@@ -1,15 +1,14 @@
-mod utils;
+pub mod animation_data;
+mod animation_player;
+pub mod value;
 
-use wasm_bindgen::prelude::*;
+// Re-export common functionality that should be available in both environments
+#[cfg(not(target_arch = "wasm32"))]
+pub use animation_player::{get_animation, load_animation, unload_animation};
 
-#[wasm_bindgen]
-extern "C" {
-    fn alert(s: &str);
-}
+// Conditionally compile wasm-specific code
+#[cfg(target_arch = "wasm32")]
+mod wasm;
 
-#[wasm_bindgen]
-pub fn greet() -> String {
-    let greeting = "Hello, animation-player!";
-    alert(greeting);
-    greeting.to_string()
-}
+#[cfg(target_arch = "wasm32")]
+pub use wasm::{get_animation, greet, load_animation, unload_animation};
