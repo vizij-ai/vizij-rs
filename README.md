@@ -54,10 +54,17 @@ This compiles the Rust code into a WebAssembly module and generates JavaScript b
 
 ### Testing for WebAssembly
 
-To run tests for the WebAssembly build in headless browsers:
+To run tests for the WebAssembly build:
 
 ```bash
 # Run WebAssembly tests in headless browsers
+cd animation-player
+wasm-pack test --node
+```
+
+Consider testing it for browsers as well:
+
+```bash
 cd animation-player
 wasm-pack test --headless --firefox --chrome
 ```
