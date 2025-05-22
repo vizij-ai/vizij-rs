@@ -1,4 +1,4 @@
-name: Playwright Tests
+name: Continuous Integration Tests
 
 on:
   push:
@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./example/npm_vite_ts
+        working-directory: ./animation-player
 
     steps:
     - uses: actions/checkout@v3
@@ -22,13 +22,12 @@ jobs:
 
     - name: Build and test Rust crate
       run: |
-        cd animation-player
         cargo build --release
         cargo test --release
 
+
     - name: Build and test Rust crate for web
       run: |
-        cd animation-player
         wasm-pack build --target web
         wasm-pack test --headless --node
         wasm-pack test --headless --firefox --chrome
@@ -45,15 +44,19 @@ jobs:
 
     - name: Install dependencies
       run: npm ci # Installs the pkg along other dependencies
+      working-directory: ./example/npm_vite_ts
 
     - name: Install Playwright browsers
       run: npx playwright install --with-deps
+      working-directory: ./example/npm_vite_ts
 
     - name: Build app
       run: npm run build
+      working-directory: ./example/npm_vite_ts
 
     - name: Run Playwright tests
       run: npx playwright test
+      working-directory: ./example/npm_vite_ts
 
     - name: Upload test results
       if: always()
