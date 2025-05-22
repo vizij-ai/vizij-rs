@@ -30,6 +30,7 @@ jobs:
       run: |
         cd animation-player
         wasm-pack build --target web
+        wasm-pack test --headless --node
         wasm-pack test --headless --firefox --chrome
 
     # The web assembly build is now available in the pkg directory
