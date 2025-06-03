@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAnimationPlayer } from './AnimationPlayerProvider.jsx';
+import { useAnimationPlayerContext } from '../../hooks/useAnimationPlayerContext.js';
 import ControlPanel from '../UI/ControlPanel.jsx';
 
 const AnimationControls = () => {
@@ -12,8 +12,11 @@ const AnimationControls = () => {
     isPlaying, 
     updatePlayerConfig, 
     config,
-    player
-  } = useAnimationPlayer();
+    pollingRate,
+    updatePollingRate,
+    getPlayerIds,
+    getPerformanceStats
+  } = useAnimationPlayerContext();
 
   const [seekValue, setSeekValue] = useState(0);
 
@@ -41,7 +44,7 @@ const AnimationControls = () => {
   };
 
   const handleUpdateRateChange = (updateRate) => {
-    updatePlayerConfig({ updateRate: parseInt(updateRate) });
+    updatePollingRate(parseInt(updateRate));
   };
 
 
@@ -158,10 +161,10 @@ const AnimationControls = () => {
             min="1"
             max="120"
             step="10"
-            value={config.updateRate}
+            value={pollingRate}
             onChange={(e) => handleUpdateRateChange(e.target.value)}
           />
-          <span>{config.updateRate} FPS</span>
+          <span>{pollingRate} FPS</span>
         </div>
 
         <p style={{ fontSize: '12px', color: '#666', margin: '10px 0 0 0' }}>
@@ -173,18 +176,14 @@ const AnimationControls = () => {
       <ControlPanel title="Animation Management">
         <div className="button-group">
           <button className="btn-primary" onClick={() => {
-            if (player) {
-              const info = player.getPlayerIds();
-              console.log('Player Info:', info);
-            }
+            const info = getPlayerIds();
+            console.log('Player Info:', info);
           }}>
             Get Info
           </button>
           <button className="btn-secondary" onClick={() => {
-            if (player) {
-              const stats = player.getPerformanceStats();
-              console.log('Performance Stats:', stats);
-            }
+            const stats = getPerformanceStats();
+            console.log('Performance Stats:', stats);
           }}>
             Performance
           </button>

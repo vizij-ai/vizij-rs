@@ -284,6 +284,12 @@ impl AnimationPlayer {
             .collect()
     }
 
+    /// Get all instance IDs in this player
+    #[inline]
+    pub fn instance_ids(&self) -> Vec<&str> {
+        self.instances.keys().map(|s| s.as_str()).collect()
+    }
+
     /// Get performance metrics
     #[inline]
     pub fn metrics(&self) -> &PlaybackMetrics {

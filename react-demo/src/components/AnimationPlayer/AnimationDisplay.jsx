@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAnimationPlayer } from './AnimationPlayerProvider.jsx';
+import { useAnimationPlayerContext } from '../../hooks/useAnimationPlayerContext.js';
 import MetricsGrid from '../UI/MetricsGrid.jsx';
 
 const AnimationDisplay = () => {
@@ -11,7 +11,7 @@ const AnimationDisplay = () => {
     metrics,
     logs,
     clearLogs
-  } = useAnimationPlayer();
+  } = useAnimationPlayerContext();
 
   const formatValue = (value) => {
     if (typeof value === 'object' && value !== null) {

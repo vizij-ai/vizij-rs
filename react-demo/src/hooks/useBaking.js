@@ -1,10 +1,10 @@
 import { useState, useCallback } from 'react';
-import { useAnimationPlayer } from '../components/AnimationPlayer/AnimationPlayerProvider.jsx';
+import { useAnimationPlayerContext } from './useAnimationPlayerContext.js';
 
 /**
  * Manual baking fallback - samples animation at specified frame rate
  */
-async function generateManualBakedData(player, frameRate, config) {
+async function generateManualBakedData(animationPlayer, frameRate, config) {
   console.log('🔧 Starting manual baking fallback...');
   
   // Get animation duration - use test animation duration
@@ -16,22 +16,22 @@ async function generateManualBakedData(player, frameRate, config) {
   const playerId = 'demo_player';
   
   // Store original player state
-  const originalTime = player.getPlayerTime(playerId);
-  const originalState = player.getPlayerState(playerId);
+  const originalTime = animationPlayer.getPlayerTime(playerId);
+  const originalState = animationPlayer.getPlayerState(playerId);
   
   try {
     // Stop player to ensure we can control time precisely
-    player.stop(playerId);
+    animationPlayer.stop(playerId);
     
     // Sample at each frame time
     for (let frame = 0; frame < totalFrames; frame++) {
       const time = frame * frameInterval;
       
       // Seek to the time point
-      player.seek(playerId, time);
+      animationPlayer.seek(playerId, time);
       
       // Get current values
-      const values = player.update(0); // Use 0 delta to avoid time progression
+      const values = animationPlayer.update(0); // Use 0 delta to avoid time progression
       
       // Extract values for each track
       const isMap = values instanceof Map;
@@ -70,9 +70,9 @@ async function generateManualBakedData(player, frameRate, config) {
     }
     
     // Restore original player state
-    player.seek(playerId, originalTime);
+    animationPlayer.seek(playerId, originalTime);
     if (originalState.playback_state === 'Playing') {
-      player.play(playerId);
+      animationPlayer.play(playerId);
     }
     
     return {
@@ -89,9 +89,9 @@ async function generateManualBakedData(player, frameRate, config) {
   } catch (error) {
     // Ensure we restore state even if something fails
     try {
-      player.seek(playerId, originalTime);
+      animationPlayer.seek(playerId, originalTime);
       if (originalState.playback_state === 'Playing') {
-        player.play(playerId);
+        animationPlayer.play(playerId);
       }
     } catch (restoreError) {
       console.warn('Failed to restore player state:', restoreError);
@@ -101,7 +101,7 @@ async function generateManualBakedData(player, frameRate, config) {
 }
 
 export const useBaking = () => {
-  const { player, isInitialized } = useAnimationPlayer();
+  const animationPlayer = useAnimationPlayerContext();
   
   const [bakingState, setBakingState] = useState({
     isGenerating: false,
@@ -122,7 +122,7 @@ export const useBaking = () => {
    * Generate baked animation data at specified frame rate
    */
   const generateBaked = useCallback(async (frameRate = 60, config = {}) => {
-    if (!player || !isInitialized) {
+    if (!animationPlayer.isLoaded) {
       throw new Error('Animation player not initialized');
     }
 
@@ -144,7 +144,7 @@ export const useBaking = () => {
 
 
       // First check if we have players and animations loaded
-      const playerIds = player.getPlayerIds();
+      const playerIds = animationPlayer.getPlayerIds();
       
       if (playerIds.length === 0) {
         throw new Error('No players found. Make sure an animation is loaded and a player is created.');
@@ -152,7 +152,7 @@ export const useBaking = () => {
       
       // Get current player state for debugging
       try {
-        const playerState = player.getPlayerState('demo_player');
+        const playerState = animationPlayer.getPlayerState('demo_player');
         console.log('Current player state:', playerState);
       } catch (stateError) {
         console.warn('Could not get player state:', stateError.message);
@@ -165,7 +165,7 @@ export const useBaking = () => {
       // Approach 1: Try bakeCurrent method
       try {
         console.log('Attempting bakeCurrent...');
-        bakedData = player.bakeCurrent(frameRate, finalConfig);
+        bakedData = animationPlayer.bakeCurrent(frameRate, finalConfig);
         if (bakedData) {
           console.log('bakeCurrent succeeded');
         } else {
@@ -178,7 +178,7 @@ export const useBaking = () => {
         // Approach 2: Try with explicit animation ID 'demo_player'
         try {
           console.log('Attempting bakeAnimation with demo_player...');
-          bakedData = player.bakeAnimation('demo_player', frameRate, finalConfig);
+          bakedData = animationPlayer.bakeAnimation('demo_player', frameRate, finalConfig);
           if (bakedData) {
             console.log('bakeAnimation with demo_player succeeded');
           } else {
@@ -192,7 +192,7 @@ export const useBaking = () => {
           try {
             const firstPlayerId = playerIds[0];
             console.log(`Attempting bakeAnimation with first player ID: ${firstPlayerId}...`);
-            bakedData = player.bakeAnimation(firstPlayerId, frameRate, finalConfig);
+            bakedData = animationPlayer.bakeAnimation(firstPlayerId, frameRate, finalConfig);
             if (bakedData) {
               console.log('bakeAnimation with first player ID succeeded');
             } else {
@@ -203,7 +203,7 @@ export const useBaking = () => {
             
             // Approach 4: Manual sampling fallback
             try {
-              bakedData = await generateManualBakedData(player, frameRate, finalConfig);
+              bakedData = await generateManualBakedData(animationPlayer, frameRate, finalConfig);
               console.log('Manual baking succeeded');
             } catch (manualError) {
               console.log('Manual baking also failed:', manualError.message);
@@ -247,7 +247,7 @@ export const useBaking = () => {
       }));
       throw error;
     }
-  }, [player, isInitialized, bakingConfig]);
+  }, [animationPlayer, bakingConfig]);
 
   /**
    * Convert baked data to format suitable for chart visualization
@@ -291,27 +291,27 @@ export const useBaking = () => {
    * Get original smooth animation data for comparison
    */
   const getOriginalChartData = useCallback(() => {
-    if (!player || !isInitialized) {
+    if (!animationPlayer.isLoaded) {
       return {};
     }
 
     // Get current value history (smooth interpolated values)
-    const history = player.getAllValueHistory();
+    const history = animationPlayer.getAllValueHistory();
     const chartData = {};
 
     Object.entries(history).forEach(([key, values]) => {
       if (values.length > 0) {
         chartData[key] = {
-          times: values.map((_, index) => index * (1.0 / (player.pollingOptions?.updateRate || 60))), // Convert to time
+          times: values.map((_, index) => index * (1.0 / (animationPlayer.pollingRate || 60))), // Convert to time
           values: values,
-          frameRate: player.pollingOptions?.updateRate || 60,
+          frameRate: animationPlayer.pollingRate || 60,
           sampleCount: values.length
         };
       }
     });
 
     return chartData;
-  }, [player, isInitialized]);
+  }, [animationPlayer]);
 
   /**
    * Update baking configuration

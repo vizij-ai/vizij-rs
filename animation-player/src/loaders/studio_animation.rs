@@ -49,7 +49,7 @@ struct StudioAnimationData {
 ///
 /// # Returns
 /// * `AnimationData` - The converted animation data
-pub fn convert_test_animation(test_data: StudioAnimationData) -> AnimationData {
+fn convert_test_animation(test_data: StudioAnimationData) -> AnimationData {
     let mut animation = AnimationData::new(&test_data.id, &test_data.name);
     let duration_seconds = test_data.duration as f64 / 1000.0;
 

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAnimationPlayer } from '../components/AnimationPlayer/AnimationPlayerProvider.jsx';
+import { useAnimationPlayerContext } from './useAnimationPlayerContext.js';
 
 export const useTimeSeries = () => {
-  const { player, isInitialized } = useAnimationPlayer();
+  const animationPlayer = useAnimationPlayerContext();
   
   const [historyStats, setHistoryStats] = useState({
     totalKeys: 0,
@@ -27,11 +27,11 @@ export const useTimeSeries = () => {
 
   // Update stats periodically
   useEffect(() => {
-    if (!player || !isInitialized) return;
+    if (!animationPlayer.isLoaded) return;
 
     const updateStats = () => {
       try {
-        const stats = player.getHistoryStats();
+        const stats = animationPlayer.getHistoryStats();
         setHistoryStats(stats);
       } catch (error) {
         console.error('Failed to get history stats:', error);
@@ -43,18 +43,18 @@ export const useTimeSeries = () => {
     const interval = setInterval(updateStats, 1000);
 
     return () => clearInterval(interval);
-  }, [player, isInitialized]);
+  }, [animationPlayer.isLoaded, animationPlayer.getHistoryStats]);
 
   const clearHistory = useCallback(() => {
-    if (!player) return;
+    if (!animationPlayer.isLoaded) return;
     try {
-      player.clearValueHistory();
+      animationPlayer.clearValueHistory();
       setDerivativeHistory({});
       console.log('🗑️ History and derivatives cleared');
     } catch (error) {
       console.error('Failed to clear history:', error);
     }
-  }, [player]);
+  }, [animationPlayer.isLoaded, animationPlayer.clearValueHistory]);
 
   const toggleDerivatives = useCallback((enabled) => {
     setDerivativeConfig(prev => ({
@@ -81,41 +81,41 @@ export const useTimeSeries = () => {
   }, [derivativeHistory]);
 
   const updateHistoryConfig = useCallback((newConfig) => {
-    if (!player) return;
+    if (!animationPlayer.isLoaded) return;
     try {
       setHistoryConfig(prev => ({ ...prev, ...newConfig }));
-      player.setHistoryOptions(newConfig);
+      animationPlayer.setHistoryOptions(newConfig);
       console.log(`⚙️ History config updated:`, newConfig);
     } catch (error) {
       console.error('Failed to update history config:', error);
     }
-  }, [player]);
+  }, [animationPlayer.isLoaded, animationPlayer.setHistoryOptions]);
 
   const getValueHistory = useCallback((keyName) => {
-    if (!player) return [];
+    if (!animationPlayer.isLoaded) return [];
     try {
-      return player.getValueHistory(keyName);
+      return animationPlayer.getValueHistory(keyName);
     } catch (error) {
       console.error('Failed to get value history:', error);
       return [];
     }
-  }, [player]);
+  }, [animationPlayer.isLoaded, animationPlayer.getValueHistory]);
 
   const getAllValueHistory = useCallback(() => {
-    if (!player) return {};
+    if (!animationPlayer.isLoaded) return {};
     try {
-      return player.getAllValueHistory();
+      return animationPlayer.getAllValueHistory();
     } catch (error) {
       console.error('Failed to get all value history:', error);
       return {};
     }
-  }, [player]);
+  }, [animationPlayer.isLoaded, animationPlayer.getAllValueHistory]);
 
   const exportHistory = useCallback(() => {
-    if (!player) return null;
+    if (!animationPlayer.isLoaded) return null;
     try {
-      const history = player.getAllValueHistory();
-      const metadata = player.getHistoryMetadata();
+      const history = animationPlayer.getAllValueHistory();
+      const metadata = animationPlayer.getHistoryMetadata();
       
       const exportData = {
         timeSeries: history,
@@ -129,12 +129,12 @@ export const useTimeSeries = () => {
       console.error('Failed to export history:', error);
       return null;
     }
-  }, [player]);
+  }, [animationPlayer.isLoaded, animationPlayer.getAllValueHistory, animationPlayer.getHistoryMetadata]);
 
   const downloadHistoryCSV = useCallback(() => {
-    if (!player) return;
+    if (!animationPlayer.isLoaded) return;
     try {
-      const history = player.getAllValueHistory();
+      const history = animationPlayer.getAllValueHistory();
       if (Object.keys(history).length === 0) {
         alert('No history data to download');
         return;
@@ -165,7 +165,7 @@ export const useTimeSeries = () => {
     } catch (error) {
       console.error('Failed to download history CSV:', error);
     }
-  }, [player]);
+  }, [animationPlayer.isLoaded, animationPlayer.getAllValueHistory]);
 
   const formatBytes = (bytes) => {
     if (bytes === 0) return '0 B';
@@ -176,9 +176,9 @@ export const useTimeSeries = () => {
   };
 
   const getAllDerivativeHistory = () => {
-      if (!player) return {};
+      if (!animationPlayer.isLoaded) return {};
       try {
-        return player.getAllDerivativeHistory();
+        return animationPlayer.getAllDerivativeHistory();
       } catch (error) {
         console.error('Failed to get all derivative history:', error);
         return {};

@@ -4,7 +4,7 @@ A comprehensive React application demonstrating integration with the Animation P
 
 ## Overview
 
-This React demo provides an enhanced interface for the Animation Player, modeling after the `time_series_demo.html` but with improved structure, reusable components, and React-specific optimizations.
+This React demo provides a comprehensive and enhanced interface for the Animation Player core library, showcasing advanced features like animation baking, file upload, and a dark/light theme toggle, alongside improved time series visualization and a modular component architecture.
 
 ## Project Structure
 
@@ -16,16 +16,20 @@ react-demo/
 │   │   │   ├── AnimationPlayerProvider.jsx   # Context provider with WASM integration
 │   │   │   ├── AnimationControls.jsx         # Playback and configuration controls
 │   │   │   └── AnimationDisplay.jsx          # Values display and event logging
+│   │   ├── BakedAnimation/
+│   │   │   └── BakedAnimationPanel.jsx       # Controls and display for animation baking
 │   │   ├── TimeSeries/
 │   │   │   ├── TimeSeriesChart.jsx           # Chart.js integration for plotting
 │   │   │   └── TimeSeriesControls.jsx        # History management and visualization
 │   │   └── UI/
 │   │       ├── ControlPanel.jsx              # Reusable control panel component
+│   │       ├── FileUpload.jsx                # Component for uploading animation files
 │   │       └── MetricsGrid.jsx               # Performance metrics display
 │   ├── hooks/
+│   │   ├── useBaking.js                      # Custom hook for animation baking operations
 │   │   └── useTimeSeries.js                  # Custom hook for time series operations
 │   ├── utils/
-│   │   └── wasmLoader.js                     # WASM module loading utilities
+│   │   └── AnimationPlayer.js                # Utility for interacting with the WASM module
 │   ├── App.jsx                               # Main application component
 │   ├── App.css                               # Application styles
 │   └── main.jsx                              # React entry point
@@ -50,6 +54,7 @@ The `AnimationPlayerProvider` component wraps the entire application and provide
 
 - `useAnimationPlayer()`: Primary hook for accessing player functionality
 - `useTimeSeries()`: Specialized hook for time series operations and history management
+- `useBaking()`: Hook for managing animation baking processes and data.
 
 ### 3. Component Structure
 
@@ -57,10 +62,12 @@ The `AnimationPlayerProvider` component wraps the entire application and provide
 - **AnimationControls**: Playback controls, configuration, and update management
 - **AnimationDisplay**: Real-time value display, status panel, and event logging
 - **TimeSeriesControls**: History configuration, statistics, and chart visualization
+- **BakedAnimationPanel**: Interface for baking animations and visualizing baked data.
 
 **UI Components:**
 - **ControlPanel**: Reusable wrapper for grouped controls
 - **MetricsGrid**: Performance metrics display with responsive layout
+- **FileUpload**: Component for loading animation data from local files.
 
 ### 4. WASM Integration
 
@@ -129,6 +136,10 @@ const updateLoop = () => {
 
 ## Features
 
+### General
+- **Dark/Light Theme Toggle**: Switch between dark and light modes for improved readability and user preference.
+- **File Upload**: Easily load animation data from local JSON files.
+
 ### Animation Control
 - Play, pause, stop controls
 - Seek position with slider
@@ -141,6 +152,7 @@ const updateLoop = () => {
 - Player state and metrics
 - Performance statistics
 - Event logging with timestamps
+- **Derivative Visualization**: Display and compare derivatives of animation tracks.
 
 ### Time Series Visualization
 - History capture configuration
@@ -148,6 +160,11 @@ const updateLoop = () => {
 - Data export (JSON, CSV)
 - Statistics dashboard
 - Memory usage tracking
+
+### Animation Baking
+- **Baking Configuration**: Configure frame rate, time range, and other parameters for baking.
+- **Baked Data Visualization**: Compare original and baked animation data visually.
+- **Export Baked Data**: Save baked animation data to JSON.
 
 ### TypeScript Support
 - Type definitions for WASM bindings

@@ -9,8 +9,7 @@ both embedded and in a web browser using WebAssembly.
   - `/src` - Rust source files
   - `/pkg` - Generated WebAssembly package (after building)
   - `/tests` - Tests, including WebAssembly-specific tests
-- `/example` - Example applications using the WebAssembly package
-  - `/npm_vite_ts` - Example using Vite, React, and TypeScript
+- `/react-demo` - A comprehensive React application demonstrating integration with the WebAssembly package, showcasing advanced features like animation baking, file upload, and a dark/light theme toggle.
 
 ## Getting Started
 
@@ -72,7 +71,7 @@ wasm-pack test --headless --firefox --chrome
 ## Using in a Web Application
 
 To use this package in your own npm project,
-see the example in [`example/npm_vite_ts`](example/npm_vite_ts/README.md).
+see the example in [`react-demo`](react-demo/README.md).
 
 In short, you can install the package built under `animation-player/pkg`,
 either as a local dependency or by publishing it to npm.

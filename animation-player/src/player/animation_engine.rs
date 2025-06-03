@@ -1,4 +1,4 @@
-use crate::animation::instance::PlaybackMode;
+use crate::animation::instance::{AnimationInstance, InstanceSettings, PlaybackMode};
 use crate::event::EventDispatcher;
 use crate::player::animation_player::AnimationPlayer;
 use crate::player::playback_state::PlaybackState;
@@ -140,6 +140,51 @@ impl AnimationEngine {
     #[inline]
     pub fn player_ids(&self) -> Vec<&str> {
         self.players.keys().map(|s| s.as_str()).collect()
+    }
+
+    /// Get all loaded animation IDs
+    #[inline]
+    pub fn animation_ids(&self) -> Vec<&str> {
+        self.animations.keys().map(|s| s.as_str()).collect()
+    }
+
+    /// Add an animation to a player by creating a new animation instance
+    pub fn add_animation_to_player(
+        &mut self,
+        player_id: &str,
+        animation_id: &str,
+        instance_settings: Option<InstanceSettings>,
+    ) -> Result<String, AnimationError> {
+        // Verify the animation data exists
+        let animation_data = self
+            .get_animation_data(animation_id)
+            .ok_or_else(|| AnimationError::AnimationNotFound {
+                id: animation_id.to_string(),
+            })?;
+
+        // Get the animation duration for the instance
+        let animation_duration = animation_data.duration();
+
+        // Get the player
+        let player = self
+            .get_player_mut(player_id)
+            .ok_or_else(|| AnimationError::Generic {
+                message: format!("Player with ID '{}' not found.", player_id),
+            })?;
+
+        // Use provided settings or create default
+        let settings = instance_settings.unwrap_or_else(|| InstanceSettings::new(animation_id));
+
+        // Generate a unique instance ID if not already set
+        let instance_id = format!("{}_instance_{}", animation_id, player.instances.len());
+
+        // Create the animation instance
+        let instance = AnimationInstance::new(instance_id.clone(), settings, animation_duration);
+
+        // Add the instance to the player
+        player.add_instance(instance)?;
+
+        Ok(instance_id)
     }
 
     /// Update all players

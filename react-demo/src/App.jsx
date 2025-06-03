@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import AnimationPlayerProvider, { useAnimationPlayer } from './components/AnimationPlayer/AnimationPlayerProvider.jsx';
+import { AnimationPlayerProvider, useAnimationPlayerContext } from './contexts/AnimationPlayerContext.jsx';
 import AnimationControls from './components/AnimationPlayer/AnimationControls.jsx';
 import AnimationDisplay from './components/AnimationPlayer/AnimationDisplay.jsx';
 import TimeSeriesControls from './components/TimeSeries/TimeSeriesControls.jsx';
@@ -38,7 +38,7 @@ function App() {
 }
 
 const LoadingWrapper = () => {
-  const { isLoading, error, isInitialized } = useAnimationPlayer();
+  const { isLoading, error, isLoaded } = useAnimationPlayerContext();
 
   if (isLoading) {
     return (
@@ -59,7 +59,7 @@ const LoadingWrapper = () => {
     );
   }
 
-  if (!isInitialized) {
+  if (!isLoaded) {
     return (
       <div className="loading-container">
         <p>Initializing...</p>

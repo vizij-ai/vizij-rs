@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
-import { useAnimationPlayer } from '../AnimationPlayer/AnimationPlayerProvider.jsx';
+import { useAnimationPlayerContext } from '../../hooks/useAnimationPlayerContext.js';
 
 const FileUpload = () => {
-  const { loadAnimationFromData, isLoading } = useAnimationPlayer();
+  const { loadAnimationFromData, isLoading } = useAnimationPlayerContext();
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const fileInputRef = useRef(null);

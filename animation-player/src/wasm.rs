@@ -7,7 +7,7 @@ use crate::{
     AnimationKeypoint, AnimationTrack, KeypointId,
 };
 use crate::{
-    animation::{AnimationInstance, InstanceSettings, PlaybackMode},
+    animation::PlaybackMode,
     baking::{AnimationBaking, BakingConfig},
     AnimationConfig, AnimationData, AnimationEngine, AnimationTime, Value,
 };
@@ -118,36 +118,25 @@ impl WasmAnimationEngine {
     pub fn add_instance(
         &mut self,
         player_id: &str,
-        instance_id: &str,
         animation_id: &str,
-    ) -> Result<(), JsValue> {
+    ) -> Result<String, JsValue> {
         let mut engine = self.engine.lock().map_err(|e| {
             let msg = format!("Engine lock poisoned: {}", e);
             console_log(&msg);
             JsValue::from_str(&msg)
         })?;
 
-        // Get animation duration for the instance
-        let animation_duration = engine
-            .get_animation_data(animation_id)
-            .ok_or_else(|| JsValue::from_str("Animation not found"))?
-            .metadata
-            .duration;
-
-        // Create instance settings
-        let settings = InstanceSettings::new(animation_id);
-        let instance = AnimationInstance::new(instance_id, settings, animation_duration);
-
         // Add instance to player
-        let player = engine
-            .get_player_mut(player_id)
-            .ok_or_else(|| JsValue::from_str("Player not found"))?;
+        let instance_id = engine.add_animation_to_player(
+            player_id,
+            animation_id,
+            None
+        ).map_err(|e| {
+            let msg = format!("Engine lock poisoned: {}", e);
+            console_log(&msg);
+            JsValue::from_str(&msg)})?;
 
-        player
-            .add_instance(instance)
-            .map_err(|e| JsValue::from_str(&format!("Add instance error: {:?}", e)))?;
-
-        Ok(())
+        Ok(instance_id)
     }
 
     /// Start playback for a player
@@ -711,12 +700,6 @@ pub fn create_test_animation() -> String {
         .with_frame_rate(60.0);
 
     serde_json::to_string(&animation).unwrap_or_else(|_| "{}".to_owned())
-}
-
-/// Simple test function
-#[wasm_bindgen]
-pub fn add(a: i32, b: i32) -> i32 {
-    a + b
 }
 
 /// Greet function for testing

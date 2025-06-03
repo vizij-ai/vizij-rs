@@ -6,12 +6,14 @@ A high-performance animation engine built in Rust with WebAssembly bindings for 
 
 The Animation Player Core is a Rust-based animation engine that compiles to WebAssembly for web deployment. It features:
 
-- **9 Value Types**: Float, Integer, Boolean, String, Vector2, Vector3, Vector4, Color, Transform
-- **Real-time Interpolation**: Smooth animation transitions with multiple interpolation functions
-- **Track-based System**: Organize animations into tracks with keypoints
-- **Player Management**: Multiple animation players with independent playback states
-- **Performance Optimized**: Built for high-performance real-time animation playback
-- **Web Integration**: Complete JavaScript bindings for seamless web integration
+- **Comprehensive Value Types**: Supports Float, Integer, Boolean, String, Vector2, Vector3, Vector4, Color, and Transform.
+- **Real-time Interpolation**: Smooth animation transitions with extensible interpolation functions.
+- **Animation Baking**: Pre-calculates animation values at specified frame rates for optimized playback.
+- **Event System**: Dispatches detailed events for playback state changes, data modifications, and performance warnings.
+- **Advanced Player Management**: Multiple animation players with independent playback states, speed control, and playback modes (once, loop, ping-pong).
+- **Performance Monitoring & Configuration**: Configurable engine settings, performance thresholds, and real-time metrics for optimal performance.
+- **Derivative Calculation**: Supports numerical derivative calculation for animation values, useful for motion analysis.
+- **WebAssembly Integration**: Robust WASM bindings for seamless integration into web applications, including all core functionalities.
 
 ## Prerequisites
 
@@ -134,12 +136,4 @@ npm run build
 ```bash
 # Start the Vite development server
 npm start
-```
-### Step 5: Start React Server
-
-```bash
-cd react-demo
-npm install
-npm run build
-npm run dev
 ```
