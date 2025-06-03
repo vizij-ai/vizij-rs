@@ -1,241 +1,737 @@
-use uuid::Uuid;
+//! WebAssembly bindings for the animation engine
+use crate::{
+    animation::transition::AnimationTransition,
+    animation::TransitionVariant,
+    loaders::load_test_animation_from_json,
+    value::{Color, Vector3, Vector4},
+    AnimationKeypoint, AnimationTrack, KeypointId,
+};
+use crate::{
+    animation::{AnimationInstance, InstanceSettings, PlaybackMode},
+    baking::{AnimationBaking, BakingConfig},
+    AnimationConfig, AnimationData, AnimationEngine, AnimationTime, Value,
+};
+use std::sync::{Arc, Mutex};
 use wasm_bindgen::prelude::*;
 
-use crate::animation_data::AnimationData;
-use crate::animation_player;
-
-#[wasm_bindgen]
-extern "C" {
-    fn alert(s: &str);
-}
-
+// Set up panic hook for better error messages in WASM
 #[wasm_bindgen(start)]
-pub fn start() {
-    // When the `console_error_panic_hook` feature is enabled, we can call the
-    // `set_panic_hook` function at least once during initialization, and then
-    // we will get better error messages if our code ever panics.
-    //
-    // For more details see
-    // https://github.com/rustwasm/console_error_panic_hook#readme
-    #[cfg(all(feature = "console_error_panic_hook", target_arch = "wasm32"))]
+pub fn main() {
     console_error_panic_hook::set_once();
 }
 
+/// WASM wrapper for the animation engine
 #[wasm_bindgen]
-pub fn greet() -> String {
-    let greeting = "Hello, animation-player!";
-    alert(greeting);
-    greeting.to_string()
+pub struct WasmAnimationEngine {
+    engine: Arc<Mutex<AnimationEngine>>,
 }
 
-/// Loads an animation from a JsValue (for WebAssembly usage)
-///
-/// This function stores the animation data in a static HashMap keyed by a
-/// generated UUID, which can be used to reference the animation later.
 #[wasm_bindgen]
-pub fn load_animation(data: JsValue) -> String {
-    // Convert JsValue to AnimationData
-    let animation_data: AnimationData =
-        serde_wasm_bindgen::from_value(data).expect("Failed to deserialize animation data");
+impl WasmAnimationEngine {
+    /// Create a new animation engine
+    #[wasm_bindgen(constructor)]
+    pub fn new(config_json: Option<String>) -> Result<WasmAnimationEngine, JsValue> {
+        let config = if let Some(json) = config_json {
+            serde_json::from_str::<AnimationConfig>(&json)
+                .map_err(|e| JsValue::from_str(&format!("Config parse error: {}", e)))?
+        } else {
+            AnimationConfig::web_optimized()
+        };
 
-    // Store the animation and get UUID
-    let id = animation_player::load_animation(animation_data);
+        let engine = AnimationEngine::new(config);
 
-    // Return the UUID as a string
-    id.to_string()
-}
+        Ok(WasmAnimationEngine {
+            engine: Arc::new(Mutex::new(engine)),
+        })
+    }
 
-/// Unloads (removes) an animation by its UUID
-///
-/// Returns true if the animation was found and removed, false otherwise
-#[wasm_bindgen]
-pub fn unload_animation(uuid_str: &str) -> bool {
-    // Parse the UUID from the string
-    match Uuid::parse_str(uuid_str) {
-        Ok(uuid) => {
-            // Unload the animation and return the result
-            animation_player::unload_animation(&uuid)
-        }
-        Err(_) => {
-            // Invalid UUID format
-            false
+    #[wasm_bindgen]
+    pub fn load_animation(&mut self, animation_json: &str) -> Result<(), JsValue> {
+        console_log(&format!(
+            "Loading animation on wasm side {:?}",
+            animation_json
+        ));
+
+        // Try to parse the animation JSON directly first
+        let animation_data: AnimationData = match serde_json::from_str(animation_json) {
+            Ok(data) => {
+                console_log("Successfully parsed animation JSON directly");
+                data
+            }
+            Err(parse_error) => {
+                console_log(&format!("Direct JSON parse failed: {}, attempting fallback with load_test_animation_from_json_wasm", parse_error));
+
+                // Try using the test animation loader as fallback
+                match load_test_animation_from_json_wasm(animation_json) {
+                    Ok(corrected_json) => {
+                        console_log("Fallback loader succeeded, parsing corrected JSON");
+                        serde_json::from_str(&corrected_json).map_err(|e| {
+                            JsValue::from_str(&format!("Fallback JSON parse error: {}", e))
+                        })?
+                    }
+                    Err(fallback_error) => {
+                        console_log(&format!(
+                            "Fallback loader also failed: {:?}",
+                            fallback_error
+                        ));
+                        return Err(JsValue::from_str(&format!(
+                            "Animation JSON parse error: {}. Fallback loader error: {:?}",
+                            parse_error, fallback_error
+                        )));
+                    }
+                }
+            }
+        };
+        console_log(&format!("Parsed data on wasm side {:?}", animation_data));
+        self.engine
+            .lock()
+            .map_err(|e| {
+                let msg = format!("Engine lock poisoned: {}", e);
+                console_log(&msg);
+                JsValue::from_str(&msg)
+            })?
+            .load_animation_data(animation_data)
+            .map_err(|e| JsValue::from_str(&format!("Load animation error: {:?}", e)))?;
+        console_log(&format!("Finished on wasm side"));
+
+        Ok(())
+    }
+
+    /// Create a new player
+    #[wasm_bindgen]
+    pub fn create_player(&mut self, player_id: &str) -> Result<(), JsValue> {
+        self.engine
+            .lock()
+            .map_err(|e| {
+                let msg = format!("Engine lock poisoned: {}", e);
+                console_log(&msg);
+                JsValue::from_str(&msg)
+            })?
+            .create_player(player_id)
+            .map_err(|e| JsValue::from_str(&format!("Create player error: {:?}", e)))?;
+
+        Ok(())
+    }
+
+    /// Add an animation instance to a player
+    #[wasm_bindgen]
+    pub fn add_instance(
+        &mut self,
+        player_id: &str,
+        instance_id: &str,
+        animation_id: &str,
+    ) -> Result<(), JsValue> {
+        let mut engine = self.engine.lock().map_err(|e| {
+            let msg = format!("Engine lock poisoned: {}", e);
+            console_log(&msg);
+            JsValue::from_str(&msg)
+        })?;
+
+        // Get animation duration for the instance
+        let animation_duration = engine
+            .get_animation_data(animation_id)
+            .ok_or_else(|| JsValue::from_str("Animation not found"))?
+            .metadata
+            .duration;
+
+        // Create instance settings
+        let settings = InstanceSettings::new(animation_id);
+        let instance = AnimationInstance::new(instance_id, settings, animation_duration);
+
+        // Add instance to player
+        let player = engine
+            .get_player_mut(player_id)
+            .ok_or_else(|| JsValue::from_str("Player not found"))?;
+
+        player
+            .add_instance(instance)
+            .map_err(|e| JsValue::from_str(&format!("Add instance error: {:?}", e)))?;
+
+        Ok(())
+    }
+
+    /// Start playback for a player
+    #[wasm_bindgen]
+    pub fn play(&mut self, player_id: &str) -> Result<(), JsValue> {
+        self.engine
+            .lock()
+            .map_err(|e| {
+                let msg = format!("Engine lock poisoned: {}", e);
+                console_log(&msg);
+                JsValue::from_str(&msg)
+            })?
+            .play_player(player_id)
+            .map_err(|e| JsValue::from_str(&format!("Play error: {:?}", e)))?;
+        Ok(())
+    }
+
+    /// Pause playback for a player
+    #[wasm_bindgen]
+    pub fn pause(&mut self, player_id: &str) -> Result<(), JsValue> {
+        self.engine
+            .lock()
+            .map_err(|e| {
+                let msg = format!("Engine lock poisoned: {}", e);
+                console_log(&msg);
+                JsValue::from_str(&msg)
+            })?
+            .pause_player(player_id)
+            .map_err(|e| JsValue::from_str(&format!("Pause error: {:?}", e)))?;
+        Ok(())
+    }
+
+    /// Stop playback for a player
+    #[wasm_bindgen]
+    pub fn stop(&mut self, player_id: &str) -> Result<(), JsValue> {
+        self.engine
+            .lock()
+            .map_err(|e| {
+                let msg = format!("Engine lock poisoned: {}", e);
+                console_log(&msg);
+                JsValue::from_str(&msg)
+            })?
+            .stop_player(player_id)
+            .map_err(|e| JsValue::from_str(&format!("Stop error: {:?}", e)))?;
+        Ok(())
+    }
+
+    /// Seek to a specific time for a player
+    #[wasm_bindgen]
+    pub fn seek(&mut self, player_id: &str, time_seconds: f64) -> Result<(), JsValue> {
+        let time = AnimationTime::new(time_seconds)
+            .map_err(|e| JsValue::from_str(&format!("Invalid time: {:?}", e)))?;
+
+        self.engine
+            .lock()
+            .map_err(|e| {
+                let msg = format!("Engine lock poisoned: {}", e);
+                console_log(&msg);
+                JsValue::from_str(&msg)
+            })?
+            .seek_player(player_id, time)
+            .map_err(|e| JsValue::from_str(&format!("Seek error: {:?}", e)))?;
+        Ok(())
+    }
+
+    /// Update the animation engine and get current values
+    #[wasm_bindgen]
+    pub fn update(&mut self, frame_delta_seconds: f64) -> Result<JsValue, JsValue> {
+        let mut engine = self.engine.lock().map_err(|e| {
+            let msg = format!("Engine lock poisoned: {}", e);
+            console_log(&msg); // Log to console for debugging
+            JsValue::from_str(&msg)
+        })?;
+
+        let values = match engine.update(frame_delta_seconds) {
+            Ok(values) => values,
+            Err(e) => {
+                console_log(&format!("Engine update failed: {:?}", e));
+                return Err(JsValue::from_str(&format!("Update error: {:?}", e)));
+            }
+        };
+
+        // Convert the nested HashMap to a JsValue
+        match serde_wasm_bindgen::to_value(&values) {
+            Ok(js_value) => Ok(js_value),
+            Err(e) => {
+                console_log(&format!("Serialization failed: {}", e));
+                Err(JsValue::from_str(&format!("Serialization error: {}", e)))
+            }
         }
     }
-}
 
-/// Retrieves an animation by its UUID string
-///
-/// This function looks up an animation in the static HashMap by UUID
-/// and returns it as a JsValue if found, or null if not found.
-#[wasm_bindgen]
-pub fn get_animation(uuid_str: &str) -> JsValue {
-    // Parse the UUID from the string
-    match Uuid::parse_str(uuid_str) {
-        Ok(uuid) => {
-            // Retrieve the animation using the core function
-            match animation_player::get_animation(&uuid) {
-                Some(animation) => {
-                    // Serialize the animation to JsValue
-                    serde_wasm_bindgen::to_value(&animation).unwrap_or(JsValue::NULL)
-                }
-                None => {
-                    // Animation not found
-                    JsValue::NULL
+    /// Get current playback state for a player
+    #[wasm_bindgen]
+    pub fn get_player_state(&self, player_id: &str) -> Result<String, JsValue> {
+        let engine = self.engine.lock().map_err(|e| {
+            let msg = format!("Engine lock poisoned: {}", e);
+            console_log(&msg);
+            JsValue::from_str(&msg)
+        })?;
+        let player_state = engine
+            .get_player_state(player_id)
+            .ok_or_else(|| JsValue::from_str("Player not found"))?;
+        let state_string = serde_json::to_string(player_state)
+            .map_err(|e| JsValue::from_str(&format!("Export error: {}", e)))?;
+        Ok(state_string)
+    }
+
+    /// Get current time for a player
+    #[wasm_bindgen]
+    pub fn get_player_time(&self, player_id: &str) -> Result<f64, JsValue> {
+        let engine = self.engine.lock().map_err(|e| {
+            let msg = format!("Engine lock poisoned: {}", e);
+            console_log(&msg);
+            JsValue::from_str(&msg)
+        })?;
+        let player = engine
+            .get_player(player_id)
+            .ok_or_else(|| JsValue::from_str("Player not found"))?;
+
+        Ok(player.current_time.as_seconds())
+    }
+
+    /// Get progress (0.0-1.0) for a player
+    #[wasm_bindgen]
+    pub fn get_player_progress(&self, player_id: &str) -> Result<f64, JsValue> {
+        let engine = self.engine.lock().map_err(|e| {
+            let msg = format!("Engine lock poisoned: {}", e);
+            console_log(&msg);
+            JsValue::from_str(&msg)
+        })?;
+        let player = engine
+            .get_player(player_id)
+            .ok_or_else(|| JsValue::from_str("Player not found"))?;
+
+        Ok(player.progress())
+    }
+
+    /// Get list of all player IDs
+    #[wasm_bindgen]
+    pub fn get_player_ids(&self) -> Result<Vec<String>, JsValue> {
+        let engine = self.engine.lock().map_err(|e| {
+            let msg = format!("Engine lock poisoned: {}", e);
+            console_log(&msg);
+            JsValue::from_str(&msg)
+        })?;
+        Ok(engine
+            .player_ids()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect())
+    }
+
+    /// Get engine performance metrics
+    #[wasm_bindgen]
+    pub fn get_metrics(&self) -> JsValue {
+        let engine = match self.engine.lock() {
+            Ok(engine) => engine,
+            Err(e) => {
+                let msg = format!("Engine lock poisoned: {}", e);
+                console_log(&msg);
+                return JsValue::from_str(&msg);
+            }
+        };
+        let metrics = engine.metrics();
+
+        serde_wasm_bindgen::to_value(metrics).unwrap_or(JsValue::NULL)
+    }
+
+    /// Update player configuration
+    #[wasm_bindgen]
+    pub fn update_player_config(
+        &mut self,
+        player_id: &str,
+        config_json: &str,
+    ) -> Result<(), JsValue> {
+        console_log(&format!("Updating {} Config: {:?}", player_id, config_json));
+        let mut engine = self.engine.lock().map_err(|e| {
+            let msg = format!("Engine lock poisoned: {}", e);
+            console_log(&msg);
+            JsValue::from_str(&msg)
+        })?;
+        let player_config = engine
+            .get_player_state_mut(player_id)
+            .ok_or_else(|| JsValue::from_str("Player not found"))?;
+
+        let config: serde_json::Value = serde_json::from_str(config_json)
+            .map_err(|e| JsValue::from_str(&format!("Config JSON parse error: {}", e)))?;
+        console_log(&format!("New Config: {:?}", config));
+
+        // Handle speed setting (-5.0 to 5.0)
+        if let Some(speed_val) = config.get("speed").and_then(|v| v.as_f64()) {
+            if speed_val >= -5.0 && speed_val <= 5.0 {
+                console_log(&format!("Setting speed: {:?}", speed_val));
+                player_config.speed = speed_val;
+            } else {
+                return Err(JsValue::from_str(&format!(
+                    "Speed must be between -5.0 and 5.0, got: {}",
+                    speed_val
+                )));
+            }
+        }
+
+        // Handle playback mode
+        if let Some(mode_str) = config.get("mode").and_then(|v| v.as_str()) {
+            console_log(&format!("Setting mode: {:?}", mode_str));
+            match mode_str {
+                "once" => player_config.mode = PlaybackMode::Once,
+                "loop" => player_config.mode = PlaybackMode::Loop,
+                "ping_pong" => player_config.mode = PlaybackMode::PingPong,
+                _ => {
+                    return Err(JsValue::from_str(&format!(
+                        "Invalid playback mode: {}. Valid options: once, loop, ping_pong",
+                        mode_str
+                    )))
                 }
             }
         }
-        Err(_) => {
-            // Invalid UUID format
-            JsValue::NULL
+
+        // Handle start time (positive floats)
+        if let Some(start_time_val) = config.get("start_time").and_then(|v| v.as_f64()) {
+            if start_time_val >= 0.0 {
+                console_log(&format!("Setting start_time: {:?}", start_time_val));
+                let start_time = AnimationTime::new(start_time_val)
+                    .map_err(|e| JsValue::from_str(&format!("Invalid start time: {:?}", e)))?;
+                player_config.start_time = start_time;
+            } else {
+                return Err(JsValue::from_str(&format!(
+                    "Start time must be positive, got: {}",
+                    start_time_val
+                )));
+            }
         }
+
+        // Handle end time (positive floats or null)
+        if let Some(end_time_val) = config.get("end_time") {
+            if end_time_val.is_null() {
+                console_log("Setting end_time to None");
+                player_config.end_time = None;
+            } else if let Some(end_time_f64) = end_time_val.as_f64() {
+                if end_time_f64 >= 0.0 {
+                    console_log(&format!("Setting end_time: {:?}", end_time_f64));
+                    let end_time = AnimationTime::new(end_time_f64)
+                        .map_err(|e| JsValue::from_str(&format!("Invalid end time: {:?}", e)))?;
+                    player_config.end_time = Some(end_time);
+                } else {
+                    return Err(JsValue::from_str(&format!(
+                        "End time must be positive, got: {}",
+                        end_time_f64
+                    )));
+                }
+            } else {
+                return Err(JsValue::from_str("End time must be a number or null"));
+            }
+        }
+
+        // Validate that start_time < end_time if both are set
+        if let Some(end_time) = player_config.end_time {
+            if player_config.start_time >= end_time {
+                return Err(JsValue::from_str(&format!(
+                    "Start time ({:.2}) must be less than end time ({:.2})",
+                    player_config.start_time.as_seconds(),
+                    end_time.as_seconds()
+                )));
+            }
+        }
+
+        // Legacy support for boolean loop/ping_pong flags
+        if let Some(loop_val) = config.get("loop").and_then(|v| v.as_bool()) {
+            if loop_val {
+                console_log("Setting legacy loop: true");
+                player_config.mode = PlaybackMode::Loop;
+            }
+        }
+        if let Some(ping_pong_val) = config.get("ping_pong").and_then(|v| v.as_bool()) {
+            if ping_pong_val {
+                console_log("Setting legacy ping_pong: true");
+                player_config.mode = PlaybackMode::PingPong;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Export animation data as JSON
+    #[wasm_bindgen]
+    pub fn export_animation(&self, animation_id: &str) -> Result<String, JsValue> {
+        let engine = self.engine.lock().map_err(|e| {
+            let msg = format!("Engine lock poisoned: {}", e);
+            console_log(&msg);
+            JsValue::from_str(&msg)
+        })?;
+        let animation = engine
+            .get_animation_data(animation_id)
+            .ok_or_else(|| JsValue::from_str("Animation not found"))?;
+
+        serde_json::to_string(animation)
+            .map_err(|e| JsValue::from_str(&format!("Export error: {}", e)))
+    }
+
+    /// Get derivatives (rates of change) for all tracks at the current time for a specific player
+    #[wasm_bindgen]
+    pub fn get_derivatives(
+        &mut self,
+        player_id: &str,
+        derivative_width_ms: Option<f64>,
+    ) -> Result<JsValue, JsValue> {
+        // Convert derivative width from milliseconds to AnimationTime if provided
+        let derivative_width =
+            if let Some(width_ms) = derivative_width_ms {
+                if width_ms <= 0.0 {
+                    return Err(JsValue::from_str("Derivative width must be positive"));
+                }
+                Some(AnimationTime::new(width_ms / 1000000.0).map_err(|e| {
+                    JsValue::from_str(&format!("Invalid derivative width: {:?}", e))
+                })?)
+            } else {
+                None
+            };
+
+        // Calculate derivatives using the engine's helper method
+        let derivatives = {
+            let mut engine = self.engine.lock().map_err(|e| {
+                let msg = format!("Engine lock poisoned: {}", e);
+                console_log(&msg);
+                JsValue::from_str(&msg)
+            })?;
+            engine
+                .calculate_player_derivatives(player_id, derivative_width)
+                .map_err(|e| JsValue::from_str(&format!("Calculate derivatives error: {:?}", e)))?
+        };
+
+        // Convert to JsValue
+        serde_wasm_bindgen::to_value(&derivatives)
+            .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+    }
+
+    /// Bake an animation to pre-calculated values at specified frame rate
+    #[wasm_bindgen]
+    pub fn bake_animation(
+        &mut self,
+        animation_id: &str,
+        config_json: Option<String>,
+    ) -> Result<String, JsValue> {
+        let mut engine = self.engine.lock().map_err(|e| {
+            let msg = format!("Engine lock poisoned: {}", e);
+            console_log(&msg);
+            JsValue::from_str(&msg)
+        })?;
+
+        // Get the animation data
+        let animation = engine
+            .get_animation_data(animation_id)
+            .ok_or_else(|| JsValue::from_str("Animation not found"))?
+            .clone(); // Clone to avoid borrowing issues
+
+        console_log(&format!("Wasm Baking with animation data: {:?}", animation));
+
+        // Parse baking configuration
+        let config = if let Some(json) = config_json {
+            serde_json::from_str::<BakingConfig>(&json)
+                .map_err(|e| JsValue::from_str(&format!("Baking config parse error: {}", e)))?
+        } else {
+            BakingConfig::default()
+        };
+        console_log(&format!("Wasm Baking with config {:?}", config));
+
+        // Perform the baking
+        let baked_data = animation
+            .bake(&config, engine.interpolation_registry_mut())
+            .map_err(|e| JsValue::from_str(&format!("Baking error: {:?}", e)))?;
+
+        // Convert to JSON
+        console_log(&format!("Wasm Baked: {:?}", baked_data));
+        baked_data
+            .to_json()
+            .map_err(|e| JsValue::from_str(&format!("JSON serialization error: {:?}", e)))
     }
 }
 
-#[cfg(test)]
-#[cfg(target_arch = "wasm32")]
-mod wasm_tests {
-    use super::*;
-    use crate::animation_data::AnimationTransition;
-    use std::collections::HashMap;
-    use wasm_bindgen_test::*;
+/// Utility function to set up console logging from WASM
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
 
-    #[wasm_bindgen_test]
-    fn test_load_animation_wasm() {
-        // Create a test animation
-        let mut transitions = HashMap::new();
-        transitions.insert(
-            "transition1".to_string(),
-            AnimationTransition {
-                id: "transition1".to_string(),
-                keypoints: ("key1".to_string(), "key2".to_string()),
-                variant: "linear".to_string(),
-                parameters: HashMap::new(),
-            },
-        );
+/// Log a message to the browser console
+#[wasm_bindgen]
+pub fn console_log(message: &str) {
+    log(message);
+}
 
-        let animation = AnimationData {
-            id: "test-anim-wasm".to_string(),
-            name: "WASM Test Animation".to_string(),
-            tracks: vec![],
-            transitions,
-            duration: 5.0,
-        };
+/// Convert a Rust Value to JsValue for easy JavaScript access
+#[wasm_bindgen]
+pub fn value_to_js(value_json: &str) -> Result<JsValue, JsValue> {
+    let value: Value = serde_json::from_str(value_json)
+        .map_err(|e| JsValue::from_str(&format!("Value parse error: {}", e)))?;
 
-        // Convert to JsValue
-        let js_value = serde_wasm_bindgen::to_value(&animation).unwrap();
+    serde_wasm_bindgen::to_value(&value)
+        .map_err(|e| JsValue::from_str(&format!("Value conversion error: {}", e)))
+}
 
-        // Call load_animation
-        let uuid_str = load_animation(js_value);
+// Convenience – avoid spelling out zero vs. new().
+#[inline]
+fn time(t: f64) -> AnimationTime {
+    if t.abs() < f64::EPSILON {
+        AnimationTime::zero()
+    } else {
+        AnimationTime::new(t).expect("invalid time")
+    }
+}
 
-        // Parse the UUID to ensure it's valid
-        let uuid = Uuid::parse_str(&uuid_str).expect("Failed to parse UUID");
+/// Helper that builds a track, returns the finished track together with all key-point IDs.
+#[inline]
+fn build_track<F>(
+    name: &str,
+    property: &str,
+    times: &[f64],
+    make_value: F,
+) -> (AnimationTrack, Vec<KeypointId>)
+where
+    F: Fn(usize) -> Value,
+{
+    let mut track = AnimationTrack::new(name, property);
+    let mut ids: Vec<KeypointId> = Vec::with_capacity(times.len());
 
-        // Retrieve and check the animation
-        let stored_animation =
-            animation_player::get_animation(&uuid).expect("Animation should be stored");
-        assert_eq!(stored_animation.name, "WASM Test Animation");
-        assert_eq!(stored_animation.duration, 5.0);
-        assert_eq!(stored_animation.id, "test-anim-wasm");
+    for (i, &t) in times.iter().enumerate() {
+        let kp = track
+            .add_keypoint(AnimationKeypoint::new(time(t), make_value(i)))
+            .unwrap();
+        ids.push(kp.id);
     }
 
-    #[wasm_bindgen_test]
-    fn test_unload_animation() {
-        // Create a test animation
-        let mut transitions = HashMap::new();
-        transitions.insert(
-            "transition1".to_string(),
-            AnimationTransition {
-                id: "transition1".to_string(),
-                keypoints: ("key1".to_string(), "key2".to_string()),
-                variant: "linear".to_string(),
-                parameters: HashMap::new(),
-            },
-        );
+    (track, ids)
+}
 
-        let animation = AnimationData {
-            id: "test-anim-unload".to_string(),
-            name: "Test Animation for Unloading".to_string(),
-            tracks: vec![],
-            transitions,
-            duration: 5.0,
-        };
+#[wasm_bindgen]
+pub fn create_animation_test_type() -> String {
+    const POS_TIME: [f64; 5] = [0.0, 1.0, 2.0, 3.0, 4.1];
+    const ROT_TIME: [f64; 5] = [0.0, 1.0, 2.0, 3.0, 4.0];
+    const SCALE_TIME: [f64; 9] = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
+    const COL_TIME: [f64; 5] = [0.0, 1.0, 2.0, 3.0, 4.0];
+    const INT_TIME: [f64; 8] = [0.0, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0];
 
-        // Convert to JsValue
-        let js_value = serde_wasm_bindgen::to_value(&animation).unwrap();
+    let mut animation = AnimationData::new("test_animation", "Robot Wave Animation");
 
-        // Load the animation
-        let uuid_str = load_animation(js_value);
+    // Position ────────────────────────────────────────────────────────────────
+    let (track, _) = build_track("position", "transform.position", &POS_TIME, |i| {
+        let coords = [
+            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(2.0, 1.5, 0.0),
+            Vector3::new(4.0, 0.0, 0.0),
+            Vector3::new(6.0, 1.0, 0.5),
+            Vector3::new(8.0, 0.0, 0.0),
+        ][i];
+        Value::Vector3(coords)
+    });
+    animation.add_track(track);
 
-        // Verify the animation is loaded
-        let uuid = Uuid::parse_str(&uuid_str).expect("Failed to parse UUID");
-        assert!(animation_player::get_animation(&uuid).is_some());
+    // Rotation ────────────────────────────────────────────────────────────────
+    let (track, _) = build_track("rotation", "transform.rotation", &ROT_TIME, |i| {
+        let q = [
+            Vector4::new(0.0, 0.0, 0.0, 1.0),
+            Vector4::new(0.0, 0.3827, 0.0, 0.9239),
+            Vector4::new(0.0, 0.7071, 0.0, 0.7071),
+            Vector4::new(0.0, 0.9239, 0.0, 0.3827),
+            Vector4::new(0.0, 1.0, 0.0, 0.0),
+        ][i];
+        Value::Vector4(q)
+    });
+    animation.add_track(track);
 
-        // Unload the animation
-        let result = unload_animation(&uuid_str);
+    // Scale ───────────────────────────────────────────────────────────────────
+    let (track, _) = build_track("scale", "transform.scale", &SCALE_TIME, |i| {
+        let s = [
+            Vector3::new(1.0, 1.0, 1.0),
+            Vector3::new(1.2, 1.1, 1.2),
+            Vector3::new(1.0, 1.0, 1.0),
+            Vector3::new(0.9, 1.1, 0.9),
+            Vector3::new(1.0, 1.0, 1.0),
+            Vector3::new(1.3, 0.9, 1.3),
+            Vector3::new(1.0, 1.0, 1.0),
+            Vector3::new(1.1, 1.2, 1.1),
+            Vector3::new(1.0, 1.0, 1.0),
+        ][i];
+        Value::Vector3(s)
+    });
+    animation.add_track(track);
 
-        // Verify the animation was successfully unloaded
-        assert!(result);
-        assert!(animation_player::get_animation(&uuid).is_none());
+    // Color ───────────────────────────────────────────────────────────────────
+    let (track, _) = build_track("color", "material.color", &COL_TIME, |i| {
+        let c = &[
+            Color::rgba(1.0, 0.2, 0.2, 1.0),
+            Color::rgba(1.0, 0.8, 0.2, 1.0),
+            Color::rgba(0.2, 1.0, 0.2, 1.0),
+            Color::rgba(0.2, 0.5, 1.0, 1.0),
+            Color::rgba(0.8, 0.2, 1.0, 1.0),
+        ][i];
+        Value::Color(c.clone())
+    });
+    animation.add_track(track);
 
-        // Try to unload again (should return false as it no longer exists)
-        let result = unload_animation(&uuid_str);
-        assert!(!result);
+    // Intensity ───────────────────────────────────────────────────────────────
+    let (track, _) = build_track("intensity", "light.easing", &INT_TIME, |i| {
+        let v = [0.5, 1.0, 0.3, 0.8, 0.5, 1.2, 0.2, 0.5][i];
+        Value::Float(v)
+    });
+    animation.add_track(track);
 
-        // Try to unload with invalid UUID
-        let result = unload_animation("not-a-valid-uuid");
-        assert!(!result);
+    // Metadata
+    animation.metadata = animation.metadata
+        .with_author("WASM Animation Player Demo For Different types")
+        .with_description("A complex robot animation showcasing position, rotation, scale, color, and intensity changes over time")
+        .add_tag("demo").add_tag("robot").add_tag("complex")
+        .with_frame_rate(60.0);
+
+    serde_json::to_string(&animation).unwrap_or_else(|_| "{}".to_owned())
+}
+
+// ------------------------------------------------------------------------------------------------
+// 2. create_test_animation
+// ------------------------------------------------------------------------------------------------
+#[wasm_bindgen]
+pub fn create_test_animation() -> String {
+    const TIMES: [f64; 8] = [0.0, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0];
+    const VALUES: [f32; 8] = [0.5, 1.0, 0.3, 0.8, 0.5, 1.2, 0.2, 0.5];
+
+    // (track-name, property, transition variant)
+    const TRACKS: &[(&str, &str, TransitionVariant)] = &[
+        ("a", "a.step", TransitionVariant::Step),
+        ("b", "b.cubic", TransitionVariant::Cubic),
+        ("c", "c.linear", TransitionVariant::Linear),
+        ("d", "d.bezier", TransitionVariant::Bezier),
+        ("e", "e.spring", TransitionVariant::Spring),
+    ];
+
+    let mut animation = AnimationData::new("test_animation", "Transition Testing Animation");
+
+    // Build every track the same way
+    for &(name, property, variant) in TRACKS {
+        // Build track + remember each id
+        let (track, ids) = build_track(name, property, &TIMES, |i| Value::Float(VALUES[i].into()));
+
+        // Add transitions between consecutive key-points
+        for pair in ids.windows(2) {
+            animation.add_transition(AnimationTransition::new(pair[0], pair[1], variant));
+        }
+
+        animation.add_track(track);
     }
 
-    #[wasm_bindgen_test]
-    fn test_get_animation_wasm() {
-        // Create a test animation
-        let mut transitions = HashMap::new();
-        transitions.insert(
-            "transition1".to_string(),
-            AnimationTransition {
-                id: "transition1".to_string(),
-                keypoints: ("key1".to_string(), "key2".to_string()),
-                variant: "linear".to_string(),
-                parameters: HashMap::new(),
-            },
-        );
+    animation.metadata = animation
+        .metadata
+        .with_author("WASM Animation Player Demo")
+        .with_description(
+            "A complex robot animation showcasing different transition changes over time",
+        )
+        .add_tag("demo")
+        .add_tag("complex")
+        .with_frame_rate(60.0);
 
-        let animation = AnimationData {
-            id: "test-anim-get".to_string(),
-            name: "WASM Test Animation for Get".to_string(),
-            tracks: vec![],
-            transitions,
-            duration: 3.5,
-        };
+    serde_json::to_string(&animation).unwrap_or_else(|_| "{}".to_owned())
+}
 
-        // Convert to JsValue
-        let js_value = serde_wasm_bindgen::to_value(&animation).unwrap();
+/// Simple test function
+#[wasm_bindgen]
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
 
-        // Load the animation
-        let uuid_str = load_animation(js_value);
+/// Greet function for testing
+#[wasm_bindgen]
+pub fn greet(name: &str) -> String {
+    format!("Hello, {}! Animation Player WASM is ready.", name)
+}
 
-        // Get the animation using get_animation
-        let retrieved_js_value = get_animation(&uuid_str);
-
-        // Check that we got a non-null value back
-        assert!(!retrieved_js_value.is_null());
-
-        // Convert back to AnimationData
-        let retrieved_animation: AnimationData =
-            serde_wasm_bindgen::from_value(retrieved_js_value).expect("Failed to deserialize");
-
-        // Verify it's the same animation
-        assert_eq!(retrieved_animation.id, "test-anim-get");
-        assert_eq!(retrieved_animation.name, "WASM Test Animation for Get");
-        assert_eq!(retrieved_animation.duration, 3.5);
-
-        // Try getting with an invalid UUID
-        let null_result = get_animation("not-a-valid-uuid");
-        assert!(null_result.is_null());
-
-        // Try getting with a non-existent UUID
-        let random_uuid = Uuid::new_v4().to_string();
-        let null_result2 = get_animation(&random_uuid);
-        assert!(null_result2.is_null());
-    }
+/// Load and convert a test animation from JSON format
+#[wasm_bindgen]
+pub fn load_test_animation_from_json_wasm(json_str: &str) -> Result<String, JsValue> {
+    load_test_animation_from_json(json_str)
+        .map_err(|e| JsValue::from_str(&format!("Test animation load error: {:?}", e)))
+        .and_then(|animation| {
+            serde_json::to_string(&animation)
+                .map_err(|e| JsValue::from_str(&format!("Animation serialization error: {}", e)))
+        })
 }

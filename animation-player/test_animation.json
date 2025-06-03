@@ -1,0 +1,109 @@
+{
+  "id": "e6dfc5cf-72af-45b2-9533-3d1f54290e8d",
+  "name": "Waking New Quori",
+  "tracks": [
+    {
+      "id": "d7a6b716-10b0-40bb-a894-8bc13a992737",
+      "name": "twist_joint",
+      "points": [
+        {
+          "id": "061b069c-679c-4c8b-aeca-536de785b6bb",
+          "stamp": 0,
+          "value": 3.3370387617425767
+        }
+      ],
+      "animatableId": "81e09645-89b9-4c3b-bdbd-91561e093ad4"
+    },
+    {
+      "id": "0e4b7dc3-19ef-4a31-89d2-067f7c408da9",
+      "name": "neck_joint",
+      "points": [
+        {
+          "id": "d3d5a244-addc-40fe-b9ab-59c68db42f5f",
+          "stamp": 0,
+          "value": -0.125
+        },
+        {
+          "id": "3efeaad9-638a-40f9-a177-6e92901b7785",
+          "stamp": 0.5,
+          "value": -0.03133984463882411
+        },
+        {
+          "id": "22a742b6-d1f2-4e30-ada5-97a08ab4ef49",
+          "stamp": 0.8333333333333334,
+          "value": 0.02082824057149351
+        }
+      ],
+      "animatableId": "e130bd45-3731-40d9-b61f-a9970e0d5842"
+    },
+    {
+      "id": "a3ce95c8-a98c-4dc4-9264-0dc51fd1821e",
+      "name": "pan_joint",
+      "points": [
+        {
+          "id": "2d5a7f5c-c4ea-4265-916f-cc4f658fa040",
+          "stamp": 0,
+          "value": -0.9169333932954267
+        },
+        {
+          "id": "65bf55d3-aa9b-4618-8607-6db7cc81dc66",
+          "stamp": 0.3,
+          "value": 0.28917892343844265
+        },
+        {
+          "id": "b5593de1-a423-494a-bb2d-789d2107742f",
+          "stamp": 0.5,
+          "value": -1.3212424262563287,
+          "trackId": "a3ce95c8-a98c-4dc4-9264-0dc51fd1821e"
+        },
+        {
+          "id": "e28f8c99-20c5-4f5e-a817-fdb228c29e6a",
+          "stamp": 0.6583333333333333,
+          "value": 0.9437563333453869
+        },
+        {
+          "id": "c9be0c2c-1ea4-4f9c-a78e-30d36de2ec84",
+          "stamp": 0.8333333333333334,
+          "value": 0.09779342072773334
+        }
+      ],
+      "animatableId": "032babc5-8858-4fe3-9060-7d32a4aa1b9f"
+    },
+    {
+      "id": "930f8a53-2d89-4a04-9c81-53a7e1e1f6f1",
+      "name": "tilt_joint",
+      "points": [
+        {
+          "id": "7a8c469b-4568-49de-ace4-dd84d5a3c991",
+          "stamp": 0,
+          "value": 0.7853981633974483
+        },
+        {
+          "id": "bf1ef0db-65ec-4539-b4e8-ef3d259cee55",
+          "stamp": 0.3,
+          "value": 0.21847015821131954
+        },
+        {
+          "id": "662cff57-ecc2-4bf2-a7e7-2f5d530caf3e",
+          "stamp": 0.5,
+          "value": -0.1524994580561403
+        },
+        {
+          "id": "22330779-ce74-48a6-a96f-59bf6bca2ce8",
+          "stamp": 0.8333333333333334,
+          "value": -0.08954835365057338
+        }
+      ],
+      "animatableId": "cd5e7147-8381-49aa-9f43-c9b420e34053"
+    }
+  ],
+  "groups": {
+    "dataType": "Map",
+    "value": []
+  },
+  "transitions": {
+    "dataType": "Map",
+    "value": []
+  },
+  "duration": 5000
+}

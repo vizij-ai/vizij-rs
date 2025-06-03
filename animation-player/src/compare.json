@@ -1,0 +1,843 @@
+{
+    "id": "e6dfc5cf-72af-45b2-9533-3d1f54290e8d",
+    "name": "Waking New Quori",
+    "tracks": [
+        {
+            "id": "d7a6b716-10b0-40bb-a894-8bc13a992737",
+            "name": "twist_joint",
+            "points": [
+                {
+                    "id": "061b069c-679c-4c8b-aeca-536de785b6bb",
+                    "stamp": 0,
+                    "value": 3.3370387617425767
+                }
+            ],
+            "animatableId": "81e09645-89b9-4c3b-bdbd-91561e093ad4"
+        },
+        {
+            "id": "0e4b7dc3-19ef-4a31-89d2-067f7c408da9",
+            "name": "neck_joint",
+            "points": [
+                {
+                    "id": "d3d5a244-addc-40fe-b9ab-59c68db42f5f",
+                    "stamp": 0,
+                    "value": -0.125
+                },
+                {
+                    "id": "3efeaad9-638a-40f9-a177-6e92901b7785",
+                    "stamp": 0.5,
+                    "value": -0.03133984463882411
+                },
+                {
+                    "id": "22a742b6-d1f2-4e30-ada5-97a08ab4ef49",
+                    "stamp": 0.8333333333333334,
+                    "value": 0.02082824057149351
+                }
+            ],
+            "animatableId": "e130bd45-3731-40d9-b61f-a9970e0d5842"
+        },
+        {
+            "id": "a3ce95c8-a98c-4dc4-9264-0dc51fd1821e",
+            "name": "pan_joint",
+            "points": [
+                {
+                    "id": "2d5a7f5c-c4ea-4265-916f-cc4f658fa040",
+                    "stamp": 0,
+                    "value": -0.9169333932954267
+                },
+                {
+                    "id": "65bf55d3-aa9b-4618-8607-6db7cc81dc66",
+                    "stamp": 0.3,
+                    "value": 0.28917892343844265
+                },
+                {
+                    "id": "b5593de1-a423-494a-bb2d-789d2107742f",
+                    "stamp": 0.5,
+                    "value": -1.3212424262563287,
+                    "trackId": "a3ce95c8-a98c-4dc4-9264-0dc51fd1821e"
+                },
+                {
+                    "id": "e28f8c99-20c5-4f5e-a817-fdb228c29e6a",
+                    "stamp": 0.6583333333333333,
+                    "value": 0.9437563333453869
+                },
+                {
+                    "id": "c9be0c2c-1ea4-4f9c-a78e-30d36de2ec84",
+                    "stamp": 0.8333333333333334,
+                    "value": 0.09779342072773334
+                }
+            ],
+            "animatableId": "032babc5-8858-4fe3-9060-7d32a4aa1b9f"
+        },
+        {
+            "id": "930f8a53-2d89-4a04-9c81-53a7e1e1f6f1",
+            "name": "tilt_joint",
+            "points": [
+                {
+                    "id": "7a8c469b-4568-49de-ace4-dd84d5a3c991",
+                    "stamp": 0,
+                    "value": 0.7853981633974483
+                },
+                {
+                    "id": "bf1ef0db-65ec-4539-b4e8-ef3d259cee55",
+                    "stamp": 0.3,
+                    "value": 0.21847015821131954
+                },
+                {
+                    "id": "662cff57-ecc2-4bf2-a7e7-2f5d530caf3e",
+                    "stamp": 0.5,
+                    "value": -0.1524994580561403
+                },
+                {
+                    "id": "22330779-ce74-48a6-a96f-59bf6bca2ce8",
+                    "stamp": 0.8333333333333334,
+                    "value": -0.08954835365057338
+                }
+            ],
+            "animatableId": "cd5e7147-8381-49aa-9f43-c9b420e34053"
+        }
+    ],
+    "groups": {
+        "dataType": "Map",
+        "value": []
+    },
+    "transitions": {
+        "dataType": "Map",
+        "value": []
+    },
+    "duration": 5000
+}
+
+{
+    "id": "test_animation",
+    "name": "Transition Testing Animation",
+    "metadata": {
+        "created_at": 1748874119,
+        "modified_at": 1748874119,
+        "author": "WASM Animation Player Demo",
+        "description": "A complex robot animation showcasing different transition changes over time",
+        "tags": [
+            "demo",
+            "complex"
+        ],
+        "version": "1.0.0",
+        "duration": 4000000000,
+        "frame_rate": 60
+    },
+    "tracks": {
+        "c5338fba-cee1-4ec6-981b-a9f8a4cafc23": {
+            "id": "c5338fba-cee1-4ec6-981b-a9f8a4cafc23",
+            "name": "d",
+            "target": "d.bezier",
+            "keypoints": [
+                {
+                    "id": "54d36f2b-e586-4ee9-a664-f587f19b13c3",
+                    "time": 0,
+                    "value": {
+                        "Float": 0.5
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "d32a03fc-34ce-4bbd-97d2-86807ef66ea9",
+                    "time": 250000000,
+                    "value": {
+                        "Float": 1
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "cd6c98de-9a80-4371-b9c2-f87465216856",
+                    "time": 500000000,
+                    "value": {
+                        "Float": 0.30000001192092896
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "8f7fb250-c45f-47cc-8ac3-e0a65919bbab",
+                    "time": 750000000,
+                    "value": {
+                        "Float": 0.800000011920929
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "45b4d9ed-8d75-44c4-aa0f-e81bd00c0bac",
+                    "time": 1000000000,
+                    "value": {
+                        "Float": 0.5
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "754e3250-271b-4ab2-b326-5fe733d15433",
+                    "time": 2000000000,
+                    "value": {
+                        "Float": 1.2000000476837158
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "f60102d6-6346-40f6-b87f-b60eea86fd6a",
+                    "time": 3000000000,
+                    "value": {
+                        "Float": 0.20000000298023224
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "ffe672a2-6206-44c9-bca1-a1e9ca0764a7",
+                    "time": 4000000000,
+                    "value": {
+                        "Float": 0.5
+                    },
+                    "metadata": {}
+                }
+            ],
+            "enabled": true,
+            "weight": 1,
+            "metadata": {}
+        },
+        "e7d6199b-25b6-407b-9e90-12a8e96c4ec6": {
+            "id": "e7d6199b-25b6-407b-9e90-12a8e96c4ec6",
+            "name": "e",
+            "target": "e.spring",
+            "keypoints": [
+                {
+                    "id": "cd542c97-c359-46d6-aa22-d75593d7bad7",
+                    "time": 0,
+                    "value": {
+                        "Float": 0.5
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "63f0a314-08e9-4c61-bad4-d37cb2815282",
+                    "time": 250000000,
+                    "value": {
+                        "Float": 1
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "39e2004e-d539-4bd3-bf36-9e1f7a245e97",
+                    "time": 500000000,
+                    "value": {
+                        "Float": 0.30000001192092896
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "e3ba6442-e00b-4b7c-8277-f2d6600d0e43",
+                    "time": 750000000,
+                    "value": {
+                        "Float": 0.800000011920929
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "95a0f36c-34db-4eed-904d-0a033d6480c3",
+                    "time": 1000000000,
+                    "value": {
+                        "Float": 0.5
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "f256729c-9a63-41c3-92e9-5e592f431029",
+                    "time": 2000000000,
+                    "value": {
+                        "Float": 1.2000000476837158
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "570310a5-9768-470a-a047-57d1bd22e402",
+                    "time": 3000000000,
+                    "value": {
+                        "Float": 0.20000000298023224
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "d9f678cd-11bf-4354-be14-132eab0a6871",
+                    "time": 4000000000,
+                    "value": {
+                        "Float": 0.5
+                    },
+                    "metadata": {}
+                }
+            ],
+            "enabled": true,
+            "weight": 1,
+            "metadata": {}
+        },
+        "8a2f95a4-83d9-4958-ad71-27c610a92987": {
+            "id": "8a2f95a4-83d9-4958-ad71-27c610a92987",
+            "name": "a",
+            "target": "a.step",
+            "keypoints": [
+                {
+                    "id": "4840d2b0-2a68-4a3a-af1a-c032ce618962",
+                    "time": 0,
+                    "value": {
+                        "Float": 0.5
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "8fb6a94f-1610-47c0-a438-e3eddadbd0fc",
+                    "time": 250000000,
+                    "value": {
+                        "Float": 1
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "a697fc22-367e-4e8a-8787-bf825e734504",
+                    "time": 500000000,
+                    "value": {
+                        "Float": 0.30000001192092896
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "baa1ab70-8956-4321-bad5-eaecebdff8be",
+                    "time": 750000000,
+                    "value": {
+                        "Float": 0.800000011920929
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "cb328d98-d7c7-4ae7-b6b0-f85c35763c18",
+                    "time": 1000000000,
+                    "value": {
+                        "Float": 0.5
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "efb4c3b7-564c-4e91-90f6-8c1ef70ece58",
+                    "time": 2000000000,
+                    "value": {
+                        "Float": 1.2000000476837158
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "cde7d36a-0e13-4ea5-8684-6e4976988acc",
+                    "time": 3000000000,
+                    "value": {
+                        "Float": 0.20000000298023224
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "ef95cee0-5a22-4308-8888-c66e0651cb44",
+                    "time": 4000000000,
+                    "value": {
+                        "Float": 0.5
+                    },
+                    "metadata": {}
+                }
+            ],
+            "enabled": true,
+            "weight": 1,
+            "metadata": {}
+        },
+        "09080e22-359c-4042-8eb8-83f4935e6590": {
+            "id": "09080e22-359c-4042-8eb8-83f4935e6590",
+            "name": "b",
+            "target": "b.cubic",
+            "keypoints": [
+                {
+                    "id": "a509abb6-176d-4c79-be94-d20bb9fba5da",
+                    "time": 0,
+                    "value": {
+                        "Float": 0.5
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "af462e7f-ae59-47eb-ab96-f621e02a0cda",
+                    "time": 250000000,
+                    "value": {
+                        "Float": 1
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "0e0b32d8-0cb5-44c6-9e60-099c6e513591",
+                    "time": 500000000,
+                    "value": {
+                        "Float": 0.30000001192092896
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "72a02404-a9d0-44ce-9973-1d2ab554a7c2",
+                    "time": 750000000,
+                    "value": {
+                        "Float": 0.800000011920929
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "f4977725-e435-47d4-b409-1e3ca631bcf3",
+                    "time": 1000000000,
+                    "value": {
+                        "Float": 0.5
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "95d977fc-1a48-4662-8db2-c34a146f41b9",
+                    "time": 2000000000,
+                    "value": {
+                        "Float": 1.2000000476837158
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "9ff197d9-027c-493f-8ad1-59c197702b39",
+                    "time": 3000000000,
+                    "value": {
+                        "Float": 0.20000000298023224
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "61ae756d-dc73-4498-a16a-e581d97cc9da",
+                    "time": 4000000000,
+                    "value": {
+                        "Float": 0.5
+                    },
+                    "metadata": {}
+                }
+            ],
+            "enabled": true,
+            "weight": 1,
+            "metadata": {}
+        },
+        "205492dd-b398-40e1-8d6a-bb0a12d126c7": {
+            "id": "205492dd-b398-40e1-8d6a-bb0a12d126c7",
+            "name": "c",
+            "target": "c.linear",
+            "keypoints": [
+                {
+                    "id": "5fd1763a-3953-4a06-8ade-b0063ae0252c",
+                    "time": 0,
+                    "value": {
+                        "Float": 0.5
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "8f88b68c-91f9-4849-aaed-7c86eea4a5e6",
+                    "time": 250000000,
+                    "value": {
+                        "Float": 1
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "a2c5d313-104c-40f2-aac1-15f3cc493b90",
+                    "time": 500000000,
+                    "value": {
+                        "Float": 0.30000001192092896
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "55c5a4d9-db22-44ad-b17d-61eaa0cf9750",
+                    "time": 750000000,
+                    "value": {
+                        "Float": 0.800000011920929
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "c366afc3-298b-495c-9c86-5cc269689df3",
+                    "time": 1000000000,
+                    "value": {
+                        "Float": 0.5
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "2306bdbc-1f0b-47b2-8968-faa34e8f31b0",
+                    "time": 2000000000,
+                    "value": {
+                        "Float": 1.2000000476837158
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "6e0bc1d3-de6a-426a-a278-9f6180670863",
+                    "time": 3000000000,
+                    "value": {
+                        "Float": 0.20000000298023224
+                    },
+                    "metadata": {}
+                },
+                {
+                    "id": "32e0f33f-f4e6-4373-8f0f-ba6411385a61",
+                    "time": 4000000000,
+                    "value": {
+                        "Float": 0.5
+                    },
+                    "metadata": {}
+                }
+            ],
+            "enabled": true,
+            "weight": 1,
+            "metadata": {}
+        }
+    },
+    "transitions": {
+        "3bcda116-6f39-46a0-b708-99c9a7349d96": {
+            "id": "3bcda116-6f39-46a0-b708-99c9a7349d96",
+            "keypoints": [
+                "e3ba6442-e00b-4b7c-8277-f2d6600d0e43",
+                "95a0f36c-34db-4eed-904d-0a033d6480c3"
+            ],
+            "variant": "Spring",
+            "parameters": {}
+        },
+        "c273086c-fa16-4045-9c48-43730e8ee80a": {
+            "id": "c273086c-fa16-4045-9c48-43730e8ee80a",
+            "keypoints": [
+                "39e2004e-d539-4bd3-bf36-9e1f7a245e97",
+                "e3ba6442-e00b-4b7c-8277-f2d6600d0e43"
+            ],
+            "variant": "Spring",
+            "parameters": {}
+        },
+        "949392ea-a3ce-4d0b-84ef-e68b24e64ec9": {
+            "id": "949392ea-a3ce-4d0b-84ef-e68b24e64ec9",
+            "keypoints": [
+                "45b4d9ed-8d75-44c4-aa0f-e81bd00c0bac",
+                "754e3250-271b-4ab2-b326-5fe733d15433"
+            ],
+            "variant": "Bezier",
+            "parameters": {}
+        },
+        "00287f0a-5d9e-4538-a250-abe72848f1f1": {
+            "id": "00287f0a-5d9e-4538-a250-abe72848f1f1",
+            "keypoints": [
+                "8fb6a94f-1610-47c0-a438-e3eddadbd0fc",
+                "a697fc22-367e-4e8a-8787-bf825e734504"
+            ],
+            "variant": "Step",
+            "parameters": {}
+        },
+        "bdf7f343-19bd-4fa8-a8af-7850934ec958": {
+            "id": "bdf7f343-19bd-4fa8-a8af-7850934ec958",
+            "keypoints": [
+                "a697fc22-367e-4e8a-8787-bf825e734504",
+                "baa1ab70-8956-4321-bad5-eaecebdff8be"
+            ],
+            "variant": "Step",
+            "parameters": {}
+        },
+        "e04a42f3-8087-467e-9d4c-3f97c559baff": {
+            "id": "e04a42f3-8087-467e-9d4c-3f97c559baff",
+            "keypoints": [
+                "0e0b32d8-0cb5-44c6-9e60-099c6e513591",
+                "72a02404-a9d0-44ce-9973-1d2ab554a7c2"
+            ],
+            "variant": "Cubic",
+            "parameters": {}
+        },
+        "6ff90e57-d78e-4d89-aedb-aafa5d73bc93": {
+            "id": "6ff90e57-d78e-4d89-aedb-aafa5d73bc93",
+            "keypoints": [
+                "cb328d98-d7c7-4ae7-b6b0-f85c35763c18",
+                "efb4c3b7-564c-4e91-90f6-8c1ef70ece58"
+            ],
+            "variant": "Step",
+            "parameters": {}
+        },
+        "ff89d166-0760-46e6-920e-e9cdeee90b1f": {
+            "id": "ff89d166-0760-46e6-920e-e9cdeee90b1f",
+            "keypoints": [
+                "6e0bc1d3-de6a-426a-a278-9f6180670863",
+                "32e0f33f-f4e6-4373-8f0f-ba6411385a61"
+            ],
+            "variant": "Linear",
+            "parameters": {}
+        },
+        "2c735a12-8a28-4f93-852e-3e778260d785": {
+            "id": "2c735a12-8a28-4f93-852e-3e778260d785",
+            "keypoints": [
+                "95a0f36c-34db-4eed-904d-0a033d6480c3",
+                "f256729c-9a63-41c3-92e9-5e592f431029"
+            ],
+            "variant": "Spring",
+            "parameters": {}
+        },
+        "5212927e-5ce0-4239-b515-7b5a2c5f455d": {
+            "id": "5212927e-5ce0-4239-b515-7b5a2c5f455d",
+            "keypoints": [
+                "f4977725-e435-47d4-b409-1e3ca631bcf3",
+                "95d977fc-1a48-4662-8db2-c34a146f41b9"
+            ],
+            "variant": "Cubic",
+            "parameters": {}
+        },
+        "5b277f3a-5633-4b80-b853-52f457b90614": {
+            "id": "5b277f3a-5633-4b80-b853-52f457b90614",
+            "keypoints": [
+                "54d36f2b-e586-4ee9-a664-f587f19b13c3",
+                "d32a03fc-34ce-4bbd-97d2-86807ef66ea9"
+            ],
+            "variant": "Bezier",
+            "parameters": {}
+        },
+        "4e2abcad-fa23-4024-9673-327eafd75202": {
+            "id": "4e2abcad-fa23-4024-9673-327eafd75202",
+            "keypoints": [
+                "95d977fc-1a48-4662-8db2-c34a146f41b9",
+                "9ff197d9-027c-493f-8ad1-59c197702b39"
+            ],
+            "variant": "Cubic",
+            "parameters": {}
+        },
+        "ec67cad2-13cd-4b3c-9aa0-a7426133a9bf": {
+            "id": "ec67cad2-13cd-4b3c-9aa0-a7426133a9bf",
+            "keypoints": [
+                "5fd1763a-3953-4a06-8ade-b0063ae0252c",
+                "8f88b68c-91f9-4849-aaed-7c86eea4a5e6"
+            ],
+            "variant": "Linear",
+            "parameters": {}
+        },
+        "fca628bc-d9ef-4fb5-bc2a-25120060a8da": {
+            "id": "fca628bc-d9ef-4fb5-bc2a-25120060a8da",
+            "keypoints": [
+                "754e3250-271b-4ab2-b326-5fe733d15433",
+                "f60102d6-6346-40f6-b87f-b60eea86fd6a"
+            ],
+            "variant": "Bezier",
+            "parameters": {}
+        },
+        "a3f5e2d3-dd87-480f-a783-d2b579394864": {
+            "id": "a3f5e2d3-dd87-480f-a783-d2b579394864",
+            "keypoints": [
+                "72a02404-a9d0-44ce-9973-1d2ab554a7c2",
+                "f4977725-e435-47d4-b409-1e3ca631bcf3"
+            ],
+            "variant": "Cubic",
+            "parameters": {}
+        },
+        "cf2b3996-a533-4c32-a387-362201f91433": {
+            "id": "cf2b3996-a533-4c32-a387-362201f91433",
+            "keypoints": [
+                "f60102d6-6346-40f6-b87f-b60eea86fd6a",
+                "ffe672a2-6206-44c9-bca1-a1e9ca0764a7"
+            ],
+            "variant": "Bezier",
+            "parameters": {}
+        },
+        "d5666bb8-63f2-4d6b-802c-4e69112f75ce": {
+            "id": "d5666bb8-63f2-4d6b-802c-4e69112f75ce",
+            "keypoints": [
+                "d32a03fc-34ce-4bbd-97d2-86807ef66ea9",
+                "cd6c98de-9a80-4371-b9c2-f87465216856"
+            ],
+            "variant": "Bezier",
+            "parameters": {}
+        },
+        "e0c3398b-94ea-4d85-a822-868b9d1e550e": {
+            "id": "e0c3398b-94ea-4d85-a822-868b9d1e550e",
+            "keypoints": [
+                "8f7fb250-c45f-47cc-8ac3-e0a65919bbab",
+                "45b4d9ed-8d75-44c4-aa0f-e81bd00c0bac"
+            ],
+            "variant": "Bezier",
+            "parameters": {}
+        },
+        "23f26fa4-6724-40ee-b393-8900d9261c4c": {
+            "id": "23f26fa4-6724-40ee-b393-8900d9261c4c",
+            "keypoints": [
+                "4840d2b0-2a68-4a3a-af1a-c032ce618962",
+                "8fb6a94f-1610-47c0-a438-e3eddadbd0fc"
+            ],
+            "variant": "Step",
+            "parameters": {}
+        },
+        "752fe094-4651-474b-9989-504accc89875": {
+            "id": "752fe094-4651-474b-9989-504accc89875",
+            "keypoints": [
+                "efb4c3b7-564c-4e91-90f6-8c1ef70ece58",
+                "cde7d36a-0e13-4ea5-8684-6e4976988acc"
+            ],
+            "variant": "Step",
+            "parameters": {}
+        },
+        "10ae00b1-0e91-4a02-912d-871d736299d0": {
+            "id": "10ae00b1-0e91-4a02-912d-871d736299d0",
+            "keypoints": [
+                "2306bdbc-1f0b-47b2-8968-faa34e8f31b0",
+                "6e0bc1d3-de6a-426a-a278-9f6180670863"
+            ],
+            "variant": "Linear",
+            "parameters": {}
+        },
+        "9a5b39f6-c18a-4693-a622-c03d7f0ba715": {
+            "id": "9a5b39f6-c18a-4693-a622-c03d7f0ba715",
+            "keypoints": [
+                "cde7d36a-0e13-4ea5-8684-6e4976988acc",
+                "ef95cee0-5a22-4308-8888-c66e0651cb44"
+            ],
+            "variant": "Step",
+            "parameters": {}
+        },
+        "9af1bd9a-210e-4a62-9b4f-9abaa37d5aab": {
+            "id": "9af1bd9a-210e-4a62-9b4f-9abaa37d5aab",
+            "keypoints": [
+                "cd6c98de-9a80-4371-b9c2-f87465216856",
+                "8f7fb250-c45f-47cc-8ac3-e0a65919bbab"
+            ],
+            "variant": "Bezier",
+            "parameters": {}
+        },
+        "d790d5d3-692b-4ecf-9d12-bef898ddb52f": {
+            "id": "d790d5d3-692b-4ecf-9d12-bef898ddb52f",
+            "keypoints": [
+                "c366afc3-298b-495c-9c86-5cc269689df3",
+                "2306bdbc-1f0b-47b2-8968-faa34e8f31b0"
+            ],
+            "variant": "Linear",
+            "parameters": {}
+        },
+        "3bd1421c-d5d0-4d36-9667-e45973039bfe": {
+            "id": "3bd1421c-d5d0-4d36-9667-e45973039bfe",
+            "keypoints": [
+                "f256729c-9a63-41c3-92e9-5e592f431029",
+                "570310a5-9768-470a-a047-57d1bd22e402"
+            ],
+            "variant": "Spring",
+            "parameters": {}
+        },
+        "10248c48-dc61-45e8-982e-3f506b85fea5": {
+            "id": "10248c48-dc61-45e8-982e-3f506b85fea5",
+            "keypoints": [
+                "63f0a314-08e9-4c61-bad4-d37cb2815282",
+                "39e2004e-d539-4bd3-bf36-9e1f7a245e97"
+            ],
+            "variant": "Spring",
+            "parameters": {}
+        },
+        "c8e35a2a-5ce7-46eb-b5c5-05374600a09c": {
+            "id": "c8e35a2a-5ce7-46eb-b5c5-05374600a09c",
+            "keypoints": [
+                "9ff197d9-027c-493f-8ad1-59c197702b39",
+                "61ae756d-dc73-4498-a16a-e581d97cc9da"
+            ],
+            "variant": "Cubic",
+            "parameters": {}
+        },
+        "09c48f16-e269-4e95-a172-81c73bec7b4f": {
+            "id": "09c48f16-e269-4e95-a172-81c73bec7b4f",
+            "keypoints": [
+                "a2c5d313-104c-40f2-aac1-15f3cc493b90",
+                "55c5a4d9-db22-44ad-b17d-61eaa0cf9750"
+            ],
+            "variant": "Linear",
+            "parameters": {}
+        },
+        "ad1ae9a7-94b7-4aa5-8b75-7e111031605a": {
+            "id": "ad1ae9a7-94b7-4aa5-8b75-7e111031605a",
+            "keypoints": [
+                "af462e7f-ae59-47eb-ab96-f621e02a0cda",
+                "0e0b32d8-0cb5-44c6-9e60-099c6e513591"
+            ],
+            "variant": "Cubic",
+            "parameters": {}
+        },
+        "17cf686d-d670-4cb1-80d4-418d53153e33": {
+            "id": "17cf686d-d670-4cb1-80d4-418d53153e33",
+            "keypoints": [
+                "8f88b68c-91f9-4849-aaed-7c86eea4a5e6",
+                "a2c5d313-104c-40f2-aac1-15f3cc493b90"
+            ],
+            "variant": "Linear",
+            "parameters": {}
+        },
+        "d27013c2-9938-43fd-8965-aa6234758fd9": {
+            "id": "d27013c2-9938-43fd-8965-aa6234758fd9",
+            "keypoints": [
+                "a509abb6-176d-4c79-be94-d20bb9fba5da",
+                "af462e7f-ae59-47eb-ab96-f621e02a0cda"
+            ],
+            "variant": "Cubic",
+            "parameters": {}
+        },
+        "5e61fdc4-6ba8-4d1e-b595-8bd4e0a1dbe0": {
+            "id": "5e61fdc4-6ba8-4d1e-b595-8bd4e0a1dbe0",
+            "keypoints": [
+                "baa1ab70-8956-4321-bad5-eaecebdff8be",
+                "cb328d98-d7c7-4ae7-b6b0-f85c35763c18"
+            ],
+            "variant": "Step",
+            "parameters": {}
+        },
+        "93c5361b-ced4-48a2-a92b-999937895e7c": {
+            "id": "93c5361b-ced4-48a2-a92b-999937895e7c",
+            "keypoints": [
+                "cd542c97-c359-46d6-aa22-d75593d7bad7",
+                "63f0a314-08e9-4c61-bad4-d37cb2815282"
+            ],
+            "variant": "Spring",
+            "parameters": {}
+        },
+        "5e33b1cc-30c6-404e-a2b3-09925848807f": {
+            "id": "5e33b1cc-30c6-404e-a2b3-09925848807f",
+            "keypoints": [
+                "55c5a4d9-db22-44ad-b17d-61eaa0cf9750",
+                "c366afc3-298b-495c-9c86-5cc269689df3"
+            ],
+            "variant": "Linear",
+            "parameters": {}
+        },
+        "5f26bbee-c631-4560-aa88-7948099460a0": {
+            "id": "5f26bbee-c631-4560-aa88-7948099460a0",
+            "keypoints": [
+                "570310a5-9768-470a-a047-57d1bd22e402",
+                "d9f678cd-11bf-4354-be14-132eab0a6871"
+            ],
+            "variant": "Spring",
+            "parameters": {}
+        }
+    }
+}
+
+Parsed data on wasm side AnimationData 
+{ id: "e6dfc5cf-72af-45b2-9533-3d1f54290e8d", name: "Waking New Quori", metadata: AnimationMetadata { created_at: 1748875818, modified_at: 1748875818, author: None, description: None, tags: [], version: "1.0.0", duration: AnimationTime(5000000000), frame_rate: 60.0
+    }, tracks: {TrackId(751e00c1-3886-4d03-a502-c075658c2043): AnimationTrack { id: TrackId(751e00c1-3886-4d03-a502-c075658c2043), name: "neck_joint", target: "e130bd45-3731-40d9-b61f-a9970e0d5842", keypoints: [AnimationKeypoint { id: KeypointId(1aca4e30-c8d9-40f2-9fad-c304e21a85ba), time: AnimationTime(0), value: Float(-0.125), metadata: {}
+                }, AnimationKeypoint { id: KeypointId(19663c3a-c533-406d-a219-825bc0052f5d), time: AnimationTime(2500000000), value: Float(-0.03133984463882411), metadata: {}
+                }, AnimationKeypoint { id: KeypointId(5a2151f0-9522-4aec-b067-768335d4fc33), time: AnimationTime(4166666666), value: Float(0.02082824057149351), metadata: {}
+                }
+            ], enabled: true, weight: 1.0, metadata: {}
+        }, TrackId(e4ec23d4-b25c-4c51-8d9a-a6f5ec67bf62): AnimationTrack { id: TrackId(e4ec23d4-b25c-4c51-8d9a-a6f5ec67bf62), name: "tilt_joint", target: "cd5e7147-8381-49aa-9f43-c9b420e34053", keypoints: [AnimationKeypoint { id: KeypointId(d6652680-3da0-4cdd-b0bc-4d8febb1c387), time: AnimationTime(0), value: Float(0.7853981633974483), metadata: {}
+                }, AnimationKeypoint { id: KeypointId(3eb8d2ed-990d-4f5a-8015-2c5d3e4edf2b), time: AnimationTime(1500000000), value: Float(0.21847015821131952), metadata: {}
+                }, AnimationKeypoint { id: KeypointId(54b8b1fc-1a94-472a-beff-b58f097de582), time: AnimationTime(2500000000), value: Float(-0.1524994580561403), metadata: {}
+                }, AnimationKeypoint { id: KeypointId(15b01978-f03a-44a1-817b-cf497b3fe04b), time: AnimationTime(4166666666), value: Float(-0.08954835365057338), metadata: {}
+                }
+            ], enabled: true, weight: 1.0, metadata: {}
+        }, TrackId(38e50d22-9413-42c7-980b-e17d7ad66496): AnimationTrack { id: TrackId(38e50d22-9413-42c7-980b-e17d7ad66496), name: "twist_joint", target: "81e09645-89b9-4c3b-bdbd-91561e093ad4", keypoints: [AnimationKeypoint { id: KeypointId(7b281695-406b-46b0-818f-5a3b89ced695), time: AnimationTime(0), value: Float(3.3370387617425767), metadata: {}
+                }
+            ], enabled: true, weight: 1.0, metadata: {}
+        }, TrackId(0b649a37-009f-45d0-92be-959738520805): AnimationTrack { id: TrackId(0b649a37-009f-45d0-92be-959738520805), name: "pan_joint", target: "032babc5-8858-4fe3-9060-7d32a4aa1b9f", keypoints: [AnimationKeypoint { id: KeypointId(884b87b4-89d7-4a57-88c0-e540e811c615), time: AnimationTime(0), value: Float(-0.9169333932954268), metadata: {}
+                }, AnimationKeypoint { id: KeypointId(ca015b6e-11b8-4ad2-a85c-0cd6a9c98ab0), time: AnimationTime(1500000000), value: Float(0.28917892343844265), metadata: {}
+                }, AnimationKeypoint { id: KeypointId(f84f7893-b46e-440e-b2de-c26653425cd4), time: AnimationTime(2500000000), value: Float(-1.3212424262563287), metadata: {}
+                }, AnimationKeypoint { id: KeypointId(299fedaa-f18b-40bd-8b43-da8916a6cf26), time: AnimationTime(3291666666), value: Float(0.9437563333453868), metadata: {}
+                }, AnimationKeypoint { id: KeypointId(7d5c3e2f-979f-4877-8961-b918482cf5f1), time: AnimationTime(4166666666), value: Float(0.09779342072773334), metadata: {}
+                }
+            ], enabled: true, weight: 1.0, metadata: {}
+        }
+    }, transitions: {}
+}

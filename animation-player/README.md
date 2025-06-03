@@ -1,84 +1,145 @@
-<div align="center">
+# Animation Player Core - WebAssembly Demo (Vite)
 
-  <h1><code>wasm-pack-template</code></h1>
+A high-performance animation engine built in Rust with WebAssembly bindings for web integration. This project provides real-time animation streaming, interpolation, and playback capabilities optimized for modern web browsers.
 
-  <strong>A template for kick starting a Rust and WebAssembly project using <a href="https://github.com/rustwasm/wasm-pack">wasm-pack</a>.</strong>
+## Overview
 
-  <p>
-    <a href="https://travis-ci.org/rustwasm/wasm-pack-template"><img src="https://img.shields.io/travis/rustwasm/wasm-pack-template.svg?style=flat-square" alt="Build Status" /></a>
-  </p>
+The Animation Player Core is a Rust-based animation engine that compiles to WebAssembly for web deployment. It features:
 
-  <h3>
-    <a href="https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.html">Tutorial</a>
-    <span> | </span>
-    <a href="https://discordapp.com/channels/442252698964721669/443151097398296587">Chat</a>
-  </h3>
+- **9 Value Types**: Float, Integer, Boolean, String, Vector2, Vector3, Vector4, Color, Transform
+- **Real-time Interpolation**: Smooth animation transitions with multiple interpolation functions
+- **Track-based System**: Organize animations into tracks with keypoints
+- **Player Management**: Multiple animation players with independent playback states
+- **Performance Optimized**: Built for high-performance real-time animation playback
+- **Web Integration**: Complete JavaScript bindings for seamless web integration
 
-  <sub>Built with 🦀🕸 by <a href="https://rustwasm.github.io/">The Rust and WebAssembly Working Group</a></sub>
-</div>
+## Prerequisites
 
-## About
+Before building and running the WASM demo, ensure you have the following installed:
 
-[**📚 Read this template tutorial! 📚**][template-docs]
+### Required Tools
 
-This template is designed for compiling Rust libraries into WebAssembly and
-publishing the resulting package to NPM.
+1. **Rust** (latest stable version)
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   source ~/.cargo/env
+   ```
 
-Be sure to check out [other `wasm-pack` tutorials online][tutorials] for other
-templates and usages of `wasm-pack`.
+2. **wasm-pack** (for building WASM modules)
+   ```bash
+   curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+   ```
 
-[tutorials]: https://rustwasm.github.io/docs/wasm-pack/tutorials/index.html
-[template-docs]: https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.html
+3. **Node.js** (for the local HTTP server)
+   ```bash
+   # Using Node Version Manager (recommended)
+   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+   nvm install node
+   ```
 
-## 🚴 Usage
+4. **Python** (alternative for HTTP server)
+   ```bash
+   # Python 3 is usually pre-installed on most systems
+   python3 --version
+   ```
 
-### 🐑 Use `cargo generate` to Clone this Template
+### Verify Installation
 
-[Learn more about `cargo generate` here.](https://github.com/ashleygwilliams/cargo-generate)
-
-```
-cargo generate --git https://github.com/rustwasm/wasm-pack-template.git --name my-project
-cd my-project
-```
-
-### 🛠️ Build with `wasm-pack build`
-
-```
-wasm-pack build
-```
-
-### 🔬 Test in Headless Browsers with `wasm-pack test`
-
-```
-wasm-pack test --headless --firefox
+```bash
+rustc --version
+wasm-pack --version
+node --version  # or python3 --version
 ```
 
-### 🎁 Publish to NPM with `wasm-pack publish`
+## Quick Start
+
+Get the demo running in 3 steps:
+
+```bash
+# 1. Build the WASM module (Rust to WASM)
+wasm-pack build --target web --out-dir pkg --features wasm
+
+# 2. Install Node.js dependencies
+npm install
+
+# 3. Build the web demo (HTML, CSS, JS, WASM assets)
+npm run build
+
+# 4. Start the development server (optional, for local development)
+npm start
+
+# 5. Open the demo in your browser
+# For development server: Vite will automatically open a browser or you can navigate to:
+# http://localhost:5173 (default Vite port)
 
 ```
-wasm-pack publish
+
+## Building the WASM Module
+
+### Standard Build
+
+```bash
+# Build for web target (ES6 modules) with WASM features
+wasm-pack build --target web --out-dir pkg --features wasm
 ```
 
-## 🔋 Batteries Included
+### Development Build (with debug symbols)
 
-* [`wasm-bindgen`](https://github.com/rustwasm/wasm-bindgen) for communicating
-  between WebAssembly and JavaScript.
-* [`console_error_panic_hook`](https://github.com/rustwasm/console_error_panic_hook)
-  for logging panic messages to the developer console.
-* `LICENSE-APACHE` and `LICENSE-MIT`: most Rust projects are licensed this way, so these are included for you
+```bash
+# Build with debug information for development and WASM features
+wasm-pack build --target web --out-dir pkg --dev --features wasm
+```
 
-## License
+### Production Build (optimized)
 
-Licensed under either of
+```bash
+# Build with maximum optimizations and WASM features
+wasm-pack build --target web --out-dir pkg --release --features wasm
+```
 
-* Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-* MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+### Build Output (WASM)
 
-at your option.
+After building the WASM module, you'll find the following files in the `pkg/` directory:
 
-### Contribution
+- `animation_player.js` - JavaScript bindings
+- `animation_player_bg.wasm` - WebAssembly module
+- `animation_player.d.ts` - TypeScript definitions
+- `package.json` - Package metadata
 
-Unless you explicitly state otherwise, any contribution intentionally
-submitted for inclusion in the work by you, as defined in the Apache-2.0
-license, shall be dual licensed as above, without any additional terms or
-conditions.
+## Running the Demo
+
+### Step 1: Build the WASM Module (Rust to WASM)
+
+```bash
+# Build for web target with WASM features
+wasm-pack build --target web --out-dir pkg --features wasm
+```
+
+### Step 2: Install Node.js Dependencies
+
+```bash
+# Install Node.js dependencies (including Vite)
+npm install
+```
+
+### Step 3: Build the Web Demo
+
+```bash
+# Build the HTML, CSS, and JavaScript assets for the demo
+npm run build
+```
+
+### Step 4: Start Development Server (Optional, for local development)
+
+```bash
+# Start the Vite development server
+npm start
+```
+### Step 5: Start React Server
+
+```bash
+cd react-demo
+npm install
+npm run build
+npm run dev
+```
