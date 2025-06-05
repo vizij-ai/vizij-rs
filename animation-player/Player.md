@@ -6,7 +6,6 @@ This document provides a detailed overview of the animation player architecture,
 
 The animation system follows a hierarchical architecture where the **AnimationEngine** manages multiple **AnimationPlayers**, and each player manages multiple **AnimationInstances**. This design allows for complex multi-layered animations with independent timing, looping, and blending capabilities.
 
-
 ## AnimationPlayer Architecture
 
 ```mermaid
@@ -242,6 +241,7 @@ sequenceDiagram
 ## Key Concepts
 
 ### AnimationEngine Responsibilities
+
 - **Player Lifecycle Management**: Creates, manages, and destroys animation players
 - **Resource Management**: Loads and caches animation data, manages interpolation registry
 - **Global Playback Control**: Provides play/pause/stop/seek operations for individual players
@@ -249,18 +249,21 @@ sequenceDiagram
 - **Event Coordination**: Manages event dispatching across the system
 
 ### AnimationPlayer Responsibilities
+
 - **Instance Management**: Manages multiple animation instances with different settings
 - **Time Coordination**: Maintains current playback time and handles time-based operations
 - **Value Calculation**: Combines values from all active instances
 - **Player-level Metrics**: Tracks performance metrics for this specific player
 
 ### AnimationInstance Responsibilities
+
 - **Individual Animation Control**: Manages settings for a specific animation (timescale, looping, offsets)
 - **Time Mapping**: Converts player time to effective animation time
 - **Loop State Management**: Handles loop counting and ping-pong direction
 - **Animation Data Reference**: Links to specific animation data by ID
 
 ### Value Calculation Flow
+
 1. **Engine Update**: Called with frame delta time
 2. **Player Iteration**: Engine iterates through all players
 3. **State Check**: Check if player is in Playing state
@@ -275,7 +278,9 @@ sequenceDiagram
 8. **Metrics Update**: Update player and engine metrics
 
 ### Multi-layer Animation Support
+
 The architecture supports complex multi-layer animations through:
+
 - **Multiple Instances per Player**: Each instance can reference different animation data
 - **Independent Timing**: Each instance has its own timescale, start time, and duration
 - **Flexible Looping**: Per-instance loop modes (Once, Loop, PingPong)
@@ -283,6 +288,7 @@ The architecture supports complex multi-layer animations through:
 - **Blending Ready**: Architecture prepared for future blending between instances
 
 This design enables scenarios like:
+
 - Playing multiple animations simultaneously on the same object
 - Layering animations with different timing characteristics
 - Creating complex composite animations from simpler building blocks

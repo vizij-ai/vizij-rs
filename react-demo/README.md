@@ -45,6 +45,7 @@ react-demo/
 ### 1. Context Provider Pattern
 
 The `AnimationPlayerProvider` component wraps the entire application and provides:
+
 - WASM module loading and initialization
 - Animation player instance management
 - Shared state management (current values, metrics, logs)
@@ -59,12 +60,14 @@ The `AnimationPlayerProvider` component wraps the entire application and provide
 ### 3. Component Structure
 
 **Core Components:**
+
 - **AnimationControls**: Playback controls, configuration, and update management
 - **AnimationDisplay**: Real-time value display, status panel, and event logging
 - **TimeSeriesControls**: History configuration, statistics, and chart visualization
 - **BakedAnimationPanel**: Interface for baking animations and visualizing baked data.
 
 **UI Components:**
+
 - **ControlPanel**: Reusable wrapper for grouped controls
 - **MetricsGrid**: Performance metrics display with responsive layout
 - **FileUpload**: Component for loading animation data from local files.
@@ -91,28 +94,34 @@ const updateLoop = () => {
 ## Key Differences from HTML Demo
 
 ### 1. State Management
+
 - **HTML Demo**: Global variables and direct DOM manipulation
 - **React Demo**: React Context API with centralized state management
 
 ### 2. Event Handling
+
 - **HTML Demo**: Event listeners attached to DOM elements
 - **React Demo**: React event handlers with proper cleanup
 
 ### 3. Data Flow
+
 - **HTML Demo**: Imperative updates with manual DOM changes
 - **React Demo**: Declarative components with reactive data flow
 
 ### 4. Component Architecture
+
 - **HTML Demo**: Monolithic structure in single file
 - **React Demo**: Modular components with clear separation of concerns
 
 ### 5. Time Series Visualization
+
 - **HTML Demo**: Basic text display of history
 - **React Demo**: Interactive Chart.js integration with multiple chart types
 
 ## Setup and Installation
 
 1. **Install Dependencies**:
+
    ```bash
    cd react-demo
    npm install
@@ -120,6 +129,7 @@ const updateLoop = () => {
 
 2. **Copy WASM Files**:
    Ensure the WASM files are built and copied to `public/wasm/`:
+
    ```bash
    # From the root animation-player-core directory
    npm run build
@@ -127,6 +137,7 @@ const updateLoop = () => {
    ```
 
 3. **Start Development Server**:
+
    ```bash
    npm run dev
    ```
@@ -137,10 +148,12 @@ const updateLoop = () => {
 ## Features
 
 ### General
+
 - **Dark/Light Theme Toggle**: Switch between dark and light modes for improved readability and user preference.
 - **File Upload**: Easily load animation data from local JSON files.
 
 ### Animation Control
+
 - Play, pause, stop controls
 - Seek position with slider
 - Speed control (-5x to 5x)
@@ -148,6 +161,7 @@ const updateLoop = () => {
 - Start/end time configuration
 
 ### Real-time Display
+
 - Current animation values
 - Player state and metrics
 - Performance statistics
@@ -155,6 +169,7 @@ const updateLoop = () => {
 - **Derivative Visualization**: Display and compare derivatives of animation tracks.
 
 ### Time Series Visualization
+
 - History capture configuration
 - Interactive charts (line, bar, scatter)
 - Data export (JSON, CSV)
@@ -162,11 +177,13 @@ const updateLoop = () => {
 - Memory usage tracking
 
 ### Animation Baking
+
 - **Baking Configuration**: Configure frame rate, time range, and other parameters for baking.
 - **Baked Data Visualization**: Compare original and baked animation data visually.
 - **Export Baked Data**: Save baked animation data to JSON.
 
 ### TypeScript Support
+
 - Type definitions for WASM bindings
 - Proper typing for all React components
 - Enhanced development experience with IntelliSense
@@ -219,16 +236,19 @@ The player can be configured through the provider:
 ## Development Notes
 
 ### Performance Considerations
+
 - The demo uses `requestAnimationFrame` for smooth updates
 - Chart.js rendering is optimized with data limits
 - WASM calls are batched to minimize overhead
 
 ### Memory Management
+
 - Proper cleanup of intervals and event listeners
 - WASM memory is managed through the player lifecycle
 - History buffers are configurable to prevent memory leaks
 
 ### Error Handling
+
 - Comprehensive error boundaries
 - WASM loading failure recovery
 - Player initialization error handling

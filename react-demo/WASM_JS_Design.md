@@ -2,7 +2,6 @@
 
 This document contains the design and implementation plan for the react-demo using the wasm animation player.
 
-
 ## WASM Best Practices and Recommendations
 
 When integrating a Rust-based WASM module for animation playback in React, there are several architectural patterns and best practices to consider. Here's a comprehensive breakdown:

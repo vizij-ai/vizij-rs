@@ -22,17 +22,20 @@ Before building and running the WASM demo, ensure you have the following install
 ### Required Tools
 
 1. **Rust** (latest stable version)
+
    ```bash
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
    source ~/.cargo/env
    ```
 
 2. **wasm-pack** (for building WASM modules)
+
    ```bash
    curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
    ```
 
 3. **Node.js** (for the local HTTP server)
+
    ```bash
    # Using Node Version Manager (recommended)
    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
@@ -40,6 +43,7 @@ Before building and running the WASM demo, ensure you have the following install
    ```
 
 4. **Python** (alternative for HTTP server)
+
    ```bash
    # Python 3 is usually pre-installed on most systems
    python3 --version
