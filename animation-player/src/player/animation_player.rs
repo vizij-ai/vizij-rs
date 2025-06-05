@@ -6,8 +6,6 @@ use std::collections::HashMap;
 /// Individual animation player instance
 #[derive(Debug)]
 pub struct AnimationPlayer {
-    /// Unique identifier for this player
-    pub id: String,
     /// Current animation time
     pub current_time: AnimationTime, // Made public for direct access
     /// Performance metrics
@@ -25,9 +23,8 @@ pub struct AnimationPlayer {
 impl AnimationPlayer {
     /// Create a new animation player
     #[inline]
-    pub fn new(id: impl Into<String>) -> Self {
+    pub fn new() -> Self {
         Self {
-            id: id.into(),
             current_time: AnimationTime::zero(),
             metrics: PlaybackMetrics::new(),
             last_calculated_values: None,
@@ -39,22 +36,16 @@ impl AnimationPlayer {
 
     /// Add an animation instance to the player.
     /// The instance's animation_id must correspond to an AnimationData loaded in the engine.
-    #[inline]
-    pub fn add_instance(&mut self, instance: AnimationInstance) -> Result<(), AnimationError> {
-        if self.instances.contains_key(&instance.id) {
-            return Err(AnimationError::Generic {
-                message: format!(
-                    "Animation instance with ID '{}' already exists.",
-                    instance.id
-                ),
-            });
+    pub fn add_instance(&mut self, instance: AnimationInstance) -> String {
+        let mut id = uuid::Uuid::new_v4().to_string();
+        while self.instances.contains_key(&id) {
+            id = uuid::Uuid::new_v4().to_string(); // Ensure unique ID
         }
-        self.instances.insert(instance.id.clone(), instance);
-        Ok(())
+        self.instances.insert(id.clone(), instance);
+        id
     }
 
     /// Remove an animation instance from the player.
-    #[inline]
     pub fn remove_instance(
         &mut self,
         instance_id: &str,
@@ -98,11 +89,11 @@ impl AnimationPlayer {
     #[inline]
     pub fn go_to(
         &mut self,
-        time: AnimationTime,
+        time: impl Into<AnimationTime>,
         animations: &HashMap<String, AnimationData>,
         interpolation_registry: &mut InterpolationRegistry,
     ) -> Result<HashMap<String, Value>, AnimationError> {
-        self.current_time = time;
+        self.current_time = time.into();
         self.calculate_values(animations, interpolation_registry)
     }
 
@@ -111,22 +102,22 @@ impl AnimationPlayer {
     #[inline]
     pub fn increment(
         &mut self,
-        delta_time: AnimationTime,
+        delta_time: impl Into<AnimationTime>,
         animations: &HashMap<String, AnimationData>,
         interpolation_registry: &mut InterpolationRegistry,
     ) -> Result<HashMap<String, Value>, AnimationError> {
-        self.current_time += delta_time;
+        self.current_time += delta_time.into();
         self.calculate_values(animations, interpolation_registry)
     }
 
     #[inline]
     pub fn decrement(
         &mut self,
-        delta_time: AnimationTime,
+        delta_time: impl Into<AnimationTime>,
         animations: &HashMap<String, AnimationData>,
         interpolation_registry: &mut InterpolationRegistry,
     ) -> Result<HashMap<String, Value>, AnimationError> {
-        self.current_time -= delta_time;
+        self.current_time -= delta_time.into();
         self.calculate_values(animations, interpolation_registry)
     }
 
@@ -170,12 +161,11 @@ impl AnimationPlayer {
             let effective_instance_time = instance.get_effective_time(self.current_time);
 
             // Get the animation data for this instance
-            let animation_data =
-                animations
-                    .get(&instance.settings.animation_id)
-                    .ok_or_else(|| AnimationError::AnimationNotFound {
-                        id: instance.settings.animation_id.clone(),
-                    })?;
+            let animation_data = animations.get(&instance.animation_id).ok_or_else(|| {
+                AnimationError::AnimationNotFound {
+                    id: instance.animation_id.clone(),
+                }
+            })?;
 
             // Process tracks for this instance
             for track in animation_data.tracks.values() {
@@ -211,7 +201,7 @@ impl AnimationPlayer {
             self.instances
                 .values()
                 .next()
-                .map(|i| i.settings.animation_id.clone())
+                .map(|i| i.animation_id.clone())
                 .unwrap_or_default(),
         ); // Store ID of first instance's animation data
 
@@ -280,7 +270,7 @@ impl AnimationPlayer {
         self.instances
             .values()
             .filter(|instance| instance.settings.enabled)
-            .map(|instance| instance.settings.animation_id.clone())
+            .map(|instance| instance.animation_id.clone())
             .collect()
     }
 
@@ -320,12 +310,11 @@ impl AnimationPlayer {
             let effective_instance_time = instance.get_effective_time(self.current_time);
 
             // Get the animation data for this instance
-            let animation_data =
-                animations
-                    .get(&instance.settings.animation_id)
-                    .ok_or_else(|| AnimationError::AnimationNotFound {
-                        id: instance.settings.animation_id.clone(),
-                    })?;
+            let animation_data = animations.get(&instance.animation_id).ok_or_else(|| {
+                AnimationError::AnimationNotFound {
+                    id: instance.animation_id.clone(),
+                }
+            })?;
 
             // Process tracks for this instance
             for track in animation_data.tracks.values() {

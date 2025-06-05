@@ -1,8 +1,7 @@
 //! Tests for loading and playing test_animation.json format
 
 use animation_player::{
-    animation::{AnimationInstance, InstanceSettings},
-    AnimationConfig, AnimationData, AnimationEngine, AnimationKeypoint, AnimationTime,
+    AnimationEngineConfig, AnimationData, AnimationEngine, AnimationKeypoint, AnimationTime,
     AnimationTrack, Value,
 };
 use serde_json;
@@ -53,7 +52,7 @@ fn convert_test_animation(test_data: StudioAnimationData) -> AnimationData {
         for point in track_data.points {
             // Convert stamp (0.0-1.0) to time in seconds
             let time_seconds = point.stamp * duration_seconds;
-            let time = AnimationTime::new(time_seconds).unwrap();
+            let time = AnimationTime::from_seconds(time_seconds).unwrap();
             let keypoint = AnimationKeypoint::new(time, Value::Float(point.value));
             track.add_keypoint(keypoint).unwrap();
         }
@@ -62,7 +61,7 @@ fn convert_test_animation(test_data: StudioAnimationData) -> AnimationData {
     }
 
     // Set the duration
-    animation.metadata.duration = AnimationTime::new(duration_seconds).unwrap();
+    animation.metadata.duration = AnimationTime::from_seconds(duration_seconds).unwrap();
     animation
 }
 
@@ -86,7 +85,7 @@ fn test_load_test_animation_json() {
     assert_eq!(animation.name, "Waking New Quori");
     assert_eq!(
         animation.metadata.duration,
-        AnimationTime::new(5.0).unwrap()
+        AnimationTime::from_seconds(5.0).unwrap()
     );
 
     // Verify tracks
@@ -117,10 +116,10 @@ fn test_stamp_to_time_conversion() {
     assert_eq!(keypoints.len(), 3);
 
     // stamp: 0 -> time: 0.0s
-    assert_eq!(keypoints[0].time, AnimationTime::new(0.0).unwrap());
+    assert_eq!(keypoints[0].time, AnimationTime::from_seconds(0.0).unwrap());
 
     // stamp: 0.5 -> time: 2.5s (0.5 * 5.0)
-    assert_eq!(keypoints[1].time, AnimationTime::new(2.5).unwrap());
+    assert_eq!(keypoints[1].time, AnimationTime::from_seconds(2.5).unwrap());
 
     // stamp: 0.8333333333333334 -> time: ~4.167s
     assert!((keypoints[2].time.as_seconds() - 4.1666666666666670).abs() < 0.001);
@@ -137,39 +136,39 @@ fn test_stamp_to_time_conversion() {
     }
 }
 
-#[test]
-fn test_animation_playback_in_engine() {
+fn setup_engine_and_player() -> (AnimationEngine, String) {
     let json_content = include_str!("../test_animation.json");
     let animation = load_test_animation_from_json(json_content).unwrap();
-
-    let mut engine = AnimationEngine::new(AnimationConfig::default());
+    let mut engine = AnimationEngine::new(AnimationEngineConfig::default());
 
     // Load animation
-    engine.load_animation_data(animation.clone()).unwrap();
+    let animation_id = engine.load_animation_data(animation.clone()).unwrap();
 
     // Create player
-    engine.create_player("test_player").unwrap();
+    let player_id = engine.create_player();
 
-    // Add instance
-    let player = engine.get_player_mut("test_player").unwrap();
-    let instance = AnimationInstance::new(
-        "test_instance",
-        InstanceSettings::new(&animation.id),
-        animation.metadata.duration,
-    );
-    player.add_instance(instance).unwrap();
+    engine
+        .add_animation_to_player(&player_id, &animation_id, None)
+        .unwrap();
+
+    (engine, player_id)
+}
+
+#[test]
+fn test_animation_playback_in_engine() {
+    let (mut engine, player_id) = setup_engine_and_player();
 
     // Test playback at different timestamps
     let test_times = vec![0.0, 1.25, 2.5, 4.1666, 5.0]; // Key timestamps
 
     for time in test_times {
         engine
-            .seek_player("test_player", AnimationTime::new(time).unwrap())
+            .seek_player(&player_id, AnimationTime::from_seconds(time).unwrap())
             .unwrap();
         let result = engine.update(0.0).unwrap(); // Update without advancing time
 
-        assert!(result.contains_key("test_player"));
-        let player_values = &result["test_player"];
+        assert!(result.contains_key(&player_id));
+        let player_values = &result[&player_id];
 
         // Should have values for all 4 tracks
         assert!(
@@ -189,29 +188,16 @@ fn test_animation_playback_in_engine() {
 
 #[test]
 fn test_specific_value_interpolation() {
-    let json_content = include_str!("../test_animation.json");
-    let animation = load_test_animation_from_json(json_content).unwrap();
-
-    let mut engine = AnimationEngine::new(AnimationConfig::default());
-    engine.load_animation_data(animation.clone()).unwrap();
-    engine.create_player("test_player").unwrap();
-
-    let player = engine.get_player_mut("test_player").unwrap();
-    let instance = AnimationInstance::new(
-        "test_instance",
-        InstanceSettings::new(&animation.id),
-        animation.metadata.duration,
-    );
-    player.add_instance(instance).unwrap();
+    let (mut engine, player_id) = setup_engine_and_player();
 
     // Test neck_joint interpolation at halfway point (stamp 0.25 -> time 1.25s)
     // Should interpolate between values -0.125 and -0.03133984463882411
     engine
-        .seek_player("test_player", AnimationTime::new(1.25).unwrap())
+        .seek_player(&player_id, AnimationTime::from_seconds(1.25).unwrap())
         .unwrap();
     let result = engine.update(0.0).unwrap();
 
-    let player_values = &result["test_player"];
+    let player_values = &result[&player_id];
     let neck_joint_id = "e130bd45-3731-40d9-b61f-a9970e0d5842";
 
     if let Some(Value::Float(interpolated_value)) = player_values.get(neck_joint_id) {
@@ -268,27 +254,14 @@ fn test_pan_joint_multiple_keypoints() {
 
 #[test]
 fn test_edge_case_values() {
-    let json_content = include_str!("../test_animation.json");
-    let animation = load_test_animation_from_json(json_content).unwrap();
-
-    let mut engine = AnimationEngine::new(AnimationConfig::default());
-    engine.load_animation_data(animation.clone()).unwrap();
-    engine.create_player("test_player").unwrap();
-
-    let player = engine.get_player_mut("test_player").unwrap();
-    let instance = AnimationInstance::new(
-        "test_instance",
-        InstanceSettings::new(&animation.id),
-        animation.metadata.duration,
-    );
-    player.add_instance(instance).unwrap();
+    let (mut engine, player_id) = setup_engine_and_player();
 
     // Test at exact start (time 0.0)
     engine
-        .seek_player("test_player", AnimationTime::new(0.0).unwrap())
+        .seek_player(&player_id, AnimationTime::from_seconds(0.0).unwrap())
         .unwrap();
     let result = engine.update(0.0).unwrap();
-    let player_values = &result["test_player"];
+    let player_values = &result[&player_id];
 
     // Should have exact starting values
     let twist_joint_id = "81e09645-89b9-4c3b-bdbd-91561e093ad4";
@@ -298,10 +271,10 @@ fn test_edge_case_values() {
 
     // Test at exact end (time 5.0)
     engine
-        .seek_player("test_player", AnimationTime::new(5.0).unwrap())
+        .seek_player(&player_id, AnimationTime::from_seconds(5.0).unwrap())
         .unwrap();
     let result = engine.update(0.0).unwrap();
-    let player_values = &result["test_player"];
+    let player_values = &result[&player_id];
 
     // Should have final values from last keypoints
     let neck_joint_id = "e130bd45-3731-40d9-b61f-a9970e0d5842";
@@ -312,30 +285,17 @@ fn test_edge_case_values() {
 
 #[test]
 fn test_animation_loop_playback() {
-    let json_content = include_str!("../test_animation.json");
-    let animation = load_test_animation_from_json(json_content).unwrap();
-
-    let mut engine = AnimationEngine::new(AnimationConfig::default());
-    engine.load_animation_data(animation.clone()).unwrap();
-    engine.create_player("test_player").unwrap();
-
-    let player = engine.get_player_mut("test_player").unwrap();
-    let instance = AnimationInstance::new(
-        "test_instance",
-        InstanceSettings::new(&animation.id),
-        animation.metadata.duration,
-    );
-    player.add_instance(instance).unwrap();
+    let (mut engine, player_id) = setup_engine_and_player();
 
     // Enable looping
-    let player_state = engine.get_player_state_mut("test_player").unwrap();
+    let player_state = engine.get_player_state_mut(&player_id).unwrap();
     player_state.mode = animation_player::animation::PlaybackMode::Loop;
 
-    engine.play_player("test_player").unwrap();
+    engine.play_player(&player_id).unwrap();
 
     // Update past the animation duration to test looping
     engine.update(6.0).unwrap(); // 6 seconds, should loop back to 1 second
 
-    let player = engine.get_player("test_player").unwrap();
+    let player = engine.get_player(&player_id).unwrap();
     assert!((player.current_time.as_seconds() - 1.0).abs() < 0.1); // Should have looped
 }

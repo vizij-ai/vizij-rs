@@ -17,8 +17,8 @@ fn test_linear_interpolation() {
     let end = Value::Float(10.0);
     let context = InterpolationContext::new(
         AnimationTime::zero(),
-        AnimationTime::new(2.0).unwrap(),
-        AnimationTime::new(1.0).unwrap(),
+        AnimationTime::from_seconds(2.0).unwrap(),
+        AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap();
 
@@ -37,8 +37,8 @@ fn test_cubic_interpolation() {
     let end = Value::Float(10.0);
     let context = InterpolationContext::new(
         AnimationTime::zero(),
-        AnimationTime::new(2.0).unwrap(),
-        AnimationTime::new(1.0).unwrap(),
+        AnimationTime::from_seconds(2.0).unwrap(),
+        AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap();
 
@@ -60,8 +60,8 @@ fn test_step_interpolation() {
     // Before threshold
     let context1 = InterpolationContext::new(
         AnimationTime::zero(),
-        AnimationTime::new(2.0).unwrap(),
-        AnimationTime::new(1.0).unwrap(),
+        AnimationTime::from_seconds(2.0).unwrap(),
+        AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap();
 
@@ -73,8 +73,8 @@ fn test_step_interpolation() {
     // At threshold
     let context2 = InterpolationContext::new(
         AnimationTime::zero(),
-        AnimationTime::new(1.0).unwrap(),
-        AnimationTime::new(1.0).unwrap(),
+        AnimationTime::from_seconds(1.0).unwrap(),
+        AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap();
 
@@ -91,8 +91,8 @@ fn test_vector_interpolation() {
     let end = Value::Vector3(Vector3::new(10.0, 20.0, 30.0));
     let context = InterpolationContext::new(
         AnimationTime::zero(),
-        AnimationTime::new(2.0).unwrap(),
-        AnimationTime::new(1.0).unwrap(),
+        AnimationTime::from_seconds(2.0).unwrap(),
+        AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap();
 
@@ -114,8 +114,8 @@ fn test_interpolation_registry() {
     let end = Value::Float(10.0);
     let context = InterpolationContext::new(
         AnimationTime::zero(),
-        AnimationTime::new(2.0).unwrap(),
-        AnimationTime::new(1.0).unwrap(),
+        AnimationTime::from_seconds(2.0).unwrap(),
+        AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap();
 
@@ -149,8 +149,8 @@ fn test_interpolation_caching() {
     let end = Value::Float(10.0);
     let context = InterpolationContext::new(
         AnimationTime::zero(),
-        AnimationTime::new(2.0).unwrap(),
-        AnimationTime::new(1.0).unwrap(),
+        AnimationTime::from_seconds(2.0).unwrap(),
+        AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap();
 
@@ -172,8 +172,8 @@ fn test_interpolation_caching() {
 fn test_interpolation_context() {
     let mut context = InterpolationContext::new(
         AnimationTime::zero(),
-        AnimationTime::new(2.0).unwrap(),
-        AnimationTime::new(1.0).unwrap(),
+        AnimationTime::from_seconds(2.0).unwrap(),
+        AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap();
 
@@ -268,8 +268,8 @@ fn test_bezier_interpolation_specific_points() {
     let end = Value::Float(10.0);
     let context = InterpolationContext::new(
         AnimationTime::zero(),
-        AnimationTime::new(2.0).unwrap(),
-        AnimationTime::new(1.0).unwrap(),
+        AnimationTime::from_seconds(2.0).unwrap(),
+        AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap(); // t = 0.5
 
@@ -288,8 +288,8 @@ fn test_spring_interpolation_specific_params() {
     let end = Value::Float(10.0);
     let context = InterpolationContext::new(
         AnimationTime::zero(),
-        AnimationTime::new(2.0).unwrap(),
-        AnimationTime::new(1.0).unwrap(),
+        AnimationTime::from_seconds(2.0).unwrap(),
+        AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap(); // t = 0.5
 

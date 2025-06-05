@@ -1,5 +1,7 @@
 //! Time handling for animations
 
+use std::{collections::VecDeque, time::Duration};
+
 #[cfg(target_arch = "wasm32")]
 use js_sys::Date;
 use serde::{Deserialize, Serialize};
@@ -39,26 +41,26 @@ use crate::error::AnimationError;
 pub struct AnimationTime(u64); // Changed to u64 nanoseconds for Ord compliance
 
 impl AnimationTime {
-    /// Create a new animation time
+    /// Create animation time from nanoseconds
     #[inline]
-    pub fn new(seconds: f64) -> Result<Self, AnimationError> {
-        if seconds < 0.0 || !seconds.is_finite() {
-            return Err(AnimationError::InvalidTime { time: seconds });
-        }
-        let nanos = (seconds * 1_000_000_000.0) as u64;
-        Ok(Self(nanos))
+    pub fn from_nanos(nanoseconds: u64) -> Self {
+        Self(nanoseconds)
     }
 
     /// Create animation time from milliseconds
     #[inline]
     pub fn from_millis(milliseconds: f64) -> Result<Self, AnimationError> {
-        Self::new(milliseconds / 1000.0)
+        Self::from_seconds(milliseconds / 1000.0)
     }
 
-    /// Create animation time from nanoseconds
+    /// Create a new animation time
     #[inline]
-    pub fn from_nanos(nanoseconds: u64) -> Result<Self, AnimationError> {
-        Ok(Self(nanoseconds))
+    pub fn from_seconds(seconds: f64) -> Result<Self, AnimationError> {
+        if seconds < 0.0 || !seconds.is_finite() {
+            return Err(AnimationError::InvalidTime { time: seconds });
+        }
+        let nanos = (seconds * 1_000_000_000.0) as u64;
+        Ok(Self(nanos))
     }
 
     /// Zero time
@@ -162,15 +164,40 @@ impl std::ops::SubAssign for AnimationTime {
     }
 }
 
-impl From<f64> for AnimationTime {
-    fn from(seconds: f64) -> Self {
-        Self::new(seconds.max(0.0)).unwrap_or(Self::zero())
+// Easier conversions
+impl From<u64> for AnimationTime {
+    fn from(nanos: u64) -> Self {
+        Self::from_nanos(nanos)
     }
 }
 
-impl From<AnimationTime> for f64 {
-    fn from(time: AnimationTime) -> Self {
-        time.as_seconds()
+impl Into<u64> for AnimationTime {
+    fn into(self) -> u64 {
+        self.0
+    }
+}
+
+impl From<f64> for AnimationTime {
+    fn from(seconds: f64) -> Self {
+        Self::from_seconds(seconds.max(0.0)).unwrap_or(Self::zero())
+    }
+}
+
+impl Into<f64> for AnimationTime {
+    fn into(self) -> f64 {
+        self.as_seconds()
+    }
+}
+
+impl From<Duration> for AnimationTime {
+    fn from(duration: Duration) -> Self {
+        AnimationTime::from_nanos(duration.as_nanos() as u64)
+    }
+}
+
+impl Into<Duration> for AnimationTime {
+    fn into(self) -> Duration {
+        Duration::from_nanos(self.0)
     }
 }
 
@@ -301,8 +328,7 @@ impl Timer {
     /// Get elapsed time since start or last restart
     #[inline]
     pub fn elapsed(&self) -> AnimationTime {
-        let duration = self.start.elapsed();
-        AnimationTime::from_nanos(duration.as_nanos() as u64).unwrap_or(AnimationTime::zero())
+        self.start.elapsed().into()
     }
 
     /// Get elapsed time in milliseconds
@@ -327,9 +353,8 @@ impl Default for Timer {
 /// Frame rate calculator
 #[derive(Debug, Clone)]
 pub struct FrameRateCalculator {
-    frame_times: Vec<AnimationTime>,
+    frame_times: VecDeque<Instant>,
     max_samples: usize,
-    last_frame_time: Option<Instant>,
 }
 
 impl FrameRateCalculator {
@@ -337,83 +362,81 @@ impl FrameRateCalculator {
     #[inline]
     pub fn new(max_samples: usize) -> Self {
         Self {
-            frame_times: Vec::with_capacity(max_samples),
+            frame_times: VecDeque::with_capacity(max_samples + 1),
             max_samples,
-            last_frame_time: None,
         }
     }
 
     /// Record a new frame
     #[inline]
     pub fn record_frame(&mut self) {
-        let now = Instant::now();
-
-        if let Some(last_time) = self.last_frame_time {
-            let frame_duration = now.duration_since(last_time);
-            if let Ok(duration) = AnimationTime::from_nanos(frame_duration.as_nanos() as u64) {
-                self.frame_times.push(duration);
-
-                // Keep only the most recent samples
-                if self.frame_times.len() > self.max_samples {
-                    self.frame_times.remove(0);
-                }
-            }
+        self.frame_times.push_back(Instant::now());
+        if self.frame_times.len() > self.max_samples {
+            self.frame_times.pop_front();
         }
-
-        self.last_frame_time = Some(now);
     }
 
     /// Get the current frame rate (frames per second)
     #[inline]
     pub fn fps(&self) -> f64 {
-        if self.frame_times.is_empty() {
-            return 0.0;
+        let nof_frames = self.frame_times.len();
+        if nof_frames < 2 {
+            return f64::NAN; // Not enough frames to calculate FPS
         }
 
-        let total_time: f64 = self.frame_times.iter().map(|t| t.as_seconds()).sum();
-        let avg_frame_time = total_time / self.frame_times.len() as f64;
-
-        if avg_frame_time > 0.0 {
-            1.0 / avg_frame_time
-        } else {
-            0.0
-        }
+        let first_time = self.frame_times.front().unwrap();
+        let last_time = self.frame_times.back().unwrap();
+        let total_duration = last_time.duration_since(*first_time);
+        nof_frames as f64 / total_duration.as_secs_f64()
     }
 
     /// Get average frame time in milliseconds
     #[inline]
     pub fn avg_frame_time_millis(&self) -> f64 {
-        if self.frame_times.is_empty() {
-            return 0.0;
+        let nof_frames = self.frame_times.len();
+        if nof_frames < 2 {
+            return f64::NAN; // Not enough frames to calculate FPS
         }
 
-        let total_time: f64 = self.frame_times.iter().map(|t| t.as_millis()).sum();
-        total_time / self.frame_times.len() as f64
+        let first_time = self.frame_times.front().unwrap();
+        let last_time = self.frame_times.back().unwrap();
+        let total_duration = last_time.duration_since(*first_time);
+        1000f64 * total_duration.as_secs_f64() / nof_frames as f64
+    }
+
+    /// Compute durations between consecutive frames
+    #[inline]
+    fn duration_between_frames<'a>(&'a self) -> impl Iterator<Item = Duration> + 'a {
+        self.frame_times
+            .iter()
+            .zip(self.frame_times.iter().skip(1))
+            .map(|(previous, next)| next.duration_since(*previous))
     }
 
     /// Get the minimum frame time in the current sample window
+    /// If there are less than 2 frames, returns `f64::MAX`.
     #[inline]
     pub fn min_frame_time_millis(&self) -> f64 {
-        self.frame_times
-            .iter()
-            .map(|t| t.as_millis())
-            .fold(f64::INFINITY, f64::min)
+        self.duration_between_frames()
+            .fold(Duration::MAX, |min, t| min.min(t))
+            .as_secs_f64()
+            * 1000.0
     }
 
     /// Get the maximum frame time in the current sample window
+    /// If there are less than 2 frames, returns `f64::ZERO`.
     #[inline]
     pub fn max_frame_time_millis(&self) -> f64 {
-        self.frame_times
-            .iter()
-            .map(|t| t.as_millis())
-            .fold(0.0, f64::max)
+        self.duration_between_frames()
+            .fold(Duration::ZERO, |max, t| max.max(t))
+            .as_secs_f64()
+            * 1000.0
     }
 
     /// Reset the calculator
     #[inline]
     pub fn reset(&mut self) {
         self.frame_times.clear();
-        self.last_frame_time = None;
     }
 }
 
@@ -429,8 +452,8 @@ mod tests {
 
     #[test]
     fn test_animation_time() {
-        let time1 = AnimationTime::new(1.5).unwrap();
-        let time2 = AnimationTime::new(2.0).unwrap();
+        let time1 = AnimationTime::from_seconds(1.5).unwrap();
+        let time2 = AnimationTime::from_seconds(2.0).unwrap();
 
         assert_eq!(time1.as_seconds(), 1.5);
         assert_eq!(time1.as_millis(), 1500.0);
@@ -444,36 +467,39 @@ mod tests {
 
     #[test]
     fn test_invalid_time() {
-        assert!(AnimationTime::new(-1.0).is_err());
-        assert!(AnimationTime::new(f64::NAN).is_err());
-        assert!(AnimationTime::new(f64::INFINITY).is_err());
+        assert!(AnimationTime::from_seconds(-1.0).is_err());
+        assert!(AnimationTime::from_seconds(f64::NAN).is_err());
+        assert!(AnimationTime::from_seconds(f64::INFINITY).is_err());
     }
 
     #[test]
     fn test_time_range() {
-        let start = AnimationTime::new(1.0).unwrap();
-        let end = AnimationTime::new(3.0).unwrap();
+        let start = AnimationTime::from_seconds(1.0).unwrap();
+        let end = AnimationTime::from_seconds(3.0).unwrap();
         let range = TimeRange::new(start, end).unwrap();
 
         assert_eq!(range.duration().as_seconds(), 2.0);
-        assert!(range.contains(AnimationTime::new(2.0).unwrap()));
-        assert!(!range.contains(AnimationTime::new(4.0).unwrap()));
+        assert!(range.contains(AnimationTime::from_seconds(2.0).unwrap()));
+        assert!(!range.contains(AnimationTime::from_seconds(4.0).unwrap()));
 
-        assert_eq!(range.normalize_time(AnimationTime::new(2.0).unwrap()), 0.5);
+        assert_eq!(
+            range.normalize_time(AnimationTime::from_seconds(2.0).unwrap()),
+            0.5
+        );
         assert_eq!(range.denormalize_time(0.5).as_seconds(), 2.0);
     }
 
     #[test]
     fn test_range_operations() {
         let range1 = TimeRange::new(
-            AnimationTime::new(1.0).unwrap(),
-            AnimationTime::new(3.0).unwrap(),
+            AnimationTime::from_seconds(1.0).unwrap(),
+            AnimationTime::from_seconds(3.0).unwrap(),
         )
         .unwrap();
 
         let range2 = TimeRange::new(
-            AnimationTime::new(2.0).unwrap(),
-            AnimationTime::new(4.0).unwrap(),
+            AnimationTime::from_seconds(2.0).unwrap(),
+            AnimationTime::from_seconds(4.0).unwrap(),
         )
         .unwrap();
 
@@ -501,12 +527,16 @@ mod tests {
         let mut calc = FrameRateCalculator::new(10);
 
         // Simulate 60 FPS (16.67ms per frame)
-        for _ in 0..5 {
+        for _ in 0..30 {
             calc.record_frame();
-            std::thread::sleep(std::time::Duration::from_millis(16));
+            std::thread::sleep(std::time::Duration::from_nanos(16666667));
         }
 
         let fps = calc.fps();
-        assert!(fps > 50.0 && fps < 70.0); // Rough check accounting for timing variance
+        assert!(
+            fps > 50.0 && fps < 70.0,
+            "FPS out of expected range: {}",
+            fps
+        ); // Rough check accounting for timing variance
     }
 }

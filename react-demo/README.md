@@ -133,7 +133,7 @@ const updateLoop = () => {
    ```bash
    # From the root animation-player-core directory
    npm run build
-   cp pkg/*.wasm pkg/*.js react-demo/public/wasm/
+   cp ../animation-player/pkg/*.wasm ../animation-player/pkg/*.js public/wasm/
    ```
 
 3. **Start Development Server**:
@@ -196,7 +196,7 @@ import AnimationPlayerProvider, { useAnimationPlayer } from './components/Animat
 
 function MyComponent() {
   const { player, currentValues, play, pause } = useAnimationPlayer();
-  
+
   return (
     <div>
       <button onClick={play}>Play</button>

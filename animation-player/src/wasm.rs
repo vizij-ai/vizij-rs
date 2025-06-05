@@ -9,9 +9,8 @@ use crate::{
 use crate::{
     animation::PlaybackMode,
     baking::{AnimationBaking, BakingConfig},
-    AnimationConfig, AnimationData, AnimationEngine, AnimationTime, Value,
+    AnimationData, AnimationEngine, AnimationEngineConfig, AnimationTime, Value,
 };
-use std::sync::{Arc, Mutex};
 use wasm_bindgen::prelude::*;
 
 // Set up panic hook for better error messages in WASM
@@ -23,7 +22,7 @@ pub fn main() {
 /// WASM wrapper for the animation engine
 #[wasm_bindgen]
 pub struct WasmAnimationEngine {
-    engine: Arc<Mutex<AnimationEngine>>,
+    engine: AnimationEngine,
 }
 
 #[wasm_bindgen]
@@ -32,21 +31,19 @@ impl WasmAnimationEngine {
     #[wasm_bindgen(constructor)]
     pub fn new(config_json: Option<String>) -> Result<WasmAnimationEngine, JsValue> {
         let config = if let Some(json) = config_json {
-            serde_json::from_str::<AnimationConfig>(&json)
+            serde_json::from_str::<AnimationEngineConfig>(&json)
                 .map_err(|e| JsValue::from_str(&format!("Config parse error: {}", e)))?
         } else {
-            AnimationConfig::web_optimized()
+            AnimationEngineConfig::web_optimized()
         };
 
         let engine = AnimationEngine::new(config);
 
-        Ok(WasmAnimationEngine {
-            engine: Arc::new(Mutex::new(engine)),
-        })
+        Ok(WasmAnimationEngine { engine })
     }
 
     #[wasm_bindgen]
-    pub fn load_animation(&mut self, animation_json: &str) -> Result<(), JsValue> {
+    pub fn load_animation(&mut self, animation_json: &str) -> Result<String, JsValue> {
         console_log(&format!(
             "Loading animation on wasm side {:?}",
             animation_json
@@ -83,58 +80,33 @@ impl WasmAnimationEngine {
             }
         };
         console_log(&format!("Parsed data on wasm side {:?}", animation_data));
-        self.engine
-            .lock()
-            .map_err(|e| {
-                let msg = format!("Engine lock poisoned: {}", e);
-                console_log(&msg);
-                JsValue::from_str(&msg)
-            })?
+        let animation_id = self
+            .engine
             .load_animation_data(animation_data)
             .map_err(|e| JsValue::from_str(&format!("Load animation error: {:?}", e)))?;
         console_log(&format!("Finished on wasm side"));
 
-        Ok(())
+        Ok(animation_id)
     }
 
     /// Create a new player
     #[wasm_bindgen]
-    pub fn create_player(&mut self, player_id: &str) -> Result<(), JsValue> {
-        self.engine
-            .lock()
-            .map_err(|e| {
-                let msg = format!("Engine lock poisoned: {}", e);
-                console_log(&msg);
-                JsValue::from_str(&msg)
-            })?
-            .create_player(player_id)
-            .map_err(|e| JsValue::from_str(&format!("Create player error: {:?}", e)))?;
-
-        Ok(())
+    pub fn create_player(&mut self) -> String {
+        self.engine.create_player()
     }
 
     /// Add an animation instance to a player
     #[wasm_bindgen]
-    pub fn add_instance(
-        &mut self,
-        player_id: &str,
-        animation_id: &str,
-    ) -> Result<String, JsValue> {
-        let mut engine = self.engine.lock().map_err(|e| {
-            let msg = format!("Engine lock poisoned: {}", e);
-            console_log(&msg);
-            JsValue::from_str(&msg)
-        })?;
-
+    pub fn add_instance(&mut self, player_id: &str, animation_id: &str) -> Result<String, JsValue> {
         // Add instance to player
-        let instance_id = engine.add_animation_to_player(
-            player_id,
-            animation_id,
-            None
-        ).map_err(|e| {
-            let msg = format!("Engine lock poisoned: {}", e);
-            console_log(&msg);
-            JsValue::from_str(&msg)})?;
+        let instance_id = self
+            .engine
+            .add_animation_to_player(player_id, animation_id, None)
+            .map_err(|e| {
+                let msg = format!("Engine lock poisoned: {}", e);
+                console_log(&msg);
+                JsValue::from_str(&msg)
+            })?;
 
         Ok(instance_id)
     }
@@ -143,12 +115,6 @@ impl WasmAnimationEngine {
     #[wasm_bindgen]
     pub fn play(&mut self, player_id: &str) -> Result<(), JsValue> {
         self.engine
-            .lock()
-            .map_err(|e| {
-                let msg = format!("Engine lock poisoned: {}", e);
-                console_log(&msg);
-                JsValue::from_str(&msg)
-            })?
             .play_player(player_id)
             .map_err(|e| JsValue::from_str(&format!("Play error: {:?}", e)))?;
         Ok(())
@@ -158,12 +124,6 @@ impl WasmAnimationEngine {
     #[wasm_bindgen]
     pub fn pause(&mut self, player_id: &str) -> Result<(), JsValue> {
         self.engine
-            .lock()
-            .map_err(|e| {
-                let msg = format!("Engine lock poisoned: {}", e);
-                console_log(&msg);
-                JsValue::from_str(&msg)
-            })?
             .pause_player(player_id)
             .map_err(|e| JsValue::from_str(&format!("Pause error: {:?}", e)))?;
         Ok(())
@@ -173,12 +133,6 @@ impl WasmAnimationEngine {
     #[wasm_bindgen]
     pub fn stop(&mut self, player_id: &str) -> Result<(), JsValue> {
         self.engine
-            .lock()
-            .map_err(|e| {
-                let msg = format!("Engine lock poisoned: {}", e);
-                console_log(&msg);
-                JsValue::from_str(&msg)
-            })?
             .stop_player(player_id)
             .map_err(|e| JsValue::from_str(&format!("Stop error: {:?}", e)))?;
         Ok(())
@@ -187,16 +141,10 @@ impl WasmAnimationEngine {
     /// Seek to a specific time for a player
     #[wasm_bindgen]
     pub fn seek(&mut self, player_id: &str, time_seconds: f64) -> Result<(), JsValue> {
-        let time = AnimationTime::new(time_seconds)
+        let time = AnimationTime::from_seconds(time_seconds)
             .map_err(|e| JsValue::from_str(&format!("Invalid time: {:?}", e)))?;
 
         self.engine
-            .lock()
-            .map_err(|e| {
-                let msg = format!("Engine lock poisoned: {}", e);
-                console_log(&msg);
-                JsValue::from_str(&msg)
-            })?
             .seek_player(player_id, time)
             .map_err(|e| JsValue::from_str(&format!("Seek error: {:?}", e)))?;
         Ok(())
@@ -205,13 +153,7 @@ impl WasmAnimationEngine {
     /// Update the animation engine and get current values
     #[wasm_bindgen]
     pub fn update(&mut self, frame_delta_seconds: f64) -> Result<JsValue, JsValue> {
-        let mut engine = self.engine.lock().map_err(|e| {
-            let msg = format!("Engine lock poisoned: {}", e);
-            console_log(&msg); // Log to console for debugging
-            JsValue::from_str(&msg)
-        })?;
-
-        let values = match engine.update(frame_delta_seconds) {
+        let values = match self.engine.update(frame_delta_seconds) {
             Ok(values) => values,
             Err(e) => {
                 console_log(&format!("Engine update failed: {:?}", e));
@@ -232,12 +174,8 @@ impl WasmAnimationEngine {
     /// Get current playback state for a player
     #[wasm_bindgen]
     pub fn get_player_state(&self, player_id: &str) -> Result<String, JsValue> {
-        let engine = self.engine.lock().map_err(|e| {
-            let msg = format!("Engine lock poisoned: {}", e);
-            console_log(&msg);
-            JsValue::from_str(&msg)
-        })?;
-        let player_state = engine
+        let player_state = self
+            .engine
             .get_player_state(player_id)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
         let state_string = serde_json::to_string(player_state)
@@ -248,12 +186,8 @@ impl WasmAnimationEngine {
     /// Get current time for a player
     #[wasm_bindgen]
     pub fn get_player_time(&self, player_id: &str) -> Result<f64, JsValue> {
-        let engine = self.engine.lock().map_err(|e| {
-            let msg = format!("Engine lock poisoned: {}", e);
-            console_log(&msg);
-            JsValue::from_str(&msg)
-        })?;
-        let player = engine
+        let player = self
+            .engine
             .get_player(player_id)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
 
@@ -263,12 +197,8 @@ impl WasmAnimationEngine {
     /// Get progress (0.0-1.0) for a player
     #[wasm_bindgen]
     pub fn get_player_progress(&self, player_id: &str) -> Result<f64, JsValue> {
-        let engine = self.engine.lock().map_err(|e| {
-            let msg = format!("Engine lock poisoned: {}", e);
-            console_log(&msg);
-            JsValue::from_str(&msg)
-        })?;
-        let player = engine
+        let player = self
+            .engine
             .get_player(player_id)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
 
@@ -278,12 +208,8 @@ impl WasmAnimationEngine {
     /// Get list of all player IDs
     #[wasm_bindgen]
     pub fn get_player_ids(&self) -> Result<Vec<String>, JsValue> {
-        let engine = self.engine.lock().map_err(|e| {
-            let msg = format!("Engine lock poisoned: {}", e);
-            console_log(&msg);
-            JsValue::from_str(&msg)
-        })?;
-        Ok(engine
+        Ok(self
+            .engine
             .player_ids()
             .into_iter()
             .map(|s| s.to_string())
@@ -293,16 +219,7 @@ impl WasmAnimationEngine {
     /// Get engine performance metrics
     #[wasm_bindgen]
     pub fn get_metrics(&self) -> JsValue {
-        let engine = match self.engine.lock() {
-            Ok(engine) => engine,
-            Err(e) => {
-                let msg = format!("Engine lock poisoned: {}", e);
-                console_log(&msg);
-                return JsValue::from_str(&msg);
-            }
-        };
-        let metrics = engine.metrics();
-
+        let metrics = self.engine.metrics();
         serde_wasm_bindgen::to_value(metrics).unwrap_or(JsValue::NULL)
     }
 
@@ -314,12 +231,8 @@ impl WasmAnimationEngine {
         config_json: &str,
     ) -> Result<(), JsValue> {
         console_log(&format!("Updating {} Config: {:?}", player_id, config_json));
-        let mut engine = self.engine.lock().map_err(|e| {
-            let msg = format!("Engine lock poisoned: {}", e);
-            console_log(&msg);
-            JsValue::from_str(&msg)
-        })?;
-        let player_config = engine
+        let player_config = self
+            .engine
             .get_player_state_mut(player_id)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
 
@@ -360,7 +273,7 @@ impl WasmAnimationEngine {
         if let Some(start_time_val) = config.get("start_time").and_then(|v| v.as_f64()) {
             if start_time_val >= 0.0 {
                 console_log(&format!("Setting start_time: {:?}", start_time_val));
-                let start_time = AnimationTime::new(start_time_val)
+                let start_time = AnimationTime::from_seconds(start_time_val)
                     .map_err(|e| JsValue::from_str(&format!("Invalid start time: {:?}", e)))?;
                 player_config.start_time = start_time;
             } else {
@@ -379,7 +292,7 @@ impl WasmAnimationEngine {
             } else if let Some(end_time_f64) = end_time_val.as_f64() {
                 if end_time_f64 >= 0.0 {
                     console_log(&format!("Setting end_time: {:?}", end_time_f64));
-                    let end_time = AnimationTime::new(end_time_f64)
+                    let end_time = AnimationTime::from_seconds(end_time_f64)
                         .map_err(|e| JsValue::from_str(&format!("Invalid end time: {:?}", e)))?;
                     player_config.end_time = Some(end_time);
                 } else {
@@ -424,12 +337,8 @@ impl WasmAnimationEngine {
     /// Export animation data as JSON
     #[wasm_bindgen]
     pub fn export_animation(&self, animation_id: &str) -> Result<String, JsValue> {
-        let engine = self.engine.lock().map_err(|e| {
-            let msg = format!("Engine lock poisoned: {}", e);
-            console_log(&msg);
-            JsValue::from_str(&msg)
-        })?;
-        let animation = engine
+        let animation = self
+            .engine
             .get_animation_data(animation_id)
             .ok_or_else(|| JsValue::from_str("Animation not found"))?;
 
@@ -445,29 +354,24 @@ impl WasmAnimationEngine {
         derivative_width_ms: Option<f64>,
     ) -> Result<JsValue, JsValue> {
         // Convert derivative width from milliseconds to AnimationTime if provided
-        let derivative_width =
-            if let Some(width_ms) = derivative_width_ms {
-                if width_ms <= 0.0 {
-                    return Err(JsValue::from_str("Derivative width must be positive"));
-                }
-                Some(AnimationTime::new(width_ms / 1000000.0).map_err(|e| {
+        let derivative_width = if let Some(width_ms) = derivative_width_ms {
+            if width_ms <= 0.0 {
+                return Err(JsValue::from_str("Derivative width must be positive"));
+            }
+            Some(
+                AnimationTime::from_seconds(width_ms / 1000000.0).map_err(|e| {
                     JsValue::from_str(&format!("Invalid derivative width: {:?}", e))
-                })?)
-            } else {
-                None
-            };
+                })?,
+            )
+        } else {
+            None
+        };
 
         // Calculate derivatives using the engine's helper method
-        let derivatives = {
-            let mut engine = self.engine.lock().map_err(|e| {
-                let msg = format!("Engine lock poisoned: {}", e);
-                console_log(&msg);
-                JsValue::from_str(&msg)
-            })?;
-            engine
-                .calculate_player_derivatives(player_id, derivative_width)
-                .map_err(|e| JsValue::from_str(&format!("Calculate derivatives error: {:?}", e)))?
-        };
+        let derivatives = self
+            .engine
+            .calculate_player_derivatives(player_id, derivative_width)
+            .map_err(|e| JsValue::from_str(&format!("Calculate derivatives error: {:?}", e)))?;
 
         // Convert to JsValue
         serde_wasm_bindgen::to_value(&derivatives)
@@ -481,14 +385,9 @@ impl WasmAnimationEngine {
         animation_id: &str,
         config_json: Option<String>,
     ) -> Result<String, JsValue> {
-        let mut engine = self.engine.lock().map_err(|e| {
-            let msg = format!("Engine lock poisoned: {}", e);
-            console_log(&msg);
-            JsValue::from_str(&msg)
-        })?;
-
         // Get the animation data
-        let animation = engine
+        let animation = self
+            .engine
             .get_animation_data(animation_id)
             .ok_or_else(|| JsValue::from_str("Animation not found"))?
             .clone(); // Clone to avoid borrowing issues
@@ -506,7 +405,7 @@ impl WasmAnimationEngine {
 
         // Perform the baking
         let baked_data = animation
-            .bake(&config, engine.interpolation_registry_mut())
+            .bake(&config, self.engine.interpolation_registry_mut())
             .map_err(|e| JsValue::from_str(&format!("Baking error: {:?}", e)))?;
 
         // Convert to JSON
@@ -546,7 +445,7 @@ fn time(t: f64) -> AnimationTime {
     if t.abs() < f64::EPSILON {
         AnimationTime::zero()
     } else {
-        AnimationTime::new(t).expect("invalid time")
+        AnimationTime::from_seconds(t).expect("invalid time")
     }
 }
 

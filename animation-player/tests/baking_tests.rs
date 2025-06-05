@@ -21,13 +21,13 @@ fn test_basic_baking() {
         .unwrap();
     position_track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(1.0).unwrap(),
+            AnimationTime::from_seconds(1.0).unwrap(),
             Value::Vector3(Vector3::new(10.0, 5.0, 0.0)),
         ))
         .unwrap();
     position_track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(2.0).unwrap(),
+            AnimationTime::from_seconds(2.0).unwrap(),
             Value::Vector3(Vector3::new(20.0, 0.0, 0.0)),
         ))
         .unwrap();
@@ -45,7 +45,7 @@ fn test_basic_baking() {
 
     // Verify the baked data
     assert_eq!(baked.frame_rate, 30.0);
-    assert_eq!(baked.duration, AnimationTime::new(2.0).unwrap());
+    assert_eq!(baked.duration, AnimationTime::from_seconds(2.0).unwrap());
     assert_eq!(baked.frame_count, 61); // 2 seconds * 30 FPS + 1 = 61 frames
 
     // Check that we have the position track
@@ -97,7 +97,7 @@ fn test_baking_with_custom_time_range() {
         .unwrap();
     float_track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(2.0).unwrap(),
+            AnimationTime::from_seconds(2.0).unwrap(),
             Value::Float(1.0),
         ))
         .unwrap();
@@ -106,8 +106,8 @@ fn test_baking_with_custom_time_range() {
 
     // Configure baking with custom time range (bake only the second half)
     let time_range = TimeRange::new(
-        AnimationTime::new(1.0).unwrap(),
-        AnimationTime::new(2.0).unwrap(),
+        AnimationTime::from_seconds(1.0).unwrap(),
+        AnimationTime::from_seconds(2.0).unwrap(),
     )
     .unwrap();
 
@@ -121,7 +121,7 @@ fn test_baking_with_custom_time_range() {
 
     // Verify the baked data
     assert_eq!(baked.frame_rate, 10.0);
-    assert_eq!(baked.duration, AnimationTime::new(1.0).unwrap()); // Only 1 second duration
+    assert_eq!(baked.duration, AnimationTime::from_seconds(1.0).unwrap()); // Only 1 second duration
     assert_eq!(baked.frame_count, 11); // 1 second * 10 FPS + 1 = 11 frames
 
     // Check first and last values
@@ -149,7 +149,7 @@ fn test_baking_multiple_tracks() {
         .unwrap();
     position_track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(1.0).unwrap(),
+            AnimationTime::from_seconds(1.0).unwrap(),
             Value::Vector3(Vector3::new(1.0, 1.0, 1.0)),
         ))
         .unwrap();
@@ -165,7 +165,7 @@ fn test_baking_multiple_tracks() {
         .unwrap();
     scale_track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(1.0).unwrap(),
+            AnimationTime::from_seconds(1.0).unwrap(),
             Value::Vector3(Vector3::new(2.0, 2.0, 2.0)),
         ))
         .unwrap();
@@ -181,7 +181,7 @@ fn test_baking_multiple_tracks() {
         .unwrap();
     intensity_track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(1.0).unwrap(),
+            AnimationTime::from_seconds(1.0).unwrap(),
             Value::Float(1.5),
         ))
         .unwrap();
@@ -228,7 +228,7 @@ fn test_baking_statistics() {
         .unwrap();
     track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(2.0).unwrap(),
+            AnimationTime::from_seconds(2.0).unwrap(),
             Value::Float(1.0),
         ))
         .unwrap();
@@ -307,7 +307,7 @@ fn test_baking_disabled_tracks() {
         .unwrap();
     enabled_track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(1.0).unwrap(),
+            AnimationTime::from_seconds(1.0).unwrap(),
             Value::Float(2.0),
         ))
         .unwrap();

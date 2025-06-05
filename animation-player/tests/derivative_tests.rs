@@ -1,14 +1,40 @@
 //! Tests for numerical differentiation functionality
 
+use std::time::Duration;
+
 use animation_player::{
     animation::{AnimationInstance, AnimationKeypoint, AnimationTrack, InstanceSettings},
     value::{Color, Transform, Vector3, Vector4},
-    AnimationConfig, AnimationData, AnimationEngine, AnimationTime, Value,
+    AnimationData, AnimationEngine, AnimationEngineConfig, AnimationTime, Value,
 };
+
+// Helper to setup a player given animation data and settings
+fn setup_player_for_animation(
+    engine: &mut AnimationEngine,
+    animation_data: AnimationData,
+    custom_duration: impl Into<AnimationTime>,
+) -> String {
+    // Load animation data
+    let animation_id = engine.load_animation_data(animation_data).unwrap();
+
+    // Create player and instance
+    let player_id = engine.create_player();
+
+    let animation_instance = AnimationInstance::new(
+        animation_id,
+        InstanceSettings::default(),
+        custom_duration.into(),
+    );
+
+    let player = engine.get_player_mut(&player_id).unwrap();
+    player.add_instance(animation_instance);
+
+    player_id
+}
 
 #[test]
 fn test_float_derivative_calculation() {
-    let mut engine = AnimationEngine::new(AnimationConfig::default());
+    let mut engine = AnimationEngine::new(AnimationEngineConfig::default());
 
     // Create animation with float track
     let mut animation = AnimationData::new("test_float_derivative", "Float derivative test");
@@ -23,32 +49,24 @@ fn test_float_derivative_calculation() {
         .unwrap();
     track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(2.0).unwrap(),
+            AnimationTime::from_seconds(2.0).unwrap(),
             Value::Float(10.0),
         ))
         .unwrap();
 
     animation.add_track(track);
-    engine.load_animation_data(animation).unwrap();
 
     // Create player and instance
-    engine.create_player("test_player").unwrap();
-    let instance = AnimationInstance::new(
-        "test_instance",
-        InstanceSettings::new("test_float_derivative"),
-        AnimationTime::new(2.0).unwrap(),
-    );
-    let player = engine.get_player_mut("test_player").unwrap();
-    player.add_instance(instance).unwrap();
+    let player_id = setup_player_for_animation(&mut engine, animation, Duration::from_secs(2));
 
     // Set time to middle of animation
     engine
-        .seek_player("test_player", AnimationTime::new(1.0).unwrap())
+        .seek_player(&player_id, AnimationTime::from_seconds(1.0).unwrap())
         .unwrap();
 
     // Calculate derivatives
     let derivatives = engine
-        .calculate_player_derivatives("test_player", None)
+        .calculate_player_derivatives(&player_id, None)
         .unwrap();
 
     // For linear motion from 0 to 10 over 2 seconds, derivative should be ~5.0 units/second
@@ -65,7 +83,7 @@ fn test_float_derivative_calculation() {
 
 #[test]
 fn test_vector3_derivative_calculation() {
-    let mut engine = AnimationEngine::new(AnimationConfig::default());
+    let mut engine = AnimationEngine::new(AnimationEngineConfig::default());
 
     // Create animation with Vector3 track
     let mut animation = AnimationData::new("test_vector3_derivative", "Vector3 derivative test");
@@ -80,32 +98,24 @@ fn test_vector3_derivative_calculation() {
         .unwrap();
     track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(3.0).unwrap(),
+            AnimationTime::from_seconds(3.0).unwrap(),
             Value::Vector3(Vector3::new(6.0, 3.0, 9.0)),
         ))
         .unwrap();
 
     animation.add_track(track);
-    engine.load_animation_data(animation).unwrap();
 
     // Create player and instance
-    engine.create_player("test_player").unwrap();
-    let instance = AnimationInstance::new(
-        "test_instance",
-        InstanceSettings::new("test_vector3_derivative"),
-        AnimationTime::new(3.0).unwrap(),
-    );
-    let player = engine.get_player_mut("test_player").unwrap();
-    player.add_instance(instance).unwrap();
+    let player_id = setup_player_for_animation(&mut engine, animation, Duration::from_secs(3));
 
     // Set time to middle of animation
     engine
-        .seek_player("test_player", AnimationTime::new(1.5).unwrap())
+        .seek_player(&player_id, AnimationTime::from_seconds(1.5).unwrap())
         .unwrap();
 
     // Calculate derivatives
     let derivatives = engine
-        .calculate_player_derivatives("test_player", None)
+        .calculate_player_derivatives(&player_id, None)
         .unwrap();
 
     // Expected velocity: (2, 1, 3) units/second (with numerical tolerance)
@@ -132,7 +142,7 @@ fn test_vector3_derivative_calculation() {
 
 #[test]
 fn test_transform_derivative_calculation() {
-    let mut engine = AnimationEngine::new(AnimationConfig::default());
+    let mut engine = AnimationEngine::new(AnimationEngineConfig::default());
 
     // Create animation with Transform track
     let mut animation =
@@ -152,7 +162,7 @@ fn test_transform_derivative_calculation() {
         .unwrap();
     track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(2.0).unwrap(),
+            AnimationTime::from_seconds(2.0).unwrap(),
             Value::Transform(Transform::new(
                 Vector3::new(4.0, 2.0, 0.0),
                 Vector4::new(0.0, 0.7071, 0.0, 0.7071), // 90 degrees Y rotation (quaternion)
@@ -162,26 +172,18 @@ fn test_transform_derivative_calculation() {
         .unwrap();
 
     animation.add_track(track);
-    engine.load_animation_data(animation).unwrap();
 
     // Create player and instance
-    engine.create_player("test_player").unwrap();
-    let instance = AnimationInstance::new(
-        "test_instance",
-        InstanceSettings::new("test_transform_derivative"),
-        AnimationTime::new(2.0).unwrap(),
-    );
-    let player = engine.get_player_mut("test_player").unwrap();
-    player.add_instance(instance).unwrap();
+    let player_id = setup_player_for_animation(&mut engine, animation, Duration::from_secs(2));
 
     // Set time to middle of animation
     engine
-        .seek_player("test_player", AnimationTime::new(1.0).unwrap())
+        .seek_player(&player_id, AnimationTime::from_seconds(1.0).unwrap())
         .unwrap();
 
     // Calculate derivatives
     let derivatives = engine
-        .calculate_player_derivatives("test_player", None)
+        .calculate_player_derivatives(&player_id, None)
         .unwrap();
 
     if let Some(Value::Transform(transform_derivative)) = derivatives.get("object.transform") {
@@ -245,7 +247,7 @@ fn test_transform_derivative_calculation() {
 
 #[test]
 fn test_color_derivative_calculation() {
-    let mut engine = AnimationEngine::new(AnimationConfig::default());
+    let mut engine = AnimationEngine::new(AnimationEngineConfig::default());
 
     // Create animation with Color track
     let mut animation = AnimationData::new("test_color_derivative", "Color derivative test");
@@ -260,32 +262,24 @@ fn test_color_derivative_calculation() {
         .unwrap();
     track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(1.0).unwrap(),
+            AnimationTime::from_seconds(1.0).unwrap(),
             Value::Color(Color::rgba(0.0, 0.0, 1.0, 1.0)), // Blue
         ))
         .unwrap();
 
     animation.add_track(track);
-    engine.load_animation_data(animation).unwrap();
 
     // Create player and instance
-    engine.create_player("test_player").unwrap();
-    let instance = AnimationInstance::new(
-        "test_instance",
-        InstanceSettings::new("test_color_derivative"),
-        AnimationTime::new(1.0).unwrap(),
-    );
-    let player = engine.get_player_mut("test_player").unwrap();
-    player.add_instance(instance).unwrap();
+    let player_id = setup_player_for_animation(&mut engine, animation, Duration::from_secs(1));
 
     // Set time to middle of animation
     engine
-        .seek_player("test_player", AnimationTime::new(0.5).unwrap())
+        .seek_player(&player_id, AnimationTime::from_seconds(0.5).unwrap())
         .unwrap();
 
     // Calculate derivatives
     let derivatives = engine
-        .calculate_player_derivatives("test_player", None)
+        .calculate_player_derivatives(&player_id, None)
         .unwrap();
 
     if let Some(Value::Color(color_derivative)) = derivatives.get("material.color") {
@@ -302,7 +296,7 @@ fn test_color_derivative_calculation() {
 
 #[test]
 fn test_derivative_with_custom_width() {
-    let mut engine = AnimationEngine::new(AnimationConfig::default());
+    let mut engine = AnimationEngine::new(AnimationEngineConfig::default());
 
     // Create animation with rapid changes
     let mut animation = AnimationData::new("test_custom_width", "Custom width derivative test");
@@ -317,59 +311,51 @@ fn test_derivative_with_custom_width() {
         .unwrap();
     track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(0.5).unwrap(),
+            AnimationTime::from_seconds(0.5).unwrap(),
             Value::Float(1.0),
         ))
         .unwrap();
     track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(1.0).unwrap(),
+            AnimationTime::from_seconds(1.0).unwrap(),
             Value::Float(4.0),
         ))
         .unwrap();
     track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(1.5).unwrap(),
+            AnimationTime::from_seconds(1.5).unwrap(),
             Value::Float(9.0),
         ))
         .unwrap();
     track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(2.0).unwrap(),
+            AnimationTime::from_seconds(2.0).unwrap(),
             Value::Float(16.0),
         ))
         .unwrap();
 
     animation.add_track(track);
-    engine.load_animation_data(animation).unwrap();
 
     // Create player and instance
-    engine.create_player("test_player").unwrap();
-    let instance = AnimationInstance::new(
-        "test_instance",
-        InstanceSettings::new("test_custom_width"),
-        AnimationTime::new(2.0).unwrap(),
-    );
-    let player = engine.get_player_mut("test_player").unwrap();
-    player.add_instance(instance).unwrap();
+    let player_id = setup_player_for_animation(&mut engine, animation, Duration::from_secs(2));
 
     // Set time to middle of animation
     engine
-        .seek_player("test_player", AnimationTime::new(1.0).unwrap())
+        .seek_player(&player_id, AnimationTime::from_seconds(1.0).unwrap())
         .unwrap();
 
     // Calculate derivatives with different widths
     let derivative_wide = engine
         .calculate_player_derivatives(
-            "test_player",
-            Some(AnimationTime::new(0.2).unwrap()), // 200ms width
+            &player_id,
+            Some(AnimationTime::from_seconds(0.2).unwrap()), // 200ms width
         )
         .unwrap();
 
     let derivative_narrow = engine
         .calculate_player_derivatives(
-            "test_player",
-            Some(AnimationTime::new(0.02).unwrap()), // 20ms width
+            &player_id,
+            Some(AnimationTime::from_seconds(0.02).unwrap()), // 20ms width
         )
         .unwrap();
 
@@ -408,7 +394,7 @@ fn test_derivative_with_custom_width() {
 
 #[test]
 fn test_derivative_at_animation_boundaries() {
-    let mut engine = AnimationEngine::new(AnimationConfig::default());
+    let mut engine = AnimationEngine::new(AnimationEngineConfig::default());
 
     // Create simple animation
     let mut animation = AnimationData::new("test_boundaries", "Boundary derivative test");
@@ -422,44 +408,36 @@ fn test_derivative_at_animation_boundaries() {
         .unwrap();
     track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(1.0).unwrap(),
+            AnimationTime::from_seconds(1.0).unwrap(),
             Value::Float(10.0),
         ))
         .unwrap();
     track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(2.0).unwrap(),
+            AnimationTime::from_seconds(2.0).unwrap(),
             Value::Float(20.0),
         ))
         .unwrap();
 
     animation.add_track(track);
-    engine.load_animation_data(animation).unwrap();
 
     // Create player and instance
-    engine.create_player("test_player").unwrap();
-    let instance = AnimationInstance::new(
-        "test_instance",
-        InstanceSettings::new("test_boundaries"),
-        AnimationTime::new(2.0).unwrap(),
-    );
-    let player = engine.get_player_mut("test_player").unwrap();
-    player.add_instance(instance).unwrap();
+    let player_id = setup_player_for_animation(&mut engine, animation, Duration::from_secs(2));
 
     // Test derivative at start
     engine
-        .seek_player("test_player", AnimationTime::zero())
+        .seek_player(&player_id, AnimationTime::zero())
         .unwrap();
     let start_derivatives = engine
-        .calculate_player_derivatives("test_player", None)
+        .calculate_player_derivatives(&player_id, None)
         .unwrap();
 
     // Test derivative at end
     engine
-        .seek_player("test_player", AnimationTime::new(2.0).unwrap())
+        .seek_player(&player_id, AnimationTime::from_seconds(2.0).unwrap())
         .unwrap();
     let end_derivatives = engine
-        .calculate_player_derivatives("test_player", None)
+        .calculate_player_derivatives(&player_id, None)
         .unwrap();
 
     // Both should give reasonable values (using forward/backward difference at boundaries)
@@ -486,7 +464,7 @@ fn test_derivative_at_animation_boundaries() {
 
 #[test]
 fn test_multiple_tracks_derivative() {
-    let mut engine = AnimationEngine::new(AnimationConfig::default());
+    let mut engine = AnimationEngine::new(AnimationEngineConfig::default());
 
     // Create animation with multiple tracks
     let mut animation =
@@ -502,7 +480,7 @@ fn test_multiple_tracks_derivative() {
         .unwrap();
     position_track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(1.0).unwrap(),
+            AnimationTime::from_seconds(1.0).unwrap(),
             Value::Vector3(Vector3::new(2.0, 1.0, 0.0)),
         ))
         .unwrap();
@@ -517,33 +495,25 @@ fn test_multiple_tracks_derivative() {
         .unwrap();
     scale_track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(1.0).unwrap(),
+            AnimationTime::from_seconds(1.0).unwrap(),
             Value::Vector3(Vector3::new(1.5, 2.0, 1.0)),
         ))
         .unwrap();
 
     animation.add_track(position_track);
     animation.add_track(scale_track);
-    engine.load_animation_data(animation).unwrap();
 
     // Create player and instance
-    engine.create_player("test_player").unwrap();
-    let instance = AnimationInstance::new(
-        "test_instance",
-        InstanceSettings::new("test_multiple_tracks"),
-        AnimationTime::new(1.0).unwrap(),
-    );
-    let player = engine.get_player_mut("test_player").unwrap();
-    player.add_instance(instance).unwrap();
+    let player_id = setup_player_for_animation(&mut engine, animation, Duration::from_secs(1));
 
     // Set time to middle of animation
     engine
-        .seek_player("test_player", AnimationTime::new(0.5).unwrap())
+        .seek_player(&player_id, AnimationTime::from_seconds(0.5).unwrap())
         .unwrap();
 
     // Calculate derivatives
     let derivatives = engine
-        .calculate_player_derivatives("test_player", None)
+        .calculate_player_derivatives(&player_id, None)
         .unwrap();
 
     // Should have derivatives for both tracks
@@ -592,7 +562,7 @@ fn test_multiple_tracks_derivative() {
 
 #[test]
 fn test_zero_derivative_for_constant_values() {
-    let mut engine = AnimationEngine::new(AnimationConfig::default());
+    let mut engine = AnimationEngine::new(AnimationEngineConfig::default());
 
     // Create animation with constant value
     let mut animation = AnimationData::new("test_constant", "Constant value derivative test");
@@ -607,38 +577,30 @@ fn test_zero_derivative_for_constant_values() {
         .unwrap();
     track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(1.0).unwrap(),
+            AnimationTime::from_seconds(1.0).unwrap(),
             Value::Float(5.0),
         ))
         .unwrap();
     track
         .add_keypoint(AnimationKeypoint::new(
-            AnimationTime::new(2.0).unwrap(),
+            AnimationTime::from_seconds(2.0).unwrap(),
             Value::Float(5.0),
         ))
         .unwrap();
 
     animation.add_track(track);
-    engine.load_animation_data(animation).unwrap();
 
     // Create player and instance
-    engine.create_player("test_player").unwrap();
-    let instance = AnimationInstance::new(
-        "test_instance",
-        InstanceSettings::new("test_constant"),
-        AnimationTime::new(2.0).unwrap(),
-    );
-    let player = engine.get_player_mut("test_player").unwrap();
-    player.add_instance(instance).unwrap();
+    let player_id = setup_player_for_animation(&mut engine, animation, Duration::from_secs(2));
 
     // Set time to middle of animation
     engine
-        .seek_player("test_player", AnimationTime::new(1.0).unwrap())
+        .seek_player(&player_id, AnimationTime::from_seconds(1.0).unwrap())
         .unwrap();
 
     // Calculate derivatives
     let derivatives = engine
-        .calculate_player_derivatives("test_player", None)
+        .calculate_player_derivatives(&player_id, None)
         .unwrap();
 
     // Derivative should be zero for constant value

@@ -19,10 +19,10 @@ pub struct AnimationKeypoint {
 impl AnimationKeypoint {
     /// Create a new keypoint
     #[inline]
-    pub fn new(time: AnimationTime, value: Value) -> Self {
+    pub fn new(time: impl Into<AnimationTime>, value: Value) -> Self {
         Self {
             id: KeypointId::new(),
-            time,
+            time: time.into(),
             value,
             metadata: HashMap::new(),
         }

@@ -195,7 +195,7 @@ impl AnimationTrack {
     ) -> Option<Value> {
         let width = derivative_width
             .unwrap_or_else(|| AnimationTime::from_millis(1.0).unwrap_or(AnimationTime::zero()));
-        let half_width = AnimationTime::new(width.as_seconds() / 2.0).ok()?;
+        let half_width = AnimationTime::from_seconds(width.as_seconds() / 2.0).ok()?;
 
         // Calculate time points for centered difference
         let time_before = time - half_width;

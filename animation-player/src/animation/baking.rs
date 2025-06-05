@@ -57,7 +57,7 @@ impl BakedAnimationData {
             });
         }
 
-        let frame_duration = AnimationTime::new(1.0 / frame_rate)?;
+        let frame_duration = AnimationTime::from_seconds(1.0 / frame_rate)?;
         let frame_count = if duration.as_seconds() > 0.0 {
             ((duration.as_seconds() * frame_rate).ceil() as usize).max(1)
         } else {

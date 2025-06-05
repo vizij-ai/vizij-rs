@@ -9,11 +9,6 @@ license = "MIT OR Apache-2.0"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[features]
-default = ["std"]
-std = []
-wasm = ["wasm-bindgen", "console_error_panic_hook", "web-sys", "serde-wasm-bindgen", "js-sys", "wee_alloc"]
-
 [dependencies]
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -35,15 +30,16 @@ instant = "0.1"
 # Error handling
 thiserror = "1.0"
 
-# Size optimization for WASM
-wee_alloc = { version = "0.4.5", optional = true }
-
 # WebAssembly-specific dependencies
-wasm-bindgen = { version = "0.2", optional = true, features = ["serde-serialize"] }
-console_error_panic_hook = { version = "0.1", optional = true }
-web-sys = { version = "0.3", optional = true, features = ["console"] }
-serde-wasm-bindgen = { version = "0.6", optional = true }
-js-sys = { version = "0.3", optional = true }
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+serde-wasm-bindgen = "0.6"
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+console_error_panic_hook = "0.1"
+web-sys = { version = "0.3", features = ["console"] }
+js-sys = "0.3"
+
+# Size optimization for WASM
+wee_alloc = "0.4.5"
 
 [dev-dependencies]
 approx = "0.5"
@@ -53,10 +49,10 @@ approx = "0.5"
 wasm-bindgen-test = "0.3"
 
 [profile.release]
-opt-level = "s"  # optimize for size
+opt-level = "s"   # optimize for size
 lto = true
 codegen-units = 1
-panic = "abort"  # smaller code size
+panic = "abort"   # smaller code size
 
 [profile.release.package."*"]
 opt-level = "s"

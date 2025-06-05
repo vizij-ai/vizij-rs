@@ -40,7 +40,7 @@ impl BakedAnimationData {
             });
         }
 
-        let frame_duration = AnimationTime::new(1.0 / frame_rate)?;
+        let frame_duration = AnimationTime::from_seconds(1.0 / frame_rate)?;
         let frame_count = (duration.as_seconds() * frame_rate).ceil() as usize + 1;
 
         Ok(Self {
@@ -277,7 +277,7 @@ impl AnimationBaking for AnimationData {
             // Generate values for each frame
             for frame_index in 0..frame_count {
                 let frame_time =
-                    time_range.start + AnimationTime::new(frame_index as f64 / config.frame_rate)?;
+                    time_range.start + AnimationTime::from_seconds(frame_index as f64 / config.frame_rate)?;
 
                 // Clamp to time range
                 let clamped_time = frame_time.clamp(time_range.start, time_range.end);
@@ -412,7 +412,7 @@ mod tests {
     #[test]
     fn test_baked_animation_data_creation() {
         let metadata = AnimationMetadata::new();
-        let duration = AnimationTime::new(2.0).unwrap();
+        let duration = AnimationTime::from_seconds(2.0).unwrap();
 
         let baked_data = BakedAnimationData::new("test_anim", 60.0, duration, metadata);
         assert!(baked_data.is_ok());
@@ -427,14 +427,14 @@ mod tests {
     #[test]
     fn test_baked_data_operations() {
         let metadata = AnimationMetadata::new();
-        let duration = AnimationTime::new(1.0).unwrap();
+        let duration = AnimationTime::from_seconds(1.0).unwrap();
         let mut baked_data = BakedAnimationData::new("test", 10.0, duration, metadata).unwrap();
 
         // Add some test data
         let track_data = vec![
             (AnimationTime::zero(), Value::Float(0.0)),
-            (AnimationTime::new(0.1).unwrap(), Value::Float(1.0)),
-            (AnimationTime::new(0.2).unwrap(), Value::Float(2.0)),
+            (AnimationTime::from_seconds(0.1).unwrap(), Value::Float(1.0)),
+            (AnimationTime::from_seconds(0.2).unwrap(), Value::Float(2.0)),
         ];
 
         baked_data.add_track_data("test_track", track_data);
@@ -490,7 +490,7 @@ mod tests {
 
         track
             .add_keypoint(AnimationKeypoint::new(
-                AnimationTime::new(1.0).unwrap(),
+                AnimationTime::from_seconds(1.0).unwrap(),
                 Value::Float(10.0),
             ))
             .unwrap();
@@ -538,7 +538,7 @@ mod tests {
 
         track
             .add_keypoint(AnimationKeypoint::new(
-                AnimationTime::new(1.0).unwrap(),
+                AnimationTime::from_seconds(1.0).unwrap(),
                 Value::Float(10.0),
             ))
             .unwrap();
@@ -547,7 +547,7 @@ mod tests {
 
         // Bake the animation with derivatives enabled
         let config =
-            BakingConfig::new(10.0).with_derivatives(Some(AnimationTime::new(1.0).unwrap()));
+            BakingConfig::new(10.0).with_derivatives(Some(AnimationTime::from_seconds(1.0).unwrap()));
         let mut registry = InterpolationRegistry::default();
         println!("{:?}", config);
         println!("{:?}", animation);

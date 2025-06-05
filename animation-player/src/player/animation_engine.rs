@@ -1,12 +1,16 @@
+use std::collections::HashMap;
+
+use uuid::Uuid;
+
 use crate::animation::instance::{AnimationInstance, InstanceSettings, PlaybackMode};
 use crate::event::EventDispatcher;
 use crate::player::animation_player::AnimationPlayer;
 use crate::player::playback_state::PlaybackState;
 use crate::player::player_state::PlayerState;
 use crate::{
-    AnimationConfig, AnimationData, AnimationError, AnimationTime, InterpolationRegistry, Value,
+    AnimationData, AnimationEngineConfig, AnimationError, AnimationTime, InterpolationRegistry,
+    Value,
 };
-use std::collections::HashMap;
 
 /// Animation engine managing multiple players
 pub struct AnimationEngine {
@@ -21,7 +25,7 @@ pub struct AnimationEngine {
     /// Event dispatcher
     event_dispatcher: EventDispatcher,
     /// Engine configuration
-    config: AnimationConfig,
+    config: AnimationEngineConfig,
     /// Engine metrics
     engine_metrics: HashMap<String, f64>,
     /// Last time the engine was updated (for delta calculation)
@@ -30,7 +34,7 @@ pub struct AnimationEngine {
 
 impl AnimationEngine {
     /// Create a new animation engine
-    pub fn new(config: AnimationConfig) -> Self {
+    pub fn new(config: AnimationEngineConfig) -> Self {
         Self {
             players: HashMap::new(),
             player_states: HashMap::new(),
@@ -43,11 +47,16 @@ impl AnimationEngine {
         }
     }
 
-    /// Load animation data into the engine
+    /// Load animation data into the engine.
+    /// Returns a unique ID to use as the `animation_id` in other methods.
     pub fn load_animation_data(
         &mut self,
         animation_data: AnimationData,
-    ) -> Result<(), AnimationError> {
+    ) -> Result<String, AnimationError> {
+        let mut unique_id = format!("{}_{}", animation_data.id, Uuid::new_v4());
+        while self.animations.contains_key(&unique_id) {
+            unique_id = format!("{}_{}", animation_data.id, Uuid::new_v4());
+        }
         if self.animations.contains_key(&animation_data.id) {
             return Err(AnimationError::Generic {
                 message: format!(
@@ -56,9 +65,8 @@ impl AnimationEngine {
                 ),
             });
         }
-        self.animations
-            .insert(animation_data.id.clone(), animation_data);
-        Ok(())
+        self.animations.insert(unique_id.clone(), animation_data);
+        Ok(unique_id)
     }
 
     /// Unload animation data from the engine
@@ -86,24 +94,17 @@ impl AnimationEngine {
     }
 
     /// Create a new player
-    pub fn create_player(
-        &mut self,
-        id: impl Into<String>,
-    ) -> Result<&mut AnimationPlayer, AnimationError> {
-        let id = id.into();
-
-        if self.players.contains_key(&id) {
-            return Err(AnimationError::Generic {
-                message: format!("Player with ID '{}' already exists", id),
-            });
+    pub fn create_player(&mut self) -> String {
+        // Generate a new ID until we find a unique one
+        let mut id = uuid::Uuid::new_v4().to_string();
+        while self.players.contains_key(&id) {
+            id = format!("{}_{}", id, Uuid::new_v4());
         }
 
-        let player = AnimationPlayer::new(id.clone());
-        self.players.insert(id.clone(), player);
+        self.players.insert(id.clone(), AnimationPlayer::new());
         self.player_states
             .insert(id.clone(), PlayerState::default());
-
-        Ok(self.players.get_mut(&id).unwrap())
+        id
     }
 
     /// Get a player by ID
@@ -148,7 +149,8 @@ impl AnimationEngine {
         self.animations.keys().map(|s| s.as_str()).collect()
     }
 
-    /// Add an animation to a player by creating a new animation instance
+    /// Add an animation to a player by creating a new animation instance.
+    /// Returns the ID of the created instance,
     pub fn add_animation_to_player(
         &mut self,
         player_id: &str,
@@ -156,11 +158,11 @@ impl AnimationEngine {
         instance_settings: Option<InstanceSettings>,
     ) -> Result<String, AnimationError> {
         // Verify the animation data exists
-        let animation_data = self
-            .get_animation_data(animation_id)
-            .ok_or_else(|| AnimationError::AnimationNotFound {
+        let animation_data = self.get_animation_data(animation_id).ok_or_else(|| {
+            AnimationError::AnimationNotFound {
                 id: animation_id.to_string(),
-            })?;
+            }
+        })?;
 
         // Get the animation duration for the instance
         let animation_duration = animation_data.duration();
@@ -173,18 +175,13 @@ impl AnimationEngine {
             })?;
 
         // Use provided settings or create default
-        let settings = instance_settings.unwrap_or_else(|| InstanceSettings::new(animation_id));
-
-        // Generate a unique instance ID if not already set
-        let instance_id = format!("{}_instance_{}", animation_id, player.instances.len());
+        let settings = instance_settings.unwrap_or_else(|| InstanceSettings::new());
 
         // Create the animation instance
-        let instance = AnimationInstance::new(instance_id.clone(), settings, animation_duration);
+        let instance = AnimationInstance::new(animation_id, settings, animation_duration);
 
-        // Add the instance to the player
-        player.add_instance(instance)?;
-
-        Ok(instance_id)
+        // Add the instance to the player and return its ID
+        Ok(player.add_instance(instance))
     }
 
     /// Update all players
@@ -195,7 +192,7 @@ impl AnimationEngine {
         let mut all_values = HashMap::new();
 
         // Update engine's internal time
-        self.last_engine_update_time += AnimationTime::new(frame_delta_seconds)?;
+        self.last_engine_update_time += AnimationTime::from_seconds(frame_delta_seconds)?;
 
         // Collect player IDs to avoid mutable borrow issues
         let player_ids: Vec<String> = self.players.keys().cloned().collect();
@@ -218,7 +215,7 @@ impl AnimationEngine {
 
             // Calculate animation delta based on frame_delta and player speed
             let animation_delta_seconds = frame_delta_seconds * player_state.speed;
-            let animation_delta = AnimationTime::new(animation_delta_seconds.abs())?;
+            let animation_delta = AnimationTime::from_seconds(animation_delta_seconds.abs())?;
 
             // Update player time and handle bounds/looping
             let values = if player_state.speed >= 0.0 {
@@ -405,13 +402,13 @@ impl AnimationEngine {
 
     /// Get engine configuration
     #[inline]
-    pub fn config(&self) -> &AnimationConfig {
+    pub fn config(&self) -> &AnimationEngineConfig {
         &self.config
     }
 
     /// Set engine configuration
     #[inline]
-    pub fn set_config(&mut self, config: AnimationConfig) {
+    pub fn set_config(&mut self, config: AnimationEngineConfig) {
         self.config = config;
     }
 
@@ -519,7 +516,7 @@ impl AnimationEngine {
     pub fn seek_player(
         &mut self,
         player_id: &str,
-        time: AnimationTime,
+        time: impl Into<AnimationTime>,
     ) -> Result<(), AnimationError> {
         let player = self
             .players
@@ -599,6 +596,6 @@ impl AnimationEngine {
 
 impl Default for AnimationEngine {
     fn default() -> Self {
-        Self::new(AnimationConfig::default())
+        Self::new(AnimationEngineConfig::default())
     }
 }

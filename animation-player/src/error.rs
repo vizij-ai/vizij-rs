@@ -141,7 +141,6 @@ impl AnimationError {
     }
 }
 
-#[cfg(feature = "std")]
 impl From<std::io::Error> for AnimationError {
     fn from(err: std::io::Error) -> Self {
         Self::IoError {

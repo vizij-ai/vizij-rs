@@ -13,19 +13,19 @@ export const useAnimationPlayerContext = () => {
 
 export const AnimationPlayerProvider = ({ children, wasmConfig = null, options = {} }) => {
   const animationPlayer = useAnimationPlayer(wasmConfig, options);
-  
+
   // Polling/streaming state
   const pollingIntervalRef = useRef(null);
   const [isPolling, setIsPolling] = useState(false);
   const [pollingRate, setPollingRate] = useState(options.defaultPollingRate || 30);
-  
+
   // Animation state
   const [currentValues, setCurrentValues] = useState({});
   const [currentTime, setCurrentTime] = useState(0);
   const [playerState, setPlayerState] = useState('stopped');
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  
+
   // Configuration state
   const [config, setConfig] = useState({
     speed: 1.0,
@@ -34,11 +34,11 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
     endTime: null,
     ...options.defaultConfig
   });
-  
+
   // UI state
   const [logs, setLogs] = useState([]);
-  const [activePlayerId, setActivePlayerId] = useState('demo_player');
-  
+  const [activePlayerId, setActivePlayerId] = useState(undefined);
+
   // Add log entry
   const addLog = useCallback((message, type = 'info') => {
     const timestamp = new Date().toLocaleTimeString();
@@ -56,93 +56,92 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
       const initializeTestAnimation = async () => {
         try {
           addLog('Initializing test animation...');
-          
+
           // Get test animation data
           const testAnimationData = animationPlayer.getTestAnimationData();
-          
+
           // Load animation
-          const animationJson = typeof testAnimationData === 'string' 
-            ? testAnimationData 
+          const animationJson = typeof testAnimationData === 'string'
+            ? testAnimationData
             : JSON.stringify(testAnimationData);
-          animationPlayer.loadAnimation(animationJson);
-          
+          const animationId = animationPlayer.loadAnimation(animationJson);
+
           // Create player
-          animationPlayer.createPlayer(activePlayerId);
-          
-          // Extract animation ID
-          const animData = typeof testAnimationData === 'object' ? testAnimationData : JSON.parse(testAnimationData);
-          const animationId = animData.id || 'test_animation';
-          
+          const activePlayerId = animationPlayer.createPlayer();
+
           // Add instance
           animationPlayer.addInstance(activePlayerId, animationId);
-          
+
+          setActivePlayerId(activePlayerId);
+
           addLog('Test animation loaded successfully');
-          
+
           // Get initial values
           const initialUpdate = animationPlayer.enhancedUpdate(0);
           if (initialUpdate.values) {
             setCurrentValues(initialUpdate.values);
           }
-          
+
           // Set initial state
           updatePlayerStateFromWasm();
-          
+
+
         } catch (error) {
           addLog(`Failed to initialize test animation: ${error.message}`, 'error');
         }
       };
-      
+
       initializeTestAnimation();
     }
-  }, [animationPlayer.isLoaded, animationPlayer.isLoading, animationPlayer.error, activePlayerId]);
+  }, [animationPlayer.isLoaded, animationPlayer.isLoading, animationPlayer.error]);
 
   // Update player state from WASM
   const updatePlayerStateFromWasm = useCallback(() => {
     if (!animationPlayer.isLoaded) return;
-    
+
     try {
       const playerIds = animationPlayer.getPlayerIds();
       if (playerIds.length === 0) return;
-      
+
       const playerId = playerIds.includes(activePlayerId) ? activePlayerId : playerIds[0];
-      
+
       const currentPlayerTime = animationPlayer.getPlayerTime(playerId);
       const currentPlayerState = animationPlayer.getPlayerState(playerId);
       const currentPlayerProgress = animationPlayer.getPlayerProgress(playerId);
-      
+
       setCurrentTime(currentPlayerTime);
       setPlayerState(currentPlayerState.playback_state);
       setIsPlaying(currentPlayerState.playback_state === 'Playing');
       setProgress(currentPlayerProgress);
-      
+
     } catch (error) {
       // Silently handle errors in state updates
     }
-  }, [animationPlayer.isLoaded, animationPlayer.getPlayerIds, animationPlayer.getPlayerTime, 
-      animationPlayer.getPlayerState, animationPlayer.getPlayerProgress, activePlayerId]);
+  }, [animationPlayer.isLoaded, animationPlayer.getPlayerIds, animationPlayer.getPlayerTime,
+  animationPlayer.getPlayerState, animationPlayer.getPlayerProgress, activePlayerId]);
 
   // Polling functions
   const startPolling = useCallback(() => {
     if (pollingIntervalRef.current || !animationPlayer.isLoaded) return;
-    
+
     setIsPolling(true);
     const intervalMs = 1000 / pollingRate;
-    
+
     pollingIntervalRef.current = setInterval(() => {
       try {
         const updateResult = animationPlayer.enhancedUpdate();
-        
+
         if (updateResult.values) {
           setCurrentValues(updateResult.values);
         }
-        
+
         updatePlayerStateFromWasm();
-        
+
       } catch (error) {
         addLog(`Polling update failed: ${error.message}`, 'error');
       }
     }, intervalMs);
-    
+
     addLog(`Started polling at ${pollingRate} FPS`);
   }, [animationPlayer.isLoaded, animationPlayer.enhancedUpdate, pollingRate, updatePlayerStateFromWasm, addLog]);
 
@@ -171,7 +170,7 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
   // Playback control methods
   const play = useCallback(() => {
     if (!animationPlayer.isLoaded) return;
-    
+
     try {
       animationPlayer.play(activePlayerId);
       startPolling(); // Auto-start polling when playing
@@ -183,7 +182,7 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
 
   const pause = useCallback(() => {
     if (!animationPlayer.isLoaded) return;
-    
+
     try {
       animationPlayer.pause(activePlayerId);
       stopPolling(); // Auto-stop polling when pausing
@@ -195,7 +194,7 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
 
   const stop = useCallback(() => {
     if (!animationPlayer.isLoaded) return;
-    
+
     try {
       animationPlayer.stop(activePlayerId);
       stopPolling(); // Auto-stop polling when stopping
@@ -208,42 +207,42 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
 
   const seek = useCallback((time) => {
     if (!animationPlayer.isLoaded) return;
-    
+
     try {
       animationPlayer.seek(activePlayerId, time);
       setCurrentTime(time);
-      
+
       // Update values at the new time position
       const updateResult = animationPlayer.enhancedUpdate(0);
       if (updateResult.values) {
         setCurrentValues(updateResult.values);
       }
-      
+
       updatePlayerStateFromWasm();
       addLog(`Seeked to ${time.toFixed(2)}s`);
     } catch (error) {
       addLog(`Seek failed: ${error.message}`, 'error');
     }
-  }, [animationPlayer.isLoaded, animationPlayer.seek, animationPlayer.enhancedUpdate, 
-      activePlayerId, updatePlayerStateFromWasm, addLog]);
+  }, [animationPlayer.isLoaded, animationPlayer.seek, animationPlayer.enhancedUpdate,
+    activePlayerId, updatePlayerStateFromWasm, addLog]);
 
   // Configuration update methods
   const updatePlayerConfig = useCallback((newConfig) => {
     if (!animationPlayer.isLoaded) return;
-    
+
     try {
       setConfig(prev => ({ ...prev, ...newConfig }));
-      
+
       if (newConfig.speed !== undefined) {
         const configJson = JSON.stringify({ speed: newConfig.speed });
         animationPlayer.updatePlayerConfig(activePlayerId, configJson);
         addLog(`Speed set to ${newConfig.speed}x`);
       }
-      
+
       if (newConfig.mode !== undefined) {
         const configJson = JSON.stringify({ mode: newConfig.mode });
         animationPlayer.updatePlayerConfig(activePlayerId, configJson);
-        
+
         // For loop and ping_pong modes, ensure endTime is set if not specified
         if ((newConfig.mode === 'loop' || newConfig.mode === 'ping_pong') && config.endTime === null) {
           const animationDuration = 4.0; // Test animation duration
@@ -252,16 +251,16 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
           setConfig(prev => ({ ...prev, endTime: animationDuration }));
           addLog(`Auto-set end time to ${animationDuration}s for ${newConfig.mode} mode`);
         }
-        
+
         addLog(`Playback mode set to ${newConfig.mode}`);
       }
-      
+
       if (newConfig.startTime !== undefined) {
         const configJson = JSON.stringify({ start_time: newConfig.startTime });
         animationPlayer.updatePlayerConfig(activePlayerId, configJson);
         addLog(`Start time set to ${newConfig.startTime}s`);
       }
-      
+
       if (newConfig.endTime !== undefined) {
         const endTime = newConfig.endTime === null ? null : newConfig.endTime;
         const configJson = JSON.stringify({ end_time: endTime });
@@ -272,7 +271,7 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
           addLog(`End time set to ${endTime}s`);
         }
       }
-      
+
     } catch (error) {
       addLog(`Config update failed: ${error.message}`, 'error');
     }
@@ -302,7 +301,7 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
   // Manual update
   const manualUpdate = useCallback(() => {
     if (!animationPlayer.isLoaded) return;
-    
+
     try {
       const updateResult = animationPlayer.enhancedUpdate();
       if (updateResult.values) {
@@ -316,68 +315,64 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
   }, [animationPlayer.isLoaded, animationPlayer.enhancedUpdate, updatePlayerStateFromWasm, addLog]);
 
   // Load animation from data
-  const loadAnimationFromData = useCallback(async (animationData, playerName = 'custom_player') => {
+  const loadAnimationFromData = useCallback(async (animationData) => {
     if (!animationPlayer.isLoaded) {
       throw new Error('Animation player not initialized');
     }
-    
+
     try {
       addLog('Loading animation from provided data...');
-      
+
       // Stop current playback if playing
       if (isPlaying) {
         stop();
       }
-      
+
       // Load the new animation data
-      const animationJson = typeof animationData === 'string' 
-        ? animationData 
+      const animationJson = typeof animationData === 'string'
+        ? animationData
         : JSON.stringify(animationData);
-      animationPlayer.loadAnimation(animationJson);
-      
+      const animationId = animationPlayer.loadAnimation(animationJson);
+
       // Create new player
-      animationPlayer.createPlayer(playerName);
-      
-      // Extract animation ID
-      const animData = typeof animationData === 'object' ? animationData : JSON.parse(animationData);
-      const animationId = animData.id || Object.keys(animData)[0] || 'unknown';
-      
+      const playerId = animationPlayer.createPlayer();
+
       // Add instance
-      animationPlayer.addInstance(playerName, animationId);
-      
+      animationPlayer.addInstance(playerId, animationId);
+
       // Update active player
-      setActivePlayerId(playerName);
-      
+      setActivePlayerId(playerId);
+
       // Reset state
       setCurrentTime(0);
       setCurrentValues({});
       setIsPlaying(false);
       setPlayerState('stopped');
       setProgress(0);
-      
+
       // Update values at time 0
       const updateResult = animationPlayer.enhancedUpdate(0);
       if (updateResult.values) {
         setCurrentValues(updateResult.values);
       }
-      
+
       updatePlayerStateFromWasm();
       addLog('Animation data loaded successfully');
-      
+      return playerId; // Return the new player ID
     } catch (error) {
       addLog(`Failed to load animation: ${error.message}`, 'error');
       throw error;
     }
-  }, [animationPlayer.isLoaded, animationPlayer.loadAnimation, animationPlayer.createPlayer, 
-      animationPlayer.addInstance, animationPlayer.enhancedUpdate, isPlaying, stop, 
-      updatePlayerStateFromWasm, addLog]);
+  }, [animationPlayer.isLoaded, animationPlayer.loadAnimation, animationPlayer.createPlayer,
+  animationPlayer.addInstance, animationPlayer.enhancedUpdate, isPlaying, stop,
+    updatePlayerStateFromWasm, addLog]);
 
   // Baking utilities
   const bakeAnimation = useCallback((animationId, frameRate = 60, config = {}) => {
     if (!animationPlayer.isLoaded) {
       throw new Error('Animation player not initialized');
     }
-    
+
     try {
       addLog(`Baking animation '${animationId}' at ${frameRate} FPS...`);
       const bakedData = animationPlayer.bakeAnimationWithConfig(animationId, frameRate, config);
@@ -417,7 +412,7 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
     }
 
     const playerId = playerIds.includes(activePlayerId) ? activePlayerId : playerIds[0];
-    
+
     try {
       const state = animationPlayer.getPlayerState(playerId);
       return {
@@ -436,8 +431,8 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
         playbackRate: 1.0
       };
     }
-  }, [animationPlayer.isLoaded, animationPlayer.getPlayerIds, animationPlayer.getPlayerState, 
-      activePlayerId, currentTime, isPlaying, progress]);
+  }, [animationPlayer.isLoaded, animationPlayer.getPlayerIds, animationPlayer.getPlayerState,
+    activePlayerId, currentTime, isPlaying, progress]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -450,7 +445,7 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
   const value = {
     // WASM and enhanced functionality
     ...animationPlayer,
-    
+
     // React state
     currentValues,
     currentTime,
@@ -460,18 +455,18 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
     config,
     logs,
     activePlayerId,
-    
+
     // Polling state
     isPolling,
     pollingRate,
-    
+
     // Control methods
     play,
     pause,
     stop,
     seek,
     manualUpdate,
-    
+
     // Configuration
     updatePlayerConfig,
     setSpeed,
@@ -479,19 +474,19 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
     setStartTime,
     setEndTime,
     setTimeRange,
-    
+
     // Polling control
     startPolling,
     stopPolling,
     updatePollingRate,
-    
+
     // Animation loading
     loadAnimationFromData,
-    
+
     // Baking
     bakeAnimation,
     bakeCurrent,
-    
+
     // Utility
     addLog,
     clearLogs,

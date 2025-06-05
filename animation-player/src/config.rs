@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize}; // Added this use statement
 
 /// Configuration for the animation engine
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AnimationConfig {
+pub struct AnimationEngineConfig {
     /// Target frame rate for animations
     pub target_fps: f64,
     /// Maximum memory usage in bytes
@@ -26,7 +26,7 @@ pub struct AnimationConfig {
 
 const MB: usize = 1024 * 1024;
 
-impl Default for AnimationConfig {
+impl Default for AnimationEngineConfig {
     /// Create a new configuration with default values
     fn default() -> Self {
         Self {
@@ -42,7 +42,7 @@ impl Default for AnimationConfig {
     }
 }
 
-impl AnimationConfig {
+impl AnimationEngineConfig {
     /// Create a configuration optimized for high performance
     pub fn high_performance() -> Self {
         Self {
@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_default_config() {
-        let config = AnimationConfig::default();
+        let config = AnimationEngineConfig::default();
         assert_eq!(config.target_fps, 60.0);
         assert_eq!(config.max_memory_bytes, 64 * 1024 * 1024);
         assert_eq!(config.max_cache_size, 1000);
@@ -302,7 +302,7 @@ mod tests {
 
     #[test]
     fn test_high_performance_config() {
-        let config = AnimationConfig::high_performance();
+        let config = AnimationEngineConfig::high_performance();
         assert_eq!(config.target_fps, 120.0);
         assert_eq!(config.max_memory_bytes, 128 * 1024 * 1024);
         assert!(!config.enable_events); // Events disabled for performance
@@ -310,7 +310,7 @@ mod tests {
 
     #[test]
     fn test_low_memory_config() {
-        let config = AnimationConfig::low_memory();
+        let config = AnimationEngineConfig::low_memory();
         assert_eq!(config.target_fps, 30.0);
         assert_eq!(config.max_memory_bytes, 16 * 1024 * 1024);
         assert_eq!(config.max_cache_size, 200);
@@ -319,7 +319,7 @@ mod tests {
 
     #[test]
     fn test_web_optimized_config() {
-        let config = AnimationConfig::web_optimized();
+        let config = AnimationEngineConfig::web_optimized();
         assert_eq!(config.target_fps, 60.0);
         assert_eq!(config.max_memory_bytes, 32 * 1024 * 1024);
         assert_eq!(config.max_cache_size, 500);
@@ -328,7 +328,7 @@ mod tests {
 
     #[test]
     fn test_config_validation() {
-        let mut config = AnimationConfig::default();
+        let mut config = AnimationEngineConfig::default();
         assert!(config.validate().is_ok());
 
         config.target_fps = 0.0;
@@ -341,7 +341,7 @@ mod tests {
 
     #[test]
     fn test_config_builder() {
-        let config = AnimationConfig::default()
+        let config = AnimationEngineConfig::default()
             .with_target_fps(90.0)
             .with_max_memory_mb(128)
             .with_max_cache_size(2000)

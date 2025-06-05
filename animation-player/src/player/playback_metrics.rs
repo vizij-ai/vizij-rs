@@ -1,4 +1,4 @@
-use crate::AnimationConfig;
+use crate::AnimationEngineConfig;
 use crate::AnimationTime;
 
 /// Performance metrics for animation playback
@@ -42,7 +42,7 @@ impl PlaybackMetrics {
     }
 
     /// Check if performance is within acceptable thresholds
-    pub fn is_performance_acceptable(&self, config: &AnimationConfig) -> bool {
+    pub fn is_performance_acceptable(&self, config: &AnimationEngineConfig) -> bool {
         config
             .performance_thresholds
             .is_frame_time_acceptable(self.frame_time_ms)

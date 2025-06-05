@@ -22,8 +22,6 @@ impl Default for PlaybackMode {
 /// Settings for a specific animation instance.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InstanceSettings {
-    /// The unique ID of the animation data this instance refers to.
-    pub animation_id: String,
     /// The time offset to start playback from within the animation data.
     pub start_offset: AnimationTime,
     /// The time at which this instance begins relative to the player's timeline.
@@ -44,10 +42,8 @@ pub struct InstanceSettings {
 
 impl InstanceSettings {
     /// Creates new default instance settings for a given animation ID.
-    #[inline]
-    pub fn new(animation_id: impl Into<String>) -> Self {
+    pub fn new() -> Self {
         Self {
-            animation_id: animation_id.into(),
             start_offset: AnimationTime::zero(),
             instance_start_time: AnimationTime::zero(),
             duration: None,
@@ -116,11 +112,17 @@ impl InstanceSettings {
     }
 }
 
+impl Default for InstanceSettings {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Represents an active animation instance being played by the AnimationPlayer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AnimationInstance {
-    /// Unique identifier for this instance.
-    pub id: String,
+    /// The unique ID of the animation data this instance refers to.
+    pub animation_id: String,
     /// The settings defining this instance's behavior.
     pub settings: InstanceSettings,
     /// The current number of loops completed for this instance.
@@ -136,16 +138,16 @@ impl AnimationInstance {
     /// Creates a new animation instance.
     #[inline]
     pub fn new(
-        id: impl Into<String>,
+        animation_id: impl Into<String>,
         settings: InstanceSettings,
-        animation_data_duration: AnimationTime,
+        animation_data_duration: impl Into<AnimationTime>,
     ) -> Self {
         Self {
-            id: id.into(),
+            animation_id: animation_id.into(),
             settings,
             current_loop_count: 0,
             is_playing_forward: true,
-            animation_data_duration,
+            animation_data_duration: animation_data_duration.into(),
         }
     }
 
@@ -160,7 +162,8 @@ impl AnimationInstance {
             .unwrap_or_else(|_| AnimationTime::zero());
 
         let scaled_time = instance_relative_time.as_seconds() * self.settings.timescale;
-        let scaled_time = AnimationTime::new(scaled_time).unwrap_or_else(|_| AnimationTime::zero());
+        let scaled_time =
+            AnimationTime::from_seconds(scaled_time).unwrap_or_else(|_| AnimationTime::zero());
 
         let effective_duration = self
             .settings
@@ -178,7 +181,8 @@ impl AnimationInstance {
                 let total_animation_seconds = effective_duration.as_seconds();
                 if total_animation_seconds > 0.0 {
                     let looped_seconds = scaled_time.as_seconds() % total_animation_seconds;
-                    AnimationTime::new(looped_seconds).unwrap_or_else(|_| AnimationTime::zero())
+                    AnimationTime::from_seconds(looped_seconds)
+                        .unwrap_or_else(|_| AnimationTime::zero())
                 } else {
                     AnimationTime::zero()
                 }
@@ -194,7 +198,8 @@ impl AnimationInstance {
                     } else {
                         cycle_duration - cycle_time // Backward
                     };
-                    AnimationTime::new(time_in_half_cycle).unwrap_or_else(|_| AnimationTime::zero())
+                    AnimationTime::from_seconds(time_in_half_cycle)
+                        .unwrap_or_else(|_| AnimationTime::zero())
                 } else {
                     AnimationTime::zero()
                 }

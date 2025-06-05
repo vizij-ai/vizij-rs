@@ -61,7 +61,7 @@ fn convert_test_animation(test_data: StudioAnimationData) -> AnimationData {
         for point in track_data.points {
             // Convert stamp (0.0-1.0) to time in seconds
             let time_seconds = point.stamp * duration_seconds;
-            let time = AnimationTime::new(time_seconds).unwrap();
+            let time = AnimationTime::from_seconds(time_seconds).unwrap();
             let keypoint = AnimationKeypoint::new(time, Value::Float(point.value));
             track.add_keypoint(keypoint).unwrap();
         }
@@ -70,7 +70,7 @@ fn convert_test_animation(test_data: StudioAnimationData) -> AnimationData {
     }
 
     // Set the duration
-    animation.metadata.duration = AnimationTime::new(duration_seconds).unwrap();
+    animation.metadata.duration = AnimationTime::from_seconds(duration_seconds).unwrap();
     animation
 }
 
@@ -145,7 +145,7 @@ mod tests {
                   "value": 0.0
                 },
                 {
-                  "id": "point-id-2", 
+                  "id": "point-id-2",
                   "stamp": 1.0,
                   "value": 10.0
                 }
@@ -162,7 +162,7 @@ mod tests {
         assert_eq!(animation.name, "Test Animation");
         assert_eq!(
             animation.metadata.duration,
-            AnimationTime::new(5.0).unwrap()
+            AnimationTime::from_seconds(5.0).unwrap()
         );
         assert_eq!(animation.tracks.len(), 1);
 
@@ -172,13 +172,19 @@ mod tests {
         assert_eq!(track.keypoints.len(), 2);
 
         // First keypoint at stamp 0.0 -> time 0.0
-        assert_eq!(track.keypoints[0].time, AnimationTime::new(0.0).unwrap());
+        assert_eq!(
+            track.keypoints[0].time,
+            AnimationTime::from_seconds(0.0).unwrap()
+        );
         if let Value::Float(val) = track.keypoints[0].value {
             assert_eq!(val, 0.0);
         }
 
         // Second keypoint at stamp 1.0 -> time 5.0 (1.0 * 5.0 duration)
-        assert_eq!(track.keypoints[1].time, AnimationTime::new(5.0).unwrap());
+        assert_eq!(
+            track.keypoints[1].time,
+            AnimationTime::from_seconds(5.0).unwrap()
+        );
         if let Value::Float(val) = track.keypoints[1].value {
             assert_eq!(val, 10.0);
         }
@@ -212,6 +218,9 @@ mod tests {
         let track = animation.tracks.values().next().unwrap();
 
         // stamp 0.5 with duration 2000ms (2.0s) should be time 1.0s
-        assert_eq!(track.keypoints[0].time, AnimationTime::new(1.0).unwrap());
+        assert_eq!(
+            track.keypoints[0].time,
+            AnimationTime::from_seconds(1.0).unwrap()
+        );
     }
 }

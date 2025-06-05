@@ -1,9 +1,8 @@
 //! Integration tests for WASM bindings
 
-#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
+#[cfg(target_arch = "wasm32")]
 mod wasm_tests {
     use animation_player::wasm::*;
-    use animation_player::*;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -37,37 +36,33 @@ mod wasm_tests {
         }"#;
 
         // Load animation
-        assert!(engine.load_animation(animation_json).is_ok());
+        let animation_id = engine.load_animation(animation_json).unwrap();
 
         // Create player
-        assert!(engine.create_player("test_player").is_ok());
+        let player_id = engine.create_player();
 
         // Add instance
-        assert!(engine
-            .add_instance("test_player", "instance1", "test_animation")
-            .is_ok());
+        assert!(engine.add_instance(&player_id, &animation_id).is_ok());
 
         // Test playback controls
-        assert!(engine.play("test_player").is_ok());
-        assert_eq!(engine.get_player_state("test_player").unwrap(), "playing");
+        assert!(engine.play(&player_id).is_ok());
+        assert_eq!(engine.get_player_state(&player_id).unwrap(), "playing");
 
-        assert!(engine.pause("test_player").is_ok());
-        assert_eq!(engine.get_player_state("test_player").unwrap(), "paused");
+        assert!(engine.pause(&player_id).is_ok());
+        assert_eq!(engine.get_player_state(&player_id).unwrap(), "paused");
 
-        assert!(engine.stop("test_player").is_ok());
-        assert_eq!(engine.get_player_state("test_player").unwrap(), "stopped");
+        assert!(engine.stop(&player_id).is_ok());
+        assert_eq!(engine.get_player_state(&player_id).unwrap(), "stopped");
     }
 
     #[wasm_bindgen_test]
     fn test_wasm_utility_functions() {
-        assert!(!get_version().is_empty());
-
         let value_json = r#"{"Float": 42.5}"#;
         assert!(value_to_js(value_json).is_ok());
     }
 }
 
-#[cfg(not(all(target_arch = "wasm32", feature = "wasm")))]
+#[cfg(not(target_arch = "wasm32"))]
 mod non_wasm_tests {
     #[test]
     fn test_placeholder() {

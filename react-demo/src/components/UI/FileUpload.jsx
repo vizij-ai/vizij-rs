@@ -17,27 +17,24 @@ const FileUpload = () => {
     }
 
     setUploadStatus('Loading animation...');
-    
+
     try {
       const text = await file.text();
       const animationData = JSON.parse(text);
-      
+
       // Extract animation name from file name (remove .json extension)
       const animationName = file.name.replace(/\.json$/i, '');
-      
-      // Use the name from metadata if available, otherwise use filename
-      const playerName = animationData.metadata?.name || animationName;
-      
+
       // Load the animation data into a new player
-      await loadAnimationFromData(animationData, playerName);
-      setUploadStatus(`Successfully loaded: ${file.name} as "${playerName}"`);
-      
+      const playerId = await loadAnimationFromData(animationData);
+      setUploadStatus(`Successfully loaded: ${file.name} as "${playerId}"`);
+
       // Clear status after 3 seconds
       setTimeout(() => setUploadStatus(''), 3000);
     } catch (error) {
       console.error('Failed to load animation file:', error);
       setUploadStatus(`Error loading file: ${error.message}`);
-      
+
       // Clear error after 5 seconds
       setTimeout(() => setUploadStatus(''), 5000);
     }
@@ -53,7 +50,7 @@ const FileUpload = () => {
   const handleDrop = (event) => {
     event.preventDefault();
     setIsDragOver(false);
-    
+
     const files = event.dataTransfer.files;
     if (files.length > 0) {
       handleFileSelect(files[0]);
@@ -95,7 +92,7 @@ const FileUpload = () => {
   return (
     <div className="control-panel">
       <h3>📁 Load Animation Data</h3>
-      
+
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -104,7 +101,7 @@ const FileUpload = () => {
         onChange={handleFileInputChange}
         style={{ display: 'none' }}
       />
-      
+
       {/* Drop zone */}
       <div
         className={`file-drop-zone ${isDragOver ? 'drag-over' : ''}`}
@@ -122,14 +119,14 @@ const FileUpload = () => {
           </div>
         </div>
       </div>
-      
+
       {/* Status message */}
       {uploadStatus && (
         <div className={`upload-status ${uploadStatus.includes('Error') ? 'error' : 'success'}`}>
           {uploadStatus}
         </div>
       )}
-      
+
       {/* File format info */}
       <div className="file-format-info">
         <small>
@@ -138,11 +135,11 @@ const FileUpload = () => {
           See the demo animation for an example structure.
         </small>
       </div>
-      
+
       {/* Quick load button for demo file */}
       <div className="quick-actions">
         <h4>Quick Actions</h4>
-        <button 
+        <button
           className="btn-info"
           onClick={loadDemoAnimation}
           disabled={isLoading}
