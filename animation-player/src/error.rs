@@ -157,8 +157,16 @@ impl From<serde_json::Error> for AnimationError {
     }
 }
 
-impl From<bincode::Error> for AnimationError {
-    fn from(err: bincode::Error) -> Self {
+impl From<bincode::error::EncodeError> for AnimationError {
+    fn from(err: bincode::error::EncodeError) -> Self {
+        Self::SerializationError {
+            reason: err.to_string(),
+        }
+    }
+}
+
+impl From<bincode::error::DecodeError> for AnimationError {
+    fn from(err: bincode::error::DecodeError) -> Self {
         Self::SerializationError {
             reason: err.to_string(),
         }
