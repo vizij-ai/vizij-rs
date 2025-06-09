@@ -155,7 +155,7 @@ export const useBaking = () => {
         const playerState = animationPlayer.getPlayerState('demo_player');
         console.log('Current player state:', playerState);
       } catch (stateError) {
-        console.warn('Could not get player state:', stateError.message);
+        console.warn('Could not get player state, existing players:', playerIds, stateError.message);
       }
       
       // Try different approaches to baking

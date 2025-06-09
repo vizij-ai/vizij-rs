@@ -44,10 +44,10 @@ impl WasmAnimationEngine {
 
     #[wasm_bindgen]
     pub fn load_animation(&mut self, animation_json: &str) -> Result<String, JsValue> {
-        console_log(&format!(
-            "Loading animation on wasm side {:?}",
-            animation_json
-        ));
+        // console_log(&format!(
+        //     "Loading animation on wasm side {:?}",
+        //     animation_json
+        // ));
 
         // Try to parse the animation JSON directly first
         let animation_data: AnimationData = match serde_json::from_str(animation_json) {
@@ -79,7 +79,7 @@ impl WasmAnimationEngine {
                 }
             }
         };
-        console_log(&format!("Parsed data on wasm side {:?}", animation_data));
+        // console_log(&format!("Parsed data on wasm side {:?}", animation_data));
         let animation_id = self
             .engine
             .load_animation_data(animation_data)
@@ -93,6 +93,16 @@ impl WasmAnimationEngine {
     #[wasm_bindgen]
     pub fn create_player(&mut self) -> String {
         self.engine.create_player()
+    }
+
+    /// Get animation ids
+    #[wasm_bindgen]
+    pub fn animation_ids(&mut self) -> Vec<String> {
+        let ids: Vec<&str> = self.engine.animation_ids();
+        // Convert Vec<&str> to Vec<String>
+        ids.into_iter() // Create an iterator over the string slices
+            .map(|s| s.to_string()) // For each slice, create an owned String
+            .collect() // Collect the results into a Vec<String>
     }
 
     /// Add an animation instance to a player
@@ -392,7 +402,7 @@ impl WasmAnimationEngine {
             .ok_or_else(|| JsValue::from_str("Animation not found"))?
             .clone(); // Clone to avoid borrowing issues
 
-        console_log(&format!("Wasm Baking with animation data: {:?}", animation));
+        // console_log(&format!("Wasm Baking with animation data: {:?}", animation));
 
         // Parse baking configuration
         let config = if let Some(json) = config_json {
@@ -409,7 +419,7 @@ impl WasmAnimationEngine {
             .map_err(|e| JsValue::from_str(&format!("Baking error: {:?}", e)))?;
 
         // Convert to JSON
-        console_log(&format!("Wasm Baked: {:?}", baked_data));
+        // console_log(&format!("Wasm Baked: {:?}", baked_data));
         baked_data
             .to_json()
             .map_err(|e| JsValue::from_str(&format!("JSON serialization error: {:?}", e)))

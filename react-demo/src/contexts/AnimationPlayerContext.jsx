@@ -373,6 +373,8 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
       throw new Error('Animation player not initialized');
     }
 
+    console.log("loaded animmations", animationPlayer.getAnimationIds())
+
     try {
       addLog(`Baking animation '${animationId}' at ${frameRate} FPS...`);
       const bakedData = animationPlayer.bakeAnimationWithConfig(animationId, frameRate, config);
@@ -385,7 +387,8 @@ export const AnimationPlayerProvider = ({ children, wasmConfig = null, options =
   }, [animationPlayer.isLoaded, animationPlayer.bakeAnimationWithConfig, addLog]);
 
   const bakeCurrent = useCallback((frameRate = 60, config = {}) => {
-    return bakeAnimation('test_animation', frameRate, config);
+    const ids = animationPlayer.getAnimationIds();
+    return bakeAnimation(ids[0], frameRate, config);
   }, [bakeAnimation]);
 
   // Get frame info for display
