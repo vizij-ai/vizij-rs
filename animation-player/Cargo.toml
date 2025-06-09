@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Semio Team"]
 description = "Core animation engine for real-time streaming and interpolation"
-license = "Proprietary"
+license = "MIT OR Apache-2.0"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -44,3 +44,12 @@ approx = "0.5"
 # WASM testing dependencies
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.3"
+
+[profile.release]
+opt-level = "s"   # optimize for size
+lto = true
+codegen-units = 1
+panic = "abort"   # smaller code size
+
+[profile.release.package."*"]
+opt-level = "s"
