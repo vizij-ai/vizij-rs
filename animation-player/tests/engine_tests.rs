@@ -227,7 +227,7 @@ fn test_engine_update_with_single_player() {
     engine.play_player(&player_id).unwrap();
 
     // Update with small delta time
-    let delta = 1.0 / 60.0; // 60 FPS
+    let delta = Duration::from_secs_f64(1.0 / 60.0); // 60 FPS
     let result = engine.update(delta);
     assert!(result.is_ok());
 
@@ -242,7 +242,7 @@ fn test_engine_update_with_single_player() {
     // Check that player time advanced
     let player = engine.get_player(&player_id).unwrap();
     assert!(player.current_time.as_seconds() > 0.0);
-    assert!(player.current_time.as_seconds() <= delta);
+    assert!(player.current_time <= delta.into());
 }
 
 #[test]
@@ -280,7 +280,8 @@ fn test_engine_update_with_multiple_players() {
     engine.play_player(&player2_id).unwrap();
 
     // Update engine
-    let result = engine.update(1.0 / 60.0);
+    let delta = Duration::from_secs_f64(1.0 / 60.0); // 60 FPS
+    let result = engine.update(delta);
     assert!(result.is_ok());
 
     let values = result.unwrap();
@@ -306,7 +307,8 @@ fn test_engine_update_paused_players() {
 
     // Start then pause
     engine.play_player(&player_id).unwrap();
-    let initial_result = engine.update(1.0 / 60.0);
+    let delta = Duration::from_secs_f64(1.0 / 60.0); // 60 FPS
+    let initial_result = engine.update(delta);
     assert!(initial_result.is_ok());
 
     let initial_values = initial_result.unwrap();
@@ -315,7 +317,7 @@ fn test_engine_update_paused_players() {
     let initial_time = engine.get_player(&player_id).unwrap().current_time;
 
     // Update should not advance paused player
-    let result = engine.update(1.0 / 60.0);
+    let result = engine.update(Duration::from_secs_f64(1.0 / 60.0));
     assert!(result.is_ok());
 
     let values = result.unwrap();
@@ -337,7 +339,7 @@ fn test_engine_update_with_looping() {
     engine.play_player(&player_id).unwrap();
 
     // Update past the animation duration
-    let result = engine.update(2.5); // Beyond 2 second duration
+    let result = engine.update(Duration::from_millis(2500)); // Beyond 2 second duration
     assert!(result.is_ok());
 
     // Player should have looped back
@@ -360,7 +362,7 @@ fn test_engine_update_without_looping() {
     engine.play_player(&player_id).unwrap();
 
     // Update past the animation duration
-    let result = engine.update(2.5); // Beyond 2 second duration
+    let result = engine.update(Duration::from_millis(2500)); // Beyond 2 second duration
     assert!(result.is_ok());
 
     // Player should have ended
@@ -380,7 +382,7 @@ fn test_engine_update_with_speed_variations() {
     engine.play_player(&player_id).unwrap();
 
     // Update with 1 second delta
-    let result = engine.update(0.5);
+    let result = engine.update(Duration::from_millis(500));
     assert!(result.is_ok());
 
     // Player time should have advanced by 1 seconds (.5 * 2.0 speed)
@@ -410,7 +412,7 @@ fn test_engine_update_with_reverse_speed() {
     engine.play_player(&player_id).unwrap();
 
     // Update
-    let result = engine.update(0.5);
+    let result = engine.update(Duration::from_millis(500));
     if let Err(e) = &result {
         eprintln!("Update error: {:?}", e);
     }
@@ -505,7 +507,7 @@ fn test_engine_metrics() {
     engine.play_player(&player_id).unwrap();
 
     // Update to generate metrics
-    engine.update(1.0 / 60.0).unwrap();
+    engine.update(Duration::from_secs_f64(1.0 / 60.0)).unwrap();
 
     let metrics = engine.metrics();
     assert!(metrics.contains_key("total_players"));
@@ -623,7 +625,7 @@ fn test_engine_multiple_instances_per_player() {
     engine.play_player(&player_id).unwrap();
 
     // Update and check that we get combined values
-    let result = engine.update(1.5); // 1.5 seconds - should activate both instances
+    let result = engine.update(Duration::from_millis(1500)); // 1.5 seconds - should activate both instances
     assert!(result.is_ok());
 
     let values = result.unwrap();
@@ -658,7 +660,7 @@ fn test_engine_instance_time_offsets() {
     engine.play_player(&player_id).unwrap();
 
     // Update to 0.5 seconds - instance shouldn't be active yet
-    let result = engine.update(0.5);
+    let result = engine.update(Duration::from_millis(500));
     assert!(result.is_ok());
 
     let values = result.unwrap();
@@ -666,7 +668,7 @@ fn test_engine_instance_time_offsets() {
     assert!(values.get(&player_id).map_or(true, |v| v.is_empty()));
 
     // Update to 1.5 seconds - instance should now be active
-    let result = engine.update(1.0); // Additional 1.0 second
+    let result = engine.update(Duration::from_millis(1000)); // Additional 1.0 second
     assert!(result.is_ok());
 
     let values = result.unwrap();

@@ -7,7 +7,7 @@ use js_sys::Date;
 use serde::{Deserialize, Serialize};
 
 #[cfg(not(target_arch = "wasm32"))]
-use instant::Instant;
+use std::time::Instant;
 
 #[cfg(target_arch = "wasm32")]
 #[derive(Debug, Clone, Copy)]

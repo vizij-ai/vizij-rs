@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
 use uuid::Uuid;
 
@@ -29,7 +30,7 @@ pub struct AnimationEngine {
     /// Engine metrics
     engine_metrics: HashMap<String, f64>,
     /// Last time the engine was updated (for delta calculation)
-    last_engine_update_time: AnimationTime,
+    last_engine_update_time: Duration,
 }
 
 impl AnimationEngine {
@@ -43,7 +44,7 @@ impl AnimationEngine {
             event_dispatcher: EventDispatcher::new(),
             config,
             engine_metrics: HashMap::new(),
-            last_engine_update_time: AnimationTime::zero(),
+            last_engine_update_time: Duration::ZERO,
         }
     }
 
@@ -187,12 +188,13 @@ impl AnimationEngine {
     /// Update all players
     pub fn update(
         &mut self,
-        frame_delta_seconds: f64,
+        frame_delta: impl Into<Duration>,
     ) -> Result<HashMap<String, HashMap<String, Value>>, AnimationError> {
+        let frame_delta: Duration = frame_delta.into();
         let mut all_values = HashMap::new();
 
         // Update engine's internal time
-        self.last_engine_update_time += AnimationTime::from_seconds(frame_delta_seconds)?;
+        self.last_engine_update_time += frame_delta;
 
         // Collect player IDs to avoid mutable borrow issues
         let player_ids: Vec<String> = self.players.keys().cloned().collect();
@@ -214,13 +216,13 @@ impl AnimationEngine {
             let player_duration = player_state.end_time.unwrap_or(player.duration());
 
             // Calculate animation delta based on frame_delta and player speed
-            let animation_delta_seconds = frame_delta_seconds * player_state.speed;
-            let animation_delta = AnimationTime::from_seconds(animation_delta_seconds.abs())?;
+            // std::time::Duration only supports multiplying with positive values.
+            let animation_delta = frame_delta.mul_f64(player_state.speed.abs());
 
             // Update player time and handle bounds/looping
             let values = if player_state.speed >= 0.0 {
                 // Forward playback
-                let new_time = player.current_time + animation_delta;
+                let new_time = player.current_time + animation_delta.into();
 
                 if new_time >= player_duration {
                     // Use the instance's playback mode, fallback to player state mode
@@ -273,7 +275,7 @@ impl AnimationEngine {
                 }
             } else {
                 // Reverse playback
-                let new_time = player.current_time - animation_delta;
+                let new_time = player.current_time - animation_delta.into();
 
                 if new_time <= player_state.start_time {
                     // Use the instance's playback mode, fallback to player state mode

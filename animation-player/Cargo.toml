@@ -24,9 +24,6 @@ lru = "0.12"
 # Math operations
 nalgebra = "0.32"
 
-# Time handling
-instant = "0.1"
-
 # Error handling
 thiserror = "1.0"
 

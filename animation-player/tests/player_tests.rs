@@ -202,7 +202,7 @@ fn test_animation_engine_update_playback() {
     );
 
     // Update engine by 1 second
-    let values = engine.update(1.0).unwrap();
+    let values = engine.update(Duration::from_secs(1)).unwrap();
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(1.0).unwrap()
@@ -211,7 +211,7 @@ fn test_animation_engine_update_playback() {
     assert!(values.get(&player_id).unwrap().is_empty()); // Still empty as no tracks
 
     // Update until end
-    engine.update(9.0).unwrap(); // Total 10 seconds
+    engine.update(Duration::from_secs(9)).unwrap(); // Total 10 seconds
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(0.0).unwrap() // Should wrap around to 0.0
@@ -236,7 +236,7 @@ fn test_animation_engine_update_playback() {
     player_once.add_instance(anim_instance_once);
 
     engine.play_player(&player_id_once).unwrap();
-    engine.update(6.0).unwrap(); // Exceeds 5s duration
+    engine.update(Duration::from_secs(6)).unwrap(); // Exceeds 5s duration
     assert_eq!(
         engine.get_player(&player_id_once).unwrap().current_time,
         AnimationTime::from_seconds(5.0).unwrap()
@@ -280,7 +280,7 @@ fn test_playback_mode_once_forward() {
     );
 
     // Update several times, approaching the end
-    engine.update(3.0).unwrap();
+    engine.update(Duration::from_secs(3)).unwrap();
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(3.0).unwrap()
@@ -290,7 +290,7 @@ fn test_playback_mode_once_forward() {
         PlaybackState::Playing
     );
 
-    engine.update(5.0).unwrap(); // Total: 8 seconds
+    engine.update(Duration::from_secs(5)).unwrap(); // Total: 8 seconds
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(8.0).unwrap()
@@ -301,7 +301,7 @@ fn test_playback_mode_once_forward() {
     );
 
     // Cross the boundary
-    engine.update(3.0).unwrap(); // Total: 11 seconds, exceeds duration
+    engine.update(Duration::from_secs(3)).unwrap(); // Total: 11 seconds, exceeds duration
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(10.0).unwrap()
@@ -312,7 +312,7 @@ fn test_playback_mode_once_forward() {
     );
 
     // Further updates should not change time or state
-    engine.update(2.0).unwrap();
+    engine.update(Duration::from_secs(2)).unwrap();
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(10.0).unwrap()
@@ -349,7 +349,7 @@ fn test_playback_mode_once_reverse() {
     assert_eq!(engine.get_player_state(&player_id).unwrap().speed, -1.0);
 
     // Update several times, approaching the start
-    engine.update(3.0).unwrap();
+    engine.update(Duration::from_secs(3)).unwrap();
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(7.0).unwrap()
@@ -359,7 +359,7 @@ fn test_playback_mode_once_reverse() {
         PlaybackState::Playing
     );
 
-    engine.update(5.0).unwrap(); // Total moved: 8 seconds back
+    engine.update(Duration::from_secs(5)).unwrap(); // Total moved: 8 seconds back
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(2.0).unwrap()
@@ -370,7 +370,7 @@ fn test_playback_mode_once_reverse() {
     );
 
     // Cross the boundary
-    engine.update(3.0).unwrap(); // Would go to -1.0, but should clamp and end
+    engine.update(Duration::from_secs(3)).unwrap(); // Would go to -1.0, but should clamp and end
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(0.0).unwrap()
@@ -397,7 +397,7 @@ fn test_playback_mode_loop_forward() {
     player_state_mut.mode = PlaybackMode::Loop;
 
     // Update to near the end
-    engine.update(9.5).unwrap();
+    engine.update(Duration::from_millis(9500)).unwrap();
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(9.5).unwrap()
@@ -408,7 +408,7 @@ fn test_playback_mode_loop_forward() {
     );
 
     // Cross the boundary - should loop back to start
-    engine.update(1.0).unwrap(); // Would be 10.5, should wrap to 0.5
+    engine.update(Duration::from_secs(1)).unwrap(); // Would be 10.5, should wrap to 0.5
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(0.5).unwrap()
@@ -419,7 +419,7 @@ fn test_playback_mode_loop_forward() {
     );
 
     // Continue and loop again
-    engine.update(12.0).unwrap(); // Should wrap around again
+    engine.update(Duration::from_secs(12)).unwrap(); // Should wrap around again
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(2.5).unwrap()
@@ -450,7 +450,7 @@ fn test_playback_mode_loop_reverse() {
     player_state_mut.playback_state = PlaybackState::Playing;
 
     // Cross the boundary - should loop back to end
-    engine.update(1.0).unwrap(); // Would be -0.5, should wrap to end
+    engine.update(Duration::from_secs(1)).unwrap(); // Would be -0.5, should wrap to end
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(10.0).unwrap()
@@ -461,7 +461,7 @@ fn test_playback_mode_loop_reverse() {
     );
 
     // Continue with another update to verify loop behavior
-    engine.update(2.0).unwrap(); // Should go to 8.0 (10.0 - 2.0)
+    engine.update(Duration::from_secs(2)).unwrap(); // Should go to 8.0 (10.0 - 2.0)
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(8.0).unwrap()
@@ -489,7 +489,7 @@ fn test_playback_mode_pingpong_forward_to_reverse() {
     assert_eq!(engine.get_player_state(&player_id).unwrap().speed, 1.0);
 
     // Update to near the end
-    engine.update(9.5).unwrap();
+    engine.update(Duration::from_millis(9500)).unwrap();
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(9.5).unwrap()
@@ -501,7 +501,7 @@ fn test_playback_mode_pingpong_forward_to_reverse() {
     assert_eq!(engine.get_player_state(&player_id).unwrap().speed, 1.0);
 
     // Cross the boundary - should reverse direction
-    engine.update(1.0).unwrap(); // Would be 10.5, should clamp to 10.0 and reverse speed
+    engine.update(Duration::from_secs(1)).unwrap(); // Would be 10.5, should clamp to 10.0 and reverse speed
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(10.0).unwrap()
@@ -513,7 +513,7 @@ fn test_playback_mode_pingpong_forward_to_reverse() {
     assert_eq!(engine.get_player_state(&player_id).unwrap().speed, -1.0); // Speed should be reversed
 
     // Continue in reverse direction
-    engine.update(3.0).unwrap();
+    engine.update(Duration::from_secs(3)).unwrap();
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(7.0).unwrap()
@@ -545,7 +545,7 @@ fn test_playback_mode_pingpong_reverse_to_forward() {
     player_state_mut.playback_state = PlaybackState::Playing;
 
     // Cross the boundary - should reverse direction back to forward
-    engine.update(1.0).unwrap(); // Would be -0.5, should clamp to 0.0 and reverse speed
+    engine.update(Duration::from_secs(1)).unwrap(); // Would be -0.5, should clamp to 0.0 and reverse speed
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(0.0).unwrap()
@@ -557,7 +557,7 @@ fn test_playback_mode_pingpong_reverse_to_forward() {
     assert_eq!(engine.get_player_state(&player_id).unwrap().speed, 1.0); // Speed should be reversed to positive
 
     // Continue in forward direction
-    engine.update(3.0).unwrap();
+    engine.update(Duration::from_secs(3)).unwrap();
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(3.0).unwrap()
@@ -586,7 +586,7 @@ fn test_playback_mode_pingpong_full_cycle() {
     assert_eq!(engine.get_player_state(&player_id).unwrap().speed, 1.0);
 
     // Go to end (forward phase)
-    engine.update(6.0).unwrap(); // Exceeds 5.0, should hit end and reverse
+    engine.update(Duration::from_secs(6)).unwrap(); // Exceeds 5.0, should hit end and reverse
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(5.0).unwrap()
@@ -594,7 +594,7 @@ fn test_playback_mode_pingpong_full_cycle() {
     assert_eq!(engine.get_player_state(&player_id).unwrap().speed, -1.0);
 
     // Go back to start (reverse phase)
-    engine.update(6.0).unwrap(); // Should hit start and reverse again
+    engine.update(Duration::from_secs(6)).unwrap(); // Should hit start and reverse again
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(0.0).unwrap()
@@ -624,13 +624,13 @@ fn test_mixed_playback_speeds() {
     player_state_mut.speed = 2.0;
     player_state_mut.playback_state = PlaybackState::Playing;
 
-    engine.update(1.0).unwrap(); // Should advance 2 seconds
+    engine.update(Duration::from_secs(1)).unwrap(); // Should advance 2 seconds
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(2.0).unwrap()
     );
 
-    engine.update(4.5).unwrap(); // Should advance 9 more seconds, total 11, wrap to 1
+    engine.update(Duration::from_millis(4500)).unwrap(); // Should advance 9 more seconds, total 11, wrap to 1
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(1.0).unwrap()
@@ -640,7 +640,7 @@ fn test_mixed_playback_speeds() {
     let player_state = engine.get_player_state_mut(&player_id).unwrap();
     player_state.speed = 0.5;
 
-    engine.update(2.0).unwrap(); // Should advance 1 second
+    engine.update(Duration::from_secs(2)).unwrap(); // Should advance 1 second
     assert_eq!(
         engine.get_player(&player_id).unwrap().current_time,
         AnimationTime::from_seconds(2.0).unwrap()

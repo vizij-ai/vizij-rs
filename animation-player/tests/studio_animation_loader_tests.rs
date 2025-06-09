@@ -1,7 +1,9 @@
 //! Tests for loading and playing test_animation.json format
 
+use std::time::Duration;
+
 use animation_player::{
-    AnimationEngineConfig, AnimationData, AnimationEngine, AnimationKeypoint, AnimationTime,
+    AnimationData, AnimationEngine, AnimationEngineConfig, AnimationKeypoint, AnimationTime,
     AnimationTrack, Value,
 };
 use serde_json;
@@ -165,7 +167,7 @@ fn test_animation_playback_in_engine() {
         engine
             .seek_player(&player_id, AnimationTime::from_seconds(time).unwrap())
             .unwrap();
-        let result = engine.update(0.0).unwrap(); // Update without advancing time
+        let result = engine.update(Duration::from_secs(0)).unwrap(); // Update without advancing time
 
         assert!(result.contains_key(&player_id));
         let player_values = &result[&player_id];
@@ -195,7 +197,7 @@ fn test_specific_value_interpolation() {
     engine
         .seek_player(&player_id, AnimationTime::from_seconds(1.25).unwrap())
         .unwrap();
-    let result = engine.update(0.0).unwrap();
+    let result = engine.update(Duration::from_secs(0)).unwrap();
 
     let player_values = &result[&player_id];
     let neck_joint_id = "e130bd45-3731-40d9-b61f-a9970e0d5842";
@@ -260,7 +262,7 @@ fn test_edge_case_values() {
     engine
         .seek_player(&player_id, AnimationTime::from_seconds(0.0).unwrap())
         .unwrap();
-    let result = engine.update(0.0).unwrap();
+    let result = engine.update(Duration::from_secs(0)).unwrap();
     let player_values = &result[&player_id];
 
     // Should have exact starting values
@@ -273,7 +275,7 @@ fn test_edge_case_values() {
     engine
         .seek_player(&player_id, AnimationTime::from_seconds(5.0).unwrap())
         .unwrap();
-    let result = engine.update(0.0).unwrap();
+    let result = engine.update(Duration::from_secs(0)).unwrap();
     let player_values = &result[&player_id];
 
     // Should have final values from last keypoints
@@ -294,7 +296,7 @@ fn test_animation_loop_playback() {
     engine.play_player(&player_id).unwrap();
 
     // Update past the animation duration to test looping
-    engine.update(6.0).unwrap(); // 6 seconds, should loop back to 1 second
+    engine.update(Duration::from_secs(6)).unwrap(); // 6 seconds, should loop back to 1 second
 
     let player = engine.get_player(&player_id).unwrap();
     assert!((player.current_time.as_seconds() - 1.0).abs() < 0.1); // Should have looped
