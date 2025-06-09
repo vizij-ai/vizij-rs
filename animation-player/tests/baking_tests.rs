@@ -1,10 +1,8 @@
 //! Tests for animation baking functionality
 
 use animation_player::{
-    baking::{AnimationBaking, BakingConfig},
-    value::Vector3,
-    AnimationData, AnimationKeypoint, AnimationTime, AnimationTrack, InterpolationRegistry,
-    TimeRange, Value,
+    value::Vector3, AnimationBaking, AnimationData, AnimationKeypoint, AnimationTime,
+    AnimationTrack, BakingConfig, InterpolationRegistry, TimeRange, Value,
 };
 
 #[test]

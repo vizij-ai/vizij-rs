@@ -7,9 +7,8 @@ use crate::{
     AnimationKeypoint, AnimationTrack, KeypointId,
 };
 use crate::{
-    animation::PlaybackMode,
-    baking::{AnimationBaking, BakingConfig},
-    AnimationData, AnimationEngine, AnimationEngineConfig, AnimationTime, Value,
+    animation::PlaybackMode, AnimationBaking, AnimationData, AnimationEngine,
+    AnimationEngineConfig, AnimationTime, BakingConfig, Value,
 };
 use wasm_bindgen::prelude::*;
 

@@ -14,7 +14,7 @@ use wee_alloc::WeeAlloc;
 static ALLOC: WeeAlloc = WeeAlloc::INIT;
 
 pub mod animation;
-pub mod baking;
+// pub mod baking;
 pub mod config;
 pub mod error;
 pub mod event;
@@ -29,8 +29,8 @@ pub mod wasm;
 
 // Re-export common types for convenience
 pub use animation::{
-    AnimationData, AnimationKeypoint, AnimationTrack, BakedAnimationData, BakedDataStatistics,
-    BakingConfig, KeypointId, TrackId,
+    AnimationBaking, AnimationData, AnimationKeypoint, AnimationTrack, BakedAnimationData,
+    BakedDataStatistics, BakingConfig, KeypointId, TrackId,
 };
 pub use config::{AnimationEngineConfig, PerformanceThresholds};
 pub use error::AnimationError;

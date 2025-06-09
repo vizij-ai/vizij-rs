@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Semio Team"]
 description = "Core animation engine for real-time streaming and interpolation"
-license = "MIT OR Apache-2.0"
+license = "Proprietary"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
