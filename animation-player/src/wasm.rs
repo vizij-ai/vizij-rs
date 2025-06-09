@@ -10,6 +10,7 @@ use crate::{
     animation::PlaybackMode, AnimationBaking, AnimationData, AnimationEngine,
     AnimationEngineConfig, AnimationTime, BakingConfig, Value,
 };
+use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
 // Set up panic hook for better error messages in WASM
@@ -162,7 +163,10 @@ impl WasmAnimationEngine {
     /// Update the animation engine and get current values
     #[wasm_bindgen]
     pub fn update(&mut self, frame_delta_seconds: f64) -> Result<JsValue, JsValue> {
-        let values = match self.engine.update(frame_delta_seconds) {
+        let values = match self
+            .engine
+            .update(Duration::from_secs_f64(frame_delta_seconds))
+        {
             Ok(values) => values,
             Err(e) => {
                 console_log(&format!("Engine update failed: {:?}", e));
