@@ -5,11 +5,8 @@ both embedded and in a web browser using WebAssembly.
 
 ## Directory Structure
 
-- `/animation-player` - Rust crate containing the WebAssembly source code
-  - `/src` - Rust source files
-  - `/pkg` - Generated WebAssembly package (after building)
-  - `/tests` - Tests, including WebAssembly-specific tests
-- `/react-demo` - A comprehensive React application demonstrating integration with the WebAssembly package, showcasing advanced features like animation baking, file upload, and a dark/light theme toggle.
+- `example` - Conventional location for example projects
+  - `npm_vite_ts` - Example demonstrating the integration of the WASM module in a web application using Vite and TypeScript.
 
 ## Getting Started
 
