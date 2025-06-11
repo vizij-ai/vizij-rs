@@ -1,5 +1,9 @@
-//! Time handling for animations
-
+/**
+ * Time handling and types for animations.
+ * We are using standard types mostly,
+ * but some are not available in WASM.
+ * For them, we need few custom implementations.
+ */
 use std::{collections::VecDeque, time::Duration};
 
 #[cfg(target_arch = "wasm32")]
