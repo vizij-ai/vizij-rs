@@ -15,7 +15,7 @@ export default defineConfig({
   ],
   server: {
     fs: {
-      allow: ['..']
+      allow: [".", "../../animation-player/pkg"]
     }
   },
   optimizeDeps: {

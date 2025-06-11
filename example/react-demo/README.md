@@ -123,26 +123,17 @@ const updateLoop = () => {
 1. **Install Dependencies**:
 
    ```bash
-   cd react-demo
+   cd example/react-demo
    npm install
    ```
 
-2. **Copy WASM Files**:
-   Ensure the WASM files are built and copied to `public/wasm/`:
-
-   ```bash
-   # From the root animation-player-core directory
-   npm run build
-   cp ../animation-player/pkg/*.wasm ../animation-player/pkg/*.js public/wasm/
-   ```
-
-3. **Start Development Server**:
+2. **Start Development Server**:
 
    ```bash
    npm run dev
    ```
 
-4. **Open in Browser**:
+3. **Open in Browser**:
    Navigate to `http://localhost:5173`
 
 ## Features
