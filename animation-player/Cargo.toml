@@ -32,7 +32,6 @@ thiserror = "2.0.12"
 serde-wasm-bindgen = "0.6"
 wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
 console_error_panic_hook = "0.1"
-web-sys = { version = "0.3", features = ["console"] }
 js-sys = "0.3"
 
 # Size optimization for WASM

@@ -18,6 +18,7 @@ pub struct AnimationData {
     /// All tracks in this animation
     pub tracks: HashMap<TrackId, AnimationTrack>,
     /// Transitions between keypoints that define interpolation behavior
+    #[serde(default)]
     pub transitions: HashMap<String, AnimationTransition>,
 }
 

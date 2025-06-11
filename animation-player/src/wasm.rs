@@ -13,9 +13,11 @@ use crate::{
 use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
-// Set up panic hook for better error messages in WASM
+// Entry point for the WASM module.
+// Note that it cannot be named `main`.
 #[wasm_bindgen(start)]
-pub fn main() {
+pub fn on_start() {
+    // Set up panic hook for better error messages in WASM
     console_error_panic_hook::set_once();
 }
 
@@ -180,14 +182,13 @@ impl WasmAnimationEngine {
 
     /// Get current playback state for a player
     #[wasm_bindgen]
-    pub fn get_player_state(&self, player_id: &str) -> Result<String, JsValue> {
-        let player_state = self
+    pub fn get_player_state(&self, player_id: &str) -> Result<JsValue, JsValue> {
+        let state = self
             .engine
             .get_player_state(player_id)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
-        let state_string = serde_json::to_string(player_state)
-            .map_err(|e| JsValue::from_str(&format!("Export error: {}", e)))?;
-        Ok(state_string)
+        serde_wasm_bindgen::to_value(&state)
+            .map_err(|e| JsValue::from_str(&format!("State serialization error: {}", e)))
     }
 
     /// Get current time for a player
