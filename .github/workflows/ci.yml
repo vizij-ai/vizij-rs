@@ -17,9 +17,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Install WASM Pack
-      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-
     - name: Build and test Rust crate
       run: |
         cargo build --release
@@ -28,6 +25,7 @@ jobs:
 
     - name: Build and test Rust crate for web
       run: |
+        cargo install wasm-pack
         wasm-pack build --target web
         wasm-pack test --node
         wasm-pack test --headless --firefox --chrome
