@@ -10,7 +10,7 @@ both embedded and in a web browser using WebAssembly (WASM).
   - `pkg` - Generated WebAssembly package (after building)
   - `tests` - Tests, including WebAssembly-specific tests
 - `example` - Conventional location for example projects
-  - `npm_vite_ts` - Example demonstrating the integration of the WASM module in a web application using Vite and TypeScript.
+  - `npm-vite-ts` - Example demonstrating the integration of the WASM module in a web application using Vite and TypeScript.
   - `react-demo` - A comprehensive React application demonstrating integration with the WebAssembly package, showcasing advanced features like animation baking, file upload, and a dark/light theme toggle.
 
 ## Getting Started

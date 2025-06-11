@@ -46,23 +46,23 @@ jobs:
         npm run build
       working-directory: ./example/react_demo
 
-    - name: Build `npm_vite_ts` example
+    - name: Build `npm-vite-ts` example
       run: |
         npm i
         npm ci
         npm run build
-      working-directory: ./example/npm_vite_ts
+      working-directory: ./example/npm-vite-ts
 
-    - name: Install Playwright browsers and run tests for `npm_vite_ts` example
+    - name: Install Playwright browsers and run tests for `npm-vite-ts` example
       run: |
         npx playwright install --with-deps
         npx playwright test
-      working-directory: ./example/npm_vite_ts
+      working-directory: ./example/npm-vite-ts
 
     - name: Upload test results
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: playwright-report
-        path: ./example/npm_vite_ts/playwright-report/
+        path: ./example/npm-vite-ts/playwright-report/
         retention-days: 30
