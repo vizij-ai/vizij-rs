@@ -35,8 +35,8 @@ pub use config::{AnimationEngineConfig, PerformanceThresholds};
 pub use error::AnimationError;
 pub use event::{AnimationEvent, EventType};
 pub use interpolation::{
-    InterpolationCacheKey, InterpolationContext, InterpolationFunction, InterpolationMetrics,
-    InterpolationRegistry,
+    InterpolationCacheKey, InterpolationContext, InterpolationMetrics, InterpolationRegistry,
+    Interpolator,
 };
 pub use player::{AnimationEngine, AnimationPlayer, PlaybackMetrics, PlaybackState};
 pub use time::{AnimationTime, TimeRange};

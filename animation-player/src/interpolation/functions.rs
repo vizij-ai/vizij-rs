@@ -6,7 +6,7 @@ use crate::{AnimationError, Value};
 use std::collections::HashMap;
 
 /// Trait for interpolation functions
-pub trait InterpolationFunction: Send + Sync {
+pub trait Interpolator: Send + Sync {
     /// Get the name of this interpolation function
     fn name(&self) -> &str;
 
@@ -41,7 +41,7 @@ pub trait InterpolationFunction: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct LinearInterpolation;
 
-impl InterpolationFunction for LinearInterpolation {
+impl Interpolator for LinearInterpolation {
     fn name(&self) -> &str {
         "linear"
     }
@@ -149,7 +149,7 @@ impl InterpolationFunction for LinearInterpolation {
 #[derive(Debug, Clone)]
 pub struct CubicInterpolation;
 
-impl InterpolationFunction for CubicInterpolation {
+impl Interpolator for CubicInterpolation {
     fn name(&self) -> &str {
         "cubic"
     }
@@ -206,7 +206,7 @@ impl InterpolationFunction for CubicInterpolation {
 #[derive(Debug, Clone)]
 pub struct StepInterpolation;
 
-impl InterpolationFunction for StepInterpolation {
+impl Interpolator for StepInterpolation {
     fn name(&self) -> &str {
         "step"
     }
@@ -279,7 +279,7 @@ impl BezierInterpolation {
     }
 }
 
-impl InterpolationFunction for BezierInterpolation {
+impl Interpolator for BezierInterpolation {
     fn name(&self) -> &str {
         "bezier"
     }
@@ -436,7 +436,7 @@ impl SpringInterpolation {
     }
 }
 
-impl InterpolationFunction for SpringInterpolation {
+impl Interpolator for SpringInterpolation {
     fn name(&self) -> &str {
         "spring"
     }
@@ -544,7 +544,7 @@ fn spring_ease(t: f64, damping: f64, stiffness: f64) -> f64 {
 #[derive(Debug, Clone)]
 pub struct EaseInInterpolation;
 
-impl InterpolationFunction for EaseInInterpolation {
+impl Interpolator for EaseInInterpolation {
     fn name(&self) -> &str {
         "ease_in"
     }
@@ -601,7 +601,7 @@ impl InterpolationFunction for EaseInInterpolation {
 #[derive(Debug, Clone)]
 pub struct EaseOutInterpolation;
 
-impl InterpolationFunction for EaseOutInterpolation {
+impl Interpolator for EaseOutInterpolation {
     fn name(&self) -> &str {
         "ease_out"
     }
@@ -658,7 +658,7 @@ impl InterpolationFunction for EaseOutInterpolation {
 #[derive(Debug, Clone)]
 pub struct EaseInOutInterpolation;
 
-impl InterpolationFunction for EaseInOutInterpolation {
+impl Interpolator for EaseInOutInterpolation {
     fn name(&self) -> &str {
         "ease_in_out"
     }

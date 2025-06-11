@@ -2,7 +2,7 @@ use crate::animation::AnimationTransition;
 use crate::interpolation::cache::InterpolationCacheKey;
 use crate::interpolation::functions::{
     BezierInterpolation, CubicInterpolation, EaseInInterpolation, EaseInOutInterpolation,
-    EaseOutInterpolation, InterpolationFunction, LinearInterpolation, SpringInterpolation,
+    EaseOutInterpolation, Interpolator, LinearInterpolation, SpringInterpolation,
     StepInterpolation,
 };
 use crate::interpolation::metrics::InterpolationMetrics;
@@ -14,7 +14,7 @@ use std::num::NonZeroUsize;
 
 /// Registry for managing interpolation functions
 pub struct InterpolationRegistry {
-    functions: HashMap<String, Box<dyn InterpolationFunction>>,
+    functions: HashMap<String, Box<dyn Interpolator>>,
     cache: LruCache<InterpolationCacheKey, Value>,
     metrics: InterpolationMetrics,
     enable_caching: bool,
@@ -56,13 +56,13 @@ impl InterpolationRegistry {
 
     /// Register a new interpolation function
     #[inline]
-    pub fn register_function(&mut self, function: Box<dyn InterpolationFunction>) {
+    pub fn register_function(&mut self, function: Box<dyn Interpolator>) {
         self.functions.insert(function.name().to_string(), function);
     }
 
     /// Get an interpolation function by name
     #[inline]
-    pub fn get_function(&self, name: &str) -> Option<&dyn InterpolationFunction> {
+    pub fn get_function(&self, name: &str) -> Option<&dyn Interpolator> {
         self.functions.get(name).map(|f| f.as_ref())
     }
 

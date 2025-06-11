@@ -8,7 +8,7 @@ use animation_player::interpolation::{
 };
 use animation_player::value::{Value, ValueType, Vector3};
 use animation_player::AnimationTime;
-use animation_player::InterpolationFunction;
+use animation_player::Interpolator;
 
 #[test]
 fn test_linear_interpolation() {
