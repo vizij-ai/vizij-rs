@@ -2,10 +2,7 @@
 #![cfg(target_arch = "wasm32")]
 extern crate wasm_bindgen_test;
 
-use animation_player::{
-    wasm::{value_to_js, WasmAnimationEngine},
-    AnimationEngine,
-};
+use animation_player::wasm::{value_to_js, WasmAnimationEngine};
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
