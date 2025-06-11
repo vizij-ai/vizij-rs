@@ -31,23 +31,29 @@ jobs:
         wasm-pack test --headless --firefox --chrome
 
     # The web assembly build is now available in the pkg directory
-    # We can use it for the Web example
-
+    # We can use it for the Web examples
     - name: Set up Node.js
       uses: actions/setup-node@v3
       with:
         node-version: '18'
         cache: 'npm'
-        cache-dependency-path: ./example/npm_vite_ts/package-lock.json
+        cache-dependency-path: ./example/react-demo/package-lock.json
 
-    - name: Install deps and build.
+    - name: Build `react-demo` example
+      run: |
+        npm i
+        npm ci
+        npm run build
+      working-directory: ./example/react_demo
+
+    - name: Build `npm_vite_ts` example
       run: |
         npm i
         npm ci
         npm run build
       working-directory: ./example/npm_vite_ts
 
-    - name: Install Playwright browsers and run tests
+    - name: Install Playwright browsers and run tests for `npm_vite_ts` example
       run: |
         npx playwright install --with-deps
         npx playwright test
