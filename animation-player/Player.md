@@ -12,36 +12,36 @@ The animation system follows a hierarchical architecture where the **AnimationEn
 graph TB
     subgraph "AnimationPlayer"
         AP[Animation Player]
-        
+
         subgraph "Core State"
             ID[id: String]
             CurrentTime[current_time: AnimationTime]
             Metrics[metrics: PlaybackMetrics]
         end
-        
+
         subgraph "Instance Management"
             Instances[instances: HashMap<String, AnimationInstance>]
             AddInst[add_instance]
             RemoveInst[remove_instance]
         end
-        
+
         subgraph "Time Operations"
             GoTo[go_to]
             Increment[increment]
             Decrement[decrement]
         end
-        
+
         subgraph "Value Calculation"
             CalcValues[calculate_values]
             InterpTrack[interpolate_track_value_for_instance]
             GetEffTime[get_effective_time_for_track]
         end
-        
+
         subgraph "Animation Instances"
             AI1[AnimationInstance 1]
             AI2[AnimationInstance 2]
             AI3[AnimationInstance N...]
-            
+
             subgraph "Instance Components"
                 InstSettings[InstanceSettings]
                 LoopState[Loop State]
@@ -49,33 +49,33 @@ graph TB
             end
         end
     end
-    
+
     AP --> ID
     AP --> CurrentTime
     AP --> Metrics
     AP --> Instances
-    
+
     Instances --> AI1
     Instances --> AI2
     Instances --> AI3
-    
+
     AI1 --> InstSettings
     AI1 --> LoopState
     AI1 --> EffectiveTime
-    
+
     GoTo --> CalcValues
     Increment --> CalcValues
     Decrement --> CalcValues
-    
+
     CalcValues --> InterpTrack
     CalcValues --> Instances
-    
-    style AP fill:#e1f5fe
-    style CalcValues fill:#fff3e0
-    style Instances fill:#f3e5f5
-    style AI1 fill:#e8f5e8
-    style AI2 fill:#e8f5e8
-    style AI3 fill:#e8f5e8
+
+    style AP fill:#e1f5fe,color:#000
+    style CalcValues fill:#fff3e0,color:#000
+    style Instances fill:#f3e5f5,color:#000
+    style AI1 fill:#e8f5e8,color:#000
+    style AI2 fill:#e8f5e8,color:#000
+    style AI3 fill:#e8f5e8,color:#000
 ```
 
 ## Engine-Player Relationship and Animation Management
@@ -85,13 +85,13 @@ graph TB
     subgraph "Animation System Flow"
         subgraph "AnimationEngine Level"
             Engine[AnimationEngine]
-            
+
             subgraph "Shared Resources"
                 AnimData[AnimationData Storage]
                 InterpRegistry[InterpolationRegistry]
                 EventSystem[EventDispatcher]
             end
-            
+
             subgraph "Engine Update Loop"
                 FrameDelta[Frame Delta Input]
                 UpdateLoop[update Method]
@@ -102,19 +102,19 @@ graph TB
                 CollectValues[Collect All Values]
             end
         end
-        
+
         subgraph "Player Level"
             Player1[AnimationPlayer 1]
             Player2[AnimationPlayer 2]
             PlayerN[AnimationPlayer N]
-            
+
             subgraph "Player Components"
                 PlayerState[PlayerState]
                 PlayerTime[Current Time]
                 PlayerInstances[Animation Instances]
             end
         end
-        
+
         subgraph "Instance Level"
             subgraph "Instance 1"
                 Inst1[AnimationInstance]
@@ -122,7 +122,7 @@ graph TB
                 LoopState1[Loop State]
                 EffTime1[Effective Time]
             end
-            
+
             subgraph "Instance 2"
                 Inst2[AnimationInstance]
                 Settings2[InstanceSettings]
@@ -130,11 +130,11 @@ graph TB
                 EffTime2[Effective Time]
             end
         end
-        
+
         subgraph "Animation Data"
             AnimData1[AnimationData 1]
             AnimData2[AnimationData 2]
-            
+
             subgraph "Data Components"
                 Tracks[Animation Tracks]
                 Keypoints[Keypoints]
@@ -142,45 +142,45 @@ graph TB
             end
         end
     end
-    
+
     %% Flow connections
     Engine --> AnimData
     Engine --> InterpRegistry
     Engine --> EventSystem
-    
+
     FrameDelta --> UpdateLoop
     UpdateLoop --> PlayerIteration
     PlayerIteration --> Player1
     PlayerIteration --> Player2
     PlayerIteration --> PlayerN
-    
+
     Player1 --> PlayerState
     Player1 --> PlayerTime
     Player1 --> PlayerInstances
-    
+
     PlayerInstances --> Inst1
     PlayerInstances --> Inst2
-    
+
     Inst1 --> Settings1
     Inst1 --> LoopState1
     Inst1 --> EffTime1
-    
+
     Settings1 --> AnimData1
     Settings2 --> AnimData2
-    
+
     AnimData1 --> Tracks
     AnimData1 --> Keypoints
     AnimData1 --> Transitions
-    
+
     StateCheck --> TimeCalculation
     TimeCalculation --> BoundsHandling
     BoundsHandling --> CollectValues
-    
-    style Engine fill:#e1f5fe
-    style UpdateLoop fill:#fff3e0
-    style Player1 fill:#f3e5f5
-    style Inst1 fill:#e8f5e8
-    style AnimData1 fill:#fff9c4
+
+    style Engine fill:#e1f5fe,color:#000
+    style UpdateLoop fill:#fff3e0,color:#000
+    style Player1 fill:#f3e5f5,color:#000
+    style Inst1 fill:#e8f5e8,color:#000
+    style AnimData1 fill:#fff9c4,color:#000
 ```
 
 ## Individual Animation Update Flow
@@ -192,29 +192,29 @@ sequenceDiagram
     participant Instance as AnimationInstance
     participant AnimData as AnimationData
     participant InterpReg as InterpolationRegistry
-    
+
     Note over Engine: Frame Update Begins
     Engine->>Engine: Calculate frame delta
-    
+
     loop For each player
         Engine->>Player: Check player state
         alt Player is Playing
             Engine->>Player: Calculate animation delta
             Engine->>Player: Update player time
-            
+
             Player->>Player: calculate_values()
-            
+
             loop For each active instance
                 Player->>Instance: Check if instance is active
                 Player->>Instance: update_loop_state()
                 Player->>Instance: get_effective_time()
-                
+
                 Instance->>Instance: Apply timescale
                 Instance->>Instance: Handle looping mode
                 Instance->>Instance: Add start offset
-                
+
                 Player->>AnimData: Get animation data by ID
-                
+
                 loop For each track
                     Player->>AnimData: Get track transition
                     Player->>AnimData: Call track.value_at_time()
@@ -222,10 +222,10 @@ sequenceDiagram
                     InterpReg-->>AnimData: Return interpolated value
                     AnimData-->>Player: Return track value
                 end
-                
+
                 Player->>Player: Combine instance values
             end
-            
+
             Player->>Player: Update metrics
             Player-->>Engine: Return combined values
         else Player is Paused/Stopped
@@ -233,7 +233,7 @@ sequenceDiagram
             Player-->>Engine: Return values
         end
     end
-    
+
     Engine->>Engine: Update engine metrics
     Engine-->>Engine: Return all player values
 ```
