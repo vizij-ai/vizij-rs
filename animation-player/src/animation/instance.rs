@@ -21,7 +21,7 @@ impl Default for PlaybackMode {
 
 /// Settings for a specific animation instance.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct InstanceSettings {
+pub struct AnimationSettings {
     /// The time offset to start playback from within the animation data.
     pub start_offset: AnimationTime,
     /// The time at which this instance begins relative to the player's timeline.
@@ -40,7 +40,7 @@ pub struct InstanceSettings {
     pub metadata: HashMap<String, String>,
 }
 
-impl InstanceSettings {
+impl AnimationSettings {
     /// Creates new default instance settings for a given animation ID.
     pub fn new() -> Self {
         Self {
@@ -54,65 +54,9 @@ impl InstanceSettings {
             metadata: HashMap::new(),
         }
     }
-
-    /// Sets the start offset for the instance.
-    #[inline]
-    pub fn with_start_offset(mut self, offset: AnimationTime) -> Self {
-        self.start_offset = offset;
-        self
-    }
-
-    /// Sets the instance start time on the player's timeline.
-    #[inline]
-    pub fn with_instance_start_time(mut self, start_time: AnimationTime) -> Self {
-        self.instance_start_time = start_time;
-        self
-    }
-
-    /// Sets the duration for the instance.
-    #[inline]
-    pub fn with_duration(mut self, duration: AnimationTime) -> Self {
-        self.duration = Some(duration);
-        self
-    }
-
-    /// Sets the timescale for the instance.
-    #[inline]
-    pub fn with_timescale(mut self, timescale: f64) -> Self {
-        self.timescale = timescale;
-        self
-    }
-
-    /// Sets the loop mode for the instance.
-    #[inline]
-    pub fn with_playback_mode(mut self, playback_mode: PlaybackMode) -> Self {
-        self.playback_mode = playback_mode;
-        self
-    }
-
-    /// Sets the loop count for the instance.
-    #[inline]
-    pub fn with_loop_count(mut self, loop_count: u32) -> Self {
-        self.loop_count = Some(loop_count);
-        self
-    }
-
-    /// Sets whether the instance is enabled.
-    #[inline]
-    pub fn with_enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
-        self
-    }
-
-    /// Adds metadata to the instance settings.
-    #[inline]
-    pub fn with_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        self.metadata.insert(key.into(), value.into());
-        self
-    }
 }
 
-impl Default for InstanceSettings {
+impl Default for AnimationSettings {
     fn default() -> Self {
         Self::new()
     }
@@ -120,11 +64,11 @@ impl Default for InstanceSettings {
 
 /// Represents an active animation instance being played by the AnimationPlayer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct AnimationInstance {
+pub struct Animation {
     /// The unique ID of the animation data this instance refers to.
     pub animation_id: String,
     /// The settings defining this instance's behavior.
-    pub settings: InstanceSettings,
+    pub settings: AnimationSettings,
     /// The current number of loops completed for this instance.
     pub current_loop_count: u32,
     /// The current direction of playback for PingPong loop mode (true for forward, false for backward).
@@ -134,12 +78,12 @@ pub struct AnimationInstance {
     pub animation_data_duration: AnimationTime,
 }
 
-impl AnimationInstance {
+impl Animation {
     /// Creates a new animation instance.
     #[inline]
     pub fn new(
         animation_id: impl Into<String>,
-        settings: InstanceSettings,
+        settings: AnimationSettings,
         animation_data_duration: impl Into<AnimationTime>,
     ) -> Self {
         Self {
@@ -151,7 +95,8 @@ impl AnimationInstance {
         }
     }
 
-    /// Calculates the effective playback time within the animation data for a given player time.
+    /// Translates the given player time into the time relative to this animation,
+    /// with respect to the playback settings.
     pub fn get_effective_time(&self, player_time: AnimationTime) -> AnimationTime {
         if !self.settings.enabled {
             return AnimationTime::zero();

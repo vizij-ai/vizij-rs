@@ -1,14 +1,13 @@
 //! WebAssembly bindings for the animation engine
 use crate::{
-    animation::transition::AnimationTransition,
-    animation::TransitionVariant,
+    animation::PlaybackMode, AnimationBaking, AnimationData, AnimationEngine,
+    AnimationEngineConfig, AnimationTime, BakingConfig, Value,
+};
+use crate::{
+    animation::{transition::AnimationTransition, AnimationMetadata, TransitionVariant},
     loaders::load_test_animation_from_json,
     value::{Color, Vector3, Vector4},
     AnimationKeypoint, AnimationTrack, KeypointId,
-};
-use crate::{
-    animation::PlaybackMode, AnimationBaking, AnimationData, AnimationEngine,
-    AnimationEngineConfig, AnimationTime, BakingConfig, Value,
 };
 use std::time::Duration;
 use wasm_bindgen::prelude::*;
@@ -552,11 +551,16 @@ pub fn create_animation_test_type() -> String {
     animation.add_track(track);
 
     // Metadata
-    animation.metadata = animation.metadata
-        .with_author("WASM Animation Player Demo For Different types")
-        .with_description("A complex robot animation showcasing position, rotation, scale, color, and intensity changes over time")
-        .add_tag("demo").add_tag("robot").add_tag("complex")
-        .with_frame_rate(60.0);
+    animation.metadata = AnimationMetadata {
+        author: Some("WASM Animation Player Demo For Different types".to_string()),
+        description: Some(
+            "A complex robot animation showcasing position, rotation, scale, color, and intensity changes over time"
+                .to_string(),
+        ),
+        frame_rate: 60f64,
+        tags: vec!["demo".to_string(), "robot".to_string(), "complex".to_string()],
+        ..animation.metadata
+    };
 
     serde_json::to_string(&animation).unwrap_or_else(|_| "{}".to_owned())
 }
@@ -593,15 +597,16 @@ pub fn create_test_animation() -> String {
         animation.add_track(track);
     }
 
-    animation.metadata = animation
-        .metadata
-        .with_author("WASM Animation Player Demo")
-        .with_description(
-            "A complex robot animation showcasing different transition changes over time",
-        )
-        .add_tag("demo")
-        .add_tag("complex")
-        .with_frame_rate(60.0);
+    animation.metadata = AnimationMetadata {
+        author: Some("WASM Animation Player Demo".to_string()),
+        description: Some(
+            "A complex robot animation showcasing different transition changes over time"
+                .to_string(),
+        ),
+        frame_rate: 60f64,
+        tags: vec!["demo".to_string(), "complex".to_string()],
+        ..animation.metadata
+    };
 
     serde_json::to_string(&animation).unwrap_or_else(|_| "{}".to_owned())
 }

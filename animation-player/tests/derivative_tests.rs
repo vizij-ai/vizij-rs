@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use animation_player::{
-    animation::{AnimationInstance, AnimationKeypoint, AnimationTrack, InstanceSettings},
+    animation::{AnimationKeypoint, AnimationSettings, Animation, AnimationTrack},
     value::{Color, Transform, Vector3, Vector4},
     AnimationData, AnimationEngine, AnimationEngineConfig, AnimationTime, Value,
 };
@@ -20,9 +20,9 @@ fn setup_player_for_animation(
     // Create player and instance
     let player_id = engine.create_player();
 
-    let animation_instance = AnimationInstance::new(
+    let animation_instance = Animation::new(
         animation_id,
-        InstanceSettings::default(),
+        AnimationSettings::default(),
         custom_duration.into(),
     );
 

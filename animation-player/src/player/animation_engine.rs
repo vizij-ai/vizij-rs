@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use uuid::Uuid;
 
-use crate::animation::instance::{AnimationInstance, InstanceSettings, PlaybackMode};
+use crate::animation::instance::{AnimationSettings, Animation, PlaybackMode};
 use crate::event::EventDispatcher;
 use crate::player::animation_player::AnimationPlayer;
 use crate::player::playback_state::PlaybackState;
@@ -156,7 +156,7 @@ impl AnimationEngine {
         &mut self,
         player_id: &str,
         animation_id: &str,
-        instance_settings: Option<InstanceSettings>,
+        instance_settings: Option<AnimationSettings>,
     ) -> Result<String, AnimationError> {
         // Verify the animation data exists
         let animation_data = self.get_animation_data(animation_id).ok_or_else(|| {
@@ -176,10 +176,10 @@ impl AnimationEngine {
             })?;
 
         // Use provided settings or create default
-        let settings = instance_settings.unwrap_or_else(|| InstanceSettings::new());
+        let settings = instance_settings.unwrap_or_else(|| AnimationSettings::new());
 
         // Create the animation instance
-        let instance = AnimationInstance::new(animation_id, settings, animation_duration);
+        let instance = Animation::new(animation_id, settings, animation_duration);
 
         // Add the instance to the player and return its ID
         Ok(player.add_instance(instance))

@@ -1,4 +1,4 @@
-use crate::animation::{AnimationInstance, InstanceSettings};
+use crate::animation::{Animation, AnimationSettings};
 use crate::player::playback_metrics::PlaybackMetrics;
 use crate::{AnimationData, AnimationError, AnimationTime, InterpolationRegistry, Value};
 use std::collections::HashMap;
@@ -17,7 +17,7 @@ pub struct AnimationPlayer {
     /// ID of the animation data used for last_calculated_values
     last_animation_id: Option<String>,
     /// Active animation instances managed by this player
-    pub instances: HashMap<String, AnimationInstance>, // Made public
+    pub instances: HashMap<String, Animation>, // Made public
 }
 
 impl AnimationPlayer {
@@ -36,7 +36,7 @@ impl AnimationPlayer {
 
     /// Add an animation instance to the player.
     /// The instance's animation_id must correspond to an AnimationData loaded in the engine.
-    pub fn add_instance(&mut self, instance: AnimationInstance) -> String {
+    pub fn add_instance(&mut self, instance: Animation) -> String {
         let mut id = uuid::Uuid::new_v4().to_string();
         while self.instances.contains_key(&id) {
             id = uuid::Uuid::new_v4().to_string(); // Ensure unique ID
@@ -49,7 +49,7 @@ impl AnimationPlayer {
     pub fn remove_instance(
         &mut self,
         instance_id: &str,
-    ) -> Result<AnimationInstance, AnimationError> {
+    ) -> Result<Animation, AnimationError> {
         self.instances
             .remove(instance_id)
             .ok_or_else(|| AnimationError::Generic {
@@ -75,7 +75,7 @@ impl AnimationPlayer {
     pub fn get_instance_settings(
         &self,
         instance_id: &str,
-    ) -> Result<&InstanceSettings, AnimationError> {
+    ) -> Result<&AnimationSettings, AnimationError> {
         self.instances
             .get(instance_id)
             .map(|instance| &instance.settings)
@@ -187,8 +187,8 @@ impl AnimationPlayer {
 
                 active_tracks_count += 1;
             }
-            estimated_memory_usage += std::mem::size_of::<AnimationInstance>();
-            estimated_memory_usage += std::mem::size_of::<InstanceSettings>();
+            estimated_memory_usage += std::mem::size_of::<Animation>();
+            estimated_memory_usage += std::mem::size_of::<AnimationSettings>();
         }
 
         // Update metrics
