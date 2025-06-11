@@ -149,7 +149,7 @@ pub struct BakedDataStatistics {
 }
 
 /// Configuration for animation baking
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct BakingConfig {
     /// Frame rate for baking (frames per second)
     pub frame_rate: f64,

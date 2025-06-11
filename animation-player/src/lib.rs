@@ -14,7 +14,6 @@ use wee_alloc::WeeAlloc;
 static ALLOC: WeeAlloc = WeeAlloc::INIT;
 
 pub mod animation;
-// pub mod baking;
 pub mod config;
 pub mod error;
 pub mod event;
