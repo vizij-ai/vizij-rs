@@ -17,23 +17,23 @@ export function useWasm(config = null) {
 
     const initWasm = async () => {
       if (engineRef.current) return; // Already initialized
-      
+
       setIsLoading(true);
       setError(null);
 
       try {
         // Initialize WASM module
         await wasminit();
-        
+
         if (!mounted) return;
 
         // Create engine instance
         const configJson = config ? JSON.stringify(config) : null;
         const engine = new WasmAnimationEngine(configJson);
-        
+      
         engineRef.current = engine;
         setIsLoaded(true);
-        
+
       } catch (err) {
         if (mounted) {
           setError(err.message);
