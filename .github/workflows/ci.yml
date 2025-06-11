@@ -27,7 +27,7 @@ jobs:
       run: |
         cargo build --release
         cargo test --release
-      working-directory: ./animation-player
+      working-directory: animation-player
 
 
     - name: Build and test Rust crate for web
@@ -36,7 +36,7 @@ jobs:
         wasm-pack build --target web
         wasm-pack test --node
         wasm-pack test --headless --firefox --chrome
-      working-directory: ./animation-player
+      working-directory: animation-player
 
     # The web assembly build is now available in the pkg directory
     # We can use it for the Web examples
@@ -52,7 +52,7 @@ jobs:
         npm i
         npm ci
         npm run build
-      working-directory: example/react_demo
+      working-directory: example/react-demo
 
     - name: Build `npm-vite-ts` example
       run: |
