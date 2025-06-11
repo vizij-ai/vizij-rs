@@ -2,21 +2,11 @@
 
 ## Overview
 
-The WasmAnimationEngine is a WebAssembly (WASM) module that provides high-performance animation playback and interpolation capabilities for web applications. It wraps the core Rust animation engine and exposes a JavaScript-friendly API for real-time animation processing.
+The WasmAnimationEngine is a WebAssembly (WASM) module that provides a thin wrapper around the [animation engine](README.md) and its interpolators for web applications.
 
 ## Architecture
 
-### Core Structure
-
-```
-WasmAnimationEngine
-├── AnimationEngine (Rust core)
-├── JavaScript Bindings (wasm-bindgen)
-├── Memory Management (Arc<Mutex<>>)
-└── JSON Serialization Interface
-```
-
-The module is built around a thread-safe wrapper (`Arc<Mutex<AnimationEngine>>`) that allows safe concurrent access to the animation engine from JavaScript.
+The module allows creating instances of `AnimationEngine` from JavaScript.
 
 ### Key Components
 
@@ -230,7 +220,6 @@ The engine supports multiple value types:
 
 - Web-optimized default: 32MB limit
 - Automatic memory tracking and limits
-- Efficient Arc<Mutex<>> for thread safety
 - Optional wee_alloc for smaller WASM size
 
 ### Interpolation Performance
@@ -240,11 +229,6 @@ The engine supports multiple value types:
 - Real-time performance monitoring
 - Optimized for 60 FPS target on web
 
-### Concurrency
-
-- Thread-safe design with Mutex protection
-- Non-blocking updates where possible
-- Error isolation prevents engine corruption
 
 ## Testing and Development
 
@@ -267,7 +251,3 @@ Simple greeting function for WASM connectivity testing.
 - `console_log(message: string)`: Direct browser console logging
 - Automatic error logging with context
 - Performance warning notifications
-
-## Conclusion
-
-The WasmAnimationEngine provides a robust foundation for web-based animation systems with excellent performance characteristics and a comprehensive feature set.
