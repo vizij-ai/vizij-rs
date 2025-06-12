@@ -70,12 +70,6 @@ graph TB
     CalcValues --> InterpTrack
     CalcValues --> Instances
 
-    style AP fill:#e1f5fe,color:#000
-    style CalcValues fill:#fff3e0,color:#000
-    style Instances fill:#f3e5f5,color:#000
-    style AI1 fill:#e8f5e8,color:#000
-    style AI2 fill:#e8f5e8,color:#000
-    style AI3 fill:#e8f5e8,color:#000
 ```
 
 ## Engine-Player Relationship and Animation Management
@@ -176,11 +170,6 @@ graph TB
     TimeCalculation --> BoundsHandling
     BoundsHandling --> CollectValues
 
-    style Engine fill:#e1f5fe,color:#000
-    style UpdateLoop fill:#fff3e0,color:#000
-    style Player1 fill:#f3e5f5,color:#000
-    style Inst1 fill:#e8f5e8,color:#000
-    style AnimData1 fill:#fff9c4,color:#000
 ```
 
 ## Individual Animation Update Flow

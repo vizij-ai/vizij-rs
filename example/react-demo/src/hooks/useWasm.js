@@ -101,8 +101,7 @@ export function useWasm(config = null) {
 
   const getPlayerState = useCallback((playerId) => {
     if (!engineRef.current) throw new Error('WASM not loaded');
-    const stateJson = engineRef.current.get_player_state(playerId);
-    return JSON.parse(stateJson);
+    return engineRef.current.get_player_state(playerId);
   }, []);
 
   const getPlayerTime = useCallback((playerId) => {

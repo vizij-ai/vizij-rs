@@ -48,13 +48,13 @@ export const useTimeSeries = () => {
   const clearHistory = useCallback(() => {
     if (!animationPlayer.isLoaded) return;
     try {
-      animationPlayer.clearValueHistory();
+      animationPlayer.clearHistory();
       setDerivativeHistory({});
       console.log('🗑️ History and derivatives cleared');
     } catch (error) {
       console.error('Failed to clear history:', error);
     }
-  }, [animationPlayer.isLoaded, animationPlayer.clearValueHistory]);
+  }, [animationPlayer.isLoaded, animationPlayer.clearHistory]);
 
   const toggleDerivatives = useCallback((enabled) => {
     setDerivativeConfig(prev => ({

@@ -77,7 +77,7 @@ fn load_test_animation_from_json(
 
 #[test]
 fn test_load_test_animation_json() {
-    let json_content = include_str!("../test_animation.json");
+    let json_content = include_str!("test_animation.json");
 
     let animation = load_test_animation_from_json(json_content)
         .expect("Should load test animation successfully");
@@ -103,7 +103,7 @@ fn test_load_test_animation_json() {
 
 #[test]
 fn test_stamp_to_time_conversion() {
-    let json_content = include_str!("../test_animation.json");
+    let json_content = include_str!("test_animation.json");
     let animation = load_test_animation_from_json(json_content).unwrap();
 
     // Find the neck_joint track
@@ -139,7 +139,7 @@ fn test_stamp_to_time_conversion() {
 }
 
 fn setup_engine_and_player() -> (AnimationEngine, String) {
-    let json_content = include_str!("../test_animation.json");
+    let json_content = include_str!("test_animation.json");
     let animation = load_test_animation_from_json(json_content).unwrap();
     let mut engine = AnimationEngine::new(AnimationEngineConfig::default());
 
@@ -218,7 +218,7 @@ fn test_specific_value_interpolation() {
 
 #[test]
 fn test_pan_joint_multiple_keypoints() {
-    let json_content = include_str!("../test_animation.json");
+    let json_content = include_str!("test_animation.json");
     let animation = load_test_animation_from_json(json_content).unwrap();
 
     // Find pan_joint track - it has 5 keypoints

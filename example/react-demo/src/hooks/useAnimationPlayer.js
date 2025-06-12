@@ -158,12 +158,10 @@ export function useAnimationPlayer(wasmConfig = null, options = {}) {
         }
         
         // Add value to history
-        console.log("adding new", key, numericValue)
         newValues[key] = numericValue;
         
         });
     }
-    console.log("Setting value history to include", newValues)
     setValueHistory(prev => {
         const newHistory = { ...prev };
         Object.keys(newValues).forEach((k) => {
@@ -180,7 +178,6 @@ export function useAnimationPlayer(wasmConfig = null, options = {}) {
                 newHistory[k] = newHistory[k].slice(1);
             }
         });
-        console.log("New History:", newHistory)
         return newHistory;
     });
     
@@ -280,7 +277,6 @@ export function useAnimationPlayer(wasmConfig = null, options = {}) {
       }
       
       // Capture history
-      console.log("values:", values, now)
       captureValueHistory(values, now);
       
       // Get derivatives if we have players

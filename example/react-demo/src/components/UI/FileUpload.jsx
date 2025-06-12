@@ -72,7 +72,7 @@ const FileUpload = () => {
   };
 
   const loadDemoAnimation = async () => {
-    setUploadStatus('Loading demo animation...');
+    setUploadStatus('Loading test_animation.json...');
     try {
       const response = await fetch('/test_animation.json');
       if (!response.ok) {
