@@ -9,6 +9,7 @@ use animation_player::{
 /// Helper function to create a test track with float keypoints
 fn create_test_float_track() -> AnimationTrack {
     let mut track = AnimationTrack::new("test_track", "test.value");
+    track.settings = None; // Explicitly set settings to None
 
     // Add keypoints at times 0, 2, 4, 6
     track
@@ -45,6 +46,7 @@ fn create_test_float_track() -> AnimationTrack {
 /// Helper function to create a test track with Vector3 keypoints  
 fn create_test_vector3_track() -> AnimationTrack {
     let mut track = AnimationTrack::new("position_track", "transform.position");
+    track.settings = None; // Explicitly set settings to None
 
     track
         .add_keypoint(AnimationKeypoint::new(
@@ -201,7 +203,8 @@ fn test_surrounding_keypoints_outside_range() {
 /// Test surrounding_keypoints with empty track
 #[test]
 fn test_surrounding_keypoints_empty_track() {
-    let track = AnimationTrack::new("empty_track", "test.empty");
+    let mut track = AnimationTrack::new("empty_track", "test.empty");
+    track.settings = None; // Explicitly set settings to None
 
     let result = track.surrounding_keypoints(AnimationTime::from(1.0));
     assert!(
@@ -214,6 +217,7 @@ fn test_surrounding_keypoints_empty_track() {
 #[test]
 fn test_surrounding_keypoints_single_keypoint() {
     let mut track = AnimationTrack::new("single_track", "test.single");
+    track.settings = None; // Explicitly set settings to None
     track
         .add_keypoint(AnimationKeypoint::new(
             AnimationTime::from(2.0),
@@ -372,6 +376,7 @@ fn test_value_at_time_disabled_track() {
 #[test]
 fn test_keypoint_lookup_performance() {
     let mut track = AnimationTrack::new("perf_track", "test.performance");
+    track.settings = None; // Explicitly set settings to None
 
     // Add 1000 keypoints
     for i in 0..1000 {
@@ -403,6 +408,7 @@ fn test_keypoint_lookup_performance() {
 #[test]
 fn test_binary_search_correctness() {
     let mut track = AnimationTrack::new("binary_track", "test.binary");
+    track.settings = None; // Explicitly set settings to None
 
     // Add keypoints at even numbers: 0, 2, 4, 6, ..., 98
     for i in 0..50 {
@@ -460,6 +466,7 @@ fn test_binary_search_correctness() {
 #[test]
 fn test_very_close_time_values() {
     let mut track = AnimationTrack::new("close_track", "test.close");
+    track.settings = None; // Explicitly set settings to None
 
     // Add keypoints very close together
     track

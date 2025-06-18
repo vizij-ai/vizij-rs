@@ -32,7 +32,8 @@ fn test_wasm_basic_workflow() {
                 "duration": 2000000000,
                 "frame_rate": 60.0
             },
-            "tracks": {}
+            "tracks": {},
+            "groups": {}
         }"#;
 
     // Load animation

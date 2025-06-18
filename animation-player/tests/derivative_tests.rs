@@ -2,11 +2,12 @@
 
 use std::time::Duration;
 
-use animation_player::{
-    animation::{AnimationKeypoint, AnimationSettings, Animation, AnimationTrack},
-    value::{Color, Transform, Vector3, Vector4},
-    AnimationData, AnimationEngine, AnimationEngineConfig, AnimationTime, Value,
-};
+    use animation_player::{
+        animation::{AnimationKeypoint, AnimationSettings, Animation, AnimationTrack},
+        value::{Color, Transform, Vector3, Vector4},
+        value::euler::Euler, // Corrected import for Euler
+        AnimationData, AnimationEngine, AnimationEngineConfig, AnimationTime, Value,
+    };
 
 // Helper to setup a player given animation data and settings
 fn setup_player_for_animation(
@@ -39,6 +40,7 @@ fn test_float_derivative_calculation() {
     // Create animation with float track
     let mut animation = AnimationData::new("test_float_derivative", "Float derivative test");
     let mut track = AnimationTrack::new("position_x", "transform.position.x");
+    track.settings = None; // Explicitly set settings to None
 
     // Add keypoints: linear increase from 0 to 10 over 2 seconds
     track
@@ -88,6 +90,7 @@ fn test_vector3_derivative_calculation() {
     // Create animation with Vector3 track
     let mut animation = AnimationData::new("test_vector3_derivative", "Vector3 derivative test");
     let mut track = AnimationTrack::new("position", "transform.position");
+    track.settings = None; // Explicitly set settings to None
 
     // Add keypoints: motion from (0,0,0) to (6,3,9) over 3 seconds
     track
@@ -148,6 +151,7 @@ fn test_transform_derivative_calculation() {
     let mut animation =
         AnimationData::new("test_transform_derivative", "Transform derivative test");
     let mut track = AnimationTrack::new("transform", "object.transform");
+    track.settings = None; // Explicitly set settings to None
 
     // Add keypoints with changing position and scale
     track
@@ -252,6 +256,7 @@ fn test_color_derivative_calculation() {
     // Create animation with Color track
     let mut animation = AnimationData::new("test_color_derivative", "Color derivative test");
     let mut track = AnimationTrack::new("color", "material.color");
+    track.settings = None; // Explicitly set settings to None
 
     // Add keypoints: fade from red to blue over 1 second
     track
@@ -301,6 +306,7 @@ fn test_derivative_with_custom_width() {
     // Create animation with rapid changes
     let mut animation = AnimationData::new("test_custom_width", "Custom width derivative test");
     let mut track = AnimationTrack::new("value", "test.value");
+    track.settings = None; // Explicitly set settings to None
 
     // Add keypoints with non-linear motion (quadratic-like)
     track
@@ -399,6 +405,7 @@ fn test_derivative_at_animation_boundaries() {
     // Create simple animation
     let mut animation = AnimationData::new("test_boundaries", "Boundary derivative test");
     let mut track = AnimationTrack::new("value", "test.value");
+    track.settings = None; // Explicitly set settings to None
 
     track
         .add_keypoint(AnimationKeypoint::new(
@@ -472,6 +479,7 @@ fn test_multiple_tracks_derivative() {
 
     // Position track
     let mut position_track = AnimationTrack::new("position", "transform.position");
+    position_track.settings = None; // Explicitly set settings to None
     position_track
         .add_keypoint(AnimationKeypoint::new(
             AnimationTime::zero(),
@@ -487,6 +495,7 @@ fn test_multiple_tracks_derivative() {
 
     // Scale track
     let mut scale_track = AnimationTrack::new("scale", "transform.scale");
+    scale_track.settings = None; // Explicitly set settings to None
     scale_track
         .add_keypoint(AnimationKeypoint::new(
             AnimationTime::zero(),
@@ -567,6 +576,7 @@ fn test_zero_derivative_for_constant_values() {
     // Create animation with constant value
     let mut animation = AnimationData::new("test_constant", "Constant value derivative test");
     let mut track = AnimationTrack::new("constant", "test.constant");
+    track.settings = None; // Explicitly set settings to None
 
     // All keypoints have same value
     track

@@ -50,6 +50,7 @@ fn convert_test_animation(test_data: StudioAnimationData) -> AnimationData {
 
     for track_data in test_data.tracks {
         let mut track = AnimationTrack::new(&track_data.name, &track_data.animatable_id);
+        track.settings = None; // Explicitly set settings to None
 
         for point in track_data.points {
             // Convert stamp (0.0-1.0) to time in seconds

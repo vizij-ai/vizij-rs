@@ -107,6 +107,28 @@ fn test_vector_interpolation() {
 }
 
 #[test]
+fn test_euler_interpolation() {
+    let linear = LinearInterpolation;
+    let start = Value::Euler(animation_player::value::euler::Euler::new(0.0, 0.0, 0.0));
+    let end = Value::Euler(animation_player::value::euler::Euler::new(90.0, 180.0, 270.0));
+    let context = InterpolationContext::new(
+        AnimationTime::zero(),
+        AnimationTime::from_seconds(2.0).unwrap(),
+        AnimationTime::from_seconds(1.0).unwrap(),
+    )
+    .unwrap();
+
+    let result = linear.interpolate(&start, &end, &context).unwrap();
+    if let Value::Euler(e) = result {
+        assert!((e.r - 45.0).abs() < 0.001);
+        assert!((e.p - 90.0).abs() < 0.001);
+        assert!((e.y - 135.0).abs() < 0.001);
+    } else {
+        panic!("Expected Euler result");
+    }
+}
+
+#[test]
 fn test_interpolation_registry() {
     let mut registry = InterpolationRegistry::new(10);
 

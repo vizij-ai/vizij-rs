@@ -13,6 +13,7 @@ fn test_animation_ids_and_add_animation_to_player() {
 
     // Create test animation data
     let mut track = AnimationTrack::new("test_track".to_string(), "test_target".to_string());
+    track.settings = None; // Explicitly set settings to None
 
     track
         .add_keypoint(AnimationKeypoint::new(
