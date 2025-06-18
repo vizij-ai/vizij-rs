@@ -1,5 +1,6 @@
 use crate::error::AnimationError;
 use crate::value::color::Color;
+use crate::value::euler::Euler; // Add this import
 use crate::value::transform::Transform;
 use crate::value::utils::hash_f64;
 use crate::value::vector2::Vector2;
@@ -18,6 +19,7 @@ pub enum ValueType {
     Vector2,
     Vector3,
     Vector4,
+    Euler, // Add Euler
     Color,
     Transform,
 }
@@ -39,6 +41,8 @@ pub enum Value {
     Vector3(Vector3),
     /// 4D vector (often used for colors or quaternions)
     Vector4(Vector4),
+    /// Euler angles for rotation
+    Euler(Euler), // Add Euler
     /// Color in various formats
     Color(Color),
     /// 3D transform (position, rotation, scale)
@@ -76,12 +80,16 @@ impl Hash for Value {
                 6u8.hash(state); // discriminant
                 v.hash(state);
             }
-            Value::Color(c) => {
+            Value::Euler(e) => {
                 7u8.hash(state); // discriminant
+                e.hash(state);
+            }
+            Value::Color(c) => {
+                8u8.hash(state); // discriminant
                 c.hash(state);
             }
             Value::Transform(t) => {
-                8u8.hash(state); // discriminant
+                9u8.hash(state); // discriminant
                 t.hash(state);
             }
         }
@@ -99,6 +107,7 @@ impl Value {
             Value::Vector2(_) => ValueType::Vector2,
             Value::Vector3(_) => ValueType::Vector3,
             Value::Vector4(_) => ValueType::Vector4,
+            Value::Euler(_) => ValueType::Euler,
             Value::Color(_) => ValueType::Color,
             Value::Transform(_) => ValueType::Transform,
         }
@@ -124,6 +133,7 @@ impl Value {
             Value::Vector2(v) => vec![v.x, v.y],
             Value::Vector3(v) => vec![v.x, v.y, v.z],
             Value::Vector4(v) => vec![v.x, v.y, v.z, v.w],
+            Value::Euler(e) => vec![e.r, e.p, e.y],
             Value::Color(c) => {
                 let (r, g, b, a) = c.to_rgba();
                 vec![r, g, b, a]
@@ -172,6 +182,12 @@ impl Value {
                 (b.y - a.y) / delta_time,
                 (b.z - a.z) / delta_time,
                 (b.w - a.w) / delta_time,
+            ))),
+
+            (Value::Euler(a), Value::Euler(b)) => Some(Value::Euler(Euler::new(
+                (b.r - a.r) / delta_time,
+                (b.p - a.p) / delta_time,
+                (b.y - a.y) / delta_time,
             ))),
 
             (Value::Transform(a), Value::Transform(b)) => {
@@ -290,6 +306,18 @@ impl Value {
                     components[3],
                 )))
             }
+            ValueType::Euler => {
+                if components.len() != 3 {
+                    return Err(AnimationError::InvalidValue {
+                        reason: format!("Euler requires 3 components, got {}", components.len()),
+                    });
+                }
+                Ok(Value::Euler(Euler::new(
+                    components[0],
+                    components[1],
+                    components[2],
+                )))
+            }
             ValueType::Color => {
                 if components.len() != 4 {
                     return Err(AnimationError::InvalidValue {
@@ -392,6 +420,12 @@ impl From<Vector3> for Value {
 impl From<Vector4> for Value {
     fn from(value: Vector4) -> Self {
         Value::Vector4(value)
+    }
+}
+
+impl From<Euler> for Value {
+    fn from(value: Euler) -> Self {
+        Value::Euler(value)
     }
 }
 
@@ -500,6 +534,20 @@ impl TryFrom<Value> for Vector4 {
             Value::Vector4(v) => Ok(v),
             _ => Err(AnimationError::ValueTypeMismatch {
                 expected: ValueType::Vector4,
+                actual: value.value_type(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<Value> for Euler {
+    type Error = AnimationError;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Euler(e) => Ok(e),
+            _ => Err(AnimationError::ValueTypeMismatch {
+                expected: ValueType::Euler,
                 actual: value.value_type(),
             }),
         }

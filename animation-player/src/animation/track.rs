@@ -22,6 +22,9 @@ pub struct AnimationTrack {
     pub enabled: bool,
     /// Track weight for blending (0.0 to 1.0)
     pub weight: f64,
+    /// Optional settings, e.g., for UI representation
+    #[serde(default)]
+    pub settings: Option<HashMap<String, String>>,
     /// Optional metadata
     pub metadata: HashMap<String, String>,
 }
@@ -37,6 +40,7 @@ impl AnimationTrack {
             keypoints: Vec::new(),
             enabled: true,
             weight: 1.0,
+            settings: None,
             metadata: HashMap::new(),
         }
     }
@@ -55,6 +59,7 @@ impl AnimationTrack {
             keypoints: Vec::new(),
             enabled: true,
             weight: 1.0,
+            settings: None, // Initialize the new field
             metadata: HashMap::new(),
         })
     }

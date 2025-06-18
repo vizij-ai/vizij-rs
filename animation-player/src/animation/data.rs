@@ -1,3 +1,4 @@
+use crate::animation::group::TrackGroup; 
 use crate::animation::ids::{KeypointId, TrackId};
 use crate::animation::metadata::AnimationMetadata;
 use crate::animation::track::AnimationTrack;
@@ -17,6 +18,9 @@ pub struct AnimationData {
     pub metadata: AnimationMetadata,
     /// All tracks in this animation
     pub tracks: HashMap<TrackId, AnimationTrack>,
+    /// Groups of tracks for organizational purposes
+    #[serde(default)]
+    pub groups: HashMap<String, TrackGroup>,
     /// Transitions between keypoints that define interpolation behavior
     #[serde(default)]
     pub transitions: HashMap<String, AnimationTransition>,
@@ -31,6 +35,7 @@ impl AnimationData {
             name: name.into(),
             metadata: AnimationMetadata::new(),
             tracks: HashMap::new(),
+            groups: HashMap::new(),
             transitions: HashMap::new(),
         }
     }
@@ -67,6 +72,22 @@ impl AnimationData {
     #[inline]
     pub fn get_track_mut(&mut self, id: TrackId) -> Option<&mut AnimationTrack> {
         self.tracks.get_mut(&id)
+    }
+
+    /// Add a track group to this animation
+    pub fn add_group(&mut self, group: TrackGroup) {
+        self.groups.insert(group.id.clone(), group);
+    }
+
+    /// Remove a track group by ID
+    pub fn remove_group(&mut self, id: &str) -> Option<TrackGroup> {
+        self.groups.remove(id)
+    }
+
+    /// Get a track group by ID
+    #[inline]
+    pub fn get_group(&self, id: &str) -> Option<&TrackGroup> {
+        self.groups.get(id)
     }
 
     /// Add a transition between keypoints

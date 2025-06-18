@@ -2,6 +2,7 @@
 
 pub mod baking;
 pub mod data;
+pub mod group; // Add the new module to make it accessible
 pub mod ids;
 pub mod instance;
 pub mod keypoint;

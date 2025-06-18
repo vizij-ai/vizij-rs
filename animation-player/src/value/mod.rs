@@ -1,6 +1,7 @@
 //! Value types for animation data
 
 pub mod color;
+pub mod euler; // Add the new module
 pub mod transform;
 pub mod utils;
 pub mod value_enum;
