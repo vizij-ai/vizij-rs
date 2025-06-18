@@ -153,7 +153,6 @@ fn test_baking_multiple_tracks() {
             Value::Vector3(Vector3::new(1.0, 1.0, 1.0)),
         ))
         .unwrap();
-    position_track.settings = None; // Explicitly set settings to None
     animation.add_track(position_track);
 
     // Scale track
@@ -170,7 +169,6 @@ fn test_baking_multiple_tracks() {
             Value::Vector3(Vector3::new(2.0, 2.0, 2.0)),
         ))
         .unwrap();
-    scale_track.settings = None; // Explicitly set settings to None
     animation.add_track(scale_track);
 
     // Intensity track
@@ -187,7 +185,6 @@ fn test_baking_multiple_tracks() {
             Value::Float(1.5),
         ))
         .unwrap();
-    intensity_track.settings = None; // Explicitly set settings to None
     animation.add_track(intensity_track);
 
     // Configure baking
@@ -314,7 +311,6 @@ fn test_baking_disabled_tracks() {
             Value::Float(2.0),
         ))
         .unwrap();
-    enabled_track.settings = None; // Explicitly set settings to None
     animation.add_track(enabled_track);
 
     // Disabled track
@@ -326,7 +322,6 @@ fn test_baking_disabled_tracks() {
         ))
         .unwrap();
     disabled_track.set_enabled(false);
-    disabled_track.settings = None; // Explicitly set settings to None
     animation.add_track(disabled_track);
 
     // Configure baking

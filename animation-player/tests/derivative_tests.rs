@@ -472,7 +472,6 @@ fn test_multiple_tracks_derivative() {
 
     // Position track
     let mut position_track = AnimationTrack::new("position", "transform.position");
-    position_track.settings = None; // Explicitly set settings to None
     position_track
         .add_keypoint(AnimationKeypoint::new(
             AnimationTime::zero(),
@@ -488,7 +487,6 @@ fn test_multiple_tracks_derivative() {
 
     // Scale track
     let mut scale_track = AnimationTrack::new("scale", "transform.scale");
-    scale_track.settings = None; // Explicitly set settings to None
     scale_track
         .add_keypoint(AnimationKeypoint::new(
             AnimationTime::zero(),

@@ -16,7 +16,6 @@ fn create_simple_animation() -> AnimationData {
 
     // Position track
     let mut position_track = AnimationTrack::new("position", "transform.position");
-    position_track.settings = None; // Explicitly set settings to None
     position_track
         .add_keypoint(AnimationKeypoint::new(
             AnimationTime::from(0.0),
@@ -41,7 +40,6 @@ fn create_multi_track_animation() -> AnimationData {
 
     // Position track
     let mut position_track = AnimationTrack::new("position", "transform.position");
-    position_track.settings = None; // Explicitly set settings to None
     position_track
         .add_keypoint(AnimationKeypoint::new(
             AnimationTime::from(0.0),
@@ -63,7 +61,6 @@ fn create_multi_track_animation() -> AnimationData {
 
     // Scale track
     let mut scale_track = AnimationTrack::new("scale", "transform.scale");
-    scale_track.settings = None; // Explicitly set settings to None
     scale_track
         .add_keypoint(AnimationKeypoint::new(
             AnimationTime::from(0.0),
@@ -85,7 +82,6 @@ fn create_multi_track_animation() -> AnimationData {
 
     // Rotation track
     let mut rotation_track = AnimationTrack::new("rotation", "transform.rotation");
-    rotation_track.settings = None; // Explicitly set settings to None
     rotation_track
         .add_keypoint(AnimationKeypoint::new(
             AnimationTime::from(0.0),
