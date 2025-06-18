@@ -110,7 +110,9 @@ fn test_vector_interpolation() {
 fn test_euler_interpolation() {
     let linear = LinearInterpolation;
     let start = Value::Euler(animation_player::value::euler::Euler::new(0.0, 0.0, 0.0));
-    let end = Value::Euler(animation_player::value::euler::Euler::new(90.0, 180.0, 270.0));
+    let end = Value::Euler(animation_player::value::euler::Euler::new(
+        90.0, 180.0, 270.0,
+    ));
     let context = InterpolationContext::new(
         AnimationTime::zero(),
         AnimationTime::from_seconds(2.0).unwrap(),

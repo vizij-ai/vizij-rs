@@ -1,8 +1,8 @@
 //! Defines the Euler angle structure.
 
+use crate::value::utils::hash_f64;
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
-use crate::value::utils::hash_f64;
 
 /// Represents Euler angles for rotation.
 /// In robotics, rpy equates to xyz. In Three.js, this will need to be remapped to zyx.

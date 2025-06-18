@@ -46,24 +46,29 @@ fn test_serialization_for_spec_compat() {
     animation.add_track(track);
 
     // -- Add a Transition --
-    let transition = AnimationTransition::new(
-        keypoint1.id,
-        keypoint2.id,
-        TransitionVariant::Linear,
-    );
+    let transition =
+        AnimationTransition::new(keypoint1.id, keypoint2.id, TransitionVariant::Linear);
     animation.add_transition(transition);
 
     // 2. Serialize the AnimationData to a JSON string.
-    let json_output = serde_json::to_string_pretty(&animation).expect("Failed to serialize animation");
+    let json_output =
+        serde_json::to_string_pretty(&animation).expect("Failed to serialize animation");
 
     // 3. Write the JSON to a file.
-    let mut file = File::create("tests/spec_compat_animation.json").expect("Failed to create test animation file");
-    file.write_all(json_output.as_bytes()).expect("Failed to write test animation file");
+    let mut file = File::create("tests/spec_compat_animation.json")
+        .expect("Failed to create test animation file");
+    file.write_all(json_output.as_bytes())
+        .expect("Failed to write test animation file");
 
     // 4. Read the file back and deserialize it.
-    let file_content = std::fs::read_to_string("tests/spec_compat_animation.json").expect("Failed to read test animation file");
-    let deserialized_animation: AnimationData = serde_json::from_str(&file_content).expect("Failed to deserialize animation");
+    let file_content = std::fs::read_to_string("tests/spec_compat_animation.json")
+        .expect("Failed to read test animation file");
+    let deserialized_animation: AnimationData =
+        serde_json::from_str(&file_content).expect("Failed to deserialize animation");
 
     // 5. Assert that the deserialized object is equal to the original.
-    assert_eq!(animation, deserialized_animation, "The serialized and deserialized animation should be identical");
+    assert_eq!(
+        animation, deserialized_animation,
+        "The serialized and deserialized animation should be identical"
+    );
 }

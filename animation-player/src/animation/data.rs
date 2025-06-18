@@ -1,4 +1,4 @@
-use crate::animation::group::TrackGroup; 
+use crate::animation::group::TrackGroup;
 use crate::animation::ids::{KeypointId, TrackId};
 use crate::animation::metadata::AnimationMetadata;
 use crate::animation::track::AnimationTrack;

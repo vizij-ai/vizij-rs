@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use uuid::Uuid;
 
-use crate::animation::instance::{AnimationSettings, Animation, PlaybackMode};
+use crate::animation::instance::{Animation, AnimationSettings, PlaybackMode};
 use crate::event::EventDispatcher;
 use crate::player::animation_player::AnimationPlayer;
 use crate::player::playback_state::PlaybackState;

@@ -46,10 +46,7 @@ impl AnimationPlayer {
     }
 
     /// Remove an animation instance from the player.
-    pub fn remove_instance(
-        &mut self,
-        instance_id: &str,
-    ) -> Result<Animation, AnimationError> {
+    pub fn remove_instance(&mut self, instance_id: &str) -> Result<Animation, AnimationError> {
         self.instances
             .remove(instance_id)
             .ok_or_else(|| AnimationError::Generic {

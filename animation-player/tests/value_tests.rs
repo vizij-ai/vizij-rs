@@ -62,7 +62,10 @@ fn test_value_from_components_euler() {
     let result = Value::from_components(ValueType::Euler, &[10.0, 20.0, 30.0]).unwrap();
 
     if let Value::Euler(e) = result {
-        assert_eq!(e, animation_player::value::euler::Euler::new(10.0, 20.0, 30.0));
+        assert_eq!(
+            e,
+            animation_player::value::euler::Euler::new(10.0, 20.0, 30.0)
+        );
     } else {
         panic!("Expected Euler");
     }
@@ -79,7 +82,10 @@ fn test_value_conversions() {
     let euler_val: Value = animation_player::value::euler::Euler::new(1.0, 2.0, 3.0).into();
     assert!(matches!(euler_val, Value::Euler(_)));
     let extracted_euler: animation_player::value::euler::Euler = euler_val.try_into().unwrap();
-    assert_eq!(extracted_euler, animation_player::value::euler::Euler::new(1.0, 2.0, 3.0));
+    assert_eq!(
+        extracted_euler,
+        animation_player::value::euler::Euler::new(1.0, 2.0, 3.0)
+    );
 }
 
 #[test]
