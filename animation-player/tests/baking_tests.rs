@@ -235,7 +235,6 @@ fn test_baking_statistics() {
             Value::Float(1.0),
         ))
         .unwrap();
-    track.settings = None; // Explicitly set settings to None
     animation.add_track(track);
 
     // Configure baking
@@ -289,7 +288,6 @@ fn test_baking_config_validation() {
             Value::Float(1.0),
         ))
         .unwrap();
-    track.settings = None; // Explicitly set settings to None
     animation.add_track(track);
 
     let mut interpolation_registry = InterpolationRegistry::default();
