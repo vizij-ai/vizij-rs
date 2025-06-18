@@ -4,13 +4,8 @@ use std::time::Duration;
 
 use animation_player::{
     animation::{Animation, AnimationKeypoint, AnimationSettings, AnimationTrack},
-    value::euler::Euler, // Corrected import for Euler
     value::{Color, Transform, Vector3, Vector4},
-    AnimationData,
-    AnimationEngine,
-    AnimationEngineConfig,
-    AnimationTime,
-    Value,
+    AnimationData, AnimationEngine, AnimationEngineConfig, AnimationTime, Value,
 };
 
 // Helper to setup a player given animation data and settings
