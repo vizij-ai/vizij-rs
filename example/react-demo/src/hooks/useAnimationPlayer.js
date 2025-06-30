@@ -283,7 +283,7 @@ export function useAnimationPlayer(wasmConfig = null, options = {}) {
       const playerIds = wasm.getPlayerIds();
       if (playerIds.length > 0) {
         try {
-          const derivativeWidth = Math.round(1000000.0 / 60); // 60 FPS derivative width
+          const derivativeWidth = delta * 1000.0; // Convert delta to milliseconds
           const derivatives = wasm.getDerivatives(playerIds[0], derivativeWidth);
           captureDerivativeHistory(derivatives, now);
         } catch (error) {
