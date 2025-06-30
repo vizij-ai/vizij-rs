@@ -391,7 +391,7 @@ impl FrameRateCalculator {
         let first_time = self.frame_times.front().unwrap();
         let last_time = self.frame_times.back().unwrap();
         let total_duration = last_time.duration_since(*first_time);
-        nof_frames as f64 / total_duration.as_secs_f64()
+        (nof_frames -1) as f64 / total_duration.as_secs_f64()
     }
 
     /// Get average frame time in milliseconds
@@ -405,7 +405,7 @@ impl FrameRateCalculator {
         let first_time = self.frame_times.front().unwrap();
         let last_time = self.frame_times.back().unwrap();
         let total_duration = last_time.duration_since(*first_time);
-        1000f64 * total_duration.as_secs_f64() / nof_frames as f64
+        1000f64 * total_duration.as_secs_f64() / (nof_frames -1) as f64
     }
 
     /// Compute durations between consecutive frames
