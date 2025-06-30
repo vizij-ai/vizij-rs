@@ -113,7 +113,7 @@ impl Value {
         }
     }
 
-    /// Get the type name of this value as a static string.
+    /// Get the type name of this value as a ValueType enum.
     pub fn type_name(&self) -> ValueType {
         self.value_type()
     }

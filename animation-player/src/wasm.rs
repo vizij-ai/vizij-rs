@@ -1,4 +1,4 @@
-//! WebAssembly bindings for the animation engine
+//! WebAssembly bindings for the animation engine.
 use crate::{
     animation::PlaybackMode, AnimationBaking, AnimationData, AnimationEngine,
     AnimationEngineConfig, AnimationTime, BakingConfig, Value,
@@ -12,15 +12,13 @@ use crate::{
 use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
-// Entry point for the WASM module.
-// Note that it cannot be named `main`.
+/// Sets up a panic hook to log panic messages to the browser console.
 #[wasm_bindgen(start)]
 pub fn on_start() {
-    // Set up panic hook for better error messages in WASM
     console_error_panic_hook::set_once();
 }
 
-/// WASM wrapper for the animation engine
+/// A WebAssembly-compatible wrapper for the `AnimationEngine`.
 #[wasm_bindgen]
 pub struct WasmAnimationEngine {
     engine: AnimationEngine,
@@ -28,7 +26,10 @@ pub struct WasmAnimationEngine {
 
 #[wasm_bindgen]
 impl WasmAnimationEngine {
-    /// Create a new animation engine
+    /// Creates a new `WasmAnimationEngine`.
+    ///
+    /// An optional JSON configuration string can be provided. If `None`, a default, web-optimized
+    /// configuration is used.
     #[wasm_bindgen(constructor)]
     pub fn new(config_json: Option<String>) -> Result<WasmAnimationEngine, JsValue> {
         let config = if let Some(json) = config_json {
@@ -43,30 +44,20 @@ impl WasmAnimationEngine {
         Ok(WasmAnimationEngine { engine })
     }
 
+    /// Loads animation data from a JSON string.
+    ///
+    /// This function first attempts to parse the JSON directly into an `AnimationData` struct.
+    /// If that fails, it falls back to a test animation loader for compatibility.
     #[wasm_bindgen]
     pub fn load_animation(&mut self, animation_json: &str) -> Result<String, JsValue> {
-        // Try to parse the animation JSON directly first
         let animation_data: AnimationData = match serde_json::from_str(animation_json) {
-            Ok(data) => {
-                console_log("Successfully parsed animation JSON directly");
-                data
-            }
+            Ok(data) => data,
             Err(parse_error) => {
-                console_log(&format!("Direct JSON parse failed: {}, attempting fallback with load_test_animation_from_json_wasm", parse_error));
-
-                // Try using the test animation loader as fallback
+                // Fallback for test animations
                 match load_test_animation_from_json_wasm(animation_json) {
-                    Ok(corrected_json) => {
-                        console_log("Fallback loader succeeded, parsing corrected JSON");
-                        serde_json::from_str(&corrected_json).map_err(|e| {
-                            JsValue::from_str(&format!("Fallback JSON parse error: {}", e))
-                        })?
-                    }
+                    Ok(corrected_json) => serde_json::from_str(&corrected_json)
+                        .map_err(|e| JsValue::from_str(&format!("Fallback JSON parse error: {}", e)))?,
                     Err(fallback_error) => {
-                        console_log(&format!(
-                            "Fallback loader also failed: {:?}",
-                            fallback_error
-                        ));
                         return Err(JsValue::from_str(&format!(
                             "Animation JSON parse error: {}. Fallback loader error: {:?}",
                             parse_error, fallback_error
@@ -79,44 +70,31 @@ impl WasmAnimationEngine {
             .engine
             .load_animation_data(animation_data)
             .map_err(|e| JsValue::from_str(&format!("Load animation error: {:?}", e)))?;
-        console_log(&format!("Finished on wasm side"));
 
         Ok(animation_id)
     }
 
-    /// Create a new player
+    /// Creates a new animation player and returns its unique ID.
     #[wasm_bindgen]
     pub fn create_player(&mut self) -> String {
         self.engine.create_player()
     }
 
-    /// Get animation ids
+    /// Returns a list of all loaded animation IDs.
     #[wasm_bindgen]
     pub fn animation_ids(&mut self) -> Vec<String> {
-        let ids: Vec<&str> = self.engine.animation_ids();
-        // Convert Vec<&str> to Vec<String>
-        ids.into_iter() // Create an iterator over the string slices
-            .map(|s| s.to_string()) // For each slice, create an owned String
-            .collect() // Collect the results into a Vec<String>
+        self.engine.animation_ids().into_iter().map(|s| s.to_string()).collect()
     }
 
-    /// Add an animation instance to a player
+    /// Adds an animation instance to a player.
     #[wasm_bindgen]
     pub fn add_instance(&mut self, player_id: &str, animation_id: &str) -> Result<String, JsValue> {
-        // Add instance to player
-        let instance_id = self
-            .engine
+        self.engine
             .add_animation_to_player(player_id, animation_id, None)
-            .map_err(|e| {
-                let msg = format!("Engine lock poisoned: {}", e);
-                console_log(&msg);
-                JsValue::from_str(&msg)
-            })?;
-
-        Ok(instance_id)
+            .map_err(|e| JsValue::from_str(&format!("Engine lock poisoned: {}", e)))
     }
 
-    /// Start playback for a player
+    /// Starts playback for a player.
     #[wasm_bindgen]
     pub fn play(&mut self, player_id: &str) -> Result<(), JsValue> {
         self.engine
@@ -125,7 +103,7 @@ impl WasmAnimationEngine {
         Ok(())
     }
 
-    /// Pause playback for a player
+    /// Pauses playback for a player.
     #[wasm_bindgen]
     pub fn pause(&mut self, player_id: &str) -> Result<(), JsValue> {
         self.engine
@@ -134,7 +112,7 @@ impl WasmAnimationEngine {
         Ok(())
     }
 
-    /// Stop playback for a player
+    /// Stops playback for a player and resets its time to the beginning.
     #[wasm_bindgen]
     pub fn stop(&mut self, player_id: &str) -> Result<(), JsValue> {
         self.engine
@@ -143,7 +121,7 @@ impl WasmAnimationEngine {
         Ok(())
     }
 
-    /// Seek to a specific time for a player
+    /// Seeks a player to a specific time in seconds.
     #[wasm_bindgen]
     pub fn seek(&mut self, player_id: &str, time_seconds: f64) -> Result<(), JsValue> {
         let time = AnimationTime::from_seconds(time_seconds)
@@ -155,31 +133,21 @@ impl WasmAnimationEngine {
         Ok(())
     }
 
-    /// Update the animation engine and get current values
+    /// Updates the animation engine by a given time delta and returns the current animation values.
+    ///
+    /// The `frame_delta_seconds` is the time elapsed since the last update.
     #[wasm_bindgen]
     pub fn update(&mut self, frame_delta_seconds: f64) -> Result<JsValue, JsValue> {
-        let values = match self
+        let values = self
             .engine
             .update(Duration::from_secs_f64(frame_delta_seconds))
-        {
-            Ok(values) => values,
-            Err(e) => {
-                console_log(&format!("Engine update failed: {:?}", e));
-                return Err(JsValue::from_str(&format!("Update error: {:?}", e)));
-            }
-        };
+            .map_err(|e| JsValue::from_str(&format!("Update error: {:?}", e)))?;
 
-        // Convert the nested HashMap to a JsValue
-        match serde_wasm_bindgen::to_value(&values) {
-            Ok(js_value) => Ok(js_value),
-            Err(e) => {
-                console_log(&format!("Serialization failed: {}", e));
-                Err(JsValue::from_str(&format!("Serialization error: {}", e)))
-            }
-        }
+        serde_wasm_bindgen::to_value(&values)
+            .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
     }
 
-    /// Get current playback state for a player
+    /// Returns the current playback state of a player as a JSON object.
     #[wasm_bindgen]
     pub fn get_player_state(&self, player_id: &str) -> Result<JsValue, JsValue> {
         let state = self
@@ -190,7 +158,7 @@ impl WasmAnimationEngine {
             .map_err(|e| JsValue::from_str(&format!("State serialization error: {}", e)))
     }
 
-    /// Get current time for a player
+    /// Returns the current time of a player in seconds.
     #[wasm_bindgen]
     pub fn get_player_time(&self, player_id: &str) -> Result<f64, JsValue> {
         let player = self
@@ -201,7 +169,7 @@ impl WasmAnimationEngine {
         Ok(player.current_time.as_seconds())
     }
 
-    /// Get progress (0.0-1.0) for a player
+    /// Returns the playback progress of a player as a value between 0.0 and 1.0.
     #[wasm_bindgen]
     pub fn get_player_progress(&self, player_id: &str) -> Result<f64, JsValue> {
         let player = self
@@ -212,7 +180,7 @@ impl WasmAnimationEngine {
         Ok(player.progress())
     }
 
-    /// Get list of all player IDs
+    /// Returns a list of all player IDs.
     #[wasm_bindgen]
     pub fn get_player_ids(&self) -> Result<Vec<String>, JsValue> {
         Ok(self
@@ -223,21 +191,20 @@ impl WasmAnimationEngine {
             .collect())
     }
 
-    /// Get engine performance metrics
+    /// Returns the engine's performance metrics as a JSON object.
     #[wasm_bindgen]
     pub fn get_metrics(&self) -> JsValue {
         let metrics = self.engine.metrics();
         serde_wasm_bindgen::to_value(metrics).unwrap_or(JsValue::NULL)
     }
 
-    /// Update player configuration
+    /// Updates a player's configuration from a JSON string.
     #[wasm_bindgen]
     pub fn update_player_config(
         &mut self,
         player_id: &str,
         config_json: &str,
     ) -> Result<(), JsValue> {
-        console_log(&format!("Updating {} Config: {:?}", player_id, config_json));
         let player_config = self
             .engine
             .get_player_state_mut(player_id)
@@ -245,12 +212,9 @@ impl WasmAnimationEngine {
 
         let config: serde_json::Value = serde_json::from_str(config_json)
             .map_err(|e| JsValue::from_str(&format!("Config JSON parse error: {}", e)))?;
-        console_log(&format!("New Config: {:?}", config));
 
-        // Handle speed setting (-5.0 to 5.0)
         if let Some(speed_val) = config.get("speed").and_then(|v| v.as_f64()) {
             if speed_val >= -5.0 && speed_val <= 5.0 {
-                console_log(&format!("Setting speed: {:?}", speed_val));
                 player_config.speed = speed_val;
             } else {
                 return Err(JsValue::from_str(&format!(
@@ -260,9 +224,7 @@ impl WasmAnimationEngine {
             }
         }
 
-        // Handle playback mode
         if let Some(mode_str) = config.get("mode").and_then(|v| v.as_str()) {
-            console_log(&format!("Setting mode: {:?}", mode_str));
             match mode_str {
                 "once" => player_config.mode = PlaybackMode::Once,
                 "loop" => player_config.mode = PlaybackMode::Loop,
@@ -276,10 +238,8 @@ impl WasmAnimationEngine {
             }
         }
 
-        // Handle start time (positive floats)
         if let Some(start_time_val) = config.get("start_time").and_then(|v| v.as_f64()) {
             if start_time_val >= 0.0 {
-                console_log(&format!("Setting start_time: {:?}", start_time_val));
                 let start_time = AnimationTime::from_seconds(start_time_val)
                     .map_err(|e| JsValue::from_str(&format!("Invalid start time: {:?}", e)))?;
                 player_config.start_time = start_time;
@@ -291,14 +251,11 @@ impl WasmAnimationEngine {
             }
         }
 
-        // Handle end time (positive floats or null)
         if let Some(end_time_val) = config.get("end_time") {
             if end_time_val.is_null() {
-                console_log("Setting end_time to None");
                 player_config.end_time = None;
             } else if let Some(end_time_f64) = end_time_val.as_f64() {
                 if end_time_f64 >= 0.0 {
-                    console_log(&format!("Setting end_time: {:?}", end_time_f64));
                     let end_time = AnimationTime::from_seconds(end_time_f64)
                         .map_err(|e| JsValue::from_str(&format!("Invalid end time: {:?}", e)))?;
                     player_config.end_time = Some(end_time);
@@ -313,7 +270,6 @@ impl WasmAnimationEngine {
             }
         }
 
-        // Validate that start_time < end_time if both are set
         if let Some(end_time) = player_config.end_time {
             if player_config.start_time >= end_time {
                 return Err(JsValue::from_str(&format!(
@@ -327,13 +283,11 @@ impl WasmAnimationEngine {
         // Legacy support for boolean loop/ping_pong flags
         if let Some(loop_val) = config.get("loop").and_then(|v| v.as_bool()) {
             if loop_val {
-                console_log("Setting legacy loop: true");
                 player_config.mode = PlaybackMode::Loop;
             }
         }
         if let Some(ping_pong_val) = config.get("ping_pong").and_then(|v| v.as_bool()) {
             if ping_pong_val {
-                console_log("Setting legacy ping_pong: true");
                 player_config.mode = PlaybackMode::PingPong;
             }
         }
@@ -341,7 +295,7 @@ impl WasmAnimationEngine {
         Ok(())
     }
 
-    /// Export animation data as JSON
+    /// Exports a loaded animation as a JSON string.
     #[wasm_bindgen]
     pub fn export_animation(&self, animation_id: &str) -> Result<String, JsValue> {
         let animation = self
@@ -353,87 +307,80 @@ impl WasmAnimationEngine {
             .map_err(|e| JsValue::from_str(&format!("Export error: {}", e)))
     }
 
-    /// Get derivatives (rates of change) for all tracks at the current time for a specific player
+    /// Calculates the derivatives (rates of change) for all tracks of a player at the current time.
+    ///
+    /// The `derivative_width_ms` is the time window in milliseconds over which to calculate the rate of change.
     #[wasm_bindgen]
     pub fn get_derivatives(
         &mut self,
         player_id: &str,
         derivative_width_ms: Option<f64>,
     ) -> Result<JsValue, JsValue> {
-        // Convert derivative width from milliseconds to AnimationTime if provided
         let derivative_width = if let Some(width_ms) = derivative_width_ms {
             if width_ms <= 0.0 {
                 return Err(JsValue::from_str("Derivative width must be positive"));
             }
             Some(
-                AnimationTime::from_millis(width_ms).map_err(|e| {
-                    JsValue::from_str(&format!("Invalid derivative width: {:?}", e))
-                })?,
+                AnimationTime::from_millis(width_ms)
+                    .map_err(|e| JsValue::from_str(&format!("Invalid derivative width: {:?}", e)))?,
             )
         } else {
             None
         };
 
-        // Calculate derivatives using the engine's helper method
         let derivatives = self
             .engine
             .calculate_player_derivatives(player_id, derivative_width)
             .map_err(|e| JsValue::from_str(&format!("Calculate derivatives error: {:?}", e)))?;
 
-        // Convert to JsValue
         serde_wasm_bindgen::to_value(&derivatives)
             .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
     }
 
-    /// Bake an animation to pre-calculated values at specified frame rate
+    /// Bakes an animation into a series of pre-calculated values at a specified frame rate.
     #[wasm_bindgen]
     pub fn bake_animation(
         &mut self,
         animation_id: &str,
         config_json: Option<String>,
     ) -> Result<String, JsValue> {
-        // Get the animation data
         let animation = self
             .engine
             .get_animation_data(animation_id)
             .ok_or_else(|| JsValue::from_str("Animation not found"))?
-            .clone(); // Clone to avoid borrowing issues
+            .clone();
 
-        // Parse baking configuration
         let config = if let Some(json) = config_json {
             serde_json::from_str::<BakingConfig>(&json)
                 .map_err(|e| JsValue::from_str(&format!("Baking config parse error: {}", e)))?
         } else {
             BakingConfig::default()
         };
-        console_log(&format!("Wasm Baking with config {:?}", config));
 
-        // Perform the baking
         let baked_data = animation
             .bake(&config, self.engine.interpolation_registry_mut())
             .map_err(|e| JsValue::from_str(&format!("Baking error: {:?}", e)))?;
 
-        // Convert to JSON
         baked_data
             .to_json()
             .map_err(|e| JsValue::from_str(&format!("JSON serialization error: {:?}", e)))
     }
 }
 
-/// Utility function to set up console logging from WASM
+/// Logs a message to the browser console.
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
 }
 
-/// Log a message to the browser console
+/// A convenience function for logging from Rust to the browser console.
 #[wasm_bindgen]
 pub fn console_log(message: &str) {
     log(message);
 }
 
-/// Convert a Rust Value to JsValue for easy JavaScript access
+/// Converts a JSON string representing a `Value` into a `JsValue`.
 #[wasm_bindgen]
 pub fn value_to_js(value_json: &str) -> Result<JsValue, JsValue> {
     let value: Value = serde_json::from_str(value_json)
@@ -443,7 +390,7 @@ pub fn value_to_js(value_json: &str) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("Value conversion error: {}", e)))
 }
 
-// Convenience – avoid spelling out zero vs. new().
+/// Creates an `AnimationTime` from seconds.
 #[inline]
 fn time(t: f64) -> AnimationTime {
     if t.abs() < f64::EPSILON {
@@ -453,7 +400,7 @@ fn time(t: f64) -> AnimationTime {
     }
 }
 
-/// Helper that builds a track, returns the finished track together with all key-point IDs.
+/// A helper function to build an `AnimationTrack` from arrays of times and values.
 #[inline]
 fn build_track<F>(
     name: &str,
@@ -477,6 +424,7 @@ where
     (track, ids)
 }
 
+/// Creates a test animation with various value types.
 #[wasm_bindgen]
 pub fn create_animation_test_type() -> String {
     const POS_TIME: [f64; 5] = [0.0, 1.0, 2.0, 3.0, 4.1];
@@ -487,7 +435,6 @@ pub fn create_animation_test_type() -> String {
 
     let mut animation = AnimationData::new("test_animation", "Robot Wave Animation");
 
-    // Position ────────────────────────────────────────────────────────────────
     let (track, _) = build_track("position", "transform.position", &POS_TIME, |i| {
         let coords = [
             Vector3::new(0.0, 0.0, 0.0),
@@ -500,7 +447,6 @@ pub fn create_animation_test_type() -> String {
     });
     animation.add_track(track);
 
-    // Rotation ────────────────────────────────────────────────────────────────
     let (track, _) = build_track("rotation", "transform.rotation", &ROT_TIME, |i| {
         let q = [
             Vector4::new(0.0, 0.0, 0.0, 1.0),
@@ -513,7 +459,6 @@ pub fn create_animation_test_type() -> String {
     });
     animation.add_track(track);
 
-    // Scale ───────────────────────────────────────────────────────────────────
     let (track, _) = build_track("scale", "transform.scale", &SCALE_TIME, |i| {
         let s = [
             Vector3::new(1.0, 1.0, 1.0),
@@ -530,7 +475,6 @@ pub fn create_animation_test_type() -> String {
     });
     animation.add_track(track);
 
-    // Color ───────────────────────────────────────────────────────────────────
     let (track, _) = build_track("color", "material.color", &COL_TIME, |i| {
         let c = &[
             Color::rgba(1.0, 0.2, 0.2, 1.0),
@@ -543,14 +487,12 @@ pub fn create_animation_test_type() -> String {
     });
     animation.add_track(track);
 
-    // Intensity ───────────────────────────────────────────────────────────────
     let (track, _) = build_track("intensity", "light.easing", &INT_TIME, |i| {
         let v = [0.5, 1.0, 0.3, 0.8, 0.5, 1.2, 0.2, 0.5][i];
         Value::Float(v)
     });
     animation.add_track(track);
 
-    // Metadata
     animation.metadata = AnimationMetadata {
         author: Some("WASM Animation Player Demo For Different types".to_string()),
         description: Some(
@@ -565,15 +507,12 @@ pub fn create_animation_test_type() -> String {
     serde_json::to_string(&animation).unwrap_or_else(|_| "{}".to_owned())
 }
 
-// ------------------------------------------------------------------------------------------------
-// 2. create_test_animation
-// ------------------------------------------------------------------------------------------------
+/// Creates a test animation with various transition types.
 #[wasm_bindgen]
 pub fn create_test_animation() -> String {
     const TIMES: [f64; 8] = [0.0, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0];
     const VALUES: [f32; 8] = [0.5, 1.0, 0.3, 0.8, 0.5, 1.2, 0.2, 0.5];
 
-    // (track-name, property, transition variant)
     const TRACKS: &[(&str, &str, TransitionVariant)] = &[
         ("a", "a.step", TransitionVariant::Step),
         ("b", "b.cubic", TransitionVariant::Cubic),
@@ -584,12 +523,9 @@ pub fn create_test_animation() -> String {
 
     let mut animation = AnimationData::new("test_animation", "Transition Testing Animation");
 
-    // Build every track the same way
     for &(name, property, variant) in TRACKS {
-        // Build track + remember each id
         let (track, ids) = build_track(name, property, &TIMES, |i| Value::Float(VALUES[i].into()));
 
-        // Add transitions between consecutive key-points
         for pair in ids.windows(2) {
             animation.add_transition(AnimationTransition::new(pair[0], pair[1], variant));
         }
@@ -611,13 +547,13 @@ pub fn create_test_animation() -> String {
     serde_json::to_string(&animation).unwrap_or_else(|_| "{}".to_owned())
 }
 
-/// Greet function for testing
+/// A simple test function that returns a greeting.
 #[wasm_bindgen]
 pub fn greet(name: &str) -> String {
     format!("Hello, {}! Animation Player WASM is ready.", name)
 }
 
-/// Load and convert a test animation from JSON format
+/// Loads a test animation from a JSON string and returns it as a JSON string.
 #[wasm_bindgen]
 pub fn load_test_animation_from_json_wasm(json_str: &str) -> Result<String, JsValue> {
     load_test_animation_from_json(json_str)

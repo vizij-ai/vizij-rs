@@ -1,7 +1,7 @@
 //! Configuration for the animation player system
 
 use crate::AnimationError;
-use serde::{Deserialize, Serialize}; // Added this use statement
+use serde::{Deserialize, Serialize};
 
 /// Configuration for the animation engine
 #[derive(Debug, Clone, Serialize, Deserialize)]
