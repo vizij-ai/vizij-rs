@@ -8,8 +8,8 @@ pub struct PlayerState {
     pub playback_state: PlaybackState,
     pub speed: f64, // Represents timescale
     pub mode: PlaybackMode,
-    pub offset: AnimationTime, // Time offset for starting the animation
-    pub start_time: AnimationTime,
+    pub offset: AnimationTime, // Time offset for starting the animation (relative to other animations)
+    pub start_time: AnimationTime, // Time within the current animation to start playback at
     pub end_time: Option<AnimationTime>,
     pub last_update_time: AnimationTime, // For delta calculation
 }
