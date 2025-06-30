@@ -588,7 +588,7 @@ fn test_player_state_initialization() {
     assert_eq!(state.speed, 1.0);
     assert_eq!(state.mode, PlaybackMode::Loop);
     assert_eq!(state.start_time, AnimationTime::zero());
-    assert_eq!(state.offset, AnimationTime::zero()); // New field
+    assert_eq!(state.offset, AnimationTime::zero());
     assert_eq!(state.end_time, None);
     assert_eq!(state.last_update_time, AnimationTime::zero());
 }

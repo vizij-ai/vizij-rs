@@ -12,7 +12,7 @@ fn test_track_creation() {
     assert_eq!(track.target, "transform.position");
     assert!(track.enabled);
     assert_eq!(track.weight, 1.0);
-    assert!(track.settings.is_none()); // New field, should be None by default
+    assert!(track.settings.is_none());
 }
 
 #[test]

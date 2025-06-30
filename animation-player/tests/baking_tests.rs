@@ -29,7 +29,7 @@ fn test_basic_baking() {
             Value::Vector3(Vector3::new(20.0, 0.0, 0.0)),
         ))
         .unwrap();
-    position_track.settings = None; // Explicitly set settings to None for consistency
+    position_track.settings = None;
 
     animation.add_track(position_track);
 
@@ -100,7 +100,7 @@ fn test_baking_with_custom_time_range() {
             Value::Float(1.0),
         ))
         .unwrap();
-    float_track.settings = None; // Explicitly set settings to None for consistency
+    float_track.settings = None;
 
     animation.add_track(float_track);
 

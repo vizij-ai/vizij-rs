@@ -55,8 +55,9 @@ impl WasmAnimationEngine {
             Err(parse_error) => {
                 // Fallback for test animations
                 match load_test_animation_from_json_wasm(animation_json) {
-                    Ok(corrected_json) => serde_json::from_str(&corrected_json)
-                        .map_err(|e| JsValue::from_str(&format!("Fallback JSON parse error: {}", e)))?,
+                    Ok(corrected_json) => serde_json::from_str(&corrected_json).map_err(|e| {
+                        JsValue::from_str(&format!("Fallback JSON parse error: {}", e))
+                    })?,
                     Err(fallback_error) => {
                         return Err(JsValue::from_str(&format!(
                             "Animation JSON parse error: {}. Fallback loader error: {:?}",
@@ -83,7 +84,11 @@ impl WasmAnimationEngine {
     /// Returns a list of all loaded animation IDs.
     #[wasm_bindgen]
     pub fn animation_ids(&mut self) -> Vec<String> {
-        self.engine.animation_ids().into_iter().map(|s| s.to_string()).collect()
+        self.engine
+            .animation_ids()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect()
     }
 
     /// Adds an animation instance to a player.
@@ -316,17 +321,17 @@ impl WasmAnimationEngine {
         player_id: &str,
         derivative_width_ms: Option<f64>,
     ) -> Result<JsValue, JsValue> {
-        let derivative_width = if let Some(width_ms) = derivative_width_ms {
-            if width_ms <= 0.0 {
-                return Err(JsValue::from_str("Derivative width must be positive"));
-            }
-            Some(
-                AnimationTime::from_millis(width_ms)
-                    .map_err(|e| JsValue::from_str(&format!("Invalid derivative width: {:?}", e)))?,
-            )
-        } else {
-            None
-        };
+        let derivative_width =
+            if let Some(width_ms) = derivative_width_ms {
+                if width_ms <= 0.0 {
+                    return Err(JsValue::from_str("Derivative width must be positive"));
+                }
+                Some(AnimationTime::from_millis(width_ms).map_err(|e| {
+                    JsValue::from_str(&format!("Invalid derivative width: {:?}", e))
+                })?)
+            } else {
+                None
+            };
 
         let derivatives = self
             .engine
