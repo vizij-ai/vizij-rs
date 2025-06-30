@@ -366,7 +366,7 @@ impl WasmAnimationEngine {
                 return Err(JsValue::from_str("Derivative width must be positive"));
             }
             Some(
-                AnimationTime::from_seconds(width_ms / 1000000.0).map_err(|e| {
+                AnimationTime::from_millis(width_ms).map_err(|e| {
                     JsValue::from_str(&format!("Invalid derivative width: {:?}", e))
                 })?,
             )
