@@ -28,6 +28,21 @@ impl AnimationKeypoint {
         }
     }
 
+    /// Create a new keypoint with a specific ID.
+    #[inline]
+    pub fn new_with_id(
+        id: impl AsRef<str>,
+        time: impl Into<AnimationTime>,
+        value: Value,
+    ) -> Result<Self, crate::AnimationError> {
+        Ok(Self {
+            id: KeypointId::from_string(id)?,
+            time: time.into(),
+            value,
+            metadata: HashMap::new(),
+        })
+    }
+
     /// Add metadata
     #[inline]
     pub fn with_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {

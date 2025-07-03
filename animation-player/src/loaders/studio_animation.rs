@@ -3,8 +3,10 @@
 //! This module provides functionality to load animations from the test_animation.json format
 //! and convert them to the internal AnimationData representation.
 
-use crate::{AnimationData, AnimationKeypoint, AnimationTime, AnimationTrack, Value};
+use crate::{AnimationData, AnimationKeypoint, AnimationTime, AnimationTrack, Value, animation::{AnimationTransition, TransitionVariant, KeypointId}};
 use serde::Deserialize;
+use uuid::Uuid;
+use std::collections::HashMap;
 
 #[derive(Deserialize)]
 struct StudioAnimationPoint {
@@ -24,8 +26,22 @@ struct StudioAnimationTrack {
     name: String,
     points: Vec<StudioAnimationPoint>,
     #[serde(rename = "animatableId")]
-    #[allow(dead_code)]
     animatable_id: String,
+}
+
+#[derive(Deserialize)]
+struct StudioTransition {
+    id: String,
+    keypoints: [String; 2],
+    variant: String,
+    #[serde(default)]
+    parameters: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct StudioTransitions {
+    value: Vec<StudioTransition>,
 }
 
 #[derive(Deserialize)]
@@ -37,8 +53,7 @@ struct StudioAnimationData {
     #[allow(dead_code)]
     groups: serde_json::Value,
     #[serde(default)]
-    #[allow(dead_code)]
-    transitions: serde_json::Value,
+    transitions: StudioTransitions,
     duration: u64,
 }
 
@@ -55,18 +70,36 @@ fn convert_test_animation(test_data: StudioAnimationData) -> AnimationData {
 
     for track_data in test_data.tracks {
         let mut track =
-            AnimationTrack::new_with_id(&track_data.id, &track_data.name, &track_data.name)
-                .unwrap_or_else(|_| AnimationTrack::new(&track_data.name, &track_data.name));
+            AnimationTrack::new_with_id(&track_data.id, &track_data.name, &track_data.animatable_id)
+                .unwrap_or_else(|_| AnimationTrack::new(&track_data.name, &track_data.animatable_id));
 
         for point in track_data.points {
             // Convert stamp (0.0-1.0) to time in seconds
             let time_seconds = point.stamp * duration_seconds;
             let time = AnimationTime::from_seconds(time_seconds).unwrap();
-            let keypoint = AnimationKeypoint::new(time, Value::Float(point.value));
+            let keypoint =
+                AnimationKeypoint::new_with_id(&point.id, time, Value::Float(point.value))
+                    .unwrap_or_else(|_| AnimationKeypoint::new(time, Value::Float(point.value)));
             track.add_keypoint(keypoint).unwrap();
         }
 
         animation.add_track(track);
+    }
+
+    for transition_data in test_data.transitions.value {
+        let from_keypoint_id = KeypointId::from(Uuid::parse_str(&transition_data.keypoints[0]).unwrap());
+        let to_keypoint_id = KeypointId::from(Uuid::parse_str(&transition_data.keypoints[1]).unwrap());
+        let variant = TransitionVariant::from(transition_data.variant.as_str());
+        let mut transition = AnimationTransition::with_id(
+            &transition_data.id,
+            from_keypoint_id,
+            to_keypoint_id,
+            variant,
+        );
+        for (key, value) in transition_data.parameters {
+            transition = transition.with_parameter(&key, value.to_string());
+        }
+        animation.add_transition(transition);
     }
 
     // Set the duration
@@ -168,7 +201,7 @@ mod tests {
 
         let track = animation.tracks.values().next().unwrap();
         assert_eq!(track.name, "test_track");
-        assert_eq!(track.target, "test_track");
+        assert_eq!(track.target, "animatable-id");
         assert_eq!(track.keypoints.len(), 2);
 
         // First keypoint at stamp 0.0 -> time 0.0
@@ -222,5 +255,57 @@ mod tests {
             track.keypoints[0].time,
             AnimationTime::from_seconds(1.0).unwrap()
         );
+    }
+
+    #[test]
+    fn test_transition_loading() {
+        let json = r#"
+        {
+          "id": "test-id",
+          "name": "Test Animation",
+          "tracks": [
+            {
+              "id": "track-id",
+              "name": "test_track",
+              "points": [
+                {
+                  "id": "d3d5a244-addc-40fe-b9ab-59c68db42f5f",
+                  "stamp": 0.0,
+                  "value": 0.0
+                },
+                {
+                  "id": "3efeaad9-638a-40f9-a177-6e92901b7785",
+                  "stamp": 1.0,
+                  "value": 10.0
+                }
+              ],
+              "animatableId": "animatable-id"
+            }
+          ],
+          "transitions": {
+            "dataType": "Map",
+            "value": [
+              {
+                "id": "transition-id",
+                "keypoints": ["d3d5a244-addc-40fe-b9ab-59c68db42f5f", "3efeaad9-638a-40f9-a177-6e92901b7785"],
+                "variant": "linear",
+                "parameters": {
+                  "tension": 0.5
+                }
+              }
+            ]
+          },
+          "duration": 5000
+        }
+        "#;
+
+        let animation = load_test_animation_from_json(json).unwrap();
+        assert_eq!(animation.transitions.len(), 1);
+        let transition = animation.transitions.values().next().unwrap();
+        assert_eq!(transition.id, "transition-id");
+        assert_eq!(transition.from_keypoint().to_string(), "d3d5a244-addc-40fe-b9ab-59c68db42f5f");
+        assert_eq!(transition.to_keypoint().to_string(), "3efeaad9-638a-40f9-a177-6e92901b7785");
+        assert_eq!(transition.variant, TransitionVariant::Linear);
+        assert_eq!(transition.get_parameter("tension"), Some("0.5"));
     }
 }
