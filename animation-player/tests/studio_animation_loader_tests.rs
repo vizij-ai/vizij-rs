@@ -3,7 +3,8 @@
 use std::time::Duration;
 
 use animation_player::{
-    loaders::load_test_animation_from_json, AnimationEngine, AnimationEngineConfig, Value, AnimationTime
+    loaders::load_test_animation_from_json, AnimationEngine, AnimationEngineConfig, AnimationTime,
+    Value,
 };
 
 #[test]

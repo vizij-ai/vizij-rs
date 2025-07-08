@@ -3,10 +3,13 @@
 //! This module provides functionality to load animations from the test_animation.json format
 //! and convert them to the internal AnimationData representation.
 
-use crate::{AnimationData, AnimationKeypoint, AnimationTime, AnimationTrack, Value, animation::{AnimationTransition, TransitionVariant, KeypointId}};
+use crate::{
+    animation::{AnimationTransition, KeypointId, TransitionVariant},
+    AnimationData, AnimationKeypoint, AnimationTime, AnimationTrack, Value,
+};
 use serde::Deserialize;
-use uuid::Uuid;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 #[derive(Deserialize)]
 struct StudioAnimationPoint {
@@ -69,9 +72,12 @@ fn convert_test_animation(test_data: StudioAnimationData) -> AnimationData {
     let duration_seconds = test_data.duration as f64 / 1000.0;
 
     for track_data in test_data.tracks {
-        let mut track =
-            AnimationTrack::new_with_id(&track_data.id, &track_data.name, &track_data.animatable_id)
-                .unwrap_or_else(|_| AnimationTrack::new(&track_data.name, &track_data.animatable_id));
+        let mut track = AnimationTrack::new_with_id(
+            &track_data.id,
+            &track_data.name,
+            &track_data.animatable_id,
+        )
+        .unwrap_or_else(|_| AnimationTrack::new(&track_data.name, &track_data.animatable_id));
 
         for point in track_data.points {
             // Convert stamp (0.0-1.0) to time in seconds
@@ -87,8 +93,10 @@ fn convert_test_animation(test_data: StudioAnimationData) -> AnimationData {
     }
 
     for transition_data in test_data.transitions.value {
-        let from_keypoint_id = KeypointId::from(Uuid::parse_str(&transition_data.keypoints[0]).unwrap());
-        let to_keypoint_id = KeypointId::from(Uuid::parse_str(&transition_data.keypoints[1]).unwrap());
+        let from_keypoint_id =
+            KeypointId::from(Uuid::parse_str(&transition_data.keypoints[0]).unwrap());
+        let to_keypoint_id =
+            KeypointId::from(Uuid::parse_str(&transition_data.keypoints[1]).unwrap());
         let variant = TransitionVariant::from(transition_data.variant.as_str());
         let mut transition = AnimationTransition::with_id(
             &transition_data.id,
@@ -303,8 +311,14 @@ mod tests {
         assert_eq!(animation.transitions.len(), 1);
         let transition = animation.transitions.values().next().unwrap();
         assert_eq!(transition.id, "transition-id");
-        assert_eq!(transition.from_keypoint().to_string(), "d3d5a244-addc-40fe-b9ab-59c68db42f5f");
-        assert_eq!(transition.to_keypoint().to_string(), "3efeaad9-638a-40f9-a177-6e92901b7785");
+        assert_eq!(
+            transition.from_keypoint().to_string(),
+            "d3d5a244-addc-40fe-b9ab-59c68db42f5f"
+        );
+        assert_eq!(
+            transition.to_keypoint().to_string(),
+            "3efeaad9-638a-40f9-a177-6e92901b7785"
+        );
         assert_eq!(transition.variant, TransitionVariant::Linear);
         assert_eq!(transition.get_parameter("tension"), Some("0.5"));
     }

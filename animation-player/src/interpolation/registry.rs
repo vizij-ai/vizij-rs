@@ -196,7 +196,6 @@ impl InterpolationRegistry {
 
         self.interpolate(transition.variant.name(), start, end, &context_with_params)
     }
-
 }
 
 impl Default for InterpolationRegistry {
