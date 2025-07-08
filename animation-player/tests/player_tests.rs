@@ -78,7 +78,6 @@ fn test_animation_player_add_instance() {
 fn test_animation_player_get_effective_time() {
     let anim_duration = AnimationTime::from_seconds(10.0).unwrap();
     let settings = AnimationSettings {
-        start_offset: AnimationTime::from_seconds(2.0).unwrap(),
         instance_start_time: AnimationTime::from_seconds(5.0).unwrap(),
         timescale: 0.5,
         ..Default::default()
@@ -86,24 +85,24 @@ fn test_animation_player_get_effective_time() {
     let animation_id = "fake_animation_id";
     let instance = Animation::new(animation_id, settings.clone(), anim_duration);
 
-    // Player time 5.0s, instance starts at 5.0s, offset 2.0s, timescale 0.5
-    // Relative time = 0.0s, scaled = 0.0s, effective = 0.0s + 2.0s = 2.0s
+    // Player time 5.0s, instance starts at 5.0s, timescale 0.5
+    // Relative time = 0.0s, scaled = 0.0s, effective = 0.0s
     assert_eq!(
         instance.get_effective_time(AnimationTime::from_seconds(5.0).unwrap()),
-        AnimationTime::from_seconds(2.0).unwrap()
+        AnimationTime::from_seconds(0.0).unwrap()
     );
 
-    // Player time 7.0s, instance starts at 5.0s, offset 2.0s, timescale 0.5
-    // Relative time = 2.0s, scaled = 1.0s, effective = 1.0s + 2.0s = 3.0s
+    // Player time 7.0s, instance starts at 5.0s, timescale 0.5
+    // Relative time = 2.0s, scaled = 1.0s, effective = 1.0s
     assert_eq!(
         instance.get_effective_time(AnimationTime::from_seconds(7.0).unwrap()),
-        AnimationTime::from_seconds(3.0).unwrap()
+        AnimationTime::from_seconds(1.0).unwrap()
     );
 
-    // Player time 15.0s (well past end of animation data duration 10s + offset 2s = 12s)
+    // Player time 15.0s (well past end of animation data duration 10s = 10s)
     // Relative time = 10.0s, scaled = 5.0s, effective = 5.0s + 2.0s = 7.0s (clamped to 10s for Once mode)
     // For PlaybackMode::Once, it clamps to effective_duration.
-    // Effective duration is 10s. Scaled time is 5s. Looped time is 5s. Add offset 2s. Result 7s.
+    // Effective duration is 10s. Scaled time is 5s. Looped time is 5s.
     let instance_once = Animation::new(
         animation_id,
         AnimationSettings {
@@ -114,7 +113,7 @@ fn test_animation_player_get_effective_time() {
     );
     assert_eq!(
         instance_once.get_effective_time(AnimationTime::from_seconds(25.0).unwrap()),
-        AnimationTime::from_seconds(12.0).unwrap()
+        AnimationTime::from_seconds(10.0).unwrap()
     );
 
     // Test loop mode
@@ -128,10 +127,10 @@ fn test_animation_player_get_effective_time() {
     );
     // Player time 25.0s
     // Relative time = 20.0s, scaled = 10.0s.
-    // Looped time (10.0 % 10.0) = 0.0s. Add offset 2.0s. Result 2.0s.
+    // Looped time (10.0 % 10.0) = 0.0s.
     assert_eq!(
         instance_loop.get_effective_time(AnimationTime::from_seconds(25.0).unwrap()),
-        AnimationTime::from_seconds(2.0).unwrap()
+        AnimationTime::from_seconds(0.0).unwrap()
     );
 
     // Test ping-pong mode
@@ -147,10 +146,9 @@ fn test_animation_player_get_effective_time() {
     // Relative time = 20.0s, scaled = 10.0s.
     // Cycle duration = 20.0s. Cycle time = 10.0s % 20.0s = 10.0s.
     // time_in_half_cycle = cycle_duration - cycle_time = 20.0 - 10.0 = 10.0s.
-    // Add offset 2.0s. Result 12.0s.
     assert_eq!(
         instance_pingpong.get_effective_time(AnimationTime::from_seconds(25.0).unwrap()),
-        AnimationTime::from_seconds(12.0).unwrap()
+        AnimationTime::from_seconds(10.0).unwrap()
     );
 }
 

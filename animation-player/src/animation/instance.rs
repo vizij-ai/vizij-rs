@@ -22,8 +22,6 @@ impl Default for PlaybackMode {
 /// Settings for a specific animation instance.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AnimationSettings {
-    /// The time offset to start playback from within the animation data.
-    pub start_offset: AnimationTime,
     /// The time at which this instance begins relative to the player's timeline.
     pub instance_start_time: AnimationTime,
     /// The duration this instance should play for. If None, plays for the full animation duration.
@@ -44,7 +42,6 @@ impl AnimationSettings {
     /// Creates new default instance settings for a given animation ID.
     pub fn new() -> Self {
         Self {
-            start_offset: AnimationTime::zero(),
             instance_start_time: AnimationTime::zero(),
             duration: None,
             timescale: 1.0,
@@ -119,7 +116,6 @@ impl Animation {
             return AnimationTime::zero();
         }
 
-        // Apply looping to the scaled time (without start_offset)
         let looped_time = match self.settings.playback_mode {
             PlaybackMode::Once => scaled_time.clamp(AnimationTime::zero(), effective_duration),
             PlaybackMode::Loop => {
@@ -151,8 +147,7 @@ impl Animation {
             }
         };
 
-        // Add start_offset to the final looped time
-        looped_time + self.settings.start_offset
+        looped_time
     }
 
     /// Updates the instance's internal state (e.g., loop count, direction for ping-pong).
@@ -177,7 +172,6 @@ impl Animation {
         }
 
         let total_animation_seconds = effective_duration.as_seconds();
-        // Don't add start_offset here - it only affects where we read data, not loop timing
         let playback_time_seconds = scaled_time_seconds;
 
         match self.settings.playback_mode {
