@@ -197,16 +197,6 @@ impl InterpolationRegistry {
         self.interpolate(transition.variant.name(), start, end, &context_with_params)
     }
 
-    /// Perform interpolation using a transition variant directly
-    pub fn interpolate_with_variant(
-        &mut self,
-        variant: crate::animation::TransitionVariant,
-        start: &Value,
-        end: &Value,
-        context: &crate::interpolation::context::InterpolationContext,
-    ) -> Result<Value, AnimationError> {
-        self.interpolate(variant.name(), start, end, context)
-    }
 }
 
 impl Default for InterpolationRegistry {
