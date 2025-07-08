@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use animation_player::{
-    animation::{Animation, AnimationSettings, PlaybackMode},
+    animation::{AnimationInstance, AnimationInstanceSettings, PlaybackMode},
     player::PlayerState,
     value::Vector3,
     AnimationData, AnimationEngine, AnimationEngineConfig, AnimationKeypoint, AnimationTime,
@@ -260,17 +260,17 @@ fn test_engine_update_with_multiple_players() {
 
     // Add instances
     let player1 = engine.get_player_mut(&player1_id).unwrap();
-    let instance1 = Animation::new(
+    let instance1 = AnimationInstance::new(
         animation1_id,
-        AnimationSettings::new(),
+        AnimationInstanceSettings::new(),
         animation1.metadata.duration,
     );
     player1.add_instance(instance1);
 
     let player2 = engine.get_player_mut(&player2_id).unwrap();
-    let instance2 = Animation::new(
+    let instance2 = AnimationInstance::new(
         animation2_id,
-        AnimationSettings::new(),
+        AnimationInstanceSettings::new(),
         animation2.metadata.duration,
     );
     player2.add_instance(instance2);
@@ -435,9 +435,9 @@ fn test_engine_stop_all_players() {
     // Add instances and start playback
     for player_id in [&player1_id, &player2_id] {
         let player = engine.get_player_mut(player_id).unwrap();
-        let instance = Animation::new(
+        let instance = AnimationInstance::new(
             animation_id.clone(),
-            AnimationSettings::new(),
+            AnimationInstanceSettings::new(),
             animation.metadata.duration,
         );
         player.add_instance(instance);
@@ -469,9 +469,9 @@ fn test_engine_pause_resume_all_players() {
     // Add instances and start playback
     for player_id in [&player1_id, &player2_id] {
         let player = engine.get_player_mut(player_id).unwrap();
-        let instance = Animation::new(
+        let instance = AnimationInstance::new(
             animation_id.clone(),
-            AnimationSettings::new(),
+            AnimationInstanceSettings::new(),
             animation.metadata.duration,
         );
         player.add_instance(instance);
@@ -606,16 +606,16 @@ fn test_engine_multiple_instances_per_player() {
     let player = engine.get_player_mut(&player_id).unwrap();
 
     // Add multiple instances to the same player
-    let instance1 = Animation::new(
+    let instance1 = AnimationInstance::new(
         animation1_id,
-        AnimationSettings::new(),
+        AnimationInstanceSettings::new(),
         animation1.metadata.duration,
     );
-    let instance2 = Animation::new(
+    let instance2 = AnimationInstance::new(
         animation2_id,
-        AnimationSettings {
+        AnimationInstanceSettings {
             instance_start_time: Duration::from_secs(1).into(),
-            ..AnimationSettings::default()
+            ..AnimationInstanceSettings::default()
         },
         animation2.metadata.duration,
     );
@@ -648,11 +648,11 @@ fn test_engine_instance_time_offsets() {
     let player = engine.get_player_mut(&player_id).unwrap();
 
     // Instance that starts 1 second into player timeline
-    let instance = Animation::new(
+    let instance = AnimationInstance::new(
         animation_id,
-        AnimationSettings {
+        AnimationInstanceSettings {
             instance_start_time: Duration::from_secs(1).into(),
-            ..AnimationSettings::default()
+            ..AnimationInstanceSettings::default()
         },
         animation.metadata.duration,
     );

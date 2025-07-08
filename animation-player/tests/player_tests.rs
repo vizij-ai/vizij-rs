@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use animation_player::animation::{
-    instance::PlaybackMode, Animation, AnimationData, AnimationSettings,
+    instance::PlaybackMode, AnimationData, AnimationInstance, AnimationInstanceSettings,
 };
 use animation_player::player::{AnimationEngine, AnimationPlayer, PlaybackState};
 use animation_player::{AnimationEngineConfig, AnimationTime};
@@ -62,9 +62,9 @@ fn test_animation_engine_load_animation_data() {
 #[test]
 fn test_animation_player_add_instance() {
     let mut player = AnimationPlayer::new();
-    let anim_instance = Animation::new(
+    let anim_instance = AnimationInstance::new(
         "anim1".to_string(),
-        AnimationSettings {
+        AnimationInstanceSettings {
             playback_mode: PlaybackMode::Loop,
             ..Default::default()
         },
@@ -77,13 +77,13 @@ fn test_animation_player_add_instance() {
 #[test]
 fn test_animation_player_get_effective_time() {
     let anim_duration = AnimationTime::from_seconds(10.0).unwrap();
-    let settings = AnimationSettings {
+    let settings = AnimationInstanceSettings {
         instance_start_time: AnimationTime::from_seconds(5.0).unwrap(),
         timescale: 0.5,
         ..Default::default()
     };
     let animation_id = "fake_animation_id";
-    let instance = Animation::new(animation_id, settings.clone(), anim_duration);
+    let instance = AnimationInstance::new(animation_id, settings.clone(), anim_duration);
 
     // Player time 5.0s, instance starts at 5.0s, timescale 0.5
     // Relative time = 0.0s, scaled = 0.0s, effective = 0.0s
@@ -103,9 +103,9 @@ fn test_animation_player_get_effective_time() {
     // Relative time = 10.0s, scaled = 5.0s, effective = 5.0s + 2.0s = 7.0s (clamped to 10s for Once mode)
     // For PlaybackMode::Once, it clamps to effective_duration.
     // Effective duration is 10s. Scaled time is 5s. Looped time is 5s.
-    let instance_once = Animation::new(
+    let instance_once = AnimationInstance::new(
         animation_id,
-        AnimationSettings {
+        AnimationInstanceSettings {
             playback_mode: PlaybackMode::Once,
             ..settings.clone()
         },
@@ -117,9 +117,9 @@ fn test_animation_player_get_effective_time() {
     );
 
     // Test loop mode
-    let instance_loop = Animation::new(
+    let instance_loop = AnimationInstance::new(
         animation_id,
-        AnimationSettings {
+        AnimationInstanceSettings {
             playback_mode: PlaybackMode::Loop,
             ..settings.clone()
         },
@@ -134,9 +134,9 @@ fn test_animation_player_get_effective_time() {
     );
 
     // Test ping-pong mode
-    let instance_pingpong = Animation::new(
+    let instance_pingpong = AnimationInstance::new(
         animation_id,
-        AnimationSettings {
+        AnimationInstanceSettings {
             playback_mode: PlaybackMode::PingPong,
             ..settings.clone()
         },
@@ -155,12 +155,12 @@ fn test_animation_player_get_effective_time() {
 fn setup_animation_player(
     engine: &mut AnimationEngine,
     animation_data: AnimationData,
-    settings: AnimationSettings,
+    settings: AnimationInstanceSettings,
     custom_duration: impl Into<AnimationTime>,
 ) -> (String, String) {
     let animation_id = engine.load_animation_data(animation_data).unwrap();
     let player_id = engine.create_player();
-    let anim_instance = Animation::new(animation_id.clone(), settings, custom_duration);
+    let anim_instance = AnimationInstance::new(animation_id.clone(), settings, custom_duration);
     engine
         .get_player_mut(&player_id)
         .unwrap()
@@ -174,7 +174,7 @@ fn test_animation_player_go_to() {
     let (_, player_id) = setup_animation_player(
         &mut engine,
         AnimationData::new("anim1", "Test Animation"),
-        AnimationSettings {
+        AnimationInstanceSettings {
             playback_mode: PlaybackMode::Loop,
             ..Default::default()
         },
@@ -199,7 +199,7 @@ fn test_animation_engine_update_playback() {
     let (animation_id, player_id) = setup_animation_player(
         &mut engine,
         AnimationData::new("anim1", "Test Animation"),
-        AnimationSettings {
+        AnimationInstanceSettings {
             playback_mode: PlaybackMode::Loop,
             ..Default::default()
         },
@@ -240,9 +240,9 @@ fn test_animation_engine_update_playback() {
     player_state_once.mode = PlaybackMode::Once;
 
     let player_once = engine.get_player_mut(&player_id_once).unwrap();
-    let anim_instance_once = Animation::new(
+    let anim_instance_once = AnimationInstance::new(
         animation_id.clone(),
-        AnimationSettings::new(),
+        AnimationInstanceSettings::new(),
         Duration::from_secs(5),
     );
     player_once.add_instance(anim_instance_once);
@@ -270,7 +270,7 @@ fn test_playback_mode_once_forward() {
     let (_, player_id) = setup_animation_player(
         &mut engine,
         AnimationData::new("test_anim", "Test Animation"),
-        AnimationSettings {
+        AnimationInstanceSettings {
             playback_mode: PlaybackMode::Once,
             ..Default::default()
         },
@@ -341,7 +341,7 @@ fn test_playback_mode_once_reverse() {
     let (_, player_id) = setup_animation_player(
         &mut engine,
         AnimationData::new("test_anim", "Test Animation"),
-        AnimationSettings::new(),
+        AnimationInstanceSettings::new(),
         Duration::from_secs(10),
     );
 
@@ -399,7 +399,7 @@ fn test_playback_mode_loop_forward() {
     let (_, player_id) = setup_animation_player(
         &mut engine,
         AnimationData::new("test_anim", "Test Animation"),
-        AnimationSettings::default(),
+        AnimationInstanceSettings::default(),
         Duration::from_secs(10),
     );
 
@@ -448,7 +448,7 @@ fn test_playback_mode_loop_reverse() {
     let (_, player_id) = setup_animation_player(
         &mut engine,
         AnimationData::new("test_anim", "Test Animation"),
-        AnimationSettings::default(),
+        AnimationInstanceSettings::default(),
         Duration::from_secs(10),
     );
 
@@ -490,7 +490,7 @@ fn test_playback_mode_pingpong_forward_to_reverse() {
     let (_, player_id) = setup_animation_player(
         &mut engine,
         AnimationData::new("test_anim", "Test Animation"),
-        AnimationSettings::default(),
+        AnimationInstanceSettings::default(),
         Duration::from_secs(10),
     );
 
@@ -543,7 +543,7 @@ fn test_playback_mode_pingpong_reverse_to_forward() {
     let (_, player_id) = setup_animation_player(
         &mut engine,
         AnimationData::new("test_anim", "Test Animation"),
-        AnimationSettings::default(),
+        AnimationInstanceSettings::default(),
         Duration::from_secs(10),
     );
 
@@ -587,7 +587,7 @@ fn test_playback_mode_pingpong_full_cycle() {
     let (_, player_id) = setup_animation_player(
         &mut engine,
         AnimationData::new("test_anim", "Test Animation"),
-        AnimationSettings::default(),
+        AnimationInstanceSettings::default(),
         Duration::from_secs(5), // Short duration for easier testing
     );
 
@@ -626,7 +626,7 @@ fn test_mixed_playback_speeds() {
     let (_, player_id) = setup_animation_player(
         &mut engine,
         AnimationData::new("test_anim", "Test Animation"),
-        AnimationSettings::default(),
+        AnimationInstanceSettings::default(),
         Duration::from_secs(10),
     );
 

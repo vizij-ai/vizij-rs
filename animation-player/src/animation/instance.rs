@@ -21,7 +21,7 @@ impl Default for PlaybackMode {
 
 /// Settings for a specific animation instance.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct AnimationSettings {
+pub struct AnimationInstanceSettings {
     /// The time at which this instance begins relative to the player's timeline.
     pub instance_start_time: AnimationTime,
     /// The duration this instance should play for. If None, plays for the full animation duration.
@@ -38,7 +38,7 @@ pub struct AnimationSettings {
     pub metadata: HashMap<String, String>,
 }
 
-impl AnimationSettings {
+impl AnimationInstanceSettings {
     /// Creates new default instance settings for a given animation ID.
     pub fn new() -> Self {
         Self {
@@ -53,7 +53,7 @@ impl AnimationSettings {
     }
 }
 
-impl Default for AnimationSettings {
+impl Default for AnimationInstanceSettings {
     fn default() -> Self {
         Self::new()
     }
@@ -61,11 +61,11 @@ impl Default for AnimationSettings {
 
 /// Represents an active animation instance being played by the AnimationPlayer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Animation {
+pub struct AnimationInstance {
     /// The unique ID of the animation data this instance refers to.
     pub animation_id: String,
     /// The settings defining this instance's behavior.
-    pub settings: AnimationSettings,
+    pub settings: AnimationInstanceSettings,
     /// The current number of loops completed for this instance.
     pub current_loop_count: u32,
     /// The current direction of playback for PingPong loop mode (true for forward, false for backward).
@@ -75,12 +75,12 @@ pub struct Animation {
     pub animation_data_duration: AnimationTime,
 }
 
-impl Animation {
+impl AnimationInstance {
     /// Creates a new animation instance.
     #[inline]
     pub fn new(
         animation_id: impl Into<String>,
-        settings: AnimationSettings,
+        settings: AnimationInstanceSettings,
         animation_data_duration: impl Into<AnimationTime>,
     ) -> Self {
         Self {

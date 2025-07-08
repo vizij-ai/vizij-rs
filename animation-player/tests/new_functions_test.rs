@@ -1,5 +1,5 @@
 use animation_player::{
-    animation::{keypoint::AnimationKeypoint, track::AnimationTrack, AnimationSettings},
+    animation::{keypoint::AnimationKeypoint, track::AnimationTrack, AnimationInstanceSettings},
     value::Value,
     AnimationData, AnimationEngine, AnimationEngineConfig, AnimationTime,
 };
@@ -59,7 +59,7 @@ fn test_animation_ids_and_add_animation_to_player() {
     assert_eq!(instance_ids[0], instance_id);
 
     // Add animation to player with custom settings
-    let custom_settings = AnimationSettings {
+    let custom_settings = AnimationInstanceSettings {
         timescale: 2.0,
         enabled: true,
         ..Default::default()
