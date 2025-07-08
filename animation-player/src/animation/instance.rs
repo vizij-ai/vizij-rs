@@ -24,8 +24,6 @@ impl Default for PlaybackMode {
 pub struct AnimationInstanceSettings {
     /// The time at which this instance begins relative to the player's timeline.
     pub instance_start_time: AnimationTime,
-    /// The duration this instance should play for. If None, plays for the full animation duration.
-    pub duration: Option<AnimationTime>,
     /// The playback speed multiplier for this instance.
     pub timescale: f64,
     /// How the animation should loop.
@@ -43,7 +41,6 @@ impl AnimationInstanceSettings {
     pub fn new() -> Self {
         Self {
             instance_start_time: AnimationTime::zero(),
-            duration: None,
             timescale: 1.0,
             playback_mode: PlaybackMode::PingPong,
             loop_count: None,
@@ -107,19 +104,16 @@ impl AnimationInstance {
         let scaled_time =
             AnimationTime::from_seconds(scaled_time).unwrap_or_else(|_| AnimationTime::zero());
 
-        let effective_duration = self
-            .settings
-            .duration
-            .unwrap_or(self.animation_data_duration);
-
-        if effective_duration.as_seconds() <= 0.0 {
+        if self.animation_data_duration.as_seconds() <= 0.0 {
             return AnimationTime::zero();
         }
 
         let looped_time = match self.settings.playback_mode {
-            PlaybackMode::Once => scaled_time.clamp(AnimationTime::zero(), effective_duration),
+            PlaybackMode::Once => {
+                scaled_time.clamp(AnimationTime::zero(), self.animation_data_duration)
+            }
             PlaybackMode::Loop => {
-                let total_animation_seconds = effective_duration.as_seconds();
+                let total_animation_seconds = self.animation_data_duration.as_seconds();
                 if total_animation_seconds > 0.0 {
                     let looped_seconds = scaled_time.as_seconds() % total_animation_seconds;
                     AnimationTime::from_seconds(looped_seconds)
@@ -129,7 +123,7 @@ impl AnimationInstance {
                 }
             }
             PlaybackMode::PingPong => {
-                let total_animation_seconds = effective_duration.as_seconds();
+                let total_animation_seconds = self.animation_data_duration.as_seconds();
                 if total_animation_seconds > 0.0 {
                     let cycle_duration = total_animation_seconds * 2.0; // One full ping-pong cycle
                     let cycle_time = scaled_time.as_seconds() % cycle_duration;
@@ -162,16 +156,12 @@ impl AnimationInstance {
             .unwrap_or_else(|_| AnimationTime::zero());
 
         let scaled_time_seconds = instance_relative_time.as_seconds() * self.settings.timescale;
-        let effective_duration = self
-            .settings
-            .duration
-            .unwrap_or(self.animation_data_duration);
 
-        if effective_duration.as_seconds() <= 0.0 {
+        if self.animation_data_duration.as_seconds() <= 0.0 {
             return false;
         }
 
-        let total_animation_seconds = effective_duration.as_seconds();
+        let total_animation_seconds = self.animation_data_duration.as_seconds();
         let playback_time_seconds = scaled_time_seconds;
 
         match self.settings.playback_mode {

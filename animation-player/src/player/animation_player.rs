@@ -244,12 +244,7 @@ impl AnimationPlayer {
         self.instances
             .values()
             .filter(|instance| instance.settings.enabled)
-            .map(|instance| {
-                instance
-                    .settings
-                    .duration
-                    .unwrap_or(instance.animation_data_duration)
-            })
+            .map(|instance| instance.animation_data_duration)
             .max()
             .unwrap_or(AnimationTime::zero())
     }
