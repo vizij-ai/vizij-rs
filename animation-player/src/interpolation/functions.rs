@@ -75,12 +75,6 @@ impl Interpolator for LinearInterpolation {
             });
         }
 
-        if start_components.len() != end_components.len() {
-            return Err(AnimationError::InterpolationError {
-                reason: "Component count mismatch".to_string(),
-            });
-        }
-
         if let (Value::Transform(start_transform), Value::Transform(end_transform)) = (start, end) {
             // Interpolate position and scale linearly
             let interpolated_position: Vec<f64> = vec![
