@@ -11,7 +11,6 @@ pub enum InterpolationType {
     Spring,
     CatmullRom,
     Hermite,
-    BSpline,
     Custom(u32), // Custom function ID
 }
 
@@ -27,7 +26,6 @@ impl InterpolationType {
             Self::Spring => "spring",
             Self::CatmullRom => "catmullrom",
             Self::Hermite => "hermite",
-            Self::BSpline => "bspline",
             Self::Custom(_) => "custom",
         }
     }
@@ -43,7 +41,6 @@ impl From<&str> for InterpolationType {
             "spring" => Self::Spring,
             "catmullrom" => Self::CatmullRom,
             "hermite" => Self::Hermite,
-            "bspline" => Self::BSpline,
             _ => Self::Linear, // Default to linear for unknown types
         }
     }
@@ -66,7 +63,6 @@ impl From<TransitionVariant> for InterpolationType {
             | TransitionVariant::StepBefore => Self::Step,
             TransitionVariant::Catmullrom => Self::CatmullRom,
             TransitionVariant::Hermite => Self::Hermite,
-            TransitionVariant::BSpline => Self::BSpline,
             TransitionVariant::EaseIn
             | TransitionVariant::EaseOut
             | TransitionVariant::EaseInOut => Self::Cubic,
