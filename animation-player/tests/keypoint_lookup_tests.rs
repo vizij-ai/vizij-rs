@@ -2,8 +2,8 @@
 //! These tests focus on the surrounding_keypoints() method and track value calculations
 
 use animation_player::{
-    value::Vector3, AnimationKeypoint, AnimationTime, AnimationTrack, InterpolationRegistry,
-    TimeRange, Value,
+    value::Vector3, AnimationData, AnimationKeypoint, AnimationTime, AnimationTrack,
+    InterpolationRegistry, TimeRange, Value,
 };
 
 /// Helper function to create a test track with float keypoints
@@ -261,9 +261,14 @@ fn test_value_at_time_float_interpolation() {
         (6.0, 15.0), // At fourth keypoint
     ];
     let mut interpolation_registry = InterpolationRegistry::default();
+    let animation_data = AnimationData::new("test", "test");
     for (time, expected_value) in test_cases {
-        let value =
-            track.value_at_time(AnimationTime::from(time), &mut interpolation_registry, None);
+        let value = track.value_at_time(
+            AnimationTime::from(time),
+            &mut interpolation_registry,
+            None,
+            &animation_data,
+        );
         assert!(value.is_some(), "Should get value at time {}", time);
 
         if let Value::Float(actual_value) = value.unwrap() {
@@ -285,9 +290,15 @@ fn test_value_at_time_float_interpolation() {
 fn test_value_at_time_vector3_interpolation() {
     let track = create_test_vector3_track();
     let mut interpolation_registry = InterpolationRegistry::default();
+    let animation_data = AnimationData::new("test", "test");
 
     // Test at midpoint between first and second keypoints (time 1.0)
-    let value = track.value_at_time(AnimationTime::from(1.0), &mut interpolation_registry, None);
+    let value = track.value_at_time(
+        AnimationTime::from(1.0),
+        &mut interpolation_registry,
+        None,
+        &animation_data,
+    );
     assert!(value.is_some());
 
     if let Value::Vector3(vec) = value.unwrap() {
@@ -317,9 +328,15 @@ fn test_value_at_time_vector3_interpolation() {
 fn test_value_at_time_outside_range() {
     let track = create_test_float_track();
     let mut interpolation_registry = InterpolationRegistry::default();
+    let animation_data = AnimationData::new("test", "test");
 
     // Before first keypoint - should return first keypoint value
-    let value = track.value_at_time(AnimationTime::from(-1.0), &mut interpolation_registry, None);
+    let value = track.value_at_time(
+        AnimationTime::from(-1.0),
+        &mut interpolation_registry,
+        None,
+        &animation_data,
+    );
     assert!(value.is_some());
     if let Value::Float(val) = value.unwrap() {
         assert!(
@@ -329,7 +346,12 @@ fn test_value_at_time_outside_range() {
     }
 
     // After last keypoint - should return last keypoint value
-    let value = track.value_at_time(AnimationTime::from(7.0), &mut interpolation_registry, None);
+    let value = track.value_at_time(
+        AnimationTime::from(7.0),
+        &mut interpolation_registry,
+        None,
+        &animation_data,
+    );
     assert!(value.is_some());
     if let Value::Float(val) = value.unwrap() {
         assert!(
@@ -344,8 +366,14 @@ fn test_value_at_time_outside_range() {
 fn test_value_at_time_empty_track() {
     let track = AnimationTrack::new("empty_track", "test.empty");
     let mut interpolation_registry = InterpolationRegistry::default();
+    let animation_data = AnimationData::new("test", "test");
 
-    let value = track.value_at_time(AnimationTime::from(1.0), &mut interpolation_registry, None);
+    let value = track.value_at_time(
+        AnimationTime::from(1.0),
+        &mut interpolation_registry,
+        None,
+        &animation_data,
+    );
     assert!(
         value.is_none(),
         "Empty track should return None for value_at_time"
@@ -358,10 +386,16 @@ fn test_value_at_time_disabled_track() {
     let mut track = create_test_float_track();
     track.set_enabled(false);
     let mut interpolation_registry = InterpolationRegistry::default();
+    let animation_data = AnimationData::new("test", "test");
 
     // Even though track has keypoints, it's disabled so value_at_time might still work
     // This tests the basic interpolation logic regardless of enabled state
-    let value = track.value_at_time(AnimationTime::from(1.0), &mut interpolation_registry, None);
+    let value = track.value_at_time(
+        AnimationTime::from(1.0),
+        &mut interpolation_registry,
+        None,
+        &animation_data,
+    );
     assert!(
         value.is_some(),
         "Disabled track should still interpolate values"
@@ -500,6 +534,7 @@ fn test_very_close_time_values() {
 fn test_interpolation_at_boundaries() {
     let track = create_test_float_track();
     let mut interpolation_registry = InterpolationRegistry::default();
+    let animation_data = AnimationData::new("test", "test");
 
     // Test interpolation very close to keypoints
     let epsilon = 0.0001;
@@ -509,6 +544,7 @@ fn test_interpolation_at_boundaries() {
         AnimationTime::from(2.0 - epsilon),
         &mut interpolation_registry,
         None,
+        &animation_data,
     );
     assert!(value.is_some());
     if let Value::Float(val) = value.unwrap() {
@@ -525,6 +561,7 @@ fn test_interpolation_at_boundaries() {
         AnimationTime::from(2.0 + epsilon),
         &mut interpolation_registry,
         None,
+        &animation_data,
     );
     assert!(value.is_some());
     if let Value::Float(val) = value.unwrap() {

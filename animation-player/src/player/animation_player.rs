@@ -221,7 +221,7 @@ impl AnimationPlayer {
         }
 
         let transition = animation_data.get_track_transition_for_time(time, &track.id);
-        let value = track.value_at_time(time, interpolation_registry, transition);
+        let value = track.value_at_time(time, interpolation_registry, transition, animation_data);
         return Ok(value);
     }
 
@@ -348,8 +348,13 @@ impl AnimationPlayer {
         }
 
         let transition = animation_data.get_track_transition_for_time(time, &track.id);
-        let value =
-            track.derivative_at_time(time, interpolation_registry, transition, derivative_width);
+        let value = track.derivative_at_time(
+            time,
+            interpolation_registry,
+            transition,
+            derivative_width,
+            animation_data,
+        );
         return Ok(value);
     }
 }

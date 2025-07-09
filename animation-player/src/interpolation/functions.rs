@@ -1,8 +1,11 @@
+use crate::animation::data::AnimationData;
 use crate::interpolation::context::InterpolationContext;
+use crate::interpolation::parameters::InterpolationParams;
 use crate::interpolation::schema::{InterpolationParameterSchema, ParameterDefinition};
 use crate::interpolation::types::InterpolationType;
 use crate::value::ValueType;
 use crate::{AnimationError, Value};
+
 use std::collections::HashMap;
 
 /// Trait for interpolation functions
@@ -16,6 +19,7 @@ pub trait Interpolator: Send + Sync {
         start: &Value,
         end: &Value,
         context: &InterpolationContext,
+        animation: &AnimationData,
     ) -> Result<Value, AnimationError>;
 
     /// Get the interpolation type
@@ -55,6 +59,7 @@ impl Interpolator for LinearInterpolation {
         start: &Value,
         end: &Value,
         context: &InterpolationContext,
+        _animation: &AnimationData,
     ) -> Result<Value, AnimationError> {
         if !self.can_interpolate(start, end) {
             return Err(AnimationError::InterpolationError {
@@ -157,6 +162,7 @@ impl Interpolator for CubicInterpolation {
         start: &Value,
         end: &Value,
         context: &InterpolationContext,
+        _animation: &AnimationData,
     ) -> Result<Value, AnimationError> {
         if !self.can_interpolate(start, end) {
             return Err(AnimationError::InterpolationError {
@@ -214,6 +220,7 @@ impl Interpolator for StepInterpolation {
         start: &Value,
         end: &Value,
         context: &InterpolationContext,
+        animation: &AnimationData,
     ) -> Result<Value, AnimationError> {
         if !self.can_interpolate(start, end) {
             return Err(AnimationError::InterpolationError {
@@ -226,7 +233,17 @@ impl Interpolator for StepInterpolation {
         }
 
         // Step threshold - when to jump to end value
-        let threshold = context.get_property_or("threshold", 1.0);
+        let threshold = context.get_property("threshold").unwrap_or_else(|| {
+            if let Some(params) = animation
+                .default_interpolation
+                .get(&self.interpolation_type())
+            {
+                if let InterpolationParams::Step(step_params) = params {
+                    return step_params.point as f64;
+                }
+            }
+            1.0
+        });
 
         if context.t >= threshold {
             Ok(end.clone())
@@ -287,6 +304,7 @@ impl Interpolator for BezierInterpolation {
         start: &Value,
         end: &Value,
         context: &InterpolationContext,
+        animation: &AnimationData,
     ) -> Result<Value, AnimationError> {
         if !self.can_interpolate(start, end) {
             return Err(AnimationError::InterpolationError {
@@ -298,7 +316,32 @@ impl Interpolator for BezierInterpolation {
             });
         }
 
-        let eased_t = cubic_bezier(context.t.clamp(0.0, 1.0), &self.control_points);
+        let control_points = if let (Some(x1), Some(y1), Some(x2), Some(y2)) = (
+            context.get_property("x1"),
+            context.get_property("y1"),
+            context.get_property("x2"),
+            context.get_property("y2"),
+        ) {
+            [x1, y1, x2, y2]
+        } else if let Some(params) = animation
+            .default_interpolation
+            .get(&self.interpolation_type())
+        {
+            if let InterpolationParams::Bezier(bezier_params) = params {
+                [
+                    bezier_params.x1 as f64,
+                    bezier_params.y1 as f64,
+                    bezier_params.x2 as f64,
+                    bezier_params.y2 as f64,
+                ]
+            } else {
+                self.control_points
+            }
+        } else {
+            self.control_points
+        };
+
+        let eased_t = cubic_bezier(context.t.clamp(0.0, 1.0), &control_points);
 
         let start_components = start.interpolatable_components();
         let end_components = end.interpolatable_components();
@@ -444,6 +487,7 @@ impl Interpolator for SpringInterpolation {
         start: &Value,
         end: &Value,
         context: &InterpolationContext,
+        animation: &AnimationData,
     ) -> Result<Value, AnimationError> {
         if !self.can_interpolate(start, end) {
             return Err(AnimationError::InterpolationError {
@@ -455,7 +499,31 @@ impl Interpolator for SpringInterpolation {
             });
         }
 
-        let spring_t = spring_ease(context.t.clamp(0.0, 1.0), self.damping, self.stiffness);
+        let damping = context.get_property("damping").unwrap_or_else(|| {
+            if let Some(params) = animation
+                .default_interpolation
+                .get(&self.interpolation_type())
+            {
+                if let InterpolationParams::Spring(spring_params) = params {
+                    return spring_params.damping as f64;
+                }
+            }
+            self.damping
+        });
+
+        let stiffness = context.get_property("stiffness").unwrap_or_else(|| {
+            if let Some(params) = animation
+                .default_interpolation
+                .get(&self.interpolation_type())
+            {
+                if let InterpolationParams::Spring(spring_params) = params {
+                    return spring_params.stiffness as f64;
+                }
+            }
+            self.stiffness
+        });
+
+        let spring_t = spring_ease(context.t.clamp(0.0, 1.0), damping, stiffness);
 
         let start_components = start.interpolatable_components();
         let end_components = end.interpolatable_components();
@@ -552,6 +620,7 @@ impl Interpolator for EaseInInterpolation {
         start: &Value,
         end: &Value,
         context: &InterpolationContext,
+        _animation: &AnimationData,
     ) -> Result<Value, AnimationError> {
         if !self.can_interpolate(start, end) {
             return Err(AnimationError::InterpolationError {
@@ -609,6 +678,7 @@ impl Interpolator for EaseOutInterpolation {
         start: &Value,
         end: &Value,
         context: &InterpolationContext,
+        _animation: &AnimationData,
     ) -> Result<Value, AnimationError> {
         if !self.can_interpolate(start, end) {
             return Err(AnimationError::InterpolationError {
@@ -666,6 +736,7 @@ impl Interpolator for EaseInOutInterpolation {
         start: &Value,
         end: &Value,
         context: &InterpolationContext,
+        _animation: &AnimationData,
     ) -> Result<Value, AnimationError> {
         if !self.can_interpolate(start, end) {
             return Err(AnimationError::InterpolationError {

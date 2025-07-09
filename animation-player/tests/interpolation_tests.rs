@@ -6,23 +6,26 @@ use animation_player::interpolation::{
     },
     registry::InterpolationRegistry,
 };
-use animation_player::value::{Value, ValueType, Vector3};
-use animation_player::AnimationTime;
+use animation_player::value::{ValueType, Vector3};
 use animation_player::Interpolator;
+use animation_player::{AnimationData, AnimationTime, Value};
 
 #[test]
-fn test_linear_interpolation() {
-    let linear = LinearInterpolation;
+fn test_linear_interpolation_float() {
     let start = Value::Float(0.0);
     let end = Value::Float(10.0);
     let context = InterpolationContext::new(
         AnimationTime::zero(),
-        AnimationTime::from_seconds(2.0).unwrap(),
         AnimationTime::from_seconds(1.0).unwrap(),
+        AnimationTime::from_seconds(0.5).unwrap(),
     )
     .unwrap();
+    let linear = LinearInterpolation;
+    let animation_data = AnimationData::new("test", "test");
 
-    let result = linear.interpolate(&start, &end, &context).unwrap();
+    let result = linear
+        .interpolate(&start, &end, &context, &animation_data)
+        .unwrap();
     if let Value::Float(f) = result {
         assert!((f - 5.0).abs() < 0.001);
     } else {
@@ -31,18 +34,21 @@ fn test_linear_interpolation() {
 }
 
 #[test]
-fn test_cubic_interpolation() {
-    let cubic = CubicInterpolation;
+fn test_cubic_interpolation_float() {
     let start = Value::Float(0.0);
     let end = Value::Float(10.0);
     let context = InterpolationContext::new(
         AnimationTime::zero(),
-        AnimationTime::from_seconds(2.0).unwrap(),
         AnimationTime::from_seconds(1.0).unwrap(),
+        AnimationTime::from_seconds(0.5).unwrap(),
     )
     .unwrap();
+    let cubic = CubicInterpolation;
+    let animation_data = AnimationData::new("test", "test");
 
-    let result = cubic.interpolate(&start, &end, &context).unwrap();
+    let result = cubic
+        .interpolate(&start, &end, &context, &animation_data)
+        .unwrap();
     if let Value::Float(f) = result {
         // Cubic interpolation should give a different result than linear
         assert!(f > 4.0 && f < 6.0);
@@ -56,6 +62,7 @@ fn test_step_interpolation() {
     let step = StepInterpolation;
     let start = Value::Float(0.0);
     let end = Value::Float(10.0);
+    let animation_data = AnimationData::new("test", "test");
 
     // Before threshold
     let context1 = InterpolationContext::new(
@@ -65,7 +72,9 @@ fn test_step_interpolation() {
     )
     .unwrap();
 
-    let result1 = step.interpolate(&start, &end, &context1).unwrap();
+    let result1 = step
+        .interpolate(&start, &end, &context1, &animation_data)
+        .unwrap();
     if let Value::Float(f) = result1 {
         assert_eq!(f, 0.0);
     }
@@ -78,7 +87,9 @@ fn test_step_interpolation() {
     )
     .unwrap();
 
-    let result2 = step.interpolate(&start, &end, &context2).unwrap();
+    let result2 = step
+        .interpolate(&start, &end, &context2, &animation_data)
+        .unwrap();
     if let Value::Float(f) = result2 {
         assert_eq!(f, 10.0);
     }
@@ -95,8 +106,11 @@ fn test_vector_interpolation() {
         AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap();
+    let animation_data = AnimationData::new("test", "test");
 
-    let result = linear.interpolate(&start, &end, &context).unwrap();
+    let result = linear
+        .interpolate(&start, &end, &context, &animation_data)
+        .unwrap();
     if let Value::Vector3(v) = result {
         assert!((v.x - 5.0).abs() < 0.001);
         assert!((v.y - 10.0).abs() < 0.001);
@@ -119,8 +133,11 @@ fn test_euler_interpolation() {
         AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap();
+    let animation_data = AnimationData::new("test", "test");
 
-    let result = linear.interpolate(&start, &end, &context).unwrap();
+    let result = linear
+        .interpolate(&start, &end, &context, &animation_data)
+        .unwrap();
     if let Value::Euler(e) = result {
         assert!((e.r - 45.0).abs() < 0.001);
         assert!((e.p - 90.0).abs() < 0.001);
@@ -142,10 +159,11 @@ fn test_interpolation_registry() {
         AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap();
+    let animation_data = AnimationData::new("test", "test");
 
     // Test linear interpolation
     let result = registry
-        .interpolate("linear", &start, &end, &context)
+        .interpolate("linear", &start, &end, &context, &animation_data)
         .unwrap();
     if let Value::Float(f) = result {
         assert!((f - 5.0).abs() < 0.001);
@@ -153,7 +171,7 @@ fn test_interpolation_registry() {
 
     // Test cubic interpolation
     let result = registry
-        .interpolate("cubic", &start, &end, &context)
+        .interpolate("cubic", &start, &end, &context, &animation_data)
         .unwrap();
     if let Value::Float(f) = result {
         assert!(f > 4.0 && f < 6.0);
@@ -161,7 +179,7 @@ fn test_interpolation_registry() {
 
     // Test unknown interpolation
     assert!(registry
-        .interpolate("unknown", &start, &end, &context)
+        .interpolate("unknown", &start, &end, &context, &animation_data)
         .is_err());
 }
 
@@ -177,17 +195,18 @@ fn test_interpolation_caching() {
         AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap();
+    let animation_data = AnimationData::new("test", "test");
 
     // First call should be a cache miss
     let _ = registry
-        .interpolate("linear", &start, &end, &context)
+        .interpolate("linear", &start, &end, &context, &animation_data)
         .unwrap();
     assert_eq!(registry.metrics().cache_misses, 1);
     assert_eq!(registry.metrics().cache_hits, 0);
 
     // Second call with same parameters should be a cache hit
     let _ = registry
-        .interpolate("linear", &start, &end, &context)
+        .interpolate("linear", &start, &end, &context, &animation_data)
         .unwrap();
     assert_eq!(registry.metrics().cache_hits, 1);
 }
@@ -296,8 +315,11 @@ fn test_bezier_interpolation_specific_points() {
         AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap(); // t = 0.5
+    let animation_data = AnimationData::new("test", "test");
 
-    let result = bezier.interpolate(&start, &end, &context).unwrap();
+    let result = bezier
+        .interpolate(&start, &end, &context, &animation_data)
+        .unwrap();
     if let Value::Float(f) = result {
         assert!((f - 5.0).abs() < 0.001); // Should be linear
     } else {
@@ -316,8 +338,11 @@ fn test_spring_interpolation_specific_params() {
         AnimationTime::from_seconds(1.0).unwrap(),
     )
     .unwrap(); // t = 0.5
+    let animation_data = AnimationData::new("test", "test");
 
-    let result = spring.interpolate(&start, &end, &context).unwrap();
+    let result = spring
+        .interpolate(&start, &end, &context, &animation_data)
+        .unwrap();
     if let Value::Float(f) = result {
         // Check if it's a reasonable spring value (not linear)
         assert!((f - 5.0).abs() > 0.1); // Ensure it's not linear

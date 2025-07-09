@@ -79,6 +79,7 @@ impl InterpolationRegistry {
         start: &Value,
         end: &Value,
         context: &crate::interpolation::context::InterpolationContext,
+        animation: &crate::AnimationData,
     ) -> Result<Value, AnimationError> {
         let timer = if self.enable_metrics {
             Some(Timer::new())
@@ -114,7 +115,7 @@ impl InterpolationRegistry {
         let function = self.get_function(function_name).unwrap();
 
         // Perform interpolation
-        let result = function.interpolate(start, end, context)?;
+        let result = function.interpolate(start, end, context, animation)?;
 
         // Cache result
         if self.enable_caching {
@@ -180,6 +181,7 @@ impl InterpolationRegistry {
         start: &Value,
         end: &Value,
         context: &crate::interpolation::context::InterpolationContext,
+        animation: &crate::AnimationData,
     ) -> Result<Value, AnimationError> {
         // Create a context with transition parameters only if needed
         let context_with_params = if transition.parameters.is_empty() {
@@ -194,7 +196,13 @@ impl InterpolationRegistry {
             new_context
         };
 
-        self.interpolate(transition.variant.name(), start, end, &context_with_params)
+        self.interpolate(
+            transition.variant.name(),
+            start,
+            end,
+            &context_with_params,
+            animation,
+        )
     }
 }
 

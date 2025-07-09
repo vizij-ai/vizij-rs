@@ -5,6 +5,7 @@
 
 use crate::{
     animation::{AnimationTransition, KeypointId, TransitionVariant},
+    interpolation::{InterpolationParams, InterpolationType},
     AnimationData, AnimationKeypoint, AnimationTime, AnimationTrack, Value,
 };
 use serde::Deserialize;
@@ -57,6 +58,8 @@ struct StudioAnimationData {
     groups: serde_json::Value,
     #[serde(default)]
     transitions: StudioTransitions,
+    #[serde(default)]
+    pub default_interpolation: HashMap<InterpolationType, InterpolationParams>,
     duration: u64,
 }
 
@@ -69,6 +72,7 @@ struct StudioAnimationData {
 /// * `AnimationData` - The converted animation data
 fn convert_test_animation(test_data: StudioAnimationData) -> AnimationData {
     let mut animation = AnimationData::new(&test_data.id, &test_data.name);
+    animation.default_interpolation = test_data.default_interpolation;
     let duration_seconds = test_data.duration as f64 / 1000.0;
 
     for track_data in test_data.tracks {

@@ -1,3 +1,4 @@
+use crate::animation::data::AnimationData;
 use crate::animation::ids::{KeypointId, TrackId};
 use crate::animation::keypoint::AnimationKeypoint;
 use crate::animation::transition::AnimationTransition;
@@ -197,6 +198,7 @@ impl AnimationTrack {
         interpolation_registry: &mut InterpolationRegistry,
         transition: Option<&AnimationTransition>,
         derivative_width: Option<AnimationTime>,
+        animation_data: &AnimationData,
     ) -> Option<Value> {
         let width = derivative_width
             .unwrap_or_else(|| AnimationTime::from_millis(1.0).unwrap_or(AnimationTime::zero()));
@@ -224,8 +226,10 @@ impl AnimationTrack {
         };
 
         // Get values at the two time points
-        let value_before = self.value_at_time(t1, interpolation_registry, transition)?;
-        let value_after = self.value_at_time(t2, interpolation_registry, transition)?;
+        let value_before =
+            self.value_at_time(t1, interpolation_registry, transition, animation_data)?;
+        let value_after =
+            self.value_at_time(t2, interpolation_registry, transition, animation_data)?;
 
         // Calculate numerical derivative
         Value::calculate_derivative(&value_before, &value_after, delta_time)
@@ -237,6 +241,7 @@ impl AnimationTrack {
         time: AnimationTime,
         interpolation_registry: &mut InterpolationRegistry,
         transition: Option<&AnimationTransition>,
+        animation_data: &AnimationData,
     ) -> Option<Value> {
         if self.keypoints.is_empty() {
             return None;
@@ -268,12 +273,19 @@ impl AnimationTrack {
                             &prev_kp.value,
                             &next_kp.value,
                             &context,
+                            animation_data,
                         )
                         .ok()
                 } else {
                     // Fallback to default cubic interpolation
                     interpolation_registry
-                        .interpolate("cubic", &prev_kp.value, &next_kp.value, &context)
+                        .interpolate(
+                            "cubic",
+                            &prev_kp.value,
+                            &next_kp.value,
+                            &context,
+                            animation_data,
+                        )
                         .ok()
                 };
                 result

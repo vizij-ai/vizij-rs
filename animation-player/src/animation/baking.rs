@@ -307,7 +307,7 @@ impl AnimationBaking for AnimationData {
 
                 // Get interpolated value at this time using track's built-in method
                 if let Some(mut value) =
-                    track.value_at_time(clamped_time, interpolation_registry, transition)
+                    track.value_at_time(clamped_time, interpolation_registry, transition, self)
                 {
                     // Apply track weight if configured
                     if config.apply_track_weights && track.weight != 1.0 {
@@ -327,6 +327,7 @@ impl AnimationBaking for AnimationData {
                         interpolation_registry,
                         transition,
                         config.derivative_width,
+                        self,
                     ) {
                         println!(
                             "{:?} {:?} {:?} {:?}",

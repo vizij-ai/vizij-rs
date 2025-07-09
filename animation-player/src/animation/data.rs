@@ -3,6 +3,7 @@ use crate::animation::ids::{KeypointId, TrackId};
 use crate::animation::metadata::AnimationMetadata;
 use crate::animation::track::AnimationTrack;
 use crate::animation::transition::AnimationTransition;
+use crate::interpolation::{InterpolationParams, InterpolationType};
 use crate::AnimationTime;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -24,6 +25,9 @@ pub struct AnimationData {
     /// Transitions between keypoints that define interpolation behavior
     #[serde(default)]
     pub transitions: HashMap<String, AnimationTransition>,
+    /// Default interpolation parameters for the animation
+    #[serde(default)]
+    pub default_interpolation: HashMap<InterpolationType, InterpolationParams>,
 }
 
 impl AnimationData {
@@ -37,6 +41,7 @@ impl AnimationData {
             tracks: HashMap::new(),
             groups: HashMap::new(),
             transitions: HashMap::new(),
+            default_interpolation: HashMap::new(),
         }
     }
 
