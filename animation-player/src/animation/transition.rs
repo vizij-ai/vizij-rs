@@ -22,6 +22,7 @@ pub enum TransitionVariant {
     EaseIn,
     EaseOut,
     EaseInOut,
+    BSpline,
 }
 
 impl From<&str> for TransitionVariant {
@@ -43,6 +44,7 @@ impl From<&str> for TransitionVariant {
             "ease_in" => Self::EaseIn,
             "ease_out" => Self::EaseOut,
             "ease_in_out" => Self::EaseInOut,
+            "b_spline" => Self::BSpline,
             _ => Self::Cubic, // Default to cubic for unknown types
         }
     }
@@ -69,6 +71,7 @@ impl TransitionVariant {
             Self::EaseIn => "ease_in",
             Self::EaseOut => "ease_out",
             Self::EaseInOut => "ease_in_out",
+            Self::BSpline => "b_spline",
         }
     }
 }

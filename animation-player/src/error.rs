@@ -173,6 +173,18 @@ impl From<bincode::error::DecodeError> for AnimationError {
     }
 }
 
+impl From<String> for AnimationError {
+    fn from(s: String) -> Self {
+        AnimationError::new(s)
+    }
+}
+
+impl From<&str> for AnimationError {
+    fn from(s: &str) -> Self {
+        AnimationError::new(s)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

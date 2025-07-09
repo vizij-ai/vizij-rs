@@ -116,6 +116,29 @@ impl AnimationTrack {
         self.keypoints.iter_mut().find(|k| k.id == id)
     }
 
+    /// Find the indices of the keypoints that surround the given time
+    pub fn keypoint_indices_at_time(&self, time: AnimationTime) -> (Option<usize>, Option<usize>) {
+        if self.keypoints.is_empty() {
+            return (None, None);
+        }
+
+        match self
+            .keypoints
+            .binary_search_by(|k| k.time.partial_cmp(&time).unwrap())
+        {
+            Ok(idx) => (Some(idx), Some(idx)), // Exact match
+            Err(idx) => {
+                let prev = if idx > 0 { Some(idx - 1) } else { None };
+                let next = if idx < self.keypoints.len() {
+                    Some(idx)
+                } else {
+                    None
+                };
+                (prev, next)
+            }
+        }
+    }
+
     /// Get the time range covered by this track
     #[inline]
     pub fn time_range(&self) -> Option<TimeRange> {
@@ -258,12 +281,25 @@ impl AnimationTrack {
         }
 
         // Find surrounding keypoints
-        let (prev, next) = self.surrounding_keypoints(time)?;
+        let (prev_idx_opt, next_idx_opt) = self.keypoint_indices_at_time(time);
 
-        match (prev, next) {
-            (Some(prev_kp), Some(next_kp)) => {
+        match (prev_idx_opt, next_idx_opt) {
+            (Some(prev_idx), Some(next_idx)) => {
+                if prev_idx == next_idx {
+                    return Some(self.keypoints[prev_idx].value.clone());
+                }
+                let prev_kp = &self.keypoints[prev_idx];
+                let next_kp = &self.keypoints[next_idx];
+
                 // Create interpolation context
-                let context = InterpolationContext::new(prev_kp.time, next_kp.time, time).ok()?;
+                let context = InterpolationContext::new(
+                    prev_kp.time,
+                    next_kp.time,
+                    time,
+                    &self.keypoints,
+                    prev_idx,
+                )
+                .ok()?;
 
                 let result = if let Some(specific_transition) = transition {
                     // Use the transition's interpolation method
@@ -290,9 +326,9 @@ impl AnimationTrack {
                 };
                 result
             }
-            (Some(kp), None) => Some(kp.value.clone()),
-            (None, Some(kp)) => Some(kp.value.clone()),
-            (None, None) => None,
+            (Some(idx), None) => Some(self.keypoints[idx].value.clone()), // At or after last keypoint
+            (None, Some(idx)) => Some(self.keypoints[idx].value.clone()), // Before first keypoint
+            (None, None) => None,                                         // No keypoints
         }
     }
 }

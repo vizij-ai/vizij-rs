@@ -5,7 +5,8 @@
 
 use crate::{
     animation::{AnimationTransition, KeypointId, TransitionVariant},
-    interpolation::{InterpolationParams, InterpolationType},
+    interpolation::parameters::InterpolationParams,
+    interpolation::InterpolationType,
     AnimationData, AnimationKeypoint, AnimationTime, AnimationTrack, Value,
 };
 use serde::Deserialize;

@@ -3,7 +3,7 @@ use crate::interpolation::cache::InterpolationCacheKey;
 use crate::interpolation::functions::{
     BezierInterpolation, CubicInterpolation, EaseInInterpolation, EaseInOutInterpolation,
     EaseOutInterpolation, Interpolator, LinearInterpolation, SpringInterpolation,
-    StepInterpolation,
+    StepInterpolation, CatmullRomInterpolation, HermiteInterpolation
 };
 use crate::interpolation::metrics::InterpolationMetrics;
 use crate::time::Timer;
@@ -47,6 +47,8 @@ impl InterpolationRegistry {
         self.register_function(Box::new(StepInterpolation));
         self.register_function(Box::new(BezierInterpolation::new()));
         self.register_function(Box::new(SpringInterpolation::new()));
+        self.register_function(Box::new(CatmullRomInterpolation));
+        self.register_function(Box::new(HermiteInterpolation));
 
         // Add common easing functions
         self.register_function(Box::new(EaseInInterpolation));

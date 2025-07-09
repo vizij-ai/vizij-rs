@@ -524,6 +524,8 @@ pub fn create_test_animation() -> String {
         ("c", "c.linear", TransitionVariant::Linear),
         ("d", "d.bezier", TransitionVariant::Bezier),
         ("e", "e.spring", TransitionVariant::Spring),
+        ("f", "f.hermite", TransitionVariant::Hermite),
+        ("g", "g.catmullrom", TransitionVariant::Catmullrom),
     ];
 
     let mut animation = AnimationData::new("test_animation", "Transition Testing Animation");

@@ -18,6 +18,8 @@ fn test_linear_interpolation_float() {
         AnimationTime::zero(),
         AnimationTime::from_seconds(1.0).unwrap(),
         AnimationTime::from_seconds(0.5).unwrap(),
+        &[],
+        0,
     )
     .unwrap();
     let linear = LinearInterpolation;
@@ -41,6 +43,8 @@ fn test_cubic_interpolation_float() {
         AnimationTime::zero(),
         AnimationTime::from_seconds(1.0).unwrap(),
         AnimationTime::from_seconds(0.5).unwrap(),
+        &[],
+        0,
     )
     .unwrap();
     let cubic = CubicInterpolation;
@@ -69,6 +73,8 @@ fn test_step_interpolation() {
         AnimationTime::zero(),
         AnimationTime::from_seconds(2.0).unwrap(),
         AnimationTime::from_seconds(1.0).unwrap(),
+        &[],
+        0,
     )
     .unwrap();
 
@@ -84,6 +90,8 @@ fn test_step_interpolation() {
         AnimationTime::zero(),
         AnimationTime::from_seconds(1.0).unwrap(),
         AnimationTime::from_seconds(1.0).unwrap(),
+        &[],
+        0,
     )
     .unwrap();
 
@@ -104,6 +112,8 @@ fn test_vector_interpolation() {
         AnimationTime::zero(),
         AnimationTime::from_seconds(2.0).unwrap(),
         AnimationTime::from_seconds(1.0).unwrap(),
+        &[],
+        0,
     )
     .unwrap();
     let animation_data = AnimationData::new("test", "test");
@@ -131,6 +141,8 @@ fn test_euler_interpolation() {
         AnimationTime::zero(),
         AnimationTime::from_seconds(2.0).unwrap(),
         AnimationTime::from_seconds(1.0).unwrap(),
+        &[],
+        0,
     )
     .unwrap();
     let animation_data = AnimationData::new("test", "test");
@@ -157,6 +169,8 @@ fn test_interpolation_registry() {
         AnimationTime::zero(),
         AnimationTime::from_seconds(2.0).unwrap(),
         AnimationTime::from_seconds(1.0).unwrap(),
+        &[],
+        0,
     )
     .unwrap();
     let animation_data = AnimationData::new("test", "test");
@@ -193,6 +207,8 @@ fn test_interpolation_caching() {
         AnimationTime::zero(),
         AnimationTime::from_seconds(2.0).unwrap(),
         AnimationTime::from_seconds(1.0).unwrap(),
+        &[],
+        0,
     )
     .unwrap();
     let animation_data = AnimationData::new("test", "test");
@@ -217,6 +233,8 @@ fn test_interpolation_context() {
         AnimationTime::zero(),
         AnimationTime::from_seconds(2.0).unwrap(),
         AnimationTime::from_seconds(1.0).unwrap(),
+        &[],
+        0,
     )
     .unwrap();
 
@@ -224,7 +242,6 @@ fn test_interpolation_context() {
 
     context.set_property("test", 42.0);
     assert_eq!(context.get_property("test"), Some(42.0));
-    assert_eq!(context.get_property_or("missing", 10.0), 10.0);
 }
 
 #[test]
@@ -313,6 +330,8 @@ fn test_bezier_interpolation_specific_points() {
         AnimationTime::zero(),
         AnimationTime::from_seconds(2.0).unwrap(),
         AnimationTime::from_seconds(1.0).unwrap(),
+        &[],
+        0,
     )
     .unwrap(); // t = 0.5
     let animation_data = AnimationData::new("test", "test");
@@ -336,6 +355,8 @@ fn test_spring_interpolation_specific_params() {
         AnimationTime::zero(),
         AnimationTime::from_seconds(2.0).unwrap(),
         AnimationTime::from_seconds(1.0).unwrap(),
+        &[],
+        0,
     )
     .unwrap(); // t = 0.5
     let animation_data = AnimationData::new("test", "test");

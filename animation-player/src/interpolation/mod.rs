@@ -1,5 +1,3 @@
-//! Interpolation system for animation values
-
 pub mod cache;
 pub mod context;
 pub mod functions;
@@ -7,13 +5,16 @@ pub mod metrics;
 pub mod parameters;
 pub mod registry;
 pub mod schema;
+pub mod spline_helpers;
 pub mod types;
 
-pub use cache::*;
-pub use context::*;
-pub use functions::*;
-pub use metrics::*;
-pub use parameters::*;
-pub use registry::*;
-pub use schema::*;
-pub use types::*;
+pub use cache::InterpolationCacheKey;
+pub use context::InterpolationContext;
+pub use functions::{
+    BezierInterpolation, CatmullRomInterpolation, CubicInterpolation, EaseInInterpolation,
+    EaseInOutInterpolation, EaseOutInterpolation, HermiteInterpolation, Interpolator,
+    LinearInterpolation, SpringInterpolation, StepInterpolation,
+};
+pub use metrics::InterpolationMetrics;
+pub use registry::InterpolationRegistry;
+pub use types::InterpolationType;

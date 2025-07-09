@@ -2,9 +2,10 @@ use crate::animation::data::AnimationData;
 use crate::interpolation::context::InterpolationContext;
 use crate::interpolation::parameters::InterpolationParams;
 use crate::interpolation::schema::{InterpolationParameterSchema, ParameterDefinition};
+use crate::interpolation::spline_helpers::{bezier_curve, catmull_rom_spline, hermite_spline};
 use crate::interpolation::types::InterpolationType;
-use crate::value::ValueType;
-use crate::{AnimationError, Value};
+use crate::value::{Value, ValueType};
+use crate::AnimationError;
 
 use std::collections::HashMap;
 
@@ -29,12 +30,6 @@ pub trait Interpolator: Send + Sync {
     #[inline]
     fn can_interpolate(&self, start: &Value, end: &Value) -> bool {
         start.can_interpolate_with(end)
-    }
-
-    /// Precompute any values needed for interpolation (optional optimization)
-    #[inline]
-    fn precompute(&self, _start: &Value, _end: &Value) -> Result<(), AnimationError> {
-        Ok(())
     }
 
     /// Get the parameter schema for this interpolation function
@@ -65,8 +60,8 @@ impl Interpolator for LinearInterpolation {
             return Err(AnimationError::InterpolationError {
                 reason: format!(
                     "Cannot interpolate between {:?} and {:?}",
-                    start.type_name(),
-                    end.type_name()
+                    start.value_type().name(),
+                    end.value_type().name()
                 ),
             });
         }
@@ -168,8 +163,8 @@ impl Interpolator for CubicInterpolation {
             return Err(AnimationError::InterpolationError {
                 reason: format!(
                     "Cannot interpolate between {:?} and {:?}",
-                    start.type_name(),
-                    end.type_name()
+                    start.value_type().name(),
+                    end.value_type().name()
                 ),
             });
         }
@@ -226,8 +221,8 @@ impl Interpolator for StepInterpolation {
             return Err(AnimationError::InterpolationError {
                 reason: format!(
                     "Cannot interpolate between {:?} and {:?}",
-                    start.type_name(),
-                    end.type_name()
+                    start.value_type().name(),
+                    end.value_type().name()
                 ),
             });
         }
@@ -310,8 +305,8 @@ impl Interpolator for BezierInterpolation {
             return Err(AnimationError::InterpolationError {
                 reason: format!(
                     "Cannot interpolate between {:?} and {:?}",
-                    start.type_name(),
-                    end.type_name()
+                    start.value_type().name(),
+                    end.value_type().name()
                 ),
             });
         }
@@ -341,7 +336,7 @@ impl Interpolator for BezierInterpolation {
             self.control_points
         };
 
-        let eased_t = cubic_bezier(context.t.clamp(0.0, 1.0), &control_points);
+        let eased_t = cubic_bezier_easing(context.t.clamp(0.0, 1.0), &control_points);
 
         let start_components = start.interpolatable_components();
         let end_components = end.interpolatable_components();
@@ -412,7 +407,7 @@ impl Interpolator for BezierInterpolation {
     }
 }
 
-fn cubic_bezier(t: f64, control_points: &[f64; 4]) -> f64 {
+fn cubic_bezier_easing(t: f64, control_points: &[f64; 4]) -> f64 {
     let [x1, y1, x2, y2] = *control_points;
 
     // Binary search for the correct t value
@@ -422,7 +417,7 @@ fn cubic_bezier(t: f64, control_points: &[f64; 4]) -> f64 {
 
     for _ in 0..10 {
         // 10 iterations should be sufficient
-        let current_x = cubic_bezier_value(current_t, 0.0, x1, x2, 1.0);
+        let current_x = bezier_curve(0.0, x1, x2, 1.0, current_t) as f64;
 
         if (current_x - t).abs() < 0.001 {
             break;
@@ -437,20 +432,7 @@ fn cubic_bezier(t: f64, control_points: &[f64; 4]) -> f64 {
         current_t = (lower + upper) / 2.0;
     }
 
-    cubic_bezier_value(current_t, 0.0, y1, y2, 1.0)
-}
-
-fn cubic_bezier_value(t: f64, p0: f64, p1: f64, p2: f64, p3: f64) -> f64 {
-    let one_minus_t = 1.0 - t;
-    let one_minus_t_squared = one_minus_t * one_minus_t;
-    let one_minus_t_cubed = one_minus_t_squared * one_minus_t;
-    let t_squared = t * t;
-    let t_cubed = t_squared * t;
-
-    one_minus_t_cubed * p0
-        + 3.0 * one_minus_t_squared * t * p1
-        + 3.0 * one_minus_t * t_squared * p2
-        + t_cubed * p3
+    bezier_curve(0.0, y1, y2, 1.0, current_t) as f64
 }
 
 /// Spring interpolation function (bouncy/elastic effect)
@@ -493,8 +475,8 @@ impl Interpolator for SpringInterpolation {
             return Err(AnimationError::InterpolationError {
                 reason: format!(
                     "Cannot interpolate between {:?} and {:?}",
-                    start.type_name(),
-                    end.type_name()
+                    start.value_type().name(),
+                    end.value_type().name()
                 ),
             });
         }
@@ -626,8 +608,8 @@ impl Interpolator for EaseInInterpolation {
             return Err(AnimationError::InterpolationError {
                 reason: format!(
                     "Cannot interpolate between {:?} and {:?}",
-                    start.type_name(),
-                    end.type_name()
+                    start.value_type().name(),
+                    end.value_type().name()
                 ),
             });
         }
@@ -684,8 +666,8 @@ impl Interpolator for EaseOutInterpolation {
             return Err(AnimationError::InterpolationError {
                 reason: format!(
                     "Cannot interpolate between {:?} and {:?}",
-                    start.type_name(),
-                    end.type_name()
+                    start.value_type().name(),
+                    end.value_type().name()
                 ),
             });
         }
@@ -742,8 +724,8 @@ impl Interpolator for EaseInOutInterpolation {
             return Err(AnimationError::InterpolationError {
                 reason: format!(
                     "Cannot interpolate between {:?} and {:?}",
-                    start.type_name(),
-                    end.type_name()
+                    start.value_type().name(),
+                    end.value_type().name()
                 ),
             });
         }
@@ -774,6 +756,257 @@ impl Interpolator for EaseInOutInterpolation {
     }
 
     fn parameter_schema(&self) -> InterpolationParameterSchema {
+        InterpolationParameterSchema {
+            parameters: HashMap::new(),
+        }
+    }
+}
+
+/// Hermite interpolation function
+#[derive(Debug, Clone)]
+pub struct HermiteInterpolation;
+
+impl Interpolator for HermiteInterpolation {
+    fn name(&self) -> &str {
+        "hermite"
+    }
+
+    fn interpolation_type(&self) -> InterpolationType {
+        InterpolationType::Hermite
+    }
+
+    fn interpolate(
+        &self,
+        start: &Value,
+        end: &Value,
+        context: &InterpolationContext,
+        _animation: &AnimationData,
+    ) -> Result<Value, AnimationError> {
+        if !self.can_interpolate(start, end) {
+            return Err(AnimationError::InterpolationError {
+                reason: format!(
+                    "Cannot interpolate between {:?} and {:?}",
+                    start.value_type().name(),
+                    end.value_type().name()
+                ),
+            });
+        }
+
+        let p0 = start;
+        let p1 = end;
+
+        // Get tangents from context or calculate them by finite difference
+        let m0_val = context.get_property("tangent_start").unwrap_or_else(|| {
+            let p0_components = p0.interpolatable_components();
+            let p1_components = p1.interpolatable_components();
+            let m0_components: Vec<f64> = p0_components
+                .iter()
+                .zip(p1_components.iter())
+                .map(|(c0, c1)| (c1 - c0) * 0.5)
+                .collect();
+            Value::from_components(p0.value_type(), &m0_components)
+                .unwrap_or_else(|_| Value::Float(0.0))
+        });
+        let m1_val = context.get_property("tangent_end").unwrap_or_else(|| {
+            let p0_components = p0.interpolatable_components();
+            let p1_components = p1.interpolatable_components();
+            let m1_components: Vec<f64> = p0_components
+                .iter()
+                .zip(p1_components.iter())
+                .map(|(c0, c1)| (c1 - c0) * 0.5)
+                .collect();
+            Value::from_components(p0.value_type(), &m1_components)
+                .unwrap_or_else(|_| Value::Float(0.0))
+        });
+
+        let p0_components = p0.interpolatable_components();
+        let p1_components = p1.interpolatable_components();
+        let m0_components = m0_val.interpolatable_components();
+        let m1_components = m1_val.interpolatable_components();
+
+        if !(p0_components.len() == p1_components.len()
+            && p0_components.len() == m0_components.len()
+            && p0_components.len() == m1_components.len())
+        {
+            return Err(AnimationError::InterpolationError {
+                reason: "Component count mismatch for Hermite interpolation".to_string(),
+            });
+        }
+
+        let interpolated_components: Vec<f64> = (0..p0_components.len())
+            .map(|i| {
+                hermite_spline(
+                    p0_components[i],
+                    p1_components[i],
+                    m0_components[i],
+                    m1_components[i],
+                    context.t,
+                )
+            })
+            .collect();
+
+        Value::from_components(start.value_type(), &interpolated_components)
+    }
+
+    fn parameter_schema(&self) -> InterpolationParameterSchema {
+        let mut params = HashMap::new();
+        params.insert(
+            "tangent_start".to_string(),
+            ParameterDefinition {
+                name: "tangent_start".to_string(),
+                value_type: ValueType::Float, // Placeholder, actual type depends on value
+                default_value: None,
+                min_value: None,
+                max_value: None,
+                description: "The tangent vector at the start point.".to_string(),
+            },
+        );
+        params.insert(
+            "tangent_end".to_string(),
+            ParameterDefinition {
+                name: "tangent_end".to_string(),
+                value_type: ValueType::Float, // Placeholder, actual type depends on value
+                default_value: None,
+                min_value: None,
+                max_value: None,
+                description: "The tangent vector at the end point.".to_string(),
+            },
+        );
+        InterpolationParameterSchema { parameters: params }
+    }
+}
+
+/// Catmull-Rom interpolation function
+#[derive(Debug, Clone)]
+pub struct CatmullRomInterpolation;
+
+impl Interpolator for CatmullRomInterpolation {
+    fn name(&self) -> &str {
+        "catmullrom"
+    }
+
+    fn interpolation_type(&self) -> InterpolationType {
+        InterpolationType::CatmullRom
+    }
+
+    fn interpolate(
+        &self,
+        start: &Value, // p1
+        end: &Value,   // p2
+        context: &InterpolationContext,
+        _animation: &AnimationData,
+    ) -> Result<Value, AnimationError> {
+        if !self.can_interpolate(start, end) {
+            return Err(AnimationError::InterpolationError {
+                reason: format!(
+                    "Cannot interpolate between {:?} and {:?}",
+                    start.value_type().name(),
+                    end.value_type().name()
+                ),
+            });
+        }
+
+        // Get the surrounding points from the context
+        let p0 = context.get_point(-1).unwrap_or_else(|| start.clone());
+        let p3 = context.get_point(2).unwrap_or_else(|| end.clone());
+
+        // Handle Transform separately for SLERP on rotation
+        if let (Value::Transform(p1_transform), Value::Transform(p2_transform)) = (start, end) {
+            let p0_transform = p0.as_transform().unwrap_or(p1_transform); // Fallback
+            let p3_transform = p3.as_transform().unwrap_or(p2_transform); // Fallback
+
+            // Interpolate rotation with SLERP (splines are not great for quaternions)
+            let rot = crate::value::transform::slerp_quaternion(
+                &p1_transform.rotation.to_array(),
+                &p2_transform.rotation.to_array(),
+                context.t,
+            );
+
+            // Interpolate position and scale with Catmull-Rom
+            let pos_x = catmull_rom_spline(
+                p0_transform.position.x,
+                p1_transform.position.x,
+                p2_transform.position.x,
+                p3_transform.position.x,
+                context.t,
+            );
+            let pos_y = catmull_rom_spline(
+                p0_transform.position.y,
+                p1_transform.position.y,
+                p2_transform.position.y,
+                p3_transform.position.y,
+                context.t,
+            );
+            let pos_z = catmull_rom_spline(
+                p0_transform.position.z,
+                p1_transform.position.z,
+                p2_transform.position.z,
+                p3_transform.position.z,
+                context.t,
+            );
+
+            let scale_x = catmull_rom_spline(
+                p0_transform.scale.x,
+                p1_transform.scale.x,
+                p2_transform.scale.x,
+                p3_transform.scale.x,
+                context.t,
+            );
+            let scale_y = catmull_rom_spline(
+                p0_transform.scale.y,
+                p1_transform.scale.y,
+                p2_transform.scale.y,
+                p3_transform.scale.y,
+                context.t,
+            );
+            let scale_z = catmull_rom_spline(
+                p0_transform.scale.z,
+                p1_transform.scale.z,
+                p2_transform.scale.z,
+                p3_transform.scale.z,
+                context.t,
+            );
+
+            let mut components = Vec::new();
+            components.extend_from_slice(&[pos_x, pos_y, pos_z]);
+            components.extend_from_slice(&rot);
+            components.extend_from_slice(&[scale_x, scale_y, scale_z]);
+
+            return Value::from_components(start.value_type(), &components);
+        }
+
+        // Generic component-wise interpolation for other types
+        let p0_components = p0.interpolatable_components();
+        let p1_components = start.interpolatable_components();
+        let p2_components = end.interpolatable_components();
+        let p3_components = p3.interpolatable_components();
+
+        if !(p1_components.len() == p2_components.len()
+            && p1_components.len() == p0_components.len()
+            && p1_components.len() == p3_components.len())
+        {
+            return Err(AnimationError::InterpolationError {
+                reason: "Component count mismatch for Catmull-Rom interpolation".to_string(),
+            });
+        }
+
+        let interpolated_components: Vec<f64> = (0..p1_components.len())
+            .map(|i| {
+                catmull_rom_spline(
+                    p0_components[i],
+                    p1_components[i],
+                    p2_components[i],
+                    p3_components[i],
+                    context.t,
+                )
+            })
+            .collect();
+
+        Value::from_components(start.value_type(), &interpolated_components)
+    }
+
+    fn parameter_schema(&self) -> InterpolationParameterSchema {
+        // Control points are implicit from the keyframe sequence
         InterpolationParameterSchema {
             parameters: HashMap::new(),
         }

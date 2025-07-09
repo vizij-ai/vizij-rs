@@ -1,6 +1,6 @@
-use crate::error::AnimationError;
+use crate::AnimationError;
 use crate::value::color::Color;
-use crate::value::euler::Euler; // Add this import
+use crate::value::euler::Euler;
 use crate::value::transform::Transform;
 use crate::value::utils::hash_f64;
 use crate::value::vector2::Vector2;
@@ -8,6 +8,7 @@ use crate::value::vector3::Vector3;
 use crate::value::vector4::Vector4;
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
+use std::ops::{Add, Mul, Sub};
 
 /// Enum representing the type of a `Value`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -19,9 +20,26 @@ pub enum ValueType {
     Vector2,
     Vector3,
     Vector4,
-    Euler, // Add Euler
+    Euler,
     Color,
     Transform,
+}
+
+impl ValueType {
+    pub fn name(&self) -> &'static str {
+        match self {
+            ValueType::Float => "Float",
+            ValueType::Integer => "Integer",
+            ValueType::Boolean => "Boolean",
+            ValueType::String => "String",
+            ValueType::Vector2 => "Vector2",
+            ValueType::Vector3 => "Vector3",
+            ValueType::Vector4 => "Vector4",
+            ValueType::Color => "Color",
+            ValueType::Transform => "Transform",
+            ValueType::Euler => "Euler",
+        }
+    }
 }
 
 /// Primary value type supporting all animation data
@@ -42,7 +60,7 @@ pub enum Value {
     /// 4D vector (often used for colors or quaternions)
     Vector4(Vector4),
     /// Euler angles for rotation
-    Euler(Euler), // Add Euler
+    Euler(Euler),
     /// Color in various formats
     Color(Color),
     /// 3D transform (position, rotation, scale)
@@ -113,9 +131,12 @@ impl Value {
         }
     }
 
-    /// Get the type name of this value as a ValueType enum.
-    pub fn type_name(&self) -> ValueType {
-        self.value_type()
+    pub fn as_transform(&self) -> Option<&Transform> {
+        if let Self::Transform(v) = self {
+            Some(v)
+        } else {
+            None
+        }
     }
 
     /// Check if this value can be interpolated with another value
@@ -579,5 +600,36 @@ impl TryFrom<Value> for Transform {
                 actual: value.value_type(),
             }),
         }
+    }
+}
+
+
+
+impl Add for Value {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        let c1 = self.interpolatable_components();
+        let c2 = rhs.interpolatable_components();
+        let res: Vec<f64> = c1.iter().zip(c2.iter()).map(|(a, b)| a + b).collect();
+        Value::from_components(self.value_type(), &res).unwrap_or(self)
+    }
+}
+
+impl Sub for Value {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self::Output {
+        let c1 = self.interpolatable_components();
+        let c2 = rhs.interpolatable_components();
+        let res: Vec<f64> = c1.iter().zip(c2.iter()).map(|(a, b)| a - b).collect();
+        Value::from_components(self.value_type(), &res).unwrap_or(self)
+    }
+}
+
+impl Mul<f64> for Value {
+    type Output = Self;
+    fn mul(self, rhs: f64) -> Self::Output {
+        let c1 = self.interpolatable_components();
+        let res: Vec<f64> = c1.iter().map(|c| c * rhs).collect();
+        Value::from_components(self.value_type(), &res).unwrap_or(self)
     }
 }
