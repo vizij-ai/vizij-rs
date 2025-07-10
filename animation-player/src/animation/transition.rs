@@ -1,6 +1,6 @@
 use crate::animation::ids::KeypointId;
+use crate::interpolation::parameters::InterpolationParams;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Defines the type of transition between keypoints
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -85,8 +85,9 @@ pub struct AnimationTransition {
     pub keypoints: [KeypointId; 2],
     /// The type of transition/interpolation to use
     pub variant: TransitionVariant,
-    /// Additional parameters for the transition (e.g., bezier control points, spring constants)
-    pub parameters: HashMap<String, String>,
+    /// Additional parameters for the transition (typed)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parameters: Option<InterpolationParams>,
 }
 
 impl AnimationTransition {
@@ -102,7 +103,7 @@ impl AnimationTransition {
             id: Uuid::new_v4().to_string(),
             keypoints: [from_keypoint, to_keypoint],
             variant,
-            parameters: HashMap::new(),
+            parameters: None,
         }
     }
 
@@ -118,21 +119,21 @@ impl AnimationTransition {
             id: id.into(),
             keypoints: [from_keypoint, to_keypoint],
             variant,
-            parameters: HashMap::new(),
+            parameters: None,
         }
     }
 
-    /// Add a parameter to this transition
+    /// Set typed parameters for this transition
     #[inline]
-    pub fn with_parameter(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        self.parameters.insert(key.into(), value.into());
+    pub fn with_parameters(mut self, params: InterpolationParams) -> Self {
+        self.parameters = Some(params);
         self
     }
 
-    /// Get a parameter value
+    /// Get a reference to the typed parameters
     #[inline]
-    pub fn get_parameter(&self, key: &str) -> Option<&str> {
-        self.parameters.get(key).map(|s| s.as_str())
+    pub fn parameters(&self) -> Option<&InterpolationParams> {
+        self.parameters.as_ref()
     }
 
     /// Get the from keypoint ID

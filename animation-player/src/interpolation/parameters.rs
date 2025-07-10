@@ -24,6 +24,17 @@ pub struct StepParams {
     pub point: f32,
 }
 
+/// Parameters for the Hermite interpolation function
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HermiteParams {
+    /// Optional tangent vector at the start point
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tangent_start: Option<crate::Value>,
+    /// Optional tangent vector at the end point
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tangent_end: Option<crate::Value>,
+}
+
 /// Enum to hold the different interpolation parameter structs
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -31,4 +42,5 @@ pub enum InterpolationParams {
     Spring(SpringParams),
     Bezier(BezierParams),
     Step(StepParams),
+    Hermite(HermiteParams),
 }

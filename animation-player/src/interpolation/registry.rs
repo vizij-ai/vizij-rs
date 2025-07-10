@@ -1,11 +1,12 @@
 use crate::animation::AnimationTransition;
 use crate::interpolation::cache::InterpolationCacheKey;
 use crate::interpolation::functions::{
-    BSplineInterpolation, BezierInterpolation, CatmullRomInterpolation, CubicInterpolation,
-    EaseInInterpolation, EaseInOutInterpolation, EaseOutInterpolation, HermiteInterpolation,
-    Interpolator, LinearInterpolation, SpringInterpolation, StepInterpolation,
+    BezierInterpolation, CatmullRomInterpolation, CubicInterpolation, EaseInInterpolation,
+    EaseInOutInterpolation, EaseOutInterpolation, HermiteInterpolation, Interpolator,
+    LinearInterpolation, SpringInterpolation, StepInterpolation,
 };
 use crate::interpolation::metrics::InterpolationMetrics;
+use crate::interpolation::parameters::InterpolationParams;
 use crate::time::Timer;
 use crate::{AnimationError, Value};
 use lru::LruCache;
@@ -187,16 +188,35 @@ impl InterpolationRegistry {
         animation: &crate::AnimationData,
     ) -> Result<Value, AnimationError> {
         // Create a context with transition parameters only if needed
-        let context_with_params = if transition.parameters.is_empty() {
-            context.clone()
-        } else {
+        let context_with_params = if let Some(params) = &transition.parameters {
             let mut new_context = context.clone();
-            for (key, value) in &transition.parameters {
-                if let Ok(param_value) = value.parse::<f64>() {
-                    new_context.set_property(key, param_value);
+            match params {
+                InterpolationParams::Spring(p) => {
+                    new_context.set_property("mass", p.mass as f64);
+                    new_context.set_property("stiffness", p.stiffness as f64);
+                    new_context.set_property("damping", p.damping as f64);
+                }
+                InterpolationParams::Bezier(p) => {
+                    new_context.set_property("x1", p.x1 as f64);
+                    new_context.set_property("y1", p.y1 as f64);
+                    new_context.set_property("x2", p.x2 as f64);
+                    new_context.set_property("y2", p.y2 as f64);
+                }
+                InterpolationParams::Step(p) => {
+                    new_context.set_property("threshold", p.point as f64);
+                }
+                InterpolationParams::Hermite(p) => {
+                    if let Some(val) = &p.tangent_start {
+                        new_context.set_property("tangent_start", val.clone());
+                    }
+                    if let Some(val) = &p.tangent_end {
+                        new_context.set_property("tangent_end", val.clone());
+                    }
                 }
             }
             new_context
+        } else {
+            context.clone()
         };
 
         self.interpolate(

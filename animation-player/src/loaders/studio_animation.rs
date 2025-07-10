@@ -5,7 +5,9 @@
 
 use crate::{
     animation::{AnimationTransition, KeypointId, TransitionVariant},
-    interpolation::parameters::InterpolationParams,
+    interpolation::parameters::{
+        BezierParams, HermiteParams, InterpolationParams, SpringParams, StepParams,
+    },
     interpolation::InterpolationType,
     AnimationData, AnimationKeypoint, AnimationTime, AnimationTrack, Value,
 };
@@ -109,8 +111,8 @@ fn convert_test_animation(test_data: StudioAnimationData) -> AnimationData {
             to_keypoint_id,
             variant,
         );
-        for (key, value) in transition_data.parameters {
-            transition = transition.with_parameter(&key, value.to_string());
+        if let Some(params) = parse_transition_params(variant, transition_data.parameters) {
+            transition = transition.with_parameters(params);
         }
         animation.add_transition(transition);
     }
@@ -118,6 +120,78 @@ fn convert_test_animation(test_data: StudioAnimationData) -> AnimationData {
     // Set the duration
     animation.metadata.duration = AnimationTime::from_seconds(duration_seconds).unwrap();
     animation
+}
+
+fn parse_transition_params(
+    variant: TransitionVariant,
+    params: HashMap<String, serde_json::Value>,
+) -> Option<InterpolationParams> {
+    match variant {
+        TransitionVariant::Spring => {
+            let damping = params
+                .get("damping")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(20.0);
+            let stiffness = params
+                .get("stiffness")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(100.0);
+            let mass = params.get("mass").and_then(|v| v.as_f64()).unwrap_or(1.0);
+            Some(InterpolationParams::Spring(SpringParams {
+                mass: mass as f32,
+                stiffness: stiffness as f32,
+                damping: damping as f32,
+            }))
+        }
+        TransitionVariant::Bezier => {
+            let x1 = params.get("x1").and_then(|v| v.as_f64()).unwrap_or(0.25);
+            let y1 = params.get("y1").and_then(|v| v.as_f64()).unwrap_or(0.1);
+            let x2 = params.get("x2").and_then(|v| v.as_f64()).unwrap_or(0.25);
+            let y2 = params.get("y2").and_then(|v| v.as_f64()).unwrap_or(1.0);
+            Some(InterpolationParams::Bezier(BezierParams {
+                x1: x1 as f32,
+                y1: y1 as f32,
+                x2: x2 as f32,
+                y2: y2 as f32,
+            }))
+        }
+        TransitionVariant::StepStart
+        | TransitionVariant::StepEnd
+        | TransitionVariant::StepMiddle
+        | TransitionVariant::StepAfter
+        | TransitionVariant::StepBefore
+        | TransitionVariant::Constant
+        | TransitionVariant::Step => {
+            let default = match variant {
+                TransitionVariant::StepStart | TransitionVariant::StepBefore => 0.0,
+                TransitionVariant::StepEnd
+                | TransitionVariant::StepAfter
+                | TransitionVariant::Constant => 1.0,
+                TransitionVariant::StepMiddle => 0.5,
+                _ => 1.0,
+            };
+            let threshold = params
+                .get("threshold")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(default);
+            Some(InterpolationParams::Step(StepParams {
+                point: threshold as f32,
+            }))
+        }
+        TransitionVariant::Hermite => {
+            let tangent_start = params
+                .get("tangent_start")
+                .and_then(|v| serde_json::from_value::<Value>(v.clone()).ok());
+            let tangent_end = params
+                .get("tangent_end")
+                .and_then(|v| serde_json::from_value::<Value>(v.clone()).ok());
+            Some(InterpolationParams::Hermite(HermiteParams {
+                tangent_start,
+                tangent_end,
+            }))
+        }
+        _ => None,
+    }
 }
 
 /// Load test animation from JSON string
@@ -301,9 +375,9 @@ mod tests {
               {
                 "id": "transition-id",
                 "keypoints": ["d3d5a244-addc-40fe-b9ab-59c68db42f5f", "3efeaad9-638a-40f9-a177-6e92901b7785"],
-                "variant": "linear",
+                "variant": "spring",
                 "parameters": {
-                  "tension": 0.5
+                  "damping": 0.5
                 }
               }
             ]
@@ -324,7 +398,11 @@ mod tests {
             transition.to_keypoint().to_string(),
             "3efeaad9-638a-40f9-a177-6e92901b7785"
         );
-        assert_eq!(transition.variant, TransitionVariant::Linear);
-        assert_eq!(transition.get_parameter("tension"), Some("0.5"));
+        assert_eq!(transition.variant, TransitionVariant::Spring);
+        if let Some(InterpolationParams::Spring(p)) = transition.parameters() {
+            assert_eq!(p.damping, 0.5);
+        } else {
+            panic!("Expected spring parameters");
+        }
     }
 }
