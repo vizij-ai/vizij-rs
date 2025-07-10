@@ -287,6 +287,7 @@ impl AnimationPlayer {
         animations: &HashMap<String, AnimationData>,
         interpolation_registry: &mut InterpolationRegistry,
         derivative_width: Option<AnimationTime>,
+        speed: f64,
     ) -> Result<HashMap<String, Value>, AnimationError> {
         let mut derivatives: HashMap<String, Value> = HashMap::new();
 
@@ -324,6 +325,7 @@ impl AnimationPlayer {
                         animation_data,
                         interpolation_registry,
                         derivative_width,
+                        speed,
                     )?
                 {
                     derivatives.insert(track.target.clone(), derivative);
@@ -342,6 +344,7 @@ impl AnimationPlayer {
         animation_data: &AnimationData,
         interpolation_registry: &mut InterpolationRegistry,
         derivative_width: Option<AnimationTime>,
+        speed: f64,
     ) -> Result<Option<Value>, AnimationError> {
         if track.keypoints.is_empty() {
             return Ok(None);
@@ -355,6 +358,11 @@ impl AnimationPlayer {
             derivative_width,
             animation_data,
         );
-        return Ok(value);
+
+        if let Some(v) = value {
+            Ok(Some(v.multiply_by_scalar(speed)))
+        } else {
+            Ok(None)
+        }
     }
 }

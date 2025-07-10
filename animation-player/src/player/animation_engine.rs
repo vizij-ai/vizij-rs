@@ -588,10 +588,18 @@ impl AnimationEngine {
                 message: format!("Player '{}' not found", player_id),
             })?;
 
+        let player_state =
+            self.player_states
+                .get(player_id)
+                .ok_or_else(|| AnimationError::Generic {
+                    message: format!("Player state for '{}' not found", player_id),
+                })?;
+
         player.calculate_derivatives(
             &all_animations,
             &mut self.interpolation_registry,
             derivative_width,
+            player_state.speed,
         )
     }
 }

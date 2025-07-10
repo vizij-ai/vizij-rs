@@ -174,6 +174,12 @@ impl Value {
         }
     }
 
+    pub fn multiply_by_scalar(&self, scalar: f64) -> Value {
+        let components = self.interpolatable_components();
+        let new_components: Vec<f64> = components.iter().map(|c| c * scalar).collect();
+        Value::from_components(self.value_type(), &new_components).unwrap_or_else(|_| self.clone())
+    }
+
     /// Calculate numerical derivative between two values
     pub fn calculate_derivative(
         value_before: &Value,
