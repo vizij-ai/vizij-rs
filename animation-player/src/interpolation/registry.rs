@@ -1,9 +1,9 @@
 use crate::animation::AnimationTransition;
 use crate::interpolation::cache::InterpolationCacheKey;
 use crate::interpolation::functions::{
-    BezierInterpolation, CubicInterpolation, EaseInInterpolation, EaseInOutInterpolation,
-    EaseOutInterpolation, Interpolator, LinearInterpolation, SpringInterpolation,
-    StepInterpolation, CatmullRomInterpolation, HermiteInterpolation
+    BSplineInterpolation, BezierInterpolation, CatmullRomInterpolation, CubicInterpolation,
+    EaseInInterpolation, EaseInOutInterpolation, EaseOutInterpolation, HermiteInterpolation,
+    Interpolator, LinearInterpolation, SpringInterpolation, StepInterpolation,
 };
 use crate::interpolation::metrics::InterpolationMetrics;
 use crate::time::Timer;
@@ -49,6 +49,7 @@ impl InterpolationRegistry {
         self.register_function(Box::new(SpringInterpolation::new()));
         self.register_function(Box::new(CatmullRomInterpolation));
         self.register_function(Box::new(HermiteInterpolation));
+        self.register_function(Box::new(BSplineInterpolation));
 
         // Add common easing functions
         self.register_function(Box::new(EaseInInterpolation));

@@ -526,6 +526,7 @@ pub fn create_test_animation() -> String {
         ("e", "e.spring", TransitionVariant::Spring),
         ("f", "f.hermite", TransitionVariant::Hermite),
         ("g", "g.catmullrom", TransitionVariant::Catmullrom),
+        ("h", "h.bspline", TransitionVariant::Bspline),
     ];
 
     let mut animation = AnimationData::new("test_animation", "Transition Testing Animation");

@@ -2,7 +2,9 @@ use crate::animation::data::AnimationData;
 use crate::interpolation::context::InterpolationContext;
 use crate::interpolation::parameters::InterpolationParams;
 use crate::interpolation::schema::{InterpolationParameterSchema, ParameterDefinition};
-use crate::interpolation::spline_helpers::{bezier_curve, catmull_rom_spline, hermite_spline};
+use crate::interpolation::spline_helpers::{
+    b_spline_curve, bezier_curve, catmull_rom_spline, hermite_spline,
+};
 use crate::interpolation::types::InterpolationType;
 use crate::value::{Value, ValueType};
 use crate::AnimationError;
@@ -1007,6 +1009,138 @@ impl Interpolator for CatmullRomInterpolation {
 
     fn parameter_schema(&self) -> InterpolationParameterSchema {
         // Control points are implicit from the keyframe sequence
+        InterpolationParameterSchema {
+            parameters: HashMap::new(),
+        }
+    }
+}
+
+/// B-spline interpolation function using uniform cubic B-splines
+#[derive(Debug, Clone)]
+pub struct BSplineInterpolation;
+
+impl Interpolator for BSplineInterpolation {
+    fn name(&self) -> &str {
+        "bspline"
+    }
+
+    fn interpolation_type(&self) -> InterpolationType {
+        InterpolationType::BSpline
+    }
+
+    fn interpolate(
+        &self,
+        start: &Value,
+        end: &Value,
+        context: &InterpolationContext,
+        _animation: &AnimationData,
+    ) -> Result<Value, AnimationError> {
+        if !self.can_interpolate(start, end) {
+            return Err(AnimationError::InterpolationError {
+                reason: format!(
+                    "Cannot interpolate between {:?} and {:?}",
+                    start.value_type().name(),
+                    end.value_type().name()
+                ),
+            });
+        }
+
+        let p_before = context.get_point(-1).unwrap_or_else(|| start.clone());
+        let p_after = context.get_point(2).unwrap_or_else(|| end.clone());
+
+        // Special handling for Transform values
+        if let (Value::Transform(p_start), Value::Transform(p_end)) = (start, end) {
+            let p_before_t = p_before.as_transform().unwrap_or(p_start);
+            let p_after_t = p_after.as_transform().unwrap_or(p_end);
+
+            let rot = crate::value::transform::slerp_quaternion(
+                &p_start.rotation.to_array(),
+                &p_end.rotation.to_array(),
+                context.t,
+            );
+
+            let pos_x = b_spline_curve(
+                p_before_t.position.x,
+                p_start.position.x,
+                p_end.position.x,
+                p_after_t.position.x,
+                context.t,
+            );
+            let pos_y = b_spline_curve(
+                p_before_t.position.y,
+                p_start.position.y,
+                p_end.position.y,
+                p_after_t.position.y,
+                context.t,
+            );
+            let pos_z = b_spline_curve(
+                p_before_t.position.z,
+                p_start.position.z,
+                p_end.position.z,
+                p_after_t.position.z,
+                context.t,
+            );
+
+            let scale_x = b_spline_curve(
+                p_before_t.scale.x,
+                p_start.scale.x,
+                p_end.scale.x,
+                p_after_t.scale.x,
+                context.t,
+            );
+            let scale_y = b_spline_curve(
+                p_before_t.scale.y,
+                p_start.scale.y,
+                p_end.scale.y,
+                p_after_t.scale.y,
+                context.t,
+            );
+            let scale_z = b_spline_curve(
+                p_before_t.scale.z,
+                p_start.scale.z,
+                p_end.scale.z,
+                p_after_t.scale.z,
+                context.t,
+            );
+
+            let mut comps = Vec::new();
+            comps.extend_from_slice(&[pos_x, pos_y, pos_z]);
+            comps.extend_from_slice(&rot);
+            comps.extend_from_slice(&[scale_x, scale_y, scale_z]);
+            return Value::from_components(start.value_type(), &comps);
+        }
+
+        let before_components = p_before.interpolatable_components();
+        let start_components = start.interpolatable_components();
+        let end_components = end.interpolatable_components();
+        let after_components = p_after.interpolatable_components();
+
+        if !(start_components.len() == end_components.len()
+            && start_components.len() == before_components.len()
+            && start_components.len() == after_components.len())
+        {
+            return Err(AnimationError::InterpolationError {
+                reason: "Component count mismatch for B-spline interpolation".to_string(),
+            });
+        }
+
+        let interpolated_components: Vec<f64> = (0..start_components.len())
+            .map(|i| {
+                b_spline_curve(
+                    before_components[i],
+                    start_components[i],
+                    end_components[i],
+                    after_components[i],
+                    context.t,
+                )
+            })
+            .collect();
+
+        Value::from_components(start.value_type(), &interpolated_components)
+    }
+
+    fn parameter_schema(&self) -> InterpolationParameterSchema {
+        // Control points are implicit from keyframes
         InterpolationParameterSchema {
             parameters: HashMap::new(),
         }

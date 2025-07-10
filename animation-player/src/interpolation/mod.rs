@@ -11,9 +11,9 @@ pub mod types;
 pub use cache::InterpolationCacheKey;
 pub use context::InterpolationContext;
 pub use functions::{
-    BezierInterpolation, CatmullRomInterpolation, CubicInterpolation, EaseInInterpolation,
-    EaseInOutInterpolation, EaseOutInterpolation, HermiteInterpolation, Interpolator,
-    LinearInterpolation, SpringInterpolation, StepInterpolation,
+    BSplineInterpolation, BezierInterpolation, CatmullRomInterpolation, CubicInterpolation,
+    EaseInInterpolation, EaseInOutInterpolation, EaseOutInterpolation, HermiteInterpolation,
+    Interpolator, LinearInterpolation, SpringInterpolation, StepInterpolation,
 };
 pub use metrics::InterpolationMetrics;
 pub use registry::InterpolationRegistry;
