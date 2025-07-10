@@ -52,7 +52,7 @@ impl<'a> InterpolationContext<'a> {
         if self.start_index >= self.keypoints.len() {
             return None;
         }
-        
+
         // Handle the offset calculation safely
         let target_idx = if offset >= 0 {
             // For positive offsets, check for potential overflow
@@ -62,13 +62,10 @@ impl<'a> InterpolationContext<'a> {
             let abs_offset = offset.unsigned_abs() as usize;
             self.start_index.checked_sub(abs_offset)?
         };
-        
-        // Now safely get the keypoint at the calculated index
-        self.keypoints
-            .get(target_idx)
-            .map(|kp| kp.value.clone())
-    }
 
+        // Now safely get the keypoint at the calculated index
+        self.keypoints.get(target_idx).map(|kp| kp.value.clone())
+    }
 
     /// Gets a generic property from the context.
     pub fn get_property<T: TryFrom<Value>>(&self, key: &str) -> Option<T> {

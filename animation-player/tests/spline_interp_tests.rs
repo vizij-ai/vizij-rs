@@ -9,7 +9,7 @@ fn test_catmull_rom_basic_interpolation() {
     let mut track = AnimationTrack::new("test", "position");
 
     // Add 4 keypoints for Catmull-Rom
-    let k1 = track
+    let _k1 = track
         .add_keypoint(AnimationKeypoint::new(
             AnimationTime::from_seconds(0.0).unwrap(),
             Value::Float(0.0),
@@ -27,7 +27,7 @@ fn test_catmull_rom_basic_interpolation() {
             Value::Float(20.0),
         ))
         .unwrap();
-    let k4 = track
+    let _k4 = track
         .add_keypoint(AnimationKeypoint::new(
             AnimationTime::from_seconds(3.0).unwrap(),
             Value::Float(15.0),
@@ -122,7 +122,7 @@ fn test_b_spline_curve_helper() {
 fn test_bspline_track_interpolation() {
     let mut track = AnimationTrack::new("bspline", "value");
 
-    let k1 = track
+    let _k1 = track
         .add_keypoint(AnimationKeypoint::new(
             AnimationTime::from_seconds(0.0).unwrap(),
             Value::Float(0.0),
@@ -140,7 +140,7 @@ fn test_bspline_track_interpolation() {
             Value::Float(20.0),
         ))
         .unwrap();
-    let k4 = track
+    let _k4 = track
         .add_keypoint(AnimationKeypoint::new(
             AnimationTime::from_seconds(3.0).unwrap(),
             Value::Float(30.0),
@@ -198,7 +198,7 @@ fn test_spline_with_transform_values() {
         scale: Vector3::new(0.5, 0.5, 0.5),
     };
 
-    let k1 = track
+    let _k1 = track
         .add_keypoint(AnimationKeypoint::new(
             AnimationTime::from_seconds(0.0).unwrap(),
             Value::Transform(t1),
@@ -216,7 +216,7 @@ fn test_spline_with_transform_values() {
             Value::Transform(t3),
         ))
         .unwrap();
-    let k4 = track
+    let _k4 = track
         .add_keypoint(AnimationKeypoint::new(
             AnimationTime::from_seconds(3.0).unwrap(),
             Value::Transform(t4),

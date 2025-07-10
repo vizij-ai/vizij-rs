@@ -126,7 +126,7 @@ impl AnimationTrack {
             .keypoints
             .binary_search_by(|k| k.time.partial_cmp(&time).unwrap())
         {
-            Ok(idx) => (Some(idx-1), Some(idx)), // Exact match should return prior and current
+            Ok(idx) => (Some(idx - 1), Some(idx)), // Exact match should return prior and current
             Err(idx) => {
                 let prev = if idx > 0 { Some(idx - 1) } else { None };
                 let next = if idx < self.keypoints.len() {

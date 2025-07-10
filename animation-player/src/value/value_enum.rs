@@ -1,4 +1,3 @@
-use crate::AnimationError;
 use crate::value::color::Color;
 use crate::value::euler::Euler;
 use crate::value::transform::Transform;
@@ -6,6 +5,7 @@ use crate::value::utils::hash_f64;
 use crate::value::vector2::Vector2;
 use crate::value::vector3::Vector3;
 use crate::value::vector4::Vector4;
+use crate::AnimationError;
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Mul, Sub};
@@ -602,8 +602,6 @@ impl TryFrom<Value> for Transform {
         }
     }
 }
-
-
 
 impl Add for Value {
     type Output = Self;

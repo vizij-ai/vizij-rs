@@ -1,18 +1,17 @@
+use animation_player::interpolation::parameters::{InterpolationParams, StepParams};
+use animation_player::interpolation::InterpolationType;
 use animation_player::interpolation::{
     context::InterpolationContext,
     functions::{
         BezierInterpolation, CubicInterpolation, EaseInInterpolation, EaseInOutInterpolation,
-        EaseOutInterpolation, LinearInterpolation, SpringInterpolation,
-        StepInterpolation,
+        EaseOutInterpolation, LinearInterpolation, SpringInterpolation, StepInterpolation,
     },
     registry::InterpolationRegistry,
 };
 use animation_player::value::{ValueType, Vector3};
+use animation_player::AnimationError;
 use animation_player::Interpolator;
 use animation_player::{AnimationData, AnimationTime, Value};
-use animation_player::interpolation::parameters::{InterpolationParams, StepParams};
-use animation_player::interpolation::InterpolationType;
-use animation_player::AnimationError;
 
 #[test]
 fn test_linear_interpolation_float() {
@@ -460,7 +459,10 @@ fn test_interpolator_type_mismatch_error() {
     let animation_data = AnimationData::new("test", "test");
 
     let result = linear.interpolate(&start, &end, &context, &animation_data);
-    assert!(matches!(result, Err(AnimationError::InterpolationError { .. })));
+    assert!(matches!(
+        result,
+        Err(AnimationError::InterpolationError { .. })
+    ));
 }
 
 #[test]
