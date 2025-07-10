@@ -1,7 +1,8 @@
 use animation_player::interpolation::{
     context::InterpolationContext,
     functions::{
-        BezierInterpolation, CubicInterpolation, LinearInterpolation, SpringInterpolation,
+        BezierInterpolation, CubicInterpolation, EaseInInterpolation, EaseInOutInterpolation,
+        EaseOutInterpolation, LinearInterpolation, SpringInterpolation,
         StepInterpolation,
     },
     registry::InterpolationRegistry,
@@ -9,6 +10,9 @@ use animation_player::interpolation::{
 use animation_player::value::{ValueType, Vector3};
 use animation_player::Interpolator;
 use animation_player::{AnimationData, AnimationTime, Value};
+use animation_player::interpolation::parameters::{InterpolationParams, StepParams};
+use animation_player::interpolation::InterpolationType;
+use animation_player::AnimationError;
 
 #[test]
 fn test_linear_interpolation_float() {
@@ -368,6 +372,184 @@ fn test_spring_interpolation_specific_params() {
         // Check if it's a reasonable spring value (not linear)
         assert!((f - 5.0).abs() > 0.1); // Ensure it's not linear
                                         // Allow for overshooting/undershooting characteristic of a spring
+    } else {
+        panic!("Expected float result");
+    }
+}
+
+#[test]
+fn test_step_custom_threshold() {
+    let step = StepInterpolation;
+    let start = Value::Float(0.0);
+    let end = Value::Float(10.0);
+    let mut context = InterpolationContext::new(
+        AnimationTime::zero(),
+        AnimationTime::from_seconds(1.0).unwrap(),
+        AnimationTime::from_seconds(0.5).unwrap(),
+        &[],
+        0,
+    )
+    .unwrap();
+    context.set_property("threshold", 0.8);
+    let animation_data = AnimationData::new("test", "test");
+
+    let result = step
+        .interpolate(&start, &end, &context, &animation_data)
+        .unwrap();
+    if let Value::Float(f) = result {
+        assert_eq!(f, 0.0);
+    } else {
+        panic!("Expected float result");
+    }
+
+    context.set_property("threshold", 0.3);
+    let result = step
+        .interpolate(&start, &end, &context, &animation_data)
+        .unwrap();
+    if let Value::Float(f) = result {
+        assert_eq!(f, 10.0);
+    } else {
+        panic!("Expected float result");
+    }
+}
+
+#[test]
+fn test_step_default_threshold_from_animation() {
+    let step = StepInterpolation;
+    let start = Value::Float(0.0);
+    let end = Value::Float(10.0);
+
+    let mut animation_data = AnimationData::new("test", "test");
+    animation_data.default_interpolation.insert(
+        InterpolationType::Step,
+        InterpolationParams::Step(StepParams { point: 0.25 }),
+    );
+
+    let context = InterpolationContext::new(
+        AnimationTime::zero(),
+        AnimationTime::from_seconds(1.0).unwrap(),
+        AnimationTime::from_seconds(0.3).unwrap(),
+        &[],
+        0,
+    )
+    .unwrap();
+
+    let result = step
+        .interpolate(&start, &end, &context, &animation_data)
+        .unwrap();
+    if let Value::Float(f) = result {
+        assert_eq!(f, 10.0);
+    } else {
+        panic!("Expected float result");
+    }
+}
+
+#[test]
+fn test_interpolator_type_mismatch_error() {
+    let linear = LinearInterpolation;
+    let start = Value::Float(0.0);
+    let end = Value::Vector3(Vector3::new(1.0, 1.0, 1.0));
+    let context = InterpolationContext::new(
+        AnimationTime::zero(),
+        AnimationTime::from_seconds(1.0).unwrap(),
+        AnimationTime::from_seconds(0.5).unwrap(),
+        &[],
+        0,
+    )
+    .unwrap();
+    let animation_data = AnimationData::new("test", "test");
+
+    let result = linear.interpolate(&start, &end, &context, &animation_data);
+    assert!(matches!(result, Err(AnimationError::InterpolationError { .. })));
+}
+
+#[test]
+fn test_ease_functions_midpoint() {
+    let start = Value::Float(0.0);
+    let end = Value::Float(10.0);
+    let context = InterpolationContext::new(
+        AnimationTime::zero(),
+        AnimationTime::from_seconds(1.0).unwrap(),
+        AnimationTime::from_seconds(0.5).unwrap(),
+        &[],
+        0,
+    )
+    .unwrap();
+    let animation_data = AnimationData::new("test", "test");
+
+    let ease_in = EaseInInterpolation;
+    let ease_out = EaseOutInterpolation;
+    let ease_in_out = EaseInOutInterpolation;
+
+    let result = ease_in
+        .interpolate(&start, &end, &context, &animation_data)
+        .unwrap();
+    if let Value::Float(v) = result {
+        assert!((v - 2.5).abs() < 1e-6);
+    } else {
+        panic!("Expected float result");
+    }
+
+    let result = ease_out
+        .interpolate(&start, &end, &context, &animation_data)
+        .unwrap();
+    if let Value::Float(v) = result {
+        assert!((v - 7.5).abs() < 1e-6);
+    } else {
+        panic!("Expected float result");
+    }
+
+    let result = ease_in_out
+        .interpolate(&start, &end, &context, &animation_data)
+        .unwrap();
+    if let Value::Float(v) = result {
+        assert!((v - 5.0).abs() < 1e-6);
+    } else {
+        panic!("Expected float result");
+    }
+}
+
+#[test]
+fn test_ease_functions_quarter() {
+    let start = Value::Float(0.0);
+    let end = Value::Float(10.0);
+    let context = InterpolationContext::new(
+        AnimationTime::zero(),
+        AnimationTime::from_seconds(1.0).unwrap(),
+        AnimationTime::from_seconds(0.25).unwrap(),
+        &[],
+        0,
+    )
+    .unwrap();
+    let animation_data = AnimationData::new("test", "test");
+
+    let ease_in = EaseInInterpolation;
+    let ease_out = EaseOutInterpolation;
+    let ease_in_out = EaseInOutInterpolation;
+
+    let result = ease_in
+        .interpolate(&start, &end, &context, &animation_data)
+        .unwrap();
+    if let Value::Float(v) = result {
+        assert!((v - 0.625).abs() < 1e-6);
+    } else {
+        panic!("Expected float result");
+    }
+
+    let result = ease_out
+        .interpolate(&start, &end, &context, &animation_data)
+        .unwrap();
+    if let Value::Float(v) = result {
+        assert!((v - 4.375).abs() < 1e-6);
+    } else {
+        panic!("Expected float result");
+    }
+
+    let result = ease_in_out
+        .interpolate(&start, &end, &context, &animation_data)
+        .unwrap();
+    if let Value::Float(v) = result {
+        assert!((v - 1.25).abs() < 1e-6);
     } else {
         panic!("Expected float result");
     }

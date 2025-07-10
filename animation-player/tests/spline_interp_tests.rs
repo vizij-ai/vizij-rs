@@ -85,8 +85,18 @@ fn test_hermite_with_explicit_tangents() {
         .interpolate("hermite", &start, &end, &context, &animation_data)
         .unwrap();
 
-    // Verify the result is a Vector3
-    assert!(matches!(result, Value::Vector3(_)));
+    // Verify the result matches expected hermite spline value
+    if let Value::Vector3(v) = result {
+        use animation_player::interpolation::spline_helpers::hermite_spline;
+        let expected_x = hermite_spline(0.0, 10.0, 5.0, 0.0, 0.5);
+        let expected_y = hermite_spline(0.0, 10.0, 0.0, 5.0, 0.5);
+        let expected_z = hermite_spline(0.0, 10.0, 0.0, 0.0, 0.5);
+        assert!((v.x - expected_x).abs() < 1e-6);
+        assert!((v.y - expected_y).abs() < 1e-6);
+        assert!((v.z - expected_z).abs() < 1e-6);
+    } else {
+        panic!("Expected Vector3 result");
+    }
 }
 
 #[test]
