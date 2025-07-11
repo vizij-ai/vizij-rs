@@ -222,7 +222,7 @@ fn test_animation_loop_playback() {
     let (mut engine, player_id) = setup_engine_and_player();
 
     // Enable looping
-    let player_state = engine.get_player_state_mut(&player_id).unwrap();
+    let player_state = engine.get_player_settings_mut(&player_id).unwrap();
     player_state.mode = animation_player::animation::PlaybackMode::Loop;
 
     engine.play_player(&player_id).unwrap();

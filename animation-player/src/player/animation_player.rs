@@ -154,9 +154,6 @@ impl AnimationPlayer {
                 continue; // Instance hasn't started yet
             }
 
-            // Update instance loop state
-            instance.update_loop_state(self.current_time);
-
             // Get the effective time for this instance
             let effective_instance_time = instance.get_effective_time(self.current_time);
 

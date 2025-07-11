@@ -7,30 +7,60 @@ use crate::animation::instance::{AnimationInstance, AnimationInstanceSettings, P
 use crate::event::EventDispatcher;
 use crate::player::animation_player::AnimationPlayer;
 use crate::player::playback_state::PlaybackState;
-use crate::player::player_state::PlayerState;
+use crate::player::{PlayerProperties, PlayerSettings};
 use crate::{
     AnimationData, AnimationEngineConfig, AnimationError, AnimationTime, InterpolationRegistry,
     Value,
 };
 
+/// Settings for the entire engine
+#[derive(Debug, Clone)]
+pub struct EngineSettings {
+    pub config: AnimationEngineConfig,
+}
+
+impl Default for EngineSettings {
+    fn default() -> Self {
+        Self {
+            config: AnimationEngineConfig::default(),
+        }
+    }
+}
+
+/// Runtime properties for the engine
+#[derive(Debug, Clone)]
+pub struct EngineProperties {
+    pub engine_metrics: HashMap<String, f64>,
+    pub last_engine_update_time: Duration,
+}
+
+impl Default for EngineProperties {
+    fn default() -> Self {
+        Self {
+            engine_metrics: HashMap::new(),
+            last_engine_update_time: Duration::ZERO,
+        }
+    }
+}
+
 /// Animation engine managing multiple players
 pub struct AnimationEngine {
     /// All animation players
     players: HashMap<String, AnimationPlayer>,
-    /// State for each player managed by the engine
-    player_states: HashMap<String, PlayerState>,
+    /// Settings for each player managed by the engine
+    player_settings: HashMap<String, PlayerSettings>,
+    /// Properties for each player managed by the engine
+    player_properties: HashMap<String, PlayerProperties>,
     /// All loaded animation data
     animations: HashMap<String, AnimationData>,
     /// Interpolation registry
     interpolation_registry: InterpolationRegistry,
     /// Event dispatcher
     event_dispatcher: EventDispatcher,
-    /// Engine configuration
-    config: AnimationEngineConfig,
-    /// Engine metrics
-    engine_metrics: HashMap<String, f64>,
-    /// Last time the engine was updated (for delta calculation)
-    last_engine_update_time: Duration,
+    /// Engine settings
+    settings: EngineSettings,
+    /// Engine properties
+    properties: EngineProperties,
 }
 
 impl AnimationEngine {
@@ -38,13 +68,13 @@ impl AnimationEngine {
     pub fn new(config: AnimationEngineConfig) -> Self {
         Self {
             players: HashMap::new(),
-            player_states: HashMap::new(),
+            player_settings: HashMap::new(),
+            player_properties: HashMap::new(),
             animations: HashMap::new(),
             interpolation_registry: InterpolationRegistry::new(config.max_cache_size),
             event_dispatcher: EventDispatcher::new(),
-            config,
-            engine_metrics: HashMap::new(),
-            last_engine_update_time: Duration::ZERO,
+            settings: EngineSettings { config },
+            properties: EngineProperties::default(),
         }
     }
 
@@ -103,8 +133,10 @@ impl AnimationEngine {
         }
 
         self.players.insert(id.clone(), AnimationPlayer::new());
-        self.player_states
-            .insert(id.clone(), PlayerState::default());
+        self.player_settings
+            .insert(id.clone(), PlayerSettings::default());
+        self.player_properties
+            .insert(id.clone(), PlayerProperties::default());
         id
     }
 
@@ -120,21 +152,34 @@ impl AnimationEngine {
         self.players.get_mut(id)
     }
 
-    /// Get a player's state by ID
+    /// Get a player's settings by ID
     #[inline]
-    pub fn get_player_state(&self, id: &str) -> Option<&PlayerState> {
-        self.player_states.get(id)
+    pub fn get_player_settings(&self, id: &str) -> Option<&PlayerSettings> {
+        self.player_settings.get(id)
     }
 
-    /// Get a mutable player's state by ID
+    /// Get mutable player settings by ID
     #[inline]
-    pub fn get_player_state_mut(&mut self, id: &str) -> Option<&mut PlayerState> {
-        self.player_states.get_mut(id)
+    pub fn get_player_settings_mut(&mut self, id: &str) -> Option<&mut PlayerSettings> {
+        self.player_settings.get_mut(id)
+    }
+
+    /// Get a player's properties by ID
+    #[inline]
+    pub fn get_player_properties(&self, id: &str) -> Option<&PlayerProperties> {
+        self.player_properties.get(id)
+    }
+
+    /// Get mutable player properties by ID
+    #[inline]
+    pub fn get_player_properties_mut(&mut self, id: &str) -> Option<&mut PlayerProperties> {
+        self.player_properties.get_mut(id)
     }
 
     /// Remove a player
     pub fn remove_player(&mut self, id: &str) -> Option<AnimationPlayer> {
-        self.player_states.remove(id);
+        self.player_settings.remove(id);
+        self.player_properties.remove(id);
         self.players.remove(id)
     }
 
@@ -194,7 +239,7 @@ impl AnimationEngine {
         let mut all_values = HashMap::new();
 
         // Update engine's internal time
-        self.last_engine_update_time += frame_delta;
+        self.properties.last_engine_update_time += frame_delta;
 
         // Collect player IDs to avoid mutable borrow issues
         let player_ids: Vec<String> = self.players.keys().cloned().collect();
@@ -202,10 +247,11 @@ impl AnimationEngine {
         for player_id in player_ids {
             // Get mutable references to player and its state
             let player = self.players.get_mut(&player_id).unwrap();
-            let player_state = self.player_states.get_mut(&player_id).unwrap();
+            let player_property = self.player_properties.get_mut(&player_id).unwrap();
+            let player_setting = self.player_settings.get_mut(&player_id).unwrap();
 
             // Skip processing if player is not playing
-            if player_state.playback_state != PlaybackState::Playing {
+            if player_property.playback_state != PlaybackState::Playing {
                 let values =
                     player.calculate_values(&self.animations, &mut self.interpolation_registry)?;
                 all_values.insert(player_id.clone(), values);
@@ -213,14 +259,14 @@ impl AnimationEngine {
             }
 
             // Get player duration
-            let player_duration = player_state.end_time.unwrap_or(player.duration());
+            let player_duration = player_setting.end_time.unwrap_or(player.duration());
 
             // Calculate animation delta based on frame_delta and player speed
             // std::time::Duration only supports multiplying with positive values.
-            let animation_delta = frame_delta.mul_f64(player_state.speed.abs());
+            let animation_delta = frame_delta.mul_f64(player_setting.speed.abs());
 
             // Update player time and handle bounds/looping
-            let values = if player_state.speed >= 0.0 {
+            let values = if player_setting.speed >= 0.0 {
                 // Forward playback
                 let new_time = player.current_time + animation_delta.into();
 
@@ -232,22 +278,22 @@ impl AnimationEngine {
                     //     .next()
                     //     .unwrap_or(player_state.mode);
 
-                    match player_state.mode {
+                    match player_setting.mode {
                         PlaybackMode::Loop => {
                             // Wrap around to start
                             let wrapped_time =
-                                player_state.start_time + (new_time - player_duration);
+                                player_setting.start_time + (new_time - player_duration);
                             let result = player.go_to(
                                 wrapped_time,
                                 &self.animations,
                                 &mut self.interpolation_registry,
                             )?;
-                            player_state.playback_state = PlaybackState::Playing; // Ensure state remains Playing
+                            player_property.playback_state = PlaybackState::Playing; // Ensure state remains Playing
                             result
                         }
                         PlaybackMode::PingPong => {
                             // Reverse the speed for ping pong mode
-                            player_state.speed = -player_state.speed.abs();
+                            player_setting.speed = -player_setting.speed.abs();
                             // Clamp to the end and reverse
                             player.go_to(
                                 player_duration,
@@ -257,7 +303,7 @@ impl AnimationEngine {
                         }
                         PlaybackMode::Once => {
                             // End playback
-                            player_state.playback_state = PlaybackState::Ended;
+                            player_property.playback_state = PlaybackState::Ended;
                             player.go_to(
                                 player_duration,
                                 &self.animations,
@@ -277,7 +323,7 @@ impl AnimationEngine {
                 // Reverse playback
                 let new_time = player.current_time - animation_delta.into();
 
-                if new_time <= player_state.start_time {
+                if new_time <= player_setting.start_time {
                     // Use the instance's playback mode, fallback to player state mode
                     // let effective_mode = player.instances.values()
                     //     .filter(|inst| inst.settings.enabled)
@@ -285,34 +331,34 @@ impl AnimationEngine {
                     //     .next()
                     //     .unwrap_or(player_state.mode);
 
-                    match player_state.mode {
+                    match player_setting.mode {
                         PlaybackMode::Loop => {
                             // Wrap around to end
                             let wrapped_time =
-                                player_duration - (player_state.start_time - new_time);
+                                player_duration - (player_setting.start_time - new_time);
                             let result = player.go_to(
                                 wrapped_time,
                                 &self.animations,
                                 &mut self.interpolation_registry,
                             )?;
-                            player_state.playback_state = PlaybackState::Playing; // Ensure state remains Playing
+                            player_property.playback_state = PlaybackState::Playing; // Ensure state remains Playing
                             result
                         }
                         PlaybackMode::PingPong => {
                             // Reverse the speed for ping pong mode
-                            player_state.speed = player_state.speed.abs();
+                            player_setting.speed = player_setting.speed.abs();
                             // Clamp to the start and reverse
                             player.go_to(
-                                player_state.start_time,
+                                player_setting.start_time,
                                 &self.animations,
                                 &mut self.interpolation_registry,
                             )?
                         }
                         PlaybackMode::Once => {
                             // End playback
-                            player_state.playback_state = PlaybackState::Ended;
+                            player_property.playback_state = PlaybackState::Ended;
                             player.go_to(
-                                player_state.start_time,
+                                player_setting.start_time,
                                 &self.animations,
                                 &mut self.interpolation_registry,
                             )?
@@ -341,7 +387,7 @@ impl AnimationEngine {
     fn update_engine_metrics(&mut self) {
         let total_players = self.players.len() as f64;
         let playing_players = self
-            .player_states
+            .player_properties
             .values()
             .filter(|ps| ps.playback_state.is_playing())
             .count() as f64;
@@ -362,17 +408,20 @@ impl AnimationEngine {
             0.0
         };
 
-        self.engine_metrics
+        self.properties
+            .engine_metrics
             .insert("total_players".to_string(), total_players);
-        self.engine_metrics
+        self.properties
+            .engine_metrics
             .insert("playing_players".to_string(), playing_players);
-        self.engine_metrics.insert(
+        self.properties.engine_metrics.insert(
             "total_memory_mb".to_string(),
             total_memory as f64 / (1024.0 * 1024.0),
         );
-        self.engine_metrics
+        self.properties
+            .engine_metrics
             .insert("average_fps".to_string(), avg_fps);
-        self.engine_metrics.insert(
+        self.properties.engine_metrics.insert(
             "cache_hit_rate".to_string(),
             self.interpolation_registry.metrics().cache_hit_rate(),
         );
@@ -405,19 +454,19 @@ impl AnimationEngine {
     /// Get engine configuration
     #[inline]
     pub fn config(&self) -> &AnimationEngineConfig {
-        &self.config
+        &self.settings.config
     }
 
     /// Set engine configuration
     #[inline]
     pub fn set_config(&mut self, config: AnimationEngineConfig) {
-        self.config = config;
+        self.settings.config = config;
     }
 
     /// Get engine metrics
     #[inline]
     pub fn metrics(&self) -> &HashMap<String, f64> {
-        &self.engine_metrics
+        &self.properties.engine_metrics
     }
 
     /// Get total number of players
@@ -429,7 +478,7 @@ impl AnimationEngine {
     /// Get number of playing players
     #[inline]
     pub fn playing_player_count(&self) -> usize {
-        self.player_states
+        self.player_properties
             .values()
             .filter(|ps| ps.playback_state.is_playing())
             .count()
@@ -437,24 +486,24 @@ impl AnimationEngine {
 
     /// Start playback for a specific player
     pub fn play_player(&mut self, player_id: &str) -> Result<(), AnimationError> {
-        let player_state =
-            self.player_states
+        let player_property =
+            self.player_properties
                 .get_mut(player_id)
                 .ok_or_else(|| AnimationError::Generic {
                     message: format!("Player with ID '{}' not found.", player_id),
                 })?;
-
-        if player_state.playback_state.can_resume() {
-            player_state.playback_state = PlaybackState::Playing;
-            player_state.last_update_time = AnimationTime::zero(); // Reset for new playback
+        let player_setting = self.player_settings.get_mut(player_id).unwrap();
+        if player_property.playback_state.can_resume() {
+            player_property.playback_state = PlaybackState::Playing;
+            player_property.last_update_time = AnimationTime::zero(); // Reset for new playback
 
             // Reset player's time if starting from stopped/ended
             let player = self.players.get_mut(player_id).unwrap();
-            if player_state.playback_state == PlaybackState::Stopped
-                || player_state.playback_state == PlaybackState::Ended
+            if player_property.playback_state == PlaybackState::Stopped
+                || player_property.playback_state == PlaybackState::Ended
             {
                 player.go_to(
-                    player_state.start_time,
+                    player_setting.start_time,
                     &self.animations,
                     &mut self.interpolation_registry,
                 )?;
@@ -462,7 +511,7 @@ impl AnimationEngine {
             Ok(())
         } else {
             Err(AnimationError::InvalidPlayerState {
-                current_state: player_state.playback_state.name().to_string(),
+                current_state: player_property.playback_state.name().to_string(),
                 requested_state: "playing".to_string(),
             })
         }
@@ -470,19 +519,19 @@ impl AnimationEngine {
 
     /// Pause playback for a specific player
     pub fn pause_player(&mut self, player_id: &str) -> Result<(), AnimationError> {
-        let player_state =
-            self.player_states
+        let player_property =
+            self.player_properties
                 .get_mut(player_id)
                 .ok_or_else(|| AnimationError::Generic {
                     message: format!("Player with ID '{}' not found.", player_id),
                 })?;
 
-        if player_state.playback_state.can_pause() {
-            player_state.playback_state = PlaybackState::Paused;
+        if player_property.playback_state.can_pause() {
+            player_property.playback_state = PlaybackState::Paused;
             Ok(())
         } else {
             Err(AnimationError::InvalidPlayerState {
-                current_state: player_state.playback_state.name().to_string(),
+                current_state: player_property.playback_state.name().to_string(),
                 requested_state: "paused".to_string(),
             })
         }
@@ -490,25 +539,26 @@ impl AnimationEngine {
 
     /// Stop playback for a specific player
     pub fn stop_player(&mut self, player_id: &str) -> Result<(), AnimationError> {
-        let player_state =
-            self.player_states
+        let player_property =
+            self.player_properties
                 .get_mut(player_id)
                 .ok_or_else(|| AnimationError::Generic {
                     message: format!("Player with ID '{}' not found.", player_id),
                 })?;
+        let player_setting = self.player_settings.get(player_id).unwrap();
 
-        if player_state.playback_state.can_stop() {
-            player_state.playback_state = PlaybackState::Stopped;
+        if player_property.playback_state.can_stop() {
+            player_property.playback_state = PlaybackState::Stopped;
             let player = self.players.get_mut(player_id).unwrap();
             player.go_to(
-                player_state.start_time,
+                player_setting.start_time,
                 &self.animations,
                 &mut self.interpolation_registry,
             )?;
             Ok(())
         } else {
             Err(AnimationError::InvalidPlayerState {
-                current_state: player_state.playback_state.name().to_string(),
+                current_state: player_property.playback_state.name().to_string(),
                 requested_state: "stopped".to_string(),
             })
         }
@@ -588,18 +638,19 @@ impl AnimationEngine {
                 message: format!("Player '{}' not found", player_id),
             })?;
 
-        let player_state =
-            self.player_states
+        let player_property =
+            self.player_properties
                 .get(player_id)
                 .ok_or_else(|| AnimationError::Generic {
                     message: format!("Player state for '{}' not found", player_id),
                 })?;
+        let player_setting = self.player_settings.get(player_id).unwrap();
 
         player.calculate_derivatives(
             &all_animations,
             &mut self.interpolation_registry,
             derivative_width,
-            player_state.speed,
+            player_setting.speed,
         )
     }
 }

@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use animation_player::{
     animation::{AnimationInstance, AnimationInstanceSettings, PlaybackMode},
-    player::PlayerState,
+    player::{PlayerProperties, PlayerSettings},
     value::Vector3,
     AnimationData, AnimationEngine, AnimationEngineConfig, AnimationKeypoint, AnimationTime,
     AnimationTrack, PlaybackState, Value,
@@ -148,8 +148,8 @@ fn test_engine_player_management() {
     assert!(engine.get_player("non_existent").is_none());
 
     // Get player states
-    assert!(engine.get_player_state(&player1_id).is_some());
-    assert!(engine.get_player_state("non_existent").is_none());
+    assert!(engine.get_player_properties(&player1_id).is_some());
+    assert!(engine.get_player_properties("non_existent").is_none());
 
     // Remove player
     assert!(engine.remove_player(&player1_id).is_some());
@@ -178,17 +178,17 @@ fn test_engine_player_playback_control() {
 
     // Test playback controls
     assert!(engine.play_player(&player_id).is_ok());
-    let state = engine.get_player_state(&player_id).unwrap();
+    let state = engine.get_player_properties(&player_id).unwrap();
     assert_eq!(state.playback_state, PlaybackState::Playing);
     assert_eq!(engine.playing_player_count(), 1);
 
     assert!(engine.pause_player(&player_id).is_ok());
-    let state = engine.get_player_state(&player_id).unwrap();
+    let state = engine.get_player_properties(&player_id).unwrap();
     assert_eq!(state.playback_state, PlaybackState::Paused);
     assert_eq!(engine.playing_player_count(), 0);
 
     assert!(engine.stop_player(&player_id).is_ok());
-    let state = engine.get_player_state(&player_id).unwrap();
+    let state = engine.get_player_properties(&player_id).unwrap();
     assert_eq!(state.playback_state, PlaybackState::Stopped);
 
     // Test invalid state transitions
@@ -333,7 +333,7 @@ fn test_engine_update_with_looping() {
     let player_id = setup_player_of_simple_animation(&mut engine);
 
     // Enable looping for the player state
-    let player_state = engine.get_player_state_mut(&player_id).unwrap();
+    let player_state = engine.get_player_settings_mut(&player_id).unwrap();
     player_state.mode = PlaybackMode::Loop;
 
     engine.play_player(&player_id).unwrap();
@@ -346,7 +346,7 @@ fn test_engine_update_with_looping() {
     let player = engine.get_player(&player_id).unwrap();
     assert!(player.current_time.as_seconds() < 2.0); // Should have wrapped
 
-    let state = engine.get_player_state(&player_id).unwrap();
+    let state = engine.get_player_properties(&player_id).unwrap();
     assert_eq!(state.playback_state, PlaybackState::Playing); // Still playing
 }
 
@@ -356,7 +356,7 @@ fn test_engine_update_without_looping() {
     let player_id = setup_player_of_simple_animation(&mut engine);
 
     // Set player to play once
-    let player_state = engine.get_player_state_mut(&player_id).unwrap();
+    let player_state = engine.get_player_settings_mut(&player_id).unwrap();
     player_state.mode = PlaybackMode::Once;
 
     engine.play_player(&player_id).unwrap();
@@ -366,7 +366,7 @@ fn test_engine_update_without_looping() {
     assert!(result.is_ok());
 
     // Player should have ended
-    let state = engine.get_player_state(&player_id).unwrap();
+    let state = engine.get_player_properties(&player_id).unwrap();
     assert_eq!(state.playback_state, PlaybackState::Ended);
 }
 
@@ -376,7 +376,7 @@ fn test_engine_update_with_speed_variations() {
     let player_id = setup_player_of_simple_animation(&mut engine);
 
     // Set speed to 2x
-    let player_state = engine.get_player_state_mut(&player_id).unwrap();
+    let player_state = engine.get_player_settings_mut(&player_id).unwrap();
     player_state.speed = 2.0;
 
     engine.play_player(&player_id).unwrap();
@@ -406,7 +406,7 @@ fn test_engine_update_with_reverse_speed() {
         .seek_player(&player_id, animation.metadata.duration)
         .unwrap();
 
-    let player_state = engine.get_player_state_mut(&player_id).unwrap();
+    let player_state = engine.get_player_settings_mut(&player_id).unwrap();
     player_state.speed = -1.0;
 
     engine.play_player(&player_id).unwrap();
@@ -452,7 +452,7 @@ fn test_engine_stop_all_players() {
 
     // Check that all players are stopped
     for player_id in [&player1_id, &player2_id] {
-        let state = engine.get_player_state(player_id).unwrap();
+        let state = engine.get_player_properties(player_id).unwrap();
         assert_eq!(state.playback_state, PlaybackState::Stopped);
     }
 }
@@ -485,7 +485,7 @@ fn test_engine_pause_resume_all_players() {
     assert_eq!(engine.playing_player_count(), 0);
 
     for player_id in [&player1_id, &player2_id] {
-        let state = engine.get_player_state(player_id).unwrap();
+        let state = engine.get_player_properties(player_id).unwrap();
         assert_eq!(state.playback_state, PlaybackState::Paused);
     }
 
@@ -494,7 +494,7 @@ fn test_engine_pause_resume_all_players() {
     assert_eq!(engine.playing_player_count(), 2);
 
     for player_id in [&player1_id, &player2_id] {
-        let state = engine.get_player_state(player_id).unwrap();
+        let state = engine.get_player_properties(player_id).unwrap();
         assert_eq!(state.playback_state, PlaybackState::Playing);
     }
 }
@@ -582,15 +582,19 @@ fn test_engine_default_construction() {
 
 #[test]
 fn test_player_state_initialization() {
-    let state = PlayerState::default();
+    let settings = PlayerSettings::default();
+    let properties = PlayerProperties::default();
 
-    assert_eq!(state.playback_state, PlaybackState::Stopped);
-    assert_eq!(state.speed, 1.0);
-    assert_eq!(state.mode, PlaybackMode::Loop);
-    assert_eq!(state.start_time, AnimationTime::zero());
-    assert_eq!(state.offset, AnimationTime::zero());
-    assert_eq!(state.end_time, None);
-    assert_eq!(state.last_update_time, AnimationTime::zero());
+    assert_eq!(properties.playback_state, PlaybackState::Stopped);
+    assert_eq!(settings.speed, 1.0);
+    assert_eq!(settings.mode, PlaybackMode::Loop);
+    assert_eq!(settings.loop_until_target, None);
+    assert_eq!(settings.start_time, AnimationTime::zero());
+    assert_eq!(settings.offset, AnimationTime::zero());
+    assert_eq!(settings.end_time, None);
+    assert_eq!(properties.last_update_time, AnimationTime::zero());
+    assert_eq!(properties.current_loop_count, 0);
+    assert!(properties.is_playing_forward);
 }
 
 #[test]

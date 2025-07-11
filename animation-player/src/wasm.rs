@@ -152,14 +152,14 @@ impl WasmAnimationEngine {
             .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
     }
 
-    /// Returns the current playback state of a player as a JSON object.
+    /// Returns the current playback properties of a player as a JSON object.
     #[wasm_bindgen]
-    pub fn get_player_state(&self, player_id: &str) -> Result<JsValue, JsValue> {
-        let state = self
+    pub fn get_player_properties(&self, player_id: &str) -> Result<JsValue, JsValue> {
+        let props = self
             .engine
-            .get_player_state(player_id)
+            .get_player_properties(player_id)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
-        serde_wasm_bindgen::to_value(&state)
+        serde_wasm_bindgen::to_value(&props)
             .map_err(|e| JsValue::from_str(&format!("State serialization error: {}", e)))
     }
 
@@ -212,7 +212,7 @@ impl WasmAnimationEngine {
     ) -> Result<(), JsValue> {
         let player_config = self
             .engine
-            .get_player_state_mut(player_id)
+            .get_player_settings_mut(player_id)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
 
         let config: serde_json::Value = serde_json::from_str(config_json)

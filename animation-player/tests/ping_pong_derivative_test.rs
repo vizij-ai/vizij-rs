@@ -22,7 +22,7 @@ fn setup_player_for_animation(
 
     // Create player and instance
     let player_id = engine.create_player();
-    let player_state = engine.get_player_state_mut(&player_id).unwrap();
+    let player_state = engine.get_player_settings_mut(&player_id).unwrap();
     player_state.mode = playback_mode;
 
     let animation_instance = AnimationInstance::new(
@@ -98,9 +98,9 @@ fn test_ping_pong_derivative_sign() {
         .seek_player(&player_id, AnimationTime::from_seconds(1.0).unwrap())
         .unwrap();
 
-    let player_state = engine.get_player_state_mut(&player_id).unwrap();
+    let player_state = engine.get_player_settings_mut(&player_id).unwrap();
     player_state.speed = -1.0;
-    player_state.playback_state = PlaybackState::Playing;
+    engine.get_player_properties_mut(&player_id).unwrap().playback_state = PlaybackState::Playing;
 
     let derivatives_backward = engine
         .calculate_player_derivatives(&player_id, None)

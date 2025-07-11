@@ -74,7 +74,7 @@ sequenceDiagram
     participant App as Application
     participant Engine as AnimationEngine
     participant Player as AnimationPlayer
-    participant PState as PlayerState
+    participant PState as PlayerSettings/Properties
     participant Instance as AnimationInstance
     participant AnimData as AnimationData
     participant InterpReg as InterpolationRegistry
@@ -91,9 +91,8 @@ sequenceDiagram
             Player->>Player: calculate_values()
 
             loop For each active instance
-                Player->>Instance: update_loop_state(player.current_time)
                 Player->>Instance: get_effective_time(player.current_time)
-                Note right of Instance: Applies instance timescale, looping, and start offset
+                Note right of Instance: Applies instance timescale and start offset
 
                 Player->>Engine: Get AnimationData via instance.animation_id
                 Engine-->>Player: Return AnimData
@@ -125,7 +124,7 @@ sequenceDiagram
 
 -   **Resource Management**: Loads, stores, and provides access to `AnimationData` via `load_animation_data`. Manages the shared `InterpolationRegistry`.
 -   **Player Lifecycle**: Creates (`create_player`) and destroys (`remove_player`) `AnimationPlayer` instances.
--   **State Management**: Manages a `PlayerState` for each player, which holds the runtime configuration like playback speed, mode, and current state (playing, paused, etc.).
+-   **State Management**: Tracks `PlayerSettings` (user controlled) and `PlayerProperties` (runtime state) for each player.
 -   **Global Playback Control**: Provides top-level methods to `play_player`, `pause_player`, `stop_player`, and `seek_player`.
 -   **Update Loop**: Drives the entire animation system forward in time, iterating through players, updating their time based on their state, and collecting the final animation values.
 
@@ -141,16 +140,13 @@ sequenceDiagram
 -   **Individual Animation State**: Represents a single playing animation clip. It links to `AnimationData` via its `animation_id`.
 -   **Behavior Definition**: `AnimationInstanceSettings` define its unique behavior:
     -   `timescale`: Controls the playback speed relative to the player.
-    -   `playback_mode` & `loop_count`: Manages how the instance loops (`Once`, `Loop`, `PingPong`).
-    -   `instance_start_time`: Defines an offset on the player's timeline, a`ll`owing for staggered animations.
--   **Effective Time Calculation**: Its most critical role is to translate the player's `current_time` into its own local time (`get_effective_time`), applying its settings. This allows each instance to have timing independent of its siblings.
--   **Loop Management**: Tracks its own loop state (`update_loop_state`) to handle finite loops and ping-pong direction.
-
+    -   `instance_start_time`: Defines an offset on the player's timeline, allowing for staggered animations.
+-   **Effective Time Calculation**: Its most critical role is to translate the player's `current_time` into its own local time (`get_effective_time`), applying its settings.
 ### Value Calculation Flow
 
 1.  **Engine Update**: The `update` method is called with the frame's delta time.
 2.  **Player Iteration**: The engine iterates through each `AnimationPlayer`.
-3.  **State Check**: It checks the `PlayerState`. If not `Playing`, it may return cached values and skip the update.
+3.  **State Check**: It checks the `PlayerProperties`. If not `Playing`, it may return cached values and skip the update.
 4.  **Player Time Update**: The engine calculates the time change based on `frame_delta` and the player's `speed`. It updates the player's `current_time` and handles player-level looping or ping-pong by reversing speed or wrapping time.
 5.  **Instance Processing**: The player's `calculate_values` method is called. It iterates through its active `AnimationInstance`s.
 6.  **Effective Time**: For each instance, it calculates the *effective time* by applying the instance's start offset, timescale, and looping rules to the player's `current_time`.

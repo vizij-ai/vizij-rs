@@ -108,9 +108,9 @@ Advances the animation engine by a time delta (typically the time since the last
 
 ### 7. State & Configuration Queries
 
-#### `get_player_state(player_id: string): string`
+#### `get_player_properties(player_id: string): string`
 
-Returns a JSON string of the player's current `PlayerState`, including its playback status (`playing`, `paused`, etc.), speed, and mode.
+Returns a JSON string of the player's current `PlayerProperties`, including its playback status (`playing`, `paused`, etc.).
 
 #### `get_player_time(player_id: string): f64`
 
@@ -122,7 +122,7 @@ Returns the player's progress as a value from `0.0` to `1.0`.
 
 #### `update_player_config(player_id: string, config_json: string): void`
 
-Updates the runtime configuration of a player. See the `PlayerState` data structure for available fields.
+Updates the runtime configuration of a player. See the `PlayerSettings` data structure for available fields.
 
 #### `update_instance_config(player_id: string, instance_id: string, settings_json: string): void`
 
@@ -190,7 +190,7 @@ The core data model for an animation clip.
 }
 ```
 
-### PlayerState (Player Configuration)
+### PlayerSettings (Player Configuration)
 
 Used with `update_player_config`.
 
@@ -198,6 +198,7 @@ Used with `update_player_config`.
 {
   "speed": 1.0,
   "mode": "Loop", // "Once", "Loop", "PingPong"
+  "loop_until_target": null,
   "start_time": 0.0,
   "end_time": null // or a time in seconds
 }
@@ -211,8 +212,6 @@ Used with `add_instance` and `update_instance_config`.
 {
   "instance_start_time": 0.0, // Offset on the player's timeline
   "timescale": 1.0,
-  "playback_mode": "Loop", // "Once", "Loop", "PingPong"
-  "loop_count": null, // or a number
   "enabled": true
 }
 ```
