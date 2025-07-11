@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { AnimationPlayerProvider, useAnimationPlayerContext } from './contexts/AnimationPlayerContext.jsx';
-import AnimationControls from './components/AnimationPlayer/AnimationControls.jsx';
-import AnimationDisplay from './components/AnimationPlayer/AnimationDisplay.jsx';
-import TimeSeriesControls from './components/TimeSeries/TimeSeriesControls.jsx';
+import { useState, useEffect } from 'react';
+import { AnimationEngineProvider, useAnimationEngine } from './contexts/AnimationEngineContext.jsx';
+import PlayerPanel from './components/AnimationPlayer/PlayerPanel.jsx';
+import DataViewport from './components/DataViewport/DataViewport.jsx';
 import BakedAnimationPanel from './components/BakedAnimation/BakedAnimationPanel.jsx';
 import FileUpload from './components/UI/FileUpload.jsx';
 import './App.css';
@@ -19,7 +18,7 @@ function App() {
   };
 
   return (
-    <AnimationPlayerProvider>
+    <AnimationEngineProvider>
       <div className="app">
         <div className="demo-container">
           <div className="header">
@@ -30,15 +29,15 @@ function App() {
             </button>
           </div>
           
-          <LoadingWrapper />
+          <MainContent />
         </div>
       </div>
-    </AnimationPlayerProvider>
+    </AnimationEngineProvider>
   );
 }
 
-const LoadingWrapper = () => {
-  const { isLoading, error, isLoaded } = useAnimationPlayerContext();
+const MainContent = () => {
+  const { isLoading, error, isLoaded, playerIds } = useAnimationEngine();
 
   if (isLoading) {
     return (
@@ -67,10 +66,6 @@ const LoadingWrapper = () => {
     );
   }
 
-  return <MainDemo />;
-};
-
-const MainDemo = () => {
   return (
     <div className="demo">
       {/* File Upload Section */}
@@ -78,14 +73,15 @@ const MainDemo = () => {
         <FileUpload />
       </div>
       
-      {/* Animation Display and Controls */}
-      <AnimationDisplay />
+      {/* Player Panels */}
+      <div className="player-panels-grid">
+        {playerIds.map((id) => (
+          <PlayerPanel key={id} playerId={id} />
+        ))}
+      </div>
       
-      {/* Main Controls */}
-      <AnimationControls />
-      
-      {/* Time Series Section */}
-      <TimeSeriesControls />
+      {/* Data Viewport */}
+      <DataViewport />
       
       {/* Baked Animation Section */}
       <BakedAnimationPanel />

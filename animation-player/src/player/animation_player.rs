@@ -355,6 +355,7 @@ impl AnimationPlayer {
     }
 
     /// Get the total duration of the animation player, based on the longest instance.
+    /// // TODO fix this with offsets
     #[inline]
     pub fn duration(&self) -> AnimationTime {
         self.instances

@@ -101,12 +101,17 @@ export function useWasm(config = null) {
 
   const getPlayerState = useCallback((playerId) => {
     if (!engineRef.current) throw new Error('WASM not loaded');
-    return engineRef.current.get_player_properties(playerId);
+    return engineRef.current.get_player_settings(playerId);
   }, []);
 
   const getPlayerTime = useCallback((playerId) => {
     if (!engineRef.current) throw new Error('WASM not loaded');
     return engineRef.current.get_player_time(playerId);
+  }, []);
+
+  const getPlayerDuration = useCallback((playerId) => {
+    if (!engineRef.current) throw new Error('WASM not loaded');
+    return engineRef.current.get_player_duration(playerId);
   }, []);
 
   const getAnimationIds = useCallback(() => {
@@ -175,6 +180,7 @@ export function useWasm(config = null) {
     getPlayerState,
     getPlayerTime,
     getAnimationIds,
+    getPlayerDuration,
     getPlayerProgress,
     getPlayerIds,
     updatePlayerConfig,

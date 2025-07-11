@@ -65,34 +65,29 @@ impl WasmAnimationEngine {
     ///
     /// @param {string} player_id - The ID of the player.
     /// @returns {any} A JSON object representing the player's properties.
-    /// ```json
-    /// {
-    ///   "state": "string", // "Playing", "Paused", "Stopped"
-    ///   "time": "float",
-    ///   "speed": "float",
-    ///   "mode": "string", // "Once", "Loop", "PingPong"
-    ///   "startTime": "float",
-    ///   "endTime": "float" | null,
-    ///   "progress": "float",
-    ///   "instances": [
-    ///     {
-    ///       "instanceId": "string",
-    ///       "animationId": "string",
-    ///       "weight": "float",
-    ///       "timeScale": "float",
-    ///       "enabled": "boolean"
-    ///     }
-    ///   ]
-    /// }
     /// ```
     #[wasm_bindgen]
-    pub fn get_player_properties(&self, player_id: &str) -> Result<JsValue, JsValue> {
+    pub fn get_player_settings(&self, player_id: &str) -> Result<JsValue, JsValue> {
         let props = self
             .engine
-            .get_player_properties(player_id)
+            .get_player_settings(player_id)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
         serde_wasm_bindgen::to_value(&props)
             .map_err(|e| JsValue::from_str(&format!("State serialization error: {}", e)))
+    }
+
+    /// Returns the duration of a player in seconds.
+    ///
+    /// @param {string} player_id - The ID of the player.
+    /// @returns {number} The duration of the player fully extended in seconds.
+    #[wasm_bindgen]
+    pub fn get_player_duration(&self, player_id: &str) -> Result<f64, JsValue> {
+        let player = self
+            .engine
+            .get_player(player_id)
+            .ok_or_else(|| JsValue::from_str("Player not found"))?;
+
+        Ok(player.duration().as_seconds())
     }
 
     /// Returns the current time of a player in seconds.

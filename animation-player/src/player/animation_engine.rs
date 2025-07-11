@@ -152,7 +152,7 @@ impl AnimationEngine {
         self.players.get_mut(id)
     }
 
-    /// Get a player's settings by ID
+    /// Get a player's settings by ID (speed, mode, loop_until_target, offset, start_time, end_time)
     #[inline]
     pub fn get_player_settings(&self, id: &str) -> Option<&PlayerSettings> {
         self.player_settings.get(id)
@@ -164,7 +164,7 @@ impl AnimationEngine {
         self.player_settings.get_mut(id)
     }
 
-    /// Get a player's properties by ID
+    /// Get a player's properties by ID (playback_state, last_update_time, current_loop_count, is_playing_forward)
     #[inline]
     pub fn get_player_properties(&self, id: &str) -> Option<&PlayerProperties> {
         self.player_properties.get(id)

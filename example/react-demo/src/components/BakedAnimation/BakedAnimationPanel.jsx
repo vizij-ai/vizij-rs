@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Line } from 'react-chartjs-2';
+import { useAnimationEngine } from '../../contexts/AnimationEngineContext.jsx';
 import { useBaking } from '../../hooks/useBaking.js';
-import { useTimeSeries } from '../../hooks/useTimeSeries.js';
 import ControlPanel from '../UI/ControlPanel.jsx';
 
 const BakedAnimationPanel = () => {
+  const { animationIds } = useAnimationEngine();
+  const [animationId, setAnimationId] = useState('');
   const {
     bakingState,
-    bakingConfig,
     generateBaked,
     updateConfig,
     clearBaked,
@@ -15,7 +16,7 @@ const BakedAnimationPanel = () => {
     getBakingStats,
     downloadBaked,
     formatBytes
-  } = useBaking();
+  } = useBaking(null, animationId);
 
   const [frameRate, setFrameRate] = useState(60);
   const [showBaked, setShowBaked] = useState(false);
@@ -34,6 +35,10 @@ const BakedAnimationPanel = () => {
   }, [bakingState.lastBakedData, selectedTrack]);
 
   const handleGenerateBaked = async () => {
+    if (!animationId) {
+      alert('Please select an animation to bake.');
+      return;
+    }
     try {
       await generateBaked(frameRate);
       setShowBaked(true);
@@ -218,6 +223,21 @@ const BakedAnimationPanel = () => {
       {/* Controls */}
       <ControlPanel title="🥧 Baked Animation Generator">
         <div className="baking-controls">
+          <div className="control-group">
+            <label htmlFor="animation-select">Animation:</label>
+            <select
+              id="animation-select"
+              value={animationId}
+              onChange={(e) => setAnimationId(e.target.value)}
+            >
+              <option value="">Select Animation</option>
+              {animationIds.map((id) => (
+                <option key={id} value={id}>
+                  {id}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="control-group">
             <label htmlFor="frameRate">Frame Rate (FPS):</label>
             <input

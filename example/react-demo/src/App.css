@@ -93,6 +93,25 @@ body {
 }
 
 /* Controls */
+.player-panels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.player-panel {
+  background: var(--panel-background);
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.player-panel h3 {
+  margin-top: 0;
+  color: var(--text-color);
+}
+
 .controls-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

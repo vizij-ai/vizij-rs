@@ -31,12 +31,9 @@ const CHART_COLORS = [
 
 const TimeSeriesChart = ({ 
   historyData, 
-  derivativeData,
   selectedKeys, 
   chartType = 'line', 
-  timeRange = 'all',
-  showDerivatives = true,
-  onClose 
+  timeRange = 'all'
 }) => {
   const chartRef = useRef(null);
   const [chartData, setChartData] = useState({ datasets: [] });
@@ -50,67 +47,40 @@ const TimeSeriesChart = ({
     const datasets = [];
     let colorIndex = 0;
 
-    Array.from(selectedKeys).forEach(key => {
-      if (historyData[key] && historyData[key].length > 0) {
-        let data = historyData[key];
+    for (const [playerId, playerData] of Object.entries(historyData)) {
+        for (const [trackName, trackData] of Object.entries(playerData)) {
+            if (selectedKeys.has(trackName) && trackData.length > 0) {
+                let data = trackData;
+                
+                // Apply time range filter
+                if (timeRange !== 'all') {
+                  const limit = parseInt(timeRange.replace('last', ''));
+                  data = data.slice(-limit);
+                }
         
-        // Apply time range filter
-        if (timeRange !== 'all') {
-          const limit = parseInt(timeRange.replace('last', ''));
-          data = data.slice(-limit);
+                const baseColor = CHART_COLORS[colorIndex % CHART_COLORS.length];
+        
+                // Create original data dataset
+                const dataset = {
+                  label: `${playerId} - ${trackName}`,
+                  data: data.map(([timestamp, value]) => ({ x: timestamp, y: value })),
+                  borderColor: baseColor,
+                  backgroundColor: baseColor + '20',
+                  tension: chartType === 'line' ? 0.4 : 0,
+                  fill: false,
+                  pointRadius: chartType === 'scatter' ? 4 : 2,
+                  pointHoverRadius: 6,
+                  borderWidth: 2
+                };
+                
+                datasets.push(dataset);
+                colorIndex++;
+            }
         }
-
-        const baseColor = CHART_COLORS[colorIndex % CHART_COLORS.length];
-
-        // Create original data dataset
-        const dataset = {
-          label: key,
-          data: data.map((value, index) => ({ x: index, y: value })),
-          borderColor: baseColor,
-          backgroundColor: baseColor + '20',
-          tension: chartType === 'line' ? 0.4 : 0,
-          fill: false,
-          pointRadius: chartType === 'scatter' ? 4 : 2,
-          pointHoverRadius: 6,
-          borderWidth: 2
-        };
-        
-        datasets.push(dataset);
-
-        // Add derivative dataset if available and enabled
-        if (showDerivatives && derivativeData && derivativeData[key] && derivativeData[key].length > 0) {
-          let derivData = derivativeData[key];
-          
-          // Apply same time range filter to derivatives
-          if (timeRange !== 'all') {
-            const limit = parseInt(timeRange.replace('last', ''));
-            derivData = derivData.slice(-limit);
-          }
-
-          const derivativeDataset = {
-            label: `${key} (derivative)`,
-            data: derivData.map((value, index) => ({ x: index, y: value })),
-            borderColor: baseColor,
-            backgroundColor: baseColor + '10',
-            tension: chartType === 'line' ? 0.2 : 0,
-            fill: false,
-            pointRadius: chartType === 'scatter' ? 3 : 1,
-            pointHoverRadius: 4,
-            borderWidth: 1,
-            borderDash: [5, 5], // Dashed line for derivatives
-            yAxisID: 'y1' // Use secondary y-axis for derivatives
-          };
-          
-          datasets.push(derivativeDataset);
-        }
-        
-        colorIndex++;
-      }
-    });
+    }
 
     setChartData({ datasets });
-  }, [selectedKeys, chartType, timeRange, showDerivatives]);
-  // }, [historyData, derivativeData, selectedKeys, chartType, timeRange, showDerivatives]);
+  }, [historyData, selectedKeys, chartType, timeRange]);
 
 
   useEffect(() => {
@@ -127,7 +97,7 @@ const TimeSeriesChart = ({
     plugins: {
       title: {
         display: true,
-        text: showDerivatives ? 'Animation Time Series Data (with Derivatives)' : 'Animation Time Series Data',
+        text: 'Animation Time Series Data',
         font: { size: 16 }
       },
       legend: {
@@ -137,13 +107,11 @@ const TimeSeriesChart = ({
       tooltip: {
         callbacks: {
           title: function(context) {
-            return `Sample: ${context[0].parsed.x}`;
+            return `Time: ${new Date(context[0].parsed.x).toLocaleTimeString()}`;
           },
           label: function(context) {
-            const isDerivative = context.dataset.label.includes('(derivative)');
             const value = context.parsed.y.toFixed(3);
-            const unit = isDerivative ? '/s' : '';
-            return `${context.dataset.label}: ${value}${unit}`;
+            return `${context.dataset.label}: ${value}`;
           }
         }
       }
@@ -154,7 +122,7 @@ const TimeSeriesChart = ({
         display: true,
         title: {
           display: true,
-          text: 'Sample Index'
+          text: 'Time'
         },
         grid: {
           color: '#e0e0e0'
@@ -172,27 +140,13 @@ const TimeSeriesChart = ({
           color: '#e0e0e0'
         }
       },
-      y1: showDerivatives ? {
-        type: 'linear',
-        display: true,
-        position: 'right',
-        title: {
-          display: true,
-          text: 'Rate of Change (per sample)'
-        },
-        grid: {
-          drawOnChartArea: true,
-        },
-      } : undefined
     },
     elements: {
       point: {
         radius: chartType === 'scatter' ? 4 : 2
       }
     },
-    animation: {
-      duration: 300
-    }
+    animation: false
   };
 
   const renderChart = () => {
@@ -211,9 +165,6 @@ const TimeSeriesChart = ({
     <div className="chart-container">
       <div className="chart-header">
         <h3>Time Series Chart</h3>
-        <button className="btn-secondary" onClick={onClose}>
-          Close
-        </button>
       </div>
       <div className="chart-wrapper">
         {chartData.datasets.length === 0 ? (
@@ -224,18 +175,6 @@ const TimeSeriesChart = ({
           renderChart()
         )}
       </div>
-      {showDerivatives && (
-        <div className="chart-legend">
-          <div className="legend-item">
-            <span className="legend-line solid"></span>
-            <span>Original Values</span>
-          </div>
-          <div className="legend-item">
-            <span className="legend-line dashed"></span>
-            <span>Derivatives (Rate of Change)</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

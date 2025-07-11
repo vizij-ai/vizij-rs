@@ -1,8 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { useAnimationPlayerContext } from '../../hooks/useAnimationPlayerContext.js';
+import { useAnimationEngine } from '../../contexts/AnimationEngineContext';
+import { create_test_animation } from 'animation-player';
 
 const FileUpload = () => {
-  const { loadAnimationFromData, isLoading } = useAnimationPlayerContext();
+  const { loadAnimation, createPlayer, addInstance, isLoading } = useAnimationEngine();
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const fileInputRef = useRef(null);
@@ -21,13 +22,11 @@ const FileUpload = () => {
     try {
       const text = await file.text();
       const animationData = JSON.parse(text);
-
-      // Extract animation name from file name (remove .json extension)
-      const animationName = file.name.replace(/\.json$/i, '');
-
       // Load the animation data into a new player
-      const playerId = await loadAnimationFromData(animationData);
-      setUploadStatus(`Successfully loaded: ${file.name} as "${playerId}"`);
+      const animationId = await loadAnimation(JSON.stringify(animationData));
+      const playerId = createPlayer();
+      await addInstance(playerId, animationId);
+      setUploadStatus(`Successfully loaded: ${file.name} as "${animationId}" in player "${playerId}"`);
 
       // Clear status after 3 seconds
       setTimeout(() => setUploadStatus(''), 3000);
@@ -72,14 +71,12 @@ const FileUpload = () => {
   };
 
   const loadDemoAnimation = async () => {
-    setUploadStatus('Loading test_animation.json...');
+    setUploadStatus('Loading test animation...');
     try {
-      const response = await fetch('/test_animation.json');
-      if (!response.ok) {
-        throw new Error(`Failed to fetch demo file: ${response.statusText}`);
-      }
-      const animationData = await response.json();
-      await loadAnimationFromData(animationData);
+      const animationData = create_test_animation();
+      const animationId = await loadAnimation(animationData);
+      const playerId = createPlayer();
+      await addInstance(playerId, animationId);
       setUploadStatus('Demo animation loaded successfully!');
       setTimeout(() => setUploadStatus(''), 3000);
     } catch (error) {
