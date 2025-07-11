@@ -76,7 +76,7 @@ fn test_animation_player_get_effective_time() {
     let anim_duration = AnimationTime::from_seconds(10.0).unwrap();
     let settings = AnimationInstanceSettings {
         instance_start_time: AnimationTime::from_seconds(5.0).unwrap(),
-        timescale: 0.5,
+        time_scale: 0.5,
         ..Default::default()
     };
     let animation_id = "fake_animation_id";
@@ -194,7 +194,7 @@ fn test_animation_engine_update_playback() {
     let player_once = engine.get_player_mut(&player_id_once).unwrap();
     let anim_instance_once = AnimationInstance::new(
         animation_id.clone(),
-        AnimationInstanceSettings::new(),
+        AnimationInstanceSettings::default(),
         Duration::from_secs(5),
     );
     player_once.add_instance(anim_instance_once);
@@ -305,7 +305,7 @@ fn test_playback_mode_once_reverse() {
     let (_, player_id) = setup_animation_player(
         &mut engine,
         AnimationData::new("test_anim", "Test Animation"),
-        AnimationInstanceSettings::new(),
+        AnimationInstanceSettings::default(),
         Duration::from_secs(10),
     );
 

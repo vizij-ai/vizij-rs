@@ -21,13 +21,28 @@ impl Default for PlaybackMode {
 
 /// Settings for a specific animation instance.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(default)]
 pub struct AnimationInstanceSettings {
     /// The time at which this instance begins relative to the player's timeline.
     pub instance_start_time: AnimationTime,
     /// The playback speed multiplier for this instance.
-    pub timescale: f64,
+    pub time_scale: f32,
     /// Whether the instance is enabled for playback.
     pub enabled: bool,
+    /// The weight of the animation, influencing its blend with others.
+    pub weight: f32,
+}
+
+impl Default for AnimationInstanceSettings {
+    fn default() -> Self {
+        Self {
+            instance_start_time: AnimationTime::zero(),
+            time_scale: 1.0,
+            enabled: true,
+            weight: 1.0,
+        }
+    }
 }
 
 /// Properties for a specific animation instance tracked at runtime.
@@ -42,23 +57,6 @@ impl Default for InstanceProperties {
         Self {
             metadata: HashMap::new(),
         }
-    }
-}
-
-impl AnimationInstanceSettings {
-    /// Creates new default instance settings for a given animation ID.
-    pub fn new() -> Self {
-        Self {
-            instance_start_time: AnimationTime::zero(),
-            timescale: 1.0,
-            enabled: true,
-        }
-    }
-}
-
-impl Default for AnimationInstanceSettings {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -103,7 +101,7 @@ impl AnimationInstance {
             .duration_since(self.settings.instance_start_time)
             .unwrap_or_else(|_| AnimationTime::zero());
 
-        let scaled_time = instance_relative_time.as_seconds() * self.settings.timescale;
+        let scaled_time = instance_relative_time.as_seconds() * self.settings.time_scale as f64;
         let scaled_time =
             AnimationTime::from_seconds(scaled_time).unwrap_or_else(|_| AnimationTime::zero());
 
@@ -113,5 +111,4 @@ impl AnimationInstance {
 
         scaled_time.clamp(AnimationTime::zero(), self.animation_data_duration)
     }
-
 }

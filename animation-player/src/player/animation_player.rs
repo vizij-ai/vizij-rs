@@ -70,18 +70,137 @@ impl AnimationPlayer {
         Ok(self.current_time)
     }
 
-    /// Get the settings for a specific animation instance.
+    /// Get an immutable reference to an animation instance.
     #[inline]
-    pub fn get_instance_settings(
+    pub fn get_animation_instance(
         &self,
         instance_id: &str,
-    ) -> Result<&AnimationInstanceSettings, AnimationError> {
-        self.instances
-            .get(instance_id)
-            .map(|instance| &instance.settings)
-            .ok_or_else(|| AnimationError::Generic {
-                message: format!("Instance settings for ID '{}' not found.", instance_id),
-            })
+    ) -> Option<&AnimationInstance> {
+        self.instances.get(instance_id)
+    }
+
+    /// Set the weight of an animation instance.
+    #[inline]
+    pub fn set_instance_weight(
+        &mut self,
+        instance_id: &str,
+        weight: f32,
+    ) -> Result<(), AnimationError> {
+        let instance = self.instances.get_mut(instance_id).ok_or_else(|| {
+            AnimationError::Generic {
+                message: format!("Animation instance with ID '{}' not found.", instance_id),
+            }
+        })?;
+        
+        if weight < 0.0 {
+            return Err(AnimationError::Generic {
+                message: format!("Weight must be non-negative, got: {}", weight),
+            });
+        }
+        
+        instance.settings.weight = weight;
+        Ok(())
+    }
+
+    /// Get the weight of an animation instance.
+    #[inline]
+    pub fn get_instance_weight(&self, instance_id: &str) -> Result<f32, AnimationError> {
+        let instance = self.instances.get(instance_id).ok_or_else(|| {
+            AnimationError::Generic {
+                message: format!("Animation instance with ID '{}' not found.", instance_id),
+            }
+        })?;
+        Ok(instance.settings.weight)
+    }
+
+    /// Set the time scale of an animation instance.
+    #[inline]
+    pub fn set_instance_time_scale(
+        &mut self,
+        instance_id: &str,
+        time_scale: f32,
+    ) -> Result<(), AnimationError> {
+        let instance = self.instances.get_mut(instance_id).ok_or_else(|| {
+            AnimationError::Generic {
+                message: format!("Animation instance with ID '{}' not found.", instance_id),
+            }
+        })?;
+        
+        if time_scale < -5.0 || time_scale > 5.0 {
+            return Err(AnimationError::Generic {
+                message: format!("Time scale must be between -5.0 and 5.0, got: {}", time_scale),
+            });
+        }
+        
+        instance.settings.time_scale = time_scale;
+        Ok(())
+    }
+
+    /// Get the time scale of an animation instance.
+    #[inline]
+    pub fn get_instance_time_scale(&self, instance_id: &str) -> Result<f32, AnimationError> {
+        let instance = self.instances.get(instance_id).ok_or_else(|| {
+            AnimationError::Generic {
+                message: format!("Animation instance with ID '{}' not found.", instance_id),
+            }
+        })?;
+        Ok(instance.settings.time_scale)
+    }
+
+    /// Set whether an animation instance is enabled.
+    #[inline]
+    pub fn set_instance_enabled(
+        &mut self,
+        instance_id: &str,
+        enabled: bool,
+    ) -> Result<(), AnimationError> {
+        let instance = self.instances.get_mut(instance_id).ok_or_else(|| {
+            AnimationError::Generic {
+                message: format!("Animation instance with ID '{}' not found.", instance_id),
+            }
+        })?;
+        
+        instance.settings.enabled = enabled;
+        Ok(())
+    }
+
+    /// Get whether an animation instance is enabled.
+    #[inline]
+    pub fn get_instance_enabled(&self, instance_id: &str) -> Result<bool, AnimationError> {
+        let instance = self.instances.get(instance_id).ok_or_else(|| {
+            AnimationError::Generic {
+                message: format!("Animation instance with ID '{}' not found.", instance_id),
+            }
+        })?;
+        Ok(instance.settings.enabled)
+    }
+
+    /// Set the start time of an animation instance.
+    #[inline]
+    pub fn set_instance_start_time(
+        &mut self,
+        instance_id: &str,
+        start_time: AnimationTime,
+    ) -> Result<(), AnimationError> {
+        let instance = self.instances.get_mut(instance_id).ok_or_else(|| {
+            AnimationError::Generic {
+                message: format!("Animation instance with ID '{}' not found.", instance_id),
+            }
+        })?;
+        
+        instance.settings.instance_start_time = start_time;
+        Ok(())
+    }
+
+    /// Get the start time of an animation instance.
+    #[inline]
+    pub fn get_instance_start_time(&self, instance_id: &str) -> Result<AnimationTime, AnimationError> {
+        let instance = self.instances.get(instance_id).ok_or_else(|| {
+            AnimationError::Generic {
+                message: format!("Animation instance with ID '{}' not found.", instance_id),
+            }
+        })?;
+        Ok(instance.settings.instance_start_time)
     }
 
     /// Set the player's current time to a specific `AnimationTime`.

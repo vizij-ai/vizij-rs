@@ -262,7 +262,7 @@ fn test_engine_update_with_multiple_players() {
     let player1 = engine.get_player_mut(&player1_id).unwrap();
     let instance1 = AnimationInstance::new(
         animation1_id,
-        AnimationInstanceSettings::new(),
+        AnimationInstanceSettings::default(),
         animation1.metadata.duration,
     );
     player1.add_instance(instance1);
@@ -270,7 +270,7 @@ fn test_engine_update_with_multiple_players() {
     let player2 = engine.get_player_mut(&player2_id).unwrap();
     let instance2 = AnimationInstance::new(
         animation2_id,
-        AnimationInstanceSettings::new(),
+        AnimationInstanceSettings::default(),
         animation2.metadata.duration,
     );
     player2.add_instance(instance2);
@@ -437,7 +437,7 @@ fn test_engine_stop_all_players() {
         let player = engine.get_player_mut(player_id).unwrap();
         let instance = AnimationInstance::new(
             animation_id.clone(),
-            AnimationInstanceSettings::new(),
+            AnimationInstanceSettings::default(),
             animation.metadata.duration,
         );
         player.add_instance(instance);
@@ -471,7 +471,7 @@ fn test_engine_pause_resume_all_players() {
         let player = engine.get_player_mut(player_id).unwrap();
         let instance = AnimationInstance::new(
             animation_id.clone(),
-            AnimationInstanceSettings::new(),
+            AnimationInstanceSettings::default(),
             animation.metadata.duration,
         );
         player.add_instance(instance);
@@ -612,7 +612,7 @@ fn test_engine_multiple_instances_per_player() {
     // Add multiple instances to the same player
     let instance1 = AnimationInstance::new(
         animation1_id,
-        AnimationInstanceSettings::new(),
+        AnimationInstanceSettings::default(),
         animation1.metadata.duration,
     );
     let instance2 = AnimationInstance::new(

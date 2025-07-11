@@ -221,7 +221,7 @@ impl AnimationEngine {
             })?;
 
         // Use provided settings or create default
-        let settings = instance_settings.unwrap_or_else(|| AnimationInstanceSettings::new());
+        let settings = instance_settings.unwrap_or_default();
 
         // Create the animation instance
         let instance = AnimationInstance::new(animation_id, settings, animation_duration);

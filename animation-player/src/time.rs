@@ -41,7 +41,7 @@ impl Instant {
 use crate::error::AnimationError;
 
 /// Represents a moment in animation time
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Serialize, Deserialize, Default)]
 pub struct AnimationTime(u64); // Changed to u64 nanoseconds for Ord compliance
 
 impl AnimationTime {

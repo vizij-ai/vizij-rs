@@ -60,7 +60,7 @@ fn test_animation_ids_and_add_animation_to_player() {
 
     // Add animation to player with custom settings
     let custom_settings = AnimationInstanceSettings {
-        timescale: 2.0,
+        time_scale: 2.0,
         enabled: true,
         ..Default::default()
     };
