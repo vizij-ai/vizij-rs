@@ -1,284 +1,252 @@
 # Animation Player Architecture
 
-This document provides a detailed overview of the animation player architecture, focusing on the AnimationEngine and AnimationPlayer components and their relationship in managing individual animations.
+This document provides a detailed overview of the animation player architecture, focusing on the `AnimationEngine`, `AnimationPlayer`, and `AnimationInstance` components and their relationships.
 
 ## Overview
 
-The animation system follows a hierarchical architecture where the **AnimationEngine** manages multiple **AnimationPlayers**, and each player manages multiple **AnimationInstances**. This design allows for complex multi-layered animations with independent timing, looping, and blending capabilities.
+The animation system follows a hierarchical architecture:
 
-## AnimationPlayer Architecture
+1.  **`AnimationEngine`**: The top-level container that manages all resources, including animation data, players, and the interpolation registry. It drives the global update loop.
+2.  **`AnimationPlayer`**: A manager for a collection of animations that should be played back together. It maintains a timeline (`current_time`) and orchestrates multiple `AnimationInstance`s.
+3.  **`AnimationInstance`**: Represents a single, active animation with its own unique settings (like `timescale`, `looping`, `start_time`). It is responsible for calculating its effective time based on the parent player's time.
+
+This design allows for complex, multi-layered animations where different animation clips can be played on the same target with independent timing, looping, and blending behaviors.
+
+## Core Architecture
+
+### Animation Data Model
+
+The foundation of the system is a flexible animation data model.
 
 ```mermaid
-graph TB
-    subgraph "AnimationPlayer"
-        AP[Animation Player]
-
-        subgraph "Core State"
-            ID[id: String]
-            CurrentTime[current_time: AnimationTime]
-            Metrics[metrics: PlaybackMetrics]
-        end
-
-        subgraph "Instance Management"
-            Instances[instances: HashMap<String, AnimationInstance>]
-            AddInst[add_instance]
-            RemoveInst[remove_instance]
-        end
-
-        subgraph "Time Operations"
-            GoTo[go_to]
-            Increment[increment]
-            Decrement[decrement]
-        end
-
-        subgraph "Value Calculation"
-            CalcValues[calculate_values]
-            InterpTrack[interpolate_track_value_for_instance]
-            GetEffTime[get_effective_time_for_track]
-        end
-
-        subgraph "Animation Instances"
-            AI1[AnimationInstance 1]
-            AI2[AnimationInstance 2]
-            AI3[AnimationInstance N...]
-
-            subgraph "Instance Components"
-                InstSettings[InstanceSettings]
-                LoopState[Loop State]
-                EffectiveTime[Effective Time Calculation]
-            end
-        end
+graph TD
+    subgraph "AnimationData"
+        direction LR
+        Data[id, name, metadata]
+        Tracks[tracks: HashMap<TrackId, AnimationTrack>]
+        Transitions[transitions: HashMap<String, AnimationTransition>]
+        Groups[groups: HashMap<String, TrackGroup>]
     end
 
-    AP --> ID
-    AP --> CurrentTime
-    AP --> Metrics
-    AP --> Instances
+    subgraph "AnimationTrack"
+        direction LR
+        Track[id, name, target, enabled, weight]
+        Keypoints[keypoints: Vec<AnimationKeypoint>]
+    end
 
-    Instances --> AI1
-    Instances --> AI2
-    Instances --> AI3
+    subgraph "AnimationKeypoint"
+        direction LR
+        Keypoint[id, time, value]
+    end
 
-    AI1 --> InstSettings
-    AI1 --> LoopState
-    AI1 --> EffectiveTime
+    subgraph "AnimationTransition"
+        direction LR
+        Transition[id, keypoints, variant, parameters]
+    end
 
-    GoTo --> CalcValues
-    Increment --> CalcValues
-    Decrement --> CalcValues
+    subgraph "TrackGroup"
+        direction LR
+        Group[id, name, tracks]
+    end
 
-    CalcValues --> InterpTrack
-    CalcValues --> Instances
-
+    Data --> Tracks
+    Data --> Transitions
+    Data --> Groups
+    Tracks --> Track
+    Track --> Keypoints
+    Keypoints --> Keypoint
+    Transitions --> Transition
+    Groups --> Group
 ```
 
-## Engine-Player Relationship and Animation Management
+-   **`AnimationData`**: The main container for an animation clip. It holds tracks, transitions, and groups.
+-   **`AnimationTrack`**: A sequence of keypoints targeting a specific property (e.g., `transform.position.x`).
+-   **`AnimationKeypoint`**: A point in time with a specific value.
+-   **`AnimationTransition`**: Defines the interpolation method (e.g., `Linear`, `Cubic`, `Bezier`) between two keypoints.
+-   **`TrackGroup`**: An organizational tool to group related tracks.
+
+### Engine, Player, and Instance Relationship
+
+The `AnimationEngine` orchestrates playback by managing `AnimationPlayer`s and their associated `PlayerState`. Each player, in turn, manages multiple `AnimationInstance`s.
 
 ```mermaid
 graph TB
-    subgraph "Animation System Flow"
-        subgraph "AnimationEngine Level"
-            Engine[AnimationEngine]
+    subgraph "Animation System"
+        Engine[AnimationEngine]
 
-            subgraph "Shared Resources"
-                AnimData[AnimationData Storage]
-                InterpRegistry[InterpolationRegistry]
-                EventSystem[EventDispatcher]
-            end
-
-            subgraph "Engine Update Loop"
-                FrameDelta[Frame Delta Input]
-                UpdateLoop[update Method]
-                PlayerIteration[Iterate Over Players]
-                StateCheck[Check Player State]
-                TimeCalculation[Calculate Animation Delta]
-                BoundsHandling[Handle Time Bounds/Looping]
-                CollectValues[Collect All Values]
-            end
+        subgraph "Engine Components"
+            Players[players: HashMap<String, AnimationPlayer>]
+            PlayerStates[player_states: HashMap<String, PlayerState>]
+            Animations[animations: HashMap<String, AnimationData>]
+            InterpRegistry[InterpolationRegistry]
         end
+
+        Engine --> Players
+        Engine --> PlayerStates
+        Engine --> Animations
+        Engine --> InterpRegistry
 
         subgraph "Player Level"
             Player1[AnimationPlayer 1]
-            Player2[AnimationPlayer 2]
-            PlayerN[AnimationPlayer N]
-
-            subgraph "Player Components"
-                PlayerState[PlayerState]
-                PlayerTime[Current Time]
-                PlayerInstances[Animation Instances]
-            end
+            PlayerState1[PlayerState 1]
         end
 
         subgraph "Instance Level"
-            subgraph "Instance 1"
-                Inst1[AnimationInstance]
-                Settings1[InstanceSettings]
-                LoopState1[Loop State]
-                EffTime1[Effective Time]
-            end
-
-            subgraph "Instance 2"
-                Inst2[AnimationInstance]
-                Settings2[InstanceSettings]
-                LoopState2[Loop State]
-                EffTime2[Effective Time]
-            end
+            Instance1[AnimationInstance 1]
+            Instance2[AnimationInstance 2]
         end
 
-        subgraph "Animation Data"
-            AnimData1[AnimationData 1]
-            AnimData2[AnimationData 2]
+        subgraph "Data Level"
+            AnimData1[AnimationData]
+        end
 
-            subgraph "Data Components"
-                Tracks[Animation Tracks]
-                Keypoints[Keypoints]
-                Transitions[Transitions]
-            end
+        Players -- manages --> Player1
+        PlayerStates -- state for --> Player1
+
+        Player1 --> Instance1
+        Player1 --> Instance2
+
+        Instance1 -- references --> AnimData1
+        Instance2 -- references --> AnimData1
+
+        PlayerState1 -- controls playback --> Player1
+    end
+
+    subgraph "Component Details"
+        subgraph "PlayerState"
+            PS_State[playback_state: PlaybackState]
+            PS_Speed[speed: f64]
+            PS_Mode[mode: PlaybackMode]
+            PS_Time[start_time, end_time]
+        end
+
+        subgraph "AnimationPlayer"
+            AP_Time[current_time: AnimationTime]
+            AP_Instances[instances: HashMap<String, AnimationInstance>]
+            AP_Metrics[metrics: PlaybackMetrics]
+        end
+
+        subgraph "AnimationInstance"
+            AI_Data[animation_id: String]
+            AI_Settings[settings: AnimationInstanceSettings]
+            AI_State[current_loop_count, is_playing_forward]
+        end
+
+        subgraph "AnimationInstanceSettings"
+            AIS_Time[instance_start_time: AnimationTime]
+            AIS_Scale[timescale: f64]
+            AIS_Mode[playback_mode: PlaybackMode]
+            AIS_Loop[loop_count: Option<u32>]
         end
     end
 
-    %% Flow connections
-    Engine --> AnimData
-    Engine --> InterpRegistry
-    Engine --> EventSystem
+    Player1 --> AP_Time
+    Player1 --> AP_Instances
+    Player1 --> AP_Metrics
 
-    FrameDelta --> UpdateLoop
-    UpdateLoop --> PlayerIteration
-    PlayerIteration --> Player1
-    PlayerIteration --> Player2
-    PlayerIteration --> PlayerN
+    PlayerState1 --> PS_State
+    PlayerState1 --> PS_Speed
+    PlayerState1 --> PS_Mode
 
-    Player1 --> PlayerState
-    Player1 --> PlayerTime
-    Player1 --> PlayerInstances
-
-    PlayerInstances --> Inst1
-    PlayerInstances --> Inst2
-
-    Inst1 --> Settings1
-    Inst1 --> LoopState1
-    Inst1 --> EffTime1
-
-    Settings1 --> AnimData1
-    Settings2 --> AnimData2
-
-    AnimData1 --> Tracks
-    AnimData1 --> Keypoints
-    AnimData1 --> Transitions
-
-    StateCheck --> TimeCalculation
-    TimeCalculation --> BoundsHandling
-    BoundsHandling --> CollectValues
-
+    AP_Instances --> Instance1
+    Instance1 --> AI_Data
+    Instance1 --> AI_Settings
+    Instance1 --> AI_State
+    AI_Settings --> AIS_Time
+    AI_Settings --> AIS_Scale
+    AI_Settings --> AIS_Mode
 ```
 
-## Individual Animation Update Flow
+## Animation Update Flow
+
+The animation update process is driven by the `AnimationEngine`'s `update` method, which is called on every frame.
 
 ```mermaid
 sequenceDiagram
+    participant App as Application
     participant Engine as AnimationEngine
     participant Player as AnimationPlayer
+    participant PState as PlayerState
     participant Instance as AnimationInstance
     participant AnimData as AnimationData
     participant InterpReg as InterpolationRegistry
 
-    Note over Engine: Frame Update Begins
-    Engine->>Engine: Calculate frame delta
+    App->>Engine: update(frame_delta)
 
     loop For each player
-        Engine->>Player: Check player state
+        Engine->>PState: Check playback_state
         alt Player is Playing
-            Engine->>Player: Calculate animation delta
-            Engine->>Player: Update player time
+            Engine->>PState: Calculate animation_delta (frame_delta * speed)
+            Engine->>Player: Update player.current_time
+            Engine->>PState: Handle player-level looping/ping-pong, update speed if needed
 
             Player->>Player: calculate_values()
 
             loop For each active instance
-                Player->>Instance: Check if instance is active
-                Player->>Instance: update_loop_state()
-                Player->>Instance: get_effective_time()
+                Player->>Instance: update_loop_state(player.current_time)
+                Player->>Instance: get_effective_time(player.current_time)
+                Note right of Instance: Applies instance timescale, looping, and start offset
 
-                Instance->>Instance: Apply timescale
-                Instance->>Instance: Handle looping mode
-                Instance->>Instance: Add start offset
+                Player->>Engine: Get AnimationData via instance.animation_id
+                Engine-->>Player: Return AnimData
 
-                Player->>AnimData: Get animation data by ID
-
-                loop For each track
-                    Player->>AnimData: Get track transition
-                    Player->>AnimData: Call track.value_at_time()
-                    AnimData->>InterpReg: Interpolate keypoints
+                loop For each track in AnimData
+                    Player->>AnimData: get_track_transition_for_time(effective_time, track.id)
+                    Player->>AnimData: track.value_at_time(effective_time, ...)
+                    AnimData->>InterpReg: Interpolate value using transition
                     InterpReg-->>AnimData: Return interpolated value
                     AnimData-->>Player: Return track value
                 end
 
-                Player->>Player: Combine instance values
+                Player->>Player: Combine instance values (overwrite)
             end
 
-            Player->>Player: Update metrics
-            Player-->>Engine: Return combined values
+            Player-->>Engine: Return combined values for the player
         else Player is Paused/Stopped
             Player->>Player: Return cached values
             Player-->>Engine: Return values
         end
     end
 
-    Engine->>Engine: Update engine metrics
-    Engine-->>Engine: Return all player values
+    Engine-->>App: Return all player values
 ```
 
-## Key Concepts
+## Key Concepts Explained
 
 ### AnimationEngine Responsibilities
 
-- **Player Lifecycle Management**: Creates, manages, and destroys animation players
-- **Resource Management**: Loads and caches animation data, manages interpolation registry
-- **Global Playback Control**: Provides play/pause/stop/seek operations for individual players
-- **Performance Monitoring**: Tracks engine-wide metrics and performance
-- **Event Coordination**: Manages event dispatching across the system
+-   **Resource Management**: Loads, stores, and provides access to `AnimationData` via `load_animation_data`. Manages the shared `InterpolationRegistry`.
+-   **Player Lifecycle**: Creates (`create_player`) and destroys (`remove_player`) `AnimationPlayer` instances.
+-   **State Management**: Manages a `PlayerState` for each player, which holds the runtime configuration like playback speed, mode, and current state (playing, paused, etc.).
+-   **Global Playback Control**: Provides top-level methods to `play_player`, `pause_player`, `stop_player`, and `seek_player`.
+-   **Update Loop**: Drives the entire animation system forward in time, iterating through players, updating their time based on their state, and collecting the final animation values.
 
 ### AnimationPlayer Responsibilities
 
-- **Instance Management**: Manages multiple animation instances with different settings
-- **Time Coordination**: Maintains current playback time and handles time-based operations
-- **Value Calculation**: Combines values from all active instances
-- **Player-level Metrics**: Tracks performance metrics for this specific player
+-   **Instance Management**: Manages a collection of `AnimationInstance`s using `add_instance` and `remove_instance`. A single player can orchestrate multiple animations simultaneously.
+-   **Timekeeping**: Maintains its own `current_time`, which acts as the master clock for all its instances.
+-   **Value Calculation**: Its core task is to implement `calculate_values`, which iterates through all active instances, triggers their value calculation, and combines the results into a final output map.
+-   **Metrics**: Tracks performance metrics like frames rendered and interpolations performed.
 
 ### AnimationInstance Responsibilities
 
-- **Individual Animation Control**: Manages settings for a specific animation (timescale, looping, offsets)
-- **Time Mapping**: Converts player time to effective animation time
-- **Loop State Management**: Handles loop counting and ping-pong direction
-- **Animation Data Reference**: Links to specific animation data by ID
+-   **Individual Animation State**: Represents a single playing animation clip. It links to `AnimationData` via its `animation_id`.
+-   **Behavior Definition**: `AnimationInstanceSettings` define its unique behavior:
+    -   `timescale`: Controls the playback speed relative to the player.
+    -   `playback_mode` & `loop_count`: Manages how the instance loops (`Once`, `Loop`, `PingPong`).
+    -   `instance_start_time`: Defines an offset on the player's timeline, a`ll`owing for staggered animations.
+-   **Effective Time Calculation**: Its most critical role is to translate the player's `current_time` into its own local time (`get_effective_time`), applying its settings. This allows each instance to have timing independent of its siblings.
+-   **Loop Management**: Tracks its own loop state (`update_loop_state`) to handle finite loops and ping-pong direction.
 
 ### Value Calculation Flow
 
-1. **Engine Update**: Called with frame delta time
-2. **Player Iteration**: Engine iterates through all players
-3. **State Check**: Check if player is in Playing state
-4. **Time Calculation**: Apply speed multiplier and calculate new time
-5. **Bounds Handling**: Handle looping/ping-pong at player level
-6. **Instance Processing**: For each active instance:
-   - Check if instance should be active at current time
-   - Update instance loop state
-   - Calculate effective time (apply timescale, handle instance-level looping, add offset)
-   - Interpolate values from animation data
-7. **Value Combination**: Combine values from all instances (currently simple overwrite, future: blending)
-8. **Metrics Update**: Update player and engine metrics
+1.  **Engine Update**: The `update` method is called with the frame's delta time.
+2.  **Player Iteration**: The engine iterates through each `AnimationPlayer`.
+3.  **State Check**: It checks the `PlayerState`. If not `Playing`, it may return cached values and skip the update.
+4.  **Player Time Update**: The engine calculates the time change based on `frame_delta` and the player's `speed`. It updates the player's `current_time` and handles player-level looping or ping-pong by reversing speed or wrapping time.
+5.  **Instance Processing**: The player's `calculate_values` method is called. It iterates through its active `AnimationInstance`s.
+6.  **Effective Time**: For each instance, it calculates the *effective time* by applying the instance's start offset, timescale, and looping rules to the player's `current_time`.
+7.  **Interpolation**: It retrieves the corresponding `AnimationData` and, for each track, calls `track.value_at_time()` with the effective time. This function finds the correct keypoints and transition, and uses the `InterpolationRegistry` to compute the final, interpolated `Value`.
+8.  **Value Combination**: The values from all tracks across all instances are combined. Currently, this is a simple overwrite, with later tracks/instances overriding earlier ones. Future work will introduce blending.
+9.  **Return Values**: The final map of `[track_target -> Value]` is returned up to the engine.
 
-### Multi-layer Animation Support
-
-The architecture supports complex multi-layer animations through:
-
-- **Multiple Instances per Player**: Each instance can reference different animation data
-- **Independent Timing**: Each instance has its own timescale, start time, and duration
-- **Flexible Looping**: Per-instance loop modes (Once, Loop, PingPong)
-- **Offset Support**: Start offset allows instances to begin from any point in their animation
-- **Blending Ready**: Architecture prepared for future blending between instances
-
-This design enables scenarios like:
-
-- Playing multiple animations simultaneously on the same object
-- Layering animations with different timing characteristics
-- Creating complex composite animations from simpler building blocks
-- Managing large numbers of independent animations efficiently
