@@ -14,6 +14,8 @@ const PlayerPanel = ({ playerId }) => {
   } = usePlayer(playerId);
 
   const [seekValue, setSeekValue] = useState(0);
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [isValuesOpen, setIsValuesOpen] = useState(true);
 
   useEffect(() => {
     if (playerState) {
@@ -64,31 +66,18 @@ const PlayerPanel = ({ playerId }) => {
     <ControlPanel title={`🎬 Player: ${playerId}`}>
       {/* Playback Controls */}
       <div className="button-group">
-        <button className="btn-success" onClick={play}>
-          ▶ Play
+        <button className="player-btn" onClick={play} title="Play">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
         </button>
-        <button className="btn-warning" onClick={pause}>
-          ⏸ Pause
+        <button className="player-btn" onClick={pause} title="Pause">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path></svg>
         </button>
-        <button className="btn-danger" onClick={stop}>
-          ⏹ Stop
-        </button>
-      </div>
-      
-      <div className="button-group">
-        <button className="btn-secondary" onClick={() => handleSeek(0)}>
-          ⏮ Start
-        </button>
-        <button className="btn-secondary" onClick={() => handleSeek(playerState.duration / 2)}>
-          ⏯ Middle
-        </button>
-        <button className="btn-secondary" onClick={() => handleSeek(playerState.duration)}>
-          ⏭ End
+        <button className="player-btn" onClick={stop} title="Stop">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"></path></svg>
         </button>
       </div>
 
       <div className="slider-container">
-        <label htmlFor={`seek-slider-${playerId}`}>Seek Position:</label>
         <input
           type="range"
           id={`seek-slider-${playerId}`}
@@ -102,73 +91,13 @@ const PlayerPanel = ({ playerId }) => {
         <span>{playerState.current_player_time?.toFixed(2) || '0.00'}s / {playerState.duration?.toFixed(2) || '0.00'}s</span>
       </div>
 
-      {/* Player Configuration */}
-      <h4>Configuration</h4>
-      <div className="control-group">
-        <label htmlFor={`speed-slider-${playerId}`}>Speed (-5.0 to 5.0):</label>
-        <input
-          type="range"
-          id={`speed-slider-${playerId}`}
-          className="slider"
-          min="-5"
-          max="5"
-          step="0.1"
-          value={playerState.speed}
-          onChange={(e) => handleSpeedChange(e.target.value)}
-        />
-        <span>{playerState.speed}x</span>
-      </div>
-
-      <div className="control-group">
-        <label htmlFor={`mode-select-${playerId}`}>Playback Mode:</label>
-        <select
-          id={`mode-select-${playerId}`}
-          value={playerState.mode.toLowerCase()}
-          onChange={(e) => handleModeChange(e.target.value)}
-        >
-          <option value="once">Once</option>
-          <option value="loop">Loop</option>
-          <option value="ping_pong">Ping Pong</option>
-        </select>
-      </div>
-
-      <div className="control-group">
-        <label htmlFor={`start-time-input-${playerId}`}>Start Time (seconds):</label>
-        <input
-          type="number"
-          id={`start-time-input-${playerId}`}
-          min="0"
-          step="0.1"
-          value={playerState.start_time/1000000000}
-          onChange={(e) => handleStartTimeChange(e.target.value)}
-        />
-      </div>
-
-      <div className="control-group">
-        <label htmlFor={`end-time-input-${playerId}`}>End Time (seconds):</label>
-        <input
-          type="number"
-          id={`end-time-input-${playerId}`}
-          min="0"
-          step="0.1"
-          value={playerState.end_time/1000000000 || ''}
-          onChange={(e) => handleEndTimeChange(e.target.value)}
-          placeholder="No limit"
-        />
-        <button onClick={() => handleEndTimeChange('')}>Clear</button>
-      </div>
-
       {/* Status Panel */}
-      <h4>Status</h4>
       <div className="status-info">
         <div className="status-item">
           <strong>State:</strong> 
           <span className={`status-badge ${playerState.state}`}>
             {playerState.state}
           </span>
-        </div>
-        <div className="status-item">
-          <strong>Time:</strong> {playerState.current_player_time?.toFixed(2) || '0.00'}s
         </div>
         <div className="status-item">
           <strong>Playing:</strong> 
@@ -178,19 +107,92 @@ const PlayerPanel = ({ playerId }) => {
         </div>
       </div>
 
+      {/* Player Configuration */}
+      <div className="collapsible-section">
+        <button className="collapsible-header" onClick={() => setIsConfigOpen(!isConfigOpen)}>
+          <h4>Configuration</h4>
+          <span>{isConfigOpen ? '▲' : '▼'}</span>
+        </button>
+        {isConfigOpen && (
+          <div className="collapsible-content">
+            <div className="control-group">
+              <label htmlFor={`speed-slider-${playerId}`}>Speed:</label>
+              <input
+                type="range"
+                id={`speed-slider-${playerId}`}
+                className="slider"
+                min="-5"
+                max="5"
+                step="0.1"
+                value={playerState.speed}
+                onChange={(e) => handleSpeedChange(e.target.value)}
+              />
+              <span>{playerState.speed}x</span>
+            </div>
+
+            <div className="control-group">
+              <label htmlFor={`mode-select-${playerId}`}>Mode:</label>
+              <select
+                id={`mode-select-${playerId}`}
+                value={playerState.mode.toLowerCase()}
+                onChange={(e) => handleModeChange(e.target.value)}
+              >
+                <option value="once">Once</option>
+                <option value="loop">Loop</option>
+                <option value="ping_pong">Ping Pong</option>
+              </select>
+            </div>
+
+            <div className="control-group">
+              <label htmlFor={`start-time-input-${playerId}`}>Start Time (s):</label>
+              <input
+                type="number"
+                id={`start-time-input-${playerId}`}
+                min="0"
+                step="0.1"
+                value={playerState.start_time/1000000000}
+                onChange={(e) => handleStartTimeChange(e.target.value)}
+              />
+            </div>
+
+            <div className="control-group">
+              <label htmlFor={`end-time-input-${playerId}`}>End Time (s):</label>
+              <input
+                type="number"
+                id={`end-time-input-${playerId}`}
+                min="0"
+                step="0.1"
+                value={playerState.end_time/1000000000 || ''}
+                onChange={(e) => handleEndTimeChange(e.target.value)}
+                placeholder="No limit"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Current Values Display */}
-      <h4>Current Values</h4>
-      <div className="player-values">
-        {playerValues.size === 0 ? (
-          <div className="no-values">No values yet...</div>
-        ) : (
-          <div className="value-list">
-            {Object.entries(playerValues).sort(([nameA], [nameB]) => nameA.localeCompare(nameB)).map(([trackName, trackValue]) => (
-              <div key={trackName} className="value-item">
-                <span className="value-key">{trackName.slice(0,8)}:</span>
-                <span className="value-value">{formatValue(trackValue)}</span>
-              </div>
-            ))}
+      <div className="collapsible-section">
+        <button className="collapsible-header" onClick={() => setIsValuesOpen(!isValuesOpen)}>
+          <h4>Current Values</h4>
+          <span>{isValuesOpen ? '▲' : '▼'}</span>
+        </button>
+        {isValuesOpen && (
+          <div className="collapsible-content">
+            <div className="player-values">
+              {playerValues.size === 0 ? (
+                <div className="no-values">No values yet...</div>
+              ) : (
+                <div className="value-list">
+                  {Object.entries(playerValues).sort(([nameA], [nameB]) => nameA.localeCompare(nameB)).map(([trackName, trackValue]) => (
+                    <div key={trackName} className="value-item">
+                      <span className="value-key">{trackName.slice(0,8)}:</span>
+                      <span className="value-value">{formatValue(trackValue)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

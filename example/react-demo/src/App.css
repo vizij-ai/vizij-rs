@@ -821,3 +821,92 @@ button:disabled {
 .file-format-info strong {
   color: var(--text-color);
 }
+
+/* New styles for PlayerPanel */
+.player-btn {
+  background: var(--primary-blue);
+  color: white;
+  padding: 10px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.player-btn:hover {
+  background: var(--primary-blue-dark);
+  transform: translateY(-1px);
+}
+
+.player-btn svg {
+  fill: currentColor;
+  width: 24px;
+  height: 24px;
+}
+
+.collapsible-section {
+  margin-top: 15px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.collapsible-header {
+  background: var(--panel-background);
+  border: none;
+  width: 100%;
+  padding: 10px 15px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--text-color);
+  transition: background-color 0.2s;
+}
+
+.collapsible-header:hover {
+  background: var(--border-color);
+}
+
+.collapsible-header h4 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.collapsible-header span {
+  font-size: 18px;
+  transition: transform 0.2s;
+}
+
+.collapsible-content {
+  padding: 15px;
+  background: var(--surface-color);
+  border-top: 1px solid var(--border-color);
+}
+
+.player-values .value-list {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.player-values .value-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px;
+}
+
+.player-values .value-key {
+  font-size: 12px;
+  color: var(--secondary-text-color);
+}
+
+.player-values .value-value {
+  font-size: 14px;
+  font-weight: bold;
+}
