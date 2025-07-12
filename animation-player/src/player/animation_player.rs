@@ -354,16 +354,36 @@ impl AnimationPlayer {
         self.metrics.memory_usage_bytes = estimated_memory_usage;
     }
 
-    /// Get the total duration of the animation player, based on the longest instance.
-    /// // TODO fix this with offsets
+    /// Get the total duration of the animation player, taking into account each
+    /// instance's start time and time scale. This finds the latest point on the
+    /// player's timeline that any instance contributes animation data.
     #[inline]
     pub fn duration(&self) -> AnimationTime {
-        self.instances
-            .values()
-            .filter(|instance| instance.settings.enabled)
-            .map(|instance| instance.animation_data_duration)
-            .max()
-            .unwrap_or(AnimationTime::zero())
+        let mut max_seconds = 0.0;
+
+        for instance in self.instances.values() {
+            if !instance.settings.enabled {
+                continue;
+            }
+
+            // When time_scale is zero the instance never progresses so it does
+            // not extend the player's duration beyond its start time.
+            let scale = instance.settings.time_scale.abs() as f64;
+
+            let instance_duration_seconds = if scale > 0.0 {
+                instance.animation_data_duration.as_seconds() / scale
+            } else {
+                0.0
+            };
+
+            let end_seconds =
+                instance.settings.instance_start_time.as_seconds() + instance_duration_seconds;
+            if end_seconds > max_seconds {
+                max_seconds = end_seconds;
+            }
+        }
+
+        AnimationTime::from_seconds(max_seconds).unwrap_or(AnimationTime::zero())
     }
 
     /// Get progress as a value between 0.0 and 1.0

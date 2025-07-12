@@ -678,3 +678,35 @@ fn test_mixed_playback_speeds() {
         AnimationTime::from_seconds(2.0).unwrap()
     );
 }
+
+#[test]
+fn test_animation_player_duration_with_offsets_and_scales() {
+    let mut player = AnimationPlayer::new();
+
+    let instance1 = AnimationInstance::new(
+        "anim1".to_string(),
+        AnimationInstanceSettings {
+            instance_start_time: AnimationTime::from_seconds(0.0).unwrap(),
+            time_scale: 1.0,
+            ..Default::default()
+        },
+        AnimationTime::from_seconds(2.0).unwrap(),
+    );
+
+    let instance2 = AnimationInstance::new(
+        "anim2".to_string(),
+        AnimationInstanceSettings {
+            instance_start_time: AnimationTime::from_seconds(1.0).unwrap(),
+            time_scale: 0.5,
+            ..Default::default()
+        },
+        AnimationTime::from_seconds(2.0).unwrap(),
+    );
+
+    player.add_instance(instance1);
+    player.add_instance(instance2);
+
+    // Instance2 runs for 4 seconds (2 / 0.5) and starts at 1 second, so the
+    // total duration should be 5 seconds.
+    assert!((player.duration().as_seconds() - 5.0).abs() < 0.001);
+}
