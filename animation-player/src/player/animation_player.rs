@@ -14,8 +14,6 @@ pub struct AnimationPlayer {
     last_calculated_values: Option<HashMap<String, Value>>,
     /// Time when last_calculated_values was computed
     last_calculated_time: AnimationTime,
-    /// ID of the animation data used for last_calculated_values
-    last_animation_id: Option<String>,
     /// Active animation instances managed by this player
     pub instances: HashMap<String, AnimationInstance>, // Made public
 }
@@ -29,7 +27,6 @@ impl AnimationPlayer {
             metrics: PlaybackMetrics::new(),
             last_calculated_values: None,
             last_calculated_time: AnimationTime::zero(),
-            last_animation_id: None,
             instances: HashMap::new(),
         }
     }
@@ -72,10 +69,7 @@ impl AnimationPlayer {
 
     /// Get an immutable reference to an animation instance.
     #[inline]
-    pub fn get_animation_instance(
-        &self,
-        instance_id: &str,
-    ) -> Option<&AnimationInstance> {
+    pub fn get_animation_instance(&self, instance_id: &str) -> Option<&AnimationInstance> {
         self.instances.get(instance_id)
     }
 
@@ -86,18 +80,19 @@ impl AnimationPlayer {
         instance_id: &str,
         weight: f32,
     ) -> Result<(), AnimationError> {
-        let instance = self.instances.get_mut(instance_id).ok_or_else(|| {
-            AnimationError::Generic {
-                message: format!("Animation instance with ID '{}' not found.", instance_id),
-            }
-        })?;
-        
+        let instance =
+            self.instances
+                .get_mut(instance_id)
+                .ok_or_else(|| AnimationError::Generic {
+                    message: format!("Animation instance with ID '{}' not found.", instance_id),
+                })?;
+
         if weight < 0.0 {
             return Err(AnimationError::Generic {
                 message: format!("Weight must be non-negative, got: {}", weight),
             });
         }
-        
+
         instance.settings.weight = weight;
         Ok(())
     }
@@ -105,11 +100,12 @@ impl AnimationPlayer {
     /// Get the weight of an animation instance.
     #[inline]
     pub fn get_instance_weight(&self, instance_id: &str) -> Result<f32, AnimationError> {
-        let instance = self.instances.get(instance_id).ok_or_else(|| {
-            AnimationError::Generic {
+        let instance = self
+            .instances
+            .get(instance_id)
+            .ok_or_else(|| AnimationError::Generic {
                 message: format!("Animation instance with ID '{}' not found.", instance_id),
-            }
-        })?;
+            })?;
         Ok(instance.settings.weight)
     }
 
@@ -120,18 +116,22 @@ impl AnimationPlayer {
         instance_id: &str,
         time_scale: f32,
     ) -> Result<(), AnimationError> {
-        let instance = self.instances.get_mut(instance_id).ok_or_else(|| {
-            AnimationError::Generic {
-                message: format!("Animation instance with ID '{}' not found.", instance_id),
-            }
-        })?;
-        
+        let instance =
+            self.instances
+                .get_mut(instance_id)
+                .ok_or_else(|| AnimationError::Generic {
+                    message: format!("Animation instance with ID '{}' not found.", instance_id),
+                })?;
+
         if time_scale < -5.0 || time_scale > 5.0 {
             return Err(AnimationError::Generic {
-                message: format!("Time scale must be between -5.0 and 5.0, got: {}", time_scale),
+                message: format!(
+                    "Time scale must be between -5.0 and 5.0, got: {}",
+                    time_scale
+                ),
             });
         }
-        
+
         instance.settings.time_scale = time_scale;
         Ok(())
     }
@@ -139,11 +139,12 @@ impl AnimationPlayer {
     /// Get the time scale of an animation instance.
     #[inline]
     pub fn get_instance_time_scale(&self, instance_id: &str) -> Result<f32, AnimationError> {
-        let instance = self.instances.get(instance_id).ok_or_else(|| {
-            AnimationError::Generic {
+        let instance = self
+            .instances
+            .get(instance_id)
+            .ok_or_else(|| AnimationError::Generic {
                 message: format!("Animation instance with ID '{}' not found.", instance_id),
-            }
-        })?;
+            })?;
         Ok(instance.settings.time_scale)
     }
 
@@ -154,12 +155,13 @@ impl AnimationPlayer {
         instance_id: &str,
         enabled: bool,
     ) -> Result<(), AnimationError> {
-        let instance = self.instances.get_mut(instance_id).ok_or_else(|| {
-            AnimationError::Generic {
-                message: format!("Animation instance with ID '{}' not found.", instance_id),
-            }
-        })?;
-        
+        let instance =
+            self.instances
+                .get_mut(instance_id)
+                .ok_or_else(|| AnimationError::Generic {
+                    message: format!("Animation instance with ID '{}' not found.", instance_id),
+                })?;
+
         instance.settings.enabled = enabled;
         Ok(())
     }
@@ -167,11 +169,12 @@ impl AnimationPlayer {
     /// Get whether an animation instance is enabled.
     #[inline]
     pub fn get_instance_enabled(&self, instance_id: &str) -> Result<bool, AnimationError> {
-        let instance = self.instances.get(instance_id).ok_or_else(|| {
-            AnimationError::Generic {
+        let instance = self
+            .instances
+            .get(instance_id)
+            .ok_or_else(|| AnimationError::Generic {
                 message: format!("Animation instance with ID '{}' not found.", instance_id),
-            }
-        })?;
+            })?;
         Ok(instance.settings.enabled)
     }
 
@@ -182,24 +185,29 @@ impl AnimationPlayer {
         instance_id: &str,
         start_time: AnimationTime,
     ) -> Result<(), AnimationError> {
-        let instance = self.instances.get_mut(instance_id).ok_or_else(|| {
-            AnimationError::Generic {
-                message: format!("Animation instance with ID '{}' not found.", instance_id),
-            }
-        })?;
-        
+        let instance =
+            self.instances
+                .get_mut(instance_id)
+                .ok_or_else(|| AnimationError::Generic {
+                    message: format!("Animation instance with ID '{}' not found.", instance_id),
+                })?;
+
         instance.settings.instance_start_time = start_time;
         Ok(())
     }
 
     /// Get the start time of an animation instance.
     #[inline]
-    pub fn get_instance_start_time(&self, instance_id: &str) -> Result<AnimationTime, AnimationError> {
-        let instance = self.instances.get(instance_id).ok_or_else(|| {
-            AnimationError::Generic {
+    pub fn get_instance_start_time(
+        &self,
+        instance_id: &str,
+    ) -> Result<AnimationTime, AnimationError> {
+        let instance = self
+            .instances
+            .get(instance_id)
+            .ok_or_else(|| AnimationError::Generic {
                 message: format!("Animation instance with ID '{}' not found.", instance_id),
-            }
-        })?;
+            })?;
         Ok(instance.settings.instance_start_time)
     }
 
@@ -249,10 +257,7 @@ impl AnimationPlayer {
         interpolation_registry: &mut InterpolationRegistry,
     ) -> Result<HashMap<String, Value>, AnimationError> {
         // Check cache first
-        if self.current_time == self.last_calculated_time &&
-           self.last_animation_id.as_ref().map_or(true, |id| animations.contains_key(id)) && // Check if animation data still exists
-           self.last_calculated_values.is_some()
-        {
+        if self.current_time == self.last_calculated_time && self.last_calculated_values.is_some() {
             return Ok(self.last_calculated_values.clone().unwrap());
         }
 
@@ -313,13 +318,6 @@ impl AnimationPlayer {
         // Update cache
         self.last_calculated_values = Some(combined_values.clone());
         self.last_calculated_time = self.current_time;
-        self.last_animation_id = Some(
-            self.instances
-                .values()
-                .next()
-                .map(|i| i.animation_id.clone())
-                .unwrap_or_default(),
-        ); // Store ID of first instance's animation data
 
         Ok(combined_values)
     }
@@ -404,6 +402,12 @@ impl AnimationPlayer {
             .filter(|instance| instance.settings.enabled)
             .map(|instance| instance.animation_id.clone())
             .collect()
+    }
+
+    /// Get all instance IDs in this player
+    #[inline]
+    pub fn get_instance_ids(&self) -> Vec<String> {
+        self.instances.keys().map(|s| s.to_string()).collect()
     }
 
     /// Get all instance IDs in this player

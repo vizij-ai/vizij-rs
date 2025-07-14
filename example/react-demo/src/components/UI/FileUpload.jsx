@@ -3,7 +3,7 @@ import { useAnimationEngine } from '../../contexts/AnimationEngineContext';
 import { create_test_animation } from 'animation-player';
 
 const FileUpload = () => {
-  const { loadAnimation, createPlayer, addInstance, isLoading } = useAnimationEngine();
+  const { loadAnimation, isLoading } = useAnimationEngine();
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const fileInputRef = useRef(null);
@@ -22,11 +22,8 @@ const FileUpload = () => {
     try {
       const text = await file.text();
       const animationData = JSON.parse(text);
-      // Load the animation data into a new player
       const animationId = await loadAnimation(JSON.stringify(animationData));
-      const playerId = createPlayer();
-      await addInstance(playerId, animationId);
-      setUploadStatus(`Successfully loaded: ${file.name} as "${animationId}" in player "${playerId}"`);
+      setUploadStatus(`Successfully loaded: ${file.name} as "${animationId}"`);
 
       // Clear status after 3 seconds
       setTimeout(() => setUploadStatus(''), 3000);
@@ -75,9 +72,7 @@ const FileUpload = () => {
     try {
       const animationData = create_test_animation();
       const animationId = await loadAnimation(animationData);
-      const playerId = createPlayer();
-      await addInstance(playerId, animationId);
-      setUploadStatus('Demo animation loaded successfully!');
+      setUploadStatus(`Demo animation loaded: ${animationId}`);
       setTimeout(() => setUploadStatus(''), 3000);
     } catch (error) {
       console.error('Failed to load demo animation:', error);

@@ -3,7 +3,7 @@ use crate::AnimationTime;
 
 /// Runtime properties tracked by the engine for each player
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct PlayerProperties {
+pub struct PlayerState {
     /// Current playback state
     pub playback_state: PlaybackState,
     /// Last time the player was updated
@@ -14,7 +14,7 @@ pub struct PlayerProperties {
     pub is_playing_forward: bool,
 }
 
-impl Default for PlayerProperties {
+impl Default for PlayerState {
     fn default() -> Self {
         Self {
             playback_state: PlaybackState::Stopped,

@@ -1,7 +1,7 @@
 //! The core WebAssembly animation engine.
 use crate::{AnimationEngine, AnimationEngineConfig};
-use wasm_bindgen::prelude::*;
 use std::time::Duration;
+use wasm_bindgen::prelude::*;
 
 /// A WebAssembly-compatible wrapper for the `AnimationEngine`.
 ///

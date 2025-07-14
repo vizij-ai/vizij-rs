@@ -99,9 +99,19 @@ export function useWasm(config = null) {
     return engineRef.current.update(frameDeltaSeconds);
   }, []);
 
-  const getPlayerState = useCallback((playerId) => {
+  const getPlayerSettings = useCallback((playerId) => {
     if (!engineRef.current) throw new Error('WASM not loaded');
     return engineRef.current.get_player_settings(playerId);
+  }, []);
+
+  const getInstanceSettings = useCallback((playerId, instanceId) => {
+    if (!engineRef.current) throw new Error('WASM not loaded');
+    return engineRef.current.get_instance_config(playerId, instanceId);
+  }, []);
+
+  const getPlayerState = useCallback((playerId) => {
+    if (!engineRef.current) throw new Error('WASM not loaded');
+    return engineRef.current.get_player_state(playerId);
   }, []);
 
   const getPlayerTime = useCallback((playerId) => {
@@ -132,6 +142,11 @@ export function useWasm(config = null) {
   const updatePlayerConfig = useCallback((playerId, configJson) => {
     if (!engineRef.current) throw new Error('WASM not loaded');
     return engineRef.current.update_player_config(playerId, configJson);
+  }, []);
+
+  const updateInstanceConfig = useCallback((playerId, instanceId, configJson) => {
+    if (!engineRef.current) throw new Error('WASM not loaded');
+    return engineRef.current.update_instance_config(playerId, instanceId, configJson);
   }, []);
 
   const exportAnimation = useCallback((animationId) => {
@@ -183,7 +198,10 @@ export function useWasm(config = null) {
     getPlayerDuration,
     getPlayerProgress,
     getPlayerIds,
+    getPlayerSettings,
+    getInstanceSettings,
     updatePlayerConfig,
+    updateInstanceConfig,
     exportAnimation,
     bakeAnimation,
     getDerivatives,

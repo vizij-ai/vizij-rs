@@ -7,8 +7,8 @@ export const useAnimationInstance = (playerId, instanceId) => {
   const instanceConfig = useMemo(() => {
     if (!engine.isLoaded || !playerId || !instanceId) return null;
     try {
-      const playerState = engine.getPlayerState(playerId);
-      return playerState?.instances.find(inst => inst.instanceId === instanceId) || null;
+      const settings = engine.getInstanceSettings(playerId, instanceId);
+      return settings || null;
     } catch (e) {
       return null;
     }

@@ -124,7 +124,7 @@ sequenceDiagram
 
 -   **Resource Management**: Loads, stores, and provides access to `AnimationData` via `load_animation_data`. Manages the shared `InterpolationRegistry`.
 -   **Player Lifecycle**: Creates (`create_player`) and destroys (`remove_player`) `AnimationPlayer` instances.
--   **State Management**: Tracks `PlayerSettings` (user controlled) and `PlayerProperties` (runtime state) for each player.
+-   **State Management**: Tracks `PlayerSettings` (user controlled) and `PlayerState` (runtime state) for each player.
 -   **Global Playback Control**: Provides top-level methods to `play_player`, `pause_player`, `stop_player`, and `seek_player`.
 -   **Update Loop**: Drives the entire animation system forward in time, iterating through players, updating their time based on their state, and collecting the final animation values.
 
@@ -146,7 +146,7 @@ sequenceDiagram
 
 1.  **Engine Update**: The `update` method is called with the frame's delta time.
 2.  **Player Iteration**: The engine iterates through each `AnimationPlayer`.
-3.  **State Check**: It checks the `PlayerProperties`. If not `Playing`, it may return cached values and skip the update.
+3.  **State Check**: It checks the `PlayerState`. If not `Playing`, it may return cached values and skip the update.
 4.  **Player Time Update**: The engine calculates the time change based on `frame_delta` and the player's `speed`. It updates the player's `current_time` and handles player-level looping or ping-pong by reversing speed or wrapping time.
 5.  **Instance Processing**: The player's `calculate_values` method is called. It iterates through its active `AnimationInstance`s.
 6.  **Effective Time**: For each instance, it calculates the *effective time* by applying the instance's start offset, timescale, and looping rules to the player's `current_time`.

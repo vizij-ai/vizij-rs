@@ -48,7 +48,7 @@ fn test_animation_engine_create_player() {
     let mut engine = AnimationEngine::new(AnimationEngineConfig::default());
     let player_id = engine.create_player();
     assert!(engine.get_player(&player_id).is_some());
-    assert!(engine.get_player_properties(&player_id).is_some());
+    assert!(engine.get_player_state(&player_id).is_some());
 }
 
 #[test]
@@ -155,10 +155,7 @@ fn test_animation_engine_update_playback() {
     // Play the player
     engine.play_player(&player_id).unwrap();
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
 
@@ -179,10 +176,7 @@ fn test_animation_engine_update_playback() {
     );
     // Since default playback mode is Loop, it should wrap around
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
 
@@ -207,7 +201,7 @@ fn test_animation_engine_update_playback() {
     );
     assert_eq!(
         engine
-            .get_player_properties(&player_id_once)
+            .get_player_state(&player_id_once)
             .unwrap()
             .playback_state,
         PlaybackState::Ended
@@ -232,10 +226,7 @@ fn test_playback_mode_once_forward() {
     // Start playback
     engine.play_player(&player_id).unwrap();
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
     assert_eq!(
@@ -250,10 +241,7 @@ fn test_playback_mode_once_forward() {
         AnimationTime::from_seconds(3.0).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
 
@@ -263,10 +251,7 @@ fn test_playback_mode_once_forward() {
         AnimationTime::from_seconds(8.0).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
 
@@ -277,10 +262,7 @@ fn test_playback_mode_once_forward() {
         AnimationTime::from_seconds(10.0).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Ended
     );
 
@@ -291,10 +273,7 @@ fn test_playback_mode_once_forward() {
         AnimationTime::from_seconds(10.0).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Ended
     );
 }
@@ -336,10 +315,7 @@ fn test_playback_mode_once_reverse() {
         AnimationTime::from_seconds(7.0).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
 
@@ -349,10 +325,7 @@ fn test_playback_mode_once_reverse() {
         AnimationTime::from_seconds(2.0).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
 
@@ -363,10 +336,7 @@ fn test_playback_mode_once_reverse() {
         AnimationTime::from_seconds(0.0).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Ended
     );
 }
@@ -393,10 +363,7 @@ fn test_playback_mode_loop_forward() {
         AnimationTime::from_seconds(9.5).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
 
@@ -407,10 +374,7 @@ fn test_playback_mode_loop_forward() {
         AnimationTime::from_seconds(0.5).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
 
@@ -421,10 +385,7 @@ fn test_playback_mode_loop_forward() {
         AnimationTime::from_seconds(2.5).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
 }
@@ -458,10 +419,7 @@ fn test_playback_mode_loop_reverse() {
         AnimationTime::from_seconds(10.0).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
 
@@ -472,10 +430,7 @@ fn test_playback_mode_loop_reverse() {
         AnimationTime::from_seconds(8.0).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
 }
@@ -503,10 +458,7 @@ fn test_playback_mode_pingpong_forward_to_reverse() {
         AnimationTime::from_seconds(9.5).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
     assert_eq!(engine.get_player_settings(&player_id).unwrap().speed, 1.0);
@@ -518,10 +470,7 @@ fn test_playback_mode_pingpong_forward_to_reverse() {
         AnimationTime::from_seconds(10.0).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
     assert_eq!(engine.get_player_settings(&player_id).unwrap().speed, -1.0); // Speed should be reversed
@@ -533,10 +482,7 @@ fn test_playback_mode_pingpong_forward_to_reverse() {
         AnimationTime::from_seconds(7.0).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
     assert_eq!(engine.get_player_settings(&player_id).unwrap().speed, -1.0);
@@ -571,10 +517,7 @@ fn test_playback_mode_pingpong_reverse_to_forward() {
         AnimationTime::from_seconds(0.0).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
     assert_eq!(engine.get_player_settings(&player_id).unwrap().speed, 1.0); // Speed should be reversed to positive
@@ -586,10 +529,7 @@ fn test_playback_mode_pingpong_reverse_to_forward() {
         AnimationTime::from_seconds(3.0).unwrap()
     );
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
     assert_eq!(engine.get_player_settings(&player_id).unwrap().speed, 1.0);
@@ -629,10 +569,7 @@ fn test_playback_mode_pingpong_full_cycle() {
 
     // Verify state is still playing throughout
     assert_eq!(
-        engine
-            .get_player_properties(&player_id)
-            .unwrap()
-            .playback_state,
+        engine.get_player_state(&player_id).unwrap().playback_state,
         PlaybackState::Playing
     );
 }

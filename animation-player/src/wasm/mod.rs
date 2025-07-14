@@ -1,8 +1,8 @@
 pub mod animation;
+pub mod conversions;
 pub mod engine;
 pub mod player;
 pub mod utils;
-pub mod conversions;
 
 use wasm_bindgen::prelude::*;
 

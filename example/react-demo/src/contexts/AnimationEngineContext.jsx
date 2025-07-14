@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useRef, useEffect, useState, useCallback } from 'react';
 import { useWasm } from '../hooks/useWasm';
 
 const AnimationEngineContext = createContext(null);
@@ -42,7 +42,7 @@ export const AnimationEngineProvider = ({ children }) => {
     }
 
     animationFrameRef.current = requestAnimationFrame(updateLoop);
-  }, [wasm, wasm.isLoaded, wasm.update, wasm.getPlayerIds, wasm.getAnimationIds]);
+  }, [wasm, targetInterval]);
 
   useEffect(() => {
     // Start/stop the update loop
@@ -56,11 +56,20 @@ export const AnimationEngineProvider = ({ children }) => {
     };
   }, [wasm.isLoaded, updateLoop]);
 
+  const createPlayer = useCallback((playerName) => {
+    if (!wasm.isLoaded) return;
+    const newPlayerId = wasm.createPlayer();
+    wasm.updatePlayerConfig(newPlayerId, JSON.stringify({ name: playerName }));
+    setPlayerIds(wasm.getPlayerIds());
+    return newPlayerId;
+  }, [wasm]);
+
   const value = {
     ...wasm, // Expose all raw WASM methods
     latestValues,
     playerIds,
     animationIds,
+    createPlayer,
   };
 
   return (

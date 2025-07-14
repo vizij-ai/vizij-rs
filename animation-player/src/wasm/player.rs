@@ -1,6 +1,6 @@
 //! Player-related WebAssembly bindings.
-use crate::{animation::PlaybackMode, AnimationTime};
 use super::engine::WasmAnimationEngine;
+use crate::{animation::PlaybackMode, AnimationTime};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -73,6 +73,21 @@ impl WasmAnimationEngine {
             .get_player_settings(player_id)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
         serde_wasm_bindgen::to_value(&props)
+            .map_err(|e| JsValue::from_str(&format!("State serialization error: {}", e)))
+    }
+
+    /// Returns the current playback properties of a player as a JSON object.
+    ///
+    /// @param {string} player_id - The ID of the player.
+    /// @returns {any} A JSON object representing the player's properties.
+    /// ```
+    #[wasm_bindgen]
+    pub fn get_player_state(&self, player_id: &str) -> Result<JsValue, JsValue> {
+        let state = self
+            .engine
+            .get_player_state(player_id)
+            .ok_or_else(|| JsValue::from_str("Player not found"))?;
+        serde_wasm_bindgen::to_value(&state)
             .map_err(|e| JsValue::from_str(&format!("State serialization error: {}", e)))
     }
 
@@ -178,6 +193,10 @@ impl WasmAnimationEngine {
                     speed_val
                 )));
             }
+        }
+
+        if let Some(name) = config.get("name").and_then(|v| v.as_str()) {
+            player_config.name = name.to_string();
         }
 
         if let Some(mode_str) = config.get("mode").and_then(|v| v.as_str()) {

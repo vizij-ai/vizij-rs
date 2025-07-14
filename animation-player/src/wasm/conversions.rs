@@ -2,8 +2,7 @@
 use crate::{
     animation::{transition::AnimationTransition, AnimationMetadata, TransitionVariant},
     value::{Color, Vector3, Vector4},
-    AnimationData,
-    AnimationKeypoint, AnimationTrack, AnimationTime, KeypointId, Value,
+    AnimationData, AnimationKeypoint, AnimationTime, AnimationTrack, KeypointId, Value,
 };
 use wasm_bindgen::prelude::*;
 

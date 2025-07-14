@@ -1,10 +1,10 @@
 //! Animation data management for WebAssembly.
+use super::engine::WasmAnimationEngine;
+use crate::loaders::load_test_animation_from_json;
 use crate::{
     animation::AnimationInstanceSettings, AnimationBaking, AnimationData, AnimationTime,
     BakingConfig,
 };
-use crate::loaders::load_test_animation_from_json;
-use super::engine::WasmAnimationEngine;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -141,13 +141,23 @@ impl WasmAnimationEngine {
                 .set_instance_weight(instance_id, weight as f32)
                 .map_err(|e| JsValue::from_str(&format!("Set weight error: {}", e)))?;
         }
-        
+
         if let Some(time_scale) = config.get("timeScale").and_then(|v| v.as_f64()) {
             player
                 .set_instance_time_scale(instance_id, time_scale as f32)
                 .map_err(|e| JsValue::from_str(&format!("Set time scale error: {}", e)))?;
         }
-        
+
+        if let Some(start_offset) = config.get("instanceStartTime").and_then(|v| v.as_f64()) {
+            player
+                .set_instance_start_time(
+                    instance_id,
+                    AnimationTime::from_seconds(start_offset)
+                        .map_err(|e| JsValue::from_str(&format!("Invalid start time: {:?}", e)))?,
+                )
+                .map_err(|e| JsValue::from_str(&format!("Set time scale error: {}", e)))?;
+        }
+
         if let Some(enabled) = config.get("enabled").and_then(|v| v.as_bool()) {
             player
                 .set_instance_enabled(instance_id, enabled)
@@ -155,6 +165,36 @@ impl WasmAnimationEngine {
         }
 
         Ok(())
+    }
+
+    /// Exports a loaded animation as a JSON string.
+    ///
+    /// # Example
+    ///
+    /// ```javascript
+    /// const json = engine.export_animation("anim_01");
+    /// console.log(json);
+    /// ```
+    ///
+    /// @param {string} instance_id - The ID of the animation to export.
+    /// @returns {string} The animation data as a JSON string.
+    #[wasm_bindgen]
+    pub fn get_instance_config(
+        &self,
+        player_id: &str,
+        instance_id: &str,
+    ) -> Result<String, JsValue> {
+        let player = self
+            .engine
+            .get_player(player_id)
+            .ok_or_else(|| JsValue::from_str("Player not found"))?;
+
+        let instance_config = player
+            .get_animation_instance(instance_id)
+            .ok_or_else(|| JsValue::from_str("Instance not found"))?;
+
+        serde_json::to_string(instance_config)
+            .map_err(|e| JsValue::from_str(&format!("Export error: {}", e)))
     }
 
     /// Exports a loaded animation as a JSON string.

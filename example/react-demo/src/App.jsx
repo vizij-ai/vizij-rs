@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AnimationEngineProvider, useAnimationEngine } from './contexts/AnimationEngineContext.jsx';
 import PlayerPanel from './components/AnimationPlayer/PlayerPanel.jsx';
+import AnimationLibraryPanel from './components/AnimationPlayer/AnimationLibraryPanel.jsx';
 import DataViewport from './components/DataViewport/DataViewport.jsx';
 import BakedAnimationPanel from './components/BakedAnimation/BakedAnimationPanel.jsx';
 import FileUpload from './components/UI/FileUpload.jsx';
+import PlayerForm from './components/UI/PlayerForm.jsx';
 import './App.css';
 
 function App() {
@@ -37,7 +39,7 @@ function App() {
 }
 
 const MainContent = () => {
-  const { isLoading, error, isLoaded, playerIds } = useAnimationEngine();
+  const { isLoading, error, isLoaded, playerIds, createPlayer } = useAnimationEngine();
 
   if (isLoading) {
     return (
@@ -73,6 +75,14 @@ const MainContent = () => {
         <FileUpload />
       </div>
       
+      {/* Animation Library */}
+      <AnimationLibraryPanel />
+
+      {/* Player Creation */}
+      <div className="add-player-section">
+        <PlayerForm addPlayer={createPlayer} />
+      </div>
+
       {/* Player Panels */}
       <div className="player-panels-grid">
         {playerIds.map((id) => (

@@ -1,21 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { usePlayer } from '../../hooks/usePlayer.js';
+import { useAnimationEngine } from '../../contexts/AnimationEngineContext.jsx';
 import ControlPanel from '../UI/ControlPanel.jsx';
+import InstanceConfig from './InstanceConfig.jsx';
 
 const PlayerPanel = ({ playerId }) => {
-  const { 
-    play, 
-    pause, 
-    stop, 
-    seek, 
+  const {
+    play,
+    pause,
+    stop,
+    seek,
     playerState,
     playerValues,
     updatePlayerConfig,
+    addInstance,
   } = usePlayer(playerId);
+  const { animationIds } = useAnimationEngine();
 
   const [seekValue, setSeekValue] = useState(0);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isValuesOpen, setIsValuesOpen] = useState(true);
+  const [isInstancesOpen, setIsInstancesOpen] = useState(false);
+  const [selectedAnim, setSelectedAnim] = useState('');
 
   useEffect(() => {
     if (playerState) {
@@ -63,7 +69,7 @@ const PlayerPanel = ({ playerId }) => {
   };
 
   return (
-    <ControlPanel title={`🎬 Player: ${playerId}`}>
+    <ControlPanel title={`🎬 Player: ${playerState.name} (${playerId})`}>
       {/* Playback Controls */}
       <div className="button-group">
         <button className="player-btn" onClick={play} title="Play">
@@ -96,13 +102,13 @@ const PlayerPanel = ({ playerId }) => {
         <div className="status-item">
           <strong>State:</strong> 
           <span className={`status-badge ${playerState.state}`}>
-            {playerState.state}
+            {JSON.stringify(playerState)}
           </span>
         </div>
         <div className="status-item">
           <strong>Playing:</strong> 
           <span className={`status-badge ${playerState.state === 'Playing' ? 'playing' : 'stopped'}`}>
-            {playerState.state === 'Playing' ? 'Yes' : 'No'}
+            {playerState.playback_state === 'Playing' ? 'Yes' : 'No'}
           </span>
         </div>
       </div>
@@ -167,6 +173,33 @@ const PlayerPanel = ({ playerId }) => {
                 placeholder="No limit"
               />
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Animation Instances */}
+      <div className="collapsible-section">
+        <button className="collapsible-header" onClick={() => setIsInstancesOpen(!isInstancesOpen)}>
+          <h4>Instances</h4>
+          <span>{isInstancesOpen ? '▲' : '▼'}</span>
+        </button>
+        {isInstancesOpen && (
+          <div className="collapsible-content">
+            <div className="control-group" style={{ display: 'flex', gap: '5px' }}>
+              <select value={selectedAnim} onChange={e => setSelectedAnim(e.target.value)}>
+                <option value="">Select Animation</option>
+                {animationIds.map(id => (
+                  <option key={id} value={id}>{id}</option>
+                ))}
+              </select>
+              <button className="btn-primary" onClick={() => { if(selectedAnim) { addInstance(selectedAnim); setSelectedAnim(''); } }} disabled={!selectedAnim}>Add</button>
+            </div>
+            {playerState.instance_ids && playerState.instance_ids.map(inst => (
+              <>
+                {/* <div>Hello{inst}</div> */}
+                <InstanceConfig key={inst} playerId={playerId} instance={inst} />
+              </>
+            ))}
           </div>
         )}
       </div>

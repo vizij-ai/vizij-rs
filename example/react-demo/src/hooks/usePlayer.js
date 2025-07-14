@@ -7,18 +7,22 @@ export const usePlayer = (playerId) => {
   const playerState = useMemo(() => {
     if (!engine.isLoaded || !playerId) return null;
     try {
-      const state = engine.getPlayerState(playerId);
+      const settings = engine.getPlayerSettings(playerId);
       const current_player_time = engine.getPlayerTime(playerId);
       const duration = engine.getPlayerDuration(playerId);
-      return { ...state, duration, current_player_time };
+      const state = engine.getPlayerState(playerId);
+      // console.log("settings", settings)
+      // console.log("state", state)
+      return { ...settings, duration, current_player_time, ...state };
     } catch (e) {
       return null; // Player might not exist yet
     }
   }, [engine, playerId]);
 
   const playerValues = useMemo(() => {
-    if (!engine.latestValues) return {};
-    return Object.fromEntries(engine.latestValues[playerId]) || {};
+    if (!engine.latestValues || !engine.latestValues[playerId]) return {};
+    
+      return Object.fromEntries(engine.latestValues[playerId]) || {};
   }, [engine.latestValues, playerId]);
 
   // Player-specific actions

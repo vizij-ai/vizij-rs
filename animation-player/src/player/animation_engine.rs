@@ -7,7 +7,7 @@ use crate::animation::instance::{AnimationInstance, AnimationInstanceSettings, P
 use crate::event::EventDispatcher;
 use crate::player::animation_player::AnimationPlayer;
 use crate::player::playback_state::PlaybackState;
-use crate::player::{PlayerProperties, PlayerSettings};
+use crate::player::{PlayerSettings, PlayerState};
 use crate::{
     AnimationData, AnimationEngineConfig, AnimationError, AnimationTime, InterpolationRegistry,
     Value,
@@ -50,7 +50,7 @@ pub struct AnimationEngine {
     /// Settings for each player managed by the engine
     player_settings: HashMap<String, PlayerSettings>,
     /// Properties for each player managed by the engine
-    player_properties: HashMap<String, PlayerProperties>,
+    player_state: HashMap<String, PlayerState>,
     /// All loaded animation data
     animations: HashMap<String, AnimationData>,
     /// Interpolation registry
@@ -69,7 +69,7 @@ impl AnimationEngine {
         Self {
             players: HashMap::new(),
             player_settings: HashMap::new(),
-            player_properties: HashMap::new(),
+            player_state: HashMap::new(),
             animations: HashMap::new(),
             interpolation_registry: InterpolationRegistry::new(config.max_cache_size),
             event_dispatcher: EventDispatcher::new(),
@@ -135,8 +135,7 @@ impl AnimationEngine {
         self.players.insert(id.clone(), AnimationPlayer::new());
         self.player_settings
             .insert(id.clone(), PlayerSettings::default());
-        self.player_properties
-            .insert(id.clone(), PlayerProperties::default());
+        self.player_state.insert(id.clone(), PlayerState::default());
         id
     }
 
@@ -154,8 +153,14 @@ impl AnimationEngine {
 
     /// Get a player's settings by ID (speed, mode, loop_until_target, offset, start_time, end_time)
     #[inline]
-    pub fn get_player_settings(&self, id: &str) -> Option<&PlayerSettings> {
-        self.player_settings.get(id)
+    pub fn get_player_settings(&self, id: &str) -> Option<PlayerSettings> {
+        self.player_settings.get(id).map(|settings| {
+            let mut updated_settings = settings.clone();
+            if let Some(player) = self.players.get(id) {
+                updated_settings.instance_ids = player.get_instance_ids();
+            }
+            updated_settings
+        })
     }
 
     /// Get mutable player settings by ID
@@ -166,20 +171,20 @@ impl AnimationEngine {
 
     /// Get a player's properties by ID (playback_state, last_update_time, current_loop_count, is_playing_forward)
     #[inline]
-    pub fn get_player_properties(&self, id: &str) -> Option<&PlayerProperties> {
-        self.player_properties.get(id)
+    pub fn get_player_state(&self, id: &str) -> Option<&PlayerState> {
+        self.player_state.get(id)
     }
 
     /// Get mutable player properties by ID
     #[inline]
-    pub fn get_player_properties_mut(&mut self, id: &str) -> Option<&mut PlayerProperties> {
-        self.player_properties.get_mut(id)
+    pub fn get_player_properties_mut(&mut self, id: &str) -> Option<&mut PlayerState> {
+        self.player_state.get_mut(id)
     }
 
     /// Remove a player
     pub fn remove_player(&mut self, id: &str) -> Option<AnimationPlayer> {
         self.player_settings.remove(id);
-        self.player_properties.remove(id);
+        self.player_state.remove(id);
         self.players.remove(id)
     }
 
@@ -247,7 +252,7 @@ impl AnimationEngine {
         for player_id in player_ids {
             // Get mutable references to player and its state
             let player = self.players.get_mut(&player_id).unwrap();
-            let player_property = self.player_properties.get_mut(&player_id).unwrap();
+            let player_property = self.player_state.get_mut(&player_id).unwrap();
             let player_setting = self.player_settings.get_mut(&player_id).unwrap();
 
             // Skip processing if player is not playing
@@ -387,7 +392,7 @@ impl AnimationEngine {
     fn update_engine_metrics(&mut self) {
         let total_players = self.players.len() as f64;
         let playing_players = self
-            .player_properties
+            .player_state
             .values()
             .filter(|ps| ps.playback_state.is_playing())
             .count() as f64;
@@ -478,7 +483,7 @@ impl AnimationEngine {
     /// Get number of playing players
     #[inline]
     pub fn playing_player_count(&self) -> usize {
-        self.player_properties
+        self.player_state
             .values()
             .filter(|ps| ps.playback_state.is_playing())
             .count()
@@ -487,7 +492,7 @@ impl AnimationEngine {
     /// Start playback for a specific player
     pub fn play_player(&mut self, player_id: &str) -> Result<(), AnimationError> {
         let player_property =
-            self.player_properties
+            self.player_state
                 .get_mut(player_id)
                 .ok_or_else(|| AnimationError::Generic {
                     message: format!("Player with ID '{}' not found.", player_id),
@@ -520,7 +525,7 @@ impl AnimationEngine {
     /// Pause playback for a specific player
     pub fn pause_player(&mut self, player_id: &str) -> Result<(), AnimationError> {
         let player_property =
-            self.player_properties
+            self.player_state
                 .get_mut(player_id)
                 .ok_or_else(|| AnimationError::Generic {
                     message: format!("Player with ID '{}' not found.", player_id),
@@ -540,7 +545,7 @@ impl AnimationEngine {
     /// Stop playback for a specific player
     pub fn stop_player(&mut self, player_id: &str) -> Result<(), AnimationError> {
         let player_property =
-            self.player_properties
+            self.player_state
                 .get_mut(player_id)
                 .ok_or_else(|| AnimationError::Generic {
                     message: format!("Player with ID '{}' not found.", player_id),
@@ -639,7 +644,7 @@ impl AnimationEngine {
             })?;
 
         let player_property =
-            self.player_properties
+            self.player_state
                 .get(player_id)
                 .ok_or_else(|| AnimationError::Generic {
                     message: format!("Player state for '{}' not found", player_id),

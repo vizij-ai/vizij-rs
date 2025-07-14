@@ -108,9 +108,9 @@ Advances the animation engine by a time delta (typically the time since the last
 
 ### 7. State & Configuration Queries
 
-#### `get_player_properties(player_id: string): string`
+#### `get_player_state(player_id: string): string`
 
-Returns a JSON string of the player's current `PlayerProperties`, including its playback status (`playing`, `paused`, etc.).
+Returns a JSON string of the player's current `PlayerState`, including its playback status (`playing`, `paused`, etc.).
 
 #### `get_player_time(player_id: string): f64`
 

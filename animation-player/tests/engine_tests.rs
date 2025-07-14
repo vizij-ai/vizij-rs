@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use animation_player::{
     animation::{AnimationInstance, AnimationInstanceSettings, PlaybackMode},
-    player::{PlayerProperties, PlayerSettings},
+    player::{PlayerSettings, PlayerState},
     value::Vector3,
     AnimationData, AnimationEngine, AnimationEngineConfig, AnimationKeypoint, AnimationTime,
     AnimationTrack, PlaybackState, Value,
@@ -148,8 +148,8 @@ fn test_engine_player_management() {
     assert!(engine.get_player("non_existent").is_none());
 
     // Get player states
-    assert!(engine.get_player_properties(&player1_id).is_some());
-    assert!(engine.get_player_properties("non_existent").is_none());
+    assert!(engine.get_player_state(&player1_id).is_some());
+    assert!(engine.get_player_state("non_existent").is_none());
 
     // Remove player
     assert!(engine.remove_player(&player1_id).is_some());
@@ -178,17 +178,17 @@ fn test_engine_player_playback_control() {
 
     // Test playback controls
     assert!(engine.play_player(&player_id).is_ok());
-    let state = engine.get_player_properties(&player_id).unwrap();
+    let state = engine.get_player_state(&player_id).unwrap();
     assert_eq!(state.playback_state, PlaybackState::Playing);
     assert_eq!(engine.playing_player_count(), 1);
 
     assert!(engine.pause_player(&player_id).is_ok());
-    let state = engine.get_player_properties(&player_id).unwrap();
+    let state = engine.get_player_state(&player_id).unwrap();
     assert_eq!(state.playback_state, PlaybackState::Paused);
     assert_eq!(engine.playing_player_count(), 0);
 
     assert!(engine.stop_player(&player_id).is_ok());
-    let state = engine.get_player_properties(&player_id).unwrap();
+    let state = engine.get_player_state(&player_id).unwrap();
     assert_eq!(state.playback_state, PlaybackState::Stopped);
 
     // Test invalid state transitions
@@ -346,7 +346,7 @@ fn test_engine_update_with_looping() {
     let player = engine.get_player(&player_id).unwrap();
     assert!(player.current_time.as_seconds() < 2.0); // Should have wrapped
 
-    let state = engine.get_player_properties(&player_id).unwrap();
+    let state = engine.get_player_state(&player_id).unwrap();
     assert_eq!(state.playback_state, PlaybackState::Playing); // Still playing
 }
 
@@ -366,7 +366,7 @@ fn test_engine_update_without_looping() {
     assert!(result.is_ok());
 
     // Player should have ended
-    let state = engine.get_player_properties(&player_id).unwrap();
+    let state = engine.get_player_state(&player_id).unwrap();
     assert_eq!(state.playback_state, PlaybackState::Ended);
 }
 
@@ -452,7 +452,7 @@ fn test_engine_stop_all_players() {
 
     // Check that all players are stopped
     for player_id in [&player1_id, &player2_id] {
-        let state = engine.get_player_properties(player_id).unwrap();
+        let state = engine.get_player_state(player_id).unwrap();
         assert_eq!(state.playback_state, PlaybackState::Stopped);
     }
 }
@@ -485,7 +485,7 @@ fn test_engine_pause_resume_all_players() {
     assert_eq!(engine.playing_player_count(), 0);
 
     for player_id in [&player1_id, &player2_id] {
-        let state = engine.get_player_properties(player_id).unwrap();
+        let state = engine.get_player_state(player_id).unwrap();
         assert_eq!(state.playback_state, PlaybackState::Paused);
     }
 
@@ -494,7 +494,7 @@ fn test_engine_pause_resume_all_players() {
     assert_eq!(engine.playing_player_count(), 2);
 
     for player_id in [&player1_id, &player2_id] {
-        let state = engine.get_player_properties(player_id).unwrap();
+        let state = engine.get_player_state(player_id).unwrap();
         assert_eq!(state.playback_state, PlaybackState::Playing);
     }
 }
@@ -583,7 +583,7 @@ fn test_engine_default_construction() {
 #[test]
 fn test_player_state_initialization() {
     let settings = PlayerSettings::default();
-    let properties = PlayerProperties::default();
+    let properties = PlayerState::default();
 
     assert_eq!(properties.playback_state, PlaybackState::Stopped);
     assert_eq!(settings.speed, 1.0);

@@ -100,7 +100,10 @@ fn test_ping_pong_derivative_sign() {
 
     let player_state = engine.get_player_settings_mut(&player_id).unwrap();
     player_state.speed = -1.0;
-    engine.get_player_properties_mut(&player_id).unwrap().playback_state = PlaybackState::Playing;
+    engine
+        .get_player_properties_mut(&player_id)
+        .unwrap()
+        .playback_state = PlaybackState::Playing;
 
     let derivatives_backward = engine
         .calculate_player_derivatives(&player_id, None)
