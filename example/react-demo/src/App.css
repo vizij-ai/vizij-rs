@@ -281,14 +281,6 @@ button:disabled {
   color: #721c24;
 }
 
-/* Metrics */
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
-  margin: 10px 0;
-}
-
 .metric-box {
   background: var(--surface-color);
   padding: 10px;
@@ -680,9 +672,6 @@ button:disabled {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
   
-  .metrics-grid {
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  }
   
   .chart-controls {
     flex-direction: column;
@@ -910,3 +899,6 @@ button:disabled {
   font-size: 14px;
   font-weight: bold;
 }
+.engine-dashboard .config-controls { display:flex; gap:15px; flex-wrap:wrap; margin-top:10px; }
+.engine-dashboard .config-controls .control-group { margin-bottom:0; }
+

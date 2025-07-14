@@ -5,9 +5,7 @@ use crate::interpolation::functions::{
     EaseInOutInterpolation, EaseOutInterpolation, HermiteInterpolation, Interpolator,
     LinearInterpolation, SpringInterpolation, StepInterpolation,
 };
-use crate::interpolation::metrics::InterpolationMetrics;
 use crate::interpolation::parameters::InterpolationParams;
-use crate::time::Timer;
 use crate::{AnimationError, Value};
 use lru::LruCache;
 use std::collections::HashMap;
@@ -17,9 +15,7 @@ use std::num::NonZeroUsize;
 pub struct InterpolationRegistry {
     functions: HashMap<String, Box<dyn Interpolator>>,
     cache: LruCache<InterpolationCacheKey, Value>,
-    metrics: InterpolationMetrics,
     enable_caching: bool,
-    enable_metrics: bool,
 }
 
 impl InterpolationRegistry {
@@ -30,9 +26,7 @@ impl InterpolationRegistry {
         let mut registry = Self {
             functions: HashMap::new(),
             cache: LruCache::new(cache_size),
-            metrics: InterpolationMetrics::new(),
             enable_caching: true,
-            enable_metrics: true,
         };
 
         // Register built-in interpolation functions
@@ -85,12 +79,6 @@ impl InterpolationRegistry {
         context: &crate::interpolation::context::InterpolationContext,
         animation: &crate::AnimationData,
     ) -> Result<Value, AnimationError> {
-        let timer = if self.enable_metrics {
-            Some(Timer::new())
-        } else {
-            None
-        };
-
         // First, check if the function exists and get its interpolation type
         let interpolation_type = {
             let function = self.get_function(function_name).ok_or_else(|| {
@@ -107,10 +95,6 @@ impl InterpolationRegistry {
 
             if let Some(cached_value) = self.cache.get(&cache_key) {
                 let cloned_value = cached_value.clone();
-                if let Some(timer) = timer {
-                    self.metrics
-                        .record_interpolation(timer.elapsed_micros() as u64, true);
-                }
                 return Ok(cloned_value);
             }
         }
@@ -127,12 +111,6 @@ impl InterpolationRegistry {
             self.cache.put(cache_key, result.clone());
         }
 
-        // Record metrics
-        if let Some(timer) = timer {
-            self.metrics
-                .record_interpolation(timer.elapsed_micros() as u64, false);
-        }
-
         Ok(result)
     }
 
@@ -143,21 +121,6 @@ impl InterpolationRegistry {
         if !enabled {
             self.cache.clear();
         }
-    }
-
-    /// Enable or disable metrics
-    #[inline]
-    pub fn set_metrics_enabled(&mut self, enabled: bool) {
-        self.enable_metrics = enabled;
-        if !enabled {
-            self.metrics.reset();
-        }
-    }
-
-    /// Get performance metrics
-    #[inline]
-    pub fn metrics(&self) -> &InterpolationMetrics {
-        &self.metrics
     }
 
     /// Clear the interpolation cache

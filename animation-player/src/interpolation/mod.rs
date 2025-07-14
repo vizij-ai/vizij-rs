@@ -1,7 +1,6 @@
 pub mod cache;
 pub mod context;
 pub mod functions;
-pub mod metrics;
 pub mod parameters;
 pub mod registry;
 pub mod schema;
@@ -15,6 +14,5 @@ pub use functions::{
     EaseInInterpolation, EaseInOutInterpolation, EaseOutInterpolation, HermiteInterpolation,
     Interpolator, LinearInterpolation, SpringInterpolation, StepInterpolation,
 };
-pub use metrics::InterpolationMetrics;
 pub use registry::InterpolationRegistry;
 pub use types::InterpolationType;

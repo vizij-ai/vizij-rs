@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAnimationEngine } from '../contexts/AnimationEngineContext';
+import { useAnimationEngine } from './useAnimationEngine.js';
 
 export const useEngineDataViewport = ({ durationMs = 5000, enabled = true }) => {
   const { latestValues } = useAnimationEngine();

@@ -166,9 +166,15 @@ export function useWasm(config = null) {
     return engineRef.current.get_derivatives(playerId, derivativeWidthMs);
   }, []);
 
-  const getMetrics = useCallback(() => {
+  const setEngineConfig = useCallback((config) => {
     if (!engineRef.current) throw new Error('WASM not loaded');
-    return engineRef.current.get_metrics();
+    const json = typeof config === 'string' ? config : JSON.stringify(config);
+    engineRef.current.set_engine_config(json);
+  }, []);
+
+  const getEngineConfig = useCallback(() => {
+    if (!engineRef.current) throw new Error('WASM not loaded');
+    return engineRef.current.get_engine_config();
   }, []);
 
   // Test animation helper
@@ -205,7 +211,8 @@ export function useWasm(config = null) {
     exportAnimation,
     bakeAnimation,
     getDerivatives,
-    getMetrics,
+    setEngineConfig,
+    getEngineConfig,
     getTestAnimationData,
   };
 }

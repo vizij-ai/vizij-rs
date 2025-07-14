@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { useAnimationEngine } from '../../contexts/AnimationEngineContext';
+import { useAnimationEngine } from '../../hooks/useAnimationEngine.js';
 import { create_test_animation } from 'animation-player';
 
 const FileUpload = () => {

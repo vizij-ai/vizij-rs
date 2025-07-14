@@ -96,21 +96,18 @@ impl WasmAnimationEngine {
             .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
     }
 
-    /// Returns the engine's performance metrics as a JSON object.
-    ///
-    /// @returns {any} A JSON object containing performance metrics.
-    /// ```json
-    /// {
-    ///   "totalPlayers": "integer",
-    ///   "activePlayers": "integer",
-    ///   "updateTime": "float",
-    ///   "renderTime": "float",
-    ///   "totalTime": "float"
-    /// }
-    /// ```
+    /// Returns the current engine configuration as a JSON object.
     #[wasm_bindgen]
-    pub fn get_metrics(&self) -> JsValue {
-        let metrics = self.engine.metrics();
-        serde_wasm_bindgen::to_value(metrics).unwrap_or(JsValue::NULL)
+    pub fn get_engine_config(&self) -> JsValue {
+        serde_wasm_bindgen::to_value(self.engine.config()).unwrap_or(JsValue::NULL)
+    }
+
+    /// Sets the engine configuration from a JSON string.
+    #[wasm_bindgen]
+    pub fn set_engine_config(&mut self, config_json: &str) -> Result<(), JsValue> {
+        let config: AnimationEngineConfig = serde_json::from_str(config_json)
+            .map_err(|e| JsValue::from_str(&format!("Config parse error: {}", e)))?;
+        self.engine.set_config(config);
+        Ok(())
     }
 }

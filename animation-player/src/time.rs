@@ -4,40 +4,10 @@
  * but some are not available in WASM.
  * For them, we need few custom implementations.
  */
-use std::{collections::VecDeque, time::Duration};
+use std::time::Duration;
 
-#[cfg(target_arch = "wasm32")]
-use js_sys::Date;
 use serde::{Deserialize, Serialize};
 
-#[cfg(not(target_arch = "wasm32"))]
-use std::time::Instant;
-
-#[cfg(target_arch = "wasm32")]
-#[derive(Debug, Clone, Copy)]
-struct Instant {
-    timestamp: f64,
-}
-
-#[cfg(target_arch = "wasm32")]
-impl Instant {
-    fn now() -> Self {
-        Self {
-            timestamp: Date::now(),
-        }
-    }
-
-    fn duration_since(&self, earlier: Instant) -> std::time::Duration {
-        let millis = self.timestamp - earlier.timestamp;
-        std::time::Duration::from_millis(millis.max(0.0) as u64)
-    }
-
-    fn elapsed(&self) -> std::time::Duration {
-        let now = Date::now();
-        let millis = now - self.timestamp;
-        std::time::Duration::from_millis(millis.max(0.0) as u64)
-    }
-}
 use crate::error::AnimationError;
 
 /// Represents a moment in animation time
@@ -308,148 +278,6 @@ impl TimeRange {
     }
 }
 
-/// High-precision timer for performance measurements
-#[derive(Debug, Clone)]
-pub struct Timer {
-    start: Instant,
-}
-
-impl Timer {
-    /// Create a new timer and start it
-    #[inline]
-    pub fn new() -> Self {
-        Self {
-            start: Instant::now(),
-        }
-    }
-
-    /// Restart the timer
-    #[inline]
-    pub fn restart(&mut self) {
-        self.start = Instant::now();
-    }
-
-    /// Get elapsed time since start or last restart
-    #[inline]
-    pub fn elapsed(&self) -> AnimationTime {
-        self.start.elapsed().into()
-    }
-
-    /// Get elapsed time in milliseconds
-    #[inline]
-    pub fn elapsed_millis(&self) -> f64 {
-        self.elapsed().as_millis()
-    }
-
-    /// Get elapsed time in microseconds
-    #[inline]
-    pub fn elapsed_micros(&self) -> f64 {
-        self.elapsed().as_seconds() * 1_000_000.0
-    }
-}
-
-impl Default for Timer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Frame rate calculator
-#[derive(Debug, Clone)]
-pub struct FrameRateCalculator {
-    frame_times: VecDeque<Instant>,
-    max_samples: usize,
-}
-
-impl FrameRateCalculator {
-    /// Create a new frame rate calculator
-    #[inline]
-    pub fn new(max_samples: usize) -> Self {
-        Self {
-            frame_times: VecDeque::with_capacity(max_samples + 1),
-            max_samples,
-        }
-    }
-
-    /// Record a new frame
-    #[inline]
-    pub fn record_frame(&mut self) {
-        self.frame_times.push_back(Instant::now());
-        if self.frame_times.len() > self.max_samples {
-            self.frame_times.pop_front();
-        }
-    }
-
-    /// Get the current frame rate (frames per second)
-    #[inline]
-    pub fn fps(&self) -> f64 {
-        let nof_frames = self.frame_times.len();
-        if nof_frames < 2 {
-            return f64::NAN; // Not enough frames to calculate FPS
-        }
-
-        let first_time = self.frame_times.front().unwrap();
-        let last_time = self.frame_times.back().unwrap();
-        let total_duration = last_time.duration_since(*first_time);
-        (nof_frames - 1) as f64 / total_duration.as_secs_f64()
-    }
-
-    /// Get average frame time in milliseconds
-    #[inline]
-    pub fn avg_frame_time_millis(&self) -> f64 {
-        let nof_frames = self.frame_times.len();
-        if nof_frames < 2 {
-            return f64::NAN; // Not enough frames to calculate FPS
-        }
-
-        let first_time = self.frame_times.front().unwrap();
-        let last_time = self.frame_times.back().unwrap();
-        let total_duration = last_time.duration_since(*first_time);
-        1000f64 * total_duration.as_secs_f64() / (nof_frames - 1) as f64
-    }
-
-    /// Compute durations between consecutive frames
-    #[inline]
-    fn duration_between_frames<'a>(&'a self) -> impl Iterator<Item = Duration> + 'a {
-        self.frame_times
-            .iter()
-            .zip(self.frame_times.iter().skip(1))
-            .map(|(previous, next)| next.duration_since(*previous))
-    }
-
-    /// Get the minimum frame time in the current sample window
-    /// If there are less than 2 frames, returns `f64::MAX`.
-    #[inline]
-    pub fn min_frame_time_millis(&self) -> f64 {
-        self.duration_between_frames()
-            .fold(Duration::MAX, |min, t| min.min(t))
-            .as_secs_f64()
-            * 1000.0
-    }
-
-    /// Get the maximum frame time in the current sample window
-    /// If there are less than 2 frames, returns `f64::ZERO`.
-    #[inline]
-    pub fn max_frame_time_millis(&self) -> f64 {
-        self.duration_between_frames()
-            .fold(Duration::ZERO, |max, t| max.max(t))
-            .as_secs_f64()
-            * 1000.0
-    }
-
-    /// Reset the calculator
-    #[inline]
-    pub fn reset(&mut self) {
-        self.frame_times.clear();
-    }
-}
-
-impl Default for FrameRateCalculator {
-    fn default() -> Self {
-        Self::new(60) // Default to 60 samples (1 second at 60 FPS)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -516,31 +344,5 @@ mod tests {
         let union = range1.union(&range2).unwrap();
         assert_eq!(union.start.as_seconds(), 1.0);
         assert_eq!(union.end.as_seconds(), 4.0);
-    }
-
-    #[test]
-    fn test_timer() {
-        let timer = Timer::new();
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        let elapsed = timer.elapsed();
-        assert!(elapsed.as_millis() >= 10.0);
-    }
-
-    #[test]
-    fn test_frame_rate_calculator() {
-        let mut calc = FrameRateCalculator::new(10);
-
-        // Simulate 60 FPS (16.67ms per frame)
-        for _ in 0..30 {
-            calc.record_frame();
-            std::thread::sleep(std::time::Duration::from_nanos(16666667));
-        }
-
-        let fps = calc.fps();
-        assert!(
-            fps > 50.0 && fps < 70.0,
-            "FPS out of expected range: {}",
-            fps
-        ); // Rough check accounting for timing variance
     }
 }

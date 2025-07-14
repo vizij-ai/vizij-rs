@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useAnimationEngine } from '../contexts/AnimationEngineContext.jsx';
+import { useAnimationEngine } from './useAnimationEngine.js';
 
 export const useBaking = (playerId, animationId) => {
   const animationPlayer = useAnimationEngine();

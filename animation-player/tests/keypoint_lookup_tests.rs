@@ -402,37 +402,6 @@ fn test_value_at_time_disabled_track() {
     );
 }
 
-/// Test performance of keypoint lookup with many keypoints
-#[test]
-fn test_keypoint_lookup_performance() {
-    let mut track = AnimationTrack::new("perf_track", "test.performance");
-
-    // Add 1000 keypoints
-    for i in 0..1000 {
-        track
-            .add_keypoint(AnimationKeypoint::new(
-                AnimationTime::from(i as f64),
-                Value::Float(i as f64),
-            ))
-            .unwrap();
-    }
-
-    // Test lookup performance
-    let start = std::time::Instant::now();
-    for i in 0..1000 {
-        let time = i as f64 + 0.5; // Between keypoints
-        let _result = track.surrounding_keypoints(AnimationTime::from(time));
-    }
-    let elapsed = start.elapsed();
-
-    // Binary search should be fast even with 1000 keypoints
-    assert!(
-        elapsed.as_millis() < 10,
-        "1000 keypoint lookups took too long: {}ms",
-        elapsed.as_millis()
-    );
-}
-
 /// Test binary search correctness with many keypoints
 #[test]
 fn test_binary_search_correctness() {

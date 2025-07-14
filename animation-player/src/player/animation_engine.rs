@@ -30,14 +30,12 @@ impl Default for EngineSettings {
 /// Runtime properties for the engine
 #[derive(Debug, Clone)]
 pub struct EngineProperties {
-    pub engine_metrics: HashMap<String, f64>,
     pub last_engine_update_time: Duration,
 }
 
 impl Default for EngineProperties {
     fn default() -> Self {
         Self {
-            engine_metrics: HashMap::new(),
             last_engine_update_time: Duration::ZERO,
         }
     }
@@ -382,54 +380,7 @@ impl AnimationEngine {
             all_values.insert(player_id.clone(), values);
         }
 
-        // Update engine metrics
-        self.update_engine_metrics();
-
         Ok(all_values)
-    }
-
-    /// Update engine-level metrics
-    fn update_engine_metrics(&mut self) {
-        let total_players = self.players.len() as f64;
-        let playing_players = self
-            .player_state
-            .values()
-            .filter(|ps| ps.playback_state.is_playing())
-            .count() as f64;
-
-        let total_memory: usize = self
-            .players
-            .values()
-            .map(|p| p.metrics.memory_usage_bytes)
-            .sum();
-
-        let avg_fps = if !self.players.is_empty() {
-            self.players
-                .values()
-                .map(|p| p.metrics.frames_rendered as f64) // Use frames_rendered for FPS calculation
-                .sum::<f64>()
-                / total_players
-        } else {
-            0.0
-        };
-
-        self.properties
-            .engine_metrics
-            .insert("total_players".to_string(), total_players);
-        self.properties
-            .engine_metrics
-            .insert("playing_players".to_string(), playing_players);
-        self.properties.engine_metrics.insert(
-            "total_memory_mb".to_string(),
-            total_memory as f64 / (1024.0 * 1024.0),
-        );
-        self.properties
-            .engine_metrics
-            .insert("average_fps".to_string(), avg_fps);
-        self.properties.engine_metrics.insert(
-            "cache_hit_rate".to_string(),
-            self.interpolation_registry.metrics().cache_hit_rate(),
-        );
     }
 
     /// Get interpolation registry
@@ -466,12 +417,6 @@ impl AnimationEngine {
     #[inline]
     pub fn set_config(&mut self, config: AnimationEngineConfig) {
         self.settings.config = config;
-    }
-
-    /// Get engine metrics
-    #[inline]
-    pub fn metrics(&self) -> &HashMap<String, f64> {
-        &self.properties.engine_metrics
     }
 
     /// Get total number of players
@@ -642,13 +587,6 @@ impl AnimationEngine {
             .ok_or_else(|| AnimationError::Generic {
                 message: format!("Player '{}' not found", player_id),
             })?;
-
-        let player_property =
-            self.player_state
-                .get(player_id)
-                .ok_or_else(|| AnimationError::Generic {
-                    message: format!("Player state for '{}' not found", player_id),
-                })?;
         let player_setting = self.player_settings.get(player_id).unwrap();
 
         player.calculate_derivatives(

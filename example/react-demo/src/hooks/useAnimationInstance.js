@@ -1,4 +1,4 @@
-import { useAnimationEngine } from '../contexts/AnimationEngineContext';
+import { useAnimationEngine } from './useAnimationEngine.js';
 import { useMemo } from 'react';
 
 export const useAnimationInstance = (playerId, instanceId) => {

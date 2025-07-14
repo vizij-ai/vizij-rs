@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { AnimationEngineProvider, useAnimationEngine } from './contexts/AnimationEngineContext.jsx';
+import { AnimationEngineProvider } from './contexts/AnimationEngineProvider.jsx';
+import { useAnimationEngine } from './hooks/useAnimationEngine.js';
 import PlayerPanel from './components/AnimationPlayer/PlayerPanel.jsx';
 import AnimationLibraryPanel from './components/AnimationPlayer/AnimationLibraryPanel.jsx';
 import DataViewport from './components/DataViewport/DataViewport.jsx';
 import BakedAnimationPanel from './components/BakedAnimation/BakedAnimationPanel.jsx';
 import FileUpload from './components/UI/FileUpload.jsx';
 import PlayerForm from './components/UI/PlayerForm.jsx';
+import EngineDashboard from './components/UI/EngineDashboard.jsx';
 import './App.css';
 
 function App() {
@@ -70,6 +72,7 @@ const MainContent = () => {
 
   return (
     <div className="demo">
+      <EngineDashboard />
       {/* File Upload Section */}
       <div className="file-upload-section">
         <FileUpload />

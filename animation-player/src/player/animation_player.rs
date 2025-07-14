@@ -1,5 +1,4 @@
-use crate::animation::{AnimationInstance, AnimationInstanceSettings};
-use crate::player::playback_metrics::PlaybackMetrics;
+use crate::animation::AnimationInstance;
 use crate::{AnimationData, AnimationError, AnimationTime, InterpolationRegistry, Value};
 use std::collections::HashMap;
 
@@ -8,8 +7,6 @@ use std::collections::HashMap;
 pub struct AnimationPlayer {
     /// Current animation time
     pub current_time: AnimationTime, // Made public for direct access
-    /// Performance metrics
-    pub metrics: PlaybackMetrics, // Made public for direct access
     /// Cache for last calculated values
     last_calculated_values: Option<HashMap<String, Value>>,
     /// Time when last_calculated_values was computed
@@ -24,7 +21,6 @@ impl AnimationPlayer {
     pub fn new() -> Self {
         Self {
             current_time: AnimationTime::zero(),
-            metrics: PlaybackMetrics::new(),
             last_calculated_values: None,
             last_calculated_time: AnimationTime::zero(),
             instances: HashMap::new(),
@@ -261,11 +257,7 @@ impl AnimationPlayer {
             return Ok(self.last_calculated_values.clone().unwrap());
         }
 
-        self.metrics.frames_rendered += 1;
-
         let mut combined_values: HashMap<String, Value> = HashMap::new();
-        let mut active_tracks_count = 0;
-        let mut estimated_memory_usage = 0;
 
         // Iterate over active instances
         for instance in self.instances.values_mut() {
@@ -303,17 +295,9 @@ impl AnimationPlayer {
                 )? {
                     // For now, simple overwrite. Blending logic would go here.
                     combined_values.insert(track.target.clone(), value);
-                    self.metrics.interpolations_performed += 1;
                 }
-
-                active_tracks_count += 1;
             }
-            estimated_memory_usage += std::mem::size_of::<AnimationInstance>();
-            estimated_memory_usage += std::mem::size_of::<AnimationInstanceSettings>();
         }
-
-        // Update metrics
-        self.update_metrics_with_data(active_tracks_count, estimated_memory_usage);
 
         // Update cache
         self.last_calculated_values = Some(combined_values.clone());
@@ -337,19 +321,6 @@ impl AnimationPlayer {
         let transition = animation_data.get_track_transition_for_time(time, &track.id);
         let value = track.value_at_time(time, interpolation_registry, transition, animation_data);
         return Ok(value);
-    }
-
-    /// Update performance metrics
-    #[inline]
-    fn update_metrics_with_data(
-        &mut self,
-        active_tracks_count: usize,
-        estimated_memory_usage: usize,
-    ) {
-        self.metrics.last_update = self.current_time; // Use current_time as last_update
-
-        self.metrics.active_tracks = active_tracks_count;
-        self.metrics.memory_usage_bytes = estimated_memory_usage;
     }
 
     /// Get the total duration of the animation player, taking into account each
@@ -414,12 +385,6 @@ impl AnimationPlayer {
     #[inline]
     pub fn instance_ids(&self) -> Vec<&str> {
         self.instances.keys().map(|s| s.as_str()).collect()
-    }
-
-    /// Get performance metrics
-    #[inline]
-    pub fn metrics(&self) -> &PlaybackMetrics {
-        &self.metrics
     }
 
     /// Calculate derivatives (rates of change) for all tracks at the current time

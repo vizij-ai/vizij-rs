@@ -142,12 +142,6 @@ Pre-calculates animation values at a fixed frame rate ("bakes" the animation). T
 
 -   **Returns**: A JSON string of the `BakedAnimationData`.
 
-### 9. Performance Monitoring
-
-#### `get_metrics(): JsValue`
-
-Returns a `JsValue` object containing comprehensive performance metrics for the engine, including frame rate stats, memory usage, cache hit rate, and player counts.
-
 ## Data Structures
 
 ### AnimationData

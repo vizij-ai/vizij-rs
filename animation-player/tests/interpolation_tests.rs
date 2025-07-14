@@ -201,36 +201,6 @@ fn test_interpolation_registry() {
 }
 
 #[test]
-fn test_interpolation_caching() {
-    let mut registry = InterpolationRegistry::new(10);
-
-    let start = Value::Float(0.0);
-    let end = Value::Float(10.0);
-    let context = InterpolationContext::new(
-        AnimationTime::zero(),
-        AnimationTime::from_seconds(2.0).unwrap(),
-        AnimationTime::from_seconds(1.0).unwrap(),
-        &[],
-        0,
-    )
-    .unwrap();
-    let animation_data = AnimationData::new("test", "test");
-
-    // First call should be a cache miss
-    let _ = registry
-        .interpolate("linear", &start, &end, &context, &animation_data)
-        .unwrap();
-    assert_eq!(registry.metrics().cache_misses, 1);
-    assert_eq!(registry.metrics().cache_hits, 0);
-
-    // Second call with same parameters should be a cache hit
-    let _ = registry
-        .interpolate("linear", &start, &end, &context, &animation_data)
-        .unwrap();
-    assert_eq!(registry.metrics().cache_hits, 1);
-}
-
-#[test]
 fn test_interpolation_context() {
     let mut context = InterpolationContext::new(
         AnimationTime::zero(),

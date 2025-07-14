@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAnimationEngine } from '../../contexts/AnimationEngineContext.jsx';
+import { useAnimationEngine } from '../../hooks/useAnimationEngine.js';
 import ControlPanel from '../UI/ControlPanel.jsx';
 
 const AnimationLibraryPanel = () => {

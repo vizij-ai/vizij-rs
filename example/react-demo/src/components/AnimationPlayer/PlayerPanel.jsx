@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { usePlayer } from '../../hooks/usePlayer.js';
-import { useAnimationEngine } from '../../contexts/AnimationEngineContext.jsx';
+import { useAnimationEngine } from '../../hooks/useAnimationEngine.js';
 import ControlPanel from '../UI/ControlPanel.jsx';
 import InstanceConfig from './InstanceConfig.jsx';
 

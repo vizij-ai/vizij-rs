@@ -500,28 +500,6 @@ fn test_engine_pause_resume_all_players() {
 }
 
 #[test]
-fn test_engine_metrics() {
-    let mut engine = AnimationEngine::default();
-    let player_id = setup_player_of_simple_animation(&mut engine);
-
-    engine.play_player(&player_id).unwrap();
-
-    // Update to generate metrics
-    engine.update(Duration::from_secs_f64(1.0 / 60.0)).unwrap();
-
-    let metrics = engine.metrics();
-    assert!(metrics.contains_key("total_players"));
-    assert!(metrics.contains_key("playing_players"));
-    assert!(metrics.contains_key("total_memory_mb"));
-    assert!(metrics.contains_key("average_fps"));
-    assert!(metrics.contains_key("cache_hit_rate"));
-
-    assert_eq!(metrics["total_players"], 1.0);
-    assert_eq!(metrics["playing_players"], 1.0);
-    assert!(metrics["total_memory_mb"] >= 0.0);
-}
-
-#[test]
 fn test_engine_config_access() {
     let config = AnimationEngineConfig::default()
         .with_target_fps(120.0)
@@ -544,19 +522,6 @@ fn test_engine_config_access() {
     assert_eq!(engine.config().target_fps, 30.0);
     assert_eq!(engine.config().max_memory_bytes, 1024 * 1024);
     assert_eq!(engine.config().max_cache_size, 256);
-}
-
-#[test]
-fn test_engine_interpolation_registry_access() {
-    let mut engine = AnimationEngine::default();
-
-    // Access immutable registry
-    let registry = engine.interpolation_registry();
-    let metrics = registry.metrics();
-    assert_eq!(metrics.total_interpolations, 0);
-
-    // Access mutable registry (would be used to register new interpolation functions)
-    let _registry_mut = engine.interpolation_registry_mut();
 }
 
 #[test]

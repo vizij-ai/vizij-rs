@@ -133,7 +133,6 @@ sequenceDiagram
 -   **Instance Management**: Manages a collection of `AnimationInstance`s using `add_instance` and `remove_instance`. A single player can orchestrate multiple animations simultaneously.
 -   **Timekeeping**: Maintains its own `current_time`, which acts as the master clock for all its instances.
 -   **Value Calculation**: Its core task is to implement `calculate_values`, which iterates through all active instances, triggers their value calculation, and combines the results into a final output map.
--   **Metrics**: Tracks performance metrics like frames rendered and interpolations performed.
 
 ### AnimationInstance Responsibilities
 

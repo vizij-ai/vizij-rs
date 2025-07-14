@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Line } from 'react-chartjs-2';
-import { useAnimationEngine } from '../../contexts/AnimationEngineContext.jsx';
+import { useAnimationEngine } from '../../hooks/useAnimationEngine.js';
 import { useBaking } from '../../hooks/useBaking.js';
 import ControlPanel from '../UI/ControlPanel.jsx';
 
