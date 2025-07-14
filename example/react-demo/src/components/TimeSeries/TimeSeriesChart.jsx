@@ -89,7 +89,7 @@ const TimeSeriesChart = ({
 
   const chartOptions = {
     responsive: true,
-    maintainAspectRatio: false,
+    maintainAspectRatio: true,
     interaction: {
       mode: 'index',
       intersect: false
@@ -111,7 +111,7 @@ const TimeSeriesChart = ({
           },
           label: function(context) {
             const value = context.parsed.y.toFixed(3);
-            return `${context.dataset.label}: ${value}`;
+            return `${context.dataset.label.slice(-8,-1)}: ${value}`;
           }
         }
       }
@@ -124,8 +124,16 @@ const TimeSeriesChart = ({
           display: true,
           text: 'Time'
         },
-        grid: {
-          color: '#e0e0e0'
+        // grid: {
+        //   color: '#e0e0e0'
+        // },
+        bounds: "data",
+        ticks: {
+          display: false,
+          // maxRotation: 0,
+          // major: {
+          //   enabled: false
+          // }
         }
       },
       y: {
