@@ -62,12 +62,26 @@ export const AnimationEngineProvider = ({ children }) => {
     return newPlayerId;
   }, [wasm]);
 
+  const removePlayer = useCallback((playerId) => {
+    if (!wasm.isLoaded) return;
+    wasm.removePlayer(playerId);
+    setPlayerIds(wasm.getPlayerIds());
+  }, [wasm]);
+
+  const unloadAnimation = useCallback((animationId) => {
+    if (!wasm.isLoaded) return;
+    wasm.unloadAnimation(animationId);
+    setAnimationIds(wasm.getAnimationIds());
+  }, [wasm]);
+
   const value = {
     ...wasm, // Expose all raw WASM methods
     latestValues,
     playerIds,
     animationIds,
     createPlayer,
+    removePlayer,
+    unloadAnimation,
     updateInterval,
     setUpdateInterval,
   };

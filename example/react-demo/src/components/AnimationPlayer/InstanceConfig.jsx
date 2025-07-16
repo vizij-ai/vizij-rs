@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAnimationInstance } from '../../hooks/useAnimationInstance.js';
 
 const InstanceConfig = ({ playerId, instance }) => {
-  const { config, updateConfig } = useAnimationInstance(playerId, instance);
+  const { config, updateConfig, remove } = useAnimationInstance(playerId, instance);
   const [local, setLocal] = useState({ enabled: true, weight: 1, timeScale: 1, instanceStartTime: 0 });
 
   useEffect(() => {
@@ -47,6 +47,7 @@ const InstanceConfig = ({ playerId, instance }) => {
         <label>Start Offset (seconds):</label>
         <input type="number" step="0.1" value={local.instanceStartTime} onChange={e => change('instanceStartTime', parseFloat(e.target.value))} />
       </div>
+      <button className="btn-danger" onClick={remove}>Remove Instance</button>
     </div>
   );
 };

@@ -3,7 +3,7 @@ import { useAnimationEngine } from '../../hooks/useAnimationEngine.js';
 import ControlPanel from '../UI/ControlPanel.jsx';
 
 const AnimationLibraryPanel = () => {
-  const { animationIds, playerIds, createPlayer, addInstance } = useAnimationEngine();
+  const { animationIds, playerIds, createPlayer, addInstance, unloadAnimation } = useAnimationEngine();
   const [selected, setSelected] = useState({});
   const [status, setStatus] = useState('');
 
@@ -41,6 +41,7 @@ const AnimationLibraryPanel = () => {
               ))}
             </select>
             <button className="btn-primary" onClick={() => handleAssign(id)} disabled={!selected[id]}>Assign</button>
+            <button className="btn-danger" onClick={() => unloadAnimation(id)} title="Remove animation">Remove</button>
           </div>
         </div>
       ))}

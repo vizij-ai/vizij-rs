@@ -35,6 +35,8 @@ export const usePlayer = (playerId) => {
     const configJson = config ? JSON.stringify(config) : undefined;
     return engine.addInstance(playerId, animId, configJson);
   }
+  const removeInstance = (instanceId) => engine.removeInstance(playerId, instanceId);
+  const removePlayer = () => engine.removePlayer(playerId);
   const updatePlayerConfig = (config) => {
     const configJson = JSON.stringify(config);
     engine.updatePlayerConfig(playerId, configJson);
@@ -49,6 +51,8 @@ export const usePlayer = (playerId) => {
     stop,
     seek,
     addInstance,
+    removeInstance,
+    removePlayer,
     updatePlayerConfig,
   };
 };

@@ -20,10 +20,16 @@ export const useAnimationInstance = (playerId, instanceId) => {
     engine.updateInstanceConfig(playerId, instanceId, configJson);
   };
 
+  const remove = () => {
+    if (!engine.isLoaded) return;
+    engine.removeInstance(playerId, instanceId);
+  };
+
   return {
     instanceId,
     playerId,
     config: instanceConfig, // weight, timeScale, enabled
     updateConfig,
+    remove,
   };
 };

@@ -13,6 +13,16 @@ impl WasmAnimationEngine {
         self.engine.create_player()
     }
 
+    /// Removes a player by ID.
+    #[wasm_bindgen]
+    pub fn remove_player(&mut self, player_id: &str) -> Result<(), JsValue> {
+        self
+            .engine
+            .remove_player(player_id)
+            .ok_or_else(|| JsValue::from_str("Player not found"))?;
+        Ok(())
+    }
+
     /// Starts playback for a player.
     ///
     /// @param {string} player_id - The ID of the player to start.

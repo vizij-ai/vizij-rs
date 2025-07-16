@@ -58,6 +58,17 @@ impl WasmAnimationEngine {
         Ok(animation_id)
     }
 
+    /// Unloads animation data from the engine.
+    ///
+    /// @param {string} animation_id - The ID of the animation to unload.
+    #[wasm_bindgen]
+    pub fn unload_animation(&mut self, animation_id: &str) -> Result<(), JsValue> {
+        self.engine
+            .unload_animation_data(animation_id)
+            .map(|_| ())
+            .map_err(|e| JsValue::from_str(&format!("Unload animation error: {:?}", e)))
+    }
+
     /// Returns a list of all loaded animation IDs.
     ///
     /// # Example
@@ -107,6 +118,23 @@ impl WasmAnimationEngine {
         self.engine
             .add_animation_to_player(player_id, animation_id, Some(config))
             .map_err(|e| JsValue::from_str(&format!("Engine error: {}", e)))
+    }
+
+    /// Removes an animation instance from a player.
+    #[wasm_bindgen]
+    pub fn remove_instance(
+        &mut self,
+        player_id: &str,
+        instance_id: &str,
+    ) -> Result<(), JsValue> {
+        let player = self
+            .engine
+            .get_player_mut(player_id)
+            .ok_or_else(|| JsValue::from_str("Player not found"))?;
+        player
+            .remove_instance(instance_id)
+            .map(|_| ())
+            .map_err(|e| JsValue::from_str(&format!("Remove instance error: {:?}", e)))
     }
 
     /// Updates the configuration of an existing animation instance.

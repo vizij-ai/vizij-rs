@@ -64,14 +64,29 @@ export function useWasm(config = null) {
     return engineRef.current.load_animation(animationJson);
   }, []);
 
+  const unloadAnimation = useCallback((animationId) => {
+    if (!engineRef.current) throw new Error('WASM not loaded');
+    return engineRef.current.unload_animation(animationId);
+  }, []);
+
   const createPlayer = useCallback((playerId) => {
     if (!engineRef.current) throw new Error('WASM not loaded');
     return engineRef.current.create_player(playerId);
   }, []);
 
+  const removePlayer = useCallback((playerId) => {
+    if (!engineRef.current) throw new Error('WASM not loaded');
+    return engineRef.current.remove_player(playerId);
+  }, []);
+
   const addInstance = useCallback((playerId, animationId) => {
     if (!engineRef.current) throw new Error('WASM not loaded');
     return engineRef.current.add_instance(playerId, animationId);
+  }, []);
+
+  const removeInstance = useCallback((playerId, instanceId) => {
+    if (!engineRef.current) throw new Error('WASM not loaded');
+    return engineRef.current.remove_instance(playerId, instanceId);
   }, []);
 
   const play = useCallback((playerId) => {
@@ -191,8 +206,11 @@ export function useWasm(config = null) {
 
     // Direct WASM methods
     loadAnimation,
+    unloadAnimation,
     createPlayer,
+    removePlayer,
     addInstance,
+    removeInstance,
     play,
     pause,
     stop,
