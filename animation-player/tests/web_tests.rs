@@ -2,7 +2,8 @@
 #![cfg(target_arch = "wasm32")]
 extern crate wasm_bindgen_test;
 
-use animation_player::wasm::{value_to_js, WasmAnimationEngine};
+use animation_player::wasm::conversions::value_to_js;
+use animation_player::wasm::engine::WasmAnimationEngine;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -43,7 +44,7 @@ fn test_wasm_basic_workflow() {
     let player_id = engine.create_player();
 
     // Add instance
-    assert!(engine.add_instance(&player_id, &animation_id).is_ok());
+    assert!(engine.add_instance(&player_id, &animation_id, None).is_ok());
 
     // Test playback controls
     assert!(engine.play(&player_id).is_ok());

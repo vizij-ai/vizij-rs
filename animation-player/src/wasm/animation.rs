@@ -122,11 +122,7 @@ impl WasmAnimationEngine {
 
     /// Removes an animation instance from a player.
     #[wasm_bindgen]
-    pub fn remove_instance(
-        &mut self,
-        player_id: &str,
-        instance_id: &str,
-    ) -> Result<(), JsValue> {
+    pub fn remove_instance(&mut self, player_id: &str, instance_id: &str) -> Result<(), JsValue> {
         let player = self
             .engine
             .get_player_mut(player_id)

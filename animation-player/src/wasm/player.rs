@@ -16,8 +16,7 @@ impl WasmAnimationEngine {
     /// Removes a player by ID.
     #[wasm_bindgen]
     pub fn remove_player(&mut self, player_id: &str) -> Result<(), JsValue> {
-        self
-            .engine
+        self.engine
             .remove_player(player_id)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
         Ok(())
