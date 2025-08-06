@@ -3,7 +3,7 @@ use crate::interpolation::cache::InterpolationCacheKey;
 use crate::interpolation::functions::{
     BezierInterpolation, CatmullRomInterpolation, CubicInterpolation, EaseInInterpolation,
     EaseInOutInterpolation, EaseOutInterpolation, HermiteInterpolation, Interpolator,
-    LinearInterpolation, SpringInterpolation, StepInterpolation,
+    LinearInterpolation, SpringInterpolation, StepInterpolation, BSplineInterpolation
 };
 use crate::interpolation::parameters::InterpolationParams;
 use crate::{AnimationError, Value};
