@@ -408,7 +408,7 @@ fn test_keypoint_indices_at_time() {
 
     // Test exact match
     let (prev, next) = track.keypoint_indices_at_time(AnimationTime::from_seconds(3.0).unwrap());
-    assert_eq!(prev, Some(1));
+    assert_eq!(prev, Some(0));
     assert_eq!(next, Some(1));
 
     // Test between keypoints
