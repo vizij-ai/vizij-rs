@@ -7,11 +7,13 @@ use crate::interpolation::functions::{
 };
 use crate::interpolation::parameters::InterpolationParams;
 use crate::{AnimationError, Value};
+use bevy::prelude::Resource;
 use lru::LruCache;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 
 /// Registry for managing interpolation functions
+#[derive(Resource)]
 pub struct InterpolationRegistry {
     functions: HashMap<String, Box<dyn Interpolator>>,
     cache: LruCache<InterpolationCacheKey, Value>,
