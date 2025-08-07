@@ -9,7 +9,16 @@ use crate::{
     },
     interpolation::InterpolationRegistry,
 };
-use bevy::prelude::*;
+use bevy::{ecs::schedule::IntoScheduleConfigs, prelude::*};
+
+#[derive(SystemSet, Debug, Clone, Eq, PartialEq, Hash)]
+pub enum AnimationSystemSet {
+    BindInstances,
+    UpdatePlayers,
+    Accumulate,
+    BlendApply,
+    Output,
+}
 
 pub struct AnimationPlayerPlugin;
 
@@ -27,17 +36,38 @@ impl Plugin for AnimationPlayerPlugin {
             .register_type::<AnimationBinding>()
             .register_type::<AnimatedColor>()
             .register_type::<Intensity>()
-            // Add systems in a defined order
-            .add_systems(
+            // Configure system sets to run in order
+            .configure_sets(
                 Update,
                 (
-                    bind_new_animation_instances_system,
-                    update_animation_players_system,
-                    accumulate_animation_values_system,
-                    blend_and_apply_animation_values_system,
-                    collect_animation_output_system,
+                    AnimationSystemSet::BindInstances,
+                    AnimationSystemSet::UpdatePlayers,
+                    AnimationSystemSet::Accumulate,
+                    AnimationSystemSet::BlendApply,
+                    AnimationSystemSet::Output,
                 )
                     .chain(),
+            )
+            // Add systems to their respective sets
+            .add_systems(
+                Update,
+                bind_new_animation_instances_system.in_set(AnimationSystemSet::BindInstances),
+            )
+            .add_systems(
+                Update,
+                update_animation_players_system.in_set(AnimationSystemSet::UpdatePlayers),
+            )
+            .add_systems(
+                Update,
+                accumulate_animation_values_system.in_set(AnimationSystemSet::Accumulate),
+            )
+            .add_systems(
+                Update,
+                blend_and_apply_animation_values_system.in_set(AnimationSystemSet::BlendApply),
+            )
+            .add_systems(
+                Update,
+                collect_animation_output_system.in_set(AnimationSystemSet::Output),
             );
     }
 }

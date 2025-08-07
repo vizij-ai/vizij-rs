@@ -204,7 +204,7 @@ fn parse_transition_params(
 ///
 /// # Example
 /// ```rust
-/// use animation_player::loaders::load_test_animation_from_json;
+/// use ecs_animation_player::loaders::load_test_animation_from_json;
 ///
 /// let json = r#"
 /// {
