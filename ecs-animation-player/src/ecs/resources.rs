@@ -8,8 +8,8 @@ pub struct AnimationOutput {
     pub values: HashMap<String, HashMap<String, Value>>,
 }
 
-/// A frame-local resource used to accumulate weighted values for blending before they are applied.
-#[derive(Resource, Default)]
+/// A frame-local cache used to accumulate weighted values for blending before they are applied.
+#[derive(Default)]
 pub struct FrameBlendData {
     pub blended_values: HashMap<(Entity, String), Vec<(f32, Value)>>,
 }
