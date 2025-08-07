@@ -7,6 +7,7 @@ use crate::{
         resources::{AnimationOutput, IdMapping},
         systems::*,
     },
+    event::AnimationEvent,
     interpolation::InterpolationRegistry,
 };
 use bevy::{ecs::schedule::IntoScheduleConfigs, prelude::*};
@@ -27,6 +28,7 @@ impl Plugin for AnimationPlayerPlugin {
         app.init_resource::<AnimationOutput>()
             .init_resource::<IdMapping>()
             .init_resource::<InterpolationRegistry>()
+            .add_event::<AnimationEvent>()
             // Register assets and their reflection data
             .register_asset_reflect::<AnimationData>()
             .register_asset_reflect::<BakedAnimationData>()

@@ -9,6 +9,7 @@ use crate::{
         components::{AnimationBinding, AnimationInstance, AnimationPlayer},
         resources::{AnimationOutput, FrameBlendData, IdMapping},
     },
+    event::AnimationEvent,
     interpolation::InterpolationRegistry,
     player::playback_state::PlaybackState,
     value::{Transform, Value, Vector3, Vector4},
@@ -91,6 +92,7 @@ pub fn update_animation_players_system(
     instance_query: Query<&AnimationInstance>,
     animations: Res<Assets<AnimationData>>,
     time: Res<Time>,
+    mut event_writer: EventWriter<AnimationEvent>,
 ) {
     for (player_entity, mut player) in player_query.iter_mut() {
         // Calculate player duration based on its instances
@@ -135,6 +137,21 @@ pub fn update_animation_players_system(
                     PlaybackMode::Once => {
                         player.current_time = player_duration;
                         player.playback_state = PlaybackState::Ended;
+                        let timestamp =
+                            AnimationTime::from_seconds(time.elapsed_secs_f64()).unwrap();
+                        if let Ok(children) = children_query.get(player_entity) {
+                            for child in children {
+                                if let Ok(instance) = instance_query.get(*child) {
+                                    let animation_id = format!("{:?}", instance.animation);
+                                    event_writer.write(AnimationEvent::playback_ended(
+                                        animation_id,
+                                        player.name.clone(),
+                                        timestamp,
+                                        player.current_time,
+                                    ));
+                                }
+                            }
+                        }
                     }
                 }
             } else if new_time_seconds < 0.0 {

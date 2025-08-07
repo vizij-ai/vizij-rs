@@ -1,6 +1,7 @@
 //! Event system for animation player notifications
 
 use crate::{AnimationTime, KeypointId, TrackId, Value};
+use bevy::prelude::Event;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -138,7 +139,7 @@ impl From<&str> for EventType {
 }
 
 /// Animation event with associated data
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Event)]
 pub struct AnimationEvent {
     /// Type of event
     pub event_type: EventType,
