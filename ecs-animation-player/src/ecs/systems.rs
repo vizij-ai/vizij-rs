@@ -230,7 +230,7 @@ pub fn blend_and_apply_animation_values_system(
         let final_value = match value_type {
             crate::value::ValueType::Transform => {
                 let mut final_pos = Vector3::zero();
-                let mut final_scale = Vector3::one();
+                let mut final_scale = Vector3::zero();
                 let mut final_rot = nalgebra::Quaternion::new(0.0, 0.0, 0.0, 0.0);
 
                 for (weight, value) in &values {
