@@ -1,6 +1,7 @@
 use crate::{value::Color, AnimationData, AnimationTime, PlaybackMode, TrackId};
 use bevy::prelude::*;
 use bevy::reflect::Reflect;
+use super::path::BevyPath;
 use std::collections::HashMap;
 
 /// Represents an animation player, acting as a timeline and container for animation instances.
@@ -29,7 +30,7 @@ pub struct AnimationInstance {
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
 pub struct AnimationBinding {
-    pub bindings: HashMap<TrackId, (Entity, String)>,
+    pub bindings: HashMap<TrackId, (Entity, BevyPath)>,
 }
 
 /// A custom component to hold an animatable `Color` value.

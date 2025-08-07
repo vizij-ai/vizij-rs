@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 use bevy::prelude::*;
+use bevy::reflect::GetPath;
+use super::path::BevyPath;
 use nalgebra::UnitQuaternion;
 
 use crate::{
@@ -71,8 +73,9 @@ pub fn bind_new_animation_instances_system(
                                 &children_query,
                                 &name_query,
                             ) {
-                                bindings
-                                    .insert(track.id, (target_entity, prop_path_str.to_string()));
+                                if let Ok(path) = BevyPath::parse(prop_path_str) {
+                                    bindings.insert(track.id, (target_entity, path));
+                                }
                             }
                         }
                     }
@@ -231,13 +234,11 @@ pub fn blend_and_apply_animation_values_system(
     mut transforms: Query<&mut bevy::prelude::Transform>,
 ) {
     let blend_data_map = std::mem::take(&mut blend_data.blended_values);
-
-    for ((entity, path_str), values) in blend_data_map {
+    for ((entity, path), values) in blend_data_map {
         if values.is_empty() {
             continue;
         }
 
-        // Blend values
         let total_weight: f32 = values.iter().map(|(w, _)| *w).sum();
         if total_weight == 0.0 {
             continue;
@@ -288,78 +289,65 @@ pub fn blend_and_apply_animation_values_system(
             }
         };
 
-        // Apply blended value to Bevy's Transform component
-        if let Ok(mut t) = transforms.get_mut(entity) {
-            // For now we implement direct setters for our Transform/Value pairs.
-            // Extend this match as you support more target types/paths.
-            match (path_str.as_str(), &final_value) {
-                // Replace whole transform from your Value::Transform
-                ("transform", Value::Transform(new_t)) => {
-                    t.translation = Vec3::new(
-                        new_t.position.x as f32,
-                        new_t.position.y as f32,
-                        new_t.position.z as f32,
-                    );
-                    t.scale = Vec3::new(
-                        new_t.scale.x as f32,
-                        new_t.scale.y as f32,
-                        new_t.scale.z as f32,
-                    );
-                    t.rotation = Quat::from_xyzw(
-                        new_t.rotation.x as f32,
-                        new_t.rotation.y as f32,
-                        new_t.rotation.z as f32,
-                        new_t.rotation.w as f32,
-                    );
+        let path_str = path.to_string();
+        let (root, sub_path) = path_str.split_once('.').unwrap_or((&path_str[..], ""));
+
+        match root {
+            "Transform" => {
+                if let Ok(mut t) = transforms.get_mut(entity) {
+                    match final_value {
+                        Value::Transform(new_t) => {
+                            let bevy_t = bevy::prelude::Transform {
+                                translation: Vec3::new(
+                                    new_t.position.x as f32,
+                                    new_t.position.y as f32,
+                                    new_t.position.z as f32,
+                                ),
+                                rotation: Quat::from_xyzw(
+                                    new_t.rotation.x as f32,
+                                    new_t.rotation.y as f32,
+                                    new_t.rotation.z as f32,
+                                    new_t.rotation.w as f32,
+                                ),
+                                scale: Vec3::new(
+                                    new_t.scale.x as f32,
+                                    new_t.scale.y as f32,
+                                    new_t.scale.z as f32,
+                                ),
+                            };
+                            if sub_path.is_empty() {
+                                *t = bevy_t;
+                            }
+                        }
+                        Value::Vector3(v) => {
+                            let vec = Vec3::new(v.x as f32, v.y as f32, v.z as f32);
+                            if let Ok(field) = t.reflect_path_mut(sub_path) {
+                                if let Some(target) = field.try_downcast_mut::<Vec3>() {
+                                    *target = vec;
+                                }
+                            }
+                        }
+                        Value::Vector4(q) => {
+                            let quat = Quat::from_xyzw(q.x as f32, q.y as f32, q.z as f32, q.w as f32);
+                            if let Ok(field) = t.reflect_path_mut(sub_path) {
+                                if let Some(target) = field.try_downcast_mut::<Quat>() {
+                                    *target = quat;
+                                }
+                            }
+                        }
+                        Value::Float(x) => {
+                            let f32_val = x as f32;
+                            if let Ok(field) = t.reflect_path_mut(sub_path) {
+                                if let Some(target) = field.try_downcast_mut::<f32>() {
+                                    *target = f32_val;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
                 }
-                // Position vector replacement
-                ("transform.position", Value::Vector3(v)) => {
-                    t.translation = Vec3::new(v.x as f32, v.y as f32, v.z as f32);
-                }
-                // Individual position components
-                ("transform.position.x", Value::Float(x)) => {
-                    t.translation.x = *x as f32;
-                }
-                ("transform.position.y", Value::Float(y)) => {
-                    t.translation.y = *y as f32;
-                }
-                ("transform.position.z", Value::Float(z)) => {
-                    t.translation.z = *z as f32;
-                }
-                // Scale vector replacement
-                ("transform.scale", Value::Vector3(v)) => {
-                    t.scale = Vec3::new(v.x as f32, v.y as f32, v.z as f32);
-                }
-                // Individual scale components
-                ("transform.scale.x", Value::Float(x)) => {
-                    t.scale.x = *x as f32;
-                }
-                ("transform.scale.y", Value::Float(y)) => {
-                    t.scale.y = *y as f32;
-                }
-                ("transform.scale.z", Value::Float(z)) => {
-                    t.scale.z = *z as f32;
-                }
-                // Rotation as quaternion (x, y, z, w)
-                ("transform.rotation", Value::Vector4(q)) => {
-                    t.rotation = Quat::from_xyzw(q.x as f32, q.y as f32, q.z as f32, q.w as f32);
-                }
-                // Individual rotation components
-                ("transform.rotation.x", Value::Float(x)) => {
-                    t.rotation.x = *x as f32;
-                }
-                ("transform.rotation.y", Value::Float(y)) => {
-                    t.rotation.y = *y as f32;
-                }
-                ("transform.rotation.z", Value::Float(z)) => {
-                    t.rotation.z = *z as f32;
-                }
-                ("transform.rotation.w", Value::Float(w)) => {
-                    t.rotation.w = *w as f32;
-                }
-                // Unsupported target/value pair for now
-                _ => { /* TODO: extend as additional targets are added */ }
             }
+            _ => {}
         }
     }
 }
@@ -381,76 +369,63 @@ pub fn collect_animation_output_system(
             for child_entity in children {
                 if let Ok((instance, binding)) = instance_query.get(*child_entity) {
                     if let Some(anim_data) = animations.get(&instance.animation) {
-                        for (track_id, (target_entity, path_str)) in &binding.bindings {
+                        for (track_id, (target_entity, path)) in &binding.bindings {
                             if let Some(track) = anim_data.tracks.get(track_id) {
                                 let target_path_str = &track.target;
-                                // Manual readback (mirrors the write path above)
-                                if let Ok(t) = transform_query.get(*target_entity) {
-                                    let maybe_value = match path_str.as_str() {
-                                        "transform" => Some(Value::Transform(Transform::new(
-                                            Vector3::new(
-                                                t.translation.x as f64,
-                                                t.translation.y as f64,
-                                                t.translation.z as f64,
-                                            ),
-                                            Vector4::new(
-                                                t.rotation.x as f64,
-                                                t.rotation.y as f64,
-                                                t.rotation.z as f64,
-                                                t.rotation.w as f64,
-                                            ),
-                                            Vector3::new(
-                                                t.scale.x as f64,
-                                                t.scale.y as f64,
-                                                t.scale.z as f64,
-                                            ),
-                                        ))),
-                                        "transform.position" => Some(Value::Vector3(Vector3::new(
-                                            t.translation.x as f64,
-                                            t.translation.y as f64,
-                                            t.translation.z as f64,
-                                        ))),
-                                        "transform.position.x" => {
-                                            Some(Value::Float(t.translation.x as f64))
-                                        }
-                                        "transform.position.y" => {
-                                            Some(Value::Float(t.translation.y as f64))
-                                        }
-                                        "transform.position.z" => {
-                                            Some(Value::Float(t.translation.z as f64))
-                                        }
-                                        "transform.scale" => Some(Value::Vector3(Vector3::new(
-                                            t.scale.x as f64,
-                                            t.scale.y as f64,
-                                            t.scale.z as f64,
-                                        ))),
-                                        "transform.scale.x" => Some(Value::Float(t.scale.x as f64)),
-                                        "transform.scale.y" => Some(Value::Float(t.scale.y as f64)),
-                                        "transform.scale.z" => Some(Value::Float(t.scale.z as f64)),
-                                        "transform.rotation" => Some(Value::Vector4(Vector4::new(
-                                            t.rotation.x as f64,
-                                            t.rotation.y as f64,
-                                            t.rotation.z as f64,
-                                            t.rotation.w as f64,
-                                        ))),
-                                        "transform.rotation.x" => {
-                                            Some(Value::Float(t.rotation.x as f64))
-                                        }
-                                        "transform.rotation.y" => {
-                                            Some(Value::Float(t.rotation.y as f64))
-                                        }
-                                        "transform.rotation.z" => {
-                                            Some(Value::Float(t.rotation.z as f64))
-                                        }
-                                        "transform.rotation.w" => {
-                                            Some(Value::Float(t.rotation.w as f64))
-                                        }
-                                        _ => None,
-                                    };
+                                let path_str = path.to_string();
+                                let (root, sub_path) =
+                                    path_str.split_once('.').unwrap_or((&path_str[..], ""));
+                                match root {
+                                    "Transform" => {
+                                        if let Ok(t) = transform_query.get(*target_entity) {
+                                            let maybe_value = if sub_path.is_empty() {
+                                                Some(Value::Transform(Transform::new(
+                                                    Vector3::new(
+                                                        t.translation.x as f64,
+                                                        t.translation.y as f64,
+                                                        t.translation.z as f64,
+                                                    ),
+                                                    Vector4::new(
+                                                        t.rotation.x as f64,
+                                                        t.rotation.y as f64,
+                                                        t.rotation.z as f64,
+                                                        t.rotation.w as f64,
+                                                    ),
+                                                    Vector3::new(
+                                                        t.scale.x as f64,
+                                                        t.scale.y as f64,
+                                                        t.scale.z as f64,
+                                                    ),
+                                                )))
+                                            } else if let Ok(val) = t.reflect_path(sub_path) {
+                                                if let Some(v3) = val.try_downcast_ref::<Vec3>() {
+                                                    Some(Value::Vector3(Vector3::new(
+                                                        v3.x as f64,
+                                                        v3.y as f64,
+                                                        v3.z as f64,
+                                                    )))
+                                                } else if let Some(f) = val.try_downcast_ref::<f32>() {
+                                                    Some(Value::Float(*f as f64))
+                                                } else if let Some(q) = val.try_downcast_ref::<Quat>() {
+                                                    Some(Value::Vector4(Vector4::new(
+                                                        q.x as f64,
+                                                        q.y as f64,
+                                                        q.z as f64,
+                                                        q.w as f64,
+                                                    )))
+                                                } else {
+                                                    None
+                                                }
+                                            } else {
+                                                None
+                                            };
 
-                                    if let Some(v) = maybe_value {
-                                        player_output.insert(target_path_str.clone(), v);
+                                            if let Some(v) = maybe_value {
+                                                player_output.insert(target_path_str.clone(), v);
+                                            }
+                                        }
                                     }
+                                    _ => {}
                                 }
                             }
                         }
