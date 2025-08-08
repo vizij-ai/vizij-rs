@@ -139,96 +139,103 @@ pub fn bind_new_animation_instances_system(
     }
 }
 
+/// Recalculates the cached duration for animation players when their child instances change.
+pub fn update_player_durations_system(
+    mut player_query: Query<(&Children, &mut AnimationPlayer), Or<(Added<Children>, Changed<Children>)>>,
+    instance_query: Query<&AnimationInstance>,
+    animations: Res<Assets<AnimationData>>,
+) {
+    for (children, mut player) in player_query.iter_mut() {
+        let mut max_duration = AnimationTime::zero();
+        for child in children.iter() {
+            if let Ok(instance) = instance_query.get(child) {
+                if let Some(animation_data) = animations.get(&instance.animation) {
+                    let scale = instance.time_scale.abs() as f64;
+                    let instance_duration_seconds = if scale > 0.0 {
+                        animation_data.duration().as_seconds() / scale
+                    } else {
+                        0.0
+                    };
+                    let end_seconds =
+                        instance.start_time.as_seconds() + instance_duration_seconds;
+                    if end_seconds > max_duration.as_seconds() {
+                        max_duration = AnimationTime::from_seconds(end_seconds).unwrap();
+                    }
+                }
+            }
+        }
+        player.duration = max_duration;
+    }
+}
+
 /// Updates the timelines of all animation players.
 pub fn update_animation_players_system(
     mut player_query: Query<(Entity, &mut AnimationPlayer)>,
     children_query: Query<&Children>,
     instance_query: Query<&AnimationInstance>,
-    animations: Res<Assets<AnimationData>>,
     time: Res<Time>,
     mut event_writer: EventWriter<AnimationEvent>,
 ) {
     for (player_entity, mut player) in player_query.iter_mut() {
-        // Calculate player duration based on its instances
-        let mut max_duration = AnimationTime::zero();
-        if let Ok(children) = children_query.get(player_entity) {
-            for child_entity in children {
-                if let Ok(instance) = instance_query.get(*child_entity) {
-                    if let Some(animation_data) = animations.get(&instance.animation) {
-                        let scale = instance.time_scale.abs() as f64;
-                        let instance_duration_seconds = if scale > 0.0 {
-                            animation_data.duration().as_seconds() / scale
-                        } else {
-                            0.0
-                        };
-                        let end_seconds =
-                            instance.start_time.as_seconds() + instance_duration_seconds;
-                        if end_seconds > max_duration.as_seconds() {
-                            max_duration = AnimationTime::from_seconds(end_seconds).unwrap();
+        let was_playing = player.playback_state == PlaybackState::Playing;
+        if was_playing {
+            let delta = time.delta_secs_f64() * player.speed;
+            let duration_secs = player.duration.as_seconds();
+            let mut new_time = player.current_time.as_seconds() + delta;
+            let mut ended = false;
+
+            match player.mode {
+                PlaybackMode::Loop => {
+                    if duration_secs > 0.0 {
+                        new_time = new_time.rem_euclid(duration_secs);
+                    } else {
+                        new_time = 0.0;
+                    }
+                }
+                PlaybackMode::PingPong => {
+                    if duration_secs > 0.0 {
+                        while new_time > duration_secs {
+                            new_time = duration_secs - (new_time - duration_secs);
+                            player.speed = -player.speed;
                         }
+                        while new_time < 0.0 {
+                            new_time = -new_time;
+                            player.speed = -player.speed;
+                        }
+                    } else {
+                        new_time = 0.0;
+                    }
+                }
+                PlaybackMode::Once => {
+                    if new_time >= duration_secs {
+                        new_time = duration_secs;
+                        player.playback_state = PlaybackState::Ended;
+                        ended = true;
+                    } else if new_time <= 0.0 {
+                        new_time = 0.0;
+                        player.playback_state = PlaybackState::Ended;
+                        ended = true;
                     }
                 }
             }
-        }
-        let player_duration = max_duration;
 
-        // Update time
-        if player.playback_state == PlaybackState::Playing {
-            let delta = time.delta_secs_f64() * player.speed;
-            let new_time_seconds = player.current_time.as_seconds() + delta;
+            player.current_time = AnimationTime::from_seconds(new_time).unwrap();
 
-            if new_time_seconds >= player_duration.as_seconds() {
-                match player.mode {
-                    PlaybackMode::Loop => {
-                        let wrapped_time =
-                            new_time_seconds % player_duration.as_seconds().max(f64::EPSILON);
-                        player.current_time = AnimationTime::from_seconds(wrapped_time).unwrap();
-                    }
-                    PlaybackMode::PingPong => {
-                        player.current_time = player_duration;
-                        player.speed = -player.speed;
-                    }
-                    PlaybackMode::Once => {
-                        player.current_time = player_duration;
-                        player.playback_state = PlaybackState::Ended;
-                        let timestamp =
-                            AnimationTime::from_seconds(time.elapsed_secs_f64()).unwrap();
-                        if let Ok(children) = children_query.get(player_entity) {
-                            for child in children {
-                                if let Ok(instance) = instance_query.get(*child) {
-                                    let animation_id = format!("{:?}", instance.animation);
-                                    event_writer.write(AnimationEvent::playback_ended(
-                                        animation_id,
-                                        player.name.clone(),
-                                        timestamp,
-                                        player.current_time,
-                                    ));
-                                }
-                            }
+            if ended {
+                let timestamp = AnimationTime::from_seconds(time.elapsed_secs_f64()).unwrap();
+                if let Ok(children) = children_query.get(player_entity) {
+                    for child in children.iter() {
+                        if let Ok(instance) = instance_query.get(child) {
+                            let animation_id = format!("{:?}", instance.animation);
+                            event_writer.write(AnimationEvent::playback_ended(
+                                animation_id,
+                                player.name.clone(),
+                                timestamp,
+                                player.current_time,
+                            ));
                         }
                     }
                 }
-            } else if new_time_seconds < 0.0 {
-                match player.mode {
-                    PlaybackMode::Loop => {
-                        player.current_time = AnimationTime::from_seconds(
-                            player_duration.as_seconds()
-                                + (new_time_seconds
-                                    % player_duration.as_seconds().max(f64::EPSILON)),
-                        )
-                        .unwrap();
-                    }
-                    PlaybackMode::PingPong => {
-                        player.current_time = AnimationTime::zero();
-                        player.speed = -player.speed;
-                    }
-                    PlaybackMode::Once => {
-                        player.current_time = AnimationTime::zero();
-                        player.playback_state = PlaybackState::Ended;
-                    }
-                }
-            } else {
-                player.current_time = AnimationTime::from_seconds(new_time_seconds).unwrap();
             }
         }
     }

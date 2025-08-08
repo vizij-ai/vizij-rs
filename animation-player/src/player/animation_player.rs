@@ -7,6 +7,8 @@ use std::collections::HashMap;
 pub struct AnimationPlayer {
     /// Current animation time
     pub current_time: AnimationTime, // Made public for direct access
+    /// Cached total duration of all instances
+    duration: AnimationTime,
     /// Cache for last calculated values
     last_calculated_values: Option<HashMap<String, Value>>,
     /// Time when last_calculated_values was computed
@@ -21,6 +23,7 @@ impl AnimationPlayer {
     pub fn new() -> Self {
         Self {
             current_time: AnimationTime::zero(),
+            duration: AnimationTime::zero(),
             last_calculated_values: None,
             last_calculated_time: AnimationTime::zero(),
             instances: HashMap::new(),
@@ -35,6 +38,7 @@ impl AnimationPlayer {
             id = uuid::Uuid::new_v4().to_string(); // Ensure unique ID
         }
         self.instances.insert(id.clone(), instance);
+        self.update_duration();
         id
     }
 
@@ -43,11 +47,41 @@ impl AnimationPlayer {
         &mut self,
         instance_id: &str,
     ) -> Result<AnimationInstance, AnimationError> {
-        self.instances
+        let removed = self
+            .instances
             .remove(instance_id)
             .ok_or_else(|| AnimationError::Generic {
-                message: format!("Animation instance with ID '{}' not found.", instance_id),
-            })
+                message: format!(
+                    "Animation instance with ID '{}' not found.",
+                    instance_id
+                ),
+            })?;
+        self.update_duration();
+        Ok(removed)
+    }
+
+    /// Recalculate cached duration from all instances
+    fn update_duration(&mut self) {
+        let mut max_seconds = 0.0;
+        for instance in self.instances.values() {
+            if !instance.settings.enabled {
+                continue;
+            }
+
+            let scale = instance.settings.time_scale.abs() as f64;
+            let instance_duration_seconds = if scale > 0.0 {
+                instance.animation_data_duration.as_seconds() / scale
+            } else {
+                0.0
+            };
+            let end_seconds =
+                instance.settings.instance_start_time.as_seconds() + instance_duration_seconds;
+            if end_seconds > max_seconds {
+                max_seconds = end_seconds;
+            }
+        }
+        self.duration =
+            AnimationTime::from_seconds(max_seconds).unwrap_or(AnimationTime::zero());
     }
 
     /// Calculates the effective time for a given track across all active instances.
@@ -328,31 +362,7 @@ impl AnimationPlayer {
     /// player's timeline that any instance contributes animation data.
     #[inline]
     pub fn duration(&self) -> AnimationTime {
-        let mut max_seconds = 0.0;
-
-        for instance in self.instances.values() {
-            if !instance.settings.enabled {
-                continue;
-            }
-
-            // When time_scale is zero the instance never progresses so it does
-            // not extend the player's duration beyond its start time.
-            let scale = instance.settings.time_scale.abs() as f64;
-
-            let instance_duration_seconds = if scale > 0.0 {
-                instance.animation_data_duration.as_seconds() / scale
-            } else {
-                0.0
-            };
-
-            let end_seconds =
-                instance.settings.instance_start_time.as_seconds() + instance_duration_seconds;
-            if end_seconds > max_seconds {
-                max_seconds = end_seconds;
-            }
-        }
-
-        AnimationTime::from_seconds(max_seconds).unwrap_or(AnimationTime::zero())
+        self.duration
     }
 
     /// Get progress as a value between 0.0 and 1.0

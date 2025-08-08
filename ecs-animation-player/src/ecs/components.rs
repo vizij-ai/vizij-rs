@@ -12,6 +12,7 @@ pub struct AnimationPlayer {
     pub speed: f64,
     pub mode: PlaybackMode,
     pub current_time: AnimationTime,
+    pub duration: AnimationTime,
     pub playback_state: crate::player::playback_state::PlaybackState,
     pub target_root: Option<Entity>,
 }

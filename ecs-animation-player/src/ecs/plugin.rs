@@ -57,6 +57,12 @@ impl Plugin for AnimationPlayerPlugin {
             )
             .add_systems(
                 Update,
+                update_player_durations_system
+                    .in_set(AnimationSystemSet::UpdatePlayers)
+                    .before(update_animation_players_system),
+            )
+            .add_systems(
+                Update,
                 update_animation_players_system.in_set(AnimationSystemSet::UpdatePlayers),
             )
             .add_systems(
