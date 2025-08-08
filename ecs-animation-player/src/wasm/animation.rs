@@ -15,16 +15,19 @@ impl WasmAnimationEngine {
         animation_id: &str,
         config_json: Option<String>,
     ) -> Result<String, JsValue> {
-        let id_mapping = self.app.world.resource::<IdMapping>();
-        let player_entity = id_mapping
-            .players
-            .get(player_id)
-            .ok_or_else(|| JsValue::from_str("Player not found"))?;
-
-        let animation_handle = id_mapping
-            .animations
-            .get(animation_id)
-            .ok_or_else(|| JsValue::from_str("Animation not found"))?;
+        let (player_entity, animation_handle) = {
+            let id_mapping = self.app.world().resource::<IdMapping>();
+            let player_entity = *id_mapping
+                .players
+                .get(player_id)
+                .ok_or_else(|| JsValue::from_str("Player not found"))?;
+            let animation_handle = id_mapping
+                .animations
+                .get(animation_id)
+                .ok_or_else(|| JsValue::from_str("Animation not found"))?
+                .clone();
+            (player_entity, animation_handle)
+        };
 
         let settings: crate::AnimationInstanceSettings = if let Some(json) = config_json {
             serde_json::from_str(&json)
@@ -40,15 +43,18 @@ impl WasmAnimationEngine {
             start_time: settings.instance_start_time,
         };
 
-        let instance_entity = self.app.world.spawn(instance_component).id();
+        let instance_entity = self.app.world_mut().spawn(instance_component).id();
         self.app
-            .world
-            .entity_mut(*player_entity)
+            .world_mut()
+            .entity_mut(player_entity)
             .add_child(instance_entity);
 
-        let mut id_mapping = self.app.world.resource_mut::<IdMapping>();
-        let id = uuid::Uuid::new_v4().to_string();
-        id_mapping.instances.insert(id.clone(), instance_entity);
+        let id = {
+            let mut id_mapping = self.app.world_mut().resource_mut::<IdMapping>();
+            let id = uuid::Uuid::new_v4().to_string();
+            id_mapping.instances.insert(id.clone(), instance_entity);
+            id
+        };
 
         Ok(id)
     }
@@ -76,16 +82,18 @@ impl WasmAnimationEngine {
         instance_id: &str,
         config_json: &str,
     ) -> Result<(), JsValue> {
-        let id_mapping = self.app.world.resource::<IdMapping>();
-        let entity = id_mapping
-            .instances
-            .get(instance_id)
-            .ok_or_else(|| JsValue::from_str("Instance not found"))?;
+        let entity = {
+            let id_mapping = self.app.world().resource::<IdMapping>();
+            *id_mapping
+                .instances
+                .get(instance_id)
+                .ok_or_else(|| JsValue::from_str("Instance not found"))?
+        };
 
         let config: serde_json::Value = serde_json::from_str(config_json)
             .map_err(|e| JsValue::from_str(&format!("Config JSON parse error: {}", e)))?;
 
-        if let Some(mut instance) = self.app.world.get_mut::<AnimationInstance>(*entity) {
+        if let Some(mut instance) = self.app.world_mut().get_mut::<AnimationInstance>(entity) {
             if let Some(weight) = config.get("weight").and_then(|v| v.as_f64()) {
                 instance.weight = weight as f32;
             }
