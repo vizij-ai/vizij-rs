@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use super::path::BevyPath;
+use bevy::ecs::world::Mut;
 use bevy::prelude::ChildOf as Parent;
 use bevy::prelude::*;
 use bevy::reflect::GetPath;
@@ -8,7 +9,7 @@ use nalgebra::UnitQuaternion;
 use tracing::warn;
 
 use crate::{
-    animation::AnimationData,
+    animation::{AnimationData, BakedAnimationData},
     ecs::{
         components::{AnimationBinding, AnimationInstance, AnimationPlayer},
         resources::{AnimationOutput, FrameBlendData, IdMapping},
@@ -16,7 +17,7 @@ use crate::{
     event::AnimationEvent,
     interpolation::InterpolationRegistry,
     player::playback_state::PlaybackState,
-    value::{Transform, Value, Vector3, Vector4},
+    value::{Color as AnimColor, euler::Euler, Transform, Value, Vector2, Vector3, Vector4},
     AnimationTime, PlaybackMode,
 };
 
@@ -58,6 +59,7 @@ pub fn bind_new_animation_instances_system(
     new_instances_query: Query<(Entity, &Parent, &AnimationInstance), Added<AnimationInstance>>,
     player_query: Query<&AnimationPlayer>,
     animations: Res<Assets<AnimationData>>,
+    baked_animations: Res<Assets<BakedAnimationData>>,
     children_query: Query<&Children>,
     name_query: Query<&Name>,
 ) {
@@ -65,7 +67,7 @@ pub fn bind_new_animation_instances_system(
         if let Ok(player) = player_query.get(parent.parent()) {
             if let Some(target_root) = player.target_root {
                 if let Some(animation_data) = animations.get(&instance.animation) {
-                    let mut bindings = HashMap::new();
+                    let mut raw_bindings = HashMap::new();
                     for track in animation_data.tracks.values() {
                         let target_str = track.target.trim();
                         if target_str.is_empty() {
@@ -109,7 +111,7 @@ pub fn bind_new_animation_instances_system(
                             &children_query,
                             &name_query,
                         ) {
-                            bindings.insert(track.id, (target_entity, path));
+                            raw_bindings.insert(track.id, (target_entity, path));
                         } else {
                             warn!(
                                 "Failed to resolve entity path '{}' for track '{}'",
@@ -119,15 +121,73 @@ pub fn bind_new_animation_instances_system(
                         }
                     }
 
-                    if bindings.is_empty() {
+                    // Build baked track bindings if baked data is available
+                    let mut baked_bindings = HashMap::new();
+                    if let Some(baked_data) = baked_animations
+                        .iter()
+                        .find(|(_, b)| b.animation_id == animation_data.id)
+                        .map(|(_, b)| b)
+                    {
+                        for target in baked_data.track_targets() {
+                            let target_str = target.trim();
+                            if target_str.is_empty() {
+                                continue;
+                            }
+                            let (entity_part_opt, prop_path_str) =
+                                match target_str.rsplit_once('/') {
+                                    Some((entity_part, prop_part)) => (Some(entity_part), prop_part),
+                                    None => (None, target_str),
+                                };
+
+                            if prop_path_str.trim().is_empty() {
+                                continue;
+                            }
+
+                            let path = match BevyPath::parse(prop_path_str) {
+                                Ok(p) => p,
+                                Err(_) => {
+                                    warn!(
+                                        "Failed to parse property path '{}' for baked track '{}'",
+                                        prop_path_str, target_str
+                                    );
+                                    continue;
+                                }
+                            };
+
+                            let entity_path_parts: Vec<&str> = entity_part_opt
+                                .unwrap_or_default()
+                                .split('/')
+                                .filter(|p| !p.is_empty())
+                                .collect();
+
+                            if let Some(target_entity) = find_entity_by_path(
+                                target_root,
+                                &entity_path_parts,
+                                &children_query,
+                                &name_query,
+                            ) {
+                                baked_bindings
+                                    .insert(target_str.to_string(), (target_entity, path));
+                            } else {
+                                warn!(
+                                    "Failed to resolve entity path '{}' for baked track '{}'",
+                                    entity_part_opt.unwrap_or_default(),
+                                    target_str
+                                );
+                            }
+                        }
+                    }
+
+                    if raw_bindings.is_empty() && baked_bindings.is_empty() {
                         warn!(
                             "No valid bindings created for instance {:?}; skipping",
                             instance_entity
                         );
                     } else {
-                        commands
-                            .entity(instance_entity)
-                            .insert(AnimationBinding { bindings });
+                        commands.entity(instance_entity).insert(AnimationBinding {
+                            raw_track_bindings: raw_bindings,
+                            baked_track_bindings: baked_bindings,
+                        });
                     }
                 }
             }
@@ -175,6 +235,7 @@ pub fn update_animation_players_system(
     mut event_writer: EventWriter<AnimationEvent>,
 ) {
     for (player_entity, mut player) in player_query.iter_mut() {
+
         let was_playing = player.playback_state == PlaybackState::Playing;
         if was_playing {
             let delta = time.delta_secs_f64() * player.speed;
@@ -244,24 +305,25 @@ pub fn accumulate_animation_values_system(
     instance_query: Query<(&Parent, &AnimationInstance, &AnimationBinding)>,
     player_query: Query<&AnimationPlayer>,
     animations: Res<Assets<AnimationData>>,
+    baked_animations: Res<Assets<BakedAnimationData>>,
     mut interpolation_registry: ResMut<InterpolationRegistry>,
-    mut blend_data: Local<FrameBlendData>,
+    mut blend_data: ResMut<FrameBlendData>,
 ) {
     blend_data.blended_values.clear();
 
     for (parent, instance, binding) in instance_query.iter() {
         if let Ok(player) = player_query.get(parent.parent()) {
-            if player.playback_state != PlaybackState::Playing {
+            if player.playback_state != PlaybackState::Playing && player.playback_state != PlaybackState::Ended {
                 continue;
             }
 
-            if let Some(animation_data) = animations.get(&instance.animation) {
-                let instance_time = (player.current_time.as_seconds()
-                    - instance.start_time.as_seconds())
-                    * instance.time_scale as f64;
-                let instance_time = AnimationTime::from_seconds(instance_time.max(0.0)).unwrap();
+            let instance_time = (player.current_time.as_seconds()
+                - instance.start_time.as_seconds())
+                * instance.time_scale as f64;
+            let instance_time = AnimationTime::from_seconds(instance_time.max(0.0)).unwrap();
 
-                for (track_id, (target_entity, path)) in &binding.bindings {
+            if let Some(animation_data) = animations.get(&instance.animation) {
+                for (track_id, (target_entity, path)) in &binding.raw_track_bindings {
                     if let Some(track) = animation_data.tracks.get(track_id) {
                         let transition =
                             animation_data.get_track_transition_for_time(instance_time, &track.id);
@@ -279,16 +341,39 @@ pub fn accumulate_animation_values_system(
                         }
                     }
                 }
+
+                if let Some(baked_data) = baked_animations
+                    .iter()
+                    .find(|(_, b)| b.animation_id == animation_data.id)
+                    .map(|(_, b)| b)
+                {
+                    for (target_str, (target_entity, path)) in &binding.baked_track_bindings {
+                        // Skip if a raw track already targets this entity/path
+                        let has_raw = binding
+                            .raw_track_bindings
+                            .values()
+                            .any(|(e, p)| *e == *target_entity && p == path);
+                        if has_raw {
+                            continue;
+                        }
+                        if let Some(value) = baked_data.get_value_at_time(target_str, instance_time)
+                        {
+                            blend_data
+                                .blended_values
+                                .entry((*target_entity, path.clone()))
+                                .or_default()
+                                .push((instance.weight, value.clone()));
+                        }
+                    }
+                }
             }
         }
     }
 }
 
-/// Blends the accumulated values and applies them to the target components.
-pub fn blend_and_apply_animation_values_system(
-    mut blend_data: Local<FrameBlendData>,
-    mut transforms: Query<&mut bevy::prelude::Transform>,
-) {
+/// Blends the accumulated values and applies them to the target components using reflection.
+pub fn blend_and_apply_animation_values_system(world: &mut World) {
+    let mut blend_data = world.resource_mut::<FrameBlendData>();
     let blend_data_map = std::mem::take(&mut blend_data.blended_values);
     for ((entity, path), values) in blend_data_map {
         if values.is_empty() {
@@ -341,162 +426,68 @@ pub fn blend_and_apply_animation_values_system(
                         final_components[i] += comp * (weight / total_weight) as f64;
                     }
                 }
-                Value::from_components(value_type, &final_components).unwrap_or(values[0].1.clone())
+                Value::from_components(value_type, &final_components)
+                    .unwrap_or_else(|_| values[0].1.clone())
             }
         };
 
-        let component = path.component();
-        let property_path = path.property();
-        let sub_path = property_path.as_ref();
+        if let Some(component_name) = path.component() {
+            if let Some(mut comp_ref) = reflect_component_mut(world, entity, component_name) {
+                let target: Option<&mut dyn Reflect> = if let Some(sub) = path.property() {
+                    comp_ref
+                        .reflect_path_mut(&sub)
+                        .ok()
+                        .and_then(|p| p.try_as_reflect_mut())
+                } else {
+                    Some(&mut *comp_ref)
+                };
 
-        match component {
-            Some("Transform") => {
-                if let Ok(mut t) = transforms.get_mut(entity) {
-                    match final_value {
-                        Value::Transform(new_t) => {
-                            let bevy_t = bevy::prelude::Transform {
-                                translation: Vec3::new(
-                                    new_t.position.x as f32,
-                                    new_t.position.y as f32,
-                                    new_t.position.z as f32,
-                                ),
-                                rotation: Quat::from_xyzw(
-                                    new_t.rotation.x as f32,
-                                    new_t.rotation.y as f32,
-                                    new_t.rotation.z as f32,
-                                    new_t.rotation.w as f32,
-                                ),
-                                scale: Vec3::new(
-                                    new_t.scale.x as f32,
-                                    new_t.scale.y as f32,
-                                    new_t.scale.z as f32,
-                                ),
-                            };
-                            if sub_path.is_none() {
-                                *t = bevy_t;
-                            }
-                        }
-                        Value::Vector3(v) => {
-                            let vec = Vec3::new(v.x as f32, v.y as f32, v.z as f32);
-                            if let Some(sp) = sub_path {
-                                if let Ok(field) = t.reflect_path_mut(sp) {
-                                    if let Some(target) = field.try_downcast_mut::<Vec3>() {
-                                        *target = vec;
-                                    }
-                                }
-                            }
-                        }
-                        Value::Vector4(q) => {
-                            let quat =
-                                Quat::from_xyzw(q.x as f32, q.y as f32, q.z as f32, q.w as f32);
-                            if let Some(sp) = sub_path {
-                                if let Ok(field) = t.reflect_path_mut(sp) {
-                                    if let Some(target) = field.try_downcast_mut::<Quat>() {
-                                        *target = quat;
-                                    }
-                                }
-                            }
-                        }
-                        Value::Float(x) => {
-                            let f32_val = x as f32;
-                            if let Some(sp) = sub_path {
-                                if let Ok(field) = t.reflect_path_mut(sp) {
-                                    if let Some(target) = field.try_downcast_mut::<f32>() {
-                                        *target = f32_val;
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
+                if let Some(target) = target {
+                    apply_value_to_reflect(target, &final_value);
                 }
             }
-            _ => {}
         }
     }
 }
 
 /// Collects the final animated values and populates the `AnimationOutput` resource.
-pub fn collect_animation_output_system(
-    mut output: ResMut<AnimationOutput>,
-    id_mapping: Res<IdMapping>,
-    children_query: Query<&Children>,
-    instance_query: Query<(&AnimationInstance, &AnimationBinding)>,
-    animations: Res<Assets<AnimationData>>,
-    transform_query: Query<&bevy::prelude::Transform>,
-) {
-    output.values.clear();
+pub fn collect_animation_output_system(world: &mut World) {
+    let mut children_query = world.query::<&Children>();
+    let mut instance_query = world.query::<(&AnimationInstance, &AnimationBinding)>();
+    let players = { world.resource::<IdMapping>().players.clone() };
+    let animations = world.resource::<Assets<AnimationData>>();
+    let baked_animations = world.resource::<Assets<BakedAnimationData>>();
 
-    for (player_id, player_entity) in id_mapping.players.iter() {
+    let mut new_values = HashMap::new();
+
+    for (player_id, player_entity) in players.iter() {
         let mut player_output = HashMap::new();
-        if let Ok(children) = children_query.get(*player_entity) {
-            for child_entity in children {
-                if let Ok((instance, binding)) = instance_query.get(*child_entity) {
+        if let Ok(children) = children_query.get(world, *player_entity) {
+            for child_entity in children.iter() {
+                if let Ok((instance, binding)) = instance_query.get(world, child_entity) {
                     if let Some(anim_data) = animations.get(&instance.animation) {
-                        for (track_id, (target_entity, path)) in &binding.bindings {
+                        for (track_id, (target_entity, path)) in &binding.raw_track_bindings {
                             if let Some(track) = anim_data.tracks.get(track_id) {
-                                let target_path_str = &track.target;
-                                let component = path.component();
-                                let property_path = path.property();
-                                let sub_path = property_path.as_ref();
-                                match component {
-                                    Some("Transform") => {
-                                        if let Ok(t) = transform_query.get(*target_entity) {
-                                            let maybe_value = if sub_path.is_none() {
-                                                Some(Value::Transform(Transform::new(
-                                                    Vector3::new(
-                                                        t.translation.x as f64,
-                                                        t.translation.y as f64,
-                                                        t.translation.z as f64,
-                                                    ),
-                                                    Vector4::new(
-                                                        t.rotation.x as f64,
-                                                        t.rotation.y as f64,
-                                                        t.rotation.z as f64,
-                                                        t.rotation.w as f64,
-                                                    ),
-                                                    Vector3::new(
-                                                        t.scale.x as f64,
-                                                        t.scale.y as f64,
-                                                        t.scale.z as f64,
-                                                    ),
-                                                )))
-                                            } else if let Some(sp) = sub_path {
-                                                if let Ok(val) = t.reflect_path(sp) {
-                                                    if let Some(v3) = val.try_downcast_ref::<Vec3>()
-                                                    {
-                                                        Some(Value::Vector3(Vector3::new(
-                                                            v3.x as f64,
-                                                            v3.y as f64,
-                                                            v3.z as f64,
-                                                        )))
-                                                    } else if let Some(f) =
-                                                        val.try_downcast_ref::<f32>()
-                                                    {
-                                                        Some(Value::Float(*f as f64))
-                                                    } else if let Some(q) =
-                                                        val.try_downcast_ref::<Quat>()
-                                                    {
-                                                        Some(Value::Vector4(Vector4::new(
-                                                            q.x as f64, q.y as f64, q.z as f64,
-                                                            q.w as f64,
-                                                        )))
-                                                    } else {
-                                                        None
-                                                    }
-                                                } else {
-                                                    None
-                                                }
-                                            } else {
-                                                None
-                                            };
+                                if let Some(value) =
+                                    get_component_value(world, *target_entity, path)
+                                {
+                                    player_output.insert(track.target.clone(), value);
+                                }
+                            }
+                        }
 
-                                            if let Some(v) = maybe_value {
-                                                player_output.insert(target_path_str.clone(), v);
-                                            }
-                                        }
-                                    }
-                                    _ => {}
+                        if let Some(baked_data) = baked_animations
+                            .iter()
+                            .find(|(_, b)| b.animation_id == anim_data.id)
+                            .map(|(_, b)| b)
+                        {
+                            for (target_str, (target_entity, path)) in
+                                &binding.baked_track_bindings
+                            {
+                                if let Some(value) =
+                                    get_component_value(world, *target_entity, path)
+                                {
+                                    player_output.insert(target_str.clone(), value);
                                 }
                             }
                         }
@@ -504,7 +495,196 @@ pub fn collect_animation_output_system(
                 }
             }
         }
-        output.values.insert(player_id.clone(), player_output);
+        new_values.insert(player_id.clone(), player_output);
+    }
+
+    let _ = animations;
+    let _ = baked_animations;
+
+    let mut output = world.resource_mut::<AnimationOutput>();
+    output.values = new_values;
+}
+
+fn reflect_component_mut<'a>(
+    world: &'a mut World,
+    entity: Entity,
+    component_name: &str,
+) -> Option<Mut<'a, dyn Reflect>> {
+    let type_id = {
+        let registry = world.resource::<AppTypeRegistry>();
+        let reg = registry.read();
+        reg.get_with_type_path(component_name)?.type_id()
+    };
+    world.get_reflect_mut(entity, type_id).ok()
+}
+
+fn reflect_component<'a>(
+    world: &'a World,
+    entity: Entity,
+    component_name: &str,
+) -> Option<&'a dyn Reflect> {
+    let type_id = {
+        let registry = world.resource::<AppTypeRegistry>();
+        let reg = registry.read();
+        reg.get_with_type_path(component_name)?.type_id()
+    };
+    world.get_reflect(entity, type_id).ok()
+}
+
+/// Convert a reflected field to a [`Value`].
+fn reflect_to_value(val: &dyn Reflect) -> Option<Value> {
+    if let Some(v) = val.downcast_ref::<f32>() {
+        Some(Value::Float(*v as f64))
+    } else if let Some(v) = val.downcast_ref::<f64>() {
+        Some(Value::Float(*v))
+    } else if let Some(v) = val.downcast_ref::<i32>() {
+        Some(Value::Integer(*v as i64))
+    } else if let Some(v) = val.downcast_ref::<i64>() {
+        Some(Value::Integer(*v))
+    } else if let Some(v) = val.downcast_ref::<bool>() {
+        Some(Value::Boolean(*v))
+    } else if let Some(v) = val.downcast_ref::<String>() {
+        Some(Value::String(v.clone()))
+    } else if let Some(v) = val.downcast_ref::<Vec2>() {
+        Some(Value::Vector2(Vector2::new(v.x as f64, v.y as f64)))
+    } else if let Some(v) = val.downcast_ref::<Vec3>() {
+        Some(Value::Vector3(Vector3::new(v.x as f64, v.y as f64, v.z as f64)))
+    } else if let Some(v) = val.downcast_ref::<Vec4>() {
+        Some(Value::Vector4(Vector4::new(
+            v.x as f64,
+            v.y as f64,
+            v.z as f64,
+            v.w as f64,
+        )))
+    } else if let Some(v) = val.downcast_ref::<Quat>() {
+        Some(Value::Vector4(Vector4::new(
+            v.x as f64,
+            v.y as f64,
+            v.z as f64,
+            v.w as f64,
+        )))
+    } else if let Some(v) = val.downcast_ref::<bevy::prelude::Transform>() {
+        Some(Value::Transform(Transform::new(
+            Vector3::new(
+                v.translation.x as f64,
+                v.translation.y as f64,
+                v.translation.z as f64,
+            ),
+            Vector4::new(
+                v.rotation.x as f64,
+                v.rotation.y as f64,
+                v.rotation.z as f64,
+                v.rotation.w as f64,
+            ),
+            Vector3::new(v.scale.x as f64, v.scale.y as f64, v.scale.z as f64),
+        )))
+    } else if let Some(v) = val.downcast_ref::<Transform>() {
+        Some(Value::Transform(v.clone()))
+    } else if let Some(v) = val.downcast_ref::<Vector2>() {
+        Some(Value::Vector2(*v))
+    } else if let Some(v) = val.downcast_ref::<Vector3>() {
+        Some(Value::Vector3(*v))
+    } else if let Some(v) = val.downcast_ref::<Vector4>() {
+        Some(Value::Vector4(*v))
+    } else if let Some(v) = val.downcast_ref::<Euler>() {
+        Some(Value::Euler(*v))
+    } else if let Some(v) = val.downcast_ref::<AnimColor>() {
+        Some(Value::Color(v.clone()))
+    } else {
+        None
+    }
+}
+
+fn get_component_value(world: &World, entity: Entity, path: &BevyPath) -> Option<Value> {
+    let component_name = path.component()?;
+    let comp_ref = reflect_component(world, entity, component_name)?;
+    let field = if let Some(sub) = path.property() {
+        comp_ref
+            .reflect_path(&sub)
+            .ok()?
+            .try_as_reflect()?
+    } else {
+        comp_ref
+    };
+    reflect_to_value(field)
+}
+
+/// Apply a [`Value`] to a reflected field.
+fn apply_value_to_reflect(target: &mut dyn Reflect, value: &Value) {
+    match value {
+        Value::Float(f) => {
+            if let Some(v) = target.downcast_mut::<f32>() {
+                *v = *f as f32;
+            } else if let Some(v) = target.downcast_mut::<f64>() {
+                *v = *f;
+            }
+        }
+        Value::Integer(i) => {
+            if let Some(v) = target.downcast_mut::<i32>() {
+                *v = *i as i32;
+            } else if let Some(v) = target.downcast_mut::<i64>() {
+                *v = *i;
+            }
+        }
+        Value::Boolean(b) => {
+            if let Some(v) = target.downcast_mut::<bool>() {
+                *v = *b;
+            }
+        }
+        Value::String(s) => {
+            if let Some(v) = target.downcast_mut::<String>() {
+                *v = s.clone();
+            }
+        }
+        Value::Vector2(v2) => {
+            if let Some(v) = target.downcast_mut::<Vec2>() {
+                *v = Vec2::new(v2.x as f32, v2.y as f32);
+            } else if let Some(v) = target.downcast_mut::<Vector2>() {
+                *v = *v2;
+            }
+        }
+        Value::Vector3(v3) => {
+            if let Some(v) = target.downcast_mut::<Vec3>() {
+                *v = Vec3::new(v3.x as f32, v3.y as f32, v3.z as f32);
+            } else if let Some(v) = target.downcast_mut::<Vector3>() {
+                *v = *v3;
+            }
+        }
+        Value::Vector4(v4) => {
+            if let Some(v) = target.downcast_mut::<Vec4>() {
+                *v = Vec4::new(v4.x as f32, v4.y as f32, v4.z as f32, v4.w as f32);
+            } else if let Some(v) = target.downcast_mut::<Quat>() {
+                *v = Quat::from_xyzw(v4.x as f32, v4.y as f32, v4.z as f32, v4.w as f32);
+            } else if let Some(v) = target.downcast_mut::<Vector4>() {
+                *v = *v4;
+            }
+        }
+        Value::Euler(e) => {
+            if let Some(v) = target.downcast_mut::<Euler>() {
+                *v = *e;
+            }
+        }
+        Value::Color(c) => {
+            if let Some(v) = target.downcast_mut::<AnimColor>() {
+                *v = c.clone();
+            }
+        }
+        Value::Transform(t) => {
+            if let Some(v) = target.downcast_mut::<Transform>() {
+                *v = t.clone();
+            } else if let Some(v) = target.downcast_mut::<bevy::prelude::Transform>() {
+                *v = bevy::prelude::Transform {
+                    translation: Vec3::new(t.position.x as f32, t.position.y as f32, t.position.z as f32),
+                    rotation: Quat::from_xyzw(
+                        t.rotation.x as f32,
+                        t.rotation.y as f32,
+                        t.rotation.z as f32,
+                        t.rotation.w as f32,
+                    ),
+                    scale: Vec3::new(t.scale.x as f32, t.scale.y as f32, t.scale.z as f32),
+                };
+            }
+        }
     }
 }
 

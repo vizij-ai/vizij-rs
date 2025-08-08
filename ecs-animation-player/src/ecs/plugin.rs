@@ -4,7 +4,7 @@ use crate::{
         components::{
             AnimatedColor, AnimationBinding, AnimationInstance, AnimationPlayer, Intensity,
         },
-        resources::{AnimationOutput, IdMapping},
+        resources::{AnimationOutput, FrameBlendData, IdMapping},
         systems::*,
     },
     event::AnimationEvent,
@@ -28,6 +28,7 @@ impl Plugin for AnimationPlayerPlugin {
         app.init_resource::<AnimationOutput>()
             .init_resource::<IdMapping>()
             .init_resource::<InterpolationRegistry>()
+            .init_resource::<FrameBlendData>()
             .add_event::<AnimationEvent>()
             // Register assets and their reflection data
             .register_asset_reflect::<AnimationData>()

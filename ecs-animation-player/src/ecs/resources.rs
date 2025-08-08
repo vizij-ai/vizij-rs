@@ -10,7 +10,7 @@ pub struct AnimationOutput {
 }
 
 /// A frame-local cache used to accumulate weighted values for blending before they are applied.
-#[derive(Default)]
+#[derive(Resource, Default)]
 pub struct FrameBlendData {
     pub blended_values: HashMap<(Entity, BevyPath), Vec<(f32, Value)>>,
 }

@@ -27,12 +27,22 @@ pub struct AnimationInstance {
     pub start_time: AnimationTime,
 }
 
-/// Stores the resolved mapping from an animation track to a target entity and component property.
+/// Stores resolved bindings for both raw and baked animation tracks.
+///
+/// * `raw_track_bindings` map raw `TrackId` values to their target entity and
+///   [`BevyPath`].
+/// * `baked_track_bindings` map baked track target strings (e.g.
+///   "Transform.translation") to the same tuple.  This allows the systems to
+///   operate with baked animation metadata side-by-side with raw track data.
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
 pub struct AnimationBinding {
+    /// Mapping from raw animation track ID to entity/property path.
     #[reflect(ignore)]
-    pub bindings: HashMap<TrackId, (Entity, BevyPath)>,
+    pub raw_track_bindings: HashMap<TrackId, (Entity, BevyPath)>,
+    /// Mapping from baked track target strings to entity/property path.
+    #[reflect(ignore)]
+    pub baked_track_bindings: HashMap<String, (Entity, BevyPath)>,
 }
 
 /// A custom component to hold an animatable `Color` value.
