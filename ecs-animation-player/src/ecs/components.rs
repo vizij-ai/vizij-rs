@@ -5,7 +5,7 @@ use bevy::reflect::Reflect;
 use std::collections::HashMap;
 
 /// Represents an animation player, acting as a timeline and container for animation instances.
-#[derive(Component, Reflect, Default)]
+#[derive(Component, Reflect)]
 #[reflect(Component)]
 pub struct AnimationPlayer {
     pub name: String,
@@ -54,6 +54,20 @@ pub struct AnimatedColor(pub Color);
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
 pub struct Intensity(pub f32);
+
+impl Default for AnimationPlayer {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            speed: 1.0, // default playback speed should advance time
+            mode: PlaybackMode::Loop,
+            current_time: AnimationTime::zero(),
+            duration: AnimationTime::zero(),
+            playback_state: crate::player::playback_state::PlaybackState::Stopped,
+            target_root: None,
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

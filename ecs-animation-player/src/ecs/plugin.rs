@@ -4,7 +4,7 @@ use crate::{
         components::{
             AnimatedColor, AnimationBinding, AnimationInstance, AnimationPlayer, Intensity,
         },
-        resources::{AnimationOutput, FrameBlendData, IdMapping},
+        resources::{AnimationOutput, EngineTime, FrameBlendData, IdMapping},
         systems::*,
     },
     event::AnimationEvent,
@@ -29,6 +29,7 @@ impl Plugin for AnimationPlayerPlugin {
             .init_resource::<IdMapping>()
             .init_resource::<InterpolationRegistry>()
             .init_resource::<FrameBlendData>()
+            .init_resource::<EngineTime>()
             .add_event::<AnimationEvent>()
             // Register assets and their reflection data
             .register_asset_reflect::<AnimationData>()
@@ -39,6 +40,8 @@ impl Plugin for AnimationPlayerPlugin {
             .register_type::<AnimatedColor>()
             .register_type::<Intensity>()
             .register_type::<AnimationBinding>()
+            // Register common target component types used by bindings
+            .register_type::<bevy::prelude::Transform>()
             // Configure system sets to run in order
             .configure_sets(
                 Update,

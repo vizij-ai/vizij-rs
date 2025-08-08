@@ -196,8 +196,8 @@ impl WasmAnimationEngine {
         {
             let id_mapping = self.app.world().resource::<IdMapping>();
             for (id, &entity) in id_mapping.instances.iter() {
-                if let Some(parent) = self.app.world().get::<Parent>(entity) {
-                    if parent.get() == player_entity {
+                if let Some(children) = self.app.world().get::<Children>(player_entity) {
+                    if children.iter().any(|&c| c == entity) {
                         instance_ids.push(id.clone());
                     }
                 }

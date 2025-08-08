@@ -1,11 +1,17 @@
 use crate::ecs::plugin::AnimationPlayerPlugin;
+use crate::ecs::plugin::AnimationPlayerPlugin;
 use crate::{
-    ecs::resources::{AnimationOutput, IdMapping},
+    ecs::resources::{AnimationOutput, EngineTime, IdMapping},
+    event::AnimationEvent,
+    AnimationData,
+};
+use crate::{
+    ecs::resources::{AnimationOutput, EngineTime, IdMapping},
     event::AnimationEvent,
     AnimationData,
 };
 use bevy::asset::AssetPlugin;
-use bevy::prelude::*;
+use bevy::{core::CorePlugin, prelude::*};
 use wasm_bindgen::prelude::*;
 
 /// A WebAssembly-compatible animation engine backed by a Bevy [`App`].
@@ -22,11 +28,8 @@ impl WasmAnimationEngine {
     #[wasm_bindgen(constructor)]
     pub fn new() -> WasmAnimationEngine {
         let mut app = App::new();
-        app.add_plugins((
-            MinimalPlugins,
-            AssetPlugin::default(),
-            AnimationPlayerPlugin,
-        ));
+        app.init_resource::<Time>();
+        app.add_plugins((CorePlugin, AssetPlugin::default(), AnimationPlayerPlugin));
         WasmAnimationEngine { app }
     }
 
@@ -50,11 +53,18 @@ impl WasmAnimationEngine {
     #[wasm_bindgen]
     pub fn update(&mut self, frame_delta_seconds: f64) -> Result<JsValue, JsValue> {
         {
-            let mut time = self.app.world_mut().resource_mut::<Time>();
-            time.advance_by(std::time::Duration::from_secs_f64(frame_delta_seconds));
+            let mut engine_time = self.app.world_mut().resource_mut::<EngineTime>();
+            engine_time.delta_seconds = frame_delta_seconds;
+            engine_time.elapsed_seconds += frame_delta_seconds;
         }
 
         self.app.update();
+
+        // Clear delta after update to prevent accidental reuse across multiple updates
+        {
+            let mut engine_time = self.app.world_mut().resource_mut::<EngineTime>();
+            engine_time.delta_seconds = 0.0;
+        }
 
         let output = self.app.world().resource::<AnimationOutput>();
         serde_wasm_bindgen::to_value(&output.values)

@@ -22,3 +22,21 @@ pub struct IdMapping {
     pub instances: HashMap<String, Entity>,
     pub animations: HashMap<String, Handle<AnimationData>>,
 }
+
+/// External tick-based time resource:
+/// - delta_seconds: The externally provided delta for the current tick (consumed each frame)
+/// - elapsed_seconds: The accumulated elapsed time from all applied deltas
+#[derive(Resource, Debug, Clone, Copy)]
+pub struct EngineTime {
+    pub delta_seconds: f64,
+    pub elapsed_seconds: f64,
+}
+
+impl Default for EngineTime {
+    fn default() -> Self {
+        EngineTime {
+            delta_seconds: 0.0,
+            elapsed_seconds: 0.0,
+        }
+    }
+}

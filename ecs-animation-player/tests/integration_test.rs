@@ -1,7 +1,12 @@
 use bevy::prelude::*;
+use ecs_animation_player::ecs::components::AnimationPlayer as EcsAnimationPlayer;
 use ecs_animation_player::{
-    animation::{AnimationData, AnimationKeypoint, AnimationTrack},
-    ecs::{components::*, plugin::AnimationPlayerPlugin},
+    animation::{AnimationData, AnimationKeypoint, AnimationTrack, BakedAnimationData},
+    ecs::{
+        components::*,
+        plugin::AnimationPlayerPlugin,
+        resources::{EngineTime, IdMapping},
+    },
     value::{Value, Vector3},
     AnimationTime,
 };
@@ -14,11 +19,12 @@ fn setup_test_app() -> App {
         AnimationPlayerPlugin,
     ));
     app.init_resource::<Assets<AnimationData>>();
+    app.init_resource::<Assets<BakedAnimationData>>();
+    app.init_resource::<IdMapping>();
     app
 }
 
 #[test]
-#[ignore]
 fn test_animation_player_integration() {
     let mut app = setup_test_app();
 
@@ -51,7 +57,9 @@ fn test_animation_player_integration() {
     // 3. Create Player and Instance
     let player_entity = app
         .world_mut()
-        .spawn(AnimationPlayer {
+        .spawn(EcsAnimationPlayer {
+            name: "TestPlayer".into(),
+            speed: 1.0,
             target_root: Some(target_entity),
             playback_state: ecs_animation_player::PlaybackState::Playing,
             ..default()
@@ -60,6 +68,8 @@ fn test_animation_player_integration() {
 
     let instance_component = AnimationInstance {
         animation: animation_handle,
+        weight: 1.0,
+        time_scale: 1.0,
         ..default()
     };
     let instance_entity = app.world_mut().spawn(instance_component).id();
@@ -71,9 +81,12 @@ fn test_animation_player_integration() {
     // First update for binding
     app.update();
 
-    // Advance time to halfway through the animation
-    let mut time = app.world_mut().resource_mut::<Time>();
-    time.advance_by(std::time::Duration::from_secs_f64(0.5));
+    // Advance time to halfway through the animation using EngineTime
+    {
+        let mut et = app.world_mut().resource_mut::<EngineTime>();
+        et.delta_seconds = 0.5;
+        et.elapsed_seconds += 0.5;
+    }
     app.update();
 
     // 5. Assertions

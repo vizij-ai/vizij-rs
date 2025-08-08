@@ -2,22 +2,21 @@ use std::collections::HashMap;
 
 use super::path::BevyPath;
 use bevy::ecs::world::Mut;
-use bevy::prelude::ChildOf as Parent;
 use bevy::prelude::*;
 use bevy::reflect::GetPath;
 use nalgebra::UnitQuaternion;
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::{
     animation::{AnimationData, BakedAnimationData},
     ecs::{
         components::{AnimationBinding, AnimationInstance, AnimationPlayer},
-        resources::{AnimationOutput, FrameBlendData, IdMapping},
+        resources::{AnimationOutput, EngineTime, FrameBlendData, IdMapping},
     },
     event::AnimationEvent,
     interpolation::InterpolationRegistry,
     player::playback_state::PlaybackState,
-    value::{Color as AnimColor, euler::Euler, Transform, Value, Vector2, Vector3, Vector4},
+    value::{euler::Euler, Color as AnimColor, Transform, Value, Vector2, Vector3, Vector4},
     AnimationTime, PlaybackMode,
 };
 
@@ -56,15 +55,23 @@ fn find_entity_by_path(
 /// Binds new animation instances to their target entities and properties.
 pub fn bind_new_animation_instances_system(
     mut commands: Commands,
-    new_instances_query: Query<(Entity, &Parent, &AnimationInstance), Added<AnimationInstance>>,
-    player_query: Query<&AnimationPlayer>,
+    new_instances_query: Query<(Entity, &AnimationInstance), Added<AnimationInstance>>,
+    player_query: Query<(Entity, &AnimationPlayer)>,
     animations: Res<Assets<AnimationData>>,
     baked_animations: Res<Assets<BakedAnimationData>>,
     children_query: Query<&Children>,
     name_query: Query<&Name>,
 ) {
-    for (instance_entity, parent, instance) in new_instances_query.iter() {
-        if let Ok(player) = player_query.get(parent.parent()) {
+    for (instance_entity, instance) in new_instances_query.iter() {
+        debug!("bind: new instance {:?} detected", instance_entity);
+        let player_opt = player_query.iter().find(|(p_ent, _)| {
+            if let Ok(children) = children_query.get(*p_ent) {
+                children.contains(&instance_entity)
+            } else {
+                false
+            }
+        });
+        if let Some((_p_ent, player)) = player_opt {
             if let Some(target_root) = player.target_root {
                 if let Some(animation_data) = animations.get(&instance.animation) {
                     let mut raw_bindings = HashMap::new();
@@ -133,11 +140,11 @@ pub fn bind_new_animation_instances_system(
                             if target_str.is_empty() {
                                 continue;
                             }
-                            let (entity_part_opt, prop_path_str) =
-                                match target_str.rsplit_once('/') {
-                                    Some((entity_part, prop_part)) => (Some(entity_part), prop_part),
-                                    None => (None, target_str),
-                                };
+                            let (entity_part_opt, prop_path_str) = match target_str.rsplit_once('/')
+                            {
+                                Some((entity_part, prop_part)) => (Some(entity_part), prop_part),
+                                None => (None, target_str),
+                            };
 
                             if prop_path_str.trim().is_empty() {
                                 continue;
@@ -184,6 +191,12 @@ pub fn bind_new_animation_instances_system(
                             instance_entity
                         );
                     } else {
+                        debug!(
+                            "bind: instance {:?} created {} raw, {} baked bindings",
+                            instance_entity,
+                            raw_bindings.len(),
+                            baked_bindings.len()
+                        );
                         commands.entity(instance_entity).insert(AnimationBinding {
                             raw_track_bindings: raw_bindings,
                             baked_track_bindings: baked_bindings,
@@ -231,16 +244,49 @@ pub fn update_animation_players_system(
     mut player_query: Query<(Entity, &mut AnimationPlayer)>,
     children_query: Query<&Children>,
     instance_query: Query<&AnimationInstance>,
-    time: Res<Time>,
+    animations: Res<Assets<AnimationData>>,
+    engine_time: Res<EngineTime>,
     mut event_writer: EventWriter<AnimationEvent>,
 ) {
     for (player_entity, mut player) in player_query.iter_mut() {
+        // Opportunistically compute duration if it's zero to avoid timeline stalling
+        if player.duration.as_seconds() == 0.0 {
+            if let Ok(children) = children_query.get(player_entity) {
+                let mut max_duration = AnimationTime::zero();
+                for child in children.iter() {
+                    if let Ok(instance) = instance_query.get(child) {
+                        if let Some(animation_data) = animations.get(&instance.animation) {
+                            let scale = instance.time_scale.abs() as f64;
+                            let instance_duration_seconds = if scale > 0.0 {
+                                animation_data.duration().as_seconds() / scale
+                            } else {
+                                0.0
+                            };
+                            let end_seconds =
+                                instance.start_time.as_seconds() + instance_duration_seconds;
+                            if end_seconds > max_duration.as_seconds() {
+                                max_duration = AnimationTime::from_seconds(end_seconds).unwrap();
+                            }
+                        }
+                    }
+                }
+                player.duration = max_duration;
+            }
+        }
 
-        let was_playing = player.playback_state == PlaybackState::Playing;
-        if was_playing {
-            let delta = time.delta_secs_f64() * player.speed;
+        if player.playback_state == PlaybackState::Playing {
+            let delta = engine_time.delta_seconds * player.speed;
             let duration_secs = player.duration.as_seconds();
             let mut new_time = player.current_time.as_seconds() + delta;
+            debug!(
+                "update: player='{}' delta={:.6} before={:.6} tentative={:.6} duration={:.6} speed={:.3}",
+                player.name,
+                delta,
+                player.current_time.as_seconds(),
+                new_time,
+                duration_secs,
+                player.speed
+            );
             let mut ended = false;
 
             match player.mode {
@@ -270,7 +316,7 @@ pub fn update_animation_players_system(
                         new_time = duration_secs;
                         player.playback_state = PlaybackState::Ended;
                         ended = true;
-                    } else if new_time <= 0.0 {
+                    } else if new_time < 0.0 {
                         new_time = 0.0;
                         player.playback_state = PlaybackState::Ended;
                         ended = true;
@@ -278,10 +324,14 @@ pub fn update_animation_players_system(
                 }
             }
 
+            debug!(
+                "update: player='{}' final_time={:.6} state={:?}",
+                player.name, new_time, player.playback_state
+            );
             player.current_time = AnimationTime::from_seconds(new_time).unwrap();
 
             if ended {
-                let timestamp = AnimationTime::from_seconds(time.elapsed_secs_f64()).unwrap();
+                let timestamp = AnimationTime::from_seconds(engine_time.elapsed_seconds).unwrap();
                 if let Ok(children) = children_query.get(player_entity) {
                     for child in children.iter() {
                         if let Ok(instance) = instance_query.get(child) {
@@ -302,8 +352,9 @@ pub fn update_animation_players_system(
 
 /// Samples all animations and accumulates the values for blending.
 pub fn accumulate_animation_values_system(
-    instance_query: Query<(&Parent, &AnimationInstance, &AnimationBinding)>,
-    player_query: Query<&AnimationPlayer>,
+    instance_query: Query<(Entity, &AnimationInstance, &AnimationBinding)>,
+    player_query: Query<(Entity, &AnimationPlayer)>,
+    children_query: Query<&Children>,
     animations: Res<Assets<AnimationData>>,
     baked_animations: Res<Assets<BakedAnimationData>>,
     mut interpolation_registry: ResMut<InterpolationRegistry>,
@@ -311,58 +362,72 @@ pub fn accumulate_animation_values_system(
 ) {
     blend_data.blended_values.clear();
 
-    for (parent, instance, binding) in instance_query.iter() {
-        if let Ok(player) = player_query.get(parent.parent()) {
-            if player.playback_state != PlaybackState::Playing && player.playback_state != PlaybackState::Ended {
-                continue;
+    for (instance_entity, instance, binding) in instance_query.iter() {
+        let player_opt = player_query.iter().find(|(p_ent, _)| {
+            if let Ok(children) = children_query.get(*p_ent) {
+                children.contains(&instance_entity)
+            } else {
+                false
             }
+        });
+        if let Some((_p_ent, player)) = player_opt {
+            if player.playback_state == PlaybackState::Playing
+                || player.playback_state == PlaybackState::Ended
+            {
+                let instance_time = (player.current_time.as_seconds()
+                    - instance.start_time.as_seconds())
+                    * instance.time_scale as f64;
+                let instance_time = AnimationTime::from_seconds(instance_time.max(0.0)).unwrap();
+                debug!(
+                    "accumulate: instance {:?} local_time={:.6} weight={:.3}",
+                    instance_entity,
+                    instance_time.as_seconds(),
+                    instance.weight
+                );
 
-            let instance_time = (player.current_time.as_seconds()
-                - instance.start_time.as_seconds())
-                * instance.time_scale as f64;
-            let instance_time = AnimationTime::from_seconds(instance_time.max(0.0)).unwrap();
-
-            if let Some(animation_data) = animations.get(&instance.animation) {
-                for (track_id, (target_entity, path)) in &binding.raw_track_bindings {
-                    if let Some(track) = animation_data.tracks.get(track_id) {
-                        let transition =
-                            animation_data.get_track_transition_for_time(instance_time, &track.id);
-                        if let Some(value) = track.value_at_time(
-                            instance_time,
-                            &mut interpolation_registry,
-                            transition,
-                            animation_data,
-                        ) {
-                            blend_data
-                                .blended_values
-                                .entry((*target_entity, path.clone()))
-                                .or_default()
-                                .push((instance.weight, value));
+                if let Some(animation_data) = animations.get(&instance.animation) {
+                    for (track_id, (target_entity, path)) in &binding.raw_track_bindings {
+                        if let Some(track) = animation_data.tracks.get(track_id) {
+                            let transition = animation_data
+                                .get_track_transition_for_time(instance_time, &track.id);
+                            if let Some(value) = track.value_at_time(
+                                instance_time,
+                                &mut interpolation_registry,
+                                transition,
+                                animation_data,
+                            ) {
+                                blend_data
+                                    .blended_values
+                                    .entry((*target_entity, path.clone()))
+                                    .or_default()
+                                    .push((instance.weight, value));
+                            }
                         }
                     }
-                }
 
-                if let Some(baked_data) = baked_animations
-                    .iter()
-                    .find(|(_, b)| b.animation_id == animation_data.id)
-                    .map(|(_, b)| b)
-                {
-                    for (target_str, (target_entity, path)) in &binding.baked_track_bindings {
-                        // Skip if a raw track already targets this entity/path
-                        let has_raw = binding
-                            .raw_track_bindings
-                            .values()
-                            .any(|(e, p)| *e == *target_entity && p == path);
-                        if has_raw {
-                            continue;
-                        }
-                        if let Some(value) = baked_data.get_value_at_time(target_str, instance_time)
-                        {
-                            blend_data
-                                .blended_values
-                                .entry((*target_entity, path.clone()))
-                                .or_default()
-                                .push((instance.weight, value.clone()));
+                    if let Some(baked_data) = baked_animations
+                        .iter()
+                        .find(|(_, b)| b.animation_id == animation_data.id)
+                        .map(|(_, b)| b)
+                    {
+                        for (target_str, (target_entity, path)) in &binding.baked_track_bindings {
+                            // Skip if a raw track already targets this entity/path
+                            let has_raw = binding
+                                .raw_track_bindings
+                                .values()
+                                .any(|(e, p)| *e == *target_entity && p == path);
+                            if has_raw {
+                                continue;
+                            }
+                            if let Some(value) =
+                                baked_data.get_value_at_time(target_str, instance_time)
+                            {
+                                blend_data
+                                    .blended_values
+                                    .entry((*target_entity, path.clone()))
+                                    .or_default()
+                                    .push((instance.weight, value.clone()));
+                            }
                         }
                     }
                 }
@@ -444,6 +509,7 @@ pub fn blend_and_apply_animation_values_system(world: &mut World) {
 
                 if let Some(target) = target {
                     apply_value_to_reflect(target, &final_value);
+                    debug!("blend_apply: entity={:?} path={} applied", entity, path);
                 }
             }
         }
@@ -481,8 +547,7 @@ pub fn collect_animation_output_system(world: &mut World) {
                             .find(|(_, b)| b.animation_id == anim_data.id)
                             .map(|(_, b)| b)
                         {
-                            for (target_str, (target_entity, path)) in
-                                &binding.baked_track_bindings
+                            for (target_str, (target_entity, path)) in &binding.baked_track_bindings
                             {
                                 if let Some(value) =
                                     get_component_value(world, *target_entity, path)
@@ -510,7 +575,9 @@ fn reflect_component_mut<'a>(
     entity: Entity,
     component_name: &str,
 ) -> Option<Mut<'a, dyn Reflect>> {
-    let type_id = {
+    let type_id: std::any::TypeId = if component_name == "Transform" {
+        std::any::TypeId::of::<bevy::prelude::Transform>()
+    } else {
         let registry = world.resource::<AppTypeRegistry>();
         let reg = registry.read();
         reg.get_with_type_path(component_name)?.type_id()
@@ -523,7 +590,9 @@ fn reflect_component<'a>(
     entity: Entity,
     component_name: &str,
 ) -> Option<&'a dyn Reflect> {
-    let type_id = {
+    let type_id: std::any::TypeId = if component_name == "Transform" {
+        std::any::TypeId::of::<bevy::prelude::Transform>()
+    } else {
         let registry = world.resource::<AppTypeRegistry>();
         let reg = registry.read();
         reg.get_with_type_path(component_name)?.type_id()
@@ -548,20 +617,16 @@ fn reflect_to_value(val: &dyn Reflect) -> Option<Value> {
     } else if let Some(v) = val.downcast_ref::<Vec2>() {
         Some(Value::Vector2(Vector2::new(v.x as f64, v.y as f64)))
     } else if let Some(v) = val.downcast_ref::<Vec3>() {
-        Some(Value::Vector3(Vector3::new(v.x as f64, v.y as f64, v.z as f64)))
+        Some(Value::Vector3(Vector3::new(
+            v.x as f64, v.y as f64, v.z as f64,
+        )))
     } else if let Some(v) = val.downcast_ref::<Vec4>() {
         Some(Value::Vector4(Vector4::new(
-            v.x as f64,
-            v.y as f64,
-            v.z as f64,
-            v.w as f64,
+            v.x as f64, v.y as f64, v.z as f64, v.w as f64,
         )))
     } else if let Some(v) = val.downcast_ref::<Quat>() {
         Some(Value::Vector4(Vector4::new(
-            v.x as f64,
-            v.y as f64,
-            v.z as f64,
-            v.w as f64,
+            v.x as f64, v.y as f64, v.z as f64, v.w as f64,
         )))
     } else if let Some(v) = val.downcast_ref::<bevy::prelude::Transform>() {
         Some(Value::Transform(Transform::new(
@@ -599,10 +664,7 @@ fn get_component_value(world: &World, entity: Entity, path: &BevyPath) -> Option
     let component_name = path.component()?;
     let comp_ref = reflect_component(world, entity, component_name)?;
     let field = if let Some(sub) = path.property() {
-        comp_ref
-            .reflect_path(&sub)
-            .ok()?
-            .try_as_reflect()?
+        comp_ref.reflect_path(&sub).ok()?.try_as_reflect()?
     } else {
         comp_ref
     };
@@ -674,7 +736,11 @@ fn apply_value_to_reflect(target: &mut dyn Reflect, value: &Value) {
                 *v = t.clone();
             } else if let Some(v) = target.downcast_mut::<bevy::prelude::Transform>() {
                 *v = bevy::prelude::Transform {
-                    translation: Vec3::new(t.position.x as f32, t.position.y as f32, t.position.z as f32),
+                    translation: Vec3::new(
+                        t.position.x as f32,
+                        t.position.y as f32,
+                        t.position.z as f32,
+                    ),
                     rotation: Quat::from_xyzw(
                         t.rotation.x as f32,
                         t.rotation.y as f32,
