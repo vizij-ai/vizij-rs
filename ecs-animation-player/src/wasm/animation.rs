@@ -43,9 +43,8 @@ impl WasmAnimationEngine {
         let instance_entity = self.app.world.spawn(instance_component).id();
         self.app
             .world
-            .get_mut::<Children>(*player_entity)
-            .unwrap()
-            .add(instance_entity);
+            .entity_mut(*player_entity)
+            .add_child(instance_entity);
 
         let mut id_mapping = self.app.world.resource_mut::<IdMapping>();
         let id = uuid::Uuid::new_v4().to_string();
