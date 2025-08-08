@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
+use super::path::BevyPath;
+use bevy::prelude::ChildOf as Parent;
 use bevy::prelude::*;
 use bevy::reflect::GetPath;
-use tracing::warn;
-use bevy_ecs::hierarchy::ChildOf as Parent;
-use super::path::BevyPath;
 use nalgebra::UnitQuaternion;
+use tracing::warn;
 
 use crate::{
     animation::AnimationData,
@@ -69,18 +69,14 @@ pub fn bind_new_animation_instances_system(
                     for track in animation_data.tracks.values() {
                         let target_str = track.target.trim();
                         if target_str.is_empty() {
-                            warn!(
-                                "Track '{}' has empty target; skipping binding",
-                                track.id
-                            );
+                            warn!("Track '{}' has empty target; skipping binding", track.id);
                             continue;
                         }
 
-                        let (entity_part_opt, prop_path_str) =
-                            match target_str.rsplit_once('/') {
-                                Some((entity_part, prop_part)) => (Some(entity_part), prop_part),
-                                None => (None, target_str),
-                            };
+                        let (entity_part_opt, prop_path_str) = match target_str.rsplit_once('/') {
+                            Some((entity_part, prop_part)) => (Some(entity_part), prop_part),
+                            None => (None, target_str),
+                        };
 
                         if prop_path_str.trim().is_empty() {
                             warn!(
@@ -141,7 +137,10 @@ pub fn bind_new_animation_instances_system(
 
 /// Recalculates the cached duration for animation players when their child instances change.
 pub fn update_player_durations_system(
-    mut player_query: Query<(&Children, &mut AnimationPlayer), Or<(Added<Children>, Changed<Children>)>>,
+    mut player_query: Query<
+        (&Children, &mut AnimationPlayer),
+        Or<(Added<Children>, Changed<Children>)>,
+    >,
     instance_query: Query<&AnimationInstance>,
     animations: Res<Assets<AnimationData>>,
 ) {
@@ -156,8 +155,7 @@ pub fn update_player_durations_system(
                     } else {
                         0.0
                     };
-                    let end_seconds =
-                        instance.start_time.as_seconds() + instance_duration_seconds;
+                    let end_seconds = instance.start_time.as_seconds() + instance_duration_seconds;
                     if end_seconds > max_duration.as_seconds() {
                         max_duration = AnimationTime::from_seconds(end_seconds).unwrap();
                     }
@@ -389,7 +387,8 @@ pub fn blend_and_apply_animation_values_system(
                             }
                         }
                         Value::Vector4(q) => {
-                            let quat = Quat::from_xyzw(q.x as f32, q.y as f32, q.z as f32, q.w as f32);
+                            let quat =
+                                Quat::from_xyzw(q.x as f32, q.y as f32, q.z as f32, q.w as f32);
                             if let Some(sp) = sub_path {
                                 if let Ok(field) = t.reflect_path_mut(sp) {
                                     if let Some(target) = field.try_downcast_mut::<Quat>() {
@@ -464,19 +463,22 @@ pub fn collect_animation_output_system(
                                                 )))
                                             } else if let Some(sp) = sub_path {
                                                 if let Ok(val) = t.reflect_path(sp) {
-                                                    if let Some(v3) = val.try_downcast_ref::<Vec3>() {
+                                                    if let Some(v3) = val.try_downcast_ref::<Vec3>()
+                                                    {
                                                         Some(Value::Vector3(Vector3::new(
                                                             v3.x as f64,
                                                             v3.y as f64,
                                                             v3.z as f64,
                                                         )))
-                                                    } else if let Some(f) = val.try_downcast_ref::<f32>() {
+                                                    } else if let Some(f) =
+                                                        val.try_downcast_ref::<f32>()
+                                                    {
                                                         Some(Value::Float(*f as f64))
-                                                    } else if let Some(q) = val.try_downcast_ref::<Quat>() {
+                                                    } else if let Some(q) =
+                                                        val.try_downcast_ref::<Quat>()
+                                                    {
                                                         Some(Value::Vector4(Vector4::new(
-                                                            q.x as f64,
-                                                            q.y as f64,
-                                                            q.z as f64,
+                                                            q.x as f64, q.y as f64, q.z as f64,
                                                             q.w as f64,
                                                         )))
                                                     } else {

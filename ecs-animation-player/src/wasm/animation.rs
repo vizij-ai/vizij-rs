@@ -59,21 +59,6 @@ impl WasmAnimationEngine {
         Ok(id)
     }
 
-    /// Removes an animation instance from the world.
-    #[wasm_bindgen(js_name = removeInstance)]
-    pub fn remove_instance(&mut self, instance_id: &str) -> Result<(), JsValue> {
-        let entity = {
-            let mut id_mapping = self.app.world.resource_mut::<IdMapping>();
-            id_mapping
-                .instances
-                .remove(instance_id)
-                .ok_or_else(|| JsValue::from_str("Instance not found"))?
-        };
-
-        self.app.world.despawn(entity);
-        Ok(())
-    }
-
     /// Updates the configuration of an existing animation instance.
     #[wasm_bindgen(js_name = updateInstanceConfig)]
     pub fn update_instance_config(
@@ -110,12 +95,9 @@ impl WasmAnimationEngine {
     }
 
     /// Removes an animation instance from its player.
+    /// TODO: Check if logical to use player id
     #[wasm_bindgen(js_name = removeInstance)]
-    pub fn remove_instance(
-        &mut self,
-        _player_id: &str,
-        instance_id: &str,
-    ) -> Result<(), JsValue> {
+    pub fn remove_instance(&mut self, _player_id: &str, instance_id: &str) -> Result<(), JsValue> {
         // Remove instance ID and get entity
         let entity = {
             let mut id_mapping = self.app.world.resource_mut::<IdMapping>();
@@ -126,11 +108,7 @@ impl WasmAnimationEngine {
         };
 
         // Despawn the instance entity
-        let _ = self
-            .app
-            .world
-            .entity_mut(entity)
-            .despawn_recursive();
+        let _ = self.app.world.entity_mut(entity).despawn_recursive();
 
         Ok(())
     }

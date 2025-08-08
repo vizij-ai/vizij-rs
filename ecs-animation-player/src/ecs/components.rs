@@ -1,7 +1,7 @@
+use super::path::BevyPath;
 use crate::{value::Color, AnimationData, AnimationTime, PlaybackMode, TrackId};
 use bevy::prelude::*;
 use bevy::reflect::Reflect;
-use super::path::BevyPath;
 use std::collections::HashMap;
 
 /// Represents an animation player, acting as a timeline and container for animation instances.
@@ -28,8 +28,10 @@ pub struct AnimationInstance {
 }
 
 /// Stores the resolved mapping from an animation track to a target entity and component property.
-#[derive(Component, Default)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
 pub struct AnimationBinding {
+    #[reflect(ignore)]
     pub bindings: HashMap<TrackId, (Entity, BevyPath)>,
 }
 
@@ -42,3 +44,25 @@ pub struct AnimatedColor(pub Color);
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
 pub struct Intensity(pub f32);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::{
+        prelude::{App, AppTypeRegistry},
+        reflect::TypePath,
+    };
+
+    #[test]
+    fn animation_binding_reflection_path_registered() {
+        let mut app = App::new();
+        app.register_type::<AnimationBinding>();
+
+        let registry = app.world().resource::<AppTypeRegistry>().clone();
+        let registry = registry.read();
+
+        assert!(registry
+            .get_with_type_path(AnimationBinding::type_path())
+            .is_some());
+    }
+}

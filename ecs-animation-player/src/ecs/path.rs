@@ -35,7 +35,6 @@ impl BevyPath {
     }
 }
 
-
 impl fmt::Display for BevyPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.path.fmt(f)

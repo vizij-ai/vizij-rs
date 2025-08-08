@@ -1,6 +1,6 @@
+use super::path::BevyPath;
 use crate::{AnimationData, Value};
 use bevy::prelude::*;
-use super::path::BevyPath;
 use std::collections::HashMap;
 
 /// A global resource that stores the final computed animation values at the end of each frame.

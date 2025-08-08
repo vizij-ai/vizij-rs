@@ -47,15 +47,12 @@ impl AnimationPlayer {
         &mut self,
         instance_id: &str,
     ) -> Result<AnimationInstance, AnimationError> {
-        let removed = self
-            .instances
-            .remove(instance_id)
-            .ok_or_else(|| AnimationError::Generic {
-                message: format!(
-                    "Animation instance with ID '{}' not found.",
-                    instance_id
-                ),
-            })?;
+        let removed =
+            self.instances
+                .remove(instance_id)
+                .ok_or_else(|| AnimationError::Generic {
+                    message: format!("Animation instance with ID '{}' not found.", instance_id),
+                })?;
         self.update_duration();
         Ok(removed)
     }
@@ -80,8 +77,7 @@ impl AnimationPlayer {
                 max_seconds = end_seconds;
             }
         }
-        self.duration =
-            AnimationTime::from_seconds(max_seconds).unwrap_or(AnimationTime::zero());
+        self.duration = AnimationTime::from_seconds(max_seconds).unwrap_or(AnimationTime::zero());
     }
 
     /// Calculates the effective time for a given track across all active instances.
