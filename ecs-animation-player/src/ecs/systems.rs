@@ -494,3 +494,17 @@ pub fn collect_animation_output_system(
         output.values.insert(player_id.clone(), player_output);
     }
 }
+
+/// Removes ID mappings for entities that have been despawned.
+pub fn cleanup_id_mapping_on_despawned_system(
+    mut removed_players: RemovedComponents<AnimationPlayer>,
+    mut removed_instances: RemovedComponents<AnimationInstance>,
+    mut id_mapping: ResMut<IdMapping>,
+) {
+    for entity in removed_players.read() {
+        id_mapping.players.retain(|_, e| *e != entity);
+    }
+    for entity in removed_instances.read() {
+        id_mapping.instances.retain(|_, e| *e != entity);
+    }
+}

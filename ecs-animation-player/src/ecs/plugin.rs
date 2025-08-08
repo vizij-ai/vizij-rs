@@ -76,6 +76,7 @@ impl Plugin for AnimationPlayerPlugin {
             .add_systems(
                 Update,
                 collect_animation_output_system.in_set(AnimationSystemSet::Output),
-            );
+            )
+            .add_systems(Update, cleanup_id_mapping_on_despawned_system);
     }
 }

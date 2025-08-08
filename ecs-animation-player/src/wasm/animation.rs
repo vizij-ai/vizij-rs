@@ -100,4 +100,30 @@ impl WasmAnimationEngine {
 
         Ok(())
     }
+
+    /// Removes an animation instance from its player.
+    #[wasm_bindgen(js_name = removeInstance)]
+    pub fn remove_instance(
+        &mut self,
+        _player_id: &str,
+        instance_id: &str,
+    ) -> Result<(), JsValue> {
+        // Remove instance ID and get entity
+        let entity = {
+            let mut id_mapping = self.app.world.resource_mut::<IdMapping>();
+            id_mapping
+                .instances
+                .remove(instance_id)
+                .ok_or_else(|| JsValue::from_str("Instance not found"))?
+        };
+
+        // Despawn the instance entity
+        let _ = self
+            .app
+            .world
+            .entity_mut(entity)
+            .despawn_recursive();
+
+        Ok(())
+    }
 }

@@ -142,4 +142,40 @@ impl WasmAnimationEngine {
 
         Ok(())
     }
+
+    /// Removes a player and all of its instances.
+    #[wasm_bindgen(js_name = removePlayer)]
+    pub fn remove_player(&mut self, player_id: &str) -> Result<(), JsValue> {
+        // Remove player ID and fetch entity
+        let entity = {
+            let mut id_mapping = self.app.world.resource_mut::<IdMapping>();
+            id_mapping
+                .players
+                .remove(player_id)
+                .ok_or_else(|| JsValue::from_str("Player not found"))?
+        };
+
+        // Collect child entities for instance ID cleanup
+        let children: Vec<Entity> = self
+            .app
+            .world
+            .get::<Children>(entity)
+            .map(|c| c.iter().copied().collect())
+            .unwrap_or_default();
+
+        // Remove instance IDs associated with this player
+        {
+            let mut id_mapping = self.app.world.resource_mut::<IdMapping>();
+            id_mapping.instances.retain(|_, e| !children.contains(e));
+        }
+
+        // Despawn the player and its children
+        let _ = self
+            .app
+            .world
+            .entity_mut(entity)
+            .despawn_recursive();
+
+        Ok(())
+    }
 }
