@@ -1,9 +1,7 @@
 use crate::{
     animation::{AnimationData, BakedAnimationData},
     ecs::{
-        components::{
-            AnimatedColor, AnimationBinding, AnimationInstance, AnimationPlayer, Intensity,
-        },
+        components::{AnimatedColor, AnimationInstance, AnimationPlayer, Intensity},
         resources::{AnimationOutput, IdMapping},
         systems::*,
     },
@@ -35,7 +33,6 @@ impl Plugin for AnimationPlayerPlugin {
             // Register components for reflection
             .register_type::<AnimationPlayer>()
             .register_type::<AnimationInstance>()
-            .register_type::<AnimationBinding>()
             .register_type::<AnimatedColor>()
             .register_type::<Intensity>()
             // Configure system sets to run in order

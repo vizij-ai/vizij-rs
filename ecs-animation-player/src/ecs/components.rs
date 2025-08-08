@@ -28,8 +28,7 @@ pub struct AnimationInstance {
 }
 
 /// Stores the resolved mapping from an animation track to a target entity and component property.
-#[derive(Component, Reflect, Default)]
-#[reflect(Component)]
+#[derive(Component, Default)]
 pub struct AnimationBinding {
     pub bindings: HashMap<TrackId, (Entity, BevyPath)>,
 }

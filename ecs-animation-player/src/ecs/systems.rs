@@ -347,11 +347,12 @@ pub fn blend_and_apply_animation_values_system(
             }
         };
 
-        let path_str = path.to_string();
-        let (root, sub_path) = path_str.split_once('.').unwrap_or((&path_str[..], ""));
+        let component = path.component();
+        let property_path = path.property();
+        let sub_path = property_path.as_ref();
 
-        match root {
-            "Transform" => {
+        match component {
+            Some("Transform") => {
                 if let Ok(mut t) = transforms.get_mut(entity) {
                     match final_value {
                         Value::Transform(new_t) => {
@@ -373,31 +374,37 @@ pub fn blend_and_apply_animation_values_system(
                                     new_t.scale.z as f32,
                                 ),
                             };
-                            if sub_path.is_empty() {
+                            if sub_path.is_none() {
                                 *t = bevy_t;
                             }
                         }
                         Value::Vector3(v) => {
                             let vec = Vec3::new(v.x as f32, v.y as f32, v.z as f32);
-                            if let Ok(field) = t.reflect_path_mut(sub_path) {
-                                if let Some(target) = field.try_downcast_mut::<Vec3>() {
-                                    *target = vec;
+                            if let Some(sp) = sub_path {
+                                if let Ok(field) = t.reflect_path_mut(sp) {
+                                    if let Some(target) = field.try_downcast_mut::<Vec3>() {
+                                        *target = vec;
+                                    }
                                 }
                             }
                         }
                         Value::Vector4(q) => {
                             let quat = Quat::from_xyzw(q.x as f32, q.y as f32, q.z as f32, q.w as f32);
-                            if let Ok(field) = t.reflect_path_mut(sub_path) {
-                                if let Some(target) = field.try_downcast_mut::<Quat>() {
-                                    *target = quat;
+                            if let Some(sp) = sub_path {
+                                if let Ok(field) = t.reflect_path_mut(sp) {
+                                    if let Some(target) = field.try_downcast_mut::<Quat>() {
+                                        *target = quat;
+                                    }
                                 }
                             }
                         }
                         Value::Float(x) => {
                             let f32_val = x as f32;
-                            if let Ok(field) = t.reflect_path_mut(sub_path) {
-                                if let Some(target) = field.try_downcast_mut::<f32>() {
-                                    *target = f32_val;
+                            if let Some(sp) = sub_path {
+                                if let Ok(field) = t.reflect_path_mut(sp) {
+                                    if let Some(target) = field.try_downcast_mut::<f32>() {
+                                        *target = f32_val;
+                                    }
                                 }
                             }
                         }
@@ -430,13 +437,13 @@ pub fn collect_animation_output_system(
                         for (track_id, (target_entity, path)) in &binding.bindings {
                             if let Some(track) = anim_data.tracks.get(track_id) {
                                 let target_path_str = &track.target;
-                                let path_str = path.to_string();
-                                let (root, sub_path) =
-                                    path_str.split_once('.').unwrap_or((&path_str[..], ""));
-                                match root {
-                                    "Transform" => {
+                                let component = path.component();
+                                let property_path = path.property();
+                                let sub_path = property_path.as_ref();
+                                match component {
+                                    Some("Transform") => {
                                         if let Ok(t) = transform_query.get(*target_entity) {
-                                            let maybe_value = if sub_path.is_empty() {
+                                            let maybe_value = if sub_path.is_none() {
                                                 Some(Value::Transform(Transform::new(
                                                     Vector3::new(
                                                         t.translation.x as f64,
@@ -455,22 +462,26 @@ pub fn collect_animation_output_system(
                                                         t.scale.z as f64,
                                                     ),
                                                 )))
-                                            } else if let Ok(val) = t.reflect_path(sub_path) {
-                                                if let Some(v3) = val.try_downcast_ref::<Vec3>() {
-                                                    Some(Value::Vector3(Vector3::new(
-                                                        v3.x as f64,
-                                                        v3.y as f64,
-                                                        v3.z as f64,
-                                                    )))
-                                                } else if let Some(f) = val.try_downcast_ref::<f32>() {
-                                                    Some(Value::Float(*f as f64))
-                                                } else if let Some(q) = val.try_downcast_ref::<Quat>() {
-                                                    Some(Value::Vector4(Vector4::new(
-                                                        q.x as f64,
-                                                        q.y as f64,
-                                                        q.z as f64,
-                                                        q.w as f64,
-                                                    )))
+                                            } else if let Some(sp) = sub_path {
+                                                if let Ok(val) = t.reflect_path(sp) {
+                                                    if let Some(v3) = val.try_downcast_ref::<Vec3>() {
+                                                        Some(Value::Vector3(Vector3::new(
+                                                            v3.x as f64,
+                                                            v3.y as f64,
+                                                            v3.z as f64,
+                                                        )))
+                                                    } else if let Some(f) = val.try_downcast_ref::<f32>() {
+                                                        Some(Value::Float(*f as f64))
+                                                    } else if let Some(q) = val.try_downcast_ref::<Quat>() {
+                                                        Some(Value::Vector4(Vector4::new(
+                                                            q.x as f64,
+                                                            q.y as f64,
+                                                            q.z as f64,
+                                                            q.w as f64,
+                                                        )))
+                                                    } else {
+                                                        None
+                                                    }
                                                 } else {
                                                     None
                                                 }
