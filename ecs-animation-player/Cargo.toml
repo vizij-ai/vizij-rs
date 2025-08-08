@@ -22,6 +22,7 @@ thiserror = "2.0.12"
 nalgebra = "0.33.2"
 lru = "0.14.0"
 bincode = "2.0.1"
+tracing = "0.1"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

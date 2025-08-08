@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 use bevy::reflect::GetPath;
+use tracing::warn;
+use bevy_ecs::hierarchy::ChildOf as Parent;
 use super::path::BevyPath;
 use nalgebra::UnitQuaternion;
 
@@ -53,35 +55,84 @@ fn find_entity_by_path(
 /// Binds new animation instances to their target entities and properties.
 pub fn bind_new_animation_instances_system(
     mut commands: Commands,
-    new_instances_query: Query<(Entity, &ChildOf, &AnimationInstance), Added<AnimationInstance>>,
+    new_instances_query: Query<(Entity, &Parent, &AnimationInstance), Added<AnimationInstance>>,
     player_query: Query<&AnimationPlayer>,
     animations: Res<Assets<AnimationData>>,
     children_query: Query<&Children>,
     name_query: Query<&Name>,
 ) {
-    for (instance_entity, child_of, instance) in new_instances_query.iter() {
-        if let Ok(player) = player_query.get(child_of.parent()) {
+    for (instance_entity, parent, instance) in new_instances_query.iter() {
+        if let Ok(player) = player_query.get(parent.parent()) {
             if let Some(target_root) = player.target_root {
                 if let Some(animation_data) = animations.get(&instance.animation) {
                     let mut bindings = HashMap::new();
                     for track in animation_data.tracks.values() {
-                        let parts: Vec<&str> = track.target.split('/').collect();
-                        if let Some((prop_path_str, entity_path_parts)) = parts.split_last() {
-                            if let Some(target_entity) = find_entity_by_path(
-                                target_root,
-                                entity_path_parts,
-                                &children_query,
-                                &name_query,
-                            ) {
-                                if let Ok(path) = BevyPath::parse(prop_path_str) {
-                                    bindings.insert(track.id, (target_entity, path));
-                                }
+                        let target_str = track.target.trim();
+                        if target_str.is_empty() {
+                            warn!(
+                                "Track '{}' has empty target; skipping binding",
+                                track.id
+                            );
+                            continue;
+                        }
+
+                        let (entity_part_opt, prop_path_str) =
+                            match target_str.rsplit_once('/') {
+                                Some((entity_part, prop_part)) => (Some(entity_part), prop_part),
+                                None => (None, target_str),
+                            };
+
+                        if prop_path_str.trim().is_empty() {
+                            warn!(
+                                "Track '{}' has empty property path in target '{}'",
+                                track.id, target_str
+                            );
+                            continue;
+                        }
+
+                        let path = match BevyPath::parse(prop_path_str) {
+                            Ok(p) => p,
+                            Err(_) => {
+                                warn!(
+                                    "Failed to parse property path '{}' for track '{}'",
+                                    prop_path_str, track.id
+                                );
+                                continue;
                             }
+                        };
+
+                        let entity_path_parts: Vec<&str> = entity_part_opt
+                            .unwrap_or_default()
+                            .split('/')
+                            .filter(|p| !p.is_empty())
+                            .collect();
+
+                        if let Some(target_entity) = find_entity_by_path(
+                            target_root,
+                            &entity_path_parts,
+                            &children_query,
+                            &name_query,
+                        ) {
+                            bindings.insert(track.id, (target_entity, path));
+                        } else {
+                            warn!(
+                                "Failed to resolve entity path '{}' for track '{}'",
+                                entity_part_opt.unwrap_or_default(),
+                                track.id
+                            );
                         }
                     }
-                    commands
-                        .entity(instance_entity)
-                        .insert(AnimationBinding { bindings });
+
+                    if bindings.is_empty() {
+                        warn!(
+                            "No valid bindings created for instance {:?}; skipping",
+                            instance_entity
+                        );
+                    } else {
+                        commands
+                            .entity(instance_entity)
+                            .insert(AnimationBinding { bindings });
+                    }
                 }
             }
         }
@@ -185,7 +236,7 @@ pub fn update_animation_players_system(
 
 /// Samples all animations and accumulates the values for blending.
 pub fn accumulate_animation_values_system(
-    instance_query: Query<(&ChildOf, &AnimationInstance, &AnimationBinding)>,
+    instance_query: Query<(&Parent, &AnimationInstance, &AnimationBinding)>,
     player_query: Query<&AnimationPlayer>,
     animations: Res<Assets<AnimationData>>,
     mut interpolation_registry: ResMut<InterpolationRegistry>,
@@ -193,8 +244,8 @@ pub fn accumulate_animation_values_system(
 ) {
     blend_data.blended_values.clear();
 
-    for (child_of, instance, binding) in instance_query.iter() {
-        if let Ok(player) = player_query.get(child_of.parent()) {
+    for (parent, instance, binding) in instance_query.iter() {
+        if let Ok(player) = player_query.get(parent.parent()) {
             if player.playback_state != PlaybackState::Playing {
                 continue;
             }
