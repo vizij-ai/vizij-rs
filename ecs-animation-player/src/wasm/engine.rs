@@ -3,6 +3,7 @@ use bevy::prelude::*;
 
 use crate::{
     ecs::resources::{AnimationOutput, IdMapping},
+    event::AnimationEvent,
     AnimationData,
 };
 use bevy::prelude::*;
@@ -43,6 +44,15 @@ impl WasmAnimationEngine {
 
         let output = self.app.world.resource::<AnimationOutput>();
         serde_wasm_bindgen::to_value(&output.values)
+            .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+    }
+
+    /// Drains animation events produced by the engine.
+    #[wasm_bindgen(js_name = drainEvents)]
+    pub fn drain_events(&mut self) -> Result<JsValue, JsValue> {
+        let mut events = self.app.world.resource_mut::<Events<AnimationEvent>>();
+        let drained: Vec<AnimationEvent> = events.drain().collect();
+        serde_wasm_bindgen::to_value(&drained)
             .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
     }
 }
