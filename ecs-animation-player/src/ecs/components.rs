@@ -17,16 +17,31 @@ pub struct AnimationPlayer {
     pub duration: AnimationTime,
     pub playback_state: crate::player::playback_state::PlaybackState,
     pub target_root: Option<Entity>,
+    pub start_time: AnimationTime,
+    pub end_time: Option<AnimationTime>,
 }
 
 /// Represents a single, active animation being played.
-#[derive(Component, Reflect, Default)]
+#[derive(Component, Reflect)]
 #[reflect(Component)]
 pub struct AnimationInstance {
     pub animation: Handle<AnimationData>,
     pub weight: f32,
     pub time_scale: f32,
     pub start_time: AnimationTime,
+    pub enabled: bool,
+}
+
+impl Default for AnimationInstance {
+    fn default() -> Self {
+        Self {
+            animation: Handle::default(),
+            weight: 1.0,
+            time_scale: 1.0,
+            start_time: AnimationTime::zero(),
+            enabled: true,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -75,6 +90,8 @@ impl Default for AnimationPlayer {
             duration: AnimationTime::zero(),
             playback_state: crate::player::playback_state::PlaybackState::Stopped,
             target_root: None,
+            start_time: AnimationTime::zero(),
+            end_time: None,
         }
     }
 }

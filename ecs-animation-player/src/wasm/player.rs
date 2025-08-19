@@ -167,7 +167,17 @@ impl WasmAnimationEngine {
         };
 
         if let Some(mut player) = self.app.world_mut().get_mut::<AnimationPlayer>(entity) {
-            player.current_time = crate::AnimationTime::from_seconds(time_seconds)
+            // Clamp seek target into the configured playback window [start_time, end_time_or_duration]
+            let start = player.start_time.as_seconds();
+            let mut end = player
+                .end_time
+                .map(|t| t.as_seconds())
+                .unwrap_or_else(|| player.duration.as_seconds());
+            if end < start {
+                end = start;
+            }
+            let clamped = time_seconds.clamp(start, end);
+            player.current_time = crate::AnimationTime::from_seconds(clamped)
                 .map_err(|e| JsValue::from_str(&format!("Invalid time: {:?}", e)))?;
         }
 
@@ -216,8 +226,8 @@ impl WasmAnimationEngine {
             mode: mode.to_string(),
             loop_until_target: None,
             offset: 0.0,
-            start_time: 0.0,
-            end_time: None,
+            start_time: player.start_time.as_seconds(),
+            end_time: player.end_time.map(|t| t.as_seconds()),
             instance_ids,
         };
 
@@ -310,9 +320,16 @@ impl WasmAnimationEngine {
             .get::<AnimationPlayer>(player_entity)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
 
-        let duration = player.duration.as_seconds();
-        if duration > 0.0 {
-            Ok((player.current_time.as_seconds() / duration).clamp(0.0, 1.0))
+        // Progress is computed within the playback window [start_time, end_time_or_duration]
+        let start = player.start_time.as_seconds();
+        let end = player
+            .end_time
+            .map(|t| t.as_seconds())
+            .unwrap_or_else(|| player.duration.as_seconds());
+        let window_len = (end - start).max(0.0);
+        if window_len > 0.0 {
+            let local = (player.current_time.as_seconds() - start).clamp(0.0, window_len);
+            Ok(local / window_len)
         } else {
             Ok(0.0)
         }
@@ -378,14 +395,12 @@ impl WasmAnimationEngine {
             };
         }
 
-        // Validate optional start and end times even though they are not currently stored
-        let mut start_time_opt: Option<AnimationTime> = None;
+        // Parse and apply optional start/end times
+        let mut new_start = player.start_time;
         if let Some(start_time_val) = config.get("startTime").and_then(|v| v.as_f64()) {
             if start_time_val >= 0.0 {
-                start_time_opt = Some(
-                    AnimationTime::from_seconds(start_time_val)
-                        .map_err(|e| JsValue::from_str(&format!("Invalid start time: {:?}", e)))?,
-                );
+                new_start = AnimationTime::from_seconds(start_time_val)
+                    .map_err(|e| JsValue::from_str(&format!("Invalid start time: {:?}", e)))?;
             } else {
                 return Err(JsValue::from_str(&format!(
                     "Start time must be positive, got: {}",
@@ -394,16 +409,16 @@ impl WasmAnimationEngine {
             }
         }
 
-        let mut end_time_opt: Option<AnimationTime> = None;
+        let mut new_end = player.end_time;
         if let Some(end_time_val) = config.get("endTime") {
             if end_time_val.is_null() {
-                end_time_opt = None;
+                new_end = None;
             } else if let Some(end_time_f64) = end_time_val.as_f64() {
                 if end_time_f64 >= 0.0 {
-                    end_time_opt =
-                        Some(AnimationTime::from_seconds(end_time_f64).map_err(|e| {
-                            JsValue::from_str(&format!("Invalid end time: {:?}", e))
-                        })?);
+                    new_end = Some(
+                        AnimationTime::from_seconds(end_time_f64)
+                            .map_err(|e| JsValue::from_str(&format!("Invalid end time: {:?}", e)))?,
+                    );
                 } else {
                     return Err(JsValue::from_str(&format!(
                         "End time must be positive, got: {}",
@@ -415,13 +430,33 @@ impl WasmAnimationEngine {
             }
         }
 
-        if let (Some(start_time), Some(end_time)) = (start_time_opt, end_time_opt) {
-            if start_time >= end_time {
+        if let Some(end_time) = new_end {
+            if new_start >= end_time {
                 return Err(JsValue::from_str(&format!(
                     "Start time ({:.2}) must be less than end time ({:.2})",
-                    start_time.as_seconds(),
+                    new_start.as_seconds(),
                     end_time.as_seconds()
                 )));
+            }
+        }
+
+        player.start_time = new_start;
+        player.end_time = new_end;
+
+        // Optional: set player root entity via config.rootEntity (string u64 bits, number, or null)
+        if let Some(root_val) = config.get("rootEntity") {
+            if root_val.is_null() {
+                player.target_root = None;
+            } else if let Some(bits_str) = root_val.as_str() {
+                let bits = bits_str.parse::<u64>()
+                    .map_err(|e| JsValue::from_str(&format!("Invalid rootEntity: {}", e)))?;
+                player.target_root = Some(Entity::from_bits(bits));
+            } else if let Some(bits_num) = root_val.as_u64() {
+                player.target_root = Some(Entity::from_bits(bits_num));
+            } else {
+                return Err(JsValue::from_str(
+                    "rootEntity must be a string (u64) or number, or null",
+                ));
             }
         }
 
@@ -438,5 +473,57 @@ impl WasmAnimationEngine {
         }
 
         Ok(())
+    }
+
+    // snake_case export aliases for non-ECS parity
+    #[wasm_bindgen(js_name = create_player)]
+    pub fn create_player_snake(&mut self) -> String {
+        self.create_player()
+    }
+
+    #[wasm_bindgen(js_name = remove_player)]
+    pub fn remove_player_snake(&mut self, player_id: &str) -> Result<(), JsValue> {
+        self.remove_player(player_id)
+    }
+
+    // ECS-only helper also exposed in snake_case as optional API
+    #[wasm_bindgen(js_name = set_player_root)]
+    pub fn set_player_root_snake(&mut self, player_id: &str, entity_id: &str) -> Result<(), JsValue> {
+        self.set_player_root(player_id, entity_id)
+    }
+
+    #[wasm_bindgen(js_name = get_player_settings)]
+    pub fn get_player_settings_snake(&self, player_id: &str) -> Result<JsValue, JsValue> {
+        self.get_player_settings(player_id)
+    }
+
+    #[wasm_bindgen(js_name = get_player_state)]
+    pub fn get_player_state_snake(&self, player_id: &str) -> Result<JsValue, JsValue> {
+        self.get_player_state(player_id)
+    }
+
+    #[wasm_bindgen(js_name = get_player_duration)]
+    pub fn get_player_duration_snake(&self, player_id: &str) -> Result<f64, JsValue> {
+        self.get_player_duration(player_id)
+    }
+
+    #[wasm_bindgen(js_name = get_player_time)]
+    pub fn get_player_time_snake(&self, player_id: &str) -> Result<f64, JsValue> {
+        self.get_player_time(player_id)
+    }
+
+    #[wasm_bindgen(js_name = get_player_progress)]
+    pub fn get_player_progress_snake(&self, player_id: &str) -> Result<f64, JsValue> {
+        self.get_player_progress(player_id)
+    }
+
+    #[wasm_bindgen(js_name = get_player_ids)]
+    pub fn get_player_ids_snake(&self) -> Result<Vec<String>, JsValue> {
+        self.get_player_ids()
+    }
+
+    #[wasm_bindgen(js_name = update_player_config)]
+    pub fn update_player_config_snake(&mut self, player_id: &str, config_json: &str) -> Result<(), JsValue> {
+        self.update_player_config(player_id, config_json)
     }
 }

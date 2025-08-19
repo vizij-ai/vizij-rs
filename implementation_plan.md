@@ -259,3 +259,47 @@ Implement parity incrementally to minimize conflicts and verify along the way.
 8) Documentation and cleanup
    - Update any Wasm docs/comments to clarify parity and optional ECS-specific functions.
    - Ensure no breaking changes for current ECS consumers due to added optional parameters or fields.
+
+[Status]
+- [x] Step 1: Engine constructor/config parity (new(config_json?), EngineConfigEcs resource, get_engine_config/set_engine_config)
+- [x] Step 2: Animation asset parity (fallback loader, unload_animation, animation_ids)
+- [x] Step 3: Player settings parity (add start_time/end_time to component, update getters, clamp logic in systems)
+- [x] Step 4: Instance lifecycle parity (add enabled flag, add_instance/remove_instance/update_instance_config/get_instance_config, systems honor enabled)
+- [x] Step 5: Baking parity (bake_animation returns baked JSON identical to non-ECS)
+- [x] Step 6: Derivatives parity (get_derivatives with identical semantics and output shape)
+- [x] Step 7: Naming parity (add snake_case wasm exports; keep camelCase js_name aliases)
+- [ ] Step 8: Tests and docs (integration tests for new APIs; update comments to state ECS-only methods are optional)
+
+[Progress]
+- 2025-08-19:
+  - Added EngineConfigEcs resource (ecs-animation-player/src/ecs/resources.rs) wrapping AnimationEngineConfig with Default::web_optimized().
+  - Updated WasmAnimationEngine constructor to accept Option<String> config JSON and insert EngineConfigEcs into the Bevy App (ecs-animation-player/src/wasm/engine.rs).
+  - Added get_engine_config / set_engine_config wasm bindings with snake_case and camelCase aliases (getEngineConfig / setEngineConfig).
+  - Animation assets parity: load_animation now supports native JSON + test_animation fallback; unload_animation and animation_ids implemented with snake_case and camelCase aliases (ecs-animation-player/src/wasm/engine.rs).
+  - Player parity: Added start_time/end_time to AnimationPlayer; get_player_settings returns them; seek and progress respect window; systems clamp/reflect within [start,end] (ecs-animation-player/src/ecs/components.rs, ecs-animation-player/src/ecs/systems.rs, ecs-animation-player/src/wasm/player.rs).
+  - Instance lifecycle: AnimationInstance gained enabled; wasm methods add_instance, remove_instance, update_instance_config, get_instance_config implemented (ecs-animation-player/src/wasm/animation.rs); systems skip disabled instances.
+  - Baking: bake_animation implemented to return baked JSON consistent with non-ECS (ecs-animation-player/src/wasm/animation.rs).
+  - Derivatives: get_derivatives implemented with optional width and camelCase alias (getDerivatives); blends per-target derivatives across instances (ecs-animation-player/src/wasm/animation.rs).
+  - Fixed borrow checker errors (E0502) in collect_animation_output_system by avoiding simultaneous mutable/immutable borrows of World; replaced resource_mut InterpolationRegistry with a local instance. Also fixed E0614 by removing dereferences of Entity. All tests now pass.
+
+[Findings: Output parity and front-end current values]
+- Risk identified: setPlayerRoot is ECS-only and intended to be optional, but current output collection relies on resolved bindings (via setPlayerRoot) to reflect component values. If a consumer does not call setPlayerRoot, no bindings are created and collect_animation_output_system produces empty outputs. This breaks drop-in usage where non-ECS returned evaluated values without a scene graph.
+- Impact: Front ends expecting update() to return current values (by track target path) see empty objects when setPlayerRoot is not used.
+- Remediation plan:
+  1) Add a binding-less fallback in collect_animation_output_system:
+     - When no AnimationBinding exists for an instance (or player has no target_root), evaluate raw track values directly at the instance’s local time and emit them keyed by track.target, blended by instance weights (just like non-ECS).
+     - Preserve existing binding-based path (preferred when bindings exist) but ensure the fallback always fills outputs for tracks with no bindings.
+  2) Instrument debug logs to surface misconfiguration:
+     - Warn once per player per few seconds if target_root is None and there are instances (“player has no target_root; using binding-less fallback output”).
+     - Warn if a player has instances but both raw and baked bindings are empty (“no bindings created; output is produced via fallback sampling”).
+     - Info when output map is empty after both binding and fallback paths.
+  3) Document in README/DeveloperFeedback that setPlayerRoot is optional; when omitted, outputs are computed directly from track data (matching non-ECS behavior).
+  4) Provide a config flag (future) to force binding-less output mode (useful for headless/data use).
+
+[Next Steps]
+- Step 8: Tests and docs
+  - Add/extend tests to cover: no set_player_root fallback returns current values; update_player_config rootEntity sets/clears target_root; derivatives width validation and shapes; bake_animation JSON schema; instance enabled behavior.
+  - Update DeveloperFeedback/README to document optional ECS-only APIs, fallback behavior, and snake_case/camelCase parity.
+- Cleanup
+  - Remove or #[allow(dead_code)] reflect_component_mut to silence warnings.
+  - Quick audit of exported wasm names to confirm final parity list and optional aliases.

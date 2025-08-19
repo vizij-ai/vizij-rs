@@ -32,6 +32,9 @@ impl Plugin for AnimationPlayerPlugin {
             .init_resource::<FrameBlendData>()
             .init_resource::<EngineTime>()
             .init_resource::<BakedIndex>()
+            // Ensure asset storages exist for both raw and baked animation types
+            .init_resource::<Assets<AnimationData>>()
+            .init_resource::<Assets<BakedAnimationData>>()
             .init_resource::<Events<AssetEvent<BakedAnimationData>>>()
             .add_event::<AnimationEvent>()
             // Register assets and their reflection data

@@ -4,6 +4,7 @@ use bevy::prelude::*;
 use bevy_reflect::ParsedPath;
 use std::any::TypeId;
 use std::collections::HashMap;
+use crate::config::AnimationEngineConfig;
 
 /// A global resource that stores the final computed animation values at the end of each frame.
 #[derive(Resource, Default)]
@@ -55,5 +56,15 @@ impl Default for EngineTime {
             delta_seconds: 0.0,
             elapsed_seconds: 0.0,
         }
+    }
+}
+
+/// Engine configuration stored as a Bevy Resource for wasm parity with the non-ECS API.
+#[derive(Resource, Debug, Clone)]
+pub struct EngineConfigEcs(pub AnimationEngineConfig);
+
+impl Default for EngineConfigEcs {
+    fn default() -> Self {
+        EngineConfigEcs(AnimationEngineConfig::web_optimized())
     }
 }

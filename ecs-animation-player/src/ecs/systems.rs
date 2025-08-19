@@ -413,48 +413,64 @@ pub fn update_animation_players_system(
 
         if player.playback_state == PlaybackState::Playing {
             let delta = engine_time.delta_seconds * player.speed;
-            let duration_secs = player.duration.as_seconds();
             let mut new_time = player.current_time.as_seconds() + delta;
+
+            // Playback window defined by player.start_time .. player.end_time (or duration if None)
+            let start = player.start_time.as_seconds();
+            let mut end = player
+                .end_time
+                .map(|t| t.as_seconds())
+                .unwrap_or_else(|| player.duration.as_seconds());
+            if end < start {
+                end = start;
+            }
+            let window_len = end - start;
+
             debug!(
-                "update: player='{}' delta={:.6} before={:.6} tentative={:.6} duration={:.6} speed={:.3}",
+                "update: player='{}' delta={:.6} before={:.6} tentative={:.6} window=[{:.6},{:.6}] len={:.6} speed={:.3}",
                 player.name,
                 delta,
                 player.current_time.as_seconds(),
                 new_time,
-                duration_secs,
+                start,
+                end,
+                window_len,
                 player.speed
             );
             let mut ended = false;
 
             match player.mode {
                 PlaybackMode::Loop => {
-                    if duration_secs > 0.0 {
-                        new_time = new_time.rem_euclid(duration_secs);
+                    if window_len > 0.0 {
+                        // Wrap within [start, end)
+                        let local = (new_time - start).rem_euclid(window_len);
+                        new_time = start + local;
                     } else {
-                        new_time = 0.0;
+                        new_time = start;
                     }
                 }
                 PlaybackMode::PingPong => {
-                    if duration_secs > 0.0 {
-                        while new_time > duration_secs {
-                            new_time = duration_secs - (new_time - duration_secs);
+                    if window_len > 0.0 {
+                        // Reflect at bounds [start, end]
+                        while new_time > end {
+                            new_time = end - (new_time - end);
                             player.speed = -player.speed;
                         }
-                        while new_time < 0.0 {
-                            new_time = -new_time;
+                        while new_time < start {
+                            new_time = start + (start - new_time);
                             player.speed = -player.speed;
                         }
                     } else {
-                        new_time = 0.0;
+                        new_time = start;
                     }
                 }
                 PlaybackMode::Once => {
-                    if new_time >= duration_secs {
-                        new_time = duration_secs;
+                    if new_time >= end {
+                        new_time = end;
                         player.playback_state = PlaybackState::Ended;
                         ended = true;
-                    } else if new_time < 0.0 {
-                        new_time = 0.0;
+                    } else if new_time < start {
+                        new_time = start;
                         player.playback_state = PlaybackState::Ended;
                         ended = true;
                     }
@@ -512,6 +528,11 @@ pub fn accumulate_animation_values_system(
             if player.playback_state == PlaybackState::Playing
                 || player.playback_state == PlaybackState::Ended
             {
+                // Skip disabled instances or those with zero weight
+                if !instance.enabled || instance.weight == 0.0 {
+                    continue;
+                }
+
                 let instance_time = (player.current_time.as_seconds()
                     - instance.start_time.as_seconds())
                     * instance.time_scale as f64;
@@ -659,6 +680,7 @@ pub fn blend_and_apply_animation_values_system(world: &mut World) {
 pub fn collect_animation_output_system(world: &mut World) {
     let mut children_query = world.query::<&Children>();
     let mut instance_query = world.query::<(&AnimationInstance, &AnimationBinding)>();
+    let mut instance_only_query = world.query::<&AnimationInstance>();
     let players = { world.resource::<IdMapping>().players.clone() };
     let animations = world.resource::<Assets<AnimationData>>();
     let baked_animations = world.resource::<Assets<BakedAnimationData>>();
@@ -668,9 +690,11 @@ pub fn collect_animation_output_system(world: &mut World) {
 
     for (player_id, player_entity) in players.iter() {
         let mut player_output = HashMap::new();
+        let mut had_binding = false;
         if let Ok(children) = children_query.get(world, *player_entity) {
             for child_entity in children.iter() {
                 if let Ok((instance, binding)) = instance_query.get(world, child_entity) {
+                    had_binding = true;
                     if let Some(anim_data) = animations.get(&instance.animation) {
                         for (track_id, binding_info) in &binding.raw_track_bindings {
                             if let Some(track) = anim_data.tracks.get(track_id) {
@@ -689,6 +713,142 @@ pub fn collect_animation_output_system(world: &mut World) {
                         }
                     }
                 }
+            }
+        }
+
+        // Fallback sampling when there are instances without AnimationBinding (no setPlayerRoot)
+        if let Ok(children) = children_query.get(world, *player_entity) {
+            if let Some(player) = world.get::<AnimationPlayer>(*player_entity) {
+                let mut fallback_acc: HashMap<String, Vec<(f32, Value)>> = HashMap::new();
+
+                let mut registry = InterpolationRegistry::default();
+
+                for child_entity in children.iter() {
+                        // Skip instances that already have bindings
+                        let has_binding = instance_query.get(world, child_entity).is_ok();
+                        if has_binding {
+                            continue;
+                        }
+
+                        if let Ok(instance) = instance_only_query.get(world, child_entity) {
+                            if instance.weight == 0.0 || !instance.enabled {
+                                continue;
+                            }
+
+                            if let Some(anim_data) = animations.get(&instance.animation) {
+                                let local_secs = (player.current_time.as_seconds()
+                                    - instance.start_time.as_seconds())
+                                    * (instance.time_scale as f64);
+                                let local_time =
+                                    AnimationTime::from_seconds(local_secs.max(0.0)).unwrap();
+
+                                for track in anim_data.tracks.values() {
+                                    // If a bound path already produced this target, do not override it
+                                    if player_output.contains_key(&track.target) {
+                                        continue;
+                                    }
+
+                                    let transition =
+                                        anim_data.get_track_transition_for_time(local_time, &track.id);
+
+                                    if let Some(value) = track.value_at_time(
+                                        local_time,
+                                        &mut registry,
+                                        transition,
+                                        anim_data,
+                                    ) {
+                                        fallback_acc
+                                            .entry(track.target.clone())
+                                            .or_default()
+                                            .push((instance.weight, value));
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                // Blend accumulated fallback values per target
+                for (target, list) in fallback_acc {
+                    if list.is_empty() {
+                        continue;
+                    }
+                    let total_weight: f32 = list.iter().map(|(w, _)| *w).sum();
+                    if total_weight == 0.0 {
+                        continue;
+                    }
+
+                    let value_type = list[0].1.value_type();
+                    let blended = match value_type {
+                        crate::value::ValueType::Transform => {
+                            // Linear blending for transform derivative components
+                            let mut sum_pos = Vector3::zero();
+                            let mut sum_rot = Vector4::new(0.0, 0.0, 0.0, 0.0);
+                            let mut sum_scale = Vector3::zero();
+                            for (w, v) in &list {
+                                if let Value::Transform(t) = v {
+                                    let wn = (*w / total_weight) as f64;
+                                    sum_pos.x += t.position.x * wn;
+                                    sum_pos.y += t.position.y * wn;
+                                    sum_pos.z += t.position.z * wn;
+                                    sum_rot.x += t.rotation.x * wn;
+                                    sum_rot.y += t.rotation.y * wn;
+                                    sum_rot.z += t.rotation.z * wn;
+                                    sum_rot.w += t.rotation.w * wn;
+                                    sum_scale.x += t.scale.x * wn;
+                                    sum_scale.y += t.scale.y * wn;
+                                    sum_scale.z += t.scale.z * wn;
+                                }
+                            }
+                            Value::Transform(Transform::new(sum_pos, sum_rot, sum_scale))
+                        }
+                        _ => {
+                            let comps_len = list[0].1.interpolatable_components().len();
+                            let mut final_components = vec![0.0f64; comps_len];
+                            for (w, v) in &list {
+                                let wn = (*w / total_weight) as f64;
+                                for (i, c) in v.interpolatable_components().iter().enumerate() {
+                                    final_components[i] += c * wn;
+                                }
+                            }
+                            Value::from_components(value_type, &final_components)
+                                .unwrap_or_else(|_| list[0].1.clone())
+                        }
+                    };
+
+                    // Only insert if not already provided by the binding-based path
+                    player_output.entry(target).or_insert(blended);
+                }
+            }
+        }
+
+        // Diagnostics: when no bindings exist (e.g., setPlayerRoot not used), outputs may be empty.
+        if player_output.is_empty() {
+            if let Some(player) = world.get::<AnimationPlayer>(*player_entity) {
+                if let Ok(children) = children_query.get(world, *player_entity) {
+                    if !had_binding && !children.is_empty() {
+                        if player.target_root.is_none() {
+                            warn!(
+                                "collect_output: player='{}' has instances but no target_root and no AnimationBinding; outputs may be empty. Either call setPlayerRoot (ECS) or enable binding-less fallback.",
+                                player.name
+                            );
+                        } else {
+                            warn!(
+                                "collect_output: player='{}' has instances but no AnimationBinding; outputs may be empty.",
+                                player.name
+                            );
+                        }
+                    }
+                }
+                // Always log if the player produced an empty output map
+                warn!(
+                    "collect_output: player='{}' produced empty output map",
+                    player.name
+                );
+            } else {
+                warn!(
+                    "collect_output: player entity {:?} produced empty output map",
+                    player_entity
+                );
             }
         }
         new_values.insert(player_id.clone(), player_output);
