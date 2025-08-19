@@ -23,7 +23,7 @@ impl WasmAnimationEngine {
     #[wasm_bindgen(constructor)]
     pub fn new() -> WasmAnimationEngine {
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, TimePlugin, AssetPlugin::default(), AnimationPlayerPlugin));
+        app.add_plugins((MinimalPlugins, AssetPlugin::default(), AnimationPlayerPlugin));
         WasmAnimationEngine { app }
     }
 

@@ -1,115 +1,247 @@
-use crate::ecs::components::AnimationInstance;
-use crate::ecs::resources::IdMapping;
-use bevy::prelude::*;
+//! Animation data management for WebAssembly.
+use super::engine::WasmAnimationEngine;
+use crate::{
+    animation::{transition::AnimationTransition, AnimationMetadata, TransitionVariant},
+    value::{Color, Vector3, Vector4},
+    AnimationData, AnimationKeypoint, AnimationTime, AnimationTrack, KeypointId, Value,
+};
 use wasm_bindgen::prelude::*;
 
-use super::WasmAnimationEngine;
 
+/// Converts a JSON string representing a `Value` into a `JsValue`.
+///
+/// This is useful for converting individual animation values for use in JavaScript.
+///
+/// # Example
+///
+/// ```javascript
+/// const valueJson = `{"Vector3":[1, 2, 3]}`;
+/// const jsValue = value_to_js(valueJson);
+/// console.log(jsValue); // { "Vector3": [1, 2, 3] }
+/// ```
+///
+/// @param {string} value_json - A JSON string of a `Value` enum.
+/// @returns {any} The JavaScript representation of the value.
 #[wasm_bindgen]
-impl WasmAnimationEngine {
-    /// Adds an animation instance to a player, with optional configuration.
-    #[wasm_bindgen(js_name = addInstance)]
-    pub fn add_instance(
-        &mut self,
-        player_id: &str,
-        animation_id: &str,
-        config_json: Option<String>,
-    ) -> Result<String, JsValue> {
-        let (player_entity, animation_handle) = {
-            let id_mapping = self.app.world().resource::<IdMapping>();
-            let player_entity = *id_mapping
-                .players
-                .get(player_id)
-                .ok_or_else(|| JsValue::from_str("Player not found"))?;
-            let animation_handle = id_mapping
-                .animations
-                .get(animation_id)
-                .ok_or_else(|| JsValue::from_str("Animation not found"))?
-                .clone();
-            (player_entity, animation_handle)
-        };
+pub fn value_to_js(value_json: &str) -> Result<JsValue, JsValue> {
+    let value: Value = serde_json::from_str(value_json)
+        .map_err(|e| JsValue::from_str(&format!("Value parse error: {}", e)))?;
 
-        let settings: crate::AnimationInstanceSettings = if let Some(json) = config_json {
-            serde_json::from_str(&json)
-                .map_err(|e| JsValue::from_str(&format!("Instance config parse error: {}", e)))?
-        } else {
-            Default::default()
-        };
+    serde_wasm_bindgen::to_value(&value)
+        .map_err(|e| JsValue::from_str(&format!("Value conversion error: {}", e)))
+}
 
-        let instance_component = AnimationInstance {
-            animation: animation_handle.clone(),
-            weight: settings.weight as f32,
-            time_scale: settings.time_scale as f32,
-            start_time: settings.instance_start_time,
-        };
+/// Creates an `AnimationTime` from seconds.
+#[inline]
+fn time(t: f64) -> AnimationTime {
+    if t.abs() < f64::EPSILON {
+        AnimationTime::zero()
+    } else {
+        AnimationTime::from_seconds(t).expect("invalid time")
+    }
+}
 
-        let instance_entity = self.app.world_mut().spawn(instance_component).id();
-        self.app
-            .world_mut()
-            .entity_mut(player_entity)
-            .add_child(instance_entity);
+/// A helper function to build an `AnimationTrack` from arrays of times and values.
+#[inline]
+fn build_track<F>(
+    name: &str,
+    property: &str,
+    times: &[f64],
+    make_value: F,
+) -> (AnimationTrack, Vec<KeypointId>)
+where
+    F: Fn(usize) -> Value,
+{
+    let mut track = AnimationTrack::new(name, property);
+    let mut ids: Vec<KeypointId> = Vec::with_capacity(times.len());
 
-        let id = {
-            let mut id_mapping = self.app.world_mut().resource_mut::<IdMapping>();
-            let id = uuid::Uuid::new_v4().to_string();
-            id_mapping.instances.insert(id.clone(), instance_entity);
-            id
-        };
-
-        Ok(id)
+    for (i, &t) in times.iter().enumerate() {
+        let kp = track
+            .add_keypoint(AnimationKeypoint::new(time(t), make_value(i)))
+            .unwrap();
+        ids.push(kp.id);
     }
 
-    /// Updates the configuration of an existing animation instance.
-    #[wasm_bindgen(js_name = updateInstanceConfig)]
-    pub fn update_instance_config(
-        &mut self,
-        _player_id: &str,
-        instance_id: &str,
-        config_json: &str,
-    ) -> Result<(), JsValue> {
-        let entity = {
-            let id_mapping = self.app.world().resource::<IdMapping>();
-            *id_mapping
-                .instances
-                .get(instance_id)
-                .ok_or_else(|| JsValue::from_str("Instance not found"))?
-        };
+    (track, ids)
+}
 
-        let config: serde_json::Value = serde_json::from_str(config_json)
-            .map_err(|e| JsValue::from_str(&format!("Config JSON parse error: {}", e)))?;
+/// Creates a test animation with various value types.
+///
+/// This function generates a complex animation with tracks for position, rotation, scale,
+/// color, and intensity, demonstrating the engine's ability to handle different data types.
+///
+/// @returns {string} A JSON string representing the test animation.
+#[wasm_bindgen]
+pub fn create_animation_test_type() -> String {
+    const POS_TIME: [f64; 5] = [0.0, 1.0, 2.0, 3.0, 4.1];
+    const ROT_TIME: [f64; 5] = [0.0, 1.0, 2.0, 3.0, 4.0];
+    const SCALE_TIME: [f64; 9] = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
+    const COL_TIME: [f64; 5] = [0.0, 1.0, 2.0, 3.0, 4.0];
+    const INT_TIME: [f64; 8] = [0.0, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0];
 
-        if let Some(mut instance) = self.app.world_mut().get_mut::<AnimationInstance>(entity) {
-            if let Some(weight) = config.get("weight").and_then(|v| v.as_f64()) {
-                instance.weight = weight as f32;
-            }
-            if let Some(time_scale) = config.get("timeScale").and_then(|v| v.as_f64()) {
-                instance.time_scale = time_scale as f32;
-            }
-            if let Some(start_time) = config.get("instanceStartTime").and_then(|v| v.as_f64()) {
-                instance.start_time = crate::AnimationTime::from_seconds(start_time)
-                    .map_err(|e| JsValue::from_str(&format!("Invalid start time: {:?}", e)))?;
-            }
+    let mut animation = AnimationData::new("test_animation", "Robot Wave Animation");
+
+    let (track, _) = build_track("position", "transform.position", &POS_TIME, |i| {
+        let coords = [
+            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(2.0, 1.5, 0.0),
+            Vector3::new(4.0, 0.0, 0.0),
+            Vector3::new(6.0, 1.0, 0.5),
+            Vector3::new(8.0, 0.0, 0.0),
+        ][i];
+        Value::Vector3(coords)
+    });
+    animation.add_track(track);
+
+    let (track, _) = build_track("rotation", "transform.rotation", &ROT_TIME, |i| {
+        let q = [
+            Vector4::new(0.0, 0.0, 0.0, 1.0),
+            Vector4::new(0.0, 0.3827, 0.0, 0.9239),
+            Vector4::new(0.0, 0.7071, 0.0, 0.7071),
+            Vector4::new(0.0, 0.9239, 0.0, 0.3827),
+            Vector4::new(0.0, 1.0, 0.0, 0.0),
+        ][i];
+        Value::Vector4(q)
+    });
+    animation.add_track(track);
+
+    let (track, _) = build_track("scale", "transform.scale", &SCALE_TIME, |i| {
+        let s = [
+            Vector3::new(1.0, 1.0, 1.0),
+            Vector3::new(1.2, 1.1, 1.2),
+            Vector3::new(1.0, 1.0, 1.0),
+            Vector3::new(0.9, 1.1, 0.9),
+            Vector3::new(1.0, 1.0, 1.0),
+            Vector3::new(1.3, 0.9, 1.3),
+            Vector3::new(1.0, 1.0, 1.0),
+            Vector3::new(1.1, 1.2, 1.1),
+            Vector3::new(1.0, 1.0, 1.0),
+        ][i];
+        Value::Vector3(s)
+    });
+    animation.add_track(track);
+
+    let (track, _) = build_track("color", "material.color", &COL_TIME, |i| {
+        let c = &[
+            Color::rgba(1.0, 0.2, 0.2, 1.0),
+            Color::rgba(1.0, 0.8, 0.2, 1.0),
+            Color::rgba(0.2, 1.0, 0.2, 1.0),
+            Color::rgba(0.2, 0.5, 1.0, 1.0),
+            Color::rgba(0.8, 0.2, 1.0, 1.0),
+        ][i];
+        Value::Color(c.clone())
+    });
+    animation.add_track(track);
+
+    let (track, _) = build_track("intensity", "light.easing", &INT_TIME, |i| {
+        let v = [0.5, 1.0, 0.3, 0.8, 0.5, 1.2, 0.2, 0.5][i];
+        Value::Float(v)
+    });
+    animation.add_track(track);
+
+    animation.metadata = AnimationMetadata {
+        author: Some("WASM Animation Player Demo For Different types".to_string()),
+        description: Some(
+            "A complex robot animation showcasing position, rotation, scale, color, and intensity changes over time"
+                .to_string(),
+        ),
+        frame_rate: 60f64,
+        tags: vec!["demo".to_string(), "robot".to_string(), "complex".to_string()],
+        ..animation.metadata
+    };
+
+    serde_json::to_string(&animation).unwrap_or_else(|_| "{}".to_owned())
+}
+
+/// Creates a test animation with various transition types.
+///
+/// This function generates an animation that uses every available transition type (Step, Linear,
+/// Cubic, Bezier, etc.) to allow for visual testing and verification.
+///
+/// @returns {string} A JSON string representing the test animation.
+#[wasm_bindgen]
+pub fn create_test_animation() -> String {
+    const TIMES: [f64; 8] = [0.0, 0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0];
+    const VALUES: [f32; 8] = [0.5, 1.0, 0.3, 0.8, 0.5, 1.2, 0.2, 0.5];
+
+    const TRACKS: &[(&str, &str, TransitionVariant)] = &[
+        ("a", "a.step", TransitionVariant::Step),
+        ("b", "b.cubic", TransitionVariant::Cubic),
+        ("c", "c.linear", TransitionVariant::Linear),
+        ("d", "d.bezier", TransitionVariant::Bezier),
+        ("e", "e.spring", TransitionVariant::Spring),
+        ("f", "f.hermite", TransitionVariant::Hermite),
+        ("g", "g.catmullrom", TransitionVariant::Catmullrom),
+        ("h", "h.bspline", TransitionVariant::Bspline),
+    ];
+
+    let mut animation = AnimationData::new("test_animation", "Transition Testing Animation");
+
+    for &(name, property, variant) in TRACKS {
+        let (track, ids) = build_track(name, property, &TIMES, |i| Value::Float(VALUES[i].into()));
+
+        for pair in ids.windows(2) {
+            animation.add_transition(AnimationTransition::new(pair[0], pair[1], variant));
         }
 
-        Ok(())
+        animation.add_track(track);
     }
 
-    /// Removes an animation instance from its player.
-    /// TODO: Check if logical to use player id
-    #[wasm_bindgen(js_name = removeInstance)]
-    pub fn remove_instance(&mut self, _player_id: &str, instance_id: &str) -> Result<(), JsValue> {
-        // Remove instance ID and get entity
-        let entity = {
-            let mut id_mapping = self.app.world_mut().resource_mut::<IdMapping>();
-            id_mapping
-                .instances
-                .remove(instance_id)
-                .ok_or_else(|| JsValue::from_str("Instance not found"))?
-        };
+    animation.metadata = AnimationMetadata {
+        author: Some("WASM Animation Player Demo".to_string()),
+        description: Some(
+            "A complex robot animation showcasing different transition changes over time"
+                .to_string(),
+        ),
+        frame_rate: 60f64,
+        tags: vec!["demo".to_string(), "complex".to_string()],
+        ..animation.metadata
+    };
 
-        // Despawn the instance entity
-        self.app.world_mut().entity_mut(entity).despawn();
+    serde_json::to_string(&animation).unwrap_or_else(|_| "{}".to_owned())
+}
 
-        Ok(())
-    }
+/// Logs a message to the browser console.
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
+/// A convenience function for logging from Rust to the browser console.
+///
+/// # Example
+///
+/// ```javascript
+/// import { console_log } from "./pkg/ecs_animation_player.js";
+/// console_log("Hello from Rust!");
+/// ```
+///
+/// @param {string} message - The message to log.
+#[wasm_bindgen]
+pub fn console_log(message: &str) {
+    log(message);
+}
+
+/// A simple test function that returns a greeting.
+///
+/// # Example
+///
+/// ```javascript
+/// import { greet } from "./pkg/ecs_animation_player.js";
+/// const greeting = greet("World");
+/// console.log(greeting); // "Hello, World! ECS Animation Player WASM is ready."
+/// ```
+///
+/// @param {string} name - The name to include in the greeting.
+/// @returns {string} The greeting message.
+#[wasm_bindgen]
+pub fn greet(name: &str) -> String {
+    format!("Hello, {}! ECS Animation Player WASM is ready.", name)
+}
+
+/// Sets up a panic hook to log panic messages to the browser console.
+#[wasm_bindgen(start)]
+pub fn on_start() {
+    console_error_panic_hook::set_once();
 }

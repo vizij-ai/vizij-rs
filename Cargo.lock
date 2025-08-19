@@ -1912,6 +1912,7 @@ dependencies = [
  "bevy",
  "bevy_reflect",
  "bincode",
+ "console_error_panic_hook",
  "js-sys",
  "lru",
  "nalgebra",
