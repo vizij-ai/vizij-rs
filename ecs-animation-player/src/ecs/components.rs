@@ -2,6 +2,8 @@ use super::path::BevyPath;
 use crate::{value::Color, AnimationData, AnimationTime, PlaybackMode, TrackId};
 use bevy::prelude::*;
 use bevy::reflect::Reflect;
+use bevy_reflect::ParsedPath;
+use std::any::TypeId;
 use std::collections::HashMap;
 
 /// Represents an animation player, acting as a timeline and container for animation instances.
@@ -27,6 +29,14 @@ pub struct AnimationInstance {
     pub start_time: AnimationTime,
 }
 
+#[derive(Clone)]
+pub struct ResolvedBinding {
+    pub entity: Entity,
+    pub path: BevyPath,
+    pub component_type_id: TypeId,
+    pub property_path: Option<ParsedPath>,
+}
+
 /// Stores resolved bindings for both raw and baked animation tracks.
 ///
 /// * `raw_track_bindings` map raw `TrackId` values to their target entity and
@@ -39,10 +49,10 @@ pub struct AnimationInstance {
 pub struct AnimationBinding {
     /// Mapping from raw animation track ID to entity/property path.
     #[reflect(ignore)]
-    pub raw_track_bindings: HashMap<TrackId, (Entity, BevyPath)>,
+    pub raw_track_bindings: HashMap<TrackId, ResolvedBinding>,
     /// Mapping from baked track target strings to entity/property path.
     #[reflect(ignore)]
-    pub baked_track_bindings: HashMap<String, (Entity, BevyPath)>,
+    pub baked_track_bindings: HashMap<String, ResolvedBinding>,
 }
 
 /// A custom component to hold an animatable `Color` value.

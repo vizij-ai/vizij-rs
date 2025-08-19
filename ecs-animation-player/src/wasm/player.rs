@@ -47,7 +47,7 @@ impl WasmAnimationEngine {
     #[wasm_bindgen(js_name = removePlayer)]
     pub fn remove_player(&mut self, player_id: &str) -> Result<(), JsValue> {
         let entity = {
-            let mut id_mapping = self.app.world.resource_mut::<IdMapping>();
+            let mut id_mapping = self.app.world_mut().resource_mut::<IdMapping>();
             id_mapping
                 .players
                 .remove(player_id)
@@ -59,8 +59,8 @@ impl WasmAnimationEngine {
         let mut stack = vec![entity];
         entities.insert(entity);
         while let Some(e) = stack.pop() {
-            if let Some(children) = self.app.world.get::<Children>(e) {
-                for &child in children.iter() {
+            if let Some(children) = self.app.world().get::<Children>(e) {
+                for child in children.iter() {
                     if entities.insert(child) {
                         stack.push(child);
                     }
@@ -69,11 +69,11 @@ impl WasmAnimationEngine {
         }
 
         {
-            let mut id_mapping = self.app.world.resource_mut::<IdMapping>();
+            let mut id_mapping = self.app.world_mut().resource_mut::<IdMapping>();
             id_mapping.instances.retain(|_, e| !entities.contains(e));
         }
 
-        self.app.world.despawn_recursive(entity);
+        self.app.world_mut().entity_mut(entity).despawn();
         Ok(())
     }
 
@@ -81,7 +81,7 @@ impl WasmAnimationEngine {
     #[wasm_bindgen(js_name = setPlayerRoot)]
     pub fn set_player_root(&mut self, player_id: &str, entity_id: &str) -> Result<(), JsValue> {
         let player_entity = {
-            let id_mapping = self.app.world.resource::<IdMapping>();
+            let id_mapping = self.app.world().resource::<IdMapping>();
             *id_mapping
                 .players
                 .get(player_id)
@@ -93,7 +93,7 @@ impl WasmAnimationEngine {
             .map_err(|e| JsValue::from_str(&format!("Invalid entity ID: {}", e)))?;
         let target_entity = Entity::from_bits(bits);
 
-        if let Some(mut player) = self.app.world.get_mut::<AnimationPlayer>(player_entity) {
+        if let Some(mut player) = self.app.world_mut().get_mut::<AnimationPlayer>(player_entity) {
             player.target_root = Some(target_entity);
         }
 
@@ -187,7 +187,7 @@ impl WasmAnimationEngine {
 
         let player = self
             .app
-            .world
+            .world()
             .get::<AnimationPlayer>(player_entity)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
 
@@ -197,7 +197,7 @@ impl WasmAnimationEngine {
             let id_mapping = self.app.world().resource::<IdMapping>();
             for (id, &entity) in id_mapping.instances.iter() {
                 if let Some(children) = self.app.world().get::<Children>(player_entity) {
-                    if children.iter().any(|&c| c == entity) {
+                    if children.iter().any(|c| c == entity) {
                         instance_ids.push(id.clone());
                     }
                 }
@@ -238,7 +238,7 @@ impl WasmAnimationEngine {
 
         let player = self
             .app
-            .world
+            .world()
             .get::<AnimationPlayer>(player_entity)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
 
@@ -266,7 +266,7 @@ impl WasmAnimationEngine {
 
         let player = self
             .app
-            .world
+            .world()
             .get::<AnimationPlayer>(player_entity)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
 
@@ -286,7 +286,7 @@ impl WasmAnimationEngine {
 
         let player = self
             .app
-            .world
+            .world()
             .get::<AnimationPlayer>(player_entity)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
 
@@ -306,7 +306,7 @@ impl WasmAnimationEngine {
 
         let player = self
             .app
-            .world
+            .world()
             .get::<AnimationPlayer>(player_entity)
             .ok_or_else(|| JsValue::from_str("Player not found"))?;
 

@@ -65,7 +65,7 @@ Impact and API compatibility:
     - `baked_track_bindings: HashMap<String, (Entity, BevyPath)>`
 - Resources:
   - `AnimationOutput` exists and is produced at end of frame.
-  - `FrameBlendData` exists and is currently a `Resource`.
+  - `FrameBlendData` exists and is currently a `Resource` with single-writer/consumer semantics.
   - `IdMapping` bridges string IDs to `Entity`/`Handle`.
   - NEW: `EngineTime` for external tick-based updates.
 - Systems:

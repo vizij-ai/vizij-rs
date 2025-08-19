@@ -1,17 +1,18 @@
 use std::collections::HashMap;
 
 use super::path::BevyPath;
+use std::any::TypeId;
 use bevy::ecs::world::Mut;
+use bevy::asset::AssetEvent;
 use bevy::prelude::*;
 use bevy::reflect::GetPath;
-use nalgebra::UnitQuaternion;
 use tracing::{debug, warn};
 
 use crate::{
     animation::{AnimationData, BakedAnimationData},
     ecs::{
-        components::{AnimationBinding, AnimationInstance, AnimationPlayer},
-        resources::{AnimationOutput, EngineTime, FrameBlendData, IdMapping},
+        components::{AnimationBinding, AnimationInstance, AnimationPlayer, ResolvedBinding},
+        resources::{AnimationOutput, BakedIndex, BlendedEntry, EngineTime, FrameBlendData, IdMapping},
     },
     event::AnimationEvent,
     interpolation::InterpolationRegistry,
@@ -52,6 +53,79 @@ fn find_entity_by_path(
     Some(current_entity)
 }
 
+/// Blends a list of weighted quaternion rotations.
+///
+/// For two inputs, spherical linear interpolation (SLERP) is used to ensure
+/// numerical precision. For three or more inputs, normalized linear
+/// interpolation (NLERP) with hemisphere alignment is applied.
+fn blend_rotations(rotations: &[(f32, Vector4)]) -> Vector4 {
+    if rotations.is_empty() {
+        return Vector4::new(0.0, 0.0, 0.0, 1.0);
+    }
+
+    if rotations.len() == 2 {
+        let (w0, r0) = rotations[0];
+        let (w1, r1) = rotations[1];
+        let t = w1 as f64 / (w0 + w1) as f64;
+        let res = crate::value::transform::slerp_quaternion(&r0.to_array(), &r1.to_array(), t);
+        return Vector4::new(res[0], res[1], res[2], res[3]);
+    }
+
+    let total_weight: f32 = rotations.iter().map(|(w, _)| *w).sum();
+    let mut acc = [0.0f64; 4];
+    let mut q_ref: Option<[f64; 4]> = None;
+
+    for (w, rot) in rotations {
+        let mut q = rot.to_array();
+        if let Some(ref rq) = q_ref {
+            let dot = q[0] * rq[0] + q[1] * rq[1] + q[2] * rq[2] + q[3] * rq[3];
+            if dot < 0.0 {
+                q[0] = -q[0];
+                q[1] = -q[1];
+                q[2] = -q[2];
+                q[3] = -q[3];
+            }
+        } else {
+            q_ref = Some(q);
+        }
+        let wn = (*w / total_weight) as f64;
+        acc[0] += q[0] * wn;
+        acc[1] += q[1] * wn;
+        acc[2] += q[2] * wn;
+        acc[3] += q[3] * wn;
+    }
+
+    let len = (acc[0] * acc[0] + acc[1] * acc[1] + acc[2] * acc[2] + acc[3] * acc[3]).sqrt();
+    if len > 0.0 {
+        Vector4::new(acc[0] / len, acc[1] / len, acc[2] / len, acc[3] / len)
+    } else {
+        Vector4::new(0.0, 0.0, 0.0, 1.0)
+    }
+}
+
+///// Maintain an index of baked animations keyed by `animation_id` for O(1) lookups.
+pub fn update_baked_index_system(
+    mut events: EventReader<AssetEvent<BakedAnimationData>>,
+    baked_assets: Res<Assets<BakedAnimationData>>,
+    mut index: ResMut<BakedIndex>,
+) {
+    for event in events.read() {
+        match event {
+            AssetEvent::Added { id }
+            | AssetEvent::LoadedWithDependencies { id }
+            | AssetEvent::Modified { id } => {
+                index.0.retain(|_, h| h.id() != *id);
+                if let Some(data) = baked_assets.get(*id) {
+                    index.0.insert(data.animation_id.clone(), Handle::Weak(*id));
+                }
+            }
+            AssetEvent::Removed { id } | AssetEvent::Unused { id } => {
+                index.0.retain(|_, h| h.id() != *id);
+            }
+        }
+    }
+}
+
 /// Binds new animation instances to their target entities and properties.
 pub fn bind_new_animation_instances_system(
     mut commands: Commands,
@@ -59,8 +133,10 @@ pub fn bind_new_animation_instances_system(
     player_query: Query<(Entity, &AnimationPlayer)>,
     animations: Res<Assets<AnimationData>>,
     baked_animations: Res<Assets<BakedAnimationData>>,
+    baked_index: Res<BakedIndex>,
     children_query: Query<&Children>,
     name_query: Query<&Name>,
+    type_registry: Res<AppTypeRegistry>,
 ) {
     for (instance_entity, instance) in new_instances_query.iter() {
         debug!("bind: new instance {:?} detected", instance_entity);
@@ -118,7 +194,40 @@ pub fn bind_new_animation_instances_system(
                             &children_query,
                             &name_query,
                         ) {
-                            raw_bindings.insert(track.id, (target_entity, path));
+                            if let Some(component_name) = path.component() {
+                                let type_id: TypeId = if component_name == "Transform" {
+                                    TypeId::of::<bevy::prelude::Transform>()
+                                } else {
+                                    let reg = type_registry.read();
+                                    if let Some(registration) =
+                                        reg.get_with_type_path(component_name)
+                                    {
+                                        registration.type_id()
+                                    } else {
+                                        warn!(
+                                            "bind: component '{}' not registered",
+                                            component_name
+                                        );
+                                        continue;
+                                    }
+                                };
+                                let property_path = path.property();
+                                raw_bindings.insert(
+                                    track.id,
+                                    ResolvedBinding {
+                                        entity: target_entity,
+                                        path,
+                                        component_type_id: type_id,
+                                        property_path,
+                                    },
+                                );
+                            } else {
+                                warn!(
+                                    "Track '{}' target '{}' missing component",
+                                    track.id,
+                                    target_str
+                                );
+                            }
                         } else {
                             warn!(
                                 "Failed to resolve entity path '{}' for track '{}'",
@@ -127,60 +236,88 @@ pub fn bind_new_animation_instances_system(
                             );
                         }
                     }
-
+ 
                     // Build baked track bindings if baked data is available
                     let mut baked_bindings = HashMap::new();
-                    if let Some(baked_data) = baked_animations
-                        .iter()
-                        .find(|(_, b)| b.animation_id == animation_data.id)
-                        .map(|(_, b)| b)
-                    {
-                        for target in baked_data.track_targets() {
-                            let target_str = target.trim();
-                            if target_str.is_empty() {
-                                continue;
-                            }
-                            let (entity_part_opt, prop_path_str) = match target_str.rsplit_once('/')
-                            {
-                                Some((entity_part, prop_part)) => (Some(entity_part), prop_part),
-                                None => (None, target_str),
-                            };
-
-                            if prop_path_str.trim().is_empty() {
-                                continue;
-                            }
-
-                            let path = match BevyPath::parse(prop_path_str) {
-                                Ok(p) => p,
-                                Err(_) => {
-                                    warn!(
-                                        "Failed to parse property path '{}' for baked track '{}'",
-                                        prop_path_str, target_str
-                                    );
+                    if let Some(handle) = baked_index.0.get(&animation_data.id) {
+                        if let Some(baked_data) = baked_animations.get(handle) {
+                            for target in baked_data.track_targets() {
+                                let target_str = target.trim();
+                                if target_str.is_empty() {
                                     continue;
                                 }
-                            };
+                                let (entity_part_opt, prop_path_str) = match target_str.rsplit_once('/') {
+                                    Some((entity_part, prop_part)) => (Some(entity_part), prop_part),
+                                    None => (None, target_str),
+                                };
 
-                            let entity_path_parts: Vec<&str> = entity_part_opt
-                                .unwrap_or_default()
-                                .split('/')
-                                .filter(|p| !p.is_empty())
-                                .collect();
+                                if prop_path_str.trim().is_empty() {
+                                    continue;
+                                }
 
-                            if let Some(target_entity) = find_entity_by_path(
-                                target_root,
-                                &entity_path_parts,
-                                &children_query,
-                                &name_query,
-                            ) {
-                                baked_bindings
-                                    .insert(target_str.to_string(), (target_entity, path));
-                            } else {
-                                warn!(
-                                    "Failed to resolve entity path '{}' for baked track '{}'",
-                                    entity_part_opt.unwrap_or_default(),
-                                    target_str
-                                );
+                                let path = match BevyPath::parse(prop_path_str) {
+                                    Ok(p) => p,
+                                    Err(_) => {
+                                        warn!(
+                                            "Failed to parse property path '{}' for baked track '{}'",
+                                            prop_path_str, target_str
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                let entity_path_parts: Vec<&str> = entity_part_opt
+                                    .unwrap_or_default()
+                                    .split('/')
+                                    .filter(|p| !p.is_empty())
+                                    .collect();
+
+                                if let Some(target_entity) = find_entity_by_path(
+                                    target_root,
+                                    &entity_path_parts,
+                                    &children_query,
+                                    &name_query,
+                                ) {
+                                    if let Some(component_name) = path.component() {
+                                        let type_id: TypeId = if component_name == "Transform" {
+                                            TypeId::of::<bevy::prelude::Transform>()
+                                        } else {
+                                            let reg = type_registry.read();
+                                            if let Some(registration) =
+                                                reg.get_with_type_path(component_name)
+                                            {
+                                                registration.type_id()
+                                            } else {
+                                                warn!(
+                                                    "bind: component '{}' not registered",
+                                                    component_name
+                                                );
+                                                continue;
+                                            }
+                                        };
+                                        let property_path = path.property();
+                                        baked_bindings.insert(
+                                            target_str.to_string(),
+                                            ResolvedBinding {
+                                                entity: target_entity,
+                                                path,
+                                                component_type_id: type_id,
+                                                property_path,
+                                            },
+                                        );
+                                    } else {
+                                        warn!(
+                                            "Baked target '{}' missing component segment",
+                                            target_str
+                                        );
+                                    }
+                                } else {
+                                    warn!(
+                                        "Failed to resolve entity path '{}' for baked track '{}'",
+                                        entity_part_opt.unwrap_or_default(),
+                                        target_str
+                                    );
+                                }
                             }
                         }
                     }
@@ -357,6 +494,7 @@ pub fn accumulate_animation_values_system(
     children_query: Query<&Children>,
     animations: Res<Assets<AnimationData>>,
     baked_animations: Res<Assets<BakedAnimationData>>,
+    baked_index: Res<BakedIndex>,
     mut interpolation_registry: ResMut<InterpolationRegistry>,
     mut blend_data: ResMut<FrameBlendData>,
 ) {
@@ -386,7 +524,7 @@ pub fn accumulate_animation_values_system(
                 );
 
                 if let Some(animation_data) = animations.get(&instance.animation) {
-                    for (track_id, (target_entity, path)) in &binding.raw_track_bindings {
+                    for (track_id, binding_info) in &binding.raw_track_bindings {
                         if let Some(track) = animation_data.tracks.get(track_id) {
                             let transition = animation_data
                                 .get_track_transition_for_time(instance_time, &track.id);
@@ -398,35 +536,41 @@ pub fn accumulate_animation_values_system(
                             ) {
                                 blend_data
                                     .blended_values
-                                    .entry((*target_entity, path.clone()))
-                                    .or_default()
+                                    .entry((binding_info.entity, binding_info.path.clone()))
+                                    .or_insert_with(|| BlendedEntry {
+                                        type_id: binding_info.component_type_id,
+                                        property_path: binding_info.property_path.clone(),
+                                        values: Vec::new(),
+                                    })
+                                    .values
                                     .push((instance.weight, value));
                             }
                         }
                     }
 
-                    if let Some(baked_data) = baked_animations
-                        .iter()
-                        .find(|(_, b)| b.animation_id == animation_data.id)
-                        .map(|(_, b)| b)
-                    {
-                        for (target_str, (target_entity, path)) in &binding.baked_track_bindings {
-                            // Skip if a raw track already targets this entity/path
-                            let has_raw = binding
-                                .raw_track_bindings
-                                .values()
-                                .any(|(e, p)| *e == *target_entity && p == path);
-                            if has_raw {
-                                continue;
-                            }
-                            if let Some(value) =
-                                baked_data.get_value_at_time(target_str, instance_time)
-                            {
-                                blend_data
-                                    .blended_values
-                                    .entry((*target_entity, path.clone()))
-                                    .or_default()
-                                    .push((instance.weight, value.clone()));
+                    if let Some(handle) = baked_index.0.get(&animation_data.id) {
+                        if let Some(baked_data) = baked_animations.get(handle) {
+                            for (target_str, binding_info) in &binding.baked_track_bindings {
+                                // Skip if a raw track already targets this entity/path
+                                let has_raw = binding
+                                    .raw_track_bindings
+                                    .values()
+                                    .any(|b| b.entity == binding_info.entity && b.path == binding_info.path);
+                                if has_raw {
+                                    continue;
+                                }
+                                if let Some(value) = baked_data.get_value_at_time(target_str, instance_time) {
+                                    blend_data
+                                        .blended_values
+                                        .entry((binding_info.entity, binding_info.path.clone()))
+                                        .or_insert_with(|| BlendedEntry {
+                                            type_id: binding_info.component_type_id,
+                                            property_path: binding_info.property_path.clone(),
+                                            values: Vec::new(),
+                                        })
+                                        .values
+                                        .push((instance.weight, value.clone()));
+                                }
                             }
                         }
                     }
@@ -440,7 +584,13 @@ pub fn accumulate_animation_values_system(
 pub fn blend_and_apply_animation_values_system(world: &mut World) {
     let mut blend_data = world.resource_mut::<FrameBlendData>();
     let blend_data_map = std::mem::take(&mut blend_data.blended_values);
-    for ((entity, path), values) in blend_data_map {
+    for ((entity, path), entry) in blend_data_map {
+        let BlendedEntry {
+            type_id,
+            property_path,
+            values,
+        } = entry;
+
         if values.is_empty() {
             continue;
         }
@@ -455,7 +605,7 @@ pub fn blend_and_apply_animation_values_system(world: &mut World) {
             crate::value::ValueType::Transform => {
                 let mut final_pos = Vector3::zero();
                 let mut final_scale = Vector3::zero();
-                let mut final_rot = nalgebra::Quaternion::new(0.0, 0.0, 0.0, 0.0);
+                let mut rotations: Vec<(f32, Vector4)> = Vec::new();
 
                 for (weight, value) in &values {
                     if let Value::Transform(t) = value {
@@ -468,19 +618,10 @@ pub fn blend_and_apply_animation_values_system(world: &mut World) {
                         final_scale.y += t.scale.y * w as f64;
                         final_scale.z += t.scale.z * w as f64;
 
-                        final_rot.coords.x += t.rotation.x * w as f64;
-                        final_rot.coords.y += t.rotation.y * w as f64;
-                        final_rot.coords.z += t.rotation.z * w as f64;
-                        final_rot.coords.w += t.rotation.w * w as f64;
+                        rotations.push((*weight, t.rotation));
                     }
                 }
-                let final_rot_unit = UnitQuaternion::new_normalize(final_rot);
-                let rot = Vector4::new(
-                    final_rot_unit.coords.x,
-                    final_rot_unit.coords.y,
-                    final_rot_unit.coords.z,
-                    final_rot_unit.coords.w,
-                );
+                let rot = blend_rotations(&rotations);
                 Value::Transform(Transform::new(final_pos, rot, final_scale))
             }
             _ => {
@@ -496,21 +637,19 @@ pub fn blend_and_apply_animation_values_system(world: &mut World) {
             }
         };
 
-        if let Some(component_name) = path.component() {
-            if let Some(mut comp_ref) = reflect_component_mut(world, entity, component_name) {
-                let target: Option<&mut dyn Reflect> = if let Some(sub) = path.property() {
-                    comp_ref
-                        .reflect_path_mut(&sub)
-                        .ok()
-                        .and_then(|p| p.try_as_reflect_mut())
-                } else {
-                    Some(&mut *comp_ref)
-                };
+        if let Some(mut comp_ref) = world.get_reflect_mut(entity, type_id).ok() {
+            let target: Option<&mut dyn Reflect> = if let Some(sub) = property_path {
+                comp_ref
+                    .reflect_path_mut(&sub)
+                    .ok()
+                    .and_then(|p| p.try_as_reflect_mut())
+            } else {
+                Some(&mut *comp_ref)
+            };
 
-                if let Some(target) = target {
-                    apply_value_to_reflect(target, &final_value);
-                    debug!("blend_apply: entity={:?} path={} applied", entity, path);
-                }
+            if let Some(target) = target {
+                apply_value_to_reflect(target, &final_value);
+                debug!("blend_apply: entity={:?} path={} applied", entity, path);
             }
         }
     }
@@ -523,6 +662,7 @@ pub fn collect_animation_output_system(world: &mut World) {
     let players = { world.resource::<IdMapping>().players.clone() };
     let animations = world.resource::<Assets<AnimationData>>();
     let baked_animations = world.resource::<Assets<BakedAnimationData>>();
+    let baked_index = world.resource::<BakedIndex>();
 
     let mut new_values = HashMap::new();
 
@@ -532,26 +672,17 @@ pub fn collect_animation_output_system(world: &mut World) {
             for child_entity in children.iter() {
                 if let Ok((instance, binding)) = instance_query.get(world, child_entity) {
                     if let Some(anim_data) = animations.get(&instance.animation) {
-                        for (track_id, (target_entity, path)) in &binding.raw_track_bindings {
+                        for (track_id, binding_info) in &binding.raw_track_bindings {
                             if let Some(track) = anim_data.tracks.get(track_id) {
-                                if let Some(value) =
-                                    get_component_value(world, *target_entity, path)
-                                {
+                                if let Some(value) = get_component_value(world, binding_info) {
                                     player_output.insert(track.target.clone(), value);
                                 }
                             }
                         }
 
-                        if let Some(baked_data) = baked_animations
-                            .iter()
-                            .find(|(_, b)| b.animation_id == anim_data.id)
-                            .map(|(_, b)| b)
-                        {
-                            for (target_str, (target_entity, path)) in &binding.baked_track_bindings
-                            {
-                                if let Some(value) =
-                                    get_component_value(world, *target_entity, path)
-                                {
+                        if baked_index.0.get(&anim_data.id).is_some() {
+                            for (target_str, binding_info) in &binding.baked_track_bindings {
+                                if let Some(value) = get_component_value(world, binding_info) {
                                     player_output.insert(target_str.clone(), value);
                                 }
                             }
@@ -588,15 +719,8 @@ fn reflect_component_mut<'a>(
 fn reflect_component<'a>(
     world: &'a World,
     entity: Entity,
-    component_name: &str,
+    type_id: TypeId,
 ) -> Option<&'a dyn Reflect> {
-    let type_id: std::any::TypeId = if component_name == "Transform" {
-        std::any::TypeId::of::<bevy::prelude::Transform>()
-    } else {
-        let registry = world.resource::<AppTypeRegistry>();
-        let reg = registry.read();
-        reg.get_with_type_path(component_name)?.type_id()
-    };
     world.get_reflect(entity, type_id).ok()
 }
 
@@ -660,11 +784,10 @@ fn reflect_to_value(val: &dyn Reflect) -> Option<Value> {
     }
 }
 
-fn get_component_value(world: &World, entity: Entity, path: &BevyPath) -> Option<Value> {
-    let component_name = path.component()?;
-    let comp_ref = reflect_component(world, entity, component_name)?;
-    let field = if let Some(sub) = path.property() {
-        comp_ref.reflect_path(&sub).ok()?.try_as_reflect()?
+fn get_component_value(world: &World, binding: &ResolvedBinding) -> Option<Value> {
+    let comp_ref = reflect_component(world, binding.entity, binding.component_type_id)?;
+    let field = if let Some(sub) = &binding.property_path {
+        comp_ref.reflect_path(sub).ok()?.try_as_reflect()?
     } else {
         comp_ref
     };

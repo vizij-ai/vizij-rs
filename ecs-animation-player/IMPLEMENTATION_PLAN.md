@@ -88,7 +88,7 @@ This document provides a detailed, step-by-step plan for building the `ecs-anima
         2.  Deserialize the config into `AnimationInstanceSettings`.
         3.  Create the `AnimationInstance` component.
         4.  Spawn a new entity with this component: `let instance_entity = world.spawn(instance_component).id();`.
-        5.  Use `world.get_mut::<Children>(player_entity).unwrap().add(instance_entity)` to create the parent-child relationship.
+        5.  Use `world.entity_mut(player_entity).add_child(instance_entity);` to create the parent-child relationship.
         6.  Generate and return a string ID for the instance, storing it in the `IdMapping`.
     *   `update_instance_config(player_id, instance_id, config)`:
         1.  Look up the instance `Entity` from the `IdMapping`.

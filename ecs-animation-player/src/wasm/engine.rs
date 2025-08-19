@@ -1,17 +1,12 @@
 use crate::ecs::plugin::AnimationPlayerPlugin;
-use crate::ecs::plugin::AnimationPlayerPlugin;
-use crate::{
-    ecs::resources::{AnimationOutput, EngineTime, IdMapping},
-    event::AnimationEvent,
-    AnimationData,
-};
 use crate::{
     ecs::resources::{AnimationOutput, EngineTime, IdMapping},
     event::AnimationEvent,
     AnimationData,
 };
 use bevy::asset::AssetPlugin;
-use bevy::{core::CorePlugin, prelude::*};
+use bevy::prelude::*;
+use bevy::time::TimePlugin;
 use wasm_bindgen::prelude::*;
 
 /// A WebAssembly-compatible animation engine backed by a Bevy [`App`].
@@ -28,8 +23,7 @@ impl WasmAnimationEngine {
     #[wasm_bindgen(constructor)]
     pub fn new() -> WasmAnimationEngine {
         let mut app = App::new();
-        app.init_resource::<Time>();
-        app.add_plugins((CorePlugin, AssetPlugin::default(), AnimationPlayerPlugin));
+        app.add_plugins((MinimalPlugins, TimePlugin, AssetPlugin::default(), AnimationPlayerPlugin));
         WasmAnimationEngine { app }
     }
 
@@ -74,7 +68,7 @@ impl WasmAnimationEngine {
     /// Drains animation events produced by the engine.
     #[wasm_bindgen(js_name = drainEvents)]
     pub fn drain_events(&mut self) -> Result<JsValue, JsValue> {
-        let mut events = self.app.world.resource_mut::<Events<AnimationEvent>>();
+        let mut events = self.app.world_mut().resource_mut::<Events<AnimationEvent>>();
         let drained: Vec<AnimationEvent> = events.drain().collect();
         serde_wasm_bindgen::to_value(&drained)
             .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))

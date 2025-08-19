@@ -1,6 +1,8 @@
 use super::path::BevyPath;
-use crate::{AnimationData, Value};
+use crate::{AnimationData, BakedAnimationData, Value};
 use bevy::prelude::*;
+use bevy_reflect::ParsedPath;
+use std::any::TypeId;
 use std::collections::HashMap;
 
 /// A global resource that stores the final computed animation values at the end of each frame.
@@ -9,10 +11,21 @@ pub struct AnimationOutput {
     pub values: HashMap<String, HashMap<String, Value>>,
 }
 
-/// A frame-local cache used to accumulate weighted values for blending before they are applied.
+///// A frame-local cache used to accumulate weighted values for blending before they are applied.
+/////
+///// This resource follows a single-writer/single-consumer model within a frame: it is populated by
+///// `accumulate_animation_values_system` and consumed by `blend_and_apply_animation_values_system`.
+///// The data is cleared after each frame. Because only one system writes and one system reads, the
+///// serialization impact on the schedule is explicit and predictable.
+pub struct BlendedEntry {
+    pub type_id: TypeId,
+    pub property_path: Option<ParsedPath>,
+    pub values: Vec<(f32, Value)>,
+}
+
 #[derive(Resource, Default)]
 pub struct FrameBlendData {
-    pub blended_values: HashMap<(Entity, BevyPath), Vec<(f32, Value)>>,
+    pub blended_values: HashMap<(Entity, BevyPath), BlendedEntry>,
 }
 
 /// A resource to bridge the gap between Wasm string IDs and Bevy Entity IDs.
@@ -22,6 +35,10 @@ pub struct IdMapping {
     pub instances: HashMap<String, Entity>,
     pub animations: HashMap<String, Handle<AnimationData>>,
 }
+
+/// Index for quick lookup of baked animations by their corresponding `animation_id`.
+#[derive(Resource, Default)]
+pub struct BakedIndex(pub HashMap<String, Handle<BakedAnimationData>>);
 
 /// External tick-based time resource:
 /// - delta_seconds: The externally provided delta for the current tick (consumed each frame)

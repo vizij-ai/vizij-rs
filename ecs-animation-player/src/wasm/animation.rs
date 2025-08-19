@@ -100,7 +100,7 @@ impl WasmAnimationEngine {
     pub fn remove_instance(&mut self, _player_id: &str, instance_id: &str) -> Result<(), JsValue> {
         // Remove instance ID and get entity
         let entity = {
-            let mut id_mapping = self.app.world.resource_mut::<IdMapping>();
+            let mut id_mapping = self.app.world_mut().resource_mut::<IdMapping>();
             id_mapping
                 .instances
                 .remove(instance_id)
@@ -108,7 +108,7 @@ impl WasmAnimationEngine {
         };
 
         // Despawn the instance entity
-        let _ = self.app.world.entity_mut(entity).despawn_recursive();
+        self.app.world_mut().entity_mut(entity).despawn();
 
         Ok(())
     }

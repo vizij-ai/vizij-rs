@@ -4,13 +4,14 @@ use crate::{
         components::{
             AnimatedColor, AnimationBinding, AnimationInstance, AnimationPlayer, Intensity,
         },
-        resources::{AnimationOutput, EngineTime, FrameBlendData, IdMapping},
+        resources::{AnimationOutput, BakedIndex, EngineTime, FrameBlendData, IdMapping},
         systems::*,
     },
     event::AnimationEvent,
     interpolation::InterpolationRegistry,
 };
 use bevy::{ecs::schedule::IntoScheduleConfigs, prelude::*};
+use bevy::asset::AssetEvent;
 
 #[derive(SystemSet, Debug, Clone, Eq, PartialEq, Hash)]
 pub enum AnimationSystemSet {
@@ -30,6 +31,8 @@ impl Plugin for AnimationPlayerPlugin {
             .init_resource::<InterpolationRegistry>()
             .init_resource::<FrameBlendData>()
             .init_resource::<EngineTime>()
+            .init_resource::<BakedIndex>()
+            .init_resource::<Events<AssetEvent<BakedAnimationData>>>()
             .add_event::<AnimationEvent>()
             // Register assets and their reflection data
             .register_asset_reflect::<AnimationData>()
@@ -57,7 +60,10 @@ impl Plugin for AnimationPlayerPlugin {
             // Add systems to their respective sets
             .add_systems(
                 Update,
-                bind_new_animation_instances_system.in_set(AnimationSystemSet::BindInstances),
+                (
+                    update_baked_index_system.before(AnimationSystemSet::BindInstances),
+                    bind_new_animation_instances_system.in_set(AnimationSystemSet::BindInstances),
+                ),
             )
             .add_systems(
                 Update,
