@@ -161,4 +161,46 @@ Gaps and Risks (still applicable or newly observed):
    - Reduce `warn!` spam in expected control paths; keep debug logs for step validation.
 
 9. Cargo dependency alignment
-   - Consolidate Bevy dependency approach and ensure all required features (hierarchy, reflect, time, core, transform) are enabled.
+    - Consolidate Bevy dependency approach and ensure all required features (hierarchy, reflect, time, core, transform) are enabled.
+
+## API Parity Summary (Wasm)
+
+- snake_case exports (matching non-ECS):
+  - Engine: new, update, get_engine_config, set_engine_config, drain_events
+  - Animation assets: load_animation, unload_animation, animation_ids, export_animation, bake_animation
+  - Player lifecycle/control: create_player, remove_player, play, pause, stop, seek
+  - Player info: get_player_settings, get_player_state, get_player_duration, get_player_time, get_player_progress, get_player_ids
+  - Player config: update_player_config, set_player_root (ECS-only, optional)
+  - Instances: add_instance, remove_instance, update_instance_config, get_instance_config
+  - Analysis/Utilities: get_derivatives, load_test_animation_from_json_wasm, value_to_js
+- camelCase aliases are retained via wasm_bindgen(js_name) for existing ECS consumers (e.g., loadAnimation, createPlayer, getPlayerSettings, getDerivatives, etc.).
+
+## Binding-less Fallback Behavior (Drop-in Parity)
+
+- set_player_root is OPTIONAL. When no AnimationBinding exists (no set_player_root or unresolved target), collect_animation_output_system now computes current values directly from AnimationData:
+  - Samples each instance’s tracks at local_time = (player.current_time - instance.start_time) * time_scale
+  - Blends values by instance.weight per target, and populates AnimationOutput as: player_id -> { target_path -> Value }
+  - If bindings exist, binding-based values take precedence and fallback will not overwrite them
+- Diagnostics:
+  - Warn when a player has instances but no target_root and no bindings (outputs may be empty)
+  - Warn when a player produced an empty output map (for quick troubleshooting)
+- Tests:
+  - ecs-animation-player/tests/output_fallback_test.rs:
+    - fallback_sampling_produces_output_without_bindings validates non-empty output without set_player_root
+    - disabled_instance_is_skipped_in_fallback_output ensures disabled instances do not contribute
+
+## Root Entity Convenience
+
+- Wasm update_player_config accepts an optional rootEntity to set/clear target_root ergonomically
+- In ECS integration tests, setting AnimationPlayer.target_root at spawn time and adding instances ensures bind_new_animation_instances_system resolves bindings on the next update
+
+## Derivatives and Baking Parity
+
+- get_derivatives mirrors non-ECS semantics and shape (width validation, per-target derivative computation, optional derivative_width_ms)
+- bake_animation produces baked JSON like the non-ECS engine (not just storing an asset), enabling drop-in usage patterns
+
+## Test Status (Step 8)
+
+- Added output_fallback_test.rs covering binding-less fallback and instance.enabled behavior
+- Existing tests (integration_test.rs, time_update_test.rs) validate binding path, EngineTime-driven updates, and deterministic interpolation
+- All tests pass via cargo test across crates

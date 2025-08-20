@@ -77,7 +77,10 @@ impl WasmAnimationEngine {
         Ok(())
     }
 
-    /// Sets the target root entity for a player.
+    /// Sets the target root entity for a player (optional).
+    /// Note: This ECS-only helper is optional. If you do not call set_player_root,
+    /// the engine will still produce current values via binding-less fallback sampling
+    /// in collect_animation_output_system. When bindings exist, they take precedence.
     #[wasm_bindgen(js_name = setPlayerRoot)]
     pub fn set_player_root(&mut self, player_id: &str, entity_id: &str) -> Result<(), JsValue> {
         let player_entity = {
@@ -343,6 +346,10 @@ impl WasmAnimationEngine {
     }
 
     /// Updates a player's configuration from a JSON string.
+    /// Supported fields: "speed", "name", "mode" ("once"|"loop"|"ping_pong"),
+    /// "startTime", "endTime" (number or null), and optional "rootEntity"
+    /// (string u64 bits, number, or null) to set/clear target_root in the same call.
+    /// Seeking and progress are clamped to the configured [startTime, endTime|duration] window.
     #[wasm_bindgen(js_name = updatePlayerConfig)]
     pub fn update_player_config(
         &mut self,

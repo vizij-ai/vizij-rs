@@ -861,6 +861,7 @@ pub fn collect_animation_output_system(world: &mut World) {
     output.values = new_values;
 }
 
+#[allow(dead_code)]
 fn reflect_component_mut<'a>(
     world: &'a mut World,
     entity: Entity,

@@ -268,7 +268,7 @@ Implement parity incrementally to minimize conflicts and verify along the way.
 - [x] Step 5: Baking parity (bake_animation returns baked JSON identical to non-ECS)
 - [x] Step 6: Derivatives parity (get_derivatives with identical semantics and output shape)
 - [x] Step 7: Naming parity (add snake_case wasm exports; keep camelCase js_name aliases)
-- [ ] Step 8: Tests and docs (integration tests for new APIs; update comments to state ECS-only methods are optional)
+- [x] Step 8: Tests and docs (integration tests for new APIs; update comments to state ECS-only methods are optional)
 
 [Progress]
 - 2025-08-19:
@@ -281,6 +281,9 @@ Implement parity incrementally to minimize conflicts and verify along the way.
   - Baking: bake_animation implemented to return baked JSON consistent with non-ECS (ecs-animation-player/src/wasm/animation.rs).
   - Derivatives: get_derivatives implemented with optional width and camelCase alias (getDerivatives); blends per-target derivatives across instances (ecs-animation-player/src/wasm/animation.rs).
   - Fixed borrow checker errors (E0502) in collect_animation_output_system by avoiding simultaneous mutable/immutable borrows of World; replaced resource_mut InterpolationRegistry with a local instance. Also fixed E0614 by removing dereferences of Entity. All tests now pass.
+  - Tests added for Step 8: ecs-animation-player/tests/output_fallback_test.rs covers binding-less fallback output and skipping of disabled instances; cargo test is green across crates.
+  - Docs updated for Step 8: DeveloperFeedback.md describes API parity (snake_case/camelCase), fallback behavior, and rootEntity convenience; wasm/player.rs rustdoc clarifies set_player_root is optional and documents update_player_config fields.
+  - Build warnings addressed: #[allow(dead_code)] applied to reflect_component_mut in systems.rs.
 
 [Findings: Output parity and front-end current values]
 - Risk identified: setPlayerRoot is ECS-only and intended to be optional, but current output collection relies on resolved bindings (via setPlayerRoot) to reflect component values. If a consumer does not call setPlayerRoot, no bindings are created and collect_animation_output_system produces empty outputs. This breaks drop-in usage where non-ECS returned evaluated values without a scene graph.
