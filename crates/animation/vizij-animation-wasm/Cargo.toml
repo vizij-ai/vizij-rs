@@ -1,0 +1,22 @@
+[package]
+name = "vizij-animation-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "wasm-bindgen interface for Vizij animation."
+repository = "https://github.com/vizij/vizij-rs"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+serde = { workspace = true }
+serde-wasm-bindgen = "0.6"
+vizij-animation-core = { path = "../vizij-animation-core" }
+console_error_panic_hook = "0.1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1

@@ -1,76 +1,44 @@
-name: Continuous Integration Tests
-
+name: ci
 on:
   push:
-    branches: [ main, master ]
   pull_request:
-    branches: [ main, master ]
+
+concurrency:
+  group: rs-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
-    name: Build and Test
+  rust:
     runs-on: ubuntu-latest
-
+    defaults: { run: { working-directory: vizij-rs } }
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            vizij-rs/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('vizij-rs/**/Cargo.lock') }}
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --all-features --all-targets
 
-    - uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
-
-    - name: Build and test Rust crate
-      run: |
-        cargo build --release
-        cargo test --release
-      working-directory: animation-player
-
-
-    - name: Build and test Rust crate for web
-      run: |
-        cargo install wasm-pack
-        wasm-pack build --target web
-        wasm-pack test --node
-        wasm-pack test --headless --firefox --chrome
-      working-directory: animation-player
-
-    # The web assembly build is now available in the pkg directory
-    # We can use it for the Web examples
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: example/react-demo/package-lock.json
-
-    - name: Build `react-demo` example
-      run: |
-        npm i
-        npm ci
-        npm run build
-      working-directory: example/react-demo
-
-    - name: Build `npm-vite-ts` example
-      run: |
-        npm i
-        npm ci
-        npm run build
-      working-directory: example/npm-vite-ts
-
-    - name: Install Playwright browsers and run tests for `npm-vite-ts` example
-      run: |
-        npx playwright install --with-deps
-        npx playwright test
-      working-directory: example/npm-vite-ts
-
-    - name: Upload test results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: playwright-report
-        path: example/npm-vite-ts/playwright-report/
-        retention-days: 30
+  wasm:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: vizij-rs } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+      - name: Build WASM into npm wrapper pkg/
+        run: node scripts/build-wasm.mjs
+      - name: Verify wrapper builds
+        run: |
+          cd npm/@vizij/animation-wasm
+          npm ci
+          npm run build
+          npm pack --dry-run

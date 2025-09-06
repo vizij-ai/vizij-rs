@@ -1,0 +1,17 @@
+{
+  "name": "vizij-rs-scripts",
+  "private": true,
+  "scripts": {
+    "build:wasm:animation": "node scripts/build-animation-wasm.mjs",
+    "watch:wasm:animation": "cargo watch -w crates/animation/vizij-animation-core -w crates/animation/vizij-animation-wasm -s \"node scripts/build-wasm.mjs\"",
+    "link:wasm:animation": "npm --workspace npm/@vizij/animation-wasm run build && (cd npm/@vizij/animation-wasm && npm link)",
+    "clean:wasm:animation": "rm -rf npm/@vizij/animation-wasm/pkg npm/@vizij/animation-wasm/dist",
+    "build:wasm:graph": "node scripts/build-graph-wasm.mjs",
+    "watch:wasm:graph": "cargo watch -w crates/node-graph/vizij-graph-core -w crates/node-graph/vizij-graph-wasm -s \"node scripts/build-wasm.mjs\"",
+    "link:wasm:graph": "npm --workspace npm/@vizij/node-graph-wasm run build && (cd npm/@vizij/node-graph-wasm && npm link)",
+    "clean:wasm:graph": "rm -rf npm/@vizij/node-graph-wasm/pkg npm/@vizij/node-graph-wasm/dist"
+  },
+  "workspaces": [
+    "npm/@vizij/*"
+  ]
+}

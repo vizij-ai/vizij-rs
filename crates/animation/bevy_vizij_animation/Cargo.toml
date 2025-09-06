@@ -1,0 +1,11 @@
+[package]
+name = "bevy_vizij_animation"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Bevy plugin that wraps Vizij animation core."
+repository = "https://github.com/vizij/vizij-rs"
+
+[dependencies]
+vizij-animation-core = { version = "0.1", path = "../vizij-animation-core" }
+bevy = { version = "0.14", default-features = false }

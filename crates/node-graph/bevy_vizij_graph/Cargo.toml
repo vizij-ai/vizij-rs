@@ -1,0 +1,12 @@
+[package]
+name = "bevy_vizij_graph"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+bevy = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+hashbrown = { workspace = true }
+vizij-graph-core = { path = "../vizij-graph-core", version = "0.1.0" }

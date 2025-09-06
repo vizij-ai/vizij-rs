@@ -1,0 +1,12 @@
+[package]
+name = "vizij-graph-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+hashbrown = { workspace = true }
+anyhow = { workspace = true }
