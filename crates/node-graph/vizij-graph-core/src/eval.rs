@@ -60,14 +60,19 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
                 Value::Float(res)
             }
         }
-        NodeType::Power => Value::Float(as_float(&ivals[0]).powf(as_float(&ivals[1]))),
-        NodeType::Log => {
-            let base = if ivals.len() > 1 { as_float(&ivals[1]) } else { std::f64::consts::E };
-            Value::Float(as_float(&ivals[0]).log(base))
+        NodeType::Power => {
+            let base = ivals.get(0).map(as_float).unwrap_or(0.0);
+            let exp = ivals.get(1).map(as_float).unwrap_or(0.0);
+            Value::Float(base.powf(exp))
         }
-        NodeType::Sin => Value::Float(as_float(&ivals[0]).sin()),
-        NodeType::Cos => Value::Float(as_float(&ivals[0]).cos()),
-        NodeType::Tan => Value::Float(as_float(&ivals[0]).tan()),
+        NodeType::Log => {
+            let val = ivals.get(0).map(as_float).unwrap_or(1.0);
+            let base = ivals.get(1).map(as_float).unwrap_or(std::f64::consts::E);
+            Value::Float(val.log(base))
+        }
+        NodeType::Sin => Value::Float(ivals.get(0).map(as_float).unwrap_or(0.0).sin()),
+        NodeType::Cos => Value::Float(ivals.get(0).map(as_float).unwrap_or(0.0).cos()),
+        NodeType::Tan => Value::Float(ivals.get(0).map(as_float).unwrap_or(0.0).tan()),
 
         NodeType::Time => Value::Float(t),
         NodeType::Oscillator => {
@@ -83,10 +88,26 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
             if ivals.len() < 2 { Value::Bool(false) } else { Value::Bool(as_bool(&ivals[0]) ^ as_bool(&ivals[1])) }
         }
 
-        NodeType::GreaterThan => Value::Bool(as_float(&ivals[0]) > as_float(&ivals[1])),
-        NodeType::LessThan => Value::Bool(as_float(&ivals[0]) < as_float(&ivals[1])),
-        NodeType::Equal => Value::Bool((as_float(&ivals[0]) - as_float(&ivals[1])).abs() < 1e-9),
-        NodeType::NotEqual => Value::Bool((as_float(&ivals[0]) - as_float(&ivals[1])).abs() > 1e-9),
+        NodeType::GreaterThan => {
+            let a = as_float(ivals.get(0).unwrap_or(&Value::default()));
+            let b = as_float(ivals.get(1).unwrap_or(&Value::default()));
+            Value::Bool(a > b)
+        }
+        NodeType::LessThan => {
+            let a = as_float(ivals.get(0).unwrap_or(&Value::default()));
+            let b = as_float(ivals.get(1).unwrap_or(&Value::default()));
+            Value::Bool(a < b)
+        }
+        NodeType::Equal => {
+            let a = as_float(ivals.get(0).unwrap_or(&Value::default()));
+            let b = as_float(ivals.get(1).unwrap_or(&Value::default()));
+            Value::Bool((a - b).abs() < 1e-9)
+        }
+        NodeType::NotEqual => {
+            let a = as_float(ivals.get(0).unwrap_or(&Value::default()));
+            let b = as_float(ivals.get(1).unwrap_or(&Value::default()));
+            Value::Bool((a - b).abs() > 1e-9)
+        }
         NodeType::If => {
             if ivals.len() < 3 { Value::default() } else {
                 if as_bool(&ivals[0]) { ivals[1] } else { ivals[2] }
@@ -94,14 +115,14 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
         }
 
         NodeType::Clamp => {
-            let x = as_float(&ivals[0]);
+            let x = as_float(ivals.get(0).unwrap_or(&Value::default()));
             let min = p.min;
             let max = p.max;
             Value::Float(x.clamp(min, max))
         }
 
         NodeType::Remap => {
-            let x = as_float(&ivals[0]);
+            let x = as_float(ivals.get(0).unwrap_or(&Value::default()));
             let in_min = p.in_min.unwrap_or(0.0);
             let in_max = p.in_max.unwrap_or(1.0);
             let out_min = p.out_min.unwrap_or(0.0);
@@ -125,41 +146,51 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
             Value::Vec3([x,y,z])
         }
         NodeType::Vec3Add => {
-            let a = as_vec3(&ivals[0]); let b = as_vec3(&ivals[1]);
-            Value::Vec3([a[0]+b[0], a[1]+b[1], a[2]+b[2]])
+            let a = as_vec3(ivals.get(0).unwrap_or(&Value::default()));
+            let b = as_vec3(ivals.get(1).unwrap_or(&Value::default()));
+            Value::Vec3([a[0] + b[0], a[1] + b[1], a[2] + b[2]])
         }
         NodeType::Vec3Subtract => {
-            let a = as_vec3(&ivals[0]); let b = as_vec3(&ivals[1]);
-            Value::Vec3([a[0]-b[0], a[1]-b[1], a[2]-b[2]])
+            let a = as_vec3(ivals.get(0).unwrap_or(&Value::default()));
+            let b = as_vec3(ivals.get(1).unwrap_or(&Value::default()));
+            Value::Vec3([a[0] - b[0], a[1] - b[1], a[2] - b[2]])
         }
         NodeType::Vec3Multiply => {
-            let a = as_vec3(&ivals[0]); let b = as_vec3(&ivals[1]);
-            Value::Vec3([a[0]*b[0], a[1]*b[1], a[2]*b[2]])
+            let a = as_vec3(ivals.get(0).unwrap_or(&Value::default()));
+            let b = as_vec3(ivals.get(1).unwrap_or(&Value::default()));
+            Value::Vec3([a[0] * b[0], a[1] * b[1], a[2] * b[2]])
         }
         NodeType::Vec3Scale => {
-            let s = as_float(&ivals[0]); let v = as_vec3(&ivals[1]);
-            Value::Vec3([s*v[0], s*v[1], s*v[2]])
+            let s = as_float(ivals.get(0).unwrap_or(&Value::default()));
+            let v = as_vec3(ivals.get(1).unwrap_or(&Value::default()));
+            Value::Vec3([s * v[0], s * v[1], s * v[2]])
         }
         NodeType::Vec3Normalize => {
-            let v = as_vec3(&ivals[0]);
-            let len = (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]).sqrt();
-            if len > 0.0 { Value::Vec3([v[0]/len, v[1]/len, v[2]/len]) } else { Value::Vec3([0.0,0.0,0.0]) }
+            let v = as_vec3(ivals.get(0).unwrap_or(&Value::default()));
+            let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+            if len > 0.0 {
+                Value::Vec3([v[0] / len, v[1] / len, v[2] / len])
+            } else {
+                Value::Vec3([0.0, 0.0, 0.0])
+            }
         }
         NodeType::Vec3Dot => {
-            let a = as_vec3(&ivals[0]); let b = as_vec3(&ivals[1]);
-            Value::Float(a[0]*b[0] + a[1]*b[1] + a[2]*b[2])
+            let a = as_vec3(ivals.get(0).unwrap_or(&Value::default()));
+            let b = as_vec3(ivals.get(1).unwrap_or(&Value::default()));
+            Value::Float(a[0] * b[0] + a[1] * b[1] + a[2] * b[2])
         }
         NodeType::Vec3Cross => {
-            let a = as_vec3(&ivals[0]); let b = as_vec3(&ivals[1]);
+            let a = as_vec3(ivals.get(0).unwrap_or(&Value::default()));
+            let b = as_vec3(ivals.get(1).unwrap_or(&Value::default()));
             Value::Vec3([
-                a[1]*b[2] - a[2]*b[1],
-                a[2]*b[0] - a[0]*b[2],
-                a[0]*b[1] - a[1]*b[0],
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0],
             ])
         }
         NodeType::Vec3Length => {
-            let v = as_vec3(&ivals[0]);
-            Value::Float((v[0]*v[0] + v[1]*v[1] + v[2]*v[2]).sqrt())
+            let v = as_vec3(ivals.get(0).unwrap_or(&Value::default()));
+            Value::Float((v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt())
         }
 
         NodeType::Output => ivals.get(0).cloned().unwrap_or_default(),
