@@ -116,17 +116,17 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
 
         NodeType::Clamp => {
             let x = as_float(ivals.get(0).unwrap_or(&Value::default()));
-            let min = p.min;
-            let max = p.max;
+            let max = ivals.get(1).map(as_float).unwrap_or(p.max);
+            let min = ivals.get(2).map(as_float).unwrap_or(p.min);
             Value::Float(x.clamp(min, max))
         }
 
         NodeType::Remap => {
             let x = as_float(ivals.get(0).unwrap_or(&Value::default()));
-            let in_min = p.in_min.unwrap_or(0.0);
-            let in_max = p.in_max.unwrap_or(1.0);
-            let out_min = p.out_min.unwrap_or(0.0);
-            let out_max = p.out_max.unwrap_or(1.0);
+            let in_min = ivals.get(1).map(as_float).or(p.in_min).unwrap_or(0.0);
+            let in_max = ivals.get(2).map(as_float).or(p.in_max).unwrap_or(1.0);
+            let out_min = ivals.get(3).map(as_float).or(p.out_min).unwrap_or(0.0);
+            let out_max = ivals.get(4).map(as_float).or(p.out_max).unwrap_or(1.0);
             let t = ((x - in_min) / (in_max - in_min)).clamp(0.0, 1.0);
             Value::Float(out_min + t * (out_max - out_min))
         }
@@ -139,11 +139,13 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
             Value::Vec3([x,y,z])
         }
         NodeType::Vec3Split => {
-            let v = ivals.get(0).cloned().unwrap_or(Value::Vec3([0.0,0.0,0.0]));
-            let [x,y,z] = as_vec3(&v);
-            // Convention: publish X/Y/Z onto synthetic node ids id.x / id.y / id.z
-            // but since our runtime stores one value per node id, we return Vec3 and let hosts split if needed.
-            Value::Vec3([x,y,z])
+            let v = as_vec3(ivals.get(0).unwrap_or(&Value::default()));
+            let index = p.index.unwrap_or(0.0) as usize;
+            if index < 3 {
+                Value::Float(v[index])
+            } else {
+                Value::Float(std::f64::NAN)
+            }
         }
         NodeType::Vec3Add => {
             let a = as_vec3(ivals.get(0).unwrap_or(&Value::default()));
@@ -193,6 +195,37 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
             Value::Float((v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt())
         }
 
+        NodeType::InverseKinematics => {
+            // 3-bone IK for a target pose (x, y, theta)
+            let l1 = ivals.get(0).map(as_float).or(p.bone1).unwrap_or(1.0);
+            let l2 = ivals.get(1).map(as_float).or(p.bone2).unwrap_or(1.0);
+            let l3 = ivals.get(2).map(as_float).or(p.bone3).unwrap_or(0.5);
+            let theta = ivals.get(3).map(as_float).unwrap_or(0.0);
+            let x = ivals.get(4).map(as_float).unwrap_or(0.0);
+            let y = ivals.get(5).map(as_float).unwrap_or(0.0);
+
+            // Position of the wrist (end of bone 2)
+            let wx = x - l3 * theta.cos();
+            let wy = y - l3 * theta.sin();
+
+            let dist_sq = wx * wx + wy * wy;
+
+            // Check reachability for the first two bones
+            if dist_sq > (l1 + l2) * (l1 + l2) || dist_sq < (l1 - l2) * (l1 - l2) {
+                Value::Vec3([std::f64::NAN, std::f64::NAN, std::f64::NAN]) // Indicate failure
+            } else {
+                let dist = dist_sq.sqrt();
+                let cos_angle2 = (dist_sq - l1 * l1 - l2 * l2) / (2.0 * l1 * l2);
+                let angle2 = cos_angle2.acos(); // Joint 2 angle
+
+                let angle1 = wy.atan2(wx) - (l2 * angle2.sin()).atan2(l1 + l2 * angle2.cos()); // Joint 1 angle
+
+                let angle3 = theta - angle1 - angle2; // Joint 3 angle
+
+                Value::Vec3([angle1, angle2, angle3])
+            }
+        }
+
         NodeType::Output => ivals.get(0).cloned().unwrap_or_default(),
     };
 
@@ -208,3 +241,4 @@ pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), Strin
     }
     Ok(())
 }
+

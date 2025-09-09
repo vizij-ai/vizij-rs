@@ -70,6 +70,10 @@ impl WasmGraph {
                 "x" => node.params.x = Some(if let Value::Float(f)=val { f } else { 0.0 }),
                 "y" => node.params.y = Some(if let Value::Float(f)=val { f } else { 0.0 }),
                 "z" => node.params.z = Some(if let Value::Float(f)=val { f } else { 0.0 }),
+                "bone1" => node.params.bone1 = Some(if let Value::Float(f)=val { f } else { 0.0 }),
+                "bone2" => node.params.bone2 = Some(if let Value::Float(f)=val { f } else { 0.0 }),
+                "bone3" => node.params.bone3 = Some(if let Value::Float(f)=val { f } else { 0.0 }),
+                "index" => node.params.index = Some(if let Value::Float(f)=val { f } else { 0.0 }),
                 _ => {}
             }
             Ok(())

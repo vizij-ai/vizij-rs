@@ -51,6 +51,10 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                 "x" => node.params.x = Some(match e.value { Value::Float(f)=>f, Value::Bool(b)=> if b {1.0} else {0.0}, Value::Vec3(v)=>v[0] }),
                 "y" => node.params.y = Some(match e.value { Value::Float(f)=>f, Value::Bool(b)=> if b {1.0} else {0.0}, Value::Vec3(v)=>v[1] }),
                 "z" => node.params.z = Some(match e.value { Value::Float(f)=>f, Value::Bool(b)=> if b {1.0} else {0.0}, Value::Vec3(v)=>v[2] }),
+                "bone1" => node.params.bone1 = Some(match e.value { Value::Float(f)=>f, Value::Bool(b)=> if b {1.0} else {0.0}, Value::Vec3(v)=>v[0] }),
+                "bone2" => node.params.bone2 = Some(match e.value { Value::Float(f)=>f, Value::Bool(b)=> if b {1.0} else {0.0}, Value::Vec3(v)=>v[0] }),
+                "bone3" => node.params.bone3 = Some(match e.value { Value::Float(f)=>f, Value::Bool(b)=> if b {1.0} else {0.0}, Value::Vec3(v)=>v[0] }),
+                "index" => node.params.index = Some(match e.value { Value::Float(f)=>f, Value::Bool(b)=> if b {1.0} else {0.0}, Value::Vec3(v)=>v[0] }),
                 _ => { /* ignore unknown keys */ }
             }
         }

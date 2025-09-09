@@ -51,6 +51,9 @@ pub enum NodeType {
     Vec3Cross,
     Vec3Length,
 
+    // Robotics
+    InverseKinematics,
+
     // Sinks (for external binding in hosts)
     Output,
 }
@@ -85,6 +88,12 @@ pub struct NodeParams {
     pub in_max: Option<f64>,
     pub out_min: Option<f64>,
     pub out_max: Option<f64>,
+    // For IK
+    pub bone1: Option<f64>,
+    pub bone2: Option<f64>,
+    pub bone3: Option<f64>,
+    // For Splitter
+    pub index: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
