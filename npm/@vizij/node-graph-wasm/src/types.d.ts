@@ -8,6 +8,7 @@ export type NodeId = string;
 export type NodeType =
   | "constant"
   | "slider"
+  | "multislider"
   | "add"
   | "subtract"
   | "multiply"
@@ -71,14 +72,18 @@ export interface NodeSpec {
   /** Rust field name is `type`, but `type` is a TS keyword; JSON still uses `"type"`. */
   type: NodeType;
   params?: NodeParams;
-  inputs?: NodeId[];
+  /**
+   * Map of input name to a connection specifying the source node and which output key to read.
+   * Matches Rust: HashMap<String, InputConnection> where InputConnection { node_id, output_key }.
+   */
+  inputs?: Record<string, { node_id: string; output_key: string }>;
 }
 
 export interface GraphSpec {
   nodes: NodeSpec[];
 }
 
-export type GraphOutputs = Record<NodeId, ValueJSON>;
+export type GraphOutputs = Record<NodeId, Record<string, ValueJSON>>;
 
 /**
  * Input accepted by wasm-bindgen init; mirrors what wasm-pack generated init()

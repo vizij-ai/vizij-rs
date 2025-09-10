@@ -1,4 +1,4 @@
-use crate::types::*;
+use crate::types::{NodeId, NodeSpec};
 use std::collections::{HashMap, VecDeque};
 
 pub fn topo_order(nodes: &[NodeSpec]) -> Result<Vec<NodeId>, String> {
@@ -7,8 +7,10 @@ pub fn topo_order(nodes: &[NodeSpec]) -> Result<Vec<NodeId>, String> {
 
     for n in nodes {
         indeg.entry(n.id.clone()).or_insert(0);
-        for inp in &n.inputs {
-            adj.entry(inp.clone()).or_default().push(n.id.clone());
+        for inp_conn in n.inputs.values() {
+            adj.entry(inp_conn.node_id.clone())
+                .or_default()
+                .push(n.id.clone());
             *indeg.entry(n.id.clone()).or_default() += 1;
         }
     }
@@ -47,9 +49,31 @@ mod tests {
     fn simple_topo() {
         let g = GraphSpec {
             nodes: vec![
-                NodeSpec { id: "a".into(), kind: NodeType::Constant, params: NodeParams{ value: Some(Value::Float(1.0)), ..Default::default() }, inputs: vec![] },
-                NodeSpec { id: "b".into(), kind: NodeType::Add, params: Default::default(), inputs: vec!["a".into()] },
-            ]
+                NodeSpec {
+                    id: "a".into(),
+                    kind: NodeType::Constant,
+                    params: NodeParams {
+                        value: Some(Value::Float(1.0)),
+                        ..Default::default()
+                    },
+                    inputs: HashMap::new(),
+                },
+                NodeSpec {
+                    id: "b".into(),
+                    kind: NodeType::Add,
+                    params: Default::default(),
+                    inputs: [(
+                        "a".to_string(),
+                        InputConnection {
+                            node_id: "a".into(),
+                            output_key: "out".to_string(),
+                        },
+                    )]
+                    .iter()
+                    .cloned()
+                    .collect(),
+                },
+            ],
         };
         let order = topo_order(&g.nodes).unwrap();
         assert_eq!(order.len(), 2);

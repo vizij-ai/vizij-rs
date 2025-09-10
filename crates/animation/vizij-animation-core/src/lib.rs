@@ -27,7 +27,7 @@ impl AnimationCore {
     }
 
     pub fn update(&mut self, dt: f32, _inputs: AnimationInputs) -> AnimationOutputs {
-        self.t += dt /50.0;
+        self.t += dt / 50.0;
         let phase = 2.0 * std::f32::consts::PI * self.cfg.frequency_hz * self.t;
         let value = phase.sin() * self.cfg.amplitude;
         AnimationOutputs { value }

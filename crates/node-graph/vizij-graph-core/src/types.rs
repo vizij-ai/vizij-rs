@@ -1,3 +1,4 @@
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 
 pub type NodeId = String;
@@ -8,6 +9,7 @@ pub enum NodeType {
     // Scalars / arithmetic
     Constant,
     Slider,
+    MultiSlider,
     Add,
     Subtract,
     Multiply,
@@ -40,12 +42,12 @@ pub enum NodeType {
     Remap,
 
     // Vec3 utilities
-    Vec3,           // make vec3(x,y,z) from inputs/params
-    Vec3Split,      // split to x,y,z
+    Vec3,      // make vec3(x,y,z) from inputs/params
+    Vec3Split, // split to x,y,z
     Vec3Add,
     Vec3Subtract,
-    Vec3Multiply,   // component-wise
-    Vec3Scale,      // scalar * vec3
+    Vec3Multiply, // component-wise
+    Vec3Scale,    // scalar * vec3
     Vec3Normalize,
     Vec3Dot,
     Vec3Cross,
@@ -67,7 +69,9 @@ pub enum Value {
 }
 
 impl Default for Value {
-    fn default() -> Self { Value::Float(0.0) }
+    fn default() -> Self {
+        Value::Float(0.0)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -97,6 +101,17 @@ pub struct NodeParams {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputConnection {
+    pub node_id: NodeId,
+    #[serde(default = "default_output_key")]
+    pub output_key: String,
+}
+
+fn default_output_key() -> String {
+    "out".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeSpec {
     pub id: NodeId,
     #[serde(rename = "type")]
@@ -104,7 +119,7 @@ pub struct NodeSpec {
     #[serde(default)]
     pub params: NodeParams,
     #[serde(default)]
-    pub inputs: Vec<NodeId>,
+    pub inputs: HashMap<String, InputConnection>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

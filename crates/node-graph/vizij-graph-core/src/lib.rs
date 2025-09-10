@@ -1,7 +1,7 @@
-pub mod types;
-pub mod topo;
 pub mod eval;
+pub mod topo;
+pub mod types;
 
-pub use types::*;
+pub use eval::{eval_node, evaluate_all, GraphRuntime};
 pub use topo::topo_order;
-pub use eval::{GraphRuntime, evaluate_all, eval_node};
+pub use types::*;

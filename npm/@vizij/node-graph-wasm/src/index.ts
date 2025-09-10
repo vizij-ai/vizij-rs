@@ -110,12 +110,12 @@ export class Graph {
   }
 
   /**
-   * Evaluate the whole graph and return a map of nodeId -> ValueJSON.
+   * Evaluate the whole graph and return a map of nodeId -> outputKey -> ValueJSON.
    * (One batched wasm call.)
    */
-  evalAll(): Record<string, ValueJSON> {
+  evalAll(): Record<string, Record<string, ValueJSON>> {
     const raw = this.inner.eval_all(); // JSON string
-    return JSON.parse(raw) as Record<string, ValueJSON>;
+    return JSON.parse(raw) as Record<string, Record<string, ValueJSON>>;
   }
 
   /**
