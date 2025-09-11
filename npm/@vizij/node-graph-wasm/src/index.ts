@@ -1,7 +1,7 @@
 // Stable ESM entry for @vizij/graph-wasm
 // Wraps the wasm-pack output in ../pkg (built with `--target web`).
 // Adjust the import path if your pkg name differs.
-import initWasm, { WasmGraph } from "../pkg/vizij_graph_wasm.js";
+import initWasm, { WasmGraph, get_node_schemas_json } from "../pkg/vizij_graph_wasm.js";
 import type {
   NodeId,
   NodeType,
@@ -136,4 +136,14 @@ export async function createGraph(
   const g = new Graph();
   if (spec) g.loadGraph(spec);
   return g;
+}
+
+/**
+ * Fetch the node schema registry from the wasm module as a parsed object.
+ * Ensures the wasm module is initialized before calling.
+ */
+export async function getNodeSchemas(): Promise<import("./types").Registry> {
+  await init();
+  const raw = get_node_schemas_json();
+  return JSON.parse(raw) as import("./types").Registry;
 }

@@ -135,3 +135,10 @@ impl WasmGraph {
         }
     }
 }
+
+/// Expose the node schema registry as JSON for tooling/UI.
+#[wasm_bindgen]
+pub fn get_node_schemas_json() -> String {
+    let reg = vizij_graph_core::registry();
+    serde_json::to_string(&reg).unwrap()
+}

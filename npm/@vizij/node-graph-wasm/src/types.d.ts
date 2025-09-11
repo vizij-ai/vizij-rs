@@ -95,3 +95,58 @@ export type InitInput =
   | Response
   | BufferSource
   | WebAssembly.Module;
+
+/* --------------------------------------------------------------------
+   Node Schema Registry (exported from wasm via get_node_schemas_json)
+-------------------------------------------------------------------- */
+
+export type PortType = "float" | "bool" | "vec3";
+export type ParamType = "float" | "bool" | "vec3" | "any";
+
+export interface PortSpec {
+  id: string;            // canonical port id (e.g., "out", "in", "lhs", "rhs", "x", "y", "z")
+  ty: PortType;
+  label: string;         // human-friendly label for UI
+  doc?: string;          // optional help text
+  optional?: boolean;    // missing by default
+}
+
+export interface VariadicSpec {
+  id: string;            // group id for variadic inputs (e.g., "operands")
+  ty: PortType;
+  label: string;
+  doc?: string;
+  min: number;
+  max?: number;
+}
+
+export interface ParamSpec {
+  id: string;
+  ty: ParamType;
+  label: string;
+  doc?: string;
+  default_json?: ValueJSON;  // default value encoded as ValueJSON when applicable
+  min?: number;
+  max?: number;
+}
+
+export interface NodeSignature {
+  type_id: NodeType;
+  name: string;
+  category: string;
+  inputs: PortSpec[];
+  variadic_inputs?: VariadicSpec;
+  outputs: PortSpec[];
+  params: ParamSpec[];
+}
+
+export interface Registry {
+  version: string;
+  nodes: NodeSignature[];
+}
+
+/**
+ * Fetch the node schema registry from the wasm module.
+ * You must have called init() before using this (or call getNodeSchemas from the JS wrapper).
+ */
+export function getNodeSchemas(): Promise<Registry>;

@@ -87,15 +87,15 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
             let x = p.x.unwrap_or(0.0);
             let y = p.y.unwrap_or(0.0);
             let z = p.z.unwrap_or(0.0);
-            map.insert("o1".to_string(), Value::Float(x));
-            map.insert("o2".to_string(), Value::Float(y));
-            map.insert("o3".to_string(), Value::Float(z));
+            map.insert("x".to_string(), Value::Float(x));
+            map.insert("y".to_string(), Value::Float(y));
+            map.insert("z".to_string(), Value::Float(z));
             map
         }
         NodeType::Add => out_map!(Value::Float(ivals.values().map(as_float).sum())),
         NodeType::Subtract => {
-            let first = as_float(&get_input("a"));
-            let second = as_float(&get_input("b"));
+            let first = as_float(&get_input("lhs"));
+            let second = as_float(&get_input("rhs"));
             out_map!(Value::Float(first - second))
         }
         NodeType::Multiply => {
@@ -103,9 +103,9 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
             out_map!(Value::Float(product))
         }
         NodeType::Divide => {
-            let a = as_float(&get_input("a"));
-            let b = as_float(&get_input("b"));
-            out_map!(Value::Float(if b != 0.0 { a / b } else { f64::NAN }))
+            let lhs = as_float(&get_input("lhs"));
+            let rhs = as_float(&get_input("rhs"));
+            out_map!(Value::Float(if rhs != 0.0 { lhs / rhs } else { f64::NAN }))
         }
         NodeType::Power => {
             let base = as_float(&get_input("base"));
@@ -129,27 +129,27 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
         }
 
         NodeType::And => out_map!(Value::Bool(
-            as_bool(&get_input("a")) && as_bool(&get_input("b"))
+            as_bool(&get_input("lhs")) && as_bool(&get_input("rhs"))
         )),
         NodeType::Or => out_map!(Value::Bool(
-            as_bool(&get_input("a")) || as_bool(&get_input("b"))
+            as_bool(&get_input("lhs")) || as_bool(&get_input("rhs"))
         )),
         NodeType::Not => out_map!(Value::Bool(!as_bool(&get_input("in")))),
         NodeType::Xor => out_map!(Value::Bool(
-            as_bool(&get_input("a")) ^ as_bool(&get_input("b"))
+            as_bool(&get_input("lhs")) ^ as_bool(&get_input("rhs"))
         )),
 
         NodeType::GreaterThan => out_map!(Value::Bool(
-            as_float(&get_input("a")) > as_float(&get_input("b"))
+            as_float(&get_input("lhs")) > as_float(&get_input("rhs"))
         )),
         NodeType::LessThan => out_map!(Value::Bool(
-            as_float(&get_input("a")) < as_float(&get_input("b"))
+            as_float(&get_input("lhs")) < as_float(&get_input("rhs"))
         )),
         NodeType::Equal => out_map!(Value::Bool(
-            (as_float(&get_input("a")) - as_float(&get_input("b"))).abs() < 1e-9
+            (as_float(&get_input("lhs")) - as_float(&get_input("rhs"))).abs() < 1e-9
         )),
         NodeType::NotEqual => out_map!(Value::Bool(
-            (as_float(&get_input("a")) - as_float(&get_input("b"))).abs() > 1e-9
+            (as_float(&get_input("lhs")) - as_float(&get_input("rhs"))).abs() > 1e-9
         )),
         NodeType::If => {
             let cond = as_bool(&get_input("cond"));
@@ -207,7 +207,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
             out_map!(Value::Vec3([a[0] * b[0], a[1] * b[1], a[2] * b[2]]))
         }
         NodeType::Vec3Scale => {
-            let s = as_float(&get_input("s"));
+            let s = as_float(&get_input("scalar"));
             let v = as_vec3(&get_input("v"));
             out_map!(Value::Vec3([s * v[0], s * v[1], s * v[2]]))
         }
