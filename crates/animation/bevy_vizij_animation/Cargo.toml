@@ -9,3 +9,6 @@ repository = "https://github.com/vizij/vizij-rs"
 [dependencies]
 vizij-animation-core = { version = "0.1", path = "../vizij-animation-core" }
 bevy = { version = "0.14", default-features = false }
+
+[dev-dependencies]
+serde_json = "1"

@@ -1,43 +1,37 @@
-use serde::{Deserialize, Serialize};
+#![allow(dead_code)]
+//! Vizij Animation Core (engine-agnostic)
+//!
+//! Step 1: scaffolding of core types and Engine skeleton per IMPLEMENTATION_PLAN.md.
+//! This crate defines data models, IDs, inputs/outputs contracts, binding types,
+//! scratch buffers, an interpolation registry placeholder, baking stubs, and an
+//! Engine skeleton (no sampling/blending yet).
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct AnimationConfig {
-    pub frequency_hz: f32,
-    pub amplitude: f32,
-}
+pub mod accumulate;
+pub mod baking;
+pub mod binding;
+pub mod config;
+pub mod data;
+pub mod engine;
+pub mod ids;
+pub mod inputs;
+pub mod interp;
+pub mod outputs;
+pub mod sampling;
+pub mod scratch;
+pub mod stored_animation;
+pub mod value;
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct AnimationInputs {
-    // add inputs as needed (sliders, events, etc.)
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct AnimationOutputs {
-    pub value: f32,
-}
-
-pub struct AnimationCore {
-    cfg: AnimationConfig,
-    t: f32,
-}
-
-impl AnimationCore {
-    pub fn new(cfg: AnimationConfig) -> Self {
-        Self { cfg, t: 0.0 }
-    }
-
-    pub fn update(&mut self, dt: f32, _inputs: AnimationInputs) -> AnimationOutputs {
-        self.t += dt / 50.0;
-        let phase = 2.0 * std::f32::consts::PI * self.cfg.frequency_hz * self.t;
-        let value = phase.sin() * self.cfg.amplitude;
-        AnimationOutputs { value }
-    }
-
-    pub fn set_frequency(&mut self, hz: f32) {
-        self.cfg.frequency_hz = hz.max(0.0);
-    }
-
-    pub fn set_amplitude(&mut self, amp: f32) {
-        self.cfg.amplitude = amp;
-    }
-}
+// Re-exports for consumers (adapters)
+pub use baking::{BakedAnimationData, BakingConfig};
+pub use binding::{BindingSet, BindingTable, ChannelKey, TargetHandle, TargetResolver};
+pub use config::Config;
+pub use data::{AnimationData, Keypoint, Track, Transitions, Vec2};
+pub use engine::{Engine, InstanceCfg, Player};
+pub use ids::{AnimId, InstId, PlayerId};
+pub use inputs::{Inputs, InstanceUpdate, LoopMode, PlayerCommand};
+pub use interp::InterpRegistry;
+pub use outputs::{Change, CoreEvent, Outputs};
+pub use sampling::sample_track;
+pub use scratch::Scratch;
+pub use stored_animation::parse_stored_animation_json;
+pub use value::{Value, ValueKind};

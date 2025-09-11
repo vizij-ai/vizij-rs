@@ -1,0 +1,18 @@
+{
+  "id": "ramp-1",
+  "name": "ramp",
+  "tracks": [
+    {
+      "id": "t-ramp-scalar",
+      "name": "Scalar Ramp",
+      "animatableId": "node.t",
+      "points": [
+        { "id": "k0", "stamp": 0.0, "value": 0.0, "transitions": { "out": { "x": 0.0, "y": 0.0 } } },
+        { "id": "k1", "stamp": 1.0, "value": 1.0, "transitions": { "in": { "x": 1.0, "y": 1.0 } } }
+      ],
+      "settings": {}
+    }
+  ],
+  "groups": {},
+  "duration": 1000
+}

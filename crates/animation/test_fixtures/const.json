@@ -1,0 +1,18 @@
+{
+  "id": "const-1",
+  "name": "const",
+  "tracks": [
+    {
+      "id": "t-const-vec3",
+      "name": "Const Vec3",
+      "animatableId": "node/Transform.translation",
+      "points": [
+        { "id": "k0", "stamp": 0.0, "value": { "x": 1.0, "y": 2.0, "z": 3.0 } },
+        { "id": "k1", "stamp": 1.0, "value": { "x": 1.0, "y": 2.0, "z": 3.0 } }
+      ],
+      "settings": {}
+    }
+  ],
+  "groups": {},
+  "duration": 1000
+}
