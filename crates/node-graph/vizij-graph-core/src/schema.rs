@@ -75,22 +75,58 @@ pub struct Registry {
 }
 
 fn p_in() -> PortSpec {
-    PortSpec { id: "in", ty: PortType::Float, label: "In", doc: "", optional: false }
+    PortSpec {
+        id: "in",
+        ty: PortType::Float,
+        label: "In",
+        doc: "",
+        optional: false,
+    }
 }
 fn p_bool_in() -> PortSpec {
-    PortSpec { id: "in", ty: PortType::Bool, label: "In", doc: "", optional: false }
+    PortSpec {
+        id: "in",
+        ty: PortType::Bool,
+        label: "In",
+        doc: "",
+        optional: false,
+    }
 }
 fn p_vec_in() -> PortSpec {
-    PortSpec { id: "in", ty: PortType::Vec3, label: "In", doc: "", optional: false }
+    PortSpec {
+        id: "in",
+        ty: PortType::Vec3,
+        label: "In",
+        doc: "",
+        optional: false,
+    }
 }
 fn p_out_float() -> PortSpec {
-    PortSpec { id: "out", ty: PortType::Float, label: "Out", doc: "", optional: false }
+    PortSpec {
+        id: "out",
+        ty: PortType::Float,
+        label: "Out",
+        doc: "",
+        optional: false,
+    }
 }
 fn p_out_bool() -> PortSpec {
-    PortSpec { id: "out", ty: PortType::Bool, label: "Out", doc: "", optional: false }
+    PortSpec {
+        id: "out",
+        ty: PortType::Bool,
+        label: "Out",
+        doc: "",
+        optional: false,
+    }
 }
 fn p_out_vec() -> PortSpec {
-    PortSpec { id: "out", ty: PortType::Vec3, label: "Out", doc: "", optional: false }
+    PortSpec {
+        id: "out",
+        ty: PortType::Vec3,
+        label: "Out",
+        doc: "",
+        optional: false,
+    }
 }
 
 pub fn registry() -> Registry {
@@ -124,9 +160,33 @@ pub fn registry() -> Registry {
         variadic_inputs: None,
         outputs: vec![p_out_float()],
         params: vec![
-            ParamSpec { id: "value", ty: ParamType::Float, label: "Value", doc: "", default_json: Some(serde_json::json!({ "float": 0.0 })), min: None, max: None },
-            ParamSpec { id: "min", ty: ParamType::Float, label: "Min", doc: "", default_json: Some(serde_json::json!({ "float": 0.0 })), min: None, max: None },
-            ParamSpec { id: "max", ty: ParamType::Float, label: "Max", doc: "", default_json: Some(serde_json::json!({ "float": 1.0 })), min: None, max: None },
+            ParamSpec {
+                id: "value",
+                ty: ParamType::Float,
+                label: "Value",
+                doc: "",
+                default_json: Some(serde_json::json!({ "float": 0.0 })),
+                min: None,
+                max: None,
+            },
+            ParamSpec {
+                id: "min",
+                ty: ParamType::Float,
+                label: "Min",
+                doc: "",
+                default_json: Some(serde_json::json!({ "float": 0.0 })),
+                min: None,
+                max: None,
+            },
+            ParamSpec {
+                id: "max",
+                ty: ParamType::Float,
+                label: "Max",
+                doc: "",
+                default_json: Some(serde_json::json!({ "float": 1.0 })),
+                min: None,
+                max: None,
+            },
         ],
     });
 
@@ -137,14 +197,56 @@ pub fn registry() -> Registry {
         inputs: vec![],
         variadic_inputs: None,
         outputs: vec![
-            PortSpec { id: "x", ty: PortType::Float, label: "X", doc: "", optional: false },
-            PortSpec { id: "y", ty: PortType::Float, label: "Y", doc: "", optional: false },
-            PortSpec { id: "z", ty: PortType::Float, label: "Z", doc: "", optional: false },
+            PortSpec {
+                id: "x",
+                ty: PortType::Float,
+                label: "X",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "y",
+                ty: PortType::Float,
+                label: "Y",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "z",
+                ty: PortType::Float,
+                label: "Z",
+                doc: "",
+                optional: false,
+            },
         ],
         params: vec![
-            ParamSpec { id: "x", ty: ParamType::Float, label: "X", doc: "", default_json: Some(serde_json::json!({ "float": 0.0 })), min: None, max: None },
-            ParamSpec { id: "y", ty: ParamType::Float, label: "Y", doc: "", default_json: Some(serde_json::json!({ "float": 0.0 })), min: None, max: None },
-            ParamSpec { id: "z", ty: ParamType::Float, label: "Z", doc: "", default_json: Some(serde_json::json!({ "float": 0.0 })), min: None, max: None },
+            ParamSpec {
+                id: "x",
+                ty: ParamType::Float,
+                label: "X",
+                doc: "",
+                default_json: Some(serde_json::json!({ "float": 0.0 })),
+                min: None,
+                max: None,
+            },
+            ParamSpec {
+                id: "y",
+                ty: ParamType::Float,
+                label: "Y",
+                doc: "",
+                default_json: Some(serde_json::json!({ "float": 0.0 })),
+                min: None,
+                max: None,
+            },
+            ParamSpec {
+                id: "z",
+                ty: ParamType::Float,
+                label: "Z",
+                doc: "",
+                default_json: Some(serde_json::json!({ "float": 0.0 })),
+                min: None,
+                max: None,
+            },
         ],
     });
 
@@ -153,7 +255,14 @@ pub fn registry() -> Registry {
         name: "Add",
         category: "Math",
         inputs: vec![],
-        variadic_inputs: Some(VariadicSpec { id: "operands", ty: PortType::Float, label: "Operand", doc: "", min: 2, max: None }),
+        variadic_inputs: Some(VariadicSpec {
+            id: "operands",
+            ty: PortType::Float,
+            label: "Operand",
+            doc: "",
+            min: 2,
+            max: None,
+        }),
         outputs: vec![p_out_float()],
         params: vec![],
     });
@@ -163,8 +272,20 @@ pub fn registry() -> Registry {
         name: "Subtract",
         category: "Math",
         inputs: vec![
-            PortSpec { id: "lhs", ty: PortType::Float, label: "LHS", doc: "", optional: false },
-            PortSpec { id: "rhs", ty: PortType::Float, label: "RHS", doc: "", optional: false },
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Float,
+                label: "LHS",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Float,
+                label: "RHS",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
@@ -176,7 +297,14 @@ pub fn registry() -> Registry {
         name: "Multiply",
         category: "Math",
         inputs: vec![],
-        variadic_inputs: Some(VariadicSpec { id: "operands", ty: PortType::Float, label: "Operand", doc: "", min: 2, max: None }),
+        variadic_inputs: Some(VariadicSpec {
+            id: "operands",
+            ty: PortType::Float,
+            label: "Operand",
+            doc: "",
+            min: 2,
+            max: None,
+        }),
         outputs: vec![p_out_float()],
         params: vec![],
     });
@@ -186,8 +314,20 @@ pub fn registry() -> Registry {
         name: "Divide",
         category: "Math",
         inputs: vec![
-            PortSpec { id: "lhs", ty: PortType::Float, label: "LHS", doc: "", optional: false },
-            PortSpec { id: "rhs", ty: PortType::Float, label: "RHS", doc: "", optional: false },
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Float,
+                label: "LHS",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Float,
+                label: "RHS",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
@@ -199,8 +339,20 @@ pub fn registry() -> Registry {
         name: "Power",
         category: "Math",
         inputs: vec![
-            PortSpec { id: "base", ty: PortType::Float, label: "Base", doc: "", optional: false },
-            PortSpec { id: "exp", ty: PortType::Float, label: "Exponent", doc: "", optional: false },
+            PortSpec {
+                id: "base",
+                ty: PortType::Float,
+                label: "Base",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "exp",
+                ty: PortType::Float,
+                label: "Exponent",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
@@ -212,19 +364,27 @@ pub fn registry() -> Registry {
         name: "Log",
         category: "Math",
         inputs: vec![
-            PortSpec { id: "value", ty: PortType::Float, label: "Value", doc: "", optional: false },
-            PortSpec { id: "base", ty: PortType::Float, label: "Base", doc: "", optional: false },
+            PortSpec {
+                id: "value",
+                ty: PortType::Float,
+                label: "Value",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "base",
+                ty: PortType::Float,
+                label: "Base",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
         params: vec![],
     });
 
-    for (nt, name) in [
-        (Sin, "Sin"),
-        (Cos, "Cos"),
-        (Tan, "Tan"),
-    ] {
+    for (nt, name) in [(Sin, "Sin"), (Cos, "Cos"), (Tan, "Tan")] {
         nodes.push(NodeSignature {
             type_id: nt,
             name,
@@ -252,8 +412,20 @@ pub fn registry() -> Registry {
         name: "Oscillator",
         category: "Time",
         inputs: vec![
-            PortSpec { id: "frequency", ty: PortType::Float, label: "Frequency", doc: "", optional: false },
-            PortSpec { id: "phase", ty: PortType::Float, label: "Phase", doc: "", optional: false },
+            PortSpec {
+                id: "frequency",
+                ty: PortType::Float,
+                label: "Frequency",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "phase",
+                ty: PortType::Float,
+                label: "Phase",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
@@ -266,8 +438,20 @@ pub fn registry() -> Registry {
         name: "And",
         category: "Logic",
         inputs: vec![
-            PortSpec { id: "lhs", ty: PortType::Bool, label: "LHS", doc: "", optional: false },
-            PortSpec { id: "rhs", ty: PortType::Bool, label: "RHS", doc: "", optional: false },
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Bool,
+                label: "LHS",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Bool,
+                label: "RHS",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
@@ -278,8 +462,20 @@ pub fn registry() -> Registry {
         name: "Or",
         category: "Logic",
         inputs: vec![
-            PortSpec { id: "lhs", ty: PortType::Bool, label: "LHS", doc: "", optional: false },
-            PortSpec { id: "rhs", ty: PortType::Bool, label: "RHS", doc: "", optional: false },
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Bool,
+                label: "LHS",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Bool,
+                label: "RHS",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
@@ -290,8 +486,20 @@ pub fn registry() -> Registry {
         name: "Xor",
         category: "Logic",
         inputs: vec![
-            PortSpec { id: "lhs", ty: PortType::Bool, label: "LHS", doc: "", optional: false },
-            PortSpec { id: "rhs", ty: PortType::Bool, label: "RHS", doc: "", optional: false },
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Bool,
+                label: "LHS",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Bool,
+                label: "RHS",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
@@ -313,8 +521,20 @@ pub fn registry() -> Registry {
         name: "Greater Than",
         category: "Logic",
         inputs: vec![
-            PortSpec { id: "lhs", ty: PortType::Float, label: "LHS", doc: "", optional: false },
-            PortSpec { id: "rhs", ty: PortType::Float, label: "RHS", doc: "", optional: false },
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Float,
+                label: "LHS",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Float,
+                label: "RHS",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
@@ -325,8 +545,20 @@ pub fn registry() -> Registry {
         name: "Less Than",
         category: "Logic",
         inputs: vec![
-            PortSpec { id: "lhs", ty: PortType::Float, label: "LHS", doc: "", optional: false },
-            PortSpec { id: "rhs", ty: PortType::Float, label: "RHS", doc: "", optional: false },
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Float,
+                label: "LHS",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Float,
+                label: "RHS",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
@@ -337,8 +569,20 @@ pub fn registry() -> Registry {
         name: "Equal",
         category: "Logic",
         inputs: vec![
-            PortSpec { id: "lhs", ty: PortType::Float, label: "LHS", doc: "", optional: false },
-            PortSpec { id: "rhs", ty: PortType::Float, label: "RHS", doc: "", optional: false },
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Float,
+                label: "LHS",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Float,
+                label: "RHS",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
@@ -349,8 +593,20 @@ pub fn registry() -> Registry {
         name: "Not Equal",
         category: "Logic",
         inputs: vec![
-            PortSpec { id: "lhs", ty: PortType::Float, label: "LHS", doc: "", optional: false },
-            PortSpec { id: "rhs", ty: PortType::Float, label: "RHS", doc: "", optional: false },
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Float,
+                label: "LHS",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Float,
+                label: "RHS",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
@@ -361,15 +617,39 @@ pub fn registry() -> Registry {
         name: "If",
         category: "Logic",
         inputs: vec![
-            PortSpec { id: "cond", ty: PortType::Bool, label: "Condition", doc: "", optional: false },
+            PortSpec {
+                id: "cond",
+                ty: PortType::Bool,
+                label: "Condition",
+                doc: "",
+                optional: false,
+            },
             // then/else allow union; document as Any
-            PortSpec { id: "then", ty: PortType::Vec3, label: "Then", doc: "Value (float/bool/vec3)", optional: true },
-            PortSpec { id: "else", ty: PortType::Vec3, label: "Else", doc: "Value (float/bool/vec3)", optional: true },
+            PortSpec {
+                id: "then",
+                ty: PortType::Vec3,
+                label: "Then",
+                doc: "Value (float/bool/vec3)",
+                optional: true,
+            },
+            PortSpec {
+                id: "else",
+                ty: PortType::Vec3,
+                label: "Else",
+                doc: "Value (float/bool/vec3)",
+                optional: true,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![
             // Union in core; encode as vec3 in schema for display; UI should treat as Any value
-            PortSpec { id: "out", ty: PortType::Vec3, label: "Out", doc: "Value (float/bool/vec3)", optional: false }
+            PortSpec {
+                id: "out",
+                ty: PortType::Vec3,
+                label: "Out",
+                doc: "Value (float/bool/vec3)",
+                optional: false,
+            },
         ],
         params: vec![],
     });
@@ -380,9 +660,27 @@ pub fn registry() -> Registry {
         name: "Clamp",
         category: "Math",
         inputs: vec![
-            PortSpec { id: "in", ty: PortType::Float, label: "In", doc: "", optional: false },
-            PortSpec { id: "min", ty: PortType::Float, label: "Min", doc: "", optional: false },
-            PortSpec { id: "max", ty: PortType::Float, label: "Max", doc: "", optional: false },
+            PortSpec {
+                id: "in",
+                ty: PortType::Float,
+                label: "In",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "min",
+                ty: PortType::Float,
+                label: "Min",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "max",
+                ty: PortType::Float,
+                label: "Max",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
@@ -394,11 +692,41 @@ pub fn registry() -> Registry {
         name: "Remap",
         category: "Math",
         inputs: vec![
-            PortSpec { id: "in", ty: PortType::Float, label: "In", doc: "", optional: false },
-            PortSpec { id: "in_min", ty: PortType::Float, label: "In Min", doc: "", optional: false },
-            PortSpec { id: "in_max", ty: PortType::Float, label: "In Max", doc: "", optional: false },
-            PortSpec { id: "out_min", ty: PortType::Float, label: "Out Min", doc: "", optional: false },
-            PortSpec { id: "out_max", ty: PortType::Float, label: "Out Max", doc: "", optional: false },
+            PortSpec {
+                id: "in",
+                ty: PortType::Float,
+                label: "In",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "in_min",
+                ty: PortType::Float,
+                label: "In Min",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "in_max",
+                ty: PortType::Float,
+                label: "In Max",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "out_min",
+                ty: PortType::Float,
+                label: "Out Min",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "out_max",
+                ty: PortType::Float,
+                label: "Out Max",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
@@ -411,9 +739,27 @@ pub fn registry() -> Registry {
         name: "Vec3",
         category: "Vectors",
         inputs: vec![
-            PortSpec { id: "x", ty: PortType::Float, label: "X", doc: "", optional: false },
-            PortSpec { id: "y", ty: PortType::Float, label: "Y", doc: "", optional: false },
-            PortSpec { id: "z", ty: PortType::Float, label: "Z", doc: "", optional: false },
+            PortSpec {
+                id: "x",
+                ty: PortType::Float,
+                label: "X",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "y",
+                ty: PortType::Float,
+                label: "Y",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "z",
+                ty: PortType::Float,
+                label: "Z",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_vec()],
@@ -427,9 +773,27 @@ pub fn registry() -> Registry {
         inputs: vec![p_vec_in()],
         variadic_inputs: None,
         outputs: vec![
-            PortSpec { id: "x", ty: PortType::Float, label: "X", doc: "", optional: false },
-            PortSpec { id: "y", ty: PortType::Float, label: "Y", doc: "", optional: false },
-            PortSpec { id: "z", ty: PortType::Float, label: "Z", doc: "", optional: false },
+            PortSpec {
+                id: "x",
+                ty: PortType::Float,
+                label: "X",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "y",
+                ty: PortType::Float,
+                label: "Y",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "z",
+                ty: PortType::Float,
+                label: "Z",
+                doc: "",
+                optional: false,
+            },
         ],
         params: vec![],
     });
@@ -444,8 +808,20 @@ pub fn registry() -> Registry {
             name,
             category: "Vectors",
             inputs: vec![
-                PortSpec { id: "a", ty: PortType::Vec3, label: "A", doc: "", optional: false },
-                PortSpec { id: "b", ty: PortType::Vec3, label: "B", doc: "", optional: false },
+                PortSpec {
+                    id: "a",
+                    ty: PortType::Vec3,
+                    label: "A",
+                    doc: "",
+                    optional: false,
+                },
+                PortSpec {
+                    id: "b",
+                    ty: PortType::Vec3,
+                    label: "B",
+                    doc: "",
+                    optional: false,
+                },
             ],
             variadic_inputs: None,
             outputs: vec![p_out_vec()],
@@ -458,8 +834,20 @@ pub fn registry() -> Registry {
         name: "Vec3 Scale",
         category: "Vectors",
         inputs: vec![
-            PortSpec { id: "scalar", ty: PortType::Float, label: "Scalar", doc: "", optional: false },
-            PortSpec { id: "v", ty: PortType::Vec3, label: "Vector", doc: "", optional: false },
+            PortSpec {
+                id: "scalar",
+                ty: PortType::Float,
+                label: "Scalar",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "v",
+                ty: PortType::Vec3,
+                label: "Vector",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_vec()],
@@ -481,8 +869,20 @@ pub fn registry() -> Registry {
         name: "Vec3 Dot",
         category: "Vectors",
         inputs: vec![
-            PortSpec { id: "a", ty: PortType::Vec3, label: "A", doc: "", optional: false },
-            PortSpec { id: "b", ty: PortType::Vec3, label: "B", doc: "", optional: false },
+            PortSpec {
+                id: "a",
+                ty: PortType::Vec3,
+                label: "A",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "b",
+                ty: PortType::Vec3,
+                label: "B",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
@@ -494,8 +894,20 @@ pub fn registry() -> Registry {
         name: "Vec3 Cross",
         category: "Vectors",
         inputs: vec![
-            PortSpec { id: "a", ty: PortType::Vec3, label: "A", doc: "", optional: false },
-            PortSpec { id: "b", ty: PortType::Vec3, label: "B", doc: "", optional: false },
+            PortSpec {
+                id: "a",
+                ty: PortType::Vec3,
+                label: "A",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "b",
+                ty: PortType::Vec3,
+                label: "B",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_vec()],
@@ -518,12 +930,48 @@ pub fn registry() -> Registry {
         name: "Inverse Kinematics",
         category: "Robotics",
         inputs: vec![
-            PortSpec { id: "bone1", ty: PortType::Float, label: "Bone1", doc: "", optional: false },
-            PortSpec { id: "bone2", ty: PortType::Float, label: "Bone2", doc: "", optional: false },
-            PortSpec { id: "bone3", ty: PortType::Float, label: "Bone3", doc: "", optional: false },
-            PortSpec { id: "theta", ty: PortType::Float, label: "Theta", doc: "", optional: false },
-            PortSpec { id: "x", ty: PortType::Float, label: "Target X", doc: "", optional: false },
-            PortSpec { id: "y", ty: PortType::Float, label: "Target Y", doc: "", optional: false },
+            PortSpec {
+                id: "bone1",
+                ty: PortType::Float,
+                label: "Bone1",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "bone2",
+                ty: PortType::Float,
+                label: "Bone2",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "bone3",
+                ty: PortType::Float,
+                label: "Bone3",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "theta",
+                ty: PortType::Float,
+                label: "Theta",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "x",
+                ty: PortType::Float,
+                label: "Target X",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "y",
+                ty: PortType::Float,
+                label: "Target Y",
+                doc: "",
+                optional: false,
+            },
         ],
         variadic_inputs: None,
         outputs: vec![p_out_vec()],
