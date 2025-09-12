@@ -48,7 +48,7 @@ pub enum PlayerCommand {
     },
 }
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum LoopMode {
     Once,
     Loop,

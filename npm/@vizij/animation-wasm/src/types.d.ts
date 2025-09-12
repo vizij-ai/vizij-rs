@@ -196,3 +196,41 @@ export interface StoredAnimation {
    Left intentionally broad; use when supplying core-format clips.
 ----------------------------------------------------------- */
 export type AnimationData = unknown;
+
+/* -----------------------------------------------------------
+   Engine inspection (authoritative state from core)
+----------------------------------------------------------- */
+
+export interface AnimationInfo {
+  id: number;
+  name?: string;
+  duration_ms: number;
+  track_count: number;
+}
+
+export type PlaybackState = "Playing" | "Paused" | "Stopped";
+
+export interface InstanceCfg {
+  weight: number;
+  time_scale: number;
+  start_offset: number;
+  enabled: boolean;
+}
+
+export interface InstanceInfo {
+  id: number;
+  animation: number;
+  cfg: InstanceCfg;
+}
+
+export interface PlayerInfo {
+  id: number;
+  name: string;
+  state: PlaybackState;
+  time: number; // seconds
+  speed: number;
+  loop_mode: LoopMode;
+  start_time: number; // seconds
+  end_time?: number | null; // seconds or null/undefined
+  length: number; // seconds (computed: max over instances of start_offset + anim_duration/|time_scale|)
+}

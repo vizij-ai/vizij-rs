@@ -63,13 +63,14 @@ fn durations_are_independent_per_player() {
             enabled: true,
         },
     );
-    // P2: two instances with different spans: (3.0/3.0) = 1.0 and (3.0/0.5) = 6.0 => max span 6.0
+    // P2: two instances with different spans (multiplier semantics):
+    // (3.0 * (1/3)) = 1.0 and (3.0 * 2.0) = 6.0 => max span 6.0
     eng.add_instance(
         p2,
         a,
         InstanceCfg {
             weight: 1.0,
-            time_scale: 3.0,
+            time_scale: 1.0 / 3.0,
             start_offset: 0.0,
             enabled: true,
         },
@@ -79,7 +80,7 @@ fn durations_are_independent_per_player() {
         a,
         InstanceCfg {
             weight: 1.0,
-            time_scale: 0.5,
+            time_scale: 2.0,
             start_offset: 0.0,
             enabled: true,
         },

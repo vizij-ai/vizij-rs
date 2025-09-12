@@ -6,6 +6,7 @@ import type {
   InitInput,
   Config,
   Inputs,
+  InstanceUpdate,
   Outputs,
   AnimationData,
   StoredAnimation,
@@ -15,12 +16,16 @@ import type {
   Value,
   CoreEvent,
   Change,
+  AnimationInfo,
+  PlayerInfo,
+  InstanceInfo,
 } from "./types";
 
 export type {
   InitInput,
   Config,
   Inputs,
+  InstanceUpdate,
   Outputs,
   AnimationData,
   StoredAnimation,
@@ -30,6 +35,9 @@ export type {
   Value,
   CoreEvent,
   Change,
+  AnimationInfo,
+  PlayerInfo,
+  InstanceInfo,
 };
 
 export { VizijAnimation, abi_version };
@@ -174,6 +182,69 @@ export class Engine {
   /** Step the simulation by dt (seconds) with optional Inputs; returns Outputs */
   update(dt: number, inputs?: Inputs): Outputs {
     return (this.inner.update(dt, (inputs ?? undefined) as any) as unknown) as Outputs;
+  }
+
+  /** Remove a player and all its instances */
+  removePlayer(player: PlayerId): boolean {
+    const inner: any = this.inner;
+    if (typeof inner.remove_player !== "function") {
+      throw new Error("remove_player not available; rebuild vizij-animation-wasm");
+    }
+    return !!inner.remove_player(player as number);
+  }
+
+  /** Remove a specific instance from a player */
+  removeInstance(player: PlayerId, inst: InstId): boolean {
+    const inner: any = this.inner;
+    if (typeof inner.remove_instance !== "function") {
+      throw new Error("remove_instance not available; rebuild vizij-animation-wasm");
+    }
+    return !!inner.remove_instance(player as number, inst as number);
+  }
+
+  /** Unload an animation; auto-detach referencing instances */
+  unloadAnimation(anim: AnimId): boolean {
+    const inner: any = this.inner;
+    if (typeof inner.unload_animation !== "function") {
+      throw new Error("unload_animation not available; rebuild vizij-animation-wasm");
+    }
+    return !!inner.unload_animation(anim as number);
+  }
+
+  /** Enumerate animations in the engine */
+  listAnimations(): AnimationInfo[] {
+    const inner: any = this.inner;
+    if (typeof inner.list_animations !== "function") {
+      throw new Error("list_animations not available; rebuild vizij-animation-wasm");
+    }
+    return (inner.list_animations() as unknown) as AnimationInfo[];
+  }
+
+  /** Enumerate players and playback info */
+  listPlayers(): PlayerInfo[] {
+    const inner: any = this.inner;
+    if (typeof inner.list_players !== "function") {
+      throw new Error("list_players not available; rebuild vizij-animation-wasm");
+    }
+    return (inner.list_players() as unknown) as PlayerInfo[];
+  }
+
+  /** Enumerate instances for a given player */
+  listInstances(player: PlayerId): InstanceInfo[] {
+    const inner: any = this.inner;
+    if (typeof inner.list_instances !== "function") {
+      throw new Error("list_instances not available; rebuild vizij-animation-wasm");
+    }
+    return (inner.list_instances(player as number) as unknown) as InstanceInfo[];
+  }
+
+  /** Enumerate resolved output keys currently associated with a player's instances */
+  listPlayerKeys(player: PlayerId): string[] {
+    const inner: any = this.inner;
+    if (typeof inner.list_player_keys !== "function") {
+      throw new Error("list_player_keys not available; rebuild vizij-animation-wasm");
+    }
+    return (inner.list_player_keys(player as number) as unknown) as string[];
   }
 }
 

@@ -15,6 +15,7 @@ use crate::outputs::{Change, Outputs};
 use crate::sampling::sample_track;
 use crate::scratch::Scratch;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 /// Per-player controller and instance list.
 #[derive(Debug)]
@@ -60,7 +61,7 @@ pub struct Instance {
 }
 
 /// Configuration for adding an instance.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct InstanceCfg {
     pub weight: f32,
     pub time_scale: f32,
@@ -96,6 +97,14 @@ impl AnimLib {
     }
     fn iter(&self) -> impl Iterator<Item = &(AnimId, AnimationData)> {
         self.items.iter()
+    }
+    fn remove(&mut self, id: AnimId) -> bool {
+        let before = self.items.len();
+        self.items.retain(|(a, _)| *a != id);
+        before != self.items.len()
+    }
+    fn contains(&self, id: AnimId) -> bool {
+        self.items.iter().any(|(a, _)| *a == id)
     }
 }
 
@@ -152,7 +161,75 @@ fn ping_pong(t: f32, span: f32) -> f32 {
     }
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+pub enum PlaybackState {
+    Playing,
+    Paused,
+    Stopped,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct AnimationInfo {
+    pub id: u32,
+    pub name: Option<String>,
+    pub duration_ms: u32,
+    pub track_count: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct PlayerInfo {
+    pub id: u32,
+    pub name: String,
+    pub state: PlaybackState,
+    pub time: f32,
+    pub speed: f32,
+    pub loop_mode: LoopMode,
+    pub start_time: f32,
+    pub end_time: Option<f32>,
+    /// Full player length (seconds): max over instances of start_offset + (anim_duration * |time_scale|)
+    pub length: f32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct InstanceInfo {
+    pub id: u32,
+    pub animation: u32,
+    pub cfg: InstanceCfg,
+}
+
 impl Engine {
+    /// Map player's internal time to a display/playhead time according to loop mode and window.
+    fn map_player_time_for_display(p: &Player) -> f32 {
+        // Determine the looping span: window if set, otherwise from start_time over computed length.
+        let start = p.start_time.max(0.0);
+        // If window end provided use it; else use start + total_duration (if total_duration is 0, avoid div by zero)
+        let span = if let Some(end) = p.end_time {
+            (end - start).max(0.0)
+        } else {
+            (p.total_duration - start).max(0.0)
+        };
+
+        // For empty span, just clamp to start
+        if span <= 0.0 {
+            return start;
+        }
+
+        match p.mode {
+            LoopMode::Once => p.time.clamp(start, start + span),
+            LoopMode::Loop => {
+                // Reduce to [start, start+span)
+                let rel = p.time - start;
+                let m = fmod(rel, span);
+                let wrapped = if m < 0.0 { m + span } else { m };
+                start + wrapped
+            }
+            LoopMode::PingPong => {
+                // Mirror over [start, start+span]
+                // ping_pong maps into [0, span], so add start back
+                start + ping_pong(p.time - start, span)
+            }
+        }
+    }
     /// Public accessor for a player's computed total duration (in player time).
     pub fn player_total_duration(&self, player: PlayerId) -> Option<f32> {
         self.players
@@ -244,40 +321,29 @@ impl Engine {
         }
     }
 
-    /// Recalculate a player's effective total duration from its instances and window.
+    /// Recalculate a player's full length (seconds) from its instances.
+    /// length = max over instances of: start_offset + (anim_duration * |time_scale|)
     fn recalc_player_duration(&mut self, player: PlayerId) {
         if let Some(p) = self.players.iter_mut().find(|pp| pp.id == player) {
-            // Compute the required span of player time to traverse each instance's remaining local range.
-            // local_time = player_time * time_scale + start_offset
-            // Remaining local range (forward):
-            //   if time_scale >= 0: max(0, anim_duration - start_offset)
-            //   if time_scale <  0: max(0, start_offset - 0)
-            // Player span for instance = remaining_local / abs(time_scale)
-            let mut max_span = 0.0f32;
+            let mut max_end = 0.0f32;
             for iid in &p.instances {
                 if let Some(inst) = self.instances.iter().find(|ii| ii.id == *iid) {
                     if let Some(anim) = self.anims.get(inst.anim) {
                         let anim_duration = anim.duration_ms as f32 / 1000.0;
-                        let ts = inst.time_scale;
-                        let ts_abs = ts.abs().max(1e-6);
-                        let remaining_local = if ts >= 0.0 {
-                            (anim_duration - inst.start_offset).max(0.0)
-                        } else {
-                            (inst.start_offset - 0.0).max(0.0)
-                        };
-                        let span = remaining_local / ts_abs;
-                        if span > max_span {
-                            max_span = span;
+                        let ts_abs = inst.time_scale.abs().max(1e-6);
+                        let end_time = inst.start_offset + (anim_duration * ts_abs);
+                        if end_time > max_end {
+                            max_end = end_time;
                         }
                     }
                 }
             }
-            // Apply player window if specified; window defines the allowed player time domain.
+            // Apply window clamp if configured
             if let Some(end) = p.end_time {
                 let window_len = (end - p.start_time).max(0.0);
-                p.total_duration = window_len.min(max_span);
+                p.total_duration = max_end.min(window_len);
             } else {
-                p.total_duration = max_span;
+                p.total_duration = max_end;
             }
         }
     }
@@ -385,21 +451,40 @@ impl Engine {
 
     /// Compute instance-local time given a player and animation duration under the player's loop mode.
     fn local_time_for_instance(&self, player: &Player, inst: &Instance, anim_duration: f32) -> f32 {
-        // Map player time into clip time using instance scale and offset:
-        // local_t = player.time * time_scale + start_offset
-        let base = player.time * inst.time_scale + inst.start_offset;
+        // Interpret start_offset as a player-time shift (when the instance starts).
+        // Interpret time_scale as a duration multiplier (|ts| > 1 => longer, |ts| < 1 => shorter).
+        // Mapping from player time to clip local time:
+        //   base = (player.time - inst.start_offset) / inst.time_scale
+        // Before the instance starts (player.time < start_offset), we must NOT wrap:
+        //   return 0.0 so the instance outputs its initial values until start.
+        // After start, apply Once/Loop/PingPong in the clip's [0, anim_duration] domain.
         if anim_duration <= 0.0 {
             return 0.0;
         }
+        // Guard against division by zero while preserving sign semantics
+        let ts = if inst.time_scale.abs() < 1e-6 {
+            if inst.time_scale >= 0.0 { 1e-6 } else { -1e-6 }
+        } else {
+            inst.time_scale
+        };
+        // Compute cycle-relative player time so each cycle has a pre-offset hold.
+        let t_cycle = Self::map_player_time_for_display(player);
+        let rel_cycle = t_cycle - player.start_time;
+        if rel_cycle <= 0.0 {
+            // At the very start of a cycle, hold initial value before any instance starts.
+            return 0.0;
+        }
+        let rel = rel_cycle - inst.start_offset;
+        if rel <= 0.0 {
+            // Hold initial value up to the instance start within each cycle.
+            return 0.0;
+        }
+        let base = rel / ts;
         match player.mode {
             crate::inputs::LoopMode::Once => base.clamp(0.0, anim_duration),
             crate::inputs::LoopMode::Loop => {
                 let m = fmod(base, anim_duration);
-                if m < 0.0 {
-                    m + anim_duration
-                } else {
-                    m
-                }
+                if m < 0.0 { m + anim_duration } else { m }
             }
             crate::inputs::LoopMode::PingPong => ping_pong(base, anim_duration),
         }
@@ -476,6 +561,174 @@ impl Engine {
         }
 
         &self.outputs
+    }
+
+    /// Remove an instance from a player. Returns true if removed.
+    pub fn remove_instance(&mut self, player: PlayerId, inst: InstId) -> bool {
+        // Detach from player
+        if let Some(p) = self.players.iter_mut().find(|pp| pp.id == player) {
+            let before = p.instances.len();
+            p.instances.retain(|iid| *iid != inst);
+            let removed = before != p.instances.len();
+            if removed {
+                // Remove from engine.instances
+                self.instances.retain(|ii| ii.id != inst);
+                // Recompute duration
+                self.recalc_player_duration(player);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Remove a player and all its instances. Returns true if removed.
+    pub fn remove_player(&mut self, player: PlayerId) -> bool {
+        if let Some(idx) = self.players.iter().position(|p| p.id == player) {
+            let inst_ids: Vec<InstId> = self.players[idx].instances.clone();
+            // Remove all instances owned by this player
+            if !inst_ids.is_empty() {
+                self.instances.retain(|ii| !inst_ids.iter().any(|id| *id == ii.id));
+            }
+            // Remove the player
+            self.players.remove(idx);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Unload an animation and remove all instances referencing it across all players. Returns true if animation existed.
+    pub fn unload_animation(&mut self, anim: AnimId) -> bool {
+        if !self.anims.contains(anim) {
+            return false;
+        }
+        // Determine all instances to remove
+        let to_remove: Vec<InstId> = self
+            .instances
+            .iter()
+            .filter(|ii| ii.anim == anim)
+            .map(|ii| ii.id)
+            .collect();
+
+        if !to_remove.is_empty() {
+            // Detach from players
+            for p in &mut self.players {
+                p.instances.retain(|iid| !to_remove.iter().any(|rid| *rid == *iid));
+                // Recompute duration after detaching
+                let pid = p.id;
+                // recalc will run in a separate pass below to avoid borrow conflicts
+                drop(pid);
+            }
+            // Remove instance structs
+            self.instances.retain(|ii| ii.anim != anim);
+            // Recompute durations for all players
+            let player_ids: Vec<PlayerId> = self.players.iter().map(|p| p.id).collect();
+            for pid in player_ids {
+                self.recalc_player_duration(pid);
+            }
+        }
+        // Remove animation from library
+        self.anims.remove(anim)
+    }
+
+    /// List all animations in the engine.
+    pub fn list_animations(&self) -> Vec<AnimationInfo> {
+        self.anims
+            .iter()
+            .map(|(id, data)| AnimationInfo {
+                id: id.0,
+                name: if data.name.is_empty() {
+                    None
+                } else {
+                    Some(data.name.clone())
+                },
+                duration_ms: data.duration_ms,
+                track_count: data.tracks.len(),
+            })
+            .collect()
+    }
+
+    fn derive_playback_state(p: &Player) -> PlaybackState {
+        if p.speed == 0.0 {
+            if (p.time - p.start_time).abs() < 1e-6 {
+                PlaybackState::Stopped
+            } else {
+                PlaybackState::Paused
+            }
+        } else {
+            PlaybackState::Playing
+        }
+    }
+
+    /// List all players with playback info and computed length.
+    pub fn list_players(&self) -> Vec<PlayerInfo> {
+        self.players
+            .iter()
+            .map(|p| PlayerInfo {
+                id: p.id.0,
+                name: p.name.clone(),
+                state: Self::derive_playback_state(p),
+                time: Self::map_player_time_for_display(p),
+                speed: p.speed,
+                loop_mode: p.mode,
+                start_time: p.start_time,
+                end_time: p.end_time,
+                length: p.total_duration,
+            })
+            .collect()
+    }
+
+    /// List all instances for a given player.
+    pub fn list_instances(&self, player: PlayerId) -> Vec<InstanceInfo> {
+        if let Some(p) = self.players.iter().find(|pp| pp.id == player) {
+            p.instances
+                .iter()
+                .filter_map(|iid| self.instances.iter().find(|ii| ii.id == *iid))
+                .map(|ii| InstanceInfo {
+                    id: ii.id.0,
+                    animation: ii.anim.0,
+                    cfg: InstanceCfg {
+                        weight: ii.weight,
+                        time_scale: ii.time_scale,
+                        start_offset: ii.start_offset,
+                        enabled: ii.enabled,
+                    },
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// List the set of resolved output keys currently associated with the player's instances.
+    /// Keys match those produced in Outputs (bound handle if available, else canonical track path).
+    pub fn list_player_keys(&self, player: PlayerId) -> Vec<String> {
+        let mut set: HashSet<String> = HashSet::new();
+        let Some(p) = self.players.iter().find(|pp| pp.id == player) else {
+            return Vec::new();
+        };
+        for iid in &p.instances {
+            if let Some(inst) = self.instances.iter().find(|ii| ii.id == *iid) {
+                if let Some(anim) = self.anims.get(inst.anim) {
+                    for ch in &inst.binding_set.channels {
+                        if ch.anim != inst.anim {
+                            continue;
+                        }
+                        let idx = ch.track_idx as usize;
+                        if let Some(track) = anim.tracks.get(idx) {
+                            // Resolve handle if bound, else fallback to canonical path
+                            let handle = if let Some(row) = self.binds.get(*ch) {
+                                row.handle.as_str().to_string()
+                            } else {
+                                track.animatable_id.clone()
+                            };
+                            set.insert(handle);
+                        }
+                    }
+                }
+            }
+        }
+        set.into_iter().collect()
     }
 }
 

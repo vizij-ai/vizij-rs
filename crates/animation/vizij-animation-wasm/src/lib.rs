@@ -54,7 +54,7 @@ impl VizijAnimation {
     ///   new VizijAnimation({ scratch_samples: 2048 })
     #[wasm_bindgen(constructor)]
     pub fn new(config: JsValue) -> Result<VizijAnimation, JsError> {
-        console_error_panic_hook::set_once();
+        unsafe { console_error_panic_hook::set_once(); }
 
         let cfg: Config = if jsvalue_is_undefined_or_null(&config) {
             Config::default()
@@ -142,6 +142,52 @@ impl VizijAnimation {
         };
         let out: &Outputs = self.core.update(dt, inputs);
         swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
+    }
+
+    /// Remove a player and all its instances. Returns boolean success.
+    #[wasm_bindgen(js_name = remove_player)]
+    pub fn remove_player(&mut self, player_id: u32) -> bool {
+        self.core.remove_player(PlayerId(player_id))
+    }
+
+    /// Remove a specific instance from a player. Returns boolean success.
+    #[wasm_bindgen(js_name = remove_instance)]
+    pub fn remove_instance(&mut self, player_id: u32, inst_id: u32) -> bool {
+        self.core.remove_instance(PlayerId(player_id), InstId(inst_id))
+    }
+
+    /// Unload an animation and detach all referencing instances. Returns boolean success.
+    #[wasm_bindgen(js_name = unload_animation)]
+    pub fn unload_animation(&mut self, anim_id: u32) -> bool {
+        self.core.unload_animation(AnimId(anim_id))
+    }
+
+    /// List all animations (id, name, duration_ms, track_count).
+    #[wasm_bindgen(js_name = list_animations)]
+    pub fn list_animations(&self) -> Result<JsValue, JsError> {
+        let v = self.core.list_animations();
+        swb::to_value(&v).map_err(|e| JsError::new(&format!("list_animations error: {e}")))
+    }
+
+    /// List all players with playback info and computed length.
+    #[wasm_bindgen(js_name = list_players)]
+    pub fn list_players(&self) -> Result<JsValue, JsError> {
+        let v = self.core.list_players();
+        swb::to_value(&v).map_err(|e| JsError::new(&format!("list_players error: {e}")))
+    }
+
+    /// List all instances for a given player id.
+    #[wasm_bindgen(js_name = list_instances)]
+    pub fn list_instances(&self, player_id: u32) -> Result<JsValue, JsError> {
+        let v = self.core.list_instances(PlayerId(player_id));
+        swb::to_value(&v).map_err(|e| JsError::new(&format!("list_instances error: {e}")))
+    }
+
+    /// List the set of resolved output keys currently associated with the player's instances.
+    #[wasm_bindgen(js_name = list_player_keys)]
+    pub fn list_player_keys(&self, player_id: u32) -> Result<JsValue, JsError> {
+        let v = self.core.list_player_keys(PlayerId(player_id));
+        swb::to_value(&v).map_err(|e| JsError::new(&format!("list_player_keys error: {e}")))
     }
 }
 

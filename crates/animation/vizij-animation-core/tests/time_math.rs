@@ -64,13 +64,13 @@ fn total_duration_multiple_instances_basic() {
         },
     );
 
-    // Instance 2: time_scale 0.5 (slower), offset 0.0 -> span = 1.0 / 0.5 = 2.0
+    // Instance 2: time_scale 2.0 (slower by multiplier semantics), offset 0.0 -> span = 1.0 * 2.0 = 2.0
     eng.add_instance(
         p,
         a2,
         InstanceCfg {
             weight: 1.0,
-            time_scale: 0.5,
+            time_scale: 2.0,
             start_offset: 0.0,
             enabled: true,
         },
