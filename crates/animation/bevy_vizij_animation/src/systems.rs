@@ -66,7 +66,7 @@ pub fn build_binding_index_system(
 
 /// Bridges the core prebind call into the ECS: resolves canonical track target paths
 /// to string handles recorded in BindingIndex. We use the same string as the handle.
-pub fn prebind_core_system(mut eng: ResMut<VizijEngine>, mut index: Res<BindingIndex>) {
+pub fn prebind_core_system(mut eng: ResMut<VizijEngine>, index: Res<BindingIndex>) {
     struct Resolver<'a> {
         idx: &'a BindingIndex,
     }

@@ -47,7 +47,7 @@ pub fn parse_stored_animation_json(s: &str) -> Result<AnimationData, String> {
         });
     }
 
-    let mut data = AnimationData {
+    let data = AnimationData {
         id: None::<AnimId>,
         name: sa.name,
         tracks,

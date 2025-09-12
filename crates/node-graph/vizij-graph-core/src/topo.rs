@@ -45,6 +45,7 @@ pub fn topo_order(nodes: &[NodeSpec]) -> Result<Vec<NodeId>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{GraphSpec, NodeType, NodeParams, Value, InputConnection};
     #[test]
     fn simple_topo() {
         let g = GraphSpec {
@@ -56,7 +57,7 @@ mod tests {
                         value: Some(Value::Float(1.0)),
                         ..Default::default()
                     },
-                    inputs: HashMap::new(),
+                    inputs: hashbrown::HashMap::new(),
                 },
                 NodeSpec {
                     id: "b".into(),

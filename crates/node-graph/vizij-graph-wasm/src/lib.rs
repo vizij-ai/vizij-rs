@@ -1,5 +1,5 @@
 use hashbrown::HashMap;
-use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, InputConnection, Value};
+use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, Value};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]

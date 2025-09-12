@@ -1,12 +1,12 @@
 use bevy::prelude::*;
 use hashbrown::HashMap;
-use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, NodeId, NodeParams, Value};
+use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, NodeId, Value};
 
 #[derive(Resource, Default, Clone)]
 pub struct GraphResource(pub GraphSpec);
 
 #[derive(Resource, Default, Clone)]
-pub struct GraphOutputs(pub HashMap<NodeId, Value>);
+pub struct GraphOutputs(pub HashMap<NodeId, HashMap<String, Value>>);
 
 #[derive(Event)]
 pub struct SetNodeParam {

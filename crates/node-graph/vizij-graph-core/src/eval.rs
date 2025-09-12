@@ -257,7 +257,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
                 if dist_sq > (l1 + l2) * (l1 + l2) || dist_sq < (l1 - l2) * (l1 - l2) {
                     Value::Vec3([std::f64::NAN, std::f64::NAN, std::f64::NAN])
                 } else {
-                    let dist = dist_sq.sqrt();
+                    // let dist = dist_sq.sqrt();
                     let cos_angle2 = (dist_sq - l1 * l1 - l2 * l2) / (2.0 * l1 * l2);
                     let angle2 = cos_angle2.acos();
                     let angle1 = wy.atan2(wx) - (l2 * angle2.sin()).atan2(l1 + l2 * angle2.cos());
