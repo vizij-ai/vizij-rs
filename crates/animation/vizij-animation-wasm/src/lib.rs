@@ -54,7 +54,9 @@ impl VizijAnimation {
     ///   new VizijAnimation({ scratch_samples: 2048 })
     #[wasm_bindgen(constructor)]
     pub fn new(config: JsValue) -> Result<VizijAnimation, JsError> {
-        unsafe { console_error_panic_hook::set_once(); }
+        unsafe {
+            console_error_panic_hook::set_once();
+        }
 
         let cfg: Config = if jsvalue_is_undefined_or_null(&config) {
             Config::default()
@@ -153,7 +155,8 @@ impl VizijAnimation {
     /// Remove a specific instance from a player. Returns boolean success.
     #[wasm_bindgen(js_name = remove_instance)]
     pub fn remove_instance(&mut self, player_id: u32, inst_id: u32) -> bool {
-        self.core.remove_instance(PlayerId(player_id), InstId(inst_id))
+        self.core
+            .remove_instance(PlayerId(player_id), InstId(inst_id))
     }
 
     /// Unload an animation and detach all referencing instances. Returns boolean success.

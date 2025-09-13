@@ -60,6 +60,7 @@ impl WasmGraph {
                             Value::Float(f) => serde_json::json!({ "float": f }),
                             Value::Bool(b) => serde_json::json!({ "bool": b }),
                             Value::Vec3(a) => serde_json::json!({ "vec3": [a[0], a[1], a[2]] }),
+                            Value::Vector(a) => serde_json::json!({ "vector": a }),
                         };
                         (key, jv)
                     })
@@ -86,6 +87,9 @@ impl WasmGraph {
                 a[i] = arr.get(i).and_then(|x| x.as_f64()).unwrap_or(0.0);
             }
             Value::Vec3(a)
+        } else if let Some(arr) = v.get("vector").and_then(|x| x.as_array()) {
+            let vec: Vec<f64> = arr.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect();
+            Value::Vector(vec)
         } else {
             return Err(JsValue::from_str("unsupported value"));
         };
@@ -126,6 +130,11 @@ impl WasmGraph {
                 }
                 "index" => {
                     node.params.index = Some(if let Value::Float(f) = val { f } else { 0.0 })
+                }
+                "sizes" => {
+                    if let Value::Vector(vec) = val {
+                        node.params.sizes = Some(vec);
+                    }
                 }
                 _ => {}
             }

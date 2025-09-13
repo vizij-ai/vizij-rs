@@ -7,6 +7,7 @@ pub enum PortType {
     Float,
     Bool,
     Vec3,
+    Vector,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,6 +16,7 @@ pub enum ParamType {
     Float,
     Bool,
     Vec3,
+    Vector,
     Any, // union (Value)
 }
 
@@ -65,6 +67,8 @@ pub struct NodeSignature {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub variadic_inputs: Option<VariadicSpec>,
     pub outputs: Vec<PortSpec>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub variadic_outputs: Option<VariadicSpec>,
     pub params: Vec<ParamSpec>,
 }
 
@@ -74,6 +78,7 @@ pub struct Registry {
     pub nodes: Vec<NodeSignature>,
 }
 
+// Helpers
 fn p_in() -> PortSpec {
     PortSpec {
         id: "in",
@@ -92,10 +97,10 @@ fn p_bool_in() -> PortSpec {
         optional: false,
     }
 }
-fn p_vec_in() -> PortSpec {
+fn p_vector_in() -> PortSpec {
     PortSpec {
         id: "in",
-        ty: PortType::Vec3,
+        ty: PortType::Vector,
         label: "In",
         doc: "",
         optional: false,
@@ -119,10 +124,19 @@ fn p_out_bool() -> PortSpec {
         optional: false,
     }
 }
-fn p_out_vec() -> PortSpec {
+fn p_out_vec3() -> PortSpec {
     PortSpec {
         id: "out",
         ty: PortType::Vec3,
+        label: "Out",
+        doc: "",
+        optional: false,
+    }
+}
+fn p_out_vector() -> PortSpec {
+    PortSpec {
+        id: "out",
+        ty: PortType::Vector,
         label: "Out",
         doc: "",
         optional: false,
@@ -133,7 +147,7 @@ pub fn registry() -> Registry {
     use NodeType::*;
     let mut nodes: Vec<NodeSignature> = Vec::new();
 
-    // Scalars / arithmetic
+    // Scalars / arithmetic (float-based legacy kept for convenience)
     nodes.push(NodeSignature {
         type_id: Constant,
         name: "Constant",
@@ -141,6 +155,7 @@ pub fn registry() -> Registry {
         inputs: vec![],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
+        variadic_outputs: None,
         params: vec![ParamSpec {
             id: "value",
             ty: ParamType::Any,
@@ -159,6 +174,7 @@ pub fn registry() -> Registry {
         inputs: vec![],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
+        variadic_outputs: None,
         params: vec![
             ParamSpec {
                 id: "value",
@@ -219,6 +235,7 @@ pub fn registry() -> Registry {
                 optional: false,
             },
         ],
+        variadic_outputs: None,
         params: vec![
             ParamSpec {
                 id: "x",
@@ -264,6 +281,7 @@ pub fn registry() -> Registry {
             max: None,
         }),
         outputs: vec![p_out_float()],
+        variadic_outputs: None,
         params: vec![],
     });
 
@@ -289,6 +307,7 @@ pub fn registry() -> Registry {
         ],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
+        variadic_outputs: None,
         params: vec![],
     });
 
@@ -306,6 +325,7 @@ pub fn registry() -> Registry {
             max: None,
         }),
         outputs: vec![p_out_float()],
+        variadic_outputs: None,
         params: vec![],
     });
 
@@ -331,6 +351,7 @@ pub fn registry() -> Registry {
         ],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
+        variadic_outputs: None,
         params: vec![],
     });
 
@@ -356,6 +377,7 @@ pub fn registry() -> Registry {
         ],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
+        variadic_outputs: None,
         params: vec![],
     });
 
@@ -381,6 +403,7 @@ pub fn registry() -> Registry {
         ],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
+        variadic_outputs: None,
         params: vec![],
     });
 
@@ -392,6 +415,7 @@ pub fn registry() -> Registry {
             inputs: vec![p_in()],
             variadic_inputs: None,
             outputs: vec![p_out_float()],
+            variadic_outputs: None,
             params: vec![],
         });
     }
@@ -404,6 +428,7 @@ pub fn registry() -> Registry {
         inputs: vec![],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
+        variadic_outputs: None,
         params: vec![],
     });
 
@@ -429,10 +454,11 @@ pub fn registry() -> Registry {
         ],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
+        variadic_outputs: None,
         params: vec![],
     });
 
-    // Logic
+    // Logic (Bool semantics)
     nodes.push(NodeSignature {
         type_id: And,
         name: "And",
@@ -455,6 +481,7 @@ pub fn registry() -> Registry {
         ],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
+        variadic_outputs: None,
         params: vec![],
     });
     nodes.push(NodeSignature {
@@ -479,6 +506,7 @@ pub fn registry() -> Registry {
         ],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
+        variadic_outputs: None,
         params: vec![],
     });
     nodes.push(NodeSignature {
@@ -503,6 +531,7 @@ pub fn registry() -> Registry {
         ],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
+        variadic_outputs: None,
         params: vec![],
     });
     nodes.push(NodeSignature {
@@ -512,10 +541,11 @@ pub fn registry() -> Registry {
         inputs: vec![p_bool_in()],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
+        variadic_outputs: None,
         params: vec![],
     });
 
-    // Conditional
+    // Conditional (float comparisons)
     nodes.push(NodeSignature {
         type_id: GreaterThan,
         name: "Greater Than",
@@ -538,6 +568,7 @@ pub fn registry() -> Registry {
         ],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
+        variadic_outputs: None,
         params: vec![],
     });
     nodes.push(NodeSignature {
@@ -562,6 +593,7 @@ pub fn registry() -> Registry {
         ],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
+        variadic_outputs: None,
         params: vec![],
     });
     nodes.push(NodeSignature {
@@ -586,6 +618,7 @@ pub fn registry() -> Registry {
         ],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
+        variadic_outputs: None,
         params: vec![],
     });
     nodes.push(NodeSignature {
@@ -610,8 +643,11 @@ pub fn registry() -> Registry {
         ],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
+        variadic_outputs: None,
         params: vec![],
     });
+
+    // If (union in core; schema uses Vector as generic placeholder)
     nodes.push(NodeSignature {
         type_id: If,
         name: "If",
@@ -624,33 +660,24 @@ pub fn registry() -> Registry {
                 doc: "",
                 optional: false,
             },
-            // then/else allow union; document as Any
             PortSpec {
                 id: "then",
-                ty: PortType::Vec3,
+                ty: PortType::Vector,
                 label: "Then",
-                doc: "Value (float/bool/vec3)",
+                doc: "Value",
                 optional: true,
             },
             PortSpec {
                 id: "else",
-                ty: PortType::Vec3,
+                ty: PortType::Vector,
                 label: "Else",
-                doc: "Value (float/bool/vec3)",
+                doc: "Value",
                 optional: true,
             },
         ],
         variadic_inputs: None,
-        outputs: vec![
-            // Union in core; encode as vec3 in schema for display; UI should treat as Any value
-            PortSpec {
-                id: "out",
-                ty: PortType::Vec3,
-                label: "Out",
-                doc: "Value (float/bool/vec3)",
-                optional: false,
-            },
-        ],
+        outputs: vec![p_out_vector()],
+        variadic_outputs: None,
         params: vec![],
     });
 
@@ -684,6 +711,7 @@ pub fn registry() -> Registry {
         ],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
+        variadic_outputs: None,
         params: vec![],
     });
 
@@ -730,165 +758,11 @@ pub fn registry() -> Registry {
         ],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
+        variadic_outputs: None,
         params: vec![],
     });
 
-    // Vec3 utilities
-    nodes.push(NodeSignature {
-        type_id: Vec3,
-        name: "Vec3",
-        category: "Vectors",
-        inputs: vec![
-            PortSpec {
-                id: "x",
-                ty: PortType::Float,
-                label: "X",
-                doc: "",
-                optional: false,
-            },
-            PortSpec {
-                id: "y",
-                ty: PortType::Float,
-                label: "Y",
-                doc: "",
-                optional: false,
-            },
-            PortSpec {
-                id: "z",
-                ty: PortType::Float,
-                label: "Z",
-                doc: "",
-                optional: false,
-            },
-        ],
-        variadic_inputs: None,
-        outputs: vec![p_out_vec()],
-        params: vec![],
-    });
-
-    nodes.push(NodeSignature {
-        type_id: Vec3Split,
-        name: "Vec3 Split",
-        category: "Vectors",
-        inputs: vec![p_vec_in()],
-        variadic_inputs: None,
-        outputs: vec![
-            PortSpec {
-                id: "x",
-                ty: PortType::Float,
-                label: "X",
-                doc: "",
-                optional: false,
-            },
-            PortSpec {
-                id: "y",
-                ty: PortType::Float,
-                label: "Y",
-                doc: "",
-                optional: false,
-            },
-            PortSpec {
-                id: "z",
-                ty: PortType::Float,
-                label: "Z",
-                doc: "",
-                optional: false,
-            },
-        ],
-        params: vec![],
-    });
-
-    for (nt, name) in [
-        (Vec3Add, "Vec3 Add"),
-        (Vec3Subtract, "Vec3 Subtract"),
-        (Vec3Multiply, "Vec3 Multiply"),
-    ] {
-        nodes.push(NodeSignature {
-            type_id: nt,
-            name,
-            category: "Vectors",
-            inputs: vec![
-                PortSpec {
-                    id: "a",
-                    ty: PortType::Vec3,
-                    label: "A",
-                    doc: "",
-                    optional: false,
-                },
-                PortSpec {
-                    id: "b",
-                    ty: PortType::Vec3,
-                    label: "B",
-                    doc: "",
-                    optional: false,
-                },
-            ],
-            variadic_inputs: None,
-            outputs: vec![p_out_vec()],
-            params: vec![],
-        });
-    }
-
-    nodes.push(NodeSignature {
-        type_id: Vec3Scale,
-        name: "Vec3 Scale",
-        category: "Vectors",
-        inputs: vec![
-            PortSpec {
-                id: "scalar",
-                ty: PortType::Float,
-                label: "Scalar",
-                doc: "",
-                optional: false,
-            },
-            PortSpec {
-                id: "v",
-                ty: PortType::Vec3,
-                label: "Vector",
-                doc: "",
-                optional: false,
-            },
-        ],
-        variadic_inputs: None,
-        outputs: vec![p_out_vec()],
-        params: vec![],
-    });
-
-    nodes.push(NodeSignature {
-        type_id: Vec3Normalize,
-        name: "Vec3 Normalize",
-        category: "Vectors",
-        inputs: vec![p_vec_in()],
-        variadic_inputs: None,
-        outputs: vec![p_out_vec()],
-        params: vec![],
-    });
-
-    nodes.push(NodeSignature {
-        type_id: Vec3Dot,
-        name: "Vec3 Dot",
-        category: "Vectors",
-        inputs: vec![
-            PortSpec {
-                id: "a",
-                ty: PortType::Vec3,
-                label: "A",
-                doc: "",
-                optional: false,
-            },
-            PortSpec {
-                id: "b",
-                ty: PortType::Vec3,
-                label: "B",
-                doc: "",
-                optional: false,
-            },
-        ],
-        variadic_inputs: None,
-        outputs: vec![p_out_float()],
-        params: vec![],
-    });
-
+    // 3D-specific utility kept
     nodes.push(NodeSignature {
         type_id: Vec3Cross,
         name: "Vec3 Cross",
@@ -910,19 +784,230 @@ pub fn registry() -> Registry {
             },
         ],
         variadic_inputs: None,
-        outputs: vec![p_out_vec()],
+        outputs: vec![p_out_vec3()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // Generic vector utilities
+    nodes.push(NodeSignature {
+        type_id: VectorConstant,
+        name: "Vector Constant",
+        category: "Vectors",
+        inputs: vec![],
+        variadic_inputs: None,
+        outputs: vec![p_out_vector()],
+        variadic_outputs: None,
+        params: vec![ParamSpec {
+            id: "value",
+            ty: ParamType::Any,
+            label: "Value",
+            doc: "",
+            default_json: Some(serde_json::json!({ "vector": [] })),
+            min: None,
+            max: None,
+        }],
+    });
+
+    for (nt, name) in [
+        (VectorAdd, "Vector Add"),
+        (VectorSubtract, "Vector Subtract"),
+        (VectorMultiply, "Vector Multiply"),
+    ] {
+        nodes.push(NodeSignature {
+            type_id: nt,
+            name,
+            category: "Vectors",
+            inputs: vec![
+                PortSpec {
+                    id: "a",
+                    ty: PortType::Vector,
+                    label: "A",
+                    doc: "",
+                    optional: false,
+                },
+                PortSpec {
+                    id: "b",
+                    ty: PortType::Vector,
+                    label: "B",
+                    doc: "",
+                    optional: false,
+                },
+            ],
+            variadic_inputs: None,
+            outputs: vec![p_out_vector()],
+            variadic_outputs: None,
+            params: vec![],
+        });
+    }
+
+    nodes.push(NodeSignature {
+        type_id: VectorScale,
+        name: "Vector Scale",
+        category: "Vectors",
+        inputs: vec![
+            PortSpec {
+                id: "scalar",
+                ty: PortType::Float,
+                label: "Scalar",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "v",
+                ty: PortType::Vector,
+                label: "Vector",
+                doc: "",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_vector()],
+        variadic_outputs: None,
         params: vec![],
     });
 
     nodes.push(NodeSignature {
-        type_id: Vec3Length,
-        name: "Vec3 Length",
+        type_id: VectorNormalize,
+        name: "Vector Normalize",
         category: "Vectors",
-        inputs: vec![p_vec_in()],
+        inputs: vec![p_vector_in()],
         variadic_inputs: None,
-        outputs: vec![p_out_float()],
+        outputs: vec![p_out_vector()],
+        variadic_outputs: None,
         params: vec![],
     });
+
+    nodes.push(NodeSignature {
+        type_id: VectorDot,
+        name: "Vector Dot",
+        category: "Vectors",
+        inputs: vec![
+            PortSpec {
+                id: "a",
+                ty: PortType::Vector,
+                label: "A",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "b",
+                ty: PortType::Vector,
+                label: "B",
+                doc: "",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: VectorLength,
+        name: "Vector Length",
+        category: "Vectors",
+        inputs: vec![p_vector_in()],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: VectorIndex,
+        name: "Vector Index",
+        category: "Vectors",
+        inputs: vec![
+            PortSpec {
+                id: "v",
+                ty: PortType::Vector,
+                label: "Vector",
+                doc: "",
+                optional: false,
+            },
+            PortSpec {
+                id: "index",
+                ty: PortType::Float,
+                label: "Index",
+                doc: "0-based index; non-integer values are floored",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // Join (variadic inputs -> single vector)
+    nodes.push(NodeSignature {
+        type_id: Join,
+        name: "Join",
+        category: "Vectors",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "operands",
+            ty: PortType::Vector,
+            label: "Operand",
+            doc: "",
+            min: 1,
+            max: None,
+        }),
+        outputs: vec![p_out_vector()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // Split (vector in, sizes param, variadic vector outputs)
+    nodes.push(NodeSignature {
+        type_id: Split,
+        name: "Split",
+        category: "Vectors",
+        inputs: vec![p_vector_in()],
+        variadic_inputs: None,
+        outputs: vec![],
+        variadic_outputs: Some(VariadicSpec {
+            id: "parts",
+            ty: PortType::Vector,
+            label: "Part",
+            doc: "",
+            min: 1,
+            max: None,
+        }),
+        params: vec![
+            ParamSpec {
+                id: "sizes",
+                ty: ParamType::Vector,
+                label: "Sizes",
+                doc: "Vector of sizes (floored to integers). Sum must equal input length; otherwise each part is NaNs of requested size.",
+                default_json: Some(serde_json::json!({ "vector": [] })),
+                min: None,
+                max: None,
+            }
+        ],
+    });
+
+    // Reducers: vector -> float
+    for (nt, name) in [
+        (VectorMin, "Vector Min"),
+        (VectorMax, "Vector Max"),
+        (VectorMean, "Vector Mean"),
+        (VectorMedian, "Vector Median"),
+        (VectorMode, "Vector Mode"),
+    ] {
+        nodes.push(NodeSignature {
+            type_id: nt,
+            name,
+            category: "Vectors",
+            inputs: vec![p_vector_in()],
+            variadic_inputs: None,
+            outputs: vec![p_out_float()],
+            variadic_outputs: None,
+            params: vec![],
+        });
+    }
 
     // Robotics
     nodes.push(NodeSignature {
@@ -974,7 +1059,8 @@ pub fn registry() -> Registry {
             },
         ],
         variadic_inputs: None,
-        outputs: vec![p_out_vec()],
+        outputs: vec![p_out_vec3()],
+        variadic_outputs: None,
         params: vec![],
     });
 
@@ -986,6 +1072,7 @@ pub fn registry() -> Registry {
         inputs: vec![p_in()],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
+        variadic_outputs: None,
         params: vec![],
     });
 

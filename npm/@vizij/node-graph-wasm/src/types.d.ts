@@ -31,16 +31,24 @@ export type NodeType =
   | "if"
   | "clamp"
   | "remap"
-  | "vec3"
-  | "vec3split"
-  | "vec3add"
-  | "vec3subtract"
-  | "vec3multiply"
-  | "vec3scale"
-  | "vec3normalize"
-  | "vec3dot"
   | "vec3cross"
-  | "vec3length"
+  | "vectorconstant"
+  | "vectoradd"
+  | "vectorsubtract"
+  | "vectormultiply"
+  | "vectorscale"
+  | "vectornormalize"
+  | "vectordot"
+  | "vectorlength"
+  | "vectorindex"
+  | "join"
+  | "split"
+  | "vectormin"
+  | "vectormax"
+  | "vectormean"
+  | "vectormedian"
+  | "vectormode"
+  | "inversekinematics"
   | "output";
 
 /**
@@ -50,10 +58,12 @@ export type NodeType =
 export type ValueJSON =
   | { float: number }
   | { bool: boolean }
-  | { vec3: [number, number, number] };
+  | { vec3: [number, number, number] }
+  | { vector: number[] };
 
 export interface NodeParams {
-  value?: ValueJSON | number | boolean | [number, number, number];
+  value?: ValueJSON | number | boolean | [number, number, number] | number[];
+  sizes?: number[]; // for Split
   frequency?: number;
   phase?: number;
   min?: number;
@@ -100,8 +110,8 @@ export type InitInput =
    Node Schema Registry (exported from wasm via get_node_schemas_json)
 -------------------------------------------------------------------- */
 
-export type PortType = "float" | "bool" | "vec3";
-export type ParamType = "float" | "bool" | "vec3" | "any";
+export type PortType = "float" | "bool" | "vec3" | "vector";
+export type ParamType = "float" | "bool" | "vec3" | "vector" | "any";
 
 export interface PortSpec {
   id: string;            // canonical port id (e.g., "out", "in", "lhs", "rhs", "x", "y", "z")
@@ -137,6 +147,7 @@ export interface NodeSignature {
   inputs: PortSpec[];
   variadic_inputs?: VariadicSpec;
   outputs: PortSpec[];
+  variadic_outputs?: VariadicSpec;
   params: ParamSpec[];
 }
 

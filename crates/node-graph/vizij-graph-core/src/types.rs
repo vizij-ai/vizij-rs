@@ -41,17 +41,26 @@ pub enum NodeType {
     Clamp,
     Remap,
 
-    // Vec3 utilities
-    Vec3,      // make vec3(x,y,z) from inputs/params
-    Vec3Split, // split to x,y,z
-    Vec3Add,
-    Vec3Subtract,
-    Vec3Multiply, // component-wise
-    Vec3Scale,    // scalar * vec3
-    Vec3Normalize,
-    Vec3Dot,
+    // 3D-specific utilities
     Vec3Cross,
-    Vec3Length,
+
+    // Generic vector utilities
+    VectorConstant,
+    VectorAdd,
+    VectorSubtract,
+    VectorMultiply, // component-wise
+    VectorScale,    // scalar * vector
+    VectorNormalize,
+    VectorDot,
+    VectorLength,
+    VectorIndex,
+    Join,
+    Split,
+    VectorMin,
+    VectorMax,
+    VectorMean,
+    VectorMedian,
+    VectorMode,
 
     // Robotics
     InverseKinematics,
@@ -60,12 +69,13 @@ pub enum NodeType {
     Output,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum Value {
     Float(f64),
     Bool(bool),
     Vec3([f64; 3]),
+    Vector(Vec<f64>),
 }
 
 impl Default for Value {
@@ -98,6 +108,8 @@ pub struct NodeParams {
     pub bone3: Option<f64>,
     // For Splitter
     pub index: Option<f64>,
+    // For Split sizes (vector of sizes, floored to usize)
+    pub sizes: Option<Vec<f64>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

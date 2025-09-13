@@ -62,18 +62,19 @@ function ensureInited(): void {
 export type Value =
   | number
   | boolean
-  | [number, number, number]
+  | number[] // vector of arbitrary length; length 3 is treated as vec3
   | ValueJSON; // accept already-encoded JSON form too
 
 export function toValueJSON(v: Value): ValueJSON {
   if (typeof v === "number") return { float: v };
   if (typeof v === "boolean") return { bool: v };
   if (Array.isArray(v)) {
-    if (v.length !== 3) throw new Error("vec3 must be [x,y,z]");
-    return { vec3: [v[0] ?? 0, v[1] ?? 0, v[2] ?? 0] };
+    // Always encode JS arrays as generic vectors to avoid accidental vec3 coercion.
+    // Vec3 values should be passed explicitly as { vec3: [x,y,z] } when intended.
+    return { vector: v.slice() };
   }
   // assume already ValueJSON-ish
-  if ("float" in v || "bool" in v || "vec3" in v) return v as ValueJSON;
+  if ("float" in v || "bool" in v || "vec3" in v || "vector" in v) return v as ValueJSON;
   throw new Error("Unsupported Value shape");
 }
 

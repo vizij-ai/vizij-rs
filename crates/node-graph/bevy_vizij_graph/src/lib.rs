@@ -43,9 +43,9 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
     for e in ev.read() {
         if let Some(node) = g.0.nodes.iter_mut().find(|n| n.id == e.node) {
             match e.key.as_str() {
-                "value" => node.params.value = Some(e.value),
+                "value" => node.params.value = Some(e.value.clone()),
                 "frequency" => {
-                    node.params.frequency = Some(match e.value {
+                    node.params.frequency = Some(match e.value.clone() {
                         Value::Float(f) => f,
                         Value::Bool(b) => {
                             if b {
@@ -55,10 +55,11 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
+                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
                     })
                 }
                 "phase" => {
-                    node.params.phase = Some(match e.value {
+                    node.params.phase = Some(match e.value.clone() {
                         Value::Float(f) => f,
                         Value::Bool(b) => {
                             if b {
@@ -68,10 +69,11 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
+                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
                     })
                 }
                 "min" => {
-                    node.params.min = match e.value {
+                    node.params.min = match e.value.clone() {
                         Value::Float(f) => f,
                         Value::Bool(b) => {
                             if b {
@@ -81,10 +83,11 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
+                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
                     }
                 }
                 "max" => {
-                    node.params.max = match e.value {
+                    node.params.max = match e.value.clone() {
                         Value::Float(f) => f,
                         Value::Bool(b) => {
                             if b {
@@ -94,10 +97,11 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
+                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
                     }
                 }
                 "in_min" => {
-                    node.params.in_min = Some(match e.value {
+                    node.params.in_min = Some(match e.value.clone() {
                         Value::Float(f) => f,
                         Value::Bool(b) => {
                             if b {
@@ -107,10 +111,11 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
+                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
                     })
                 }
                 "in_max" => {
-                    node.params.in_max = Some(match e.value {
+                    node.params.in_max = Some(match e.value.clone() {
                         Value::Float(f) => f,
                         Value::Bool(b) => {
                             if b {
@@ -120,10 +125,11 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
+                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
                     })
                 }
                 "out_min" => {
-                    node.params.out_min = Some(match e.value {
+                    node.params.out_min = Some(match e.value.clone() {
                         Value::Float(f) => f,
                         Value::Bool(b) => {
                             if b {
@@ -133,10 +139,11 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
+                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
                     })
                 }
                 "out_max" => {
-                    node.params.out_max = Some(match e.value {
+                    node.params.out_max = Some(match e.value.clone() {
                         Value::Float(f) => f,
                         Value::Bool(b) => {
                             if b {
@@ -146,10 +153,11 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
+                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
                     })
                 }
                 "x" => {
-                    node.params.x = Some(match e.value {
+                    node.params.x = Some(match e.value.clone() {
                         Value::Float(f) => f,
                         Value::Bool(b) => {
                             if b {
@@ -159,10 +167,11 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
+                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
                     })
                 }
                 "y" => {
-                    node.params.y = Some(match e.value {
+                    node.params.y = Some(match e.value.clone() {
                         Value::Float(f) => f,
                         Value::Bool(b) => {
                             if b {
@@ -172,10 +181,11 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[1],
+                        Value::Vector(v) => v.get(1).copied().unwrap_or(0.0),
                     })
                 }
                 "z" => {
-                    node.params.z = Some(match e.value {
+                    node.params.z = Some(match e.value.clone() {
                         Value::Float(f) => f,
                         Value::Bool(b) => {
                             if b {
@@ -185,10 +195,11 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[2],
+                        Value::Vector(v) => v.get(2).copied().unwrap_or(0.0),
                     })
                 }
                 "bone1" => {
-                    node.params.bone1 = Some(match e.value {
+                    node.params.bone1 = Some(match e.value.clone() {
                         Value::Float(f) => f,
                         Value::Bool(b) => {
                             if b {
@@ -198,10 +209,11 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
+                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
                     })
                 }
                 "bone2" => {
-                    node.params.bone2 = Some(match e.value {
+                    node.params.bone2 = Some(match e.value.clone() {
                         Value::Float(f) => f,
                         Value::Bool(b) => {
                             if b {
@@ -211,10 +223,11 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
+                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
                     })
                 }
                 "bone3" => {
-                    node.params.bone3 = Some(match e.value {
+                    node.params.bone3 = Some(match e.value.clone() {
                         Value::Float(f) => f,
                         Value::Bool(b) => {
                             if b {
@@ -224,10 +237,11 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
+                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
                     })
                 }
                 "index" => {
-                    node.params.index = Some(match e.value {
+                    node.params.index = Some(match e.value.clone() {
                         Value::Float(f) => f,
                         Value::Bool(b) => {
                             if b {
@@ -237,6 +251,7 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
+                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
                     })
                 }
                 _ => { /* ignore unknown keys */ }
