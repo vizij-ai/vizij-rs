@@ -8,6 +8,12 @@ pub struct WasmGraph {
     t: f64,
 }
 
+impl Default for WasmGraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmGraph {
     #[wasm_bindgen(constructor)]
@@ -83,8 +89,8 @@ impl WasmGraph {
             Value::Bool(b)
         } else if let Some(arr) = v.get("vec3").and_then(|x| x.as_array()) {
             let mut a = [0.0; 3];
-            for i in 0..3 {
-                a[i] = arr.get(i).and_then(|x| x.as_f64()).unwrap_or(0.0);
+            for (i, slot) in a.iter_mut().enumerate() {
+                *slot = arr.get(i).and_then(|x| x.as_f64()).unwrap_or(0.0);
             }
             Value::Vec3(a)
         } else if let Some(arr) = v.get("vector").and_then(|x| x.as_array()) {

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Git pre-commit hook: enforce formatting and linting for the Rust workspace
+set -euo pipefail
+
+echo "[pre-commit] cargo fmt --all -- --check"
+cargo fmt --all -- --check
+
+echo "[pre-commit] cargo clippy --all-targets -- -D warnings"
+cargo clippy --all-targets -- -D warnings
+
+echo "[pre-commit] OK"

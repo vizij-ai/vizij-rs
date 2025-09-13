@@ -18,7 +18,7 @@ fn as_float(v: &Value) -> f64 {
             }
         }
         Value::Vec3(v) => v[0],
-        Value::Vector(a) => *a.get(0).unwrap_or(&0.0),
+        Value::Vector(a) => a.first().copied().unwrap_or(0.0),
     }
 }
 
@@ -123,9 +123,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
 
     let outputs = match spec.kind {
         NodeType::Constant => out_map!(p.value.clone().unwrap_or_default()),
-        NodeType::Slider => out_map!(Value::Float(
-            p.value.as_ref().map(|v| as_float(v)).unwrap_or(0.0)
-        )),
+        NodeType::Slider => out_map!(Value::Float(p.value.as_ref().map(as_float).unwrap_or(0.0))),
         NodeType::MultiSlider => {
             let mut map = HashMap::new();
             let x = p.x.unwrap_or(0.0);
@@ -138,7 +136,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
         }
         NodeType::Add => {
             // Variadic add (vector-first with broadcasting)
-            let ops: Vec<Vec<f64>> = ivals.values().map(|v| as_vector(v)).collect();
+            let ops: Vec<Vec<f64>> = ivals.values().map(as_vector).collect();
             if let Some((first, rest)) = ops.split_first() {
                 let acc =
                     fold_variadic(first.clone(), rest.iter().map(|v| v.as_slice()), |x, y| {
@@ -158,7 +156,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
         }
         NodeType::Multiply => {
             // Variadic multiply (vector-first with broadcasting)
-            let ops: Vec<Vec<f64>> = ivals.values().map(|v| as_vector(v)).collect();
+            let ops: Vec<Vec<f64>> = ivals.values().map(as_vector).collect();
             if let Some((first, rest)) = ops.split_first() {
                 let acc =
                     fold_variadic(first.clone(), rest.iter().map(|v| v.as_slice()), |x, y| {
@@ -278,11 +276,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
 
         // Generic vector utilities
         NodeType::VectorConstant => {
-            let vec = p
-                .value
-                .as_ref()
-                .map(|v| as_vector(v))
-                .unwrap_or_else(|| vec![]);
+            let vec = p.value.as_ref().map(as_vector).unwrap_or_default();
             out_map!(Value::Vector(vec))
         }
         NodeType::VectorAdd => {
@@ -484,7 +478,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
 
             out_map!(
                 if dist_sq > (l1 + l2) * (l1 + l2) || dist_sq < (l1 - l2) * (l1 - l2) {
-                    Value::Vec3([std::f64::NAN, std::f64::NAN, std::f64::NAN])
+                    Value::Vec3([f64::NAN, f64::NAN, f64::NAN])
                 } else {
                     // let dist = dist_sq.sqrt();
                     let cos_angle2 = (dist_sq - l1 * l1 - l2 * l2) / (2.0 * l1 * l2);

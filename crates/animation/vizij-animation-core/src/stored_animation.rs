@@ -68,8 +68,8 @@ fn to_core_value(v: &RawValue) -> Result<Value, String> {
         RawValue::Vector2 { x, y } => Ok(Value::Vec2([*x as f32, *y as f32])),
         // Euler (r,p,y) mapped to Vec3 [r,p,y]; adapters can remap axes if needed.
         RawValue::Euler { r, p, y } => Ok(Value::Vec3([*r as f32, *p as f32, *y as f32])),
-        RawValue::RGB { r, g, b } => Ok(Value::Color([*r as f32, *g as f32, *b as f32, 1.0])),
-        RawValue::HSL { h, s, l } => {
+        RawValue::Rgb { r, g, b } => Ok(Value::Color([*r as f32, *g as f32, *b as f32, 1.0])),
+        RawValue::Hsl { h, s, l } => {
             let (r, g, b) = hsl_to_rgb(*h as f32, *s as f32, *l as f32);
             Ok(Value::Color([r, g, b, 1.0]))
         }
@@ -176,6 +176,6 @@ enum RawValue {
     Vector3 { x: f64, y: f64, z: f64 },
     Vector2 { x: f64, y: f64 },
     Euler { r: f64, p: f64, y: f64 },
-    RGB { r: f64, g: f64, b: f64 },
-    HSL { h: f64, s: f64, l: f64 },
+    Rgb { r: f64, g: f64, b: f64 },
+    Hsl { h: f64, s: f64, l: f64 },
 }

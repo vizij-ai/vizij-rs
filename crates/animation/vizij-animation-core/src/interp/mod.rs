@@ -11,6 +11,6 @@ pub struct InterpRegistry;
 
 impl InterpRegistry {
     pub fn new() -> Self {
-        Self::default()
+        Self
     }
 }

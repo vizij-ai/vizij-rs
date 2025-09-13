@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Git pre-push hook: run format, lint, tests, and optional WASM/package checks
+set -euo pipefail
+
+# Skip hooks if requested
+if [[ "${SKIP_GIT_HOOKS:-0}" == "1" ]]; then
+  echo "[pre-push] SKIP_GIT_HOOKS=1 -> skipping checks"
+  exit 0
+fi
+
+echo "[pre-push] cargo fmt --all -- --check"
+cargo fmt --all -- --check
+
+echo "[pre-push] cargo clippy --all-targets -- -D warnings"
+cargo clippy --all-targets -- -D warnings
+
+echo "[pre-push] cargo test --all-features --all-targets"
+cargo test --all-features --all-targets
+
+# Optional heavier checks: build WASM wrappers and ensure npm packages pack
+# Enable by setting HOOK_RUN_WASM=1 in your environment.
+if [[ "${HOOK_RUN_WASM:-0}" == "1" ]]; then
+  echo "[pre-push] node scripts/build-animation-wasm.mjs"
+  node scripts/build-animation-wasm.mjs
+
+  echo "[pre-push] node scripts/build-graph-wasm.mjs"
+  node scripts/build-graph-wasm.mjs
+
+  echo "[pre-push] npm/@vizij/animation-wasm: npm ci && npm run build && npm pack --dry-run"
+  (cd npm/@vizij/animation-wasm && npm ci && npm run build && npm pack --dry-run)
+
+  echo "[pre-push] npm/@vizij/node-graph-wasm: npm ci && npm run build && npm pack --dry-run"
+  (cd npm/@vizij/node-graph-wasm && npm ci && npm run build && npm pack --dry-run)
+fi
+
+echo "[pre-push] OK"

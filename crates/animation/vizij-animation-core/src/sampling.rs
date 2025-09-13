@@ -4,8 +4,8 @@
 //! Model:
 //! - Each Track has ordered Keypoints with normalized stamps in [0,1].
 //! - Segment [Pi -> P(i+1)] timing is a cubic-bezier determined by:
-//!     cp0 = Pi.transitions.out or default {x:0.42, y:0.0}
-//!     cp1 = P(i+1).transitions.in or default {x:0.58, y:1.0}
+//!   cp0 = Pi.transitions.out or default {x:0.42, y:0.0}
+//!   cp1 = P(i+1).transitions.in or default {x:0.58, y:1.0}
 //! - For Bool/Text value kinds we use true step behavior (hold left).
 //! - All other kinds use bezier easing on time, then linear/nlerp blend on value.
 //!
@@ -79,14 +79,14 @@ pub fn sample_track(track: &Track, u: f32) -> Value {
                 .transitions
                 .as_ref()
                 .and_then(|t| t.r#out.as_ref())
-                .map(|v| (v.x as f32, v.y as f32))
+                .map(|v| (v.x, v.y))
                 .unwrap_or((DEFAULT_OUT_X, DEFAULT_OUT_Y));
 
             let (x2, y2) = right
                 .transitions
                 .as_ref()
                 .and_then(|t| t.r#in.as_ref())
-                .map(|v| (v.x as f32, v.y as f32))
+                .map(|v| (v.x, v.y))
                 .unwrap_or((DEFAULT_IN_X, DEFAULT_IN_Y));
 
             bezier_value(&left.value, &right.value, lt, [x1, y1, x2, y2])

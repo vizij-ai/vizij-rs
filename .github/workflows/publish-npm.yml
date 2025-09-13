@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'npm-v*.*.*'   # e.g., npm-v0.1.3
+      - 'npm-graph-v*.*.*'   # e.g., npm-graph-v0.1.3
 
 permissions:
   contents: read
@@ -11,6 +12,7 @@ permissions:
 
 jobs:
   publish:
+    if: startsWith(github.ref, 'refs/tags/npm-v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +37,37 @@ jobs:
 
       - name: Publish @vizij/animation-wasm
         working-directory: npm/@vizij/animation-wasm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
+        run: npm publish --access public --provenance
+
+  publish_graph:
+    if: startsWith(github.ref, 'refs/tags/npm-graph-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+
+      - name: Build Graph WASM into pkg/
+        run: node scripts/build-graph-wasm.mjs
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+      - name: Build graph wrapper
+        run: |
+          cd npm/@vizij/node-graph-wasm
+          npm ci
+          npm run build
+          npm pack --dry-run
+
+      - name: Publish @vizij/node-graph-wasm
+        working-directory: npm/@vizij/node-graph-wasm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true

@@ -595,8 +595,7 @@ impl Engine {
             let inst_ids: Vec<InstId> = self.players[idx].instances.clone();
             // Remove all instances owned by this player
             if !inst_ids.is_empty() {
-                self.instances
-                    .retain(|ii| !inst_ids.iter().any(|id| *id == ii.id));
+                self.instances.retain(|ii| !inst_ids.contains(&ii.id));
             }
             // Remove the player
             self.players.remove(idx);
@@ -622,8 +621,7 @@ impl Engine {
         if !to_remove.is_empty() {
             // Detach from players
             for p in &mut self.players {
-                p.instances
-                    .retain(|iid| !to_remove.iter().any(|rid| *rid == *iid));
+                p.instances.retain(|iid| !to_remove.contains(iid));
                 // TODO: Evaluate if the drop below is necessary
                 // Recompute duration after detaching
                 // let pid = p.id;

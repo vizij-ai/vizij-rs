@@ -55,7 +55,7 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
+                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
                     })
                 }
                 "phase" => {
@@ -69,7 +69,7 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
+                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
                     })
                 }
                 "min" => {
@@ -83,7 +83,7 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
+                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
                     }
                 }
                 "max" => {
@@ -97,7 +97,7 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
+                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
                     }
                 }
                 "in_min" => {
@@ -111,7 +111,7 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
+                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
                     })
                 }
                 "in_max" => {
@@ -125,7 +125,7 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
+                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
                     })
                 }
                 "out_min" => {
@@ -139,7 +139,7 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
+                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
                     })
                 }
                 "out_max" => {
@@ -153,7 +153,7 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
+                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
                     })
                 }
                 "x" => {
@@ -167,7 +167,7 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
+                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
                     })
                 }
                 "y" => {
@@ -209,7 +209,7 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
+                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
                     })
                 }
                 "bone2" => {
@@ -223,7 +223,7 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
+                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
                     })
                 }
                 "bone3" => {
@@ -237,7 +237,7 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
+                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
                     })
                 }
                 "index" => {
@@ -251,7 +251,7 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                             }
                         }
                         Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.get(0).copied().unwrap_or(0.0),
+                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
                     })
                 }
                 _ => { /* ignore unknown keys */ }

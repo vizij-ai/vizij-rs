@@ -54,9 +54,7 @@ impl VizijAnimation {
     ///   new VizijAnimation({ scratch_samples: 2048 })
     #[wasm_bindgen(constructor)]
     pub fn new(config: JsValue) -> Result<VizijAnimation, JsError> {
-        unsafe {
-            console_error_panic_hook::set_once();
-        }
+        console_error_panic_hook::set_once();
 
         let cfg: Config = if jsvalue_is_undefined_or_null(&config) {
             Config::default()
