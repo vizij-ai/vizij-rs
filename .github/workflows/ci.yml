@@ -10,7 +10,6 @@ concurrency:
 jobs:
   rust:
     runs-on: ubuntu-latest
-    defaults: { run: { working-directory: vizij-rs } }
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -20,25 +19,36 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            vizij-rs/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('vizij-rs/**/Cargo.lock') }}
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --all-features --all-targets
 
   wasm:
     runs-on: ubuntu-latest
-    defaults: { run: { working-directory: vizij-rs } }
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install wasm-pack
         run: cargo install wasm-pack
       - name: Build WASM into npm wrapper pkg/
-        run: node scripts/build-wasm.mjs
+        run: node scripts/build-animation-wasm.mjs
+      - name: Build Graph WASM into npm wrapper pkg/
+        run: node scripts/build-graph-wasm.mjs
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
       - name: Verify wrapper builds
         run: |
           cd npm/@vizij/animation-wasm
+          npm ci
+          npm run build
+          npm pack --dry-run
+      - name: Verify node-graph wrapper builds
+        run: |
+          cd npm/@vizij/node-graph-wasm
           npm ci
           npm run build
           npm pack --dry-run

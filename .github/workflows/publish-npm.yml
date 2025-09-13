@@ -12,7 +12,6 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    defaults: { run: { working-directory: vizij-rs } }
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -20,8 +19,13 @@ jobs:
         run: cargo install wasm-pack
 
       - name: Build WASM into pkg/
-        run: node scripts/build-wasm.mjs
+        run: node scripts/build-animation-wasm.mjs
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
       - name: Build wrapper
         run: |
           cd npm/@vizij/animation-wasm
@@ -30,7 +34,7 @@ jobs:
           npm pack --dry-run
 
       - name: Publish @vizij/animation-wasm
-        working-directory: vizij-rs/npm/@vizij/animation-wasm
+        working-directory: npm/@vizij/animation-wasm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
