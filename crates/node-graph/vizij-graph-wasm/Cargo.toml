@@ -13,7 +13,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 hashbrown = { workspace = true }
 vizij-graph-core = { path = "../vizij-graph-core", version = "0.1.0" }
+console_error_panic_hook = { version = "0.1", optional = true }
 
 [features]
 # Enable this if you want console_error_panic_hook
-console_error_panic_hook = []
+console_error_panic_hook = ["dep:console_error_panic_hook"]
