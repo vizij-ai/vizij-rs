@@ -31,7 +31,7 @@ jobs:
       - name: Build wrapper
         run: |
           cd npm/@vizij/animation-wasm
-          if [ -f package-lock.json ]; then npm ci; else npm i; fi
+          npm i
           npm run build
           npm pack --dry-run
 
@@ -62,7 +62,7 @@ jobs:
       - name: Build graph wrapper
         run: |
           cd npm/@vizij/node-graph-wasm
-          if [ -f package-lock.json ]; then npm ci; else npm i; fi
+          npm i
           npm run build
           npm pack --dry-run
 
