@@ -1,22 +1,27 @@
 [package]
-name = "vizij-animation-wasm"
-version = "0.1.0"
-edition = "2021"
-license = "MIT OR Apache-2.0"
-description = "wasm-bindgen interface for Vizij animation."
-repository = "https://github.com/vizij/vizij-rs"
+name        = "vizij-animation-wasm"
+version     = "0.1.0"
+edition     = "2021"
+license     = "MIT OR Apache-2.0"
+description = "wasm‑bindgen interface for Vizij animation."
+repository  = "https://github.com/vizij-ai/vizij-rs"
+homepage    = "https://github.com/vizij-ai/vizij-rs"
+documentation = "https://docs.rs/vizij-animation-wasm"
+readme      = "README.md"
+keywords    = ["vizij", "animation", "wasm", "web"]
+categories  = ["wasm", "rendering"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-wasm-bindgen = { workspace = true }
-js-sys = { workspace = true }
-serde = { workspace = true }
-serde-wasm-bindgen = "0.6"
+wasm-bindgen          = { workspace = true }
+js-sys               = { workspace = true }
+serde                = { workspace = true }
+serde-wasm-bindgen   = "0.6"
 console_error_panic_hook = "0.1"
-vizij-animation-core = { path = "../vizij-animation-core" }
+vizij-animation-core = { path = "../vizij-animation-core", version = "0.1.0" }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
-serde_json = "1"
+serde_json       = "1"

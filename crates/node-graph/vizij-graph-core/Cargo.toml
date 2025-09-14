@@ -1,12 +1,19 @@
 [package]
-name = "vizij-graph-core"
-version = "0.1.0"
-edition = "2021"
-license = "MIT OR Apache-2.0"
+name        = "vizij-graph-core"
+version     = "0.1.0"
+edition     = "2021"
+license     = "MIT OR Apache-2.0"
+description = "Core node‑graph engine used by Vizij."
+repository  = "https://github.com/vizij-ai/vizij-rs"
+homepage    = "https://github.com/vizij-ai/vizij-rs"
+documentation = "https://docs.rs/vizij-graph-core"
+readme      = "README.md"
+keywords    = ["vizij", "node", "graph", "ecs"]
+categories  = ["rendering", "game-engines"]
 
 [dependencies]
-serde = { workspace = true }
+serde    = { workspace = true }
 serde_json = { workspace = true }
-thiserror = { workspace = true }
-hashbrown = { workspace = true }
-anyhow = { workspace = true }
+thiserror  = { workspace = true }
+hashbrown  = { workspace = true }
+anyhow     = { workspace = true }

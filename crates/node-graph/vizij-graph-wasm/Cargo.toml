@@ -1,20 +1,27 @@
 [package]
-name = "vizij-graph-wasm"
-version = "0.1.0"
-edition = "2021"
-license = "MIT OR Apache-2.0"
+name        = "vizij-graph-wasm"
+version     = "0.1.0"
+edition     = "2021"
+license     = "MIT OR Apache-2.0"
+description = "wasm‑bindgen interface for Vizij node graph."
+repository  = "https://github.com/vizij-ai/vizij-rs"
+homepage    = "https://github.com/vizij-ai/vizij-rs"
+documentation = "https://docs.rs/vizij-graph-wasm"
+readme      = "README.md"
+keywords    = ["vizij", "node", "graph", "wasm"]
+categories  = ["wasm", "rendering"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 wasm-bindgen = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-hashbrown = { workspace = true }
+serde        = { workspace = true }
+serde_json   = { workspace = true }
+hashbrown    = { workspace = true }
 vizij-graph-core = { path = "../vizij-graph-core", version = "0.1.0" }
 console_error_panic_hook = { version = "0.1", optional = true }
 
 [features]
-# Enable this if you want console_error_panic_hook
-console_error_panic_hook = ["dep:console_error_panic_hook"]
+# enable console error hook if desired
+console_error = ["console_error_panic_hook"]

@@ -1,12 +1,19 @@
 [package]
-name = "bevy_vizij_graph"
-version = "0.1.0"
-edition = "2021"
-license = "MIT OR Apache-2.0"
+name        = "bevy_vizij_graph"
+version     = "0.1.0"
+edition     = "2021"
+license     = "MIT OR Apache-2.0"
+description = "Bevy plugin that integrates Vizij’s node graph into Bevy."
+repository  = "https://github.com/vizij-ai/vizij-rs"
+homepage    = "https://github.com/vizij-ai/vizij-rs"
+documentation = "https://docs.rs/bevy_vizij_graph"
+readme      = "README.md"
+keywords    = ["vizij", "node", "graph", "bevy", "plugin"]
+categories  = ["game-engines", "rendering"]
 
 [dependencies]
-bevy = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-hashbrown = { workspace = true }
+bevy           = { workspace = true }
+serde          = { workspace = true }
+serde_json     = { workspace = true }
+hashbrown      = { workspace = true }
 vizij-graph-core = { path = "../vizij-graph-core", version = "0.1.0" }

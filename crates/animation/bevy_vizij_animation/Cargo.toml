@@ -1,14 +1,19 @@
 [package]
-name = "bevy_vizij_animation"
-version = "0.1.0"
-edition = "2021"
-license = "MIT OR Apache-2.0"
-description = "Bevy plugin that wraps Vizij animation core."
-repository = "https://github.com/vizij/vizij-rs"
+name        = "bevy_vizij_animation"
+version     = "0.1.0"
+edition     = "2021"
+license     = "MIT OR Apache-2.0"
+description = "Bevy plugin that wraps the Vizij animation core."
+repository  = "https://github.com/vizij-ai/vizij-rs"
+homepage    = "https://github.com/vizij-ai/vizij-rs"
+documentation = "https://docs.rs/bevy_vizij_animation"
+readme      = "README.md"
+keywords    = ["vizij", "animation", "bevy", "plugin"]
+categories  = ["game-engines", "rendering", "wasm"]
 
 [dependencies]
-vizij-animation-core = { version = "0.1", path = "../vizij-animation-core" }
-bevy = { workspace = true }
+vizij-animation-core = { version = "0.1.0", path = "../vizij-animation-core" }
+bevy                = { workspace = true }
 
 [dev-dependencies]
 serde_json = "1"
