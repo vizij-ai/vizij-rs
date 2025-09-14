@@ -211,6 +211,27 @@ cd ../vizij-rs/npm/@vizij/animation-wasm && npm unlink
 * **Use semver** in `vizij-web` (`"@vizij/animation-wasm": "^x.y.z"`). No `npm link` in CI; just `npm ci && npm run build`.
 * The Vite Option B dev config is harmless in prod builds; you can leave it.
 
+### Version Management Strategy Notes
+Managing versions across crates and npm packages is the hardest part of multi‑language workspaces. Here is a proposed approach:
+
+Single source of truth for version numbers. Align the versions of each crate and its corresponding WASM wrapper and React package (e.g., vizij-animation-core, vizij-animation-wasm, @vizij/animation-wasm and @vizij/animation-react should all have the same version). Do the same for the graph packages. This makes it obvious which versions correspond to each other.
+
+Use cargo-workspaces or cargo-release to bump versions for all Rust crates simultaneously. A typical release flow is:
+
+Merge feature branches into main.
+
+Run cargo workspaces version --yes <level> (where <level> is patch, minor or major). This updates versions in all Cargo.toml files, updates dependency version bounds and commits the changes.
+
+Tag the repo with crates/vizij-animation-core@X.Y.Z and crates/vizij-graph-core@X.Y.Z (one tag per crate) or create a single umbrella tag like rs-vX.Y.Z. Pushing the tags triggers the publish-crates workflow.
+
+Build and publish the WASM wrappers. After publishing the core crates, update the version numbers of vizij-animation-wasm and vizij-graph-wasm to match the core crates and publish them to crates.io and update the npm wrapper packages. The publish-npm.yml workflow triggered by tags (npm-vX.Y.Z and npm-graph-vX.Y.Z) handles the npm publish step. Use a script (similar to the dry‑run) to update the package.json versions and re‑point dependencies before committing.
+
+Version the React and render packages by following semver based on public API changes. If you adopt changesets, each PR that changes public API must include a .changeset/xyz.md file that declares which packages need version bumps and of what type. Running changeset version will update versions in all related package.json files and update inter‑package dependencies accordingly.
+
+Coordinate between repos. Because vizij-web consumes the npm wrappers built in vizij-rs, update the version ranges of @vizij/animation-wasm and @vizij/node-graph-wasm in vizij-web whenever a new wrapper is published. If you use unified versioning, this just means bumping to the latest ^X.Y.Z in package.json.
+
+Document the release process in a RELEASE.md file. Outline the steps: prepare crates with correct metadata, bump versions with cargo-workspaces, publish crates, tag and push; build WASM and publish npm wrappers; update vizij-web dependencies and bump versions; publish React packages via changesets or tags. Include commands and CI behaviour.
+
 ---
 
 ## Troubleshooting tips
