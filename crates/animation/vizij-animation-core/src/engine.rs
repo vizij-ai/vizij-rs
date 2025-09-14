@@ -198,35 +198,54 @@ pub struct InstanceInfo {
 }
 
 impl Engine {
-    /// Map player's internal time to a display/playhead time according to loop mode and window.
-    fn map_player_time_for_display(p: &Player) -> f32 {
-        // Determine the looping span: window if set, otherwise from start_time over computed length.
-        let start = p.start_time.max(0.0);
-        // If window end provided use it; else use start + total_duration (if total_duration is 0, avoid div by zero)
-        let span = if let Some(end) = p.end_time {
-            (end - start).max(0.0)
-        } else {
-            (p.total_duration - start).max(0.0)
-        };
-
-        // For empty span, just clamp to start
-        if span <= 0.0 {
-            return start;
-        }
-
+    /// Map player's internal time to a display/playhead time according to loop mode.
+    /// Semantics:
+    /// - Once: apply window clamp [start_time, end_time?], otherwise [start_time, start_time+total_duration]
+    /// - Loop: ignore window, wrap over full clip [0, total_duration)
+    /// - PingPong: ignore window, reflect over full clip [0, total_duration]
+    fn map_player_time_for_display(&self, p: &Player) -> f32 {
         match p.mode {
-            LoopMode::Once => p.time.clamp(start, start + span),
-            LoopMode::Loop => {
-                // Reduce to [start, start+span)
-                let rel = p.time - start;
-                let m = fmod(rel, span);
-                let wrapped = if m < 0.0 { m + span } else { m };
-                start + wrapped
+            LoopMode::Once => {
+                let start = p.start_time.max(0.0);
+                let span = if let Some(end) = p.end_time {
+                    (end - start).max(0.0)
+                } else {
+                    (p.total_duration - start).max(0.0)
+                };
+                if span <= 0.0 {
+                    start
+                } else {
+                    p.time.clamp(start, start + span)
+                }
             }
-            LoopMode::PingPong => {
-                // Mirror over [start, start+span]
-                // ping_pong maps into [0, span], so add start back
-                start + ping_pong(p.time - start, span)
+            LoopMode::Loop | LoopMode::PingPong => {
+                // Compute full (unwindowed) span across instances
+                let mut full_span = 0.0f32;
+                for iid in &p.instances {
+                    if let Some(inst) = self.instances.iter().find(|ii| ii.id == *iid) {
+                        if let Some(anim) = self.anims.get(inst.anim) {
+                            let anim_duration = anim.duration_ms as f32 / 1000.0;
+                            let ts_abs = inst.time_scale.abs().max(1e-6);
+                            let end_time = inst.start_offset + (anim_duration * ts_abs);
+                            if end_time > full_span {
+                                full_span = end_time;
+                            }
+                        }
+                    }
+                }
+                if full_span <= 0.0 {
+                    0.0
+                } else if matches!(p.mode, LoopMode::Loop) {
+                    let m = fmod(p.time, full_span);
+                    if m < 0.0 {
+                        m + full_span
+                    } else {
+                        m
+                    }
+                } else {
+                    // PingPong over full span
+                    ping_pong(p.time, full_span)
+                }
             }
         }
     }
@@ -461,19 +480,15 @@ impl Engine {
         if anim_duration <= 0.0 {
             return 0.0;
         }
+        // Special-case zero time scale: hold at start_offset in clip time.
+        if inst.time_scale == 0.0 {
+            return inst.start_offset.clamp(0.0, anim_duration);
+        }
         // Guard against division by zero while preserving sign semantics
-        let ts = if inst.time_scale.abs() < 1e-6 {
-            if inst.time_scale >= 0.0 {
-                1e-6
-            } else {
-                -1e-6
-            }
-        } else {
-            inst.time_scale
-        };
-        // Compute cycle-relative player time so each cycle has a pre-offset hold.
-        let t_cycle = Self::map_player_time_for_display(player);
-        let rel_cycle = t_cycle - player.start_time;
+        let ts = inst.time_scale;
+        // Compute display-mapped player time (already windowed/looped)
+        let t_display = self.map_player_time_for_display(player);
+        let rel_cycle = t_display;
         if rel_cycle <= 0.0 {
             // At the very start of a cycle, hold initial value before any instance starts.
             return 0.0;
@@ -677,7 +692,7 @@ impl Engine {
                 id: p.id.0,
                 name: p.name.clone(),
                 state: Self::derive_playback_state(p),
-                time: Self::map_player_time_for_display(p),
+                time: self.map_player_time_for_display(p),
                 speed: p.speed,
                 loop_mode: p.mode,
                 start_time: p.start_time,
