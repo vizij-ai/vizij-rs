@@ -222,4 +222,36 @@ cd ../vizij-rs/npm/@vizij/animation-wasm && npm unlink
 
 ---
 
+## Developer Git Hooks
+
+Use repository-local Git hooks to catch formatting, clippy, and test failures before pushing code.
+
+Install (one-time per clone):
+```bash
+bash scripts/install-git-hooks.sh
+```
+
+What runs
+- pre-commit
+  - `cargo fmt --all -- --check`
+  - `cargo clippy --all-targets -- -D warnings`
+- pre-push
+  - `cargo fmt --all -- --check`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo test --all-features --all-targets`
+  - Optional heavier WASM/package checks when you set:
+    ```bash
+    export HOOK_RUN_WASM=1
+    ```
+    This will:
+    - Build both WASM packages via `scripts/build-animation-wasm.mjs` and `scripts/build-graph-wasm.mjs`
+    - `npm ci && npm run build && npm pack --dry-run` in
+      - `npm/@vizij/animation-wasm`
+      - `npm/@vizij/node-graph-wasm`
+
+Bypass temporarily (not recommended):
+```bash
+export SKIP_GIT_HOOKS=1
+```
+
 If you want, I can also generate these scripts + the Vite config as a small patch you can apply directly to your repos.

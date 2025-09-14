@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install system dependencies (alsa dev for Bevy/alsa-sys)
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
       - name: Cache cargo
         uses: actions/cache@v4
@@ -43,12 +45,12 @@ jobs:
       - name: Verify wrapper builds
         run: |
           cd npm/@vizij/animation-wasm
-          npm ci
+          if [ -f package-lock.json ]; then npm ci; else npm i; fi
           npm run build
           npm pack --dry-run
       - name: Verify node-graph wrapper builds
         run: |
           cd npm/@vizij/node-graph-wasm
-          npm ci
+          if [ -f package-lock.json ]; then npm ci; else npm i; fi
           npm run build
           npm pack --dry-run
