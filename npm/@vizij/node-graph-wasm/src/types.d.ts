@@ -65,8 +65,28 @@ export type ValueJSON =
   | { color: [number, number, number, number] }    // ColorRgba
   | { transform: { pos: [number, number, number]; rot: [number, number, number, number]; scale: [number, number, number] } }
   | { vector: number[] }
+  | { record: { [key: string]: ValueJSON } }
+  | { array: ValueJSON[] }
+  | { list: ValueJSON[] }
+  | { tuple: ValueJSON[] }
   | { text: string }
   | { enum: { tag: string; value: ValueJSON } };
+
+export type ShapeJSON =
+  | { id: "Scalar"; meta?: Record<string, string> }
+  | { id: "Bool"; meta?: Record<string, string> }
+  | { id: "Vec2"; meta?: Record<string, string> }
+  | { id: "Vec3"; meta?: Record<string, string> }
+  | { id: "Vec4"; meta?: Record<string, string> }
+  | { id: "Quat"; meta?: Record<string, string> }
+  | { id: "ColorRgba"; meta?: Record<string, string> }
+  | { id: "Transform"; meta?: Record<string, string> }
+  | { id: "Text"; meta?: Record<string, string> }
+  | { id: "Record"; data: { name: string; shape: ShapeJSON }[]; meta?: Record<string, string> }
+  | { id: "Array"; data: [ShapeJSON, number]; meta?: Record<string, string> }
+  | { id: "List"; data: ShapeJSON; meta?: Record<string, string> }
+  | { id: "Tuple"; data: ShapeJSON[]; meta?: Record<string, string> }
+  | { id: "Enum"; data: [string, ShapeJSON][]; meta?: Record<string, string> };
 
 export interface NodeParams {
   value?: ValueJSON | number | boolean | [number, number, number] | number[];
@@ -94,13 +114,30 @@ export interface NodeSpec {
    * Matches Rust: HashMap<String, InputConnection> where InputConnection { node_id, output_key }.
    */
   inputs?: Record<string, { node_id: string; output_key: string }>;
+  output_shapes?: Record<string, ShapeJSON>;
 }
 
 export interface GraphSpec {
   nodes: NodeSpec[];
 }
 
-export type GraphOutputs = Record<NodeId, Record<string, ValueJSON>>;
+export interface PortSnapshot {
+  value: ValueJSON;
+  shape: ShapeJSON;
+}
+
+export type GraphOutputs = Record<NodeId, Record<string, PortSnapshot>>;
+
+export interface WriteOpJSON {
+  path: string;
+  value: ValueJSON;
+  shape: ShapeJSON;
+}
+
+export interface EvalResult {
+  nodes: Record<NodeId, Record<string, PortSnapshot>>;
+  writes: WriteOpJSON[];
+}
 
 /**
  * Input accepted by wasm-bindgen init; mirrors what wasm-pack generated init()

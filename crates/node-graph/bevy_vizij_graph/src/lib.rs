@@ -1,13 +1,13 @@
 use bevy::prelude::*;
 use hashbrown::HashMap;
 use vizij_api_core::Value;
-use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, NodeId};
+use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, NodeId, PortValue};
 
 #[derive(Resource, Default, Clone)]
 pub struct GraphResource(pub GraphSpec);
 
 #[derive(Resource, Default, Clone)]
-pub struct GraphOutputs(pub HashMap<NodeId, HashMap<String, Value>>);
+pub struct GraphOutputs(pub HashMap<NodeId, HashMap<String, PortValue>>);
 
 /// Convert a Value into a coarse f32 scalar for node parameter assignment.
 /// Rules:
@@ -34,6 +34,10 @@ fn value_to_f32(v: &Value) -> f32 {
         Value::ColorRgba(a) => a[0],
         Value::Transform { pos, .. } => pos[0],
         Value::Vector(vec) => vec.first().copied().unwrap_or(0.0),
+        Value::Record(map) => map.values().next().map(value_to_f32).unwrap_or(0.0),
+        Value::Array(items) => items.first().map(value_to_f32).unwrap_or(0.0),
+        Value::List(items) => items.first().map(value_to_f32).unwrap_or(0.0),
+        Value::Tuple(items) => items.first().map(value_to_f32).unwrap_or(0.0),
         Value::Enum(_, boxed) => value_to_f32(boxed.as_ref()),
         Value::Text(_) => 0.0,
     }
@@ -155,7 +159,7 @@ fn system_eval(world: &mut World) {
                         format!("{base}.{}", key)
                     };
                     if let Ok(tp) = vizij_api_core::TypedPath::parse(&path_str) {
-                        batch.push(vizij_api_core::WriteOp::new(tp, val.clone()));
+                        batch.push(vizij_api_core::WriteOp::new(tp, val.value.clone()));
                     }
                 }
             }

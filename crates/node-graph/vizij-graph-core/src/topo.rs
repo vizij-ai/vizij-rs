@@ -59,6 +59,7 @@ mod tests {
                         ..Default::default()
                     },
                     inputs: hashbrown::HashMap::new(),
+                    output_shapes: Default::default(),
                 },
                 NodeSpec {
                     id: "b".into(),
@@ -74,6 +75,7 @@ mod tests {
                     .iter()
                     .cloned()
                     .collect(),
+                    output_shapes: Default::default(),
                 },
             ],
         };

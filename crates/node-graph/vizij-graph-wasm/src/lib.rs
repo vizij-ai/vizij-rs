@@ -3,6 +3,154 @@ use vizij_api_core::Value;
 use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec};
 use wasm_bindgen::prelude::*;
 
+fn normalize_value_json(value: serde_json::Value) -> serde_json::Value {
+    use serde_json::{json, Map, Value as JsonValue};
+
+    match value {
+        JsonValue::Number(n) => json!({ "type": "Float", "data": n }),
+        JsonValue::Bool(b) => json!({ "type": "Bool", "data": b }),
+        JsonValue::String(s) => json!({ "type": "Text", "data": s }),
+        JsonValue::Array(arr) => {
+            let all_numbers = arr.iter().all(|x| x.is_number());
+            if all_numbers {
+                if arr.len() == 2 {
+                    json!({ "type": "Vec2", "data": arr })
+                } else if arr.len() == 3 {
+                    json!({ "type": "Vec3", "data": arr })
+                } else if arr.len() == 4 {
+                    json!({ "type": "Vec4", "data": arr })
+                } else {
+                    json!({ "type": "Vector", "data": arr })
+                }
+            } else {
+                let data: Vec<JsonValue> = arr.into_iter().map(normalize_value_json).collect();
+                json!({ "type": "List", "data": data })
+            }
+        }
+        JsonValue::Object(obj) => {
+            if obj.contains_key("type") && obj.contains_key("data") {
+                return JsonValue::Object(obj);
+            }
+
+            if let Some(f) = obj.get("float").and_then(|x| x.as_f64()) {
+                return json!({ "type": "Float", "data": f });
+            }
+            if let Some(b) = obj.get("bool").and_then(|x| x.as_bool()) {
+                return json!({ "type": "Bool", "data": b });
+            }
+            if let Some(arr) = obj.get("vec2").and_then(|x| x.as_array()) {
+                return json!({ "type": "Vec2", "data": arr });
+            }
+            if let Some(arr) = obj.get("vec3").and_then(|x| x.as_array()) {
+                return json!({ "type": "Vec3", "data": arr });
+            }
+            if let Some(arr) = obj.get("vec4").and_then(|x| x.as_array()) {
+                return json!({ "type": "Vec4", "data": arr });
+            }
+            if let Some(arr) = obj.get("quat").and_then(|x| x.as_array()) {
+                return json!({ "type": "Quat", "data": arr });
+            }
+            if let Some(arr) = obj.get("color").and_then(|x| x.as_array()) {
+                return json!({ "type": "ColorRgba", "data": arr });
+            }
+            if let Some(arr) = obj.get("vector").and_then(|x| x.as_array()) {
+                return json!({ "type": "Vector", "data": arr });
+            }
+            if let Some(transform) = obj.get("transform").and_then(|x| x.as_object()) {
+                let pos = transform.get("pos").cloned().unwrap_or(JsonValue::Null);
+                let rot = transform.get("rot").cloned().unwrap_or(JsonValue::Null);
+                let scale = transform.get("scale").cloned().unwrap_or(JsonValue::Null);
+                return json!({ "type": "Transform", "data": { "pos": pos, "rot": rot, "scale": scale } });
+            }
+            if let Some(enum_obj) = obj.get("enum").and_then(|x| x.as_object()) {
+                let tag = enum_obj
+                    .get("tag")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let payload = enum_obj.get("value").cloned().unwrap_or(JsonValue::Null);
+                let normalized_payload = normalize_value_json(payload);
+                return json!({ "type": "Enum", "data": [tag, normalized_payload] });
+            }
+            if let Some(record) = obj.get("record").and_then(|x| x.as_object()) {
+                let mut data = Map::new();
+                for (key, val) in record.iter() {
+                    data.insert(key.clone(), normalize_value_json(val.clone()));
+                }
+                return json!({ "type": "Record", "data": JsonValue::Object(data) });
+            }
+            if let Some(array_items) = obj.get("array").and_then(|x| x.as_array()) {
+                let data: Vec<JsonValue> = array_items
+                    .iter()
+                    .cloned()
+                    .map(normalize_value_json)
+                    .collect();
+                return json!({ "type": "Array", "data": data });
+            }
+            if let Some(list_items) = obj.get("list").and_then(|x| x.as_array()) {
+                let data: Vec<JsonValue> = list_items
+                    .iter()
+                    .cloned()
+                    .map(normalize_value_json)
+                    .collect();
+                return json!({ "type": "List", "data": data });
+            }
+            if let Some(tuple_items) = obj.get("tuple").and_then(|x| x.as_array()) {
+                let data: Vec<JsonValue> = tuple_items
+                    .iter()
+                    .cloned()
+                    .map(normalize_value_json)
+                    .collect();
+                return json!({ "type": "Tuple", "data": data });
+            }
+
+            JsonValue::Object(obj)
+        }
+        other => other,
+    }
+}
+
+fn value_to_legacy_json(value: &Value) -> serde_json::Value {
+    use serde_json::json;
+
+    match value {
+        Value::Float(f) => json!({ "float": *f }),
+        Value::Bool(b) => json!({ "bool": *b }),
+        Value::Vec2(a) => json!({ "vec2": [a[0], a[1]] }),
+        Value::Vec3(a) => json!({ "vec3": [a[0], a[1], a[2]] }),
+        Value::Vec4(a) => json!({ "vec4": [a[0], a[1], a[2], a[3]] }),
+        Value::Quat(a) => json!({ "quat": [a[0], a[1], a[2], a[3]] }),
+        Value::ColorRgba(a) => json!({ "color": [a[0], a[1], a[2], a[3]] }),
+        Value::Transform { pos, rot, scale } => {
+            json!({ "transform": { "pos": pos, "rot": rot, "scale": scale } })
+        }
+        Value::Vector(a) => json!({ "vector": a }),
+        Value::Enum(tag, boxed) => {
+            json!({ "enum": { "tag": tag, "value": value_to_legacy_json(boxed) } })
+        }
+        Value::Text(s) => json!({ "text": s }),
+        Value::Record(map) => {
+            let mut obj = serde_json::Map::new();
+            for (key, val) in map.iter() {
+                obj.insert(key.clone(), value_to_legacy_json(val));
+            }
+            json!({ "record": serde_json::Value::Object(obj) })
+        }
+        Value::Array(items) => {
+            let data: Vec<_> = items.iter().map(value_to_legacy_json).collect();
+            json!({ "array": data })
+        }
+        Value::List(items) => {
+            let data: Vec<_> = items.iter().map(value_to_legacy_json).collect();
+            json!({ "list": data })
+        }
+        Value::Tuple(items) => {
+            let data: Vec<_> = items.iter().map(value_to_legacy_json).collect();
+            json!({ "tuple": data })
+        }
+    }
+}
+
 #[wasm_bindgen]
 pub struct WasmGraph {
     spec: GraphSpec,
@@ -39,121 +187,12 @@ impl WasmGraph {
             for node in nodes.iter_mut() {
                 if let Some(params) = node.get_mut("params") {
                     if let Some(val) = params.get_mut("value") {
-                        match val {
-                            serde_json::Value::Number(n) => {
-                                let f = n.as_f64().unwrap_or(0.0);
-                                // Convert shorthand number into adjacently-tagged Value JSON expected by serde:
-                                // { "type": "Float", "data": f }
-                                *val = serde_json::json!({ "type": "Float", "data": f });
-                            }
-                            serde_json::Value::Bool(b) => {
-                                let b2 = *b;
-                                *val = serde_json::json!({ "type": "Bool", "data": b2 });
-                            }
-                            serde_json::Value::String(s) => {
-                                let s2 = s.clone();
-                                *val = serde_json::json!({ "type": "Text", "data": s2 });
-                            }
-                            serde_json::Value::Array(arr) => {
-                                let all_numbers = arr.iter().all(|x| x.is_number());
-                                if arr.len() == 3 && all_numbers {
-                                    *val =
-                                        serde_json::json!({ "type": "Vec3", "data": arr.clone() });
-                                } else if all_numbers {
-                                    *val = serde_json::json!({ "type": "Vector", "data": arr.clone() });
-                                } else {
-                                    // leave complex arrays untouched (could be enums etc)
-                                }
-                            }
-                            _ => {
-                                // If object is in legacy ValueJSON form, convert to adjacently-tagged {"type": "...", "data": ...}
-                                if let serde_json::Value::Object(obj) = val {
-                                    if let Some(f) = obj.get("float").and_then(|x| x.as_f64()) {
-                                        *val = serde_json::json!({ "type": "Float", "data": f });
-                                    } else if let Some(b) =
-                                        obj.get("bool").and_then(|x| x.as_bool())
-                                    {
-                                        *val = serde_json::json!({ "type": "Bool", "data": b });
-                                    } else if let Some(arr) =
-                                        obj.get("vec2").and_then(|x| x.as_array())
-                                    {
-                                        *val = serde_json::json!({ "type": "Vec2", "data": arr.clone() });
-                                    } else if let Some(arr) =
-                                        obj.get("vec3").and_then(|x| x.as_array())
-                                    {
-                                        *val = serde_json::json!({ "type": "Vec3", "data": arr.clone() });
-                                    } else if let Some(arr) =
-                                        obj.get("vec4").and_then(|x| x.as_array())
-                                    {
-                                        *val = serde_json::json!({ "type": "Vec4", "data": arr.clone() });
-                                    } else if let Some(arr) =
-                                        obj.get("quat").and_then(|x| x.as_array())
-                                    {
-                                        *val = serde_json::json!({ "type": "Quat", "data": arr.clone() });
-                                    } else if let Some(arr) =
-                                        obj.get("color").and_then(|x| x.as_array())
-                                    {
-                                        *val = serde_json::json!({ "type": "ColorRgba", "data": arr.clone() });
-                                    } else if let Some(arr) =
-                                        obj.get("vector").and_then(|x| x.as_array())
-                                    {
-                                        *val = serde_json::json!({ "type": "Vector", "data": arr.clone() });
-                                    } else if let Some(s) = obj.get("text").and_then(|x| x.as_str())
-                                    {
-                                        *val = serde_json::json!({ "type": "Text", "data": s });
-                                    } else if let Some(tr) =
-                                        obj.get("transform").and_then(|x| x.as_object())
-                                    {
-                                        if tr.get("pos").is_some()
-                                            && tr.get("rot").is_some()
-                                            && tr.get("scale").is_some()
-                                        {
-                                            *val = serde_json::json!({ "type": "Transform", "data": tr.clone() });
-                                        }
-                                    } else if let Some(en) =
-                                        obj.get("enum").and_then(|x| x.as_object())
-                                    {
-                                        // Expect { tag, value }, where value may itself be a legacy form; normalize common inner types.
-                                        if let (Some(tag), Some(value)) = (
-                                            en.get("tag").and_then(|x| x.as_str()),
-                                            en.get("value"),
-                                        ) {
-                                            let inner = if let Some(f) =
-                                                value.get("float").and_then(|x| x.as_f64())
-                                            {
-                                                serde_json::json!({ "type": "Float", "data": f })
-                                            } else if let Some(b) =
-                                                value.get("bool").and_then(|x| x.as_bool())
-                                            {
-                                                serde_json::json!({ "type": "Bool", "data": b })
-                                            } else if let Some(arr) =
-                                                value.get("vec3").and_then(|x| x.as_array())
-                                            {
-                                                serde_json::json!({ "type": "Vec3", "data": arr.clone() })
-                                            } else if let Some(arr) =
-                                                value.get("vector").and_then(|x| x.as_array())
-                                            {
-                                                serde_json::json!({ "type": "Vector", "data": arr.clone() })
-                                            } else if let Some(s) =
-                                                value.get("text").and_then(|x| x.as_str())
-                                            {
-                                                serde_json::json!({ "type": "Text", "data": s })
-                                            } else {
-                                                value.clone()
-                                            };
-                                            *val = serde_json::json!({ "type": "Enum", "data": [tag, inner] });
-                                        }
-                                    } else {
-                                        // already adjacently-tagged or null — leave as-is
-                                    }
-                                }
-                            }
-                        }
+                        let taken = std::mem::take(val);
+                        *val = normalize_value_json(taken);
                     }
                 }
             }
         }
-
         // Now deserialize into the typed GraphSpec
         self.spec = serde_json::from_value(v).map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok(())
@@ -191,31 +230,13 @@ impl WasmGraph {
         for (node_id, outputs) in rt.outputs.iter() {
             let outputs_json: HashMap<String, serde_json::Value> = outputs
                 .iter()
-                .map(|(key, val)| {
-                    let jv = match val {
-                        Value::Float(f) => serde_json::json!({ "float": *f }),
-                        Value::Bool(b) => serde_json::json!({ "bool": *b }),
-                        Value::Vec2(a) => serde_json::json!({ "vec2": [a[0], a[1]] }),
-                        Value::Vec3(a) => serde_json::json!({ "vec3": [a[0], a[1], a[2]] }),
-                        Value::Vec4(a) => serde_json::json!({ "vec4": [a[0], a[1], a[2], a[3]] }),
-                        Value::Quat(a) => serde_json::json!({ "quat": [a[0], a[1], a[2], a[3]] }),
-                        Value::ColorRgba(a) => serde_json::json!({ "color": [a[0], a[1], a[2], a[3]] }),
-                        Value::Transform { pos, rot, scale } => serde_json::json!({ "transform": { "pos": pos, "rot": rot, "scale": scale } }),
-                        Value::Vector(a) => serde_json::json!({ "vector": a }),
-                        Value::Enum(tag, boxed) => {
-                            let inner = match boxed.as_ref() {
-                                Value::Float(f) => serde_json::json!({ "float": *f }),
-                                Value::Bool(b) => serde_json::json!({ "bool": *b }),
-                                Value::Vec3(a) => serde_json::json!({ "vec3": [a[0], a[1], a[2]] }),
-                                Value::Vector(a) => serde_json::json!({ "vector": a }),
-                                Value::Text(s) => serde_json::json!({ "text": s }),
-                                _ => serde_json::json!(null),
-                            };
-                            serde_json::json!({ "enum": { "tag": tag, "value": inner } })
-                        }
-                        Value::Text(s) => serde_json::json!({ "text": s }),
-                    };
-                    (key.clone(), jv)
+                .map(|(key, port)| {
+                    let value_json = value_to_legacy_json(&port.value);
+                    let shape_json = serde_json::to_value(&port.shape).unwrap();
+                    (
+                        key.clone(),
+                        serde_json::json!({ "value": value_json, "shape": shape_json }),
+                    )
                 })
                 .collect();
             nodes_map.insert(node_id.clone(), serde_json::to_value(outputs_json).unwrap());
@@ -226,41 +247,13 @@ impl WasmGraph {
             if let Some(path_str) = node.params.path.as_ref() {
                 if let Some(outputs) = rt.outputs.get(&node.id) {
                     if let Some(val) = outputs.get("out") {
-                        // convert val to ValueJSON same as above
-                        let jv = match val {
-                            Value::Float(f) => serde_json::json!({ "float": *f }),
-                            Value::Bool(b) => serde_json::json!({ "bool": *b }),
-                            Value::Vec2(a) => serde_json::json!({ "vec2": [a[0], a[1]] }),
-                            Value::Vec3(a) => serde_json::json!({ "vec3": [a[0], a[1], a[2]] }),
-                            Value::Vec4(a) => {
-                                serde_json::json!({ "vec4": [a[0], a[1], a[2], a[3]] })
-                            }
-                            Value::Quat(a) => {
-                                serde_json::json!({ "quat": [a[0], a[1], a[2], a[3]] })
-                            }
-                            Value::ColorRgba(a) => {
-                                serde_json::json!({ "color": [a[0], a[1], a[2], a[3]] })
-                            }
-                            Value::Transform { pos, rot, scale } => {
-                                serde_json::json!({ "transform": { "pos": pos, "rot": rot, "scale": scale } })
-                            }
-                            Value::Vector(a) => serde_json::json!({ "vector": a }),
-                            Value::Enum(tag, boxed) => {
-                                let inner = match boxed.as_ref() {
-                                    Value::Float(f) => serde_json::json!({ "float": *f }),
-                                    Value::Bool(b) => serde_json::json!({ "bool": *b }),
-                                    Value::Vec3(a) => {
-                                        serde_json::json!({ "vec3": [a[0], a[1], a[2]] })
-                                    }
-                                    Value::Vector(a) => serde_json::json!({ "vector": a }),
-                                    Value::Text(s) => serde_json::json!({ "text": s }),
-                                    _ => serde_json::json!(null),
-                                };
-                                serde_json::json!({ "enum": { "tag": tag, "value": inner } })
-                            }
-                            Value::Text(s) => serde_json::json!({ "text": s }),
-                        };
-                        writes.push(serde_json::json!({ "path": path_str, "value": jv }));
+                        let jv = value_to_legacy_json(&val.value);
+                        let shape_json = serde_json::to_value(&val.shape).unwrap();
+                        writes.push(serde_json::json!({
+                            "path": path_str,
+                            "value": jv,
+                            "shape": shape_json
+                        }));
                     }
                 }
             }
@@ -277,46 +270,11 @@ impl WasmGraph {
     /// Set a param on a node (e.g., key="value" with float/bool/vec3 JSON)
     #[wasm_bindgen]
     pub fn set_param(&mut self, node_id: &str, key: &str, json_value: &str) -> Result<(), JsValue> {
-        let v: serde_json::Value =
+        let raw: serde_json::Value =
             serde_json::from_str(json_value).map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let val = if let Some(f) = v.get("float").and_then(|x| x.as_f64()) {
-            Value::Float(f as f32)
-        } else if let Some(b) = v.get("bool").and_then(|x| x.as_bool()) {
-            Value::Bool(b)
-        } else if let Some(arr) = v.get("vec3").and_then(|x| x.as_array()) {
-            let mut a = [0.0f32; 3];
-            for (i, slot) in a.iter_mut().enumerate() {
-                *slot = arr.get(i).and_then(|x| x.as_f64()).unwrap_or(0.0) as f32;
-            }
-            Value::Vec3(a)
-        } else if let Some(arr) = v.get("vector").and_then(|x| x.as_array()) {
-            let vec: Vec<f32> = arr
-                .iter()
-                .map(|x| x.as_f64().unwrap_or(0.0) as f32)
-                .collect();
-            Value::Vector(vec)
-        } else {
-            return Err(JsValue::from_str("unsupported value"));
-        };
-        if let Some(f) = v.get("float").and_then(|x| x.as_f64()) {
-            Value::Float(f as f32)
-        } else if let Some(b) = v.get("bool").and_then(|x| x.as_bool()) {
-            Value::Bool(b)
-        } else if let Some(arr) = v.get("vec3").and_then(|x| x.as_array()) {
-            let mut a = [0.0f32; 3];
-            for (i, slot) in a.iter_mut().enumerate() {
-                *slot = arr.get(i).and_then(|x| x.as_f64()).unwrap_or(0.0) as f32;
-            }
-            Value::Vec3(a)
-        } else if let Some(arr) = v.get("vector").and_then(|x| x.as_array()) {
-            let vec: Vec<f32> = arr
-                .iter()
-                .map(|x| x.as_f64().unwrap_or(0.0) as f32)
-                .collect();
-            Value::Vector(vec)
-        } else {
-            return Err(JsValue::from_str("unsupported value"));
-        };
+        let normalized = normalize_value_json(raw);
+        let val: Value =
+            serde_json::from_value(normalized).map_err(|e| JsValue::from_str(&e.to_string()))?;
         if let Some(node) = self.spec.nodes.iter_mut().find(|n| n.id == node_id) {
             match key {
                 "value" => node.params.value = Some(val),

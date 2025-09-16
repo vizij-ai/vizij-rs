@@ -8,6 +8,7 @@
 
 use crate::coercion;
 use crate::Value;
+use hashbrown::HashMap;
 
 /// Linear interpolation for f32
 #[inline]
@@ -126,6 +127,28 @@ pub fn blend_values(a: &Value, b: &Value, t: f32) -> Value {
             Value::Transform { pos, rot, scale }
         }
 
+        (Value::Record(ma), Value::Record(mb)) => {
+            let mut out: HashMap<String, Value> = if t < 0.5 { ma.clone() } else { mb.clone() };
+            for (key, va) in ma.iter() {
+                if let Some(vb) = mb.get(key) {
+                    out.insert(key.clone(), blend_values(va, vb, t));
+                }
+            }
+            Value::Record(out)
+        }
+
+        (Value::Array(a_items), Value::Array(b_items)) => {
+            Value::Array(blend_list_like(a_items, b_items, t))
+        }
+
+        (Value::List(a_items), Value::List(b_items)) => {
+            Value::List(blend_list_like(a_items, b_items, t))
+        }
+
+        (Value::Tuple(a_items), Value::Tuple(b_items)) => {
+            Value::Tuple(blend_list_like(a_items, b_items, t))
+        }
+
         // Vector and VecN mixes
         (Value::Vector(va), Value::Vector(vb)) => Value::Vector(blend_vector(va, vb, t)),
 
@@ -176,6 +199,28 @@ pub fn blend_values(a: &Value, b: &Value, t: f32) -> Value {
             Value::Float(lerp_f(fa, fb, t))
         }
     }
+}
+
+fn blend_list_like(a: &[Value], b: &[Value], t: f32) -> Vec<Value> {
+    let len = a.len().max(b.len());
+    let mut out = Vec::with_capacity(len);
+    for idx in 0..len {
+        match (a.get(idx), b.get(idx)) {
+            (Some(va), Some(vb)) => out.push(blend_values(va, vb, t)),
+            (Some(va), None) => {
+                if t < 0.5 {
+                    out.push(va.clone());
+                }
+            }
+            (None, Some(vb)) => {
+                if t >= 0.5 {
+                    out.push(vb.clone());
+                }
+            }
+            (None, None) => {}
+        }
+    }
+    out
 }
 
 /// Step blending for step-only types: choose a for t < 0.5, else b.

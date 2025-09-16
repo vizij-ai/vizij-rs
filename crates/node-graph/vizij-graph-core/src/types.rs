@@ -1,6 +1,6 @@
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
-use vizij_api_core::Value;
+use vizij_api_core::{Shape, Value};
 
 pub type NodeId = String;
 
@@ -124,6 +124,8 @@ pub struct NodeSpec {
     pub params: NodeParams,
     #[serde(default)]
     pub inputs: HashMap<String, InputConnection>,
+    #[serde(default)]
+    pub output_shapes: HashMap<String, Shape>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

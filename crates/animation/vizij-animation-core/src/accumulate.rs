@@ -114,6 +114,18 @@ impl AccumEntry {
             (AccumEntry::Step(last), Value::Text(_)) => {
                 *last = v.clone(); // prefer last/most-recent assignment
             }
+            (AccumEntry::Step(last), Value::Record(_)) => {
+                *last = v.clone();
+            }
+            (AccumEntry::Step(last), Value::Array(_)) => {
+                *last = v.clone();
+            }
+            (AccumEntry::Step(last), Value::List(_)) => {
+                *last = v.clone();
+            }
+            (AccumEntry::Step(last), Value::Tuple(_)) => {
+                *last = v.clone();
+            }
             _ => {
                 // Mismatched kind; ignore additional values to keep fail-soft behavior.
             }
@@ -153,6 +165,10 @@ impl AccumEntry {
             Value::Bool(b) => AccumEntry::Step(Value::Bool(*b)),
             Value::Vector(v) => AccumEntry::Step(Value::Vector(v.clone())),
             Value::Enum(tag, boxed) => AccumEntry::Step(Value::Enum(tag.clone(), boxed.clone())),
+            Value::Record(map) => AccumEntry::Step(Value::Record(map.clone())),
+            Value::Array(items) => AccumEntry::Step(Value::Array(items.clone())),
+            Value::List(items) => AccumEntry::Step(Value::List(items.clone())),
+            Value::Tuple(items) => AccumEntry::Step(Value::Tuple(items.clone())),
         }
     }
 

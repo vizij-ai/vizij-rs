@@ -1,6 +1,7 @@
 //! Value: runtime instances that conform to Shapes.
 //! All numeric types use f32 as requested.
 
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 
 /// Lightweight kind enum for convenience. This is intentionally local to
@@ -18,6 +19,10 @@ pub enum ValueKind {
     ColorRgba,
     Transform,
     Vector,
+    Record,
+    Array,
+    List,
+    Tuple,
     Enum,
     Text,
 }
@@ -61,6 +66,18 @@ pub enum Value {
 
     /// Text / string; step-only for interpolation
     Text(String),
+
+    /// Record of named fields (order is not guaranteed)
+    Record(HashMap<String, Value>),
+
+    /// Fixed-size homogeneous array
+    Array(Vec<Value>),
+
+    /// Variable-length list (alias of Vec but distinct ShapeId)
+    List(Vec<Value>),
+
+    /// Heterogeneous tuple (ordered elements)
+    Tuple(Vec<Value>),
 }
 
 impl Value {
@@ -77,6 +94,10 @@ impl Value {
             Value::ColorRgba(_) => ValueKind::ColorRgba,
             Value::Transform { .. } => ValueKind::Transform,
             Value::Vector(_) => ValueKind::Vector,
+            Value::Record(_) => ValueKind::Record,
+            Value::Array(_) => ValueKind::Array,
+            Value::List(_) => ValueKind::List,
+            Value::Tuple(_) => ValueKind::Tuple,
             Value::Enum(_, _) => ValueKind::Enum,
             Value::Text(_) => ValueKind::Text,
         }

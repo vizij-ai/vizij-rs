@@ -19,10 +19,48 @@ npm link
 npm link @vizij/node-graph-wasm
 ```
 
-## Use
+## Runtime API
+
+The published package exposes a thin TypeScript wrapper around the wasm `WasmGraph`
+class. Import the helpers from the ESM entry and call `init()` **once** before
+constructing `Graph` instances.
+
 ```ts
-import init, { NodeGraph } from "@vizij/node-graph-wasm";
+import {
+  init,
+  Graph,
+  type EvalResult,
+  type GraphSpec,
+  type ValueJSON,
+  getNodeSchemas,
+} from "@vizij/node-graph-wasm";
+
 await init();
-const graph = new NodeGraph({ frequency_hz: 1.0 });
-const out = graph.update(0.016, {});
+
+const graph = new Graph();
+graph.loadGraph(spec); // spec: GraphSpec | JSON string
+
+graph.setTime(0);
+graph.step(1 / 60); // advance internal time in seconds
+
+const { nodes, writes }: EvalResult = graph.evalAll();
+// nodes: Record<NodeId, Record<PortId, ValueJSON>>
+// writes: Array<{ path: string; value: ValueJSON }>
+
+graph.setParam("nodeA", "value", { vec3: [1, 2, 3] });
+
+const registry = await getNodeSchemas();
 ```
+
+`ValueJSON` mirrors the serialized shape produced by `vizij-api-core::Value`.
+Primitive variants such as `{ float: number }` and `{ vec3: [...] }` are supported,
+as well as composites:
+
+- `{ record: { [fieldName]: ValueJSON } }`
+- `{ array: ValueJSON[] }`
+- `{ list: ValueJSON[] }`
+- `{ tuple: ValueJSON[] }`
+
+`EvalResult.writes` contains the typed output batch emitted by nodes that define a
+`params.path`. Each entry matches the JSON contract exposed by
+`vizij_api_core::WriteOp` (`{ path: string, value: ValueJSON }`).

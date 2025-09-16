@@ -11,6 +11,9 @@ import type {
   GraphSpec,
   GraphOutputs,
   InitInput,
+  PortSnapshot,
+  EvalResult,
+  ShapeJSON,
 } from "./types";
 
 export type {
@@ -22,6 +25,9 @@ export type {
   GraphSpec,
   GraphOutputs,
   InitInput,
+  PortSnapshot,
+  EvalResult,
+  ShapeJSON
 } 
 
 // --- init() ---
@@ -114,13 +120,10 @@ export class Graph {
    * Evaluate the whole graph and return a map of nodeId -> outputKey -> ValueJSON.
    * (One batched wasm call.)
    */
-  evalAll(): Record<string, Record<string, ValueJSON>> {
+  evalAll(): EvalResult {
     const raw = this.inner.eval_all(); // JSON string
-    const parsed = JSON.parse(raw) as {
-      nodes: Record<string, Record<string, ValueJSON>>;
-      writes: unknown;
-    };
-    return parsed.nodes;
+    const parsed = JSON.parse(raw) as EvalResult;
+    return parsed;
   }
 
   /**
