@@ -84,7 +84,7 @@ fn color_bezier_with_explicit_ctrl_points() {
             Keypoint {
                 id: "k0".into(),
                 stamp: 0.0,
-                value: Value::Color([0.0, 0.0, 0.0, 1.0]),
+                value: Value::ColorRgba([0.0, 0.0, 0.0, 1.0]),
                 transitions: Some(Transitions {
                     r#in: None,
                     r#out: Some(Vec2 { x: 0.8, y: 0.0 }),
@@ -93,7 +93,7 @@ fn color_bezier_with_explicit_ctrl_points() {
             Keypoint {
                 id: "k1".into(),
                 stamp: 1.0,
-                value: Value::Color([1.0, 1.0, 1.0, 1.0]),
+                value: Value::ColorRgba([1.0, 1.0, 1.0, 1.0]),
                 transitions: Some(Transitions {
                     r#in: Some(Vec2 { x: 0.2, y: 1.0 }),
                     r#out: None,
@@ -105,7 +105,7 @@ fn color_bezier_with_explicit_ctrl_points() {
 
     let v = sample_track(&track, 0.25);
     match v {
-        Value::Color(c) => {
+        Value::ColorRgba(c) => {
             // With strong ease-in, components should be noticeably below linear 0.25
             assert!(c[0] < 0.25, "r {} !< 0.25", c[0]);
             assert!(c[1] < 0.25, "g {} !< 0.25", c[1]);

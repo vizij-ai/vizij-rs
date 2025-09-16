@@ -16,3 +16,4 @@ exclude = ["*/scripts/*", ".github/*", "npm/*", "target/*"]
 [dependencies]
 serde       = { workspace = true }
 serde_json  = { workspace = true }
+vizij-api-core = { path = "../../api/vizij-api-core" }

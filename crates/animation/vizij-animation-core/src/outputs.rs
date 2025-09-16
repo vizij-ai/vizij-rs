@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ids::PlayerId;
-use crate::value::Value;
+use vizij_api_core::Value;
 
 /// One changed target value for a given player this tick.
 #[derive(Clone, Debug, Serialize, Deserialize)]

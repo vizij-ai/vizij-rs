@@ -17,3 +17,4 @@ serde_json = { workspace = true }
 thiserror  = { workspace = true }
 hashbrown  = { workspace = true }
 anyhow     = { workspace = true }
+vizij-api-core = { path = "../../api/vizij-api-core" }

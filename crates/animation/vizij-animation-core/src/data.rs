@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ids::AnimId;
-use crate::value::Value;
+use vizij_api_core::Value;
 
 /// 2D vector used for transition control points (normalized 0..1 domain).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]

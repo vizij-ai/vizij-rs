@@ -1,0 +1,11 @@
+[package]
+name = "bevy_vizij_api"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+bevy = { version = "0.14.2" }
+vizij-api-core = { path = "../vizij-api-core" }
+serde = { version = "1", features = ["derive"] }
+hashbrown = { workspace = true }

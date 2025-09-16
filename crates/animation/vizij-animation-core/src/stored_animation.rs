@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use crate::data::{AnimationData, Keypoint, Track, TrackSettings, Transitions};
 use crate::ids::AnimId;
-use crate::value::Value;
+use vizij_api_core::Value;
 
 /// Public API: parse StoredAnimation-style JSON (see types/animation.ts and tests/fixtures/new_format.json)
 /// into vizij-animation-core's canonical AnimationData (data.rs).
@@ -62,16 +62,16 @@ pub fn parse_stored_animation_json(s: &str) -> Result<AnimationData, String> {
 fn to_core_value(v: &RawValue) -> Result<Value, String> {
     match v {
         RawValue::Boolean(b) => Ok(Value::Bool(*b)),
-        RawValue::Number(n) => Ok(Value::Scalar(*n as f32)),
+        RawValue::Number(n) => Ok(Value::Float(*n as f32)),
         RawValue::String(s) => Ok(Value::Text(s.clone())),
         RawValue::Vector3 { x, y, z } => Ok(Value::Vec3([*x as f32, *y as f32, *z as f32])),
         RawValue::Vector2 { x, y } => Ok(Value::Vec2([*x as f32, *y as f32])),
         // Euler (r,p,y) mapped to Vec3 [r,p,y]; adapters can remap axes if needed.
         RawValue::Euler { r, p, y } => Ok(Value::Vec3([*r as f32, *p as f32, *y as f32])),
-        RawValue::Rgb { r, g, b } => Ok(Value::Color([*r as f32, *g as f32, *b as f32, 1.0])),
+        RawValue::Rgb { r, g, b } => Ok(Value::ColorRgba([*r as f32, *g as f32, *b as f32, 1.0])),
         RawValue::Hsl { h, s, l } => {
             let (r, g, b) = hsl_to_rgb(*h as f32, *s as f32, *l as f32);
-            Ok(Value::Color([r, g, b, 1.0]))
+            Ok(Value::ColorRgba([r, g, b, 1.0]))
         }
     }
 }

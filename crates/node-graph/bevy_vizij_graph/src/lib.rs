@@ -1,12 +1,43 @@
 use bevy::prelude::*;
 use hashbrown::HashMap;
-use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, NodeId, Value};
+use vizij_api_core::Value;
+use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, NodeId};
 
 #[derive(Resource, Default, Clone)]
 pub struct GraphResource(pub GraphSpec);
 
 #[derive(Resource, Default, Clone)]
 pub struct GraphOutputs(pub HashMap<NodeId, HashMap<String, Value>>);
+
+/// Convert a Value into a coarse f32 scalar for node parameter assignment.
+/// Rules:
+/// - Float -> value
+/// - Bool -> 1.0 / 0.0
+/// - VecN / Vector -> first component (or 0.0 if missing)
+/// - Quat / ColorRgba / Transform -> first component (conservative)
+/// - Enum -> recurse into inner value
+/// - Text / others -> 0.0
+fn value_to_f32(v: &Value) -> f32 {
+    match v {
+        Value::Float(f) => *f,
+        Value::Bool(b) => {
+            if *b {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        Value::Vec2(a) => a[0],
+        Value::Vec3(a) => a[0],
+        Value::Vec4(a) => a[0],
+        Value::Quat(a) => a[0],
+        Value::ColorRgba(a) => a[0],
+        Value::Transform { pos, .. } => pos[0],
+        Value::Vector(vec) => vec.first().copied().unwrap_or(0.0),
+        Value::Enum(_, boxed) => value_to_f32(boxed.as_ref()),
+        Value::Text(_) => 0.0,
+    }
+}
 
 #[derive(Event)]
 pub struct SetNodeParam {
@@ -17,7 +48,7 @@ pub struct SetNodeParam {
 
 #[derive(Resource, Default)]
 pub struct GraphTime {
-    pub t: f64,
+    pub t: f32,
 }
 
 pub struct VizijGraphPlugin;
@@ -28,15 +59,14 @@ impl Plugin for VizijGraphPlugin {
             .insert_resource(GraphOutputs::default())
             .insert_resource(GraphTime { t: 0.0 })
             .add_event::<SetNodeParam>()
-            .add_systems(
-                Update,
-                (system_time, system_set_params, system_eval).chain(),
-            );
+            .add_systems(Update, system_time)
+            .add_systems(Update, system_set_params)
+            .add_systems(Update, system_eval);
     }
 }
 
 fn system_time(time: Res<Time>, mut gt: ResMut<GraphTime>) {
-    gt.t += time.delta_seconds_f64();
+    gt.t += time.delta_seconds();
 }
 
 fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResource>) {
@@ -45,214 +75,49 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
             match e.key.as_str() {
                 "value" => node.params.value = Some(e.value.clone()),
                 "frequency" => {
-                    node.params.frequency = Some(match e.value.clone() {
-                        Value::Float(f) => f,
-                        Value::Bool(b) => {
-                            if b {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
-                    })
+                    node.params.frequency = Some(value_to_f32(&e.value));
                 }
                 "phase" => {
-                    node.params.phase = Some(match e.value.clone() {
-                        Value::Float(f) => f,
-                        Value::Bool(b) => {
-                            if b {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
-                    })
+                    node.params.phase = Some(value_to_f32(&e.value));
                 }
                 "min" => {
-                    node.params.min = match e.value.clone() {
-                        Value::Float(f) => f,
-                        Value::Bool(b) => {
-                            if b {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
-                    }
+                    node.params.min = value_to_f32(&e.value);
                 }
                 "max" => {
-                    node.params.max = match e.value.clone() {
-                        Value::Float(f) => f,
-                        Value::Bool(b) => {
-                            if b {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
-                    }
+                    node.params.max = value_to_f32(&e.value);
                 }
                 "in_min" => {
-                    node.params.in_min = Some(match e.value.clone() {
-                        Value::Float(f) => f,
-                        Value::Bool(b) => {
-                            if b {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
-                    })
+                    node.params.in_min = Some(value_to_f32(&e.value));
                 }
                 "in_max" => {
-                    node.params.in_max = Some(match e.value.clone() {
-                        Value::Float(f) => f,
-                        Value::Bool(b) => {
-                            if b {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
-                    })
+                    node.params.in_max = Some(value_to_f32(&e.value));
                 }
                 "out_min" => {
-                    node.params.out_min = Some(match e.value.clone() {
-                        Value::Float(f) => f,
-                        Value::Bool(b) => {
-                            if b {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
-                    })
+                    node.params.out_min = Some(value_to_f32(&e.value));
                 }
                 "out_max" => {
-                    node.params.out_max = Some(match e.value.clone() {
-                        Value::Float(f) => f,
-                        Value::Bool(b) => {
-                            if b {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
-                    })
+                    node.params.out_max = Some(value_to_f32(&e.value));
                 }
                 "x" => {
-                    node.params.x = Some(match e.value.clone() {
-                        Value::Float(f) => f,
-                        Value::Bool(b) => {
-                            if b {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
-                    })
+                    node.params.x = Some(value_to_f32(&e.value));
                 }
                 "y" => {
-                    node.params.y = Some(match e.value.clone() {
-                        Value::Float(f) => f,
-                        Value::Bool(b) => {
-                            if b {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        Value::Vec3(v) => v[1],
-                        Value::Vector(v) => v.get(1).copied().unwrap_or(0.0),
-                    })
+                    node.params.y = Some(value_to_f32(&e.value));
                 }
                 "z" => {
-                    node.params.z = Some(match e.value.clone() {
-                        Value::Float(f) => f,
-                        Value::Bool(b) => {
-                            if b {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        Value::Vec3(v) => v[2],
-                        Value::Vector(v) => v.get(2).copied().unwrap_or(0.0),
-                    })
+                    node.params.z = Some(value_to_f32(&e.value));
                 }
                 "bone1" => {
-                    node.params.bone1 = Some(match e.value.clone() {
-                        Value::Float(f) => f,
-                        Value::Bool(b) => {
-                            if b {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
-                    })
+                    node.params.bone1 = Some(value_to_f32(&e.value));
                 }
                 "bone2" => {
-                    node.params.bone2 = Some(match e.value.clone() {
-                        Value::Float(f) => f,
-                        Value::Bool(b) => {
-                            if b {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
-                    })
+                    node.params.bone2 = Some(value_to_f32(&e.value));
                 }
                 "bone3" => {
-                    node.params.bone3 = Some(match e.value.clone() {
-                        Value::Float(f) => f,
-                        Value::Bool(b) => {
-                            if b {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
-                    })
+                    node.params.bone3 = Some(value_to_f32(&e.value));
                 }
                 "index" => {
-                    node.params.index = Some(match e.value.clone() {
-                        Value::Float(f) => f,
-                        Value::Bool(b) => {
-                            if b {
-                                1.0
-                            } else {
-                                0.0
-                            }
-                        }
-                        Value::Vec3(v) => v[0],
-                        Value::Vector(v) => v.first().copied().unwrap_or(0.0),
-                    })
+                    node.params.index = Some(value_to_f32(&e.value));
                 }
                 _ => { /* ignore unknown keys */ }
             }
@@ -260,11 +125,55 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
     }
 }
 
-fn system_eval(g: Res<GraphResource>, mut out: ResMut<GraphOutputs>, gt: Res<GraphTime>) {
+fn system_eval(world: &mut World) {
+    // Pull resources from the World (exclusive system).
+    let Some(g) = world.get_resource::<GraphResource>().cloned() else {
+        return;
+    };
+    let Some(gt) = world.get_resource::<GraphTime>() else {
+        return;
+    };
+    let t = gt.t;
+
     let mut rt = GraphRuntime {
-        t: gt.t,
+        t,
         outputs: HashMap::new(),
     };
     let _ = evaluate_all(&mut rt, &g.0);
-    out.0 = rt.outputs;
+
+    // Build a WriteBatch from graph outputs where nodes declare a target path.
+    let mut batch = vizij_api_core::WriteBatch::new();
+
+    for node in &g.0.nodes {
+        if let Some(base) = node.params.path.as_ref() {
+            if let Some(node_outputs) = rt.outputs.get(&node.id) {
+                for (key, val) in node_outputs.iter() {
+                    // If output key is "out" use base as-is, else append ".{key}".
+                    let path_str = if key == "out" {
+                        base.clone()
+                    } else {
+                        format!("{base}.{}", key)
+                    };
+                    if let Ok(tp) = vizij_api_core::TypedPath::parse(&path_str) {
+                        batch.push(vizij_api_core::WriteOp::new(tp, val.clone()));
+                    }
+                }
+            }
+        }
+    }
+
+    // Apply batch to world if WriterRegistry is present. Use resource_scope to avoid borrow conflicts.
+    if world.contains_resource::<bevy_vizij_api::WriterRegistry>() {
+        world.resource_scope(|world, reg: Mut<bevy_vizij_api::WriterRegistry>| {
+            bevy_vizij_api::apply_write_batch(&reg, world, &batch);
+        });
+    }
+
+    // Preserve the GraphOutputs resource for inspection.
+    if let Some(mut out) = world.get_resource_mut::<GraphOutputs>() {
+        out.0 = rt.outputs;
+    } else {
+        // In case it wasn't inserted for some reason, insert it now.
+        world.insert_resource(GraphOutputs(rt.outputs));
+    }
 }

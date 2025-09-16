@@ -58,8 +58,15 @@ export type NodeType =
 export type ValueJSON =
   | { float: number }
   | { bool: boolean }
+  | { vec2: [number, number] }
   | { vec3: [number, number, number] }
-  | { vector: number[] };
+  | { vec4: [number, number, number, number] }
+  | { quat: [number, number, number, number] }
+  | { color: [number, number, number, number] }    // ColorRgba
+  | { transform: { pos: [number, number, number]; rot: [number, number, number, number]; scale: [number, number, number] } }
+  | { vector: number[] }
+  | { text: string }
+  | { enum: { tag: string; value: ValueJSON } };
 
 export interface NodeParams {
   value?: ValueJSON | number | boolean | [number, number, number] | number[];

@@ -5,7 +5,7 @@
 //! - bezier_value (cubic-bezier timing -> linear blend)
 //! - quaternion NLERP with shortest-arc normalization
 
-use crate::value::Value;
+use vizij_api_core::Value;
 
 /// Linear interpolation of scalars.
 #[inline]
@@ -85,26 +85,26 @@ pub fn step_value(a: &Value) -> Value {
 /// Linear interpolation across Value kinds (Transform uses TRS with quat NLERP).
 pub fn linear_value(a: &Value, b: &Value, t: f32) -> Value {
     match (a, b) {
-        (Value::Scalar(va), Value::Scalar(vb)) => Value::Scalar(lerp_f32(*va, *vb, t)),
+        (Value::Float(va), Value::Float(vb)) => Value::Float(lerp_f32(*va, *vb, t)),
         (Value::Vec2(va), Value::Vec2(vb)) => Value::Vec2(lerp_vec2(*va, *vb, t)),
         (Value::Vec3(va), Value::Vec3(vb)) => Value::Vec3(lerp_vec3(*va, *vb, t)),
         (Value::Vec4(va), Value::Vec4(vb)) => Value::Vec4(lerp_vec4(*va, *vb, t)),
         (Value::Quat(qa), Value::Quat(qb)) => Value::Quat(nlerp_quat(*qa, *qb, t)),
-        (Value::Color(ca), Value::Color(cb)) => Value::Color(lerp_vec4(*ca, *cb, t)),
+        (Value::ColorRgba(ca), Value::ColorRgba(cb)) => Value::ColorRgba(lerp_vec4(*ca, *cb, t)),
         (
             Value::Transform {
-                translation: ta,
-                rotation: ra,
+                pos: ta,
+                rot: ra,
                 scale: sa,
             },
             Value::Transform {
-                translation: tb,
-                rotation: rb,
+                pos: tb,
+                rot: rb,
                 scale: sb,
             },
         ) => Value::Transform {
-            translation: lerp_vec3(*ta, *tb, t),
-            rotation: nlerp_quat(*ra, *rb, t),
+            pos: lerp_vec3(*ta, *tb, t),
+            rot: nlerp_quat(*ra, *rb, t),
             scale: lerp_vec3(*sa, *sb, t),
         },
         // Fallback: if types mismatch, prefer left (fail-soft).

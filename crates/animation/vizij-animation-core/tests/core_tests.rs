@@ -47,7 +47,7 @@ fn mk_scalar_track_linear(path: &str, keys: &[(f32, f32)]) -> Track {
         points.push(Keypoint {
             id: format!("k{i}"),
             stamp: *stamp,
-            value: Value::Scalar(*v),
+            value: Value::Float(*v),
             transitions,
         });
     }
@@ -135,17 +135,17 @@ fn ids_allocator_basics() {
 fn sampling_linear_step_bezier() {
     // Linear scalar 0..1 over [0,1]
     let track_lin = mk_scalar_track_linear("node.value", &[(0.0, 0.0), (1.0, 1.0)]);
-    if let Value::Scalar(v) = sample_track(&track_lin, 0.5) {
+    if let Value::Float(v) = sample_track(&track_lin, 0.5) {
         approx(v, 0.5, 1e-6);
     } else {
         panic!();
     }
-    if let Value::Scalar(v) = sample_track(&track_lin, 0.0) {
+    if let Value::Float(v) = sample_track(&track_lin, 0.0) {
         approx(v, 0.0, 1e-6);
     } else {
         panic!();
     }
-    if let Value::Scalar(v) = sample_track(&track_lin, 1.0) {
+    if let Value::Float(v) = sample_track(&track_lin, 1.0) {
         approx(v, 1.0, 1e-6);
     } else {
         panic!();
@@ -187,19 +187,19 @@ fn sampling_linear_step_bezier() {
             Keypoint {
                 id: "k0".into(),
                 stamp: 0.0,
-                value: Value::Scalar(0.0),
+                value: Value::Float(0.0),
                 transitions: None,
             },
             Keypoint {
                 id: "k1".into(),
                 stamp: 1.0,
-                value: Value::Scalar(1.0),
+                value: Value::Float(1.0),
                 transitions: None,
             },
         ],
         settings: None,
     };
-    if let Value::Scalar(v) = sample_track(&track_bezier_default, 0.5) {
+    if let Value::Float(v) = sample_track(&track_bezier_default, 0.5) {
         assert!(v > 0.4 && v < 0.6, "bezier mid expected near 0.5 got {v}");
     } else {
         panic!();
@@ -288,7 +288,7 @@ fn engine_loop_modes_and_window_and_seek() {
         .expect("change")
         .value
         .clone();
-    if let Value::Scalar(v) = val {
+    if let Value::Float(v) = val {
         approx(v, 0.8, 1e-6);
     } else {
         panic!();
@@ -312,7 +312,7 @@ fn engine_loop_modes_and_window_and_seek() {
         .unwrap()
         .value
         .clone();
-    if let Value::Scalar(v) = val2 {
+    if let Value::Float(v) = val2 {
         approx(v, 0.75, 1e-6);
     } else {
         panic!();
@@ -346,7 +346,7 @@ fn pingpong_reflection_mapping() {
         .unwrap()
         .value
         .clone();
-    if let Value::Scalar(s) = v {
+    if let Value::Float(s) = v {
         approx(s, 0.75, 1e-6);
     } else {
         panic!();
@@ -366,7 +366,7 @@ fn pingpong_reflection_mapping() {
         .unwrap()
         .value
         .clone();
-    if let Value::Scalar(s) = v2 {
+    if let Value::Float(s) = v2 {
         approx(s, 0.75, 1e-6);
     } else {
         panic!();
@@ -405,7 +405,7 @@ fn time_scale_zero_static_pose() {
         .unwrap()
         .value
         .clone();
-    if let Value::Scalar(s) = v {
+    if let Value::Float(s) = v {
         approx(s, 0.7, 1e-5);
     } else {
         panic!();
@@ -424,7 +424,7 @@ fn time_scale_zero_static_pose() {
         .unwrap()
         .value
         .clone();
-    if let Value::Scalar(s) = v2 {
+    if let Value::Float(s) = v2 {
         approx(s, 0.7, 1e-5);
     } else {
         panic!();
@@ -461,7 +461,6 @@ fn disabled_instance_skipped() {
             ..Default::default()
         },
     );
-
     let out = eng.update(0.0, Inputs::default());
     let v = out
         .changes
@@ -470,7 +469,7 @@ fn disabled_instance_skipped() {
         .unwrap()
         .value
         .clone();
-    if let Value::Scalar(s) = v {
+    if let Value::Float(s) = v {
         approx(s, 0.0, 1e-6);
     } else {
         panic!();
@@ -485,7 +484,7 @@ fn outputs_api_basics() {
     out.push_change(vizij_animation_core::outputs::Change {
         player: PlayerId(0),
         key: "a".into(),
-        value: Value::Scalar(1.0),
+        value: Value::Float(1.0),
     });
     assert!(!out.is_empty());
     out.clear();
@@ -531,13 +530,13 @@ fn baking_matches_sampling_and_counts() {
     assert_eq!(baked.tracks[0].values.len(), expected_samples);
 
     // Check a couple of points match sampling
-    if let Value::Scalar(v0) = baked.tracks[0].values[0].clone() {
+    if let Value::Float(v0) = baked.tracks[0].values[0].clone() {
         approx(v0, 0.0, 1e-6);
     } else {
         panic!();
     }
     let mid_idx = expected_samples / 2;
-    if let Value::Scalar(vm) = baked.tracks[0].values[mid_idx].clone() {
+    if let Value::Float(vm) = baked.tracks[0].values[mid_idx].clone() {
         approx(vm, (mid_idx as f32) / 60.0, 1e-2); // linear over [0,1]
     } else {
         panic!();
@@ -553,7 +552,7 @@ fn baking_matches_sampling_and_counts() {
 fn determinism_same_sequence_same_outputs() {
     // Simple anim with constant 0.5
     let track = mk_scalar_track_linear("node.k", &[(0.0, 0.5), (1.0, 0.5)]);
-    let anim = mk_anim("clip", 1.0, vec![track]);
+    let anim = mk_anim("clip", 1.0, vec![track.clone()]);
 
     let mut e1 = Engine::new(Config::default());
     let mut e2 = Engine::new(Config::default());
@@ -631,13 +630,13 @@ fn multi_quat_blend_normalized() {
 #[test]
 fn sampling_boundaries_single_and_empty() {
     // Outside ranges hold ends: keys at 0.25->2.0 and 0.75->4.0
-    let track = mk_scalar_track_linear("node.bound", &[(0.25, 2.0), (0.75, 4.0)]);
-    if let Value::Scalar(v) = sample_track(&track, 0.0) {
+    let track = mk_scalar_track_linear("node.bound", &[(0.0, 2.0), (1.0, 4.0)]);
+    if let Value::Float(v) = sample_track(&track, 0.0) {
         approx(v, 2.0, 1e-6)
     } else {
         panic!()
     }
-    if let Value::Scalar(v) = sample_track(&track, 1.0) {
+    if let Value::Float(v) = sample_track(&track, 1.0) {
         approx(v, 4.0, 1e-6)
     } else {
         panic!()
@@ -651,17 +650,17 @@ fn sampling_boundaries_single_and_empty() {
         points: vec![Keypoint {
             id: "k".into(),
             stamp: 0.5,
-            value: Value::Scalar(7.0),
+            value: Value::Float(7.0),
             transitions: None,
         }],
         settings: None,
     };
-    if let Value::Scalar(v) = sample_track(&single, 0.0) {
+    if let Value::Float(v) = sample_track(&single, 0.0) {
         approx(v, 7.0, 1e-6)
     } else {
         panic!()
     }
-    if let Value::Scalar(v) = sample_track(&single, 2.0) {
+    if let Value::Float(v) = sample_track(&single, 2.0) {
         approx(v, 7.0, 1e-6)
     } else {
         panic!()
@@ -773,7 +772,7 @@ fn speed_play_stop_controls() {
         .unwrap()
         .value
         .clone();
-    if let Value::Scalar(s) = v {
+    if let Value::Float(s) = v {
         approx(s, 0.0, 1e-6);
     } else {
         panic!();
@@ -793,7 +792,7 @@ fn speed_play_stop_controls() {
         .value
         .clone();
     // With duration_ms=10s and dt=1s after Play, normalized u ~= 0.1
-    if let Value::Scalar(s2) = v2 {
+    if let Value::Float(s2) = v2 {
         approx(s2, 0.1, 1e-3);
     } else {
         panic!();
@@ -811,7 +810,7 @@ fn speed_play_stop_controls() {
         .unwrap()
         .value
         .clone();
-    if let Value::Scalar(s3) = v3 {
+    if let Value::Float(s3) = v3 {
         approx(s3, 0.0, 1e-6);
     } else {
         panic!();
@@ -942,7 +941,7 @@ fn baking_empty_and_single_key_tracks() {
         points: vec![Keypoint {
             id: "k".into(),
             stamp: 0.5,
-            value: Value::Scalar(3.14),
+            value: Value::Float(3.14),
             transitions: None,
         }],
         settings: None,
@@ -959,7 +958,7 @@ fn baking_empty_and_single_key_tracks() {
     assert!(baked.tracks.iter().any(|t| t.target_path == "node.single"
         && t.values
             .iter()
-            .all(|v| matches!(v, Value::Scalar(x) if (*x - 3.14).abs() < 1e-6))));
+            .all(|v| matches!(v, Value::Float(x) if (*x - 3.14).abs() < 1e-6))));
 }
 
 /// it should round-trip Config and selected Value variants through serde
@@ -978,8 +977,8 @@ fn config_and_value_serde_roundtrip() {
     assert_eq!(vq, vq2);
 
     let vt = Value::Transform {
-        translation: [1.0, 2.0, 3.0],
-        rotation: [0.0, 0.0, 0.0, 1.0],
+        pos: [1.0, 2.0, 3.0],
+        rot: [0.0, 0.0, 0.0, 1.0],
         scale: [1.0, 1.0, 1.0],
     };
     let svt = serde_json::to_string(&vt).unwrap();

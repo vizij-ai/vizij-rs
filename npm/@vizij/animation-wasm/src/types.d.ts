@@ -78,17 +78,17 @@ export interface Inputs {
    Tagged union: { type: "...", data: ... }
 ----------------------------------------------------------- */
 export type Value =
-  | { type: "Scalar"; data: number }
+  | { type: "Float"; data: number }
   | { type: "Vec2"; data: [number, number] }
   | { type: "Vec3"; data: [number, number, number] }
   | { type: "Vec4"; data: [number, number, number, number] }
   | { type: "Quat"; data: [number, number, number, number] } // (x, y, z, w)
-  | { type: "Color"; data: [number, number, number, number] } // RGBA
+  | { type: "ColorRgba"; data: [number, number, number, number] } // RGBA
   | {
       type: "Transform";
       data: {
-        translation: [number, number, number];
-        rotation: [number, number, number, number]; // quat (x,y,z,w)
+        pos: [number, number, number];
+        rot: [number, number, number, number]; // quat (x,y,z,w)
         scale: [number, number, number];
       };
     }

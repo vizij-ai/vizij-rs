@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use crate::interp::functions::nlerp_quat;
-use crate::value::Value;
+use vizij_api_core::Value;
 
 /// Accumulator entry storing weighted sums per Value kind.
 /// For vectors/colors: store component-wise sum and total weight.
@@ -49,7 +49,7 @@ enum AccumEntry {
 impl AccumEntry {
     fn add_value(&mut self, v: &Value, w: f32) {
         match (self, v) {
-            (AccumEntry::Scalar { sum, w: ww }, Value::Scalar(x)) => {
+            (AccumEntry::Scalar { sum, w: ww }, Value::Float(x)) => {
                 *sum += x * w;
                 *ww += w;
             }
@@ -78,7 +78,7 @@ impl AccumEntry {
                 sum[3] += q[3] * w;
                 *ww += w;
             }
-            (AccumEntry::Color { sum, w: ww }, Value::Color(a)) => {
+            (AccumEntry::Color { sum, w: ww }, Value::ColorRgba(a)) => {
                 sum[0] += a[0] * w;
                 sum[1] += a[1] * w;
                 sum[2] += a[2] * w;
@@ -92,20 +92,16 @@ impl AccumEntry {
                     s_sum,
                     w: ww,
                 },
-                Value::Transform {
-                    translation,
-                    rotation,
-                    scale,
-                },
+                Value::Transform { pos, rot, scale },
             ) => {
-                t_sum[0] += translation[0] * w;
-                t_sum[1] += translation[1] * w;
-                t_sum[2] += translation[2] * w;
+                t_sum[0] += pos[0] * w;
+                t_sum[1] += pos[1] * w;
+                t_sum[2] += pos[2] * w;
 
-                r_sum[0] += rotation[0] * w;
-                r_sum[1] += rotation[1] * w;
-                r_sum[2] += rotation[2] * w;
-                r_sum[3] += rotation[3] * w;
+                r_sum[0] += rot[0] * w;
+                r_sum[1] += rot[1] * w;
+                r_sum[2] += rot[2] * w;
+                r_sum[3] += rot[3] * w;
 
                 s_sum[0] += scale[0] * w;
                 s_sum[1] += scale[1] * w;
@@ -126,7 +122,7 @@ impl AccumEntry {
 
     fn from_value(v: &Value, w: f32) -> Self {
         match v {
-            Value::Scalar(x) => AccumEntry::Scalar { sum: *x * w, w },
+            Value::Float(x) => AccumEntry::Scalar { sum: *x * w, w },
             Value::Vec2(a) => AccumEntry::Vec2 {
                 sum: [a[0] * w, a[1] * w],
                 w,
@@ -143,27 +139,20 @@ impl AccumEntry {
                 sum: [q[0] * w, q[1] * w, q[2] * w, q[3] * w],
                 w,
             },
-            Value::Color(c) => AccumEntry::Color {
+            Value::ColorRgba(c) => AccumEntry::Color {
                 sum: [c[0] * w, c[1] * w, c[2] * w, c[3] * w],
                 w,
             },
-            Value::Transform {
-                translation,
-                rotation,
-                scale,
-            } => AccumEntry::Transform {
-                t_sum: [translation[0] * w, translation[1] * w, translation[2] * w],
-                r_sum: [
-                    rotation[0] * w,
-                    rotation[1] * w,
-                    rotation[2] * w,
-                    rotation[3] * w,
-                ],
+            Value::Transform { pos, rot, scale } => AccumEntry::Transform {
+                t_sum: [pos[0] * w, pos[1] * w, pos[2] * w],
+                r_sum: [rot[0] * w, rot[1] * w, rot[2] * w, rot[3] * w],
                 s_sum: [scale[0] * w, scale[1] * w, scale[2] * w],
                 w,
             },
             Value::Text(s) => AccumEntry::Step(Value::Text(s.clone())),
             Value::Bool(b) => AccumEntry::Step(Value::Bool(*b)),
+            Value::Vector(v) => AccumEntry::Step(Value::Vector(v.clone())),
+            Value::Enum(tag, boxed) => AccumEntry::Step(Value::Enum(tag.clone(), boxed.clone())),
         }
     }
 
@@ -171,7 +160,7 @@ impl AccumEntry {
         match self {
             AccumEntry::Scalar { sum, w } => {
                 if w > 0.0 {
-                    Some(Value::Scalar(sum / w))
+                    Some(Value::Float(sum / w))
                 } else {
                     None
                 }
@@ -214,7 +203,7 @@ impl AccumEntry {
             }
             AccumEntry::Color { sum, w } => {
                 if w > 0.0 {
-                    Some(Value::Color([
+                    Some(Value::ColorRgba([
                         sum[0] / w,
                         sum[1] / w,
                         sum[2] / w,
@@ -236,8 +225,8 @@ impl AccumEntry {
                     let r = [r_sum[0] / w, r_sum[1] / w, r_sum[2] / w, r_sum[3] / w];
                     let r_norm = nlerp_quat(r, r, 0.0);
                     Some(Value::Transform {
-                        translation: t,
-                        rotation: r_norm,
+                        pos: t,
+                        rot: r_norm,
                         scale: s,
                     })
                 } else {

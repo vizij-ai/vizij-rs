@@ -53,10 +53,10 @@ fn parity_scalar_ramp_values() {
         .expect("node.t")
         .value
         .clone();
-    if let Value::Scalar(s) = v0 {
+    if let Value::Float(s) = v0 {
         approx(s, 0.0, 1e-5);
     } else {
-        panic!("expected Scalar");
+        panic!("expected Float");
     }
 
     // Step dt=0.1 for 10 ticks, expect values ~ i/10
@@ -71,7 +71,7 @@ fn parity_scalar_ramp_values() {
             .expect("node.t")
             .value
             .clone();
-        if let Value::Scalar(s) = v {
+        if let Value::Float(s) = v {
             approx(s, t, 1e-5);
             assert!(
                 (s - (i as f32) / 10.0).abs() < 1e-5,
@@ -80,7 +80,7 @@ fn parity_scalar_ramp_values() {
                 s
             );
         } else {
-            panic!("expected Scalar");
+            panic!("expected Float");
         }
     }
 }
@@ -108,7 +108,7 @@ fn parity_const_vec3_values() {
         .clone();
     match v {
         Value::Vec3(v3) => approx3(v3, [1.0, 2.0, 3.0], 1e-6),
-        Value::Transform { translation, .. } => approx3(translation, [1.0, 2.0, 3.0], 1e-6),
+        Value::Transform { pos, .. } => approx3(pos, [1.0, 2.0, 3.0], 1e-6),
         _ => panic!("expected Vec3 or Transform"),
     }
 }
@@ -148,10 +148,10 @@ fn parity_window_and_seek() {
         .expect("node.t")
         .value
         .clone();
-    if let Value::Scalar(s) = v {
+    if let Value::Float(s) = v {
         approx(s, 0.8, 1e-5);
     } else {
-        panic!("expected Scalar");
+        panic!("expected Float");
     }
 
     // Loop mode wrapping on a 10s clip: seek -0.25 wraps to 9.75 (absolute seconds)
@@ -172,10 +172,10 @@ fn parity_window_and_seek() {
         .expect("node.t")
         .value
         .clone();
-    if let Value::Scalar(s) = v2 {
+    if let Value::Float(s) = v2 {
         approx(s, 9.75, 1e-5);
     } else {
-        panic!("expected Scalar");
+        panic!("expected Float");
     }
 }
 

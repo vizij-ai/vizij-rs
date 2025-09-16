@@ -45,7 +45,8 @@ pub fn topo_order(nodes: &[NodeSpec]) -> Result<Vec<NodeId>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{GraphSpec, InputConnection, NodeParams, NodeType, Value};
+    use crate::types::{GraphSpec, InputConnection, NodeParams, NodeType};
+    use vizij_api_core::Value;
     #[test]
     fn simple_topo() {
         let g = GraphSpec {

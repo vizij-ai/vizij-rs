@@ -16,6 +16,7 @@ use crate::sampling::sample_track;
 use crate::scratch::Scratch;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use vizij_api_core::{TypedPath, WriteBatch, WriteOp};
 
 /// Per-player controller and instance list.
 #[derive(Debug)]
@@ -584,6 +585,24 @@ impl Engine {
         }
 
         &self.outputs
+    }
+
+    /// Update and also return a typed WriteBatch (collection of WriteOp) where each
+    /// WriteOp.path is parsed as a `TypedPath`. If a change's key does not parse as a
+    /// TypedPath it will be skipped in the returned batch. The engine still maintains
+    /// its normal Outputs in `self.outputs`.
+    pub fn update_writebatch(&mut self, dt: f32, inputs: Inputs) -> WriteBatch {
+        // Populate self.outputs as usual.
+        let _ = self.update(dt, inputs);
+
+        let mut batch = WriteBatch::new();
+        for ch in self.outputs.changes.iter() {
+            // Parse the canonical path into a TypedPath; skip on parse error.
+            if let Ok(tp) = TypedPath::parse(&ch.key) {
+                batch.push(WriteOp::new(tp, ch.value.clone()));
+            }
+        }
+        batch
     }
 
     /// Remove an instance from a player. Returns true if removed.

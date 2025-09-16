@@ -14,7 +14,7 @@
 
 use crate::data::{Keypoint, Track};
 use crate::interp::functions::{bezier_value, step_value};
-use crate::value::{Value, ValueKind};
+use vizij_api_core::{Value, ValueKind};
 
 const DEFAULT_OUT_X: f32 = 0.42;
 const DEFAULT_OUT_Y: f32 = 0.0;
@@ -57,7 +57,7 @@ pub fn sample_track(track: &Track, u: f32) -> Value {
     match n {
         0 => {
             // No points: return a neutral scalar 0.0 (fail-soft). Adapters can choose policy.
-            Value::Scalar(0.0)
+            Value::Float(0.0)
         }
         1 => points[0].value.clone(),
         _ => {

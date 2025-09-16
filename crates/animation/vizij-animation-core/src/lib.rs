@@ -34,4 +34,4 @@ pub use outputs::{Change, CoreEvent, Outputs};
 pub use sampling::sample_track;
 pub use scratch::Scratch;
 pub use stored_animation::parse_stored_animation_json;
-pub use value::{Value, ValueKind};
+pub use vizij_api_core::{Value, ValueKind};

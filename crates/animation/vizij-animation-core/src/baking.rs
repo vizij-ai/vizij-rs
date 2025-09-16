@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::data::AnimationData;
 use crate::ids::AnimId;
 use crate::sampling::sample_track;
-use crate::value::Value;
+use vizij_api_core::Value;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakingConfig {

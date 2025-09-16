@@ -2,6 +2,7 @@ use js_sys::{Function, JSON};
 use serde_wasm_bindgen as swb;
 use wasm_bindgen::prelude::*;
 
+use serde_json::{json, to_value, Map};
 use vizij_animation_core::{
     parse_stored_animation_json, AnimId, AnimationData, Config, Engine, Inputs, InstId,
     InstanceCfg, Outputs, PlayerId, TargetResolver,
@@ -142,6 +143,38 @@ impl VizijAnimation {
         };
         let out: &Outputs = self.core.update(dt, inputs);
         swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
+    }
+
+    /// Step the simulation and return a nodes+writes JSON object compatible with
+    /// the node-graph WASM output shape.
+    /// Returns an object with shape:
+    /// { nodes: Record<string, Record<string, ValueJSON>>, writes: Array<{ path: string, value: ValueJSON }> }.
+    #[wasm_bindgen(js_name = update_nodes_writes)]
+    pub fn update_nodes_writes(
+        &mut self,
+        dt: f32,
+        inputs_json: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let inputs: Inputs = if jsvalue_is_undefined_or_null(&inputs_json) {
+            Inputs::default()
+        } else {
+            swb::from_value(inputs_json).map_err(|e| JsError::new(&format!("inputs error: {e}")))?
+        };
+
+        // Produce a typed WriteBatch from the engine (skips keys that don't parse).
+        let batch = self.core.update_writebatch(dt, inputs);
+
+        // Serialize the WriteBatch into JSON (an array of { path, value } objects).
+        let writes_json =
+            to_value(&batch).map_err(|e| JsError::new(&format!("serialize batch error: {e}")))?;
+
+        // For animation the per-node outputs map is not applicable; keep empty object for tooling parity.
+        let out_obj = json!({
+            "nodes": Map::new(),
+            "writes": writes_json,
+        });
+
+        swb::to_value(&out_obj).map_err(|e| JsError::new(&format!("outputs error: {e}")))
     }
 
     /// Remove a player and all its instances. Returns boolean success.

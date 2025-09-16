@@ -1,5 +1,6 @@
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
+use vizij_api_core::Value;
 
 pub type NodeId = String;
 
@@ -69,47 +70,37 @@ pub enum NodeType {
     Output,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(untagged)]
-pub enum Value {
-    Float(f64),
-    Bool(bool),
-    Vec3([f64; 3]),
-    Vector(Vec<f64>),
-}
-
-impl Default for Value {
-    fn default() -> Self {
-        Value::Float(0.0)
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NodeParams {
     pub value: Option<Value>,
-    pub frequency: Option<f64>,
-    pub phase: Option<f64>,
+    pub frequency: Option<f32>,
+    pub phase: Option<f32>,
     #[serde(default)]
-    pub min: f64,
+    pub min: f32,
     #[serde(default)]
-    pub max: f64,
+    pub max: f32,
     // Optional defaults for Vec3 constructor
-    pub x: Option<f64>,
-    pub y: Option<f64>,
-    pub z: Option<f64>,
+    pub x: Option<f32>,
+    pub y: Option<f32>,
+    pub z: Option<f32>,
     // For Remap
-    pub in_min: Option<f64>,
-    pub in_max: Option<f64>,
-    pub out_min: Option<f64>,
-    pub out_max: Option<f64>,
+    pub in_min: Option<f32>,
+    pub in_max: Option<f32>,
+    pub out_min: Option<f32>,
+    pub out_max: Option<f32>,
     // For IK
-    pub bone1: Option<f64>,
-    pub bone2: Option<f64>,
-    pub bone3: Option<f64>,
+    pub bone1: Option<f32>,
+    pub bone2: Option<f32>,
+    pub bone3: Option<f32>,
     // For Splitter
-    pub index: Option<f64>,
+    pub index: Option<f32>,
     // For Split sizes (vector of sizes, floored to usize)
-    pub sizes: Option<Vec<f64>>,
+    pub sizes: Option<Vec<f32>>,
+
+    // Optional target typed path for Output nodes and sinks.
+    // Example: "robot1/Arm/Joint3.translation"
+    #[serde(default)]
+    pub path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -126,7 +117,8 @@ fn default_output_key() -> String {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeSpec {
     pub id: NodeId,
-    #[serde(rename = "type")]
+    /// Accept either `"type"` (preferred) or legacy `"kind"` in incoming JSON.
+    #[serde(rename = "type", alias = "kind")]
     pub kind: NodeType,
     #[serde(default)]
     pub params: NodeParams,

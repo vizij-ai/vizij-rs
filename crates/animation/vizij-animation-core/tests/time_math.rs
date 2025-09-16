@@ -12,7 +12,7 @@ fn mk_anim(name: &str, duration_s: f32) -> AnimationData {
         Keypoint {
             id: "k0".into(),
             stamp: 0.0,
-            value: Value::Scalar(0.0),
+            value: Value::Float(0.0),
             transitions: Some(Transitions {
                 r#in: None,
                 r#out: Some(Vec2 { x: 0.0, y: 0.0 }),
@@ -21,7 +21,7 @@ fn mk_anim(name: &str, duration_s: f32) -> AnimationData {
         Keypoint {
             id: "k1".into(),
             stamp: 1.0,
-            value: Value::Scalar(1.0),
+            value: Value::Float(1.0),
             transitions: Some(Transitions {
                 r#in: Some(Vec2 { x: 1.0, y: 1.0 }),
                 r#out: None,
@@ -185,13 +185,13 @@ fn interpolation_bezier_and_bezier_ease_in_smoke() {
         Keypoint {
             id: "k0".into(),
             stamp: 0.0,
-            value: Value::Scalar(0.0),
+            value: Value::Float(0.0),
             transitions: None, // default out (0.42,0)
         },
         Keypoint {
             id: "k1".into(),
             stamp: 1.0,
-            value: Value::Scalar(1.0),
+            value: Value::Float(1.0),
             transitions: None, // default in (0.58,1)
         },
     ];
@@ -203,7 +203,7 @@ fn interpolation_bezier_and_bezier_ease_in_smoke() {
         settings: None,
     };
     let v_mid = sample_track(&track_bez, 0.5);
-    if let Value::Scalar(x) = v_mid {
+    if let Value::Float(x) = v_mid {
         assert!(
             x > 0.4 && x < 0.6,
             "bezier midpoint in reasonable range, got {x}"
@@ -217,7 +217,7 @@ fn interpolation_bezier_and_bezier_ease_in_smoke() {
         Keypoint {
             id: "k0".into(),
             stamp: 0.0,
-            value: Value::Scalar(0.0),
+            value: Value::Float(0.0),
             transitions: Some(Transitions {
                 r#in: None,
                 r#out: Some(Vec2 { x: 0.42, y: 0.0 }),
@@ -226,7 +226,7 @@ fn interpolation_bezier_and_bezier_ease_in_smoke() {
         Keypoint {
             id: "k1".into(),
             stamp: 1.0,
-            value: Value::Scalar(1.0),
+            value: Value::Float(1.0),
             transitions: Some(Transitions {
                 r#in: Some(Vec2 { x: 1.0, y: 1.0 }),
                 r#out: None,
@@ -241,7 +241,7 @@ fn interpolation_bezier_and_bezier_ease_in_smoke() {
         settings: None,
     };
     let v_mid_bz = sample_track(&track_ease_in, 0.5);
-    if let Value::Scalar(x) = v_mid_bz {
+    if let Value::Float(x) = v_mid_bz {
         assert!(
             x < 0.5,
             "ease-in at 0.5 should be less than linear 0.5, got {x}"

@@ -6,6 +6,9 @@ members = [
   "crates/node-graph/vizij-graph-core",
   "crates/node-graph/bevy_vizij_graph",
   "crates/node-graph/vizij-graph-wasm",
+  "crates/api/vizij-api-core",
+  "crates/api/vizij-api-wasm",
+  "crates/api/bevy_vizij_api",
 ]
 resolver = "2"
 

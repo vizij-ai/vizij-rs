@@ -116,7 +116,11 @@ export class Graph {
    */
   evalAll(): Record<string, Record<string, ValueJSON>> {
     const raw = this.inner.eval_all(); // JSON string
-    return JSON.parse(raw) as Record<string, Record<string, ValueJSON>>;
+    const parsed = JSON.parse(raw) as {
+      nodes: Record<string, Record<string, ValueJSON>>;
+      writes: unknown;
+    };
+    return parsed.nodes;
   }
 
   /**

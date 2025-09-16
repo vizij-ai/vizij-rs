@@ -1082,8 +1082,20 @@ name = "bevy_vizij_animation"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_vizij_api",
  "serde_json",
  "vizij-animation-core",
+ "vizij-api-core",
+]
+
+[[package]]
+name = "bevy_vizij_api"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "hashbrown 0.14.5",
+ "serde",
+ "vizij-api-core",
 ]
 
 [[package]]
@@ -1091,9 +1103,11 @@ name = "bevy_vizij_graph"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_vizij_api",
  "hashbrown 0.14.5",
  "serde",
  "serde_json",
+ "vizij-api-core",
  "vizij-graph-core",
 ]
 
@@ -3700,6 +3714,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "vizij-api-core",
 ]
 
 [[package]]
@@ -3712,8 +3727,31 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "vizij-animation-core",
+ "vizij-api-core",
+ "vizij-api-wasm",
  "wasm-bindgen",
  "wasm-bindgen-test",
+]
+
+[[package]]
+name = "vizij-api-core"
+version = "0.1.0"
+dependencies = [
+ "hashbrown 0.14.5",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "vizij-api-wasm"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "vizij-api-core",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -3725,6 +3763,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "vizij-api-core",
 ]
 
 [[package]]
@@ -3735,6 +3774,7 @@ dependencies = [
  "hashbrown 0.14.5",
  "serde",
  "serde_json",
+ "vizij-api-core",
  "vizij-graph-core",
  "wasm-bindgen",
 ]

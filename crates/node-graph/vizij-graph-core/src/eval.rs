@@ -1,13 +1,16 @@
-use crate::types::{GraphSpec, InputConnection, NodeId, NodeSpec, NodeType, Value};
+// Adapted to use vizij_api_core::Value (f32-based) and f32 arithmetic.
+
+use crate::types::{GraphSpec, InputConnection, NodeId, NodeSpec, NodeType};
 use hashbrown::HashMap;
+use vizij_api_core::Value;
 
 #[derive(Debug, Clone, Default)]
 pub struct GraphRuntime {
-    pub t: f64,
+    pub t: f32,
     pub outputs: HashMap<NodeId, HashMap<String, Value>>,
 }
 
-fn as_float(v: &Value) -> f64 {
+fn as_float(v: &Value) -> f32 {
     match v {
         Value::Float(f) => *f,
         Value::Bool(b) => {
@@ -19,6 +22,13 @@ fn as_float(v: &Value) -> f64 {
         }
         Value::Vec3(v) => v[0],
         Value::Vector(a) => a.first().copied().unwrap_or(0.0),
+        Value::Vec2(a) => a[0],
+        Value::Vec4(a) => a[0],
+        Value::Quat(a) => a[0],
+        Value::ColorRgba(a) => a[0],
+        Value::Transform { pos, .. } => pos[0],
+        Value::Enum(_, boxed) => as_float(boxed),
+        Value::Text(_) => 0.0,
     }
 }
 
@@ -28,13 +38,22 @@ fn as_bool(v: &Value) -> bool {
         Value::Bool(b) => *b,
         Value::Vec3(v) => v[0] != 0.0 || v[1] != 0.0 || v[2] != 0.0,
         Value::Vector(a) => a.iter().any(|x| *x != 0.0),
+        Value::Vec2(v) => v[0] != 0.0 || v[1] != 0.0,
+        Value::Vec4(v) => v.iter().any(|x| *x != 0.0),
+        Value::Quat(q) => q.iter().any(|x| *x != 0.0),
+        Value::ColorRgba(c) => c.iter().any(|x| *x != 0.0),
+        Value::Transform { pos, .. } => pos.iter().any(|x| *x != 0.0),
+        Value::Enum(_, boxed) => as_bool(boxed),
+        Value::Text(s) => !s.is_empty(),
     }
 }
 
-fn as_vector(v: &Value) -> Vec<f64> {
+fn as_vector(v: &Value) -> Vec<f32> {
     match v {
         Value::Vector(a) => a.clone(),
         Value::Vec3(a) => vec![a[0], a[1], a[2]],
+        Value::Vec2(a) => vec![a[0], a[1]],
+        Value::Vec4(a) => vec![a[0], a[1], a[2], a[3]],
         Value::Float(f) => vec![*f],
         Value::Bool(b) => {
             if *b {
@@ -43,12 +62,17 @@ fn as_vector(v: &Value) -> Vec<f64> {
                 vec![0.0]
             }
         }
+        Value::Quat(a) => vec![a[0], a[1], a[2], a[3]],
+        Value::ColorRgba(a) => vec![a[0], a[1], a[2], a[3]],
+        Value::Transform { pos, .. } => vec![pos[0], pos[1], pos[2]],
+        Value::Enum(_, boxed) => as_vector(boxed),
+        Value::Text(_) => Vec::new(),
     }
 }
 
-fn elementwise_bin_op<F>(a: &[f64], b: &[f64], f: F) -> Vec<f64>
+fn elementwise_bin_op<F>(a: &[f32], b: &[f32], f: F) -> Vec<f32>
 where
-    F: Fn(f64, f64) -> f64,
+    F: Fn(f32, f32) -> f32,
 {
     if a.len() == b.len() {
         a.iter().zip(b.iter()).map(|(x, y)| f(*x, *y)).collect()
@@ -60,24 +84,24 @@ where
         a.iter().map(|&x| f(x, y)).collect()
     } else {
         let len = a.len().max(b.len());
-        vec![f64::NAN; len]
+        vec![f32::NAN; len]
     }
 }
 
-fn length_squared(v: &[f64]) -> f64 {
+fn length_squared(v: &[f32]) -> f32 {
     v.iter().map(|x| x * x).sum()
 }
 
-fn map_unary<F>(a: &[f64], f: F) -> Vec<f64>
+fn map_unary<F>(a: &[f32], f: F) -> Vec<f32>
 where
-    F: Fn(f64) -> f64,
+    F: Fn(f32) -> f32,
 {
     a.iter().copied().map(f).collect()
 }
 
-fn fold_variadic<'a, F>(mut acc: Vec<f64>, rest: impl Iterator<Item = &'a [f64]>, f: F) -> Vec<f64>
+fn fold_variadic<'a, F>(mut acc: Vec<f32>, rest: impl Iterator<Item = &'a [f32]>, f: F) -> Vec<f32>
 where
-    F: Fn(f64, f64) -> f64 + Copy,
+    F: Fn(f32, f32) -> f32 + Copy,
 {
     for next in rest {
         acc = elementwise_bin_op(&acc, next, f);
@@ -97,7 +121,7 @@ fn read_inputs(
                 .get(&conn.node_id)
                 .and_then(|outputs| outputs.get(&conn.output_key))
                 .cloned()
-                .unwrap_or_default();
+                .unwrap_or(Value::Float(0.0));
             (input_key.clone(), val)
         })
         .collect()
@@ -119,10 +143,10 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
     let t = rt.t;
     let p = &spec.params;
 
-    let get_input = |key: &str| ivals.get(key).cloned().unwrap_or_default();
+    let get_input = |key: &str| ivals.get(key).cloned().unwrap_or(Value::Float(0.0));
 
     let outputs = match spec.kind {
-        NodeType::Constant => out_map!(p.value.clone().unwrap_or_default()),
+        NodeType::Constant => out_map!(p.value.clone().unwrap_or(Value::Float(0.0))),
         NodeType::Slider => out_map!(Value::Float(p.value.as_ref().map(as_float).unwrap_or(0.0))),
         NodeType::MultiSlider => {
             let mut map = HashMap::new();
@@ -136,7 +160,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
         }
         NodeType::Add => {
             // Variadic add (vector-first with broadcasting)
-            let ops: Vec<Vec<f64>> = ivals.values().map(as_vector).collect();
+            let ops: Vec<Vec<f32>> = ivals.values().map(as_vector).collect();
             if let Some((first, rest)) = ops.split_first() {
                 let acc =
                     fold_variadic(first.clone(), rest.iter().map(|v| v.as_slice()), |x, y| {
@@ -156,7 +180,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
         }
         NodeType::Multiply => {
             // Variadic multiply (vector-first with broadcasting)
-            let ops: Vec<Vec<f64>> = ivals.values().map(as_vector).collect();
+            let ops: Vec<Vec<f32>> = ivals.values().map(as_vector).collect();
             if let Some((first, rest)) = ops.split_first() {
                 let acc =
                     fold_variadic(first.clone(), rest.iter().map(|v| v.as_slice()), |x, y| {
@@ -171,7 +195,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
             // Binary divide (vector-first with broadcasting)
             let a = as_vector(&get_input("lhs"));
             let b = as_vector(&get_input("rhs"));
-            let out = elementwise_bin_op(&a, &b, |x, y| if y != 0.0 { x / y } else { f64::NAN });
+            let out = elementwise_bin_op(&a, &b, |x, y| if y != 0.0 { x / y } else { f32::NAN });
             out_map!(Value::Vector(out))
         }
         NodeType::Power => {
@@ -208,7 +232,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
         NodeType::Oscillator => {
             let f = as_float(&get_input("frequency"));
             let phase = as_float(&get_input("phase"));
-            out_map!(Value::Float((std::f64::consts::TAU * f * t + phase).sin()))
+            out_map!(Value::Float((std::f32::consts::TAU * f * t + phase).sin()))
         }
 
         NodeType::And => out_map!(Value::Bool(
@@ -229,10 +253,10 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
             as_float(&get_input("lhs")) < as_float(&get_input("rhs"))
         )),
         NodeType::Equal => out_map!(Value::Bool(
-            (as_float(&get_input("lhs")) - as_float(&get_input("rhs"))).abs() < 1e-9
+            (as_float(&get_input("lhs")) - as_float(&get_input("rhs"))).abs() < 1e-6
         )),
         NodeType::NotEqual => out_map!(Value::Bool(
-            (as_float(&get_input("lhs")) - as_float(&get_input("rhs"))).abs() > 1e-9
+            (as_float(&get_input("lhs")) - as_float(&get_input("rhs"))).abs() > 1e-6
         )),
         NodeType::If => {
             let cond = as_bool(&get_input("cond"));
@@ -270,7 +294,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
                     a[0] * b[1] - a[1] * b[0],
                 ]))
             } else {
-                out_map!(Value::Vec3([f64::NAN, f64::NAN, f64::NAN]))
+                out_map!(Value::Vec3([f32::NAN, f32::NAN, f32::NAN]))
             }
         }
 
@@ -300,7 +324,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
         NodeType::VectorScale => {
             let s = as_float(&get_input("scalar"));
             let v = as_vector(&get_input("v"));
-            let out: Vec<f64> = v.iter().map(|x| s * x).collect();
+            let out: Vec<f32> = v.iter().map(|x| s * x).collect();
             out_map!(Value::Vector(out))
         }
         NodeType::VectorNormalize => {
@@ -317,9 +341,9 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
             let a = as_vector(&get_input("a"));
             let b = as_vector(&get_input("b"));
             let out = if a.len() == b.len() {
-                a.iter().zip(b.iter()).map(|(x, y)| x * y).sum::<f64>()
+                a.iter().zip(b.iter()).map(|(x, y)| x * y).sum::<f32>()
             } else {
-                f64::NAN
+                f32::NAN
             };
             out_map!(Value::Float(out))
         }
@@ -334,7 +358,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
             let out = if idx >= 0 && (idx as usize) < v.len() {
                 Value::Float(v[idx as usize])
             } else {
-                Value::Float(f64::NAN)
+                Value::Float(f32::NAN)
             };
             out_map!(out)
         }
@@ -343,7 +367,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
 
         // Join: flatten all inputs (order of map iteration is arbitrary here)
         NodeType::Join => {
-            let mut out: Vec<f64> = Vec::new();
+            let mut out: Vec<f32> = Vec::new();
             for v in ivals.values() {
                 out.extend(as_vector(v));
             }
@@ -376,7 +400,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
                 } else {
                     // Mismatch: return NaN vectors for each requested size
                     for (i, sz) in sizes_usize.iter().copied().enumerate() {
-                        map.insert(format!("part{}", i + 1), Value::Vector(vec![f64::NAN; sz]));
+                        map.insert(format!("part{}", i + 1), Value::Vector(vec![f32::NAN; sz]));
                     }
                     map
                 }
@@ -387,34 +411,34 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
         NodeType::VectorMin => {
             let v = as_vector(&get_input("in"));
             let out = if v.is_empty() {
-                f64::NAN
+                f32::NAN
             } else {
-                v.iter().copied().fold(f64::INFINITY, f64::min)
+                v.iter().copied().fold(f32::INFINITY, f32::min)
             };
             out_map!(Value::Float(out))
         }
         NodeType::VectorMax => {
             let v = as_vector(&get_input("in"));
             let out = if v.is_empty() {
-                f64::NAN
+                f32::NAN
             } else {
-                v.iter().copied().fold(f64::NEG_INFINITY, f64::max)
+                v.iter().copied().fold(f32::NEG_INFINITY, f32::max)
             };
             out_map!(Value::Float(out))
         }
         NodeType::VectorMean => {
             let v = as_vector(&get_input("in"));
             let out = if v.is_empty() {
-                f64::NAN
+                f32::NAN
             } else {
-                v.iter().sum::<f64>() / (v.len() as f64)
+                v.iter().sum::<f32>() / (v.len() as f32)
             };
             out_map!(Value::Float(out))
         }
         NodeType::VectorMedian => {
             let mut v = as_vector(&get_input("in"));
             let out = if v.is_empty() {
-                f64::NAN
+                f32::NAN
             } else {
                 v.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 let n = v.len();
@@ -429,11 +453,11 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
         NodeType::VectorMode => {
             let v = as_vector(&get_input("in"));
             let out = if v.is_empty() {
-                f64::NAN
+                f32::NAN
             } else {
                 // Count frequencies; tie -> smallest numeric value
-                let mut map: hashbrown::HashMap<i64, (f64, usize)> = hashbrown::HashMap::new();
-                // quantize to i64 for frequency on floats; for more precision use epsilon-binning later
+                let mut map: hashbrown::HashMap<i64, (f32, usize)> = hashbrown::HashMap::new();
+                // quantize to bits for frequency on floats
                 for x in v {
                     if x.is_nan() {
                         continue;
@@ -443,9 +467,9 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
                     entry.1 += 1;
                 }
                 if map.is_empty() {
-                    f64::NAN
+                    f32::NAN
                 } else {
-                    let mut best_val = f64::NAN;
+                    let mut best_val = f32::NAN;
                     let mut best_count = 0usize;
                     for (_k, (val, cnt)) in map.iter() {
                         if *cnt > best_count {
@@ -478,7 +502,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
 
             out_map!(
                 if dist_sq > (l1 + l2) * (l1 + l2) || dist_sq < (l1 - l2) * (l1 - l2) {
-                    Value::Vec3([f64::NAN, f64::NAN, f64::NAN])
+                    Value::Vec3([f32::NAN, f32::NAN, f32::NAN])
                 } else {
                     // let dist = dist_sq.sqrt();
                     let cos_angle2 = (dist_sq - l1 * l1 - l2 * l2) / (2.0 * l1 * l2);

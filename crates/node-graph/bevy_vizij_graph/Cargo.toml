@@ -17,3 +17,5 @@ serde          = { workspace = true }
 serde_json     = { workspace = true }
 hashbrown      = { workspace = true }
 vizij-graph-core = { path = "../vizij-graph-core", version = "0.1.0" }
+vizij-api-core = { path = "../../api/vizij-api-core" }
+bevy_vizij_api = { path = "../../api/bevy_vizij_api" }
