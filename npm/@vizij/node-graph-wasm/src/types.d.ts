@@ -20,6 +20,9 @@ export type NodeType =
   | "tan"
   | "time"
   | "oscillator"
+  | "spring"
+  | "damp"
+  | "slew"
   | "and"
   | "or"
   | "not"
@@ -105,6 +108,11 @@ export interface NodeParams {
   out_max?: number;
   /** Optional typed-path target for sinks (validated in Rust). */
   path?: string;
+  stiffness?: number;
+  damping?: number;
+  mass?: number;
+  half_life?: number;
+  max_rate?: number;
 }
 
 export interface NodeSpec {

@@ -25,6 +25,11 @@ pub enum NodeType {
     Time,
     Oscillator, // sin(2π f t + phase)
 
+    // Transition & smoothing
+    Spring,
+    Damp,
+    Slew,
+
     // Logic
     And,
     Or,
@@ -96,6 +101,13 @@ pub struct NodeParams {
     pub index: Option<f32>,
     // For Split sizes (vector of sizes, floored to usize)
     pub sizes: Option<Vec<f32>>,
+
+    // Transition parameters
+    pub stiffness: Option<f32>,
+    pub damping: Option<f32>,
+    pub mass: Option<f32>,
+    pub half_life: Option<f32>,
+    pub max_rate: Option<f32>,
 
     // Optional target typed path for Output nodes and sinks.
     // Example: "robot1/Arm/Joint3.translation"

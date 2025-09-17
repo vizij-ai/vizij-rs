@@ -133,7 +133,8 @@ export class Graph {
   }
 
   /**
-   * Update a node parameter by key (e.g., "value", "frequency", "phase", "min", "max", "x", "y", "z").
+   * Update a node parameter by key (e.g., "value", "frequency", "phase", "min", "max",
+   * "stiffness", "damping", "half_life", "max_rate").
    * Value may be number | boolean | vec3 or a pre-encoded ValueJSON.
    */
   setParam(nodeId: string, key: string, value: Value): void {

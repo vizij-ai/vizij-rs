@@ -1,7 +1,7 @@
 // Adapted to use vizij_api_core::Value (f32-based) and f32 arithmetic.
 
 use crate::types::{GraphSpec, InputConnection, NodeId, NodeSpec, NodeType};
-use hashbrown::HashMap;
+use hashbrown::{hash_map::Entry, HashMap};
 use vizij_api_core::shape::Field;
 use vizij_api_core::{coercion, Shape, ShapeId, Value, WriteBatch, WriteOp};
 
@@ -162,6 +162,83 @@ impl ValueLayout {
         self.reconstruct(&data)
     }
 }
+
+#[derive(Clone, Debug)]
+struct SpringState {
+    layout: ValueLayout,
+    position: Vec<f32>,
+    velocity: Vec<f32>,
+    target: Vec<f32>,
+}
+
+impl SpringState {
+    fn new(flat: &FlatValue) -> Self {
+        let len = flat.data.len();
+        SpringState {
+            layout: flat.layout.clone(),
+            position: flat.data.clone(),
+            velocity: vec![0.0; len],
+            target: flat.data.clone(),
+        }
+    }
+
+    fn reset(&mut self, flat: &FlatValue) {
+        let len = flat.data.len();
+        self.layout = flat.layout.clone();
+        self.position = flat.data.clone();
+        self.velocity = vec![0.0; len];
+        self.target = flat.data.clone();
+    }
+}
+
+#[derive(Clone, Debug)]
+struct DampState {
+    layout: ValueLayout,
+    value: Vec<f32>,
+}
+
+impl DampState {
+    fn new(flat: &FlatValue) -> Self {
+        DampState {
+            layout: flat.layout.clone(),
+            value: flat.data.clone(),
+        }
+    }
+
+    fn reset(&mut self, flat: &FlatValue) {
+        self.layout = flat.layout.clone();
+        self.value = flat.data.clone();
+    }
+}
+
+#[derive(Clone, Debug)]
+struct SlewState {
+    layout: ValueLayout,
+    value: Vec<f32>,
+}
+
+impl SlewState {
+    fn new(flat: &FlatValue) -> Self {
+        SlewState {
+            layout: flat.layout.clone(),
+            value: flat.data.clone(),
+        }
+    }
+
+    fn reset(&mut self, flat: &FlatValue) {
+        self.layout = flat.layout.clone();
+        self.value = flat.data.clone();
+    }
+}
+
+#[derive(Clone, Debug)]
+enum NodeRuntimeState {
+    Spring(SpringState),
+    Damp(DampState),
+    Slew(SlewState),
+}
+
+const MIN_MASS: f32 = 1.0e-4;
 
 fn flatten_numeric(value: &Value) -> Option<FlatValue> {
     match value {
@@ -430,8 +507,106 @@ fn infer_shape_id(value: &Value) -> ShapeId {
 #[derive(Debug, Clone, Default)]
 pub struct GraphRuntime {
     pub t: f32,
+    pub dt: f32,
     pub outputs: HashMap<NodeId, HashMap<String, PortValue>>,
     pub writes: WriteBatch,
+    node_states: HashMap<NodeId, NodeRuntimeState>,
+}
+
+impl GraphRuntime {
+    fn spring_state_mut<'a>(
+        &'a mut self,
+        node_id: &NodeId,
+        flat: &FlatValue,
+    ) -> &'a mut SpringState {
+        match self.node_states.entry(node_id.clone()) {
+            Entry::Occupied(mut occupied) => {
+                {
+                    let state = occupied.get_mut();
+                    match state {
+                        NodeRuntimeState::Spring(inner) => {
+                            if inner.layout != flat.layout {
+                                inner.reset(flat);
+                            }
+                        }
+                        _ => {
+                            *state = NodeRuntimeState::Spring(SpringState::new(flat));
+                        }
+                    }
+                }
+                match occupied.into_mut() {
+                    NodeRuntimeState::Spring(inner) => inner,
+                    _ => unreachable!(),
+                }
+            }
+            Entry::Vacant(vacant) => {
+                match vacant.insert(NodeRuntimeState::Spring(SpringState::new(flat))) {
+                    NodeRuntimeState::Spring(inner) => inner,
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
+
+    fn damp_state_mut<'a>(&'a mut self, node_id: &NodeId, flat: &FlatValue) -> &'a mut DampState {
+        match self.node_states.entry(node_id.clone()) {
+            Entry::Occupied(mut occupied) => {
+                {
+                    let state = occupied.get_mut();
+                    match state {
+                        NodeRuntimeState::Damp(inner) => {
+                            if inner.layout != flat.layout {
+                                inner.reset(flat);
+                            }
+                        }
+                        _ => {
+                            *state = NodeRuntimeState::Damp(DampState::new(flat));
+                        }
+                    }
+                }
+                match occupied.into_mut() {
+                    NodeRuntimeState::Damp(inner) => inner,
+                    _ => unreachable!(),
+                }
+            }
+            Entry::Vacant(vacant) => {
+                match vacant.insert(NodeRuntimeState::Damp(DampState::new(flat))) {
+                    NodeRuntimeState::Damp(inner) => inner,
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
+
+    fn slew_state_mut<'a>(&'a mut self, node_id: &NodeId, flat: &FlatValue) -> &'a mut SlewState {
+        match self.node_states.entry(node_id.clone()) {
+            Entry::Occupied(mut occupied) => {
+                {
+                    let state = occupied.get_mut();
+                    match state {
+                        NodeRuntimeState::Slew(inner) => {
+                            if inner.layout != flat.layout {
+                                inner.reset(flat);
+                            }
+                        }
+                        _ => {
+                            *state = NodeRuntimeState::Slew(SlewState::new(flat));
+                        }
+                    }
+                }
+                match occupied.into_mut() {
+                    NodeRuntimeState::Slew(inner) => inner,
+                    _ => unreachable!(),
+                }
+            }
+            Entry::Vacant(vacant) => {
+                match vacant.insert(NodeRuntimeState::Slew(SlewState::new(flat))) {
+                    NodeRuntimeState::Slew(inner) => inner,
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
 }
 
 fn as_float(v: &Value) -> f32 {
@@ -552,6 +727,124 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) -> Result<(), String> {
             let f = as_float(&get_input("frequency").value);
             let phase = as_float(&get_input("phase").value);
             out_map!(Value::Float((std::f32::consts::TAU * f * t + phase).sin()))
+        }
+        NodeType::Spring => {
+            let input = get_input("in");
+            match flatten_numeric(&input.value) {
+                Some(flat) => {
+                    let dt = if rt.dt.is_finite() {
+                        rt.dt.max(0.0)
+                    } else {
+                        0.0
+                    };
+                    let stiffness = p.stiffness.unwrap_or(120.0);
+                    let stiffness = if stiffness.is_finite() {
+                        stiffness.max(0.0)
+                    } else {
+                        0.0
+                    };
+                    let damping = p.damping.unwrap_or(20.0);
+                    let damping = if damping.is_finite() {
+                        damping.max(0.0)
+                    } else {
+                        0.0
+                    };
+                    let mass = p.mass.unwrap_or(1.0);
+                    let mass = if mass.is_finite() {
+                        mass.max(MIN_MASS)
+                    } else {
+                        1.0
+                    };
+
+                    let state = rt.spring_state_mut(&spec.id, &flat);
+                    state.target = flat.data.clone();
+
+                    if dt <= 0.0 {
+                        state.position = state.target.clone();
+                        state.velocity.fill(0.0);
+                    } else {
+                        let inv_mass = 1.0 / mass;
+                        for ((pos, vel), target) in state
+                            .position
+                            .iter_mut()
+                            .zip(state.velocity.iter_mut())
+                            .zip(state.target.iter())
+                        {
+                            let displacement = *pos - *target;
+                            let spring_force = -stiffness * displacement;
+                            let damping_force = -damping * *vel;
+                            let acceleration = (spring_force + damping_force) * inv_mass;
+                            *vel += acceleration * dt;
+                            *pos += *vel * dt;
+                        }
+                    }
+
+                    out_map!(state.layout.reconstruct(&state.position))
+                }
+                None => out_map!(Value::Float(f32::NAN)),
+            }
+        }
+        NodeType::Damp => {
+            let input = get_input("in");
+            match flatten_numeric(&input.value) {
+                Some(flat) => {
+                    let dt = if rt.dt.is_finite() {
+                        rt.dt.max(0.0)
+                    } else {
+                        0.0
+                    };
+                    let half_life = p.half_life.unwrap_or(0.1);
+                    let half_life = if half_life.is_finite() {
+                        half_life
+                    } else {
+                        0.1
+                    };
+                    let state = rt.damp_state_mut(&spec.id, &flat);
+                    if dt <= 0.0 || half_life <= 0.0 {
+                        state.value = flat.data.clone();
+                    } else {
+                        let hl = half_life.max(1.0e-6);
+                        let decay = (-std::f32::consts::LN_2 * dt / hl).exp();
+                        for (value, target) in state.value.iter_mut().zip(flat.data.iter()) {
+                            *value = *target + (*value - *target) * decay;
+                        }
+                    }
+                    out_map!(state.layout.reconstruct(&state.value))
+                }
+                None => out_map!(Value::Float(f32::NAN)),
+            }
+        }
+        NodeType::Slew => {
+            let input = get_input("in");
+            match flatten_numeric(&input.value) {
+                Some(flat) => {
+                    let dt = if rt.dt.is_finite() {
+                        rt.dt.max(0.0)
+                    } else {
+                        0.0
+                    };
+                    let max_rate = p.max_rate.unwrap_or(1.0);
+                    let max_rate = if max_rate.is_finite() { max_rate } else { 1.0 };
+                    let state = rt.slew_state_mut(&spec.id, &flat);
+                    if dt <= 0.0 || max_rate <= 0.0 {
+                        state.value = flat.data.clone();
+                    } else {
+                        let max_delta = max_rate * dt;
+                        for (value, target) in state.value.iter_mut().zip(flat.data.iter()) {
+                            let delta = *target - *value;
+                            if delta.abs() <= max_delta {
+                                *value = *target;
+                            } else if delta > 0.0 {
+                                *value += max_delta;
+                            } else {
+                                *value -= max_delta;
+                            }
+                        }
+                    }
+                    out_map!(state.layout.reconstruct(&state.value))
+                }
+                None => out_map!(Value::Float(f32::NAN)),
+            }
         }
 
         NodeType::And => out_map!(Value::Bool(
@@ -995,6 +1288,11 @@ fn value_matches_shape(shape: &ShapeId, value: &Value) -> bool {
     }
 }
 pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), String> {
+    rt.outputs.clear();
+    rt.writes = WriteBatch::new();
+    rt.node_states
+        .retain(|id, _| spec.nodes.iter().any(|node| node.id == *id));
+
     let order = crate::topo::topo_order(&spec.nodes)?;
     for id in order {
         if let Some(node) = spec.nodes.iter().find(|n| n.id == id) {
@@ -1143,5 +1441,218 @@ mod tests {
         let err = serde_json::from_str::<NodeSpec>(json)
             .expect_err("invalid typed path should fail to parse");
         assert!(err.to_string().contains("path"));
+    }
+
+    #[test]
+    fn spring_node_transitions_toward_new_target() {
+        let mut spring_inputs = HashMap::new();
+        spring_inputs.insert(
+            "in".to_string(),
+            InputConnection {
+                node_id: "target".to_string(),
+                output_key: "out".to_string(),
+            },
+        );
+
+        let spring = NodeSpec {
+            id: "spring".to_string(),
+            kind: NodeType::Spring,
+            params: NodeParams {
+                stiffness: Some(30.0),
+                damping: Some(6.0),
+                mass: Some(1.0),
+                ..Default::default()
+            },
+            inputs: spring_inputs,
+            output_shapes: HashMap::new(),
+        };
+
+        let mut spec = GraphSpec {
+            nodes: vec![constant_node("target", Value::Float(0.0)), spring],
+        };
+
+        let mut rt = GraphRuntime::default();
+        evaluate_all(&mut rt, &spec).expect("initial evaluate");
+
+        spec.nodes[0].params.value = Some(Value::Float(10.0));
+
+        rt.dt = 1.0 / 60.0;
+        rt.t += rt.dt;
+        evaluate_all(&mut rt, &spec).expect("first step");
+        let first = match rt
+            .outputs
+            .get("spring")
+            .and_then(|map| map.get("out"))
+            .map(|pv| pv.value.clone())
+            .expect("spring output")
+        {
+            Value::Float(f) => f,
+            other => panic!("expected float, got {:?}", other),
+        };
+        assert!(
+            (first - 10.0).abs() > 0.01,
+            "spring should not immediately reach target"
+        );
+
+        for _ in 0..240 {
+            rt.dt = 1.0 / 60.0;
+            rt.t += rt.dt;
+            evaluate_all(&mut rt, &spec).expect("subsequent step");
+        }
+
+        let final_val = match rt
+            .outputs
+            .get("spring")
+            .and_then(|map| map.get("out"))
+            .map(|pv| pv.value.clone())
+            .expect("spring output")
+        {
+            Value::Float(f) => f,
+            other => panic!("expected float, got {:?}", other),
+        };
+        assert!(
+            (final_val - 10.0).abs() < 0.1,
+            "spring should converge to target"
+        );
+    }
+
+    #[test]
+    fn damp_node_smooths_toward_target() {
+        let mut damp_inputs = HashMap::new();
+        damp_inputs.insert(
+            "in".to_string(),
+            InputConnection {
+                node_id: "target".to_string(),
+                output_key: "out".to_string(),
+            },
+        );
+
+        let damp = NodeSpec {
+            id: "damp".to_string(),
+            kind: NodeType::Damp,
+            params: NodeParams {
+                half_life: Some(0.2),
+                ..Default::default()
+            },
+            inputs: damp_inputs,
+            output_shapes: HashMap::new(),
+        };
+
+        let mut spec = GraphSpec {
+            nodes: vec![constant_node("target", Value::Float(0.0)), damp],
+        };
+
+        let mut rt = GraphRuntime::default();
+        evaluate_all(&mut rt, &spec).expect("initial evaluate");
+
+        spec.nodes[0].params.value = Some(Value::Float(1.0));
+        rt.dt = 0.1;
+        rt.t += rt.dt;
+        evaluate_all(&mut rt, &spec).expect("first step");
+
+        let first = match rt
+            .outputs
+            .get("damp")
+            .and_then(|map| map.get("out"))
+            .map(|pv| pv.value.clone())
+            .expect("damp output")
+        {
+            Value::Float(f) => f,
+            other => panic!("expected float, got {:?}", other),
+        };
+        assert!(first > 0.0 && first < 1.0, "damp should move but not snap");
+
+        for _ in 0..20 {
+            rt.dt = 0.1;
+            rt.t += rt.dt;
+            evaluate_all(&mut rt, &spec).expect("subsequent step");
+        }
+
+        let final_val = match rt
+            .outputs
+            .get("damp")
+            .and_then(|map| map.get("out"))
+            .map(|pv| pv.value.clone())
+            .expect("damp output")
+        {
+            Value::Float(f) => f,
+            other => panic!("expected float, got {:?}", other),
+        };
+        assert!(
+            (final_val - 1.0).abs() < 0.05,
+            "damp should approach target"
+        );
+    }
+
+    #[test]
+    fn slew_node_limits_rate_of_change() {
+        let mut slew_inputs = HashMap::new();
+        slew_inputs.insert(
+            "in".to_string(),
+            InputConnection {
+                node_id: "target".to_string(),
+                output_key: "out".to_string(),
+            },
+        );
+
+        let slew = NodeSpec {
+            id: "slew".to_string(),
+            kind: NodeType::Slew,
+            params: NodeParams {
+                max_rate: Some(2.0),
+                ..Default::default()
+            },
+            inputs: slew_inputs,
+            output_shapes: HashMap::new(),
+        };
+
+        let mut spec = GraphSpec {
+            nodes: vec![constant_node("target", Value::Float(0.0)), slew],
+        };
+
+        let mut rt = GraphRuntime::default();
+        evaluate_all(&mut rt, &spec).expect("initial evaluate");
+
+        spec.nodes[0].params.value = Some(Value::Float(5.0));
+        rt.dt = 0.25;
+        rt.t += rt.dt;
+        evaluate_all(&mut rt, &spec).expect("slew step");
+
+        let first = match rt
+            .outputs
+            .get("slew")
+            .and_then(|map| map.get("out"))
+            .map(|pv| pv.value.clone())
+            .expect("slew output")
+        {
+            Value::Float(f) => f,
+            other => panic!("expected float, got {:?}", other),
+        };
+
+        assert!(
+            (first - 0.5).abs() < 1e-6,
+            "slew should move at configured rate"
+        );
+
+        for _ in 0..10 {
+            rt.dt = 0.25;
+            rt.t += rt.dt;
+            evaluate_all(&mut rt, &spec).expect("subsequent step");
+        }
+
+        let final_val = match rt
+            .outputs
+            .get("slew")
+            .and_then(|map| map.get("out"))
+            .map(|pv| pv.value.clone())
+            .expect("slew output")
+        {
+            Value::Float(f) => f,
+            other => panic!("expected float, got {:?}", other),
+        };
+        assert!(
+            (final_val - 5.0).abs() < 0.25,
+            "slew should eventually reach target"
+        );
     }
 }

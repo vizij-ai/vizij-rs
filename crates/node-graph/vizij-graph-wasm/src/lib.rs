@@ -1,5 +1,5 @@
 use hashbrown::HashMap;
-use vizij_api_core::{coercion, TypedPath, Value, WriteBatch};
+use vizij_api_core::{coercion, TypedPath, Value};
 use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, PortValue};
 use wasm_bindgen::prelude::*;
 
@@ -292,10 +292,13 @@ mod tests {
     }
 }
 
+/// Holds a persistent runtime so transition nodes can accumulate state across
+/// evaluations without copying it through the wasm boundary each frame.
 #[wasm_bindgen]
 pub struct WasmGraph {
     spec: GraphSpec,
     t: f64,
+    runtime: GraphRuntime,
 }
 
 impl Default for WasmGraph {
@@ -313,6 +316,7 @@ impl WasmGraph {
         WasmGraph {
             spec: GraphSpec { nodes: vec![] },
             t: 0.0,
+            runtime: GraphRuntime::default(),
         }
     }
 
@@ -322,6 +326,9 @@ impl WasmGraph {
         // Now deserialize into the typed GraphSpec
         self.spec =
             serde_json::from_value(normalized).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        self.runtime = GraphRuntime::default();
+        self.runtime.t = self.t as f32;
+        self.runtime.dt = 0.0;
         Ok(())
     }
 
@@ -342,20 +349,21 @@ impl WasmGraph {
     ///   "writes": [ { "path": string, "value": ValueJSON, "shape": ShapeJSON }, ... ]
     /// }
     #[wasm_bindgen]
-    pub fn eval_all(&self) -> Result<String, JsValue> {
-        // GraphRuntime.t is f32 in core; cast from f64
-        let mut rt = GraphRuntime {
-            t: self.t as f32,
-            outputs: HashMap::new(),
-            writes: WriteBatch::new(),
-        };
-        evaluate_all(&mut rt, &self.spec).map_err(|e| JsValue::from_str(&e))?;
+    pub fn eval_all(&mut self) -> Result<String, JsValue> {
+        let new_time = self.t as f32;
+        let mut dt = new_time - self.runtime.t;
+        if !dt.is_finite() || dt < 0.0 {
+            dt = 0.0;
+        }
+        self.runtime.dt = dt;
+        self.runtime.t = new_time;
+        evaluate_all(&mut self.runtime, &self.spec).map_err(|e| JsValue::from_str(&e))?;
 
         // Build per-node outputs JSON (for tooling) and collect WriteOps for Output nodes that have a path.
         let mut nodes_map: HashMap<String, serde_json::Value> = HashMap::new();
         let mut writes: Vec<serde_json::Value> = Vec::new();
 
-        for (node_id, outputs) in rt.outputs.iter() {
+        for (node_id, outputs) in self.runtime.outputs.iter() {
             let outputs_json: HashMap<String, serde_json::Value> = outputs
                 .iter()
                 .map(|(key, port)| {
@@ -370,7 +378,7 @@ impl WasmGraph {
             nodes_map.insert(node_id.clone(), serde_json::to_value(outputs_json).unwrap());
         }
 
-        for op in rt.writes.iter() {
+        for op in self.runtime.writes.iter() {
             let jv = value_to_legacy_json(&op.value);
             let inferred_shape = PortValue::new(op.value.clone()).shape;
             let shape_json = serde_json::to_value(&inferred_shape).unwrap();
@@ -434,6 +442,19 @@ impl WasmGraph {
                 }
                 "index" => {
                     node.params.index = Some(if let Value::Float(f) = val { f } else { 0.0 })
+                }
+                "stiffness" => {
+                    node.params.stiffness = Some(if let Value::Float(f) = val { f } else { 0.0 })
+                }
+                "damping" => {
+                    node.params.damping = Some(if let Value::Float(f) = val { f } else { 0.0 })
+                }
+                "mass" => node.params.mass = Some(if let Value::Float(f) = val { f } else { 1.0 }),
+                "half_life" => {
+                    node.params.half_life = Some(if let Value::Float(f) = val { f } else { 0.0 })
+                }
+                "max_rate" => {
+                    node.params.max_rate = Some(if let Value::Float(f) = val { f } else { 0.0 })
                 }
                 "sizes" => {
                     node.params.sizes = Some(coercion::to_vector(&val));

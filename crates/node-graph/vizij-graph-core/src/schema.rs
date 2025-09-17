@@ -458,6 +458,120 @@ pub fn registry() -> Registry {
         params: vec![],
     });
 
+    // Transitions & smoothing
+    nodes.push(NodeSignature {
+        type_id: Spring,
+        name: "Spring",
+        category: "Transitions",
+        inputs: vec![PortSpec {
+            id: "in",
+            ty: PortType::Vector,
+            label: "Target",
+            doc: "Target value to spring toward (scalar or vector).",
+            optional: false,
+        }],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Vector,
+            label: "Value",
+            doc: "Spring-integrated value.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![
+            ParamSpec {
+                id: "stiffness",
+                ty: ParamType::Float,
+                label: "Stiffness",
+                doc: "Hooke's spring constant controlling acceleration toward the target.",
+                default_json: Some(serde_json::json!({ "float": 120.0 })),
+                min: Some(0.0),
+                max: None,
+            },
+            ParamSpec {
+                id: "damping",
+                ty: ParamType::Float,
+                label: "Damping",
+                doc: "Velocity damping applied each step.",
+                default_json: Some(serde_json::json!({ "float": 20.0 })),
+                min: Some(0.0),
+                max: None,
+            },
+            ParamSpec {
+                id: "mass",
+                ty: ParamType::Float,
+                label: "Mass",
+                doc: "Effective mass of the spring system.",
+                default_json: Some(serde_json::json!({ "float": 1.0 })),
+                min: Some(0.0),
+                max: None,
+            },
+        ],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Damp,
+        name: "Damp",
+        category: "Transitions",
+        inputs: vec![PortSpec {
+            id: "in",
+            ty: PortType::Vector,
+            label: "Target",
+            doc: "Target value to smooth toward.",
+            optional: false,
+        }],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Vector,
+            label: "Value",
+            doc: "Exponentially smoothed output.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![ParamSpec {
+            id: "half_life",
+            ty: ParamType::Float,
+            label: "Half-Life",
+            doc: "Seconds for the remaining error to halve.",
+            default_json: Some(serde_json::json!({ "float": 0.2 })),
+            min: Some(0.0),
+            max: None,
+        }],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Slew,
+        name: "Slew",
+        category: "Transitions",
+        inputs: vec![PortSpec {
+            id: "in",
+            ty: PortType::Vector,
+            label: "Target",
+            doc: "Target value to chase.",
+            optional: false,
+        }],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Vector,
+            label: "Value",
+            doc: "Rate-limited output value.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![ParamSpec {
+            id: "max_rate",
+            ty: ParamType::Float,
+            label: "Max Rate",
+            doc: "Maximum units per second the value may change.",
+            default_json: Some(serde_json::json!({ "float": 1.0 })),
+            min: Some(0.0),
+            max: None,
+        }],
+    });
+
     // Logic (Bool semantics)
     nodes.push(NodeSignature {
         type_id: And,

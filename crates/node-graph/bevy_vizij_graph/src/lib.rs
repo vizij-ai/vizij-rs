@@ -9,6 +9,10 @@ pub struct GraphResource(pub GraphSpec);
 #[derive(Resource, Default, Clone)]
 pub struct GraphOutputs(pub HashMap<NodeId, HashMap<String, PortValue>>);
 
+/// Persistent runtime so stateful nodes (springs, dampers, etc.) can integrate across frames.
+#[derive(Resource, Default)]
+pub struct GraphRuntimeResource(pub GraphRuntime);
+
 /// Convert a Value into a coarse f32 scalar for node parameter assignment.
 /// Rules:
 /// - Float -> value
@@ -50,9 +54,10 @@ pub struct SetNodeParam {
     pub value: Value,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub struct GraphTime {
     pub t: f32,
+    pub dt: f32,
 }
 
 pub struct VizijGraphPlugin;
@@ -61,7 +66,8 @@ impl Plugin for VizijGraphPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(GraphResource::default())
             .insert_resource(GraphOutputs::default())
-            .insert_resource(GraphTime { t: 0.0 })
+            .insert_resource(GraphTime { t: 0.0, dt: 0.0 })
+            .insert_resource(GraphRuntimeResource::default())
             .add_event::<SetNodeParam>()
             .add_systems(Update, system_time)
             .add_systems(Update, system_set_params)
@@ -70,7 +76,11 @@ impl Plugin for VizijGraphPlugin {
 }
 
 fn system_time(time: Res<Time>, mut gt: ResMut<GraphTime>) {
-    gt.t += time.delta_seconds();
+    gt.dt = time.delta_seconds();
+    if !gt.dt.is_finite() {
+        gt.dt = 0.0;
+    }
+    gt.t += gt.dt;
 }
 
 fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResource>) {
@@ -123,6 +133,21 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                 "index" => {
                     node.params.index = Some(value_to_f32(&e.value));
                 }
+                "stiffness" => {
+                    node.params.stiffness = Some(value_to_f32(&e.value));
+                }
+                "damping" => {
+                    node.params.damping = Some(value_to_f32(&e.value));
+                }
+                "mass" => {
+                    node.params.mass = Some(value_to_f32(&e.value));
+                }
+                "half_life" => {
+                    node.params.half_life = Some(value_to_f32(&e.value));
+                }
+                "max_rate" => {
+                    node.params.max_rate = Some(value_to_f32(&e.value));
+                }
                 _ => { /* ignore unknown keys */ }
             }
         }
@@ -134,20 +159,29 @@ fn system_eval(world: &mut World) {
     let Some(g) = world.get_resource::<GraphResource>().cloned() else {
         return;
     };
-    let Some(gt) = world.get_resource::<GraphTime>() else {
+    let Some(gt) = world.get_resource::<GraphTime>().cloned() else {
         return;
     };
-    let t = gt.t;
+    let (batch, snapshot) = {
+        let Some(mut runtime) = world.get_resource_mut::<GraphRuntimeResource>() else {
+            return;
+        };
 
-    let mut rt = GraphRuntime {
-        t,
-        outputs: HashMap::new(),
-        writes: vizij_api_core::WriteBatch::new(),
+        let dt = if gt.dt.is_finite() {
+            gt.dt.max(0.0)
+        } else {
+            0.0
+        };
+        runtime.0.t = gt.t;
+        runtime.0.dt = dt;
+        if let Err(err) = evaluate_all(&mut runtime.0, &g.0) {
+            bevy::log::error!("graph evaluation error: {err}");
+        }
+
+        let batch = runtime.0.writes.clone();
+        let snapshot = runtime.0.outputs.clone();
+        (batch, snapshot)
     };
-    let _ = evaluate_all(&mut rt, &g.0);
-
-    // Use the core-emitted WriteBatch directly.
-    let batch = rt.writes.clone();
 
     // Apply batch to world if WriterRegistry is present. Use resource_scope to avoid borrow conflicts.
     if world.contains_resource::<bevy_vizij_api::WriterRegistry>() {
@@ -158,9 +192,9 @@ fn system_eval(world: &mut World) {
 
     // Preserve the GraphOutputs resource for inspection.
     if let Some(mut out) = world.get_resource_mut::<GraphOutputs>() {
-        out.0 = rt.outputs;
+        out.0 = snapshot.clone();
     } else {
         // In case it wasn't inserted for some reason, insert it now.
-        world.insert_resource(GraphOutputs(rt.outputs));
+        world.insert_resource(GraphOutputs(snapshot));
     }
 }
