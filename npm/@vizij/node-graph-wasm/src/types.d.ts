@@ -103,6 +103,8 @@ export interface NodeParams {
   in_max?: number;
   out_min?: number;
   out_max?: number;
+  /** Optional typed-path target for sinks (validated in Rust). */
+  path?: string;
 }
 
 export interface NodeSpec {
