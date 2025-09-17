@@ -44,12 +44,14 @@ graph.setTime(0);
 graph.step(1 / 60); // advance internal time in seconds
 
 const { nodes, writes }: EvalResult = graph.evalAll();
-// nodes: Record<NodeId, Record<PortId, ValueJSON>>
-// writes: Array<{ path: string; value: ValueJSON }>
+// nodes: Record<NodeId, Record<PortId, { value: ValueJSON; shape: ShapeJSON }>>
+// writes: Array<{ path: string; value: ValueJSON; shape: ShapeJSON }>
 
 graph.setParam("nodeA", "value", { vec3: [1, 2, 3] });
 
 const registry = await getNodeSchemas();
+
+const normalized = await normalizeGraphSpec(spec);
 ```
 
 `ValueJSON` mirrors the serialized shape produced by `vizij-api-core::Value`.
@@ -62,5 +64,8 @@ as well as composites:
 - `{ tuple: ValueJSON[] }`
 
 `EvalResult.writes` contains the typed output batch emitted by nodes that define a
-`params.path`. Each entry matches the JSON contract exposed by
-`vizij_api_core::WriteOp` (`{ path: string, value: ValueJSON }`).
+`params.path`. Each entry mirrors the JSON contract exposed by
+`vizij_api_core::WriteOp` and includes both the serialized value and its inferred
+shape (`{ path: string, value: ValueJSON, shape: ShapeJSON }`). The per-node
+output map follows the same `{ value, shape }` convention so UI layers can render
+data using the same schema metadata returned by the Rust core.

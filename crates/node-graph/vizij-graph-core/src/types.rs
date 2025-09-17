@@ -1,6 +1,6 @@
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
-use vizij_api_core::{Shape, Value};
+use vizij_api_core::{Shape, TypedPath, Value};
 
 pub type NodeId = String;
 
@@ -100,7 +100,7 @@ pub struct NodeParams {
     // Optional target typed path for Output nodes and sinks.
     // Example: "robot1/Arm/Joint3.translation"
     #[serde(default)]
-    pub path: Option<String>,
+    pub path: Option<TypedPath>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

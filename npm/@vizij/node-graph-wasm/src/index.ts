@@ -1,7 +1,11 @@
 // Stable ESM entry for @vizij/graph-wasm
 // Wraps the wasm-pack output in ../pkg (built with `--target web`).
 // Adjust the import path if your pkg name differs.
-import initWasm, { WasmGraph, get_node_schemas_json } from "../pkg/vizij_graph_wasm.js";
+import initWasm, {
+  WasmGraph,
+  get_node_schemas_json,
+  normalize_graph_spec_json,
+} from "../pkg/vizij_graph_wasm.js";
 import type {
   NodeId,
   NodeType,
@@ -68,12 +72,14 @@ function ensureInited(): void {
 export type Value =
   | number
   | boolean
+  | string
   | number[] // vector of arbitrary length; length 3 is treated as vec3
   | ValueJSON; // accept already-encoded JSON form too
 
 export function toValueJSON(v: Value): ValueJSON {
   if (typeof v === "number") return { float: v };
   if (typeof v === "boolean") return { bool: v };
+  if (typeof v === "string") return { text: v };
   if (Array.isArray(v)) {
     // Always encode JS arrays as generic vectors to avoid accidental vec3 coercion.
     // Vec3 values should be passed explicitly as { vec3: [x,y,z] } when intended.
@@ -144,6 +150,19 @@ export async function createGraph(
   const g = new Graph();
   if (spec) g.loadGraph(spec);
   return g;
+}
+
+/**
+ * Normalize a graph specification (object or JSON string) using the shared
+ * Rust-side normalization logic. Helpful for persisting specs or diffing.
+ */
+export async function normalizeGraphSpec(
+  spec: GraphSpec | string
+): Promise<GraphSpec> {
+  await init();
+  const json = typeof spec === "string" ? spec : JSON.stringify(spec);
+  const normalizedJson = normalize_graph_spec_json(json);
+  return JSON.parse(normalizedJson) as GraphSpec;
 }
 
 /**

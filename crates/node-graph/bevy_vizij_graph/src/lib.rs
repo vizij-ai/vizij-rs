@@ -142,29 +142,12 @@ fn system_eval(world: &mut World) {
     let mut rt = GraphRuntime {
         t,
         outputs: HashMap::new(),
+        writes: vizij_api_core::WriteBatch::new(),
     };
     let _ = evaluate_all(&mut rt, &g.0);
 
-    // Build a WriteBatch from graph outputs where nodes declare a target path.
-    let mut batch = vizij_api_core::WriteBatch::new();
-
-    for node in &g.0.nodes {
-        if let Some(base) = node.params.path.as_ref() {
-            if let Some(node_outputs) = rt.outputs.get(&node.id) {
-                for (key, val) in node_outputs.iter() {
-                    // If output key is "out" use base as-is, else append ".{key}".
-                    let path_str = if key == "out" {
-                        base.clone()
-                    } else {
-                        format!("{base}.{}", key)
-                    };
-                    if let Ok(tp) = vizij_api_core::TypedPath::parse(&path_str) {
-                        batch.push(vizij_api_core::WriteOp::new(tp, val.value.clone()));
-                    }
-                }
-            }
-        }
-    }
+    // Use the core-emitted WriteBatch directly.
+    let batch = rt.writes.clone();
 
     // Apply batch to world if WriterRegistry is present. Use resource_scope to avoid borrow conflicts.
     if world.contains_resource::<bevy_vizij_api::WriterRegistry>() {

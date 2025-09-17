@@ -3,7 +3,7 @@
 use crate::types::{GraphSpec, InputConnection, NodeId, NodeSpec, NodeType};
 use hashbrown::HashMap;
 use vizij_api_core::shape::Field;
-use vizij_api_core::{Shape, ShapeId, Value};
+use vizij_api_core::{coercion, Shape, ShapeId, Value, WriteBatch, WriteOp};
 
 #[derive(Clone, Debug, PartialEq)]
 enum ValueLayout {
@@ -372,7 +372,13 @@ fn infer_shape_id(value: &Value) -> ShapeId {
         Value::Quat(_) => ShapeId::Quat,
         Value::ColorRgba(_) => ShapeId::ColorRgba,
         Value::Transform { .. } => ShapeId::Transform,
-        Value::Vector(_) => ShapeId::List(Box::new(ShapeId::Scalar)),
+        Value::Vector(vec) => ShapeId::Vector {
+            len: if vec.is_empty() {
+                None
+            } else {
+                Some(vec.len())
+            },
+        },
         Value::Text(_) => ShapeId::Text,
         Value::Enum(tag, boxed) => ShapeId::Enum(vec![(tag.clone(), infer_shape_id(boxed))]),
         Value::Record(map) => {
@@ -425,51 +431,18 @@ fn infer_shape_id(value: &Value) -> ShapeId {
 pub struct GraphRuntime {
     pub t: f32,
     pub outputs: HashMap<NodeId, HashMap<String, PortValue>>,
+    pub writes: WriteBatch,
 }
 
 fn as_float(v: &Value) -> f32 {
-    match v {
-        Value::Float(f) => *f,
-        Value::Bool(b) => {
-            if *b {
-                1.0
-            } else {
-                0.0
-            }
-        }
-        Value::Vec3(v) => v[0],
-        Value::Vector(a) => a.first().copied().unwrap_or(0.0),
-        Value::Vec2(a) => a[0],
-        Value::Vec4(a) => a[0],
-        Value::Quat(a) => a[0],
-        Value::ColorRgba(a) => a[0],
-        Value::Transform { pos, .. } => pos[0],
-        Value::Record(map) => map.values().next().map(as_float).unwrap_or(0.0),
-        Value::Array(items) => items.first().map(as_float).unwrap_or(0.0),
-        Value::List(items) => items.first().map(as_float).unwrap_or(0.0),
-        Value::Tuple(items) => items.first().map(as_float).unwrap_or(0.0),
-        Value::Enum(_, boxed) => as_float(boxed),
-        Value::Text(_) => 0.0,
-    }
+    coercion::to_float(v)
 }
 
 fn as_bool(v: &Value) -> bool {
     match v {
-        Value::Float(f) => *f != 0.0,
         Value::Bool(b) => *b,
-        Value::Vec3(v) => v[0] != 0.0 || v[1] != 0.0 || v[2] != 0.0,
-        Value::Vector(a) => a.iter().any(|x| *x != 0.0),
-        Value::Vec2(v) => v[0] != 0.0 || v[1] != 0.0,
-        Value::Vec4(v) => v.iter().any(|x| *x != 0.0),
-        Value::Quat(q) => q.iter().any(|x| *x != 0.0),
-        Value::ColorRgba(c) => c.iter().any(|x| *x != 0.0),
-        Value::Transform { pos, .. } => pos.iter().any(|x| *x != 0.0),
-        Value::Record(map) => map.values().any(as_bool),
-        Value::Array(items) => items.iter().any(as_bool),
-        Value::List(items) => items.iter().any(as_bool),
-        Value::Tuple(items) => items.iter().any(as_bool),
-        Value::Enum(_, boxed) => as_bool(boxed),
         Value::Text(s) => !s.is_empty(),
+        _ => coercion::to_vector(v).iter().any(|x| *x != 0.0),
     }
 }
 
@@ -502,7 +475,7 @@ macro_rules! out_map {
     };
 }
 
-pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
+pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) -> Result<(), String> {
     let ivals = read_inputs(rt, &spec.inputs);
     let t = rt.t;
     let p = &spec.params;
@@ -514,7 +487,7 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
             .unwrap_or_else(|| PortValue::new(Value::Float(0.0)))
     };
 
-    let outputs = match spec.kind {
+    let mut outputs = match spec.kind {
         NodeType::Constant => out_map!(p.value.clone().unwrap_or(Value::Float(0.0))),
         NodeType::Slider => out_map!(Value::Float(p.value.as_ref().map(as_float).unwrap_or(0.0))),
         NodeType::MultiSlider => {
@@ -923,15 +896,252 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) {
         NodeType::Output => out_map!(get_input("in").value),
     };
 
+    let pending_write = spec.params.path.as_ref().and_then(|path| {
+        outputs
+            .get("out")
+            .map(|pv| (path.clone(), pv.value.clone()))
+    });
+
+    enforce_output_shapes(spec, &mut outputs)?;
+    if let Some((path, value)) = pending_write {
+        rt.writes.push(WriteOp::new(path, value));
+    }
     rt.outputs.insert(spec.id.clone(), outputs);
+    Ok(())
 }
 
+fn enforce_output_shapes(
+    spec: &NodeSpec,
+    outputs: &mut HashMap<String, PortValue>,
+) -> Result<(), String> {
+    if spec.output_shapes.is_empty() {
+        return Ok(());
+    }
+
+    for (key, declared) in spec.output_shapes.iter() {
+        let port = outputs.get_mut(key).ok_or_else(|| {
+            format!(
+                "node '{}' missing declared output '{}' during evaluation",
+                spec.id, key
+            )
+        })?;
+
+        if !value_matches_shape(&declared.id, &port.value) {
+            return Err(format!(
+                "node '{}' output '{}' does not match declared shape {:?}",
+                spec.id, key, declared.id
+            ));
+        }
+
+        port.shape = declared.clone();
+    }
+
+    Ok(())
+}
+
+fn value_matches_shape(shape: &ShapeId, value: &Value) -> bool {
+    match shape {
+        ShapeId::Scalar => matches!(value, Value::Float(_)),
+        ShapeId::Bool => matches!(value, Value::Bool(_)),
+        ShapeId::Vec2 => matches!(value, Value::Vec2(_)),
+        ShapeId::Vec3 => matches!(value, Value::Vec3(_)),
+        ShapeId::Vec4 => matches!(value, Value::Vec4(_)),
+        ShapeId::Quat => matches!(value, Value::Quat(_)),
+        ShapeId::ColorRgba => matches!(value, Value::ColorRgba(_)),
+        ShapeId::Transform => matches!(value, Value::Transform { .. }),
+        ShapeId::Text => matches!(value, Value::Text(_)),
+        ShapeId::Vector { len } => match value {
+            Value::Vector(items) => match len {
+                Some(expected) => items.len() == *expected,
+                None => true,
+            },
+            _ => false,
+        },
+        ShapeId::Record(fields) => match value {
+            Value::Record(map) => fields.iter().all(|field| {
+                map.get(&field.name)
+                    .map(|v| value_matches_shape(&field.shape, v))
+                    .unwrap_or(false)
+            }),
+            _ => false,
+        },
+        ShapeId::Array(inner, len) => match value {
+            Value::Array(items) => {
+                items.len() == *len && items.iter().all(|item| value_matches_shape(inner, item))
+            }
+            _ => false,
+        },
+        ShapeId::List(inner) => match value {
+            Value::List(items) => items.iter().all(|item| value_matches_shape(inner, item)),
+            _ => false,
+        },
+        ShapeId::Tuple(entries) => match value {
+            Value::Tuple(items) => {
+                items.len() == entries.len()
+                    && items
+                        .iter()
+                        .zip(entries.iter())
+                        .all(|(item, shape)| value_matches_shape(shape, item))
+            }
+            _ => false,
+        },
+        ShapeId::Enum(variants) => match value {
+            Value::Enum(tag, boxed) => variants
+                .iter()
+                .find(|(variant, _)| variant == tag)
+                .is_some_and(|(_, shape)| value_matches_shape(shape, boxed)),
+            _ => false,
+        },
+    }
+}
 pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), String> {
     let order = crate::topo::topo_order(&spec.nodes)?;
     for id in order {
         if let Some(node) = spec.nodes.iter().find(|n| n.id == id) {
-            eval_node(rt, node);
+            eval_node(rt, node)?;
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{GraphSpec, InputConnection, NodeParams, NodeType};
+    use hashbrown::HashMap;
+
+    fn constant_node(id: &str, value: Value) -> NodeSpec {
+        NodeSpec {
+            id: id.to_string(),
+            kind: NodeType::Constant,
+            params: NodeParams {
+                value: Some(value),
+                ..Default::default()
+            },
+            inputs: HashMap::new(),
+            output_shapes: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn it_should_respect_declared_shape() {
+        let mut node = constant_node("a", Value::Float(1.0));
+        node.output_shapes
+            .insert("out".to_string(), Shape::new(ShapeId::Scalar));
+
+        let spec = GraphSpec { nodes: vec![node] };
+        let mut rt = GraphRuntime::default();
+        evaluate_all(&mut rt, &spec).expect("shape should match");
+        let outputs = rt.outputs.get("a").expect("outputs present");
+        let port = outputs.get("out").expect("out port present");
+        assert!(matches!(port.shape.id, ShapeId::Scalar));
+    }
+
+    #[test]
+    fn it_should_error_when_shape_mismatches() {
+        let mut node = constant_node("a", Value::Float(1.0));
+        node.output_shapes
+            .insert("out".to_string(), Shape::new(ShapeId::Vec3));
+
+        let spec = GraphSpec { nodes: vec![node] };
+        let mut rt = GraphRuntime::default();
+        let err = evaluate_all(&mut rt, &spec).expect_err("should fail due to mismatch");
+        assert!(err.contains("does not match declared shape"));
+    }
+
+    #[test]
+    fn it_should_emit_write_for_output_nodes() {
+        let mut output_inputs = HashMap::new();
+        output_inputs.insert(
+            "in".to_string(),
+            InputConnection {
+                node_id: "src".to_string(),
+                output_key: "out".to_string(),
+            },
+        );
+
+        let graph = GraphSpec {
+            nodes: vec![
+                constant_node("src", Value::Float(2.0)),
+                NodeSpec {
+                    id: "out".to_string(),
+                    kind: NodeType::Output,
+                    params: NodeParams {
+                        path: Some(
+                            vizij_api_core::TypedPath::parse("robot1/Arm/Joint.angle")
+                                .expect("valid path"),
+                        ),
+                        ..Default::default()
+                    },
+                    inputs: output_inputs,
+                    output_shapes: HashMap::new(),
+                },
+            ],
+        };
+
+        let mut rt = GraphRuntime::default();
+        evaluate_all(&mut rt, &graph).expect("graph should evaluate");
+        assert_eq!(rt.writes.iter().count(), 1);
+        let op = rt.writes.iter().next().expect("write present");
+        assert_eq!(op.path.to_string(), "robot1/Arm/Joint.angle");
+        match op.value {
+            Value::Float(f) => assert_eq!(f, 2.0),
+            _ => panic!("expected float write"),
+        }
+    }
+
+    #[test]
+    fn it_should_infer_vector_length_hints() {
+        let node = constant_node("vec", Value::Vector(vec![1.0, 2.0, 3.0]));
+        let spec = GraphSpec { nodes: vec![node] };
+        let mut rt = GraphRuntime::default();
+        evaluate_all(&mut rt, &spec).expect("graph should evaluate");
+        let outputs = rt.outputs.get("vec").expect("outputs present");
+        let port = outputs.get("out").expect("out port");
+        match &port.shape.id {
+            ShapeId::Vector { len } => assert_eq!(*len, Some(3)),
+            other => panic!("expected vector shape, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn it_should_error_when_declared_output_missing() {
+        let mut node = constant_node("a", Value::Float(1.0));
+        node.output_shapes
+            .insert("secondary".to_string(), Shape::new(ShapeId::Scalar));
+
+        let spec = GraphSpec { nodes: vec![node] };
+        let mut rt = GraphRuntime::default();
+        let err = evaluate_all(&mut rt, &spec).expect_err("missing declared output should error");
+        assert!(err.contains("missing declared output"));
+    }
+
+    #[test]
+    fn it_should_validate_vector_length_against_declared_shape() {
+        let mut node = constant_node("a", Value::Vector(vec![1.0, 2.0, 3.0]));
+        node.output_shapes.insert(
+            "out".to_string(),
+            Shape::new(ShapeId::Vector { len: Some(4) }),
+        );
+
+        let spec = GraphSpec { nodes: vec![node] };
+        let mut rt = GraphRuntime::default();
+        let err = evaluate_all(&mut rt, &spec).expect_err("vector length mismatch should error");
+        assert!(err.contains("does not match declared shape"));
+    }
+
+    #[test]
+    fn it_should_reject_invalid_paths_during_deserialization() {
+        let json = r#"{
+            "id": "node",
+            "type": "output",
+            "params": { "path": "robot/invalid/" },
+            "inputs": {},
+            "output_shapes": {}
+        }"#;
+
+        let err = serde_json::from_str::<NodeSpec>(json)
+            .expect_err("invalid typed path should fail to parse");
+        assert!(err.to_string().contains("path"));
+    }
 }

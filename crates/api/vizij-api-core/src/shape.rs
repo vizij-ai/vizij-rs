@@ -26,6 +26,12 @@ pub enum ShapeId {
     ColorRgba,
     Transform, // TRS: { pos: vec3, rot: quat, scale: vec3 }
     Text,
+    /// Homogeneous numeric vector (float). Optional length hint enables UIs to
+    /// pre-size controls but evaluation remains dynamic.
+    Vector {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        len: Option<usize>,
+    },
 
     // Composite
     Record(Vec<Field>),

@@ -82,6 +82,7 @@ export type ShapeJSON =
   | { id: "ColorRgba"; meta?: Record<string, string> }
   | { id: "Transform"; meta?: Record<string, string> }
   | { id: "Text"; meta?: Record<string, string> }
+  | { id: "Vector"; data?: { len?: number }; meta?: Record<string, string> }
   | { id: "Record"; data: { name: string; shape: ShapeJSON }[]; meta?: Record<string, string> }
   | { id: "Array"; data: [ShapeJSON, number]; meta?: Record<string, string> }
   | { id: "List"; data: ShapeJSON; meta?: Record<string, string> }
