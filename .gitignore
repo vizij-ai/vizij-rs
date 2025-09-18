@@ -1,6 +1,6 @@
 # Rust build
 /target
-
+/node_modules
 # wasm-pack output (generated)
 npm/@vizij/animation-wasm/pkg/
 npm/@vizij/node-graph-wasm/pkg/

@@ -18,6 +18,9 @@ import type {
   PortSnapshot,
   EvalResult,
   ShapeJSON,
+  WriteOpJSON,
+  ParamSpec,
+  Registry,
 } from "./types";
 
 export type {
@@ -31,7 +34,10 @@ export type {
   InitInput,
   PortSnapshot,
   EvalResult,
-  ShapeJSON
+  WriteOpJSON,
+  ShapeJSON,
+  ParamSpec,
+  Registry,
 } 
 
 // --- init() ---
