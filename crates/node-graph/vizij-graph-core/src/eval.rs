@@ -2,6 +2,7 @@
 
 use crate::types::{GraphSpec, InputConnection, NodeId, NodeSpec, NodeType};
 use hashbrown::{hash_map::Entry, HashMap};
+use std::cmp::Ordering;
 use vizij_api_core::shape::Field;
 use vizij_api_core::{coercion, Shape, ShapeId, Value, WriteBatch, WriteOp};
 
@@ -367,6 +368,30 @@ fn align_flattened(
     }
 }
 
+fn parse_variadic_key(key: &str) -> (&str, Option<usize>) {
+    if let Some((prefix, tail)) = key.rsplit_once('_') {
+        if let Ok(idx) = tail.parse::<usize>() {
+            return (prefix, Some(idx));
+        }
+    }
+    (key, None)
+}
+
+fn compare_variadic_keys(a: &str, b: &str) -> Ordering {
+    let (prefix_a, idx_a) = parse_variadic_key(a);
+    let (prefix_b, idx_b) = parse_variadic_key(b);
+
+    match prefix_a.cmp(prefix_b) {
+        Ordering::Equal => match (idx_a, idx_b) {
+            (Some(ia), Some(ib)) => ia.cmp(&ib),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (None, None) => a.cmp(b),
+        },
+        other => other,
+    }
+}
+
 fn binary_numeric<F>(lhs: &Value, rhs: &Value, op: F) -> Value
 where
     F: Fn(f32, f32) -> f32 + Copy,
@@ -724,9 +749,61 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) -> Result<(), String> {
 
         NodeType::Time => out_map!(Value::Float(t)),
         NodeType::Oscillator => {
-            let f = as_float(&get_input("frequency").value);
-            let phase = as_float(&get_input("phase").value);
-            out_map!(Value::Float((std::f32::consts::TAU * f * t + phase).sin()))
+            let freq_port = get_input("frequency");
+            let phase_port = get_input("phase");
+
+            let freq_value = freq_port.value;
+            let phase_value = phase_port.value;
+
+            let freq_flat = flatten_numeric(&freq_value);
+            let phase_flat = flatten_numeric(&phase_value);
+
+            let value = match (freq_flat, phase_flat) {
+                (Some(freq_flat), Some(phase_flat)) => {
+                    match align_flattened(&freq_flat, &phase_flat) {
+                        Ok((layout, freqs, phases)) => {
+                            let data: Vec<f32> = freqs
+                                .into_iter()
+                                .zip(phases)
+                                .map(|(f, phase)| (std::f32::consts::TAU * f * t + phase).sin())
+                                .collect();
+                            layout.reconstruct(&data)
+                        }
+                        Err(layout) => layout.fill_with(f32::NAN),
+                    }
+                }
+                (Some(freq_flat), None) => {
+                    let FlatValue {
+                        layout,
+                        data: freqs,
+                    } = freq_flat;
+                    let phase_scalar = as_float(&phase_value);
+                    let data: Vec<f32> = freqs
+                        .into_iter()
+                        .map(|f| (std::f32::consts::TAU * f * t + phase_scalar).sin())
+                        .collect();
+                    layout.reconstruct(&data)
+                }
+                (None, Some(phase_flat)) => {
+                    let FlatValue {
+                        layout,
+                        data: phases,
+                    } = phase_flat;
+                    let freq_scalar = as_float(&freq_value);
+                    let data: Vec<f32> = phases
+                        .into_iter()
+                        .map(|phase| (std::f32::consts::TAU * freq_scalar * t + phase).sin())
+                        .collect();
+                    layout.reconstruct(&data)
+                }
+                (None, None) => {
+                    let f = as_float(&freq_value);
+                    let phase = as_float(&phase_value);
+                    Value::Float((std::f32::consts::TAU * f * t + phase).sin())
+                }
+            };
+
+            out_map!(value)
         }
         NodeType::Spring => {
             let input = get_input("in");
@@ -1019,10 +1096,13 @@ pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) -> Result<(), String> {
 
         // Placeholder implementations to satisfy exhaustive match (schema may not expose these yet)
 
-        // Join: flatten all inputs (order of map iteration is arbitrary here)
+        // Join: flatten all inputs in handle order (operands_1, operands_2, ...)
         NodeType::Join => {
+            let mut entries: Vec<_> = ivals.iter().collect();
+            entries.sort_by(|(ka, _), (kb, _)| compare_variadic_keys(ka, kb));
+
             let mut out: Vec<f32> = Vec::new();
-            for v in ivals.values() {
+            for (_, v) in entries {
                 if let Some(flat) = flatten_numeric(&v.value) {
                     out.extend(flat.data);
                 }
@@ -1385,6 +1465,115 @@ mod tests {
         match op.value {
             Value::Float(f) => assert_eq!(f, 2.0),
             _ => panic!("expected float write"),
+        }
+    }
+
+    #[test]
+    fn join_respects_operand_order() {
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            "operands_1".to_string(),
+            InputConnection {
+                node_id: "a".to_string(),
+                output_key: "out".to_string(),
+            },
+        );
+        inputs.insert(
+            "operands_2".to_string(),
+            InputConnection {
+                node_id: "b".to_string(),
+                output_key: "out".to_string(),
+            },
+        );
+        inputs.insert(
+            "operands_3".to_string(),
+            InputConnection {
+                node_id: "c".to_string(),
+                output_key: "out".to_string(),
+            },
+        );
+
+        let graph = GraphSpec {
+            nodes: vec![
+                constant_node("a", Value::Vector(vec![1.0, 2.0])),
+                constant_node("b", Value::Vector(vec![3.0])),
+                constant_node("c", Value::Vector(vec![4.0, 5.0])),
+                NodeSpec {
+                    id: "join".to_string(),
+                    kind: NodeType::Join,
+                    params: NodeParams::default(),
+                    inputs,
+                    output_shapes: HashMap::new(),
+                },
+            ],
+        };
+
+        let mut rt = GraphRuntime::default();
+        evaluate_all(&mut rt, &graph).expect("join should evaluate");
+        let outputs = rt.outputs.get("join").expect("join outputs present");
+        let port = outputs.get("out").expect("out port present");
+        match &port.value {
+            Value::Vector(vec) => assert_eq!(vec, &vec![1.0, 2.0, 3.0, 4.0, 5.0]),
+            other => panic!("expected vector output, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn oscillator_broadcasts_vector_inputs() {
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            "frequency".to_string(),
+            InputConnection {
+                node_id: "freq".to_string(),
+                output_key: "out".to_string(),
+            },
+        );
+        inputs.insert(
+            "phase".to_string(),
+            InputConnection {
+                node_id: "phase".to_string(),
+                output_key: "out".to_string(),
+            },
+        );
+
+        let graph = GraphSpec {
+            nodes: vec![
+                constant_node("freq", Value::Vector(vec![1.0, 2.0, 3.0])),
+                constant_node("phase", Value::Float(0.0)),
+                NodeSpec {
+                    id: "osc".to_string(),
+                    kind: NodeType::Oscillator,
+                    params: NodeParams::default(),
+                    inputs,
+                    output_shapes: HashMap::new(),
+                },
+            ],
+        };
+
+        let mut rt = GraphRuntime {
+            t: 0.5,
+            ..Default::default()
+        };
+        evaluate_all(&mut rt, &graph).expect("oscillator should evaluate");
+
+        let outputs = rt.outputs.get("osc").expect("osc outputs present");
+        let port = outputs.get("out").expect("osc out port present");
+        let expected: Vec<f32> = vec![1.0, 2.0, 3.0]
+            .into_iter()
+            .map(|f| (std::f32::consts::TAU * f * rt.t).sin())
+            .collect();
+
+        match &port.value {
+            Value::Vector(vec) => {
+                assert_eq!(vec.len(), expected.len());
+                for (actual, expected) in vec.iter().zip(expected.iter()) {
+                    assert!(
+                        (actual - expected).abs() < 1e-6,
+                        "expected {expected}, got {actual}"
+                    );
+                }
+            }
+            other => panic!("expected vector output, got {:?}", other),
         }
     }
 
