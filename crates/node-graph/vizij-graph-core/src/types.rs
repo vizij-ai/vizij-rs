@@ -70,6 +70,8 @@ pub enum NodeType {
 
     // Robotics
     InverseKinematics,
+    UrdfIkPosition,
+    UrdfIkPose,
 
     // Sinks (for external binding in hosts)
     Output,
@@ -97,6 +99,14 @@ pub struct NodeParams {
     pub bone1: Option<f32>,
     pub bone2: Option<f32>,
     pub bone3: Option<f32>,
+    pub urdf_xml: Option<String>,
+    pub root_link: Option<String>,
+    pub tip_link: Option<String>,
+    pub seed: Option<Vec<f32>>,
+    pub weights: Option<Vec<f32>>,
+    pub max_iters: Option<u32>,
+    pub tol_pos: Option<f32>,
+    pub tol_rot: Option<f32>,
     // For Splitter
     pub index: Option<f32>,
     // For Split sizes (vector of sizes, floored to usize)

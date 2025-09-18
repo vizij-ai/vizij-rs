@@ -19,3 +19,7 @@ hashbrown      = { workspace = true }
 vizij-graph-core = { path = "../vizij-graph-core", version = "0.1.0" }
 vizij-api-core = { path = "../../api/vizij-api-core" }
 bevy_vizij_api = { path = "../../api/bevy_vizij_api" }
+
+[features]
+default = ["urdf_ik"]
+urdf_ik = ["vizij-graph-core/urdf_ik"]

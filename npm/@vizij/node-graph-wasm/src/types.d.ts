@@ -52,6 +52,8 @@ export type NodeType =
   | "vectormedian"
   | "vectormode"
   | "inversekinematics"
+  | "urdfikposition"
+  | "urdfikpose"
   | "output";
 
 /**
@@ -113,6 +115,14 @@ export interface NodeParams {
   mass?: number;
   half_life?: number;
   max_rate?: number;
+  urdf_xml?: string;
+  root_link?: string;
+  tip_link?: string;
+  seed?: number[];
+  weights?: number[];
+  max_iters?: number;
+  tol_pos?: number;
+  tol_rot?: number;
 }
 
 export interface NodeSpec {
@@ -165,7 +175,7 @@ export type InitInput =
    Node Schema Registry (exported from wasm via get_node_schemas_json)
 -------------------------------------------------------------------- */
 
-export type PortType = "float" | "bool" | "vec3" | "vector";
+export type PortType = "float" | "bool" | "vec3" | "vector" | "any";
 export type ParamType = "float" | "bool" | "vec3" | "vector" | "any";
 
 export interface PortSpec {

@@ -8,6 +8,7 @@ pub enum PortType {
     Bool,
     Vec3,
     Vector,
+    Any,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1177,6 +1178,199 @@ pub fn registry() -> Registry {
         variadic_outputs: None,
         params: vec![],
     });
+
+    #[cfg(feature = "urdf_ik")]
+    {
+        nodes.push(NodeSignature {
+            type_id: UrdfIkPosition,
+            name: "URDF IK (Position)",
+            category: "Robotics",
+            inputs: vec![
+                PortSpec {
+                    id: "target_pos",
+                    ty: PortType::Vec3,
+                    label: "Target Position",
+                    doc: "World-space XYZ target (meters).",
+                    optional: false,
+                },
+                PortSpec {
+                    id: "seed",
+                    ty: PortType::Vector,
+                    label: "Seed",
+                    doc: "Optional joint seed vector.",
+                    optional: true,
+                },
+            ],
+            variadic_inputs: None,
+            outputs: vec![PortSpec {
+                id: "out",
+                ty: PortType::Any,
+                label: "Joint Angles",
+                doc: "Record mapping joint_name → angle radians.",
+                optional: false,
+            }],
+            variadic_outputs: None,
+            params: vec![
+                ParamSpec {
+                    id: "urdf_xml",
+                    ty: ParamType::Any,
+                    label: "URDF XML",
+                    doc: "Robot URDF definition (string).",
+                    default_json: Some(serde_json::json!({ "text": "" })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "root_link",
+                    ty: ParamType::Any,
+                    label: "Root Link",
+                    doc: "Chain root link name.",
+                    default_json: Some(serde_json::json!({ "text": "base_link" })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "tip_link",
+                    ty: ParamType::Any,
+                    label: "Tip Link",
+                    doc: "Chain tip link name.",
+                    default_json: Some(serde_json::json!({ "text": "tool0" })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "weights",
+                    ty: ParamType::Vector,
+                    label: "Joint Weights",
+                    doc: "Optional per-joint weights.",
+                    default_json: Some(serde_json::json!({ "vector": [] })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "max_iters",
+                    ty: ParamType::Float,
+                    label: "Max Iterations",
+                    doc: "Solver iteration cap.",
+                    default_json: Some(serde_json::json!({ "float": 100.0 })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "tol_pos",
+                    ty: ParamType::Float,
+                    label: "Position Tolerance",
+                    doc: "Solver position tolerance (m).",
+                    default_json: Some(serde_json::json!({ "float": 0.001 })),
+                    min: None,
+                    max: None,
+                },
+            ],
+        });
+
+        nodes.push(NodeSignature {
+            type_id: UrdfIkPose,
+            name: "URDF IK (Pose)",
+            category: "Robotics",
+            inputs: vec![
+                PortSpec {
+                    id: "target_pos",
+                    ty: PortType::Vec3,
+                    label: "Target Position",
+                    doc: "World-space XYZ target (meters).",
+                    optional: false,
+                },
+                PortSpec {
+                    id: "target_rot",
+                    ty: PortType::Vector,
+                    label: "Target Rotation",
+                    doc: "Target quaternion (x, y, z, w).",
+                    optional: false,
+                },
+                PortSpec {
+                    id: "seed",
+                    ty: PortType::Vector,
+                    label: "Seed",
+                    doc: "Optional joint seed vector.",
+                    optional: true,
+                },
+            ],
+            variadic_inputs: None,
+            outputs: vec![PortSpec {
+                id: "out",
+                ty: PortType::Any,
+                label: "Joint Angles",
+                doc: "Record mapping joint_name → angle radians.",
+                optional: false,
+            }],
+            variadic_outputs: None,
+            params: vec![
+                ParamSpec {
+                    id: "urdf_xml",
+                    ty: ParamType::Any,
+                    label: "URDF XML",
+                    doc: "Robot URDF definition (string).",
+                    default_json: Some(serde_json::json!({ "text": "" })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "root_link",
+                    ty: ParamType::Any,
+                    label: "Root Link",
+                    doc: "Chain root link name.",
+                    default_json: Some(serde_json::json!({ "text": "base_link" })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "tip_link",
+                    ty: ParamType::Any,
+                    label: "Tip Link",
+                    doc: "Chain tip link name.",
+                    default_json: Some(serde_json::json!({ "text": "tool0" })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "weights",
+                    ty: ParamType::Vector,
+                    label: "Joint Weights",
+                    doc: "Optional per-joint weights.",
+                    default_json: Some(serde_json::json!({ "vector": [] })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "max_iters",
+                    ty: ParamType::Float,
+                    label: "Max Iterations",
+                    doc: "Solver iteration cap.",
+                    default_json: Some(serde_json::json!({ "float": 100.0 })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "tol_pos",
+                    ty: ParamType::Float,
+                    label: "Position Tolerance",
+                    doc: "Solver position tolerance (m).",
+                    default_json: Some(serde_json::json!({ "float": 0.001 })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "tol_rot",
+                    ty: ParamType::Float,
+                    label: "Rotation Tolerance",
+                    doc: "Solver rotation tolerance (rad).",
+                    default_json: Some(serde_json::json!({ "float": 0.001 })),
+                    min: None,
+                    max: None,
+                },
+            ],
+        });
+    }
 
     // Sinks
     nodes.push(NodeSignature {

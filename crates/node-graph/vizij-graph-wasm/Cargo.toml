@@ -24,5 +24,7 @@ vizij-api-core = { path = "../../api/vizij-api-core" }
 console_error_panic_hook = { version = "0.1", optional = true }
 
 [features]
+default = ["urdf_ik"]
 # enable console error hook if desired
 console_error = ["console_error_panic_hook"]
+urdf_ik = ["vizij-graph-core/urdf_ik"]
