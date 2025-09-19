@@ -55,6 +55,7 @@ export type NodeType =
   | "urdfikposition"
   | "urdfikpose"
   | "urdffk"
+  | "input"
   | "output";
 
 /**
@@ -159,7 +160,7 @@ export type GraphOutputs = Record<NodeId, Record<string, PortSnapshot>>;
 export interface WriteOpJSON {
   path: string;
   value: ValueJSON;
-  shape?: ShapeJSON;
+  shape: ShapeJSON;
 }
 
 export interface EvalResult {
@@ -234,6 +235,15 @@ export interface Registry {
   version: string;
   nodes: NodeSignature[];
 }
+
+/* --------------------------------------------------------------------
+   Samples (exported from wasm via src/index.ts)
+-------------------------------------------------------------------- */
+export const oscillatorBasics: GraphSpec;
+export const vectorPlayground: GraphSpec;
+export const logicGate: GraphSpec;
+export const tupleSpringDampSlew: GraphSpec;
+export const graphSamples: Record<string, GraphSpec>;
 
 /**
  * Fetch the node schema registry from the wasm module.

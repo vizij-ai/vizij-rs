@@ -1,11 +1,51 @@
 // Stable ESM entry for @vizij/graph-wasm
 // Wraps the wasm-pack output in ../pkg (built with `--target web`).
 // Adjust the import path if your pkg name differs.
-import initWasm, {
-  WasmGraph,
-  get_node_schemas_json,
-  normalize_graph_spec_json,
-} from "../pkg/vizij_graph_wasm.js";
+let _bindings: any | null = null;
+
+function pkgWasmJsUrl(): URL {
+  // Resolve package-local pkg/ for both src/ and dist/src/ callers
+  return new URL("../../pkg/vizij_graph_wasm.js", import.meta.url);
+}
+
+function defaultWasmUrl(): URL {
+  return new URL("../../pkg/vizij_graph_wasm_bg.wasm", import.meta.url);
+}
+
+async function loadBindings(input?: InitInput): Promise<any> {
+  if (!_bindings) {
+    const mod: any = await import(/* @vite-ignore */ pkgWasmJsUrl().toString());
+    let initArg: any = input ?? defaultWasmUrl();
+
+    // In Node tests, fetch(file://) is not supported; read the wasm bytes instead.
+    try {
+      const isUrlObj = typeof initArg === "object" && initArg !== null && "href" in (initArg as any);
+      const href = isUrlObj ? (initArg as URL).href : (typeof initArg === "string" ? (initArg as string) : "");
+      const isFileUrl =
+        (isUrlObj && (initArg as URL).protocol === "file:") ||
+        (typeof href === "string" && href.startsWith("file:"));
+
+      if (isFileUrl) {
+        // Compute spec strings to avoid Vite pre-bundler statically analyzing node: imports in browser builds.
+        const fsSpec = "node:fs/promises";
+        const urlSpec = "node:url";
+        const [{ readFile }, { fileURLToPath }] = await Promise.all([
+          import(/* @vite-ignore */ fsSpec),
+          import(/* @vite-ignore */ urlSpec),
+        ]);
+        const path = fileURLToPath(isUrlObj ? (initArg as URL) : new URL(href));
+        const bytes = await readFile(path);
+        initArg = bytes; // Uint8Array acceptable by wasm-bindgen init
+      }
+    } catch {
+      // Fall back to default behavior; browser bundlers handle URL fetch.
+    }
+
+    await mod.default(initArg);
+    _bindings = mod;
+  }
+  return _bindings;
+}
 import type {
   NodeId,
   NodeType,
@@ -44,9 +84,6 @@ export type {
 
 let _initPromise: Promise<void> | null = null;
 
-function defaultWasmUrl(): URL {
-  return new URL("../pkg/vizij_graph_wasm_bg.wasm", import.meta.url);
-}
 
 /**
  * Initialize the wasm module once.
@@ -57,7 +94,7 @@ export function init(input?: InitInput): Promise<void> {
 
   // initWasm returns Promise<InitOutput>; coerce to Promise<void>
   _initPromise = (async () => {
-    await initWasm(input ?? defaultWasmUrl());
+    await loadBindings(input);
   })();
 
   return _initPromise;
@@ -91,9 +128,8 @@ export function toValueJSON(v: Value): ValueJSON {
     // Vec3 values should be passed explicitly as { vec3: [x,y,z] } when intended.
     return { vector: v.slice() };
   }
-  // assume already ValueJSON-ish
-  if ("float" in v || "bool" in v || "vec3" in v || "vector" in v) return v as ValueJSON;
-  throw new Error("Unsupported Value shape");
+  // assume already ValueJSON-ish (accept full ValueJSON surface)
+  return v as ValueJSON;
 }
 
 // --- Public API class ---
@@ -103,11 +139,15 @@ export function toValueJSON(v: Value): ValueJSON {
  * Always await init() once before constructing.
  */
 export class Graph {
-  private inner: WasmGraph;
+  private inner: any;
 
   constructor() {
     ensureInited();
-    this.inner = new WasmGraph();
+    if (!_bindings) {
+      throw new Error("Call init() from @vizij/node-graph-wasm before creating Graph instances.");
+    }
+    const WasmGraphCtor = (_bindings as any).WasmGraph;
+    this.inner = new WasmGraphCtor();
   }
 
   /**
@@ -126,6 +166,17 @@ export class Graph {
   /** Increment time (seconds). */
   step(dt: number): void {
     this.inner.step(dt);
+  }
+
+  /**
+   * Stage a host-provided input for the next evalAll() tick.
+   * Values staged before evalAll will be visible in that evaluation (epoch semantics).
+   */
+  stageInput(path: string, value: Value, declaredShape?: ShapeJSON): void {
+    const payload = JSON.stringify(toValueJSON(value));
+    const shapeStr = declaredShape ? JSON.stringify(declaredShape) : undefined;
+    // wasm-bindgen maps Option<String> to string | undefined
+    (this.inner as any).stage_input(path, payload, shapeStr);
   }
 
   /**
@@ -168,7 +219,8 @@ export async function normalizeGraphSpec(
 ): Promise<GraphSpec> {
   await init();
   const json = typeof spec === "string" ? spec : JSON.stringify(spec);
-  const normalizedJson = normalize_graph_spec_json(json);
+  const mod = await loadBindings();
+  const normalizedJson = mod.normalize_graph_spec_json(json);
   return JSON.parse(normalizedJson) as GraphSpec;
 }
 
@@ -178,6 +230,16 @@ export async function normalizeGraphSpec(
  */
 export async function getNodeSchemas(): Promise<import("./types").Registry> {
   await init();
-  const raw = get_node_schemas_json();
+  const mod = await loadBindings();
+  const raw = mod.get_node_schemas_json();
   return JSON.parse(raw) as import("./types").Registry;
 }
+
+// Samples re-exports
+export {
+  graphSamples,
+  oscillatorBasics,
+  vectorPlayground,
+  logicGate,
+  tupleSpringDampSlew,
+} from "./samples.js";

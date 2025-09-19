@@ -1,5 +1,5 @@
 use hashbrown::HashMap;
-use vizij_api_core::{coercion, TypedPath, Value};
+use vizij_api_core::{coercion, Shape, TypedPath, Value};
 use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, PortValue};
 use wasm_bindgen::prelude::*;
 
@@ -148,6 +148,110 @@ fn value_to_legacy_json(value: &Value) -> serde_json::Value {
             let data: Vec<_> = items.iter().map(value_to_legacy_json).collect();
             json!({ "tuple": data })
         }
+    }
+}
+
+fn normalize_value_json_for_staging(value: serde_json::Value) -> serde_json::Value {
+    use serde_json::{json, Map, Value as JsonValue};
+
+    match value {
+        JsonValue::Number(n) => json!({ "type": "Float", "data": n }),
+        JsonValue::Bool(b) => json!({ "type": "Bool", "data": b }),
+        JsonValue::String(s) => json!({ "type": "Text", "data": s }),
+        JsonValue::Array(arr) => {
+            let all_numbers = arr.iter().all(|x| x.is_number());
+            if all_numbers {
+                // For staging, avoid auto-Vec2/3/4; default numeric arrays to Vector unless explicitly tagged
+                json!({ "type": "Vector", "data": arr })
+            } else {
+                let data: Vec<JsonValue> = arr
+                    .into_iter()
+                    .map(normalize_value_json_for_staging)
+                    .collect();
+                json!({ "type": "List", "data": data })
+            }
+        }
+        JsonValue::Object(obj) => {
+            if obj.contains_key("type") && obj.contains_key("data") {
+                return JsonValue::Object(obj);
+            }
+
+            if let Some(f) = obj.get("float").and_then(|x| x.as_f64()) {
+                return json!({ "type": "Float", "data": f });
+            }
+            if let Some(b) = obj.get("bool").and_then(|x| x.as_bool()) {
+                return json!({ "type": "Bool", "data": b });
+            }
+            // Honor explicit aliases only (no auto detection)
+            if let Some(arr) = obj.get("vec2").and_then(|x| x.as_array()) {
+                return json!({ "type": "Vec2", "data": arr });
+            }
+            if let Some(arr) = obj.get("vec3").and_then(|x| x.as_array()) {
+                return json!({ "type": "Vec3", "data": arr });
+            }
+            if let Some(arr) = obj.get("vec4").and_then(|x| x.as_array()) {
+                return json!({ "type": "Vec4", "data": arr });
+            }
+            if let Some(arr) = obj.get("quat").and_then(|x| x.as_array()) {
+                return json!({ "type": "Quat", "data": arr });
+            }
+            if let Some(arr) = obj.get("color").and_then(|x| x.as_array()) {
+                return json!({ "type": "ColorRgba", "data": arr });
+            }
+            if let Some(arr) = obj.get("vector").and_then(|x| x.as_array()) {
+                return json!({ "type": "Vector", "data": arr });
+            }
+            if let Some(transform) = obj.get("transform").and_then(|x| x.as_object()) {
+                let pos = transform.get("pos").cloned().unwrap_or(JsonValue::Null);
+                let rot = transform.get("rot").cloned().unwrap_or(JsonValue::Null);
+                let scale = transform.get("scale").cloned().unwrap_or(JsonValue::Null);
+                return json!({ "type": "Transform", "data": { "pos": pos, "rot": rot, "scale": scale } });
+            }
+            if let Some(enum_obj) = obj.get("enum").and_then(|x| x.as_object()) {
+                let tag = enum_obj
+                    .get("tag")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let payload = enum_obj.get("value").cloned().unwrap_or(JsonValue::Null);
+                let normalized_payload = normalize_value_json_for_staging(payload);
+                return json!({ "type": "Enum", "data": [tag, normalized_payload] });
+            }
+            if let Some(record) = obj.get("record").and_then(|x| x.as_object()) {
+                let mut data = Map::new();
+                for (key, val) in record.iter() {
+                    data.insert(key.clone(), normalize_value_json_for_staging(val.clone()));
+                }
+                return json!({ "type": "Record", "data": JsonValue::Object(data) });
+            }
+            if let Some(array_items) = obj.get("array").and_then(|x| x.as_array()) {
+                let data: Vec<JsonValue> = array_items
+                    .iter()
+                    .cloned()
+                    .map(normalize_value_json_for_staging)
+                    .collect();
+                return json!({ "type": "Array", "data": data });
+            }
+            if let Some(list_items) = obj.get("list").and_then(|x| x.as_array()) {
+                let data: Vec<JsonValue> = list_items
+                    .iter()
+                    .cloned()
+                    .map(normalize_value_json_for_staging)
+                    .collect();
+                return json!({ "type": "List", "data": data });
+            }
+            if let Some(tuple_items) = obj.get("tuple").and_then(|x| x.as_array()) {
+                let data: Vec<JsonValue> = tuple_items
+                    .iter()
+                    .cloned()
+                    .map(normalize_value_json_for_staging)
+                    .collect();
+                return json!({ "type": "Tuple", "data": data });
+            }
+
+            JsonValue::Object(obj)
+        }
+        other => other,
     }
 }
 
@@ -333,6 +437,34 @@ impl WasmGraph {
     }
 
     #[wasm_bindgen]
+    pub fn stage_input(
+        &mut self,
+        path: &str,
+        value_json: &str,
+        declared_shape_json: Option<String>,
+    ) -> Result<(), JsValue> {
+        let typed_path = TypedPath::parse(path)
+            .map_err(|e| JsValue::from_str(&format!("invalid path: {}", e)))?;
+        let raw: serde_json::Value =
+            serde_json::from_str(value_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let normalized = normalize_value_json_for_staging(raw);
+        let value: Value =
+            serde_json::from_value(normalized).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let declared: Option<Shape> = match declared_shape_json {
+            Some(s) => {
+                if s.trim().is_empty() {
+                    None
+                } else {
+                    Some(serde_json::from_str(&s).map_err(|e| JsValue::from_str(&e.to_string()))?)
+                }
+            }
+            None => None,
+        };
+        self.runtime.set_input(typed_path, value, declared);
+        Ok(())
+    }
+
+    #[wasm_bindgen]
     pub fn set_time(&mut self, t: f64) {
         self.t = t;
     }
@@ -380,8 +512,12 @@ impl WasmGraph {
 
         for op in self.runtime.writes.iter() {
             let jv = value_to_legacy_json(&op.value);
-            let inferred_shape = PortValue::new(op.value.clone()).shape;
-            let shape_json = serde_json::to_value(&inferred_shape).unwrap();
+            let shape_json = if let Some(shape) = &op.shape {
+                serde_json::to_value(shape).unwrap()
+            } else {
+                let inferred_shape = PortValue::new(op.value.clone()).shape;
+                serde_json::to_value(&inferred_shape).unwrap()
+            };
             writes.push(serde_json::json!({
                 "path": op.path.to_string(),
                 "value": jv,
@@ -405,73 +541,165 @@ impl WasmGraph {
         let normalized = normalize_value_json(raw);
         let val: Value =
             serde_json::from_value(normalized).map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+        fn expect_float(node_id: &str, key: &str, v: &Value) -> Result<f32, JsValue> {
+            if let Value::Float(f) = v {
+                Ok(*f)
+            } else {
+                Err(JsValue::from_str(&format!(
+                    "set_param: node '{}' key '{}' expects Float",
+                    node_id, key
+                )))
+            }
+        }
+        fn expect_text<'a>(node_id: &str, key: &str, v: &'a Value) -> Result<&'a str, JsValue> {
+            if let Value::Text(s) = v {
+                Ok(s.as_str())
+            } else {
+                Err(JsValue::from_str(&format!(
+                    "set_param: node '{}' key '{}' expects Text",
+                    node_id, key
+                )))
+            }
+        }
+        fn parse_u32(node_id: &str, key: &str, v: &Value) -> Result<u32, JsValue> {
+            let f = expect_float(node_id, key, v)?;
+            if f.is_finite() && f >= 0.0 {
+                Ok(f.floor() as u32)
+            } else {
+                Err(JsValue::from_str(&format!(
+                    "set_param: node '{}' key '{}' expects non-negative finite Float",
+                    node_id, key
+                )))
+            }
+        }
+        fn parse_pairs(node_id: &str, key: &str, v: &Value) -> Result<Vec<(String, f32)>, JsValue> {
+            let items: Vec<Value> = match v {
+                Value::List(xs) => xs.clone(),
+                Value::Array(xs) => xs.clone(),
+                _ => {
+                    return Err(JsValue::from_str(&format!(
+                        "set_param: node '{}' key '{}' expects Array/List of [Text, Float] tuples",
+                        node_id, key
+                    )))
+                }
+            };
+            let mut out = Vec::with_capacity(items.len());
+            for item in items {
+                match item {
+                    Value::Tuple(elems) if elems.len() >= 2 => {
+                        let name = match &elems[0] {
+                            Value::Text(s) => s.clone(),
+                            _ => {
+                                return Err(JsValue::from_str(&format!(
+                                    "set_param: node '{}' key '{}' tuple[0] expects Text",
+                                    node_id, key
+                                )))
+                            }
+                        };
+                        let val = match &elems[1] {
+                            Value::Float(f) => *f,
+                            _ => {
+                                return Err(JsValue::from_str(&format!(
+                                    "set_param: node '{}' key '{}' tuple[1] expects Float",
+                                    node_id, key
+                                )))
+                            }
+                        };
+                        out.push((name, val));
+                    }
+                    _ => {
+                        return Err(JsValue::from_str(&format!(
+                        "set_param: node '{}' key '{}' expects Array/List of [Text, Float] tuples",
+                        node_id, key
+                    )))
+                    }
+                }
+            }
+            Ok(out)
+        }
+
         if let Some(node) = self.spec.nodes.iter_mut().find(|n| n.id == node_id) {
             match key {
-                "value" => node.params.value = Some(val),
-                "frequency" => {
-                    node.params.frequency = Some(if let Value::Float(f) = val { f } else { 0.0 })
+                "value" => {
+                    node.params.value = Some(val);
                 }
-                "phase" => {
-                    node.params.phase = Some(if let Value::Float(f) = val { f } else { 0.0 })
-                }
-                "min" => node.params.min = if let Value::Float(f) = val { f } else { 0.0 },
-                "max" => node.params.max = if let Value::Float(f) = val { f } else { 0.0 },
-                "in_min" => {
-                    node.params.in_min = Some(if let Value::Float(f) = val { f } else { 0.0 })
-                }
-                "in_max" => {
-                    node.params.in_max = Some(if let Value::Float(f) = val { f } else { 0.0 })
-                }
-                "out_min" => {
-                    node.params.out_min = Some(if let Value::Float(f) = val { f } else { 0.0 })
-                }
-                "out_max" => {
-                    node.params.out_max = Some(if let Value::Float(f) = val { f } else { 0.0 })
-                }
-                "x" => node.params.x = Some(if let Value::Float(f) = val { f } else { 0.0 }),
-                "y" => node.params.y = Some(if let Value::Float(f) = val { f } else { 0.0 }),
-                "z" => node.params.z = Some(if let Value::Float(f) = val { f } else { 0.0 }),
-                "bone1" => {
-                    node.params.bone1 = Some(if let Value::Float(f) = val { f } else { 0.0 })
-                }
-                "bone2" => {
-                    node.params.bone2 = Some(if let Value::Float(f) = val { f } else { 0.0 })
-                }
-                "bone3" => {
-                    node.params.bone3 = Some(if let Value::Float(f) = val { f } else { 0.0 })
-                }
-                "index" => {
-                    node.params.index = Some(if let Value::Float(f) = val { f } else { 0.0 })
-                }
-                "stiffness" => {
-                    node.params.stiffness = Some(if let Value::Float(f) = val { f } else { 0.0 })
-                }
-                "damping" => {
-                    node.params.damping = Some(if let Value::Float(f) = val { f } else { 0.0 })
-                }
-                "mass" => node.params.mass = Some(if let Value::Float(f) = val { f } else { 1.0 }),
-                "half_life" => {
-                    node.params.half_life = Some(if let Value::Float(f) = val { f } else { 0.0 })
-                }
-                "max_rate" => {
-                    node.params.max_rate = Some(if let Value::Float(f) = val { f } else { 0.0 })
-                }
+
+                // Scalars / options (strict float)
+                "frequency" => node.params.frequency = Some(expect_float(node_id, key, &val)?),
+                "phase" => node.params.phase = Some(expect_float(node_id, key, &val)?),
+                "min" => node.params.min = expect_float(node_id, key, &val)?,
+                "max" => node.params.max = expect_float(node_id, key, &val)?,
+                "in_min" => node.params.in_min = Some(expect_float(node_id, key, &val)?),
+                "in_max" => node.params.in_max = Some(expect_float(node_id, key, &val)?),
+                "out_min" => node.params.out_min = Some(expect_float(node_id, key, &val)?),
+                "out_max" => node.params.out_max = Some(expect_float(node_id, key, &val)?),
+                "x" => node.params.x = Some(expect_float(node_id, key, &val)?),
+                "y" => node.params.y = Some(expect_float(node_id, key, &val)?),
+                "z" => node.params.z = Some(expect_float(node_id, key, &val)?),
+                "bone1" => node.params.bone1 = Some(expect_float(node_id, key, &val)?),
+                "bone2" => node.params.bone2 = Some(expect_float(node_id, key, &val)?),
+                "bone3" => node.params.bone3 = Some(expect_float(node_id, key, &val)?),
+                "index" => node.params.index = Some(expect_float(node_id, key, &val)?),
+                "stiffness" => node.params.stiffness = Some(expect_float(node_id, key, &val)?),
+                "damping" => node.params.damping = Some(expect_float(node_id, key, &val)?),
+                "mass" => node.params.mass = Some(expect_float(node_id, key, &val)?),
+                "half_life" => node.params.half_life = Some(expect_float(node_id, key, &val)?),
+                "max_rate" => node.params.max_rate = Some(expect_float(node_id, key, &val)?),
+
+                // Vectors / numeric lists
                 "sizes" => {
                     node.params.sizes = Some(coercion::to_vector(&val));
                 }
+
+                // Paths
                 "path" => {
-                    if let Value::Text(s) = val {
-                        let trimmed = s.trim();
-                        if trimmed.is_empty() {
-                            node.params.path = None;
-                        } else {
-                            let parsed =
-                                TypedPath::parse(trimmed).map_err(|e| JsValue::from_str(&e))?;
-                            node.params.path = Some(parsed);
-                        }
+                    let s = expect_text(node_id, key, &val)?;
+                    let trimmed = s.trim();
+                    if trimmed.is_empty() {
+                        node.params.path = None;
+                    } else {
+                        let parsed =
+                            TypedPath::parse(trimmed).map_err(|e| JsValue::from_str(&e))?;
+                        node.params.path = Some(parsed);
                     }
                 }
-                _ => {}
+
+                // URDF / IK configuration
+                "urdf_xml" => {
+                    node.params.urdf_xml = Some(expect_text(node_id, key, &val)?.to_string());
+                }
+                "root_link" => {
+                    node.params.root_link = Some(expect_text(node_id, key, &val)?.to_string());
+                }
+                "tip_link" => {
+                    node.params.tip_link = Some(expect_text(node_id, key, &val)?.to_string());
+                }
+                "seed" => {
+                    node.params.seed = Some(coercion::to_vector(&val));
+                }
+                "weights" => {
+                    node.params.weights = Some(coercion::to_vector(&val));
+                }
+                "max_iters" => {
+                    node.params.max_iters = Some(parse_u32(node_id, key, &val)?);
+                }
+                "tol_pos" => {
+                    node.params.tol_pos = Some(expect_float(node_id, key, &val)?);
+                }
+                "tol_rot" => {
+                    node.params.tol_rot = Some(expect_float(node_id, key, &val)?);
+                }
+                "joint_defaults" => {
+                    node.params.joint_defaults = Some(parse_pairs(node_id, key, &val)?);
+                }
+
+                _ => {
+                    return Err(JsValue::from_str(&format!(
+                        "set_param: node '{}' unknown key '{}'",
+                        node_id, key
+                    )))
+                }
             }
             Ok(())
         } else {
