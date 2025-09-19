@@ -25,7 +25,7 @@ mod value_layout;
 mod variadic;
 
 pub use eval_node::eval_node;
-pub use graph_runtime::GraphRuntime;
+pub use graph_runtime::{GraphRuntime, StagedInput};
 pub use value_layout::PortValue;
 
 #[cfg(test)]
@@ -36,6 +36,7 @@ mod tests;
 /// The runtime is cleared before evaluation and is repopulated as nodes are visited in topological
 /// order. Any error propagated from an individual node halts evaluation.
 pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), String> {
+    rt.advance_epoch();
     rt.outputs.clear();
     rt.writes = WriteBatch::new();
     rt.node_states

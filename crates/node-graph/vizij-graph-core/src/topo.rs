@@ -70,6 +70,7 @@ mod tests {
                         InputConnection {
                             node_id: "a".into(),
                             output_key: "out".to_string(),
+                            selector: None,
                         },
                     )]
                     .iter()

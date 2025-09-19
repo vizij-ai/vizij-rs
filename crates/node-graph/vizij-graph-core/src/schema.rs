@@ -1450,16 +1450,72 @@ pub fn registry() -> Registry {
         });
     }
 
-    // Sinks
+    // IO nodes
+    nodes.push(NodeSignature {
+        type_id: Input,
+        name: "Input",
+        category: "IO",
+        inputs: vec![],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Staged input value forwarded into the graph.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![
+            ParamSpec {
+                id: "path",
+                ty: ParamType::Any,
+                label: "Path",
+                doc: "TypedPath string used to stage host inputs (e.g. robot1/Joint.angle).",
+                default_json: None,
+                min: None,
+                max: None,
+            },
+            ParamSpec {
+                id: "value",
+                ty: ParamType::Any,
+                label: "Default",
+                doc: "Optional fallback emitted when no staged input is present.",
+                default_json: None,
+                min: None,
+                max: None,
+            },
+        ],
+    });
+
     nodes.push(NodeSignature {
         type_id: Output,
         name: "Output",
-        category: "Sinks",
-        inputs: vec![p_in()],
+        category: "IO",
+        inputs: vec![PortSpec {
+            id: "in",
+            ty: PortType::Any,
+            label: "In",
+            doc: "Value to publish via TypedPath write.",
+            optional: false,
+        }],
         variadic_inputs: None,
-        outputs: vec![p_out_float()],
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Passthrough copy of the input value for chaining.",
+            optional: false,
+        }],
         variadic_outputs: None,
-        params: vec![],
+        params: vec![ParamSpec {
+            id: "path",
+            ty: ParamType::Any,
+            label: "Path",
+            doc: "TypedPath string used when queuing external writes.",
+            default_json: None,
+            min: None,
+            max: None,
+        }],
     });
 
     Registry {

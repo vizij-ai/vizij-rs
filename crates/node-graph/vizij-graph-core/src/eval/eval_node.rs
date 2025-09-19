@@ -1,13 +1,16 @@
 //! Per-node evaluation logic for the Vizij graph runtime.
 
-use crate::eval::graph_runtime::GraphRuntime;
+use crate::eval::graph_runtime::{GraphRuntime, StagedInput};
 use crate::eval::variadic::compare_variadic_keys;
 use crate::types::{InputConnection, NodeParams, NodeSpec, NodeType};
 use hashbrown::HashMap;
-use vizij_api_core::{Value, WriteOp};
+use vizij_api_core::{Shape, Value, WriteOp};
 
 use super::numeric::{as_bool, as_float, binary_numeric, unary_numeric};
-use super::shape_helpers::enforce_output_shapes;
+use super::shape_helpers::{
+    coerce_numeric_to_shape, enforce_output_shapes, is_numeric_like, null_of_shape_numeric,
+    project_by_selector, value_matches_shape,
+};
 use super::urdfik::{
     apply_joint_positions, fetch_joint_vector, hash_urdf_config, quat_from_value, solve_pose,
     solve_position, tip_pose, vector_from_value, IkKey,
@@ -24,6 +27,13 @@ fn keyed_output(key: &str, value: Value) -> OutputMap {
     map
 }
 
+/// Build an output map containing a pre-shaped port value.
+fn keyed_port(key: &str, port: PortValue) -> OutputMap {
+    let mut map = HashMap::with_capacity(1);
+    map.insert(key.to_string(), port);
+    map
+}
+
 /// Build an output map for the default `out` port.
 fn single_output(value: Value) -> OutputMap {
     keyed_output("out", value)
@@ -31,18 +41,22 @@ fn single_output(value: Value) -> OutputMap {
 
 /// Evaluate a single node, updating `rt` with new outputs and queued writes.
 pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) -> Result<(), String> {
-    let inputs = read_inputs(rt, &spec.inputs);
+    let inputs = read_inputs(rt, &spec.inputs)?;
     let mut outputs = evaluate_kind(rt, spec, &inputs)?;
-
-    let pending_write = spec.params.path.as_ref().and_then(|path| {
-        outputs
-            .get("out")
-            .map(|pv| (path.clone(), pv.value.clone()))
-    });
+    let pending_path = spec.params.path.clone();
 
     enforce_output_shapes(spec, &mut outputs)?;
-    if let Some((path, value)) = pending_write {
-        rt.writes.push(WriteOp::new(path, value));
+    // Only explicit sink nodes (Output) publish external writes.
+    if matches!(spec.kind, NodeType::Output) {
+        if let Some(path) = pending_path {
+            if let Some(port) = outputs.get("out") {
+                rt.writes.push(WriteOp::new_with_shape(
+                    path,
+                    port.value.clone(),
+                    Some(port.shape.clone()),
+                ));
+            }
+        }
     }
     rt.outputs.insert(spec.id.clone(), outputs);
     Ok(())
@@ -114,6 +128,7 @@ fn evaluate_kind(
         NodeType::UrdfFk => eval_urdf_fk(rt, spec, params, inputs),
         #[cfg(not(feature = "urdf_ik"))]
         NodeType::UrdfFk => Err("UrdfFk node requires the 'urdf_ik' feature".to_string()),
+        NodeType::Input => eval_input_node(rt, spec),
         NodeType::Output => Ok(eval_output(inputs)),
     }
 }
@@ -939,21 +954,150 @@ fn eval_urdf_pose(
 fn eval_output(inputs: &HashMap<String, PortValue>) -> OutputMap {
     single_output(input_or_default(inputs, "in").value)
 }
-/// Gather the most recent outputs for each of the node's input connections.
+
+fn eval_input_node(rt: &GraphRuntime, spec: &NodeSpec) -> Result<OutputMap, String> {
+    let params = &spec.params;
+    let path = params
+        .path
+        .as_ref()
+        .ok_or_else(|| format!("Input node '{}' missing required 'path' parameter", spec.id))?;
+    let path_str = path.to_string();
+    let declared_shape = spec.output_shapes.get("out");
+    let staged = rt.get_input(path).cloned();
+
+    if let Some(target_shape) = declared_shape {
+        if let Some(staged_input) = staged {
+            let port = align_input_to_declared(
+                &spec.id,
+                &path_str,
+                "staged input",
+                target_shape,
+                staged_input.declared.as_ref(),
+                staged_input.value,
+            )?;
+            return Ok(keyed_port("out", port));
+        }
+
+        if let Some(default_value) = params.value.clone() {
+            let port = align_input_to_declared(
+                &spec.id,
+                &path_str,
+                "default value",
+                target_shape,
+                None,
+                default_value,
+            )?;
+            return Ok(keyed_port("out", port));
+        }
+
+        if is_numeric_like(&target_shape.id) {
+            return Ok(keyed_port(
+                "out",
+                PortValue::with_shape(
+                    null_of_shape_numeric(&target_shape.id),
+                    target_shape.clone(),
+                ),
+            ));
+        }
+
+        return Err(format!(
+            "Input node '{}' missing staged value for '{}' and declared non-numeric shape {:?}",
+            spec.id, path_str, target_shape.id
+        ));
+    }
+
+    if let Some(StagedInput {
+        value, declared, ..
+    }) = staged
+    {
+        let mut port = PortValue::new(value);
+        if let Some(shape) = declared {
+            port.set_shape(shape);
+        }
+        return Ok(keyed_port("out", port));
+    }
+
+    if let Some(default_value) = params.value.clone() {
+        return Ok(keyed_output("out", default_value));
+    }
+
+    Err(format!(
+        "Input node '{}' missing staged value for '{}' and no default provided",
+        spec.id, path_str
+    ))
+}
+
+fn align_input_to_declared(
+    node_id: &str,
+    path: &str,
+    source: &str,
+    declared: &Shape,
+    staged_shape: Option<&Shape>,
+    value: Value,
+) -> Result<PortValue, String> {
+    if let Some(shape) = staged_shape {
+        if shape.id != declared.id && !is_numeric_like(&declared.id) {
+            return Err(format!(
+                "Input node '{}' received {} for '{}' with incompatible shape {:?} (expected {:?})",
+                node_id, source, path, shape.id, declared.id
+            ));
+        }
+    }
+
+    if value_matches_shape(&declared.id, &value) {
+        return Ok(PortValue::with_shape(value, declared.clone()));
+    }
+
+    if !is_numeric_like(&declared.id) {
+        return Err(format!(
+            "Input node '{}' cannot coerce {} for '{}' into declared shape {:?}",
+            node_id, source, path, declared.id
+        ));
+    }
+
+    if let Some(coerced) = coerce_numeric_to_shape(&declared.id, &value) {
+        return Ok(PortValue::with_shape(coerced, declared.clone()));
+    }
+
+    Ok(PortValue::with_shape(
+        null_of_shape_numeric(&declared.id),
+        declared.clone(),
+    ))
+}
+
+/// Gather the most recent outputs for each of the node's input connections, applying selectors.
 fn read_inputs(
     rt: &GraphRuntime,
     inputs: &HashMap<String, InputConnection>,
-) -> HashMap<String, PortValue> {
-    inputs
-        .iter()
-        .map(|(input_key, conn)| {
-            let val = rt
-                .outputs
-                .get(&conn.node_id)
-                .and_then(|outputs| outputs.get(&conn.output_key))
-                .cloned()
-                .unwrap_or_else(|| PortValue::new(Value::Float(0.0)));
-            (input_key.clone(), val)
-        })
-        .collect()
+) -> Result<HashMap<String, PortValue>, String> {
+    let mut resolved = HashMap::with_capacity(inputs.len());
+
+    for (input_key, conn) in inputs.iter() {
+        let mut port = rt
+            .outputs
+            .get(&conn.node_id)
+            .and_then(|outputs| outputs.get(&conn.output_key))
+            .cloned()
+            .unwrap_or_else(|| PortValue::new(Value::Float(0.0)));
+
+        if let Some(selector) = &conn.selector {
+            let (value, shape_id) =
+                project_by_selector(&port.value, Some(&port.shape.id), selector).map_err(
+                    |err| {
+                        format!(
+                            "selector {:?} on edge {}:{} -> {} failed: {}",
+                            selector, conn.node_id, conn.output_key, input_key, err
+                        )
+                    },
+                )?;
+            port = match shape_id {
+                Some(id) => PortValue::with_shape(value, Shape::new(id)),
+                None => PortValue::new(value),
+            };
+        }
+
+        resolved.insert(input_key.clone(), port);
+    }
+
+    Ok(resolved)
 }

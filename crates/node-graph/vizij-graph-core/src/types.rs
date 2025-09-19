@@ -6,6 +6,15 @@ pub type NodeId = String;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
+pub enum SelectorSegment {
+    Field(String),
+    Index(usize),
+}
+
+pub type Selector = Vec<SelectorSegment>;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
 pub enum NodeType {
     // Scalars / arithmetic
     Constant,
@@ -74,6 +83,8 @@ pub enum NodeType {
     UrdfIkPose,
     UrdfFk,
 
+    // IO
+    Input,
     // Sinks (for external binding in hosts)
     Output,
 }
@@ -133,6 +144,8 @@ pub struct InputConnection {
     pub node_id: NodeId,
     #[serde(default = "default_output_key")]
     pub output_key: String,
+    #[serde(default)]
+    pub selector: Option<Selector>,
 }
 
 fn default_output_key() -> String {

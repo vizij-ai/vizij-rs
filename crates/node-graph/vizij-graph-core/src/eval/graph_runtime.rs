@@ -2,7 +2,7 @@
 
 use crate::types::NodeId;
 use hashbrown::{hash_map::Entry, HashMap};
-use vizij_api_core::WriteBatch;
+use vizij_api_core::{Shape, TypedPath, Value, WriteBatch};
 
 use super::urdfik::{build_chain_from_urdf, IkKey, UrdfKinematicsState};
 use super::value_layout::{FlatValue, PortValue, ValueLayout};
@@ -94,6 +94,14 @@ pub enum NodeRuntimeState {
     UrdfKinematics(UrdfKinematicsState),
 }
 
+/// Data staged by the host for consumption by [`NodeType::Input`](crate::types::NodeType::Input).
+#[derive(Debug, Clone)]
+pub struct StagedInput {
+    pub value: Value,
+    pub declared: Option<Shape>,
+    pub epoch: u64,
+}
+
 /// Runtime data shared by all node evaluations.
 #[derive(Debug, Default)]
 pub struct GraphRuntime {
@@ -102,9 +110,56 @@ pub struct GraphRuntime {
     pub outputs: HashMap<NodeId, HashMap<String, PortValue>>,
     pub writes: WriteBatch,
     pub node_states: HashMap<NodeId, NodeRuntimeState>,
+    pub staged_inputs: HashMap<TypedPath, StagedInput>,
+    pub input_epoch: u64,
 }
 
 impl GraphRuntime {
+    /// Advance the staging epoch. Values staged for `epoch + 1` become visible for the
+    /// upcoming frame; older entries are dropped so stale data cannot leak through.
+    pub fn advance_epoch(&mut self) {
+        self.input_epoch = self.input_epoch.saturating_add(1);
+        let current = self.input_epoch;
+        self.staged_inputs
+            .retain(|_, staged| staged.epoch == current);
+    }
+
+    /// Stage an input value for the next evaluation epoch using a [`TypedPath`] key.
+    pub fn set_input(
+        &mut self,
+        path: TypedPath,
+        value: Value,
+        declared: Option<Shape>,
+    ) -> Option<StagedInput> {
+        let staged = StagedInput {
+            value,
+            declared,
+            epoch: self.input_epoch.saturating_add(1),
+        };
+        self.staged_inputs.insert(path, staged)
+    }
+
+    /// Fetch a staged input for the current evaluation epoch, if present.
+    pub fn get_input(&self, path: &TypedPath) -> Option<&StagedInput> {
+        self.staged_inputs
+            .get(path)
+            .filter(|staged| staged.epoch == self.input_epoch)
+    }
+
+    /// Consume a staged input for the current epoch, removing it from the cache.
+    pub fn take_input(&mut self, path: &TypedPath) -> Option<StagedInput> {
+        let matches_epoch = self
+            .staged_inputs
+            .get(path)
+            .map(|staged| staged.epoch == self.input_epoch)
+            .unwrap_or(false);
+        if matches_epoch {
+            self.staged_inputs.remove(path)
+        } else {
+            None
+        }
+    }
+
     /// Fetch the spring state for `node_id`, creating or reinitialising it from `flat` as needed.
     pub fn spring_state_mut<'a>(
         &'a mut self,

@@ -127,16 +127,21 @@ export interface NodeParams {
   joint_defaults?: [string, number][];
 }
 
+export type SelectorSegmentJSON =
+  | { field: string }
+  | { index: number };
+
 export interface NodeSpec {
   id: NodeId;
   /** Rust field name is `type`, but `type` is a TS keyword; JSON still uses `"type"`. */
   type: NodeType;
   params?: NodeParams;
   /**
-   * Map of input name to a connection specifying the source node and which output key to read.
-   * Matches Rust: HashMap<String, InputConnection> where InputConnection { node_id, output_key }.
+   * Map of input name to a connection specifying the source node, which output key to read,
+   * and optional selector segments for projecting structured values.
+   * Matches Rust: HashMap<String, InputConnection> where `selector` is an Option<Vec<SelectorSeg>>.
    */
-  inputs?: Record<string, { node_id: string; output_key: string }>;
+  inputs?: Record<string, { node_id: string; output_key?: string; selector?: SelectorSegmentJSON[] }>;
   output_shapes?: Record<string, ShapeJSON>;
 }
 
@@ -154,7 +159,7 @@ export type GraphOutputs = Record<NodeId, Record<string, PortSnapshot>>;
 export interface WriteOpJSON {
   path: string;
   value: ValueJSON;
-  shape: ShapeJSON;
+  shape?: ShapeJSON;
 }
 
 export interface EvalResult {

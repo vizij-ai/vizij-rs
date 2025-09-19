@@ -18,6 +18,16 @@ impl PortValue {
         let shape = infer_shape(&value);
         PortValue { value, shape }
     }
+
+    /// Construct a `PortValue` with an explicit [`Shape`], bypassing inference.
+    pub fn with_shape(value: Value, shape: Shape) -> Self {
+        PortValue { value, shape }
+    }
+
+    /// Overwrite the cached [`Shape`] while leaving the [`Value`] untouched.
+    pub fn set_shape(&mut self, shape: Shape) {
+        self.shape = shape;
+    }
 }
 
 impl Default for PortValue {

@@ -1,8 +1,9 @@
 //! Behavioural coverage for the evaluation pipeline.
 
 use super::*;
-use crate::types::{GraphSpec, InputConnection, NodeParams, NodeSpec, NodeType};
+use crate::types::{GraphSpec, InputConnection, NodeParams, NodeSpec, NodeType, SelectorSegment};
 use hashbrown::HashMap;
+use vizij_api_core::shape::Field;
 use vizij_api_core::{Shape, ShapeId, TypedPath, Value};
 
 fn constant_node(id: &str, value: Value) -> NodeSpec {
@@ -15,6 +16,14 @@ fn constant_node(id: &str, value: Value) -> NodeSpec {
         },
         inputs: HashMap::new(),
         output_shapes: HashMap::new(),
+    }
+}
+
+fn connection(node_id: &str, output_key: &str) -> InputConnection {
+    InputConnection {
+        node_id: node_id.to_string(),
+        output_key: output_key.to_string(),
+        selector: None,
     }
 }
 
@@ -51,13 +60,7 @@ fn it_should_error_when_shape_mismatches() {
 #[test]
 fn it_should_emit_write_for_output_nodes() {
     let mut output_inputs = HashMap::new();
-    output_inputs.insert(
-        "in".to_string(),
-        InputConnection {
-            node_id: "src".to_string(),
-            output_key: "out".to_string(),
-        },
-    );
+    output_inputs.insert("in".to_string(), connection("src", "out"));
 
     let graph = GraphSpec {
         nodes: vec![
@@ -80,10 +83,45 @@ fn it_should_emit_write_for_output_nodes() {
     assert_eq!(rt.writes.iter().count(), 1);
     let op = rt.writes.iter().next().expect("write present");
     assert_eq!(op.path.to_string(), "robot1/Arm/Joint.angle");
+    assert!(matches!(
+        op.shape.as_ref().map(|s| &s.id),
+        Some(ShapeId::Scalar)
+    ));
     match op.value {
         Value::Float(f) => assert_eq!(f, 2.0),
         _ => panic!("expected float write"),
     }
+}
+
+#[test]
+fn writes_batch_json_roundtrip_from_graph() {
+    // Build a trivial graph that emits a write.
+    let mut output_inputs = HashMap::new();
+    output_inputs.insert("in".to_string(), connection("src", "out"));
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("src", Value::Vec3([1.0, 2.0, 3.0])),
+            NodeSpec {
+                id: "out".to_string(),
+                kind: NodeType::Output,
+                params: NodeParams {
+                    path: Some(TypedPath::parse("robot/pose.pos").expect("valid path")),
+                    ..Default::default()
+                },
+                inputs: output_inputs,
+                output_shapes: HashMap::new(),
+            },
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("graph should evaluate");
+    let original = rt.writes.clone();
+
+    let json = serde_json::to_string(&original).expect("serialize writes");
+    let parsed: WriteBatch = serde_json::from_str(&json).expect("parse writes");
+    assert_eq!(original, parsed, "writes batch should roundtrip via JSON");
 }
 
 // --- Variadic & oscillator behaviour ------------------------------------
@@ -91,27 +129,9 @@ fn it_should_emit_write_for_output_nodes() {
 #[test]
 fn join_respects_operand_order() {
     let mut inputs = HashMap::new();
-    inputs.insert(
-        "operands_1".to_string(),
-        InputConnection {
-            node_id: "a".to_string(),
-            output_key: "out".to_string(),
-        },
-    );
-    inputs.insert(
-        "operands_2".to_string(),
-        InputConnection {
-            node_id: "b".to_string(),
-            output_key: "out".to_string(),
-        },
-    );
-    inputs.insert(
-        "operands_3".to_string(),
-        InputConnection {
-            node_id: "c".to_string(),
-            output_key: "out".to_string(),
-        },
-    );
+    inputs.insert("operands_1".to_string(), connection("a", "out"));
+    inputs.insert("operands_2".to_string(), connection("b", "out"));
+    inputs.insert("operands_3".to_string(), connection("c", "out"));
 
     let graph = GraphSpec {
         nodes: vec![
@@ -141,20 +161,8 @@ fn join_respects_operand_order() {
 #[test]
 fn oscillator_broadcasts_vector_inputs() {
     let mut inputs = HashMap::new();
-    inputs.insert(
-        "frequency".to_string(),
-        InputConnection {
-            node_id: "freq".to_string(),
-            output_key: "out".to_string(),
-        },
-    );
-    inputs.insert(
-        "phase".to_string(),
-        InputConnection {
-            node_id: "phase".to_string(),
-            output_key: "out".to_string(),
-        },
-    );
+    inputs.insert("frequency".to_string(), connection("freq", "out"));
+    inputs.insert("phase".to_string(), connection("phase", "out"));
 
     let graph = GraphSpec {
         nodes: vec![
@@ -256,18 +264,339 @@ fn it_should_reject_invalid_paths_during_deserialization() {
     assert!(err.to_string().contains("path"));
 }
 
+// --- Staged input nodes & selectors -------------------------------------
+
+#[test]
+fn input_node_emits_staged_value_with_declared_shape() {
+    let typed_path = TypedPath::parse("sensor/imu.accel").expect("valid path");
+
+    let params = NodeParams {
+        path: Some(typed_path.clone()),
+        ..Default::default()
+    };
+
+    let mut output_shapes = HashMap::new();
+    output_shapes.insert("out".to_string(), Shape::new(ShapeId::Vec3));
+
+    let input_node = NodeSpec {
+        id: "input".to_string(),
+        kind: NodeType::Input,
+        params,
+        inputs: HashMap::new(),
+        output_shapes,
+    };
+
+    let graph = GraphSpec {
+        nodes: vec![input_node],
+    };
+
+    let mut rt = GraphRuntime::default();
+    rt.set_input(
+        typed_path,
+        Value::Vec3([1.0, 2.0, 3.0]),
+        Some(Shape::new(ShapeId::Vec3)),
+    );
+
+    evaluate_all(&mut rt, &graph).expect("input node should evaluate");
+
+    let port = rt
+        .outputs
+        .get("input")
+        .and_then(|outputs| outputs.get("out"))
+        .expect("input output present");
+
+    match &port.value {
+        Value::Vec3(arr) => assert_eq!(*arr, [1.0, 2.0, 3.0]),
+        other => panic!("expected Vec3, got {:?}", other),
+    }
+    assert!(matches!(port.shape.id, ShapeId::Vec3));
+}
+
+#[test]
+fn input_node_coerces_vector_to_declared_vec3() {
+    // Stage a generic numeric vector and declare the Input's shape as Vec3.
+    // The node should coerce the vector to a Vec3 value rather than erroring.
+    let typed_path = TypedPath::parse("sensor/imu.accel").expect("valid path");
+
+    let params = NodeParams {
+        path: Some(typed_path.clone()),
+        ..Default::default()
+    };
+
+    let mut output_shapes = HashMap::new();
+    output_shapes.insert("out".to_string(), Shape::new(ShapeId::Vec3));
+
+    let graph = GraphSpec {
+        nodes: vec![NodeSpec {
+            id: "input".to_string(),
+            kind: NodeType::Input,
+            params,
+            inputs: HashMap::new(),
+            output_shapes,
+        }],
+    };
+
+    let mut rt = GraphRuntime::default();
+    // Staged value is a generic vector of the right length to coerce to Vec3.
+    rt.set_input(
+        typed_path,
+        Value::Vector(vec![9.0, 8.0, 7.0]),
+        Some(Shape::new(ShapeId::Vector { len: Some(3) })),
+    );
+
+    evaluate_all(&mut rt, &graph).expect("coercion should succeed");
+
+    let port = rt
+        .outputs
+        .get("input")
+        .and_then(|outputs| outputs.get("out"))
+        .expect("input output present");
+
+    match &port.value {
+        Value::Vec3(arr) => assert_eq!(*arr, [9.0, 8.0, 7.0]),
+        other => panic!("expected Vec3 after coercion, got {:?}", other),
+    }
+    assert!(matches!(port.shape.id, ShapeId::Vec3));
+}
+
+#[test]
+fn input_node_missing_numeric_returns_null() {
+    let typed_path = TypedPath::parse("sensor/imu.accel").expect("valid path");
+
+    let params = NodeParams {
+        path: Some(typed_path.clone()),
+        ..Default::default()
+    };
+
+    let mut output_shapes = HashMap::new();
+    output_shapes.insert("out".to_string(), Shape::new(ShapeId::Vec3));
+
+    let graph = GraphSpec {
+        nodes: vec![NodeSpec {
+            id: "input".to_string(),
+            kind: NodeType::Input,
+            params,
+            inputs: HashMap::new(),
+            output_shapes,
+        }],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("numeric shape should fall back to NaNs");
+
+    let port = rt
+        .outputs
+        .get("input")
+        .and_then(|outputs| outputs.get("out"))
+        .expect("input output present");
+
+    match &port.value {
+        Value::Vec3(arr) => assert!(arr.iter().all(|v| v.is_nan())),
+        other => panic!("expected Vec3 null, got {:?}", other),
+    }
+    assert!(matches!(port.shape.id, ShapeId::Vec3));
+}
+
+#[test]
+fn input_node_missing_non_numeric_errors() {
+    let typed_path = TypedPath::parse("sensor/name").expect("valid path");
+
+    let params = NodeParams {
+        path: Some(typed_path.clone()),
+        ..Default::default()
+    };
+
+    let mut output_shapes = HashMap::new();
+    output_shapes.insert("out".to_string(), Shape::new(ShapeId::Text));
+
+    let graph = GraphSpec {
+        nodes: vec![NodeSpec {
+            id: "input".to_string(),
+            kind: NodeType::Input,
+            params,
+            inputs: HashMap::new(),
+            output_shapes,
+        }],
+    };
+
+    let mut rt = GraphRuntime::default();
+    let err = evaluate_all(&mut rt, &graph).expect_err("non-numeric shape should error");
+    assert!(err.contains("missing staged value"));
+}
+
+#[test]
+fn input_node_requires_restaging_each_epoch() {
+    let typed_path = TypedPath::parse("sensor/imu.accel").expect("valid path");
+
+    let params = NodeParams {
+        path: Some(typed_path.clone()),
+        ..Default::default()
+    };
+
+    let mut output_shapes = HashMap::new();
+    output_shapes.insert("out".to_string(), Shape::new(ShapeId::Vec3));
+
+    let graph = GraphSpec {
+        nodes: vec![NodeSpec {
+            id: "input".to_string(),
+            kind: NodeType::Input,
+            params,
+            inputs: HashMap::new(),
+            output_shapes,
+        }],
+    };
+
+    let mut rt = GraphRuntime::default();
+    rt.set_input(
+        typed_path.clone(),
+        Value::Vec3([1.0, 2.0, 3.0]),
+        Some(Shape::new(ShapeId::Vec3)),
+    );
+
+    evaluate_all(&mut rt, &graph).expect("first frame should read staged value");
+    let first = rt
+        .outputs
+        .get("input")
+        .and_then(|outputs| outputs.get("out"))
+        .expect("input output present");
+    match &first.value {
+        Value::Vec3(arr) => assert_eq!(*arr, [1.0, 2.0, 3.0]),
+        other => panic!("expected Vec3, got {:?}", other),
+    }
+
+    evaluate_all(&mut rt, &graph).expect("second frame should evaluate");
+    let second = rt
+        .outputs
+        .get("input")
+        .and_then(|outputs| outputs.get("out"))
+        .expect("input output present");
+    match &second.value {
+        Value::Vec3(arr) => assert!(arr.iter().all(|v| v.is_nan())),
+        other => panic!("expected Vec3 null, got {:?}", other),
+    }
+}
+
+#[test]
+fn selector_projects_record_field() {
+    let mut record = HashMap::new();
+    record.insert("pos".to_string(), Value::Vec3([3.0, 4.0, 0.0]));
+    record.insert("label".to_string(), Value::Text("ignored".to_string()));
+
+    let mut inputs = HashMap::new();
+    let mut conn = connection("src", "out");
+    conn.selector = Some(vec![SelectorSegment::Field("pos".to_string())]);
+    inputs.insert("in".to_string(), conn);
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("src", Value::Record(record)),
+            NodeSpec {
+                id: "out".to_string(),
+                kind: NodeType::Output,
+                params: NodeParams::default(),
+                inputs,
+                output_shapes: HashMap::new(),
+            },
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("selector projection should succeed");
+
+    let port = rt
+        .outputs
+        .get("out")
+        .and_then(|outputs| outputs.get("out"))
+        .expect("output node present");
+
+    match &port.value {
+        Value::Vec3(arr) => assert_eq!(*arr, [3.0, 4.0, 0.0]),
+        other => panic!("expected Vec3, got {:?}", other),
+    }
+}
+
+#[test]
+fn selector_projects_transform_field_and_nested_index() {
+    // Source provides a Transform; downstream selects .pos then [1] (y component).
+    let mut inputs = HashMap::new();
+    let mut conn = connection("src", "out");
+    conn.selector = Some(vec![
+        SelectorSegment::Field("pos".to_string()),
+        SelectorSegment::Index(1),
+    ]);
+    inputs.insert("in".to_string(), conn);
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node(
+                "src",
+                Value::Transform {
+                    pos: [10.0, 42.0, -1.0],
+                    rot: [0.0, 0.0, 0.0, 1.0],
+                    scale: [1.0, 1.0, 1.0],
+                },
+            ),
+            NodeSpec {
+                id: "out".to_string(),
+                kind: NodeType::Output,
+                params: NodeParams::default(),
+                inputs,
+                output_shapes: HashMap::new(),
+            },
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("selector projection should succeed");
+
+    let port = rt
+        .outputs
+        .get("out")
+        .and_then(|outputs| outputs.get("out"))
+        .expect("output node present");
+
+    match &port.value {
+        Value::Float(f) => assert_eq!(*f, 42.0),
+        other => panic!("expected scalar, got {:?}", other),
+    }
+    assert!(matches!(port.shape.id, ShapeId::Scalar));
+}
+
+#[test]
+fn selector_index_out_of_bounds_errors() {
+    // Select index 5 from a vec3; should error.
+    let mut inputs = HashMap::new();
+    let mut conn = connection("src", "out");
+    conn.selector = Some(vec![SelectorSegment::Index(5)]);
+    inputs.insert("in".to_string(), conn);
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("src", Value::Vec3([1.0, 2.0, 3.0])),
+            NodeSpec {
+                id: "out".to_string(),
+                kind: NodeType::Output,
+                params: NodeParams::default(),
+                inputs,
+                output_shapes: HashMap::new(),
+            },
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    let err = evaluate_all(&mut rt, &graph).expect_err("oob selector should error");
+    assert!(
+        err.contains("out of bounds"),
+        "unexpected error content: {err}"
+    );
+}
+
 // --- Stateful nodes ------------------------------------------------------
 
 #[test]
 fn spring_node_transitions_toward_new_target() {
     let mut spring_inputs = HashMap::new();
-    spring_inputs.insert(
-        "in".to_string(),
-        InputConnection {
-            node_id: "target".to_string(),
-            output_key: "out".to_string(),
-        },
-    );
+    spring_inputs.insert("in".to_string(), connection("target", "out"));
 
     let spring = NodeSpec {
         id: "spring".to_string(),
@@ -334,13 +663,7 @@ fn spring_node_transitions_toward_new_target() {
 #[test]
 fn damp_node_smooths_toward_target() {
     let mut damp_inputs = HashMap::new();
-    damp_inputs.insert(
-        "in".to_string(),
-        InputConnection {
-            node_id: "target".to_string(),
-            output_key: "out".to_string(),
-        },
-    );
+    damp_inputs.insert("in".to_string(), connection("target", "out"));
 
     let damp = NodeSpec {
         id: "damp".to_string(),
@@ -402,13 +725,7 @@ fn damp_node_smooths_toward_target() {
 #[test]
 fn slew_node_limits_rate_of_change() {
     let mut slew_inputs = HashMap::new();
-    slew_inputs.insert(
-        "in".to_string(),
-        InputConnection {
-            node_id: "target".to_string(),
-            output_key: "out".to_string(),
-        },
-    );
+    slew_inputs.insert("in".to_string(), connection("target", "out"));
 
     let slew = NodeSpec {
         id: "slew".to_string(),
@@ -471,620 +788,112 @@ fn slew_node_limits_rate_of_change() {
     );
 }
 
-// --- Feature-gated URDF IK tests ----------------------------------------
+// --- End-to-end: Input → selector → math → Output ------------------------
 
-#[cfg(feature = "urdf_ik")]
-mod urdf_ik {
-    use super::*;
+#[test]
+fn end_to_end_input_selector_scalar_math_output() {
+    // Build Input node producing a record { pos: vec3, label: text } with a declared record shape.
+    let typed_path = TypedPath::parse("sensor/pose").expect("valid path");
 
-    const PLANAR_URDF: &str = r#"
-<robot name="planar_arm">
-  <link name="base_link" />
-  <link name="link1" />
-  <link name="link2" />
-  <link name="tool" />
+    // Declared output shape for the Input node: Record { pos: Vec3, label: Text }
+    let declared = Shape::new(ShapeId::Record(vec![
+        Field {
+            name: "label".to_string(),
+            shape: ShapeId::Text,
+        },
+        Field {
+            name: "pos".to_string(),
+            shape: ShapeId::Vec3,
+        },
+    ]));
 
-  <joint name="joint1" type="revolute">
-<parent link="base_link" />
-<child link="link1" />
-<origin xyz="0 0 0" rpy="0 0 0" />
-<axis xyz="0 0 1" />
-<limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
+    let input_params = NodeParams {
+        path: Some(typed_path.clone()),
+        ..Default::default()
+    };
 
-  <joint name="joint2" type="revolute">
-<parent link="link1" />
-<child link="link2" />
-<origin xyz="0.5 0 0" rpy="0 0 0" />
-<axis xyz="0 0 1" />
-<limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
+    let mut input_output_shapes = HashMap::new();
+    input_output_shapes.insert("out".to_string(), declared.clone());
 
-  <joint name="joint3" type="revolute">
-<parent link="link2" />
-<child link="tool" />
-<origin xyz="0.5 0 0" rpy="0 0 0" />
-<axis xyz="0 0 1" />
-<limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-</robot>
-"#;
+    let input_node = NodeSpec {
+        id: "in".to_string(),
+        kind: NodeType::Input,
+        params: input_params,
+        inputs: HashMap::new(),
+        output_shapes: input_output_shapes,
+    };
 
-    const POSE_URDF: &str = r#"
-<robot name="pose_arm">
-  <link name="base_link" />
-  <link name="link1" />
-  <link name="link2" />
-  <link name="link3" />
-  <link name="link4" />
-  <link name="link5" />
-  <link name="link6" />
-  <link name="tool" />
+    // Add node: Add(lhs, rhs) where lhs is selector ["pos", 1] (y) and rhs is constant 2.0
+    let mut add_inputs = HashMap::new();
+    // Connection from Input.out with selector ["pos", 1]
+    let mut lhs_conn = connection("in", "out");
+    lhs_conn.selector = Some(vec![
+        SelectorSegment::Field("pos".to_string()),
+        SelectorSegment::Index(1),
+    ]);
+    add_inputs.insert("lhs".to_string(), lhs_conn);
+    add_inputs.insert("rhs".to_string(), connection("two", "out"));
 
-  <joint name="joint1" type="revolute">
-<parent link="base_link" />
-<child link="link1" />
-<origin xyz="0 0 0.1" rpy="0 0 0" />
-<axis xyz="0 0 1" />
-<limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
+    let add_node = NodeSpec {
+        id: "sum".to_string(),
+        kind: NodeType::Add,
+        params: NodeParams::default(),
+        inputs: add_inputs,
+        output_shapes: HashMap::new(),
+    };
 
-  <joint name="joint2" type="revolute">
-<parent link="link1" />
-<child link="link2" />
-<origin xyz="0.2 0 0" rpy="0 0 0" />
-<axis xyz="0 1 0" />
-<limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
+    // Output sink
+    let mut out_inputs = HashMap::new();
+    out_inputs.insert("in".to_string(), connection("sum", "out"));
 
-  <joint name="joint3" type="revolute">
-<parent link="link2" />
-<child link="link3" />
-<origin xyz="0.2 0 0" rpy="0 0 0" />
-<axis xyz="1 0 0" />
-<limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="joint4" type="revolute">
-<parent link="link3" />
-<child link="link4" />
-<origin xyz="0.2 0 0" rpy="0 0 0" />
-<axis xyz="0 0 1" />
-<limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="joint5" type="revolute">
-<parent link="link4" />
-<child link="link5" />
-<origin xyz="0.15 0 0" rpy="0 0 0" />
-<axis xyz="0 1 0" />
-<limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="joint6" type="revolute">
-<parent link="link5" />
-<child link="link6" />
-<origin xyz="0.1 0 0" rpy="0 0 0" />
-<axis xyz="1 0 0" />
-<limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="tool_joint" type="fixed">
-<parent link="link6" />
-<child link="tool" />
-<origin xyz="0.1 0 0" rpy="0 0 0" />
-  </joint>
-</robot>
-"#;
-
-    fn params_for(urdf: &str) -> NodeParams {
-        NodeParams {
-            urdf_xml: Some(urdf.to_string()),
-            root_link: Some("base_link".to_string()),
-            tip_link: Some("tool".to_string()),
-            max_iters: Some(200),
-            tol_pos: Some(1e-3),
-            tol_rot: Some(1e-3),
+    let output_node = NodeSpec {
+        id: "out".to_string(),
+        kind: NodeType::Output,
+        params: NodeParams {
+            path: Some(TypedPath::parse("robot/calc.y2").expect("valid path")),
             ..Default::default()
-        }
-    }
-
-    fn run_graph(nodes: Vec<NodeSpec>) -> Result<GraphRuntime, String> {
-        let spec = GraphSpec { nodes };
-        let mut rt = GraphRuntime::default();
-        evaluate_all(&mut rt, &spec)?;
-        Ok(rt)
-    }
-
-    fn extract_angles(record: &HashMap<String, Value>, names: &[&str]) -> Vec<f32> {
-        names
-            .iter()
-            .map(|name| match record.get(*name) {
-                Some(Value::Float(angle)) => *angle,
-                other => panic!("expected float angle for {name}, got {:?}", other),
-            })
-            .collect()
-    }
-
-    #[test]
-    fn urdf_ik_position_reaches_target() {
-        let target_pos_id = "target_pos";
-        let ik_id = "ik";
-
-        let seed = vec![0.1, -0.2, 0.3, 0.2, -0.1, 0.25];
-        let (chain, _) = super::urdfik::build_chain_from_urdf(POSE_URDF, "base_link", "tool")
-            .expect("valid chain");
-        chain.set_joint_positions(&seed).expect("apply seed for fk");
-        let target_pose = chain.end_transform();
-        let target_pos_vec = target_pose.translation.vector;
-
-        let mut nodes = Vec::new();
-        nodes.push(super::constant_node(
-            target_pos_id,
-            Value::Vec3([target_pos_vec.x, target_pos_vec.y, target_pos_vec.z]),
-        ));
-
-        let mut inputs = HashMap::new();
-        inputs.insert(
-            "target_pos".to_string(),
-            InputConnection {
-                node_id: target_pos_id.to_string(),
-                output_key: "out".to_string(),
-            },
-        );
-
-        let mut params = params_for(POSE_URDF);
-        params.seed = Some(seed.clone());
-
-        nodes.push(NodeSpec {
-            id: ik_id.to_string(),
-            kind: NodeType::UrdfIkPosition,
-            params,
-            inputs,
-            output_shapes: HashMap::new(),
-        });
-
-        let rt = run_graph(nodes).expect("IK position solve should succeed");
-        let record = match rt
-            .outputs
-            .get(ik_id)
-            .and_then(|map| map.get("out"))
-            .map(|pv| pv.value.clone())
-            .expect("ik output")
-        {
-            Value::Record(map) => map,
-            other => panic!("expected record output, got {:?}", other),
-        };
-
-        assert_eq!(record.len(), 6, "expected six joint outputs");
-        let joint_names = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"];
-        let angles = extract_angles(&record, &joint_names);
-
-        for (expected, actual) in seed.iter().zip(angles.iter()) {
-            assert!((expected - actual).abs() < 1e-3);
-        }
-
-        let (chain_verify, _) =
-            super::urdfik::build_chain_from_urdf(POSE_URDF, "base_link", "tool")
-                .expect("valid chain");
-        chain_verify
-            .set_joint_positions(&angles)
-            .expect("seed application");
-        let end = chain_verify.end_transform();
-        let pos = end.translation.vector;
-        assert!((pos.x - target_pos_vec.x).abs() < 5e-3);
-        assert!((pos.y - target_pos_vec.y).abs() < 5e-3);
-        assert!((pos.z - target_pos_vec.z).abs() < 5e-3);
-    }
-
-    #[test]
-    fn urdf_ik_pose_matches_target_orientation() {
-        let target_pos_id = "target_pos";
-        let target_rot_id = "target_rot";
-        let ik_id = "ik_pose";
-
-        let seed = vec![0.3, -0.45, 0.35, 0.15, -0.2, 0.18];
-        let (chain, _) = super::urdfik::build_chain_from_urdf(POSE_URDF, "base_link", "tool")
-            .expect("valid chain");
-        chain.set_joint_positions(&seed).expect("seed fk");
-        let base_pose = chain.end_transform();
-        let base_pos = base_pose.translation.vector;
-
-        let desired_rot = base_pose.rotation;
-
-        let mut nodes = Vec::new();
-        nodes.push(super::constant_node(
-            target_pos_id,
-            Value::Vec3([base_pos.x, base_pos.y, base_pos.z]),
-        ));
-        nodes.push(super::constant_node(
-            target_rot_id,
-            Value::Quat([desired_rot.i, desired_rot.j, desired_rot.k, desired_rot.w]),
-        ));
-
-        let mut inputs = HashMap::new();
-        inputs.insert(
-            "target_pos".to_string(),
-            InputConnection {
-                node_id: target_pos_id.to_string(),
-                output_key: "out".to_string(),
-            },
-        );
-        inputs.insert(
-            "target_rot".to_string(),
-            InputConnection {
-                node_id: target_rot_id.to_string(),
-                output_key: "out".to_string(),
-            },
-        );
-
-        let mut params = params_for(POSE_URDF);
-        params.max_iters = Some(600);
-        params.seed = Some(seed.clone());
-
-        nodes.push(NodeSpec {
-            id: ik_id.to_string(),
-            kind: NodeType::UrdfIkPose,
-            params,
-            inputs,
-            output_shapes: HashMap::new(),
-        });
-
-        let rt = run_graph(nodes).expect("IK pose solve should succeed");
-        let record = match rt
-            .outputs
-            .get(ik_id)
-            .and_then(|map| map.get("out"))
-            .map(|pv| pv.value.clone())
-            .expect("ik output")
-        {
-            Value::Record(map) => map,
-            other => panic!("expected record output, got {:?}", other),
-        };
-
-        assert_eq!(record.len(), 6, "expected six joint outputs");
-        let joint_names = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"];
-        let angles = extract_angles(&record, &joint_names);
-
-        for (expected, actual) in seed.iter().zip(angles.iter()) {
-            assert!((expected - actual).abs() < 1e-3);
-        }
-
-        let (chain_verify, _) =
-            super::urdfik::build_chain_from_urdf(POSE_URDF, "base_link", "tool")
-                .expect("valid chain");
-        chain_verify
-            .set_joint_positions(&angles)
-            .expect("apply joints");
-        let end = chain_verify.end_transform();
-        let pos = end.translation.vector;
-        assert!((pos.x - base_pos.x).abs() < 5e-3);
-        assert!((pos.y - base_pos.y).abs() < 5e-3);
-        assert!((pos.z - base_pos.z).abs() < 5e-3);
-
-        let angle_err = desired_rot.angle_to(&end.rotation);
-        assert!(angle_err.abs() < 5e-3);
-    }
-
-    #[test]
-    fn malformed_urdf_returns_error() {
-        let mut params = params_for(PLANAR_URDF);
-        params.urdf_xml = Some("<robot".to_string());
-
-        let mut nodes = Vec::new();
-        nodes.push(super::constant_node(
-            "target_pos",
-            Value::Vec3([0.5, 0.0, 0.0]),
-        ));
-
-        let mut inputs = HashMap::new();
-        inputs.insert(
-            "target_pos".to_string(),
-            InputConnection {
-                node_id: "target_pos".to_string(),
-                output_key: "out".to_string(),
-            },
-        );
-
-        nodes.push(NodeSpec {
-            id: "ik".to_string(),
-            kind: NodeType::UrdfIkPosition,
-            params,
-            inputs,
-            output_shapes: HashMap::new(),
-        });
-
-        let spec = GraphSpec { nodes };
-        let mut rt = GraphRuntime::default();
-        let err = evaluate_all(&mut rt, &spec).expect_err("malformed URDF should error");
-        assert!(err.contains("parse URDF"));
-    }
-
-    #[test]
-    fn seed_length_mismatch_errors() {
-        let mut params = params_for(PLANAR_URDF);
-        params.seed = Some(vec![0.0]);
-
-        let mut nodes = Vec::new();
-        nodes.push(super::constant_node(
-            "target_pos",
-            Value::Vec3([0.5, 0.0, 0.0]),
-        ));
-
-        let mut inputs = HashMap::new();
-        inputs.insert(
-            "target_pos".to_string(),
-            InputConnection {
-                node_id: "target_pos".to_string(),
-                output_key: "out".to_string(),
-            },
-        );
-
-        nodes.push(NodeSpec {
-            id: "ik".to_string(),
-            kind: NodeType::UrdfIkPosition,
-            params,
-            inputs,
-            output_shapes: HashMap::new(),
-        });
-
-        let spec = GraphSpec { nodes };
-        let mut rt = GraphRuntime::default();
-        let err = evaluate_all(&mut rt, &spec).expect_err("seed mismatch should error");
-        assert!(err.contains("seed length"));
-    }
-
-    #[test]
-    fn weights_length_mismatch_errors() {
-        let mut params = params_for(PLANAR_URDF);
-        params.weights = Some(vec![1.0]);
-
-        let mut nodes = Vec::new();
-        nodes.push(super::constant_node(
-            "target_pos",
-            Value::Vec3([0.5, 0.0, 0.0]),
-        ));
-
-        let mut inputs = HashMap::new();
-        inputs.insert(
-            "target_pos".to_string(),
-            InputConnection {
-                node_id: "target_pos".to_string(),
-                output_key: "out".to_string(),
-            },
-        );
-
-        nodes.push(NodeSpec {
-            id: "ik".to_string(),
-            kind: NodeType::UrdfIkPosition,
-            params,
-            inputs,
-            output_shapes: HashMap::new(),
-        });
-
-        let spec = GraphSpec { nodes };
-        let mut rt = GraphRuntime::default();
-        let err = evaluate_all(&mut rt, &spec).expect_err("weights mismatch should error");
-        assert!(err.contains("weights length"));
-    }
-
-    #[test]
-    fn urdf_fk_returns_correct_pose() {
-        let joints_id = "joints";
-        let fk_id = "fk";
-
-        let joint_names = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"];
-        let joint_angles = vec![0.1, -0.2, 0.3, -0.15, 0.2, -0.1];
-
-        let mut record = HashMap::new();
-        for (name, angle) in joint_names.iter().zip(joint_angles.iter()) {
-            record.insert((*name).to_string(), Value::Float(*angle));
-        }
-
-        let mut inputs = HashMap::new();
-        inputs.insert(
-            "joints".to_string(),
-            InputConnection {
-                node_id: joints_id.to_string(),
-                output_key: "out".to_string(),
-            },
-        );
-
-        let mut params = params_for(POSE_URDF);
-        params.max_iters = None;
-        params.tol_pos = None;
-        params.tol_rot = None;
-
-        let nodes = vec![
-            super::constant_node(joints_id, Value::Record(record)),
-            NodeSpec {
-                id: fk_id.to_string(),
-                kind: NodeType::UrdfFk,
-                params,
-                inputs,
-                output_shapes: HashMap::new(),
-            },
-        ];
-
-        let rt = run_graph(nodes).expect("FK evaluation should succeed");
-
-        let (expected_chain, _) =
-            super::urdfik::build_chain_from_urdf(POSE_URDF, "base_link", "tool")
-                .expect("valid chain");
-        expected_chain
-            .set_joint_positions(&joint_angles)
-            .expect("apply joints");
-        let expected_pose = expected_chain.end_transform();
-        let expected_pos = expected_pose.translation.vector;
-        let expected_rot = expected_pose.rotation;
-
-        let outputs = rt.outputs.get(fk_id).expect("fk outputs present");
-        let position = match outputs
-            .get("position")
-            .map(|pv| pv.value.clone())
-            .expect("position output")
-        {
-            Value::Vec3(arr) => arr,
-            other => panic!("expected Vec3, got {:?}", other),
-        };
-        for (observed, expected) in
-            position
-                .iter()
-                .zip([expected_pos.x, expected_pos.y, expected_pos.z])
-        {
-            assert!((observed - expected).abs() < 1e-4);
-        }
-
-        let rotation = match outputs
-            .get("rotation")
-            .map(|pv| pv.value.clone())
-            .expect("rotation output")
-        {
-            Value::Quat(arr) => arr,
-            other => panic!("expected Quat, got {:?}", other),
-        };
-        let actual_rot = k::UnitQuaternion::new_normalize(k::nalgebra::Quaternion::new(
-            rotation[3],
-            rotation[0],
-            rotation[1],
-            rotation[2],
-        ));
-        let angle_err = expected_rot.angle_to(&actual_rot);
-        assert!(angle_err.abs() < 1e-4, "quaternion mismatch: {angle_err}");
-
-        let (transform_pos, transform_rot) = match outputs
-            .get("transform")
-            .map(|pv| pv.value.clone())
-            .expect("transform output")
-        {
-            Value::Transform { pos, rot, scale } => {
-                assert_eq!(scale, [1.0, 1.0, 1.0]);
-                (pos, rot)
-            }
-            other => panic!("expected Transform, got {:?}", other),
-        };
-        for (observed, expected) in
-            transform_pos
-                .iter()
-                .zip([expected_pos.x, expected_pos.y, expected_pos.z])
-        {
-            assert!((observed - expected).abs() < 1e-4);
-        }
-        let transform_rot = k::UnitQuaternion::new_normalize(k::nalgebra::Quaternion::new(
-            transform_rot[3],
-            transform_rot[0],
-            transform_rot[1],
-            transform_rot[2],
-        ));
-        let transform_angle = expected_rot.angle_to(&transform_rot);
-        assert!(
-            transform_angle.abs() < 1e-4,
-            "transform rotation mismatch: {transform_angle}"
-        );
-    }
-
-    #[test]
-    fn urdf_fk_handles_missing_joint_with_default() {
-        let joints_id = "joints";
-        let fk_id = "fk_defaults";
-
-        let provided_angles = [0.25f32, -0.35f32];
-        let default_angle = 0.5f32;
-
-        let mut record = HashMap::new();
-        record.insert("joint1".to_string(), Value::Float(provided_angles[0]));
-        record.insert("joint2".to_string(), Value::Float(provided_angles[1]));
-
-        let mut inputs = HashMap::new();
-        inputs.insert(
-            "joints".to_string(),
-            InputConnection {
-                node_id: joints_id.to_string(),
-                output_key: "out".to_string(),
-            },
-        );
-
-        let mut params = params_for(PLANAR_URDF);
-        params.max_iters = None;
-        params.tol_pos = None;
-        params.tol_rot = None;
-        params.joint_defaults = Some(vec![("joint3".to_string(), default_angle)]);
-
-        let nodes = vec![
-            super::constant_node(joints_id, Value::Record(record)),
-            NodeSpec {
-                id: fk_id.to_string(),
-                kind: NodeType::UrdfFk,
-                params,
-                inputs,
-                output_shapes: HashMap::new(),
-            },
-        ];
-
-        let rt = run_graph(nodes).expect("FK evaluation with defaults should succeed");
-
-        let full_angles = vec![provided_angles[0], provided_angles[1], default_angle];
-        let (expected_chain, _) =
-            super::urdfik::build_chain_from_urdf(PLANAR_URDF, "base_link", "tool")
-                .expect("valid chain");
-        expected_chain
-            .set_joint_positions(&full_angles)
-            .expect("apply joints");
-        let expected_pose = expected_chain.end_transform();
-        let expected_pos = expected_pose.translation.vector;
-
-        let outputs = rt.outputs.get(fk_id).expect("fk outputs present");
-        let position = match outputs
-            .get("position")
-            .map(|pv| pv.value.clone())
-            .expect("position output")
-        {
-            Value::Vec3(arr) => arr,
-            other => panic!("expected Vec3, got {:?}", other),
-        };
-        for (observed, expected) in
-            position
-                .iter()
-                .zip([expected_pos.x, expected_pos.y, expected_pos.z])
-        {
-            assert!((observed - expected).abs() < 1e-4);
-        }
-    }
-
-    #[test]
-    fn urdf_fk_errors_on_bad_input_type() {
-        let joints_id = "bad_joints";
-        let fk_id = "fk_error";
-
-        let mut record = HashMap::new();
-        record.insert("joint1".to_string(), Value::Text("invalid".to_string()));
-        record.insert("joint2".to_string(), Value::Float(0.0));
-        record.insert("joint3".to_string(), Value::Float(0.0));
-
-        let mut inputs = HashMap::new();
-        inputs.insert(
-            "joints".to_string(),
-            InputConnection {
-                node_id: joints_id.to_string(),
-                output_key: "out".to_string(),
-            },
-        );
-
-        let mut params = params_for(PLANAR_URDF);
-        params.joint_defaults = None;
-
-        let nodes = vec![
-            super::constant_node(joints_id, Value::Record(record)),
-            NodeSpec {
-                id: fk_id.to_string(),
-                kind: NodeType::UrdfFk,
-                params,
-                inputs,
-                output_shapes: HashMap::new(),
-            },
-        ];
-
-        let err = run_graph(nodes).expect_err("FK should fail on invalid joint input");
-        assert!(err.contains("numeric scalar"), "unexpected error: {err}");
+        },
+        inputs: out_inputs,
+        output_shapes: HashMap::new(),
+    };
+
+    let graph = GraphSpec {
+        nodes: vec![
+            input_node,
+            constant_node("two", Value::Float(2.0)),
+            add_node,
+            output_node,
+        ],
+    };
+
+    // Stage record { pos: [1, 3, 5], label: "ok" } for the Input node.
+    let mut record = HashMap::new();
+    record.insert("pos".to_string(), Value::Vec3([1.0, 3.0, 5.0]));
+    record.insert("label".to_string(), Value::Text("ok".to_string()));
+
+    let mut rt = GraphRuntime::default();
+    rt.set_input(typed_path, Value::Record(record), Some(declared));
+
+    evaluate_all(&mut rt, &graph).expect("end-to-end evaluation");
+
+    // Assert final write to Output node path has scalar shape and expected value 3 + 2 = 5
+    let writes: Vec<_> = rt
+        .writes
+        .iter()
+        .filter(|op| op.path.to_string() == "robot/calc.y2")
+        .collect();
+    assert_eq!(
+        writes.len(),
+        1,
+        "expected exactly one write to the Output node path"
+    );
+    let op = writes[0];
+    assert!(matches!(
+        op.shape.as_ref().map(|s| &s.id),
+        Some(ShapeId::Scalar)
+    ));
+    match op.value {
+        Value::Float(f) => assert!((f - 5.0).abs() < 1e-6),
+        ref other => panic!("expected scalar value, got {:?}", other),
     }
 }

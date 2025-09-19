@@ -6,7 +6,7 @@
 //!
 //! WriteBatch is a simple Vec<WriteOp> with helpers.
 
-use crate::{typed_path::TypedPath, Value};
+use crate::{typed_path::TypedPath, Shape, Value};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 
@@ -14,11 +14,16 @@ use std::fmt;
 pub struct WriteOp {
     pub path: TypedPath,
     pub value: Value,
+    pub shape: Option<Shape>,
 }
 
 impl WriteOp {
     pub fn new(path: TypedPath, value: Value) -> Self {
-        Self { path, value }
+        Self::new_with_shape(path, value, None)
+    }
+
+    pub fn new_with_shape(path: TypedPath, value: Value, shape: Option<Shape>) -> Self {
+        Self { path, value, shape }
     }
 }
 
@@ -28,13 +33,19 @@ impl Serialize for WriteOp {
     where
         S: Serializer,
     {
-        use serde_json::json;
-        // Build a temporary serde_json::Value then serialize it via serializer
-        let obj = json!({
-            "path": self.path.to_string(),
-            "value": &self.value,
-        });
-        obj.serialize(serializer)
+        use serde::ser::SerializeStruct;
+
+        let mut state = if self.shape.is_some() {
+            serializer.serialize_struct("WriteOp", 3)?
+        } else {
+            serializer.serialize_struct("WriteOp", 2)?
+        };
+        state.serialize_field("path", &self.path)?;
+        state.serialize_field("value", &self.value)?;
+        if let Some(shape) = &self.shape {
+            state.serialize_field("shape", shape)?;
+        }
+        state.end()
     }
 }
 
@@ -59,7 +70,20 @@ impl<'de> Deserialize<'de> for WriteOp {
         // Deserialize the value JSON into Value using serde_json -> Value
         let value: Value = serde_json::from_value(val.clone()).map_err(de::Error::custom)?;
 
-        Ok(WriteOp { path: tp, value })
+        let shape = match v.get("shape") {
+            Some(shape_value) => {
+                let parsed: Shape =
+                    serde_json::from_value(shape_value.clone()).map_err(de::Error::custom)?;
+                Some(parsed)
+            }
+            None => None,
+        };
+
+        Ok(WriteOp {
+            path: tp,
+            value,
+            shape,
+        })
     }
 }
 
@@ -77,10 +101,22 @@ mod write_batch_def {
     where
         S: Serializer,
     {
-        let arr: Vec<JsonValue> = v
-            .iter()
-            .map(|op| serde_json::json!({ "path": op.path.to_string(), "value": &op.value }))
-            .collect();
+        let mut arr: Vec<JsonValue> = Vec::with_capacity(v.len());
+        for op in v {
+            let mut map = serde_json::Map::with_capacity(3);
+            map.insert("path".to_string(), serde_json::json!(op.path.to_string()));
+            map.insert(
+                "value".to_string(),
+                serde_json::to_value(&op.value).map_err(serde::ser::Error::custom)?,
+            );
+            if let Some(shape) = &op.shape {
+                map.insert(
+                    "shape".to_string(),
+                    serde_json::to_value(shape).map_err(serde::ser::Error::custom)?,
+                );
+            }
+            arr.push(JsonValue::Object(map));
+        }
         arr.serialize(serializer)
     }
 
@@ -103,7 +139,15 @@ mod write_batch_def {
                 .ok_or_else(|| serde::de::Error::custom("missing 'value'"))?;
             let value: crate::Value =
                 serde_json::from_value(val.clone()).map_err(serde::de::Error::custom)?;
-            out.push(WriteOp::new(tp, value));
+            let shape = match v.get("shape") {
+                Some(shape_value) => {
+                    let parsed: crate::Shape = serde_json::from_value(shape_value.clone())
+                        .map_err(serde::de::Error::custom)?;
+                    Some(parsed)
+                }
+                None => None,
+            };
+            out.push(WriteOp::new_with_shape(tp, value, shape));
         }
         Ok(out)
     }
@@ -143,14 +187,23 @@ impl WriteBatch {
 impl fmt::Display for WriteOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let val = serde_json::to_string(&self.value).map_err(|_| fmt::Error)?;
-        write!(f, "{{ path: {}, value: {} }}", self.path, val)
+        if let Some(shape) = &self.shape {
+            let shape_json = serde_json::to_string(shape).map_err(|_| fmt::Error)?;
+            write!(
+                f,
+                "{{ path: {}, value: {}, shape: {} }}",
+                self.path, val, shape_json
+            )
+        } else {
+            write!(f, "{{ path: {}, value: {} }}", self.path, val)
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Value;
+    use crate::{Shape, ShapeId, Value};
 
     #[test]
     fn writeop_roundtrip_json() {
@@ -175,5 +228,15 @@ mod tests {
         let s = serde_json::to_string(&b).unwrap();
         let parsed: WriteBatch = serde_json::from_str(&s).unwrap();
         assert_eq!(b, parsed);
+    }
+
+    #[test]
+    fn writeop_roundtrip_with_shape() {
+        let tp = TypedPath::parse("robot1/Arm/Joint3.angle").unwrap();
+        let shape = Shape::new(ShapeId::Vec3);
+        let op = WriteOp::new_with_shape(tp, Value::Vec3([1.0, 2.0, 3.0]), Some(shape));
+        let s = serde_json::to_string(&op).unwrap();
+        let parsed: WriteOp = serde_json::from_str(&s).unwrap();
+        assert_eq!(op, parsed);
     }
 }
