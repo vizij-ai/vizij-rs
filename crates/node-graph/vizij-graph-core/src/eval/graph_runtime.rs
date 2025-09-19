@@ -4,7 +4,7 @@ use crate::types::NodeId;
 use hashbrown::{hash_map::Entry, HashMap};
 use vizij_api_core::WriteBatch;
 
-use super::urdfik::{build_chain_from_urdf, IkKey, UrdfIkState};
+use super::urdfik::{build_chain_from_urdf, IkKey, UrdfKinematicsState};
 use super::value_layout::{FlatValue, PortValue, ValueLayout};
 
 /// Internal integration state for a spring node. Values remain flattened for efficiency.
@@ -91,7 +91,7 @@ pub enum NodeRuntimeState {
     Damp(DampState),
     Slew(SlewState),
     #[cfg(feature = "urdf_ik")]
-    UrdfIk(UrdfIkState),
+    UrdfKinematics(UrdfKinematicsState),
 }
 
 /// Runtime data shared by all node evaluations.
@@ -211,41 +211,41 @@ impl GraphRuntime {
     }
 
     #[cfg(feature = "urdf_ik")]
-    /// Fetch the cached URDF IK solver state for `node_id`, rebuilding it if the configuration
-    /// hash changes.
-    pub fn ik_state_mut<'a>(
+    /// Fetch the cached URDF chain for `node_id`, rebuilding it if the configuration hash
+    /// changes.
+    pub fn kinematics_state_mut<'a>(
         &'a mut self,
         node_id: &NodeId,
         key: IkKey<'_>,
-    ) -> Result<&'a mut UrdfIkState, String> {
-        let build_state = || -> Result<UrdfIkState, String> {
+    ) -> Result<&'a mut UrdfKinematicsState, String> {
+        let build_state = || -> Result<UrdfKinematicsState, String> {
             let (chain, joint_names) =
                 build_chain_from_urdf(key.urdf_xml, key.root_link, key.tip_link)?;
-            Ok(UrdfIkState::new(key.hash, chain, joint_names))
+            Ok(UrdfKinematicsState::new(key.hash, chain, joint_names))
         };
 
         match self.node_states.entry(node_id.clone()) {
             Entry::Occupied(occupied) => {
                 let state = occupied.into_mut();
                 match state {
-                    NodeRuntimeState::UrdfIk(inner) => {
+                    NodeRuntimeState::UrdfKinematics(inner) => {
                         if inner.hash != key.hash {
                             *inner = build_state()?;
                         }
                         Ok(inner)
                     }
                     _ => {
-                        *state = NodeRuntimeState::UrdfIk(build_state()?);
+                        *state = NodeRuntimeState::UrdfKinematics(build_state()?);
                         match state {
-                            NodeRuntimeState::UrdfIk(inner) => Ok(inner),
+                            NodeRuntimeState::UrdfKinematics(inner) => Ok(inner),
                             _ => unreachable!(),
                         }
                     }
                 }
             }
             Entry::Vacant(vacant) => {
-                match vacant.insert(NodeRuntimeState::UrdfIk(build_state()?)) {
-                    NodeRuntimeState::UrdfIk(inner) => Ok(inner),
+                match vacant.insert(NodeRuntimeState::UrdfKinematics(build_state()?)) {
+                    NodeRuntimeState::UrdfKinematics(inner) => Ok(inner),
                     _ => unreachable!(),
                 }
             }

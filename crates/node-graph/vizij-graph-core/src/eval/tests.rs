@@ -867,4 +867,224 @@ mod urdf_ik {
         let err = evaluate_all(&mut rt, &spec).expect_err("weights mismatch should error");
         assert!(err.contains("weights length"));
     }
+
+    #[test]
+    fn urdf_fk_returns_correct_pose() {
+        let joints_id = "joints";
+        let fk_id = "fk";
+
+        let joint_names = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"];
+        let joint_angles = vec![0.1, -0.2, 0.3, -0.15, 0.2, -0.1];
+
+        let mut record = HashMap::new();
+        for (name, angle) in joint_names.iter().zip(joint_angles.iter()) {
+            record.insert((*name).to_string(), Value::Float(*angle));
+        }
+
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            "joints".to_string(),
+            InputConnection {
+                node_id: joints_id.to_string(),
+                output_key: "out".to_string(),
+            },
+        );
+
+        let mut params = params_for(POSE_URDF);
+        params.max_iters = None;
+        params.tol_pos = None;
+        params.tol_rot = None;
+
+        let nodes = vec![
+            super::constant_node(joints_id, Value::Record(record)),
+            NodeSpec {
+                id: fk_id.to_string(),
+                kind: NodeType::UrdfFk,
+                params,
+                inputs,
+                output_shapes: HashMap::new(),
+            },
+        ];
+
+        let rt = run_graph(nodes).expect("FK evaluation should succeed");
+
+        let (expected_chain, _) =
+            super::urdfik::build_chain_from_urdf(POSE_URDF, "base_link", "tool")
+                .expect("valid chain");
+        expected_chain
+            .set_joint_positions(&joint_angles)
+            .expect("apply joints");
+        let expected_pose = expected_chain.end_transform();
+        let expected_pos = expected_pose.translation.vector;
+        let expected_rot = expected_pose.rotation;
+
+        let outputs = rt.outputs.get(fk_id).expect("fk outputs present");
+        let position = match outputs
+            .get("position")
+            .map(|pv| pv.value.clone())
+            .expect("position output")
+        {
+            Value::Vec3(arr) => arr,
+            other => panic!("expected Vec3, got {:?}", other),
+        };
+        for (observed, expected) in
+            position
+                .iter()
+                .zip([expected_pos.x, expected_pos.y, expected_pos.z])
+        {
+            assert!((observed - expected).abs() < 1e-4);
+        }
+
+        let rotation = match outputs
+            .get("rotation")
+            .map(|pv| pv.value.clone())
+            .expect("rotation output")
+        {
+            Value::Quat(arr) => arr,
+            other => panic!("expected Quat, got {:?}", other),
+        };
+        let actual_rot = k::UnitQuaternion::new_normalize(k::nalgebra::Quaternion::new(
+            rotation[3],
+            rotation[0],
+            rotation[1],
+            rotation[2],
+        ));
+        let angle_err = expected_rot.angle_to(&actual_rot);
+        assert!(angle_err.abs() < 1e-4, "quaternion mismatch: {angle_err}");
+
+        let (transform_pos, transform_rot) = match outputs
+            .get("transform")
+            .map(|pv| pv.value.clone())
+            .expect("transform output")
+        {
+            Value::Transform { pos, rot, scale } => {
+                assert_eq!(scale, [1.0, 1.0, 1.0]);
+                (pos, rot)
+            }
+            other => panic!("expected Transform, got {:?}", other),
+        };
+        for (observed, expected) in
+            transform_pos
+                .iter()
+                .zip([expected_pos.x, expected_pos.y, expected_pos.z])
+        {
+            assert!((observed - expected).abs() < 1e-4);
+        }
+        let transform_rot = k::UnitQuaternion::new_normalize(k::nalgebra::Quaternion::new(
+            transform_rot[3],
+            transform_rot[0],
+            transform_rot[1],
+            transform_rot[2],
+        ));
+        let transform_angle = expected_rot.angle_to(&transform_rot);
+        assert!(
+            transform_angle.abs() < 1e-4,
+            "transform rotation mismatch: {transform_angle}"
+        );
+    }
+
+    #[test]
+    fn urdf_fk_handles_missing_joint_with_default() {
+        let joints_id = "joints";
+        let fk_id = "fk_defaults";
+
+        let provided_angles = [0.25f32, -0.35f32];
+        let default_angle = 0.5f32;
+
+        let mut record = HashMap::new();
+        record.insert("joint1".to_string(), Value::Float(provided_angles[0]));
+        record.insert("joint2".to_string(), Value::Float(provided_angles[1]));
+
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            "joints".to_string(),
+            InputConnection {
+                node_id: joints_id.to_string(),
+                output_key: "out".to_string(),
+            },
+        );
+
+        let mut params = params_for(PLANAR_URDF);
+        params.max_iters = None;
+        params.tol_pos = None;
+        params.tol_rot = None;
+        params.joint_defaults = Some(vec![("joint3".to_string(), default_angle)]);
+
+        let nodes = vec![
+            super::constant_node(joints_id, Value::Record(record)),
+            NodeSpec {
+                id: fk_id.to_string(),
+                kind: NodeType::UrdfFk,
+                params,
+                inputs,
+                output_shapes: HashMap::new(),
+            },
+        ];
+
+        let rt = run_graph(nodes).expect("FK evaluation with defaults should succeed");
+
+        let full_angles = vec![provided_angles[0], provided_angles[1], default_angle];
+        let (expected_chain, _) =
+            super::urdfik::build_chain_from_urdf(PLANAR_URDF, "base_link", "tool")
+                .expect("valid chain");
+        expected_chain
+            .set_joint_positions(&full_angles)
+            .expect("apply joints");
+        let expected_pose = expected_chain.end_transform();
+        let expected_pos = expected_pose.translation.vector;
+
+        let outputs = rt.outputs.get(fk_id).expect("fk outputs present");
+        let position = match outputs
+            .get("position")
+            .map(|pv| pv.value.clone())
+            .expect("position output")
+        {
+            Value::Vec3(arr) => arr,
+            other => panic!("expected Vec3, got {:?}", other),
+        };
+        for (observed, expected) in
+            position
+                .iter()
+                .zip([expected_pos.x, expected_pos.y, expected_pos.z])
+        {
+            assert!((observed - expected).abs() < 1e-4);
+        }
+    }
+
+    #[test]
+    fn urdf_fk_errors_on_bad_input_type() {
+        let joints_id = "bad_joints";
+        let fk_id = "fk_error";
+
+        let mut record = HashMap::new();
+        record.insert("joint1".to_string(), Value::Text("invalid".to_string()));
+        record.insert("joint2".to_string(), Value::Float(0.0));
+        record.insert("joint3".to_string(), Value::Float(0.0));
+
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            "joints".to_string(),
+            InputConnection {
+                node_id: joints_id.to_string(),
+                output_key: "out".to_string(),
+            },
+        );
+
+        let mut params = params_for(PLANAR_URDF);
+        params.joint_defaults = None;
+
+        let nodes = vec![
+            super::constant_node(joints_id, Value::Record(record)),
+            NodeSpec {
+                id: fk_id.to_string(),
+                kind: NodeType::UrdfFk,
+                params,
+                inputs,
+                output_shapes: HashMap::new(),
+            },
+        ];
+
+        let err = run_graph(nodes).expect_err("FK should fail on invalid joint input");
+        assert!(err.contains("numeric scalar"), "unexpected error: {err}");
+    }
 }

@@ -9,22 +9,21 @@ use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 #[cfg(feature = "urdf_ik")]
 use std::hash::{Hash, Hasher};
-use vizij_api_core::Value;
+use vizij_api_core::{coercion, Value};
 
 #[cfg(feature = "urdf_ik")]
-/// Cached state for URDF IK nodes.
-pub struct UrdfIkState {
+/// Cached state for URDF chains shared by IK and FK nodes.
+pub struct UrdfKinematicsState {
     pub hash: u64,
     pub dofs: usize,
     pub joint_names: Vec<String>,
     pub chain: k::SerialChain<f32>,
-    pub solver: k::JacobianIkSolver<f32>,
 }
 
 #[cfg(feature = "urdf_ik")]
-impl fmt::Debug for UrdfIkState {
+impl fmt::Debug for UrdfKinematicsState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("UrdfIkState")
+        f.debug_struct("UrdfKinematicsState")
             .field("hash", &self.hash)
             .field("dofs", &self.dofs)
             .field("joint_names", &self.joint_names)
@@ -33,20 +32,19 @@ impl fmt::Debug for UrdfIkState {
 }
 
 #[cfg(feature = "urdf_ik")]
-impl UrdfIkState {
-    /// Construct a new IK state from a serial chain and its joint names.
+impl UrdfKinematicsState {
+    /// Construct a new kinematics state from a serial chain and its joint names.
     pub fn new(hash: u64, chain: k::SerialChain<f32>, joint_names: Vec<String>) -> Self {
         let dofs = chain.dof();
         if dofs > 0 {
             let zero_seed = vec![0.0f32; dofs];
             chain.set_joint_positions_clamped(&zero_seed);
         }
-        UrdfIkState {
+        UrdfKinematicsState {
             hash,
             dofs,
             joint_names,
             chain,
-            solver: k::JacobianIkSolver::default(),
         }
     }
 
@@ -177,7 +175,8 @@ fn apply_weights(
 #[cfg(feature = "urdf_ik")]
 /// Solve for joint positions that reach `target_pos` while respecting `weights`.
 pub fn solve_position(
-    state: &mut UrdfIkState,
+    state: &mut UrdfKinematicsState,
+    solver: &mut k::JacobianIkSolver<f32>,
     target_pos: [f32; 3],
     seed: &[f32],
     weights: Option<&[f32]>,
@@ -189,11 +188,11 @@ pub fn solve_position(
         .set_joint_positions(seed)
         .map_err(|err| format!("failed to apply joint seed: {err}"))?;
 
-    apply_weights(&mut state.solver, seed, weights)?;
+    apply_weights(solver, seed, weights)?;
 
-    state.solver.num_max_try = max_iters.max(1) as usize;
-    state.solver.allowable_target_distance = tol_pos;
-    state.solver.allowable_target_angle = std::f32::consts::PI;
+    solver.num_max_try = max_iters.max(1) as usize;
+    solver.allowable_target_distance = tol_pos;
+    solver.allowable_target_angle = std::f32::consts::PI;
 
     let target_pose = k::Isometry3::from_parts(
         k::Translation3::new(target_pos[0], target_pos[1], target_pos[2]),
@@ -207,19 +206,152 @@ pub fn solve_position(
         ..Default::default()
     };
 
-    state
-        .solver
+    solver
         .solve_with_constraints(&state.chain, &target_pose, &constraints)
         .map_err(|err| format!("IK solve failed: {err}"))?;
 
     Ok(state.chain.joint_positions())
 }
 
+#[cfg(feature = "urdf_ik")]
+fn scalar_from_value(value: &Value) -> Result<f32, String> {
+    match value {
+        Value::Float(f) => Ok(*f),
+        Value::Bool(b) => Ok(if *b { 1.0 } else { 0.0 }),
+        Value::Vec2(arr) => Ok(arr[0]),
+        Value::Vec3(arr) => Ok(arr[0]),
+        Value::Vec4(arr) => Ok(arr[0]),
+        Value::Quat(arr) => Ok(arr[0]),
+        Value::Vector(vec) => vec
+            .first()
+            .copied()
+            .ok_or_else(|| "vector is empty".to_string()),
+        Value::Array(items) | Value::List(items) | Value::Tuple(items) => {
+            if items.len() == 1 {
+                scalar_from_value(&items[0])
+            } else {
+                Err(format!(
+                    "expected numeric scalar, received {:?}",
+                    value.kind()
+                ))
+            }
+        }
+        Value::Enum(_, inner) => scalar_from_value(inner),
+        _ => Err(format!(
+            "expected numeric scalar, received {:?}",
+            value.kind()
+        )),
+    }
+}
+
+#[cfg(feature = "urdf_ik")]
+fn align_sequence_with_defaults(
+    values: &[f32],
+    expected: usize,
+    joint_names: &[String],
+    defaults: &HashMap<&str, f32>,
+) -> Vec<f32> {
+    let mut result = Vec::with_capacity(expected);
+    for (index, joint) in joint_names.iter().enumerate() {
+        if let Some(value) = values.get(index) {
+            result.push(*value);
+        } else if let Some(default_value) = defaults.get(joint.as_str()) {
+            result.push(*default_value);
+        } else {
+            result.push(0.0);
+        }
+    }
+    result
+}
+
+#[cfg(feature = "urdf_ik")]
+/// Coerce input joint data into a vector matching the chain joint order.
+pub fn fetch_joint_vector(
+    value: &Value,
+    expected: usize,
+    defaults: Option<&[(String, f32)]>,
+    joint_names: &[String],
+) -> Result<Vec<f32>, String> {
+    let mut default_map: HashMap<&str, f32> = HashMap::new();
+    if let Some(entries) = defaults {
+        for (name, angle) in entries {
+            default_map.insert(name.as_str(), *angle);
+        }
+    }
+
+    match value {
+        Value::Record(map) => {
+            let mut result = Vec::with_capacity(expected);
+            for joint in joint_names {
+                if let Some(entry) = map.get(joint) {
+                    result.push(scalar_from_value(entry)?);
+                } else if let Some(default_value) = default_map.get(joint.as_str()) {
+                    result.push(*default_value);
+                } else {
+                    result.push(0.0);
+                }
+            }
+            Ok(result)
+        }
+        Value::Array(items) | Value::List(items) | Value::Tuple(items) => {
+            let mut sequence = Vec::with_capacity(items.len());
+            for item in items {
+                sequence.push(scalar_from_value(item)?);
+            }
+            Ok(align_sequence_with_defaults(
+                &sequence,
+                expected,
+                joint_names,
+                &default_map,
+            ))
+        }
+        other => {
+            let sequence = coercion::to_vector(other);
+            Ok(align_sequence_with_defaults(
+                &sequence,
+                expected,
+                joint_names,
+                &default_map,
+            ))
+        }
+    }
+}
+
+#[cfg(feature = "urdf_ik")]
+/// Apply joint values to the cached serial chain.
+pub fn apply_joint_positions(
+    state: &mut UrdfKinematicsState,
+    joints: &[f32],
+) -> Result<(), String> {
+    if joints.len() != state.dofs {
+        return Err(format!(
+            "joint vector length {} does not match chain DoF {}",
+            joints.len(),
+            state.dofs
+        ));
+    }
+    state
+        .chain
+        .set_joint_positions(joints)
+        .map_err(|err| format!("failed to apply joint values: {err}"))?;
+    Ok(())
+}
+
+#[cfg(feature = "urdf_ik")]
+/// Extract the current tip pose (position + quaternion) from the chain.
+pub fn tip_pose(state: &UrdfKinematicsState) -> ([f32; 3], [f32; 4]) {
+    let end = state.chain.end_transform();
+    let pos = end.translation.vector;
+    let rot = end.rotation;
+    ([pos.x, pos.y, pos.z], [rot.i, rot.j, rot.k, rot.w])
+}
+
 #[allow(clippy::too_many_arguments)]
 #[cfg(feature = "urdf_ik")]
 /// Solve for joint positions that reach both `target_pos` and `target_rot`.
 pub fn solve_pose(
-    state: &mut UrdfIkState,
+    state: &mut UrdfKinematicsState,
+    solver: &mut k::JacobianIkSolver<f32>,
     target_pos: [f32; 3],
     target_rot: [f32; 4],
     seed: &[f32],
@@ -233,11 +365,11 @@ pub fn solve_pose(
         .set_joint_positions(seed)
         .map_err(|err| format!("failed to apply joint seed: {err}"))?;
 
-    apply_weights(&mut state.solver, seed, weights)?;
+    apply_weights(solver, seed, weights)?;
 
-    state.solver.num_max_try = max_iters.max(1) as usize;
-    state.solver.allowable_target_distance = tol_pos;
-    state.solver.allowable_target_angle = tol_rot;
+    solver.num_max_try = max_iters.max(1) as usize;
+    solver.allowable_target_distance = tol_pos;
+    solver.allowable_target_angle = tol_rot;
 
     let rotation = k::UnitQuaternion::new_normalize(k::nalgebra::Quaternion::new(
         target_rot[3],
@@ -250,8 +382,7 @@ pub fn solve_pose(
         rotation,
     );
 
-    state
-        .solver
+    solver
         .solve(&state.chain, &target_pose)
         .map_err(|err| format!("IK solve failed: {err}"))?;
 

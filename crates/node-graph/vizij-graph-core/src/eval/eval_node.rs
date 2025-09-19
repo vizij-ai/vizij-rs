@@ -9,7 +9,8 @@ use vizij_api_core::{Value, WriteOp};
 use super::numeric::{as_bool, as_float, binary_numeric, unary_numeric};
 use super::shape_helpers::enforce_output_shapes;
 use super::urdfik::{
-    hash_urdf_config, quat_from_value, solve_pose, solve_position, vector_from_value, IkKey,
+    apply_joint_positions, fetch_joint_vector, hash_urdf_config, quat_from_value, solve_pose,
+    solve_position, tip_pose, vector_from_value, IkKey,
 };
 use super::value_layout::{align_flattened, flatten_numeric, FlatValue, PortValue};
 use super::variadic::fold_numeric_variadic;
@@ -109,6 +110,10 @@ fn evaluate_kind(
         NodeType::UrdfIkPose => eval_urdf_pose(rt, spec, params, inputs),
         #[cfg(not(feature = "urdf_ik"))]
         NodeType::UrdfIkPose => Err("UrdfIkPose node requires the 'urdf_ik' feature".to_string()),
+        #[cfg(feature = "urdf_ik")]
+        NodeType::UrdfFk => eval_urdf_fk(rt, spec, params, inputs),
+        #[cfg(not(feature = "urdf_ik"))]
+        NodeType::UrdfFk => Err("UrdfFk node requires the 'urdf_ik' feature".to_string()),
         NodeType::Output => Ok(eval_output(inputs)),
     }
 }
@@ -714,6 +719,62 @@ fn eval_inverse_kinematics(inputs: &HashMap<String, PortValue>) -> OutputMap {
 }
 
 #[cfg(feature = "urdf_ik")]
+fn eval_urdf_fk(
+    rt: &mut GraphRuntime,
+    spec: &NodeSpec,
+    params: &NodeParams,
+    inputs: &HashMap<String, PortValue>,
+) -> Result<OutputMap, String> {
+    let joints_port = inputs
+        .get("joints")
+        .ok_or_else(|| "UrdfFk requires 'joints' input".to_string())?;
+
+    let urdf_xml = params
+        .urdf_xml
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .ok_or_else(|| "UrdfFk requires non-empty 'urdf_xml' param".to_string())?;
+    let root_link = params.root_link.as_deref().unwrap_or("base_link");
+    let tip_link = params.tip_link.as_deref().unwrap_or("tool0");
+
+    let key = IkKey {
+        hash: hash_urdf_config(urdf_xml, root_link, tip_link),
+        urdf_xml,
+        root_link,
+        tip_link,
+    };
+    let state = rt.kinematics_state_mut(&spec.id, key)?;
+
+    let joints = fetch_joint_vector(
+        &joints_port.value,
+        state.dofs,
+        params.joint_defaults.as_deref(),
+        &state.joint_names,
+    )?;
+
+    apply_joint_positions(state, &joints)?;
+
+    let (pos_arr, rot_arr) = tip_pose(state);
+    let position_value = Value::Vec3(pos_arr);
+    let rotation_value = Value::Quat(rot_arr);
+    let transform_value = match (&position_value, &rotation_value) {
+        (Value::Vec3(pos), Value::Quat(rot)) => Value::Transform {
+            pos: *pos,
+            rot: *rot,
+            scale: [1.0, 1.0, 1.0],
+        },
+        _ => unreachable!(),
+    };
+
+    let mut outputs = HashMap::with_capacity(3);
+    outputs.insert("position".to_string(), PortValue::new(position_value));
+    outputs.insert("rotation".to_string(), PortValue::new(rotation_value));
+    outputs.insert("transform".to_string(), PortValue::new(transform_value));
+
+    Ok(outputs)
+}
+
+#[cfg(feature = "urdf_ik")]
 fn eval_urdf_position(
     rt: &mut GraphRuntime,
     spec: &NodeSpec,
@@ -744,8 +805,9 @@ fn eval_urdf_position(
         root_link,
         tip_link,
     };
-    let state = rt.ik_state_mut(&spec.id, key)?;
+    let state = rt.kinematics_state_mut(&spec.id, key)?;
     let dofs = state.dofs;
+    let mut solver = k::JacobianIkSolver::default();
 
     let seed_candidate: Option<Vec<f32>> = inputs
         .get("seed")
@@ -779,6 +841,7 @@ fn eval_urdf_position(
 
     let solution = solve_position(
         state,
+        &mut solver,
         target_pos,
         seed.as_slice(),
         weights,
@@ -824,8 +887,9 @@ fn eval_urdf_pose(
         root_link,
         tip_link,
     };
-    let state = rt.ik_state_mut(&spec.id, key)?;
+    let state = rt.kinematics_state_mut(&spec.id, key)?;
     let dofs = state.dofs;
+    let mut solver = k::JacobianIkSolver::default();
 
     let seed_candidate: Option<Vec<f32>> = inputs
         .get("seed")
@@ -859,6 +923,7 @@ fn eval_urdf_pose(
 
     let solution = solve_pose(
         state,
+        &mut solver,
         target_pos,
         target_rot,
         seed.as_slice(),
