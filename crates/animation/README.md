@@ -1,212 +1,222 @@
 # Vizij Animation Crates
 
-This repository contains the core animation system for Vizij, designed for high performance, deterministic updates, and portability across different runtimes. The system is split into three primary Rust crates: a generic core, a Bevy engine adapter, and a WebAssembly (WASM) wrapper.
+This directory contains the animation stack used throughout Vizij. The crates are designed to share the same core logic while
+serving multiple runtimes—native Rust hosts, Bevy ECS games, and browser/Node environments via WebAssembly.
 
 ## Overview
 
-The goal of this project is to provide a single, unified animation player that can power both native applications (e.g., games, robotics) and web-based experiences from the same animation data and core logic. It emphasizes zero or low per-frame allocations, one-time binding of animation targets, and a clear separation between the animation engine and the host application (renderer, scene graph, etc.).
+* **`vizij-animation-core`** – Pure Rust engine that parses animation data, evaluates tracks, blends values, and emits outputs.
+* **`bevy_vizij_animation`** – Bevy plugin that wires the core engine into ECS schedules and applies outputs to Bevy components.
+* **`vizij-animation-wasm`** – `wasm-bindgen` bindings that expose the engine to JavaScript/TypeScript consumers. Published to
+  npm as `@vizij/animation-wasm`.
+* **Shared data format** – Animations are serialized as `StoredAnimation` JSON with normalized keypoints and cubic-bezier
+  transitions. Hosts can also supply the engine’s internal `AnimationData` JSON when needed.
 
 ## Architecture
 
-The architecture is composed of a central `core` crate with thin adapters for specific environments.
-
 ```
-+----------------------+          +----------------------+          +----------------------+
-| vizij-animation-core | <------> | vizij-animation-wasm | <------> | @vizij/animation-*   |
-| (Rust, no engine)    |          | (Rust FFI)           |          | (npm pkg + React)    |
-+----------------------+          +----------------------+          +----------------------+
-           ^
-           |
-+----------------------+          +----------------------+          +----------------------+
-| bevy_vizij_animation |  ----->  |  Bevy World / ECS   |  <-----> | App / Game / Robot   |
-| (Rust Bevy plugin)   |          |  (components, sys)  |          | (native)             |
-+----------------------+          +----------------------+          +----------------------+
-```
-
-- **`vizij-animation-core`**: A pure Rust library with no engine-specific dependencies. It defines the data formats, owns the animation logic (sampling, blending, time management), and exposes a simple `update` function.
-- **`bevy_vizij_animation`**: A Bevy plugin that integrates the core engine into a Bevy ECS application. It acts as a bridge, mapping Bevy components to animation targets and applying the computed animation values back to the world.
-- **`vizij-animation-wasm`**: A WebAssembly wrapper that exposes the core engine's functionality to JavaScript/TypeScript. This allows the animation system to run efficiently in a web browser or Node.js environment.
-
-## Core Concepts
-
-### Data Model (`StoredAnimation`)
-
-The system uses a standardized JSON format, `StoredAnimation`, for defining animation clips. This format is designed to be human-readable and easy to generate from various authoring tools.
-
-- **Duration**: Specified in milliseconds at the root of the animation file.
-- **Keypoints**: Timestamps (`stamp`) are normalized from `0.0` to `1.0` within the track's duration.
-- **Values**: Supports a range of data types, including `boolean`, `number`, `string`, vectors (`{x,y}`, `{x,y,z}`), Euler angles (`{r,p,y}`), and colors (`{r,g,b}`, `{h,s,l}`).
-- **Transitions**: Animation curves are defined by per-keypoint transitions.
-
-**Example `StoredAnimation` Snippet:**
-```json
-{
-  "id": "anim-1",
-  "name": "My Animation",
-  "duration": 5000,
-  "tracks": [
-    {
-      "id": "track-0",
-      "name": "Position X",
-      "animatableId": "cube-position-x",
-      "points": [
-        {
-          "id": "k0",
-          "stamp": 0.0,
-          "value": -2,
-          "transitions": { "out": { "x": 0.65, "y": 0 } }
-        },
-        {
-          "id": "k1",
-          "stamp": 0.25,
-          "value": 0,
-          "transitions": { "in": { "x": 0.35, "y": 1 } }
-        }
-      ]
-    }
-  ]
-}
+          +--------------------------+
+          | vizij-animation-core     |
+          |  (Rust library)          |
+          +-----------+--------------+
+                      |
+        +-------------+--------------+
+        |                            |
+        v                            v
+ +----------------------+   +------------------------+
+ | bevy_vizij_animation |   | vizij-animation-wasm   |
+ |  (Bevy Plugin)       |   |  (wasm-bindgen bindings)|
+ +----------------------+   +-----------+------------+
+                                        |
+                              +---------v-----------+
+                              | @vizij/animation-   |
+                              | wasm (npm wrapper)  |
+                              +---------------------+
 ```
 
-### Transition Model (Cubic Bezier)
+* The core crate owns sampling, blending, and the update loop. It has no engine-specific dependencies.
+* The Bevy plugin wraps the core engine in resources/systems, builds canonical bindings from the ECS world, and applies outputs.
+* The WASM crate exports a JS class mirroring the engine API and feeds the npm package for web consumers (the Bevy and WASM
+  layers are independent peers that both depend on the core crate).
 
-The primary transition model is a **cubic-bezier** timing function applied to each segment between keypoints. This provides smooth, customizable easing similar to CSS animations.
+## Installation
 
-- For a segment from `P0` to `P1`, the curve is defined by `P0.transitions.out` and `P1.transitions.in`.
-- If control points are missing, they default to a standard "ease-in-out" curve:
-  - `out`: `{ "x": 0.42, "y": 0 }`
-  - `in`: `{ "x": 0.58, "y": 1 }`
-- `boolean` and `string` tracks use **step** interpolation, holding the previous value until the next keypoint is reached.
+From an external Rust project, add the crates you need via `cargo add` (replace the version with the published release):
 
-### Binding and Targets
+```bash
+cargo add vizij-animation-core
+cargo add bevy_vizij_animation             # if you use Bevy
+```
 
-To avoid costly string lookups in the animation hot loop, the engine performs a **one-time binding** step. It resolves human-readable target paths (e.g., `"Head/Transform.rotation"`) into direct, efficient handles. This binding is performed upfront and only updated when the scene structure changes.
+Optional features:
 
-### Update Pipeline
+* `vizij-animation-core` exposes the default feature set and requires no extra flags.
+* `bevy_vizij_animation` and `vizij-animation-wasm` inherit Bevy/wasm dependencies and have no additional feature flags.
 
-The engine follows a deterministic, multi-stage update pipeline on each tick:
-1.  **Advance Players**: Update each player's timeline based on `dt`, speed, and loop settings.
-2.  **Accumulate**: For each animation instance, sample the relevant tracks at the correct local time and accumulate the weighted `(target, value)` contributions.
-3.  **Blend & Apply**: Blend the accumulated values for each target. The core engine does not modify external state; it produces a set of final outputs.
-4.  **Emit Output**: The host adapter (`bevy` or `wasm`) receives the outputs and applies them to the application's world (e.g., updating Bevy `Transform` components or providing a JSON object to JavaScript).
+For JavaScript consumers install the npm package (published from this workspace):
 
-## Crates
+```bash
+npm install @vizij/animation-wasm
+```
 
-### `vizij-animation-core`
+## Setup
 
-The engine-agnostic heart of the system. It is responsible for:
-- Parsing the `StoredAnimation` JSON format.
-- The `Engine -> Player -> Instance` ownership model.
-- Deterministic sampling, accumulation, and blending logic.
-- A wide range of supported `Value` types, including `Scalar`, `Vec3`, `Quat`, `Color`, and step-only `Bool` and `Text`.
+Inside this repository:
 
-### `bevy_vizij_animation`
+1. Build/test the Rust crates:
+   ```bash
+   cargo test -p vizij-animation-core
+   cargo test -p bevy_vizij_animation
+   ```
+2. Generate the WASM pkg output:
+   ```bash
+   node scripts/build-animation-wasm.mjs
+   ```
+3. (Optional) Link the npm package into `vizij-web` for live development:
+   ```bash
+   npm --workspace npm/@vizij/animation-wasm run build
+   (cd npm/@vizij/animation-wasm && npm link)
+   ```
+4. Use `npm run watch:wasm` in this repo to rebuild the WASM crate automatically when Rust code changes (requires
+   `cargo install cargo-watch`).
 
-A Bevy plugin that makes it easy to use the animation engine in an ECS context.
-- Wraps the core `Engine` in a Bevy `Resource`.
-- Automatically discovers and binds animatable entities using a `VizijTargetRoot` marker component.
-- Runs the engine's update loop within Bevy's `FixedUpdate` schedule for determinism.
-- Applies animation outputs to Bevy `Transform` components.
+## Usage
 
-### `vizij-animation-wasm`
+### Core crate
 
-A lightweight WASM wrapper that exposes the core engine to JavaScript and TypeScript.
-- Provides a simple JavaScript `class VizijAnimation` API.
-- Accepts JSON for configuration and animation data.
-- Returns outputs as a structured JSON object for easy consumption in web frontends.
-- Includes an ABI version check to ensure compatibility between the WASM module and the JS wrapper.
+* Create an `Engine`, load animation data (either `AnimationData` or `StoredAnimation` JSON), create players/instances, and call
+  `update(dt, inputs)` each tick.
+* Outputs contain `changes` (resolved target key/value pairs) and `events` (playback notifications, keypoint hits, warnings).
 
-## Usage Examples
+### Bevy plugin
 
-### Core Rust
+* Add `VizijAnimationPlugin` to your `App`.
+* Mark a root entity with `VizijTargetRoot`; the plugin builds a canonical binding map by traversing named descendants or entities
+  with `VizijBindingHint`.
+* The plugin schedules systems that prebind the engine, run fixed updates, and apply outputs to `Transform` components.
+
+### WASM binding / npm package
+
+* `await init()` once, then construct `VizijAnimation` or the higher-level `Engine` wrapper from the npm package.
+* Use the same workflow as the Rust engine: load animations, create players/instances, optionally call `prebind` with a resolver
+  callback, and `update(dt)` each frame. Outputs are plain JSON structures suitable for React state or other consumers.
+
+## Key Details
+
+* **StoredAnimation JSON** – Duration in milliseconds, track `stamp` values normalized 0..1, per-keypoint cubic-bezier control
+  points via `transitions.in/out`, and support for scalar/vector/quat/color/bool/text values. Missing control points default to
+  `{out: {x:0.42, y:0}, in: {x:0.58, y:1}}`. Boolean/string tracks use step interpolation.
+* **Transition model** – Every segment is sampled using the cubic-bezier easing curve derived from adjacent keypoint transitions.
+  Linear curves normalize to Bezier(0,0,1,1). Quaternion interpolation uses shortest-arc NLERP with normalization. Transform
+  tracks decompose to TRS and blend components individually.
+* **Binding** – Before the hot loop runs, canonical target paths (e.g., `Head/Transform.rotation`) are resolved to user-defined
+  handles. The Bevy plugin builds this map automatically; the WASM binding expects a resolver callback.
+* **Performance** – The engine minimizes per-frame allocations; once animations and bindings are loaded the update path operates
+  on preallocated scratch buffers.
+
+## Examples
+
+### Native Rust engine
 
 ```rust
 use vizij_animation_core::{parse_stored_animation_json, Engine, InstanceCfg};
 
-let json_str = std::fs::read_to_string("tests/fixtures/new_format.json").unwrap();
-let anim = parse_stored_animation_json(&json_str).expect("parse");
+let json = std::fs::read_to_string("tests/fixtures/new_format.json")?;
+let stored = parse_stored_animation_json(&json)?;
 
 let mut engine = Engine::new(Default::default());
-let aid = engine.load_animation(anim);
-let pid = engine.create_player("demo");
-let _iid = engine.add_instance(pid, aid, InstanceCfg::default());
+let anim = engine.load_animation(stored);
+let player = engine.create_player("demo");
+engine.add_instance(player, anim, InstanceCfg::default());
 
-// In your game loop:
 let outputs = engine.update(1.0 / 60.0, Default::default());
-// Apply outputs.changes to your world...
+for change in outputs.changes {
+    println!("{} => {:?}", change.key, change.value);
+}
 ```
 
-### Bevy
+### Bevy integration
 
 ```rust
 use bevy::prelude::*;
-use bevy_vizij_animation::{VizijAnimationPlugin, VizijTargetRoot};
+use bevy_vizij_animation::{VizijAnimationPlugin, VizijTargetRoot, VizijEngine};
+use vizij_animation_core::{parse_stored_animation_json, InstanceCfg};
 
 fn main() {
-  App::new()
-    .add_plugins(DefaultPlugins)
-    .add_plugins(VizijAnimationPlugin)
-    .add_systems(Startup, setup)
-    .run();
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .add_plugins(VizijAnimationPlugin)
+        .add_systems(Startup, setup)
+        .add_systems(Startup, load_animations)
+        .run();
 }
 
 fn setup(mut commands: Commands) {
-  // The plugin will discover and bind named entities under this root
-  let root = commands.spawn(VizijTargetRoot).id();
+    let root = commands.spawn(VizijTargetRoot).id();
+    let node = commands
+        .spawn((Name::new("cube"), Transform::default(), GlobalTransform::default()))
+        .id();
+    commands.entity(root).add_child(node);
+}
 
-  let node = commands.spawn((Name::new("node"), Transform::default())).id();
-  commands.entity(root).add_child(node);
-
-  // Load animations into the `VizijEngine` resource...
+fn load_animations(mut eng: ResMut<VizijEngine>) {
+    let json = include_str!("../../vizij-animation-core/tests/fixtures/new_format.json");
+    let stored = parse_stored_animation_json(json).expect("valid animation");
+    let anim = eng.0.load_animation(stored);
+    let player = eng.0.create_player("demo");
+    eng.0.add_instance(player, anim, InstanceCfg::default());
 }
 ```
 
-### JavaScript/TypeScript (WASM)
+### JavaScript via npm package
 
 ```ts
-import { VizijAnimation } from "@vizij/animation-wasm";
+import { init, Engine } from "@vizij/animation-wasm";
 
-const engine = new VizijAnimation();
+await init();
+const eng = new Engine();
+const animId = eng.loadAnimation({
+  duration: 2000,
+  tracks: [
+    {
+      id: "pos-x",
+      animatableId: "cube/Transform.translation",
+      points: [
+        { id: "k0", stamp: 0.0, value: 0 },
+        { id: "k1", stamp: 1.0, value: 5 },
+      ],
+    },
+  ],
+  groups: {},
+}, { format: "stored" });
+const playerId = eng.createPlayer("demo");
+eng.addInstance(playerId, animId);
+eng.prebind((path) => path); // identity binding
 
-const animJson = { /* ... StoredAnimation JSON ... */ };
-const animId = engine.load_stored_animation(animJson);
-const playerId = engine.create_player("demo");
-engine.add_instance(playerId, animId);
-
-// In your render loop:
-const outputs = engine.update(0.016);
+const outputs = eng.update(1 / 60);
 console.log(outputs.changes);
-// e.g., [{ player: 0, key: "cube-position-x", value: { type: "Scalar", data: -1.95 } }]
 ```
 
-## Development Status
+## Testing
 
-The project is actively developed. The core features are implemented and tested, but some tasks remain.
+* Core unit tests:
+  ```bash
+  cargo test -p vizij-animation-core
+  ```
+* Bevy adapter tests:
+  ```bash
+  cargo test -p bevy_vizij_animation
+  ```
+* WASM tests (Node-based runner):
+  ```bash
+  scripts/run-wasm-tests.sh
+  ```
 
-### Remaining Implementation Tasks
-- Finalize the transition model simplification in `vizij-animation-core` to rely exclusively on cubic-bezier and step interpolations, removing legacy paths.
-- Update or retire test fixtures that use old transition types.
-- Refresh documentation and examples to fully reflect the new `StoredAnimation` JSON schema and defaults.
+The WASM script builds the crate for `wasm32-unknown-unknown`, runs `wasm-bindgen` to produce JS glue, and executes the test
+suite using Node.
 
-### Remaining Testing Tasks
-- Verify shortest-arc logic for quaternion interpolation.
-- Add specific tests for `BindingTable` upsert/overwrite logic.
-- Add tests for decomposed TRS (Transform) blending.
-- Add validation for normalized quaternions in baked output.
-- Instrument and assert zero per-tick allocations in the hot path.
+## Remaining Work & Ideas
 
-## Building and Testing
-
-You can run tests for each crate from the workspace root:
-
-```bash
-# Test the core engine
-cargo test -p vizij-animation-core
-
-# Test the Bevy adapter
-cargo test -p bevy_vizij_animation
-
-# Test the WASM wrapper (requires wasm-pack)
-./scripts/run-wasm-tests.sh
-```
-
+* Expand fixture coverage for the new JSON schema (additional transition shapes, color tracks, and transform binding cases).
+* Add assertions that the hot path remains allocation-free and document profiling techniques for animation-heavy scenarios.
+* Continue refining Bevy component coverage as more targets are supported (materials, cameras, custom data components).
