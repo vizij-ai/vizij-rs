@@ -242,4 +242,10 @@ export {
   vectorPlayground,
   logicGate,
   tupleSpringDampSlew,
+  nestedTelemetry,
+  nestedRigWeightedPose,
+  selectorCascade,
+  hierarchicalBlend,
+  weightedAverage,
+  layeredRigBlend,
 } from "./samples.js";

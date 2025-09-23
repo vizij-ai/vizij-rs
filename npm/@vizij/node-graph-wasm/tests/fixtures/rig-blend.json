@@ -1,0 +1,137 @@
+{
+  "nodes": [
+    {
+      "id": "scene",
+      "type": "input",
+      "params": {
+        "path": "samples/rig.scene",
+        "value": {
+          "record": {
+            "joints": {
+              "array": [
+                {
+                  "record": {
+                    "angle": { "float": 0.5 },
+                    "limits": { "tuple": [{ "float": -1 }, { "float": 1 }] }
+                  }
+                },
+                {
+                  "record": {
+                    "angle": { "float": -0.3 },
+                    "limits": { "tuple": [{ "float": -0.8 }, { "float": 0.8 }] }
+                  }
+                }
+              ]
+            },
+            "weights": { "vector": [0.2, 0.8] },
+            "metadata": {
+              "record": {
+                "mode": { "type": "Text", "data": "demo" }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "blend0",
+      "type": "multiply",
+      "inputs": {
+        "lhs": {
+          "node_id": "scene",
+          "selector": [
+            { "field": "joints" },
+            { "index": 0 },
+            { "field": "angle" }
+          ]
+        },
+        "rhs": {
+          "node_id": "scene",
+          "selector": [
+            { "field": "weights" },
+            { "index": 0 }
+          ]
+        }
+      }
+    },
+    {
+      "id": "blend1",
+      "type": "multiply",
+      "inputs": {
+        "lhs": {
+          "node_id": "scene",
+          "selector": [
+            { "field": "joints" },
+            { "index": 1 },
+            { "field": "angle" }
+          ]
+        },
+        "rhs": {
+          "node_id": "scene",
+          "selector": [
+            { "field": "weights" },
+            { "index": 1 }
+          ]
+        }
+      }
+    },
+    {
+      "id": "blend_sum",
+      "type": "add",
+      "inputs": {
+        "lhs": { "node_id": "blend0" },
+        "rhs": { "node_id": "blend1" }
+      }
+    },
+    {
+      "id": "joint0_limits",
+      "type": "join",
+      "inputs": {
+        "segment_1": {
+          "node_id": "scene",
+          "selector": [
+            { "field": "joints" },
+            { "index": 0 },
+            { "field": "limits" },
+            { "index": 0 }
+          ]
+        },
+        "segment_2": {
+          "node_id": "scene",
+          "selector": [
+            { "field": "joints" },
+            { "index": 0 },
+            { "field": "limits" },
+            { "index": 1 }
+          ]
+        }
+      }
+    },
+    {
+      "id": "blended_output",
+      "type": "output",
+      "params": { "path": "samples/rig.blendedAngle" },
+      "inputs": { "in": { "node_id": "blend_sum" } }
+    },
+    {
+      "id": "limits_output",
+      "type": "output",
+      "params": { "path": "samples/rig.joint0.limits" },
+      "inputs": { "in": { "node_id": "joint0_limits" } }
+    },
+    {
+      "id": "mode_output",
+      "type": "output",
+      "params": { "path": "samples/rig.mode" },
+      "inputs": {
+        "in": {
+          "node_id": "scene",
+          "selector": [
+            { "field": "metadata" },
+            { "field": "mode" }
+          ]
+        }
+      }
+    }
+  ]
+}

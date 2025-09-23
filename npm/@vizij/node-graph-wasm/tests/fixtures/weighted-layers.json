@@ -1,0 +1,171 @@
+{
+  "nodes": [
+    {
+      "id": "payload",
+      "type": "input",
+      "params": {
+        "path": "samples/json.payload",
+        "value": {
+          "record": {
+            "layers": {
+              "list": [
+                {
+                  "record": {
+                    "samples": {
+                      "tuple": [
+                        { "vector": [0.1, 0.2, 0.3] },
+                        { "vector": [-0.1, 0.4, 0.5] }
+                      ]
+                    },
+                    "gain": { "float": 1.2 }
+                  }
+                },
+                {
+                  "record": {
+                    "samples": {
+                      "tuple": [
+                        { "vector": [0.05, -0.05, 0.1] },
+                        { "vector": [0.25, 0.15, -0.05] }
+                      ]
+                    },
+                    "gain": { "float": 0.6 }
+                  }
+                }
+              ]
+            },
+            "mask": {
+              "array": [
+                { "bool": true },
+                { "bool": false }
+              ]
+            },
+            "bias": { "float": -0.15 }
+          }
+        }
+      }
+    },
+    {
+      "id": "primary_scale",
+      "type": "vectorscale",
+      "inputs": {
+        "scalar": {
+          "node_id": "payload",
+          "selector": [
+            { "field": "layers" },
+            { "index": 0 },
+            { "field": "gain" }
+          ]
+        },
+        "v": {
+          "node_id": "payload",
+          "selector": [
+            { "field": "layers" },
+            { "index": 0 },
+            { "field": "samples" },
+            { "index": 1 }
+          ]
+        }
+      }
+    },
+    {
+      "id": "primary_blend",
+      "type": "vectoradd",
+      "inputs": {
+        "a": {
+          "node_id": "payload",
+          "selector": [
+            { "field": "layers" },
+            { "index": 0 },
+            { "field": "samples" },
+            { "index": 0 }
+          ]
+        },
+        "b": { "node_id": "primary_scale" }
+      }
+    },
+    {
+      "id": "secondary_scale",
+      "type": "vectorscale",
+      "inputs": {
+        "scalar": {
+          "node_id": "payload",
+          "selector": [
+            { "field": "layers" },
+            { "index": 1 },
+            { "field": "gain" }
+          ]
+        },
+        "v": {
+          "node_id": "payload",
+          "selector": [
+            { "field": "layers" },
+            { "index": 1 },
+            { "field": "samples" },
+            { "index": 1 }
+          ]
+        }
+      }
+    },
+    {
+      "id": "secondary_blend",
+      "type": "vectoradd",
+      "inputs": {
+        "a": {
+          "node_id": "payload",
+          "selector": [
+            { "field": "layers" },
+            { "index": 1 },
+            { "field": "samples" },
+            { "index": 0 }
+          ]
+        },
+        "b": { "node_id": "secondary_scale" }
+      }
+    },
+    {
+      "id": "combined",
+      "type": "vectoradd",
+      "inputs": {
+        "a": { "node_id": "primary_blend" },
+        "b": { "node_id": "secondary_blend" }
+      }
+    },
+    {
+      "id": "bias_const",
+      "type": "constant",
+      "params": { "value": 0.2 }
+    },
+    {
+      "id": "bias_gate",
+      "type": "if",
+      "inputs": {
+        "cond": {
+          "node_id": "payload",
+          "selector": [
+            { "field": "mask" },
+            { "index": 1 }
+          ]
+        },
+        "then": {
+          "node_id": "payload",
+          "selector": [
+            { "field": "bias" }
+          ]
+        },
+        "else": { "node_id": "bias_const" }
+      }
+    },
+    {
+      "id": "out_vec",
+      "type": "output",
+      "params": { "path": "samples/json.combined" },
+      "inputs": { "in": { "node_id": "combined" } }
+    },
+    {
+      "id": "out_bias",
+      "type": "output",
+      "params": { "path": "samples/json.bias" },
+      "inputs": { "in": { "node_id": "bias_gate" } }
+    }
+  ]
+}

@@ -243,6 +243,8 @@ export const oscillatorBasics: GraphSpec;
 export const vectorPlayground: GraphSpec;
 export const logicGate: GraphSpec;
 export const tupleSpringDampSlew: GraphSpec;
+export const nestedRigWeightedPose: GraphSpec;
+export const selectorCascade: GraphSpec;
 export const graphSamples: Record<string, GraphSpec>;
 
 /**

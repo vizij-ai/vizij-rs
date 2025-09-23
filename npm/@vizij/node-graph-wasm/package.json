@@ -26,7 +26,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node dist/tests/samples.test.js",
+    "test": "npm run build && node dist/tests/all.test.js",
     "prepublishOnly": "node -e \"const fs=require('fs');if(!fs.existsSync('pkg')){console.error('Missing pkg/. Run wasm-pack build.');process.exit(1);}\""
   },
   "devDependencies": {

@@ -31,7 +31,9 @@ fn normalize_value_json(value: serde_json::Value) -> serde_json::Value {
             if obj.contains_key("type") && obj.contains_key("data") {
                 return JsonValue::Object(obj);
             }
-
+            if let Some(text) = obj.get("text").and_then(|x| x.as_str()) {
+                return json!({ "type": "Text", "data": text });
+            }
             if let Some(f) = obj.get("float").and_then(|x| x.as_f64()) {
                 return json!({ "type": "Float", "data": f });
             }
@@ -181,6 +183,9 @@ fn normalize_value_json_for_staging(value: serde_json::Value) -> serde_json::Val
             }
             if let Some(b) = obj.get("bool").and_then(|x| x.as_bool()) {
                 return json!({ "type": "Bool", "data": b });
+            }
+            if let Some(text) = obj.get("text").and_then(|x| x.as_str()) {
+                return json!({ "type": "Text", "data": text });
             }
             // Honor explicit aliases only (no auto detection)
             if let Some(arr) = obj.get("vec2").and_then(|x| x.as_array()) {

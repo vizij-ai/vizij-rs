@@ -1,0 +1,171 @@
+{
+  "nodes": [
+    {
+      "id": "targets",
+      "type": "input",
+      "params": {
+        "path": "samples/weighted.targets",
+        "value": {
+          "tuple": [
+            {
+              "record": {
+                "weight": { "float": 0.5 },
+                "value": { "vec3": [1, 0, 0.8] }
+              }
+            },
+            {
+              "record": {
+                "weight": { "float": 0.3 },
+                "value": { "vec3": [0.2, 1, 0] }
+              }
+            },
+            {
+              "record": {
+                "weight": { "float": 0.4 },
+                "value": { "vec3": [0, 0, 1] }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "weighted_0",
+      "type": "vectorscale",
+      "inputs": {
+        "v": {
+          "node_id": "targets",
+          "selector": [
+            { "index": 0 },
+            { "field": "value" }
+          ]
+        },
+        "scalar": {
+          "node_id": "targets",
+          "selector": [
+            { "index": 0 },
+            { "field": "weight" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "weighted_1",
+      "type": "vectorscale",
+      "inputs": {
+        "v": {
+          "node_id": "targets",
+          "selector": [
+            { "index": 1 },
+            { "field": "value" }
+          ]
+        },
+        "scalar": {
+          "node_id": "targets",
+          "selector": [
+            { "index": 1 },
+            { "field": "weight" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "weighted_2",
+      "type": "vectorscale",
+      "inputs": {
+        "v": {
+          "node_id": "targets",
+          "selector": [
+            { "index": 2 },
+            { "field": "value" }
+          ]
+        },
+        "scalar": {
+          "node_id": "targets",
+          "selector": [
+            { "index": 2 },
+            { "field": "weight" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "weighted_sum_ab",
+      "type": "vectoradd",
+      "inputs": {
+        "a": { "node_id": "weighted_0" },
+        "b": { "node_id": "weighted_1" }
+      }
+    },
+    {
+      "id": "weighted_sum",
+      "type": "vectoradd",
+      "inputs": {
+        "a": { "node_id": "weighted_sum_ab" },
+        "b": { "node_id": "weighted_2" }
+      }
+    },
+    {
+      "id": "weight_sum",
+      "type": "add",
+      "inputs": {
+        "weight_0": {
+          "node_id": "targets",
+          "selector": [
+            { "index": 0 },
+            { "field": "weight" }
+          ]
+        },
+        "weight_1": {
+          "node_id": "targets",
+          "selector": [
+            { "index": 1 },
+            { "field": "weight" }
+          ]
+        },
+        "weight_2": {
+          "node_id": "targets",
+          "selector": [
+            { "index": 2 },
+            { "field": "weight" }
+          ]
+        }
+      }
+    },
+    { "id": "one", "type": "constant", "params": { "value": 1 } },
+    {
+      "id": "inv_weight",
+      "type": "divide",
+      "inputs": {
+        "lhs": { "node_id": "one" },
+        "rhs": { "node_id": "weight_sum" }
+      }
+    },
+    {
+      "id": "average",
+      "type": "vectorscale",
+      "inputs": {
+        "v": { "node_id": "weighted_sum" },
+        "scalar": { "node_id": "inv_weight" }
+      }
+    },
+    {
+      "id": "sum_out",
+      "type": "output",
+      "params": { "path": "samples/weighted.sum" },
+      "inputs": { "in": { "node_id": "weighted_sum" } }
+    },
+    {
+      "id": "avg_out",
+      "type": "output",
+      "params": { "path": "samples/weighted.average" },
+      "inputs": { "in": { "node_id": "average" } }
+    },
+    {
+      "id": "total_out",
+      "type": "output",
+      "params": { "path": "samples/weighted.total" },
+      "inputs": { "in": { "node_id": "weight_sum" } }
+    }
+  ]
+}

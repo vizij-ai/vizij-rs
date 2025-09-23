@@ -1,0 +1,26 @@
+{
+  "samples/weighted.targets": {
+    "value": {
+      "tuple": [
+        {
+          "record": {
+            "weight": { "float": 0.6 },
+            "value": { "vec3": [1.5, 0, 0] }
+          }
+        },
+        {
+          "record": {
+            "weight": { "float": 0.25 },
+            "value": { "vec3": [0, 1, 0.5] }
+          }
+        },
+        {
+          "record": {
+            "weight": { "float": 0.35 },
+            "value": { "vec3": [0, 0, -1.5] }
+          }
+        }
+      ]
+    }
+  }
+}
