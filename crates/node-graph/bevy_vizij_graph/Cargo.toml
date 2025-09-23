@@ -1,6 +1,6 @@
 [package]
 name        = "bevy_vizij_graph"
-version     = "0.1.0"
+version = "0.2.0"
 edition     = "2021"
 license     = "MIT OR Apache-2.0"
 description = "Bevy plugin that integrates Vizij’s node graph into Bevy."
@@ -16,7 +16,7 @@ bevy           = { workspace = true }
 serde          = { workspace = true }
 serde_json     = { workspace = true }
 hashbrown      = { workspace = true }
-vizij-graph-core = { path = "../vizij-graph-core", version = "0.1.0" }
+vizij-graph-core = { path = "../vizij-graph-core", version = "0.2.0" }
 vizij-api-core = { path = "../../api/vizij-api-core" }
 bevy_vizij_api = { path = "../../api/bevy_vizij_api" }
 

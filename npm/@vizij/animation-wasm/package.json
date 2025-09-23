@@ -1,6 +1,6 @@
 {
   "name": "@vizij/animation-wasm",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "WASM bindings for Vizij animation core.",
   "license": "MIT",
   "repository": {
@@ -11,11 +11,20 @@
   "bugs": {
     "url": "https://github.com/vizij-ai/vizij-rs/issues"
   },
-  "keywords": ["vizij", "animation", "wasm", "webassembly"],
+  "keywords": [
+    "vizij",
+    "animation",
+    "wasm",
+    "webassembly"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist", "pkg", "README.md"],
+  "files": [
+    "dist",
+    "pkg",
+    "README.md"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json",

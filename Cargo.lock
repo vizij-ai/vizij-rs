@@ -1085,7 +1085,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_vizij_animation"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bevy",
  "bevy_vizij_api",
@@ -1096,7 +1096,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_vizij_api"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bevy",
  "hashbrown 0.14.5",
@@ -1106,7 +1106,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_vizij_graph"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bevy",
  "bevy_vizij_api",
@@ -3864,7 +3864,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vizij-animation-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3873,7 +3873,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-animation-wasm"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "console_error_panic_hook",
  "js-sys",
@@ -3889,7 +3889,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-api-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "hashbrown 0.14.5",
  "serde",
@@ -3899,7 +3899,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-api-wasm"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde-wasm-bindgen",
@@ -3910,7 +3910,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-graph-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "hashbrown 0.14.5",
@@ -3924,7 +3924,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-graph-wasm"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "console_error_panic_hook",
  "hashbrown 0.14.5",

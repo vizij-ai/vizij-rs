@@ -1,6 +1,6 @@
 {
   "name": "@vizij/node-graph-wasm",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "WASM bindings for Vizij node-graph core.",
   "license": "MIT",
   "repository": {
@@ -11,12 +11,21 @@
   "bugs": {
     "url": "https://github.com/vizij-ai/vizij-rs/issues"
   },
-  "keywords": ["vizij", "node-graph", "wasm", "webassembly"],
+  "keywords": [
+    "vizij",
+    "node-graph",
+    "wasm",
+    "webassembly"
+  ],
   "type": "module",
   "main": "dist/src/index.js",
   "module": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
-  "files": ["dist", "pkg", "README.md"],
+  "files": [
+    "dist",
+    "pkg",
+    "README.md"
+  ],
   "exports": {
     ".": {
       "import": "./dist/src/index.js",
