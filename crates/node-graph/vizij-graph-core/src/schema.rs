@@ -798,6 +798,80 @@ pub fn registry() -> Registry {
         params: vec![],
     });
 
+    nodes.push(NodeSignature {
+        type_id: Case,
+        name: "Case (String)",
+        category: "Logic",
+        inputs: vec![
+            PortSpec {
+                id: "selector",
+                ty: PortType::Any,
+                label: "Selector",
+                doc: "Text value used to choose the matching input port by name.",
+                optional: false,
+            },
+            PortSpec {
+                id: "default",
+                ty: PortType::Any,
+                label: "Default",
+                doc: "Fallback value when no port name matches the selector.",
+                optional: true,
+            },
+            PortSpec {
+                id: "weighted_average",
+                ty: PortType::Any,
+                label: "Weighted Average",
+                doc: "Output used when selector equals 'weighted_average'.",
+                optional: true,
+            },
+            PortSpec {
+                id: "additive",
+                ty: PortType::Any,
+                label: "Additive",
+                doc: "Output used when selector equals 'additive'.",
+                optional: true,
+            },
+            PortSpec {
+                id: "multiply",
+                ty: PortType::Any,
+                label: "Multiply",
+                doc: "Output used when selector equals 'multiply'.",
+                optional: true,
+            },
+            PortSpec {
+                id: "weighted_overlay",
+                ty: PortType::Any,
+                label: "Weighted Overlay",
+                doc: "Output used when selector equals 'weighted_overlay'.",
+                optional: true,
+            },
+            PortSpec {
+                id: "weighted_average_overlay",
+                ty: PortType::Any,
+                label: "Weighted Average Overlay",
+                doc: "Output used when selector equals 'weighted_average_overlay'.",
+                optional: true,
+            },
+            PortSpec {
+                id: "max",
+                ty: PortType::Any,
+                label: "Max",
+                doc: "Output used when selector equals 'max'.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Value routed from the port whose name matches the selector.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
     // Ranges
     nodes.push(NodeSignature {
         type_id: Clamp,
@@ -1125,6 +1199,305 @@ pub fn registry() -> Registry {
             params: vec![],
         });
     }
+
+    // Blend helpers mirroring the runtime BlendNode implementation
+    nodes.push(NodeSignature {
+        type_id: VectorWeightedSum,
+        name: "Vector Weighted Sum",
+        category: "Blend",
+        inputs: vec![
+            PortSpec {
+                id: "values",
+                ty: PortType::Vector,
+                label: "Values",
+                doc: "Vector of sample values for a single channel.",
+                optional: false,
+            },
+            PortSpec {
+                id: "weights",
+                ty: PortType::Vector,
+                label: "Weights",
+                doc: "Weight assigned to each value (defaults to 1 when omitted).",
+                optional: true,
+            },
+            PortSpec {
+                id: "mask",
+                ty: PortType::Vector,
+                label: "Mask",
+                doc: "Optional 0/1 mask applied before weighting.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![
+            PortSpec {
+                id: "weighted_sum",
+                ty: PortType::Float,
+                label: "Weighted Sum",
+                doc: "Σ(value_i × weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "total_weight",
+                ty: PortType::Float,
+                label: "Total Weight",
+                doc: "Σ(weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "max_weight",
+                ty: PortType::Float,
+                label: "Max Weight",
+                doc: "max(weight_i × mask_i).",
+                optional: false,
+            },
+        ],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: BlendWeightedAverage,
+        name: "Blend - Weighted Average",
+        category: "Blend",
+        inputs: vec![
+            PortSpec {
+                id: "weighted_sum",
+                ty: PortType::Float,
+                label: "Weighted Sum",
+                doc: "Σ(value_i × weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "total_weight",
+                ty: PortType::Float,
+                label: "Total Weight",
+                doc: "Σ(weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "max_weight",
+                ty: PortType::Float,
+                label: "Max Weight",
+                doc: "max(weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "fallback",
+                ty: PortType::Any,
+                label: "Fallback",
+                doc: "Used when total_weight is zero or the average is NaN.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: BlendAdditive,
+        name: "Blend - Additive",
+        category: "Blend",
+        inputs: vec![
+            PortSpec {
+                id: "weighted_sum",
+                ty: PortType::Float,
+                label: "Weighted Sum",
+                doc: "Σ(value_i × weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "total_weight",
+                ty: PortType::Float,
+                label: "Total Weight",
+                doc: "Σ(weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "fallback",
+                ty: PortType::Any,
+                label: "Fallback",
+                doc: "Value returned when no weights contribute.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: BlendMultiply,
+        name: "Blend - Multiply",
+        category: "Blend",
+        inputs: vec![
+            PortSpec {
+                id: "values",
+                ty: PortType::Vector,
+                label: "Values",
+                doc: "Vector of sample values for the channel.",
+                optional: false,
+            },
+            PortSpec {
+                id: "weights",
+                ty: PortType::Vector,
+                label: "Weights",
+                doc: "Weight assigned to each value (defaults to 1 when omitted).",
+                optional: true,
+            },
+            PortSpec {
+                id: "mask",
+                ty: PortType::Vector,
+                label: "Mask",
+                doc: "Optional 0/1 mask applied before weighting.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Float,
+            label: "Out",
+            doc: "∏((1 − weight_i) + value_i × weight_i × mask_i).",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: BlendWeightedOverlay,
+        name: "Blend - Weighted Overlay",
+        category: "Blend",
+        inputs: vec![
+            PortSpec {
+                id: "weighted_sum",
+                ty: PortType::Float,
+                label: "Weighted Sum",
+                doc: "Σ(value_i × weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "max_weight",
+                ty: PortType::Float,
+                label: "Max Weight",
+                doc: "max(weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "base",
+                ty: PortType::Any,
+                label: "Base",
+                doc: "Base pose value blended when provided.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Float,
+            label: "Out",
+            doc: "base × (1 − max_weight) + weighted_sum × max_weight.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: BlendWeightedAverageOverlay,
+        name: "Blend - Weighted Average Overlay",
+        category: "Blend",
+        inputs: vec![
+            PortSpec {
+                id: "weighted_sum",
+                ty: PortType::Float,
+                label: "Weighted Sum",
+                doc: "Σ(value_i × weight_i × mask_i) computed from deltas.",
+                optional: false,
+            },
+            PortSpec {
+                id: "total_weight",
+                ty: PortType::Float,
+                label: "Total Weight",
+                doc: "Σ(weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "max_weight",
+                ty: PortType::Float,
+                label: "Max Weight",
+                doc: "max(weight_i × mask_i).",
+                optional: false,
+            },
+            PortSpec {
+                id: "base",
+                ty: PortType::Any,
+                label: "Base",
+                doc: "Base pose value blended when provided.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Float,
+            label: "Out",
+            doc: "base + weighted_sum ÷ (total_weight ÷ max_weight).",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: BlendMax,
+        name: "Blend - Max",
+        category: "Blend",
+        inputs: vec![
+            PortSpec {
+                id: "values",
+                ty: PortType::Vector,
+                label: "Values",
+                doc: "Vector of sample values for the channel.",
+                optional: false,
+            },
+            PortSpec {
+                id: "weights",
+                ty: PortType::Vector,
+                label: "Weights",
+                doc: "Weight assigned to each value (defaults to 1 when omitted).",
+                optional: true,
+            },
+            PortSpec {
+                id: "mask",
+                ty: PortType::Vector,
+                label: "Mask",
+                doc: "Optional 0/1 mask applied before weighting.",
+                optional: true,
+            },
+            PortSpec {
+                id: "fallback",
+                ty: PortType::Any,
+                label: "Fallback",
+                doc: "Value returned when the highest-weight input is unavailable.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Float,
+            label: "Out",
+            doc: "value_best × weight_best for the highest-weight entry.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
 
     // Robotics
     nodes.push(NodeSignature {

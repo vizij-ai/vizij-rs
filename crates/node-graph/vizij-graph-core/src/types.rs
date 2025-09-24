@@ -76,6 +76,22 @@ pub enum NodeType {
     VectorMean,
     VectorMedian,
     VectorMode,
+    #[serde(rename = "vector_weighted_sum")]
+    VectorWeightedSum,
+
+    // Blend utilities
+    #[serde(rename = "blend_weighted_average")]
+    BlendWeightedAverage,
+    #[serde(rename = "blend_additive")]
+    BlendAdditive,
+    #[serde(rename = "blend_multiply")]
+    BlendMultiply,
+    #[serde(rename = "blend_weighted_overlay")]
+    BlendWeightedOverlay,
+    #[serde(rename = "blend_weighted_average_overlay")]
+    BlendWeightedAverageOverlay,
+    #[serde(rename = "blend_max")]
+    BlendMax,
 
     // Robotics
     InverseKinematics,
@@ -87,6 +103,9 @@ pub enum NodeType {
     Input,
     // Sinks (for external binding in hosts)
     Output,
+
+    // Control-flow helpers
+    Case,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
