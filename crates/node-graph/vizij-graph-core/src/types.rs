@@ -51,6 +51,7 @@ pub enum NodeType {
     Equal,
     NotEqual,
     If,
+    Case,
 
     // Ranges
     Clamp,
@@ -76,6 +77,15 @@ pub enum NodeType {
     VectorMean,
     VectorMedian,
     VectorMode,
+
+    // Blend support
+    WeightedSumVector,
+    BlendWeightedAverage,
+    BlendAdditive,
+    BlendMultiply,
+    BlendWeightedOverlay,
+    BlendWeightedAverageOverlay,
+    BlendMax,
 
     // Robotics
     InverseKinematics,
@@ -137,6 +147,10 @@ pub struct NodeParams {
     // Example: "robot1/Arm/Joint3.translation"
     #[serde(default)]
     pub path: Option<TypedPath>,
+
+    // Labels used by nodes that route inputs by name (e.g. Case).
+    #[serde(default)]
+    pub labels: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

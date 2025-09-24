@@ -205,6 +205,935 @@ fn oscillator_broadcasts_vector_inputs() {
     }
 }
 
+// --- Blend helpers --------------------------------------------------------
+
+#[test]
+fn weighted_sum_vector_matches_expected_math() {
+    let values = vec![2.0, 4.0, 1.0];
+    let weights = vec![0.5, 0.25, 1.0];
+    let mask = vec![1.0, 0.0, 1.0];
+
+    let mut sum_inputs = HashMap::new();
+    sum_inputs.insert("values".to_string(), connection("values", "out"));
+    sum_inputs.insert("weights".to_string(), connection("weights", "out"));
+    sum_inputs.insert("mask".to_string(), connection("mask", "out"));
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("values", Value::Vector(values.clone())),
+            constant_node("weights", Value::Vector(weights.clone())),
+            constant_node("mask", Value::Vector(mask.clone())),
+            NodeSpec {
+                id: "sum".to_string(),
+                kind: NodeType::WeightedSumVector,
+                params: NodeParams::default(),
+                inputs: sum_inputs,
+                output_shapes: HashMap::new(),
+            },
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("weighted sum should evaluate");
+    let outputs = rt.outputs.get("sum").expect("weighted sum outputs present");
+
+    let total_weighted_sum = match &outputs
+        .get("total_weighted_sum")
+        .expect("total_weighted_sum output")
+        .value
+    {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    let total_weight = match &outputs
+        .get("total_weight")
+        .expect("total_weight output")
+        .value
+    {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    let max_weight = match &outputs.get("max_weight").expect("max_weight output").value {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    let input_count = match &outputs
+        .get("input_count")
+        .expect("input_count output")
+        .value
+    {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+
+    let expected_weighted_sum: f32 = values
+        .iter()
+        .zip(weights.iter())
+        .zip(mask.iter())
+        .map(|((value, weight), mask)| *value * *weight * *mask)
+        .sum();
+    let expected_total_weight: f32 = weights
+        .iter()
+        .zip(mask.iter())
+        .map(|(weight, mask)| *weight * *mask)
+        .sum();
+    let expected_max_weight: f32 = weights
+        .iter()
+        .zip(mask.iter())
+        .map(|(weight, mask)| *weight * *mask)
+        .fold(0.0f32, |acc, value| acc.max(value));
+    let expected_input_count = weights.len().max(values.len()).max(mask.len()) as f32;
+
+    assert!(
+        (total_weighted_sum - expected_weighted_sum).abs() < 1e-6,
+        "expected {expected_weighted_sum}, got {total_weighted_sum}"
+    );
+    assert!(
+        (total_weight - expected_total_weight).abs() < 1e-6,
+        "expected {expected_total_weight}, got {total_weight}"
+    );
+    assert!(
+        (max_weight - expected_max_weight).abs() < 1e-6,
+        "expected {expected_max_weight}, got {max_weight}"
+    );
+    assert!(
+        (input_count - expected_input_count).abs() < 1e-6,
+        "expected {expected_input_count}, got {input_count}"
+    );
+}
+
+#[test]
+fn blend_weighted_average_and_additive_match_expected_math() {
+    let values = vec![0.8, 0.1, 1.2];
+    let weights = vec![0.5, 0.25, 0.75];
+    let mask = vec![1.0, 1.0, 1.0];
+    let base_value = 0.2;
+
+    let mut sum_inputs = HashMap::new();
+    sum_inputs.insert("values".to_string(), connection("values", "out"));
+    sum_inputs.insert("weights".to_string(), connection("weights", "out"));
+    sum_inputs.insert("mask".to_string(), connection("mask", "out"));
+
+    let mut avg_inputs = HashMap::new();
+    avg_inputs.insert(
+        "total_weighted_sum".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "total_weighted_sum".to_string(),
+            selector: None,
+        },
+    );
+    avg_inputs.insert(
+        "total_weight".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "total_weight".to_string(),
+            selector: None,
+        },
+    );
+    avg_inputs.insert(
+        "max_weight".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "max_weight".to_string(),
+            selector: None,
+        },
+    );
+    avg_inputs.insert("base".to_string(), connection("base", "out"));
+
+    let mut add_inputs = HashMap::new();
+    add_inputs.insert(
+        "total_weighted_sum".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "total_weighted_sum".to_string(),
+            selector: None,
+        },
+    );
+    add_inputs.insert(
+        "total_weight".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "total_weight".to_string(),
+            selector: None,
+        },
+    );
+    add_inputs.insert("base".to_string(), connection("base", "out"));
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("values", Value::Vector(values.clone())),
+            constant_node("weights", Value::Vector(weights.clone())),
+            constant_node("mask", Value::Vector(mask.clone())),
+            constant_node("base", Value::Float(base_value)),
+            NodeSpec {
+                id: "sum".to_string(),
+                kind: NodeType::WeightedSumVector,
+                params: NodeParams::default(),
+                inputs: sum_inputs,
+                output_shapes: HashMap::new(),
+            },
+            NodeSpec {
+                id: "avg".to_string(),
+                kind: NodeType::BlendWeightedAverage,
+                params: NodeParams::default(),
+                inputs: avg_inputs,
+                output_shapes: HashMap::new(),
+            },
+            NodeSpec {
+                id: "add".to_string(),
+                kind: NodeType::BlendAdditive,
+                params: NodeParams::default(),
+                inputs: add_inputs,
+                output_shapes: HashMap::new(),
+            },
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("blend nodes should evaluate");
+
+    let sum_outputs = rt.outputs.get("sum").expect("sum outputs present");
+    let total_weighted_sum = match &sum_outputs
+        .get("total_weighted_sum")
+        .expect("total_weighted_sum output")
+        .value
+    {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    let total_weight = match &sum_outputs
+        .get("total_weight")
+        .expect("total_weight output")
+        .value
+    {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    let max_weight = match &sum_outputs
+        .get("max_weight")
+        .expect("max_weight output")
+        .value
+    {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+
+    let expected_total_weighted_sum: f32 = values
+        .iter()
+        .zip(weights.iter())
+        .zip(mask.iter())
+        .map(|((value, weight), mask)| *value * *weight * *mask)
+        .sum();
+    let expected_total_weight: f32 = weights
+        .iter()
+        .zip(mask.iter())
+        .map(|(weight, mask)| *weight * *mask)
+        .sum();
+    let expected_max_weight: f32 = weights
+        .iter()
+        .zip(mask.iter())
+        .map(|(weight, mask)| *weight * *mask)
+        .fold(0.0f32, |acc, value| acc.max(value));
+
+    assert!((total_weighted_sum - expected_total_weighted_sum).abs() < 1e-6);
+    assert!((total_weight - expected_total_weight).abs() < 1e-6);
+    assert!((max_weight - expected_max_weight).abs() < 1e-6);
+
+    let expected_average =
+        expected_total_weighted_sum / (expected_total_weight / expected_max_weight);
+    let avg_outputs = rt.outputs.get("avg").expect("avg output present");
+    let avg_value = match &avg_outputs.get("out").expect("avg out").value {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    assert!(
+        (avg_value - expected_average).abs() < 1e-6,
+        "expected {expected_average}, got {avg_value}"
+    );
+
+    let add_outputs = rt.outputs.get("add").expect("add output present");
+    let additive_value = match &add_outputs.get("out").expect("add out").value {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    assert!(
+        (additive_value - expected_total_weighted_sum).abs() < 1e-6,
+        "expected {expected_total_weighted_sum}, got {additive_value}"
+    );
+}
+
+#[test]
+fn blend_weighted_average_and_additive_fall_back_to_base_when_weight_zero() {
+    let values = vec![1.0, 2.0];
+    let weights = vec![0.5, 0.75];
+    let mask = vec![0.0, 0.0];
+    let base_value = 0.4;
+
+    let mut sum_inputs = HashMap::new();
+    sum_inputs.insert("values".to_string(), connection("values", "out"));
+    sum_inputs.insert("weights".to_string(), connection("weights", "out"));
+    sum_inputs.insert("mask".to_string(), connection("mask", "out"));
+
+    let mut avg_inputs = HashMap::new();
+    avg_inputs.insert(
+        "total_weighted_sum".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "total_weighted_sum".to_string(),
+            selector: None,
+        },
+    );
+    avg_inputs.insert(
+        "total_weight".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "total_weight".to_string(),
+            selector: None,
+        },
+    );
+    avg_inputs.insert(
+        "max_weight".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "max_weight".to_string(),
+            selector: None,
+        },
+    );
+    avg_inputs.insert("base".to_string(), connection("base", "out"));
+
+    let mut add_inputs = HashMap::new();
+    add_inputs.insert(
+        "total_weighted_sum".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "total_weighted_sum".to_string(),
+            selector: None,
+        },
+    );
+    add_inputs.insert(
+        "total_weight".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "total_weight".to_string(),
+            selector: None,
+        },
+    );
+    add_inputs.insert("base".to_string(), connection("base", "out"));
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("values", Value::Vector(values)),
+            constant_node("weights", Value::Vector(weights)),
+            constant_node("mask", Value::Vector(mask)),
+            constant_node("base", Value::Float(base_value)),
+            NodeSpec {
+                id: "sum".to_string(),
+                kind: NodeType::WeightedSumVector,
+                params: NodeParams::default(),
+                inputs: sum_inputs,
+                output_shapes: HashMap::new(),
+            },
+            NodeSpec {
+                id: "avg".to_string(),
+                kind: NodeType::BlendWeightedAverage,
+                params: NodeParams::default(),
+                inputs: avg_inputs,
+                output_shapes: HashMap::new(),
+            },
+            NodeSpec {
+                id: "add".to_string(),
+                kind: NodeType::BlendAdditive,
+                params: NodeParams::default(),
+                inputs: add_inputs,
+                output_shapes: HashMap::new(),
+            },
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("blend nodes should evaluate");
+
+    let avg_outputs = rt.outputs.get("avg").expect("avg output present");
+    let avg_value = match &avg_outputs.get("out").expect("avg out").value {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    assert!(
+        (avg_value - base_value).abs() < 1e-6,
+        "expected base fallback {base_value}, got {avg_value}"
+    );
+
+    let add_outputs = rt.outputs.get("add").expect("add output present");
+    let add_value = match &add_outputs.get("out").expect("add out").value {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    assert!(
+        (add_value - base_value).abs() < 1e-6,
+        "expected base fallback {base_value}, got {add_value}"
+    );
+}
+
+#[test]
+fn blend_multiply_matches_expected_math() {
+    let values = vec![0.2, 0.5, 1.1];
+    let weights = vec![0.5, 0.25, 0.75];
+    let mask = vec![1.0, 1.0, 0.5];
+
+    let mut inputs = HashMap::new();
+    inputs.insert("values".to_string(), connection("values", "out"));
+    inputs.insert("weights".to_string(), connection("weights", "out"));
+    inputs.insert("mask".to_string(), connection("mask", "out"));
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("values", Value::Vector(values.clone())),
+            constant_node("weights", Value::Vector(weights.clone())),
+            constant_node("mask", Value::Vector(mask.clone())),
+            NodeSpec {
+                id: "mul".to_string(),
+                kind: NodeType::BlendMultiply,
+                params: NodeParams::default(),
+                inputs,
+                output_shapes: HashMap::new(),
+            },
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("multiply should evaluate");
+    let outputs = rt.outputs.get("mul").expect("mul outputs present");
+    let value = match &outputs.get("out").expect("mul out").value {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+
+    let expected_product = values
+        .iter()
+        .zip(weights.iter())
+        .zip(mask.iter())
+        .fold(1.0f32, |acc, ((value, weight), mask)| {
+            acc * (1.0 - *weight + *value * *weight * *mask)
+        });
+
+    assert!(
+        (value - expected_product).abs() < 1e-6,
+        "expected {expected_product}, got {value}"
+    );
+}
+
+#[test]
+fn blend_weighted_overlay_matches_expected_math() {
+    let values = vec![0.2, 0.5, 1.0];
+    let weights = vec![0.25, 0.5, 0.75];
+    let mask = vec![1.0, 1.0, 1.0];
+    let base_value = 0.3;
+
+    let mut sum_inputs = HashMap::new();
+    sum_inputs.insert("values".to_string(), connection("values", "out"));
+    sum_inputs.insert("weights".to_string(), connection("weights", "out"));
+    sum_inputs.insert("mask".to_string(), connection("mask", "out"));
+
+    let mut overlay_inputs = HashMap::new();
+    overlay_inputs.insert(
+        "total_weighted_sum".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "total_weighted_sum".to_string(),
+            selector: None,
+        },
+    );
+    overlay_inputs.insert(
+        "max_weight".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "max_weight".to_string(),
+            selector: None,
+        },
+    );
+    overlay_inputs.insert("base".to_string(), connection("base", "out"));
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("values", Value::Vector(values.clone())),
+            constant_node("weights", Value::Vector(weights.clone())),
+            constant_node("mask", Value::Vector(mask.clone())),
+            constant_node("base", Value::Float(base_value)),
+            NodeSpec {
+                id: "sum".to_string(),
+                kind: NodeType::WeightedSumVector,
+                params: NodeParams::default(),
+                inputs: sum_inputs,
+                output_shapes: HashMap::new(),
+            },
+            NodeSpec {
+                id: "overlay".to_string(),
+                kind: NodeType::BlendWeightedOverlay,
+                params: NodeParams::default(),
+                inputs: overlay_inputs,
+                output_shapes: HashMap::new(),
+            },
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("overlay should evaluate");
+
+    let sum_outputs = rt.outputs.get("sum").expect("sum outputs present");
+    let total_weighted_sum = match &sum_outputs
+        .get("total_weighted_sum")
+        .expect("total_weighted_sum output")
+        .value
+    {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    let max_weight = match &sum_outputs
+        .get("max_weight")
+        .expect("max_weight output")
+        .value
+    {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+
+    let expected_weighted_sum: f32 = values
+        .iter()
+        .zip(weights.iter())
+        .zip(mask.iter())
+        .map(|((value, weight), mask)| *value * *weight * *mask)
+        .sum();
+    let expected_max_weight: f32 = weights
+        .iter()
+        .zip(mask.iter())
+        .map(|(weight, mask)| *weight * *mask)
+        .fold(0.0f32, |acc, value| acc.max(value));
+
+    assert!((total_weighted_sum - expected_weighted_sum).abs() < 1e-6);
+    assert!((max_weight - expected_max_weight).abs() < 1e-6);
+
+    let overlay_outputs = rt.outputs.get("overlay").expect("overlay outputs present");
+    let overlay_value = match &overlay_outputs.get("out").expect("overlay out").value {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+
+    let expected_overlay =
+        base_value * (1.0 - expected_max_weight) + expected_weighted_sum * expected_max_weight;
+    assert!(
+        (overlay_value - expected_overlay).abs() < 1e-6,
+        "expected {expected_overlay}, got {overlay_value}"
+    );
+}
+
+#[test]
+fn blend_weighted_average_overlay_matches_expected_math() {
+    let diffs = vec![0.2, 0.5];
+    let weights = vec![0.5, 0.75];
+    let mask = vec![1.0, 1.0];
+    let base_value = 0.4;
+
+    let mut sum_inputs = HashMap::new();
+    sum_inputs.insert("values".to_string(), connection("diffs", "out"));
+    sum_inputs.insert("weights".to_string(), connection("weights", "out"));
+    sum_inputs.insert("mask".to_string(), connection("mask", "out"));
+
+    let mut overlay_inputs = HashMap::new();
+    overlay_inputs.insert(
+        "total_weighted_sum".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "total_weighted_sum".to_string(),
+            selector: None,
+        },
+    );
+    overlay_inputs.insert(
+        "total_weight".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "total_weight".to_string(),
+            selector: None,
+        },
+    );
+    overlay_inputs.insert(
+        "max_weight".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "max_weight".to_string(),
+            selector: None,
+        },
+    );
+    overlay_inputs.insert(
+        "input_count".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "input_count".to_string(),
+            selector: None,
+        },
+    );
+    overlay_inputs.insert("base".to_string(), connection("base", "out"));
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("diffs", Value::Vector(diffs.clone())),
+            constant_node("weights", Value::Vector(weights.clone())),
+            constant_node("mask", Value::Vector(mask.clone())),
+            constant_node("base", Value::Float(base_value)),
+            NodeSpec {
+                id: "sum".to_string(),
+                kind: NodeType::WeightedSumVector,
+                params: NodeParams::default(),
+                inputs: sum_inputs,
+                output_shapes: HashMap::new(),
+            },
+            NodeSpec {
+                id: "overlay".to_string(),
+                kind: NodeType::BlendWeightedAverageOverlay,
+                params: NodeParams::default(),
+                inputs: overlay_inputs,
+                output_shapes: HashMap::new(),
+            },
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("overlay should evaluate");
+
+    let sum_outputs = rt.outputs.get("sum").expect("sum outputs present");
+    let total_weighted_sum = match &sum_outputs
+        .get("total_weighted_sum")
+        .expect("total_weighted_sum output")
+        .value
+    {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    let total_weight = match &sum_outputs
+        .get("total_weight")
+        .expect("total_weight output")
+        .value
+    {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    let max_weight = match &sum_outputs
+        .get("max_weight")
+        .expect("max_weight output")
+        .value
+    {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    let input_count = match &sum_outputs
+        .get("input_count")
+        .expect("input_count output")
+        .value
+    {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+
+    let expected_weighted_sum: f32 = diffs
+        .iter()
+        .zip(weights.iter())
+        .zip(mask.iter())
+        .map(|((value, weight), mask)| *value * *weight * *mask)
+        .sum();
+    let expected_total_weight: f32 = weights
+        .iter()
+        .zip(mask.iter())
+        .map(|(weight, mask)| *weight * *mask)
+        .sum();
+    let expected_max_weight: f32 = weights
+        .iter()
+        .zip(mask.iter())
+        .map(|(weight, mask)| *weight * *mask)
+        .fold(0.0f32, |acc, value| acc.max(value));
+    let expected_count = weights.len().max(diffs.len()).max(mask.len()) as f32;
+
+    assert!((total_weighted_sum - expected_weighted_sum).abs() < 1e-6);
+    assert!((total_weight - expected_total_weight).abs() < 1e-6);
+    assert!((max_weight - expected_max_weight).abs() < 1e-6);
+    assert!((input_count - expected_count).abs() < 1e-6);
+
+    let overlay_outputs = rt.outputs.get("overlay").expect("overlay outputs present");
+    let overlay_value = match &overlay_outputs.get("out").expect("overlay out").value {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+
+    let expected_divider = expected_total_weight / expected_max_weight;
+    let expected_average = expected_weighted_sum / expected_divider;
+    let expected_overlay = base_value + expected_average;
+    assert!(
+        (overlay_value - expected_overlay).abs() < 1e-6,
+        "expected {expected_overlay}, got {overlay_value}"
+    );
+}
+
+#[test]
+fn blend_weighted_average_overlay_falls_back_to_base() {
+    let diffs = vec![0.2, 0.5];
+    let weights = vec![0.5, 0.75];
+    let mask = vec![0.0, 0.0];
+    let base_value = 0.4;
+
+    let mut sum_inputs = HashMap::new();
+    sum_inputs.insert("values".to_string(), connection("diffs", "out"));
+    sum_inputs.insert("weights".to_string(), connection("weights", "out"));
+    sum_inputs.insert("mask".to_string(), connection("mask", "out"));
+
+    let mut overlay_inputs = HashMap::new();
+    overlay_inputs.insert(
+        "total_weighted_sum".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "total_weighted_sum".to_string(),
+            selector: None,
+        },
+    );
+    overlay_inputs.insert(
+        "total_weight".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "total_weight".to_string(),
+            selector: None,
+        },
+    );
+    overlay_inputs.insert(
+        "max_weight".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "max_weight".to_string(),
+            selector: None,
+        },
+    );
+    overlay_inputs.insert(
+        "input_count".to_string(),
+        InputConnection {
+            node_id: "sum".to_string(),
+            output_key: "input_count".to_string(),
+            selector: None,
+        },
+    );
+    overlay_inputs.insert("base".to_string(), connection("base", "out"));
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("diffs", Value::Vector(diffs)),
+            constant_node("weights", Value::Vector(weights)),
+            constant_node("mask", Value::Vector(mask)),
+            constant_node("base", Value::Float(base_value)),
+            NodeSpec {
+                id: "sum".to_string(),
+                kind: NodeType::WeightedSumVector,
+                params: NodeParams::default(),
+                inputs: sum_inputs,
+                output_shapes: HashMap::new(),
+            },
+            NodeSpec {
+                id: "overlay".to_string(),
+                kind: NodeType::BlendWeightedAverageOverlay,
+                params: NodeParams::default(),
+                inputs: overlay_inputs,
+                output_shapes: HashMap::new(),
+            },
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("overlay should evaluate");
+    let overlay_outputs = rt.outputs.get("overlay").expect("overlay outputs present");
+    let overlay_value = match &overlay_outputs.get("out").expect("overlay out").value {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    assert!(
+        (overlay_value - base_value).abs() < 1e-6,
+        "expected base fallback {base_value}, got {overlay_value}"
+    );
+}
+
+#[test]
+fn blend_max_matches_expected_math() {
+    let values = vec![1.0, 0.5, 0.9];
+    let weights = vec![0.2, 0.8, 0.6];
+    let mask = vec![1.0, 1.0, 0.0];
+    let base_value = 0.3;
+
+    let mut inputs = HashMap::new();
+    inputs.insert("values".to_string(), connection("values", "out"));
+    inputs.insert("weights".to_string(), connection("weights", "out"));
+    inputs.insert("mask".to_string(), connection("mask", "out"));
+    inputs.insert("base".to_string(), connection("base", "out"));
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("values", Value::Vector(values.clone())),
+            constant_node("weights", Value::Vector(weights.clone())),
+            constant_node("mask", Value::Vector(mask.clone())),
+            constant_node("base", Value::Float(base_value)),
+            NodeSpec {
+                id: "max".to_string(),
+                kind: NodeType::BlendMax,
+                params: NodeParams::default(),
+                inputs,
+                output_shapes: HashMap::new(),
+            },
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("max should evaluate");
+    let outputs = rt.outputs.get("max").expect("max outputs present");
+    let max_value = match &outputs.get("out").expect("max out").value {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+
+    let (expected_value, expected_weight, _) = values
+        .iter()
+        .zip(weights.iter())
+        .zip(mask.iter())
+        .map(|((value, weight), mask)| (*value, *weight, *weight * *mask))
+        .fold((0.0f32, 0.0f32, f32::NEG_INFINITY), |acc, item| {
+            let (value, weight, effective) = item;
+            if effective > acc.2 {
+                (value, weight, effective)
+            } else {
+                acc
+            }
+        });
+    let expected_max = expected_value * expected_weight;
+
+    assert!(
+        (max_value - expected_max).abs() < 1e-6,
+        "expected {expected_max}, got {max_value}"
+    );
+}
+
+#[test]
+fn blend_max_returns_base_when_all_masked() {
+    let values = vec![1.0, 0.5];
+    let weights = vec![0.7, 0.9];
+    let mask = vec![0.0, 0.0];
+    let base_value = 0.45;
+
+    let mut inputs = HashMap::new();
+    inputs.insert("values".to_string(), connection("values", "out"));
+    inputs.insert("weights".to_string(), connection("weights", "out"));
+    inputs.insert("mask".to_string(), connection("mask", "out"));
+    inputs.insert("base".to_string(), connection("base", "out"));
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("values", Value::Vector(values)),
+            constant_node("weights", Value::Vector(weights)),
+            constant_node("mask", Value::Vector(mask)),
+            constant_node("base", Value::Float(base_value)),
+            NodeSpec {
+                id: "max".to_string(),
+                kind: NodeType::BlendMax,
+                params: NodeParams::default(),
+                inputs,
+                output_shapes: HashMap::new(),
+            },
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("max should evaluate");
+    let outputs = rt.outputs.get("max").expect("max outputs present");
+    let max_value = match &outputs.get("out").expect("max out").value {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    assert!(
+        (max_value - base_value).abs() < 1e-6,
+        "expected base fallback {base_value}, got {max_value}"
+    );
+}
+
+#[test]
+fn case_node_routes_matching_label_or_default() {
+    let labels = vec!["weighted_average".to_string(), "additive".to_string()];
+
+    let mut case_inputs = HashMap::new();
+    case_inputs.insert("selector".to_string(), connection("selector_match", "out"));
+    case_inputs.insert("default".to_string(), connection("default", "out"));
+    case_inputs.insert("cases_1".to_string(), connection("avg_val", "out"));
+    case_inputs.insert("cases_2".to_string(), connection("add_val", "out"));
+
+    let mut default_inputs = HashMap::new();
+    default_inputs.insert(
+        "selector".to_string(),
+        connection("selector_unknown", "out"),
+    );
+    default_inputs.insert("default".to_string(), connection("default", "out"));
+    default_inputs.insert("cases_1".to_string(), connection("avg_val", "out"));
+    default_inputs.insert("cases_2".to_string(), connection("add_val", "out"));
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("selector_match", Value::Text("additive".to_string())),
+            constant_node("selector_unknown", Value::Text("multiply".to_string())),
+            constant_node("avg_val", Value::Float(1.1)),
+            constant_node("add_val", Value::Float(2.2)),
+            constant_node("default", Value::Float(3.3)),
+            NodeSpec {
+                id: "case_match".to_string(),
+                kind: NodeType::Case,
+                params: NodeParams {
+                    labels: Some(labels.clone()),
+                    ..Default::default()
+                },
+                inputs: case_inputs,
+                output_shapes: HashMap::new(),
+            },
+            NodeSpec {
+                id: "case_default".to_string(),
+                kind: NodeType::Case,
+                params: NodeParams {
+                    labels: Some(labels),
+                    ..Default::default()
+                },
+                inputs: default_inputs,
+                output_shapes: HashMap::new(),
+            },
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("case nodes should evaluate");
+
+    let match_outputs = rt
+        .outputs
+        .get("case_match")
+        .expect("case_match outputs present");
+    let match_value = match &match_outputs.get("out").expect("case_match out").value {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    assert!(
+        (match_value - 2.2).abs() < 1e-6,
+        "expected additive branch 2.2, got {match_value}"
+    );
+
+    let default_outputs = rt
+        .outputs
+        .get("case_default")
+        .expect("case_default outputs present");
+    let default_value = match &default_outputs.get("out").expect("case_default out").value {
+        Value::Float(value) => *value,
+        other => panic!("expected float, got {:?}", other),
+    };
+    assert!(
+        (default_value - 3.3).abs() < 1e-6,
+        "expected default branch 3.3, got {default_value}"
+    );
+}
+
 // --- Shape inference -----------------------------------------------------
 
 #[test]

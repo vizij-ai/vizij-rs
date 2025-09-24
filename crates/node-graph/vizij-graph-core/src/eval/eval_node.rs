@@ -4,7 +4,7 @@ use crate::eval::graph_runtime::{GraphRuntime, StagedInput};
 use crate::eval::variadic::compare_variadic_keys;
 use crate::types::{InputConnection, NodeParams, NodeSpec, NodeType};
 use hashbrown::HashMap;
-use vizij_api_core::{Shape, Value, WriteOp};
+use vizij_api_core::{coercion, Shape, Value, WriteOp};
 
 use super::numeric::{as_bool, as_float, binary_numeric, unary_numeric};
 use super::shape_helpers::{
@@ -94,6 +94,7 @@ fn evaluate_kind(
         | NodeType::Equal
         | NodeType::NotEqual) => Ok(eval_comparison(node_type, inputs)),
         NodeType::If => Ok(eval_if(inputs)),
+        NodeType::Case => Ok(eval_case(params, inputs)),
         NodeType::Clamp => Ok(eval_clamp(inputs)),
         NodeType::Remap => Ok(eval_remap(inputs)),
         NodeType::Vec3Cross => Ok(eval_vec3_cross(inputs)),
@@ -113,6 +114,13 @@ fn evaluate_kind(
         | NodeType::VectorMean
         | NodeType::VectorMedian
         | NodeType::VectorMode) => Ok(eval_vector_reducer(node_type, inputs)),
+        NodeType::WeightedSumVector => Ok(eval_weighted_sum_vector(inputs)),
+        NodeType::BlendWeightedAverage => Ok(eval_blend_weighted_average(inputs)),
+        NodeType::BlendAdditive => Ok(eval_blend_additive(inputs)),
+        NodeType::BlendMultiply => Ok(eval_blend_multiply(inputs)),
+        NodeType::BlendWeightedOverlay => Ok(eval_blend_weighted_overlay(inputs)),
+        NodeType::BlendWeightedAverageOverlay => Ok(eval_blend_weighted_average_overlay(inputs)),
+        NodeType::BlendMax => Ok(eval_blend_max(inputs)),
         NodeType::InverseKinematics => Ok(eval_inverse_kinematics(inputs)),
         #[cfg(feature = "urdf_ik")]
         NodeType::UrdfIkPosition => eval_urdf_position(rt, spec, params, inputs),
@@ -706,6 +714,259 @@ fn eval_vector_reducer(kind: &NodeType, inputs: &HashMap<String, PortValue>) -> 
         _ => f32::NAN,
     };
     single_output(Value::Float(result))
+}
+
+#[derive(Debug)]
+struct BlendInputs {
+    values: Vec<f32>,
+    weights: Vec<f32>,
+    masks: Vec<f32>,
+    mask_supplied: bool,
+    len: usize,
+}
+
+impl BlendInputs {
+    fn from_inputs(inputs: &HashMap<String, PortValue>) -> Self {
+        let values = inputs
+            .get("values")
+            .map(|port| coercion::to_vector(&port.value))
+            .unwrap_or_default();
+        let weights = inputs
+            .get("weights")
+            .map(|port| coercion::to_vector(&port.value))
+            .unwrap_or_default();
+        let mask_entry = inputs.get("mask");
+        let mask_supplied = mask_entry.is_some();
+        let mut masks = mask_entry
+            .map(|port| coercion::to_vector(&port.value))
+            .unwrap_or_default();
+
+        let mut len = values.len().max(weights.len()).max(masks.len());
+        if !mask_supplied {
+            masks = if len == 0 { Vec::new() } else { vec![1.0; len] };
+            len = values.len().max(weights.len()).max(masks.len());
+        }
+
+        BlendInputs {
+            values,
+            weights,
+            masks,
+            mask_supplied,
+            len,
+        }
+    }
+
+    fn iter(&self) -> impl Iterator<Item = (f32, f32, f32)> + '_ {
+        let default_mask = if self.mask_supplied { 0.0 } else { 1.0 };
+        (0..self.len).map(move |i| {
+            let value = self.values.get(i).copied().unwrap_or(0.0);
+            let weight = self.weights.get(i).copied().unwrap_or(0.0);
+            let mask = self.masks.get(i).copied().unwrap_or(default_mask);
+            (value, weight, mask)
+        })
+    }
+
+    fn input_count(&self) -> usize {
+        self.len
+    }
+}
+
+fn fallback_to_base(computed: Option<f32>, base: Option<f32>) -> Value {
+    match (computed, base) {
+        (Some(value), _) if value.is_finite() => Value::Float(value),
+        (Some(_), Some(base_value)) => Value::Float(base_value),
+        (Some(_), None) => Value::Float(f32::NAN),
+        (None, Some(base_value)) => Value::Float(base_value),
+        (None, None) => Value::Float(f32::NAN),
+    }
+}
+
+fn eval_weighted_sum_vector(inputs: &HashMap<String, PortValue>) -> OutputMap {
+    let blend_inputs = BlendInputs::from_inputs(inputs);
+    let mut total_weighted_sum = 0.0f32;
+    let mut total_weight = 0.0f32;
+    let mut max_weight = 0.0f32;
+
+    for (value, weight, mask) in blend_inputs.iter() {
+        let effective_weight = weight * mask;
+        total_weighted_sum += value * effective_weight;
+        total_weight += effective_weight;
+        if effective_weight > max_weight {
+            max_weight = effective_weight;
+        }
+    }
+
+    let mut map: OutputMap = OutputMap::default();
+    map.insert(
+        "total_weighted_sum".to_string(),
+        PortValue::new(Value::Float(total_weighted_sum)),
+    );
+    map.insert(
+        "total_weight".to_string(),
+        PortValue::new(Value::Float(total_weight)),
+    );
+    map.insert(
+        "max_weight".to_string(),
+        PortValue::new(Value::Float(max_weight)),
+    );
+    map.insert(
+        "input_count".to_string(),
+        PortValue::new(Value::Float(blend_inputs.input_count() as f32)),
+    );
+    map
+}
+
+fn eval_blend_weighted_average(inputs: &HashMap<String, PortValue>) -> OutputMap {
+    let total_weighted_sum = as_float(&input_or_default(inputs, "total_weighted_sum").value);
+    let total_weight = as_float(&input_or_default(inputs, "total_weight").value);
+    let max_weight = as_float(&input_or_default(inputs, "max_weight").value);
+    let base = inputs.get("base").map(|port| as_float(&port.value));
+
+    let computed = if total_weight > 0.0 && max_weight > 0.0 {
+        let divisor = total_weight / max_weight;
+        if divisor > 0.0 {
+            Some(total_weighted_sum / divisor)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    single_output(fallback_to_base(computed, base))
+}
+
+fn eval_blend_additive(inputs: &HashMap<String, PortValue>) -> OutputMap {
+    let total_weighted_sum = as_float(&input_or_default(inputs, "total_weighted_sum").value);
+    let total_weight = as_float(&input_or_default(inputs, "total_weight").value);
+    let base = inputs.get("base").map(|port| as_float(&port.value));
+
+    let computed = if total_weight > 0.0 {
+        Some(total_weighted_sum)
+    } else {
+        None
+    };
+
+    single_output(fallback_to_base(computed, base))
+}
+
+fn eval_blend_multiply(inputs: &HashMap<String, PortValue>) -> OutputMap {
+    let blend_inputs = BlendInputs::from_inputs(inputs);
+    let product = blend_inputs
+        .iter()
+        .fold(1.0f32, |acc, (value, weight, mask)| {
+            acc * (1.0 - weight + value * weight * mask)
+        });
+
+    single_output(Value::Float(product))
+}
+
+fn eval_blend_weighted_overlay(inputs: &HashMap<String, PortValue>) -> OutputMap {
+    let total_weighted_sum = as_float(&input_or_default(inputs, "total_weighted_sum").value);
+    let max_weight = as_float(&input_or_default(inputs, "max_weight").value);
+    let base = inputs.get("base").map(|port| as_float(&port.value));
+
+    let blended = if let Some(base_value) = base {
+        Some(base_value * (1.0 - max_weight) + total_weighted_sum * max_weight)
+    } else {
+        Some(total_weighted_sum)
+    };
+
+    single_output(fallback_to_base(blended, base))
+}
+
+fn eval_blend_weighted_average_overlay(inputs: &HashMap<String, PortValue>) -> OutputMap {
+    let total_weighted_sum = as_float(&input_or_default(inputs, "total_weighted_sum").value);
+    let total_weight = as_float(&input_or_default(inputs, "total_weight").value);
+    let max_weight = as_float(&input_or_default(inputs, "max_weight").value);
+    let input_count = as_float(&input_or_default(inputs, "input_count").value);
+    let base = inputs.get("base").map(|port| as_float(&port.value));
+
+    let computed_average = if total_weight > 0.0 && max_weight > 0.0 {
+        let count = input_count.round().max(0.0) as usize;
+        let divider = if count > 1 {
+            total_weight / max_weight
+        } else {
+            1.0
+        };
+        if divider > 0.0 {
+            Some(total_weighted_sum / divider)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let combined = computed_average.map(|avg| base.map_or(avg, |base_value| base_value + avg));
+
+    single_output(fallback_to_base(combined, base))
+}
+
+fn eval_blend_max(inputs: &HashMap<String, PortValue>) -> OutputMap {
+    let blend_inputs = BlendInputs::from_inputs(inputs);
+    let base = inputs.get("base").map(|port| as_float(&port.value));
+
+    let mut best_weight = f32::NEG_INFINITY;
+    let mut best_value: Option<f32> = None;
+
+    for (value, weight, mask) in blend_inputs.iter() {
+        let effective_weight = weight * mask;
+        if effective_weight > best_weight {
+            best_weight = effective_weight;
+            best_value = if mask > 0.0 {
+                Some(value * weight)
+            } else {
+                None
+            };
+        }
+    }
+
+    single_output(fallback_to_base(best_value, base))
+}
+
+fn selector_from_value(value: &Value) -> String {
+    match value {
+        Value::Text(text) => text.clone(),
+        Value::Enum(tag, _) => tag.clone(),
+        Value::Bool(flag) => flag.to_string(),
+        Value::Float(number) => number.to_string(),
+        _ => String::new(),
+    }
+}
+
+fn eval_case(params: &NodeParams, inputs: &HashMap<String, PortValue>) -> OutputMap {
+    let selector = inputs
+        .get("selector")
+        .map(|port| selector_from_value(&port.value))
+        .unwrap_or_default();
+
+    let mut entries: Vec<_> = inputs
+        .iter()
+        .filter(|(key, _)| key.starts_with("cases_"))
+        .collect();
+    entries.sort_by(|(a, _), (b, _)| compare_variadic_keys(a, b));
+
+    let labels = params.labels.clone().unwrap_or_default();
+    for (idx, (_key, port)) in entries.iter().enumerate() {
+        if let Some(label) = labels.get(idx) {
+            if label == &selector {
+                return keyed_port(
+                    "out",
+                    PortValue::with_shape(port.value.clone(), port.shape.clone()),
+                );
+            }
+        }
+    }
+
+    if let Some(default_port) = inputs.get("default") {
+        return keyed_port(
+            "out",
+            PortValue::with_shape(default_port.value.clone(), default_port.shape.clone()),
+        );
+    }
+
+    single_output(Value::Float(f32::NAN))
 }
 
 fn eval_inverse_kinematics(inputs: &HashMap<String, PortValue>) -> OutputMap {
