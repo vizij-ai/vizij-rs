@@ -51,6 +51,7 @@ pub enum NodeType {
     Equal,
     NotEqual,
     If,
+    Case,
 
     // Ranges
     Clamp,
@@ -76,6 +77,15 @@ pub enum NodeType {
     VectorMean,
     VectorMedian,
     VectorMode,
+
+    // Animation blend support
+    WeightedSumVector,
+    BlendWeightedAverage,
+    BlendAdditive,
+    BlendMultiply,
+    BlendWeightedOverlay,
+    BlendWeightedAverageOverlay,
+    BlendMax,
 
     // Robotics
     InverseKinematics,
@@ -125,6 +135,8 @@ pub struct NodeParams {
     pub index: Option<f32>,
     // For Split sizes (vector of sizes, floored to usize)
     pub sizes: Option<Vec<f32>>,
+    // For Case routing nodes
+    pub case_labels: Option<Vec<String>>,
 
     // Transition parameters
     pub stiffness: Option<f32>,
