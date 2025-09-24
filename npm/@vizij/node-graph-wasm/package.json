@@ -1,6 +1,6 @@
 {
   "name": "@vizij/node-graph-wasm",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "WASM bindings for Vizij node-graph core.",
   "license": "MIT",
   "repository": {
@@ -22,8 +22,8 @@
   "module": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "files": [
-    "dist",
-    "pkg",
+    "dist/",
+    "pkg/",
     "README.md"
   ],
   "exports": {
