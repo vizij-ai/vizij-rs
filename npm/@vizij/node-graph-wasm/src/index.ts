@@ -1,15 +1,15 @@
 // Stable ESM entry for @vizij/graph-wasm
-// Wraps the wasm-pack output in ../pkg (built with `--target web`).
+// Wraps the wasm-pack output in ../../pkg (built with `--target web`).
 // Adjust the import path if your pkg name differs.
 let _bindings: any | null = null;
 
 function pkgWasmJsUrl(): URL {
   // Resolve package-local pkg/ for both src/ and dist/src/ callers
-  return new URL("../pkg/vizij_graph_wasm.js", import.meta.url);
+  return new URL("../../pkg/vizij_graph_wasm.js", import.meta.url);
 }
 
 function defaultWasmUrl(): URL {
-  return new URL("../pkg/vizij_graph_wasm_bg.wasm", import.meta.url);
+  return new URL("../../pkg/vizij_graph_wasm_bg.wasm", import.meta.url);
 }
 
 async function loadBindings(input?: InitInput): Promise<any> {
