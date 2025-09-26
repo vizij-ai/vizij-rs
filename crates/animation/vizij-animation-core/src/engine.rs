@@ -5,6 +5,7 @@
 //! - new, load_animation, create_player, add_instance, prebind (resolver), update (accumulate → blend)
 
 use crate::accumulate::Accumulator;
+use crate::baking::{bake_animation_data, export_baked_json, BakedAnimationData, BakingConfig};
 use crate::binding::{BindingSet, BindingTable, ChannelKey, TargetResolver};
 use crate::config::Config;
 use crate::data::AnimationData;
@@ -585,6 +586,29 @@ impl Engine {
         }
 
         &self.outputs
+    }
+
+    /// Bake an animation owned by the engine using the provided config, returning
+    /// pre-sampled values for each track. This does not mutate engine state and
+    /// can be called independently of [`Engine::update`]. Returns `None` when the
+    /// animation id is unknown.
+    pub fn bake_animation(&self, anim: AnimId, cfg: &BakingConfig) -> Option<BakedAnimationData> {
+        self.anims
+            .get(anim)
+            .map(|data| bake_animation_data(anim, data, cfg))
+    }
+
+    /// Convenience helper that returns baked animation data as JSON for direct
+    /// transport to hosts.
+    pub fn bake_animation_json(
+        &self,
+        anim: AnimId,
+        cfg: &BakingConfig,
+    ) -> Option<serde_json::Value> {
+        self.anims.get(anim).map(|data| {
+            let baked = bake_animation_data(anim, data, cfg);
+            export_baked_json(&baked)
+        })
     }
 
     /// Update and also return a typed WriteBatch (collection of WriteOp) where each

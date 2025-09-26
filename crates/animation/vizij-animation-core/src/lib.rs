@@ -22,7 +22,7 @@ pub mod stored_animation;
 pub mod value;
 
 // Re-exports for consumers (adapters)
-pub use baking::{BakedAnimationData, BakingConfig};
+pub use baking::{export_baked_json, BakedAnimationData, BakingConfig};
 pub use binding::{BindingSet, BindingTable, ChannelKey, TargetHandle, TargetResolver};
 pub use config::Config;
 pub use data::{AnimationData, Keypoint, Track, Transitions, Vec2};

@@ -2,10 +2,11 @@ use js_sys::{Function, JSON};
 use serde_wasm_bindgen as swb;
 use wasm_bindgen::prelude::*;
 
+use serde::Deserialize;
 use serde_json::{json, to_value, Map};
 use vizij_animation_core::{
-    parse_stored_animation_json, AnimId, AnimationData, Config, Engine, Inputs, InstId,
-    InstanceCfg, Outputs, PlayerId, TargetResolver,
+    parse_stored_animation_json, AnimId, AnimationData, BakingConfig, Config, Engine, Inputs,
+    InstId, InstanceCfg, Outputs, PlayerId, TargetResolver,
 };
 
 #[wasm_bindgen]
@@ -46,6 +47,42 @@ impl TargetResolver for JsResolver {
             Err(_) => None,
         }
     }
+}
+
+#[derive(Default, Deserialize)]
+struct BakingConfigOptions {
+    #[serde(default)]
+    frame_rate: Option<f32>,
+    #[serde(default)]
+    start_time: Option<f32>,
+    #[serde(default)]
+    end_time: Option<Option<f32>>,
+}
+
+impl BakingConfigOptions {
+    fn into_config(self) -> BakingConfig {
+        let mut cfg = BakingConfig::default();
+        if let Some(fr) = self.frame_rate {
+            cfg.frame_rate = fr;
+        }
+        if let Some(st) = self.start_time {
+            cfg.start_time = st;
+        }
+        if let Some(et) = self.end_time {
+            cfg.end_time = et;
+        }
+        cfg
+    }
+}
+
+fn parse_baking_config(cfg: JsValue) -> Result<BakingConfig, JsError> {
+    if jsvalue_is_undefined_or_null(&cfg) {
+        return Ok(BakingConfig::default());
+    }
+
+    let opts: BakingConfigOptions = swb::from_value(cfg)
+        .map_err(|e| JsError::new(&format!("bake_animation config error: {e}")))?;
+    Ok(opts.into_config())
 }
 
 #[wasm_bindgen]
@@ -143,6 +180,18 @@ impl VizijAnimation {
         };
         let out: &Outputs = self.core.update(dt, inputs);
         swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
+    }
+
+    /// Bake an animation clip into pre-sampled tracks using the engine's loaded data.
+    #[wasm_bindgen(js_name = bake_animation)]
+    pub fn bake_animation(&self, anim_id: u32, cfg: JsValue) -> Result<JsValue, JsError> {
+        let cfg_rs = parse_baking_config(cfg)?;
+        let aid = AnimId(anim_id);
+        let baked = self.core.bake_animation(aid, &cfg_rs).ok_or_else(|| {
+            JsError::new(&format!("bake_animation: unknown animation id {anim_id}"))
+        })?;
+        swb::to_value(&baked)
+            .map_err(|e| JsError::new(&format!("bake_animation serialize error: {e}")))
     }
 
     /// Step the simulation and return a nodes+writes JSON object compatible with

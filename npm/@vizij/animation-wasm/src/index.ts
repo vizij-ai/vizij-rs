@@ -19,6 +19,8 @@ import type {
   AnimationInfo,
   PlayerInfo,
   InstanceInfo,
+  BakingConfig,
+  BakedAnimationData,
 } from "./types";
 
 export type {
@@ -38,6 +40,8 @@ export type {
   AnimationInfo,
   PlayerInfo,
   InstanceInfo,
+  BakingConfig,
+  BakedAnimationData,
 };
 
 export { VizijAnimation, abi_version };
@@ -182,6 +186,20 @@ export class Engine {
   /** Step the simulation by dt (seconds) with optional Inputs; returns Outputs */
   update(dt: number, inputs?: Inputs): Outputs {
     return (this.inner.update(dt, (inputs ?? undefined) as any) as unknown) as Outputs;
+  }
+
+  /**
+   * Bake a loaded animation clip into pre-sampled tracks. The returned object
+   * mirrors vizij-animation-core's `BakedAnimationData` schema.
+   */
+  bakeAnimation(anim: AnimId, cfg?: BakingConfig): BakedAnimationData {
+    const inner: any = this.inner;
+    if (typeof inner.bake_animation !== "function") {
+      throw new Error(
+        "Current WASM build does not expose bake_animation; rebuild vizij-animation-wasm"
+      );
+    }
+    return inner.bake_animation(anim as number, (cfg ?? undefined) as any) as BakedAnimationData;
   }
 
   /** Remove a player and all its instances */

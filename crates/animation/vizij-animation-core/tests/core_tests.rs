@@ -547,6 +547,38 @@ fn baking_matches_sampling_and_counts() {
     assert!(j.is_object());
 }
 
+/// it should bake animations through the engine facade using the same sampler
+#[test]
+fn engine_bake_animation_matches_standalone() {
+    let track = mk_scalar_track_linear("node.s", &[(0.0, 0.0), (1.0, 1.0)]);
+    let anim = mk_anim("clip", 1.0, vec![track.clone()]);
+    let mut eng = Engine::new(Config::default());
+    let aid = eng.load_animation(anim.clone());
+
+    let cfg = BakingConfig {
+        frame_rate: 24.0,
+        start_time: 0.0,
+        end_time: Some(1.0),
+    };
+
+    let baked_direct = vizij_animation_core::baking::bake_animation_data(aid, &anim, &cfg);
+    let baked_via_engine = eng
+        .bake_animation(aid, &cfg)
+        .expect("engine should know the animation");
+
+    let json_direct = serde_json::to_value(&baked_direct).unwrap();
+    let json_via_engine = serde_json::to_value(&baked_via_engine).unwrap();
+    assert_eq!(json_direct, json_via_engine);
+
+    let exported = eng
+        .bake_animation_json(aid, &cfg)
+        .expect("json export available");
+    assert_eq!(
+        exported,
+        vizij_animation_core::baking::export_baked_json(&baked_direct)
+    );
+}
+
 /// it should produce identical Outputs for the same dt sequence (determinism)
 #[test]
 fn determinism_same_sequence_same_outputs() {

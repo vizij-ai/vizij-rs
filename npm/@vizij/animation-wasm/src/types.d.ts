@@ -43,6 +43,31 @@ export interface Config {
 }
 
 /* -----------------------------------------------------------
+   Baking (vizij-animation-core/src/baking.rs)
+----------------------------------------------------------- */
+export interface BakingConfig {
+  /** Target frame rate (Hz) for baked samples */
+  frame_rate?: number;
+  /** Start time (seconds) in clip space */
+  start_time?: number;
+  /** End time (seconds) in clip space; omit or null to use full duration */
+  end_time?: number | null;
+}
+
+export interface BakedTrack {
+  target_path: string;
+  values: Value[];
+}
+
+export interface BakedAnimationData {
+  anim: AnimId;
+  frame_rate: number;
+  start_time: number;
+  end_time: number;
+  tracks: BakedTrack[];
+}
+
+/* -----------------------------------------------------------
    Inputs (vizij-animation-core/src/inputs.rs)
    serde default represents enums as { "Variant": { ... } }
 ----------------------------------------------------------- */
