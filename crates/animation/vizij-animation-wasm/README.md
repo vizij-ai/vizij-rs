@@ -63,14 +63,18 @@ The npm wrapper exports:
 
 * `async function init(input?: InitInput): Promise<void>` – Loads the WASM module. Optional input allows custom URLs or binary
   sources.
-* `function abi_version(): number` – Returns a numeric ABI guard (currently `1`).
+* `function abi_version(): number` – Returns a numeric ABI guard (currently `2`).
 * `class Engine` – Ergonomic wrapper around the low-level bindings:
   * `constructor(config?: Config)` – Optional capacity hints.
   * `loadAnimation(data, opts?)` – Accepts `StoredAnimation` or `AnimationData`. Returns `AnimId`.
   * `createPlayer(name: string)` – Returns `PlayerId`.
   * `addInstance(player, anim, cfg?)` – Adds an instance with optional `InstanceCfg` JSON.
   * `prebind(resolver)` – Resolve canonical target paths to application-defined keys.
-  * `update(dtSeconds, inputs?)` – Steps the simulation and returns `{ changes, events }`.
+  * `updateValues(dtSeconds, inputs?)` – Steps the simulation and returns `{ changes, events }`.
+  * `updateValuesWithDerivatives(dtSeconds, inputs?)` – Same as above but returns `ChangeWithDerivative` entries with optional
+    derivatives.
+  * `bakeAnimation(animId, config?)` – Samples baked values for a clip.
+  * `bakeAnimationWithDerivatives(animId, config?)` – Samples values plus baked derivatives.
 * Low-level class `VizijAnimation` mirrors the above methods with slightly more explicit JSON handling.
 
 ### StoredAnimation format
@@ -116,8 +120,9 @@ interpolation.
 
 * **Bindings and prebinding** – `prebind(resolver)` receives canonical target paths such as `"node/Transform.translation"` and
   should return the key you want in `change.key`. Return `null`/`undefined` to leave a path unresolved.
-* **Outputs** – `update` returns `{ changes: Change[], events: CoreEvent[] }`. `Change.value` is a tagged union (Scalar, Vec3,
-  Quat, Transform, Bool, Text, etc.). Events mirror the Rust core’s playback events.
+* **Outputs** – `updateValues` returns `{ changes: Change[], events: CoreEvent[] }`. `Change.value` is a tagged union (Scalar,
+  Vec3, Quat, Transform, Bool, Text, etc.). Events mirror the Rust core’s playback events. Use
+  `updateValuesWithDerivatives` when you need per-change derivative samples.
 * **Inputs** – Optional `Inputs` payload supports player commands (Play/Pause/Seek/SetLoopMode/etc.) and per-instance updates
   (weight, time scale, enable flag, etc.).
 * **ABI guard** – `abi_version()` helps consumers detect mismatches between the wasm binary and the JS wrapper. The npm package’s
@@ -152,7 +157,8 @@ const playerId = eng.createPlayer("demo");
 eng.addInstance(playerId, animId);
 eng.prebind((path) => path); // identity mapping
 
-const outputs = eng.update(1 / 60);
+const outputs = eng.updateValues(1 / 60);
+const outputsWithDerivatives = eng.updateValuesWithDerivatives(1 / 60);
 console.log(outputs.changes);
 ```
 
@@ -180,7 +186,7 @@ const animId = raw.load_stored_animation(JSON.stringify({
 }));
 const player = raw.create_player("demo");
 raw.add_instance(player, animId, null);
-const result = raw.update(0.016, null);
+const result = raw.update_values(0.016, null);
 console.log(result);
 ```
 

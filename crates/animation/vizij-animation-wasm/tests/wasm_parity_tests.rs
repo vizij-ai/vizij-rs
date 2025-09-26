@@ -72,5 +72,5 @@ fn wasm_parity_scalar_ramp() {
 /// it should validate the wasm ABI version gate for the parity suite
 #[wasm_bindgen_test]
 fn wasm_parity_abi_is_1() {
-    assert_eq!(abi_version(), 1);
+    assert_eq!(abi_version(), 2);
 }

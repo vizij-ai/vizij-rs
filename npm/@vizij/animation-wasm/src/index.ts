@@ -5,9 +5,11 @@ import initWasm, { VizijAnimation, abi_version } from "../pkg/vizij_animation_wa
 import type {
   InitInput,
   Config,
+  BakingConfig,
   Inputs,
   InstanceUpdate,
   Outputs,
+  OutputsWithDerivatives,
   AnimationData,
   StoredAnimation,
   AnimId,
@@ -16,17 +18,23 @@ import type {
   Value,
   CoreEvent,
   Change,
+  ChangeWithDerivative,
   AnimationInfo,
   PlayerInfo,
   InstanceInfo,
+  BakedAnimationData,
+  BakedAnimationDerivatives,
+  BakedAnimationBundle,
 } from "./types";
 
 export type {
   InitInput,
   Config,
+  BakingConfig,
   Inputs,
   InstanceUpdate,
   Outputs,
+  OutputsWithDerivatives,
   AnimationData,
   StoredAnimation,
   AnimId,
@@ -35,9 +43,13 @@ export type {
   Value,
   CoreEvent,
   Change,
+  ChangeWithDerivative,
   AnimationInfo,
   PlayerInfo,
   InstanceInfo,
+  BakedAnimationData,
+  BakedAnimationDerivatives,
+  BakedAnimationBundle,
 };
 
 export { VizijAnimation, abi_version };
@@ -81,9 +93,9 @@ export function init(input?: InitInput): Promise<void> {
 
     // ABI guard
     const abi = Number(abi_version());
-    if (abi !== 1) {
+    if (abi !== 2) {
       throw new Error(
-        `@vizij/animation-wasm ABI mismatch: expected 1, got ${abi}. ` +
+        `@vizij/animation-wasm ABI mismatch: expected 2, got ${abi}. ` +
           `Please rebuild the WASM package to ensure compatibility.`
       );
     }
@@ -180,8 +192,37 @@ export class Engine {
   }
 
   /** Step the simulation by dt (seconds) with optional Inputs; returns Outputs */
+  updateValues(dt: number, inputs?: Inputs): Outputs {
+    return (this.inner.update_values(dt, (inputs ?? undefined) as any) as unknown) as Outputs;
+  }
+
+  /** Step the simulation and return Outputs with derivatives */
+  updateValuesWithDerivatives(dt: number, inputs?: Inputs): OutputsWithDerivatives {
+    return (this.inner.update_values_with_derivatives(
+      dt,
+      (inputs ?? undefined) as any
+    ) as unknown) as OutputsWithDerivatives;
+  }
+
+  /** Backwards-compatible alias for updateValues */
   update(dt: number, inputs?: Inputs): Outputs {
-    return (this.inner.update(dt, (inputs ?? undefined) as any) as unknown) as Outputs;
+    return this.updateValues(dt, inputs);
+  }
+
+  /** Bake an animation clip into sampled values */
+  bakeAnimation(anim: AnimId, cfg?: BakingConfig): BakedAnimationData {
+    return (this.inner.bake_animation(anim as number, (cfg ?? undefined) as any) as unknown) as BakedAnimationData;
+  }
+
+  /** Bake values and derivatives in a single call */
+  bakeAnimationWithDerivatives(
+    anim: AnimId,
+    cfg?: BakingConfig
+  ): BakedAnimationBundle {
+    return (this.inner.bake_animation_with_derivatives(
+      anim as number,
+      (cfg ?? undefined) as any
+    ) as unknown) as BakedAnimationBundle;
   }
 
   /** Remove a player and all its instances */

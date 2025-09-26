@@ -75,7 +75,8 @@ const playerId = eng.createPlayer("demo");
 eng.addInstance(playerId, animId);
 eng.prebind((path) => path); // optional resolver
 
-const outputs = eng.update(1 / 60);
+const outputs = eng.updateValues(1 / 60);
+const outputsWithDerivatives = eng.updateValuesWithDerivatives(1 / 60);
 console.log(outputs.changes);
 ```
 
@@ -89,7 +90,7 @@ const raw = new VizijAnimation();
 const animId = raw.load_stored_animation(JSON.stringify(storedAnimationJson));
 const player = raw.create_player("demo");
 raw.add_instance(player, animId, undefined);
-const outputs = JSON.parse(raw.update(0.016, undefined));
+const outputs = JSON.parse(raw.update_values(0.016, undefined));
 ```
 
 ## Key Details
@@ -98,14 +99,23 @@ const outputs = JSON.parse(raw.update(0.016, undefined));
   bezier control points via `transitions.in/out`, and support for scalar/vector/quat/color/bool/text values.
 * **Outputs** – `{ changes: Change[], events: CoreEvent[] }`. Each `Change` includes the resolved key and a tagged union value
   (Scalar, Vec3, Transform, etc.). Events mirror the Rust engine’s playback notifications (started, paused, keypoint reached,
-  warnings, etc.).
+  warnings, etc.). Use `updateValuesWithDerivatives` to receive `ChangeWithDerivative` entries that include optional rate-of-
+  change values.
 * **Inputs** – Optional `Inputs` payload supports player commands (play/pause/seek/loop) and per-instance updates (weights,
   timescale, enabled flag, start offset).
 * **Environment detection** – Browser builds load the `.wasm` via fetch relative to the module URL; Node builds read from disk.
   Bundlers may log that Node modules (`node:path`, `fs`) were externalized—this is expected.
 * **ABI guard** – `abi_version()` ensures the JS wrapper and WASM binary agree. The `Engine` wrapper throws if the numbers differ
   after `init()`.
-* **TypeScript support** – `src/types.d.ts` exports `Value`, `StoredAnimation`, `Inputs`, `Outputs`, and helper types.
+* **TypeScript support** – `src/types.d.ts` exports `Value`, `StoredAnimation`, `Inputs`, `Outputs`, derivative-aware variants,
+  and helper types.
+
+### Baking clips
+
+```ts
+const baked = eng.bakeAnimation(animId, { frame_rate: 60 });
+const bakedWithDerivatives = eng.bakeAnimationWithDerivatives(animId);
+```
 
 ## Examples
 

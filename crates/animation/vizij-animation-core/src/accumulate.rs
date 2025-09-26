@@ -257,33 +257,69 @@ impl AccumEntry {
 /// Accumulates per-handle contributions across instances.
 #[derive(Default)]
 pub struct Accumulator {
-    map: HashMap<String, AccumEntry>,
+    values: HashMap<String, AccumEntry>,
+    derivatives: HashMap<String, AccumEntry>,
 }
 
 impl Accumulator {
     pub fn new() -> Self {
         Self {
-            map: HashMap::new(),
+            values: HashMap::new(),
+            derivatives: HashMap::new(),
         }
+    }
+
+    fn add_internal(
+        map: &mut HashMap<String, AccumEntry>,
+        handle: &str,
+        value: &Value,
+        weight: f32,
+    ) {
+        map.entry(handle.to_string())
+            .and_modify(|entry| entry.add_value(value, weight))
+            .or_insert_with(|| AccumEntry::from_value(value, weight));
     }
 
     pub fn add(&mut self, handle: &str, value: &Value, weight: f32) {
         if weight <= 0.0 {
             return;
         }
-        self.map
-            .entry(handle.to_string())
-            .and_modify(|entry| entry.add_value(value, weight))
-            .or_insert_with(|| AccumEntry::from_value(value, weight));
+        Self::add_internal(&mut self.values, handle, value, weight);
     }
 
-    pub fn finalize(self) -> HashMap<String, Value> {
+    pub fn add_with_derivative(
+        &mut self,
+        handle: &str,
+        value: &Value,
+        derivative: Option<&Value>,
+        weight: f32,
+    ) {
+        if weight <= 0.0 {
+            return;
+        }
+        Self::add_internal(&mut self.values, handle, value, weight);
+        if let Some(dv) = derivative {
+            Self::add_internal(&mut self.derivatives, handle, dv, weight);
+        }
+    }
+
+    fn finalize_map(map: HashMap<String, AccumEntry>) -> HashMap<String, Value> {
         let mut out = HashMap::new();
-        for (k, entry) in self.map.into_iter() {
+        for (k, entry) in map.into_iter() {
             if let Some(v) = entry.finalize() {
                 out.insert(k, v);
             }
         }
         out
+    }
+
+    pub fn finalize(self) -> HashMap<String, Value> {
+        Self::finalize_map(self.values)
+    }
+
+    pub fn finalize_with_derivatives(self) -> (HashMap<String, Value>, HashMap<String, Value>) {
+        let values = Self::finalize_map(self.values);
+        let derivatives = Self::finalize_map(self.derivatives);
+        (values, derivatives)
     }
 }

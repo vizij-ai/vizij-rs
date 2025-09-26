@@ -923,6 +923,45 @@ fn multi_quat_instances_normalized() {
     }
 }
 
+#[test]
+fn update_with_derivatives_provides_derivative_values() {
+    let mut eng = Engine::new(Config::default());
+    let track = Track {
+        id: "t-deriv".into(),
+        name: "deriv".into(),
+        animatable_id: "node.scalar".into(),
+        points: vec![
+            Keypoint {
+                id: "k0".into(),
+                stamp: 0.0,
+                value: Value::Float(0.0),
+                transitions: None,
+            },
+            Keypoint {
+                id: "k1".into(),
+                stamp: 1.0,
+                value: Value::Float(1.0),
+                transitions: None,
+            },
+        ],
+        settings: None,
+    };
+    let anim = AnimationData {
+        id: None,
+        name: "clip".into(),
+        tracks: vec![track],
+        groups: serde_json::json!({}),
+        duration_ms: 1000,
+    };
+    let anim_id = eng.load_animation(anim);
+    let player_id = eng.create_player("player");
+    eng.add_instance(player_id, anim_id, InstanceCfg::default());
+
+    let outputs = eng.update_with_derivatives(0.016, Inputs::default());
+    assert!(!outputs.changes.is_empty());
+    assert!(outputs.changes[0].derivative.is_some());
+}
+
 /// it should bake empty and single-key tracks with expected sequences
 #[test]
 fn baking_empty_and_single_key_tracks() {
