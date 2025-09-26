@@ -13,7 +13,7 @@
 //! - sample_track(&Track, u) where u is normalized time in [0,1] over the whole clip.
 
 use crate::data::{Keypoint, Track};
-use crate::interp::functions::{bezier_value, step_value};
+use crate::interp::functions::{bezier_value_with_derivative, linear_derivative, step_value};
 use vizij_api_core::{Value, ValueKind};
 
 const DEFAULT_OUT_X: f32 = 0.42;
@@ -50,27 +50,64 @@ fn find_segment(points: &[Keypoint], u: f32) -> (usize, usize, f32) {
     (n - 1, n - 1, 0.0)
 }
 
-/// Sample a single track at normalized time u ∈ [0,1].
-pub fn sample_track(track: &Track, u: f32) -> Value {
+#[derive(Clone, Debug)]
+pub struct SampledValue {
+    pub value: Value,
+    pub derivative: Value,
+}
+
+fn zero_like(value: &Value) -> Value {
+    match value {
+        Value::Float(_) => Value::Float(0.0),
+        Value::Vec2(_) => Value::Vec2([0.0, 0.0]),
+        Value::Vec3(_) => Value::Vec3([0.0, 0.0, 0.0]),
+        Value::Vec4(_) => Value::Vec4([0.0, 0.0, 0.0, 0.0]),
+        Value::Quat(_) => Value::Quat([0.0, 0.0, 0.0, 0.0]),
+        Value::ColorRgba(_) => Value::ColorRgba([0.0, 0.0, 0.0, 0.0]),
+        Value::Transform { .. } => Value::Transform {
+            pos: [0.0, 0.0, 0.0],
+            rot: [0.0, 0.0, 0.0, 0.0],
+            scale: [0.0, 0.0, 0.0],
+        },
+        Value::Vector(v) => Value::Vector(vec![0.0; v.len()]),
+        _ => Value::Float(0.0),
+    }
+}
+
+/// Sample a single track at normalized time u ∈ [0,1], returning value and derivative.
+pub fn sample_track_with_derivative(track: &Track, u: f32) -> SampledValue {
     let points = &track.points;
     let n = points.len();
     match n {
-        0 => {
-            // No points: return a neutral scalar 0.0 (fail-soft). Adapters can choose policy.
-            Value::Float(0.0)
-        }
-        1 => points[0].value.clone(),
+        0 => SampledValue {
+            value: Value::Float(0.0),
+            derivative: Value::Float(0.0),
+        },
+        1 => SampledValue {
+            value: points[0].value.clone(),
+            derivative: zero_like(&points[0].value),
+        },
         _ => {
             let (i0, i1, lt) = find_segment(points, u.clamp(0.0, 1.0));
             if i0 == i1 {
-                return points[i0].value.clone();
+                let v = points[i0].value.clone();
+                return SampledValue {
+                    value: v.clone(),
+                    derivative: zero_like(&v),
+                };
             }
             let left = &points[i0];
             let right = &points[i1];
 
             // Step behavior for Bool/Text tracks regardless of transitions.
             match left.value.kind() {
-                ValueKind::Bool | ValueKind::Text => return step_value(&left.value),
+                ValueKind::Bool | ValueKind::Text => {
+                    let value = step_value(&left.value);
+                    return SampledValue {
+                        value,
+                        derivative: Value::Float(0.0),
+                    };
+                }
                 _ => {}
             }
 
@@ -89,7 +126,25 @@ pub fn sample_track(track: &Track, u: f32) -> Value {
                 .map(|v| (v.x, v.y))
                 .unwrap_or((DEFAULT_IN_X, DEFAULT_IN_Y));
 
-            bezier_value(&left.value, &right.value, lt, [x1, y1, x2, y2])
+            let segment_len = (right.stamp - left.stamp).abs();
+            if segment_len <= f32::EPSILON {
+                let value = left.value.clone();
+                return SampledValue {
+                    value: value.clone(),
+                    derivative: zero_like(&value),
+                };
+            }
+
+            let (value, eased_t, ease_derivative) =
+                bezier_value_with_derivative(&left.value, &right.value, lt, [x1, y1, x2, y2]);
+            let du = ease_derivative / segment_len.max(f32::EPSILON);
+            let derivative = linear_derivative(&left.value, &right.value, eased_t, du);
+            SampledValue { value, derivative }
         }
     }
+}
+
+/// Sample a single track at normalized time u ∈ [0,1].
+pub fn sample_track(track: &Track, u: f32) -> Value {
+    sample_track_with_derivative(track, u).value
 }

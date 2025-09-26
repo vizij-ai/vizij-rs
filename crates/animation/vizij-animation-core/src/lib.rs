@@ -31,7 +31,7 @@ pub use ids::{AnimId, InstId, PlayerId};
 pub use inputs::{Inputs, InstanceUpdate, LoopMode, PlayerCommand};
 pub use interp::InterpRegistry;
 pub use outputs::{Change, CoreEvent, Outputs};
-pub use sampling::sample_track;
+pub use sampling::{sample_track, sample_track_with_derivative, SampledValue};
 pub use scratch::Scratch;
 pub use stored_animation::parse_stored_animation_json;
 pub use vizij_api_core::{Value, ValueKind};

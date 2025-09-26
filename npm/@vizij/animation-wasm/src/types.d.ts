@@ -128,6 +128,7 @@ export interface Change {
   /** Opaque key (resolved via prebind or canonical path when unresolved) */
   key: string;
   value: Value;
+  derivative: Value;
 }
 
 export type CoreEvent =

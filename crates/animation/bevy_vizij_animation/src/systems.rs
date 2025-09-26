@@ -152,7 +152,13 @@ pub fn apply_outputs_system(world: &mut World) {
     let mut batch = vizij_api_core::WriteBatch::new();
     let mut non_typed: Vec<(String, vizij_api_core::Value)> = Vec::new();
 
-    for Change { key, value, .. } in changes.into_iter() {
+    for Change {
+        key,
+        value,
+        derivative: _,
+        ..
+    } in changes.into_iter()
+    {
         match vizij_api_core::TypedPath::parse(&key) {
             Ok(tp) => batch.push(vizij_api_core::WriteOp::new(tp, value)),
             Err(_) => non_typed.push((key, value)),

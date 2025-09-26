@@ -4,7 +4,7 @@
 //! Methods:
 //! - new, load_animation, create_player, add_instance, prebind (resolver), update (accumulate → blend)
 
-use crate::accumulate::Accumulator;
+use crate::accumulate::{Accumulator, FinalizedSample};
 use crate::baking::{bake_animation_data, export_baked_json, BakedAnimationData, BakingConfig};
 use crate::binding::{BindingSet, BindingTable, ChannelKey, TargetResolver};
 use crate::config::Config;
@@ -13,7 +13,7 @@ use crate::ids::{AnimId, IdAllocator, InstId, PlayerId};
 use crate::inputs::{Inputs, LoopMode};
 use crate::interp::InterpRegistry;
 use crate::outputs::{Change, Outputs};
-use crate::sampling::sample_track;
+use crate::sampling::sample_track_with_derivative;
 use crate::scratch::Scratch;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -561,14 +561,14 @@ impl Engine {
                             } else {
                                 0.0
                             };
-                            let value = sample_track(track, u);
+                            let sample = sample_track_with_derivative(track, u);
                             // Resolve handle if bound, else fallback to canonical path
                             let handle = if let Some(row) = self.binds.get(*ch) {
                                 row.handle.as_str()
                             } else {
                                 track.animatable_id.as_str()
                             };
-                            accum.add(handle, &value, inst.weight);
+                            accum.add(handle, &sample, inst.weight);
                         }
                     }
                 }
@@ -576,11 +576,12 @@ impl Engine {
 
             // 4) Finalize accumulator → write Outputs as changes
             let blended = accum.finalize();
-            for (key, value) in blended.into_iter() {
+            for (key, FinalizedSample { value, derivative }) in blended.into_iter() {
                 self.outputs.push_change(Change {
                     player: p.id,
                     key,
                     value,
+                    derivative,
                 });
             }
         }

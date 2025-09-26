@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 
 use crate::interp::functions::nlerp_quat;
+use crate::sampling::SampledValue;
 use vizij_api_core::Value;
 
 /// Accumulator entry storing weighted sums per Value kind.
@@ -254,10 +255,46 @@ impl AccumEntry {
     }
 }
 
+#[derive(Clone, Debug)]
+struct AccumPair {
+    value: AccumEntry,
+    derivative: AccumEntry,
+}
+
+impl AccumPair {
+    fn new(value: &Value, derivative: &Value, weight: f32) -> Self {
+        Self {
+            value: AccumEntry::from_value(value, weight),
+            derivative: AccumEntry::from_value(derivative, weight),
+        }
+    }
+
+    fn add(&mut self, value: &Value, derivative: &Value, weight: f32) {
+        self.value.add_value(value, weight);
+        self.derivative.add_value(derivative, weight);
+    }
+
+    fn finalize(self) -> Option<(Value, Value)> {
+        let value = self.value.finalize();
+        let derivative = self.derivative.finalize();
+        match (value, derivative) {
+            (Some(v), Some(d)) => Some((v, d)),
+            (Some(v), None) => Some((v, Value::Float(0.0))),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FinalizedSample {
+    pub value: Value,
+    pub derivative: Value,
+}
+
 /// Accumulates per-handle contributions across instances.
 #[derive(Default)]
 pub struct Accumulator {
-    map: HashMap<String, AccumEntry>,
+    map: HashMap<String, AccumPair>,
 }
 
 impl Accumulator {
@@ -267,21 +304,21 @@ impl Accumulator {
         }
     }
 
-    pub fn add(&mut self, handle: &str, value: &Value, weight: f32) {
+    pub fn add(&mut self, handle: &str, sample: &SampledValue, weight: f32) {
         if weight <= 0.0 {
             return;
         }
         self.map
             .entry(handle.to_string())
-            .and_modify(|entry| entry.add_value(value, weight))
-            .or_insert_with(|| AccumEntry::from_value(value, weight));
+            .and_modify(|entry| entry.add(&sample.value, &sample.derivative, weight))
+            .or_insert_with(|| AccumPair::new(&sample.value, &sample.derivative, weight));
     }
 
-    pub fn finalize(self) -> HashMap<String, Value> {
+    pub fn finalize(self) -> HashMap<String, FinalizedSample> {
         let mut out = HashMap::new();
         for (k, entry) in self.map.into_iter() {
-            if let Some(v) = entry.finalize() {
-                out.insert(k, v);
+            if let Some((value, derivative)) = entry.finalize() {
+                out.insert(k, FinalizedSample { value, derivative });
             }
         }
         out

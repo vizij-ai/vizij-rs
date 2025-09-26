@@ -8,7 +8,7 @@ use vizij_animation_core::{
     ids::{AnimId, IdAllocator, PlayerId},
     inputs::{Inputs, InstanceUpdate, LoopMode, PlayerCommand},
     outputs::{CoreEvent, Outputs},
-    sampling::sample_track,
+    sampling::{sample_track, sample_track_with_derivative},
     value::Value,
 };
 
@@ -201,6 +201,54 @@ fn sampling_linear_step_bezier() {
     };
     if let Value::Float(v) = sample_track(&track_bezier_default, 0.5) {
         assert!(v > 0.4 && v < 0.6, "bezier mid expected near 0.5 got {v}");
+    } else {
+        panic!();
+    }
+}
+
+#[test]
+fn sampling_derivative_linear_and_step() {
+    let track_lin = mk_scalar_track_linear("node.value", &[(0.0, 0.0), (1.0, 1.0)]);
+    let sample = sample_track_with_derivative(&track_lin, 0.5);
+    if let Value::Float(v) = sample.value {
+        approx(v, 0.5, 1e-6);
+    } else {
+        panic!();
+    }
+    if let Value::Float(dv) = sample.derivative {
+        approx(dv, 1.0, 1e-6);
+    } else {
+        panic!();
+    }
+
+    let bool_track = Track {
+        id: "t-bool".into(),
+        name: "node.step".into(),
+        animatable_id: "node.step".into(),
+        points: vec![
+            Keypoint {
+                id: "k0".into(),
+                stamp: 0.0,
+                value: Value::Bool(true),
+                transitions: None,
+            },
+            Keypoint {
+                id: "k1".into(),
+                stamp: 1.0,
+                value: Value::Bool(false),
+                transitions: None,
+            },
+        ],
+        settings: None,
+    };
+    let step_sample = sample_track_with_derivative(&bool_track, 0.5);
+    if let Value::Bool(v) = step_sample.value {
+        assert!(v);
+    } else {
+        panic!();
+    }
+    if let Value::Float(dv) = step_sample.derivative {
+        approx(dv, 0.0, 1e-6);
     } else {
         panic!();
     }
@@ -485,6 +533,7 @@ fn outputs_api_basics() {
         player: PlayerId(0),
         key: "a".into(),
         value: Value::Float(1.0),
+        derivative: Value::Float(0.0),
     });
     assert!(!out.is_empty());
     out.clear();

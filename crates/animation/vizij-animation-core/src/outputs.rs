@@ -10,12 +10,18 @@ use serde::{Deserialize, Serialize};
 use crate::ids::PlayerId;
 use vizij_api_core::Value;
 
+fn default_zero_derivative() -> Value {
+    Value::Float(0.0)
+}
+
 /// One changed target value for a given player this tick.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Change {
     pub player: PlayerId,
     pub key: String, // TargetHandle (small string key)
     pub value: Value,
+    #[serde(default = "default_zero_derivative")]
+    pub derivative: Value,
 }
 
 /// Discrete semantic signals emitted during stepping.
