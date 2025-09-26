@@ -102,23 +102,20 @@ Follow these steps the first time you prepare a development environment:
    npm run build:wasm:animation
    npm run build:wasm:graph
    ```
-3. **Link the npm packages into vizij-web** (from this repo):
+3. **Link the npm packages into vizij-web** (from this repo). The helper will rebuild both wrappers and register the global
+   `npm link` targets in one go:
    ```bash
-   npm --workspace npm/@vizij/animation-wasm run build
-   (cd npm/@vizij/animation-wasm && npm link)
-
-   npm --workspace npm/@vizij/node-graph-wasm run build
-   (cd npm/@vizij/node-graph-wasm && npm link)
+   npm run link:wasm
    ```
    Then, in the `vizij-web` repository:
    ```bash
    npm install
-   npm link @vizij/animation-wasm
-   npm link @vizij/node-graph-wasm
+   npm run link:wasm
    ```
-4. **Configure the Vite dev servers in vizij-web** to preserve symlinks and watch the linked packages (see that repository’s
-   README for the exact config). The provided configuration keeps the packages inside `node_modules` and un-ignores them for
-   watch mode.
+   The web repo’s script simply runs `npm link @vizij/animation-wasm @vizij/node-graph-wasm`, wiring its `node_modules/`
+   entries back to these locally built packages.
+4. **Vite dev servers in vizij-web already preserve symlinks and un-ignore the linked wasm packages.** No additional config is
+   required; just ensure you restart any running dev server after relinking so it picks up new symlinks.
 
 ## Usage
 
