@@ -73,11 +73,31 @@ fn load_create_add_and_update() {
     eng.prebind(resolver);
 
     // Update with no inputs (undefined) at small dt
-    let outputs = eng.update(0.016, JsValue::UNDEFINED).unwrap();
+    let outputs = eng.update_values(0.016, JsValue::UNDEFINED).unwrap();
     // Outputs should be an object with { changes, events }
     let obj = js_sys::Object::from(outputs);
     let changes = js_sys::Reflect::get(&obj, &JsValue::from_str("changes")).unwrap();
     assert!(changes.is_object() || changes.is_array());
+}
+
+#[wasm_bindgen_test]
+fn update_with_derivatives_produces_derivative_array() {
+    let mut eng = VizijAnimation::new(JsValue::NULL).unwrap();
+    let anim_id = eng.load_animation(test_animation_json()).unwrap();
+    let player_id = eng.create_player("p".to_string());
+    let _inst_id = eng
+        .add_instance(player_id, anim_id, JsValue::UNDEFINED)
+        .unwrap();
+
+    let _ = eng.update_values(0.0, JsValue::UNDEFINED).unwrap();
+    let outputs = eng
+        .update_values_with_derivatives(0.5, JsValue::UNDEFINED)
+        .unwrap();
+    let obj = js_sys::Object::from(outputs);
+    let derivatives = js_sys::Reflect::get(&obj, &JsValue::from_str("derivatives")).unwrap();
+    assert!(js_sys::Array::is_array(&derivatives));
+    let arr = js_sys::Array::from(&derivatives);
+    assert!(arr.length() >= 1);
 }
 
 // Negative/error-path tests
@@ -120,5 +140,22 @@ fn prebind_resolver_throwing_is_ignored() {
     eng.prebind(resolver);
 
     // Update should still succeed
-    let _outputs = eng.update(0.016, JsValue::UNDEFINED).unwrap();
+    let _outputs = eng.update_values(0.016, JsValue::UNDEFINED).unwrap();
+}
+
+#[wasm_bindgen_test]
+fn bake_animation_and_derivatives_returns_objects() {
+    let mut eng = VizijAnimation::new(JsValue::NULL).unwrap();
+    let anim_id = eng.load_animation(test_animation_json()).unwrap();
+
+    let baked = eng.bake_animation(anim_id, JsValue::UNDEFINED).unwrap();
+    let baked_obj = js_sys::Object::from(baked);
+    assert!(js_sys::Reflect::has(&baked_obj, &JsValue::from_str("tracks")).unwrap());
+
+    let baked_with_derivatives = eng
+        .bake_animation_with_derivatives(anim_id, JsValue::UNDEFINED)
+        .unwrap();
+    let combo_obj = js_sys::Object::from(baked_with_derivatives);
+    assert!(js_sys::Reflect::has(&combo_obj, &JsValue::from_str("animation")).unwrap());
+    assert!(js_sys::Reflect::has(&combo_obj, &JsValue::from_str("derivatives")).unwrap());
 }

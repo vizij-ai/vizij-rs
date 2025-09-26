@@ -83,7 +83,7 @@ fn total_duration_multiple_instances_basic() {
         "initial total duration should be 2.0 (max span)"
     );
     // Apply a window larger than spans: [0, 10] -> total_duration should remain 2.0 (min(10,2))
-    eng.update(
+    eng.update_values(
         0.0,
         vizij_animation_core::Inputs {
             player_cmds: vec![vizij_animation_core::PlayerCommand::SetWindow {
@@ -98,8 +98,8 @@ fn total_duration_multiple_instances_basic() {
     // We can't read total_duration directly; instead simulate advance and ensure
     // local time maps without panic.
     let mut eng_local = eng;
-    let _out = eng_local.update(1.99, vizij_animation_core::Inputs::default());
-    let _out2 = eng_local.update(0.02, vizij_animation_core::Inputs::default());
+    let _out = eng_local.update_values(1.99, vizij_animation_core::Inputs::default());
+    let _out2 = eng_local.update_values(0.02, vizij_animation_core::Inputs::default());
 
     // Verify duration accessor still returns ~2.0 after window set
     let dur1 = eng_local.player_total_duration(p).expect("player duration");
@@ -141,7 +141,7 @@ fn total_duration_with_offsets_and_negative_scale() {
     );
 
     // Apply small window to force total_duration to be min(window_len, max_span)
-    eng.update(
+    eng.update_values(
         0.0,
         vizij_animation_core::Inputs {
             player_cmds: vec![vizij_animation_core::PlayerCommand::SetWindow {
@@ -160,7 +160,7 @@ fn total_duration_with_offsets_and_negative_scale() {
         "total duration should be 0.4 after window"
     );
     // Flip to Once mode
-    eng.update(
+    eng.update_values(
         0.0,
         vizij_animation_core::Inputs {
             player_cmds: vec![vizij_animation_core::PlayerCommand::SetLoopMode {
@@ -173,7 +173,7 @@ fn total_duration_with_offsets_and_negative_scale() {
 
     // Run for 1.0s without panicking; local mapping should handle reverse/forward correctly
     let mut eng2 = eng;
-    let _ = eng2.update(1.0, vizij_animation_core::Inputs::default());
+    let _ = eng2.update_values(1.0, vizij_animation_core::Inputs::default());
 }
 
 #[test]

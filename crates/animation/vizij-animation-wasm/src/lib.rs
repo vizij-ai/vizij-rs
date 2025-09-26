@@ -4,8 +4,8 @@ use wasm_bindgen::prelude::*;
 
 use serde_json::{json, to_value, Map};
 use vizij_animation_core::{
-    parse_stored_animation_json, AnimId, AnimationData, Config, Engine, Inputs, InstId,
-    InstanceCfg, Outputs, PlayerId, TargetResolver,
+    baking::BakingConfig, parse_stored_animation_json, AnimId, AnimationData, Config, Engine,
+    Inputs, InstId, InstanceCfg, Outputs, OutputsWithDerivatives, PlayerId, TargetResolver,
 };
 
 #[wasm_bindgen]
@@ -134,15 +134,83 @@ impl VizijAnimation {
     }
 
     /// Step the simulation by dt (seconds) with inputs JSON. Returns Outputs JSON.
-    #[wasm_bindgen]
-    pub fn update(&mut self, dt: f32, inputs_json: JsValue) -> Result<JsValue, JsError> {
+    #[wasm_bindgen(js_name = update_values)]
+    pub fn update_values(&mut self, dt: f32, inputs_json: JsValue) -> Result<JsValue, JsError> {
         let inputs: Inputs = if jsvalue_is_undefined_or_null(&inputs_json) {
             Inputs::default()
         } else {
             swb::from_value(inputs_json).map_err(|e| JsError::new(&format!("inputs error: {e}")))?
         };
-        let out: &Outputs = self.core.update(dt, inputs);
+        let out: &Outputs = self.core.update_values(dt, inputs);
         swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
+    }
+
+    /// Step the simulation and also return per-target derivatives.
+    #[wasm_bindgen(js_name = update_values_with_derivatives)]
+    pub fn update_values_with_derivatives(
+        &mut self,
+        dt: f32,
+        inputs_json: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let inputs: Inputs = if jsvalue_is_undefined_or_null(&inputs_json) {
+            Inputs::default()
+        } else {
+            swb::from_value(inputs_json).map_err(|e| JsError::new(&format!("inputs error: {e}")))?
+        };
+        let out: OutputsWithDerivatives = self.core.update_values_with_derivatives(dt, inputs);
+        swb::to_value(&out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
+    }
+
+    /// Backwards compatible alias for `update_values`.
+    #[wasm_bindgen(js_name = update)]
+    pub fn update(&mut self, dt: f32, inputs_json: JsValue) -> Result<JsValue, JsError> {
+        self.update_values(dt, inputs_json)
+    }
+
+    /// Bake animation samples for a loaded clip.
+    #[wasm_bindgen(js_name = bake_animation)]
+    pub fn bake_animation(&self, anim_id: u32, cfg_json: JsValue) -> Result<JsValue, JsError> {
+        let cfg: BakingConfig = if jsvalue_is_undefined_or_null(&cfg_json) {
+            BakingConfig::default()
+        } else {
+            swb::from_value(cfg_json)
+                .map_err(|e| JsError::new(&format!("baking config error: {e}")))?
+        };
+        let anim = AnimId(anim_id);
+        match self.core.bake_animation(anim, &cfg) {
+            Some(baked) => swb::to_value(&baked)
+                .map_err(|e| JsError::new(&format!("serialize baked animation error: {e}"))),
+            None => Err(JsError::new("bake_animation: animation id not found")),
+        }
+    }
+
+    /// Bake animation samples along with derivatives for a loaded clip.
+    #[wasm_bindgen(js_name = bake_animation_with_derivatives)]
+    pub fn bake_animation_with_derivatives(
+        &self,
+        anim_id: u32,
+        cfg_json: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let cfg: BakingConfig = if jsvalue_is_undefined_or_null(&cfg_json) {
+            BakingConfig::default()
+        } else {
+            swb::from_value(cfg_json)
+                .map_err(|e| JsError::new(&format!("baking config error: {e}")))?
+        };
+        let anim = AnimId(anim_id);
+        match self.core.bake_animation_with_derivatives(anim, &cfg) {
+            Some((values, derivatives)) => {
+                let payload = json!({
+                    "animation": values,
+                    "derivatives": derivatives,
+                });
+                swb::to_value(&payload)
+                    .map_err(|e| JsError::new(&format!("serialize baked derivatives error: {e}")))
+            }
+            None => Err(JsError::new(
+                "bake_animation_with_derivatives: animation id not found",
+            )),
+        }
     }
 
     /// Step the simulation and return a nodes+writes JSON object compatible with

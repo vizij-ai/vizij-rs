@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::data::AnimationData;
+use crate::derivative::derivative_value;
 use crate::ids::AnimId;
 use crate::sampling::sample_track;
 use vizij_api_core::Value;
@@ -37,12 +38,29 @@ pub struct BakedTrack {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BakedDerivativeTrack {
+    /// Canonical target path (animatable id)
+    pub target_path: String,
+    /// Optional derivative per frame (None when not defined, e.g. Bool/Text).
+    pub derivatives: Vec<Option<Value>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakedAnimationData {
     pub anim: AnimId,
     pub frame_rate: f32,
     pub start_time: f32,
     pub end_time: f32,
     pub tracks: Vec<BakedTrack>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BakedDerivativeAnimation {
+    pub anim: AnimId,
+    pub frame_rate: f32,
+    pub start_time: f32,
+    pub end_time: f32,
+    pub tracks: Vec<BakedDerivativeTrack>,
 }
 
 /// Bake a single AnimationData using the provided config.
@@ -86,6 +104,45 @@ pub fn bake_animation_data(
         end_time: end,
         tracks,
     }
+}
+
+/// Bake animation values together with per-frame derivatives.
+pub fn bake_animation_with_derivatives(
+    anim_id: AnimId,
+    data: &AnimationData,
+    cfg: &BakingConfig,
+) -> (BakedAnimationData, BakedDerivativeAnimation) {
+    let baked = bake_animation_data(anim_id, data, cfg);
+    let sr = baked.frame_rate;
+    let dt = if sr > 0.0 { 1.0 / sr } else { 0.0 };
+
+    let mut tracks = Vec::with_capacity(baked.tracks.len());
+    for track in &baked.tracks {
+        let mut derivatives = Vec::with_capacity(track.values.len());
+        let mut prev: Option<&Value> = None;
+        for value in &track.values {
+            if let (Some(prev_value), true) = (prev, dt > 0.0) {
+                derivatives.push(derivative_value(value, prev_value, dt));
+            } else {
+                derivatives.push(None);
+            }
+            prev = Some(value);
+        }
+        tracks.push(BakedDerivativeTrack {
+            target_path: track.target_path.clone(),
+            derivatives,
+        });
+    }
+
+    let derivative = BakedDerivativeAnimation {
+        anim: baked.anim,
+        frame_rate: baked.frame_rate,
+        start_time: baked.start_time,
+        end_time: baked.end_time,
+        tracks,
+    };
+
+    (baked, derivative)
 }
 
 /// Export baked data as serde_json::Value (stable schema for FFI/serialization).

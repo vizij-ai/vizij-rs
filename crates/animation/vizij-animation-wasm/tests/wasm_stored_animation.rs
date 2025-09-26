@@ -49,7 +49,7 @@ fn wasm_loads_new_format_and_samples_initial() {
         .unwrap();
 
     // Initial tick at dt=0.0 -> should emit starting values
-    let out0 = eng.update(0.0, JsValue::UNDEFINED).unwrap();
+    let out0 = eng.update_values(0.0, JsValue::UNDEFINED).unwrap();
 
     // Track "cube-position-x" starts at -2 (see fixture)
     let s0 = get_scalar_by_key(out0, "cube-position-x").expect("cube-position-x");

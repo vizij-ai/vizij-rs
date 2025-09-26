@@ -91,7 +91,7 @@ fn step_sampling_for_bool_and_text_tracks() {
     let _i = eng.add_instance(p, a, InstanceCfg::default());
 
     // Initial tick at 0.0
-    let out0 = eng.update(0.0, Inputs::default());
+    let out0 = eng.update_values(0.0, Inputs::default());
     let flag0 = out0
         .changes
         .iter()
@@ -116,8 +116,8 @@ fn step_sampling_for_bool_and_text_tracks() {
     }
 
     // Advance by 0.6s (engine maps seconds via duration_ms=1.0s) -> expect B/true
-    let _ = eng.update(0.6, Inputs::default());
-    let out1 = eng.update(0.0, Inputs::default());
+    let _ = eng.update_values(0.6, Inputs::default());
+    let out1 = eng.update_values(0.0, Inputs::default());
     let flag1 = out1
         .changes
         .iter()

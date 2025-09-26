@@ -93,7 +93,7 @@ fn durations_are_independent_per_player() {
     assert!((d2 - 6.0).abs() < 1e-6, "P2 total_duration should be 6.0");
 
     // Apply window to P2 that is smaller than span; duration should clamp to window
-    let _ = eng.update(
+    let _ = eng.update_values(
         0.0,
         vizij_animation_core::Inputs {
             player_cmds: vec![vizij_animation_core::PlayerCommand::SetWindow {

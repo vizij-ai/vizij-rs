@@ -42,10 +42,10 @@ fn parity_scalar_ramp_values() {
         player: pid,
         mode: LoopMode::Once,
     });
-    let _ = eng.update(0.0, init);
+    let _ = eng.update_values(0.0, init);
 
     // Initial sample at t=0.0
-    let out0 = eng.update(0.0, Inputs::default());
+    let out0 = eng.update_values(0.0, Inputs::default());
     let v0 = out0
         .changes
         .iter()
@@ -62,7 +62,7 @@ fn parity_scalar_ramp_values() {
     // Step dt=0.1 for 10 ticks, expect values ~ i/10
     let mut t = 0.0f32;
     for i in 1..=10 {
-        let out = eng.update(0.1, Inputs::default());
+        let out = eng.update_values(0.1, Inputs::default());
         t += 0.1;
         let v = out
             .changes
@@ -98,7 +98,7 @@ fn parity_const_vec3_values() {
     let _iid = eng.add_instance(pid, aid, InstanceCfg::default());
 
     // Sample any tick; expect translation [1,2,3]
-    let out = eng.update(0.016, Inputs::default());
+    let out = eng.update_values(0.016, Inputs::default());
     let v = out
         .changes
         .iter()
@@ -140,7 +140,7 @@ fn parity_window_and_seek() {
         player: pid,
         time: 1.0,
     });
-    let out = eng.update(0.0, inputs);
+    let out = eng.update_values(0.0, inputs);
     let v = out
         .changes
         .iter()
@@ -164,7 +164,7 @@ fn parity_window_and_seek() {
         player: pid,
         time: -0.25,
     });
-    let out2 = eng.update(0.0, inputs2);
+    let out2 = eng.update_values(0.0, inputs2);
     let v2 = out2
         .changes
         .iter()
@@ -197,8 +197,8 @@ fn parity_determinism_same_sequence() {
     // Same dt sequence
     let seq = [0.016, 0.016, 0.032, 0.0, 0.1, 0.25];
     for dt in seq {
-        let o1 = e1.update(dt, Inputs::default());
-        let o2 = e2.update(dt, Inputs::default());
+        let o1 = e1.update_values(dt, Inputs::default());
+        let o2 = e2.update_values(dt, Inputs::default());
         let j1 = serde_json::to_string(o1).unwrap();
         let j2 = serde_json::to_string(o2).unwrap();
         assert_eq!(j1, j2, "Outputs JSON must match for dt={dt}");
@@ -292,7 +292,7 @@ fn parity_quat_layered_normalized() {
         },
     );
 
-    let out = eng.update(0.0, Inputs::default());
+    let out = eng.update_values(0.0, Inputs::default());
     let v = out
         .changes
         .iter()

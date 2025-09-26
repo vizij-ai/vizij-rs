@@ -105,6 +105,12 @@ export interface Change {
   value: Value;
 }
 
+export interface DerivativeChange {
+  player: PlayerId;
+  key: string;
+  value: Value;
+}
+
 export type CoreEvent =
   | { PlaybackStarted: { player: PlayerId; animation?: string | null } }
   | { PlaybackPaused: { player: PlayerId } }
@@ -134,6 +140,48 @@ export type CoreEvent =
 export interface Outputs {
   changes: Change[];
   events: CoreEvent[];
+}
+
+export interface OutputsWithDerivatives {
+  changes: Change[];
+  derivatives: DerivativeChange[];
+  events: CoreEvent[];
+}
+
+/* -----------------------------------------------------------
+   Baked animation data
+----------------------------------------------------------- */
+
+export interface BakedTrack {
+  target_path: string;
+  values: Value[];
+}
+
+export interface BakedAnimationData {
+  anim: AnimId;
+  frame_rate: number;
+  start_time: number;
+  end_time: number;
+  tracks: BakedTrack[];
+}
+
+export interface BakingConfig {
+  frame_rate?: number;
+  start_time?: number;
+  end_time?: number | null;
+}
+
+export interface BakedDerivativeTrack {
+  target_path: string;
+  derivatives: Array<Value | null>;
+}
+
+export interface BakedDerivativeAnimation {
+  anim: AnimId;
+  frame_rate: number;
+  start_time: number;
+  end_time: number;
+  tracks: BakedDerivativeTrack[];
 }
 
 /* -----------------------------------------------------------

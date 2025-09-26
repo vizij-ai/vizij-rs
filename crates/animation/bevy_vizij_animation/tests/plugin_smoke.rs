@@ -26,7 +26,7 @@ fn fixedupdate_ticks_engine() {
     fn fixed_sys(mut eng: ResMut<VizijEngine>, mut ticks: ResMut<Ticks>) {
         let _ = eng
             .0
-            .update(1.0 / 60.0, vizij_animation_core::inputs::Inputs::default());
+            .update_values(1.0 / 60.0, vizij_animation_core::inputs::Inputs::default());
         ticks.0 += 1;
     }
 

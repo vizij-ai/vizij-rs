@@ -18,6 +18,14 @@ pub struct Change {
     pub value: Value,
 }
 
+/// Derivative for a changed target value.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DerivativeChange {
+    pub player: PlayerId,
+    pub key: String,
+    pub value: Value,
+}
+
 /// Discrete semantic signals emitted during stepping.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[non_exhaustive]
@@ -66,11 +74,23 @@ pub enum CoreEvent {
     },
 }
 
-/// Outputs returned by Engine::update().
+/// Outputs returned by [`Engine::update_values`](crate::engine::Engine::update_values).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Outputs {
     #[serde(default)]
     pub changes: Vec<Change>,
+    #[serde(default)]
+    pub events: Vec<CoreEvent>,
+}
+
+/// Outputs plus per-target derivatives returned by
+/// [`Engine::update_values_with_derivatives`](crate::engine::Engine::update_values_with_derivatives).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct OutputsWithDerivatives {
+    #[serde(default)]
+    pub changes: Vec<Change>,
+    #[serde(default)]
+    pub derivatives: Vec<DerivativeChange>,
     #[serde(default)]
     pub events: Vec<CoreEvent>,
 }

@@ -238,7 +238,7 @@ fn binding_prebind_and_fallback() {
     eng.prebind(&mut resolver);
 
     // On update, the key should be the resolved handle
-    let out = eng.update(0.0, Inputs::default());
+    let out = eng.update_values(0.0, Inputs::default());
     assert!(!out.changes.is_empty());
     let keys: Vec<_> = out.changes.iter().map(|c| c.key.as_str()).collect();
     assert!(keys.contains(&"HANDLE_A"));
@@ -248,7 +248,7 @@ fn binding_prebind_and_fallback() {
     let anim2 = mk_anim("b", 1.0, vec![track2]);
     let aid2 = eng.load_animation(anim2);
     let _iid2 = eng.add_instance(pid, aid2, InstanceCfg::default());
-    let out2 = eng.update(0.0, Inputs::default());
+    let out2 = eng.update_values(0.0, Inputs::default());
     let keys2: Vec<_> = out2.changes.iter().map(|c| c.key.as_str()).collect();
     assert!(keys2.contains(&"node.fallback"));
 }
@@ -279,7 +279,7 @@ fn engine_loop_modes_and_window_and_seek() {
         player: pid,
         time: 1.0,
     });
-    let out = eng.update(0.0, inputs);
+    let out = eng.update_values(0.0, inputs);
     // expect value ~ 0.8
     let val = out
         .changes
@@ -304,7 +304,7 @@ fn engine_loop_modes_and_window_and_seek() {
         player: pid,
         time: -0.25,
     });
-    let out2 = eng.update(0.0, inputs2);
+    let out2 = eng.update_values(0.0, inputs2);
     let val2 = out2
         .changes
         .iter()
@@ -338,7 +338,7 @@ fn pingpong_reflection_mapping() {
         player: p,
         time: 0.75,
     });
-    let out = eng.update(0.0, inputs);
+    let out = eng.update_values(0.0, inputs);
     let v = out
         .changes
         .iter()
@@ -358,7 +358,7 @@ fn pingpong_reflection_mapping() {
         player: p,
         time: 1.25,
     });
-    let out2 = eng.update(0.0, inputs2);
+    let out2 = eng.update_values(0.0, inputs2);
     let v2 = out2
         .changes
         .iter()
@@ -397,7 +397,7 @@ fn time_scale_zero_static_pose() {
         player: p,
         time: 0.1,
     });
-    let out = eng.update(0.0, inputs);
+    let out = eng.update_values(0.0, inputs);
     let v = out
         .changes
         .iter()
@@ -416,7 +416,7 @@ fn time_scale_zero_static_pose() {
         player: p,
         time: 10.0,
     });
-    let out2 = eng.update(0.0, inputs2);
+    let out2 = eng.update_values(0.0, inputs2);
     let v2 = out2
         .changes
         .iter()
@@ -461,7 +461,7 @@ fn disabled_instance_skipped() {
             ..Default::default()
         },
     );
-    let out = eng.update(0.0, Inputs::default());
+    let out = eng.update_values(0.0, Inputs::default());
     let v = out
         .changes
         .iter()
@@ -547,6 +547,78 @@ fn baking_matches_sampling_and_counts() {
     assert!(j.is_object());
 }
 
+#[test]
+fn update_values_with_derivatives_returns_expected_velocity() {
+    let track = mk_scalar_track_linear("node.s", &[(0.0, 0.0), (1.0, 1.0)]);
+    let anim = mk_anim("clip", 1.0, vec![track]);
+    let mut eng = Engine::new(Config::default());
+    let anim_id = eng.load_animation(anim);
+    let player = eng.create_player("p");
+    let _ = eng.add_instance(player, anim_id, InstanceCfg::default());
+
+    // Prime previous values at t = 0.
+    let _ = eng.update_values(0.0, Inputs::default());
+
+    let out = eng.update_values_with_derivatives(0.5, Inputs::default());
+    let value = out
+        .changes
+        .iter()
+        .find(|c| c.key == "node.s")
+        .expect("change for node.s")
+        .value
+        .clone();
+    if let Value::Float(v) = value {
+        approx(v, 0.5, 1e-6);
+    } else {
+        panic!("expected float value");
+    }
+
+    let derivative = out
+        .derivatives
+        .iter()
+        .find(|c| c.key == "node.s")
+        .expect("derivative for node.s")
+        .value
+        .clone();
+    if let Value::Float(dv) = derivative {
+        approx(dv, 1.0, 1e-6);
+    } else {
+        panic!("expected float derivative");
+    }
+}
+
+#[test]
+fn engine_bake_with_derivatives_matches_free_function() {
+    let track = mk_scalar_track_linear("node.s", &[(0.0, 0.0), (1.0, 1.0)]);
+    let anim = mk_anim("clip", 1.0, vec![track]);
+    let mut eng = Engine::new(Config::default());
+    let anim_id = eng.load_animation(anim.clone());
+
+    let cfg = BakingConfig {
+        frame_rate: 10.0,
+        start_time: 0.0,
+        end_time: Some(1.0),
+    };
+
+    let baked = eng.bake_animation(anim_id, &cfg).expect("baked data");
+    let baked_free = vizij_animation_core::baking::bake_animation_data(anim_id, &anim, &cfg);
+    assert_eq!(baked.tracks.len(), baked_free.tracks.len());
+    assert_eq!(baked.tracks[0].values, baked_free.tracks[0].values);
+
+    let (_, deriv) = eng
+        .bake_animation_with_derivatives(anim_id, &cfg)
+        .expect("baked derivatives");
+    assert_eq!(deriv.tracks.len(), 1);
+    let samples = &deriv.tracks[0].derivatives;
+    assert_eq!(samples.len(), baked.tracks[0].values.len());
+    assert!(samples[0].is_none());
+    if let Some(Value::Float(dv)) = samples[1] {
+        approx(dv, 1.0, 1e-6);
+    } else {
+        panic!("expected derivative value");
+    }
+}
+
 /// it should produce identical Outputs for the same dt sequence (determinism)
 #[test]
 fn determinism_same_sequence_same_outputs() {
@@ -566,8 +638,8 @@ fn determinism_same_sequence_same_outputs() {
     // Same dt sequence
     let seq = [0.016, 0.016, 0.016, 0.032, 0.0, 0.1];
     for dt in seq {
-        let o1 = e1.update(dt, Inputs::default());
-        let o2 = e2.update(dt, Inputs::default());
+        let o1 = e1.update_values(dt, Inputs::default());
+        let o2 = e2.update_values(dt, Inputs::default());
         // Compare serialized JSON to avoid implementing Eq; allow exact equality for constants
         let j1 = serde_json::to_string(o1).unwrap();
         let j2 = serde_json::to_string(o2).unwrap();
@@ -610,7 +682,7 @@ fn multi_quat_blend_normalized() {
         },
     );
 
-    let out = eng.update(0.0, Inputs::default());
+    let out = eng.update_values(0.0, Inputs::default());
     let v = out
         .changes
         .iter()
@@ -679,7 +751,7 @@ fn sampling_boundaries_single_and_empty() {
     let aid = eng.load_animation(anim);
     let p = eng.create_player("p");
     let _ = eng.add_instance(p, aid, InstanceCfg::default());
-    let out = eng.update(0.0, Inputs::default());
+    let out = eng.update_values(0.0, Inputs::default());
     assert!(!out.changes.iter().any(|c| c.key == "node.empty"));
 }
 
@@ -729,7 +801,7 @@ fn recompute_total_duration_on_window_and_updates() {
         start_time: 2.0,
         end_time: Some(5.0),
     });
-    let _ = eng.update(0.0, inputs);
+    let _ = eng.update_values(0.0, inputs);
     assert!((eng.player_total_duration(p).unwrap() - 3.0).abs() < 1e-6);
 
     // Change instance start_offset reduces remaining_local; duration should decrease
@@ -742,7 +814,7 @@ fn recompute_total_duration_on_window_and_updates() {
         start_offset: Some(9.0),
         enabled: None,
     });
-    let _ = eng.update(0.0, inputs2);
+    let _ = eng.update_values(0.0, inputs2);
     assert!(eng.player_total_duration(p).unwrap() <= 3.0 + 1e-6);
 }
 
@@ -762,9 +834,9 @@ fn speed_play_stop_controls() {
         player: p,
         speed: 0.0,
     });
-    let _ = eng.update(0.0, inputs);
-    let _ = eng.update(1.0, Inputs::default());
-    let out = eng.update(0.0, Inputs::default());
+    let _ = eng.update_values(0.0, inputs);
+    let _ = eng.update_values(1.0, Inputs::default());
+    let out = eng.update_values(0.0, Inputs::default());
     let v = out
         .changes
         .iter()
@@ -781,9 +853,9 @@ fn speed_play_stop_controls() {
     // Play restores to speed 1.0 if paused
     let mut inputs2 = Inputs::default();
     inputs2.player_cmds.push(PlayerCommand::Play { player: p });
-    let _ = eng.update(0.0, inputs2);
-    let _ = eng.update(1.0, Inputs::default());
-    let out2 = eng.update(0.0, Inputs::default());
+    let _ = eng.update_values(0.0, inputs2);
+    let _ = eng.update_values(1.0, Inputs::default());
+    let out2 = eng.update_values(0.0, Inputs::default());
     let v2 = out2
         .changes
         .iter()
@@ -801,8 +873,8 @@ fn speed_play_stop_controls() {
     // Stop resets to start_time (0.0)
     let mut inputs3 = Inputs::default();
     inputs3.player_cmds.push(PlayerCommand::Stop { player: p });
-    let _ = eng.update(0.0, inputs3);
-    let out3 = eng.update(0.0, Inputs::default());
+    let _ = eng.update_values(0.0, inputs3);
+    let out3 = eng.update_values(0.0, Inputs::default());
     let v3 = out3
         .changes
         .iter()
@@ -821,7 +893,7 @@ fn speed_play_stop_controls() {
 #[test]
 fn update_with_no_data_is_safe_and_empty() {
     let mut eng = Engine::new(Config::default());
-    let out = eng.update(0.016, Inputs::default());
+    let out = eng.update_values(0.016, Inputs::default());
     assert!(out.changes.is_empty() && out.events.is_empty());
 }
 
@@ -874,7 +946,7 @@ fn mixed_kind_same_target_safe() {
     );
 
     // Should not panic; engine should ignore mismatched contributions gracefully.
-    let _ = eng.update(0.0, Inputs::default());
+    let _ = eng.update_values(0.0, Inputs::default());
 }
 
 /// it should normalize quaternion when two instances with different orientations contribute to same key
@@ -908,7 +980,7 @@ fn multi_quat_instances_normalized() {
             ..Default::default()
         },
     );
-    let out = eng.update(0.0, Inputs::default());
+    let out = eng.update_values(0.0, Inputs::default());
     let v = out
         .changes
         .iter()

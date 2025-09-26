@@ -1085,7 +1085,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_vizij_animation"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bevy",
  "bevy_vizij_api",
@@ -3864,7 +3864,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vizij-animation-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3873,7 +3873,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-animation-wasm"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "console_error_panic_hook",
  "js-sys",

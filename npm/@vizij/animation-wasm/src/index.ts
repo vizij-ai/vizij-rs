@@ -5,9 +5,11 @@ import initWasm, { VizijAnimation, abi_version } from "../pkg/vizij_animation_wa
 import type {
   InitInput,
   Config,
+  BakingConfig,
   Inputs,
   InstanceUpdate,
   Outputs,
+  OutputsWithDerivatives,
   AnimationData,
   StoredAnimation,
   AnimId,
@@ -16,17 +18,24 @@ import type {
   Value,
   CoreEvent,
   Change,
+  DerivativeChange,
   AnimationInfo,
   PlayerInfo,
   InstanceInfo,
+  BakedAnimationData,
+  BakedDerivativeAnimation,
+  BakedDerivativeTrack,
+  BakedTrack,
 } from "./types";
 
 export type {
   InitInput,
   Config,
+  BakingConfig,
   Inputs,
   InstanceUpdate,
   Outputs,
+  OutputsWithDerivatives,
   AnimationData,
   StoredAnimation,
   AnimId,
@@ -35,9 +44,14 @@ export type {
   Value,
   CoreEvent,
   Change,
+  DerivativeChange,
   AnimationInfo,
   PlayerInfo,
   InstanceInfo,
+  BakedAnimationData,
+  BakedDerivativeAnimation,
+  BakedDerivativeTrack,
+  BakedTrack,
 };
 
 export { VizijAnimation, abi_version };
@@ -181,7 +195,63 @@ export class Engine {
 
   /** Step the simulation by dt (seconds) with optional Inputs; returns Outputs */
   update(dt: number, inputs?: Inputs): Outputs {
-    return (this.inner.update(dt, (inputs ?? undefined) as any) as unknown) as Outputs;
+    return this.updateValues(dt, inputs);
+  }
+
+  /** Step the simulation and return only blended animation values. */
+  updateValues(dt: number, inputs?: Inputs): Outputs {
+    const inner: any = this.inner;
+    if (typeof inner.update_values !== "function") {
+      throw new Error(
+        "Current WASM build does not expose update_values; rebuild vizij-animation-wasm with updated bindings."
+      );
+    }
+    return inner.update_values(dt, (inputs ?? undefined) as any) as Outputs;
+  }
+
+  /** Step the simulation and return blended values plus derivatives. */
+  updateValuesWithDerivatives(dt: number, inputs?: Inputs): OutputsWithDerivatives {
+    const inner: any = this.inner;
+    if (typeof inner.update_values_with_derivatives !== "function") {
+      throw new Error(
+        "Current WASM build does not expose update_values_with_derivatives; rebuild vizij-animation-wasm with updated bindings."
+      );
+    }
+    return inner.update_values_with_derivatives(
+      dt,
+      (inputs ?? undefined) as any
+    ) as OutputsWithDerivatives;
+  }
+
+  /** Bake samples for a loaded animation clip. */
+  bakeAnimation(anim: AnimId, cfg?: Partial<BakingConfig>): BakedAnimationData {
+    const inner: any = this.inner;
+    if (typeof inner.bake_animation !== "function") {
+      throw new Error(
+        "Current WASM build does not expose bake_animation; rebuild vizij-animation-wasm with updated bindings."
+      );
+    }
+    return inner.bake_animation(anim as number, (cfg ?? undefined) as any) as BakedAnimationData;
+  }
+
+  /** Bake samples and derivatives for a loaded animation clip. */
+  bakeAnimationWithDerivatives(
+    anim: AnimId,
+    cfg?: Partial<BakingConfig>
+  ): { animation: BakedAnimationData; derivatives: BakedDerivativeAnimation } {
+    const inner: any = this.inner;
+    if (typeof inner.bake_animation_with_derivatives !== "function") {
+      throw new Error(
+        "Current WASM build does not expose bake_animation_with_derivatives; rebuild vizij-animation-wasm with updated bindings."
+      );
+    }
+    return inner.bake_animation_with_derivatives(
+      anim as number,
+      (cfg ?? undefined) as any
+    ) as {
+      animation: BakedAnimationData;
+      derivatives: BakedDerivativeAnimation;
+    };
   }
 
   /** Remove a player and all its instances */
