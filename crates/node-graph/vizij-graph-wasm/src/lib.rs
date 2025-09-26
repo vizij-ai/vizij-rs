@@ -624,6 +624,30 @@ impl WasmGraph {
             Ok(out)
         }
 
+        fn parse_string_list(node_id: &str, key: &str, v: &Value) -> Result<Vec<String>, JsValue> {
+            match v {
+                Value::List(items) | Value::Array(items) | Value::Tuple(items) => {
+                    let mut out = Vec::with_capacity(items.len());
+                    for item in items {
+                        if let Value::Text(s) = item {
+                            out.push(s.clone());
+                        } else {
+                            return Err(JsValue::from_str(&format!(
+                                "set_param: node '{}' key '{}' expects list of Text",
+                                node_id, key
+                            )));
+                        }
+                    }
+                    Ok(out)
+                }
+                Value::Text(s) => Ok(vec![s.clone()]),
+                _ => Err(JsValue::from_str(&format!(
+                    "set_param: node '{}' key '{}' expects Text or list of Text",
+                    node_id, key
+                ))),
+            }
+        }
+
         if let Some(node) = self.spec.nodes.iter_mut().find(|n| n.id == node_id) {
             match key {
                 "value" => {
@@ -697,6 +721,9 @@ impl WasmGraph {
                 }
                 "joint_defaults" => {
                     node.params.joint_defaults = Some(parse_pairs(node_id, key, &val)?);
+                }
+                "case_labels" => {
+                    node.params.case_labels = Some(parse_string_list(node_id, key, &val)?);
                 }
 
                 _ => {

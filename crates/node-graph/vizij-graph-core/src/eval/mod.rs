@@ -29,6 +29,8 @@ pub use graph_runtime::{GraphRuntime, StagedInput};
 pub use value_layout::PortValue;
 
 #[cfg(test)]
+mod blend_tests;
+#[cfg(test)]
 mod tests;
 
 /// Evaluate every node in `spec`, updating `rt` in-place.

@@ -1,0 +1,49 @@
+{
+  "nodes": [
+    {
+      "id": "values",
+      "type": "constant",
+      "params": { "value": { "vector": [1.0, 2.0, 3.0] } }
+    },
+    {
+      "id": "weights",
+      "type": "constant",
+      "params": { "value": { "vector": [0.5] } }
+    },
+    {
+      "id": "ws",
+      "type": "weightedsumvector",
+      "inputs": {
+        "values": { "node_id": "values" },
+        "weights": { "node_id": "weights" }
+      }
+    },
+    {
+      "id": "bavg",
+      "type": "blendweightedaverage",
+      "inputs": {
+        "total_weighted_sum": { "node_id": "ws", "output_key": "total_weighted_sum" },
+        "total_weight": { "node_id": "ws", "output_key": "total_weight" },
+        "max_effective_weight": { "node_id": "ws", "output_key": "max_effective_weight" }
+      }
+    },
+    {
+      "id": "out_sum",
+      "type": "output",
+      "params": { "path": "samples/ws.sum" },
+      "inputs": { "in": { "node_id": "ws", "output_key": "total_weighted_sum" } }
+    },
+    {
+      "id": "out_total",
+      "type": "output",
+      "params": { "path": "samples/ws.total" },
+      "inputs": { "in": { "node_id": "ws", "output_key": "total_weight" } }
+    },
+    {
+      "id": "out_avg",
+      "type": "output",
+      "params": { "path": "samples/ws.avg" },
+      "inputs": { "in": { "node_id": "bavg" } }
+    }
+  ]
+}

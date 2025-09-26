@@ -454,6 +454,18 @@ function assertText(write: WriteOpJSON, expected: string): void {
       });
     }
 
+    // New fixture exercising the WeightedSumVector + BlendWeightedAverage nodes
+    {
+      const wsSpecJson = readFileSync(resolve(fixturesDir, "weighted-sum-helper-graph.json"), "utf8");
+      await runSample("weighted-sum-helper", wsSpecJson, {
+        expectations: [
+          { path: "samples/ws.sum", expectFloat: 3.0 },
+          { path: "samples/ws.total", expectFloat: 1.5 },
+          { path: "samples/ws.avg", expectFloat: 1.0 },
+        ],
+      });
+    }
+
     // nested telemetry checks
     {
       const telemetryResult = await runSample("nested-telemetry", nestedTelemetry);

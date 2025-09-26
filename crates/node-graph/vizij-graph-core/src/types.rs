@@ -51,6 +51,8 @@ pub enum NodeType {
     Equal,
     NotEqual,
     If,
+    // Control-flow helper: route by label
+    Case,
 
     // Ranges
     Clamp,
@@ -76,6 +78,15 @@ pub enum NodeType {
     VectorMean,
     VectorMedian,
     VectorMode,
+
+    // Blend helpers
+    WeightedSumVector,
+    BlendWeightedAverage,
+    BlendAdditive,
+    BlendMultiply,
+    BlendWeightedOverlay,
+    BlendWeightedAverageOverlay,
+    BlendMax,
 
     // Robotics
     InverseKinematics,
@@ -132,6 +143,10 @@ pub struct NodeParams {
     pub mass: Option<f32>,
     pub half_life: Option<f32>,
     pub max_rate: Option<f32>,
+
+    // For Case routing nodes
+    #[serde(default)]
+    pub case_labels: Option<Vec<String>>,
 
     // Optional target typed path for Output nodes and sinks.
     // Example: "robot1/Arm/Joint3.translation"
