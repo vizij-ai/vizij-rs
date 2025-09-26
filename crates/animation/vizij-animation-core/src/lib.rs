@@ -22,7 +22,7 @@ pub mod stored_animation;
 pub mod value;
 
 // Re-exports for consumers (adapters)
-pub use baking::{BakedAnimationData, BakingConfig};
+pub use baking::{BakedAnimationData, BakedAnimationDerivatives, BakingConfig};
 pub use binding::{BindingSet, BindingTable, ChannelKey, TargetHandle, TargetResolver};
 pub use config::Config;
 pub use data::{AnimationData, Keypoint, Track, Transitions, Vec2};
@@ -30,7 +30,7 @@ pub use engine::{Engine, InstanceCfg, Player};
 pub use ids::{AnimId, InstId, PlayerId};
 pub use inputs::{Inputs, InstanceUpdate, LoopMode, PlayerCommand};
 pub use interp::InterpRegistry;
-pub use outputs::{Change, CoreEvent, Outputs};
+pub use outputs::{Change, ChangeWithDerivative, CoreEvent, Outputs, OutputsWithDerivatives};
 pub use sampling::sample_track;
 pub use scratch::Scratch;
 pub use stored_animation::parse_stored_animation_json;

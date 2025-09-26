@@ -287,3 +287,37 @@ impl Accumulator {
         out
     }
 }
+
+/// Accumulator variant that tracks both values and optional derivatives.
+#[derive(Default)]
+pub struct AccumulatorWithDerivatives {
+    values: Accumulator,
+    derivatives: Accumulator,
+}
+
+impl AccumulatorWithDerivatives {
+    pub fn new() -> Self {
+        Self {
+            values: Accumulator::new(),
+            derivatives: Accumulator::new(),
+        }
+    }
+
+    pub fn add(&mut self, handle: &str, value: &Value, derivative: Option<&Value>, weight: f32) {
+        self.values.add(handle, value, weight);
+        if let Some(deriv) = derivative {
+            self.derivatives.add(handle, deriv, weight);
+        }
+    }
+
+    pub fn finalize(self) -> HashMap<String, (Value, Option<Value>)> {
+        let values = self.values.finalize();
+        let derivs = self.derivatives.finalize();
+        let mut out = HashMap::new();
+        for (key, value) in values.into_iter() {
+            let derivative = derivs.get(&key).cloned();
+            out.insert(key, (value, derivative));
+        }
+        out
+    }
+}

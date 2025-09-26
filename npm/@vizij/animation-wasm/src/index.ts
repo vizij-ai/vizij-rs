@@ -8,6 +8,7 @@ import type {
   Inputs,
   InstanceUpdate,
   Outputs,
+  OutputsWithDerivatives,
   AnimationData,
   StoredAnimation,
   AnimId,
@@ -16,9 +17,13 @@ import type {
   Value,
   CoreEvent,
   Change,
+  ChangeWithDerivative,
   AnimationInfo,
   PlayerInfo,
   InstanceInfo,
+  BakedAnimationData,
+  BakedAnimationDerivatives,
+  BakedAnimationWithDerivatives,
 } from "./types";
 
 export type {
@@ -27,6 +32,7 @@ export type {
   Inputs,
   InstanceUpdate,
   Outputs,
+  OutputsWithDerivatives,
   AnimationData,
   StoredAnimation,
   AnimId,
@@ -35,9 +41,13 @@ export type {
   Value,
   CoreEvent,
   Change,
+  ChangeWithDerivative,
   AnimationInfo,
   PlayerInfo,
   InstanceInfo,
+  BakedAnimationData,
+  BakedAnimationDerivatives,
+  BakedAnimationWithDerivatives,
 };
 
 export { VizijAnimation, abi_version };
@@ -181,7 +191,29 @@ export class Engine {
 
   /** Step the simulation by dt (seconds) with optional Inputs; returns Outputs */
   update(dt: number, inputs?: Inputs): Outputs {
-    return (this.inner.update(dt, (inputs ?? undefined) as any) as unknown) as Outputs;
+    return this.updateValues(dt, inputs);
+  }
+
+  /** Step the simulation by dt (seconds) with optional Inputs; returns Outputs */
+  updateValues(dt: number, inputs?: Inputs): Outputs {
+    const inner: any = this.inner;
+    if (typeof inner.update_values !== "function") {
+      throw new Error(
+        "Current WASM build does not expose update_values; rebuild vizij-animation-wasm with updated bindings."
+      );
+    }
+    return inner.update_values(dt, (inputs ?? undefined) as any) as Outputs;
+  }
+
+  /** Step the simulation returning values plus derivatives */
+  updateWithDerivatives(dt: number, inputs?: Inputs): OutputsWithDerivatives {
+    const inner: any = this.inner;
+    if (typeof inner.update_with_derivatives !== "function") {
+      throw new Error(
+        "Current WASM build does not expose update_with_derivatives; rebuild vizij-animation-wasm with updated bindings."
+      );
+    }
+    return inner.update_with_derivatives(dt, (inputs ?? undefined) as any) as OutputsWithDerivatives;
   }
 
   /** Remove a player and all its instances */
@@ -245,6 +277,28 @@ export class Engine {
       throw new Error("list_player_keys not available; rebuild vizij-animation-wasm");
     }
     return (inner.list_player_keys(player as number) as unknown) as string[];
+  }
+
+  /** Bake animation values using the core engine */
+  bakeAnimation(anim: AnimId, cfg?: unknown): BakedAnimationData {
+    const inner: any = this.inner;
+    if (typeof inner.bake_animation !== "function") {
+      throw new Error(
+        "Current WASM build does not expose bake_animation; rebuild vizij-animation-wasm with updated bindings."
+      );
+    }
+    return inner.bake_animation(anim as number, (cfg ?? undefined) as any) as BakedAnimationData;
+  }
+
+  /** Bake animation values and derivatives */
+  bakeAnimationWithDerivatives(anim: AnimId, cfg?: unknown): BakedAnimationWithDerivatives {
+    const inner: any = this.inner;
+    if (typeof inner.bake_animation_with_derivatives !== "function") {
+      throw new Error(
+        "Current WASM build does not expose bake_animation_with_derivatives; rebuild vizij-animation-wasm with updated bindings."
+      );
+    }
+    return inner.bake_animation_with_derivatives(anim as number, (cfg ?? undefined) as any) as BakedAnimationWithDerivatives;
   }
 }
 

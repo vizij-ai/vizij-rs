@@ -16,6 +16,8 @@ use crate::data::{Keypoint, Track};
 use crate::interp::functions::{bezier_value, step_value};
 use vizij_api_core::{Value, ValueKind};
 
+const FINITE_DIFF_EPS: f32 = 1e-3;
+
 const DEFAULT_OUT_X: f32 = 0.42;
 const DEFAULT_OUT_Y: f32 = 0.0;
 const DEFAULT_IN_X: f32 = 0.58;
@@ -92,4 +94,107 @@ pub fn sample_track(track: &Track, u: f32) -> Value {
             bezier_value(&left.value, &right.value, lt, [x1, y1, x2, y2])
         }
     }
+}
+
+fn finite_difference(forward: &Value, backward: &Value, denom: f32) -> Option<Value> {
+    if denom <= 0.0 {
+        return None;
+    }
+    match (forward, backward) {
+        (Value::Float(a), Value::Float(b)) => Some(Value::Float((a - b) / denom)),
+        (Value::Vec2(a), Value::Vec2(b)) => {
+            Some(Value::Vec2([(a[0] - b[0]) / denom, (a[1] - b[1]) / denom]))
+        }
+        (Value::Vec3(a), Value::Vec3(b)) => Some(Value::Vec3([
+            (a[0] - b[0]) / denom,
+            (a[1] - b[1]) / denom,
+            (a[2] - b[2]) / denom,
+        ])),
+        (Value::Vec4(a), Value::Vec4(b)) => Some(Value::Vec4([
+            (a[0] - b[0]) / denom,
+            (a[1] - b[1]) / denom,
+            (a[2] - b[2]) / denom,
+            (a[3] - b[3]) / denom,
+        ])),
+        (Value::Quat(a), Value::Quat(b)) => Some(Value::Quat([
+            (a[0] - b[0]) / denom,
+            (a[1] - b[1]) / denom,
+            (a[2] - b[2]) / denom,
+            (a[3] - b[3]) / denom,
+        ])),
+        (Value::ColorRgba(a), Value::ColorRgba(b)) => Some(Value::ColorRgba([
+            (a[0] - b[0]) / denom,
+            (a[1] - b[1]) / denom,
+            (a[2] - b[2]) / denom,
+            (a[3] - b[3]) / denom,
+        ])),
+        (
+            Value::Transform {
+                pos: ap,
+                rot: ar,
+                scale: a_scale,
+            },
+            Value::Transform {
+                pos: bp,
+                rot: br,
+                scale: b_scale,
+            },
+        ) => Some(Value::Transform {
+            pos: [
+                (ap[0] - bp[0]) / denom,
+                (ap[1] - bp[1]) / denom,
+                (ap[2] - bp[2]) / denom,
+            ],
+            rot: [
+                (ar[0] - br[0]) / denom,
+                (ar[1] - br[1]) / denom,
+                (ar[2] - br[2]) / denom,
+                (ar[3] - br[3]) / denom,
+            ],
+            scale: [
+                (a_scale[0] - b_scale[0]) / denom,
+                (a_scale[1] - b_scale[1]) / denom,
+                (a_scale[2] - b_scale[2]) / denom,
+            ],
+        }),
+        (Value::Vector(a), Value::Vector(b)) => {
+            if a.len() != b.len() {
+                return None;
+            }
+            let mut out = Vec::with_capacity(a.len());
+            for (aa, bb) in a.iter().zip(b.iter()) {
+                out.push((aa - bb) / denom);
+            }
+            Some(Value::Vector(out))
+        }
+        _ => None,
+    }
+}
+
+/// Sample a track and estimate its first derivative using symmetric finite differences.
+pub fn sample_track_with_derivative(
+    track: &Track,
+    u: f32,
+    duration_seconds: f32,
+) -> (Value, Option<Value>) {
+    let value = sample_track(track, u);
+
+    match value.kind() {
+        ValueKind::Bool | ValueKind::Text => return (value, None),
+        _ => {}
+    }
+
+    if duration_seconds <= 0.0 {
+        return (value, None);
+    }
+
+    let eps = FINITE_DIFF_EPS;
+    let forward_u = (u + eps).clamp(0.0, 1.0);
+    let backward_u = (u - eps).clamp(0.0, 1.0);
+    let forward = sample_track(track, forward_u);
+    let backward = sample_track(track, backward_u);
+    let dt = 2.0 * eps * duration_seconds;
+    let derivative = finite_difference(&forward, &backward, dt);
+
+    (value, derivative)
 }

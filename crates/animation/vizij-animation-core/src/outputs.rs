@@ -97,3 +97,40 @@ impl Outputs {
         self.changes.is_empty() && self.events.is_empty()
     }
 }
+
+/// A change that carries both the current value and its derivative when available.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChangeWithDerivative {
+    pub player: PlayerId,
+    pub key: String,
+    pub value: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub derivative: Option<Value>,
+}
+
+/// Outputs returned by Engine::update_with_derivatives().
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct OutputsWithDerivatives {
+    #[serde(default)]
+    pub changes: Vec<ChangeWithDerivative>,
+    #[serde(default)]
+    pub events: Vec<CoreEvent>,
+}
+
+impl OutputsWithDerivatives {
+    #[inline]
+    pub fn clear(&mut self) {
+        self.changes.clear();
+        self.events.clear();
+    }
+
+    #[inline]
+    pub fn push_change(&mut self, change: ChangeWithDerivative) {
+        self.changes.push(change);
+    }
+
+    #[inline]
+    pub fn push_event(&mut self, event: CoreEvent) {
+        self.events.push(event);
+    }
+}

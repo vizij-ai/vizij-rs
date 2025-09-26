@@ -4,8 +4,9 @@ use wasm_bindgen::prelude::*;
 
 use serde_json::{json, to_value, Map};
 use vizij_animation_core::{
-    parse_stored_animation_json, AnimId, AnimationData, Config, Engine, Inputs, InstId,
-    InstanceCfg, Outputs, PlayerId, TargetResolver,
+    parse_stored_animation_json, AnimId, AnimationData, BakedAnimationData,
+    BakedAnimationDerivatives, BakingConfig, Config, Engine, Inputs, InstId, InstanceCfg, Outputs,
+    OutputsWithDerivatives, PlayerId, TargetResolver,
 };
 
 #[wasm_bindgen]
@@ -136,12 +137,34 @@ impl VizijAnimation {
     /// Step the simulation by dt (seconds) with inputs JSON. Returns Outputs JSON.
     #[wasm_bindgen]
     pub fn update(&mut self, dt: f32, inputs_json: JsValue) -> Result<JsValue, JsError> {
+        self.update_values(dt, inputs_json)
+    }
+
+    /// Step the simulation by dt (seconds) with inputs JSON. Returns Outputs JSON.
+    #[wasm_bindgen(js_name = update_values)]
+    pub fn update_values(&mut self, dt: f32, inputs_json: JsValue) -> Result<JsValue, JsError> {
         let inputs: Inputs = if jsvalue_is_undefined_or_null(&inputs_json) {
             Inputs::default()
         } else {
             swb::from_value(inputs_json).map_err(|e| JsError::new(&format!("inputs error: {e}")))?
         };
-        let out: &Outputs = self.core.update(dt, inputs);
+        let out: &Outputs = self.core.update_values(dt, inputs);
+        swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
+    }
+
+    /// Step the simulation and return values plus derivatives.
+    #[wasm_bindgen(js_name = update_with_derivatives)]
+    pub fn update_with_derivatives(
+        &mut self,
+        dt: f32,
+        inputs_json: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let inputs: Inputs = if jsvalue_is_undefined_or_null(&inputs_json) {
+            Inputs::default()
+        } else {
+            swb::from_value(inputs_json).map_err(|e| JsError::new(&format!("inputs error: {e}")))?
+        };
+        let out: &OutputsWithDerivatives = self.core.update_with_derivatives(dt, inputs);
         swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
     }
 
@@ -222,6 +245,46 @@ impl VizijAnimation {
     pub fn list_player_keys(&self, player_id: u32) -> Result<JsValue, JsError> {
         let v = self.core.list_player_keys(PlayerId(player_id));
         swb::to_value(&v).map_err(|e| JsError::new(&format!("list_player_keys error: {e}")))
+    }
+
+    /// Bake the specified animation clip using the provided config JSON.
+    #[wasm_bindgen(js_name = bake_animation)]
+    pub fn bake_animation(&self, anim_id: u32, cfg: JsValue) -> Result<JsValue, JsError> {
+        let cfg_rs: BakingConfig = if jsvalue_is_undefined_or_null(&cfg) {
+            BakingConfig::default()
+        } else {
+            swb::from_value(cfg).map_err(|e| JsError::new(&format!("bake config error: {e}")))?
+        };
+        let anim = AnimId(anim_id);
+        let baked: BakedAnimationData = self
+            .core
+            .bake_animation(anim, &cfg_rs)
+            .ok_or_else(|| JsError::new(&format!("animation {anim_id} not found")))?;
+        swb::to_value(&baked).map_err(|e| JsError::new(&format!("bake serialize error: {e}")))
+    }
+
+    /// Bake the specified animation clip returning both values and derivatives.
+    #[wasm_bindgen(js_name = bake_animation_with_derivatives)]
+    pub fn bake_animation_with_derivatives(
+        &self,
+        anim_id: u32,
+        cfg: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let cfg_rs: BakingConfig = if jsvalue_is_undefined_or_null(&cfg) {
+            BakingConfig::default()
+        } else {
+            swb::from_value(cfg).map_err(|e| JsError::new(&format!("bake config error: {e}")))?
+        };
+        let anim = AnimId(anim_id);
+        let (values, derivatives): (BakedAnimationData, BakedAnimationDerivatives) = self
+            .core
+            .bake_animation_with_derivatives(anim, &cfg_rs)
+            .ok_or_else(|| JsError::new(&format!("animation {anim_id} not found")))?;
+        let output = json!({
+            "values": values,
+            "derivatives": derivatives,
+        });
+        swb::to_value(&output).map_err(|e| JsError::new(&format!("bake serialize error: {e}")))
     }
 }
 
