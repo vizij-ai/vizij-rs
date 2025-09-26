@@ -85,7 +85,7 @@ Inside this repository:
 ### Core crate
 
 * Create an `Engine`, load animation data (either `AnimationData` or `StoredAnimation` JSON), create players/instances, and call
-  `update(dt, inputs)` each tick.
+  `update_values(dt, inputs)` (or `update_values_and_derivatives(dt, inputs)`) each tick.
 * Outputs contain `changes` (resolved target key/value pairs) and `events` (playback notifications, keypoint hits, warnings).
 
 ### Bevy plugin
@@ -99,7 +99,8 @@ Inside this repository:
 
 * `await init()` once, then construct `VizijAnimation` or the higher-level `Engine` wrapper from the npm package.
 * Use the same workflow as the Rust engine: load animations, create players/instances, optionally call `prebind` with a resolver
-  callback, and `update(dt)` each frame. Outputs are plain JSON structures suitable for React state or other consumers.
+  callback, and `updateValues(dt)` or `updateValuesAndDerivatives(dt)` each frame. Outputs are plain JSON structures suitable for
+  React state or other consumers.
 
 ## Key Details
 
@@ -129,7 +130,7 @@ let anim = engine.load_animation(stored);
 let player = engine.create_player("demo");
 engine.add_instance(player, anim, InstanceCfg::default());
 
-let outputs = engine.update(1.0 / 60.0, Default::default());
+let outputs = engine.update_values(1.0 / 60.0, Default::default());
 for change in outputs.changes {
     println!("{} => {:?}", change.key, change.value);
 }
@@ -193,7 +194,7 @@ const playerId = eng.createPlayer("demo");
 eng.addInstance(playerId, animId);
 eng.prebind((path) => path); // identity binding
 
-const outputs = eng.update(1 / 60);
+const outputs = eng.updateValues(1 / 60);
 console.log(outputs.changes);
 ```
 

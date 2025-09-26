@@ -73,7 +73,7 @@ fn load_create_add_and_update() {
     eng.prebind(resolver);
 
     // Update with no inputs (undefined) at small dt
-    let outputs = eng.update(0.016, JsValue::UNDEFINED).unwrap();
+    let outputs = eng.update_values(0.016, JsValue::UNDEFINED).unwrap();
     // Outputs should be an object with { changes, events }
     let obj = js_sys::Object::from(outputs);
     let changes = js_sys::Reflect::get(&obj, &JsValue::from_str("changes")).unwrap();
@@ -120,5 +120,39 @@ fn prebind_resolver_throwing_is_ignored() {
     eng.prebind(resolver);
 
     // Update should still succeed
-    let _outputs = eng.update(0.016, JsValue::UNDEFINED).unwrap();
+    let _outputs = eng.update_values(0.016, JsValue::UNDEFINED).unwrap();
+}
+
+#[wasm_bindgen_test]
+fn update_with_derivatives_returns_optional_derivative() {
+    let mut eng = VizijAnimation::new(JsValue::NULL).unwrap();
+    let anim_id = eng.load_animation(test_animation_json()).unwrap();
+    let player_id = eng.create_player("p".into());
+    let _ = eng
+        .add_instance(player_id, anim_id, JsValue::UNDEFINED)
+        .unwrap();
+
+    let outputs = eng
+        .update_values_and_derivatives(0.016, JsValue::UNDEFINED)
+        .unwrap();
+    let obj = js_sys::Object::from(outputs);
+    let changes = js_sys::Reflect::get(&obj, &JsValue::from_str("changes")).unwrap();
+    let array = js_sys::Array::from(&changes);
+    assert!(array.length() > 0);
+    let first = array.get(0);
+    let derivative = js_sys::Reflect::get(&first, &JsValue::from_str("derivative")).unwrap();
+    assert!(derivative.is_null() || derivative.is_object());
+}
+
+#[wasm_bindgen_test]
+fn bake_animation_with_derivatives_returns_bundle() {
+    let mut eng = VizijAnimation::new(JsValue::NULL).unwrap();
+    let anim_id = eng.load_animation(test_animation_json()).unwrap();
+
+    let bundle = eng
+        .bake_animation_with_derivatives(anim_id, JsValue::UNDEFINED)
+        .unwrap();
+    let obj = js_sys::Object::from(bundle);
+    assert!(js_sys::Reflect::has(&obj, &JsValue::from_str("values")).unwrap());
+    assert!(js_sys::Reflect::has(&obj, &JsValue::from_str("derivatives")).unwrap());
 }

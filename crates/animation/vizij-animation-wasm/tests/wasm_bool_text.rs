@@ -95,7 +95,7 @@ fn wasm_bool_text_outputs_and_step() {
         .unwrap();
 
     // Initial tick at 0.0
-    let out0 = eng.update(0.0, JsValue::UNDEFINED).unwrap();
+    let out0 = eng.update_values(0.0, JsValue::UNDEFINED).unwrap();
     let v_flag0 = get_change_value(&out0, "node.flag").expect("node.flag");
     let v_label0 = get_change_value(&out0, "node.label").expect("node.label");
 
@@ -123,8 +123,8 @@ fn wasm_bool_text_outputs_and_step() {
     assert_eq!(data_label0, "A".to_string());
 
     // Advance to 0.6s (u~=0.6) -> expect true / "B" due to step (hold left)
-    let _ = eng.update(0.6, JsValue::UNDEFINED).unwrap();
-    let out1 = eng.update(0.0, JsValue::UNDEFINED).unwrap();
+    let _ = eng.update_values(0.6, JsValue::UNDEFINED).unwrap();
+    let out1 = eng.update_values(0.0, JsValue::UNDEFINED).unwrap();
     let v_flag1 = get_change_value(&out1, "node.flag").expect("node.flag");
     let v_label1 = get_change_value(&out1, "node.label").expect("node.label");
 

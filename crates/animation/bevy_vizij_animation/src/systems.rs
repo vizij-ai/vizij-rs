@@ -123,7 +123,7 @@ pub fn fixed_update_core_system(
     dt: Res<FixedDt>,
     mut pending: ResMut<PendingOutputs>,
 ) {
-    let out = eng.0.update(dt.0, Inputs::default());
+    let out = eng.0.update_values(dt.0, Inputs::default());
     // Replace pending changes with this tick's changes
     pending.changes.clear();
     pending.changes.extend(out.changes.iter().cloned());

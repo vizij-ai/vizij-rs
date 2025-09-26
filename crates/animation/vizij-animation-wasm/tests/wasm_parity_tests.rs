@@ -49,14 +49,14 @@ fn wasm_parity_scalar_ramp() {
         .unwrap();
 
     // Initial tick at dt=0.0 -> value ~ 0.0
-    let out0 = eng.update(0.0, JsValue::UNDEFINED).unwrap();
+    let out0 = eng.update_values(0.0, JsValue::UNDEFINED).unwrap();
     let s0 = get_scalar_by_key(out0, "node.t").expect("node.t");
     approx(s0, 0.0, 1e-6);
 
     // Step 9 ticks of 0.1 -> expect ~ i/10 at each step (avoid wrap at exactly 1.0 in Loop mode)
     let mut t = 0.0f64;
     for i in 1..=9 {
-        let out = eng.update(0.1, JsValue::UNDEFINED).unwrap();
+        let out = eng.update_values(0.1, JsValue::UNDEFINED).unwrap();
         t += 0.1;
         let s = get_scalar_by_key(out, "node.t").expect("node.t");
         approx(s, t, 1e-6);

@@ -4,8 +4,9 @@ use wasm_bindgen::prelude::*;
 
 use serde_json::{json, to_value, Map};
 use vizij_animation_core::{
-    parse_stored_animation_json, AnimId, AnimationData, Config, Engine, Inputs, InstId,
-    InstanceCfg, Outputs, PlayerId, TargetResolver,
+    parse_stored_animation_json, AnimId, AnimationData, BakedAnimationData,
+    BakedDerivativeAnimationData, BakingConfig, Config, Engine, Inputs, InstId, InstanceCfg,
+    Outputs, OutputsWithDerivatives, PlayerId, TargetResolver,
 };
 
 #[wasm_bindgen]
@@ -15,6 +16,22 @@ pub struct VizijAnimation {
 
 fn jsvalue_is_undefined_or_null(v: &JsValue) -> bool {
     v.is_undefined() || v.is_null()
+}
+
+fn parse_inputs_js(inputs_json: JsValue) -> Result<Inputs, JsError> {
+    if jsvalue_is_undefined_or_null(&inputs_json) {
+        Ok(Inputs::default())
+    } else {
+        swb::from_value(inputs_json).map_err(|e| JsError::new(&format!("inputs error: {e}")))
+    }
+}
+
+fn parse_baking_config_js(cfg: JsValue) -> Result<BakingConfig, JsError> {
+    if jsvalue_is_undefined_or_null(&cfg) {
+        Ok(BakingConfig::default())
+    } else {
+        swb::from_value(cfg).map_err(|e| JsError::new(&format!("baking config error: {e}")))
+    }
 }
 
 struct JsResolver {
@@ -134,15 +151,29 @@ impl VizijAnimation {
     }
 
     /// Step the simulation by dt (seconds) with inputs JSON. Returns Outputs JSON.
+    #[wasm_bindgen(js_name = update_values)]
+    pub fn update_values(&mut self, dt: f32, inputs_json: JsValue) -> Result<JsValue, JsError> {
+        let inputs = parse_inputs_js(inputs_json)?;
+        let out: &Outputs = self.core.update_values(dt, inputs);
+        swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
+    }
+
+    /// Step the simulation by dt returning both values and derivatives.
+    #[wasm_bindgen(js_name = update_values_and_derivatives)]
+    pub fn update_values_and_derivatives(
+        &mut self,
+        dt: f32,
+        inputs_json: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let inputs = parse_inputs_js(inputs_json)?;
+        let out: &OutputsWithDerivatives = self.core.update_values_and_derivatives(dt, inputs);
+        swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
+    }
+
+    /// Backwards-compatible alias for `update_values`.
     #[wasm_bindgen]
     pub fn update(&mut self, dt: f32, inputs_json: JsValue) -> Result<JsValue, JsError> {
-        let inputs: Inputs = if jsvalue_is_undefined_or_null(&inputs_json) {
-            Inputs::default()
-        } else {
-            swb::from_value(inputs_json).map_err(|e| JsError::new(&format!("inputs error: {e}")))?
-        };
-        let out: &Outputs = self.core.update(dt, inputs);
-        swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
+        self.update_values(dt, inputs_json)
     }
 
     /// Step the simulation and return a nodes+writes JSON object compatible with
@@ -222,6 +253,39 @@ impl VizijAnimation {
     pub fn list_player_keys(&self, player_id: u32) -> Result<JsValue, JsError> {
         let v = self.core.list_player_keys(PlayerId(player_id));
         swb::to_value(&v).map_err(|e| JsError::new(&format!("list_player_keys error: {e}")))
+    }
+
+    /// Bake animation samples for the specified animation id.
+    #[wasm_bindgen(js_name = bake_animation)]
+    pub fn bake_animation(&self, anim_id: u32, cfg: JsValue) -> Result<JsValue, JsError> {
+        let cfg_rs = parse_baking_config_js(cfg)?;
+        let aid = AnimId(anim_id);
+        let baked: BakedAnimationData = self
+            .core
+            .bake_animation(aid, &cfg_rs)
+            .ok_or_else(|| JsError::new("bake_animation: animation not loaded"))?;
+        swb::to_value(&baked).map_err(|e| JsError::new(&format!("bake_animation error: {e}")))
+    }
+
+    /// Bake animation samples and derivatives for the specified animation id.
+    #[wasm_bindgen(js_name = bake_animation_with_derivatives)]
+    pub fn bake_animation_with_derivatives(
+        &self,
+        anim_id: u32,
+        cfg: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let cfg_rs = parse_baking_config_js(cfg)?;
+        let aid = AnimId(anim_id);
+        let (values, derivatives): (BakedAnimationData, BakedDerivativeAnimationData) = self
+            .core
+            .bake_animation_with_derivatives(aid, &cfg_rs)
+            .ok_or_else(|| JsError::new("bake_animation_with_derivatives: animation not loaded"))?;
+        let payload = json!({
+            "values": values,
+            "derivatives": derivatives,
+        });
+        swb::to_value(&payload)
+            .map_err(|e| JsError::new(&format!("bake_animation_with_derivatives error: {e}")))
     }
 }
 

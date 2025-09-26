@@ -157,13 +157,20 @@ assert_eq!(anim.tracks.len(), 1);
 ### Baking animations
 
 ```rust
-use vizij_animation_core::baking::{bake_animation_data, BakingConfig, export_baked_json};
+use vizij_animation_core::baking::{
+    bake_animation_data_with_derivatives,
+    BakingConfig,
+    export_baked_json,
+    export_baked_with_derivatives_json,
+};
 
 let anim = vizij_animation_core::AnimationData::default();
 let cfg = BakingConfig { frame_rate: 60.0, start_time: 0.0, end_time: None };
-let baked = bake_animation_data(vizij_animation_core::AnimId(0), &anim, &cfg);
-let json = export_baked_json(&baked);
-println!("{}", json);
+let (values, derivatives) = bake_animation_data_with_derivatives(vizij_animation_core::AnimId(0), &anim, &cfg);
+let values_json = export_baked_json(&values);
+let bundle_json = export_baked_with_derivatives_json(&values, &derivatives);
+println!("values: {}", values_json);
+println!("values + derivatives: {}", bundle_json);
 ```
 
 ## Testing

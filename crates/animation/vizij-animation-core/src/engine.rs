@@ -5,14 +5,18 @@
 //! - new, load_animation, create_player, add_instance, prebind (resolver), update (accumulate → blend)
 
 use crate::accumulate::Accumulator;
+use crate::baking::{
+    bake_animation_data, bake_animation_data_with_derivatives, BakedAnimationData,
+    BakedDerivativeAnimationData, BakingConfig,
+};
 use crate::binding::{BindingSet, BindingTable, ChannelKey, TargetResolver};
 use crate::config::Config;
 use crate::data::AnimationData;
 use crate::ids::{AnimId, IdAllocator, InstId, PlayerId};
 use crate::inputs::{Inputs, LoopMode};
 use crate::interp::InterpRegistry;
-use crate::outputs::{Change, Outputs};
-use crate::sampling::sample_track;
+use crate::outputs::{Change, ChangeWithDerivative, Outputs, OutputsWithDerivatives};
+use crate::sampling::{sample_track, sample_track_with_derivative};
 use crate::scratch::Scratch;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -126,6 +130,7 @@ pub struct Engine {
 
     // Per-tick outputs
     outputs: Outputs,
+    outputs_with_derivatives: OutputsWithDerivatives,
 }
 
 fn fmod(a: f32, b: f32) -> f32 {
@@ -270,6 +275,7 @@ impl Engine {
             binds: BindingTable::new(),
             interp: InterpRegistry::new(),
             outputs: Outputs::default(),
+            outputs_with_derivatives: OutputsWithDerivatives::default(),
         }
     }
 
@@ -279,6 +285,24 @@ impl Engine {
         data.id = Some(id);
         self.anims.insert(id, data);
         id
+    }
+
+    /// Bake a stored animation into per-frame samples using the provided config.
+    pub fn bake_animation(&self, anim: AnimId, cfg: &BakingConfig) -> Option<BakedAnimationData> {
+        self.anims
+            .get(anim)
+            .map(|data| bake_animation_data(anim, data, cfg))
+    }
+
+    /// Bake animation values and derivatives in one pass.
+    pub fn bake_animation_with_derivatives(
+        &self,
+        anim: AnimId,
+        cfg: &BakingConfig,
+    ) -> Option<(BakedAnimationData, BakedDerivativeAnimationData)> {
+        self.anims
+            .get(anim)
+            .map(|data| bake_animation_data_with_derivatives(anim, data, cfg))
     }
 
     /// Create a new player with a display name.
@@ -514,20 +538,16 @@ impl Engine {
         }
     }
 
-    /// Step the simulation by dt with given inputs, producing outputs.
-    /// v1: Apply inputs and advance times; sample tracks → accumulate → blend; emit per-player changes.
-    pub fn update(&mut self, dt: f32, inputs: Inputs) -> &Outputs {
-        // Begin frame for scratch buffers.
+    fn step(&mut self, dt: f32, inputs: Inputs, with_derivatives: bool) {
         self.scratch.begin_frame();
         self.outputs.clear();
+        if with_derivatives {
+            self.outputs_with_derivatives.clear();
+        }
 
-        // 1) Apply player/instance commands
         self.apply_inputs(inputs);
-
-        // 2) Advance player times (speed)
         self.advance_player_times(dt);
 
-        // 3) For each player, accumulate contributions across enabled instances
         for p in &self.players {
             let mut accum = Accumulator::new();
 
@@ -544,14 +564,12 @@ impl Engine {
                     let anim_duration_s = anim_data.duration_ms as f32 / 1000.0;
                     let local_t = self.local_time_for_instance(p, inst, anim_duration_s);
 
-                    // Iterate all channels referenced by this instance
                     for ch in &inst.binding_set.channels {
                         if ch.anim != inst.anim {
                             continue;
                         }
                         let idx = ch.track_idx as usize;
                         if let Some(track) = anim_data.tracks.get(idx) {
-                            // Skip tracks with no keys to avoid emitting meaningless changes
                             if track.points.is_empty() {
                                 continue;
                             }
@@ -560,31 +578,79 @@ impl Engine {
                             } else {
                                 0.0
                             };
-                            let value = sample_track(track, u);
-                            // Resolve handle if bound, else fallback to canonical path
+                            let (value, derivative) = if with_derivatives {
+                                sample_track_with_derivative(track, u, anim_duration_s)
+                            } else {
+                                (sample_track(track, u), None)
+                            };
                             let handle = if let Some(row) = self.binds.get(*ch) {
                                 row.handle.as_str()
                             } else {
                                 track.animatable_id.as_str()
                             };
-                            accum.add(handle, &value, inst.weight);
+                            accum.add_with_derivative(
+                                handle,
+                                &value,
+                                derivative.as_ref(),
+                                inst.weight,
+                            );
                         }
                     }
                 }
             }
 
-            // 4) Finalize accumulator → write Outputs as changes
-            let blended = accum.finalize();
-            for (key, value) in blended.into_iter() {
-                self.outputs.push_change(Change {
-                    player: p.id,
-                    key,
-                    value,
-                });
+            if with_derivatives {
+                let blended = accum.finalize_with_derivatives();
+                for (key, (value, derivative)) in blended.into_iter() {
+                    self.outputs.push_change(Change {
+                        player: p.id,
+                        key: key.clone(),
+                        value: value.clone(),
+                    });
+                    self.outputs_with_derivatives
+                        .push_change(ChangeWithDerivative {
+                            player: p.id,
+                            key,
+                            value,
+                            derivative,
+                        });
+                }
+            } else {
+                let blended = accum.finalize();
+                for (key, value) in blended.into_iter() {
+                    self.outputs.push_change(Change {
+                        player: p.id,
+                        key,
+                        value,
+                    });
+                }
             }
         }
 
+        if with_derivatives {
+            self.outputs_with_derivatives.events = self.outputs.events.clone();
+        }
+    }
+
+    /// Step the simulation by dt with given inputs, returning only values.
+    pub fn update_values(&mut self, dt: f32, inputs: Inputs) -> &Outputs {
+        self.step(dt, inputs, false);
         &self.outputs
+    }
+
+    /// Step the simulation by dt returning values and derivatives.
+    pub fn update_values_and_derivatives(
+        &mut self,
+        dt: f32,
+        inputs: Inputs,
+    ) -> &OutputsWithDerivatives {
+        self.step(dt, inputs, true);
+        &self.outputs_with_derivatives
+    }
+
+    /// Backwards-compatible alias for `update_values`.
+    pub fn update(&mut self, dt: f32, inputs: Inputs) -> &Outputs {
+        self.update_values(dt, inputs)
     }
 
     /// Update and also return a typed WriteBatch (collection of WriteOp) where each
@@ -593,7 +659,7 @@ impl Engine {
     /// its normal Outputs in `self.outputs`.
     pub fn update_writebatch(&mut self, dt: f32, inputs: Inputs) -> WriteBatch {
         // Populate self.outputs as usual.
-        let _ = self.update(dt, inputs);
+        let _ = self.update_values(dt, inputs);
 
         let mut batch = WriteBatch::new();
         for ch in self.outputs.changes.iter() {

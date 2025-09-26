@@ -258,16 +258,28 @@ impl AccumEntry {
 #[derive(Default)]
 pub struct Accumulator {
     map: HashMap<String, AccumEntry>,
+    derivative_map: HashMap<String, AccumEntry>,
 }
 
 impl Accumulator {
     pub fn new() -> Self {
         Self {
             map: HashMap::new(),
+            derivative_map: HashMap::new(),
         }
     }
 
     pub fn add(&mut self, handle: &str, value: &Value, weight: f32) {
+        self.add_with_derivative(handle, value, None, weight);
+    }
+
+    pub fn add_with_derivative(
+        &mut self,
+        handle: &str,
+        value: &Value,
+        derivative: Option<&Value>,
+        weight: f32,
+    ) {
         if weight <= 0.0 {
             return;
         }
@@ -275,6 +287,13 @@ impl Accumulator {
             .entry(handle.to_string())
             .and_modify(|entry| entry.add_value(value, weight))
             .or_insert_with(|| AccumEntry::from_value(value, weight));
+
+        if let Some(deriv) = derivative {
+            self.derivative_map
+                .entry(handle.to_string())
+                .and_modify(|entry| entry.add_value(deriv, weight))
+                .or_insert_with(|| AccumEntry::from_value(deriv, weight));
+        }
     }
 
     pub fn finalize(self) -> HashMap<String, Value> {
@@ -282,6 +301,20 @@ impl Accumulator {
         for (k, entry) in self.map.into_iter() {
             if let Some(v) = entry.finalize() {
                 out.insert(k, v);
+            }
+        }
+        out
+    }
+
+    pub fn finalize_with_derivatives(self) -> HashMap<String, (Value, Option<Value>)> {
+        let mut out = HashMap::new();
+        for (k, entry) in self.map.into_iter() {
+            if let Some(v) = entry.finalize() {
+                let deriv = self
+                    .derivative_map
+                    .get(&k)
+                    .and_then(|d| d.clone().finalize());
+                out.insert(k, (v, deriv));
             }
         }
         out

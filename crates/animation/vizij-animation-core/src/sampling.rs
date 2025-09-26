@@ -16,6 +16,86 @@ use crate::data::{Keypoint, Track};
 use crate::interp::functions::{bezier_value, step_value};
 use vizij_api_core::{Value, ValueKind};
 
+const DERIV_EPSILON: f32 = 1e-3;
+
+fn value_difference(a: &Value, b: &Value) -> Option<Value> {
+    match (a, b) {
+        (Value::Float(va), Value::Float(vb)) => Some(Value::Float(va - vb)),
+        (Value::Vec2(va), Value::Vec2(vb)) => Some(Value::Vec2([va[0] - vb[0], va[1] - vb[1]])),
+        (Value::Vec3(va), Value::Vec3(vb)) => {
+            Some(Value::Vec3([va[0] - vb[0], va[1] - vb[1], va[2] - vb[2]]))
+        }
+        (Value::Vec4(va), Value::Vec4(vb)) | (Value::ColorRgba(va), Value::ColorRgba(vb)) => {
+            Some(Value::Vec4([
+                va[0] - vb[0],
+                va[1] - vb[1],
+                va[2] - vb[2],
+                va[3] - vb[3],
+            ]))
+        }
+        (Value::Quat(qa), Value::Quat(qb)) => Some(Value::Quat([
+            qa[0] - qb[0],
+            qa[1] - qb[1],
+            qa[2] - qb[2],
+            qa[3] - qb[3],
+        ])),
+        (
+            Value::Transform {
+                pos: pa,
+                rot: ra,
+                scale: sa,
+            },
+            Value::Transform {
+                pos: pb,
+                rot: rb,
+                scale: sb,
+            },
+        ) => Some(Value::Transform {
+            pos: [pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]],
+            rot: [ra[0] - rb[0], ra[1] - rb[1], ra[2] - rb[2], ra[3] - rb[3]],
+            scale: [sa[0] - sb[0], sa[1] - sb[1], sa[2] - sb[2]],
+        }),
+        _ => None,
+    }
+}
+
+fn value_scale(value: &Value, scale: f32) -> Option<Value> {
+    match value {
+        Value::Float(v) => Some(Value::Float(v * scale)),
+        Value::Vec2(v) => Some(Value::Vec2([v[0] * scale, v[1] * scale])),
+        Value::Vec3(v) => Some(Value::Vec3([v[0] * scale, v[1] * scale, v[2] * scale])),
+        Value::Vec4(v) => Some(Value::Vec4([
+            v[0] * scale,
+            v[1] * scale,
+            v[2] * scale,
+            v[3] * scale,
+        ])),
+        Value::ColorRgba(v) => Some(Value::ColorRgba([
+            v[0] * scale,
+            v[1] * scale,
+            v[2] * scale,
+            v[3] * scale,
+        ])),
+        Value::Quat(v) => Some(Value::Quat([
+            v[0] * scale,
+            v[1] * scale,
+            v[2] * scale,
+            v[3] * scale,
+        ])),
+        Value::Transform { pos, rot, scale: s } => Some(Value::Transform {
+            pos: [pos[0] * scale, pos[1] * scale, pos[2] * scale],
+            rot: [
+                rot[0] * scale,
+                rot[1] * scale,
+                rot[2] * scale,
+                rot[3] * scale,
+            ],
+            scale: [s[0] * scale, s[1] * scale, s[2] * scale],
+        }),
+        _ => None,
+    }
+}
+
 const DEFAULT_OUT_X: f32 = 0.42;
 const DEFAULT_OUT_Y: f32 = 0.0;
 const DEFAULT_IN_X: f32 = 0.58;
@@ -92,4 +172,37 @@ pub fn sample_track(track: &Track, u: f32) -> Value {
             bezier_value(&left.value, &right.value, lt, [x1, y1, x2, y2])
         }
     }
+}
+
+/// Sample a track and approximate its time derivative (seconds).
+pub fn sample_track_with_derivative(
+    track: &Track,
+    u: f32,
+    duration_s: f32,
+) -> (Value, Option<Value>) {
+    let value = sample_track(track, u);
+    if track.points.len() <= 1 || duration_s <= 0.0 {
+        return (value, None);
+    }
+
+    let u0 = (u - DERIV_EPSILON).clamp(0.0, 1.0);
+    let u1 = (u + DERIV_EPSILON).clamp(0.0, 1.0);
+    if (u1 - u0).abs() < f32::EPSILON {
+        return (value, None);
+    }
+
+    let prev = sample_track(track, u0);
+    let next = sample_track(track, u1);
+    let dt = (u1 - u0) * duration_s;
+    if dt.abs() < 1e-6 {
+        return (value, None);
+    }
+
+    let derivative = value_difference(&next, &prev)
+        .and_then(|diff| value_scale(&diff, dt.recip()))
+        .map(|v| match v {
+            Value::Vec4(arr) if matches!(value, Value::ColorRgba(_)) => Value::ColorRgba(arr),
+            other => other,
+        });
+    (value, derivative)
 }

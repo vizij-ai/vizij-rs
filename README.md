@@ -172,7 +172,7 @@ let anim = engine.load_animation(stored);
 let player = engine.create_player("demo");
 engine.add_instance(player, anim, InstanceCfg::default());
 
-let outputs = engine.update(1.0 / 60.0, Default::default());
+let outputs = engine.update_values(1.0 / 60.0, Default::default());
 println!("changes: {:?}", outputs.changes);
 ```
 
@@ -199,7 +199,7 @@ const anim = eng.loadAnimation({
 }, { format: "stored" });
 const player = eng.createPlayer("demo");
 eng.addInstance(player, anim);
-console.log(eng.update(1 / 60).changes);
+console.log(eng.updateValues(1 / 60).changes);
 ```
 
 ### Sample: Evaluating a node graph core-side

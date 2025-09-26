@@ -5,9 +5,11 @@ import initWasm, { VizijAnimation, abi_version } from "../pkg/vizij_animation_wa
 import type {
   InitInput,
   Config,
+  BakingConfig,
   Inputs,
   InstanceUpdate,
   Outputs,
+  OutputsWithDerivatives,
   AnimationData,
   StoredAnimation,
   AnimId,
@@ -16,17 +18,23 @@ import type {
   Value,
   CoreEvent,
   Change,
+  ChangeWithDerivative,
   AnimationInfo,
   PlayerInfo,
   InstanceInfo,
+  BakedAnimationData,
+  BakedDerivativeAnimationData,
+  BakedAnimationBundle,
 } from "./types";
 
 export type {
   InitInput,
   Config,
+  BakingConfig,
   Inputs,
   InstanceUpdate,
   Outputs,
+  OutputsWithDerivatives,
   AnimationData,
   StoredAnimation,
   AnimId,
@@ -35,9 +43,13 @@ export type {
   Value,
   CoreEvent,
   Change,
+  ChangeWithDerivative,
   AnimationInfo,
   PlayerInfo,
   InstanceInfo,
+  BakedAnimationData,
+  BakedDerivativeAnimationData,
+  BakedAnimationBundle,
 };
 
 export { VizijAnimation, abi_version };
@@ -180,8 +192,34 @@ export class Engine {
   }
 
   /** Step the simulation by dt (seconds) with optional Inputs; returns Outputs */
+  updateValues(dt: number, inputs?: Inputs): Outputs {
+    return (this.inner.update_values(dt, (inputs ?? undefined) as any) as unknown) as Outputs;
+  }
+
+  /** Step the simulation by dt returning both values and derivatives */
+  updateValuesAndDerivatives(dt: number, inputs?: Inputs): OutputsWithDerivatives {
+    return (this.inner.update_values_and_derivatives(
+      dt,
+      (inputs ?? undefined) as any,
+    ) as unknown) as OutputsWithDerivatives;
+  }
+
+  /** Backwards-compatible alias for updateValues */
   update(dt: number, inputs?: Inputs): Outputs {
-    return (this.inner.update(dt, (inputs ?? undefined) as any) as unknown) as Outputs;
+    return this.updateValues(dt, inputs);
+  }
+
+  /** Bake animation samples for a loaded animation */
+  bakeAnimation(anim: AnimId, cfg?: BakingConfig): BakedAnimationData {
+    return (this.inner.bake_animation(anim as number, (cfg ?? undefined) as any) as unknown) as BakedAnimationData;
+  }
+
+  /** Bake animation samples plus derivatives */
+  bakeAnimationWithDerivatives(anim: AnimId, cfg?: BakingConfig): BakedAnimationBundle {
+    return (this.inner.bake_animation_with_derivatives(
+      anim as number,
+      (cfg ?? undefined) as any,
+    ) as unknown) as BakedAnimationBundle;
   }
 
   /** Remove a player and all its instances */
