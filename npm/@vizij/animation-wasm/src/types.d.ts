@@ -52,6 +52,8 @@ export interface BakingConfig {
   start_time?: number;
   /** End time (seconds) in clip space; omit or null to use full duration */
   end_time?: number | null;
+  /** Optional finite-difference epsilon override for derivative estimation */
+  derivative_epsilon?: number;
 }
 
 export interface BakedTrack {
@@ -128,7 +130,10 @@ export interface Change {
   /** Opaque key (resolved via prebind or canonical path when unresolved) */
   key: string;
   value: Value;
-  derivative: Value;
+}
+
+export interface ChangeWithDerivative extends Change {
+  derivative?: Value | null;
 }
 
 export type CoreEvent =
@@ -159,6 +164,11 @@ export type CoreEvent =
 
 export interface Outputs {
   changes: Change[];
+  events: CoreEvent[];
+}
+
+export interface OutputsWithDerivatives {
+  changes: ChangeWithDerivative[];
   events: CoreEvent[];
 }
 
@@ -222,6 +232,40 @@ export interface StoredAnimation {
    Left intentionally broad; use when supplying core-format clips.
 ----------------------------------------------------------- */
 export type AnimationData = unknown;
+
+/* -----------------------------------------------------------
+   Baked animation data
+----------------------------------------------------------- */
+export interface BakedTrack {
+  target_path: string;
+  values: Value[];
+}
+
+export interface BakedDerivativeTrack {
+  target_path: string;
+  values: Array<Value | null>;
+}
+
+export interface BakedAnimationData {
+  anim: AnimId;
+  frame_rate: number;
+  start_time: number;
+  end_time: number;
+  tracks: BakedTrack[];
+}
+
+export interface BakedDerivativeAnimationData {
+  anim: AnimId;
+  frame_rate: number;
+  start_time: number;
+  end_time: number;
+  tracks: BakedDerivativeTrack[];
+}
+
+export interface BakedAnimationBundle {
+  values: BakedAnimationData;
+  derivatives: BakedDerivativeAnimationData;
+}
 
 /* -----------------------------------------------------------
    Engine inspection (authoritative state from core)

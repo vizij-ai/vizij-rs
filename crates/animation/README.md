@@ -85,8 +85,10 @@ Inside this repository:
 ### Core crate
 
 * Create an `Engine`, load animation data (either `AnimationData` or `StoredAnimation` JSON), create players/instances, and call
-  `update(dt, inputs)` each tick.
+  `update_values(dt, inputs)` (or `update_values_and_derivatives(dt, inputs)`) each tick.
 * Outputs contain `changes` (resolved target key/value pairs) and `events` (playback notifications, keypoint hits, warnings).
+* Use `bake_animation`/`bake_animation_with_derivatives` for offline sampling. The derivative variant returns
+  `(BakedAnimationData, BakedDerivativeAnimationData)` sharing track order and cadence.
 
 ### Bevy plugin
 
@@ -97,9 +99,13 @@ Inside this repository:
 
 ### WASM binding / npm package
 
-* `await init()` once, then construct `VizijAnimation` or the higher-level `Engine` wrapper from the npm package.
+* `await init()` once; the wrapper verifies `abi_version() === 2` and reports rebuild instructions if the JS glue/wasm binary is
+  stale.
+* Construct `VizijAnimation` or the higher-level `Engine` wrapper from the npm package.
 * Use the same workflow as the Rust engine: load animations, create players/instances, optionally call `prebind` with a resolver
-  callback, and `update(dt)` each frame. Outputs are plain JSON structures suitable for React state or other consumers.
+  callback, and `updateValues(dt)` or `updateValuesAndDerivatives(dt)` each frame. Outputs are plain JSON structures suitable for
+  React state or other consumers.
+* Baking helpers mirror the Rust tuples as `{ values, derivatives }` to simplify JSON plumbing on the TypeScript side.
 
 ## Key Details
 
@@ -113,6 +119,13 @@ Inside this repository:
   handles. The Bevy plugin builds this map automatically; the WASM binding expects a resolver callback.
 * **Performance** – The engine minimizes per-frame allocations; once animations and bindings are loaded the update path operates
   on preallocated scratch buffers.
+* **Derivatives** – Runtime derivatives are estimated via symmetric finite difference (default epsilon `1e-3`). Bool/Text tracks
+  return `None`/`null`, and quaternion derivatives are currently component-wise (TODO: angular velocity/log mapping). When
+  baking, override the epsilon with `BakingConfig::derivative_epsilon` to trade accuracy for cost.
+* **Baking bundles** – `bake_animation_with_derivatives` keeps value/derivative track ordering aligned. The WASM layer returns a
+  bundle `{ values, derivatives }` so clients can destructure without tuple semantics.
+* **BakingConfig** – Exposed fields: `frame_rate`, `start_time`, `end_time`, and optional `derivative_epsilon` (positive finite).
+  Invalid values (negative frame rate, `end_time < start_time`) are rejected by the WASM parser.
 
 ## Examples
 
@@ -129,7 +142,7 @@ let anim = engine.load_animation(stored);
 let player = engine.create_player("demo");
 engine.add_instance(player, anim, InstanceCfg::default());
 
-let outputs = engine.update(1.0 / 60.0, Default::default());
+let outputs = engine.update_values(1.0 / 60.0, Default::default());
 for change in outputs.changes {
     println!("{} => {:?}", change.key, change.value);
 }
@@ -193,8 +206,19 @@ const playerId = eng.createPlayer("demo");
 eng.addInstance(playerId, animId);
 eng.prebind((path) => path); // identity binding
 
-const outputs = eng.update(1 / 60);
+const outputs = eng.updateValues(1 / 60);
 console.log(outputs.changes);
+
+const withDerivatives = eng.updateValuesAndDerivatives(1 / 60);
+for (const change of withDerivatives.changes) {
+  console.log(change.key, change.derivative ?? null);
+}
+
+const baked = eng.bakeAnimationWithDerivatives(animId, {
+  frame_rate: 60,
+  derivative_epsilon: 5e-4,
+});
+console.log(baked.values.tracks[0].values.length, baked.derivatives.tracks[0].values.length);
 ```
 
 ## Testing

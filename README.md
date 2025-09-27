@@ -155,6 +155,22 @@ Vite server reloads when the WASM `pkg/` contents change.
   * `scripts/install-git-hooks.sh` installs pre-commit/pre-push hooks mirroring the CI checks.
   * `scripts/dry-run-release.sh` runs the publish checks without releasing artifacts.
 
+## Animation Derivatives & Baking
+
+* **Runtime updates** – `Engine::update_values(dt, Inputs)` returns the classic `Outputs` list. Call
+  `Engine::update_values_and_derivatives` (or the WASM wrapper `engine.updateValuesAndDerivatives`) to receive
+  `OutputsWithDerivatives`, where each change includes an optional `derivative` field. Non-numeric tracks emit `None`/`null`.
+* **Baking outputs** – `Engine::bake_animation` returns `BakedAnimationData`. Use
+  `Engine::bake_animation_with_derivatives` to receive the paired derivative tracks. In WASM/TypeScript the bundle is normalised
+  to `{ values, derivatives }`, each mirroring the `tracks`/`frame_rate` schema.
+* **Configuration** – `BakingConfig` now supports `derivative_epsilon` to override the finite-difference window when estimating
+  derivatives. Negative or zero frame rates/config values are rejected during WASM parsing.
+* **Derivative model** – Derivatives use a symmetric finite difference sampled around the current parameter (default epsilon
+  `1e-3`). Quaternion derivatives are currently component-wise (a good approximation for small deltas) with a TODO to upgrade to
+  angular velocity/log mapping. Bool/Text tracks intentionally produce `None`/`null` derivatives.
+* **ABI guard** – The animation WASM exports `abi_version() === 2`. The npm wrapper verifies this during `init()` and throws with
+  guidance when the JS glue or `.wasm` file is stale. Rebuild with `cargo build -p vizij-animation-wasm --target wasm32-unknown-unknown && npm run build:wasm:animation` whenever the ABI changes.
+
 ## Examples
 
 ### Sample: Using the animation engine in Rust
@@ -169,7 +185,7 @@ let anim = engine.load_animation(stored);
 let player = engine.create_player("demo");
 engine.add_instance(player, anim, InstanceCfg::default());
 
-let outputs = engine.update(1.0 / 60.0, Default::default());
+let outputs = engine.update_values(1.0 / 60.0, Default::default());
 println!("changes: {:?}", outputs.changes);
 ```
 
@@ -196,7 +212,20 @@ const anim = eng.loadAnimation({
 }, { format: "stored" });
 const player = eng.createPlayer("demo");
 eng.addInstance(player, anim);
-console.log(eng.update(1 / 60).changes);
+console.log(eng.updateValues(1 / 60).changes);
+
+// Derivative-friendly update
+const outputs = eng.updateValuesAndDerivatives(1 / 60);
+for (const change of outputs.changes) {
+  console.log(change.key, change.value, change.derivative ?? null);
+}
+
+// Baking bundle
+const baked = eng.bakeAnimationWithDerivatives(anim, {
+  frame_rate: 60,
+  derivative_epsilon: 5e-4,
+});
+console.log(baked.values.tracks[0].values.length, baked.derivatives.tracks[0].values.length);
 ```
 
 ### Sample: Evaluating a node graph core-side

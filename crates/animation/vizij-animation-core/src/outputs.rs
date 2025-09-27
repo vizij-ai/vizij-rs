@@ -20,8 +20,16 @@ pub struct Change {
     pub player: PlayerId,
     pub key: String, // TargetHandle (small string key)
     pub value: Value,
-    #[serde(default = "default_zero_derivative")]
-    pub derivative: Value,
+}
+
+/// Change paired with a derivative value.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChangeWithDerivative {
+    pub player: PlayerId,
+    pub key: String,
+    pub value: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub derivative: Option<Value>,
 }
 
 /// Discrete semantic signals emitted during stepping.
@@ -81,6 +89,15 @@ pub struct Outputs {
     pub events: Vec<CoreEvent>,
 }
 
+/// Outputs returned when derivatives are requested.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct OutputsWithDerivatives {
+    #[serde(default)]
+    pub changes: Vec<ChangeWithDerivative>,
+    #[serde(default)]
+    pub events: Vec<CoreEvent>,
+}
+
 impl Outputs {
     #[inline]
     pub fn clear(&mut self) {
@@ -90,6 +107,29 @@ impl Outputs {
 
     #[inline]
     pub fn push_change(&mut self, change: Change) {
+        self.changes.push(change);
+    }
+
+    #[inline]
+    pub fn push_event(&mut self, event: CoreEvent) {
+        self.events.push(event);
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.changes.is_empty() && self.events.is_empty()
+    }
+}
+
+impl OutputsWithDerivatives {
+    #[inline]
+    pub fn clear(&mut self) {
+        self.changes.clear();
+        self.events.clear();
+    }
+
+    #[inline]
+    pub fn push_change(&mut self, change: ChangeWithDerivative) {
         self.changes.push(change);
     }
 

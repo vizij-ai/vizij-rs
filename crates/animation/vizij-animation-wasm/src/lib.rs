@@ -5,8 +5,9 @@ use wasm_bindgen::prelude::*;
 use serde::Deserialize;
 use serde_json::{json, to_value, Map};
 use vizij_animation_core::{
-    parse_stored_animation_json, AnimId, AnimationData, BakingConfig, Config, Engine, Inputs,
-    InstId, InstanceCfg, Outputs, PlayerId, TargetResolver,
+    parse_stored_animation_json, AnimId, AnimationData, BakedAnimationData,
+    BakedDerivativeAnimationData, BakingConfig, Config, Engine, Inputs, InstId, InstanceCfg,
+    Outputs, OutputsWithDerivatives, PlayerId, TargetResolver,
 };
 
 #[wasm_bindgen]
@@ -16,6 +17,31 @@ pub struct VizijAnimation {
 
 fn jsvalue_is_undefined_or_null(v: &JsValue) -> bool {
     v.is_undefined() || v.is_null()
+}
+
+fn parse_inputs_js(inputs_json: JsValue) -> Result<Inputs, JsError> {
+    if jsvalue_is_undefined_or_null(&inputs_json) {
+        Ok(Inputs::default())
+    } else {
+        swb::from_value(inputs_json).map_err(|e| JsError::new(&format!("inputs error: {e}")))
+    }
+}
+
+fn parse_baking_config_js(cfg: JsValue) -> Result<BakingConfig, JsError> {
+    if jsvalue_is_undefined_or_null(&cfg) {
+        Ok(BakingConfig::default())
+    } else {
+        let opts: BakingConfigOptions = swb::from_value(cfg).map_err(|e| {
+            JsError::new(&format!(
+                "bake_animation_with_derivatives config error: {e}"
+            ))
+        })?;
+        opts.into_config().map_err(|msg| {
+            JsError::new(&format!(
+                "bake_animation_with_derivatives config error: {msg}"
+            ))
+        })
+    }
 }
 
 struct JsResolver {
@@ -57,21 +83,51 @@ struct BakingConfigOptions {
     start_time: Option<f32>,
     #[serde(default)]
     end_time: Option<Option<f32>>,
+    #[serde(default)]
+    derivative_epsilon: Option<f32>,
 }
 
 impl BakingConfigOptions {
-    fn into_config(self) -> BakingConfig {
+    fn into_config(self) -> Result<BakingConfig, String> {
         let mut cfg = BakingConfig::default();
         if let Some(fr) = self.frame_rate {
+            if !fr.is_finite() || fr <= 0.0 {
+                return Err(format!("frame_rate must be positive and finite (got {fr})"));
+            }
             cfg.frame_rate = fr;
         }
         if let Some(st) = self.start_time {
-            cfg.start_time = st;
+            if !st.is_finite() {
+                return Err(format!("start_time must be finite (got {st})"));
+            }
+            cfg.start_time = st.max(0.0);
         }
         if let Some(et) = self.end_time {
-            cfg.end_time = et;
+            match et {
+                Some(val) => {
+                    if !val.is_finite() {
+                        return Err(format!("end_time must be finite (got {val})"));
+                    }
+                    if val < cfg.start_time {
+                        return Err(format!(
+                            "end_time must be >= start_time (start={}, end={val})",
+                            cfg.start_time
+                        ));
+                    }
+                    cfg.end_time = Some(val);
+                }
+                None => cfg.end_time = None,
+            }
         }
-        cfg
+        if let Some(eps) = self.derivative_epsilon {
+            if !eps.is_finite() || eps <= 0.0 {
+                return Err(format!(
+                    "derivative_epsilon must be positive and finite (got {eps})"
+                ));
+            }
+            cfg.derivative_epsilon = Some(eps);
+        }
+        Ok(cfg)
     }
 }
 
@@ -82,7 +138,8 @@ fn parse_baking_config(cfg: JsValue) -> Result<BakingConfig, JsError> {
 
     let opts: BakingConfigOptions = swb::from_value(cfg)
         .map_err(|e| JsError::new(&format!("bake_animation config error: {e}")))?;
-    Ok(opts.into_config())
+    opts.into_config()
+        .map_err(|msg| JsError::new(&format!("bake_animation config error: {msg}")))
 }
 
 #[wasm_bindgen]
@@ -171,15 +228,29 @@ impl VizijAnimation {
     }
 
     /// Step the simulation by dt (seconds) with inputs JSON. Returns Outputs JSON.
+    #[wasm_bindgen(js_name = update_values)]
+    pub fn update_values(&mut self, dt: f32, inputs_json: JsValue) -> Result<JsValue, JsError> {
+        let inputs = parse_inputs_js(inputs_json)?;
+        let out: &Outputs = self.core.update_values(dt, inputs);
+        swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
+    }
+
+    /// Step the simulation by dt returning both values and derivatives.
+    #[wasm_bindgen(js_name = update_values_and_derivatives)]
+    pub fn update_values_and_derivatives(
+        &mut self,
+        dt: f32,
+        inputs_json: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let inputs = parse_inputs_js(inputs_json)?;
+        let out: &OutputsWithDerivatives = self.core.update_values_and_derivatives(dt, inputs);
+        swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
+    }
+
+    /// Backwards-compatible alias for `update_values`.
     #[wasm_bindgen]
     pub fn update(&mut self, dt: f32, inputs_json: JsValue) -> Result<JsValue, JsError> {
-        let inputs: Inputs = if jsvalue_is_undefined_or_null(&inputs_json) {
-            Inputs::default()
-        } else {
-            swb::from_value(inputs_json).map_err(|e| JsError::new(&format!("inputs error: {e}")))?
-        };
-        let out: &Outputs = self.core.update(dt, inputs);
-        swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
+        self.update_values(dt, inputs_json)
     }
 
     /// Bake an animation clip into pre-sampled tracks using the engine's loaded data.
@@ -272,10 +343,31 @@ impl VizijAnimation {
         let v = self.core.list_player_keys(PlayerId(player_id));
         swb::to_value(&v).map_err(|e| JsError::new(&format!("list_player_keys error: {e}")))
     }
+
+    /// Bake animation samples and derivatives for the specified animation id.
+    #[wasm_bindgen(js_name = bake_animation_with_derivatives)]
+    pub fn bake_animation_with_derivatives(
+        &self,
+        anim_id: u32,
+        cfg: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let cfg_rs = parse_baking_config_js(cfg)?;
+        let aid = AnimId(anim_id);
+        let (values, derivatives): (BakedAnimationData, BakedDerivativeAnimationData) = self
+            .core
+            .bake_animation_with_derivatives(aid, &cfg_rs)
+            .ok_or_else(|| JsError::new("bake_animation_with_derivatives: animation not loaded"))?;
+        let payload = json!({
+            "values": values,
+            "derivatives": derivatives,
+        });
+        swb::to_value(&payload)
+            .map_err(|e| JsError::new(&format!("bake_animation_with_derivatives error: {e}")))
+    }
 }
 
 /// Numeric ABI version for compatibility checks at init.
 #[wasm_bindgen]
 pub fn abi_version() -> u32 {
-    1
+    2
 }

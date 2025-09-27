@@ -4,7 +4,6 @@
 use std::collections::HashMap;
 
 use crate::interp::functions::nlerp_quat;
-use crate::sampling::SampledValue;
 use vizij_api_core::Value;
 
 /// Accumulator entry storing weighted sums per Value kind.
@@ -255,70 +254,50 @@ impl AccumEntry {
     }
 }
 
-#[derive(Clone, Debug)]
-struct AccumPair {
-    value: AccumEntry,
-    derivative: AccumEntry,
-}
-
-impl AccumPair {
-    fn new(value: &Value, derivative: &Value, weight: f32) -> Self {
-        Self {
-            value: AccumEntry::from_value(value, weight),
-            derivative: AccumEntry::from_value(derivative, weight),
-        }
-    }
-
-    fn add(&mut self, value: &Value, derivative: &Value, weight: f32) {
-        self.value.add_value(value, weight);
-        self.derivative.add_value(derivative, weight);
-    }
-
-    fn finalize(self) -> Option<(Value, Value)> {
-        let value = self.value.finalize();
-        let derivative = self.derivative.finalize();
-        match (value, derivative) {
-            (Some(v), Some(d)) => Some((v, d)),
-            (Some(v), None) => Some((v, Value::Float(0.0))),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct FinalizedSample {
-    pub value: Value,
-    pub derivative: Value,
-}
-
-/// Accumulates per-handle contributions across instances.
+/// Accumulates per-handle contributions across instances, tracking both values and optional
+/// derivatives so the engine can emit aligned `(Value, Option<Value>)` pairs.
 #[derive(Default)]
-pub struct Accumulator {
-    map: HashMap<String, AccumPair>,
+pub struct AccumulatorWithDerivatives {
+    values: HashMap<String, AccumEntry>,
+    derivatives: HashMap<String, AccumEntry>,
 }
 
-impl Accumulator {
+impl AccumulatorWithDerivatives {
     pub fn new() -> Self {
-        Self {
-            map: HashMap::new(),
-        }
+        Self::default()
     }
 
-    pub fn add(&mut self, handle: &str, sample: &SampledValue, weight: f32) {
+    /// Add a weighted contribution to the accumulator.
+    pub fn add(&mut self, handle: &str, value: &Value, derivative: Option<&Value>, weight: f32) {
         if weight <= 0.0 {
             return;
         }
-        self.map
+
+        self.values
             .entry(handle.to_string())
-            .and_modify(|entry| entry.add(&sample.value, &sample.derivative, weight))
-            .or_insert_with(|| AccumPair::new(&sample.value, &sample.derivative, weight));
+            .and_modify(|entry| entry.add_value(value, weight))
+            .or_insert_with(|| AccumEntry::from_value(value, weight));
+
+        if let Some(deriv) = derivative {
+            self.derivatives
+                .entry(handle.to_string())
+                .and_modify(|entry| entry.add_value(deriv, weight))
+                .or_insert_with(|| AccumEntry::from_value(deriv, weight));
+        }
     }
 
-    pub fn finalize(self) -> HashMap<String, FinalizedSample> {
-        let mut out = HashMap::new();
-        for (k, entry) in self.map.into_iter() {
-            if let Some((value, derivative)) = entry.finalize() {
-                out.insert(k, FinalizedSample { value, derivative });
+    /// Finalize accumulated values into canonical `(value, derivative)` pairs keyed by handle.
+    pub fn finalize(self) -> HashMap<String, (Value, Option<Value>)> {
+        let Self {
+            values,
+            mut derivatives,
+        } = self;
+
+        let mut out = HashMap::with_capacity(values.len());
+        for (handle, entry) in values.into_iter() {
+            if let Some(value) = entry.finalize() {
+                let derivative = derivatives.remove(&handle).and_then(AccumEntry::finalize);
+                out.insert(handle, (value, derivative));
             }
         }
         out

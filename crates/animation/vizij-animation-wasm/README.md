@@ -63,14 +63,19 @@ The npm wrapper exports:
 
 * `async function init(input?: InitInput): Promise<void>` – Loads the WASM module. Optional input allows custom URLs or binary
   sources.
-* `function abi_version(): number` – Returns a numeric ABI guard (currently `1`).
-* `class Engine` – Ergonomic wrapper around the low-level bindings:
+* `function abi_version(): number` – Returns a numeric ABI guard (currently `2`).
+* `class Engine` – Ergonomic wrapper around the low-level bindings (guards against stale WASM exports and throws with rebuild
+  instructions when a function is missing):
   * `constructor(config?: Config)` – Optional capacity hints.
   * `loadAnimation(data, opts?)` – Accepts `StoredAnimation` or `AnimationData`. Returns `AnimId`.
   * `createPlayer(name: string)` – Returns `PlayerId`.
   * `addInstance(player, anim, cfg?)` – Adds an instance with optional `InstanceCfg` JSON.
   * `prebind(resolver)` – Resolve canonical target paths to application-defined keys.
-  * `update(dtSeconds, inputs?)` – Steps the simulation and returns `{ changes, events }`.
+  * `updateValues(dtSeconds, inputs?)` – Steps the simulation and returns `{ changes, events }`.
+  * `updateValuesAndDerivatives(dtSeconds, inputs?)` – Same as above but each change also includes an optional `derivative` field.
+  * `bakeAnimation(animId, cfg?)` – Returns baked samples for a clip.
+  * `bakeAnimationWithDerivatives(animId, cfg?)` – Returns `{ values, derivatives }` with aligned track ordering.
+  * `update(...)` – Alias for `updateValues(...)` for backwards compatibility.
 * Low-level class `VizijAnimation` mirrors the above methods with slightly more explicit JSON handling.
 
 ### StoredAnimation format
@@ -116,12 +121,18 @@ interpolation.
 
 * **Bindings and prebinding** – `prebind(resolver)` receives canonical target paths such as `"node/Transform.translation"` and
   should return the key you want in `change.key`. Return `null`/`undefined` to leave a path unresolved.
-* **Outputs** – `update` returns `{ changes: Change[], events: CoreEvent[] }`. `Change.value` is a tagged union (Scalar, Vec3,
-  Quat, Transform, Bool, Text, etc.). Events mirror the Rust core’s playback events.
+* **Outputs** – `updateValues` returns `{ changes: Change[], events: CoreEvent[] }`. `updateValuesAndDerivatives` mirrors that
+  shape but each change also carries an optional `derivative` value for numeric tracks. Events mirror the Rust core’s playback
+  events.
+* **Derivative estimation** – Finite differences sample the track at `u ± epsilon` (default epsilon `1e-3`). Bool/Text tracks
+  emit `null` derivatives and quaternion derivatives are currently component-wise (TODO: angular velocity mapping).
 * **Inputs** – Optional `Inputs` payload supports player commands (Play/Pause/Seek/SetLoopMode/etc.) and per-instance updates
   (weight, time scale, enable flag, etc.).
+* **Baking config** – `{ frame_rate?, start_time?, end_time?, derivative_epsilon? }`. Invalid values (non-positive frame rate,
+  `end_time < start_time`, invalid epsilon) throw during parsing. When provided, `derivative_epsilon` overrides the finite
+  difference window used while baking.
 * **ABI guard** – `abi_version()` helps consumers detect mismatches between the wasm binary and the JS wrapper. The npm package’s
-  `Engine` automatically checks the value after `init()`.
+  `Engine` automatically checks the value after `init()` and throws with rebuild instructions if mismatched.
 * **Environment detection** – The wrapper handles Node and browser environments. Node builds read the wasm file from disk; the
   browser path fetches it relative to the module URL.
 
@@ -152,8 +163,17 @@ const playerId = eng.createPlayer("demo");
 eng.addInstance(playerId, animId);
 eng.prebind((path) => path); // identity mapping
 
-const outputs = eng.update(1 / 60);
+const outputs = eng.updateValues(1 / 60);
 console.log(outputs.changes);
+
+const withDerivatives = eng.updateValuesAndDerivatives(1 / 60);
+console.log(withDerivatives.changes.map((c) => ({ key: c.key, derivative: c.derivative ?? null })));
+
+const baked = eng.bakeAnimationWithDerivatives(animId, {
+  frame_rate: 60,
+  derivative_epsilon: 5e-4,
+});
+console.log(baked.values.tracks[0].values.length, baked.derivatives.tracks[0].values.length);
 ```
 
 ### Low-level binding example
@@ -180,7 +200,7 @@ const animId = raw.load_stored_animation(JSON.stringify({
 }));
 const player = raw.create_player("demo");
 raw.add_instance(player, animId, null);
-const result = raw.update(0.016, null);
+const result = raw.update_values(0.016, null);
 console.log(result);
 ```
 

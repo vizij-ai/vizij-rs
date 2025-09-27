@@ -123,7 +123,7 @@ pub fn fixed_update_core_system(
     dt: Res<FixedDt>,
     mut pending: ResMut<PendingOutputs>,
 ) {
-    let out = eng.0.update(dt.0, Inputs::default());
+    let out = eng.0.update_values(dt.0, Inputs::default());
     // Replace pending changes with this tick's changes
     pending.changes.clear();
     pending.changes.extend(out.changes.iter().cloned());
@@ -152,13 +152,7 @@ pub fn apply_outputs_system(world: &mut World) {
     let mut batch = vizij_api_core::WriteBatch::new();
     let mut non_typed: Vec<(String, vizij_api_core::Value)> = Vec::new();
 
-    for Change {
-        key,
-        value,
-        derivative: _,
-        ..
-    } in changes.into_iter()
-    {
+    for Change { key, value, .. } in changes.into_iter() {
         match vizij_api_core::TypedPath::parse(&key) {
             Ok(tp) => batch.push(vizij_api_core::WriteOp::new(tp, value)),
             Err(_) => non_typed.push((key, value)),

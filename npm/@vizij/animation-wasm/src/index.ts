@@ -5,9 +5,11 @@ import initWasm, { VizijAnimation, abi_version } from "../pkg/vizij_animation_wa
 import type {
   InitInput,
   Config,
+  BakingConfig,
   Inputs,
   InstanceUpdate,
   Outputs,
+  OutputsWithDerivatives,
   AnimationData,
   StoredAnimation,
   AnimId,
@@ -16,19 +18,23 @@ import type {
   Value,
   CoreEvent,
   Change,
+  ChangeWithDerivative,
   AnimationInfo,
   PlayerInfo,
   InstanceInfo,
-  BakingConfig,
   BakedAnimationData,
+  BakedDerivativeAnimationData,
+  BakedAnimationBundle,
 } from "./types";
 
 export type {
   InitInput,
   Config,
+  BakingConfig,
   Inputs,
   InstanceUpdate,
   Outputs,
+  OutputsWithDerivatives,
   AnimationData,
   StoredAnimation,
   AnimId,
@@ -37,11 +43,13 @@ export type {
   Value,
   CoreEvent,
   Change,
+  ChangeWithDerivative,
   AnimationInfo,
   PlayerInfo,
   InstanceInfo,
-  BakingConfig,
   BakedAnimationData,
+  BakedDerivativeAnimationData,
+  BakedAnimationBundle,
 };
 
 export { VizijAnimation, abi_version };
@@ -85,10 +93,10 @@ export function init(input?: InitInput): Promise<void> {
 
     // ABI guard
     const abi = Number(abi_version());
-    if (abi !== 1) {
+    if (abi !== 2) {
       throw new Error(
-        `@vizij/animation-wasm ABI mismatch: expected 1, got ${abi}. ` +
-          `Please rebuild the WASM package to ensure compatibility.`
+        `@vizij/animation-wasm ABI mismatch: expected 2, got ${abi}. ` +
+          `Please rebuild vizij-animation-wasm and regenerate @vizij/animation-wasm/pkg.`
       );
     }
   })();
@@ -184,10 +192,33 @@ export class Engine {
   }
 
   /** Step the simulation by dt (seconds) with optional Inputs; returns Outputs */
-  update(dt: number, inputs?: Inputs): Outputs {
-    return (this.inner.update(dt, (inputs ?? undefined) as any) as unknown) as Outputs;
+  updateValues(dt: number, inputs?: Inputs): Outputs {
+    const inner: any = this.inner;
+    if (typeof inner.update_values !== "function") {
+      throw new Error(
+        "Current WASM build does not expose update_values; rebuild vizij-animation-wasm with updated bindings."
+      );
+    }
+    return inner.update_values(dt, (inputs ?? undefined) as any) as Outputs;
   }
 
+  /** Step the simulation by dt returning both values and derivatives */
+  updateValuesAndDerivatives(dt: number, inputs?: Inputs): OutputsWithDerivatives {
+    const inner: any = this.inner;
+    if (typeof inner.update_values_and_derivatives !== "function") {
+      throw new Error(
+        "Current WASM build does not expose update_values_and_derivatives; rebuild vizij-animation-wasm with updated bindings."
+      );
+    }
+    return inner.update_values_and_derivatives(dt, (inputs ?? undefined) as any) as OutputsWithDerivatives;
+  }
+
+  /** Backwards-compatible alias for updateValues */
+  update(dt: number, inputs?: Inputs): Outputs {
+    return this.updateValues(dt, inputs);
+  }
+
+  /** Bake animation samples for a loaded animation */
   /**
    * Bake a loaded animation clip into pre-sampled tracks. The returned object
    * mirrors vizij-animation-core's `BakedAnimationData` schema.
@@ -196,10 +227,24 @@ export class Engine {
     const inner: any = this.inner;
     if (typeof inner.bake_animation !== "function") {
       throw new Error(
-        "Current WASM build does not expose bake_animation; rebuild vizij-animation-wasm"
+        "Current WASM build does not expose bake_animation; rebuild vizij-animation-wasm with updated bindings."
       );
     }
     return inner.bake_animation(anim as number, (cfg ?? undefined) as any) as BakedAnimationData;
+  }
+
+  /** Bake animation samples plus derivatives */
+  bakeAnimationWithDerivatives(anim: AnimId, cfg?: BakingConfig): BakedAnimationBundle {
+    const inner: any = this.inner;
+    if (typeof inner.bake_animation_with_derivatives !== "function") {
+      throw new Error(
+        "Current WASM build does not expose bake_animation_with_derivatives; rebuild vizij-animation-wasm with updated bindings."
+      );
+    }
+    return inner.bake_animation_with_derivatives(
+      anim as number,
+      (cfg ?? undefined) as any,
+    ) as BakedAnimationBundle;
   }
 
   /** Remove a player and all its instances */
