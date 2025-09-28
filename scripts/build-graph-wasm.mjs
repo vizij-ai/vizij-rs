@@ -5,7 +5,7 @@ import { writeFileSync } from "node:fs";
 const crate  = resolve(process.cwd(), "crates/node-graph/vizij-graph-wasm");
 const outDir = resolve(process.cwd(), "npm/@vizij/node-graph-wasm/pkg");
 
-execSync(`wasm-pack build "${crate}" --target web --out-dir "${outDir}" --release`, {
+execSync(`wasm-pack build "${crate}" --target web --out-dir "${outDir}" --release --features urdf_ik`, {
   stdio: "inherit",
 });
 

@@ -1416,7 +1416,7 @@ pub fn registry() -> Registry {
 
     // Case routing (select by string labels)
     nodes.push(NodeSignature {
-        type_id: If, // reuse If's union output typing; runtime uses NodeType::If/Case mapping. Keep name as 'Case' in types.
+        type_id: Case, // reuse If's union output typing; runtime uses NodeType::If/Case mapping. Keep name as 'Case' in types.
         name: "Case",
         category: "Logic",
         inputs: vec![

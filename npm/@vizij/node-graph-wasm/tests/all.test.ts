@@ -15,6 +15,8 @@ import {
   hierarchicalBlend,
   weightedAverage,
   nestedTelemetry,
+  graphSamples,
+  urdfIkPosition,
   type EvalResult,
   type ValueJSON,
   type GraphSpec,
@@ -386,6 +388,16 @@ function assertText(write: WriteOpJSON, expected: string): void {
   try {
     await init(pkgWasmUrl());
 
+    const urdfSample = graphSamples["urdf-ik-position"];
+    assert.ok(urdfSample, "graphSamples exposes urdf-ik-position");
+    assert.equal(
+      urdfSample,
+      urdfIkPosition,
+      "graphSamples should reference the urdfIkPosition sample"
+    );
+    const hasUrdfNode = urdfSample.nodes.some((node) => node.type === "urdfikposition");
+    assert.ok(hasUrdfNode, "urdf sample must include a urdfikposition node");
+
     // Basic smoke checks used across tests
     await runSample("oscillator-basics", oscillatorBasics);
     await runSample("logic-gate", logicGate);
@@ -479,6 +491,169 @@ function assertText(write: WriteOpJSON, expected: string): void {
     // If we reached here, all consolidated checks passed
     // eslint-disable-next-line no-console
     console.log("All consolidated samples tests passed");
+
+    // URDF FK/IK round-trip coverage across multiple poses.
+    {
+      const urdfXml = `
+<robot name="planar_arm">
+  <link name="base_link" />
+  <link name="link1" />
+  <link name="link2" />
+  <link name="link3" />
+  <link name="link4" />
+  <link name="link5" />
+  <link name="link6" />
+  <link name="tool" />
+
+  <joint name="joint1" type="revolute">
+    <parent link="base_link" />
+    <child link="link1" />
+    <origin xyz="0 0 0.1" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
+  </joint>
+
+  <joint name="joint2" type="revolute">
+    <parent link="link1" />
+    <child link="link2" />
+    <origin xyz="0.2 0 0" rpy="0 0 0" />
+    <axis xyz="0 1 0" />
+    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
+  </joint>
+
+  <joint name="joint3" type="revolute">
+    <parent link="link2" />
+    <child link="link3" />
+    <origin xyz="0.2 0 0" rpy="0 0 0" />
+    <axis xyz="1 0 0" />
+    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
+  </joint>
+
+  <joint name="joint4" type="revolute">
+    <parent link="link3" />
+    <child link="link4" />
+    <origin xyz="0.2 0 0" rpy="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
+  </joint>
+
+  <joint name="joint5" type="revolute">
+    <parent link="link4" />
+    <child link="link5" />
+    <origin xyz="0.15 0 0" rpy="0 0 0" />
+    <axis xyz="0 1 0" />
+    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
+  </joint>
+
+  <joint name="joint6" type="revolute">
+    <parent link="link5" />
+    <child link="link6" />
+    <origin xyz="0.1 0 0" rpy="0 0 0" />
+    <axis xyz="1 0 0" />
+    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
+  </joint>
+
+  <joint name="tool_joint" type="fixed">
+    <parent link="link6" />
+    <child link="tool" />
+    <origin xyz="0.1 0 0" rpy="0 0 0" />
+  </joint>
+</robot>
+`.trim();
+
+      const fkIkGraph: GraphSpec = {
+        nodes: [
+          {
+            id: "joint_input",
+            type: "input",
+            params: {
+              path: "tests/urdf.joints",
+              value: { vector: [0, 0, 0, 0, 0, 0] },
+            },
+          },
+          {
+            id: "fk",
+            type: "urdffk",
+            params: {
+              urdf_xml: urdfXml,
+              root_link: "base_link",
+              tip_link: "tool",
+            },
+            inputs: { joints: { node_id: "joint_input" } },
+          },
+          {
+            id: "ik",
+            type: "urdfikposition",
+            params: {
+              urdf_xml: urdfXml,
+              root_link: "base_link",
+              tip_link: "tool",
+              max_iters: 256,
+              tol_pos: 0.0005,
+            },
+            inputs: {
+              target_pos: { node_id: "fk", output_key: "position" },
+              seed: { node_id: "joint_input" },
+            },
+          },
+        ],
+      };
+
+      const fkIkGraphInstance = new Graph();
+      fkIkGraphInstance.loadGraph(fkIkGraph);
+      fkIkGraphInstance.setTime(0);
+
+      const expectedJointNames = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"] as const;
+      const jointSamples: number[][] = [
+        [0, 0, 0, 0, 0, 0],
+        [0.2, -0.1, 0.15, -0.2, 0.1, -0.05],
+        [-0.25, 0.2, -0.18, 0.22, -0.12, 0.08],
+        [0.35, -0.28, 0.24, 0.18, -0.16, 0.12],
+        [-0.3, 0.18, 0.12, -0.26, 0.2, -0.14],
+      ];
+
+      jointSamples.forEach((angles, sampleIdx) => {
+        // Forward pass: compute FK pose for the chosen joint angles.
+        console.log("FK Target", angles)
+        fkIkGraphInstance.stageInput("tests/urdf.joints", angles);
+        const fkResult = fkIkGraphInstance.evalAll();
+        const fkNode = fkResult.nodes?.fk as any;
+        assert.ok(fkNode, `fk node result missing for sample ${sampleIdx}`);
+        const fkPositionValue: ValueJSON | undefined = fkNode.position?.value;
+        assert.ok(fkPositionValue, `fk position missing for sample ${sampleIdx}`);
+        assertValueFinite(fkPositionValue, `fk.position[${sampleIdx}]`);
+        const targetPosition = valueToVector(fkPositionValue);
+        console.log("ik target", targetPosition);
+
+        const ikNode = fkResult.nodes?.ik as any;
+        assert.ok(ikNode, `ik node result missing for sample ${sampleIdx}`);
+        const ikValue: ValueJSON | undefined = ikNode.out?.value;
+        console.log("ik result", ikValue, "\n");
+        assert.ok(ikValue && "record" in ikValue, `ik output missing record for sample ${sampleIdx}`);
+
+        const ikRecord = (ikValue as { record: Record<string, ValueJSON> }).record;
+        expectedJointNames.forEach((jointName) => {
+          const entry = ikRecord[jointName];
+          assert.ok(entry && "float" in entry, `ik output missing float for joint '${jointName}' (sample ${sampleIdx})`);
+          const jointAngle = entry.float as number;
+          assert.ok(Number.isFinite(jointAngle), `ik joint '${jointName}' produced non-finite value`);
+        });
+
+        const ikAngles = expectedJointNames.map((jointName) => (ikRecord[jointName] as any).float as number);
+
+        // Backward pass: feed IK joint solution into FK and ensure pose matches.
+        fkIkGraphInstance.stageInput("tests/urdf.joints", ikAngles);
+        const validationResult = fkIkGraphInstance.evalAll();
+        const validationFkNode = validationResult.nodes?.fk as any;
+        const validationPosValue: ValueJSON | undefined = validationFkNode?.position?.value;
+        assert.ok(validationPosValue, `validation fk position missing for sample ${sampleIdx}`);
+        assertValueFinite(validationPosValue, `validation fk.position[${sampleIdx}]`);
+        const validationPosition = valueToVector(validationPosValue);
+        approxVector(validationPosition, targetPosition, 1e-3);
+
+        fkIkGraphInstance.step(1 / 120);
+      });
+    }
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);

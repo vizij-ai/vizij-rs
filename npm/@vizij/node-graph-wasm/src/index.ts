@@ -236,8 +236,8 @@ export async function getNodeSchemas(): Promise<import("./types").Registry> {
 }
 
 // Samples re-exports
-export {
-  graphSamples,
+import {
+  graphSamples as baseGraphSamples,
   oscillatorBasics,
   vectorPlayground,
   logicGate,
@@ -249,3 +249,23 @@ export {
   weightedAverage,
   layeredRigBlend,
 } from "./samples.js";
+import { urdfGraphSamples, urdfIkPosition } from "./samples_extra.js";
+
+export const graphSamples: Record<string, GraphSpec> = {
+  ...baseGraphSamples,
+  ...urdfGraphSamples,
+};
+
+export {
+  oscillatorBasics,
+  vectorPlayground,
+  logicGate,
+  tupleSpringDampSlew,
+  nestedTelemetry,
+  nestedRigWeightedPose,
+  selectorCascade,
+  hierarchicalBlend,
+  weightedAverage,
+  layeredRigBlend,
+  urdfIkPosition,
+};

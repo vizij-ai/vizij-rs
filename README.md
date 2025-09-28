@@ -150,6 +150,7 @@ Vite server reloads when the WASM `pkg/` contents change.
 * **Repo scripts** –
   * `npm run build:wasm:animation` / `npm run build:wasm:graph` wrap the underlying Node scripts to refresh WASM outputs.
   * `scripts/build-animation-wasm.mjs` / `scripts/build-graph-wasm.mjs` contain the raw build logic used by the npm shortcuts.
+    - The graph script now forwards `--features urdf_ik` to ensure the packaged wasm exposes the URDF IK/FK node family.
   * `npm run watch:wasm:animation` / `npm run watch:wasm:graph` trigger `cargo watch` loops that rebuild WASM artifacts on change
     (requires `cargo-watch`).
   * `scripts/install-git-hooks.sh` installs pre-commit/pre-push hooks mirroring the CI checks.

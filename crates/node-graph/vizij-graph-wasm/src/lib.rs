@@ -347,6 +347,7 @@ pub fn normalize_graph_spec_json(json: &str) -> Result<String, JsValue> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
     fn it_should_normalize_value_and_path_shorthand() {
@@ -398,6 +399,28 @@ mod tests {
             .unwrap();
         let values: Vec<f64> = sizes.iter().map(|v| v.as_f64().unwrap()).collect();
         assert_eq!(values, vec![2.0, 3.0, 4.5]);
+    }
+
+    #[test]
+    fn registry_exposes_urdf_nodes() {
+        let raw = get_node_schemas_json();
+        let parsed: serde_json::Value = serde_json::from_str(&raw).expect("valid registry json");
+        let nodes = parsed
+            .get("nodes")
+            .and_then(|v| v.as_array())
+            .expect("registry contains nodes array");
+        let present: HashSet<String> = nodes
+            .iter()
+            .filter_map(|entry| entry.get("type_id").and_then(|v| v.as_str()))
+            .map(|s| s.to_string())
+            .collect();
+        for expected in ["urdfikposition", "urdfikpose", "urdffk"] {
+            assert!(
+                present.contains(expected),
+                "registry missing {expected}; available: {:?}",
+                present
+            );
+        }
     }
 }
 
