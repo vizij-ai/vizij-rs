@@ -9,7 +9,7 @@ members = [
   "crates/api/vizij-api-core",
   "crates/api/vizij-api-wasm",
   "crates/api/bevy_vizij_api",
-  "crates/orchestrator/vizij-orchestrator",
+  "crates/orchestrator/vizij-orchestrator-core",
 ]
 resolver = "2"
 

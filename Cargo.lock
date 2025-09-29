@@ -3936,7 +3936,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vizij-orchestrator"
+name = "vizij-orchestrator-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
