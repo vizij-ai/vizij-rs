@@ -1,6 +1,6 @@
 [package]
 name        = "bevy_vizij_animation"
-version = "0.2.0"
+version = "0.3.0"
 edition     = "2021"
 license     = "MIT OR Apache-2.0"
 description = "Bevy plugin that wraps the Vizij animation core."
@@ -12,7 +12,7 @@ keywords    = ["vizij", "animation", "bevy", "plugin"]
 categories  = ["game-engines", "rendering", "wasm"]
 
 [dependencies]
-vizij-animation-core = { version = "0.2.0", path = "../vizij-animation-core" }
+vizij-animation-core = { version = "0.3.0", path = "../vizij-animation-core" }
 bevy                = { workspace = true }
 vizij-api-core      = { path = "../../api/vizij-api-core" }
 bevy_vizij_api      = { path = "../../api/bevy_vizij_api" }

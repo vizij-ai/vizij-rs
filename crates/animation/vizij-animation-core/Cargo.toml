@@ -1,6 +1,6 @@
 [package]
 name        = "vizij-animation-core"
-version = "0.2.0"          # bump when releasing a new version
+version = "0.3.0"          # bump when releasing a new version
 edition     = "2021"
 license     = "MIT OR Apache-2.0"
 description = "Core animation logic for Vizij (engine‑agnostic)."

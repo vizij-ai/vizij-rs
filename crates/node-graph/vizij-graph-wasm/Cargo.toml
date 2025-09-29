@@ -1,6 +1,6 @@
 [package]
 name        = "vizij-graph-wasm"
-version = "0.2.0"
+version = "0.3.0"
 edition     = "2021"
 license     = "MIT OR Apache-2.0"
 description = "wasm‑bindgen interface for Vizij node graph."
@@ -19,7 +19,7 @@ wasm-bindgen = { workspace = true }
 serde        = { workspace = true }
 serde_json   = { workspace = true }
 hashbrown    = { workspace = true }
-vizij-graph-core = { path = "../vizij-graph-core", version = "0.2.0" }
+vizij-graph-core = { path = "../vizij-graph-core", version = "0.3.0" }
 vizij-api-core = { path = "../../api/vizij-api-core" }
 console_error_panic_hook = { version = "0.1", optional = true }
 
