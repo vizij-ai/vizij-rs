@@ -15,6 +15,8 @@ jobs:
       - name: Install system dependencies (alsa/libudev dev for Bevy)
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
       - name: Cache cargo
         uses: actions/cache@v4
         with:
@@ -32,6 +34,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
       - name: Install wasm-pack
         run: cargo install wasm-pack
       - name: Build WASM into npm wrapper pkg/
