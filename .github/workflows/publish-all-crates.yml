@@ -1,8 +1,8 @@
-name: publish-crates
+name: publish-all
 on:
   push:
     tags:
-      - 'crates/*@*'
+      - 'release-*'
 
 jobs:
   publish:
@@ -19,5 +19,5 @@ jobs:
           [registry]
           token = "${{ secrets.CARGO_REGISTRY_TOKEN }}"
           EOF
-      - name: Publish crates
-        run: cargo workspaces publish --from-git --yes --no-verify
+      - name: Publish ALL crates
+        run: cargo workspaces publish --from-git --all --yes --no-verify
