@@ -3936,6 +3936,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "vizij-orchestrator"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hashbrown 0.14.5",
+ "serde",
+ "serde_json",
+ "vizij-animation-core",
+ "vizij-api-core",
+ "vizij-graph-core",
+]
+
+[[package]]
 name = "walkdir"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

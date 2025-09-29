@@ -28,7 +28,7 @@ pub enum ValueKind {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "type", content = "data")]
+#[serde(tag = "type", content = "data", rename_all = "lowercase")]
 pub enum Value {
     /// Scalar float
     Float(f32),
