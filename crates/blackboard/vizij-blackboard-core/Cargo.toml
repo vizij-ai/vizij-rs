@@ -1,0 +1,23 @@
+[package]
+name        = "vizij-blackboard-core"
+version     = "0.1.0"          # bump when releasing a new version
+edition     = "2021"
+license     = "MIT OR Apache-2.0"
+description = "Async Namespaced Shared memory container."
+repository  = "https://github.com/vizij-ai/vizij-rs"
+homepage    = "https://github.com/vizij-ai/vizij-rs"
+documentation = "https://docs.rs/vizij-animation-core"
+readme      = "README.md"
+keywords    = ["vizij", "blackboard", "async", "memory"]
+categories  = ["asynchronous", "concurrency", "data structures"]
+# Exclude files that should not be published (e.g. scripts, CI)
+exclude = ["*/scripts/*", ".github/*", "npm/*", "target/*"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+arora-schema = { workspace = true }
+log = { workspace = true }
+uuid = { workspace = true }
+
+vizij-api-core = { path = "../../api/vizij-api-core" }

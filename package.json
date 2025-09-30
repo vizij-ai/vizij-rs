@@ -8,7 +8,10 @@
     "clean:wasm:animation": "rm -rf npm/@vizij/animation-wasm/pkg npm/@vizij/animation-wasm/dist",
     "build:wasm:graph": "node scripts/build-graph-wasm.mjs",
     "watch:wasm:graph": "cargo watch -w crates/node-graph/vizij-graph-core -w crates/node-graph/vizij-graph-wasm -s \"node scripts/build-graph-wasm.mjs\"",
-    "link:wasm": "npm run link:wasm:animation && npm run link:wasm:graph",
+    "build:wasm:blackboard": "node scripts/build-blackboard-wasm.mjs",
+    "watch:wasm:blackboard": "cargo watch -w crates/blackboard/vizij-blackboard-core -w crates/blackboard/vizij-blackboard-wasm -s \"node scripts/build-blackboard-wasm.mjs\"",
+    "link:wasm:blackboard": "npm --workspace npm/@vizij/blackboard-wasm run build && (cd npm/@vizij/blackboard-wasm && npm link)",
+    "link:wasm": "npm run link:wasm:animation && npm run link:wasm:graph && npm run link:wasm:blackboard",
     "link:wasm:graph": "npm --workspace npm/@vizij/node-graph-wasm run build && (cd npm/@vizij/node-graph-wasm && npm link)",
     "clean:wasm:graph": "rm -rf npm/@vizij/node-graph-wasm/pkg npm/@vizij/node-graph-wasm/dist"
   },

@@ -90,4 +90,22 @@ Use these commands to interact with the workspace. Always run commands from the 
 * **Major refactors** – For large architectural changes, create a design doc in `docs/` explaining the rationale, proposed changes and migration steps. Review this doc before implementing.
 * **Version synchronization** – When releasing a new version of `vizij-animation-core` or `vizij-graph-core`, also release matching versions of `vizij-animation-wasm` and `vizij-graph-wasm` and update dependent crates. Align versions with related npm packages in `vizij-web`.
 
+## Adding a new wasm npm package (e.g. blackboard)
+
+When introducing a new wasm crate that also needs an npm package (as done for `@vizij/blackboard-wasm`):
+
+1. Create the Rust crate under `crates/<domain>/vizij-<name>-wasm` with `crate-type = ["cdylib", "rlib"]` and build it using `wasm-pack build --target web` (follow existing wasm crates for dependencies and features).
+2. Add / update a build script in `scripts/` (e.g. `build-blackboard-wasm.mjs`) invoking `wasm-pack build` pointing `--out-dir` to `npm/@vizij/<name>-wasm/pkg`.
+3. Scaffold an npm workspace package under `npm/@vizij/<name>-wasm`:
+   - `package.json` mirroring animation/node-graph packages (name, version, build script, `files` array containing `dist/` and `pkg/`).
+   - `tsconfig.json` (see existing packages; typically ES2020 + `moduleResolution: Bundler`).
+   - `src/index.ts` ESM entry that imports the generated `pkg/<wasm_pkg>.js` with a `.js` extension and provides an `init()` helper if needed.
+   - `README.md` with build & usage instructions.
+4. Ensure root `package.json` `workspaces` already matches `npm/@vizij/*` (no change usually needed) and optionally add convenience scripts (`build:wasm:<name>`, `link:wasm:<name>`).
+5. Run from repo root: `npm install` (to register new workspace) then `npm run build:wasm:<name>` and `npm --workspace npm/@vizij/<name>-wasm run build`.
+6. Optionally `npm run link:wasm:<name>` for local development linking.
+7. Before publishing, confirm `pkg/` exists (wasm-pack output) and `dist/` exists (TypeScript build). The `prepublishOnly` script guards against missing `pkg/`.
+
+This process was applied for `@vizij/blackboard-wasm` (version 0.1.0).
+
 

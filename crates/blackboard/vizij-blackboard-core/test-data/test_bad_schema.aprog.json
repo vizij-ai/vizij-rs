@@ -1,0 +1,34 @@
+{
+    "engine": {
+        "version": "1.0.0",
+        "name": "TestProgram1"
+    },
+    "embodiment": {
+        "name": "TestRobot",
+        "description": "A test robot for demonstration purposes."
+    },
+    "program": {
+        "states": [
+            { "name": "Engaged" },
+            { "name": "Waving" },
+            { "name": "BlendOut" }
+        ],
+        "events": [
+            { "name": "Reset" },
+            { "name": "Control", "args": [{"name": "param0", "type": "f32"}]},
+            { "name": "Hello" },
+            { "name": "WaveTimeout" },
+            { "name": "BloutTimeout" },
+            { "name": "Conv.PUTI" },
+            { "name": "Conv.FUTI" },
+            { "name": "Conv.RSS" },
+            { "name": "Conv.RFS" }
+        ],
+        "nodegraph": {
+            "type": "HardLimitsSolver",
+            "name": "HardLimits",
+            "args": []
+            
+        }
+    }
+ }

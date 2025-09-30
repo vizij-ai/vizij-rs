@@ -29,10 +29,13 @@ vizij-rs/
 │   │   ├── vizij-animation-core      # Engine-agnostic animation runtime (Rust)
 │   │   ├── bevy_vizij_animation      # Bevy plugin built on the animation core
 │   │   └── vizij-animation-wasm      # wasm-bindgen bindings consuming the core
-│   └── node-graph/
-│       ├── vizij-graph-core          # Deterministic data-flow graph evaluator (Rust)
-│       ├── bevy_vizij_graph          # Bevy plugin consuming the graph core
-│       └── vizij-graph-wasm          # wasm-bindgen adapter consuming the graph core
+│   ├── node-graph/
+│   |   ├── vizij-graph-core          # Deterministic data-flow graph evaluator (Rust)
+│   |   ├── bevy_vizij_graph          # Bevy plugin consuming the graph core
+│   |   └── vizij-graph-wasm          # wasm-bindgen adapter consuming the graph core
+│   └── blackboard/
+│       ├── vizij-blackboard-core     # Async Namespaced Shared memory container (Rust)
+│       └── vizij-blackboard-wasm     # wasm-bindgen adapter consuming the blackboard
 ├── npm/
 │   ├── @vizij/animation-wasm         # npm package that re-exports the animation WASM pkg
 │   └── @vizij/node-graph-wasm        # npm package wrapping the node graph WASM pkg
@@ -101,6 +104,7 @@ Follow these steps the first time you prepare a development environment:
    ```bash
    npm run build:wasm:animation
    npm run build:wasm:graph
+   npm run build:wasm:blackboard
    ```
 3. **Link the npm packages into vizij-web** (from this repo). The helper will rebuild both wrappers and register the global
    `npm link` targets in one go:
