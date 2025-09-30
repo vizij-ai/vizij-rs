@@ -7,9 +7,9 @@ JavaScript tooling.
 
 ## Overview
 
-* **Domain stacks** – The workspace currently ships animation and node-graph stacks, with additional stacks (e.g., blackboard,
-  behaviour tree) planned. Each stack follows the same pattern: a core Rust crate that feeds both a Bevy ECS adapter and a
-  WASM binding (which is re-exported through an npm wrapper for JavaScript consumers).
+* **Domain stacks** – The workspace currently ships animation, node-graph, and orchestrator stacks, with additional stacks
+  (e.g., blackboard, behaviour tree) planned. Each stack follows the same pattern: a core Rust crate that feeds both a Bevy ECS
+  adapter and a WASM binding (which is re-exported through an npm wrapper for JavaScript consumers).
 * **Multi-language toolchain** – Rust crates are built with Cargo, WASM targets use `wasm-bindgen`/`wasm-pack`, and npm packages
   provide typed front-end entry points. The workspace is designed so the Rust repo can publish versioned crates and npm artifacts
   without the web repo pulling in the Rust toolchain.
@@ -128,8 +128,10 @@ Common workflows from the root of `vizij-rs`:
 | Test everything | `cargo test --workspace` |
 | Build animation WASM pkg | `npm run build:wasm:animation` |
 | Build node-graph WASM pkg | `npm run build:wasm:graph` |
+| Build orchestrator WASM pkg | `npm run build:wasm:orchestrator` |
 | Watch animation WASM builds | `npm run watch:wasm:animation` *(requires `cargo-watch`)* |
 | Watch node-graph WASM builds | `npm run watch:wasm:graph` *(requires `cargo-watch`)* |
+| Watch orchestrator WASM builds | `npm run watch:wasm:orchestrator` *(requires `cargo-watch`)* |
 | Publish dry run | `scripts/dry-run-release.sh` (builds crates and npm packages without publishing) |
 
 When linked to `vizij-web`, run its dev servers (e.g., `npm run dev:animation`) and iterate on Rust code with the watcher. The

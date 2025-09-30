@@ -8,9 +8,13 @@
     "clean:wasm:animation": "rm -rf npm/@vizij/animation-wasm/pkg npm/@vizij/animation-wasm/dist",
     "build:wasm:graph": "node scripts/build-graph-wasm.mjs",
     "watch:wasm:graph": "cargo watch -w crates/node-graph/vizij-graph-core -w crates/node-graph/vizij-graph-wasm -s \"node scripts/build-graph-wasm.mjs\"",
-    "link:wasm": "npm run link:wasm:animation && npm run link:wasm:graph",
     "link:wasm:graph": "npm --workspace npm/@vizij/node-graph-wasm run build && (cd npm/@vizij/node-graph-wasm && npm link)",
-    "clean:wasm:graph": "rm -rf npm/@vizij/node-graph-wasm/pkg npm/@vizij/node-graph-wasm/dist"
+    "clean:wasm:graph": "rm -rf npm/@vizij/node-graph-wasm/pkg npm/@vizij/node-graph-wasm/dist",
+    "build:wasm:orchestrator": "node scripts/build-orchestrator-wasm.mjs",
+    "watch:wasm:orchestrator": "cargo watch -w crates/orchestrator/vizij-orchestrator-core -w crates/orchestrator/vizij-orchestrator-wasm -s \"node scripts/build-orchestrator-wasm.mjs\"",
+    "link:wasm:orchestrator": "npm --workspace npm/@vizij/orchestrator-wasm run build && (cd npm/@vizij/orchestrator-wasm && npm link)",
+    "clean:wasm:orchestrator": "rm -rf npm/@vizij/orchestrator-wasm/pkg npm/@vizij/orchestrator-wasm/dist",
+    "link:wasm": "npm run link:wasm:animation && npm run link:wasm:graph && npm run link:wasm:orchestrator"
   },
   "workspaces": [
     "npm/@vizij/*"

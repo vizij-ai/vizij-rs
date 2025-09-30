@@ -13,6 +13,7 @@ cargo test --workspace
 echo "Building WASM packages…"
 node scripts/build-animation-wasm.mjs
 node scripts/build-graph-wasm.mjs
+node scripts/build-orchestrator-wasm.mjs
 
 # 3. Dry‑run publishing of crates in dependency order
 CRATES=(
