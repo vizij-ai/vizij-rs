@@ -1,7 +1,7 @@
-use vizij_api_core::TypedPath;
+use vizij_api_core::{TypedPath, Value};
 use vizij_orchestrator::{
     controllers::animation::AnimationControllerConfig, controllers::graph::GraphControllerConfig,
-    controllers::Subscriptions, Orchestrator, Schedule,
+    controllers::graph::Subscriptions, Orchestrator, Schedule,
 };
 
 fn main() {
@@ -10,37 +10,43 @@ fn main() {
     let graph_spec_json = serde_json::json!({
         "nodes": [
             {
-                "id": "input",
+                "id": "anim_input",
                 "type": "input",
                 "params": {
-                    "path": "demo/input/value",
-                    "value": { "type": "float", "data": 0.0 }
+                    "path": "demo/animation.value",
+                    "value": { "type": "float", "data": 0 }
                 }
             },
             {
-                "id": "gain",
-                "type": "constant",
-                "params": { "value": { "type": "float", "data": 1.5 } }
+                "id": "gain_input",
+                "type": "input",
+                "params": {
+                    "path": "demo/graph/gain",
+                    "value": { "type": "float", "data": 1.5 }
+                }
+            },
+            {
+                "id": "offset_input",
+                "type": "input",
+                "params": {
+                    "path": "demo/graph/offset",
+                    "value": { "type": "float", "data": 0.25 }
+                }
             },
             {
                 "id": "scaled",
                 "type": "multiply",
                 "inputs": {
-                    "a": { "node_id": "input" },
-                    "b": { "node_id": "gain" }
+                    "lhs": { "node_id": "anim_input" },
+                    "rhs": { "node_id": "gain_input" }
                 }
-            },
-            {
-                "id": "offset_constant",
-                "type": "constant",
-                "params": { "value": { "type": "float", "data": 0.25 } }
             },
             {
                 "id": "output_sum",
                 "type": "add",
                 "inputs": {
                     "lhs": { "node_id": "scaled" },
-                    "rhs": { "node_id": "offset_constant" }
+                    "rhs": { "node_id": "offset_input" }
                 }
             },
             {
@@ -51,10 +57,15 @@ fn main() {
             }
         ]
     });
+
     let graph_spec: vizij_graph_core::types::GraphSpec =
         serde_json::from_value(graph_spec_json).expect("graph spec json");
     let subs = Subscriptions {
-        inputs: vec![TypedPath::parse("demo/input/value").unwrap()],
+        inputs: vec![
+            TypedPath::parse("demo/animation.value").unwrap(),
+            TypedPath::parse("demo/graph/gain").unwrap(),
+            TypedPath::parse("demo/graph/offset").unwrap(),
+        ],
         outputs: vec![TypedPath::parse("demo/output/value").unwrap()],
         mirror_writes: true,
     };
@@ -68,7 +79,7 @@ fn main() {
         "animation": {
             "id": "demo-ramp",
             "name": "Demo Ramp",
-            "duration": 2000,
+            "duration": 2001,
             "groups": [],
             "tracks": [
                 {
@@ -95,12 +106,32 @@ fn main() {
 
     orchestrator
         .set_input(
-            "demo/input/value",
-            serde_json::json!({ "type": "float", "data": 0.5 }),
+            "demo/graph/gain",
+            serde_json::json!({ "type": "float", "data": 1.5 }),
             None,
         )
         .unwrap();
-    let frame = orchestrator.step(0.016).unwrap();
-    println!("frame epoch {}", frame.epoch);
-    println!("writes: {:?}", frame.merged_writes);
+    orchestrator
+        .set_input(
+            "demo/graph/offset",
+            serde_json::json!({ "type": "float", "data": 0.25 }),
+            None,
+        )
+        .unwrap();
+
+    let frame0 = orchestrator.step(0.0).unwrap();
+    println!("frame0 writes {:?}", frame0.merged_writes);
+    let frame1 = orchestrator.step(1.0).unwrap();
+    println!("frame1 writes {:?}", frame1.merged_writes);
+    let frame2 = orchestrator.step(1.0).unwrap();
+    println!("frame2 writes {:?}", frame2.merged_writes);
+
+    println!("\nBlackboard snapshot:");
+    for (path, entry) in orchestrator.blackboard.iter() {
+        let value_desc = match &entry.value {
+            Value::Float(f) => format!("Float({f})"),
+            other => format!("{:?}", other),
+        };
+        println!("{} => {}", path, value_desc);
+    }
 }

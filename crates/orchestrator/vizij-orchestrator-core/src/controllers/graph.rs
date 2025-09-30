@@ -72,9 +72,6 @@ impl GraphController {
             }
         }
 
-        // Advance staging epoch so newly staged inputs become current for this evaluation.
-        self.rt.advance_epoch();
-
         // Preserve any pre-populated writes (e.g., injected by tests or external tooling)
         let mut combined = WriteBatch::new();
         combined.append(std::mem::take(&mut self.rt.writes));
