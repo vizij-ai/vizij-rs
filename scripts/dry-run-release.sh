@@ -31,7 +31,7 @@ for crate in "${CRATES[@]}"; do
 done
 
 # 4. Dry‑run publishing of npm packages in vizij-rs
-for pkg in animation-wasm node-graph-wasm; do
+for pkg in animation-wasm node-graph-wasm orchestrator-wasm; do
   echo "\n=== Dry running @vizij/$pkg ==="
   pushd npm/@vizij/$pkg > /dev/null
   npm i
