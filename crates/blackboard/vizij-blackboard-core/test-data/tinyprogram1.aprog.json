@@ -1,0 +1,117 @@
+{
+    "engine": {
+        "engine_version": "1.0.0",
+        "program_name": "MinimalProgram1",
+        "ticks_per_second": 50,
+        "debug": true
+    },
+    "embodiment": {
+        "name": "MinimalTestRobot",
+        "description": "A test robot for demonstration purposes.",
+        "channels": {
+            "Channel1": {
+                "type": "linear",
+                "zero_value": 0.0,
+                "min_value": -50.0,
+                "max_value": 50.0
+            },
+            "Channel2": {
+                "type": "linear",
+                "zero_value": 30.0,
+                "min_value": 0.0,
+                "max_value": 100.0
+            }
+        }
+    },
+    "program": {
+        "states": [
+            {
+                "name": "Waving",
+                "events_allowed": [
+                    "Reset"
+                ]
+            }
+        ],
+        "events": [
+            {
+                "name": "Reset"
+            }
+        ],
+        "nodegraph": {
+            "type": "OutputLayerNode",
+            "name": "blender",
+            "out_plugs": {
+                "Channel1": {
+                    "bb_var": "engine.output.Channel1.value"
+                },
+                "Channel2": {
+                    "bb_var": "engine.output.Channel2.value"
+                }
+            },
+            "in_plugs": {
+                "Channel1": {
+                    "node_ref": "sine_ctrl"
+                },
+                "Channel2": {
+                    "node_ref": "sine_ctrl2"
+                }
+            },
+            "children": [
+                {
+                    "type": "SineWaveController",
+                    "name": "sine_ctrl",
+                    "args": [
+                        {
+                            "name": "wave_shape",
+                            "type": "str",
+                            "value": "sine"
+                        }
+                    ],
+                    "in_plugs": {
+                        "x": {
+                            "bb_var": "engine.time"
+                        },
+                        "frequency": {
+                            "value_type": "f32",
+                            "value": 0.2
+                        },
+                        "amplitude": {
+                            "value_type": "f32",
+                            "value": 1.0
+                        },
+                        "reset": {
+                            "bb_var": "event.Reset.triggered"
+                        }
+                    }
+                },
+                {
+                    "type": "SineWaveController",
+                    "name": "sine_ctrl2",
+                    "args": [
+                        {
+                            "name": "wave_shape",
+                            "type": "str",
+                            "value": "sine"
+                        }
+                    ],
+                    "in_plugs": {
+                        "x": {
+                            "bb_var": "engine.time"
+                        },
+                        "frequency": {
+                            "value_type": "f32",
+                            "value": 0.5
+                        },
+                        "amplitude": {
+                            "value_type": "f32",
+                            "value": 1.5
+                        },
+                        "reset": {
+                            "bb_var": "event.Reset.triggered"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

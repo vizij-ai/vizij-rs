@@ -1,0 +1,55 @@
+{
+    "engine": {
+        "engine_version": "1.0.0",
+        "program_name": "MinimalProgram1",
+        "ticks_per_second": 50,
+        "debug": true
+    },
+    "embodiment": {
+        "name": "MinimalTestRobot",
+        "description": "A test robot for demonstration purposes.",
+        "channels": {
+            "Channel1": {
+                "type": "linear",
+                "zero_value": 0.0,
+                "min_value": -50.0,
+                "max_value": 50.0
+            }
+        }
+    },
+    "program": {
+        "nodegraph": {
+            "type": "OutputLayerNode",
+            "name": "blender",
+            "out_plugs": {
+                "Channel1": {
+                    "bb_var": "engine.output.Channel1.value"
+                }
+            },
+            "in_plugs": {
+                "Channel1": {
+                    "node_ref": "sine_ctrl"
+                }
+            },
+            "children": [
+                {
+                    "type": "SineWaveController",
+                    "name": "sine_ctrl",
+                    "in_plugs": {
+                        "x": {
+                            "bb_var": "engine.time"
+                        },
+                        "frequency": {
+                            "value_type": "f32",
+                            "value": 0.2
+                        },
+                        "amplitude": {
+                            "value_type": "f32",
+                            "value": 1.0
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

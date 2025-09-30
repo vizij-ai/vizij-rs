@@ -39,6 +39,9 @@ vizij-rs/
 │  │  ├─ vizij-animation-core      # Deterministic animation engine
 │  │  ├─ bevy_vizij_animation      # Bevy plugin wrapping the engine
 │  │  └─ vizij-animation-wasm      # wasm-bindgen binding
+│  ├─ blackboard/
+│  │  ├─ vizij-blackboard-core     # Async Namespaced Shared memory container (Rust)
+│  │  └─ vizij-blackboard-wasm     # wasm-bindgen adapter consuming the blackboard
 │  ├─ node-graph/
 │  │  ├─ vizij-graph-core          # Data-flow node graph evaluator
 │  │  ├─ bevy_vizij_graph          # Bevy plugin
