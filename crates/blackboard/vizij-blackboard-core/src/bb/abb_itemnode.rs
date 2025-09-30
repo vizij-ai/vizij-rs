@@ -26,7 +26,7 @@ impl ABBItemNode {
         name: String,
         value_type: Type,
         ref_id: Option<Uuid>,
-        full_path: &String,
+        full_path: &str,
     ) -> Option<Self> {
         if name.is_empty() {
             // We don't want to create nodes with empty names
@@ -45,30 +45,30 @@ impl ABBItemNode {
             value_type,
             id: ref_id,
             value: None,
-            full_path: full_path.clone(),
+            full_path: full_path.to_owned(),
         })
     }
 
     /// Constructor that accepts a Value and infers the type
     pub fn from_value(
-        name_ref: &String,
+        name_ref: &str,
         value: Value,
         id: Uuid,
-        full_path: &String,
+        full_path: &str,
     ) -> Result<Option<Self>, String> {
         if name_ref.is_empty() {
             return Err("Name cannot be empty".to_string());
         }
 
         let value_type = adt::utils::get_type_for_value(&value);
-        let name = name_ref.clone();
+        let name = name_ref.to_owned();
 
         Ok(Some(Self {
             name,
             value_type,
             id,
             value: Some(value),
-            full_path: full_path.clone(),
+            full_path: full_path.to_owned(),
         }))
     }
 
@@ -119,7 +119,7 @@ impl ABBNodeTrait for ABBItemNode {
 
     /// Returns a copy of the unique ID of the item
     fn get_id_copy(&self) -> Result<Uuid, String> {
-        Ok(self.id.clone())
+        Ok(self.id)
     }
 
     /// Returns the full path of the node as a string

@@ -79,7 +79,7 @@ impl BlackboardRef {
             BlackboardType::ArcArora => BlackboardRef {
                 bb_type,
                 simple_bb: None,
-                arc_arora_bb: Some(ArcAroraBlackboard::new(&name.to_string())),
+                arc_arora_bb: Some(ArcAroraBlackboard::new(name.to_string())),
             },
         }
     }
@@ -173,21 +173,13 @@ impl BlackboardInterface for BlackboardRef {
                                     let path_id =
                                         guard.get_id_copy().expect("Path ID should exist");
                                     drop(guard); // Explicitly unlock the MutexGuard before further operations
-                                    let path_kv =
-                                        self.lookup_kv_by_id(&path_id).map_err(|e| e.to_string());
-                                    if path_kv.is_ok() {
-                                        let kv = path_kv.unwrap();
-                                        Ok(if let Some(kv) = kv {
-                                            Some(Value::KeyValue(kv))
-                                        } else {
-                                            None
-                                        })
-                                    } else {
-                                        Err(format!(
+                                    match self.lookup_kv_by_id(&path_id) {
+                                        Ok(opt) => Ok(opt.map(Value::KeyValue)),
+                                        Err(e) => Err(format!(
                                             "Failed to get KeyValue for path '{}': {}",
                                             path.to_string(),
-                                            path_kv.err().unwrap_or("Unknown error".to_string())
-                                        ))
+                                            e
+                                        )),
                                     }
                                 } else {
                                     Ok(guard
@@ -235,7 +227,7 @@ impl BlackboardInterface for BlackboardRef {
             }
             BlackboardType::ArcArora => {
                 if let Some(bb) = &self.arc_arora_bb {
-                    bb.get_keyvalue_by_id(&id)
+                    bb.get_keyvalue_by_id(id)
                 } else {
                     Err("ArcAroraBlackboard is not initialized".to_string())
                 }
@@ -283,7 +275,7 @@ impl BlackboardInterface for BlackboardRef {
             }
             BlackboardType::ArcArora => {
                 if let Some(bb) = &self.arc_arora_bb {
-                    bb.get_node_by_id(&id).map_err(|e| e.to_string())
+                    bb.get_node_by_id(id).map_err(|e| e.to_string())
                 } else {
                     Err("ArcAroraBlackboard is not initialized".to_string())
                 }
@@ -338,7 +330,7 @@ impl BlackboardInterface for BlackboardRef {
             }
             BlackboardType::ArcArora => {
                 if let Some(bb) = &mut self.arc_arora_bb {
-                    bb.set_existing_bb_item(value, &id)
+                    bb.set_existing_bb_item(value, id)
                 } else {
                     Err("ArcAroraBlackboard is not initialized".to_string())
                 }
@@ -364,7 +356,7 @@ impl BlackboardInterface for BlackboardRef {
             }
             BlackboardType::ArcArora => {
                 if let Some(bb) = &self.arc_arora_bb {
-                    match bb.get_node_by_id(&id) {
+                    match bb.get_node_by_id(id) {
                         Ok(Some(node)) => {
                             let target_node = node.lock().unwrap();
                             match target_node.is_path() {

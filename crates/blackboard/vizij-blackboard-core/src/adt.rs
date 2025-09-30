@@ -143,7 +143,7 @@ pub mod utils {
     }
 
     pub fn quick_convert_to_dst_type(v: &Value, dst: &Value, force: bool) -> Value {
-        return quick_convert_to_type(v, &utils::get_type_for_value(dst), force);
+        quick_convert_to_type(v, &utils::get_type_for_value(dst), force)
     }
 
     pub fn quick_convert_to_type(v: &Value, dst: &Type, force: bool) -> Value {

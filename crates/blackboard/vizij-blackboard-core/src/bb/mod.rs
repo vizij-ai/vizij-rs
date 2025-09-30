@@ -13,7 +13,7 @@ pub use crate::bb::abb_traits::{
 };
 
 // Utility function to split a namespace path into components
-pub fn split_path(path: &String) -> Vec<String> {
+pub fn split_path(path: &str) -> Vec<String> {
     path.split('.')
         .filter(|s| !s.is_empty())
         .map(String::from)

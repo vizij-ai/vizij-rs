@@ -68,7 +68,7 @@ impl ArcAroraBlackboard {
 
         // Step 2: Create a struct with the wrapped path node
         let mut bb: ArcAroraBlackboard = Self {
-            id: id,
+            id,
             items: HashMap::new(),
             self_ref: None,
         };
@@ -167,7 +167,7 @@ impl JsonSerializable for ArcAroraBlackboard {
                         ));
                     }
                     ArcABBNode::Item(item) => {
-                        if let Some(name) = item.get_current_name_copy().ok() {
+                        if let Ok(name) = item.get_current_name_copy() {
                             if let Some(value) = item.get_value() {
                                 let value_type = item.get_value_type().to_string();
                                 // Clone minimal data while under lock
@@ -354,7 +354,7 @@ impl ArcABBPathNodeTrait for ArcAroraBlackboard {
     ///
     /// # Returns
     /// A `Result` containing `true` if an entry with the given name exists, `false` otherwise
-    fn contains(&self, name: &String) -> Result<bool, String> {
+    fn contains(&self, name: &str) -> Result<bool, String> {
         if let Some(base_node) = self.items.get(&self.id) {
             if let Ok(node_guard) = base_node.lock() {
                 if let ArcABBNode::Path(path) = &*node_guard {
@@ -398,7 +398,7 @@ impl ArcABBPathNodeTrait for ArcAroraBlackboard {
     ///
     /// # Returns
     /// A `Result` containing an `Option<String>` with the ID if found, or `None` if not found
-    fn get_name_id(&self, name: &String) -> Result<Option<Uuid>, String> {
+    fn get_name_id(&self, name: &str) -> Result<Option<Uuid>, String> {
         if let Some(base_node) = self.items.get(&self.id) {
             if let Ok(node_guard) = base_node.lock() {
                 if let ArcABBNode::Path(path) = &*node_guard {
@@ -460,7 +460,7 @@ impl ArcAroraBlackboardTrait for ArcAroraBlackboard {
         value: Value,
         item_id: &Uuid,
         name: Option<String>,
-        full_path: Option<&String>,
+        full_path: Option<&str>,
     ) -> Result<bool, String> {
         if self.items.contains_key(item_id) {
             if let Some(node_arc) = self.items.get(item_id) {
@@ -480,7 +480,7 @@ impl ArcAroraBlackboardTrait for ArcAroraBlackboard {
                             adt::utils::quick_convert_to_type(&value, item.get_value_type(), false);
 
                         // Check if the value is Some
-                        if let Some(_) = item.get_value() {
+                        if item.get_value().is_some() {
                             if adt::utils::is_compatible_type(&value, item.get_value_type()) {
                                 // Set the new value
                                 item.set_value(value);
@@ -488,24 +488,24 @@ impl ArcAroraBlackboardTrait for ArcAroraBlackboard {
                                 return Err(format!("Incompatible value type for existing item {}: expected {:?}, got {:?}",
                                     item_id, item.get_value_type(), value));
                             }
-                            return Ok(true);
+                            Ok(true)
                         } else {
-                            return Err(format!("Existing item {} has no value to set", item_id));
+                            Err(format!("Existing item {} has no value to set", item_id))
                         }
                     } else {
-                        return Err(format!("Tried to set an existing id {} with a new value but it was not an Item", item_id));
+                        Err(format!("Tried to set an existing id {} with a new value but it was not an Item", item_id))
                     }
                 } else {
-                    return Err(format!("Failed to lock mutex for node {}", item_id));
+                    Err(format!("Failed to lock mutex for node {}", item_id))
                 }
             } else {
-                return Err(format!(
+                Err(format!(
                     "Tried to set an existing id {} with a new value but it was not found",
                     item_id
-                ));
+                ))
             }
         } else {
-            if name.is_none() || name.clone().unwrap().is_empty() {
+            if name.as_ref().is_none() || name.as_ref().unwrap().is_empty() {
                 return Err(
                     "Name cannot be empty when adding a new item to the blackboard".to_string(),
                 );
@@ -514,8 +514,8 @@ impl ArcAroraBlackboardTrait for ArcAroraBlackboard {
             let item_result = ABBItemNode::from_value(
                 name.as_ref().unwrap(),
                 value,
-                item_id.clone(),
-                full_path.unwrap_or(&name.as_ref().unwrap().clone()),
+                *item_id,
+                full_path.unwrap_or(name.as_ref().unwrap()),
             );
 
             match item_result {
@@ -523,15 +523,11 @@ impl ArcAroraBlackboardTrait for ArcAroraBlackboard {
                     // Create the node and insert it into items HashMap (as owner)
                     let node: ArcABBNode = ArcABBNode::Item(item);
                     let node_arc = Arc::new(Mutex::new(node));
-                    self.items.insert(item_id.clone(), node_arc);
-                    return Ok(true);
+                    self.items.insert(*item_id, node_arc);
+                    Ok(true)
                 }
-                Ok(None) => {
-                    return Err("Failed to create ABBItemNode: returned None".to_string());
-                }
-                Err(e) => {
-                    return Err(format!("Failed to create ABBItemNode: {}", e));
-                }
+                Ok(None) => Err("Failed to create ABBItemNode: returned None".to_string()),
+                Err(e) => Err(format!("Failed to create ABBItemNode: {}", e)),
             }
         }
     }
@@ -622,7 +618,7 @@ impl ABBNodeTrait for Arc<Mutex<ArcAroraBlackboard>> {
 /// which is necessary for the namespaced structure of the blackboard.
 impl ArcABBPathNodeTrait for Arc<Mutex<ArcAroraBlackboard>> {
     /// Checks if the given name exists in the root namespace of the blackboard.
-    fn contains(&self, name: &String) -> Result<bool, String> {
+    fn contains(&self, name: &str) -> Result<bool, String> {
         if let Ok(guard) = self.lock() {
             guard.contains(name)
         } else {
@@ -640,7 +636,7 @@ impl ArcABBPathNodeTrait for Arc<Mutex<ArcAroraBlackboard>> {
     }
 
     /// Gets the ID associated with a name in the root namespace.
-    fn get_name_id(&self, name: &String) -> Result<Option<Uuid>, String> {
+    fn get_name_id(&self, name: &str) -> Result<Option<Uuid>, String> {
         if let Ok(guard) = self.lock() {
             guard.get_name_id(name)
         } else {
@@ -689,7 +685,7 @@ impl ArcAroraBlackboardTrait for Arc<Mutex<ArcAroraBlackboard>> {
         value: Value,
         item_id: &Uuid,
         name: Option<String>,
-        full_path: Option<&String>,
+        full_path: Option<&str>,
     ) -> Result<bool, String> {
         if let Ok(mut guard) = self.lock() {
             guard.set_bb_item(value, item_id, name, full_path)
@@ -760,7 +756,7 @@ impl ItemsFormattable for ArcAroraBlackboard {
         let mut output = String::new();
         output.push_str(&format!("Blackboard Items for {}:\n", self.id));
 
-        for (_id, node_arc) in &self.items {
+        for node_arc in self.items.values() {
             if let Ok(node_guard) = node_arc.lock() {
                 match &*node_guard {
                     ArcABBNode::Path(path) => {
@@ -813,21 +809,19 @@ impl ItemsFormattable for ArcAroraBlackboard {
                                         value
                                     ));
                                 }
+                            } else if show_ids {
+                                output.push_str(&format!(
+                                    "{} -> Item: {} : {} = (no value)\n",
+                                    id_ref.unwrap(),
+                                    name,
+                                    item.get_value_type()
+                                ));
                             } else {
-                                if show_ids {
-                                    output.push_str(&format!(
-                                        "{} -> Item: {} : {} = (no value)\n",
-                                        id_ref.unwrap(),
-                                        name,
-                                        item.get_value_type()
-                                    ));
-                                } else {
-                                    output.push_str(&format!(
-                                        "Item: {} : {} = (no value)\n",
-                                        name,
-                                        item.get_value_type()
-                                    ));
-                                }
+                                output.push_str(&format!(
+                                    "Item: {} : {} = (no value)\n",
+                                    name,
+                                    item.get_value_type()
+                                ));
                             }
                         }
                     }

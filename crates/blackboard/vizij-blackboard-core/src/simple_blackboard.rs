@@ -136,13 +136,11 @@ impl KeyValueItem {
             }
 
             // If the path continues but we have a leaf node here, we return an error
-            if let Some(node) = self.index.get(part) {
-                if let BBNode::Leaf(_) = node {
-                    return Err(format!(
-                        "Path conflict: Expected container but found leaf node at '{}'",
-                        part
-                    ));
-                }
+            if let Some(BBNode::Leaf(_)) = self.index.get(part) {
+                return Err(format!(
+                    "Path conflict: Expected container but found leaf node at '{}'",
+                    part
+                ));
             }
 
             // We need to handle the leaf vs. container case separately

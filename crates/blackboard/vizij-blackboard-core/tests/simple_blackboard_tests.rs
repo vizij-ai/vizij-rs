@@ -113,7 +113,7 @@ fn test_different_value_types() {
 
     // Verify bool value
     if let Some(Value::Boolean(val)) = bb.get_item(&"is_active") {
-        assert_eq!(*val, true);
+        assert!(*val);
     } else {
         panic!(
             "Expected Bool value but got {:?}",

@@ -1,13 +1,13 @@
 use std::sync::{Arc, Mutex};
 
 use arora_schema::value::Value;
+// Only import traits actually required for method resolution
 use vizij_blackboard_core::bb::{ABBNodeTrait, ArcABBPathNodeTrait, ArcNamespacedSetterTrait};
 use vizij_blackboard_core::ArcAroraBlackboard;
 use wasm_bindgen::prelude::*;
 
-// Import console_error_panic_hook for better error messages in development
-#[cfg(feature = "console_error_panic_hook")]
-use console_error_panic_hook;
+// console_error_panic_hook is invoked via its fully qualified path when the feature is enabled;
+// we intentionally avoid single-component path import to satisfy clippy.
 
 /// Helper function to check if a JsValue is undefined or null
 fn jsvalue_is_undefined_or_null(v: &JsValue) -> bool {
@@ -216,7 +216,7 @@ impl VizijBlackboard {
             return Ok(JsValue::UNDEFINED);
         }
         let guard = self.blackboard.lock().unwrap();
-        match guard.get_value(&path.to_string()) {
+        match guard.get_value(path) {
             Ok(Some(v)) => value_to_jsvalue(&v),
             Ok(None) => Ok(JsValue::UNDEFINED),
             Err(e) => Err(JsError::new(&format!("Failed to get value: {}", e))),
@@ -261,10 +261,7 @@ impl VizijBlackboard {
             return false;
         }
         let guard = self.blackboard.lock().unwrap();
-        guard
-            .get_value(&path.to_string())
-            .map(|v| v.is_some())
-            .unwrap_or(false)
+        guard.get_value(path).map(|v| v.is_some()).unwrap_or(false)
     }
 
     /// List all paths currently stored in the blackboard

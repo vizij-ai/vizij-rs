@@ -22,10 +22,7 @@ fn is_path_node(node: Result<Option<Arc<Mutex<ArcABBNode>>>, String>) -> bool {
     false
 }
 
-fn contains_node(
-    node_result: Result<Option<Arc<Mutex<ArcABBNode>>>, String>,
-    name: &String,
-) -> bool {
+fn contains_node(node_result: Result<Option<Arc<Mutex<ArcABBNode>>>, String>, name: &str) -> bool {
     if let Ok(Some(node_arc)) = node_result {
         if let Ok(node_guard) = node_arc.lock() {
             if let Ok(is_path) = node_guard.is_path() {
@@ -44,11 +41,7 @@ fn contains_node(
 fn unwrap_node_result(
     node: Result<Option<Arc<Mutex<ArcABBNode>>>, String>,
 ) -> Option<Arc<Mutex<ArcABBNode>>> {
-    if let Ok(node) = node {
-        node
-    } else {
-        None
-    }
+    node.unwrap_or_default()
 }
 
 // Helper function that simplifies unwrapping and checking if a node is present
@@ -94,19 +87,16 @@ fn validate_item<S: ToString + ?Sized>(
     assert!(node.is_some());
 
     if let Some(node_arc) = node {
-        match node_arc.lock().unwrap() {
-            node => {
-                if let Some(item) = node.as_item() {
-                    assert_eq!(
-                        get_name_ref_safe(item.get_current_name_copy()),
-                        name.to_string()
-                    );
-                    assert_eq!(item.get_value(), Some(value));
-                    assert_eq!(get_id_safe(item.get_id_ref()), id);
-                } else {
-                    panic!("Expected Item node");
-                }
-            }
+        let node = node_arc.lock().unwrap();
+        if let Some(item) = node.as_item() {
+            assert_eq!(
+                get_name_ref_safe(item.get_current_name_copy()),
+                name.to_string()
+            );
+            assert_eq!(item.get_value(), Some(value));
+            assert_eq!(get_id_safe(item.get_id_ref()), id);
+        } else {
+            panic!("Expected Item node");
         }
     } else {
         panic!("Node is None");
@@ -115,7 +105,7 @@ fn validate_item<S: ToString + ?Sized>(
 
 #[test]
 fn test_bb_creation() {
-    let bb: Arc<Mutex<ArcAroraBlackboard>> = ArcAroraBlackboard::new(&"root".to_string());
+    let bb: Arc<Mutex<ArcAroraBlackboard>> = ArcAroraBlackboard::new("root".to_string());
     if let Ok(bb_names) = bb.get_names_copy() {
         // Check if the names contain "root"
         assert!(bb_names.is_empty());
@@ -126,7 +116,7 @@ fn test_bb_creation() {
 
 #[test]
 fn test_add_simple_value() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     // Add a simple value
     let value = &Value::I32(42);
@@ -149,12 +139,12 @@ fn test_add_simple_value() {
 
 #[test]
 fn test_single_level_namespace() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     // Add a value in a single-level namespace
     let math_name = &"math".to_string();
     let pi_name = &"pi".to_string();
-    let pi_value = &Value::F32(3.14);
+    let pi_value = &Value::F32(std::f32::consts::PI);
     let path = &format!("{}.{}", math_name, pi_name);
     let pi_id = bb.set(path, pi_value.clone()).unwrap();
 
@@ -187,7 +177,7 @@ fn test_single_level_namespace() {
 
 #[test]
 fn test_multi_level_namespace() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     // Add values in multi-level namespaces
     let pos_x = &Value::F32(10.0);
@@ -282,7 +272,7 @@ fn test_multi_level_namespace() {
 
 #[test]
 fn test_namespaces_with_multiple_values() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     // Add multiple values to the same namespace
     let hp = Value::I32(100);
@@ -313,7 +303,7 @@ fn test_namespaces_with_multiple_values() {
 
 #[test]
 fn test_custom_ids() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     // Add a value with custom ID
     let value = Value::String("test_value".to_string());
@@ -331,12 +321,12 @@ fn test_custom_ids() {
 
     // Verify the ID was preserved
     let node_unwrapped = unwrap_node_result(node).expect("Node should exist");
-    match node_unwrapped.lock().unwrap().as_item().unwrap() {
-        item => {
-            assert_eq!(get_id_safe(item.get_id_ref()), &custom_id);
-            assert_eq!(item.get_value(), Some(&value));
-            assert_eq!(item.get_current_name_copy().unwrap(), custom_name);
-        }
+    {
+        let node_guard = node_unwrapped.lock().unwrap();
+        let item = node_guard.as_item().unwrap();
+        assert_eq!(get_id_safe(item.get_id_ref()), &custom_id);
+        assert_eq!(item.get_value(), Some(&value));
+        assert_eq!(item.get_current_name_copy().unwrap(), custom_name);
     }
 
     // Verify we can get the node by ID
@@ -346,7 +336,7 @@ fn test_custom_ids() {
 
 #[test]
 fn test_non_existent_paths() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     // Add some values
     bb.set(&"a.b.c".to_string(), Value::I32(1)).unwrap();
@@ -361,7 +351,7 @@ fn test_non_existent_paths() {
 
 #[test]
 fn test_complex_values() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     // Test with more complex values
     let bool_value = Value::Boolean(true);
@@ -397,13 +387,13 @@ fn test_complex_values() {
 #[test]
 #[should_panic(expected = "Path cannot be empty when setting an item to the blackboard")]
 fn test_empty_name() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
     bb.set(&"".to_string(), Value::I32(123)).unwrap();
 }
 
 #[test]
 fn test_namespace_node() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     // Add some values to create namespaces
     bb.set(&"system.config.debug".to_string(), Value::Boolean(true))
@@ -419,14 +409,14 @@ fn test_namespace_node() {
     let config_node_guard = config_node_unwrapped.lock().unwrap();
     let namespace = config_node_guard.as_path().unwrap();
 
-    assert!(namespace.contains(&"debug".to_string()).unwrap());
-    assert!(namespace.contains(&"log_level".to_string()).unwrap());
+    assert!(namespace.contains("debug").unwrap());
+    assert!(namespace.contains("log_level").unwrap());
     assert!(!get_id_safe(namespace.get_id_ref()).is_nil());
 }
 
 #[test]
 fn test_overwrite_existing_item() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     // Add a value
     let id1 = bb.set(&"player.health", Value::I32(100)).unwrap();
@@ -462,7 +452,7 @@ fn test_remove_item() {
 
 #[test]
 fn test_path_conflict() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     // Create a namespace node
     bb.set(&"player.inventory.gold", Value::I32(100)).unwrap();
@@ -488,7 +478,7 @@ fn test_path_conflict() {
 
 #[test]
 fn test_keyvalue_structure() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     let player_name = "player".to_string();
     let health_name = "health".to_string();
@@ -507,7 +497,7 @@ fn test_keyvalue_structure() {
         &[
             (
                 "health",
-                KeyValueField::new_with_id(health_name.clone(), health_id.clone(), Value::I32(100)),
+                KeyValueField::new_with_id(health_name.clone(), health_id, Value::I32(100)),
             ),
             (
                 "stats",
@@ -519,7 +509,7 @@ fn test_keyvalue_structure() {
                             "strength",
                             KeyValueField::new_with_id(
                                 strength_name.clone(),
-                                strength_id.clone(),
+                                strength_id,
                                 Value::I32(50),
                             ),
                         ),
@@ -527,7 +517,7 @@ fn test_keyvalue_structure() {
                             "agility",
                             KeyValueField::new_with_id(
                                 agility_name.clone(),
-                                agility_id.clone(),
+                                agility_id,
                                 Value::I32(75),
                             ),
                         ),
@@ -587,19 +577,11 @@ fn test_keyvalue_structure() {
         &[
             (
                 "strength",
-                KeyValueField::new_with_id(
-                    strength_name.clone(),
-                    strength_id.clone(),
-                    Value::I32(100),
-                ),
+                KeyValueField::new_with_id(strength_name.clone(), strength_id, Value::I32(100)),
             ),
             (
                 "agility",
-                KeyValueField::new_with_id(
-                    agility_name.clone(),
-                    agility_id.clone(),
-                    Value::I32(100),
-                ),
+                KeyValueField::new_with_id(agility_name.clone(), agility_id, Value::I32(100)),
             ),
         ],
     );
@@ -661,7 +643,7 @@ fn test_keyvalue_structure() {
 
 #[test]
 fn test_type_compatibility() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     // Set initial value as integer
     bb.set(&"player.level", Value::I32(10)).unwrap();
@@ -684,7 +666,7 @@ fn test_type_compatibility() {
 #[test]
 #[should_panic(expected = "Incompatible value type for existing item")]
 fn test_incompatible_type() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     // Set initial value as integer
     bb.set(&"player.score", Value::I32(100)).unwrap();
@@ -696,7 +678,7 @@ fn test_incompatible_type() {
 
 #[test]
 fn test_get_using_node_trait() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     // Set up a multi-level structure
     bb.set(&"game.world.player.position.x", Value::F32(10.0))
@@ -735,7 +717,7 @@ fn test_get_using_node_trait() {
 
 #[test]
 fn test_get_complex_path_using_node_trait() {
-    let mut bb = ArcAroraBlackboard::new(&"root".to_string());
+    let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     let excalibur = Value::String("Excalibur".to_string());
     // Set up a complex structure
