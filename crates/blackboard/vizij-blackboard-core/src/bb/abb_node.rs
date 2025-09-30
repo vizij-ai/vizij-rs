@@ -168,7 +168,7 @@ impl ABBNodeTrait for Arc<Mutex<ArcABBNode>> {
     /// A `Result<String, String>` containing a copy of the node's ID, or an error message
     fn get_id_copy(&self) -> Result<Uuid, String> {
         if let Ok(guard) = self.lock() {
-            guard.get_id_ref().map(|id_ref| id_ref.clone())
+            guard.get_id_ref().copied()
         } else {
             Err("Failed to lock mutex".to_string())
         }
@@ -198,7 +198,7 @@ impl ArcABBPathNodeTrait for Arc<Mutex<ArcABBNode>> {
     ///
     /// # Returns
     /// A `Result<bool, String>` indicating if an entry with the given name exists, or an error message
-    fn contains(&self, name: &String) -> Result<bool, String> {
+    fn contains(&self, name: &str) -> Result<bool, String> {
         if let Ok(guard) = self.lock() {
             if let ArcABBNode::Path(path) = &*guard {
                 path.contains(name)
@@ -237,7 +237,7 @@ impl ArcABBPathNodeTrait for Arc<Mutex<ArcABBNode>> {
     ///
     /// # Returns
     /// A `Result<Option<String>, String>` containing the ID if found, or an error message
-    fn get_name_id(&self, name: &String) -> Result<Option<Uuid>, String> {
+    fn get_name_id(&self, name: &str) -> Result<Option<Uuid>, String> {
         if let Ok(guard) = self.lock() {
             if let ArcABBNode::Path(path) = &*guard {
                 path.get_name_id(name)
@@ -300,7 +300,7 @@ impl ArcAroraBlackboardTrait for Arc<Mutex<ArcABBNode>> {
         value: Value,
         item_id: &Uuid,
         name: Option<String>,
-        full_path: Option<&String>,
+        full_path: Option<&str>,
     ) -> Result<bool, String> {
         if let Ok(mut guard) = self.lock() {
             if let ArcABBNode::Path(path) = &mut *guard {

@@ -12,12 +12,12 @@ fn test_value_getters() {
     assert_eq!(utils::as_int(&int_value), Some(42));
     assert_eq!(utils::as_float(&int_value), None);
 
-    let float_value = Value::F64(3.14);
-    assert_eq!(utils::as_float(&float_value), Some(3.14));
+    let float_value = Value::F64(std::f64::consts::PI);
+    assert_eq!(utils::as_float(&float_value), Some(std::f64::consts::PI));
     assert_eq!(utils::as_string(&float_value), None);
 
     let string_value = Value::String("test".to_string());
-    assert_eq!(utils::as_string(&string_value), Some(&"test".to_string()));
+    assert_eq!(utils::as_string(&string_value), Some(&"test".to_string())); // acceptable; could refactor to &String constant
     assert_eq!(utils::as_array_bool(&string_value), None);
 }
 

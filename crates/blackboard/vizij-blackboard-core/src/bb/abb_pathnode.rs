@@ -53,12 +53,11 @@ impl ArcABBPathNode {
     /// # Returns
     /// A new `ABBPathNode` instance with the provided name, ID, and blackboard reference.
     /// If `full_path` is `None`, it will be set to `None`.
-
     pub fn new_with_full_path_and_graph_node(
         name: String,
         id: Uuid,
         bb: Arc<Mutex<ArcAroraBlackboard>>,
-        full_path: &String,
+        full_path: &str,
         graph_node_id: Option<Uuid>,
     ) -> Self {
         Self {
@@ -67,8 +66,8 @@ impl ArcABBPathNode {
             id,
             bb: Some(Arc::downgrade(&bb)), // Store a weak reference to the blackboard
             is_root: false,
-            graph_node_id,                // Default to false, can be set later
-            full_path: full_path.clone(), // Set the full path if provided
+            graph_node_id,                   // Default to false, can be set later
+            full_path: full_path.to_owned(), // Set the full path if provided
         }
     }
 
@@ -76,7 +75,7 @@ impl ArcABBPathNode {
         name: String,
         id: Uuid,
         bb: Arc<Mutex<ArcAroraBlackboard>>,
-        full_path: &String,
+        full_path: &str,
     ) -> Self {
         Self::new_with_full_path_and_graph_node(
             name, id, bb, full_path, None, // Default to false for non-graph nodes
@@ -97,11 +96,11 @@ impl ArcABBPathNode {
     ///
     /// # Returns
     /// A new `ABBPathNode` instance configured as a root node
-    pub fn create_root(name: &String) -> Self {
-        let fullpath = name.clone();
+    pub fn create_root(name: &str) -> Self {
+        let fullpath = name.to_owned();
         Self {
             names: HashMap::new(),
-            name: name.clone(),
+            name: name.to_owned(),
             id: gen_bb_uuid(),
             bb: None,
             is_root: true,
@@ -168,7 +167,7 @@ impl ABBNodeTrait for ArcABBPathNode {
     /// # Returns
     /// A `Result` containing a copy of the path node's ID
     fn get_id_copy(&self) -> Result<Uuid, String> {
-        Ok(self.id.clone())
+        Ok(self.id)
     }
 
     /// Returns the full path of the node as a string.
@@ -191,7 +190,7 @@ impl ArcABBPathNodeTrait for ArcABBPathNode {
     ///
     /// # Returns
     /// A `Result` containing `true` if an entry with the given name exists, `false` otherwise
-    fn contains(&self, name: &String) -> Result<bool, String> {
+    fn contains(&self, name: &str) -> Result<bool, String> {
         Ok(self.names.contains_key(name))
     }
 
@@ -212,7 +211,7 @@ impl ArcABBPathNodeTrait for ArcABBPathNode {
     ///
     /// # Returns
     /// A `Result` containing an `Option<String>` with the ID if found, or `None` if not found
-    fn get_name_id(&self, name: &String) -> Result<Option<Uuid>, String> {
+    fn get_name_id(&self, name: &str) -> Result<Option<Uuid>, String> {
         Ok(self.names.get(name).cloned())
     }
 
@@ -284,7 +283,7 @@ impl ArcAroraBlackboardTrait for ArcABBPathNode {
         value: Value,
         item_id: &Uuid,
         name: Option<String>,
-        full_path: Option<&String>,
+        full_path: Option<&str>,
     ) -> Result<bool, String> {
         if let Some(ref bb) = self.bb {
             if let Some(arc_bb) = bb.upgrade() {

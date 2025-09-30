@@ -83,7 +83,7 @@ pub trait ArcABBPathNodeTrait: ABBNodeTrait + TreeFormattable {
     ///
     /// # Returns
     /// A `Result<bool, String>` indicating if an entry with the given name exists, or an error message
-    fn contains(&self, name: &String) -> Result<bool, String>;
+    fn contains(&self, name: &str) -> Result<bool, String>;
 
     /// Insert a new name-to-ID mapping in this path.
     ///
@@ -102,7 +102,7 @@ pub trait ArcABBPathNodeTrait: ABBNodeTrait + TreeFormattable {
     ///
     /// # Returns
     /// A `Result<Option<String>, String>` containing the ID if found, or an error message
-    fn get_name_id(&self, name: &String) -> Result<Option<Uuid>, String>;
+    fn get_name_id(&self, name: &str) -> Result<Option<Uuid>, String>;
 
     /// Retrieve a node by its ID from the blackboard.
     ///
@@ -145,7 +145,7 @@ pub trait ArcABBPathNodeTrait: ABBNodeTrait + TreeFormattable {
                     }
                     ArcABBNode::Item(item_node) => {
                         // The node is an Item node, return its ID
-                        return item_node.get_id_ref().map(|id_ref| Some(id_ref.clone()));
+                        return item_node.get_id_ref().map(|id_ref| Some(*id_ref));
                     }
                 }
             } else {
@@ -161,7 +161,7 @@ pub trait ArcABBPathNodeTrait: ABBNodeTrait + TreeFormattable {
             if let Ok(node_guard) = node_arc.lock() {
                 if let ArcABBNode::Item(item_node) = &*node_guard {
                     // Return the value of the item node
-                    return Ok(item_node.get_value().map(|v| v.clone()));
+                    return Ok(item_node.get_value().cloned());
                 } else {
                     // The node is not an Item node
                     return Ok(None);
@@ -177,23 +177,22 @@ pub trait ArcABBPathNodeTrait: ABBNodeTrait + TreeFormattable {
     fn format_tree(&self, show_ids: bool) -> String {
         let mut output = String::new();
 
-        let curr_name = self.get_current_name_copy();
-        if curr_name.is_err() {
-            output.push_str(&format!(
-                "Failed to get current name: {}\n",
-                curr_name.err().unwrap()
-            ));
-        } else {
-            let curr_name = curr_name.unwrap();
-            output.push_str(&format!("{:?}' Namespace Tree:\n", curr_name));
-            let names = self.get_names_copy();
-            if names.is_err() {
-                output.push_str(&format!("Failed to get names: {}\n", names.err().unwrap()));
-                return output;
-            } else {
-                let names = names.unwrap();
-                for (name, ref_id) in names {
-                    self._format_tree_recursively(&name, &ref_id, 1, show_ids, &mut output);
+        match self.get_current_name_copy() {
+            Err(e) => {
+                output.push_str(&format!("Failed to get current name: {}\n", e));
+            }
+            Ok(curr_name) => {
+                output.push_str(&format!("{:?}' Namespace Tree:\n", curr_name));
+                match self.get_names_copy() {
+                    Err(e) => {
+                        output.push_str(&format!("Failed to get names: {}\n", e));
+                        return output;
+                    }
+                    Ok(names) => {
+                        for (name, ref_id) in names {
+                            self._format_tree_recursively(&name, &ref_id, 1, show_ids, &mut output);
+                        }
+                    }
                 }
             }
         }
@@ -203,7 +202,7 @@ pub trait ArcABBPathNodeTrait: ABBNodeTrait + TreeFormattable {
     /// Recursive helper function to format the item tree
     fn _format_tree_recursively(
         &self,
-        name: &String,
+        name: &str,
         id: &Uuid,
         depth: usize,
         show_ids: bool,
@@ -215,148 +214,130 @@ pub trait ArcABBPathNodeTrait: ABBNodeTrait + TreeFormattable {
                 // Now we can match on the dereferenced guard
                 match &*node_guard {
                     ArcABBNode::Path(path) => {
-                        let full_path = path.get_full_path();
-                        if full_path.is_err() {
-                            output.push_str(&format!(
+                        match path.get_full_path() {
+                            Err(e) => output.push_str(&format!(
                                 "{}Failed to get full path for '{}': {}\n",
                                 " ".repeat(depth * 2),
                                 name,
-                                full_path.err().unwrap()
-                            ));
-                        } else {
-                            if show_ids {
-                                let id_ref = path.get_id_ref();
-                                if id_ref.is_err() {
-                                    output.push_str(&format!(
-                                        "{}Failed to get ID for path '{}': {}\n",
-                                        " ".repeat(depth * 2),
-                                        name,
-                                        id_ref.err().unwrap()
-                                    ));
+                                e
+                            )),
+                            Ok(fp) => {
+                                if show_ids {
+                                    match path.get_id_ref() {
+                                        Err(e) => output.push_str(&format!(
+                                            "{}Failed to get ID for path '{}': {}\n",
+                                            " ".repeat(depth * 2),
+                                            name,
+                                            e
+                                        )),
+                                        Ok(id_ref) => output.push_str(&format!(
+                                            "{}Namespace: {} (ID: {}, fullpath: {})\n",
+                                            " ".repeat(depth * 2),
+                                            name,
+                                            id_ref,
+                                            fp
+                                        )),
+                                    }
                                 } else {
                                     output.push_str(&format!(
-                                        "{}Namespace: {} (ID: {}, fullpath: {})\n",
+                                        "{}Namespace: {} (fullpath: {})\n",
                                         " ".repeat(depth * 2),
                                         name,
-                                        id_ref.unwrap(),
-                                        full_path.unwrap()
+                                        fp
                                     ));
                                 }
-                            } else {
-                                output.push_str(&format!(
-                                    "{}Namespace: {} (fullpath: {})\n",
-                                    " ".repeat(depth * 2),
-                                    name,
-                                    full_path.unwrap()
-                                ));
                             }
                         }
 
-                        let names = path.get_names_copy();
-                        if names.is_err() {
-                            output.push_str(&format!(
+                        match path.get_names_copy() {
+                            Err(e) => output.push_str(&format!(
                                 "{}Failed to get names for path '{}': {}\n",
                                 " ".repeat(depth * 2),
                                 name,
-                                names.err().unwrap()
-                            ));
-                            return;
-                        } else {
-                            // Process all children in the namespace
-                            for (child_name, ref_id) in names.unwrap() {
-                                self._format_tree_recursively(
-                                    &child_name,
-                                    &ref_id,
-                                    depth + 1,
-                                    show_ids,
-                                    output,
-                                );
+                                e
+                            )),
+                            Ok(child_map) => {
+                                for (child_name, ref_id) in child_map {
+                                    self._format_tree_recursively(
+                                        &child_name,
+                                        &ref_id,
+                                        depth + 1,
+                                        show_ids,
+                                        output,
+                                    );
+                                }
                             }
                         }
                     }
-                    ArcABBNode::Item(item) => {
-                        let item_name = item.get_current_name_copy();
-                        if item_name.is_err() {
-                            output.push_str(&format!(
-                                "{}Failed to get name for item '{}': {}\n",
+                    ArcABBNode::Item(item) => match item.get_current_name_copy() {
+                        Err(e) => output.push_str(&format!(
+                            "{}Failed to get name for item '{}': {}\n",
+                            " ".repeat(depth * 2),
+                            name,
+                            e
+                        )),
+                        Ok(item_name) => match item.get_full_path() {
+                            Err(e) => output.push_str(&format!(
+                                "{}Failed to get full path for item '{}': {}\n",
                                 " ".repeat(depth * 2),
                                 name,
-                                item_name.err().unwrap()
-                            ));
-                        } else {
-                            let full_path = item.get_full_path();
-                            if full_path.is_err() {
-                                output.push_str(&format!(
-                                    "{}Failed to get full path for item '{}': {}\n",
-                                    " ".repeat(depth * 2),
-                                    name,
-                                    full_path.err().unwrap()
-                                ));
-                            } else {
+                                e
+                            )),
+                            Ok(fp) => {
                                 if let Some(try_item) = item.get_value() {
-                                    // Item has a value, format it
-
                                     if show_ids {
-                                        let id_ref = item.get_id_ref();
-                                        if id_ref.is_err() {
-                                            output.push_str(&format!(
+                                        match item.get_id_ref() {
+                                            Err(e) => output.push_str(&format!(
                                                 "{}Failed to get ID for item '{}': {}\n",
                                                 " ".repeat(depth * 2),
                                                 name,
-                                                id_ref.err().unwrap()
-                                            ));
-                                        } else {
-                                            // Format the item with its value
-                                            output.push_str(&format!(
+                                                e
+                                            )),
+                                            Ok(id_ref) => output.push_str(&format!(
                                                 "{}Item: {:?} = {} (ID: {}, fullpath: {})\n",
                                                 " ".repeat(depth * 2),
-                                                item_name.unwrap(),
+                                                item_name,
                                                 try_item,
-                                                id_ref.unwrap(),
-                                                full_path.unwrap()
-                                            ));
+                                                id_ref,
+                                                fp
+                                            )),
                                         }
                                     } else {
                                         output.push_str(&format!(
                                             "{}Item: {:?} = {} (fullpath: {})\n",
                                             " ".repeat(depth * 2),
-                                            item_name.unwrap(),
+                                            item_name,
                                             try_item,
-                                            full_path.unwrap()
+                                            fp
                                         ));
+                                    }
+                                } else if show_ids {
+                                    match item.get_id_ref() {
+                                        Err(e) => output.push_str(&format!(
+                                            "{}Failed to get ID for item '{}': {}\n",
+                                            " ".repeat(depth * 2),
+                                            name,
+                                            e
+                                        )),
+                                        Ok(id_ref) => output.push_str(&format!(
+                                            "{}Item: {:?} (ID: {}, fullpath: {})\n",
+                                            " ".repeat(depth * 2),
+                                            item_name,
+                                            id_ref,
+                                            fp
+                                        )),
                                     }
                                 } else {
-                                    // Item has no value, format just the name
-                                    if show_ids {
-                                        let id_ref = item.get_id_ref();
-                                        if id_ref.is_err() {
-                                            output.push_str(&format!(
-                                                "{}Failed to get ID for item '{}': {}\n",
-                                                " ".repeat(depth * 2),
-                                                name,
-                                                id_ref.err().unwrap()
-                                            ));
-                                        } else {
-                                            output.push_str(&format!(
-                                                "{}Item: {:?} (ID: {}, fullpath: {})\n",
-                                                " ".repeat(depth * 2),
-                                                item_name.unwrap(),
-                                                id_ref.unwrap(),
-                                                full_path.unwrap()
-                                            ));
-                                        }
-                                    } else {
-                                        output.push_str(&format!(
-                                            "{}Item: {:?} (fullpath: {})\n",
-                                            " ".repeat(depth * 2),
-                                            item_name.unwrap(),
-                                            full_path.unwrap()
-                                        ));
-                                    }
+                                    output.push_str(&format!(
+                                        "{}Item: {:?} (fullpath: {})\n",
+                                        " ".repeat(depth * 2),
+                                        item_name,
+                                        fp
+                                    ));
                                 }
                             }
-                        }
-                    }
+                        },
+                    },
                 }
             } else {
                 output.push_str(&format!(
@@ -518,7 +499,7 @@ pub trait ArcABBPathNodeTrait: ABBNodeTrait + TreeFormattable {
                         name.clone(),
                         KeyValueField::new_with_id_and_option(
                             name,
-                            child_id.clone(),
+                            child_id,
                             item_node.get_value().cloned(),
                         ),
                     );
@@ -586,7 +567,7 @@ pub trait ArcAroraBlackboardTrait: ArcABBPathNodeTrait + ItemsFormattable {
         value: Value,
         item_id: &Uuid,
         name: Option<String>,
-        full_path: Option<&String>,
+        full_path: Option<&str>,
     ) -> Result<bool, String>;
 
     /// Syntactic sugar to set an existing item into the blackboard given we don't have to provide a name.
@@ -627,7 +608,7 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
     ///
     /// # Returns
     /// A `Result<CheckPathResult, String>` indicating whether the path exists and what type it is, or an error message
-    fn check_path(&self, path: &String) -> Result<CheckPathResult, String> {
+    fn check_path(&self, path: &str) -> Result<CheckPathResult, String> {
         let name_parts = split_path(path);
         if name_parts.is_empty() {
             return Ok(CheckPathResult::None());
@@ -732,7 +713,7 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
 
     fn set_value_with_compatibility_check(
         &mut self,
-        path: &String,
+        path: &str,
         value: Value,
         item_id: Option<Uuid>,
         check_compatibility: bool,
@@ -785,68 +766,63 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
 
     fn _set_keyvalue_into_existing_field(
         &mut self,
-        path: &String,
+        path: &str,
         item_id: Option<Uuid>,
         check_compatibility: bool,
         ret_id: &mut Uuid,
         current_path_id: Uuid,
         kv: &KeyValue,
     ) -> Result<(), String> {
-        Ok(
-            if let Some(existing_path_arc) = self.get_node_by_id(&current_path_id)? {
-                if check_compatibility {
-                    if let Some(res) = self.check_path_compatible_with_kv(&current_path_id, kv)? {
-                        return Err(format!(
-                            "Incompatible Value structure for existing path {}: {}",
-                            current_path_id,
-                            res.unwrap_err()
-                        ));
-                    }
-                }
+        let existing_path_arc = self.get_node_by_id(&current_path_id)?.ok_or_else(|| {
+            format!(
+                "Failed to get existing path node for {} when setting KeyValue structure",
+                path
+            )
+        })?;
 
-                *ret_id = if kv.id.is_nil() { gen_bb_uuid() } else { kv.id };
-
-                for (field_name, field) in &kv.fields {
-                    // Check if the field name already exists in the existing path
-                    let existing_field_id = {
-                        let existing_node = existing_path_arc
-                            .lock()
-                            .map_err(|_| "Failed to lock existing node mutex")?;
-                        if let ArcABBNode::Path(existing_path) = &*existing_node {
-                            // Get the field's id from the existing path - or None if it doesn't exist
-                            existing_path.get_name_id(field_name)?
-                        } else {
-                            return Err(format!(
-                                "Existing node is not a BBPath node for {}",
-                                current_path_id
-                            ));
-                        }
-                    };
-
-                    self.assign_kv_field(
-                        path,
-                        item_id,
-                        field_name,
-                        field,
-                        existing_field_id,
-                        current_path_id,
-                    )?;
-                }
-            } else {
-                // If the value is not a KeyValue, we cannot set it into a Path node
+        if check_compatibility {
+            if let Some(res) = self.check_path_compatible_with_kv(&current_path_id, kv)? {
                 return Err(format!(
-                    "Failed to get existing path node for {} when setting KeyValue structure",
-                    path
+                    "Incompatible Value structure for existing path {}: {}",
+                    current_path_id,
+                    res.unwrap_err()
                 ));
-            },
-        )
+            }
+        }
+
+        *ret_id = if kv.id.is_nil() { gen_bb_uuid() } else { kv.id };
+
+        for (field_name, field) in &kv.fields {
+            let existing_field_id = {
+                let existing_node = existing_path_arc
+                    .lock()
+                    .map_err(|_| "Failed to lock existing node mutex")?;
+                if let ArcABBNode::Path(existing_path) = &*existing_node {
+                    existing_path.get_name_id(field_name)?
+                } else {
+                    return Err(format!(
+                        "Existing node is not a BBPath node for {}",
+                        current_path_id
+                    ));
+                }
+            };
+            self.assign_kv_field(
+                path,
+                item_id,
+                field_name,
+                field,
+                existing_field_id,
+                current_path_id,
+            )?;
+        }
+        Ok(())
     }
 
     fn _set_keyvalue_into_new_field(
         &mut self,
-        path: &String,
+        path: &str,
         item_id: Option<Uuid>,
-        path_parts: &Vec<String>,
+        path_parts: &[String],
         ret_id: &mut Uuid,
         kv: KeyValue,
     ) -> Result<(), String> {
@@ -873,7 +849,7 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
         //println!("Inserting new path with name: {}", new_node_name);
         //self.insert(new_node_name, *ret_id)?;
 
-        match self.create_path_to(path, &ret_id) {
+        match self.create_path_to(path, ret_id) {
             Ok(_) => {}
             Err(e) => return Err(e),
         }
@@ -883,7 +859,7 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
 
     fn _set_item(
         &mut self,
-        path: &String,
+        path: &str,
         value: Value,
         item_id: Option<Uuid>,
         path_parts: Vec<String>,
@@ -893,13 +869,13 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
             // BBPath exists and contains an Item node
             let use_id = if let Some(ref provided_id) = item_id {
                 if !provided_id.is_nil() {
-                    provided_id.clone()
+                    *provided_id
                 } else {
-                    existing_id.clone()
+                    existing_id
                 }
             } else {
                 // If no item_id is provided, use the existing one
-                existing_id.clone()
+                existing_id
             };
             self.set_existing_bb_item(value, &use_id)?;
             use_id
@@ -921,7 +897,7 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
                 value,
                 &new_item_id,
                 Some(path_parts.last().unwrap().clone()),
-                Some(&path),
+                Some(path),
             )?;
             new_item_id
         })
@@ -929,8 +905,8 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
 
     fn assign_kv_field(
         &mut self,
-        path: &String,
-        item_id: Option<Uuid>,
+        path: &str,
+        _item_id: Option<Uuid>,
         field_name: &String,
         field: &KeyValueField,
         existing_field_id: Option<Uuid>,
@@ -942,7 +918,7 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
             field.id
         };
 
-        Ok(if let Some(field_value) = field.value.clone() {
+        if let Some(field_value) = field.value.clone() {
             // We have a field value, so we can proceed to set it
 
             if let Value::KeyValue(sub_kv) = *field_value {
@@ -978,7 +954,7 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
                         for (sub_field_name, sub_field) in &sub_kv.fields {
                             if let Err(e) = self.assign_kv_field(
                                 path,
-                                item_id,
+                                _item_id,
                                 sub_field_name,
                                 sub_field,
                                 None,
@@ -997,7 +973,7 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
                     // Create new ABBPathNode
                     let new_path = ArcABBPathNode::new_with_full_path(
                         field_name.clone(),
-                        src_field_id.clone(),
+                        src_field_id,
                         self.get_blackboard()?,
                         &format!("{}.{}", path, field_name),
                     );
@@ -1021,12 +997,11 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
                                         }
                                     };
                                     bb.insert_item_in_hash(
-                                        src_field_id.clone(),
+                                        src_field_id,
                                         Arc::new(Mutex::new(new_node)),
                                     );
                                 }
-                                existing_path_node
-                                    .insert(field_name.clone(), src_field_id.clone())?;
+                                existing_path_node.insert(field_name.clone(), src_field_id)?;
                             } else {
                                 return Err(format!(
                                     "Existing node is not a ABBPathNode for {}",
@@ -1043,11 +1018,11 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
 
                     if let Err(e) = self.assign_kv_field(
                         &format!("{}.{}", path, field_name),
-                        item_id,
+                        _item_id,
                         field_name,
                         &KeyValueField::new_with_id_and_option(
                             field_name.clone(),
-                            src_field_id.clone(),
+                            src_field_id,
                             Some(Value::KeyValue(sub_kv)),
                         ),
                         Some(src_field_id),
@@ -1077,11 +1052,13 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
                             let new_item = ABBItemNode::from_value(
                                 field_name,
                                 value,
-                                src_field_id.clone(),
+                                src_field_id,
                                 &format!("{}.{}", path, field_name).to_string(),
                             )
                             .map_err(|e| format!("Failed to create ABBItemNode: {}", e))?
-                            .ok_or(format!("Failed to create ABBItemNode: returned None"))?;
+                            .ok_or_else(|| {
+                                "Failed to create ABBItemNode: returned None".to_string()
+                            })?;
                             let new_node = ArcABBNode::Item(new_item);
                             {
                                 let bb_ref = self.get_blackboard()?;
@@ -1106,11 +1083,12 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
                     }
                 }
             }
-        })
+        }
+        Ok(())
     }
 
     /// Create all intermediate path nodes and point the last component to the provided ID
-    fn create_path_to(&mut self, path: &String, target_id: &Uuid) -> Result<(), String> {
+    fn create_path_to(&mut self, path: &str, target_id: &Uuid) -> Result<(), String> {
         let name_parts = split_path(path);
         if name_parts.is_empty() {
             return Err("Path cannot be empty when adding an item to the blackboard".to_string());
@@ -1155,26 +1133,24 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
                             } else {
                                 // if second last node, then use target id, otherwise create a new path node ID
                                 let new_node_id = if _i >= name_parts.len() - 1 {
-                                    target_id.clone()
+                                    *target_id
                                 } else {
                                     let new_id = gen_bb_uuid();
-                                    // Create new ABBPathNode and store it in the blackboard items
                                     let new_path = ArcABBPathNode::new_with_full_path(
                                         part.clone(),
-                                        new_id.clone(),
+                                        new_id,
                                         bb.clone(),
                                         &intermediate_path,
                                     );
                                     let new_node = ArcABBNode::Path(new_path);
                                     bb_guard.insert_item_in_hash(
-                                        new_id.clone(),
+                                        new_id,
                                         Arc::new(Mutex::new(new_node)),
                                     );
                                     new_id
                                 };
 
-                                // Link the current path to the new one
-                                current_path.insert(part.clone(), new_node_id.clone())?;
+                                current_path.insert(part.clone(), new_node_id)?;
                                 new_node_id
                             };
                         } else {
@@ -1193,7 +1169,7 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
                     return Err(format!("Failed to find node by ID for {}", current_node_id));
                 }
             } else {
-                return Err(format!("Failed to lock blackboard mutex"));
+                return Err("Failed to lock blackboard mutex".to_string());
             }
         }
 
@@ -1235,7 +1211,7 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
                                             {
                                                 // Check if the value types are compatible
                                                 if !adt::utils::is_compatible_type(
-                                                    &*field_value,
+                                                    &field_value,
                                                     existing_item.get_value_type(),
                                                 ) {
                                                     return Ok(Some(Err(format!("Incompatible value type for field {}. Existing type: {:?}, New value: {:?}",
@@ -1266,24 +1242,24 @@ pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
                         }
                     }
                     // All fields are compatible, return None
-                    return Ok(None);
+                    Ok(None)
                 } else {
-                    return Ok(Some(Err(format!(
+                    Ok(Some(Err(format!(
                         "Existing node is not a BBPath node for {}",
                         path_id
-                    ))));
+                    ))))
                 }
             } else {
-                return Ok(Some(Err(format!(
+                Ok(Some(Err(format!(
                     "Failed to lock existing node mutex for {}",
                     path_id
-                ))));
+                ))))
             }
         } else {
-            return Ok(Some(Err(format!(
+            Ok(Some(Err(format!(
                 "Failed to find node by ID for {}",
                 path_id
-            ))));
+            ))))
         }
     }
 }
