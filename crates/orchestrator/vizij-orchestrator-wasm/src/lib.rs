@@ -4,6 +4,7 @@ use serde_wasm_bindgen as swb;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsError;
 
+use vizij_api_core::TypedPath;
 use vizij_orchestrator::{
     controllers::animation::AnimationControllerConfig, controllers::graph::GraphControllerConfig,
     scheduler::Schedule, Orchestrator,
@@ -45,6 +46,54 @@ impl vizij_animation_core::TargetResolver for JsResolver {
             Err(_) => None,
         }
     }
+}
+
+#[derive(Deserialize)]
+struct JsGraphConfig {
+    #[serde(default)]
+    id: Option<String>,
+    spec: serde_json::Value,
+    #[serde(default)]
+    subs: Option<JsGraphSubscriptions>,
+}
+
+#[derive(Default, Deserialize)]
+struct JsGraphSubscriptions {
+    #[serde(default)]
+    inputs: Vec<String>,
+    #[serde(default)]
+    outputs: Vec<String>,
+    #[serde(default)]
+    #[serde(rename = "mirrorWrites", alias = "mirror_writes")]
+    mirror_writes: Option<bool>,
+}
+
+fn map_graph_subscriptions(
+    cfg: Option<JsGraphSubscriptions>,
+) -> Result<vizij_orchestrator::controllers::graph::Subscriptions, String> {
+    let mut subs = vizij_orchestrator::controllers::graph::Subscriptions::default();
+    if let Some(conf) = cfg {
+        subs.inputs = conf
+            .inputs
+            .into_iter()
+            .map(|s| {
+                TypedPath::parse(&s)
+                    .map_err(|e| format!("invalid input subscription '{}': {}", s, e))
+            })
+            .collect::<Result<_, _>>()?;
+        subs.outputs = conf
+            .outputs
+            .into_iter()
+            .map(|s| {
+                TypedPath::parse(&s)
+                    .map_err(|e| format!("invalid output subscription '{}': {}", s, e))
+            })
+            .collect::<Result<_, _>>()?;
+        if let Some(mirror) = conf.mirror_writes {
+            subs.mirror_writes = mirror;
+        }
+    }
+    Ok(subs)
 }
 
 #[wasm_bindgen]
@@ -99,30 +148,25 @@ impl VizijOrchestrator {
         }
 
         // If cfg is a string, parse it as JSON text into serde_json::Value
-        let (id, spec_val) = if cfg.is_string() {
+        let (id, spec_val, subs_val) = if cfg.is_string() {
             // Treat as raw JSON string
             let s = cfg.as_string().unwrap();
             let v: serde_json::Value = serde_json::from_str(&s)
                 .map_err(|e| JsError::new(&format!("graph json parse error: {}", e)))?;
-            (None, v)
+            (None, v, None)
         } else {
             // Treat as object { id?: string, spec: object }
-            let obj: serde_json::Value = swb::from_value(cfg)
+            let obj: JsGraphConfig = swb::from_value(cfg)
                 .map_err(|e| JsError::new(&format!("graph cfg parse error: {}", e)))?;
-            let id_opt = obj
-                .get("id")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            let spec = obj
-                .get("spec")
-                .ok_or_else(|| JsError::new("graph cfg must include spec"))?
-                .clone();
-            (id_opt, spec)
+            (obj.id, obj.spec, obj.subs)
         };
 
         // Deserialize GraphSpec
         let spec: vizij_graph_core::types::GraphSpec = serde_json::from_value(spec_val)
             .map_err(|e| JsError::new(&format!("graph spec deserialize error: {}", e)))?;
+
+        let subs = map_graph_subscriptions(subs_val)
+            .map_err(|e| JsError::new(&format!("graph subscriptions error: {e}")))?;
 
         // Generate id if needed
         let id = match id {
@@ -138,7 +182,7 @@ impl VizijOrchestrator {
         let cfg = GraphControllerConfig {
             id: id.clone(),
             spec,
-            subs: Default::default(),
+            subs,
         };
         let controller = vizij_orchestrator::controllers::graph::GraphController::new(cfg);
         self.core.graphs.insert(id.clone(), controller);
@@ -177,7 +221,9 @@ impl VizijOrchestrator {
             id: id.clone(),
             setup,
         };
-        let controller = vizij_orchestrator::controllers::animation::AnimationController::new(cfg);
+        let controller =
+            vizij_orchestrator::controllers::animation::AnimationController::try_new(cfg)
+                .map_err(|e| JsError::new(&format!("animation setup error: {e}")))?;
         self.core.anims.insert(id.clone(), controller);
         Ok(id)
     }

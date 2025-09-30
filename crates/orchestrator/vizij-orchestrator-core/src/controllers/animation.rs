@@ -1,11 +1,13 @@
-use anyhow::Result;
+use anyhow::{anyhow, Context, Result};
+use serde::Deserialize;
 use serde_json::Value as JsonValue;
 
 use vizij_animation_core::{
     config::Config,
     ids::{InstId, PlayerId},
     inputs::{Inputs, InstanceUpdate, PlayerCommand},
-    Engine,
+    stored_animation::parse_stored_animation_json,
+    Engine, InstanceCfg, LoopMode,
 };
 use vizij_api_core::{TypedPath, Value as ApiValue, WriteBatch, WriteOp};
 
@@ -26,10 +28,99 @@ pub struct AnimationController {
 }
 
 impl AnimationController {
+    pub fn try_new(cfg: AnimationControllerConfig) -> Result<Self> {
+        // Create engine with a default config, then apply any optional setup payload.
+        let mut controller = Self {
+            id: cfg.id,
+            engine: Engine::new(Config::default()),
+        };
+        controller.configure_from_setup(&cfg.setup)?;
+        Ok(controller)
+    }
+
     pub fn new(cfg: AnimationControllerConfig) -> Self {
-        // Create engine with a default config for now. `setup` can be parsed later to customize.
-        let engine = Engine::new(Config::default());
-        Self { id: cfg.id, engine }
+        Self::try_new(cfg).expect("AnimationController setup is invalid")
+    }
+
+    fn configure_from_setup(&mut self, setup: &JsonValue) -> Result<()> {
+        if setup.is_null() {
+            return Ok(());
+        }
+
+        let spec: AnimationSetup =
+            serde_json::from_value(setup.clone()).context("animation setup must be an object")?;
+
+        let mut anim_id = None;
+        if let Some(anim_value) = spec.animation {
+            let json = serde_json::to_string(&anim_value)?;
+            let data = parse_stored_animation_json(&json)
+                .map_err(|e| anyhow!("stored animation parse error: {e}"))?;
+            let id = self.engine.load_animation(data);
+            anim_id = Some(id);
+        }
+
+        if let Some(anim) = anim_id {
+            let player_cfg = spec.player.unwrap_or_default();
+            let player_name = player_cfg
+                .name
+                .clone()
+                .unwrap_or_else(|| "demo-player".to_string());
+            let player_id = self.engine.create_player(&player_name);
+
+            self.apply_player_overrides(player_id, &player_cfg);
+
+            let mut instance_cfg = InstanceCfg::default();
+            if let Some(inst) = spec.instance {
+                if let Some(weight) = inst.weight {
+                    instance_cfg.weight = weight;
+                }
+                if let Some(time_scale) = inst.time_scale {
+                    instance_cfg.time_scale = time_scale;
+                }
+                if let Some(start_offset) = inst.start_offset {
+                    instance_cfg.start_offset = start_offset;
+                }
+                if let Some(enabled) = inst.enabled {
+                    instance_cfg.enabled = enabled;
+                }
+            }
+            self.engine.add_instance(player_id, anim, instance_cfg);
+        }
+
+        Ok(())
+    }
+
+    fn apply_player_overrides(&mut self, player_id: PlayerId, cfg: &PlayerSetup) {
+        if cfg.loop_mode.is_none() && cfg.speed.is_none() {
+            return;
+        }
+
+        // Commands are the public way to mutate player state; enqueue them so the engine applies them next update.
+        let mut inputs = Inputs::default();
+
+        if let Some(mode) = cfg.loop_mode.as_deref() {
+            let loop_mode = match mode {
+                "once" => LoopMode::Once,
+                "loop" => LoopMode::Loop,
+                "pingpong" => LoopMode::PingPong,
+                _ => LoopMode::Loop,
+            };
+            inputs.player_cmds.push(PlayerCommand::SetLoopMode {
+                player: player_id,
+                mode: loop_mode,
+            });
+        }
+
+        if let Some(speed) = cfg.speed {
+            inputs.player_cmds.push(PlayerCommand::SetSpeed {
+                player: player_id,
+                speed,
+            });
+        }
+
+        if !inputs.player_cmds.is_empty() {
+            self.engine.update_values(0.0, inputs);
+        }
     }
 
     /// Minimal helper to parse u32 from a path segment.
@@ -196,6 +287,38 @@ impl AnimationController {
 
         Ok((batch, events))
     }
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct AnimationSetup {
+    #[serde(default)]
+    animation: Option<JsonValue>,
+    #[serde(default)]
+    player: Option<PlayerSetup>,
+    #[serde(default)]
+    instance: Option<InstanceSetup>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct PlayerSetup {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    loop_mode: Option<String>,
+    #[serde(default)]
+    speed: Option<f32>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct InstanceSetup {
+    #[serde(default)]
+    weight: Option<f32>,
+    #[serde(default)]
+    time_scale: Option<f32>,
+    #[serde(default)]
+    start_offset: Option<f32>,
+    #[serde(default)]
+    enabled: Option<bool>,
 }
 
 #[cfg(test)]

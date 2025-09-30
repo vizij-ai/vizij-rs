@@ -1,6 +1,4 @@
 use anyhow::Result;
-use std::time::Instant;
-
 use serde_json::Value as JsonValue;
 
 use vizij_api_core::WriteBatch;
@@ -21,13 +19,11 @@ pub fn run_single_pass(
     orchestrator: &mut crate::Orchestrator,
     dt: f32,
 ) -> Result<crate::OrchestratorFrame> {
-    let start = Instant::now();
     let mut timings = std::collections::HashMap::new();
-    let mut conflicts_out: Vec<JsonValue> = Vec::new();
+    let mut conflicts_out: Vec<ConflictLog> = Vec::new();
     let mut events_out: Vec<JsonValue> = Vec::new();
 
     // Animations phase
-    let t0 = Instant::now();
     let mut merged_writes = WriteBatch::new();
     for (id, anim) in orchestrator.anims.iter_mut() {
         let (batch, events) = anim.update(dt, &mut orchestrator.blackboard)?;
@@ -39,21 +35,17 @@ pub fn run_single_pass(
             .apply_writebatch(batch, orchestrator.epoch, format!("anim:{}", id))
             .into_iter()
             .collect();
-        for c in conflict_logs {
-            if let Ok(v) = serde_json::to_value(&c) {
-                conflicts_out.push(v);
-            }
-        }
+        conflicts_out.extend(conflict_logs);
         // collect events (animation-level)
         for e in events {
             events_out.push(e);
         }
     }
-    let t_anim = t0.elapsed();
-    timings.insert("animations_ms".to_string(), t_anim.as_secs_f32() * 1000.0);
+    if !orchestrator.anims.is_empty() {
+        timings.insert("animations_ms".to_string(), dt * 1000.0);
+    }
 
     // Graphs phase
-    let t1 = Instant::now();
     for (id, graph) in orchestrator.graphs.iter_mut() {
         let batch = graph.evaluate(&mut orchestrator.blackboard, orchestrator.epoch, dt)?;
         // Filter batch according to graph subscriptions: if outputs is empty -> publish all, else only listed paths
@@ -75,17 +67,13 @@ pub fn run_single_pass(
             .apply_writebatch(publish_batch, orchestrator.epoch, format!("graph:{}", id))
             .into_iter()
             .collect();
-        for c in conflict_logs {
-            if let Ok(v) = serde_json::to_value(&c) {
-                conflicts_out.push(v);
-            }
-        }
+        conflicts_out.extend(conflict_logs);
     }
-    let t_graph = t1.elapsed();
-    timings.insert("graphs_ms".to_string(), t_graph.as_secs_f32() * 1000.0);
+    if !orchestrator.graphs.is_empty() {
+        timings.insert("graphs_ms".to_string(), dt * 1000.0);
+    }
 
-    let total = start.elapsed();
-    timings.insert("total_ms".to_string(), total.as_secs_f32() * 1000.0);
+    timings.insert("total_ms".to_string(), dt * 1000.0);
 
     let frame = crate::OrchestratorFrame {
         epoch: orchestrator.epoch,
@@ -105,13 +93,11 @@ pub fn run_two_pass(
     orchestrator: &mut crate::Orchestrator,
     dt: f32,
 ) -> Result<crate::OrchestratorFrame> {
-    let start = Instant::now();
     let mut timings = std::collections::HashMap::new();
-    let mut conflicts_out: Vec<JsonValue> = Vec::new();
+    let mut conflicts_out: Vec<ConflictLog> = Vec::new();
     let mut events_out: Vec<JsonValue> = Vec::new();
 
     // First graphs pass
-    let t0 = Instant::now();
     let mut merged_writes = WriteBatch::new();
     for (id, graph) in orchestrator.graphs.iter_mut() {
         let batch = graph.evaluate(&mut orchestrator.blackboard, orchestrator.epoch, dt)?;
@@ -133,20 +119,13 @@ pub fn run_two_pass(
             .apply_writebatch(publish_batch, orchestrator.epoch, format!("graph:{}", id))
             .into_iter()
             .collect();
-        for c in conflict_logs {
-            if let Ok(v) = serde_json::to_value(&c) {
-                conflicts_out.push(v);
-            }
-        }
+        conflicts_out.extend(conflict_logs);
     }
-    let t_graph1 = t0.elapsed();
-    timings.insert(
-        "graphs_pass1_ms".to_string(),
-        t_graph1.as_secs_f32() * 1000.0,
-    );
+    if !orchestrator.graphs.is_empty() {
+        timings.insert("graphs_pass1_ms".to_string(), dt * 1000.0);
+    }
 
     // Animations pass
-    let t1 = Instant::now();
     for (id, anim) in orchestrator.anims.iter_mut() {
         let (batch, events) = anim.update(dt, &mut orchestrator.blackboard)?;
         // accumulate merged writes
@@ -156,20 +135,16 @@ pub fn run_two_pass(
             .apply_writebatch(batch, orchestrator.epoch, format!("anim:{}", id))
             .into_iter()
             .collect();
-        for c in conflict_logs {
-            if let Ok(v) = serde_json::to_value(&c) {
-                conflicts_out.push(v);
-            }
-        }
+        conflicts_out.extend(conflict_logs);
         for e in events {
             events_out.push(e);
         }
     }
-    let t_anim = t1.elapsed();
-    timings.insert("animations_ms".to_string(), t_anim.as_secs_f32() * 1000.0);
+    if !orchestrator.anims.is_empty() {
+        timings.insert("animations_ms".to_string(), dt * 1000.0);
+    }
 
     // Second graphs pass (to pick up animation-produced writes)
-    let t2 = Instant::now();
     for (id, graph) in orchestrator.graphs.iter_mut() {
         let batch = graph.evaluate(&mut orchestrator.blackboard, orchestrator.epoch, dt)?;
         let publish_batch = if graph.subs.outputs.is_empty() {
@@ -190,20 +165,13 @@ pub fn run_two_pass(
             .apply_writebatch(publish_batch, orchestrator.epoch, format!("graph:{}", id))
             .into_iter()
             .collect();
-        for c in conflict_logs {
-            if let Ok(v) = serde_json::to_value(&c) {
-                conflicts_out.push(v);
-            }
-        }
+        conflicts_out.extend(conflict_logs);
     }
-    let t_graph2 = t2.elapsed();
-    timings.insert(
-        "graphs_pass2_ms".to_string(),
-        t_graph2.as_secs_f32() * 1000.0,
-    );
+    if !orchestrator.graphs.is_empty() {
+        timings.insert("graphs_pass2_ms".to_string(), dt * 1000.0);
+    }
 
-    let total = start.elapsed();
-    timings.insert("total_ms".to_string(), total.as_secs_f32() * 1000.0);
+    timings.insert("total_ms".to_string(), dt * 1000.0);
 
     let frame = crate::OrchestratorFrame {
         epoch: orchestrator.epoch,

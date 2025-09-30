@@ -84,20 +84,33 @@ export interface WriteOpJSON {
   shape?: ShapeJSON;
 }
 
+/* Conflict log emitted when a write overwrote an existing entry */
+export interface ConflictLog {
+  path: string;
+  previous_value?: ValueJSON;
+  previous_shape?: ShapeJSON;
+  previous_epoch?: number;
+  previous_source?: string;
+  new_value: ValueJSON;
+  new_shape?: ShapeJSON;
+  new_epoch: number;
+  new_source: string;
+}
+
 /* The orchestrator frame returned after each step */
 export interface OrchestratorFrame {
   epoch: number;
   dt: number;
   merged_writes: WriteOpJSON[];
-  conflicts: any[]; // conflict logs are opaque JSON diagnostic objects
+  conflicts: ConflictLog[];
   timings_ms: { [k: string]: number };
   events: any[]; // controller-specific event payloads
 }
 
 /* High-level typed interface for the wrapper (for consumers who prefer TS types) */
 export interface OrchestratorAPI {
-  registerGraph(cfg: object | string): string;
-  registerAnimation(cfg: object): string;
+  registerGraph(cfg: GraphRegistrationInput): string;
+  registerAnimation(cfg: AnimationRegistrationConfig): string;
   prebind(resolver: (path: string) => string | number | null | undefined): void;
   setInput(path: string, value: ValueJSON, shape?: ShapeJSON): void;
   removeInput(path: string): boolean;
@@ -113,3 +126,38 @@ export type { NormalizedValue as ValueNormalized };
 export type { ValueJSON as Value };
 export type { ShapeJSON as Shape };
 export type { OrchestratorFrame as Frame };
+
+/* Helper config types used by the JS wrapper */
+export interface GraphRegistrationConfig {
+  id?: string;
+  spec: any;
+  subs?: GraphSubscriptions;
+}
+
+export interface GraphSubscriptions {
+  inputs?: string[];
+  outputs?: string[];
+  mirrorWrites?: boolean;
+}
+
+export type GraphRegistrationInput = string | GraphRegistrationConfig;
+
+export interface AnimationRegistrationConfig {
+  id?: string;
+  setup?: AnimationSetup;
+}
+
+export interface AnimationSetup {
+  animation?: any;
+  player?: {
+    name?: string;
+    loop_mode?: "once" | "loop" | "pingpong";
+    speed?: number;
+  };
+  instance?: {
+    weight?: number;
+    time_scale?: number;
+    start_offset?: number;
+    enabled?: boolean;
+  };
+}

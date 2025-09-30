@@ -62,9 +62,6 @@ impl GraphController {
     ///  - Call evaluate_all(runtime, &spec)
     ///  - Collect runtime.writes and return as WriteBatch.
     pub fn evaluate(&mut self, bb: &mut Blackboard, _epoch: u64, _dt: f32) -> Result<WriteBatch> {
-        // Advance staging epoch so staged inputs become "current"
-        self.rt.advance_epoch();
-
         // Stage only subscribed blackboard entries into the graph runtime.
         for tp in &self.subs.inputs {
             if let Some(entry) = bb.get(&tp.to_string()) {
@@ -74,6 +71,9 @@ impl GraphController {
                 self.rt.set_input(path, value, shape);
             }
         }
+
+        // Advance staging epoch so newly staged inputs become current for this evaluation.
+        self.rt.advance_epoch();
 
         // Preserve any pre-populated writes (e.g., injected by tests or external tooling)
         let mut combined = WriteBatch::new();

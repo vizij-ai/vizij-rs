@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 use vizij_api_core::WriteBatch;
 
-pub use crate::blackboard::{Blackboard, BlackboardEntry};
+pub use crate::blackboard::{Blackboard, BlackboardEntry, ConflictLog};
 pub use crate::controllers::{AnimationControllerConfig, GraphControllerConfig, Subscriptions};
 pub use crate::scheduler::Schedule;
 
@@ -27,7 +27,7 @@ pub struct OrchestratorFrame {
     pub dt: f32,
     /// Merged writes produced during the frame (append order is deterministic: pass order then controller order).
     pub merged_writes: WriteBatch,
-    pub conflicts: Vec<serde_json::Value>,
+    pub conflicts: Vec<ConflictLog>,
     pub timings_ms: HashMap<String, f32>,
     pub events: Vec<serde_json::Value>,
 }
