@@ -1,0 +1,33 @@
+[package]
+name        = "vizij-blackboard-wasm"
+version = "0.1.0"
+edition     = "2021"
+license     = "MIT OR Apache-2.0"
+description = "wasm‑bindgen interface for Vizij blackboard."
+repository  = "https://github.com/vizij-ai/vizij-rs"
+homepage    = "https://github.com/vizij-ai/vizij-rs"
+documentation = "https://docs.rs/vizij-blackboard-wasm"
+readme      = "README.md"
+keywords    = ["vizij", "blackboard", "wasm", "web"]
+categories  = ["wasm", "data-structures"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen          = { workspace = true }
+js-sys               = { workspace = true }
+serde                = { workspace = true }
+serde-wasm-bindgen   = "0.6"
+serde_json           = { workspace = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+vizij-blackboard-core = { path = "../vizij-blackboard-core", version = "0.1.0" }
+arora-schema         = { workspace = true }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+serde_json       = { workspace = true }
+
+[features]
+default = ["console_error_panic_hook"]
+console_error_panic_hook = ["dep:console_error_panic_hook"]
