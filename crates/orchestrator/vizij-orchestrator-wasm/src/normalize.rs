@@ -6,24 +6,24 @@ use serde_json::{json, Map, Value as JsonValue};
 fn normalize_value_json(value: serde_json::Value) -> serde_json::Value {
     use serde_json::Value as V;
     match value {
-        V::Number(n) => json!({ "type": "Float", "data": n }),
-        V::Bool(b) => json!({ "type": "Bool", "data": b }),
-        V::String(s) => json!({ "type": "Text", "data": s }),
+        V::Number(n) => json!({ "type": "float", "data": n }),
+        V::Bool(b) => json!({ "type": "bool", "data": b }),
+        V::String(s) => json!({ "type": "text", "data": s }),
         V::Array(arr) => {
             let all_numbers = arr.iter().all(|x| x.is_number());
             if all_numbers {
                 if arr.len() == 2 {
-                    json!({ "type": "Vec2", "data": arr })
+                    json!({ "type": "vec2", "data": arr })
                 } else if arr.len() == 3 {
-                    json!({ "type": "Vec3", "data": arr })
+                    json!({ "type": "vec3", "data": arr })
                 } else if arr.len() == 4 {
-                    json!({ "type": "Vec4", "data": arr })
+                    json!({ "type": "vec4", "data": arr })
                 } else {
-                    json!({ "type": "Vector", "data": arr })
+                    json!({ "type": "vector", "data": arr })
                 }
             } else {
                 let data: Vec<JsonValue> = arr.into_iter().map(normalize_value_json).collect();
-                json!({ "type": "List", "data": data })
+                json!({ "type": "list", "data": data })
             }
         }
         V::Object(obj) => {
@@ -31,37 +31,37 @@ fn normalize_value_json(value: serde_json::Value) -> serde_json::Value {
                 return JsonValue::Object(obj);
             }
             if let Some(text) = obj.get("text").and_then(|x| x.as_str()) {
-                return json!({ "type": "Text", "data": text });
+                return json!({ "type": "text", "data": text });
             }
             if let Some(f) = obj.get("float").and_then(|x| x.as_f64()) {
-                return json!({ "type": "Float", "data": f });
+                return json!({ "type": "float", "data": f });
             }
             if let Some(b) = obj.get("bool").and_then(|x| x.as_bool()) {
-                return json!({ "type": "Bool", "data": b });
+                return json!({ "type": "bool", "data": b });
             }
             if let Some(arr) = obj.get("vec2").and_then(|x| x.as_array()) {
-                return json!({ "type": "Vec2", "data": arr });
+                return json!({ "type": "vec2", "data": arr });
             }
             if let Some(arr) = obj.get("vec3").and_then(|x| x.as_array()) {
-                return json!({ "type": "Vec3", "data": arr });
+                return json!({ "type": "vec3", "data": arr });
             }
             if let Some(arr) = obj.get("vec4").and_then(|x| x.as_array()) {
-                return json!({ "type": "Vec4", "data": arr });
+                return json!({ "type": "vec4", "data": arr });
             }
             if let Some(arr) = obj.get("quat").and_then(|x| x.as_array()) {
-                return json!({ "type": "Quat", "data": arr });
+                return json!({ "type": "quat", "data": arr });
             }
             if let Some(arr) = obj.get("color").and_then(|x| x.as_array()) {
-                return json!({ "type": "ColorRgba", "data": arr });
+                return json!({ "type": "colorrgba", "data": arr });
             }
             if let Some(arr) = obj.get("vector").and_then(|x| x.as_array()) {
-                return json!({ "type": "Vector", "data": arr });
+                return json!({ "type": "vector", "data": arr });
             }
             if let Some(transform) = obj.get("transform").and_then(|x| x.as_object()) {
                 let pos = transform.get("pos").cloned().unwrap_or(JsonValue::Null);
                 let rot = transform.get("rot").cloned().unwrap_or(JsonValue::Null);
                 let scale = transform.get("scale").cloned().unwrap_or(JsonValue::Null);
-                return json!({ "type": "Transform", "data": { "pos": pos, "rot": rot, "scale": scale } });
+                return json!({ "type": "transform", "data": { "pos": pos, "rot": rot, "scale": scale } });
             }
             if let Some(enum_obj) = obj.get("enum").and_then(|x| x.as_object()) {
                 let tag = enum_obj
@@ -71,14 +71,14 @@ fn normalize_value_json(value: serde_json::Value) -> serde_json::Value {
                     .to_string();
                 let payload = enum_obj.get("value").cloned().unwrap_or(JsonValue::Null);
                 let normalized_payload = normalize_value_json(payload);
-                return json!({ "type": "Enum", "data": [tag, normalized_payload] });
+                return json!({ "type": "enum", "data": [tag, normalized_payload] });
             }
             if let Some(record) = obj.get("record").and_then(|x| x.as_object()) {
                 let mut data = Map::new();
                 for (key, val) in record.iter() {
                     data.insert(key.clone(), normalize_value_json(val.clone()));
                 }
-                return json!({ "type": "Record", "data": JsonValue::Object(data) });
+                return json!({ "type": "record", "data": JsonValue::Object(data) });
             }
             if let Some(array_items) = obj.get("array").and_then(|x| x.as_array()) {
                 let data: Vec<JsonValue> = array_items
@@ -86,7 +86,7 @@ fn normalize_value_json(value: serde_json::Value) -> serde_json::Value {
                     .cloned()
                     .map(normalize_value_json)
                     .collect();
-                return json!({ "type": "Array", "data": data });
+                return json!({ "type": "array", "data": data });
             }
             if let Some(list_items) = obj.get("list").and_then(|x| x.as_array()) {
                 let data: Vec<JsonValue> = list_items
@@ -94,7 +94,7 @@ fn normalize_value_json(value: serde_json::Value) -> serde_json::Value {
                     .cloned()
                     .map(normalize_value_json)
                     .collect();
-                return json!({ "type": "List", "data": data });
+                return json!({ "type": "list", "data": data });
             }
             if let Some(tuple_items) = obj.get("tuple").and_then(|x| x.as_array()) {
                 let data: Vec<JsonValue> = tuple_items
@@ -102,7 +102,7 @@ fn normalize_value_json(value: serde_json::Value) -> serde_json::Value {
                     .cloned()
                     .map(normalize_value_json)
                     .collect();
-                return json!({ "type": "Tuple", "data": data });
+                return json!({ "type": "tuple", "data": data });
             }
 
             JsonValue::Object(obj)

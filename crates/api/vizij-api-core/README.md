@@ -56,7 +56,7 @@ The crate exposes no optional features.
 
 ### Values & serde
 
-* The `Value` enum serializes with a `{ "type": "Vec3", "data": [...] }` envelope to remain unambiguous in JSON.
+* The `Value` enum serializes with a `{ "type": "vec3", "data": [...] }` envelope to remain unambiguous in JSON.
 * Convenience constructors (`Value::f`, `Value::vec3`, `Value::transform`) simplify host-side code when producing values
   programmatically.
 * `Value::kind()` exposes a lightweight discriminant for quick pattern matching without matching on every variant.
