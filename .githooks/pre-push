@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Git pre-push hook: run format, lint, tests, and optional WASM/package checks
 set -euo pipefail
 
 # Skip hooks if requested
@@ -8,17 +7,33 @@ if [[ "${SKIP_GIT_HOOKS:-0}" == "1" ]]; then
   exit 0
 fi
 
+# Detect if running in WSL and find cargo
+if [[ -d "/mnt/c/Users" ]]; then
+    # Running in WSL - add Windows cargo to PATH
+    WINDOWS_USER=$(whoami)
+    export PATH="/mnt/c/Users/$WINDOWS_USER/.cargo/bin:$PATH"
+    CARGO="cargo.exe"
+elif command -v cargo.exe &> /dev/null; then
+    # Windows Git Bash with .exe extension
+    CARGO="cargo.exe"
+elif command -v cargo &> /dev/null; then
+    # Linux or macOS
+    CARGO="cargo"
+else
+    echo "Error: cargo not found in PATH"
+    exit 1
+fi
+
 echo "[pre-push] cargo fmt --all -- --check"
-cargo fmt --all -- --check
+$CARGO fmt --all -- --check
 
 echo "[pre-push] cargo clippy --all-targets -- -D warnings"
-cargo clippy --all-targets -- -D warnings
+$CARGO clippy --all-targets -- -D warnings
 
 echo "[pre-push] cargo test --all-features --all-targets"
-cargo test --all-features --all-targets
+$CARGO test --all-features --all-targets
 
-# Optional heavier checks: build WASM wrappers and ensure npm packages pack
-# Enable by setting HOOK_RUN_WASM=1 in your environment.
+# Optional heavier checks
 if [[ "${HOOK_RUN_WASM:-0}" == "1" ]]; then
   echo "[pre-push] node scripts/build-animation-wasm.mjs"
   node scripts/build-animation-wasm.mjs
