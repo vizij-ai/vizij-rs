@@ -196,7 +196,7 @@ dependencies = [
 [[package]]
 name = "arora-schema"
 version = "0.1.0"
-source = "git+https://github.com/semio-ai/arora-schema.git?branch=15-clean-up-_keyvalue-methods#f313f3f3269c145a69f179c21262745814593cff"
+source = "git+https://github.com/semio-ai/arora-types.git?branch=main#56ca70a50e23ddc6ccad473232e8a3fe19cef4bd"
 dependencies = [
  "derive_more",
  "lazy_static",
