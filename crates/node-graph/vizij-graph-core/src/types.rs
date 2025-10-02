@@ -81,6 +81,8 @@ pub enum NodeType {
 
     // Blend helpers
     WeightedSumVector,
+    #[serde(rename = "default-blend")]
+    DefaultBlend,
     BlendWeightedAverage,
     BlendAdditive,
     BlendMultiply,
