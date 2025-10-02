@@ -6,6 +6,8 @@ members = [
   "crates/node-graph/vizij-graph-core",
   "crates/node-graph/bevy_vizij_graph",
   "crates/node-graph/vizij-graph-wasm",
+  "crates/blackboard/vizij-blackboard-core",
+  "crates/blackboard/vizij-blackboard-wasm",
   "crates/api/vizij-api-core",
   "crates/api/vizij-api-wasm",
   "crates/api/bevy_vizij_api",
@@ -24,6 +26,10 @@ wasm-bindgen = "0.2.101"
 js-sys = "0.3"
 anyhow = "1"
 bevy = { version = "0.14.2" }
+
+arora-schema = { git = "https://github.com/semio-ai/arora-types.git", branch = "main" }
+log = "0.4"
+uuid = { version = "1", features = ["serde", "v4", "js"] }
 
 [profile.release]
 opt-level = "s"

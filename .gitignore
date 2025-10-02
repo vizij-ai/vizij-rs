@@ -4,14 +4,17 @@
 # wasm-pack output (generated)
 npm/@vizij/animation-wasm/pkg/
 npm/@vizij/node-graph-wasm/pkg/
+npm/@vizij/blackboard-wasm/pkg/
 
 # wrapper build output
 npm/@vizij/animation-wasm/dist/
 npm/@vizij/node-graph-wasm/dist/
+npm/@vizij/blackboard-wasm/dist/
 
 # local installs inside wrapper (if ever run there)
 npm/@vizij/animation-wasm/node_modules/
 npm/@vizij/node-graph-wasm/node_modules/
+npm/@vizij/blackboard-wasm/node_modules/
 
 # common editor cruft
 .DS_Store
