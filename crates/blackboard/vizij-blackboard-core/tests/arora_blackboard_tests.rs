@@ -492,44 +492,24 @@ fn test_keyvalue_structure() {
     let strength_id = gen_uuid_from_str(&strength_name);
     let agility_id = gen_uuid_from_str(&agility_name);
 
-    let player_kv = KeyValue::make_kv_from_pairs(
+    let player_kv: KeyValue = (
         player_id,
-        &[
-            (
-                "health",
-                KeyValueField::new_with_id(health_name.clone(), health_id, Value::I32(100)),
-            ),
-            (
+        [
+            KeyValueField::new_with_id(health_name.clone(), health_id, Value::I32(100)),
+            KeyValueField::new_nested_kv(
                 "stats",
-                KeyValueField::new_nested_kv(
-                    "stats",
-                    stats_id,
-                    &[
-                        (
-                            "strength",
-                            KeyValueField::new_with_id(
-                                strength_name.clone(),
-                                strength_id,
-                                Value::I32(50),
-                            ),
-                        ),
-                        (
-                            "agility",
-                            KeyValueField::new_with_id(
-                                agility_name.clone(),
-                                agility_id,
-                                Value::I32(75),
-                            ),
-                        ),
-                    ],
-                ),
+                &[
+                    KeyValueField::new_with_id("strength", strength_id, Value::I32(50)),
+                    KeyValueField::new_with_id("agility", agility_id, Value::I32(75)),
+                ],
             ),
         ],
-    );
+    )
+        .into();
 
     // ## TEST 1 ##
     // Set the KeyValue structure
-    let result = bb.set(&"player".to_string(), player_kv).unwrap();
+    let result = bb.set(&"player".to_string(), player_kv.into()).unwrap();
     assert!(!result.is_nil());
 
     // Check that values were set correctly
@@ -572,22 +552,17 @@ fn test_keyvalue_structure() {
 
     // ## TEST 2 ##
     // Try setting a keyvalue into an intermediate node by its path
-    let mut new_stats_kv = KeyValue::make_kv_from_pairs(
+    let mut new_stats_kv: KeyValue = (
         stats_id,
-        &[
-            (
-                "strength",
-                KeyValueField::new_with_id(strength_name.clone(), strength_id, Value::I32(100)),
-            ),
-            (
-                "agility",
-                KeyValueField::new_with_id(agility_name.clone(), agility_id, Value::I32(100)),
-            ),
+        [
+            KeyValueField::new_with_id("strength", strength_id, Value::I32(100)),
+            KeyValueField::new_with_id("agility", agility_id, Value::I32(100)),
         ],
-    );
+    )
+        .into();
     // Update the stats KeyValue structure
     let result = bb
-        .set(&"player.stats".to_string(), new_stats_kv.clone())
+        .set(&"player.stats".to_string(), new_stats_kv.clone().into())
         .unwrap();
 
     assert!(!result.is_nil());
@@ -623,10 +598,10 @@ fn test_keyvalue_structure() {
     // Test setting the stats keyvalue directly on the player node
     // ## TEST 3 ##
     // mutate new_stats_kv agility and strength values to 200
-    if let Value::KeyValue(ref mut kv) = new_stats_kv {
-        kv.set_field_value(&agility_name, Value::I32(200));
-        kv.set_field_value(&strength_name, Value::I32(200));
-    }
+
+    new_stats_kv.set_field_value(&agility_name, Value::I32(200));
+    new_stats_kv.set_field_value(&strength_name, Value::I32(200));
+
     let player_node = bb.get(&"player");
     assert_node_exists(player_node.clone());
     let player_node_unwrapped = unwrap_node_result(player_node).expect("Player node should exist");
@@ -635,7 +610,7 @@ fn test_keyvalue_structure() {
         let result = player_node_guard
             .as_path_mut()
             .expect("Player node should be a path")
-            .set("stats", new_stats_kv);
+            .set("stats", new_stats_kv.into());
 
         assert!(result.is_ok(), "Expected Ok result when setting stats");
     }

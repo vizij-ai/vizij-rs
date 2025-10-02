@@ -27,7 +27,7 @@ js-sys = "0.3"
 anyhow = "1"
 bevy = { version = "0.14.2" }
 
-arora-schema = { git = "https://github.com/semio-ai/arora-schema.git", branch = "15-clean-up-_keyvalue-methods" }
+arora-schema = { git = "https://github.com/semio-ai/arora-types.git", branch = "main" }
 log = "0.4"
 uuid = { version = "1", features = ["serde", "v4", "js"] }
 

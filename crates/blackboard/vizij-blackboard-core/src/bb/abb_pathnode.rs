@@ -348,7 +348,7 @@ impl TreeFormattable for ArcABBPathNode {
         if let Err(e) = name {
             return format!("Error getting name: {}", e);
         }
-        output.push_str(&format!("{:?}' Namespace Tree:\n", name));
+        output.push_str(&format!("{:?} Namespace Tree:\n", name.unwrap()));
         let names = self.get_names_copy();
         if let Err(e) = names {
             return format!("Error getting names: {}", e);
