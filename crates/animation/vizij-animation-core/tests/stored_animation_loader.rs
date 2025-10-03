@@ -2,6 +2,7 @@ use vizij_animation_core::{
     data::{AnimationData, Track},
     parse_stored_animation_json,
 };
+use vizij_api_core::Value;
 
 fn approx(a: f32, b: f32, eps: f32) {
     assert!((a - b).abs() <= eps, "left={a} right={b} eps={eps}");
@@ -69,4 +70,39 @@ fn parses_new_format_fixture_and_preserves_points_and_transitions() {
         !any_transitions,
         "expected no transitions on material-color points"
     );
+}
+
+#[test]
+fn parses_pose_quat_transform_fixture_with_extended_values() {
+    let json = vizij_test_fixtures::animations::json("pose-quat-transform")
+        .expect("load pose-quat-transform fixture");
+    let anim: AnimationData =
+        parse_stored_animation_json(&json).expect("parse pose-quat-transform animation");
+
+    assert_eq!(anim.duration_ms, 3000);
+
+    let rot_track = anim
+        .tracks
+        .iter()
+        .find(|t| t.animatable_id == "rig/root.rotation")
+        .expect("rotation track");
+    assert!(matches!(rot_track.points[0].value, Value::Quat(_)));
+
+    let transform_track = anim
+        .tracks
+        .iter()
+        .find(|t| t.animatable_id == "rig/root.transform")
+        .expect("transform track");
+    match &transform_track.points[1].value {
+        Value::Transform {
+            translation,
+            rotation,
+            scale,
+        } => {
+            approx(translation[0], 0.2, 1e-6);
+            approx(rotation[3], 0.991445, 1e-6);
+            approx(scale[2], 1.1, 1e-6);
+        }
+        other => panic!("expected transform value, got {other:?}"),
+    }
 }

@@ -1,6 +1,7 @@
 use serde_json::{json, Value as JsonValue};
 use vizij_api_core::{
-    json::normalize_graph_spec_json_string, TypedPath, Value, WriteBatch, WriteOp,
+    json::{normalize_graph_spec_json_string, parse_value},
+    TypedPath, Value, WriteBatch, WriteOp,
 };
 use vizij_graph_core::types::GraphSpec;
 use vizij_orchestrator::{
@@ -170,6 +171,101 @@ fn read_scalar_write(batch: &WriteBatch, path: &str) -> f32 {
     }
 }
 
+fn find_write<'a>(batch: &'a WriteBatch, path: &str) -> &'a Value {
+    batch
+        .iter()
+        .find(|w| w.path.to_string() == path)
+        .map(|op| &op.value)
+        .unwrap_or_else(|| panic!("missing write for {path}"))
+}
+
+fn assert_write_matches(batch: &WriteBatch, path: &str, expected: &JsonValue) {
+    let actual = find_write(batch, path);
+    let expected_value = parse_value(expected.clone())
+        .unwrap_or_else(|e| panic!("parse expected value for {path}: {e}"));
+    assert_values_close(actual, &expected_value, path);
+}
+
+fn assert_values_close(actual: &Value, expected: &Value, path: &str) {
+    const EPS: f32 = 1e-3;
+    match (actual, expected) {
+        (Value::Float(a), Value::Float(b)) => assert!(
+            (a - b).abs() <= EPS,
+            "float mismatch for {path}: {a} vs {b}"
+        ),
+        (Value::Vec2(a), Value::Vec2(b)) => a
+            .iter()
+            .zip(b.iter())
+            .for_each(|(aa, bb)| assert!((aa - bb).abs() <= EPS, "vec2 mismatch for {path}")),
+        (Value::Vec3(a), Value::Vec3(b)) => a
+            .iter()
+            .zip(b.iter())
+            .for_each(|(aa, bb)| assert!((aa - bb).abs() <= EPS, "vec3 mismatch for {path}")),
+        (Value::Vec4(a), Value::Vec4(b)) => a
+            .iter()
+            .zip(b.iter())
+            .for_each(|(aa, bb)| assert!((aa - bb).abs() <= EPS, "vec4 mismatch for {path}")),
+        (Value::Quat(a), Value::Quat(b)) => {
+            let direct = a
+                .iter()
+                .zip(b.iter())
+                .all(|(aa, bb)| (aa - bb).abs() <= EPS);
+            let neg = a
+                .iter()
+                .zip(b.iter())
+                .all(|(aa, bb)| (aa + bb).abs() <= EPS);
+            assert!(
+                direct || neg,
+                "quat mismatch for {path}: actual={a:?} expected={b:?}"
+            );
+        }
+        (Value::Vector(a), Value::Vector(b)) => {
+            assert_eq!(a.len(), b.len(), "vector length mismatch for {path}");
+            a.iter()
+                .zip(b.iter())
+                .for_each(|(aa, bb)| assert!((aa - bb).abs() <= EPS, "vector mismatch for {path}"));
+        }
+        (
+            Value::Transform {
+                translation: at,
+                rotation: ar,
+                scale: as_,
+            },
+            Value::Transform {
+                translation: bt,
+                rotation: br,
+                scale: bs,
+            },
+        ) => {
+            at.iter().zip(bt.iter()).for_each(|(aa, bb)| {
+                assert!(
+                    (aa - bb).abs() <= EPS,
+                    "transform.translation mismatch for {path}"
+                )
+            });
+            let direct = ar
+                .iter()
+                .zip(br.iter())
+                .all(|(aa, bb)| (aa - bb).abs() <= EPS);
+            let neg = ar
+                .iter()
+                .zip(br.iter())
+                .all(|(aa, bb)| (aa + bb).abs() <= EPS);
+            assert!(
+                direct || neg,
+                "transform.rotation mismatch for {path}: actual={ar:?} expected={br:?}"
+            );
+            as_.iter().zip(bs.iter()).for_each(|(aa, bb)| {
+                assert!(
+                    (aa - bb).abs() <= EPS,
+                    "transform.scale mismatch for {path}"
+                )
+            });
+        }
+        _ => assert_eq!(actual, expected, "value mismatch for {path}"),
+    }
+}
+
 #[test]
 fn scalar_ramp_pipeline_shared_fixture_executes() {
     let fixture = vizij_orchestrator::fixtures::demo_single_pass();
@@ -269,5 +365,51 @@ fn sine_driver_graph_controls_animation_seek() {
             (seek - expected_seek(time)).abs() < 1e-3,
             "seek mismatch at {time}"
         );
+    }
+}
+
+#[test]
+fn blend_pose_pipeline_shared_fixture_executes() {
+    let fixture = vizij_orchestrator::fixtures::blend_pose_pipeline();
+
+    let mut orch = Orchestrator::new(Schedule::TwoPass);
+    let graph_cfg = graph_fixture("weighted-profile-blend");
+    orch = orch.with_graph(graph_cfg);
+
+    let anim_cfg = AnimationControllerConfig {
+        id: "pose".into(),
+        setup: fixture.animation.setup.clone(),
+    };
+    orch = orch.with_animation(anim_cfg);
+
+    for input in fixture.initial_inputs.iter() {
+        orch.set_input(&input.path, input.value.clone(), None)
+            .expect("set input");
+    }
+
+    for step in fixture.steps.iter() {
+        let frame = orch.step(step.delta as f32).expect("step ok");
+        for (path, expected) in step.expect.iter() {
+            assert_write_matches(&frame.merged_writes, path, expected);
+        }
+
+        let rotation = find_write(&frame.merged_writes, "rig/root.rotation");
+        if let Value::Quat(_) = rotation {
+        } else {
+            panic!("rig/root.rotation should be quaternion, got {rotation:?}");
+        }
+
+        let translation = find_write(&frame.merged_writes, "rig/root.translation");
+        match translation {
+            Value::Vec3(_) => {}
+            Value::Vector(v) => assert_eq!(v.len(), 3, "translation vector length"),
+            other => panic!("rig/root.translation should be vec3, got {other:?}"),
+        }
+
+        let transform = find_write(&frame.merged_writes, "rig/root.transform");
+        if let Value::Transform { .. } = transform {
+        } else {
+            panic!("rig/root.transform should be transform value, got {transform:?}");
+        }
     }
 }

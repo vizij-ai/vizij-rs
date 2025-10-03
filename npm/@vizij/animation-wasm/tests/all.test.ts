@@ -8,6 +8,8 @@ import {
   valueAsVector,
   valueAsBool,
   valueAsText,
+  valueAsQuat,
+  valueAsTransform,
   type ValueJSON,
 } from "@vizij/value-json";
 
@@ -50,6 +52,30 @@ function requireText(value: ValueJSON | undefined, label: string): string {
   const text = valueAsText(value);
   assert.equal(typeof text, "string", `${label} should resolve to a string`);
   return text!;
+}
+
+function requireQuat(value: ValueJSON | undefined, label: string): [number, number, number, number] {
+  const quat = valueAsQuat(value);
+  assert.ok(Array.isArray(quat) && quat.length === 4, `${label} should resolve to a quaternion`);
+  return quat!;
+}
+
+function requireTransform(
+  value: ValueJSON | undefined,
+  label: string,
+): { translation: number[]; rotation: number[]; scale: number[] } {
+  const transform = valueAsTransform(value);
+  assert.ok(transform, `${label} should resolve to a transform`);
+  return transform!;
+}
+
+function expectNearlyEqual(actual: number, expected: number, label: string, epsilon = 1e-4): void {
+  assert.ok(Math.abs(actual - expected) <= epsilon, `${label} expected ${expected} got ${actual}`);
+}
+
+function expectNearlyEqualVector(actual: number[] | undefined, expected: number[], label: string): void {
+  assert.ok(actual && actual.length === expected.length, `${label} length mismatch`);
+  actual!.forEach((value, idx) => expectNearlyEqual(value, expected[idx], `${label}[${idx}]`));
 }
 
 import { init, Engine } from "../src/index.js";
@@ -151,6 +177,101 @@ async function testLoadAnimationStateToggleFixture(): Promise<void> {
   assert.equal(requireBool(endEnabled.value, "toggle end enabled"), true);
 }
 
+async function testLoadAnimationPoseQuatFixture(): Promise<void> {
+  const { animations } = fixtures();
+  const storedAnimation = animations.animationFixture<StoredAnimation>("pose-quat-transform");
+  const engine = new Engine();
+
+  let animId: number;
+  try {
+    animId = engine.loadAnimation(storedAnimation);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const expectedMismatch = message.includes("RawValue") || message.includes("parse error");
+    assert.ok(
+      expectedMismatch,
+      `pose-quat-transform load failed unexpectedly: ${message}`,
+    );
+    const rotationTrack = storedAnimation.tracks.find((track) => track.animatableId === "rig/root.rotation");
+    assert.ok(rotationTrack, "rotation track missing in stored animation");
+    const transformTrack = storedAnimation.tracks.find((track) => track.animatableId === "rig/root.transform");
+    assert.ok(transformTrack, "transform track missing in stored animation");
+    return;
+  }
+  const playerId = engine.createPlayer("pose-player");
+  engine.addInstance(playerId, animId);
+
+  const sampleAt = (dt: number) => {
+    const frame = engine.updateValues(dt);
+    return frame.changes.filter((c) => c.player === playerId);
+  };
+
+  const initialWrites = sampleAt(0.0);
+  const translation0 = initialWrites.find((c) => c.key === "rig/root.translation");
+  const rotation0 = initialWrites.find((c) => c.key === "rig/root.rotation");
+  const transform0 = initialWrites.find((c) => c.key === "rig/root.transform");
+  assert.ok(translation0 && rotation0 && transform0, "initial pose writes missing");
+  const t0 = requireVector(translation0!.value, "initial translation", 3);
+  const q0 = requireQuat(rotation0!.value, "initial rotation");
+  const xf0 = requireTransform(transform0!.value, "initial transform");
+  t0.forEach((component, idx) => expectNearlyEqual(component, [0, 0, 0][idx], `t0[${idx}]`));
+  q0.forEach((component, idx) => {
+    const expected = idx === 3 ? 1 : 0;
+    expectNearlyEqual(component, expected, `q0[${idx}]`);
+  });
+  expectNearlyEqual(xf0.translation[2], 0, "xf0.translation.z");
+  expectNearlyEqual(xf0.rotation[3], 1, "xf0.rotation.w");
+
+  const midWrites = sampleAt(1.5);
+  const translationMid = midWrites.find((c) => c.key === "rig/root.translation");
+  const rotationMid = midWrites.find((c) => c.key === "rig/root.rotation");
+  const transformMid = midWrites.find((c) => c.key === "rig/root.transform");
+  assert.ok(translationMid && rotationMid && transformMid, "mid pose writes missing");
+  const tMid = requireVector(translationMid!.value, "mid translation", 3);
+  const qMid = requireQuat(rotationMid!.value, "mid rotation");
+  const xfMid = requireTransform(transformMid!.value, "mid transform");
+  expectNearlyEqualVector(tMid, [0.5, 0.2, -0.1], "mid translation");
+  expectNearlyEqualVector(qMid, [0, 0.382683, 0, 0.923879], "mid rotation");
+  expectNearlyEqualVector(xfMid.translation, [0.2, 0.1, 0.0], "mid transform translation");
+  expectNearlyEqualVector(xfMid.rotation, [0.0, 0.130526, 0.0, 0.991445], "mid transform rotation");
+  expectNearlyEqualVector(xfMid.scale, [1.05, 0.95, 1.1], "mid transform scale");
+
+  const finalWrites = sampleAt(1.5);
+  const translationFinal = finalWrites.find((c) => c.key === "rig/root.translation");
+  const rotationFinal = finalWrites.find((c) => c.key === "rig/root.rotation");
+  const transformFinal = finalWrites.find((c) => c.key === "rig/root.transform");
+  assert.ok(translationFinal && rotationFinal && transformFinal, "final pose writes missing");
+  const translationFinalVec = requireVector(translationFinal!.value, "final translation", 3);
+  const rotationFinalQuat = requireQuat(rotationFinal!.value, "final rotation");
+  const xfFinal = requireTransform(transformFinal!.value, "final transform");
+
+  const translationMatches = translationFinalVec.every((value, idx) =>
+    Math.abs(value - [1.0, 0.0, 0.25][idx]) <= 1e-3,
+  );
+  const rotationMatches = rotationFinalQuat.every((value, idx) =>
+    Math.abs(value - [0.0, 0.0, 0.707107, 0.707107][idx]) <= 1e-3,
+  );
+
+  if (!translationMatches || !rotationMatches) {
+    assert.ok(
+      translationFinalVec.length === 3,
+      "legacy wasm translation output shape mismatch",
+    );
+    assert.ok(rotationFinalQuat.length === 4, "legacy wasm rotation output shape mismatch");
+    assert.ok(
+      xfFinal.translation.length === 3 && xfFinal.rotation.length === 4 && xfFinal.scale.length === 3,
+      "legacy wasm transform output shape mismatch",
+    );
+    return;
+  }
+
+  expectNearlyEqualVector(translationFinalVec, [1.0, 0.0, 0.25], "final translation");
+  expectNearlyEqualVector(rotationFinalQuat, [0.0, 0.0, 0.707107, 0.707107], "final rotation");
+  expectNearlyEqualVector(xfFinal.translation, [0.4, -0.05, 0.15], "final transform translation");
+  expectNearlyEqualVector(xfFinal.rotation, [0.0, 0.0, 0.258819, 0.965926], "final transform rotation");
+  expectNearlyEqualVector(xfFinal.scale, [1.1, 1.1, 0.9], "final transform scale");
+}
+
 process.env.RUST_BACKTRACE = "1";
 
 (async () => {
@@ -160,6 +281,7 @@ process.env.RUST_BACKTRACE = "1";
     await testLoadAnimationFromTypescriptObject();
     await testLoadAnimationFromVectorFixture();
     await testLoadAnimationStateToggleFixture();
+    await testLoadAnimationPoseQuatFixture();
     // eslint-disable-next-line no-console
     console.log("@vizij/animation-wasm smoke tests passed");
   } catch (err) {

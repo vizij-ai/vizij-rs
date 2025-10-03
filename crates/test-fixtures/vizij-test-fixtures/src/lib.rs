@@ -156,3 +156,43 @@ pub mod orchestrations {
         Ok(resolve_path(entry.as_path()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn animation_pose_quat_transform_loads() {
+        let value: serde_json::Value =
+            animations::load("pose-quat-transform").expect("load pose-quat-transform fixture");
+        assert!(value.get("tracks").is_some(), "animation tracks missing");
+    }
+
+    #[test]
+    fn node_graph_logic_gate_and_urdf_available() {
+        let logic: serde_json::Value =
+            node_graphs::spec("logic-gate").expect("load logic-gate graph spec");
+        let nodes = logic
+            .get("spec")
+            .and_then(|spec| spec.get("nodes"))
+            .and_then(|nodes| nodes.as_array());
+        assert!(nodes.is_some(), "logic-gate nodes missing");
+
+        let stage = node_graphs::stage_json("urdf-ik-position")
+            .expect("fetch stage data for urdf-ik-position");
+        assert!(stage.is_some(), "urdf-ik-position stage should exist");
+    }
+
+    #[test]
+    fn orchestration_blend_pose_pipeline_exists() {
+        let json = orchestrations::json("blend-pose-pipeline")
+            .expect("load blend-pose-pipeline descriptor");
+        let value: serde_json::Value =
+            serde_json::from_str(&json).expect("parse blend-pose-pipeline descriptor JSON");
+        let animation = value
+            .get("animation")
+            .and_then(|anim| anim.as_str())
+            .unwrap_or_default();
+        assert_eq!(animation, "pose-quat-transform");
+    }
+}

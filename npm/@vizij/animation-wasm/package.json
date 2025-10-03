@@ -18,13 +18,20 @@
     "webassembly"
   ],
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/src/index.js",
+  "module": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "files": [
     "dist/",
     "pkg/",
     "README.md"
   ],
+  "exports": {
+    ".": {
+      "import": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
+    }
+  },
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json",

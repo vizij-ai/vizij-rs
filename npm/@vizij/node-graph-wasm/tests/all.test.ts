@@ -28,7 +28,6 @@ import {
   Graph,
   oscillatorBasics,
   vectorPlayground,
-  logicGate,
   tupleSpringDampSlew,
   layeredRigBlend,
   hierarchicalBlend,
@@ -58,7 +57,16 @@ function pkgWasmUrl(): URL {
 }
 
 function loadJsonFixture(key: string): string {
-  return nodeGraphFixtures().nodeGraphSpecJson(key);
+  const raw = nodeGraphFixtures().nodeGraphSpecJson(key);
+  try {
+    const parsed = JSON.parse(raw) as { spec?: unknown } | undefined;
+    if (parsed && typeof parsed === "object" && "spec" in parsed) {
+      return JSON.stringify((parsed as { spec: unknown }).spec);
+    }
+  } catch (err) {
+    // fall back to raw string if parsing fails
+  }
+  return raw;
 }
 
 /* ---------- Generic validation helpers (merged) ---------- */
@@ -459,7 +467,7 @@ function assertText(write: WriteOpJSON, expected: string): void {
 
     // Basic smoke checks used across tests
     await runSample("oscillator-basics", oscillatorBasics);
-    await runSample("logic-gate", logicGate);
+    await runSample("logic-gate-fixture", loadJsonFixture("logic-gate"));
     await runSample("tuple-spring-damp-slew", tupleSpringDampSlew);
     {
 
@@ -523,6 +531,37 @@ function assertText(write: WriteOpJSON, expected: string): void {
           { path: "samples/weighted.average", expectVector: [0.4666667, 0.25, 0.6666667] },
           { path: "samples/weighted.total", expectFloat: 1.2 },
         ],
+      });
+    }
+
+    // urdf-ik-position (shared fixture)
+    {
+      const urdfFixture = nodeGraphFixtures().nodeGraphSpec(
+        "urdf-ik-position",
+      ) as { spec: GraphSpec };
+      const urdfStage = nodeGraphFixtures().nodeGraphStage<
+        Record<string, { value: ValueJSON; shape?: ShapeJSON }>
+      >("urdf-ik-position");
+
+      const urdfResult = await runSample("urdf-ik-position-fixture", urdfFixture.spec, {
+        prepare: (graph) => {
+          if (!urdfStage) return;
+          for (const [path, payload] of Object.entries(urdfStage)) {
+            graph.stageInput(path, payload.value, payload.shape);
+          }
+        },
+      });
+
+      const urdfWrites = writesToMap(urdfResult.writes);
+      const solution = urdfWrites.get("tests/urdf.solution");
+      const solutionObj = asValueObject(solution);
+      assert.ok(solutionObj && "record" in solutionObj, "urdf solution must be a record");
+      const record = solutionObj!.record as Record<string, ValueJSON>;
+      const jointNames = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"] as const;
+      jointNames.forEach((joint) => {
+        const entry = asValueObject(record[joint]);
+        assert.ok(entry && typeof entry.float === "number", `missing float for ${joint}`);
+        assertNearlyEqual(entry!.float as number, 0, joint);
       });
     }
 

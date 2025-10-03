@@ -1,0 +1,170 @@
+{
+  "id": "pose-quat-transform-1",
+  "name": "Pose Quat Transform",
+  "duration": 3000,
+  "tracks": [
+    {
+      "id": "root-translation",
+      "name": "Root Translation",
+      "animatableId": "rig/root.translation",
+      "points": [
+        {
+          "id": "rt-0",
+          "stamp": 0.0,
+          "value": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          }
+        },
+        {
+          "id": "rt-1",
+          "stamp": 0.5,
+          "value": {
+            "x": 0.5,
+            "y": 0.2,
+            "z": -0.1
+          },
+          "transitions": {
+            "out": {
+              "x": 0.6,
+              "y": 0.3
+            }
+          }
+        },
+        {
+          "id": "rt-2",
+          "stamp": 1.0,
+          "value": {
+            "x": 1.0,
+            "y": 0.0,
+            "z": 0.25
+          }
+        }
+      ],
+      "settings": {
+        "color": "#ffcc00"
+      }
+    },
+    {
+      "id": "root-rotation",
+      "name": "Root Rotation",
+      "animatableId": "rig/root.rotation",
+      "points": [
+        {
+          "id": "rr-0",
+          "stamp": 0.0,
+          "value": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 1.0
+          }
+        },
+        {
+          "id": "rr-1",
+          "stamp": 0.5,
+          "value": {
+            "x": 0.0,
+            "y": 0.3826834,
+            "z": 0.0,
+            "w": 0.9238795
+          },
+          "transitions": {
+            "in": {
+              "x": 0.3,
+              "y": 0.7
+            }
+          }
+        },
+        {
+          "id": "rr-2",
+          "stamp": 1.0,
+          "value": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.7071068,
+            "w": 0.7071068
+          }
+        }
+      ],
+      "settings": {
+        "color": "#00ccff"
+      }
+    },
+    {
+      "id": "root-transform",
+      "name": "Root Transform",
+      "animatableId": "rig/root.transform",
+      "points": [
+        {
+          "id": "rtf-0",
+          "stamp": 0.0,
+          "value": {
+            "translation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0,
+              "w": 1.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0,
+              "z": 1.0
+            }
+          }
+        },
+        {
+          "id": "rtf-1",
+          "stamp": 0.5,
+          "value": {
+            "translation": {
+              "x": 0.2,
+              "y": 0.1,
+              "z": 0.0
+            },
+            "rotation": {
+              "x": 0.0,
+              "y": 0.1305262,
+              "z": 0.0,
+              "w": 0.9914449
+            },
+            "scale": {
+              "x": 1.05,
+              "y": 0.95,
+              "z": 1.1
+            }
+          }
+        },
+        {
+          "id": "rtf-2",
+          "stamp": 1.0,
+          "value": {
+            "translation": {
+              "x": 0.4,
+              "y": -0.05,
+              "z": 0.15
+            },
+            "rotation": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.258819,
+              "w": 0.9659258
+            },
+            "scale": {
+              "x": 1.1,
+              "y": 1.1,
+              "z": 0.9
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "groups": {}
+}

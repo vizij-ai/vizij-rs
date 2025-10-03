@@ -107,15 +107,15 @@ impl From<StepSeed> for StepFixture {
     }
 }
 
-pub fn demo_single_pass() -> DemoFixture {
+fn pipeline_fixture(name: &str) -> DemoFixture {
     let descriptor: PipelineDescriptor =
-        orchestrations::load("scalar-ramp-pipeline").expect("load scalar-ramp-pipeline descriptor");
+        orchestrations::load(name).unwrap_or_else(|_| panic!("load {name} descriptor"));
 
     let graph: GraphFixture = node_graphs::spec(&descriptor.graph)
-        .expect("load shared graph fixture for scalar-ramp pipeline");
+        .unwrap_or_else(|_| panic!("load shared graph fixture for {name}"));
 
     let animation_json: serde_json::Value = animations::load(&descriptor.animation)
-        .expect("load shared animation fixture for scalar-ramp pipeline");
+        .unwrap_or_else(|_| panic!("load shared animation fixture for {name}"));
 
     let animation_setup = json!({
         "animation": animation_json,
@@ -142,4 +142,12 @@ pub fn demo_single_pass() -> DemoFixture {
             .map(StepFixture::from)
             .collect(),
     }
+}
+
+pub fn demo_single_pass() -> DemoFixture {
+    pipeline_fixture("scalar-ramp-pipeline")
+}
+
+pub fn blend_pose_pipeline() -> DemoFixture {
+    pipeline_fixture("blend-pose-pipeline")
 }

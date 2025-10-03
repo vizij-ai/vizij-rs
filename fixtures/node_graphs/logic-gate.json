@@ -1,0 +1,38 @@
+{
+  "spec": {
+    "nodes": [
+      { "id": "time", "type": "time" },
+      { "id": "sin", "type": "sin", "inputs": { "in": { "node_id": "time" } } },
+      { "id": "threshold", "type": "constant", "params": { "value": 0 } },
+      {
+        "id": "greater",
+        "type": "greaterthan",
+        "inputs": {
+          "lhs": { "node_id": "sin" },
+          "rhs": { "node_id": "threshold" }
+        }
+      },
+      { "id": "then", "type": "constant", "params": { "value": 1 } },
+      { "id": "else", "type": "constant", "params": { "value": -1 } },
+      {
+        "id": "gate",
+        "type": "if",
+        "inputs": {
+          "cond": { "node_id": "greater" },
+          "then": { "node_id": "then" },
+          "else": { "node_id": "else" }
+        }
+      },
+      {
+        "id": "out",
+        "type": "output",
+        "params": { "path": "samples/logic.gated" },
+        "inputs": { "in": { "node_id": "gate" } }
+      }
+    ]
+  },
+  "subs": {
+    "inputs": [],
+    "outputs": ["samples/logic.gated"]
+  }
+}
