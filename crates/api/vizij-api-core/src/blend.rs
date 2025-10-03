@@ -111,20 +111,24 @@ pub fn blend_values(a: &Value, b: &Value, t: f32) -> Value {
 
         (
             Value::Transform {
-                pos: ap,
-                rot: ar,
+                translation: ap,
+                rotation: ar,
                 scale: ascale,
             },
             Value::Transform {
-                pos: bp,
-                rot: br,
+                translation: bp,
+                rotation: br,
                 scale: bscale,
             },
         ) => {
-            let pos = lerp_array(ap, bp, t);
+            let translation = lerp_array(ap, bp, t);
             let scale = lerp_array(ascale, bscale, t);
-            let rot = slerp(*ar, *br, t);
-            Value::Transform { pos, rot, scale }
+            let rotation = slerp(*ar, *br, t);
+            Value::Transform {
+                translation,
+                rotation,
+                scale,
+            }
         }
 
         (Value::Record(ma), Value::Record(mb)) => {

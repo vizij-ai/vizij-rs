@@ -35,8 +35,12 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node dist/tests/all.test.js",
+    "test": "pnpm run build && node dist/tests/all.test.js",
     "prepublishOnly": "node -e \"const fs=require('fs');if(!fs.existsSync('pkg')){console.error('Missing pkg/. Run wasm-pack build.');process.exit(1);}\""
+  },
+  "dependencies": {
+    "@vizij/value-json": "workspace:*",
+    "@vizij/wasm-loader": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

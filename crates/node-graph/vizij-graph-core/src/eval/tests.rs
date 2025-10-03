@@ -106,7 +106,7 @@ fn writes_batch_json_roundtrip_from_graph() {
                 id: "out".to_string(),
                 kind: NodeType::Output,
                 params: NodeParams {
-                    path: Some(TypedPath::parse("robot/pose.pos").expect("valid path")),
+                    path: Some(TypedPath::parse("robot/pose.translation").expect("valid path")),
                     ..Default::default()
                 },
                 inputs: output_inputs,
@@ -479,12 +479,12 @@ fn input_node_requires_restaging_each_epoch() {
 #[test]
 fn selector_projects_record_field() {
     let mut record = HashMap::new();
-    record.insert("pos".to_string(), Value::Vec3([3.0, 4.0, 0.0]));
+    record.insert("translation".to_string(), Value::Vec3([3.0, 4.0, 0.0]));
     record.insert("label".to_string(), Value::Text("ignored".to_string()));
 
     let mut inputs = HashMap::new();
     let mut conn = connection("src", "out");
-    conn.selector = Some(vec![SelectorSegment::Field("pos".to_string())]);
+    conn.selector = Some(vec![SelectorSegment::Field("translation".to_string())]);
     inputs.insert("in".to_string(), conn);
 
     let graph = GraphSpec {
@@ -517,11 +517,11 @@ fn selector_projects_record_field() {
 
 #[test]
 fn selector_projects_transform_field_and_nested_index() {
-    // Source provides a Transform; downstream selects .pos then [1] (y component).
+    // Source provides a Transform; downstream selects .translation then [1] (y component).
     let mut inputs = HashMap::new();
     let mut conn = connection("src", "out");
     conn.selector = Some(vec![
-        SelectorSegment::Field("pos".to_string()),
+        SelectorSegment::Field("translation".to_string()),
         SelectorSegment::Index(1),
     ]);
     inputs.insert("in".to_string(), conn);
@@ -531,8 +531,8 @@ fn selector_projects_transform_field_and_nested_index() {
             constant_node(
                 "src",
                 Value::Transform {
-                    pos: [10.0, 42.0, -1.0],
-                    rot: [0.0, 0.0, 0.0, 1.0],
+                    translation: [10.0, 42.0, -1.0],
+                    rotation: [0.0, 0.0, 0.0, 1.0],
                     scale: [1.0, 1.0, 1.0],
                 },
             ),
@@ -792,17 +792,17 @@ fn slew_node_limits_rate_of_change() {
 
 #[test]
 fn end_to_end_input_selector_scalar_math_output() {
-    // Build Input node producing a record { pos: vec3, label: text } with a declared record shape.
+    // Build Input node producing a record { translation: vec3, label: text } with a declared record shape.
     let typed_path = TypedPath::parse("sensor/pose").expect("valid path");
 
-    // Declared output shape for the Input node: Record { pos: Vec3, label: Text }
+    // Declared output shape for the Input node: Record { translation: Vec3, label: Text }
     let declared = Shape::new(ShapeId::Record(vec![
         Field {
             name: "label".to_string(),
             shape: ShapeId::Text,
         },
         Field {
-            name: "pos".to_string(),
+            name: "translation".to_string(),
             shape: ShapeId::Vec3,
         },
     ]));
@@ -823,12 +823,12 @@ fn end_to_end_input_selector_scalar_math_output() {
         output_shapes: input_output_shapes,
     };
 
-    // Add node: Add(lhs, rhs) where lhs is selector ["pos", 1] (y) and rhs is constant 2.0
+    // Add node: Add(lhs, rhs) where lhs is selector ["translation", 1] (y) and rhs is constant 2.0
     let mut add_inputs = HashMap::new();
-    // Connection from Input.out with selector ["pos", 1]
+    // Connection from Input.out with selector ["translation", 1]
     let mut lhs_conn = connection("in", "out");
     lhs_conn.selector = Some(vec![
-        SelectorSegment::Field("pos".to_string()),
+        SelectorSegment::Field("translation".to_string()),
         SelectorSegment::Index(1),
     ]);
     add_inputs.insert("lhs".to_string(), lhs_conn);
@@ -866,9 +866,9 @@ fn end_to_end_input_selector_scalar_math_output() {
         ],
     };
 
-    // Stage record { pos: [1, 3, 5], label: "ok" } for the Input node.
+    // Stage record { translation: [1, 3, 5], label: "ok" } for the Input node.
     let mut record = HashMap::new();
-    record.insert("pos".to_string(), Value::Vec3([1.0, 3.0, 5.0]));
+    record.insert("translation".to_string(), Value::Vec3([1.0, 3.0, 5.0]));
     record.insert("label".to_string(), Value::Text("ok".to_string()));
 
     let mut rt = GraphRuntime::default();

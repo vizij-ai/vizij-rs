@@ -172,10 +172,18 @@ pub fn apply_outputs_system(world: &mut World) {
             if let Some((entity, prop)) = index_map.get(path_str) {
                 if let Ok(mut tf) = q_tf.get_mut(world, *entity) {
                     match (prop, val) {
-                        (TargetProp::Translation, vizij_api_core::Value::Transform { pos, .. }) => {
+                        (
+                            TargetProp::Translation,
+                            vizij_api_core::Value::Transform {
+                                translation: pos, ..
+                            },
+                        ) => {
                             tf.translation = Vec3::new(pos[0], pos[1], pos[2]);
                         }
-                        (TargetProp::Rotation, vizij_api_core::Value::Transform { rot, .. }) => {
+                        (
+                            TargetProp::Rotation,
+                            vizij_api_core::Value::Transform { rotation: rot, .. },
+                        ) => {
                             tf.rotation =
                                 Quat::from_xyzw(rot[0], rot[1], rot[2], rot[3]).normalize();
                         }
@@ -208,11 +216,16 @@ pub fn apply_outputs_system(world: &mut World) {
         if let Some((entity, prop)) = index_map.get(&path_str) {
             if let Ok(mut tf) = q_tf.get_mut(world, *entity) {
                 match (&prop, &op.value) {
-                    (TargetProp::Translation, vizij_api_core::Value::Transform { pos, .. }) => {
-                        tf.translation = Vec3::new(pos[0], pos[1], pos[2]);
+                    (
+                        TargetProp::Translation,
+                        vizij_api_core::Value::Transform { translation, .. },
+                    ) => {
+                        tf.translation = Vec3::new(translation[0], translation[1], translation[2]);
                     }
-                    (TargetProp::Rotation, vizij_api_core::Value::Transform { rot, .. }) => {
-                        tf.rotation = Quat::from_xyzw(rot[0], rot[1], rot[2], rot[3]).normalize();
+                    (TargetProp::Rotation, vizij_api_core::Value::Transform { rotation, .. }) => {
+                        tf.rotation =
+                            Quat::from_xyzw(rotation[0], rotation[1], rotation[2], rotation[3])
+                                .normalize();
                     }
                     (TargetProp::Scale, vizij_api_core::Value::Transform { scale, .. }) => {
                         tf.scale = Vec3::new(scale[0], scale[1], scale[2]);
@@ -237,11 +250,16 @@ pub fn apply_outputs_system(world: &mut World) {
         if let Some((entity, prop)) = index_map.get(path_str) {
             if let Ok(mut tf) = q_tf.get_mut(world, *entity) {
                 match (prop, val) {
-                    (TargetProp::Translation, vizij_api_core::Value::Transform { pos, .. }) => {
-                        tf.translation = Vec3::new(pos[0], pos[1], pos[2]);
+                    (
+                        TargetProp::Translation,
+                        vizij_api_core::Value::Transform { translation, .. },
+                    ) => {
+                        tf.translation = Vec3::new(translation[0], translation[1], translation[2]);
                     }
-                    (TargetProp::Rotation, vizij_api_core::Value::Transform { rot, .. }) => {
-                        tf.rotation = Quat::from_xyzw(rot[0], rot[1], rot[2], rot[3]).normalize();
+                    (TargetProp::Rotation, vizij_api_core::Value::Transform { rotation, .. }) => {
+                        tf.rotation =
+                            Quat::from_xyzw(rotation[0], rotation[1], rotation[2], rotation[3])
+                                .normalize();
                     }
                     (TargetProp::Scale, vizij_api_core::Value::Transform { scale, .. }) => {
                         tf.scale = Vec3::new(scale[0], scale[1], scale[2]);

@@ -1,7 +1,6 @@
 // Stable ESM entry for @vizij/animation-wasm
 // Wraps the wasm-pack output in ../pkg (built with `--target web`).
-import initWasm, { VizijAnimation, abi_version } from "../pkg/vizij_animation_wasm.js";
-
+import { loadBindings as loadWasmBindings, type InitInput as LoaderInitInput } from "@vizij/wasm-loader";
 import type {
   InitInput,
   Config,
@@ -52,7 +51,54 @@ export type {
   BakedAnimationBundle,
 };
 
-export { VizijAnimation, abi_version };
+export function abi_version(): number {
+  if (!bindingCache.current) {
+    throw new Error("Call init() from @vizij/animation-wasm before reading abi_version().");
+  }
+  return Number(bindingCache.current.abi_version());
+}
+
+/* -----------------------------------------------------------
+   Shared wasm loader
+----------------------------------------------------------- */
+
+type WasmAnimationCtor = new (config?: unknown) => unknown;
+
+type WasmBindings = {
+  default: (input?: unknown) => Promise<unknown>;
+  VizijAnimation: WasmAnimationCtor;
+  abi_version: () => number;
+};
+
+const bindingCache: { current: WasmBindings | null } = { current: null };
+
+function pkgWasmJsUrl(): URL {
+  return new URL("../../pkg/vizij_animation_wasm.js", import.meta.url);
+}
+
+function defaultWasmUrl(): URL {
+  return new URL("../../pkg/vizij_animation_wasm_bg.wasm", import.meta.url);
+}
+
+async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
+  await loadWasmBindings<WasmBindings>(
+    {
+      cache: bindingCache,
+      importModule: () => import(/* @vite-ignore */ pkgWasmJsUrl().toString()),
+      defaultWasmUrl,
+      init: async (module: unknown, initArg: unknown) => {
+        const typed = module as WasmBindings;
+        await typed.default(initArg);
+      },
+      getBindings: (module: unknown) => module as WasmBindings,
+      expectedAbi: 2,
+      getAbiVersion: (bindings) => Number(bindings.abi_version()),
+    },
+    input
+  );
+
+  return bindingCache.current!;
+}
 
 /* -----------------------------------------------------------
    init() — initialize the wasm module once (parity with node-graph)
@@ -60,45 +106,11 @@ export { VizijAnimation, abi_version };
 
 let _initPromise: Promise<void> | null = null;
 
-function defaultWasmUrl(): URL {
-  return new URL("../pkg/vizij_animation_wasm_bg.wasm", import.meta.url);
-}
-
-/**
- * Initialize the wasm module once.
- */
 export function init(input?: InitInput): Promise<void> {
   if (_initPromise) return _initPromise;
 
   _initPromise = (async () => {
-    if (typeof input !== "undefined") {
-      // Caller provided explicit input (URL/Request/Response/BufferSource/Module)
-      await initWasm(input as any);
-    } else if (typeof window === "undefined" && typeof process !== "undefined") {
-      // Node environment: read the wasm file from disk and pass bytes to avoid fetch(file://) issues
-      const { readFile } = await import("node:fs/promises");
-      const { fileURLToPath } = await import("node:url");
-      const { dirname, resolve } = await import("node:path");
-      const wasmUrl = new URL("../pkg/vizij_animation_wasm_bg.wasm", import.meta.url);
-      const wasmPath =
-        wasmUrl.protocol === "file:"
-          ? fileURLToPath(wasmUrl)
-          : resolve(dirname(fileURLToPath(import.meta.url)), "../pkg/vizij_animation_wasm_bg.wasm");
-      const bytes = await readFile(wasmPath);
-      await initWasm(bytes);
-    } else {
-      // Browser-like: URL is fine
-      await initWasm(defaultWasmUrl());
-    }
-
-    // ABI guard
-    const abi = Number(abi_version());
-    if (abi !== 2) {
-      throw new Error(
-        `@vizij/animation-wasm ABI mismatch: expected 2, got ${abi}. ` +
-          `Please rebuild vizij-animation-wasm and regenerate @vizij/animation-wasm/pkg.`
-      );
-    }
+    await loadBindings(input);
   })();
 
   return _initPromise;
@@ -109,6 +121,9 @@ function ensureInited(): void {
     throw new Error(
       "Call init() from @vizij/animation-wasm before creating Engine or VizijAnimation."
     );
+  }
+  if (!bindingCache.current) {
+    throw new Error("WASM bindings were not initialized correctly.");
   }
 }
 
@@ -121,8 +136,9 @@ export class Engine {
 
   constructor(config?: Config) {
     ensureInited();
-    // wasm-bindgen expects a JsValue; undefined/null uses defaults per Rust impl
-    this.inner = new VizijAnimation(config as any);
+    const bindings = bindingCache.current!;
+    const Ctor = bindings.VizijAnimation;
+    this.inner = new Ctor(config as any);
   }
 
   /**
@@ -202,7 +218,7 @@ export class Engine {
     return inner.update_values(dt, (inputs ?? undefined) as any) as Outputs;
   }
 
-  /** Step the simulation by dt returning both values and derivatives */
+  /** Step the simulation by dt (seconds) returning Outputs and derivatives */
   updateValuesAndDerivatives(dt: number, inputs?: Inputs): OutputsWithDerivatives {
     const inner: any = this.inner;
     if (typeof inner.update_values_and_derivatives !== "function") {
@@ -218,7 +234,6 @@ export class Engine {
     return this.updateValues(dt, inputs);
   }
 
-  /** Bake animation samples for a loaded animation */
   /**
    * Bake a loaded animation clip into pre-sampled tracks. The returned object
    * mirrors vizij-animation-core's `BakedAnimationData` schema.
@@ -329,3 +344,16 @@ export async function createEngine(config?: Config): Promise<Engine> {
 export default init;
 // Deprecated: prefer `Engine` wrapper. Kept temporarily for legacy code.
 export { VizijAnimation as Animation };
+export const VizijAnimation: WasmAnimationCtor = new Proxy(
+  function () {},
+  {
+    construct(_target: () => void, args: any[]): object {
+      ensureInited();
+      if (!bindingCache.current) {
+        throw new Error("Call init() from @vizij/animation-wasm before constructing VizijAnimation.");
+      }
+      const Inner = bindingCache.current.VizijAnimation as unknown as WasmAnimationCtor;
+      return new Inner(...(args as any[])) as object;
+    },
+  }
+) as unknown as WasmAnimationCtor;

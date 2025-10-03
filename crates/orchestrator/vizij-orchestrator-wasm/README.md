@@ -8,6 +8,9 @@ Features
 - Prebind targets with a JS resolver function (used by animation controllers).
 - Set and remove blackboard inputs.
 - Step the orchestrator and receive a JSON-friendly OrchestratorFrame.
+
+> ABI guard: `abi_version()` returns `2`, and the npm wrapper enforces the same value during initialization to catch mismatched
+> builds early.
 - List and remove registered controllers.
 
 API (high-level)

@@ -3,9 +3,15 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, resolve } from "node:path";
 
+import { toValueJSON } from "@vizij/value-json";
 import { init, createOrchestrator } from "../src/index.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const fixturePath = resolve(
+  here,
+  "../../../../../crates/orchestrator/vizij-orchestrator-core/fixtures/demo_single_pass.json"
+);
+const fixture = JSON.parse(readFileSync(fixturePath, "utf8"));
 
 function pkgWasmUrl(): URL {
   const wasmPath = resolve(here, "../../pkg/vizij_orchestrator_wasm_bg.wasm");
@@ -25,112 +31,19 @@ process.env.RUST_BACKTRACE = "1";
 
     const orch = await createOrchestrator({ schedule: "SinglePass" });
 
-    const graphSpec = {
-      spec: {
-        nodes: [
-          {
-            id: "anim_input",
-            type: "input",
-            params: {
-              path: "demo/animation.value",
-              value: { type: "float", data: 0 },
-            },
-          },
-          {
-            id: "gain_input",
-            type: "input",
-            params: {
-              path: "demo/graph/gain",
-              value: { type: "float", data: 1.5 },
-            },
-          },
-          {
-            id: "offset_input",
-            type: "input",
-            params: {
-              path: "demo/graph/offset",
-              value: { type: "float", data: 0.25 },
-            },
-          },
-          {
-            id: "scaled",
-            type: "multiply",
-            inputs: {
-              a: { node_id: "anim_input" },
-              b: { node_id: "gain_input" },
-            },
-          },
-          {
-            id: "output_sum",
-            type: "add",
-            inputs: {
-              lhs: { node_id: "scaled" },
-              rhs: { node_id: "offset_input" },
-            },
-          },
-          {
-            id: "out",
-            type: "output",
-            params: { path: "demo/output/value" },
-            inputs: { in: { node_id: "output_sum" } },
-          },
-        ],
-      },
-      subs: {
-        inputs: [
-          "demo/animation.value",
-          "demo/graph/gain",
-          "demo/graph/offset",
-        ],
-        outputs: ["demo/output/value"],
-      },
-    };
+    const graphSpec = fixture.graph;
 
     const graphId = orch.registerGraph(graphSpec);
     assert.ok(typeof graphId === "string" && graphId.length > 0);
 
-    const animationConfig = {
-      setup: {
-        animation: {
-          id: "demo-ramp",
-          name: "Demo Ramp",
-          duration: 2001,
-          groups: [],
-          tracks: [
-            {
-              id: "ramp-track",
-              name: "Ramp Value",
-              animatableId: "demo/animation.value",
-              points: [
-                {
-                  id: "start",
-                  stamp: 0,
-                  value: 0,
-                  transitions: { out: { x: 0, y: 0 } },
-                },
-                {
-                  id: "end",
-                  stamp: 1,
-                  value: 1,
-                  transitions: { in: { x: 1, y: 1 } },
-                },
-              ],
-            },
-          ],
-        },
-        player: {
-          name: "demo-player",
-          loop_mode: "loop" as const,
-        },
-      },
-    };
+    const animationConfig = fixture.animation;
 
     const animId = orch.registerAnimation(animationConfig);
     assert.ok(typeof animId === "string" && animId.length > 0);
 
     // manually seed gain/offset once
-    orch.setInput("demo/graph/gain", { type: "float", data: 1.5 });
-    orch.setInput("demo/graph/offset", { type: "float", data: 0.25 });
+    orch.setInput("demo/graph/gain", toValueJSON(1.5));
+    orch.setInput("demo/graph/offset", toValueJSON(0.25));
 
     // Step 1: animation still at initial ramp value (0) -> graph output should be offset (0.25)
     let frame = orch.step(0.0) as any;
@@ -182,9 +95,7 @@ process.env.RUST_BACKTRACE = "1";
     // Chained controllers: animation -> sign graph -> slew graph.
     const chainedOrch = await createOrchestrator({ schedule: "SinglePass" });
 
-    const floatVal = (n: number) => ({ type: "float", data: n });
-
-    const signGraphSpec = {
+        const signGraphSpec = {
       spec: {
         nodes: [
           {
@@ -192,12 +103,12 @@ process.env.RUST_BACKTRACE = "1";
             type: "input",
             params: {
               path: "chain/ramp.value",
-              value: floatVal(0),
+              value: toValueJSON(0),
             },
           },
-          { id: "zero", type: "constant", params: { value: floatVal(0) } },
-          { id: "one", type: "constant", params: { value: floatVal(1) } },
-          { id: "neg_one", type: "constant", params: { value: floatVal(-1) } },
+          { id: "zero", type: "constant", params: { value: toValueJSON(0) } },
+          { id: "one", type: "constant", params: { value: toValueJSON(1) } },
+          { id: "neg_one", type: "constant", params: { value: toValueJSON(-1) } },
           {
             id: "gt_zero",
             type: "greaterthan",
@@ -254,7 +165,7 @@ process.env.RUST_BACKTRACE = "1";
             type: "input",
             params: {
               path: "chain/sign.value",
-              value: floatVal(0),
+              value: toValueJSON(0),
             },
           },
           {
@@ -399,10 +310,10 @@ process.env.RUST_BACKTRACE = "1";
             type: "input",
             params: {
               path: "driver/time.seconds",
-              value: floatVal(0),
+              value: toValueJSON(0),
             },
           },
-          { id: "freq", type: "constant", params: { value: floatVal(driverFrequency) } },
+          { id: "freq", type: "constant", params: { value: toValueJSON(driverFrequency) } },
           {
             id: "time_scaled",
             type: "multiply",
@@ -411,7 +322,7 @@ process.env.RUST_BACKTRACE = "1";
               b: { node_id: "freq" },
             },
           },
-          { id: "tau", type: "constant", params: { value: floatVal(tau) } },
+          { id: "tau", type: "constant", params: { value: toValueJSON(tau) } },
           {
             id: "phase",
             type: "multiply",
@@ -425,7 +336,7 @@ process.env.RUST_BACKTRACE = "1";
             type: "sin",
             inputs: { in: { node_id: "phase" } },
           },
-          { id: "one", type: "constant", params: { value: floatVal(1) } },
+          { id: "one", type: "constant", params: { value: toValueJSON(1) } },
           {
             id: "shifted",
             type: "add",
@@ -434,7 +345,7 @@ process.env.RUST_BACKTRACE = "1";
               rhs: { node_id: "one" },
             },
           },
-          { id: "half", type: "constant", params: { value: floatVal(0.5) } },
+          { id: "half", type: "constant", params: { value: toValueJSON(0.5) } },
           {
             id: "normalized",
             type: "multiply",
@@ -446,7 +357,7 @@ process.env.RUST_BACKTRACE = "1";
           {
             id: "duration",
             type: "constant",
-            params: { value: floatVal(animationDurationSeconds) },
+            params: { value: toValueJSON(animationDurationSeconds) },
           },
           {
             id: "seek_seconds",
@@ -479,7 +390,7 @@ process.env.RUST_BACKTRACE = "1";
       normalizedForTime(time) * animationDurationSeconds;
 
     const setDriverTime = (timeSeconds: number) => {
-      controllerOrch.setInput("driver/time.seconds", floatVal(timeSeconds));
+      controllerOrch.setInput("driver/time.seconds", toValueJSON(timeSeconds));
     };
 
     const verifyDriverFrame = (frame: any, expectedTime: number) => {

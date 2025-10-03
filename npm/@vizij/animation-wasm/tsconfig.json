@@ -8,5 +8,5 @@
     "moduleResolution": "Bundler",
     "skipLibCheck": true
   },
-  "include": ["src"]
+  "include": ["src", "tests"]
 }

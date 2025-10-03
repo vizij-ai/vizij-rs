@@ -1,3 +1,5 @@
+import type { NormalizedValue, ValueJSON as SharedValueJSON } from "@vizij/value-json";
+
 /**
  * Public TypeScript types for @vizij/animation-wasm
  * Mirrors vizij-animation-core JSON contracts exposed via wasm-bindgen.
@@ -104,23 +106,8 @@ export interface Inputs {
    Values (vizij-animation-core/src/value.rs)
    Tagged union: { type: "...", data: ... }
 ----------------------------------------------------------- */
-export type Value =
-  | { type: "Float"; data: number }
-  | { type: "Vec2"; data: [number, number] }
-  | { type: "Vec3"; data: [number, number, number] }
-  | { type: "Vec4"; data: [number, number, number, number] }
-  | { type: "Quat"; data: [number, number, number, number] } // (x, y, z, w)
-  | { type: "ColorRgba"; data: [number, number, number, number] } // RGBA
-  | {
-      type: "Transform";
-      data: {
-        pos: [number, number, number];
-        rot: [number, number, number, number]; // quat (x,y,z,w)
-        scale: [number, number, number];
-      };
-    }
-  | { type: "Bool"; data: boolean }
-  | { type: "Text"; data: string };
+export type ValueJSON = SharedValueJSON;
+export type Value = NormalizedValue;
 
 /* -----------------------------------------------------------
    Outputs (vizij-animation-core/src/outputs.rs)
@@ -304,3 +291,4 @@ export interface PlayerInfo {
   end_time?: number | null; // seconds or null/undefined
   length: number; // seconds (computed: max over instances of start_offset + anim_duration/|time_scale|)
 }
+import type { NormalizedValue, ValueJSON as SharedValueJSON } from "@vizij/value-json";

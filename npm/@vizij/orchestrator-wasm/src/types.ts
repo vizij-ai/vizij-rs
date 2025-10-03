@@ -5,71 +5,45 @@
  * for legacy shapes that the Rust serde layer accepts.
  */
 
-/* Core primitive / legacy representations */
-export type Float = { float: number };
-export type Bool = { bool: boolean };
-export type Text = { text: string };
+import type {
+  Float,
+  Bool,
+  Text,
+  Vec2,
+  Vec3,
+  Vec4,
+  Quat,
+  ColorRgba,
+  Vector,
+  EnumVal,
+  RecordVal,
+  ArrayVal,
+  ListVal,
+  TupleVal,
+  Transform,
+  ValueJSON,
+  NormalizedValue,
+} from "@vizij/value-json";
 
-export type Vec2 = { vec2: [number, number] };
-export type Vec3 = { vec3: [number, number, number] };
-export type Vec4 = { vec4: [number, number, number, number] };
-export type Quat = { quat: [number, number, number, number] };
-export type ColorRgba = { color: [number, number, number, number] };
-
-/* Generic containers */
-export type Vector = { vector: number[] };
-export type ArrayVal = { array: ValueJSON[] };
-export type ListVal = { list: ValueJSON[] };
-export type TupleVal = { tuple: ValueJSON[] };
-export type RecordVal = { record: { [k: string]: ValueJSON } };
-
-/* Enum and transform */
-export type EnumVal = { enum: { tag: string; value: ValueJSON } };
-export type Transform = { transform: { pos: ValueJSON; rot: ValueJSON; scale: ValueJSON } };
-
-/* Normalized (tooling) representation produced by node-graph normalizer:
-   { type: "Float"|"Vec3"|..., data: ... } */
-export type NormalizedValue =
-  | { type: "Float"; data: number }
-  | { type: "Bool"; data: boolean }
-  | { type: "Text"; data: string }
-  | { type: "Vec2"; data: [number, number] }
-  | { type: "Vec3"; data: [number, number, number] }
-  | { type: "Vec4"; data: [number, number, number, number] }
-  | { type: "Quat"; data: [number, number, number, number] }
-  | { type: "ColorRgba"; data: [number, number, number, number] }
-  | { type: "Vector"; data: number[] }
-  | { type: "List"; data: NormalizedValue[] }
-  | { type: "Array"; data: NormalizedValue[] }
-  | { type: "Tuple"; data: NormalizedValue[] }
-  | { type: "Enum"; data: [string, NormalizedValue] }
-  | { type: "Record"; data: { [k: string]: NormalizedValue } }
-  | { type: "Transform"; data: { pos: NormalizedValue; rot: NormalizedValue; scale: NormalizedValue } }
-  | { type: string; data: any }; // forward compatible
-
-/* The ValueJSON union accepts either the legacy/compact forms, normalized objects,
-   or pragmatic JS-friendly primitives that are commonly used by consumers. */
-export type ValueJSON =
-  | Float
-  | Bool
-  | Text
-  | Vec2
-  | Vec3
-  | Vec4
-  | Quat
-  | ColorRgba
-  | Vector
-  | EnumVal
-  | RecordVal
-  | ArrayVal
-  | ListVal
-  | TupleVal
-  | Transform
-  | NormalizedValue
-  | number
-  | string
-  | boolean
-  | any; // allow custom shapes for forward compatibility
+export type {
+  Float,
+  Bool,
+  Text,
+  Vec2,
+  Vec3,
+  Vec4,
+  Quat,
+  ColorRgba,
+  Vector,
+  EnumVal,
+  RecordVal,
+  ArrayVal,
+  ListVal,
+  TupleVal,
+  Transform,
+  ValueJSON,
+  NormalizedValue,
+};
 
 /* ShapeJSON: typed metadata describing a Value's shape.
    We provide a couple of common helpers while remaining permissive. */

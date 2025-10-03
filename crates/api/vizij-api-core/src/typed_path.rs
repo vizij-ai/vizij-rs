@@ -46,6 +46,9 @@ impl TypedPath {
         if parts.is_empty() {
             return Err("invalid path".to_string());
         }
+        if parts.iter().any(|seg| seg.is_empty()) {
+            return Err("invalid typed path: empty namespace segment".to_string());
+        }
         // The last segment contains target and optional '.' fields
         let last = parts.pop().unwrap();
         if last.is_empty() {
@@ -57,17 +60,53 @@ impl TypedPath {
         }
         let target = last_parts.remove(0);
         if target.is_empty() {
-            return Err("empty target name".to_string());
+            return Err("invalid typed path: empty target name".to_string());
         }
-        let fields = last_parts.into_iter().map(|s| s.to_string()).collect();
+        if target.chars().any(char::is_whitespace) {
+            return Err("invalid typed path: target contains whitespace".to_string());
+        }
+        let fields: Vec<String> = last_parts.into_iter().map(|s| s.to_string()).collect();
 
+        if parts.iter().any(|seg| seg.chars().any(char::is_whitespace)) {
+            return Err("invalid typed path: namespace contains whitespace".to_string());
+        }
         let namespaces = parts.into_iter().map(|s| s.to_string()).collect();
+
+        if fields.iter().any(|seg| seg.is_empty()) {
+            return Err("invalid typed path: empty field segment".to_string());
+        }
+        if fields
+            .iter()
+            .any(|seg| seg.chars().any(char::is_whitespace))
+        {
+            return Err("invalid typed path: field contains whitespace".to_string());
+        }
 
         Ok(TypedPath {
             namespaces,
             target: target.to_string(),
             fields,
         })
+    }
+
+    /// Return a namespace segment by index, or `None` if out of bounds.
+    pub fn namespace_segment(&self, index: usize) -> Option<&str> {
+        self.namespaces.get(index).map(|s| s.as_str())
+    }
+
+    /// Iterate over all namespace segments.
+    pub fn namespaces(&self) -> impl Iterator<Item = &str> {
+        self.namespaces.iter().map(|s| s.as_str())
+    }
+
+    /// Return the target component of the path.
+    pub fn target_name(&self) -> &str {
+        &self.target
+    }
+
+    /// Iterate over field selectors on the target.
+    pub fn fields(&self) -> impl Iterator<Item = &str> {
+        self.fields.iter().map(|s| s.as_str())
     }
 }
 
@@ -142,5 +181,13 @@ mod tests {
         assert_eq!(p.target, "node");
         assert!(p.fields.is_empty());
         assert_eq!(p.to_string(), "node");
+    }
+
+    #[test]
+    fn parse_rejects_whitespace() {
+        assert!(TypedPath::parse("invalid path").is_err());
+        assert!(TypedPath::parse("robot /Arm/Joint").is_err());
+        assert!(TypedPath::parse("robot/Arm/Joint with space").is_err());
+        assert!(TypedPath::parse("robot/Arm/Joint.field with space").is_err());
     }
 }

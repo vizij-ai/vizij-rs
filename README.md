@@ -35,7 +35,10 @@ vizij-rs/
 │       └── vizij-graph-wasm          # wasm-bindgen adapter consuming the graph core
 ├── npm/
 │   ├── @vizij/animation-wasm         # npm package that re-exports the animation WASM pkg
-│   └── @vizij/node-graph-wasm        # npm package wrapping the node graph WASM pkg
+│   ├── @vizij/node-graph-wasm        # npm package wrapping the node graph WASM pkg
+│   ├── @vizij/orchestrator-wasm      # npm package wrapping the orchestrator WASM pkg
+│   ├── @vizij/value-json             # shared ValueJSON helpers/types consumed by wasm packages
+│   └── @vizij/wasm-loader            # shared loader for wasm-pack bundles (init + ABI guards)
 └── scripts/                          # Helper scripts for building/linking WASM outputs
 ```
 
@@ -62,7 +65,7 @@ vizij-graph-core
 
 Each `*-core` crate feeds both the Bevy plugin and the WASM binding directly—the Bevy and WASM layers do not depend on each
 other.
-* **npm workspaces** vend the generated `pkg/` output with a stable ESM entry for front-end consumers such as `vizij-web`.
+* **pnpm workspaces** vend the generated `pkg/` output with a stable ESM entry for front-end consumers such as `vizij-web`.
 
 The companion repo `vizij-web` consumes the npm packages. During local development the two repos are linked with `npm link` so
 changes to Rust propagate immediately to the Vite dev servers.
@@ -71,7 +74,7 @@ changes to Rust propagate immediately to the Vite dev servers.
 
 1. **Install prerequisites**
    * Rust stable via [`rustup`](https://rustup.rs/) (install the default toolchain and `wasm32-unknown-unknown` target).
-   * Node.js ≥ 18 and npm ≥ 9.
+   * Node.js ≥ 18 with Corepack (pnpm ≥ 10).
    * `wasm-pack` and `wasm-bindgen-cli` for building the WASM crates:
      ```bash
      cargo install wasm-pack wasm-bindgen-cli
@@ -82,9 +85,10 @@ changes to Rust propagate immediately to the Vite dev servers.
    git clone https://github.com/vizij-ai/vizij-rs.git
    cd vizij-rs
    ```
-3. **Install npm workspace dependencies** (used by the wrapper packages):
+3. **Install workspace dependencies** (used by the wrapper packages):
    ```bash
-   npm install
+   corepack enable
+   pnpm install
    ```
 4. **(Optional) Clone vizij-web** if you plan to link the npm packages locally.
 
@@ -99,18 +103,19 @@ Follow these steps the first time you prepare a development environment:
 2. **Build both WASM crates** so the npm wrappers have fresh `pkg/` output. The root `package.json` exposes shortcuts that wrap
    the Node build scripts:
    ```bash
-   npm run build:wasm:animation
-   npm run build:wasm:graph
+   pnpm run build:wasm:animation
+   pnpm run build:wasm:graph
    ```
 3. **Link the npm packages into vizij-web** (from this repo). The helper will rebuild both wrappers and register the global
    `npm link` targets in one go:
    ```bash
-   npm run link:wasm
+   pnpm run link:wasm
    ```
    Then, in the `vizij-web` repository:
    ```bash
-   npm install
-   npm run link:wasm
+   corepack enable
+   pnpm install
+   pnpm run link:wasm
    ```
    The web repo’s script simply runs `npm link @vizij/animation-wasm @vizij/node-graph-wasm`, wiring its `node_modules/`
    entries back to these locally built packages.
@@ -126,12 +131,12 @@ Common workflows from the root of `vizij-rs`:
 | Format code | `cargo fmt --all` |
 | Lint | `cargo clippy --all-targets --all-features -- -D warnings` |
 | Test everything | `cargo test --workspace` |
-| Build animation WASM pkg | `npm run build:wasm:animation` |
-| Build node-graph WASM pkg | `npm run build:wasm:graph` |
-| Build orchestrator WASM pkg | `npm run build:wasm:orchestrator` |
-| Watch animation WASM builds | `npm run watch:wasm:animation` *(requires `cargo-watch`)* |
-| Watch node-graph WASM builds | `npm run watch:wasm:graph` *(requires `cargo-watch`)* |
-| Watch orchestrator WASM builds | `npm run watch:wasm:orchestrator` *(requires `cargo-watch`)* |
+| Build animation WASM pkg | `pnpm run build:wasm:animation` |
+| Build node-graph WASM pkg | `pnpm run build:wasm:graph` |
+| Build orchestrator WASM pkg | `pnpm run build:wasm:orchestrator` |
+| Watch animation WASM builds | `pnpm run watch:wasm:animation` *(requires `cargo-watch`)* |
+| Watch node-graph WASM builds | `pnpm run watch:wasm:graph` *(requires `cargo-watch`)* |
+| Watch orchestrator WASM builds | `pnpm run watch:wasm:orchestrator` *(requires `cargo-watch`)* |
 | Publish dry run | `scripts/dry-run-release.sh` (builds crates and npm packages without publishing) |
 
 When linked to `vizij-web`, run its dev servers (e.g., `npm run dev:animation`) and iterate on Rust code with the watcher. The
@@ -150,7 +155,7 @@ Vite server reloads when the WASM `pkg/` contents change.
 * **Optional features** – Node-graph crates expose an `urdf_ik` feature (enabled by default) for robotics integrations; WASM
   crates also expose a `console_error` feature to hook panics into the browser console.
 * **Repo scripts** –
-  * `npm run build:wasm:animation` / `npm run build:wasm:graph` wrap the underlying Node scripts to refresh WASM outputs.
+  * `pnpm run build:wasm:animation` / `pnpm run build:wasm:graph` wrap the underlying Node scripts to refresh WASM outputs.
   * `scripts/build-animation-wasm.mjs` / `scripts/build-graph-wasm.mjs` contain the raw build logic used by the npm shortcuts.
     - The graph script now forwards `--features urdf_ik` to ensure the packaged wasm exposes the URDF IK/FK node family.
   * `npm run watch:wasm:animation` / `npm run watch:wasm:graph` trigger `cargo watch` loops that rebuild WASM artifacts on change
@@ -171,8 +176,9 @@ Vite server reloads when the WASM `pkg/` contents change.
 * **Derivative model** – Derivatives use a symmetric finite difference sampled around the current parameter (default epsilon
   `1e-3`). Quaternion derivatives are currently component-wise (a good approximation for small deltas) with a TODO to upgrade to
   angular velocity/log mapping. Bool/Text tracks intentionally produce `None`/`null` derivatives.
-* **ABI guard** – The animation WASM exports `abi_version() === 2`. The npm wrapper verifies this during `init()` and throws with
-  guidance when the JS glue or `.wasm` file is stale. Rebuild with `cargo build -p vizij-animation-wasm --target wasm32-unknown-unknown && npm run build:wasm:animation` whenever the ABI changes.
+* **ABI guard** – The animation, node-graph, and orchestrator WASM crates all export `abi_version() === 2`. Their npm wrappers
+  validate this during `init()` and throw with guidance when the JS glue or `.wasm` file is stale. Rebuild with the appropriate
+  `npm run build:wasm:<name>` script (or the underlying cargo build) whenever you bump the ABI.
 
 ## Examples
 

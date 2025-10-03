@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ids::PlayerId;
-use vizij_api_core::Value;
+use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
 
 fn default_zero_derivative() -> Value {
     Value::Float(0.0)
@@ -119,6 +119,19 @@ impl Outputs {
     pub fn is_empty(&self) -> bool {
         self.changes.is_empty() && self.events.is_empty()
     }
+
+    /// Convert the current set of changes into a [`WriteBatch`], parsing each
+    /// change key as a [`TypedPath`]. Entries whose keys do not parse are
+    /// skipped.
+    pub fn to_writebatch(&self) -> WriteBatch {
+        let mut batch = WriteBatch::new();
+        for change in &self.changes {
+            if let Ok(path) = TypedPath::parse(&change.key) {
+                batch.push(WriteOp::new(path, change.value.clone()));
+            }
+        }
+        batch
+    }
 }
 
 impl OutputsWithDerivatives {
@@ -141,5 +154,32 @@ impl OutputsWithDerivatives {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.changes.is_empty() && self.events.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vizij_api_core::Value;
+
+    #[test]
+    fn to_writebatch_skips_invalid_paths() {
+        let mut outputs = Outputs::default();
+        outputs.push_change(Change {
+            player: PlayerId(1),
+            key: "anim/player/1/cmd/play".into(),
+            value: Value::Bool(true),
+        });
+        outputs.push_change(Change {
+            player: PlayerId(2),
+            key: "not a typed path".into(),
+            value: Value::Float(1.0),
+        });
+
+        let batch = outputs.to_writebatch();
+        assert_eq!(batch.iter().count(), 1);
+        let op = batch.iter().next().unwrap();
+        assert_eq!(op.path.to_string(), "anim/player/1/cmd/play");
+        assert!(matches!(op.value, Value::Bool(true)));
     }
 }

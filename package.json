@@ -1,20 +1,22 @@
 {
   "name": "vizij-rs-scripts",
   "private": true,
+  "packageManager": "pnpm@9.12.2",
   "scripts": {
     "build:wasm:animation": "node scripts/build-animation-wasm.mjs",
     "watch:wasm:animation": "cargo watch -w crates/animation/vizij-animation-core -w crates/animation/vizij-animation-wasm -s \"node scripts/build-animation-wasm.mjs\"",
-    "link:wasm:animation": "npm --workspace npm/@vizij/animation-wasm run build && (cd npm/@vizij/animation-wasm && npm link)",
+    "link:wasm:animation": "pnpm --filter @vizij/animation-wasm run build && (cd npm/@vizij/animation-wasm && pnpm link --global)",
     "clean:wasm:animation": "rm -rf npm/@vizij/animation-wasm/pkg npm/@vizij/animation-wasm/dist",
     "build:wasm:graph": "node scripts/build-graph-wasm.mjs",
     "watch:wasm:graph": "cargo watch -w crates/node-graph/vizij-graph-core -w crates/node-graph/vizij-graph-wasm -s \"node scripts/build-graph-wasm.mjs\"",
-    "link:wasm:graph": "npm --workspace npm/@vizij/node-graph-wasm run build && (cd npm/@vizij/node-graph-wasm && npm link)",
+    "link:wasm:graph": "pnpm --filter @vizij/node-graph-wasm run build && (cd npm/@vizij/node-graph-wasm && pnpm link --global)",
     "clean:wasm:graph": "rm -rf npm/@vizij/node-graph-wasm/pkg npm/@vizij/node-graph-wasm/dist",
     "build:wasm:orchestrator": "node scripts/build-orchestrator-wasm.mjs",
     "watch:wasm:orchestrator": "cargo watch -w crates/orchestrator/vizij-orchestrator-core -w crates/orchestrator/vizij-orchestrator-wasm -s \"node scripts/build-orchestrator-wasm.mjs\"",
-    "link:wasm:orchestrator": "npm --workspace npm/@vizij/orchestrator-wasm run build && (cd npm/@vizij/orchestrator-wasm && npm link)",
+    "link:wasm:orchestrator": "pnpm --filter @vizij/orchestrator-wasm run build && (cd npm/@vizij/orchestrator-wasm && pnpm link --global)",
     "clean:wasm:orchestrator": "rm -rf npm/@vizij/orchestrator-wasm/pkg npm/@vizij/orchestrator-wasm/dist",
-    "link:wasm": "npm run link:wasm:animation && npm run link:wasm:graph && npm run link:wasm:orchestrator"
+    "link:wasm": "pnpm run link:wasm:animation && pnpm run link:wasm:graph && pnpm run link:wasm:orchestrator",
+    "build:wasm": "pnpm run build:wasm:animation && pnpm run build:wasm:graph && pnpm run build:wasm:orchestrator"
   },
   "workspaces": [
     "npm/@vizij/*"

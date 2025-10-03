@@ -5,6 +5,9 @@ This package re-exports the wasm-pack output (pkg/) produced by the Rust crate a
 `crates/orchestrator/vizij-orchestrator-wasm` and provides a small, ergonomic TypeScript wrapper
 to initialize & use the orchestrator from ESM environments (browser, Node).
 
+> ABI guard: `abi_version()` now returns `2`, and the wrapper enforces the same version during `init()`. If you see an ABI mismatch
+> error, rebuild both the wasm binary and the JS wrapper so they stay in lockstep.
+
 This README explains purpose, API surface, initialization, examples, and packaging notes for consumers.
 
 Table of contents

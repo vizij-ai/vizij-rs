@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use vizij_api_core::{Shape, TypedPath, Value, WriteBatch};
+use vizij_api_core::{json, Shape, TypedPath, Value, WriteBatch};
 
 /// Single blackboard entry with provenance information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,7 +81,7 @@ impl Blackboard {
 
         // Convert JSON into Value
         let value: Value =
-            serde_json::from_value(value_json).map_err(|e| anyhow!("value deserialize: {}", e))?;
+            json::parse_value(value_json).map_err(|e| anyhow!("value deserialize: {}", e))?;
 
         // Optional shape
         let shape: Option<Shape> = match shape_json {

@@ -108,7 +108,7 @@ fn parity_const_vec3_values() {
         .clone();
     match v {
         Value::Vec3(v3) => approx3(v3, [1.0, 2.0, 3.0], 1e-6),
-        Value::Transform { pos, .. } => approx3(pos, [1.0, 2.0, 3.0], 1e-6),
+        Value::Transform { translation, .. } => approx3(translation, [1.0, 2.0, 3.0], 1e-6),
         _ => panic!("expected Vec3 or Transform"),
     }
 }

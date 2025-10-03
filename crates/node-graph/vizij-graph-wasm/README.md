@@ -3,6 +3,8 @@
 `vizij-graph-wasm` wraps `vizij-graph-core` with `wasm-bindgen` so JavaScript/TypeScript tooling can load, evaluate, and interact
 with Vizij node graphs. The crate builds to a `cdylib` that is republished to npm as `@vizij/node-graph-wasm`.
 
+> ABI guard: the crate exposes `abi_version() == 2` so npm wrappers can assert compatibility at runtime.
+
 ## Overview
 
 * Provides a `WasmGraph` class that mirrors the Rust runtime (`load_graph`, `stage_input`, `step`, `eval_all`, `set_param`).

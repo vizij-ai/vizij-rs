@@ -4,7 +4,7 @@ use serde_wasm_bindgen as swb;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsError;
 
-use vizij_api_core::TypedPath;
+use vizij_api_core::{json, TypedPath};
 use vizij_orchestrator::{
     controllers::animation::AnimationControllerConfig, controllers::graph::GraphControllerConfig,
     scheduler::Schedule, Orchestrator,
@@ -148,7 +148,7 @@ impl VizijOrchestrator {
         }
 
         // If cfg is a string, parse it as JSON text into serde_json::Value
-        let (id, spec_val, subs_val) = if cfg.is_string() {
+        let (id, mut spec_val, subs_val) = if cfg.is_string() {
             // Treat as raw JSON string
             let s = cfg.as_string().unwrap();
             let v: serde_json::Value = serde_json::from_str(&s)
@@ -160,6 +160,8 @@ impl VizijOrchestrator {
                 .map_err(|e| JsError::new(&format!("graph cfg parse error: {}", e)))?;
             (obj.id, obj.spec, obj.subs)
         };
+
+        json::normalize_graph_spec_value(&mut spec_val);
 
         // Deserialize GraphSpec
         let spec: vizij_graph_core::types::GraphSpec = serde_json::from_value(spec_val)
@@ -337,5 +339,5 @@ pub fn normalize_graph_spec_json(json: &str) -> Result<JsValue, JsError> {
 /// ABI version for compatibility checks.
 #[wasm_bindgen]
 pub fn abi_version() -> u32 {
-    1
+    2
 }

@@ -11,8 +11,8 @@ use vizij_orchestrator_wasm::{abi_version, VizijOrchestrator};
 wasm_bindgen_test_configure!(run_in_browser);
 
 #[wasm_bindgen_test]
-fn abi_is_1() {
-    assert_eq!(abi_version(), 1);
+fn abi_is_2() {
+    assert_eq!(abi_version(), 2);
 }
 
 #[wasm_bindgen_test]

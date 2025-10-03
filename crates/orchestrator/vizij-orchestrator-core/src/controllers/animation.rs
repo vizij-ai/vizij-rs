@@ -9,7 +9,7 @@ use vizij_animation_core::{
     stored_animation::parse_stored_animation_json,
     Engine, InstanceCfg, LoopMode,
 };
-use vizij_api_core::{TypedPath, Value as ApiValue, WriteBatch, WriteOp};
+use vizij_api_core::{TypedPath, Value as ApiValue, WriteBatch};
 
 use crate::blackboard::Blackboard;
 
@@ -25,6 +25,18 @@ pub struct AnimationControllerConfig {
 pub struct AnimationController {
     pub id: String,
     pub engine: Engine,
+}
+
+enum AnimationPathKind<'a> {
+    PlayerCommand {
+        player: PlayerId,
+        action: &'a str,
+    },
+    InstanceField {
+        player: PlayerId,
+        inst: InstId,
+        field: String,
+    },
 }
 
 impl AnimationController {
@@ -128,6 +140,40 @@ impl AnimationController {
         s.parse::<u32>().ok()
     }
 
+    fn classify_path<'a>(tp: &'a TypedPath) -> Option<AnimationPathKind<'a>> {
+        if tp.namespace_segment(0)? != "anim" || tp.namespace_segment(1)? != "player" {
+            return None;
+        }
+
+        let player_id = Self::parse_u32_segment(tp.namespace_segment(2)?)?;
+        match tp.namespace_segment(3)? {
+            "cmd" => Some(AnimationPathKind::PlayerCommand {
+                player: PlayerId(player_id),
+                action: tp.target_name(),
+            }),
+            "instance" => {
+                let inst_id = Self::parse_u32_segment(tp.namespace_segment(4)?)?;
+                Some(AnimationPathKind::InstanceField {
+                    player: PlayerId(player_id),
+                    inst: InstId(inst_id),
+                    field: Self::compose_field_name(tp),
+                })
+            }
+            _ => None,
+        }
+    }
+
+    fn compose_field_name(tp: &TypedPath) -> String {
+        if tp.fields.is_empty() {
+            tp.target.clone()
+        } else {
+            let mut name = tp.target.clone();
+            name.push('.');
+            name.push_str(&tp.fields.join("."));
+            name
+        }
+    }
+
     /// Map Blackboard entries into Engine Inputs using a small convention:
     ///
     /// - Player-level commands:
@@ -149,104 +195,71 @@ impl AnimationController {
         let mut inputs = Inputs::default();
 
         for (tp, entry) in bb.iter() {
-            // Use the string form of the TypedPath for simple convention parsing.
-            let s = tp.to_string();
-            // split and ignore empty segments
-            let segs: Vec<&str> = s.split('/').filter(|p| !p.is_empty()).collect();
-            if segs.len() < 4 {
-                continue;
-            }
-
-            // Expect prefix "anim" then "player" then <player_id>
-            if segs[0] != "anim" || segs[1] != "player" {
-                continue;
-            }
-
-            let player_id = match Self::parse_u32_segment(segs[2]) {
-                Some(n) => PlayerId(n),
-                None => continue,
-            };
-
-            // Player command path: anim/player/<pid>/cmd/<action>
-            if segs.len() >= 5 && segs[3] == "cmd" {
-                let action = segs[4];
-                match action {
-                    "play" => inputs
-                        .player_cmds
-                        .push(PlayerCommand::Play { player: player_id }),
-                    "pause" => inputs
-                        .player_cmds
-                        .push(PlayerCommand::Pause { player: player_id }),
-                    "stop" => inputs
-                        .player_cmds
-                        .push(PlayerCommand::Stop { player: player_id }),
+            match Self::classify_path(tp) {
+                Some(AnimationPathKind::PlayerCommand { player, action }) => match action {
+                    "play" => inputs.player_cmds.push(PlayerCommand::Play { player }),
+                    "pause" => inputs.player_cmds.push(PlayerCommand::Pause { player }),
+                    "stop" => inputs.player_cmds.push(PlayerCommand::Stop { player }),
                     "set_speed" => {
                         if let ApiValue::Float(f) = &entry.value {
-                            inputs.player_cmds.push(PlayerCommand::SetSpeed {
-                                player: player_id,
-                                speed: *f,
-                            });
+                            inputs
+                                .player_cmds
+                                .push(PlayerCommand::SetSpeed { player, speed: *f });
                         }
                     }
                     "seek" => {
                         if let ApiValue::Float(f) = &entry.value {
-                            inputs.player_cmds.push(PlayerCommand::Seek {
-                                player: player_id,
-                                time: *f,
-                            });
+                            inputs
+                                .player_cmds
+                                .push(PlayerCommand::Seek { player, time: *f });
                         }
                     }
                     _ => {
                         // Unknown action - skip for now
                     }
+                },
+                Some(AnimationPathKind::InstanceField {
+                    player,
+                    inst,
+                    field,
+                }) => {
+                    let mut upd = InstanceUpdate {
+                        player,
+                        inst,
+                        weight: None,
+                        time_scale: None,
+                        start_offset: None,
+                        enabled: None,
+                    };
+                    match field.as_str() {
+                        "weight" => {
+                            if let ApiValue::Float(f) = &entry.value {
+                                upd.weight = Some(*f);
+                                inputs.instance_updates.push(upd);
+                            }
+                        }
+                        "time_scale" => {
+                            if let ApiValue::Float(f) = &entry.value {
+                                upd.time_scale = Some(*f);
+                                inputs.instance_updates.push(upd);
+                            }
+                        }
+                        "start_offset" => {
+                            if let ApiValue::Float(f) = &entry.value {
+                                upd.start_offset = Some(*f);
+                                inputs.instance_updates.push(upd);
+                            }
+                        }
+                        "enabled" => {
+                            if let ApiValue::Bool(b) = &entry.value {
+                                upd.enabled = Some(*b);
+                                inputs.instance_updates.push(upd);
+                            }
+                        }
+                        _ => {}
+                    }
                 }
-                continue;
-            }
-
-            // Instance update path: anim/player/<pid>/instance/<iid>/<field>
-            if segs.len() >= 6 && segs[3] == "instance" {
-                let inst_id = match Self::parse_u32_segment(segs[4]) {
-                    Some(n) => InstId(n),
-                    None => continue,
-                };
-                let field = segs[5];
-                // Prepare a base InstanceUpdate with player+inst and defaults None
-                let mut upd = InstanceUpdate {
-                    player: player_id,
-                    inst: inst_id,
-                    weight: None,
-                    time_scale: None,
-                    start_offset: None,
-                    enabled: None,
-                };
-                match field {
-                    "weight" => {
-                        if let ApiValue::Float(f) = &entry.value {
-                            upd.weight = Some(*f);
-                            inputs.instance_updates.push(upd);
-                        }
-                    }
-                    "time_scale" => {
-                        if let ApiValue::Float(f) = &entry.value {
-                            upd.time_scale = Some(*f);
-                            inputs.instance_updates.push(upd);
-                        }
-                    }
-                    "start_offset" => {
-                        if let ApiValue::Float(f) = &entry.value {
-                            upd.start_offset = Some(*f);
-                            inputs.instance_updates.push(upd);
-                        }
-                    }
-                    "enabled" => {
-                        if let ApiValue::Bool(b) = &entry.value {
-                            upd.enabled = Some(*b);
-                            inputs.instance_updates.push(upd);
-                        }
-                    }
-                    _ => {}
-                }
-                continue;
+                None => {}
             }
         }
 
@@ -259,8 +272,8 @@ impl AnimationController {
     /// Behavior:
     ///  - Build `Inputs` from the Blackboard using a small path convention
     ///  - Call `engine.update_values(dt, inputs)` to advance the engine and collect Outputs
-    ///  - Translate `Outputs.changes` into a WriteBatch by parsing change keys into `TypedPath`
-    ///    and creating `WriteOp`s. Keys that do not parse to a TypedPath are skipped.
+    ///  - Translate `Outputs.changes` into a WriteBatch using the shared helper on
+    ///    `vizij_animation_core::Outputs`, which handles the TypedPath parsing.
     ///  - Serialize engine events into `serde_json::Value` and return them alongside the batch.
     pub fn update(&mut self, dt: f32, bb: &mut Blackboard) -> Result<(WriteBatch, Vec<JsonValue>)> {
         // Build Inputs from Blackboard
@@ -269,13 +282,8 @@ impl AnimationController {
         // Step engine and get outputs reference
         let outputs = self.engine.update_values(dt, inputs);
 
-        // Build WriteBatch from engine outputs (skip non-typed keys)
-        let mut batch = WriteBatch::new();
-        for ch in outputs.changes.iter() {
-            if let Ok(tp) = TypedPath::parse(&ch.key) {
-                batch.push(WriteOp::new(tp, ch.value.clone()));
-            }
-        }
+        // Build WriteBatch from engine outputs using the shared helper
+        let batch = outputs.to_writebatch();
 
         // Serialize events to JSON for diagnostics/consumers
         let mut events: Vec<JsonValue> = Vec::new();

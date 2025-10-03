@@ -1189,8 +1189,8 @@ fn eval_urdf_fk(
     let rotation_value = Value::Quat(rot_arr);
     let transform_value = match (&position_value, &rotation_value) {
         (Value::Vec3(pos), Value::Quat(rot)) => Value::Transform {
-            pos: *pos,
-            rot: *rot,
+            translation: *pos,
+            rotation: *rot,
             scale: [1.0, 1.0, 1.0],
         },
         _ => unreachable!(),

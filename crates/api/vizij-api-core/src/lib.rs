@@ -2,6 +2,7 @@
 
 pub mod blend;
 pub mod coercion;
+pub mod json;
 pub mod shape;
 pub mod typed_path;
 pub mod value;

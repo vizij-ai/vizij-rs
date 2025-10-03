@@ -146,18 +146,18 @@ pub fn linear_value(a: &Value, b: &Value, t: f32) -> Value {
         (Value::ColorRgba(ca), Value::ColorRgba(cb)) => Value::ColorRgba(lerp_vec4(*ca, *cb, t)),
         (
             Value::Transform {
-                pos: ta,
-                rot: ra,
+                translation: ta,
+                rotation: ra,
                 scale: sa,
             },
             Value::Transform {
-                pos: tb,
-                rot: rb,
+                translation: tb,
+                rotation: rb,
                 scale: sb,
             },
         ) => Value::Transform {
-            pos: lerp_vec3(*ta, *tb, t),
-            rot: nlerp_quat(*ra, *rb, t),
+            translation: lerp_vec3(*ta, *tb, t),
+            rotation: nlerp_quat(*ra, *rb, t),
             scale: lerp_vec3(*sa, *sb, t),
         },
         // Fallback: if types mismatch, prefer left (fail-soft).
@@ -195,13 +195,13 @@ pub fn linear_derivative(a: &Value, b: &Value, t: f32, dt_du: f32) -> Value {
         ]),
         (
             Value::Transform {
-                pos: ta,
-                rot: ra,
+                translation: ta,
+                rotation: ra,
                 scale: sa,
             },
             Value::Transform {
-                pos: tb,
-                rot: rb,
+                translation: tb,
+                rotation: rb,
                 scale: sb,
             },
         ) => {
@@ -217,8 +217,8 @@ pub fn linear_derivative(a: &Value, b: &Value, t: f32, dt_du: f32) -> Value {
             ];
             let (raw, raw_dt) = quat_derivative_components(*ra, *rb, t, dt_du);
             Value::Transform {
-                pos,
-                rot: normalize4_derivative(raw, raw_dt),
+                translation: pos,
+                rotation: normalize4_derivative(raw, raw_dt),
                 scale,
             }
         }

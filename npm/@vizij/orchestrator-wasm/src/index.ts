@@ -12,6 +12,8 @@ import type {
   ConflictLog,
   GraphRegistrationConfig,
 } from "./types";
+import { toValueJSON, type ValueInput } from "@vizij/value-json";
+import { loadBindings as loadWasmBindings, type InitInput as LoaderInitInput } from "@vizij/wasm-loader";
 type WasmResolver = (path: string) => string | number | null | undefined;
 
 interface WasmOrchestratorInstance {
@@ -37,7 +39,7 @@ interface WasmBindings {
   abi_version: () => number;
 }
 
-let _bindings: WasmBindings | null = null;
+const bindingCache: { current: WasmBindings | null } = { current: null };
 
 function pkgWasmJsUrl(): URL {
   return new URL("../../pkg/vizij_orchestrator_wasm.js", import.meta.url);
@@ -47,43 +49,25 @@ function defaultWasmUrl(): URL {
   return new URL("../../pkg/vizij_orchestrator_wasm_bg.wasm", import.meta.url);
 }
 
-async function loadBindings(input?: InitInput): Promise<WasmBindings> {
-  if (!_bindings) {
-    const mod = (await import(
-      /* @vite-ignore */ pkgWasmJsUrl().toString()
-    )) as unknown as WasmBindings;
-    let initArg: any = input ?? defaultWasmUrl();
-
-    // Node.js file:// support: read bytes if a file: URL is passed
-    try {
-      const isUrlObj = typeof initArg === "object" && initArg !== null && "href" in (initArg as any);
-      const href = isUrlObj ? (initArg as URL).href : (typeof initArg === "string" ? (initArg as string) : "");
-      const isFileUrl =
-        (isUrlObj && (initArg as URL).protocol === "file:") ||
-        (typeof href === "string" && href.startsWith("file:"));
-
-      if (isFileUrl) {
-        const fsSpec = "node:fs/promises";
-        const urlSpec = "node:url";
-        const [{ readFile }, { fileURLToPath }] = await Promise.all([
-          import(/* @vite-ignore */ fsSpec),
-          import(/* @vite-ignore */ urlSpec),
-        ]);
-        const path = fileURLToPath(isUrlObj ? (initArg as URL) : new URL(href));
-        const bytes = await readFile(path);
-        initArg = bytes;
-      }
-    } catch {
-      // ignore - bundlers handle URLs in the browser
-    }
-
-    await mod.default(initArg);
-    _bindings = mod;
-  }
-  return _bindings;
+async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
+  await loadWasmBindings<WasmBindings>(
+    {
+      cache: bindingCache,
+      importModule: () => import(/* @vite-ignore */ pkgWasmJsUrl().toString()),
+      defaultWasmUrl,
+      init: async (module, initArg) => {
+        await module.default(initArg);
+      },
+      getBindings: (module) => module as WasmBindings,
+      expectedAbi: 2,
+      getAbiVersion: (bindings) => Number(bindings.abi_version()),
+    },
+    input
+  );
+  return bindingCache.current!;
 }
 
-export type InitInput = string | URL | Uint8Array;
+export type InitInput = LoaderInitInput;
 
 /**
  * Initialize the wasm module once.
@@ -95,6 +79,13 @@ export function init(input?: InitInput): Promise<void> {
     await loadBindings(input);
   })();
   return _initPromise;
+}
+
+export function abi_version(): number {
+  if (!bindingCache.current) {
+    throw new Error("Call init() from @vizij/orchestrator-wasm before reading abi_version().");
+  }
+  return Number(bindingCache.current.abi_version());
 }
 
 function ensureInited(): void {
@@ -115,7 +106,7 @@ export type {
   AnimationRegistrationConfig,
   AnimationSetup,
 };
-type Value = ValueJSON;
+type Value = ValueInput;
 
 /**
  * Ergonomic wrapper around the wasm VizijOrchestrator.
@@ -126,10 +117,10 @@ export class Orchestrator {
 
   constructor(opts?: any) {
     ensureInited();
-    if (!_bindings) {
+    if (!bindingCache.current) {
       throw new Error("Call init() from @vizij/orchestrator-wasm before creating Orchestrator instances.");
     }
-    const Ctor = _bindings.VizijOrchestrator;
+    const Ctor = bindingCache.current.VizijOrchestrator;
     this.inner = new Ctor(opts ?? undefined) as WasmOrchestratorInstance;
   }
 
@@ -163,7 +154,7 @@ export class Orchestrator {
    * shape is optional.
    */
   setInput(path: string, value: Value, shape?: ShapeJSON): void {
-    const v = value;
+    const v = toValueJSON(value);
     const s = shape ?? undefined;
     this.inner.set_input(path, v, s);
   }

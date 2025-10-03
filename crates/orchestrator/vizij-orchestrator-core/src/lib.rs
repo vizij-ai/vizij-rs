@@ -9,6 +9,7 @@
 pub mod blackboard;
 pub mod controllers;
 pub mod diagnostics;
+pub mod fixtures;
 pub mod scheduler;
 
 use anyhow::Result;
