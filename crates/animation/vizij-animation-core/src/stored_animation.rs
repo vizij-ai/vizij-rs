@@ -66,6 +66,27 @@ fn to_core_value(v: &RawValue) -> Result<Value, String> {
         RawValue::String(s) => Ok(Value::Text(s.clone())),
         RawValue::Vector3 { x, y, z } => Ok(Value::Vec3([*x as f32, *y as f32, *z as f32])),
         RawValue::Vector2 { x, y } => Ok(Value::Vec2([*x as f32, *y as f32])),
+        RawValue::Quat { x, y, z, w } => {
+            Ok(Value::Quat([*x as f32, *y as f32, *z as f32, *w as f32]))
+        }
+        RawValue::Transform(TransformComponents {
+            translation,
+            rotation,
+            scale,
+        }) => Ok(Value::Transform {
+            translation: [
+                translation.x as f32,
+                translation.y as f32,
+                translation.z as f32,
+            ],
+            rotation: [
+                rotation.x as f32,
+                rotation.y as f32,
+                rotation.z as f32,
+                rotation.w as f32,
+            ],
+            scale: [scale.x as f32, scale.y as f32, scale.z as f32],
+        }),
         // Euler (r,p,y) mapped to Vec3 [r,p,y]; adapters can remap axes if needed.
         RawValue::Euler { r, p, y } => Ok(Value::Vec3([*r as f32, *p as f32, *y as f32])),
         RawValue::Rgb { r, g, b } => Ok(Value::ColorRgba([*r as f32, *g as f32, *b as f32, 1.0])),
@@ -156,6 +177,28 @@ struct Vec2 {
     pub y: f64,
 }
 
+#[derive(Debug, Copy, Clone, Deserialize)]
+struct Vec3 {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+#[derive(Debug, Copy, Clone, Deserialize)]
+struct Quat {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub w: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct TransformComponents {
+    pub translation: Vec3,
+    pub rotation: Quat,
+    pub scale: Vec3,
+}
+
 #[derive(Debug, Deserialize)]
 struct PointTransitions {
     #[serde(default)]
@@ -173,6 +216,8 @@ enum RawValue {
     Number(f64),
     String(String),
     // Put more specific shapes BEFORE less specific to avoid untagged matching pitfalls.
+    Quat { x: f64, y: f64, z: f64, w: f64 },
+    Transform(TransformComponents),
     Vector3 { x: f64, y: f64, z: f64 },
     Vector2 { x: f64, y: f64 },
     Euler { r: f64, p: f64, y: f64 },

@@ -1,0 +1,30 @@
+{
+  "name": "@vizij/wasm-loader",
+  "version": "0.1.0",
+  "description": "Shared loader utilities for Vizij wasm packages",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vizij-ai/vizij-rs"
+  },
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

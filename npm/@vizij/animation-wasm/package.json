@@ -18,20 +18,34 @@
     "webassembly"
   ],
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/src/index.js",
+  "module": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "files": [
     "dist/",
     "pkg/",
     "README.md"
   ],
+  "exports": {
+    ".": {
+      "import": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
+    }
+  },
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "test": "pnpm run build && node dist/tests/all.test.js",
     "prepublishOnly": "node -e \"const fs=require('fs');if(!fs.existsSync('pkg')){console.error('Missing pkg/. Run wasm-pack build.');process.exit(1);}\""
   },
+  "dependencies": {
+    "@vizij/value-json": "workspace:*",
+    "@vizij/wasm-loader": "workspace:*"
+  },
   "devDependencies": {
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "@vizij/test-fixtures": "workspace:*",
+    "@types/node": "latest"
   },
   "publishConfig": {
     "access": "public",

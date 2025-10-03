@@ -4,9 +4,16 @@
     "module": "ES2020",
     "declaration": true,
     "outDir": "dist",
+    "rootDir": ".",
     "strict": true,
     "moduleResolution": "Bundler",
-    "skipLibCheck": true
+    "types": ["node"],
+    "skipLibCheck": true,
+    "baseUrl": "./",
+    "paths": {
+      "@vizij/test-fixtures": ["../test-fixtures/dist/index.d.ts"],
+      "@vizij/test-fixtures/*": ["../test-fixtures/dist/*.d.ts"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "tests"]
 }

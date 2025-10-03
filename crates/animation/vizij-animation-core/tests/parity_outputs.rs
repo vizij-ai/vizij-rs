@@ -28,8 +28,10 @@ fn norm4(q: [f32; 4]) -> f32 {
 #[test]
 fn parity_scalar_ramp_values() {
     // Load ramp fixture
-    let json_str = include_str!("../../test_fixtures/ramp.json");
-    let anim: AnimationData = parse_stored_animation_json(json_str).expect("parse ramp.json");
+    let json_str = vizij_test_fixtures::animations::json("simple-scalar-ramp")
+        .expect("load simple-scalar-ramp fixture");
+    let anim: AnimationData =
+        parse_stored_animation_json(&json_str).expect("parse simple-scalar-ramp fixture");
 
     let mut eng = Engine::new(Config::default());
     let aid = eng.load_animation(anim);
@@ -89,8 +91,10 @@ fn parity_scalar_ramp_values() {
 #[test]
 fn parity_const_vec3_values() {
     // Load const fixture
-    let json_str = include_str!("../../test_fixtures/const.json");
-    let anim: AnimationData = parse_stored_animation_json(json_str).expect("parse const.json");
+    let json_str =
+        vizij_test_fixtures::animations::json("constant-vec3").expect("load constant-vec3 fixture");
+    let anim: AnimationData =
+        parse_stored_animation_json(&json_str).expect("parse constant-vec3 fixture");
 
     let mut eng = Engine::new(Config::default());
     let aid = eng.load_animation(anim);
@@ -108,7 +112,7 @@ fn parity_const_vec3_values() {
         .clone();
     match v {
         Value::Vec3(v3) => approx3(v3, [1.0, 2.0, 3.0], 1e-6),
-        Value::Transform { pos, .. } => approx3(pos, [1.0, 2.0, 3.0], 1e-6),
+        Value::Transform { translation, .. } => approx3(translation, [1.0, 2.0, 3.0], 1e-6),
         _ => panic!("expected Vec3 or Transform"),
     }
 }
@@ -116,9 +120,10 @@ fn parity_const_vec3_values() {
 /// it should respect window clamp and loop/once seek semantics
 #[test]
 fn parity_window_and_seek() {
-    let json_str = include_str!("../../test_fixtures/loop_window.json");
+    let json_str =
+        vizij_test_fixtures::animations::json("loop-window").expect("load loop-window fixture");
     let anim: AnimationData =
-        parse_stored_animation_json(json_str).expect("parse loop_window.json");
+        parse_stored_animation_json(&json_str).expect("parse loop-window fixture");
 
     let mut eng = Engine::new(Config::default());
     let aid = eng.load_animation(anim);
@@ -182,8 +187,10 @@ fn parity_window_and_seek() {
 /// it should produce identical Outputs for the same dt sequence (determinism)
 #[test]
 fn parity_determinism_same_sequence() {
-    let json_str = include_str!("../../test_fixtures/ramp.json");
-    let anim: AnimationData = parse_stored_animation_json(json_str).expect("parse ramp.json");
+    let json_str = vizij_test_fixtures::animations::json("simple-scalar-ramp")
+        .expect("load simple-scalar-ramp fixture");
+    let anim: AnimationData =
+        parse_stored_animation_json(&json_str).expect("parse simple-scalar-ramp fixture");
 
     let mut e1 = Engine::new(Config::default());
     let mut e2 = Engine::new(Config::default());

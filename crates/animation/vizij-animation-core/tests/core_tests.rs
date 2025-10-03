@@ -1138,8 +1138,8 @@ fn config_and_value_serde_roundtrip() {
     assert_eq!(vq, vq2);
 
     let vt = Value::Transform {
-        pos: [1.0, 2.0, 3.0],
-        rot: [0.0, 0.0, 0.0, 1.0],
+        translation: [1.0, 2.0, 3.0],
+        rotation: [0.0, 0.0, 0.0, 1.0],
         scale: [1.0, 1.0, 1.0],
     };
     let svt = serde_json::to_string(&vt).unwrap();

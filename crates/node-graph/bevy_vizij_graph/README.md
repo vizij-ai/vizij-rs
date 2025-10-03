@@ -92,7 +92,7 @@ fn main() {
 }
 
 fn load_graph(mut spec_res: ResMut<GraphSpecRes>) {
-    let spec: GraphSpec = serde_json::from_str(include_str!("../../vizij-graph-core/tests/fixtures/simple_graph.json")).unwrap();
+    let spec: GraphSpec = serde_json::from_str(include_str!("../../../fixtures/node_graphs/simple-gain-offset.json")).unwrap();
     *spec_res = GraphSpecRes::new(spec);
 }
 

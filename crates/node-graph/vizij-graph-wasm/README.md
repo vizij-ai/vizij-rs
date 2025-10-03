@@ -3,6 +3,8 @@
 `vizij-graph-wasm` wraps `vizij-graph-core` with `wasm-bindgen` so JavaScript/TypeScript tooling can load, evaluate, and interact
 with Vizij node graphs. The crate builds to a `cdylib` that is republished to npm as `@vizij/node-graph-wasm`.
 
+> ABI guard: the crate exposes `abi_version() == 2` so npm wrappers can assert compatibility at runtime.
+
 ## Overview
 
 * Provides a `WasmGraph` class that mirrors the Rust runtime (`load_graph`, `stage_input`, `step`, `eval_all`, `set_param`).
@@ -108,7 +110,7 @@ console.log(result.nodes, result.writes);
 `normalize_graph_spec_json` accepts ergonomic shorthands and rewrites them into the explicit envelopes used by the core crate:
 
 * Accepts `kind` and rewrites it to `type`, lowercasing the node type.
-* Plain numbers, bools, strings, and arrays normalize to `{ "type": "Float" }`, `{ "type": "Bool" }`, etc. Numeric arrays of
+* Plain numbers, bools, strings, and arrays normalize to `{ "type": "float" }`, `{ "type": "bool" }`, etc. Numeric arrays of
   length 2/3/4 become `Vec2`/`Vec3`/`Vec4`; other numeric arrays become `Vector`.
 * Object aliases such as `{ "vec3": [...] }`, `{ "quat": [...] }`, `{ "record": { ... } }`, `{ "enum": { "tag": "...", "value": ... } }`
   are supported.

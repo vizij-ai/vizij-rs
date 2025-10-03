@@ -1190,6 +1190,52 @@ pub fn registry() -> Registry {
     });
 
     nodes.push(NodeSignature {
+        type_id: DefaultBlend,
+        name: "Default Blend",
+        category: "Blend",
+        inputs: vec![
+            PortSpec {
+                id: "baseline",
+                ty: PortType::Any,
+                label: "Baseline",
+                doc: "Base value scaled by the remaining weight (clamped at zero).",
+                optional: true,
+            },
+            PortSpec {
+                id: "offset",
+                ty: PortType::Any,
+                label: "Offset",
+                doc: "Optional offset added after blending.",
+                optional: true,
+            },
+            PortSpec {
+                id: "weights",
+                ty: PortType::Vector,
+                label: "Weights",
+                doc: "Optional per-target weights; single value broadcasts to all targets.",
+                optional: true,
+            },
+        ],
+        variadic_inputs: Some(VariadicSpec {
+            id: "target",
+            ty: PortType::Any,
+            label: "Target",
+            doc: "Target values to blend before adding baseline and offset.",
+            min: 0,
+            max: None,
+        }),
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Blended value.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
         type_id: BlendWeightedAverage,
         name: "Blend - Weighted Average",
         category: "Blend",

@@ -134,7 +134,7 @@ Inside this repository:
 ```rust
 use vizij_animation_core::{parse_stored_animation_json, Engine, InstanceCfg};
 
-let json = std::fs::read_to_string("tests/fixtures/new_format.json")?;
+let json = std::fs::read_to_string("../../fixtures/animations/vector-pose-combo.json")?;
 let stored = parse_stored_animation_json(&json)?;
 
 let mut engine = Engine::new(Default::default());
@@ -173,7 +173,7 @@ fn setup(mut commands: Commands) {
 }
 
 fn load_animations(mut eng: ResMut<VizijEngine>) {
-    let json = include_str!("../../vizij-animation-core/tests/fixtures/new_format.json");
+    let json = include_str!("../../../fixtures/animations/vector-pose-combo.json");
     let stored = parse_stored_animation_json(json).expect("valid animation");
     let anim = eng.0.load_animation(stored);
     let player = eng.0.create_player("demo");

@@ -1,0 +1,53 @@
+{
+  "animations": {
+    "simple-scalar-ramp": "animations/simple-scalar-ramp.json",
+    "vector-pose-combo": "animations/vector-pose-combo.json",
+    "pose-quat-transform": "animations/pose-quat-transform.json",
+    "loop-window": "animations/loop-window.json",
+    "constant-vec3": "animations/constant-vec3.json",
+    "state-toggle": "animations/state-toggle.json",
+    "chain-ramp": "animations/chain-ramp.json",
+    "control-linear": "animations/control-linear.json"
+  },
+  "node-graphs": {
+    "simple-gain-offset": {
+      "spec": "node_graphs/simple-gain-offset.json"
+    },
+    "weighted-profile-blend": {
+      "spec": "node_graphs/blend-graph.json"
+    },
+    "weighted-average": {
+      "spec": "node_graphs/weighted-blend-graph.json",
+      "stage": "node_graphs/weighted-blend-inputs.json"
+    },
+    "weighted-sum-helper": {
+      "spec": "node_graphs/weighted-sum-helper-graph.json"
+    },
+    "rig-blend": {
+      "spec": "node_graphs/rig-blend.json"
+    },
+    "weighted-layers": {
+      "spec": "node_graphs/weighted-layers.json"
+    },
+    "logic-gate": {
+      "spec": "node_graphs/logic-gate.json"
+    },
+    "sign-graph": {
+      "spec": "node_graphs/sign-graph.json"
+    },
+    "slew-graph": {
+      "spec": "node_graphs/slew-graph.json"
+    },
+    "sine-driver": {
+      "spec": "node_graphs/sine-driver.json"
+    },
+    "urdf-ik-position": {
+      "spec": "node_graphs/urdf-ik-position.json",
+      "stage": "node_graphs/urdf-ik-position-stage.json"
+    }
+  },
+  "orchestrations": {
+    "scalar-ramp-pipeline": "orchestrations/scalar-ramp-pipeline.json",
+    "blend-pose-pipeline": "orchestrations/blend-pose-pipeline.json"
+  }
+}

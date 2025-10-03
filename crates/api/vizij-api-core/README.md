@@ -56,7 +56,7 @@ The crate exposes no optional features.
 
 ### Values & serde
 
-* The `Value` enum serializes with a `{ "type": "Vec3", "data": [...] }` envelope to remain unambiguous in JSON.
+* The `Value` enum serializes with a `{ "type": "vec3", "data": [...] }` envelope to remain unambiguous in JSON.
 * Convenience constructors (`Value::f`, `Value::vec3`, `Value::transform`) simplify host-side code when producing values
   programmatically.
 * `Value::kind()` exposes a lightweight discriminant for quick pattern matching without matching on every variant.
@@ -79,6 +79,16 @@ The crate exposes no optional features.
 * `WriteOp` captures `{ path, value, shape }` produced by engines. The optional `shape` travels with the value to avoid schema
   guessing downstream.
 * `WriteBatch` is a thin Vec wrapper with iterators, append helpers, and custom serde to preserve the inline JSON format.
+
+### JSON helpers
+
+* The `json` module centralizes normalization so that wasm adapters, fixtures, and the blackboard convert shorthand payloads
+  (`{ float: 1.0 }`, `[0, 1, 0]`, enum records, etc.) into the canonical `{ "type": "...", "data": ... }` structure before
+  deserializing into `Value`.
+* `normalize_graph_spec_value` mirrors the GraphSpec normalizer used in wasm, ensuring Rust tests and JS bundles share identical
+  behaviour when upgrading fixtures.
+* Legacy serializers (`value_to_legacy_json`, `writebatch_to_legacy_json`) keep backwards compatibility with tooling that still
+  expects `{ float: ... }` / `{ vec3: [...] }` envelopes during the migration window.
 
 ## Examples
 

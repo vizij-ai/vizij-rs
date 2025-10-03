@@ -1,0 +1,38 @@
+[package]
+name = "vizij-orchestrator-wasm"
+version = "0.1.0"
+edition = "2021"
+authors = ["vizij"]
+description = "WASM bindings for the vizij orchestrator core (JS-friendly wrapper)"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde-wasm-bindgen = "0.5"
+anyhow = "1.0"
+
+vizij-orchestrator-core = { path = "../vizij-orchestrator-core" }
+vizij-api-core = { path = "../../api/vizij-api-core" }
+vizij-animation-core = { path = "../../animation/vizij-animation-core" }
+vizij-graph-core = { path = "../../node-graph/vizij-graph-core" }
+
+console_error_panic_hook = { version = "0.1", optional = true }
+
+[features]
+default = []
+urdf_ik = ["vizij-graph-core/urdf_ik"]
+console_error = ["console_error_panic_hook"]
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+[profile.release]
+opt-level = "z"
+lto = true
+debug = false

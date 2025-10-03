@@ -3,6 +3,9 @@
 `@vizij/node-graph-wasm` repackages the WebAssembly build of `vizij-graph-wasm` for JavaScript/TypeScript consumers. It ships the
 wasm-bindgen output, a friendly wrapper, TypeScript definitions, and ready-to-run graph samples.
 
+> ABI guard: both the Rust crate and this wrapper expose `abi_version() === 2`. The `init()` helper verifies the version and throws
+> when the JS glue and `.wasm` artifact fall out of sync.
+
 ## Overview
 
 * Wraps the `vizij-graph-wasm` Rust crate (built with `wasm-pack`).

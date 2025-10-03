@@ -81,7 +81,7 @@ use vizij_graph_core::{evaluate_all, GraphRuntime};
 use vizij_graph_core::spec::GraphSpec;
 use vizij_api_core::{TypedPath, Value, Shape};
 
-let spec: GraphSpec = serde_json::from_str(include_str!("tests/fixtures/simple_graph.json"))?;
+let spec: GraphSpec = serde_json::from_str(include_str!("../../../../fixtures/node_graphs/simple-gain-offset.json"))?;
 let mut runtime = GraphRuntime::default();
 
 // Stage an optional input for the next tick
@@ -144,7 +144,7 @@ for write in &result.writes {
 * **Staged inputs** – `tests/input_node.rs` covers declared shape behavior (numeric coercions, NaN fallbacks, deterministic
   errors).
 * **External writes** – `tests/output_writes.rs` verifies write batches and shape serialization.
-* **End-to-end graphs** – Fixtures such as `tests/fixtures/vector_playground.json` demonstrate Input → math → Output flows.
+* **End-to-end graphs** – Fixtures such as `fixtures/node_graphs/blend-graph.json` demonstrate Input → math → Output flows.
 
 ## Testing
 

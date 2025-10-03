@@ -1,7 +1,7 @@
 //! Per-node evaluation logic for the Vizij graph runtime.
 
 use crate::eval::graph_runtime::{GraphRuntime, StagedInput};
-use crate::eval::variadic::compare_variadic_keys;
+use crate::eval::variadic::{compare_variadic_keys, parse_variadic_key};
 use crate::types::{InputConnection, NodeParams, NodeSpec, NodeType};
 use hashbrown::HashMap;
 use vizij_api_core::{coercion, Shape, Value, WriteOp};
@@ -114,6 +114,7 @@ fn evaluate_kind(
         | NodeType::VectorMedian
         | NodeType::VectorMode) => Ok(eval_vector_reducer(node_type, inputs)),
         NodeType::WeightedSumVector => Ok(eval_weighted_sum_vector(inputs)),
+        NodeType::DefaultBlend => Ok(eval_default_blend(inputs)),
         NodeType::BlendWeightedAverage => Ok(eval_blend_weighted_average(inputs)),
         NodeType::BlendAdditive => Ok(eval_blend_additive(inputs)),
         NodeType::BlendMultiply => Ok(eval_blend_multiply(inputs)),
@@ -727,6 +728,83 @@ fn vec_port_to_vec(inputs: &HashMap<String, PortValue>, key: &str) -> Vec<f32> {
         .unwrap_or_default()
 }
 
+fn eval_default_blend(inputs: &HashMap<String, PortValue>) -> OutputMap {
+    let baseline_port = input_or_default(inputs, "baseline");
+    let offset_port = input_or_default(inputs, "offset");
+
+    let mut target_entries: Vec<(&str, &PortValue)> = inputs
+        .iter()
+        .filter_map(|(key, port)| {
+            let (prefix, _) = parse_variadic_key(key);
+            if prefix == "target" {
+                Some((key.as_str(), port))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    target_entries.sort_by(|(a, _), (b, _)| compare_variadic_keys(a, b));
+    let target_ports: Vec<&PortValue> = target_entries.into_iter().map(|(_, port)| port).collect();
+
+    let mut weights = vec_port_to_vec(inputs, "weights");
+    if !target_ports.is_empty() {
+        if weights.is_empty() {
+            weights = vec![1.0; target_ports.len()];
+        } else if weights.len() == 1 && target_ports.len() > 1 {
+            weights = vec![weights[0]; target_ports.len()];
+        }
+    }
+
+    if !target_ports.is_empty() && !weights.is_empty() && weights.len() != target_ports.len() {
+        let fallback_value = target_ports
+            .first()
+            .filter(|port| is_numeric_like(&port.shape.id))
+            .map(|port| null_of_shape_numeric(&port.shape.id))
+            .or_else(|| {
+                if is_numeric_like(&baseline_port.shape.id) {
+                    Some(null_of_shape_numeric(&baseline_port.shape.id))
+                } else if is_numeric_like(&offset_port.shape.id) {
+                    Some(null_of_shape_numeric(&offset_port.shape.id))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(Value::Float(f32::NAN));
+
+        return single_output(fallback_value);
+    }
+
+    let mut total_weight_sum = 0.0f32;
+    let mut target_sum: Option<Value> = None;
+
+    for (idx, port) in target_ports.iter().enumerate() {
+        let weight = if weights.is_empty() {
+            1.0
+        } else {
+            weights[idx]
+        };
+        total_weight_sum += weight;
+
+        let weight_value = Value::Float(weight);
+        let weighted = binary_numeric(&port.value, &weight_value, |x, y| x * y);
+
+        target_sum = Some(match target_sum {
+            Some(current) => binary_numeric(&current, &weighted, |x, y| x + y),
+            None => weighted,
+        });
+    }
+
+    let targets_value = target_sum.unwrap_or_else(|| Value::Float(0.0));
+    let baseline_factor = (1.0 - total_weight_sum).max(0.0);
+    let baseline_weight = Value::Float(baseline_factor);
+    let baseline_scaled = binary_numeric(&baseline_port.value, &baseline_weight, |x, y| x * y);
+    let blended = binary_numeric(&targets_value, &baseline_scaled, |x, y| x + y);
+    let final_value = binary_numeric(&blended, &offset_port.value, |x, y| x + y);
+
+    single_output(final_value)
+}
+
 fn float_port_opt(inputs: &HashMap<String, PortValue>, key: &str) -> Option<f32> {
     inputs.get(key).map(|p| as_float(&p.value))
 }
@@ -1111,8 +1189,8 @@ fn eval_urdf_fk(
     let rotation_value = Value::Quat(rot_arr);
     let transform_value = match (&position_value, &rotation_value) {
         (Value::Vec3(pos), Value::Quat(rot)) => Value::Transform {
-            pos: *pos,
-            rot: *rot,
+            translation: *pos,
+            rotation: *rot,
             scale: [1.0, 1.0, 1.0],
         },
         _ => unreachable!(),

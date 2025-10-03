@@ -44,18 +44,18 @@ fn value_difference(a: &Value, b: &Value) -> Option<Value> {
         ])),
         (
             Value::Transform {
-                pos: pa,
-                rot: ra,
+                translation: pa,
+                rotation: ra,
                 scale: sa,
             },
             Value::Transform {
-                pos: pb,
-                rot: rb,
+                translation: pb,
+                rotation: rb,
                 scale: sb,
             },
         ) => Some(Value::Transform {
-            pos: [pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]],
-            rot: [ra[0] - rb[0], ra[1] - rb[1], ra[2] - rb[2], ra[3] - rb[3]],
+            translation: [pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]],
+            rotation: [ra[0] - rb[0], ra[1] - rb[1], ra[2] - rb[2], ra[3] - rb[3]],
             scale: [sa[0] - sb[0], sa[1] - sb[1], sa[2] - sb[2]],
         }),
         _ => None,
@@ -85,13 +85,21 @@ fn value_scale(value: &Value, scale: f32) -> Option<Value> {
             v[2] * scale,
             v[3] * scale,
         ])),
-        Value::Transform { pos, rot, scale: s } => Some(Value::Transform {
-            pos: [pos[0] * scale, pos[1] * scale, pos[2] * scale],
-            rot: [
-                rot[0] * scale,
-                rot[1] * scale,
-                rot[2] * scale,
-                rot[3] * scale,
+        Value::Transform {
+            translation,
+            rotation,
+            scale: s,
+        } => Some(Value::Transform {
+            translation: [
+                translation[0] * scale,
+                translation[1] * scale,
+                translation[2] * scale,
+            ],
+            rotation: [
+                rotation[0] * scale,
+                rotation[1] * scale,
+                rotation[2] * scale,
+                rotation[3] * scale,
             ],
             scale: [s[0] * scale, s[1] * scale, s[2] * scale],
         }),
@@ -148,8 +156,8 @@ fn zero_like(value: &Value) -> Value {
         Value::Quat(_) => Value::Quat([0.0, 0.0, 0.0, 0.0]),
         Value::ColorRgba(_) => Value::ColorRgba([0.0, 0.0, 0.0, 0.0]),
         Value::Transform { .. } => Value::Transform {
-            pos: [0.0, 0.0, 0.0],
-            rot: [0.0, 0.0, 0.0, 0.0],
+            translation: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 0.0],
             scale: [0.0, 0.0, 0.0],
         },
         Value::Vector(v) => Value::Vector(vec![0.0; v.len()]),

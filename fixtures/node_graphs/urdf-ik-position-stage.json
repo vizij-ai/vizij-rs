@@ -1,0 +1,8 @@
+{
+  "tests/urdf.target_pos": {
+    "value": { "vec3": [0.95, 0.0, 0.1] }
+  },
+  "tests/urdf.joints": {
+    "value": { "vector": [0, 0, 0, 0, 0, 0] }
+  }
+}

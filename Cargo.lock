@@ -1092,6 +1092,7 @@ dependencies = [
  "serde_json",
  "vizij-animation-core",
  "vizij-api-core",
+ "vizij-test-fixtures",
 ]
 
 [[package]]
@@ -3440,6 +3441,17 @@ dependencies = [
 
 [[package]]
 name = "serde-wasm-bindgen"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3b143e2833c57ab9ad3ea280d21fd34e285a42837aeb0ee301f4f41890fa00e"
+dependencies = [
+ "js-sys",
+ "serde",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "serde-wasm-bindgen"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8302e169f0eddcc139c70f139d19d6467353af16f9fce27e8c30158036a1e16b"
@@ -3869,6 +3881,7 @@ dependencies = [
  "serde",
  "serde_json",
  "vizij-api-core",
+ "vizij-test-fixtures",
 ]
 
 [[package]]
@@ -3878,7 +3891,7 @@ dependencies = [
  "console_error_panic_hook",
  "js-sys",
  "serde",
- "serde-wasm-bindgen",
+ "serde-wasm-bindgen 0.6.5",
  "serde_json",
  "vizij-animation-core",
  "vizij-api-core",
@@ -3902,7 +3915,7 @@ name = "vizij-api-wasm"
 version = "0.2.0"
 dependencies = [
  "serde",
- "serde-wasm-bindgen",
+ "serde-wasm-bindgen 0.6.5",
  "serde_json",
  "vizij-api-core",
  "wasm-bindgen",
@@ -3933,6 +3946,49 @@ dependencies = [
  "vizij-api-core",
  "vizij-graph-core",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "vizij-orchestrator-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hashbrown 0.14.5",
+ "indexmap",
+ "serde",
+ "serde_json",
+ "vizij-animation-core",
+ "vizij-api-core",
+ "vizij-graph-core",
+ "vizij-test-fixtures",
+]
+
+[[package]]
+name = "vizij-orchestrator-wasm"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "console_error_panic_hook",
+ "js-sys",
+ "serde",
+ "serde-wasm-bindgen 0.5.0",
+ "serde_json",
+ "vizij-animation-core",
+ "vizij-api-core",
+ "vizij-graph-core",
+ "vizij-orchestrator-core",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+]
+
+[[package]]
+name = "vizij-test-fixtures"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

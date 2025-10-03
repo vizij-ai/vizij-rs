@@ -1,7 +1,7 @@
 import type { GraphSpec, ValueJSON } from "./types";
 
 const textValue = (text: string): ValueJSON =>
-  ({ type: "Text", data: text } as unknown as ValueJSON);
+  ({ type: "text", data: text } as unknown as ValueJSON);
 
 /**
  * Samples compatible with the updated core:

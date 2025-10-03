@@ -1,0 +1,28 @@
+{
+  "id": "state-toggle-1",
+  "name": "State Toggle",
+  "duration": 2000,
+  "tracks": [
+    {
+      "id": "toggle-bool",
+      "name": "Enabled",
+      "animatableId": "demo/toggle.enabled",
+      "points": [
+        { "id": "toggle-start", "stamp": 0.0, "value": true },
+        { "id": "toggle-mid", "stamp": 0.5, "value": false },
+        { "id": "toggle-end", "stamp": 1.0, "value": true }
+      ]
+    },
+    {
+      "id": "toggle-label",
+      "name": "Label",
+      "animatableId": "demo/toggle.label",
+      "points": [
+        { "id": "label-start", "stamp": 0.0, "value": "idle" },
+        { "id": "label-mid", "stamp": 0.5, "value": "active" },
+        { "id": "label-end", "stamp": 1.0, "value": "cooldown" }
+      ]
+    }
+  ],
+  "groups": {}
+}

@@ -19,3 +19,4 @@ bevy_vizij_api      = { path = "../../api/bevy_vizij_api" }
 
 [dev-dependencies]
 serde_json = "1"
+vizij-test-fixtures = { path = "../../test-fixtures/vizij-test-fixtures" }

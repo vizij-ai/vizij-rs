@@ -1,0 +1,30 @@
+[package]
+name = "vizij-orchestrator-core"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Orchestrator crate to coordinate vizij graphs and animations (scoped, feature-gated integration)."
+
+[lib]
+name = "vizij_orchestrator"
+path = "src/lib.rs"
+crate-type = ["lib"]
+
+[dependencies]
+vizij-api-core = { path = "../../api/vizij-api-core" }
+vizij-graph-core = { path = "../../node-graph/vizij-graph-core" }
+vizij-animation-core = { path = "../../animation/vizij-animation-core" }
+vizij-test-fixtures = { path = "../../test-fixtures/vizij-test-fixtures" }
+
+# Workspace-managed utility crates
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+hashbrown = { workspace = true }
+indexmap = "2"
+
+[features]
+default = []
+
+[dev-dependencies]
+vizij-test-fixtures = { path = "../../test-fixtures/vizij-test-fixtures" }

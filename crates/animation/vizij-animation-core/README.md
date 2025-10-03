@@ -75,7 +75,7 @@ Minimal example:
 ```rust
 use vizij_animation_core::{Engine, InstanceCfg, parse_stored_animation_json};
 
-let json = std::fs::read_to_string("tests/fixtures/new_format.json")?;
+let json = std::fs::read_to_string("../../fixtures/animations/vector-pose-combo.json")?;
 let stored = parse_stored_animation_json(&json)?;
 
 let mut engine = Engine::new(Default::default());
@@ -189,6 +189,6 @@ scripts/run-wasm-tests.sh
 
 ## Additional Resources
 
-* Fixtures demonstrating the StoredAnimation schema: `tests/fixtures/new_format.json`, `tests/fixtures/cubic.json`, etc.
+* Fixtures demonstrating the StoredAnimation schema: `fixtures/animations/vector-pose-combo.json`, `fixtures/animations/simple-scalar-ramp.json`, etc.
 * Engine usage examples under `examples/` (if present) and integration tests covering blending, binding, and event emission.
 * `vizij-animation-wasm` README for the JavaScript API surface that wraps this crate.
