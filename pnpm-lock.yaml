@@ -17,6 +17,12 @@ importers:
         specifier: workspace:*
         version: link:../wasm-loader
     devDependencies:
+      '@types/node':
+        specifier: latest
+        version: 24.6.2
+      '@vizij/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
@@ -33,6 +39,9 @@ importers:
       '@types/node':
         specifier: ^20.12.7
         version: 20.19.19
+      '@vizij/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
@@ -49,12 +58,27 @@ importers:
       '@types/node':
         specifier: ^20.12.7
         version: 20.19.19
+      '@vizij/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  npm/@vizij/test-fixtures:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.12.7
+        version: 20.19.19
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
 
   npm/@vizij/value-json:
     devDependencies:
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.19.19
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
@@ -70,6 +94,9 @@ packages:
   '@types/node@20.19.19':
     resolution: {integrity: sha512-pb1Uqj5WJP7wrcbLU7Ru4QtA0+3kAXrkutGiD26wUKzSMgNNaPARTUDQmElUXp64kh3cWdou3Q0C7qwwxqSFmg==}
 
+  '@types/node@24.6.2':
+    resolution: {integrity: sha512-d2L25Y4j+W3ZlNAeMKcy7yDsK425ibcAOO2t7aPTz6gNMH0z2GThtwENCDc0d/Pw9wgyRqE5Px1wkV7naz8ang==}
+
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
@@ -78,12 +105,21 @@ packages:
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
+  undici-types@7.13.0:
+    resolution: {integrity: sha512-Ov2Rr9Sx+fRgagJ5AX0qvItZG/JKKoBRAVITs1zk7IqZGTJUwgUr7qoYBpWwakpWilTZFM98rG/AFRocu10iIQ==}
+
 snapshots:
 
   '@types/node@20.19.19':
     dependencies:
       undici-types: 6.21.0
 
+  '@types/node@24.6.2':
+    dependencies:
+      undici-types: 7.13.0
+
   typescript@5.9.3: {}
 
   undici-types@6.21.0: {}
+
+  undici-types@7.13.0: {}

@@ -1,9 +1,28 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, resolve } from "node:path";
 
+type TestFixturesModule = typeof import("@vizij/test-fixtures");
+
+let fixturesModule: TestFixturesModule | null = null;
+const fixturesPromise: Promise<TestFixturesModule> = import(
+  new URL("../../../test-fixtures/dist/index.js", import.meta.url).toString()
+).then((module): TestFixturesModule => {
+  fixturesModule = module as TestFixturesModule;
+  return fixturesModule;
+});
+
+function fixtures(): TestFixturesModule {
+  if (!fixturesModule) {
+    throw new Error("Test fixtures module not loaded yet");
+  }
+  return fixturesModule;
+}
+
+function nodeGraphFixtures(): TestFixturesModule["nodeGraphs"] {
+  return fixtures().nodeGraphs;
+}
 import {
   init,
   Graph,
@@ -28,10 +47,6 @@ type EvalSpec = Parameters<Graph["loadGraph"]>[0];
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-// Prefer local tests/fixtures directory if present, otherwise fallback to dist tests path used in some sources
-const candidateFixtures = resolve(here, "fixtures");
-const fixturesDir = existsSync(candidateFixtures) ? candidateFixtures : resolve(here, "../../tests/fixtures");
-
 function pkgWasmUrl(): URL {
   const wasmPath = resolve(here, "../../pkg/vizij_graph_wasm_bg.wasm");
   if (!existsSync(wasmPath)) {
@@ -42,12 +57,8 @@ function pkgWasmUrl(): URL {
   return pathToFileURL(wasmPath);
 }
 
-function loadJsonFixture(name: string): string {
-  const path = resolve(fixturesDir, name);
-  if (!existsSync(path)) {
-    throw new Error(`Missing JSON fixture ${name} at ${path}`);
-  }
-  return readFileSync(path, "utf8");
+function loadJsonFixture(key: string): string {
+  return nodeGraphFixtures().nodeGraphSpecJson(key);
 }
 
 /* ---------- Generic validation helpers (merged) ---------- */
@@ -433,6 +444,7 @@ function assertText(write: WriteOpJSON, expected: string): void {
 /* ---------- Entrypoint: run all grouped checks ---------- */
 (async () => {
   try {
+    await fixturesPromise;
     await init(pkgWasmUrl());
 
     const urdfSample = graphSamples["urdf-ik-position"];
@@ -468,7 +480,7 @@ function assertText(write: WriteOpJSON, expected: string): void {
 
     // json blend graph
     {
-      const jsonSpec = loadJsonFixture("blend-graph.json");
+      const jsonSpec = loadJsonFixture("weighted-profile-blend");
       const jsonResult = await runSample("json-blend-graph", jsonSpec);
       const jsonWrites = writesToMap(jsonResult.writes);
       expectNumericVector(jsonWrites.get("samples/json.pose"), [0.005, 0.115, 0.275], "samples/json.pose");
@@ -497,11 +509,12 @@ function assertText(write: WriteOpJSON, expected: string): void {
 
     // weighted-average-from-json (uses fixtures)
     {
-      const weightedSpecJson = readFileSync(resolve(fixturesDir, "weighted-blend-graph.json"), "utf8");
-      const weightedStage: Record<string, { value: ValueJSON; shape?: ShapeJSON }> = JSON.parse(readFileSync(resolve(fixturesDir, "weighted-blend-inputs.json"), "utf8"));
+      const weightedSpecJson = nodeGraphFixtures().nodeGraphSpecJson("weighted-average");
+      const weightedStage = nodeGraphFixtures().nodeGraphStage<Record<string, { value: ValueJSON; shape?: ShapeJSON }>>("weighted-average");
+      assert.ok(weightedStage, "weighted-average stage data should exist");
       await runSample("weighted-average-from-json", weightedSpecJson, {
         prepare: (graph) => {
-          for (const [path, payload] of Object.entries(weightedStage)) {
+          for (const [path, payload] of Object.entries(weightedStage!)) {
             graph.stageInput(path, payload.value, payload.shape);
           }
         },
@@ -515,7 +528,7 @@ function assertText(write: WriteOpJSON, expected: string): void {
 
     // New fixture exercising the WeightedSumVector + BlendWeightedAverage nodes
     {
-      const wsSpecJson = readFileSync(resolve(fixturesDir, "weighted-sum-helper-graph.json"), "utf8");
+      const wsSpecJson = nodeGraphFixtures().nodeGraphSpecJson("weighted-sum-helper");
       await runSample("weighted-sum-helper", wsSpecJson, {
         expectations: [
           { path: "samples/ws.sum", expectFloat: 3.0 },
@@ -661,7 +674,7 @@ function assertText(write: WriteOpJSON, expected: string): void {
 
       jointSamples.forEach((angles, sampleIdx) => {
         // Forward pass: compute FK pose for the chosen joint angles.
-        console.log("FK Target", angles)
+        // console.log("FK Target", angles)
         fkIkGraphInstance.stageInput("tests/urdf.joints", angles);
         const fkResult = fkIkGraphInstance.evalAll();
         const fkNode = fkResult.nodes?.fk as any;
@@ -670,12 +683,12 @@ function assertText(write: WriteOpJSON, expected: string): void {
         assert.ok(fkPositionValue, `fk position missing for sample ${sampleIdx}`);
         assertValueFinite(fkPositionValue, `fk.position[${sampleIdx}]`);
         const targetPosition = valueToVector(fkPositionValue);
-        console.log("ik target", targetPosition);
+        // console.log("ik target", targetPosition);
 
         const ikNode = fkResult.nodes?.ik as any;
         assert.ok(ikNode, `ik node result missing for sample ${sampleIdx}`);
         const ikValue: ValueJSON | undefined = ikNode.out?.value;
-        console.log("ik result", ikValue, "\n");
+        // console.log("ik result", ikValue, "\n");
         const ikObj = asValueObject(ikValue);
         assert.ok(ikObj && "record" in ikObj, `ik output missing record for sample ${sampleIdx}`);
 

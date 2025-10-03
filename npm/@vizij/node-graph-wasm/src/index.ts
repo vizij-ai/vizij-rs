@@ -34,6 +34,20 @@ export type {
   Registry,
 };
 
+export {
+  toValueJSON,
+  isNormalizedValue,
+  valueAsNumber,
+  valueAsNumericArray,
+  valueAsTransform,
+  valueAsVec3,
+  valueAsVector,
+  valueAsBool,
+  valueAsQuat,
+  valueAsColorRgba,
+  valueAsText,
+} from "@vizij/value-json";
+
 // --- wasm loader ---
 
 type WasmGraphCtor = new () => any;

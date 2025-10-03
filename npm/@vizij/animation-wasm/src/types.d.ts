@@ -161,7 +161,7 @@ export interface OutputsWithDerivatives {
 
 /* -----------------------------------------------------------
    StoredAnimation (new JSON format) — minimal typing
-   See vizij-spec/Animation.md and test_fixtures/new_format.json
+   See vizij-spec/Animation.md and fixtures/animations/vector-pose-combo.json
 ----------------------------------------------------------- */
 export type StoredScalarVec2 = { x: number; y: number };
 export type StoredScalarVec3 = { x: number; y: number; z: number };

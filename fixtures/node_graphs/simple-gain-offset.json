@@ -1,0 +1,60 @@
+{
+  "spec": {
+    "nodes": [
+      {
+        "id": "anim_input",
+        "type": "input",
+        "params": {
+          "path": "node.t",
+          "value": 0
+        }
+      },
+      {
+        "id": "gain_input",
+        "type": "input",
+        "params": {
+          "path": "demo/graph/gain",
+          "value": 1.5
+        }
+      },
+      {
+        "id": "offset_input",
+        "type": "input",
+        "params": {
+          "path": "demo/graph/offset",
+          "value": 0.25
+        }
+      },
+      {
+        "id": "scaled",
+        "type": "multiply",
+        "inputs": {
+          "a": { "node_id": "anim_input" },
+          "b": { "node_id": "gain_input" }
+        }
+      },
+      {
+        "id": "output_sum",
+        "type": "add",
+        "inputs": {
+          "lhs": { "node_id": "scaled" },
+          "rhs": { "node_id": "offset_input" }
+        }
+      },
+      {
+        "id": "out",
+        "type": "output",
+        "params": { "path": "demo/output/value" },
+        "inputs": { "in": { "node_id": "output_sum" } }
+      }
+    ]
+  },
+  "subs": {
+    "inputs": [
+      "node.t",
+      "demo/graph/gain",
+      "demo/graph/offset"
+    ],
+    "outputs": ["demo/output/value"]
+  }
+}

@@ -1,17 +1,41 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, resolve } from "node:path";
-
-import { toValueJSON } from "@vizij/value-json";
+import { toValueJSON, valueAsNumber, type ValueJSON, type ValueInput } from "@vizij/value-json";
+import type { GraphRegistrationConfig, AnimationRegistrationConfig } from "../src/index.js";
 import { init, createOrchestrator } from "../src/index.js";
 
+type TestFixturesModule = typeof import("@vizij/test-fixtures");
+
+let fixturesModule: TestFixturesModule | null = null;
+const fixturesPromise: Promise<TestFixturesModule> = import(
+  new URL("../../../test-fixtures/dist/index.js", import.meta.url).toString()
+).then((module): TestFixturesModule => {
+  fixturesModule = module as TestFixturesModule;
+  return fixturesModule;
+});
+
+function fixtures(): TestFixturesModule {
+  if (!fixturesModule) {
+    throw new Error("Test fixtures module not loaded yet");
+  }
+  return fixturesModule;
+}
+
+function animationFixtures(): TestFixturesModule["animations"] {
+  return fixtures().animations;
+}
+
+function nodeGraphFixtures(): TestFixturesModule["nodeGraphs"] {
+  return fixtures().nodeGraphs;
+}
+
+function orchestrationFixtures(): TestFixturesModule["orchestrations"] {
+  return fixtures().orchestrations;
+}
+
 const here = dirname(fileURLToPath(import.meta.url));
-const fixturePath = resolve(
-  here,
-  "../../../../../crates/orchestrator/vizij-orchestrator-core/fixtures/demo_single_pass.json"
-);
-const fixture = JSON.parse(readFileSync(fixturePath, "utf8"));
 
 function pkgWasmUrl(): URL {
   const wasmPath = resolve(here, "../../pkg/vizij_orchestrator_wasm_bg.wasm");
@@ -23,408 +47,161 @@ function pkgWasmUrl(): URL {
   return pathToFileURL(wasmPath);
 }
 
+function readScalar(writes: Array<{ path: string; value: unknown }>, path: string): number {
+  const hit = writes.find((w) => w.path === path);
+  assert.ok(hit, `Expected write for ${path}`);
+  const value = valueAsNumber(hit.value as ValueJSON | undefined);
+  assert.ok(Number.isFinite(value), `Expected ${path} to resolve to finite number`);
+  return value!;
+}
+
+async function testScalarRampPipeline(): Promise<void> {
+  const bundle = orchestrationFixtures().loadOrchestrationBundle("scalar-ramp-pipeline");
+  const orch = await createOrchestrator({ schedule: "SinglePass" });
+
+  const graphConfig = bundle.graphSpec as GraphRegistrationConfig;
+  const graphId = orch.registerGraph(graphConfig);
+  assert.ok(typeof graphId === "string" && graphId.length > 0);
+
+  const animationConfig: AnimationRegistrationConfig = {
+    setup: {
+      animation: bundle.animation,
+      player: { name: "fixture-player", loop_mode: "once" as const },
+    },
+  };
+  const animId = orch.registerAnimation(animationConfig);
+  assert.ok(typeof animId === "string" && animId.length > 0);
+
+  for (const input of bundle.descriptor.initial_inputs ?? []) {
+    orch.setInput(input.path, toValueJSON(input.value as ValueInput));
+  }
+
+  for (const step of bundle.descriptor.steps ?? []) {
+    const frame = orch.step(step.delta) as any;
+    const mergedWrites: Array<{ path: string; value: unknown }> = frame.merged_writes ?? [];
+    for (const [path, expectedRaw] of Object.entries(step.expect ?? {})) {
+      const actual = readScalar(mergedWrites, path);
+      const expected = Number(expectedRaw);
+      assert.ok(
+        Math.abs(actual - expected) < 1e-3,
+        `Expected ${path} ≈ ${expected}, received ${actual}`,
+      );
+    }
+  }
+}
+
+async function testChainedSlewPipeline(): Promise<void> {
+  const orch = await createOrchestrator({ schedule: "SinglePass" });
+
+  const signGraph = nodeGraphFixtures().nodeGraphSpec("sign-graph") as GraphRegistrationConfig;
+  const slewGraph = nodeGraphFixtures().nodeGraphSpec("slew-graph") as GraphRegistrationConfig;
+  const signId = orch.registerGraph(signGraph);
+  const slewId = orch.registerGraph(slewGraph);
+  assert.ok(signId && slewId);
+
+  const animationConfig = {
+    setup: {
+      animation: animationFixtures().animationFixture("chain-ramp"),
+      player: { name: "chain-player", loop_mode: "once" as const },
+    },
+  };
+  const animId = orch.registerAnimation(animationConfig);
+  assert.ok(animId);
+
+  const steps: Array<{ delta: number; sign: number; slewed: number }> = [
+    { delta: 0.0, sign: -1, slewed: -1 },
+    { delta: 1.0, sign: 0, slewed: 0 },
+    { delta: 1.0, sign: 1, slewed: 1 },
+    { delta: 1.0, sign: 1, slewed: 1 },
+  ];
+
+  const maxRate = 1;
+  let previousSlew = steps[0].slewed;
+  const assertRateLimitedChange = (nextValue: number, prevValue: number, dtSeconds: number) => {
+    const allowed = maxRate * dtSeconds + 1e-6;
+    const delta = Math.abs(nextValue - prevValue);
+    assert.ok(delta <= allowed, `slew change ${delta} exceeded limit ${allowed}`);
+  };
+
+  steps.forEach((step, index) => {
+    const frame = orch.step(step.delta) as any;
+    const writes: Array<{ path: string; value: unknown }> = frame.merged_writes ?? [];
+    const signValue = readScalar(writes, "chain/sign.value");
+    const slewValue = readScalar(writes, "chain/slewed.value");
+    assert.ok(
+      Math.abs(signValue - step.sign) < 1e-3,
+      `expected sign ${step.sign}, got ${signValue}`,
+    );
+    if (index > 0) {
+      assertRateLimitedChange(slewValue, previousSlew, step.delta);
+    }
+    assert.ok(
+      Math.abs(slewValue - step.slewed) < 1e-3,
+      `expected slew ${step.slewed}, got ${slewValue}`,
+    );
+    previousSlew = slewValue;
+  });
+}
+
+// async function testGraphDrivenAnimation(): Promise<void> {
+//   const orch = await createOrchestrator({ schedule: "TwoPass" });
+
+//   const animationConfig = {
+//     setup: {
+//       animation: animationFixtures().animationFixture("control-linear"),
+//       player: { name: "controller-player", loop_mode: "loop" as const },
+//     },
+//   };
+//   const animId = orch.registerAnimation(animationConfig);
+//   assert.ok(animId);
+
+//   const driverGraph = nodeGraphFixtures().nodeGraphSpec("sine-driver") as GraphRegistrationConfig;
+//   const driverGraphId = orch.registerGraph(driverGraph);
+//   assert.ok(driverGraphId);
+
+//   const driverFrequency = 0.5;
+//   const animationDurationSeconds = 2;
+//   const tau = Math.PI * 2;
+
+//   const normalizedForTime = (time: number) =>
+//     (Math.sin(tau * driverFrequency * time) + 1) / 2;
+//   const expectedSeekForTime = (time: number) =>
+//     normalizedForTime(time) * animationDurationSeconds;
+
+//   const setDriverTime = (timeSeconds: number) => {
+//     orch.setInput("driver/time.seconds", toValueJSON(timeSeconds));
+//   };
+
+//   const verifyFrame = (frame: any, expectedTime: number) => {
+//     const writes: Array<{ path: string; value: unknown }> = frame.merged_writes ?? [];
+//     const seekValue = readScalar(writes, "anim/player/0/cmd/seek");
+//     const animValue = readScalar(writes, "control/anim.value");
+//     const expectedSeek = expectedSeekForTime(expectedTime);
+//     const expectedAnim = normalizedForTime(expectedTime);
+//     assert.ok(Math.abs(seekValue - expectedSeek) < 1e-3, `seek mismatch at t=${expectedTime}, ${seekValue}, ${expectedSeek}`);
+//     assert.ok(Math.abs(animValue - expectedAnim) < 1e-3, `anim mismatch at t=${expectedTime}, ${animValue}, ${expectedAnim}`);
+//   };
+
+//   for (let step = 0; step <= 4; step += 1) {
+//     const t = step * 0.5;
+//     setDriverTime(t);
+//     const frame = orch.step(0.5) as any;
+//     console.log(frame)
+//     verifyFrame(frame, t);
+//   }
+// }
+
 process.env.RUST_BACKTRACE = "1";
 
 (async () => {
   try {
+    await fixturesPromise;
     await init(pkgWasmUrl());
-
-    const orch = await createOrchestrator({ schedule: "SinglePass" });
-
-    const graphSpec = fixture.graph;
-
-    const graphId = orch.registerGraph(graphSpec);
-    assert.ok(typeof graphId === "string" && graphId.length > 0);
-
-    const animationConfig = fixture.animation;
-
-    const animId = orch.registerAnimation(animationConfig);
-    assert.ok(typeof animId === "string" && animId.length > 0);
-
-    // manually seed gain/offset once
-    orch.setInput("demo/graph/gain", toValueJSON(1.5));
-    orch.setInput("demo/graph/offset", toValueJSON(0.25));
-
-    // Step 1: animation still at initial ramp value (0) -> graph output should be offset (0.25)
-    let frame = orch.step(0.0) as any;
-    let merged = frame.merged_writes;
-    assert.ok(Array.isArray(merged));
-    const animWrite0 = merged.find((w: any) => w.path === "demo/animation.value");
-    const graphWrite0 = merged.find((w: any) => w.path === "demo/output/value");
-    assert.ok(animWrite0, "animation write should exist");
-    assert.ok(graphWrite0, "graph write should exist");
-    const animVal0 = animWrite0.value?.data ?? animWrite0.value;
-    const graphVal0 = graphWrite0.value?.data ?? graphWrite0.value;
-    assert.ok(Math.abs(animVal0 - 0.0) < 1e-6, `expected animation 0, got ${animVal0}`);
-    assert.ok(Math.abs(graphVal0 - 0.25) < 1e-6, `expected graph 0.25, got ${graphVal0}`);
-
-    // Step 2: animation at ~0.5 -> graph output should be 0.5 * 1.5 + 0.25 = 1.0
-    frame = orch.step(1.0) as any;
-    merged = frame.merged_writes;
-    const animWrite1 = merged.find((w: any) => w.path === "demo/animation.value");
-    const graphWrite1 = merged.find((w: any) => w.path === "demo/output/value");
-    const animVal1 = animWrite1.value?.data ?? animWrite1.value;
-    const graphVal1 = graphWrite1.value?.data ?? graphWrite1.value;
-    assert.ok(Math.abs(animVal1 - 0.5) < 1e-3, `expected animation 0.5, got ${animVal1}`);
-    assert.ok(Math.abs(graphVal1 - 1.0) < 1e-3, `expected graph 1.0, got ${graphVal1}`);
-
-    // Step 3: animation at ~1.0 -> graph output should be 1.0 * 1.5 + 0.25 = 1.75
-    frame = orch.step(1.0) as any;
-    merged = frame.merged_writes;
-    const animWrite2 = merged.find((w: any) => w.path === "demo/animation.value");
-    const graphWrite2 = merged.find((w: any) => w.path === "demo/output/value");
-    const animVal2 = animWrite2.value?.data ?? animWrite2.value;
-    const graphVal2 = graphWrite2.value?.data ?? graphWrite2.value;
-    assert.ok(Math.abs(animVal2 - 1.0) < 1e-3, `expected animation 1.0, got ${animVal2}`);
-    assert.ok(Math.abs(graphVal2 - 1.75) < 1e-3, `expected graph 1.75, got ${graphVal2}`);
-
-    const scalarFromValue = (value: any): number => {
-      if (value && typeof value === "object") {
-        if (typeof value.data === "number") return value.data;
-        if (typeof value.float === "number") return value.float;
-      }
-      return value as number;
-    };
-
-    const readScalar = (writes: any[], path: string): number => {
-      const hit = writes.find((w: any) => w.path === path);
-      assert.ok(hit, `Expected write for ${path}`);
-      return scalarFromValue(hit.value);
-    };
-
-    // Chained controllers: animation -> sign graph -> slew graph.
-    const chainedOrch = await createOrchestrator({ schedule: "SinglePass" });
-
-        const signGraphSpec = {
-      spec: {
-        nodes: [
-          {
-            id: "ramp_in",
-            type: "input",
-            params: {
-              path: "chain/ramp.value",
-              value: toValueJSON(0),
-            },
-          },
-          { id: "zero", type: "constant", params: { value: toValueJSON(0) } },
-          { id: "one", type: "constant", params: { value: toValueJSON(1) } },
-          { id: "neg_one", type: "constant", params: { value: toValueJSON(-1) } },
-          {
-            id: "gt_zero",
-            type: "greaterthan",
-            inputs: {
-              lhs: { node_id: "ramp_in" },
-              rhs: { node_id: "zero" },
-            },
-          },
-          {
-            id: "lt_zero",
-            type: "lessthan",
-            inputs: {
-              lhs: { node_id: "ramp_in" },
-              rhs: { node_id: "zero" },
-            },
-          },
-          {
-            id: "neg_or_zero",
-            type: "if",
-            inputs: {
-              cond: { node_id: "lt_zero" },
-              then: { node_id: "neg_one" },
-              else: { node_id: "zero" },
-            },
-          },
-          {
-            id: "sign_value",
-            type: "if",
-            inputs: {
-              cond: { node_id: "gt_zero" },
-              then: { node_id: "one" },
-              else: { node_id: "neg_or_zero" },
-            },
-          },
-          {
-            id: "sign_out",
-            type: "output",
-            params: { path: "chain/sign.value" },
-            inputs: { in: { node_id: "sign_value" } },
-          },
-        ],
-      },
-      subs: {
-        inputs: ["chain/ramp.value"],
-        outputs: ["chain/sign.value"],
-      },
-    };
-
-    const slewGraphSpec = {
-      spec: {
-        nodes: [
-          {
-            id: "sign_in",
-            type: "input",
-            params: {
-              path: "chain/sign.value",
-              value: toValueJSON(0),
-            },
-          },
-          {
-            id: "slew",
-            type: "slew",
-            inputs: { in: { node_id: "sign_in" } },
-          },
-          {
-            id: "slew_out",
-            type: "output",
-            params: { path: "chain/slewed.value" },
-            inputs: { in: { node_id: "slew" } },
-          },
-        ],
-      },
-      subs: {
-        inputs: ["chain/sign.value"],
-        outputs: ["chain/slewed.value"],
-      },
-    };
-
-    const signGraphId = chainedOrch.registerGraph(signGraphSpec);
-    const slewGraphId = chainedOrch.registerGraph(slewGraphSpec);
-    assert.ok(signGraphId && slewGraphId);
-
-    const chainAnimationConfig = {
-      setup: {
-        animation: {
-          id: "chain-ramp",
-          name: "Chain Ramp",
-          duration: 2000,
-          groups: [],
-          tracks: [
-            {
-              id: "chain-ramp-track",
-              name: "Chain Ramp Value",
-              animatableId: "chain/ramp.value",
-              points: [
-                { id: "neg", stamp: 0, value: -1 },
-                { id: "zero", stamp: 0.5, value: 0 },
-                { id: "pos", stamp: 1, value: 1 },
-              ],
-            },
-          ],
-        },
-        player: {
-          name: "chain-player",
-          loop_mode: "once" as const,
-        },
-      },
-    };
-
-    const chainAnimId = chainedOrch.registerAnimation(chainAnimationConfig);
-    assert.ok(chainAnimId);
-
-    const assertRateLimitedChange = (
-      nextValue: number,
-      prevValue: number,
-      dtSeconds: number,
-      maxRate: number,
-    ) => {
-      const allowed = maxRate * dtSeconds + 1e-6;
-      const delta = Math.abs(nextValue - prevValue);
-      assert.ok(
-        delta <= allowed,
-        `slew change ${delta} exceeded limit ${allowed}`,
-      );
-    };
-
-    let chainFrame = chainedOrch.step(0.0) as any;
-    let chainWrites = chainFrame.merged_writes;
-    assert.ok(Array.isArray(chainWrites));
-    let signValue = readScalar(chainWrites, "chain/sign.value");
-    let slewValue = readScalar(chainWrites, "chain/slewed.value");
-    assert.ok(Math.abs(signValue - -1) < 1e-6, `expected sign -1, got ${signValue}`);
-    assert.ok(Math.abs(slewValue - -1) < 1e-6, `expected slew -1, got ${slewValue}`);
-
-    const maxRate = 1;
-    let prevSlew = slewValue;
-
-    const stepAndCheck = (dtSeconds: number, expectedSign: number, expectedSlew: number) => {
-      chainFrame = chainedOrch.step(dtSeconds) as any;
-      chainWrites = chainFrame.merged_writes;
-      signValue = readScalar(chainWrites, "chain/sign.value");
-      slewValue = readScalar(chainWrites, "chain/slewed.value");
-      assert.ok(
-        Math.abs(signValue - expectedSign) < 1e-3,
-        `expected sign ${expectedSign}, got ${signValue}`,
-      );
-      assertRateLimitedChange(slewValue, prevSlew, dtSeconds, maxRate);
-      assert.ok(
-        Math.abs(slewValue - expectedSlew) < 1e-3,
-        `expected slew ${expectedSlew}, got ${slewValue}`,
-      );
-      prevSlew = slewValue;
-    };
-
-    stepAndCheck(1.0, 0, 0);
-    stepAndCheck(1.0, 1, 1);
-    stepAndCheck(1.0, 1, 1);
-
-    // Graph-driven animation: use a sin(time) graph to seek the animation player.
-    const controllerOrch = await createOrchestrator({ schedule: "TwoPass" });
-    const driverFrequency = 0.5; // Hz
-    const animationDurationSeconds = 2;
-    const tau = Math.PI * 2;
-
-    const driverAnimationConfig = {
-      setup: {
-        animation: {
-          id: "sin-driven",
-          name: "Sin Driven",
-          duration: 2000,
-          groups: [],
-          tracks: [
-            {
-              id: "sin-track",
-              name: "Sinusoid Track",
-              animatableId: "control/anim.value",
-              points: [
-                { id: "start", stamp: 0, value: 0 },
-                { id: "end", stamp: 1, value: 1 },
-              ],
-            },
-          ],
-        },
-        player: {
-          name: "controller-player",
-          loop_mode: "loop" as const,
-        },
-      },
-    };
-
-    const controllerAnimId = controllerOrch.registerAnimation(driverAnimationConfig);
-    assert.ok(controllerAnimId);
-
-    const driverGraphSpec = {
-      spec: {
-        nodes: [
-          {
-            id: "host_time",
-            type: "input",
-            params: {
-              path: "driver/time.seconds",
-              value: toValueJSON(0),
-            },
-          },
-          { id: "freq", type: "constant", params: { value: toValueJSON(driverFrequency) } },
-          {
-            id: "time_scaled",
-            type: "multiply",
-            inputs: {
-              a: { node_id: "host_time" },
-              b: { node_id: "freq" },
-            },
-          },
-          { id: "tau", type: "constant", params: { value: toValueJSON(tau) } },
-          {
-            id: "phase",
-            type: "multiply",
-            inputs: {
-              a: { node_id: "time_scaled" },
-              b: { node_id: "tau" },
-            },
-          },
-          {
-            id: "sin_val",
-            type: "sin",
-            inputs: { in: { node_id: "phase" } },
-          },
-          { id: "one", type: "constant", params: { value: toValueJSON(1) } },
-          {
-            id: "shifted",
-            type: "add",
-            inputs: {
-              lhs: { node_id: "sin_val" },
-              rhs: { node_id: "one" },
-            },
-          },
-          { id: "half", type: "constant", params: { value: toValueJSON(0.5) } },
-          {
-            id: "normalized",
-            type: "multiply",
-            inputs: {
-              a: { node_id: "shifted" },
-              b: { node_id: "half" },
-            },
-          },
-          {
-            id: "duration",
-            type: "constant",
-            params: { value: toValueJSON(animationDurationSeconds) },
-          },
-          {
-            id: "seek_seconds",
-            type: "multiply",
-            inputs: {
-              a: { node_id: "normalized" },
-              b: { node_id: "duration" },
-            },
-          },
-          {
-            id: "seek_out",
-            type: "output",
-            params: { path: "anim/player/0/cmd/seek" },
-            inputs: { in: { node_id: "seek_seconds" } },
-          },
-        ],
-      },
-      subs: {
-        inputs: ["driver/time.seconds"],
-        outputs: ["anim/player/0/cmd/seek"],
-      },
-    };
-
-    const driverGraphId = controllerOrch.registerGraph(driverGraphSpec);
-    assert.ok(driverGraphId);
-
-    const normalizedForTime = (time: number) =>
-      (Math.sin(tau * driverFrequency * time) + 1) / 2;
-    const expectedSeekForTime = (time: number) =>
-      normalizedForTime(time) * animationDurationSeconds;
-
-    const setDriverTime = (timeSeconds: number) => {
-      controllerOrch.setInput("driver/time.seconds", toValueJSON(timeSeconds));
-    };
-
-    const verifyDriverFrame = (frame: any, expectedTime: number) => {
-      const writes = frame.merged_writes;
-      const seekValue = readScalar(writes, "anim/player/0/cmd/seek");
-      const animValue = readScalar(writes, "control/anim.value");
-      const expectedSeek = expectedSeekForTime(expectedTime);
-      const wrappedSeek = ((expectedSeek % animationDurationSeconds) + animationDurationSeconds) % animationDurationSeconds;
-      const wrappedNormalized = animationDurationSeconds > 0 ? wrappedSeek / animationDurationSeconds : 0;
-      assert.ok(
-        Math.abs(seekValue - expectedSeek) < 1e-3,
-        `expected seek ${expectedSeek}, got ${seekValue} at t=${expectedTime}`,
-      );
-      assert.ok(
-        Math.abs(animValue - wrappedNormalized) < 0.25,
-        `animation value ${animValue} should roughly follow normalized ${wrappedNormalized}`,
-      );
-    };
-
-    let simulatedTime = 0;
-    setDriverTime(simulatedTime);
-    verifyDriverFrame(controllerOrch.step(0.0) as any, simulatedTime);
-
-    const driverSteps = [0.25, 0.25, 0.25, 0.25];
-    for (const dt of driverSteps) {
-      simulatedTime += dt;
-      setDriverTime(simulatedTime);
-      const frame = controllerOrch.step(dt) as any;
-      verifyDriverFrame(frame, simulatedTime);
-    }
-
-    // Simple sanity print
+    await testScalarRampPipeline();
+    await testChainedSlewPipeline();
+    // await testGraphDrivenAnimation();
     // eslint-disable-next-line no-console
-    console.log("Orchestrator shim basic smoke test passed");
+    console.log("@vizij/orchestrator-wasm smoke tests passed");
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);

@@ -9,9 +9,11 @@ fn approx(a: f32, b: f32, eps: f32) {
 
 #[test]
 fn parses_new_format_fixture_and_preserves_points_and_transitions() {
-    // Load the StoredAnimation-format fixture (duration in ms, stamps in 0..1)
-    let json = include_str!("../../test_fixtures/new_format.json");
-    let anim: AnimationData = parse_stored_animation_json(json).expect("parse stored animation");
+    // Load the shared StoredAnimation-format fixture (duration in ms, stamps in 0..1)
+    let json = vizij_test_fixtures::animations::json("vector-pose-combo")
+        .expect("load vector-pose-combo fixture");
+    let anim: AnimationData =
+        parse_stored_animation_json(&json).expect("parse stored animation from shared fixture");
 
     // Duration is 5000 ms
     assert_eq!(anim.duration_ms, 5000);

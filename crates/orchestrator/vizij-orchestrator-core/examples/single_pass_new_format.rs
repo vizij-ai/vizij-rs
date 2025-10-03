@@ -1,11 +1,10 @@
-use std::fs;
-
 use serde_json::to_string_pretty;
 use vizij_animation_core::{parse_stored_animation_json, InstanceCfg};
 use vizij_graph_core::types::GraphSpec;
 use vizij_orchestrator::{
     AnimationControllerConfig, GraphControllerConfig, Orchestrator, Schedule, Subscriptions,
 };
+use vizij_test_fixtures::animations;
 
 fn main() -> anyhow::Result<()> {
     // Create orchestrator with single-pass schedule
@@ -26,8 +25,8 @@ fn main() -> anyhow::Result<()> {
     };
     orch = orch.with_animation(acfg);
 
-    // Load fixture from animation test_fixtures (new_format.json)
-    let json = fs::read_to_string("crates/animation/test_fixtures/new_format.json")?;
+    // Load shared animation fixture (vector-pose-combo)
+    let json = animations::json("vector-pose-combo")?;
     let anim_data = parse_stored_animation_json(&json).map_err(|e| anyhow::anyhow!(e))?;
 
     // Register animation with the engine inside the animation controller

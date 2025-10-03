@@ -51,6 +51,20 @@ export type {
   BakedAnimationBundle,
 };
 
+export {
+  toValueJSON,
+  isNormalizedValue,
+  valueAsNumber,
+  valueAsNumericArray,
+  valueAsTransform,
+  valueAsVec3,
+  valueAsVector,
+  valueAsBool,
+  valueAsQuat,
+  valueAsColorRgba,
+  valueAsText,
+} from "@vizij/value-json";
+
 export function abi_version(): number {
   if (!bindingCache.current) {
     throw new Error("Call init() from @vizij/animation-wasm before reading abi_version().");

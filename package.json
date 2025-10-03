@@ -16,7 +16,8 @@
     "link:wasm:orchestrator": "pnpm --filter @vizij/orchestrator-wasm run build && (cd npm/@vizij/orchestrator-wasm && pnpm link --global)",
     "clean:wasm:orchestrator": "rm -rf npm/@vizij/orchestrator-wasm/pkg npm/@vizij/orchestrator-wasm/dist",
     "link:wasm": "pnpm run link:wasm:animation && pnpm run link:wasm:graph && pnpm run link:wasm:orchestrator",
-    "build:wasm": "pnpm run build:wasm:animation && pnpm run build:wasm:graph && pnpm run build:wasm:orchestrator"
+    "build:wasm": "pnpm run build:wasm:animation && pnpm run build:wasm:graph && pnpm run build:wasm:orchestrator",
+    "test:npm": "pnpm --filter @vizij/animation-wasm run test && pnpm --filter @vizij/node-graph-wasm run test && pnpm --filter @vizij/orchestrator-wasm run test"
   },
   "workspaces": [
     "npm/@vizij/*"

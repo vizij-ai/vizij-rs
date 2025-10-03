@@ -134,7 +134,7 @@ fn setup_scene(mut commands: Commands) {
 }
 
 fn load_animation(mut eng: ResMut<VizijEngine>) {
-    let json = include_str!("../../vizij-animation-core/tests/fixtures/new_format.json");
+    let json = include_str!("../../../fixtures/animations/vector-pose-combo.json");
     let stored = parse_stored_animation_json(json).expect("valid animation");
 
     let anim = eng.0.load_animation(stored);

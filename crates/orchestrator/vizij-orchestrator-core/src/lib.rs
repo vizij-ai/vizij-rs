@@ -13,6 +13,7 @@ pub mod fixtures;
 pub mod scheduler;
 
 use anyhow::Result;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -39,10 +40,9 @@ pub struct Orchestrator {
     pub epoch: u64,
     pub schedule: Schedule,
     /// Registered graph controllers keyed by id.
-    pub graphs: std::collections::HashMap<String, crate::controllers::graph::GraphController>,
+    pub graphs: IndexMap<String, crate::controllers::graph::GraphController>,
     /// Registered animation controllers keyed by id.
-    pub anims:
-        std::collections::HashMap<String, crate::controllers::animation::AnimationController>,
+    pub anims: IndexMap<String, crate::controllers::animation::AnimationController>,
 }
 
 impl Orchestrator {
@@ -52,8 +52,8 @@ impl Orchestrator {
             blackboard: Blackboard::new(),
             epoch: 0,
             schedule,
-            graphs: HashMap::new(),
-            anims: HashMap::new(),
+            graphs: IndexMap::new(),
+            anims: IndexMap::new(),
         }
     }
 

@@ -106,6 +106,20 @@ export type {
   AnimationRegistrationConfig,
   AnimationSetup,
 };
+
+export {
+  toValueJSON,
+  isNormalizedValue,
+  valueAsNumber,
+  valueAsNumericArray,
+  valueAsTransform,
+  valueAsVec3,
+  valueAsVector,
+  valueAsBool,
+  valueAsQuat,
+  valueAsColorRgba,
+  valueAsText,
+} from "@vizij/value-json";
 type Value = ValueInput;
 
 /**

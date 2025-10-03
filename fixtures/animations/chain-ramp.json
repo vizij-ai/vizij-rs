@@ -1,0 +1,18 @@
+{
+  "id": "chain-ramp-1",
+  "name": "Chain Ramp",
+  "duration": 2000,
+  "tracks": [
+    {
+      "id": "chain-ramp-track",
+      "name": "Chain Ramp Value",
+      "animatableId": "chain/ramp.value",
+      "points": [
+        { "id": "neg", "stamp": 0.0, "value": -1.0 },
+        { "id": "zero", "stamp": 0.5, "value": 0.0 },
+        { "id": "pos", "stamp": 1.0, "value": 1.0 }
+      ]
+    }
+  ],
+  "groups": {}
+}

@@ -11,6 +11,7 @@ members = [
   "crates/api/bevy_vizij_api",
   "crates/orchestrator/vizij-orchestrator-core",
   "crates/orchestrator/vizij-orchestrator-wasm",
+  "crates/test-fixtures/vizij-test-fixtures",
 ]
 resolver = "2"
 

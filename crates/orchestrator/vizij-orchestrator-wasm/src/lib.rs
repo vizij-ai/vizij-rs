@@ -315,13 +315,13 @@ impl VizijOrchestrator {
     /// Remove a registered graph controller by id.
     #[wasm_bindgen(js_name = remove_graph)]
     pub fn remove_graph(&mut self, id: &str) -> bool {
-        self.core.graphs.remove(id).is_some()
+        self.core.graphs.shift_remove(id).is_some()
     }
 
     /// Remove a registered animation controller by id.
     #[wasm_bindgen(js_name = remove_animation)]
     pub fn remove_animation(&mut self, id: &str) -> bool {
-        self.core.anims.remove(id).is_some()
+        self.core.anims.shift_remove(id).is_some()
     }
 }
 

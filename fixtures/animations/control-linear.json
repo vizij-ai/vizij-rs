@@ -1,0 +1,17 @@
+{
+  "id": "control-linear-1",
+  "name": "Control Linear",
+  "duration": 2000,
+  "tracks": [
+    {
+      "id": "control-track",
+      "name": "Control Value",
+      "animatableId": "control/anim.value",
+      "points": [
+        { "id": "start", "stamp": 0.0, "value": 0.0 },
+        { "id": "end", "stamp": 1.0, "value": 1.0 }
+      ]
+    }
+  ],
+  "groups": {}
+}

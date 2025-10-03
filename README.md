@@ -134,6 +134,7 @@ Common workflows from the root of `vizij-rs`:
 | Build animation WASM pkg | `pnpm run build:wasm:animation` |
 | Build node-graph WASM pkg | `pnpm run build:wasm:graph` |
 | Build orchestrator WASM pkg | `pnpm run build:wasm:orchestrator` |
+| Test npm WASM wrappers | `pnpm run test:npm` *(requires fresh `pkg/` builds)* |
 | Watch animation WASM builds | `pnpm run watch:wasm:animation` *(requires `cargo-watch`)* |
 | Watch node-graph WASM builds | `pnpm run watch:wasm:graph` *(requires `cargo-watch`)* |
 | Watch orchestrator WASM builds | `pnpm run watch:wasm:orchestrator` *(requires `cargo-watch`)* |

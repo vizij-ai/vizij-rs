@@ -25,9 +25,10 @@ fn integration_parity_const_translation_applied() {
 
     // Load the constant Vec3 animation fixture into the core engine and add an instance.
     {
-        let json_str = include_str!("../../test_fixtures/const.json");
-        let anim =
-            vizij_animation_core::parse_stored_animation_json(json_str).expect("parse const.json");
+        let json_str = vizij_test_fixtures::animations::json("constant-vec3")
+            .expect("load constant-vec3 fixture");
+        let anim = vizij_animation_core::parse_stored_animation_json(&json_str)
+            .expect("parse constant-vec3 fixture");
 
         let mut eng = app.world_mut().resource_mut::<VizijEngine>();
         let aid = eng.0.load_animation(anim);

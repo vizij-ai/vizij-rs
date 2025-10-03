@@ -1092,6 +1092,7 @@ dependencies = [
  "serde_json",
  "vizij-animation-core",
  "vizij-api-core",
+ "vizij-test-fixtures",
 ]
 
 [[package]]
@@ -3880,6 +3881,7 @@ dependencies = [
  "serde",
  "serde_json",
  "vizij-api-core",
+ "vizij-test-fixtures",
 ]
 
 [[package]]
@@ -3952,11 +3954,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "hashbrown 0.14.5",
+ "indexmap",
  "serde",
  "serde_json",
  "vizij-animation-core",
  "vizij-api-core",
  "vizij-graph-core",
+ "vizij-test-fixtures",
 ]
 
 [[package]]
@@ -3975,6 +3979,16 @@ dependencies = [
  "vizij-orchestrator-core",
  "wasm-bindgen",
  "wasm-bindgen-test",
+]
+
+[[package]]
+name = "vizij-test-fixtures"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

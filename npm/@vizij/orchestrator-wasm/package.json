@@ -34,7 +34,8 @@
   },
   "devDependencies": {
     "typescript": "^5.5.0",
-    "@types/node": "^20.12.7"
+    "@types/node": "^20.12.7",
+    "@vizij/test-fixtures": "workspace:*"
   },
   "publishConfig": {
     "access": "public",

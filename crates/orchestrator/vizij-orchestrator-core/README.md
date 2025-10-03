@@ -172,5 +172,5 @@ If you want to extend this crate, consider:
   - `OrchestratorFrame` includes `timings_ms` and `conflicts` to help instruments and debug frames.
 
 If you'd like, I can:
-- Add more comprehensive examples loading real animation fixtures from `crates/animation/test_fixtures`.
+- Add more comprehensive examples loading real animation fixtures from `fixtures/animations/`.
 - Prepare a PR branch and run the workspace CI (I can create the branch locally; you'll need to push/test the PR).

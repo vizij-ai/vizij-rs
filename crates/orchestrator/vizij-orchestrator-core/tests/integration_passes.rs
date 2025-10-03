@@ -1,6 +1,12 @@
-use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
+use serde_json::{json, Value as JsonValue};
+use vizij_api_core::{
+    json::normalize_graph_spec_json_string, TypedPath, Value, WriteBatch, WriteOp,
+};
 use vizij_graph_core::types::GraphSpec;
-use vizij_orchestrator::{GraphControllerConfig, Orchestrator, Schedule, Subscriptions};
+use vizij_orchestrator::{
+    AnimationControllerConfig, GraphControllerConfig, Orchestrator, Schedule, Subscriptions,
+};
+use vizij_test_fixtures::{animations, node_graphs};
 
 #[test]
 fn single_pass_applies_graph_writes_and_merges() {
@@ -98,4 +104,170 @@ fn two_pass_applies_graph_then_anim_then_graph_writes_and_merges() {
     assert_eq!(be_a.value, Value::Float(1.0));
     let be_b = orch.blackboard.get(&tp2.to_string()).expect("entry b");
     assert_eq!(be_b.value, Value::Float(2.0));
+}
+
+fn graph_fixture(name: &str) -> GraphControllerConfig {
+    let raw = node_graphs::spec_json(name).unwrap_or_else(|_| panic!("load graph fixture {name}"));
+    let value: JsonValue = serde_json::from_str(&raw).expect("graph fixture json");
+    let spec_json = value.get("spec").cloned().expect("spec field");
+    let normalized = normalize_graph_spec_json_string(&spec_json.to_string())
+        .unwrap_or_else(|e| panic!("normalize graph spec failed: {e}"));
+    let spec: GraphSpec = serde_json::from_str(&normalized).expect("graph spec");
+    let subs_value = value.get("subs").cloned().unwrap_or_else(|| {
+        json!({
+            "inputs": [],
+            "outputs": []
+        })
+    });
+    let parse_paths = |key: &str| -> Vec<TypedPath> {
+        subs_value
+            .get(key)
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .map(|entry| {
+                        let path = entry
+                            .as_str()
+                            .unwrap_or_else(|| panic!("{key} entry must be string"));
+                        TypedPath::parse(path).unwrap_or_else(|_| panic!("invalid path {path}"))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let subs = Subscriptions {
+        inputs: parse_paths("inputs"),
+        outputs: parse_paths("outputs"),
+        mirror_writes: true,
+    };
+    GraphControllerConfig {
+        id: name.into(),
+        spec,
+        subs,
+    }
+}
+
+fn animation_setup(name: &str, player: (&str, &str)) -> JsonValue {
+    let animation: JsonValue =
+        animations::load(name).unwrap_or_else(|_| panic!("load animation {name}"));
+    json!({
+        "animation": animation,
+        "player": {
+            "name": player.0,
+            "loop_mode": player.1,
+        }
+    })
+}
+
+fn read_scalar_write(batch: &WriteBatch, path: &str) -> f32 {
+    let op = batch
+        .iter()
+        .find(|w| w.path.to_string() == path)
+        .unwrap_or_else(|| panic!("missing write for {path}"));
+    match op.value {
+        Value::Float(v) => v,
+        _ => panic!("expected float write for {path}"),
+    }
+}
+
+#[test]
+fn scalar_ramp_pipeline_shared_fixture_executes() {
+    let fixture = vizij_orchestrator::fixtures::demo_single_pass();
+
+    let mut orch = Orchestrator::new(Schedule::SinglePass);
+    let graph_cfg = graph_fixture("simple-gain-offset");
+    orch = orch.with_graph(graph_cfg);
+
+    let anim_cfg = AnimationControllerConfig {
+        id: "anim".into(),
+        setup: fixture.animation.setup.clone(),
+    };
+    orch = orch.with_animation(anim_cfg);
+
+    for input in fixture.initial_inputs.iter() {
+        orch.set_input(&input.path, input.value.clone(), None)
+            .expect("set input");
+    }
+
+    for step in fixture.steps.iter() {
+        let frame = orch.step(step.delta as f32).expect("step ok");
+        let out = read_scalar_write(&frame.merged_writes, "demo/output/value");
+        assert!(out.is_finite(), "output should be finite");
+    }
+}
+
+#[test]
+fn chain_sign_slew_pipeline_uses_shared_fixtures() {
+    let mut orch = Orchestrator::new(Schedule::SinglePass);
+    orch = orch.with_graph(graph_fixture("sign-graph"));
+    orch = orch.with_graph(graph_fixture("slew-graph"));
+
+    let anim_cfg = AnimationControllerConfig {
+        id: "chain".into(),
+        setup: animation_setup("chain-ramp", ("chain-player", "once")),
+    };
+    orch = orch.with_animation(anim_cfg);
+
+    let steps = [
+        (0.0_f32, -1.0_f32, -1.0_f32),
+        (1.0_f32, 0.0_f32, 0.0_f32),
+        (1.0_f32, 1.0_f32, 1.0_f32),
+        (1.0_f32, 1.0_f32, 1.0_f32),
+    ];
+
+    let mut prev_slew = steps[0].2;
+    let max_rate = 1.0_f32;
+
+    for (idx, (dt, expected_sign, expected_slew)) in steps.iter().enumerate() {
+        let frame = orch.step(*dt).expect("step ok");
+        let writes = &frame.merged_writes;
+        let sign = read_scalar_write(writes, "chain/sign.value");
+        let slew = read_scalar_write(writes, "chain/slewed.value");
+        assert!(
+            (sign - expected_sign).abs() < 1e-3,
+            "sign {sign} vs {expected_sign}"
+        );
+        if idx > 0 {
+            let allowed = max_rate * dt + 1e-6;
+            let delta = (slew - prev_slew).abs();
+            assert!(delta <= allowed, "slew delta {delta} exceeded {allowed}");
+        }
+        assert!(
+            (slew - expected_slew).abs() < 1e-3,
+            "slew {slew} vs {expected_slew}"
+        );
+        prev_slew = slew;
+    }
+}
+
+#[test]
+fn sine_driver_graph_controls_animation_seek() {
+    let mut orch = Orchestrator::new(Schedule::TwoPass);
+    orch = orch.with_graph(graph_fixture("sine-driver"));
+
+    let anim_cfg = AnimationControllerConfig {
+        id: "control".into(),
+        setup: animation_setup("control-linear", ("controller-player", "loop")),
+    };
+    orch = orch.with_animation(anim_cfg);
+
+    let driver_frequency = 0.5_f32;
+    let animation_duration = 2.0_f32;
+    let tau = std::f32::consts::TAU;
+
+    let normalized = |time: f32| (f32::sin(tau * driver_frequency * time) + 1.0) * 0.5;
+    let expected_seek = |time: f32| normalized(time) * animation_duration;
+
+    for step in 0..=4 {
+        let time = step as f32 * 0.5;
+        orch.set_input("driver/time.seconds", JsonValue::from(time), None)
+            .expect("set time");
+        let frame = orch.step(0.5).expect("step ok");
+        let writes = &frame.merged_writes;
+        let seek = read_scalar_write(writes, "anim/player/0/cmd/seek");
+        assert!(
+            (seek - expected_seek(time)).abs() < 1e-3,
+            "seek mismatch at {time}"
+        );
+    }
 }

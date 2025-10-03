@@ -1,0 +1,74 @@
+{
+  "spec": {
+    "nodes": [
+      {
+        "id": "host_time",
+        "type": "input",
+        "params": {
+          "path": "driver/time.seconds",
+          "value": 0
+        }
+      },
+      { "id": "freq", "type": "constant", "params": { "value": 0.5 } },
+      {
+        "id": "time_scaled",
+        "type": "multiply",
+        "inputs": {
+          "a": { "node_id": "host_time" },
+          "b": { "node_id": "freq" }
+        }
+      },
+      { "id": "tau", "type": "constant", "params": { "value": 6.283185307179586 } },
+      {
+        "id": "phase",
+        "type": "multiply",
+        "inputs": {
+          "a": { "node_id": "time_scaled" },
+          "b": { "node_id": "tau" }
+        }
+      },
+      {
+        "id": "sin_val",
+        "type": "sin",
+        "inputs": { "in": { "node_id": "phase" } }
+      },
+      { "id": "one", "type": "constant", "params": { "value": 1 } },
+      {
+        "id": "shifted",
+        "type": "add",
+        "inputs": {
+          "lhs": { "node_id": "sin_val" },
+          "rhs": { "node_id": "one" }
+        }
+      },
+      { "id": "half", "type": "constant", "params": { "value": 0.5 } },
+      {
+        "id": "normalized",
+        "type": "multiply",
+        "inputs": {
+          "a": { "node_id": "shifted" },
+          "b": { "node_id": "half" }
+        }
+      },
+      { "id": "duration", "type": "constant", "params": { "value": 2 } },
+      {
+        "id": "seek_seconds",
+        "type": "multiply",
+        "inputs": {
+          "a": { "node_id": "normalized" },
+          "b": { "node_id": "duration" }
+        }
+      },
+      {
+        "id": "seek_out",
+        "type": "output",
+        "params": { "path": "anim/player/0/cmd/seek" },
+        "inputs": { "in": { "node_id": "seek_seconds" } }
+      }
+    ]
+  },
+  "subs": {
+    "inputs": ["driver/time.seconds"],
+    "outputs": ["anim/player/0/cmd/seek"]
+  }
+}
