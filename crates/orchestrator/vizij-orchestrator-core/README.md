@@ -63,7 +63,7 @@ The crate exposes these primary types through the crate root:
   - dt: f32
   - merged_writes: WriteBatch (deterministic merged writes for the frame)
   - conflicts: Vec<serde_json::Value> (diagnostic conflict logs)
-  - timings_ms: HashMap<String, f32>
+  - timings_ms: HashMap<String, f32> (currently synthetic values derived from `dt`; real wall-clock measurements are TBD)
   - events: Vec<serde_json::Value>
 
 - GraphControllerConfig / Subscriptions
@@ -102,6 +102,7 @@ GraphController staging:
 Graph output publishing:
 - GraphController.evaluate returns a WriteBatch (combined: pre-populated writes + writes produced during evaluation).
 - The scheduler publishes only the subset of returned writes that match `Subscriptions.outputs` (if non-empty). If `Subscriptions.outputs` is empty, all returned writes are published.
+- `Subscriptions.mirror_writes` controls whether the blackboard receives the entire write batch even when `outputs` filters the published view. Leave it `true` when graphs need their internal writes available to other controllers, or set to `false` to keep the blackboard limited to public outputs.
 
 ---
 

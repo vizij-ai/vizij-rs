@@ -62,9 +62,16 @@ pub fn run_single_pass(
         };
         // accumulate merged writes (only published writes)
         merged_writes.append(publish_batch.clone());
+
+        let apply_batch = if graph.subs.mirror_writes {
+            batch.clone()
+        } else {
+            publish_batch.clone()
+        };
+
         let conflict_logs: Vec<ConflictLog> = orchestrator
             .blackboard
-            .apply_writebatch(publish_batch, orchestrator.epoch, format!("graph:{}", id))
+            .apply_writebatch(apply_batch, orchestrator.epoch, format!("graph:{}", id))
             .into_iter()
             .collect();
         conflicts_out.extend(conflict_logs);
@@ -114,9 +121,16 @@ pub fn run_two_pass(
         };
         // accumulate merged writes
         merged_writes.append(publish_batch.clone());
+
+        let apply_batch = if graph.subs.mirror_writes {
+            batch.clone()
+        } else {
+            publish_batch.clone()
+        };
+
         let conflict_logs: Vec<ConflictLog> = orchestrator
             .blackboard
-            .apply_writebatch(publish_batch, orchestrator.epoch, format!("graph:{}", id))
+            .apply_writebatch(apply_batch, orchestrator.epoch, format!("graph:{}", id))
             .into_iter()
             .collect();
         conflicts_out.extend(conflict_logs);
@@ -160,9 +174,16 @@ pub fn run_two_pass(
         };
         // accumulate merged writes
         merged_writes.append(publish_batch.clone());
+
+        let apply_batch = if graph.subs.mirror_writes {
+            batch.clone()
+        } else {
+            publish_batch.clone()
+        };
+
         let conflict_logs: Vec<ConflictLog> = orchestrator
             .blackboard
-            .apply_writebatch(publish_batch, orchestrator.epoch, format!("graph:{}", id))
+            .apply_writebatch(apply_batch, orchestrator.epoch, format!("graph:{}", id))
             .into_iter()
             .collect();
         conflicts_out.extend(conflict_logs);

@@ -13,6 +13,12 @@ use crate::blackboard::Blackboard;
 pub struct Subscriptions {
     pub inputs: Vec<TypedPath>,
     pub outputs: Vec<TypedPath>,
+    /// Mirror the full controller write batch into the blackboard even when `outputs`
+    /// restrict which paths are surfaced to consumers.
+    ///
+    /// When enabled, the orchestrator still returns only the filtered writes in
+    /// `merged_writes`, but the blackboard receives every write produced by the graph so
+    /// downstream passes have access to the internal state.
     pub mirror_writes: bool,
 }
 

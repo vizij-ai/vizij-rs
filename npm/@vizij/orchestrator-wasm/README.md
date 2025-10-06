@@ -99,6 +99,9 @@ Orchestrator instance methods:
     - A GraphSpec object
     - A JSON string containing GraphSpec
     - An object `{ id?: string, spec: GraphSpec }`
+    - Optional `subs` `{ inputs?: string[], outputs?: string[], mirrorWrites?: boolean }`; when
+      `mirrorWrites` is `true` (default) the full write batch is mirrored into the blackboard even
+      if `outputs` filters which paths appear in `merged_writes`.
   - Returns controller id.
 
 - registerAnimation(cfg: object): string

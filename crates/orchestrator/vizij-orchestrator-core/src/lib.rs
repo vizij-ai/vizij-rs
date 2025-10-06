@@ -30,6 +30,8 @@ pub struct OrchestratorFrame {
     /// Merged writes produced during the frame (append order is deterministic: pass order then controller order).
     pub merged_writes: WriteBatch,
     pub conflicts: Vec<ConflictLog>,
+    /// Per-pass timings in milliseconds. Currently populated with synthetic values derived
+    /// from the configured `dt` may change if scheduler wires in real wall-clock measurements.
     pub timings_ms: HashMap<String, f32>,
     pub events: Vec<serde_json::Value>,
 }

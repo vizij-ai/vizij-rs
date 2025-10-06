@@ -267,6 +267,94 @@ fn assert_values_close(actual: &Value, expected: &Value, path: &str) {
 }
 
 #[test]
+fn mirror_writes_false_limits_blackboard() {
+    let tp_public = TypedPath::parse("graph/public.value").expect("public path");
+    let tp_internal = TypedPath::parse("graph/internal.value").expect("internal path");
+    let tp_public_str = tp_public.to_string();
+    let tp_internal_str = tp_internal.to_string();
+
+    let subs = Subscriptions {
+        inputs: Vec::new(),
+        outputs: vec![tp_public.clone()],
+        mirror_writes: false,
+    };
+
+    let cfg = GraphControllerConfig {
+        id: "test-graph".into(),
+        spec: GraphSpec::default(),
+        subs,
+    };
+
+    let mut orch = Orchestrator::new(Schedule::SinglePass).with_graph(cfg);
+
+    let graph = orch.graphs.get_mut("test-graph").expect("graph registered");
+    let mut batch = WriteBatch::new();
+    batch.push(WriteOp::new(tp_public.clone(), Value::Float(1.0)));
+    batch.push(WriteOp::new(tp_internal.clone(), Value::Float(2.0)));
+    graph.rt.writes = batch;
+
+    let frame = orch.step(1.0 / 60.0).expect("step ok");
+
+    let mut iter = frame.merged_writes.iter();
+    let first = iter.next().expect("public write present");
+    assert_eq!(first.path, tp_public);
+    assert!(iter.next().is_none(), "only public write should be merged");
+
+    assert!(orch.blackboard.get(&tp_public_str).is_some());
+    assert!(orch.blackboard.get(&tp_internal_str).is_none());
+}
+
+#[test]
+fn mirror_writes_true_mirrors_full_batch() {
+    let tp_public = TypedPath::parse("graph/public.value").expect("public path");
+    let tp_internal = TypedPath::parse("graph/internal.value").expect("internal path");
+    let tp_public_str = tp_public.to_string();
+    let tp_internal_str = tp_internal.to_string();
+
+    let subs = Subscriptions {
+        inputs: Vec::new(),
+        outputs: vec![tp_public.clone()],
+        mirror_writes: true,
+    };
+
+    let cfg = GraphControllerConfig {
+        id: "test-graph".into(),
+        spec: GraphSpec::default(),
+        subs,
+    };
+
+    let mut orch = Orchestrator::new(Schedule::SinglePass).with_graph(cfg);
+
+    let graph = orch.graphs.get_mut("test-graph").expect("graph registered");
+    let mut batch = WriteBatch::new();
+    batch.push(WriteOp::new(tp_public.clone(), Value::Float(1.0)));
+    batch.push(WriteOp::new(tp_internal.clone(), Value::Float(2.0)));
+    graph.rt.writes = batch;
+
+    let frame = orch.step(1.0 / 60.0).expect("step ok");
+
+    let mut iter = frame.merged_writes.iter();
+    let first = iter.next().expect("public write present");
+    assert_eq!(first.path, tp_public);
+    assert!(
+        iter.next().is_none(),
+        "merged writes should still reflect filtered view"
+    );
+
+    let public_entry = orch
+        .blackboard
+        .get(&tp_public_str)
+        .expect("public mirrored");
+    assert_eq!(public_entry.value, Value::Float(1.0));
+
+    let internal_entry = orch
+        .blackboard
+        .get(&tp_internal_str)
+        .expect("internal mirrored when enabled");
+    assert_eq!(internal_entry.value, Value::Float(2.0));
+}
+
+#[test]
 fn scalar_ramp_pipeline_shared_fixture_executes() {
     let fixture = vizij_orchestrator::fixtures::demo_single_pass();
 
