@@ -19,22 +19,35 @@ node scripts/build-orchestrator-wasm.mjs
 CRATES=(
   vizij-animation-core
   vizij-graph-core
-  bevy_vizij_animation
-  bevy_vizij_graph
   vizij-animation-wasm
   vizij-graph-wasm
+  vizij-orchestrator-wasm
+  bevy_vizij_animation
+  bevy_vizij_graph
 )
 
 for crate in "${CRATES[@]}"; do
-  echo "\n=== Dry running $crate ==="
+  printf "\n=== Dry running %s ===\n" "$crate"
   cargo publish --dry-run -p "$crate"
 done
 
-# 4. Dry‑run publishing of npm packages in vizij-rs
-for pkg in animation-wasm node-graph-wasm orchestrator-wasm; do
-  echo "\n=== Dry running @vizij/$pkg ==="
+# 4. Dry‑run publishing of npm packages in vizij-rs (supporting + wasm wrappers)
+NPM_PACKAGES=(
+  value-json
+  wasm-loader
+  animation-wasm
+  node-graph-wasm
+  orchestrator-wasm
+)
+
+for pkg in "${NPM_PACKAGES[@]}"; do
+  printf "\n=== Dry running @vizij/%s ===\n" "$pkg"
   pushd npm/@vizij/$pkg > /dev/null
-  npm i
+  if [[ -f package-lock.json ]]; then
+    npm ci
+  else
+    npm install --no-save
+  fi
   npm run build
   npm pack --dry-run
   popd > /dev/null
@@ -42,9 +55,16 @@ done
 
 # 5. Dry‑run publishing of npm packages in vizij-web
 cd ../vizij-web
-for workspace in packages/@vizij/animation-react packages/@vizij/node-graph-react packages/render packages/utils; do
+for workspace in \
+  packages/@vizij/animation-react \
+  packages/@vizij/node-graph-react \
+  packages/@vizij/orchestrator-react \
+  packages/@vizij/config \
+  packages/@vizij/rig \
+  packages/render \
+  packages/utils; do
   pkg_name=$(jq -r .name < $workspace/package.json)
-  echo "\n=== Dry running $pkg_name ==="
+  printf "\n=== Dry running %s ===\n" "$pkg_name"
   npm i
   npm run --workspace $pkg_name build || npm run build
   npm pack --dry-run --workspace $pkg_name

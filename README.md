@@ -63,6 +63,14 @@ vizij-graph-core
 └─ vizij-graph-wasm → npm/@vizij/node-graph-wasm
 ```
 
+Orchestrator stack relationships:
+
+```
+vizij-orchestrator-core
+├─ bevy_vizij_orchestrator
+└─ vizij-orchestrator-wasm → npm/@vizij/orchestrator-wasm
+```
+
 Each `*-core` crate feeds both the Bevy plugin and the WASM binding directly—the Bevy and WASM layers do not depend on each
 other.
 * **pnpm workspaces** vend the generated `pkg/` output with a stable ESM entry for front-end consumers such as `vizij-web`.
@@ -100,13 +108,14 @@ Follow these steps the first time you prepare a development environment:
    ```bash
    bash scripts/install-git-hooks.sh
    ```
-2. **Build both WASM crates** so the npm wrappers have fresh `pkg/` output. The root `package.json` exposes shortcuts that wrap
+2. **Build the WASM crates** so the npm wrappers have fresh `pkg/` output. The root `package.json` exposes shortcuts that wrap
    the Node build scripts:
    ```bash
    pnpm run build:wasm:animation
    pnpm run build:wasm:graph
+   pnpm run build:wasm:orchestrator
    ```
-3. **Link the npm packages into vizij-web** (from this repo). The helper will rebuild both wrappers and register the global
+3. **Link the npm packages into vizij-web** (from this repo). The helper will rebuild all wrappers and register the global
    `npm link` targets in one go:
    ```bash
    pnpm run link:wasm
@@ -128,17 +137,22 @@ Common workflows from the root of `vizij-rs`:
 
 | Task | Command |
 |------|---------|
-| Format code | `cargo fmt --all` |
-| Lint | `cargo clippy --all-targets --all-features -- -D warnings` |
-| Test everything | `cargo test --workspace` |
-| Build animation WASM pkg | `pnpm run build:wasm:animation` |
-| Build node-graph WASM pkg | `pnpm run build:wasm:graph` |
-| Build orchestrator WASM pkg | `pnpm run build:wasm:orchestrator` |
-| Test npm WASM wrappers | `pnpm run test:npm` *(requires fresh `pkg/` builds)* |
-| Watch animation WASM builds | `pnpm run watch:wasm:animation` *(requires `cargo-watch`)* |
-| Watch node-graph WASM builds | `pnpm run watch:wasm:graph` *(requires `cargo-watch`)* |
-| Watch orchestrator WASM builds | `pnpm run watch:wasm:orchestrator` *(requires `cargo-watch`)* |
-| Publish dry run | `scripts/dry-run-release.sh` (builds crates and npm packages without publishing) |
+| Format Rust + lint JS/TS packages | `pnpm run format` |
+| Rust checks (fmt --check, clippy, build, test) | `pnpm run check:rust` |
+| JS/TS package checks (clean, build, test) | `pnpm run check:npm` |
+| Full project check (Rust first, then npm) | `pnpm run check` |
+| Build shared + WASM packages | `pnpm run build` |
+| Regenerate individual WASM wrappers | `pnpm run build:wasm:<animation|graph|orchestrator>` |
+| Run the pre-push suite manually | `pnpm run hook:pre-push` |
+
+The git hooks now delegate to `scripts/hook-tasks.sh`; you can invoke the same logic manually with `pnpm run hook:pre-commit`
+or `pnpm run hook:pre-push`. Set `HOOK_RUN_WASM=1` to include the optional WASM packaging checks those hooks expose.
+
+Additional helpers:
+
+* `pnpm run lint:npm`, `pnpm run test:rust`, and `pnpm run build:rust` are available if you want individual stages.
+* `pnpm run watch:wasm:<animation|graph|orchestrator>` wraps `cargo watch` for continuous rebuilds (requires the `cargo-watch` tool).
+* `scripts/dry-run-release.sh` runs the end-to-end publish checks without pushing artifacts.
 
 When linked to `vizij-web`, run its dev servers (e.g., `npm run dev:animation`) and iterate on Rust code with the watcher. The
 Vite server reloads when the WASM `pkg/` contents change.
@@ -156,11 +170,10 @@ Vite server reloads when the WASM `pkg/` contents change.
 * **Optional features** – Node-graph crates expose an `urdf_ik` feature (enabled by default) for robotics integrations; WASM
   crates also expose a `console_error` feature to hook panics into the browser console.
 * **Repo scripts** –
-  * `pnpm run build:wasm:animation` / `pnpm run build:wasm:graph` wrap the underlying Node scripts to refresh WASM outputs.
-  * `scripts/build-animation-wasm.mjs` / `scripts/build-graph-wasm.mjs` contain the raw build logic used by the npm shortcuts.
-    - The graph script now forwards `--features urdf_ik` to ensure the packaged wasm exposes the URDF IK/FK node family.
-  * `npm run watch:wasm:animation` / `npm run watch:wasm:graph` trigger `cargo watch` loops that rebuild WASM artifacts on change
-    (requires `cargo-watch`).
+  * `pnpm run build:wasm:<animation|graph|orchestrator>` wrap the underlying Node scripts to refresh the individual WASM outputs.
+  * `scripts/build-animation-wasm.mjs`, `scripts/build-graph-wasm.mjs`, and `scripts/build-orchestrator-wasm.mjs` contain the raw build logic used by those npm shortcuts.
+    - The graph script forwards `--features urdf_ik` to ensure the packaged wasm exposes the URDF IK/FK node family.
+  * `pnpm run watch:wasm:<animation|graph|orchestrator>` trigger `cargo watch` loops that rebuild WASM artifacts on change (requires `cargo-watch`).
   * `scripts/install-git-hooks.sh` installs pre-commit/pre-push hooks mirroring the CI checks.
   * `scripts/dry-run-release.sh` runs the publish checks without releasing artifacts.
 

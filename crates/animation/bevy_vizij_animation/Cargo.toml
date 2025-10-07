@@ -14,8 +14,8 @@ categories  = ["game-engines", "rendering", "wasm"]
 [dependencies]
 vizij-animation-core = { version = "0.3.0", path = "../vizij-animation-core" }
 bevy                = { workspace = true }
-vizij-api-core      = { path = "../../api/vizij-api-core" }
-bevy_vizij_api      = { path = "../../api/bevy_vizij_api" }
+vizij-api-core      = { version = "0.2.0", path = "../../api/vizij-api-core" }
+bevy_vizij_api      = { version = "0.2.0", path = "../../api/bevy_vizij_api" }
 
 [dev-dependencies]
 serde_json = "1"

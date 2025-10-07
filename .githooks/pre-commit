@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
-# Git pre-commit hook: enforce formatting and linting for the Rust workspace
+# Git pre-commit hook: hand off to the shared task runner.
 set -euo pipefail
 
-echo "[pre-commit] cargo fmt --all"
-cargo fmt --all
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
 
-echo "[pre-commit] cargo clippy --all-targets -- -D warnings"
-cargo clippy --all-targets -- -D warnings
-
-echo "[pre-commit] OK"
+pnpm run hook:pre-commit

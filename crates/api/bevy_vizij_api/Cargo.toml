@@ -6,6 +6,6 @@ publish = false
 
 [dependencies]
 bevy = { version = "0.14.2" }
-vizij-api-core = { path = "../vizij-api-core" }
+vizij-api-core = { version = "0.2.0", path = "../vizij-api-core" }
 serde = { version = "1", features = ["derive"] }
 hashbrown = { workspace = true }
