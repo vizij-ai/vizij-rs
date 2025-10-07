@@ -11,13 +11,20 @@
   ],
   "exports": {
     ".": {
+      "browser": "./dist/index.browser.js",
       "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "default": "./dist/index.js"
+    },
+    "./shared/browser": {
+      "browser": "./dist/shared.browser.js",
+      "import": "./dist/shared.browser.js",
+      "default": "./dist/shared.browser.js"
     }
   },
   "sideEffects": false,
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "node scripts/generate-browser-fixtures.mjs && tsc -p tsconfig.json",
+    "clean": "rm -rf dist"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

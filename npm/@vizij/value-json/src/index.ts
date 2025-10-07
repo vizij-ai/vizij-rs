@@ -79,6 +79,34 @@ const DEFAULT_SCALE: [number, number, number] = [1, 1, 1];
 
 const EMPTY_STRING = "";
 
+const NORMALIZED_TYPE_TAGS = new Set<NormalizedValue["type"]>([
+  "float",
+  "bool",
+  "text",
+  "vec2",
+  "vec3",
+  "vec4",
+  "quat",
+  "colorrgba",
+  "vector",
+  "enum",
+  "record",
+  "array",
+  "list",
+  "tuple",
+  "transform",
+]);
+
+type NormalizedType = NormalizedValue["type"];
+
+type DataFor<T extends NormalizedType> = Extract<NormalizedValue, { type: T }>["data"];
+
+function coerceNormalizedType(value: NormalizedValue): NormalizedType | null {
+  const raw = value.type as string;
+  const lower = raw.toLowerCase() as NormalizedType;
+  return NORMALIZED_TYPE_TAGS.has(lower) ? lower : null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -115,34 +143,38 @@ function coerceTuple(
 }
 
 function normalizedValueAsNumber(value: NormalizedValue): number | undefined {
-  switch (value.type) {
+  const type = coerceNormalizedType(value);
+  if (!type) return undefined;
+  switch (type) {
     case "float": {
-      const num = Number(value.data);
+      const num = Number((value.data as DataFor<"float">));
       return Number.isFinite(num) ? num : undefined;
     }
     case "bool":
-      return value.data ? 1 : 0;
+      return (value.data as DataFor<"bool">) ? 1 : 0;
     case "vec2":
     case "vec3":
     case "vec4":
     case "quat":
     case "colorrgba":
     case "vector": {
-      const first = value.data[0];
+      const first = (value.data as DataFor<typeof type>)[0];
       const num = Number(first);
       return Number.isFinite(num) ? num : undefined;
     }
     case "transform": {
-      const first = value.data.translation[0];
+      const first = (value.data as DataFor<"transform">).translation[0];
       const num = Number(first);
       return Number.isFinite(num) ? num : undefined;
     }
     case "enum":
-      return normalizedValueAsNumber(value.data[1]);
+      return normalizedValueAsNumber((value.data as DataFor<"enum">)[1]);
     case "array":
     case "list":
     case "tuple":
-      return value.data.length > 0 ? normalizedValueAsNumber(value.data[0]) : undefined;
+      return (value.data as DataFor<typeof type>).length > 0
+        ? normalizedValueAsNumber((value.data as DataFor<typeof type>)[0]!)
+        : undefined;
     default:
       return undefined;
   }
@@ -152,20 +184,22 @@ function normalizedValueAsNumericArray(
   value: NormalizedValue,
   fallback: number,
 ): number[] | undefined {
-  switch (value.type) {
+  const type = coerceNormalizedType(value);
+  if (!type) return undefined;
+  switch (type) {
     case "float": {
-      const num = Number(value.data);
+      const num = Number((value.data as DataFor<"float">));
       return [Number.isFinite(num) ? num : fallback];
     }
     case "bool":
-      return [value.data ? 1 : 0];
+      return [(value.data as DataFor<"bool">) ? 1 : 0];
     case "vec2":
     case "vec3":
     case "vec4":
     case "quat":
     case "colorrgba":
     case "vector":
-      return value.data.map((entry) => {
+      return (value.data as DataFor<typeof type>).map((entry) => {
         const num = Number(entry);
         return Number.isFinite(num) ? num : fallback;
       });
@@ -175,8 +209,9 @@ function normalizedValueAsNumericArray(
 }
 
 function normalizedValueAsTransform(value: NormalizedValue): NormalizedTransform | undefined {
-  if (value.type !== "transform") return undefined;
-  const { translation, rotation, scale } = value.data;
+  const type = coerceNormalizedType(value);
+  if (type !== "transform") return undefined;
+  const { translation, rotation, scale } = value.data as DataFor<"transform">;
   return {
     translation: translation.map((n) => Number(n) || 0) as [number, number, number],
     rotation: rotation.map((n) => Number(n) || 0) as [number, number, number, number],
@@ -185,95 +220,117 @@ function normalizedValueAsTransform(value: NormalizedValue): NormalizedTransform
 }
 
 function normalizedValueAsVec3(value: NormalizedValue): [number, number, number] | undefined {
-  switch (value.type) {
+  const type = coerceNormalizedType(value);
+  if (!type) return undefined;
+  switch (type) {
     case "vec3":
-      return [...value.data] as [number, number, number];
-    case "vec4":
-      return [value.data[0], value.data[1], value.data[2]] as [number, number, number];
-    case "quat":
-      return [value.data[0], value.data[1], value.data[2]] as [number, number, number];
-    case "colorrgba":
-      return [value.data[0], value.data[1], value.data[2]] as [number, number, number];
-    case "vector":
-      return [value.data[0] ?? 0, value.data[1] ?? 0, value.data[2] ?? 0] as [number, number, number];
+      return [...(value.data as DataFor<"vec3">)] as [number, number, number];
+    case "vec4": {
+      const [x, y, z] = value.data as DataFor<"vec4">;
+      return [x, y, z];
+    }
+    case "quat": {
+      const [x, y, z] = value.data as DataFor<"quat">;
+      return [x, y, z];
+    }
+    case "colorrgba": {
+      const [r, g, b] = value.data as DataFor<"colorrgba">;
+      return [r, g, b];
+    }
+    case "vector": {
+      const data = value.data as DataFor<"vector">;
+      return [data[0] ?? 0, data[1] ?? 0, data[2] ?? 0];
+    }
     case "transform": {
-      const pos = value.data.translation;
-      return [pos[0] ?? 0, pos[1] ?? 0, pos[2] ?? 0] as [number, number, number];
+      const pos = (value.data as DataFor<"transform">).translation;
+      return [pos[0] ?? 0, pos[1] ?? 0, pos[2] ?? 0];
     }
     case "enum":
-      return normalizedValueAsVec3(value.data[1]);
+      return normalizedValueAsVec3((value.data as DataFor<"enum">)[1]);
     case "array":
     case "list":
     case "tuple":
-      return value.data.length > 0 ? normalizedValueAsVec3(value.data[0]) : undefined;
-    case "float":
-      return [value.data, value.data, value.data] as [number, number, number];
+      return (value.data as DataFor<typeof type>).length > 0
+        ? normalizedValueAsVec3((value.data as DataFor<typeof type>)[0]!)
+        : undefined;
+    case "float": {
+      const num = value.data as DataFor<"float">;
+      return [num, num, num];
+    }
     case "bool":
-      return value.data ? ([1, 1, 1] as [number, number, number]) : ([0, 0, 0] as [number, number, number]);
+      return (value.data as DataFor<"bool">) ? [1, 1, 1] : [0, 0, 0];
     default:
       return undefined;
   }
 }
 
 function normalizedValueAsVector(value: NormalizedValue): number[] | undefined {
-  switch (value.type) {
+  const type = coerceNormalizedType(value);
+  if (!type) return undefined;
+  switch (type) {
     case "vector":
-      return value.data.slice();
+      return (value.data as DataFor<"vector">).slice();
     case "vec2":
-      return [value.data[0], value.data[1]];
+      return [...(value.data as DataFor<"vec2">)];
     case "vec3":
-      return [...value.data];
+      return [...(value.data as DataFor<"vec3">)];
     case "vec4":
-      return [...value.data];
+      return [...(value.data as DataFor<"vec4">)];
     case "quat":
-      return [...value.data];
+      return [...(value.data as DataFor<"quat">)];
     case "colorrgba":
-      return [...value.data];
-    case "transform":
+      return [...(value.data as DataFor<"colorrgba">)];
+    case "transform": {
+      const data = value.data as DataFor<"transform">;
       return [
-        value.data.translation[0] ?? 0,
-        value.data.translation[1] ?? 0,
-        value.data.translation[2] ?? 0,
-        value.data.rotation[0] ?? 0,
-        value.data.rotation[1] ?? 0,
-        value.data.rotation[2] ?? 0,
-        value.data.rotation[3] ?? 0,
-        value.data.scale[0] ?? 1,
-        value.data.scale[1] ?? 1,
-        value.data.scale[2] ?? 1,
+        data.translation[0] ?? 0,
+        data.translation[1] ?? 0,
+        data.translation[2] ?? 0,
+        data.rotation[0] ?? 0,
+        data.rotation[1] ?? 0,
+        data.rotation[2] ?? 0,
+        data.rotation[3] ?? 0,
+        data.scale[0] ?? 1,
+        data.scale[1] ?? 1,
+        data.scale[2] ?? 1,
       ];
+    }
     case "enum":
-      return normalizedValueAsVector(value.data[1]);
+      return normalizedValueAsVector((value.data as DataFor<"enum">)[1]);
     case "array":
     case "list":
     case "tuple":
-      return value.data.flatMap((entry) => normalizedValueAsVector(entry) ?? []);
+      return (value.data as DataFor<typeof type>).flatMap(
+        (entry) => normalizedValueAsVector(entry) ?? [],
+      );
     case "float":
-      return [value.data];
+      return [(value.data as DataFor<"float">)];
     case "bool":
-      return [value.data ? 1 : 0];
+      return [(value.data as DataFor<"bool">) ? 1 : 0];
     default:
       return undefined;
   }
 }
 
 function normalizedValueAsBool(value: NormalizedValue): boolean | undefined {
-  switch (value.type) {
+  const type = coerceNormalizedType(value);
+  if (!type) return undefined;
+  switch (type) {
     case "bool":
-      return value.data;
+      return value.data as DataFor<"bool">;
     case "float":
-      return value.data !== 0;
+      return (value.data as DataFor<"float">) !== 0;
     case "text":
-      return value.data.length > 0;
+      return (value.data as DataFor<"text">).length > 0;
     case "vec2":
     case "vec3":
     case "vec4":
     case "quat":
     case "colorrgba":
     case "vector":
-      return value.data.some((entry) => Number(entry) !== 0);
+      return (value.data as DataFor<typeof type>).some((entry) => Number(entry) !== 0);
     case "transform": {
-      const { translation, rotation, scale } = value.data;
+      const { translation, rotation, scale } = value.data as DataFor<"transform">;
       return (
         translation.some((entry) => Number(entry) !== 0) ||
         rotation.some((entry) => Number(entry) !== 0) ||
@@ -281,13 +338,17 @@ function normalizedValueAsBool(value: NormalizedValue): boolean | undefined {
       );
     }
     case "enum":
-      return normalizedValueAsBool(value.data[1]);
+      return normalizedValueAsBool((value.data as DataFor<"enum">)[1]);
     case "record":
-      return Object.values(value.data).some((entry) => normalizedValueAsBool(entry) ?? false);
+      return Object.values(value.data as DataFor<"record">).some(
+        (entry) => normalizedValueAsBool(entry) ?? false,
+      );
     case "array":
     case "list":
     case "tuple":
-      return value.data.some((entry) => normalizedValueAsBool(entry) ?? false);
+      return (value.data as DataFor<typeof type>).some(
+        (entry) => normalizedValueAsBool(entry) ?? false,
+      );
     default:
       return undefined;
   }
@@ -296,28 +357,31 @@ function normalizedValueAsBool(value: NormalizedValue): boolean | undefined {
 function normalizedValueAsQuat(
   value: NormalizedValue,
 ): [number, number, number, number] | undefined {
-  switch (value.type) {
+  const type = coerceNormalizedType(value);
+  if (!type) return undefined;
+  switch (type) {
     case "quat":
-      return [...value.data] as [number, number, number, number];
-    case "vec4":
-      return [value.data[0], value.data[1], value.data[2], value.data[3]] as [number, number, number, number];
-    case "vector":
-      return [value.data[0] ?? 0, value.data[1] ?? 0, value.data[2] ?? 0, value.data[3] ?? 0] as [
-        number,
-        number,
-        number,
-        number,
-      ];
+      return [...(value.data as DataFor<"quat">)] as [number, number, number, number];
+    case "vec4": {
+      const [x, y, z, w] = value.data as DataFor<"vec4">;
+      return [x, y, z, w];
+    }
+    case "vector": {
+      const vec = value.data as DataFor<"vector">;
+      return [vec[0] ?? 0, vec[1] ?? 0, vec[2] ?? 0, vec[3] ?? 0];
+    }
     case "transform": {
-      const rot = value.data.rotation;
-      return [rot[0] ?? 0, rot[1] ?? 0, rot[2] ?? 0, rot[3] ?? 0] as [number, number, number, number];
+      const rot = (value.data as DataFor<"transform">).rotation;
+      return [rot[0] ?? 0, rot[1] ?? 0, rot[2] ?? 0, rot[3] ?? 0];
     }
     case "enum":
-      return normalizedValueAsQuat(value.data[1]);
+      return normalizedValueAsQuat((value.data as DataFor<"enum">)[1]);
     case "array":
     case "list":
     case "tuple":
-      return value.data.length > 0 ? normalizedValueAsQuat(value.data[0]) : undefined;
+      return (value.data as DataFor<typeof type>).length > 0
+        ? normalizedValueAsQuat((value.data as DataFor<typeof type>)[0]!)
+        : undefined;
     default:
       return undefined;
   }
@@ -326,49 +390,56 @@ function normalizedValueAsQuat(
 function normalizedValueAsColorRgba(
   value: NormalizedValue,
 ): [number, number, number, number] | undefined {
-  switch (value.type) {
+  const type = coerceNormalizedType(value);
+  if (!type) return undefined;
+  switch (type) {
     case "colorrgba":
-      return [...value.data] as [number, number, number, number];
-    case "vec4":
-      return [value.data[0], value.data[1], value.data[2], value.data[3]] as [number, number, number, number];
-    case "vector":
-      return [value.data[0] ?? 0, value.data[1] ?? 0, value.data[2] ?? 0, value.data[3] ?? 0] as [
-        number,
-        number,
-        number,
-        number,
-      ];
+      return [...(value.data as DataFor<"colorrgba">)] as [number, number, number, number];
+    case "vec4": {
+      const [r, g, b, a] = value.data as DataFor<"vec4">;
+      return [r, g, b, a];
+    }
+    case "vector": {
+      const vec = value.data as DataFor<"vector">;
+      return [vec[0] ?? 0, vec[1] ?? 0, vec[2] ?? 0, vec[3] ?? 0];
+    }
     case "float": {
-      const num = Number(value.data) || 0;
+      const num = Number(value.data as DataFor<"float">) || 0;
       return [num, num, num, 1];
     }
     case "bool":
-      return value.data ? [1, 1, 1, 1] : [0, 0, 0, 1];
+      return (value.data as DataFor<"bool">) ? [1, 1, 1, 1] : [0, 0, 0, 1];
     case "transform": {
-      const scale = value.data.scale;
+      const scale = (value.data as DataFor<"transform">).scale;
       return [scale[0] ?? 0, scale[1] ?? 0, scale[2] ?? 0, 1];
     }
     case "enum":
-      return normalizedValueAsColorRgba(value.data[1]);
+      return normalizedValueAsColorRgba((value.data as DataFor<"enum">)[1]);
     case "array":
     case "list":
     case "tuple":
-      return value.data.length > 0 ? normalizedValueAsColorRgba(value.data[0]) : undefined;
+      return (value.data as DataFor<typeof type>).length > 0
+        ? normalizedValueAsColorRgba((value.data as DataFor<typeof type>)[0]!)
+        : undefined;
     default:
       return undefined;
   }
 }
 
 function normalizedValueAsText(value: NormalizedValue): string | undefined {
-  switch (value.type) {
+  const type = coerceNormalizedType(value);
+  if (!type) return undefined;
+  switch (type) {
     case "text":
-      return value.data;
+      return value.data as DataFor<"text">;
     case "enum":
-      return normalizedValueAsText(value.data[1]);
+      return normalizedValueAsText((value.data as DataFor<"enum">)[1]);
     case "array":
     case "list":
     case "tuple":
-      return value.data.length > 0 ? normalizedValueAsText(value.data[0]) : undefined;
+      return (value.data as DataFor<typeof type>).length > 0
+        ? normalizedValueAsText((value.data as DataFor<typeof type>)[0]!)
+        : undefined;
     default:
       return undefined;
   }

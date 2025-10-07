@@ -88,6 +88,17 @@ const baked = eng.bakeAnimationWithDerivatives(animId, {
 console.log(baked.values.tracks[0].values.length, baked.derivatives.tracks[0].values.length);
 ```
 
+### Shared fixtures
+
+```ts
+import { loadAnimationFixture } from "@vizij/animation-wasm";
+
+const stored = await loadAnimationFixture("pose-quat-transform");
+// stored is compatible with Engine.loadAnimation({ format: "stored" })
+```
+
+The helper fetches manifest-backed JSON from `@vizij/test-fixtures`, making it easy to mirror the repo's shared samples in your own tests.
+
 ### Low-level bindings
 
 ```ts
@@ -124,6 +135,8 @@ const rich = JSON.parse(raw.update_values_and_derivatives(0.016, undefined));
   baking via `derivative_epsilon`.
 * **BakingConfig** – Accepts `{ frame_rate?, start_time?, end_time?, derivative_epsilon? }`. Non-positive frame rates or
   `end_time < start_time` throw during parsing.
+* **Shared fixtures** – Use `await loadAnimationFixture("<key>")` to pull manifest-backed StoredAnimation samples from
+  `@vizij/test-fixtures` when wiring smoke tests or demos.
 
 ## Examples
 

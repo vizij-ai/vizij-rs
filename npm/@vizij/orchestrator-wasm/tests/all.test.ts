@@ -13,17 +13,17 @@ import {
   type ValueInput,
 } from "@vizij/value-json";
 import type { GraphRegistrationConfig, AnimationRegistrationConfig } from "../src/index.js";
-import { init, createOrchestrator } from "../src/index.js";
+import { init, createOrchestrator, loadOrchestrationBundle } from "../src/index.js";
 
 type TestFixturesModule = typeof import("@vizij/test-fixtures");
 
 let fixturesModule: TestFixturesModule | null = null;
-const fixturesPromise: Promise<TestFixturesModule> = import(
-  new URL("../../../test-fixtures/dist/index.js", import.meta.url).toString()
-).then((module): TestFixturesModule => {
-  fixturesModule = module as TestFixturesModule;
-  return fixturesModule;
-});
+const fixturesPromise: Promise<TestFixturesModule> = import("@vizij/test-fixtures").then(
+  (module): TestFixturesModule => {
+    fixturesModule = module as TestFixturesModule;
+    return fixturesModule;
+  },
+);
 
 function fixtures(): TestFixturesModule {
   if (!fixturesModule) {
@@ -169,7 +169,7 @@ function expectWriteMatches(
 }
 
 async function testScalarRampPipeline(): Promise<void> {
-  const bundle = orchestrationFixtures().loadOrchestrationBundle("scalar-ramp-pipeline");
+  const bundle = await loadOrchestrationBundle("scalar-ramp-pipeline");
   const orch = await createOrchestrator({ schedule: "SinglePass" });
 
   const graphConfig = graphConfigFromFixture(bundle.graphSpec);
@@ -257,7 +257,7 @@ async function testChainedSlewPipeline(): Promise<void> {
 }
 
 async function testBlendPosePipeline(): Promise<void> {
-  const bundle = orchestrationFixtures().loadOrchestrationBundle("blend-pose-pipeline");
+  const bundle = await loadOrchestrationBundle("blend-pose-pipeline");
   const orch = await createOrchestrator({ schedule: "TwoPass" });
 
   const graphConfig = graphConfigFromFixture(bundle.graphSpec);

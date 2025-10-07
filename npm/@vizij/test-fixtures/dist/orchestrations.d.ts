@@ -12,11 +12,10 @@ export interface PipelineDescriptor {
     }>;
     [key: string]: unknown;
 }
-export interface OrchestrationBundle<TDescriptor extends PipelineDescriptor = PipelineDescriptor, TAnimation = unknown, TGraphSpec = unknown, TGraphStage = unknown> {
+export interface OrchestrationBundle<TDescriptor extends PipelineDescriptor = PipelineDescriptor, TAnimation = unknown, TGraphSpec = unknown> {
     descriptor: TDescriptor;
     animation: TAnimation;
     graphSpec: TGraphSpec;
-    graphStage?: TGraphStage | null;
 }
 export declare function orchestrationNames(): string[];
 export declare function orchestrationJson(name: string): string;

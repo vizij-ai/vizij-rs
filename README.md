@@ -188,7 +188,7 @@ Vite server reloads when the WASM `pkg/` contents change.
 ```rust
 use vizij_animation_core::{Engine, InstanceCfg, parse_stored_animation_json};
 
-let json = std::fs::read_to_string("tests/fixtures/new_format.json")?;
+let json = vizij_test_fixtures::animations::json("vector-pose-combo")?;
 let stored = parse_stored_animation_json(&json)?;
 let mut engine = Engine::new(Default::default());
 let anim = engine.load_animation(stored);
@@ -244,7 +244,8 @@ console.log(baked.values.tracks[0].values.length, baked.derivatives.tracks[0].va
 use vizij_graph_core::{evaluate_all, GraphRuntime};
 use vizij_graph_core::spec::GraphSpec;
 
-let spec: GraphSpec = serde_json::from_str(include_str!("tests/fixtures/simple_graph.json"))?;
+let fixture: serde_json::Value = vizij_test_fixtures::node_graphs::spec("simple-gain-offset")?;
+let spec: GraphSpec = serde_json::from_value(fixture.get("spec").cloned().expect("spec field"))?;
 let mut runtime = GraphRuntime::default();
 let result = evaluate_all(&mut runtime, &spec)?;
 for (node_id, ports) in &result.nodes {

@@ -40,11 +40,11 @@
   },
   "dependencies": {
     "@vizij/value-json": "workspace:*",
-    "@vizij/wasm-loader": "workspace:*"
+    "@vizij/wasm-loader": "workspace:*",
+    "@vizij/test-fixtures": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.5.0",
-    "@vizij/test-fixtures": "workspace:*",
     "@types/node": "latest"
   },
   "publishConfig": {

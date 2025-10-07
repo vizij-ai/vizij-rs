@@ -4,7 +4,7 @@ use crate::data::{AnimationData, Keypoint, Track, TrackSettings, Transitions};
 use crate::ids::AnimId;
 use vizij_api_core::Value;
 
-/// Public API: parse StoredAnimation-style JSON (see types/animation.ts and tests/fixtures/new_format.json)
+/// Public API: parse StoredAnimation-style JSON (see types/animation.ts and fixtures/animations/vector-pose-combo.json)
 /// into vizij-animation-core's canonical AnimationData (data.rs).
 ///
 /// Notes:

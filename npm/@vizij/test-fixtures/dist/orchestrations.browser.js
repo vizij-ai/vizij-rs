@@ -1,6 +1,6 @@
-import { orchestrationEntry, orchestrationPath, loadFixture, manifest, readFixture, } from "./shared.js";
-import { animationFixture } from "./animations.js";
-import { nodeGraphSpec, nodeGraphStage } from "./nodeGraphs.js";
+import { orchestrationEntry, orchestrationPath, loadFixture, manifest, readFixture, } from "./shared.browser.js";
+import { animationFixture } from "./animations.browser.js";
+import { nodeGraphSpec } from "./nodeGraphs.browser.js";
 export function orchestrationNames() {
     return Object.keys(manifest().orchestrations);
 }
@@ -26,11 +26,9 @@ export function loadOrchestrationBundle(name) {
     }
     const animation = animationFixture(descriptor.animation);
     const graphSpec = nodeGraphSpec(descriptor.graph);
-    const graphStage = nodeGraphStage(descriptor.graph);
     return {
         descriptor,
         animation,
         graphSpec,
-        graphStage,
     };
 }

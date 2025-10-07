@@ -17,8 +17,7 @@
       "spec": "node_graphs/blend-graph.json"
     },
     "weighted-average": {
-      "spec": "node_graphs/weighted-blend-graph.json",
-      "stage": "node_graphs/weighted-blend-inputs.json"
+      "spec": "node_graphs/weighted-blend-graph.json"
     },
     "weighted-sum-helper": {
       "spec": "node_graphs/weighted-sum-helper-graph.json"
@@ -42,8 +41,10 @@
       "spec": "node_graphs/sine-driver.json"
     },
     "urdf-ik-position": {
-      "spec": "node_graphs/urdf-ik-position.json",
-      "stage": "node_graphs/urdf-ik-position-stage.json"
+      "spec": "node_graphs/urdf-ik-position.json"
+    },
+    "urdf-fk-ik-roundtrip": {
+      "spec": "node_graphs/urdf-fk-ik-roundtrip.json"
     }
   },
   "orchestrations": {

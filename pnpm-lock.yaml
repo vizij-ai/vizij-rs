@@ -10,6 +10,9 @@ importers:
 
   npm/@vizij/animation-wasm:
     dependencies:
+      '@vizij/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
       '@vizij/value-json':
         specifier: workspace:*
         version: link:../value-json
@@ -20,15 +23,15 @@ importers:
       '@types/node':
         specifier: latest
         version: 24.6.2
-      '@vizij/test-fixtures':
-        specifier: workspace:*
-        version: link:../test-fixtures
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
 
   npm/@vizij/node-graph-wasm:
     dependencies:
+      '@vizij/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
       '@vizij/value-json':
         specifier: workspace:*
         version: link:../value-json
@@ -39,15 +42,15 @@ importers:
       '@types/node':
         specifier: ^20.12.7
         version: 20.19.19
-      '@vizij/test-fixtures':
-        specifier: workspace:*
-        version: link:../test-fixtures
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
 
   npm/@vizij/orchestrator-wasm:
     dependencies:
+      '@vizij/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
       '@vizij/value-json':
         specifier: workspace:*
         version: link:../value-json
@@ -58,9 +61,6 @@ importers:
       '@types/node':
         specifier: ^20.12.7
         version: 20.19.19
-      '@vizij/test-fixtures':
-        specifier: workspace:*
-        version: link:../test-fixtures
       typescript:
         specifier: ^5.5.0
         version: 5.9.3

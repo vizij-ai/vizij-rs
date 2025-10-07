@@ -6,12 +6,12 @@ import { dirname, resolve } from "node:path";
 type TestFixturesModule = typeof import("@vizij/test-fixtures");
 
 let fixturesModule: TestFixturesModule | null = null;
-const fixturesPromise: Promise<TestFixturesModule> = import(
-  new URL("../../../test-fixtures/dist/index.js", import.meta.url).toString()
-).then((module): TestFixturesModule => {
-  fixturesModule = module as TestFixturesModule;
-  return fixturesModule;
-});
+const fixturesPromise: Promise<TestFixturesModule> = import("@vizij/test-fixtures").then(
+  (module): TestFixturesModule => {
+    fixturesModule = module as TestFixturesModule;
+    return fixturesModule;
+  },
+);
 
 function fixtures(): TestFixturesModule {
   if (!fixturesModule) {
@@ -35,6 +35,7 @@ import {
   nestedTelemetry,
   graphSamples,
   urdfIkPosition,
+  loadNodeGraphSpec,
   type EvalResult,
   type ValueJSON,
   type GraphSpec,
@@ -68,6 +69,50 @@ function loadJsonFixture(key: string): string {
   }
   return raw;
 }
+
+const weightedAverageStage: Record<string, { value: ValueJSON; shape?: ShapeJSON }> = {
+  "samples/weighted.targets": {
+    value: {
+      tuple: [
+        {
+          record: {
+            weight: { float: 0.6 },
+            value: { vec3: [1.5, 0, 0] },
+          },
+        },
+        {
+          record: {
+            weight: { float: 0.25 },
+            value: { vec3: [0, 1, 0.5] },
+          },
+        },
+        {
+          record: {
+            weight: { float: 0.35 },
+            value: { vec3: [0, 0, -1.5] },
+          },
+        },
+      ],
+    },
+  },
+};
+
+const urdfIkPositionStage: Record<string, { value: ValueJSON; shape?: ShapeJSON }> = {
+  "tests/urdf.target_pos": {
+    value: { vec3: [0.95, 0.0, 0.1] },
+  },
+  "tests/urdf.joints": {
+    value: { vector: [0, 0, 0, 0, 0, 0] },
+  },
+};
+
+const fkIkRoundtripSamples: number[][] = [
+  [0, 0, 0, 0, 0, 0],
+  [0.2, -0.1, 0.15, -0.2, 0.1, -0.05],
+  [-0.25, 0.2, -0.18, 0.22, -0.12, 0.08],
+  [0.35, -0.28, 0.24, 0.18, -0.16, 0.12],
+  [-0.3, 0.18, 0.12, -0.26, 0.2, -0.14],
+];
 
 /* ---------- Generic validation helpers (merged) ---------- */
 
@@ -518,11 +563,9 @@ function assertText(write: WriteOpJSON, expected: string): void {
     // weighted-average-from-json (uses fixtures)
     {
       const weightedSpecJson = nodeGraphFixtures().nodeGraphSpecJson("weighted-average");
-      const weightedStage = nodeGraphFixtures().nodeGraphStage<Record<string, { value: ValueJSON; shape?: ShapeJSON }>>("weighted-average");
-      assert.ok(weightedStage, "weighted-average stage data should exist");
       await runSample("weighted-average-from-json", weightedSpecJson, {
         prepare: (graph) => {
-          for (const [path, payload] of Object.entries(weightedStage!)) {
+          for (const [path, payload] of Object.entries(weightedAverageStage)) {
             graph.stageInput(path, payload.value, payload.shape);
           }
         },
@@ -539,14 +582,10 @@ function assertText(write: WriteOpJSON, expected: string): void {
       const urdfFixture = nodeGraphFixtures().nodeGraphSpec(
         "urdf-ik-position",
       ) as { spec: GraphSpec };
-      const urdfStage = nodeGraphFixtures().nodeGraphStage<
-        Record<string, { value: ValueJSON; shape?: ShapeJSON }>
-      >("urdf-ik-position");
 
       const urdfResult = await runSample("urdf-ik-position-fixture", urdfFixture.spec, {
         prepare: (graph) => {
-          if (!urdfStage) return;
-          for (const [path, payload] of Object.entries(urdfStage)) {
+          for (const [path, payload] of Object.entries(urdfIkPositionStage)) {
             graph.stageInput(path, payload.value, payload.shape);
           }
         },
@@ -591,127 +630,16 @@ function assertText(write: WriteOpJSON, expected: string): void {
     // eslint-disable-next-line no-console
     console.log("All consolidated samples tests passed");
 
-    // URDF FK/IK round-trip coverage across multiple poses.
+    // URDF FK/IK round-trip coverage across multiple poses using shared fixture.
     {
-      const urdfXml = `
-<robot name="planar_arm">
-  <link name="base_link" />
-  <link name="link1" />
-  <link name="link2" />
-  <link name="link3" />
-  <link name="link4" />
-  <link name="link5" />
-  <link name="link6" />
-  <link name="tool" />
-
-  <joint name="joint1" type="revolute">
-    <parent link="base_link" />
-    <child link="link1" />
-    <origin xyz="0 0 0.1" rpy="0 0 0" />
-    <axis xyz="0 0 1" />
-    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="joint2" type="revolute">
-    <parent link="link1" />
-    <child link="link2" />
-    <origin xyz="0.2 0 0" rpy="0 0 0" />
-    <axis xyz="0 1 0" />
-    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="joint3" type="revolute">
-    <parent link="link2" />
-    <child link="link3" />
-    <origin xyz="0.2 0 0" rpy="0 0 0" />
-    <axis xyz="1 0 0" />
-    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="joint4" type="revolute">
-    <parent link="link3" />
-    <child link="link4" />
-    <origin xyz="0.2 0 0" rpy="0 0 0" />
-    <axis xyz="0 0 1" />
-    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="joint5" type="revolute">
-    <parent link="link4" />
-    <child link="link5" />
-    <origin xyz="0.15 0 0" rpy="0 0 0" />
-    <axis xyz="0 1 0" />
-    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="joint6" type="revolute">
-    <parent link="link5" />
-    <child link="link6" />
-    <origin xyz="0.1 0 0" rpy="0 0 0" />
-    <axis xyz="1 0 0" />
-    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="tool_joint" type="fixed">
-    <parent link="link6" />
-    <child link="tool" />
-    <origin xyz="0.1 0 0" rpy="0 0 0" />
-  </joint>
-</robot>
-`.trim();
-
-      const fkIkGraph: GraphSpec = {
-        nodes: [
-          {
-            id: "joint_input",
-            type: "input",
-            params: {
-              path: "tests/urdf.joints",
-              value: { vector: [0, 0, 0, 0, 0, 0] },
-            },
-          },
-          {
-            id: "fk",
-            type: "urdffk",
-            params: {
-              urdf_xml: urdfXml,
-              root_link: "base_link",
-              tip_link: "tool",
-            },
-            inputs: { joints: { node_id: "joint_input" } },
-          },
-          {
-            id: "ik",
-            type: "urdfikposition",
-            params: {
-              urdf_xml: urdfXml,
-              root_link: "base_link",
-              tip_link: "tool",
-              max_iters: 256,
-              tol_pos: 0.0005,
-            },
-            inputs: {
-              target_pos: { node_id: "fk", output_key: "position" },
-              seed: { node_id: "joint_input" },
-            },
-          },
-        ],
-      };
+      const fkIkGraph = await loadNodeGraphSpec("urdf-fk-ik-roundtrip");
 
       const fkIkGraphInstance = new Graph();
       fkIkGraphInstance.loadGraph(fkIkGraph);
       fkIkGraphInstance.setTime(0);
 
       const expectedJointNames = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"] as const;
-      const jointSamples: number[][] = [
-        [0, 0, 0, 0, 0, 0],
-        [0.2, -0.1, 0.15, -0.2, 0.1, -0.05],
-        [-0.25, 0.2, -0.18, 0.22, -0.12, 0.08],
-        [0.35, -0.28, 0.24, 0.18, -0.16, 0.12],
-        [-0.3, 0.18, 0.12, -0.26, 0.2, -0.14],
-      ];
-
-      jointSamples.forEach((angles, sampleIdx) => {
+      fkIkRoundtripSamples.forEach((angles, sampleIdx) => {
         // Forward pass: compute FK pose for the chosen joint angles.
         // console.log("FK Target", angles)
         fkIkGraphInstance.stageInput("tests/urdf.joints", angles);

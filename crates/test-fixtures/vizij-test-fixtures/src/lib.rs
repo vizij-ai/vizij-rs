@@ -180,7 +180,10 @@ mod tests {
 
         let stage = node_graphs::stage_json("urdf-ik-position")
             .expect("fetch stage data for urdf-ik-position");
-        assert!(stage.is_some(), "urdf-ik-position stage should exist");
+        assert!(
+            stage.is_none(),
+            "urdf-ik-position no longer includes shared stage data"
+        );
     }
 
     #[test]

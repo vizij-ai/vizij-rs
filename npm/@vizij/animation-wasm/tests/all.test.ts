@@ -16,12 +16,12 @@ import {
 type TestFixturesModule = typeof import("@vizij/test-fixtures");
 
 let fixturesModule: TestFixturesModule | null = null;
-const fixturesPromise: Promise<TestFixturesModule> = import(
-  new URL("../../../test-fixtures/dist/index.js", import.meta.url).toString()
-).then((module): TestFixturesModule => {
-  fixturesModule = module as TestFixturesModule;
-  return fixturesModule;
-});
+const fixturesPromise: Promise<TestFixturesModule> = import("@vizij/test-fixtures").then(
+  (module): TestFixturesModule => {
+    fixturesModule = module as TestFixturesModule;
+    return fixturesModule;
+  },
+);
 
 function fixtures(): TestFixturesModule {
   if (!fixturesModule) {
@@ -78,7 +78,7 @@ function expectNearlyEqualVector(actual: number[] | undefined, expected: number[
   actual!.forEach((value, idx) => expectNearlyEqual(value, expected[idx], `${label}[${idx}]`));
 }
 
-import { init, Engine } from "../src/index.js";
+import { init, Engine, loadAnimationFixture } from "../src/index.js";
 import type { StoredAnimation, Inputs } from "../src/types";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -178,8 +178,7 @@ async function testLoadAnimationStateToggleFixture(): Promise<void> {
 }
 
 async function testLoadAnimationPoseQuatFixture(): Promise<void> {
-  const { animations } = fixtures();
-  const storedAnimation = animations.animationFixture<StoredAnimation>("pose-quat-transform");
+  const storedAnimation = await loadAnimationFixture<StoredAnimation>("pose-quat-transform");
   const engine = new Engine();
 
   let animId: number;

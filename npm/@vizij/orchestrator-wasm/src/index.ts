@@ -122,6 +122,13 @@ export {
 } from "@vizij/value-json";
 type Value = ValueInput;
 
+export {
+  listOrchestrationFixtures,
+  loadOrchestrationBundle,
+  loadOrchestrationDescriptor,
+  loadOrchestrationJson,
+} from "./fixtures.js";
+
 /**
  * Ergonomic wrapper around the wasm VizijOrchestrator.
  * Always await init() once before constructing.

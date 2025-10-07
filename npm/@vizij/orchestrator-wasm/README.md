@@ -82,6 +82,22 @@ const frame = orchestrator.step(1 / 60);
 console.log(frame);
 ```
 
+Shared fixtures
+---------------
+The package exposes helpers that load manifest-backed samples from `@vizij/test-fixtures`. For example:
+
+```ts
+import { loadOrchestrationBundle } from "@vizij/orchestrator-wasm";
+
+const bundle = await loadOrchestrationBundle("scalar-ramp-pipeline");
+// bundle.animation: StoredAnimation JSON
+// bundle.graphSpec: GraphSpec object ready to register
+// bundle.graphStage: optional staged inputs (if present)
+// bundle.descriptor: orchestration descriptor metadata
+```
+
+This makes it easy to bootstrap quick-start demos or tests without hand-coding fixtures.
+
 API reference (high level)
 --------------------------
 This TypeScript wrapper exposes an ergonomic class with the following primary functions:

@@ -38,16 +38,20 @@ test("toValueJSON passes ValueJSON through", () => {
 
 test("value helpers extract numeric data", () => {
   const normalizedVector = { type: "vec3", data: [4, 5, 6] };
+  const uppercaseFloat = { type: "Float", data: 2 };
   const legacyVector = { vector: [12, 13] };
 
   assert.equal(valueAsNumber(normalizedVector), 4);
   assert.equal(valueAsNumber(3.5), 3.5);
+  assert.equal(valueAsNumber(uppercaseFloat), 2);
   assert.equal(valueAsNumber(legacyVector), 12);
 });
 
 test("valueAsNumericArray normalizes entries", () => {
   const mixed = { type: "vector", data: [1, "oops", 3] };
+  const uppercase = { type: "Vector", data: [4, 5] };
   assert.deepEqual(valueAsNumericArray(mixed, 10), [1, 10, 3]);
+  assert.deepEqual(valueAsNumericArray(uppercase, 0), [4, 5]);
   assert.deepEqual(valueAsNumericArray({ bool: true }, 5), [1]);
 });
 
@@ -123,8 +127,10 @@ test("valueAsQuat extracts quaternion values", () => {
 
 test("valueAsColorRgba extracts color intent", () => {
   const normalizedColor = { type: "colorrgba", data: [0.5, 0.6, 0.7, 1] };
+  const uppercaseColor = { type: "COLORRGBA", data: [0.1, 0.2, 0.3, 0.4] };
 
   assert.deepEqual(valueAsColorRgba(normalizedColor), [0.5, 0.6, 0.7, 1]);
+  assert.deepEqual(valueAsColorRgba(uppercaseColor), [0.1, 0.2, 0.3, 0.4]);
   assert.deepEqual(valueAsColorRgba({ bool: true }), [1, 1, 1, 1]);
   assert.deepEqual(valueAsColorRgba({ color: [0.2, 0.3, 0.4, 0.5] }), [0.2, 0.3, 0.4, 0.5]);
 });

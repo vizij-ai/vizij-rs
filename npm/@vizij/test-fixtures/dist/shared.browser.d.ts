@@ -1,15 +1,5 @@
-export interface NodeGraphManifestEntry {
-    spec: string;
-    stage?: string;
-}
-export type OrchestrationManifestEntry = string | {
-    path: string;
-};
-export interface FixturesManifest {
-    animations: Record<string, string>;
-    "node-graphs": Record<string, NodeGraphManifestEntry>;
-    orchestrations: Record<string, OrchestrationManifestEntry>;
-}
+import type { FixturesManifest, NodeGraphManifestEntry, OrchestrationManifestEntry } from "./shared.js";
+export type { FixturesManifest, NodeGraphManifestEntry, OrchestrationManifestEntry };
 export declare function fixturesRoot(): string;
 export declare function manifest(): FixturesManifest;
 export declare function resolveFixturePath(relPath: string): string;

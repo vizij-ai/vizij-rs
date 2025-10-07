@@ -1,4 +1,4 @@
-import { animationEntry, loadFixture, manifest, readFixture, resolveFixturePath } from "./shared.js";
+import { animationEntry, loadFixture, manifest, readFixture, resolveFixturePath, } from "./shared.browser.js";
 export function animationNames() {
     return Object.keys(manifest().animations);
 }

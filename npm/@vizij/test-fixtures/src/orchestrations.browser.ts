@@ -4,9 +4,9 @@ import {
   loadFixture,
   manifest,
   readFixture,
-} from "./shared.js";
-import { animationFixture } from "./animations.js";
-import { nodeGraphSpec } from "./nodeGraphs.js";
+} from "./shared.browser.js";
+import { animationFixture } from "./animations.browser.js";
+import { nodeGraphSpec } from "./nodeGraphs.browser.js";
 
 export interface PipelineDescriptor {
   description?: string;

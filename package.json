@@ -15,9 +15,17 @@
     "watch:wasm:orchestrator": "cargo watch -w crates/orchestrator/vizij-orchestrator-core -w crates/orchestrator/vizij-orchestrator-wasm -s \"node scripts/build-orchestrator-wasm.mjs\"",
     "link:wasm:orchestrator": "pnpm --filter @vizij/orchestrator-wasm run build && (cd npm/@vizij/orchestrator-wasm && pnpm link --global)",
     "clean:wasm:orchestrator": "rm -rf npm/@vizij/orchestrator-wasm/pkg npm/@vizij/orchestrator-wasm/dist",
-    "link:wasm": "pnpm run link:wasm:animation && pnpm run link:wasm:graph && pnpm run link:wasm:orchestrator",
-    "build:wasm": "pnpm run build:wasm:animation && pnpm run build:wasm:graph && pnpm run build:wasm:orchestrator",
-    "test:npm": "pnpm --filter @vizij/animation-wasm run test && pnpm --filter @vizij/node-graph-wasm run test && pnpm --filter @vizij/orchestrator-wasm run test"
+    "build:wasm": "node scripts/build-wasm.mjs",
+    "clean:wasm": "pnpm run clean:wasm:animation && pnpm run clean:wasm:graph && pnpm run clean:wasm:orchestrator",
+    "test:wasm": "pnpm --filter @vizij/animation-wasm run test && pnpm --filter @vizij/node-graph-wasm run test && pnpm --filter @vizij/orchestrator-wasm run test",
+    "link:value-json": "pnpm --filter @vizij/value-json run build && (cd npm/@vizij/value-json && pnpm link --global)",
+    "link:wasm": "pnpm run link:value-json && pnpm run link:wasm:animation && pnpm run link:wasm:graph && pnpm run link:wasm:orchestrator",
+    "build:shared": "pnpm --filter @vizij/value-json --filter @vizij/wasm-loader --filter @vizij/test-fixtures run build",
+    "test:shared": "pnpm --filter @vizij/value-json run test",
+    "clean:shared": "pnpm --filter @vizij/value-json --filter @vizij/wasm-loader --filter @vizij/test-fixtures run clean",
+    "build": "pnpm run build:shared && pnpm run build:wasm",
+    "test": "pnpm run test:shared && pnpm run test:wasm",
+    "clean": "pnpm run clean:shared && pnpm run clean:wasm"
   },
   "workspaces": [
     "npm/@vizij/*"

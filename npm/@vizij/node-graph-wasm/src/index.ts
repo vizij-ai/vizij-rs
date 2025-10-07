@@ -199,6 +199,14 @@ export class Graph {
   }
 }
 
+export {
+  listNodeGraphFixtures,
+  loadNodeGraphBundle,
+  loadNodeGraphSpec,
+  loadNodeGraphSpecJson,
+  loadNodeGraphStage,
+} from "./fixtures.js";
+
 // Convenience re-exports for consumers who prefer a function-style API
 export async function createGraph(
   spec?: GraphSpec | string

@@ -349,6 +349,13 @@ export async function createEngine(config?: Config): Promise<Engine> {
   return new Engine(config);
 }
 
+export {
+  listAnimationFixtures,
+  loadAnimationFixture,
+  loadAnimationJson,
+  resolveAnimationPath,
+} from "./fixtures.js";
+
 /* -----------------------------------------------------------
    Backward-compat exports for legacy consumers
    - default export `init`

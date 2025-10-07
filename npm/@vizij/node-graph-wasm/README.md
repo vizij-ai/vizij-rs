@@ -86,6 +86,23 @@ const result: EvalResult = graph.evalAll();
 console.log(result.nodes, result.writes);
 ```
 
+### Shared fixtures
+
+```ts
+import { loadNodeGraphBundle } from "@vizij/node-graph-wasm";
+
+const { spec, stage } = await loadNodeGraphBundle("urdf-ik-position");
+const graph = new Graph();
+graph.loadGraph(spec);
+if (stage) {
+  for (const [path, payload] of Object.entries(stage as Record<string, { value: unknown; shape?: unknown }>)) {
+    graph.stageInput(path, payload.value, payload.shape);
+  }
+}
+```
+
+The helper pulls the manifest-backed JSON shipped via `@vizij/test-fixtures`, bundling both the spec and any staged inputs.
+
 ### Raw bindings
 
 ```ts
@@ -116,7 +133,8 @@ console.log(JSON.parse(resultJson));
 * **Parameter updates** – `graph.setParam(nodeId, key, value)` validates types (numeric params must receive numeric JSON) and
   supports robotics-focused keys (`urdf_xml`, `root_link`, `tip_link`, `weights`, etc.).
 * **Samples** – `graphSamples`, `oscillatorBasics`, `vectorPlayground`, `logicGate`, and `tupleSpringDampSlew` demonstrate modern
-  graph patterns (selectors, Input nodes, typed writes).
+  graph patterns (selectors, Input nodes, typed writes). Prefer `loadNodeGraphBundle("<key>")` to pull the manifest-backed
+  fixtures shipped via `@vizij/test-fixtures` for end-to-end smoke tests (includes graph specs and optional staged inputs).
 
 ## Examples
 
