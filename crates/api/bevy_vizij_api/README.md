@@ -1,48 +1,50 @@
 # bevy_vizij_api
 
-`bevy_vizij_api` is a lightweight bridge between Vizij's engine-agnostic `vizij-api-core` contracts and the Bevy ECS. It ships a
-thread-safe registry of writer callbacks plus helpers for applying write batches inside a Bevy `World`. Higher-level plugins (e.g.
-`bevy_vizij_animation`, `bevy_vizij_graph`) build atop this crate to apply animation or graph outputs to game entities.
+> **Bevy utilities for applying Vizij `WriteBatch` updates using canonical TypedPaths.**
+
+`bevy_vizij_api` bridges the shared contracts from `vizij-api-core` into the Bevy ECS. It provides a registry of setter callbacks keyed by `TypedPath` and helpers that map common paths (e.g., transforms) onto Bevy components. Higher-level plugins such as `bevy_vizij_animation` build on this crate.
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Installation](#installation)
+3. [Quick Start](#quick-start)
+4. [Key Concepts](#key-concepts)
+5. [Development & Testing](#development--testing)
+6. [Related Crates](#related-crates)
+
+---
 
 ## Overview
 
-* Provides a `WriterRegistry` Bevy resource that maps canonical `TypedPath` strings to setter closures.
-* Exposes `apply_write_batch` to walk a `WriteBatch` and invoke registered setters against the Bevy `World`.
-* Includes `register_transform_setters_for_entity` as a ready-made example for mapping TRS values onto `Transform` components.
-* Leaves binding strategy up to the host or higher-level plugins—nothing in this crate assumes a particular scene graph layout.
+- `WriterRegistry` resource storing path → setter registrations.
+- `apply_write_batch` helper that iterates a `WriteBatch` and invokes matching setters.
+- Convenience functions for common bindings (e.g., `register_transform_setters_for_entity`).
+- Thread-safe design (`Arc<Mutex<_>>`) so the registry can be cloned and used in parallel schedules.
 
-## Architecture
-
-```
-+-----------------+        +----------------+        +----------------+
-| WriteBatch      | -----> | WriterRegistry | -----> | Bevy World     |
-| (vizij-api-core)|        | (path -> fn)   |        | (components)   |
-+-----------------+        +----------------+        +----------------+
-```
-
-1. Engines emit `WriteBatch` values (path/value/shape triplets).
-2. Application code or plugins register setters on the `WriterRegistry` for each canonical path they care about.
-3. `apply_write_batch` looks up setters and mutates Bevy entities/components accordingly.
+---
 
 ## Installation
-
-Add the crate to any Bevy app that consumes Vizij engine outputs:
 
 ```bash
 cargo add bevy_vizij_api
 ```
 
-## Setup
+The crate targets the same Bevy version as the rest of the Vizij stack; check the workspace lockfile for the current requirement.
 
-1. Insert `WriterRegistry::default()` (or `WriterRegistry::new()`) as a Bevy resource.
-2. Register setters for the canonical paths you expect your engines to emit.
-3. When a `WriteBatch` arrives, call `apply_write_batch(&registry, world, &batch)` inside a system or schedule stage.
+---
 
-## Usage
+## Quick Start
 
 ```rust
 use bevy::prelude::*;
-use bevy_vizij_api::{apply_write_batch, register_transform_setters_for_entity, WriterRegistry};
+use bevy_vizij_api::{
+    apply_write_batch,
+    register_transform_setters_for_entity,
+    WriterRegistry,
+};
 use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
 
 fn main() {
@@ -73,17 +75,43 @@ fn drive_transforms(mut world: World) {
 }
 ```
 
-## Key Details
+---
 
-* `WriterRegistry` stores setters in an `Arc<Mutex<...>>`, making it cheap to clone and share across systems/threads.
-* Setters receive `(&mut World, &TypedPath, &Value)` and are free to query additional components or resources.
-* Helpers register both canonical TRS keys (`foo/Transform.translation`) and back-compat aliases (`foo.translation`).
-* Writes with no registered setter are ignored—this lets hosts opt-in path-by-path without panicking.
+## Key Concepts
 
-## Testing
+### WriterRegistry
 
-Run the crate's tests to validate the helper behaviour:
+- Internally stores setters in an `Arc<Mutex<Vec<(TypedPath, Setter)>>`.
+- Setters have the signature `Fn(&mut World, &TypedPath, &Value) + Send + Sync + 'static`.
+- Cloneable, allowing registration during setup and use during update systems without borrowing conflicts.
+
+### Applying Batches
+
+- `apply_write_batch(&registry, world, &batch)` looks up each `WriteOp.path` and invokes registered setters.
+- Unregistered paths are ignored, making it safe to opt-in incrementally.
+- Shapes are available on each `WriteOp` if you need metadata during application.
+
+### Helpers
+
+- `register_transform_setters_for_entity(registry, base_path, entity)` registers translation/rotation/scale setters for `Transform`.
+- Additional helpers can be added by downstream crates—`bevy_vizij_animation` registers animation-specific bindings using this API.
+
+---
+
+## Development & Testing
 
 ```bash
 cargo test -p bevy_vizij_api
 ```
+
+The test suite covers registry registration, TRS helpers, and batch application.
+
+---
+
+## Related Crates
+
+- [`vizij-api-core`](../vizij-api-core/README.md) – Shared Value/Shape/TypedPath data model.
+- [`bevy_vizij_animation`](../../animation/bevy_vizij_animation/README.md) – Animation plugin built on top of this API.
+- [`vizij-orchestrator-core`](../../orchestrator/vizij-orchestrator-core/README.md) – Produces write batches that can be applied via this registry.
+
+Spot a gap? File an issue—clean application layers make Vizij engines easy to embed in Bevy. 🧩

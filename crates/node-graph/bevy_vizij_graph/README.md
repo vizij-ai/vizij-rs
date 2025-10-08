@@ -1,53 +1,32 @@
 # bevy_vizij_graph
 
-`bevy_vizij_graph` integrates `vizij-graph-core` into the Bevy ECS. It keeps a shared graph runtime, evaluates graphs each frame,
-and exposes typed outputs/writes to other systems.
+> **Bevy plugin for evaluating Vizij node graphs inside ECS schedules.**
+
+`bevy_vizij_graph` wires `vizij-graph-core` into the Bevy game engine. It manages the current graph specification, stages host inputs, runs evaluations each frame, and exposes the results to gameplay systems.
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Installation](#installation)
+3. [Quick Start](#quick-start)
+4. [Key Concepts](#key-concepts)
+5. [Configuration](#configuration)
+6. [Development & Testing](#development--testing)
+7. [Related Crates](#related-crates)
+
+---
 
 ## Overview
 
-* Provides a Bevy plugin (`VizijGraphPlugin`) that owns the core `GraphRuntime` and current `GraphSpec`.
-* Evaluates graphs during `Update` or `FixedUpdate` (configurable) and stores results in resources/events for downstream systems.
-* Supports host-driven parameter updates and typed input staging through ECS events/resources.
-* Optional `urdf_ik` feature (enabled by default) pulls in robotics helpers from the core crate.
+- Provides `VizijGraphPlugin` which inserts the resources and systems needed to evaluate graphs.
+- Persists `GraphRuntime` state between frames while allowing the `GraphSpec` resource to be hot-swapped.
+- Offers `PendingInputs` and parameter update events for staging host data.
+- Stores the latest outputs and writes in `EvalResultRes` for downstream systems.
+- Optional `urdf_ik` feature (enabled by default) brings in robotics helpers from the core crate.
 
-## Architecture
-
-```
-+-----------------------------+
-| VizijGraphPlugin            |
-|  - Inserts resources        |
-|  - Registers systems        |
-+-----------------------------+
-            |
-            v
-+-----------------------------+
-| Resources                   |
-|  GraphSpecRes(GraphSpec)    |
-|  GraphRuntimeRes(GraphRuntime)
-|  PendingInputs              |
-|  EvalResultRes              |
-+-----------------------------+
-            |
-            v
-+-----------------------------+
-| Systems                     |
-|  stage_inputs_system        |
-|  evaluate_graph_system      |
-|  apply_writes_system (opt)  |
-+-----------------------------+
-            |
-            v
-+-----------------------------+
-| ECS consumers               |
-|  - Read EvalResultRes       |
-|  - Listen for Write events  |
-+-----------------------------+
-```
-
-* `GraphSpecRes` holds the currently loaded spec (hot-swappable if you mutate the resource).
-* `GraphRuntimeRes` persists node state and staged inputs across frames.
-* `EvalResultRes` exposes the latest evaluation output so gameplay systems can read node values or external writes.
-* Input staging can be driven by events or direct resource access to mirror `GraphRuntime::set_input`.
+---
 
 ## Installation
 
@@ -55,32 +34,20 @@ and exposes typed outputs/writes to other systems.
 cargo add bevy_vizij_graph
 ```
 
-Features:
+Disable the robotics helpers if you don’t need them:
 
-* `urdf_ik` *(default)* – Enables URDF/IK helpers from the core crate. Disable with `--no-default-features` if not needed.
+```bash
+cargo add bevy_vizij_graph --no-default-features
+```
 
-## Setup
+---
 
-1. Add the plugin to your Bevy app:
-   ```rust
-   use bevy::prelude::*;
-   use bevy_vizij_graph::VizijGraphPlugin;
-
-   App::new()
-       .add_plugins(DefaultPlugins)
-       .add_plugins(VizijGraphPlugin::default())
-       .run();
-   ```
-2. Load or construct a `GraphSpec` and insert it into the `GraphSpecRes` resource (e.g., during startup).
-3. Stage inputs by writing to the provided resources/events (`PendingInputs`) before the evaluation system runs.
-4. Read `EvalResultRes` after evaluation to inspect per-node outputs or handle external writes.
-
-## Usage
+## Quick Start
 
 ```rust
 use bevy::prelude::*;
-use bevy_vizij_graph::{VizijGraphPlugin, GraphSpecRes, GraphRuntimeRes, EvalResultRes};
-use vizij_graph_core::spec::GraphSpec;
+use bevy_vizij_graph::{VizijGraphPlugin, GraphSpecRes, EvalResultRes};
+use vizij_graph_core::types::GraphSpec;
 
 fn main() {
     App::new()
@@ -91,9 +58,11 @@ fn main() {
         .run();
 }
 
-fn load_graph(mut spec_res: ResMut<GraphSpecRes>) {
-    let spec: GraphSpec = serde_json::from_str(include_str!("../../../fixtures/node_graphs/simple-gain-offset.json")).unwrap();
-    *spec_res = GraphSpecRes::new(spec);
+fn load_graph(mut spec: ResMut<GraphSpecRes>) {
+    let graph: GraphSpec =
+        serde_json::from_str(include_str!("../../../fixtures/node_graphs/simple-gain-offset.json"))
+            .expect("valid graph");
+    *spec = GraphSpecRes::new(graph);
 }
 
 fn inspect_outputs(result: Res<EvalResultRes>) {
@@ -101,55 +70,67 @@ fn inspect_outputs(result: Res<EvalResultRes>) {
         info!(?node, ?ports, "graph output");
     }
     for write in &result.writes {
-        info!("write {:?} -> {:?}", write.path, write.value);
+        info!("write {:?} => {:?}", write.path, write.value);
     }
 }
 ```
 
-### Staging host inputs
-
-The plugin exposes `PendingInputs` so other systems can push values that mimic `GraphRuntime::set_input`.
+Staging inputs via the provided resource:
 
 ```rust
-use bevy_vizij_graph::{PendingInputs, PendingInput};
-use vizij_api_core::{TypedPath, Value, Shape};
+use bevy_vizij_graph::{PendingInput, PendingInputs};
+use vizij_api_core::{Shape, TypedPath, Value};
 
-fn stage(mut pending: ResMut<PendingInputs>) {
-    let path = TypedPath::parse("robot/Arm/ik_target").unwrap();
+fn stage_inputs(mut pending: ResMut<PendingInputs>) {
     pending.push(PendingInput {
-        path,
+        path: TypedPath::parse("demo/input/value").unwrap(),
         value: Value::vec3([0.1, 0.2, 0.3]),
         declared: Some(Shape::vec3()),
     });
 }
 ```
 
-## Key Details
+---
 
-* **Resource ownership** – `GraphSpecRes` and `GraphRuntimeRes` are separate so you can hot-swap specs while retaining runtime
-  state where appropriate. Replacing the spec resets outputs and writes to avoid stale data.
-* **Scheduling** – Evaluation runs after input staging systems. Customize the system ordering or schedule (e.g., run evaluation
-  in `FixedUpdate`) by configuring the plugin.
-* **Write handling** – By default the plugin stores writes in `EvalResultRes`. You can also register listener systems to react to
-  writes immediately.
-* **Parameter updates** – Use provided events/resources to change node parameters at runtime (see crate docs for exact types).
-* **Debugging** – `EvalResultRes` includes both node outputs and writes along with shape metadata, making it easy to visualize
-  graph state in editor overlays or logs.
+## Key Concepts
 
-## Testing
+| Resource / System | Purpose |
+|-------------------|---------|
+| `GraphSpecRes` | Stores the loaded `GraphSpec`. Replace it to hot-swap graphs. |
+| `GraphRuntimeRes` | Persistent runtime (node state, staged inputs, cached outputs). |
+| `PendingInputs` | Queue of staged inputs to apply before the next evaluation. |
+| `EvalResultRes` | Stores the latest node outputs and `WriteBatch`. |
+| `stage_inputs_system` | Applies pending inputs to the runtime. |
+| `evaluate_graph_system` | Runs `evaluate_all` each frame or fixed timestep. |
 
-Run the crate’s tests:
+- When the spec changes, the runtime is reset to ensure deterministic results.
+- Writes are stored in `EvalResultRes`; you can also consume them immediately by adding your own system after evaluation.
+- Parameter updates are exposed via events/resources (see crate docs) mirroring the staging path.
+
+---
+
+## Configuration
+
+- The plugin runs evaluation in the `Update` schedule by default. Use `VizijGraphPlugin::with_schedule` or `.with_fixed_timestep` (if provided) to move evaluation elsewhere.
+- Feature flag `urdf_ik` controls whether URDF IK/FK helpers are registered in the runtime. Disable it if you don’t need robotics nodes to reduce dependencies.
+- Systems are ordered so staging happens before evaluation. Insert additional systems before/after to customise flow.
+
+---
+
+## Development & Testing
 
 ```bash
 cargo test -p bevy_vizij_graph
 ```
 
-Tests spin up a Bevy `App`, load fixtures, stage inputs, and assert that evaluation results and writes match expectations.
+Tests cover staging, evaluation, and write propagation using sample graphs. For live experimentation, run one of the demo apps in `vizij-web` after linking the WASM builds.
 
-## Troubleshooting
+---
 
-* **Graph doesn’t evaluate** – Ensure `GraphSpecRes` contains a valid spec and that the evaluation system is scheduled (plugin
-  adds it by default). Check logs for selector/shape errors propagated from the core crate.
-* **No writes produced** – Verify that your graph includes explicit `Output` nodes with `params.path` configured. Non-sink nodes
-  no longer emit writes.
-* **Inputs not visible** – Confirm that staging happens before the evaluation system (same frame) and that you call `PendingInputs::clear()` only after evaluation if you manage the buffer manually.
+## Related Crates
+
+- [`vizij-graph-core`](../vizij-graph-core/README.md) – core evaluator used by this plugin.
+|- [`vizij-orchestrator-core`](../../orchestrator/vizij-orchestrator-core/README.md) – can feed `WriteBatch` results into other controllers.
+- [`bevy_vizij_animation`](../../animation/bevy_vizij_animation/README.md) – sister plugin for Vizij animations.
+
+Need more bindings? Open an issue—well-documented ECS integration keeps graph evaluation straightforward. 🧩

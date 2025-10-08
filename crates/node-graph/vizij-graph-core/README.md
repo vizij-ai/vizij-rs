@@ -1,57 +1,45 @@
 # vizij-graph-core
 
-`vizij-graph-core` is Vizij’s deterministic data-flow graph evaluator. It interprets `GraphSpec` descriptions, stages typed
-inputs from the host, evaluates nodes in topological order, and emits typed outputs and external write operations. The crate is
-consumed by Bevy integrations, WebAssembly bindings, and tooling that authors or executes Vizij graphs.
+> **Deterministic data-flow evaluation for Vizij graphs – pure Rust with predictable staging, shapes, and side effects.**
+
+`vizij-graph-core` turns declarative `GraphSpec` documents into structured values and typed write operations. The crate powers Vizij’s node graph tooling, Bevy integrations, and WebAssembly bindings.
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Features](#features)
+3. [Installation](#installation)
+4. [Quick Start](#quick-start)
+5. [Usage](#usage)
+6. [Key Concepts](#key-concepts)
+7. [Development & Testing](#development--testing)
+8. [Related Packages](#related-packages)
+
+---
 
 ## Overview
 
-* Pure Rust crate (2021 edition) that depends on `vizij-api-core` for shared types (`Shape`, `Value`, `TypedPath`).
-* Supports math, logic, vector, time, and stateful nodes (springs/damps/slews) with optional robotics/IK helpers (`urdf_ik`
-  feature).
-* Provides runtime types `GraphRuntime`, `evaluate_all`, and helpers for staging host inputs and reading node outputs.
-* Emits external `WriteOp { path, value, shape }` batches for sinks so hosts can apply graph results to their own systems.
+- **Pure Rust runtime** that interprets `GraphSpec` documents using the shared `vizij-api-core` Value/Shape contract.
+- **GraphRuntime** retains staged inputs, node-local state, and cached outputs across frames.
+- **evaluate_all** walks the graph in topological order, performs selector projection, enforces declared shapes, and collects sink writes.
+- **Extensible node library** covering math, logic, vector ops, time/transition nodes (Spring/Damp/Slew), blending, and (optionally) robotics IK/FK helpers behind the `urdf_ik` feature flag.
 
-## Architecture
+---
 
-```
-         +-------------------+
-         | GraphSpec (JSON)  |
-         +---------+---------+
-                   |
-                   v
-         +---------+---------+
-         | GraphRuntime      |
-         |  - node state     |
-         |  - staged inputs  |
-         |  - output cache   |
-         +---------+---------+
-                   |
-                   v
-         +---------+---------+
-         | evaluate_all()    |
-         |  - topo ordering  |
-         |  - selector eval  |
-         |  - node dispatch  |
-         |  - shape checks   |
-         +---------+---------+
-                   |
-                   v
-         +-------------------+
-         | EvalResult        |
-         |  nodes -> values  |
-         |  writes -> sinks  |
-         +-------------------+
-```
+## Features
 
-* Graph specs describe nodes, connections, selectors, declared shapes, and sink paths.
-* `GraphRuntime` retains per-node state across frames, staged host inputs keyed by `TypedPath`, and the last frame’s outputs.
-* `evaluate_all` advances the input epoch, clears cached outputs, walks the graph in topological order, and dispatches each node’s
-  evaluator. Declared shapes are enforced, selectors project structured values, and sinks enqueue writes.
+- Deterministic topological evaluation with cycle detection.
+- Input staging model with epoch tracking to prevent stale data from leaking between frames.
+- Shape-aware validators (`Shape`, `ShapeId`) for predictable coercions and helpful diagnostics.
+- Selector support (`field`, `index`) on edges for structured projection.
+- External `WriteBatch` accumulation from sink nodes for host-controlled side effects.
+- Optional URDF IK/FK nodes compiled in via the `urdf_ik` feature (enabled by default).
+
+---
 
 ## Installation
-
-Add the crate to your Cargo project (replace the version with the published release):
 
 ```bash
 cargo add vizij-graph-core
@@ -59,110 +47,130 @@ cargo add vizij-graph-core
 
 Features:
 
-* `urdf_ik` *(default)* – Enables optional inverse-kinematics helpers (depends on `k` and `urdf-rs`). Disable with
-  `--no-default-features` if you only need the math/logic/vector nodes.
+| Feature   | Default | Description                                           |
+|-----------|---------|-------------------------------------------------------|
+| `urdf_ik` | ✔       | Enables URDF chain parsing + IK/FK nodes (depends on `k` and `urdf-rs`). |
 
-## Setup
+Disable defaults with `--no-default-features` if you want a minimal build.
 
-Typical host workflow:
+---
 
-1. **Load a graph** – Deserialize JSON into `GraphSpec` via `serde_json` or build the spec programmatically.
-2. **Create a runtime** – `GraphRuntime::default()` stores node state, staged inputs, and cached outputs.
-3. **Stage inputs** *(optional each frame)* – Call `runtime.advance_epoch()` and then `runtime.set_input(path, value, declared)`
-   for each `TypedPath` you want visible on the next evaluation. `declared` is an optional `Shape` contract.
-4. **Evaluate** – `let result = evaluate_all(&mut runtime, &spec)?;` returns node outputs and external writes.
-5. **Consume outputs** – Inspect `result.nodes` for per-port values (with shapes) or iterate `result.writes` to apply side
-   effects in your host application.
-
-## Usage
+## Quick Start
 
 ```rust
-use vizij_graph_core::{evaluate_all, GraphRuntime};
-use vizij_graph_core::spec::GraphSpec;
 use vizij_api_core::{TypedPath, Value, Shape};
+use vizij_graph_core::{evaluate_all, GraphRuntime};
+use vizij_graph_core::types::GraphSpec;
 
 let spec: GraphSpec = serde_json::from_str(include_str!("../../../../fixtures/node_graphs/simple-gain-offset.json"))?;
+
 let mut runtime = GraphRuntime::default();
 
-// Stage an optional input for the next tick
-let path = TypedPath::parse("robot/Arm/ik_target")?;
+// Stage an IK target for the next frame
+let target = TypedPath::parse("robot/arm/ik_target")?;
 runtime.advance_epoch();
-runtime.set_input(path, Value::vec3([0.1, 0.2, 0.3]), Some(Shape::vec3()));
+runtime.set_input(target, Value::vec3([0.1, 0.2, 0.3]), Some(Shape::vec3()));
 
 let result = evaluate_all(&mut runtime, &spec)?;
-for (node_id, ports) in &result.nodes {
-    println!("node {node_id}: {ports:?}");
+
+for (node_id, outputs) in &result.nodes {
+    println!("node {node_id}: {outputs:#?}");
 }
 for write in &result.writes {
-    println!("write {:?} -> {:?} (shape {:?})", write.path, write.value, write.shape);
+    println!("write {:?} -> {:?}", write.path, write.value);
 }
 ```
 
-## Key Details
+---
 
-### Shapes & values
+## Usage
 
-* Values are represented by `vizij_api_core::Value` with shape metadata via `Shape`/`ShapeId`.
-* Nodes may declare expected output shapes (`NodeSpec::output_shapes`). When declared, evaluation validates that produced values
-  match; mismatches return an error for the frame.
-* Numeric vectors use the dedicated `ShapeId::Vector` variant (with optional length hints) to distinguish them from heterogeneous
-  lists.
+1. **Load or construct a `GraphSpec`.** Use `serde_json` to parse JSON, or build specs programmatically during tests.
+2. **Create and reuse a `GraphRuntime`.** It retains node-local state (`Spring`, `Slew`, etc.), staged inputs, and cached outputs across frames.
+3. **Stage host inputs.**
+   ```rust
+   runtime.advance_epoch();
+   runtime.set_input(path, value, declared_shape);
+   ```
+   - Declared shapes help coerce numeric data or produce deterministically “null-of-shape” placeholders when staging fails.
+4. **Evaluate the graph.**
+   ```rust
+   let eval = evaluate_all(&mut runtime, &spec)?;
+   ```
+5. **Consume results.**
+   - `eval.nodes` – map of node → output key → `PortValue { value, shape }`.
+   - `eval.writes` – `WriteBatch` of `WriteOp { path, value, shape }` emitted by `Output` nodes.
+6. **Integrate with hosts.** Apply writes to your own blackboard, engine, or animation runtime as needed.
 
-### Selectors on connections
+---
 
-* Each `InputConnection` may include a selector (sequence of `field`/`index` segments) that projects structured upstream values.
-* Selectors leverage upstream shape metadata to make projections deterministic.
-* If a selector cannot be resolved (missing field, out-of-bounds index), evaluation returns an error. Future work may provide
-  numeric fallbacks when shapes are known.
+## Key Concepts
 
-### Typed host inputs
+### GraphRuntime
 
-* Hosts publish values via `GraphRuntime::set_input(path, value, declared_shape)`.
-* Inputs participate in epoch tracking so stale values do not leak across frames. Call `advance_epoch()` before staging for the
-  upcoming evaluation.
-* Declared numeric shapes allow the runtime to coerce or produce “null-of-shape” (NaN-filled) values when staging fails; non-numeric mismatches emit deterministic errors.
+- Holds `t`/`dt`, per-node persistent state, staged inputs (`HashMap<TypedPath, StagedInput>`), and cached outputs.
+- `advance_epoch` bumps the staging epoch and evicts inputs not refreshed for the current frame.
+- Evaluation now updates `t`/`dt` when used via `vizij-orchestrator-core`; if you embed the runtime directly, set them yourself before calling `evaluate_all` if time-based nodes are involved.
 
-### External writes
+### Selectors
 
-* Sink nodes (currently the `Output` node type) enqueue `WriteOp`s into the runtime’s write batch.
-* Each `WriteOp` carries `path: TypedPath`, the produced `Value`, and optional `Shape` metadata so hosts can deserialize without
-  guessing.
-* Setting `params.path` on non-sink nodes has no effect; explicit sink nodes control side effects.
+- Edges can include selectors composed of field/index segments.
+- Example: `{"selector": ["outputs", "blend", 1]}` picks the second element of the `blend` array.
+- Selector evaluation respects shapes; invalid paths throw descriptive errors rather than guessing.
 
-### Error handling & migration notes
+### Shapes & Values
 
-* Evaluation returns `anyhow::Error` with detailed context (selector failures, shape mismatches, missing staged inputs, etc.).
-* Legacy graphs that relied on implicit splitters should migrate to edge selectors (e.g., `["pos", 1]` to select the Y component
-  of a vector).
-* Introduce `Input` nodes for host-provided data instead of mutating node params directly. Stage data each frame using
-  `set_input`.
-* Declare output shapes on critical ports to catch schema drift early and enable numeric coercions.
+- Values use `vizij_api_core::Value` (scalar, vector, quat, record, array, tuple, text, bool, etc.).
+- Shapes (`ShapeId`) describe numeric layouts and support inference.
+- Declared shapes on node outputs guard against schema drift and provide better error messages.
 
-## Examples
+### External Writes
 
-* **Selector usage** – See `tests/selector_projection.rs` for examples of record/tuple/index selectors.
-* **Staged inputs** – `tests/input_node.rs` covers declared shape behavior (numeric coercions, NaN fallbacks, deterministic
-  errors).
-* **External writes** – `tests/output_writes.rs` verifies write batches and shape serialization.
-* **End-to-end graphs** – Fixtures such as `fixtures/node_graphs/blend-graph.json` demonstrate Input → math → Output flows.
+- `Output` nodes enqueue writes automatically when `params.path` is set.
+- Writes include optional shapes so hosts can validate or coerce downstream.
+- Use hosts like `vizij-orchestrator-core` or your own glue to apply them.
 
-## Testing
+### URDF Feature
 
-Run the crate’s test suite:
+- Enable `urdf_ik` to pull in robotics helpers (`UrdfIkPosition`, `UrdfIkPose`, `UrdfFk` nodes).
+- The WASM build ships with the feature enabled; native builds can opt out to reduce dependencies.
+
+---
+
+## Development & Testing
+
+Run the crate tests (unit + integration):
 
 ```bash
 cargo test -p vizij-graph-core
 ```
 
-Enable the `urdf_ik` feature explicitly if you disabled default features and need robotics coverage:
+Test the robotics nodes explicitly:
 
 ```bash
 cargo test -p vizij-graph-core --features urdf_ik
 ```
 
-## Additional Resources
+Useful scripts from the workspace root:
 
-* `src/eval/README.md` explains the internal module layout (runtime, value flattening, node dispatch, URDF support).
-* The `vizij-graph-wasm` crate wraps this core for WebAssembly; its README documents JSON normalization shorthands and staging
-  helpers for JS tooling.
-* Example graphs and presets ship with the npm package `@vizij/node-graph-wasm` for quick experimentation.
+```bash
+pnpm run test:rust              # Checks the entire workspace (fmt, clippy, test)
+pnpm run build:wasm:graph       # Rebuilds the WASM adapter that embeds this crate
+pnpm run watch:wasm:graph       # Rebuilds on change (requires cargo-watch)
+```
+
+Benchmark ideas:
+
+- Evaluate large graphs under different topologies to profile numeric performance.
+- Leverage fixtures in `fixtures/node_graphs/` to validate schema migrations.
+
+---
+
+## Related Packages
+
+- [`vizij-graph-wasm`](../../vizij-graph-wasm/README.md): wasm-bindgen binding that exposes JSON-friendly APIs plus normalization helpers.
+- [`@vizij/node-graph-wasm`](../../../../npm/@vizij/node-graph-wasm/README.md): npm wrapper around the wasm build with ABI guards and utilities.
+- [`bevy_vizij_graph`](../../bevy_vizij_graph/README.md): Bevy plugin that drives this runtime inside ECS worlds.
+- [`vizij-orchestrator-core`](../../../orchestrator/vizij-orchestrator-core/README.md): Coordinates graphs, animations, and a blackboard.
+
+Need help or spotted an inconsistency? Open an issue in the main Vizij repo or ping the runtime team—accurate docs keep our tooling reliable. 💡

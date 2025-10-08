@@ -1,83 +1,130 @@
 # vizij-orchestrator-wasm
 
-WASM bindings for the vizij orchestrator core. This crate provides a JS-friendly wrapper around the Rust orchestrator that mirrors the ergonomics of `vizij-animation-wasm` and `vizij-graph-wasm`.
+> **wasm-bindgen binding for Vizij’s orchestrator runtime – manage graphs, animations, and blackboard inputs from JavaScript.**
 
-Features
-- Construct an orchestrator instance with an optional schedule.
-- Register graph and animation controllers from JS.
-- Prebind targets with a JS resolver function (used by animation controllers).
-- Set and remove blackboard inputs.
-- Step the orchestrator and receive a JSON-friendly OrchestratorFrame.
+`vizij-orchestrator-wasm` exposes `vizij-orchestrator-core` to JavaScript/TypeScript environments. The npm package `@vizij/orchestrator-wasm` is built from this crate and provides the primary developer-facing API.
 
-> ABI guard: `abi_version()` returns `2`, and the npm wrapper enforces the same value during initialization to catch mismatched
-> builds early.
-- List and remove registered controllers.
+---
 
-API (high-level)
-- constructor: `new(opts?: { schedule?: "SinglePass" | "TwoPass" | "RateDecoupled" })`
-- `abi_version(): number`
-- `register_graph(cfg: string | { id?: string, spec: object }): string` — returns controller id
-- `register_animation(cfg: { id?: string, setup?: any }): string` — returns controller id
-- `prebind(resolver: (path: string) => string | number | null | undefined): void`
-- `set_input(path: string, valueJson: any, shapeJson?: any): void`
-- `remove_input(path: string): boolean`
-- `step(dt: number): OrchestratorFrame` — returns a JS object (serialized from OrchestratorFrame)
-- `list_controllers(): { graphs: string[], anims: string[] }`
-- `remove_graph(id: string): boolean`
-- `remove_animation(id: string): boolean`
+## Table of Contents
 
-OrchestratorFrame JSON shape (example)
-{
-  epoch: number,
-  dt: number,
-  merged_writes: [ { path: string, value: ValueJSON, shape?: ShapeJSON }, ... ],
-  conflicts: [ ... ], // serde_json values produced by conflict logs
-  timings_ms: { animations_ms?: number, graphs_ms?: number, total_ms: number, ... },
-  events: [ ... ],
-}
+1. [Overview](#overview)
+2. [Exports](#exports)
+3. [Building](#building)
+4. [Usage](#usage)
+5. [OrchestratorFrame JSON](#orchestratorframe-json)
+6. [Development & Testing](#development--testing)
+7. [Related Packages](#related-packages)
 
-Notes on value shapes
-- The wrapper uses serde to serialize core types. For compatibility with older tooling, helper functions were added (in `utils.rs`) to convert core `Value` into legacy JSON shapes (e.g. `{ "vec3": [...] }`, `{ "float": 1.0 }`), if you need that representation for processed write batches.
+---
 
-JS usage example
-```js
-import init, { VizijOrchestrator, abi_version } from "@vizij/orchestrator-wasm";
+## Overview
 
-await init(); // wasm module init, if using wasm-pack generated pkg
+- Compiles to a `cdylib` with `wasm-bindgen`; `abi_version() == 2` guards the npm wrapper against mismatched builds.
+- Wraps the Rust `Orchestrator` type in a `VizijOrchestrator` class for JavaScript consumers.
+- Supports schedule configuration (`SinglePass`, `TwoPass`, future `RateDecoupled`), controller registration, input staging, stepping, and controller introspection.
+- Provides optional helpers to convert core `Value` structures into legacy JSON envelopes when required.
 
-console.log("ABI:", abi_version());
+---
 
-const o = new VizijOrchestrator({ schedule: "SinglePass" });
+## Exports
 
-// Register a graph from a JSON string (GraphSpec)
-const graphId = o.register_graph(JSON.stringify({
-  nodes: [],
-  // ...
-}));
+| Export | Description |
+|--------|-------------|
+| `class VizijOrchestrator` | Methods: constructor, `register_graph`, `register_animation`, `prebind`, `set_input`, `remove_input`, `step`, `list_controllers`, `remove_graph`, `remove_animation`. |
+| `normalize_graph_spec_json(json: &str) -> String` | Normalises GraphSpec JSON (used internally and exposed for tooling). |
+| `abi_version() -> u32` | Returns `2`; npm wrapper enforces this at init time. |
+| `utils::value_to_legacy_json` et al. | Convert `Value`/`WriteBatch` into legacy `{ vec3: [...] }` style JSON (handy for older tooling). |
 
-// Register animation controller (simple)
-const animId = o.register_animation({ setup: {} });
+---
 
-// Optional prebind resolver — used by animation controllers to resolve canonical paths
-o.prebind((path) => {
-  // return an opaque key (string or number) or null/undefined if unresolved
-  return path.toUpperCase();
-});
+## Building
 
-// Set a blackboard input
-o.set_input("robot/arm/joint.angle", { float: 1.23 }, null);
-
-// Step
-const frame = o.step(1/60);
-console.log("Frame:", frame);
+```bash
+pnpm run build:wasm:orchestrator      # preferred script
 ```
 
-Testing & build
-- This crate is configured as a `cdylib` for wasm.
-- To produce JS artifacts consistent with other wasm crates in the repo, run the repository's existing wasm build scripts (`scripts/build-graph-wasm.mjs` / `scripts/build-animation-wasm.mjs`) adapted for this crate, or use `wasm-pack` / `cargo +nightly build --target wasm32-unknown-unknown` followed by `wasm-bindgen` toolchain steps.
+Manual build:
 
-Next steps (if you want me to continue)
-- Add wasm tests (wasm_bindgen_test) to validate the WASM API surface.
-- Build the wasm package and generate the `npm/` wrapper (matching other wasm crates).
-- Wire up GraphSpec normalization (copy existing logic from `node-graph` if you want to accept shorthand graph JSON in register_graph).
-- Expand the wrapper to optionally return legacy-style write batches (utilities are already included).
+```bash
+wasm-pack build crates/orchestrator/vizij-orchestrator-wasm \
+  --target bundler \
+  --out-dir pkg \
+  --release
+```
+
+The generated `pkg/` is republished via `npm/@vizij/orchestrator-wasm`.
+
+---
+
+## Usage
+
+Via npm wrapper:
+
+```ts
+import init, { VizijOrchestrator, abi_version } from "@vizij/orchestrator-wasm";
+
+await init();
+console.log("ABI version", abi_version());
+
+const orchestrator = new VizijOrchestrator({ schedule: "SinglePass" });
+
+const graphId = orchestrator.register_graph({ spec: { nodes: [] } });
+const animId = orchestrator.register_animation({ setup: {} });
+
+// Optional: resolve animation targets
+orchestrator.prebind((path) => path.toUpperCase());
+
+orchestrator.set_input("demo/input/value", { float: 1.23 }, null);
+const frame = orchestrator.step(1 / 60);
+console.log(frame.merged_writes);
+```
+
+---
+
+## OrchestratorFrame JSON
+
+`step(dt)` returns a plain JS object:
+
+```jsonc
+{
+  "epoch": 42,
+  "dt": 0.016,
+  "merged_writes": [
+    { "path": "demo/output/value", "value": { "type": "float", "data": 1.0 }, "shape": { "id": "Scalar" } }
+  ],
+  "conflicts": [ /* conflict logs (serde_json::Value) */ ],
+  "timings_ms": { "animations_ms": 1.2, "graphs_ms": 0.7, "total_ms": 1.9 },
+  "events": [ /* animation events */ ]
+}
+```
+
+Values use the same `{ type, data }` envelope as `vizij-api-core`. Shapes are included when available so the consumer can reason about numeric layouts.
+
+---
+
+## Development & Testing
+
+```bash
+pnpm run build:wasm:orchestrator     # ensure pkg output exists
+cd npm/@vizij/orchestrator-wasm
+pnpm test
+```
+
+Rust-side unit tests:
+
+```bash
+cargo test -p vizij-orchestrator-wasm
+```
+
+Consider adding `wasm_bindgen_test` cases if you expand the API surface.
+
+---
+
+## Related Packages
+
+- [`vizij-orchestrator-core`](../../orchestrator/vizij-orchestrator-core/README.md) – underlying Rust orchestrator logic.
+- [`npm/@vizij/orchestrator-wasm`](../../../npm/@vizij/orchestrator-wasm/README.md) – npm wrapper built from this crate.
+- [`@vizij/orchestrator-react`](../../../vizij-web/packages/@vizij/orchestrator-react/README.md) – React provider built on the npm wrapper.
+
+Found an issue or need a new helper? File an issue—reliable bindings keep orchestrations in sync across platforms. 🔄

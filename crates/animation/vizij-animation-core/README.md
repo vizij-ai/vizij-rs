@@ -1,194 +1,162 @@
 # vizij-animation-core
 
-`vizij-animation-core` is the engine-agnostic heart of Vizij’s animation system. It parses animation assets, evaluates tracks
-with cubic-bezier easing, manages players/instances, and emits deterministic outputs that can be consumed by native hosts, Bevy,
-or WebAssembly bindings.
+> **Engine-agnostic animation runtime for Vizij – deterministic sampling, blending, and event emission in pure Rust.**
+
+`vizij-animation-core` parses Vizij animation assets, manages players and instances, samples tracks with cubic-bezier easing, and emits typed changes that downstream hosts can apply to rigs or renderers. It powers the Bevy plugin (`bevy_vizij_animation`) and the WebAssembly binding (`vizij-animation-wasm`).
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Features](#features)
+3. [Installation](#installation)
+4. [Quick Start](#quick-start)
+5. [Usage Workflow](#usage-workflow)
+6. [Key Concepts](#key-concepts)
+7. [Development & Testing](#development--testing)
+8. [Related Packages](#related-packages)
+
+---
 
 ## Overview
 
-* Pure Rust crate with no engine or renderer dependencies.
-* Provides the data model (`AnimationData`, `Track`, `Value`) and the runtime (`Engine`, `Instance`, `Player`).
-* Designed for zero/low per-frame allocations after initialization.
-* Consumed by the `bevy_vizij_animation` plugin and the `vizij-animation-wasm` crate.
+- **Pure Rust runtime** with predictable memory usage and zero engine dependencies.
+- **Canonical data model** for animations (`AnimationData`, `Track`, `Keyframe`) plus a JSON-friendly `StoredAnimation` schema.
+- **Engine** type that stores animations, manages players/instances, and produces `Outputs` each frame.
+- **Runtime utilities** for baking animations, estimating derivatives, and serialising data for tooling.
 
-## Architecture
+---
 
-```
-+--------------------------+
-| Config / Scratch arenas  |
-+-------------+------------+
-              |
-+-------------v------------+
-| Engine                   |
-|  - Animation store       |
-|  - Player registry       |
-|  - Instance bindings     |
-+-------------+------------+
-              |
-+-------------v------------+
-| Samplers & blending      |
-|  - Track sampling        |
-|  - Cubic-bezier easing   |
-|  - Value accumulation    |
-+-------------+------------+
-              |
-+-------------v------------+
-| Outputs (changes/events) |
-+--------------------------+
-```
+## Features
 
-* Parsing utilities convert JSON (`AnimationData` or `StoredAnimation`) into runtime-ready structures.
-* The engine owns the hot loop: advance players, sample tracks, accumulate target contributions, blend, and emit outputs.
-* Bindings map canonical string targets to compact handles to avoid string comparisons during updates.
+- Cubic-bezier easing with per-key overrides and sensible defaults.
+- Support for scalar, vector, quaternion, colour, transform, boolean, and text tracks.
+- Deterministic player state machine with loop modes (`Loop`, `Once`, `PingPong`) and playback controls.
+- Instance-level blending (weight, time scaling, offsets) across multiple animations per player.
+- Optional derivative export for downstream tooling and analysis.
+- Event dispatch for playback changes and animation-authored notifications.
+
+---
 
 ## Installation
-
-Add the crate to your project:
 
 ```bash
 cargo add vizij-animation-core
 ```
 
-The crate uses Rust 2021 and exposes no optional features. To build the WebAssembly bindings, use the sibling crate
-`vizij-animation-wasm`.
+The crate targets Rust 2021 and exposes no optional features. Companion crates provide additional environments:
 
-## Setup
+- `bevy_vizij_animation` – Bevy plugin built on this core.
+- `vizij-animation-wasm` – wasm-bindgen binding used in web applications.
 
-Typical workflow when embedding the engine:
+---
 
-1. **Parse animation data** – Use `parse_stored_animation_json` for the standardized JSON format or deserialize `AnimationData`
-   directly when you control the authoring pipeline.
-2. **Instantiate the engine** – `Engine::new(Config)` accepts optional scratch-buffer sizes and event limits. Defaults are tuned
-   for small/medium scenes.
-3. **Load animations** – Store animations with `Engine::load_animation`, receiving an `AnimId` handle.
-4. **Create players and instances** – Players own playback state. `Engine::add_instance` binds an animation to a player with
-   `InstanceCfg` (weight, loop window, start offset, etc.).
-5. **Bind targets** – Resolve canonical target paths to handles via `Engine::prebind` or use host integrations that do this for
-   you (e.g., the Bevy plugin).
-6. **Run the update loop** – Call `Engine::update(dt_seconds, Inputs)` each frame. Outputs contain resolved `Change` entries and
-   event notifications.
-
-## Usage
-
-Minimal example:
+## Quick Start
 
 ```rust
-use vizij_animation_core::{Engine, InstanceCfg, parse_stored_animation_json};
+use vizij_animation_core::{Engine, InstanceCfg, Inputs};
+use vizij_animation_core::stored_animation::parse_stored_animation_json;
 
-let json = std::fs::read_to_string("../../fixtures/animations/vector-pose-combo.json")?;
-let stored = parse_stored_animation_json(&json)?;
+let json = include_str!("../../../fixtures/animations/vector-pose-combo.json");
+let stored = parse_stored_animation_json(json)?;
 
 let mut engine = Engine::new(Default::default());
 let anim = engine.load_animation(stored);
+
 let player = engine.create_player("demo");
 engine.add_instance(player, anim, InstanceCfg::default());
 
-let outputs = engine.update(1.0 / 60.0, Default::default());
-for change in outputs.changes {
+let outputs = engine.update_values(1.0 / 60.0, Inputs::default());
+
+for change in &outputs.changes {
     println!("{} => {:?}", change.key, change.value);
 }
 ```
 
-For integration details (binding callbacks, player commands, instance updates) see the crate documentation and tests under
-`tests/`.
+---
 
-## Key Details
+## Usage Workflow
 
-### Data model
+1. **Parse Animation Data**
+   - Use `parse_stored_animation_json` for assets exported from Vizij tooling.
+   - Alternatively deserialize `AnimationData` directly if you control authoring pipelines.
+2. **Construct an Engine**
+   - `Engine::new(Config)` accepts optional tuning for scratch buffer sizes, event limits, and derivative output.
+3. **Load Animations**
+   - `Engine::load_animation(data)` stores animation content and returns an `AnimId` handle.
+4. **Create Players**
+   - `Engine::create_player(name)` returns a `PlayerId`. Players track playback time, speed, loop mode, and instance membership.
+5. **Attach Instances**
+   - `Engine::add_instance(player, anim, InstanceCfg)` binds an animation to a player with weight, time-scale, start offset, and enabled state.
+6. **Bind Targets**
+   - Provide a `TargetResolver` (e.g., through `Engine::prebind`) to map canonical target paths to the IDs your host consumes.
+7. **Update Each Frame**
+   - Call `Engine::update_values(dt_seconds, Inputs)` (or `update_values_and_derivatives`) to advance playback and collect `Outputs`.
+   - Apply `Outputs.changes` in your host (rig, renderer, etc.) and process `Outputs.events` for instrumentation or game logic.
 
-* **AnimationData** – Name, duration (seconds), `tracks: Vec<Track>`, optional metadata map.
-* **Track** – Canonical target path, value kind, keyframes, default interpolation kind.
-* **Keyframe** – Absolute time (`t` seconds), value payload, optional interpolation override for the following segment.
-* **Value types** – Scalars, Vec2/Vec3/Vec4, Quat, Color (RGBA), Transform (TRS), Bool, Text.
-* **StoredAnimation JSON** – External-friendly schema with duration in milliseconds and normalized keypoint `stamp` values (0..1).
-  Includes per-keypoint `transitions.in/out` cubic-bezier control points.
+---
 
-### Transition model
+## Key Concepts
 
-* Every segment uses a cubic-bezier easing curve defined by adjacent keypoint transitions.
-* Defaults: `out = {x: 0.42, y: 0}`, `in = {x: 0.58, y: 1}` (classic ease-in-out).
-* Linear curves normalize to `Bezier(0,0,1,1)`.
-* Boolean and Text values use step interpolation (value holds until the next key).
-* Quaternion interpolation uses shortest-arc NLERP and re-normalizes the result.
-* Transform values decompose into translation/rotation/scale; translation/scale lerp linearly, rotation NLERPs.
+### Data Model
 
-### Outputs
+- **AnimationData** – Internal representation with duration (seconds), track list, and optional metadata.
+- **StoredAnimation** – Distribution format expressed in milliseconds with normalised `stamp` keypoints (0..1). Each point contains optional `transitions.in/out` cubic-bezier control points.
+- **Track** – Couples a canonical target with keyframes and a value kind. Supports per-key interpolation overrides.
+- **Value Types** – Scalars, Vec2/Vec3/Vec4, Quaternion, Colour RGBA, Transform (TRS), Boolean, Text. Transform interpolation decomposes into TRS components.
 
-* `Change` – `{ player, key, value }` where `key` is the bound string/handle and `value` is a tagged union (Scalar, Vec3, etc.).
-* `Event` – Playback lifecycle (started/paused/stopped), keypoint notifications, time changes, warnings, or custom events emitted
-  by animations.
-* Inputs can include player commands (play/pause/seek), loop window updates, and per-instance weight/time-scale tweaks.
+### Engine Components
 
-### Error handling & validation
+- **Animations** – Stored in an internal library keyed by `AnimId`.
+- **Players** – Manage playback state, mode (`Loop`, `Once`, `PingPong`), speed, time window, and attached instances.
+- **Instances** – Bind an animation to a player with weight/time-scale/start offset/enabled flags and a `BindingSet`.
+- **Bindings** – Map canonical target paths to host IDs via a `TargetResolver`. Prevents string comparisons during updates.
+- **Outputs** – Provide a list of `Change { player, key, value }` and associated events. `OutputsWithDerivatives` adds optional derivative values per change.
 
-* Parsing returns `anyhow::Error` to surface schema issues clearly.
-* Mixed value kinds targeting the same canonical path are ignored at runtime (fail-soft policy).
-* The engine guards against out-of-range timestamps, NaN inputs, and unbound targets.
+### Baking & Derivatives
 
-## Examples
+- `bake_animation_data` – Generates sampled animation data at a fixed frame rate for export.
+- `bake_animation_data_with_derivatives` – Adds derivative tracks using finite differencing (`derivative_epsilon` configurable via `BakingConfig`).
+- Export helpers serialise baked bundles back to JSON for tooling or offline optimisation.
 
-### Parsing StoredAnimation JSON
+### Events & Inputs
 
-```rust
-use vizij_animation_core::parse_stored_animation_json;
+- **Inputs** – Aggregate player commands (`Play`, `Pause`, `Seek`, `SetSpeed`, `SetLoopMode`) and per-instance updates (weight/time-scale/start offset/enabled).
+- **Events** – Emitted for playback state transitions, loop completions, custom animation events, and warnings (e.g., binding failures).
 
-let json = r#"{
-  "id": "anim-const",
-  "name": "Const",
-  "duration": 1000,
-  "tracks": [
-    {
-      "id": "t0",
-      "name": "Translation",
-      "animatableId": "node/Transform.translation",
-      "points": [
-        { "id": "k0", "stamp": 0.0, "value": { "x": 1, "y": 2, "z": 3 } },
-        { "id": "k1", "stamp": 1.0, "value": { "x": 1, "y": 2, "z": 3 } }
-      ]
-    }
-  ],
-  "groups": {}
-}"#;
+---
 
-let anim = parse_stored_animation_json(json)?;
-assert_eq!(anim.tracks.len(), 1);
-```
+## Development & Testing
 
-### Baking animations
-
-```rust
-use vizij_animation_core::baking::{
-    bake_animation_data_with_derivatives,
-    BakingConfig,
-    export_baked_json,
-    export_baked_with_derivatives_json,
-};
-
-let anim = vizij_animation_core::AnimationData::default();
-let cfg = BakingConfig { frame_rate: 60.0, start_time: 0.0, end_time: None, ..Default::default() };
-let (values, derivatives) = bake_animation_data_with_derivatives(vizij_animation_core::AnimId(0), &anim, &cfg);
-let values_json = export_baked_json(&values);
-let bundle_json = export_baked_with_derivatives_json(&values, &derivatives);
-println!("values: {}", values_json);
-println!("values + derivatives: {}", bundle_json);
-```
-
-## Testing
-
-Run the crate’s tests from the workspace root:
+Run the crate’s test suite:
 
 ```bash
 cargo test -p vizij-animation-core
 ```
 
-For WebAssembly compatibility, execute the integration tests in `vizij-animation-wasm`:
+Integration and parity tests live under `tests/`, covering:
+
+- Stored animation parsing and JSON serialisation.
+- Blending correctness across scalar/vector/quat tracks.
+- Player command semantics and loop window enforcement.
+- Derivative baking accuracy.
+
+Helpful workspace scripts:
 
 ```bash
-scripts/run-wasm-tests.sh
+pnpm run test:rust                # fmt, clippy, and tests for the entire workspace
+pnpm run build:wasm:animation     # rebuilds the WebAssembly adapter that embeds this crate
+pnpm run watch:wasm:animation     # continuous rebuild (requires cargo-watch)
 ```
 
-## Additional Resources
+---
 
-* Fixtures demonstrating the StoredAnimation schema: `fixtures/animations/vector-pose-combo.json`, `fixtures/animations/simple-scalar-ramp.json`, etc.
-* Engine usage examples under `examples/` (if present) and integration tests covering blending, binding, and event emission.
-* `vizij-animation-wasm` README for the JavaScript API surface that wraps this crate.
+## Related Packages
+
+- [`bevy_vizij_animation`](../../animation/bevy_vizij_animation/README.md) – Bevy plugin that wires this engine into ECS systems.
+- [`vizij-animation-wasm`](../vizij-animation-wasm/README.md) – wasm-bindgen binding used in web runtimes.
+- [`@vizij/animation-wasm`](../../../npm/@vizij/animation-wasm/README.md) – npm wrapper with loader utilities and ABI checks.
+- [`vizij-orchestrator-core`](../../orchestrator/vizij-orchestrator-core/README.md) – Coordinates animation and node graph controllers via a shared blackboard.
+
+Questions or contributions? Please file an issue in the main Vizij repository—well-documented behaviour keeps animation playback predictable. 🎬

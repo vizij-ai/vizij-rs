@@ -1,177 +1,172 @@
-# vizij-orchestrator
+# vizij-orchestrator-core
 
-Orchestrator crate to coordinate vizij graphs and animations. This crate provides a small, deterministic runtime that composes multiple Graph controllers and Animation engines against a shared Blackboard. It demonstrates deterministic pass scheduling, last-writer-wins merging, conflict logging, and a small host API for stepping and wiring controllers.
+> **Deterministic multi-pass scheduling for Vizij – orchestrate graphs, animations, and blackboard state from Rust.**
 
-This README documents the crate layout, public API, conventions (Blackboard/TyperPath mappings), examples, and how to run tests and examples.
+`vizij-orchestrator-core` coordinates Vizij graph controllers and animation engines against a shared blackboard. It stages inputs, executes controllers in configurable passes, merges writes deterministically, and logs conflicts for diagnostics. The crate underpins the WebAssembly binding (`vizij-orchestrator-wasm`) and the React wrapper (`@vizij/orchestrator-react`).
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Features](#features)
+3. [Installation](#installation)
+4. [Quick Start](#quick-start)
+5. [Workflow](#workflow)
+6. [Key Concepts](#key-concepts)
+7. [Development & Testing](#development--testing)
+8. [Related Packages](#related-packages)
 
 ---
 
 ## Overview
 
-Purpose
-- Provide a decoupled orchestrator that coordinates:
-  - Graph evaluation (vizij-graph-core)
-  - Animation engines (vizij-animation-core)
-  - Shared data movement via `vizij-api-core` primitives (TypedPath, Value, Shape, WriteBatch)
-- Support deterministic schedules:
-  - `SinglePass`: Animations → Graphs
-  - `TwoPass`: Graphs → Animations → Graphs
-- Accumulate a per-frame merged WriteBatch and publish into a Blackboard with provenance and conflict logs.
-- Allow per-graph Subscriptions to restrict which Blackboard paths are staged and which outputs are published.
-
-Design choices
-- Default merge policy: last-writer-wins inside a pass (deterministic by pass and controller order).
-- Minimal conventions for mapping Blackboard → Animation Inputs (documented below).
-- Graph-level optional Subscriptions to keep staging and publishing explicit and deterministic.
+- Manages a **shared blackboard** backed by `vizij-api-core` Value/Shape/TypedPath types.
+- Hosts **GraphController** and **AnimationController** instances, each with user-defined IDs and subscription rules.
+- Provides deterministic **scheduling strategies** (`SinglePass`, `TwoPass`, future `RateDecoupled`) with per-pass timings.
+- Produces an `OrchestratorFrame` containing merged writes, conflict logs, timing metrics, and events.
 
 ---
 
-## Layout
+## Features
 
-- src/
-  - lib.rs — public crate API (Orchestrator, OrchestratorFrame, exported helpers)
-  - blackboard.rs — Blackboard implementation, BlackboardEntry, ConflictLog
-  - scheduler.rs — run_single_pass / run_two_pass and per-frame diagnostics + merged_writes accumulation
-  - controllers/
-    - mod.rs
-    - graph.rs — GraphController, Subscriptions, GraphControllerConfig
-    - animation.rs — AnimationController (Engine wrapper), conservative mapping from Blackboard -> Inputs
-  - diagnostics.rs — diagnostics placeholder
-- tests/
-  - integration_passes.rs — integration tests for SinglePass and TwoPass
-- examples/
-  - graph_only.rs — minimal graph-only example
-  - single_pass.rs — minimal single-pass orchestrator (graph + animation controller)
-  - two_pass.rs — minimal two-pass orchestrator example
-- Cargo.toml — crate manifest (workspace member)
+- **Subscriptions** control which blackboard paths a graph consumes (`inputs`) and which writes are published (`outputs`) with optional mirroring for internal state.
+- **Epoch-based staging** ensures graph runtimes only see current-frame inputs; stale entries are dropped automatically.
+- **Conflict logging** records previous vs. new values whenever multiple controllers write to the same path.
+- **Animation mapping** translates blackboard entries into `vizij-animation-core::Inputs` using a conservative naming convention.
+- **Time propagation** – `GraphController::evaluate` advances `GraphRuntime.t`/`dt` before invoking `vizij-graph-core`, so time-based nodes respond to frame delta correctly.
 
 ---
 
-## Public API (high level)
+## Installation
 
-The crate exposes these primary types through the crate root:
+```bash
+cargo add vizij-orchestrator-core
+```
 
-- Orchestrator
-  - new(schedule: Schedule) -> Orchestrator
-  - with_graph(self, cfg: GraphControllerConfig) -> Self
-  - with_animation(self, cfg: AnimationControllerConfig) -> Self
-  - set_input(&mut self, path: &str, value: serde_json::Value, shape: Option<serde_json::Value>)
-  - step(&mut self, dt: f32) -> Result<OrchestratorFrame>
-
-- OrchestratorFrame
-  - epoch: u64
-  - dt: f32
-  - merged_writes: WriteBatch (deterministic merged writes for the frame)
-  - conflicts: Vec<serde_json::Value> (diagnostic conflict logs)
-  - timings_ms: HashMap<String, f32> (currently synthetic values derived from `dt`; real wall-clock measurements are TBD)
-  - events: Vec<serde_json::Value>
-
-- GraphControllerConfig / Subscriptions
-  - Subscriptions { inputs: Vec<TypedPath>, outputs: Vec<TypedPath>, mirror_writes: bool }
-  - GraphControllerConfig { id, spec, subs }
-
-- AnimationControllerConfig
-  - id: String
-  - setup: serde_json::Value (future wiring for loading animation JSON / prebinds)
-
-Notes:
-- The orchestrator crate relies on `vizij-api-core` types (TypedPath, Value, WriteBatch) for all data movement. No duplicate definitions are introduced.
-- Subscriptions let you declare what a graph expects to consume (inputs) and what it should publish (outputs). If `outputs` is empty, the graph's returned writes are fully published; otherwise only listed paths are published.
+The crate depends on `vizij-graph-core`, `vizij-animation-core`, and `vizij-api-core`. Optional Bevy adapters can be layered on top (planned).
 
 ---
 
-## Blackboard conventions / Animation mapping
+## Quick Start
 
-Blackboard entries map `TypedPath` → `BlackboardEntry { value, shape?, epoch, source, priority }`
+```rust
+use vizij_orchestrator_core::{
+    Orchestrator, Schedule,
+    controllers::{GraphControllerConfig, Subscriptions},
+};
+use vizij_graph_core::types::GraphSpec;
 
-Basic conventions used by AnimationController for v1:
-- Player commands: TypedPath `anim/player/<player_id>/cmd/<action>`
-  - Supported actions:
-    - `play`, `pause`, `stop`
-    - `set_speed` — value must be a Value::Float
-    - `seek` — value must be a Value::Float
-- Instance updates: TypedPath `anim/player/<player_id>/instance/<inst_id>/<field>`
-  - Supported fields: `weight`, `time_scale`, `start_offset`, `enabled`
-  - Values must match types (Float for numeric fields, Bool for enabled)
+let graph_spec: GraphSpec = serde_json::from_str(include_str!("../../../../fixtures/node_graphs/simple-gain-offset.json"))?;
 
-These are host-to-engine conventions used by the orchestrator's AnimationController to build `vizij_animation_core::Inputs`.
+let graph_cfg = GraphControllerConfig {
+    id: "graph:demo".into(),
+    spec: graph_spec,
+    subs: Subscriptions::default(), // stage all inputs, publish all outputs
+};
 
-GraphController staging:
-- Only TypedPaths listed in `Subscriptions.inputs` are staged into the `GraphRuntime` before evaluate. This keeps behavior deterministic and avoids staging unrelated Blackboard entries.
+let mut orchestrator = Orchestrator::new(Schedule::SinglePass)
+    .with_graph(graph_cfg);
 
-Graph output publishing:
-- GraphController.evaluate returns a WriteBatch (combined: pre-populated writes + writes produced during evaluation).
-- The scheduler publishes only the subset of returned writes that match `Subscriptions.outputs` (if non-empty). If `Subscriptions.outputs` is empty, all returned writes are published.
-- `Subscriptions.mirror_writes` controls whether the blackboard receives the entire write batch even when `outputs` filters the published view. Leave it `true` when graphs need their internal writes available to other controllers, or set to `false` to keep the blackboard limited to public outputs.
+// Optional: inject staged inputs directly onto the blackboard
+orchestrator.set_input(
+    "demo/input/value",
+    serde_json::json!({ "type": "float", "data": 1.0 }),
+    None,
+)?;
 
----
-
-## Examples
-
-Examples are in `crates/orchestrator/vizij-orchestrator/examples/`:
-
-- graph_only.rs
-  - Demonstrates injecting a pre-populated graph runtime write and stepping the orchestrator.
-  - Shows merged_writes and Blackboard entries after a single step.
-
-- single_pass.rs
-  - Registers a graph and an animation controller and steps under `Schedule::SinglePass`.
-  - Injects a graph write to demonstrate merged_writes.
-
-- two_pass.rs
-  - Registers two graphs and steps under `Schedule::TwoPass`.
-  - Injects writes into each graph runtime to simulate multi-pass behavior and feedback.
-
-Run an example:
-- Build examples:
-  cargo build --manifest-path crates/orchestrator/vizij-orchestrator/Cargo.toml --examples
-
-- Run a single example:
-  cargo run --manifest-path crates/orchestrator/vizij-orchestrator/Cargo.toml --example graph_only
-
-Output from the examples (what you should expect)
-- Examples print the OrchestratorFrame epoch, the `merged_writes` (JSON) and any Blackboard entries created by the scheduler. They are small smoke tests for the orchestrator flow.
+let frame = orchestrator.step(1.0 / 60.0)?;
+println!("epoch {} merged writes: {:?}", frame.epoch, frame.merged_writes);
+```
 
 ---
 
-## Tests
+## Workflow
 
-- Unit tests:
-  - Blackboard behavior and ConflictLog semantics are covered in `src/blackboard.rs` tests.
-  - AnimationController mapping unit test is in `src/controllers/animation.rs` (Blackboard→Inputs mapping).
-- Integration tests:
-  - `tests/integration_passes.rs` validates SinglePass and TwoPass merged_writes and Blackboard application.
-
-Run tests for the orchestrator crate:
-- Unit + integration:
-  cargo test --manifest-path crates/orchestrator/vizij-orchestrator/Cargo.toml
-
-Run just the integration tests:
-- cargo test --manifest-path crates/orchestrator/vizij-orchestrator/Cargo.toml --test integration_passes
-
----
-
-## Next steps (recommended)
-
-If you want to extend this crate, consider:
-- Add more unit tests for Subscriptions and mapping (edge cases and invalid paths).
-- Improve the Blackboard→Inputs mapping or provide a configurable resolver for player/instance IDs.
-- Wire example animations (load real animation JSON) into AnimationController via `setup`.
-- Implement feature-gated `AnimationPlayer` within `vizij-graph-core` (planned next after stabilization).
-- Add CI integration to run orchestrator crate tests and examples automatically.
+1. **Create an orchestrator** with a schedule (`SinglePass` or `TwoPass`).
+2. **Register controllers.**
+   - Graph controllers wrap `GraphSpec` + `Subscriptions`.
+   - Animation controllers accept an ID and optional setup payload (`AnimationControllerConfig`).
+3. **Stage host inputs** on the blackboard via `Orchestrator::set_input` (or directly through `blackboard.set` if you need typed control).
+4. **Step the orchestrator** with a delta time.
+   - `step(dt)` increments the epoch, runs the configured passes, applies writes with provenance, and returns an `OrchestratorFrame`.
+5. **Consume results.**
+   - Use `frame.merged_writes` as the external surface for downstream systems.
+   - Inspect `frame.conflicts` for debugging.
+   - Read `frame.events` (populated by animation controllers) for diagnostics.
 
 ---
 
-## Notes for reviewers / maintainers
+## Key Concepts
 
-- The orchestrator intentionally keeps the cross-crate coupling minimal:
-  - It depends on `vizij-graph-core` and `vizij-animation-core` for runtime logic.
-  - Cross-crate features (like embedding an AnimationPlayer node in the graph) are intentionally feature-gated to avoid tight coupling.
-- Merging semantics:
-  - Writes are appended in deterministic order: pass order → controller order. Last-writer-wins within a pass (the scheduler applies controllers sequentially and records conflicts).
-- Diagnostics:
-  - `OrchestratorFrame` includes `timings_ms` and `conflicts` to help instruments and debug frames.
+### Blackboard
 
-If you'd like, I can:
-- Add more comprehensive examples loading real animation fixtures from `fixtures/animations/`.
-- Prepare a PR branch and run the workspace CI (I can create the branch locally; you'll need to push/test the PR).
+- `BlackboardEntry` stores `{ value, shape?, epoch, source, priority }`.
+- `set` and `set_entry` insert values keyed by `TypedPath`.
+- `apply_writebatch` merges controller outputs with last-writer-wins semantics and emits `ConflictLog` instances when existing entries are overwritten.
+
+### Subscriptions
+
+- `inputs` – list of `TypedPath`s to stage into a graph runtime before evaluation. Unlisted paths are ignored, guaranteeing deterministic input sets.
+- `outputs` – optional filter determining which writes are published. Empty => publish all.
+- `mirror_writes` – if true (default), the entire write batch updates the blackboard even when `outputs` filters the public result. Turn off to keep private state hidden.
+
+### Schedules
+
+- **SinglePass:** Animations → Graphs.
+- **TwoPass:** Graphs → Animations → Graphs (supports feedback loops where animations need graph output and vice versa).
+- `Schedule::RateDecoupled` is reserved for future work; it currently aliases to `SinglePass`.
+
+### Animation Controller Path Conventions
+
+Blackboard paths are parsed to build `vizij_animation_core::Inputs`:
+
+- `anim/player/<player_id>/cmd/play|pause|stop|set_speed|seek`
+- `anim/player/<player_id>/instance/<inst_id>/weight|time_scale|start_offset|enabled`
+
+Unrecognised paths are ignored to keep the mapping conservative.
+
+### Time Propagation
+
+`GraphController::evaluate` updates `GraphRuntime.dt` with a clamped, finite delta and increments `GraphRuntime.t`. Time-based nodes (`Time`, `Spring`, `Damp`, `Slew`, oscillators) therefore respond correctly when orchestrator hosts call `step(dt)`. If you embed `GraphController` elsewhere, mimic this behaviour.
+
+---
+
+## Development & Testing
+
+Run unit and integration tests:
+
+```bash
+cargo test -p vizij-orchestrator-core
+```
+
+Notable tests:
+
+- `src/blackboard.rs` – entry storage and conflict logging semantics.
+- `src/controllers/animation.rs` – blackboard → animation input mapping.
+- `tests/integration_passes.rs` – end-to-end coverage for `SinglePass` and `TwoPass` schedules.
+
+Helpful workspace scripts:
+
+```bash
+pnpm run test:rust                 # fmt, clippy, tests across the workspace
+pnpm run build:wasm:orchestrator   # rebuilds the WASM adapter that embeds this crate
+pnpm run watch:wasm:orchestrator   # rebuild continuously (requires cargo-watch)
+```
+
+Examples (under `examples/`) demonstrate minimal graph-only, single-pass, and two-pass orchestrations you can run with:
+
+```bash
+cargo run -p vizij-orchestrator-core --example single_pass
+```
+
+---
+
+## Related Packages
+
+- [`vizij-graph-core`](../../node-graph/vizij-graph-core/README.md) – graph runtime used by graph controllers.
+- [`vizij-animation-core`](../../animation/vizij-animation-core/README.md) – animation engine wrapped by animation controllers.
+- [`vizij-orchestrator-wasm`](../vizij-orchestrator-wasm/README.md) – wasm-bindgen binding replicating the host API for JavaScript environments.
+- [`@vizij/orchestrator-react`](../../../vizij-web/packages/@vizij/orchestrator-react/README.md) – React provider and hooks built on the wasm binding.
+
+Need help or spotted an inconsistency? Open an issue in the Vizij repository—predictable orchestrations keep downstream toolchains healthy. 🔁

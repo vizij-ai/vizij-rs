@@ -1,36 +1,58 @@
 # vizij-api-wasm
 
-`vizij-api-wasm` exposes helpers for working with Vizij value and write-batch JSON inside WebAssembly contexts. It wraps
-`vizij-api-core` with `wasm-bindgen`, providing small utility functions that validate JSON payloads or convert them into JS values
-without pulling higher-level engines into the WASM binary.
+> **WebAssembly helpers for validating and normalising Vizij Value/WriteBatch JSON.**
+
+`vizij-api-wasm` wraps `vizij-api-core` with `wasm-bindgen` so JavaScript and TypeScript tooling can normalise payloads, ensure they conform to the canonical schema, and convert them into `JsValue` instances without bundling the heavier animation/graph engines.
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Exports](#exports)
+3. [Building](#building)
+4. [Usage](#usage)
+5. [Development & Testing](#development--testing)
+6. [Related Packages](#related-packages)
+
+---
 
 ## Overview
 
-* Compiles to a `cdylib` via `wasm-bindgen`.
-* Re-uses `vizij-api-core`'s `Value` and `WriteBatch` types for schema validation.
-* Provides ergonomic entry points for JavaScript/TypeScript tooling that need to sanity-check JSON before handing it to engines.
-* Returns friendly `JsValue` errors so callers can surface human-readable diagnostics.
+- Compiles to a `cdylib` using `wasm-bindgen`.
+- Depends solely on `vizij-api-core` for Value/Shape/TypedPath definitions.
+- Provides string-based validation helpers plus converters that return proper JS objects via `serde_wasm_bindgen`.
+- Emits ergonomic error messages (mirroring the Rust core) for tooling and editor integrations.
 
-## Architecture
+---
 
-```
-JSON string  -->  vizij-api-core parsing  -->  wasm-bindgen exports  -->  JavaScript tooling
-```
+## Exports
 
-* `validate_value_json` / `validate_writebatch_json` parse JSON into the Rust types and bubble up any serde errors.
-* `value_to_js` / `writebatch_to_js` parse the JSON and convert the result into `JsValue` via `serde_wasm_bindgen::to_value`.
-* No global state is kept—each helper performs pure conversions and returns either `()` or a converted JS object.
+| Function | Description |
+|----------|-------------|
+| `validate_value_json(json: &str)` | Parses and validates a single `Value` JSON string. Throws a JS error on failure. |
+| `validate_writebatch_json(json: &str)` | Parses and validates a `WriteBatch` JSON string. |
+| `value_to_js(json: &str) -> JsValue` | Normalises and converts a value JSON string into a JS object matching the canonical `{ type, data }` shape. |
+| `writebatch_to_js(json: &str) -> JsValue` | Converts a batch JSON string into a JS object `{ writes: [...] }`. |
 
-## Installation
+All helpers accept UTF-8 strings and perform no global state mutations, making them safe to call repeatedly.
 
-Inside the workspace build the crate with the usual wasm tooling. For example:
+---
+
+## Building
+
+From the repository root:
 
 ```bash
-wasm-pack build crates/api/vizij-api-wasm --target bundler --out-dir pkg --release
+wasm-pack build crates/api/vizij-api-wasm \
+  --target bundler \
+  --out-dir pkg \
+  --release
 ```
 
-This crate is typically consumed indirectly by other WASM bindings, but the command above is sufficient when testing it
-independently.
+The generated `pkg/` directory can be imported directly or repackaged as part of a larger bundle.
+
+---
 
 ## Usage
 
@@ -44,32 +66,38 @@ import init, {
 
 await init();
 
-// Validate a candidate Value payload
-try {
-  validate_value_json('{"type":"Vec3","data":[0,1,2]}');
-} catch (err) {
-  console.error("Value JSON invalid", err);
-}
+// Validate inputs
+validate_value_json('{"type":"vec3","data":[0,1,2]}');
 
-// Convert a WriteBatch JSON string into a JS object
+// Convert a Value JSON string to a JS object
+const value = value_to_js('{"vec3":[0,1,2]}'); // shorthand accepted
+console.log(value); // { type: "vec3", data: [0, 1, 2] }
+
+// Convert a WriteBatch
 const writes = writebatch_to_js(
-  '{"writes":[{"path":"robot/Arm.joint","value":{"type":"Float","data":1.0}}]}'
+  '{"writes":[{"path":"robot/Arm.joint","value":{"float":1}}]}'
 );
-console.log(writes);
+console.log(writes.writes[0].value); // { type: "float", data: 1 }
 ```
 
-## Key Details
+Errors returned by `validate_*` include the same context as the Rust parsing layer, making them ideal for diagnostics in editors or CLI tooling.
 
-* All helpers accept UTF-8 JSON strings. Invalid UTF-8 should be sanitized before calling into WASM.
-* The conversion helpers (`*_to_js`) allocate new JS objects each call—cache them if you call them every frame.
-* Error messages mirror the `thiserror` implementations in `vizij-api-core`, giving tooling the same context as the Rust side.
+---
 
-## Testing
-
-Build the WASM crate and exercise the bindings from Node or browser tests. From the workspace root:
+## Development & Testing
 
 ```bash
 wasm-pack test crates/api/vizij-api-wasm --headless --chrome
 ```
 
-(Adjust the target or browser to match your local environment.)
+Change the target (`--node`, `--firefox`, etc.) as needed. For quick smoke tests, import the generated `pkg/` output in a Node script and run the functions above.
+
+---
+
+## Related Packages
+
+- [`vizij-api-core`](../vizij-api-core/README.md) – underlying data model shared across all Vizij stacks.
+- [`npm/@vizij/value-json`](../../npm/@vizij/value-json/README.md) – TypeScript helpers that mirror the same JSON normalisation logic.
+- WASM bindings for animation, node graphs, and the orchestrator all reuse this crate internally to validate payloads.
+
+Questions or ideas? Open an issue—consistent JSON handling keeps Vizij tooling reliable. 📦
