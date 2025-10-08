@@ -67,7 +67,17 @@ impl GraphController {
     ///  - Stage subscribed Blackboard inputs into the runtime (only inputs listed in Subscriptions).
     ///  - Call evaluate_all(runtime, &spec)
     ///  - Collect runtime.writes and return as WriteBatch.
-    pub fn evaluate(&mut self, bb: &mut Blackboard, _epoch: u64, _dt: f32) -> Result<WriteBatch> {
+    pub fn evaluate(&mut self, bb: &mut Blackboard, _epoch: u64, dt: f32) -> Result<WriteBatch> {
+        // Update runtime timekeeping so transition/time nodes observe advancing time.
+        let delta = if dt.is_finite() { dt.max(0.0) } else { 0.0 };
+        let prev_t = if self.rt.t.is_finite() {
+            self.rt.t
+        } else {
+            0.0
+        };
+        self.rt.dt = delta;
+        self.rt.t = prev_t + delta;
+
         // Stage only subscribed blackboard entries into the graph runtime.
         for tp in &self.subs.inputs {
             if let Some(entry) = bb.get(&tp.to_string()) {
