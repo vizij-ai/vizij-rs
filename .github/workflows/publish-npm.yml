@@ -13,7 +13,7 @@ permissions:
   id-token: write     # required for --provenance
 
 jobs:
-  publish:
+  publish_animation:
     if: startsWith(github.ref, 'refs/tags/npm-animation-v')
     runs-on: ubuntu-latest
     steps:
@@ -32,20 +32,23 @@ jobs:
         with:
           node-version: 20
           registry-url: 'https://registry.npmjs.org'
+      - name: Enable pnpm
+        run: corepack enable pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build shared packages
+        run: pnpm run build:shared
       - name: Build wrapper
         run: |
-          cd npm/@vizij/animation-wasm
-          npm i
-          npm run build
-          npm test
-          npm pack --dry-run
+          pnpm --filter @vizij/animation-wasm run build
+          pnpm --filter @vizij/animation-wasm run test
+          pnpm --filter @vizij/animation-wasm exec npm pack --dry-run
 
       - name: Publish @vizij/animation-wasm
-        working-directory: npm/@vizij/animation-wasm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
-        run: npm publish --access public --provenance
+        run: pnpm --filter @vizij/animation-wasm exec npm publish --access public --provenance
 
   publish_graph:
     if: startsWith(github.ref, 'refs/tags/npm-graph-v')
@@ -66,20 +69,23 @@ jobs:
         with:
           node-version: 20
           registry-url: 'https://registry.npmjs.org'
+      - name: Enable pnpm
+        run: corepack enable pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build shared packages
+        run: pnpm run build:shared
       - name: Build graph wrapper
         run: |
-          cd npm/@vizij/node-graph-wasm
-          npm i
-          npm run build
-          npm test
-          npm pack --dry-run
+          pnpm --filter @vizij/node-graph-wasm run build
+          pnpm --filter @vizij/node-graph-wasm run test
+          pnpm --filter @vizij/node-graph-wasm exec npm pack --dry-run
 
       - name: Publish @vizij/node-graph-wasm
-        working-directory: npm/@vizij/node-graph-wasm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
-        run: npm publish --access public --provenance
+        run: pnpm --filter @vizij/node-graph-wasm exec npm publish --access public --provenance
 
   publish_orchestrator:
     if: startsWith(github.ref, 'refs/tags/npm-orchestrator-v')
@@ -100,20 +106,23 @@ jobs:
         with:
           node-version: 20
           registry-url: 'https://registry.npmjs.org'
+      - name: Enable pnpm
+        run: corepack enable pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build shared packages
+        run: pnpm run build:shared
       - name: Build orchestrator wrapper
         run: |
-          cd npm/@vizij/orchestrator-wasm
-          npm i
-          npm run build
-          npm test
-          npm pack --dry-run
+          pnpm --filter @vizij/orchestrator-wasm run build
+          pnpm --filter @vizij/orchestrator-wasm run test
+          pnpm --filter @vizij/orchestrator-wasm exec npm pack --dry-run
 
       - name: Publish @vizij/orchestrator-wasm
-        working-directory: npm/@vizij/orchestrator-wasm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
-        run: npm publish --access public --provenance
+        run: pnpm --filter @vizij/orchestrator-wasm exec npm publish --access public --provenance
 
   publish_value_json:
     if: startsWith(github.ref, 'refs/tags/npm-value-json-v')
@@ -126,18 +135,21 @@ jobs:
         with:
           node-version: 20
           registry-url: 'https://registry.npmjs.org'
+      - name: Enable pnpm
+        run: corepack enable pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build shared packages
+        run: pnpm run build:shared
 
       - name: Build shared value-json package
         run: |
-          cd npm/@vizij/value-json
-          npm i
-          npm run build
-          npm test
-          npm pack --dry-run
+          pnpm --filter @vizij/value-json run build
+          pnpm --filter @vizij/value-json run test
+          pnpm --filter @vizij/value-json exec npm pack --dry-run
 
       - name: Publish @vizij/value-json
-        working-directory: npm/@vizij/value-json
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
-        run: npm publish --access public --provenance
+        run: pnpm --filter @vizij/value-json exec npm publish --access public --provenance

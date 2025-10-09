@@ -187,9 +187,7 @@ Fixtures live in `fixtures/` for repeatable scenario testing. Use them in integr
 Each domain stack keeps crate, WASM crate, and npm wrapper versions in lockstep. When you publish:
 
 1. Bump the version in all three manifests (`Cargo.toml`, `package.json`).
-2. Publish the Rust crates (`cargo publish`).
-3. Rebuild the WASM crate (`pnpm run build:wasm:<stack>`).
-4. Publish the npm package (`pnpm publish` from the wrapper directory).
+2. Use the appropriate tags on the main branch to trigger the workflow. Use `git push && git push --tags` after tagging them appropriately.
 
 `scripts/dry-run-release.sh` runs through the entire sequence without pushing artefacts; use it to confirm that crates build, WASM bundling succeeds, and npm tarballs contain the correct files.
 
