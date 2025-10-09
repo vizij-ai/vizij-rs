@@ -36,6 +36,8 @@ jobs:
         run: corepack enable pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build shared packages
+        run: pnpm run build:shared
       - name: Build wrapper
         run: |
           pnpm --filter @vizij/animation-wasm run build
@@ -71,6 +73,8 @@ jobs:
         run: corepack enable pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build shared packages
+        run: pnpm run build:shared
       - name: Build graph wrapper
         run: |
           pnpm --filter @vizij/node-graph-wasm run build
@@ -106,6 +110,8 @@ jobs:
         run: corepack enable pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build shared packages
+        run: pnpm run build:shared
       - name: Build orchestrator wrapper
         run: |
           pnpm --filter @vizij/orchestrator-wasm run build
@@ -133,6 +139,8 @@ jobs:
         run: corepack enable pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build shared packages
+        run: pnpm run build:shared
 
       - name: Build shared value-json package
         run: |

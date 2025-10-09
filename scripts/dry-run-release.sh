@@ -34,6 +34,7 @@ cargo test --workspace
 # 4. Dry‑run publishing of npm packages in vizij-rs (supporting + wasm wrappers)
 echo "Installing npm workspace dependencies…"
 pnpm install --frozen-lockfile
+pnpm run build:shared
 
 NPM_PACKAGES=(
   value-json
