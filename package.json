@@ -36,8 +36,8 @@
     "build:shared": "pnpm --filter @vizij/value-json --filter @vizij/wasm-loader --filter @vizij/test-fixtures run build",
     "test:shared": "pnpm --filter @vizij/value-json run test",
     "clean:shared": "pnpm --filter @vizij/value-json --filter @vizij/wasm-loader --filter @vizij/test-fixtures run clean",
-    "build": "pnpm run build:shared && pnpm run build:wasm",
-    "test": "pnpm run test:shared && pnpm run test:wasm",
+    "build": "pnpm run build:rust && pnpm run build:wasm && pnpm run build:shared",
+    "test": "pnpm run test:wasm && pnpm run test:shared",
     "clean": "pnpm run clean:shared && pnpm run clean:wasm"
   },
   "workspaces": [

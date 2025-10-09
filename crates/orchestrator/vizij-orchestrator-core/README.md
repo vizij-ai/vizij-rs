@@ -90,6 +90,7 @@ println!("epoch {} merged writes: {:?}", frame.epoch, frame.merged_writes);
 3. **Stage host inputs** on the blackboard via `Orchestrator::set_input` (or directly through `blackboard.set` if you need typed control).
 4. **Step the orchestrator** with a delta time.
    - `step(dt)` increments the epoch, runs the configured passes, applies writes with provenance, and returns an `OrchestratorFrame`.
+   - `frame.timings_ms` mirrors the supplied `dt` for each pass; the orchestrator does not sample wall-clock duration because wasm hosts rely on deterministic step intervals.
 5. **Consume results.**
    - Use `frame.merged_writes` as the external surface for downstream systems.
    - Inspect `frame.conflicts` for debugging.

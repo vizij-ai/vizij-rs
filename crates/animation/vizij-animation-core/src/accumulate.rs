@@ -6,6 +6,87 @@ use std::collections::HashMap;
 use crate::interp::functions::nlerp_quat;
 use vizij_api_core::Value;
 
+#[derive(Clone, Debug)]
+enum CollectionKind {
+    Vector(usize),
+    Array(usize),
+    List(usize),
+    Tuple(usize),
+}
+
+impl CollectionKind {
+    fn len(&self) -> usize {
+        match *self {
+            CollectionKind::Vector(len)
+            | CollectionKind::Array(len)
+            | CollectionKind::List(len)
+            | CollectionKind::Tuple(len) => len,
+        }
+    }
+
+    fn matches(&self, other: &CollectionKind) -> bool {
+        std::mem::discriminant(self) == std::mem::discriminant(other) && self.len() == other.len()
+    }
+
+    fn build_value(&self, data: Vec<f32>) -> Value {
+        match *self {
+            CollectionKind::Vector(_) => Value::Vector(data),
+            CollectionKind::Array(len) => {
+                debug_assert_eq!(data.len(), len);
+                Value::Array(data.into_iter().map(Value::Float).collect())
+            }
+            CollectionKind::List(len) => {
+                debug_assert_eq!(data.len(), len);
+                Value::List(data.into_iter().map(Value::Float).collect())
+            }
+            CollectionKind::Tuple(len) => {
+                debug_assert_eq!(data.len(), len);
+                Value::Tuple(data.into_iter().map(Value::Float).collect())
+            }
+        }
+    }
+}
+
+fn numeric_collection_from_value(value: &Value) -> Option<(CollectionKind, Vec<f32>)> {
+    match value {
+        Value::Vector(values) => Some((CollectionKind::Vector(values.len()), values.clone())),
+        Value::Array(items) => {
+            let mut out = Vec::with_capacity(items.len());
+            for item in items {
+                if let Value::Float(v) = item {
+                    out.push(*v);
+                } else {
+                    return None;
+                }
+            }
+            Some((CollectionKind::Array(items.len()), out))
+        }
+        Value::List(items) => {
+            let mut out = Vec::with_capacity(items.len());
+            for item in items {
+                if let Value::Float(v) = item {
+                    out.push(*v);
+                } else {
+                    return None;
+                }
+            }
+            Some((CollectionKind::List(items.len()), out))
+        }
+        Value::Tuple(items) => {
+            let mut out = Vec::with_capacity(items.len());
+            for item in items {
+                if let Value::Float(v) = item {
+                    out.push(*v);
+                } else {
+                    return None;
+                }
+            }
+            Some((CollectionKind::Tuple(items.len()), out))
+        }
+        _ => None,
+    }
+}
+
 /// Accumulator entry storing weighted sums per Value kind.
 /// For vectors/colors: store component-wise sum and total weight.
 /// For quaternions: store weighted sum vector of (x,y,z,w) then normalize at finalize.
@@ -40,6 +121,11 @@ enum AccumEntry {
         t_sum: [f32; 3],
         r_sum: [f32; 4], // weighted sum; normalized at blend
         s_sum: [f32; 3],
+        w: f32,
+    },
+    Collection {
+        kind: CollectionKind,
+        sum: Vec<f32>,
         w: f32,
     },
     /// Step-only kinds (Bool/Text): prefer last assignment, no blending
@@ -130,6 +216,27 @@ impl AccumEntry {
             (AccumEntry::Step(last), Value::Tuple(_)) => {
                 *last = v.clone();
             }
+            (entry @ AccumEntry::Collection { .. }, other) => {
+                if let Some((incoming_kind, data)) = numeric_collection_from_value(other) {
+                    let matches_kind = match entry {
+                        AccumEntry::Collection { kind, .. } => kind.matches(&incoming_kind),
+                        _ => false,
+                    };
+                    if matches_kind {
+                        if let AccumEntry::Collection { sum, w: ww, .. } = entry {
+                            debug_assert_eq!(sum.len(), data.len());
+                            for (acc, component) in sum.iter_mut().zip(data.iter()) {
+                                *acc += component * w;
+                            }
+                            *ww += w;
+                        }
+                    } else {
+                        *entry = AccumEntry::Step(other.clone());
+                    }
+                } else {
+                    *entry = AccumEntry::Step(other.clone());
+                }
+            }
             _ => {
                 // Mismatched kind; ignore additional values to keep fail-soft behavior.
             }
@@ -176,12 +283,26 @@ impl AccumEntry {
             },
             Value::Text(s) => AccumEntry::Step(Value::Text(s.clone())),
             Value::Bool(b) => AccumEntry::Step(Value::Bool(*b)),
-            Value::Vector(v) => AccumEntry::Step(Value::Vector(v.clone())),
-            Value::Enum(tag, boxed) => AccumEntry::Step(Value::Enum(tag.clone(), boxed.clone())),
-            Value::Record(map) => AccumEntry::Step(Value::Record(map.clone())),
-            Value::Array(items) => AccumEntry::Step(Value::Array(items.clone())),
-            Value::List(items) => AccumEntry::Step(Value::List(items.clone())),
-            Value::Tuple(items) => AccumEntry::Step(Value::Tuple(items.clone())),
+            other => {
+                if let Some((kind, mut data)) = numeric_collection_from_value(other) {
+                    for entry in data.iter_mut() {
+                        *entry *= w;
+                    }
+                    AccumEntry::Collection { kind, sum: data, w }
+                } else {
+                    match other {
+                        Value::Enum(tag, boxed) => {
+                            AccumEntry::Step(Value::Enum(tag.clone(), boxed.clone()))
+                        }
+                        Value::Record(map) => AccumEntry::Step(Value::Record(map.clone())),
+                        Value::Array(items) => AccumEntry::Step(Value::Array(items.clone())),
+                        Value::List(items) => AccumEntry::Step(Value::List(items.clone())),
+                        Value::Tuple(items) => AccumEntry::Step(Value::Tuple(items.clone())),
+                        Value::Vector(v) => AccumEntry::Step(Value::Vector(v.clone())),
+                        _ => unreachable!("Unhandled non-numeric variant in from_value"),
+                    }
+                }
+            }
         }
     }
 
@@ -258,6 +379,14 @@ impl AccumEntry {
                         rotation: r_norm,
                         scale: s,
                     })
+                } else {
+                    None
+                }
+            }
+            AccumEntry::Collection { kind, sum, w } => {
+                if w > 0.0 {
+                    let averaged = sum.into_iter().map(|c| c / w).collect();
+                    Some(kind.build_value(averaged))
                 } else {
                     None
                 }

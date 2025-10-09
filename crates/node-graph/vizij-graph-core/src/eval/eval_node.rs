@@ -94,8 +94,8 @@ fn evaluate_kind(
         | NodeType::Equal
         | NodeType::NotEqual) => Ok(eval_comparison(node_type, inputs)),
         NodeType::If => Ok(eval_if(inputs)),
-        NodeType::Clamp => Ok(eval_clamp(inputs)),
-        NodeType::Remap => Ok(eval_remap(inputs)),
+        NodeType::Clamp => eval_clamp(inputs),
+        NodeType::Remap => eval_remap(inputs),
         NodeType::Vec3Cross => Ok(eval_vec3_cross(inputs)),
         NodeType::VectorConstant => Ok(eval_vector_constant(params)),
         node_type @ (NodeType::VectorAdd
@@ -446,20 +446,41 @@ fn eval_if(inputs: &HashMap<String, PortValue>) -> OutputMap {
     single_output(branch.value)
 }
 
-fn eval_clamp(inputs: &HashMap<String, PortValue>) -> OutputMap {
-    let value = input_or_default(inputs, "in");
-    let min = input_or_default(inputs, "min");
-    let max = input_or_default(inputs, "max");
+fn eval_clamp(inputs: &HashMap<String, PortValue>) -> Result<OutputMap, String> {
+    let value = inputs
+        .get("in")
+        .ok_or_else(|| "Clamp requires 'in' input".to_string())?;
+    let min = inputs
+        .get("min")
+        .ok_or_else(|| "Clamp requires 'min' input".to_string())?;
+    let max = inputs
+        .get("max")
+        .ok_or_else(|| "Clamp requires 'max' input".to_string())?;
+
     let clamped_low = binary_numeric(&value.value, &min.value, |x, m| x.max(m));
-    single_output(binary_numeric(&clamped_low, &max.value, |x, m| x.min(m)))
+    Ok(single_output(binary_numeric(
+        &clamped_low,
+        &max.value,
+        |x, m| x.min(m),
+    )))
 }
 
-fn eval_remap(inputs: &HashMap<String, PortValue>) -> OutputMap {
-    let value = input_or_default(inputs, "in");
-    let in_min = input_or_default(inputs, "in_min");
-    let in_max = input_or_default(inputs, "in_max");
-    let out_min = input_or_default(inputs, "out_min");
-    let out_max = input_or_default(inputs, "out_max");
+fn eval_remap(inputs: &HashMap<String, PortValue>) -> Result<OutputMap, String> {
+    let value = inputs
+        .get("in")
+        .ok_or_else(|| "Remap requires 'in' input".to_string())?;
+    let in_min = inputs
+        .get("in_min")
+        .ok_or_else(|| "Remap requires 'in_min' input".to_string())?;
+    let in_max = inputs
+        .get("in_max")
+        .ok_or_else(|| "Remap requires 'in_max' input".to_string())?;
+    let out_min = inputs
+        .get("out_min")
+        .ok_or_else(|| "Remap requires 'out_min' input".to_string())?;
+    let out_max = inputs
+        .get("out_max")
+        .ok_or_else(|| "Remap requires 'out_max' input".to_string())?;
 
     let numer = binary_numeric(&value.value, &in_min.value, |v, min| v - min);
     let denom = binary_numeric(&in_max.value, &in_min.value, |max, min| max - min);
@@ -471,9 +492,11 @@ fn eval_remap(inputs: &HashMap<String, PortValue>) -> OutputMap {
     let ratio_clamped = unary_numeric(&ratio, |x| x.clamp(0.0, 1.0));
     let span = binary_numeric(&out_max.value, &out_min.value, |max, min| max - min);
     let scaled = binary_numeric(&ratio_clamped, &span, |t, span| t * span);
-    single_output(binary_numeric(&scaled, &out_min.value, |scaled, min| {
-        scaled + min
-    }))
+    Ok(single_output(binary_numeric(
+        &scaled,
+        &out_min.value,
+        |scaled, min| scaled + min,
+    )))
 }
 
 fn eval_vec3_cross(inputs: &HashMap<String, PortValue>) -> OutputMap {

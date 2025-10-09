@@ -208,6 +208,51 @@ fn sampling_linear_step_bezier() {
 }
 
 #[test]
+fn accumulates_vector_values_componentwise() {
+    let mut acc = AccumulatorWithDerivatives::new();
+    acc.add("vec", &Value::Vector(vec![0.0, 2.0, 4.0]), None, 1.0);
+    acc.add("vec", &Value::Vector(vec![2.0, 0.0, 2.0]), None, 1.0);
+    let finalized = acc.finalize();
+    let (value, derivative) = finalized.get("vec").expect("vector entry");
+    assert!(derivative.is_none());
+    if let Value::Vector(data) = value {
+        assert_eq!(data, &vec![1.0, 1.0, 3.0]);
+    } else {
+        panic!("expected vector average, got {value:?}");
+    }
+
+    let mut acc_list = AccumulatorWithDerivatives::new();
+    acc_list.add(
+        "list",
+        &Value::List(vec![Value::Float(0.0), Value::Float(4.0)]),
+        None,
+        1.0,
+    );
+    acc_list.add(
+        "list",
+        &Value::List(vec![Value::Float(2.0), Value::Float(0.0)]),
+        None,
+        1.0,
+    );
+    let list_finalized = acc_list.finalize();
+    let (list_value, list_deriv) = list_finalized.get("list").expect("list entry");
+    assert!(list_deriv.is_none());
+    match list_value {
+        Value::List(items) => {
+            let floats: Vec<f32> = items
+                .iter()
+                .map(|v| match v {
+                    Value::Float(f) => *f,
+                    _ => panic!("expected numeric list component, got {v:?}"),
+                })
+                .collect();
+            assert_eq!(floats, vec![1.0, 2.0]);
+        }
+        other => panic!("expected list average, got {other:?}"),
+    }
+}
+
+#[test]
 fn sampling_derivative_linear_and_step() {
     let track_lin = mk_scalar_track_linear("node.value", &[(0.0, 0.0), (1.0, 1.0)]);
     let sample = sample_track_with_derivative(&track_lin, 0.5, 1.0);
