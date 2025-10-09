@@ -1,0 +1,77 @@
+{
+  "spec": {
+    "nodes": [
+      {
+        "id": "target_pos",
+        "type": "input",
+        "params": {
+          "path": "tests/urdf.target_pos",
+          "value": {
+            "vec3": [
+              0.95,
+              0.0,
+              0.1
+            ]
+          }
+        }
+      },
+      {
+        "id": "seed",
+        "type": "input",
+        "params": {
+          "path": "tests/urdf.joints",
+          "value": {
+            "vector": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "id": "ik",
+        "type": "urdfikposition",
+        "params": {
+          "urdf_xml": "<robot name=\"sample_arm\">\n  <link name=\"base_link\" />\n  <link name=\"link1\" />\n  <link name=\"link2\" />\n  <link name=\"link3\" />\n  <link name=\"link4\" />\n  <link name=\"link5\" />\n  <link name=\"link6\" />\n  <link name=\"tool\" />\n\n  <joint name=\"joint1\" type=\"revolute\">\n    <parent link=\"base_link\" />\n    <child link=\"link1\" />\n    <origin xyz=\"0 0 0.1\" rpy=\"0 0 0\" />\n    <axis xyz=\"0 0 1\" />\n    <limit lower=\"-3.1416\" upper=\"3.1416\" effort=\"1\" velocity=\"1\" />\n  </joint>\n\n  <joint name=\"joint2\" type=\"revolute\">\n    <parent link=\"link1\" />\n    <child link=\"link2\" />\n    <origin xyz=\"0.2 0 0\" rpy=\"0 0 0\" />\n    <axis xyz=\"0 1 0\" />\n    <limit lower=\"-3.1416\" upper=\"3.1416\" effort=\"1\" velocity=\"1\" />\n  </joint>\n\n  <joint name=\"joint3\" type=\"revolute\">\n    <parent link=\"link2\" />\n    <child link=\"link3\" />\n    <origin xyz=\"0.2 0 0\" rpy=\"0 0 0\" />\n    <axis xyz=\"1 0 0\" />\n    <limit lower=\"-3.1416\" upper=\"3.1416\" effort=\"1\" velocity=\"1\" />\n  </joint>\n\n  <joint name=\"joint4\" type=\"revolute\">\n    <parent link=\"link3\" />\n    <child link=\"link4\" />\n    <origin xyz=\"0.2 0 0\" rpy=\"0 0 0\" />\n    <axis xyz=\"0 0 1\" />\n    <limit lower=\"-3.1416\" upper=\"3.1416\" effort=\"1\" velocity=\"1\" />\n  </joint>\n\n  <joint name=\"joint5\" type=\"revolute\">\n    <parent link=\"link4\" />\n    <child link=\"link5\" />\n    <origin xyz=\"0.15 0 0\" rpy=\"0 0 0\" />\n    <axis xyz=\"0 1 0\" />\n    <limit lower=\"-3.1416\" upper=\"3.1416\" effort=\"1\" velocity=\"1\" />\n  </joint>\n\n  <joint name=\"joint6\" type=\"revolute\">\n    <parent link=\"link5\" />\n    <child link=\"link6\" />\n    <origin xyz=\"0.1 0 0\" rpy=\"0 0 0\" />\n    <axis xyz=\"1 0 0\" />\n    <limit lower=\"-3.1416\" upper=\"3.1416\" effort=\"1\" velocity=\"1\" />\n  </joint>\n\n  <joint name=\"tool_joint\" type=\"fixed\">\n    <parent link=\"link6\" />\n    <child link=\"tool\" />\n    <origin xyz=\"0.1 0 0\" rpy=\"0 0 0\" />\n  </joint>\n</robot>",
+          "root_link": "base_link",
+          "tip_link": "tool",
+          "max_iters": 512,
+          "tol_pos": 0.02
+        },
+        "inputs": {
+          "target_pos": {
+            "node_id": "target_pos"
+          },
+          "seed": {
+            "node_id": "seed"
+          }
+        }
+      },
+      {
+        "id": "ik_out",
+        "type": "output",
+        "params": {
+          "path": "tests/urdf.solution"
+        },
+        "inputs": {
+          "in": {
+            "node_id": "ik"
+          }
+        }
+      }
+    ]
+  },
+  "subs": {
+    "inputs": [
+      "tests/urdf.target_pos",
+      "tests/urdf.joints"
+    ],
+    "outputs": [
+      "tests/urdf.solution"
+    ]
+  }
+}

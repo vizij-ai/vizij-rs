@@ -1,0 +1,32 @@
+{
+  "description": "Scalar ramp animation drives a gain/offset graph",
+  "animation": "simple-scalar-ramp",
+  "graph": "simple-gain-offset",
+  "initial_inputs": [
+    { "path": "demo/graph/gain", "value": 1.5 },
+    { "path": "demo/graph/offset", "value": 0.25 }
+  ],
+  "steps": [
+    {
+      "delta": 0.0,
+      "expect": {
+        "node.t": 0.0,
+        "demo/output/value": 0.25
+      }
+    },
+    {
+      "delta": 0.5,
+      "expect": {
+        "node.t": 0.5,
+        "demo/output/value": 1.0
+      }
+    },
+    {
+      "delta": 1.0,
+      "expect": {
+        "node.t": 1.0,
+        "demo/output/value": 1.75
+      }
+    }
+  ]
+}

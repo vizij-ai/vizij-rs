@@ -31,11 +31,11 @@ fn get_scalar_by_key(outputs: JsValue, want_key: &str) -> Option<f64> {
     None
 }
 
-/// it should load tests/fixtures/new_format.json via load_stored_animation and emit initial outputs
+/// it should load fixtures/animations/vector-pose-combo.json via load_stored_animation and emit initial outputs
 #[wasm_bindgen_test]
 fn wasm_loads_new_format_and_samples_initial() {
     // Parse the fixture JSON into a JS object
-    let raw = include_str!("../../test_fixtures/new_format.json");
+    let raw = include_str!("../../../../fixtures/animations/vector-pose-combo.json");
     let js_obj = JSON::parse(raw).expect("parse fixture to JS object");
 
     // Create engine, load stored animation, and add an instance

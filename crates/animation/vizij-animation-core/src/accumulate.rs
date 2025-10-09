@@ -92,16 +92,20 @@ impl AccumEntry {
                     s_sum,
                     w: ww,
                 },
-                Value::Transform { pos, rot, scale },
+                Value::Transform {
+                    translation,
+                    rotation,
+                    scale,
+                },
             ) => {
-                t_sum[0] += pos[0] * w;
-                t_sum[1] += pos[1] * w;
-                t_sum[2] += pos[2] * w;
+                t_sum[0] += translation[0] * w;
+                t_sum[1] += translation[1] * w;
+                t_sum[2] += translation[2] * w;
 
-                r_sum[0] += rot[0] * w;
-                r_sum[1] += rot[1] * w;
-                r_sum[2] += rot[2] * w;
-                r_sum[3] += rot[3] * w;
+                r_sum[0] += rotation[0] * w;
+                r_sum[1] += rotation[1] * w;
+                r_sum[2] += rotation[2] * w;
+                r_sum[3] += rotation[3] * w;
 
                 s_sum[0] += scale[0] * w;
                 s_sum[1] += scale[1] * w;
@@ -155,9 +159,18 @@ impl AccumEntry {
                 sum: [c[0] * w, c[1] * w, c[2] * w, c[3] * w],
                 w,
             },
-            Value::Transform { pos, rot, scale } => AccumEntry::Transform {
-                t_sum: [pos[0] * w, pos[1] * w, pos[2] * w],
-                r_sum: [rot[0] * w, rot[1] * w, rot[2] * w, rot[3] * w],
+            Value::Transform {
+                translation,
+                rotation,
+                scale,
+            } => AccumEntry::Transform {
+                t_sum: [translation[0] * w, translation[1] * w, translation[2] * w],
+                r_sum: [
+                    rotation[0] * w,
+                    rotation[1] * w,
+                    rotation[2] * w,
+                    rotation[3] * w,
+                ],
                 s_sum: [scale[0] * w, scale[1] * w, scale[2] * w],
                 w,
             },
@@ -241,8 +254,8 @@ impl AccumEntry {
                     let r = [r_sum[0] / w, r_sum[1] / w, r_sum[2] / w, r_sum[3] / w];
                     let r_norm = nlerp_quat(r, r, 0.0);
                     Some(Value::Transform {
-                        pos: t,
-                        rot: r_norm,
+                        translation: t,
+                        rotation: r_norm,
                         scale: s,
                     })
                 } else {

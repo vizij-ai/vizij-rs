@@ -1,247 +1,217 @@
 # Vizij RS Workspace
 
-Vizij RS is the Rust workspace that powers Vizij's real-time animation and node graph engines. It houses the native core logic,
-Bevy engine integrations, and WebAssembly bindings that are republished as npm packages for the front-end repository `vizij-web`.
-This README explains how everything fits together and how to set up a local development environment that spans Rust, WASM, and
-JavaScript tooling.
+> **Rust cores, Bevy plugins, and WASM bridges for Vizij’s real‑time animation platform.**
 
-## Overview
+This repository contains the Rust source for Vizij’s animation, node graph, and orchestration stacks together with the tooling needed to surface them in web applications. Each domain ships as a trio of crates:
 
-* **Domain stacks** – The workspace currently ships animation and node-graph stacks, with additional stacks (e.g., blackboard,
-  behaviour tree) planned. Each stack follows the same pattern: a core Rust crate that feeds both a Bevy ECS adapter and a
-  WASM binding (which is re-exported through an npm wrapper for JavaScript consumers).
-* **Multi-language toolchain** – Rust crates are built with Cargo, WASM targets use `wasm-bindgen`/`wasm-pack`, and npm packages
-  provide typed front-end entry points. The workspace is designed so the Rust repo can publish versioned crates and npm artifacts
-  without the web repo pulling in the Rust toolchain.
-* **Shared JSON contracts** – Animations use the `StoredAnimation` schema. Node graphs use `GraphSpec`/`ValueJSON`/`ShapeJSON`.
-  These formats travel between native hosts, Bevy, and the browser.
+- a **core crate** with deterministic runtime logic,
+- an optional **Bevy integration**,
+- and a **WASM binding** that is re-exported through `npm/@vizij/*-wasm`.
 
-## Architecture
+What you read here should give you everything you need to build, test, and publish those artifacts.
+
+---
+
+## Table of Contents
+
+1. [Workspace Layout](#workspace-layout)
+2. [Domain Stacks](#domain-stacks)
+3. [Toolchain & Requirements](#toolchain--requirements)
+4. [Setup](#setup)
+5. [Common Workflows](#common-workflows)
+6. [Testing](#testing)
+7. [Publishing & Versioning](#publishing--versioning)
+8. [Development Tips](#development-tips)
+9. [Reference Documentation](#reference-documentation)
+
+---
+
+## Workspace Layout
 
 ```
 vizij-rs/
-├── crates/
-│   ├── api/
-│   │   ├── vizij-api-core           # Shared Value/Shape/TypedPath definitions
-│   │   ├── bevy_vizij_api           # Bevy helpers for applying WriteOps
-│   │   └── vizij-api-wasm           # wasm-bindgen helpers for Value/WriteBatch JSON
-│   ├── animation/
-│   │   ├── vizij-animation-core      # Engine-agnostic animation runtime (Rust)
-│   │   ├── bevy_vizij_animation      # Bevy plugin built on the animation core
-│   │   └── vizij-animation-wasm      # wasm-bindgen bindings consuming the core
-│   └── node-graph/
-│       ├── vizij-graph-core          # Deterministic data-flow graph evaluator (Rust)
-│       ├── bevy_vizij_graph          # Bevy plugin consuming the graph core
-│       └── vizij-graph-wasm          # wasm-bindgen adapter consuming the graph core
-├── npm/
-│   ├── @vizij/animation-wasm         # npm package that re-exports the animation WASM pkg
-│   └── @vizij/node-graph-wasm        # npm package wrapping the node graph WASM pkg
-└── scripts/                          # Helper scripts for building/linking WASM outputs
+├─ crates/
+│  ├─ api/
+│  │  ├─ vizij-api-core            # Shared Value/Shape/TypedPath types
+│  │  ├─ vizij-api-wasm            # wasm-bindgen helpers for Value/WriteBatch JSON
+│  │  └─ bevy_vizij_api            # Bevy utilities for applying WriteOps
+│  ├─ animation/
+│  │  ├─ vizij-animation-core      # Deterministic animation engine
+│  │  ├─ bevy_vizij_animation      # Bevy plugin wrapping the engine
+│  │  └─ vizij-animation-wasm      # wasm-bindgen binding
+│  ├─ node-graph/
+│  │  ├─ vizij-graph-core          # Data-flow node graph evaluator
+│  │  ├─ bevy_vizij_graph          # Bevy plugin
+│  │  └─ vizij-graph-wasm          # wasm-bindgen binding
+│  └─ orchestrator/
+│     ├─ vizij-orchestrator-core   # Blackboard + pass scheduling runtime
+│     └─ vizij-orchestrator-wasm   # wasm-bindgen binding
+├─ npm/
+│  ├─ @vizij/animation-wasm        # Stable ESM wrapper around `vizij-animation-wasm`
+│  ├─ @vizij/node-graph-wasm       # Wrapper around `vizij-graph-wasm`
+│  ├─ @vizij/orchestrator-wasm     # Wrapper around `vizij-orchestrator-wasm`
+│  ├─ @vizij/value-json            # Shared JSON coercion helpers
+│  └─ @vizij/wasm-loader           # Loader that enforces ABI compatibility
+├─ fixtures/                       # Sample graphs, animations, orchestrations
+└─ scripts/                        # Build, watch, and release helpers
 ```
 
-* **Rust core crates** encapsulate the domain logic and are published on crates.io.
-* **Bevy adapters** bridge the cores into a Bevy application (resources, systems, fixed timesteps).
-* **WASM crates** compile the cores to `cdylib` + JS glue via `wasm-bindgen`.
-* **API crates** provide shared Value/Shape contracts plus lightweight Bevy and WASM helpers that are reused across domain stacks.
+Every crate includes a dedicated README with domain-specific guidance; the top-level README focuses on cross-cutting processes.
 
-Animation stack relationships:
+---
 
-```
-vizij-animation-core
-├─ bevy_vizij_animation
-└─ vizij-animation-wasm → npm/@vizij/animation-wasm
-```
+## Domain Stacks
 
-Node-graph stack relationships:
+| Stack          | Core Crate               | Bevy Adapter              | WASM Binding               | npm wrapper                  |
+| -------------- | ------------------------ | ------------------------- | -------------------------- | ---------------------------- |
+| Animation      | `vizij-animation-core`   | `bevy_vizij_animation`    | `vizij-animation-wasm`     | `@vizij/animation-wasm`      |
+| Node graph     | `vizij-graph-core`       | `bevy_vizij_graph`        | `vizij-graph-wasm`         | `@vizij/node-graph-wasm`     |
+| Orchestrator   | `vizij-orchestrator-core`| (planned)                 | `vizij-orchestrator-wasm`  | `@vizij/orchestrator-wasm`   |
 
-```
-vizij-graph-core
-├─ bevy_vizij_graph
-└─ vizij-graph-wasm → npm/@vizij/node-graph-wasm
-```
+Shared API crates (`vizij-api-core`, `vizij-api-wasm`, `bevy_vizij_api`) provide the Value/Shape/TyperPath contract that keeps the stacks interoperable.
 
-Each `*-core` crate feeds both the Bevy plugin and the WASM binding directly—the Bevy and WASM layers do not depend on each
-other.
-* **npm workspaces** vend the generated `pkg/` output with a stable ESM entry for front-end consumers such as `vizij-web`.
+Each WASM crate exposes a stable `abi_version()` (currently `2`); the npm wrappers verify this at runtime and instruct you to rebuild if versions drift.
 
-The companion repo `vizij-web` consumes the npm packages. During local development the two repos are linked with `npm link` so
-changes to Rust propagate immediately to the Vite dev servers.
+---
 
-## Installation
+## Toolchain & Requirements
 
-1. **Install prerequisites**
-   * Rust stable via [`rustup`](https://rustup.rs/) (install the default toolchain and `wasm32-unknown-unknown` target).
-   * Node.js ≥ 18 and npm ≥ 9.
-   * `wasm-pack` and `wasm-bindgen-cli` for building the WASM crates:
-     ```bash
-     cargo install wasm-pack wasm-bindgen-cli
-     ```
-   * Optional developer tools: `cargo install cargo-watch` for autorebuild loops.
-2. **Clone the repository**
-   ```bash
-   git clone https://github.com/vizij-ai/vizij-rs.git
-   cd vizij-rs
-   ```
-3. **Install npm workspace dependencies** (used by the wrapper packages):
-   ```bash
-   npm install
-   ```
-4. **(Optional) Clone vizij-web** if you plan to link the npm packages locally.
+- **Rust**: Stable toolchain via [rustup](https://rustup.rs/) plus the `wasm32-unknown-unknown` target.
+- **Node.js**: v18 or newer (v20 recommended) with Corepack enabled (`corepack enable`).
+- **pnpm**: v9.x (locked at `pnpm-lock.yaml`).
+- **wasm-pack** & **wasm-bindgen-cli**: `cargo install wasm-pack wasm-bindgen-cli`
+- Optional: `cargo-watch`, `just`, or other workflow helpers.
+
+Ensure Git LFS is configured if you pull large fixture assets.
+
+---
 
 ## Setup
 
-Follow these steps the first time you prepare a development environment:
+Clone the repo and install dependencies the first time you work with the workspace:
 
-1. **Bootstrap git hooks** (formats, clippy, tests):
-   ```bash
-   bash scripts/install-git-hooks.sh
-   ```
-2. **Build both WASM crates** so the npm wrappers have fresh `pkg/` output. The root `package.json` exposes shortcuts that wrap
-   the Node build scripts:
-   ```bash
-   npm run build:wasm:animation
-   npm run build:wasm:graph
-   ```
-3. **Link the npm packages into vizij-web** (from this repo). The helper will rebuild both wrappers and register the global
-   `npm link` targets in one go:
-   ```bash
-   npm run link:wasm
-   ```
-   Then, in the `vizij-web` repository:
-   ```bash
-   npm install
-   npm run link:wasm
-   ```
-   The web repo’s script simply runs `npm link @vizij/animation-wasm @vizij/node-graph-wasm`, wiring its `node_modules/`
-   entries back to these locally built packages.
-4. **Vite dev servers in vizij-web already preserve symlinks and un-ignore the linked wasm packages.** No additional config is
-   required; just ensure you restart any running dev server after relinking so it picks up new symlinks.
+```bash
+git clone https://github.com/vizij-ai/vizij-rs.git
+cd vizij-rs
 
-## Usage
-
-Common workflows from the root of `vizij-rs`:
-
-| Task | Command |
-|------|---------|
-| Format code | `cargo fmt --all` |
-| Lint | `cargo clippy --all-targets --all-features -- -D warnings` |
-| Test everything | `cargo test --workspace` |
-| Build animation WASM pkg | `npm run build:wasm:animation` |
-| Build node-graph WASM pkg | `npm run build:wasm:graph` |
-| Watch animation WASM builds | `npm run watch:wasm:animation` *(requires `cargo-watch`)* |
-| Watch node-graph WASM builds | `npm run watch:wasm:graph` *(requires `cargo-watch`)* |
-| Publish dry run | `scripts/dry-run-release.sh` (builds crates and npm packages without publishing) |
-
-When linked to `vizij-web`, run its dev servers (e.g., `npm run dev:animation`) and iterate on Rust code with the watcher. The
-Vite server reloads when the WASM `pkg/` contents change.
-
-## Key Details
-
-* **StoredAnimation JSON** – The canonical animation format. Tracks contain normalized keypoint timestamps (`stamp` 0..1) and
-  cubic-bezier control points (`transitions.in/out`) with defaults. Values support scalars, vectors, quaternions, colors, and
-  step-only booleans/strings.
-* **GraphSpec JSON** – Describes node graphs with typed ports, selectors on edges, staged inputs (`Input` nodes), and explicit
-  `Output` sinks that emit `WriteOp { path, value, shape }` structures.
-* **Versioning** – Keep crate versions in sync with their WASM/npm counterparts (e.g., `vizij-animation-core` ↔
-  `vizij-animation-wasm` ↔ `@vizij/animation-wasm`). Publish the core crate first, then release each dependent crate (Bevy plugin,
-  WASM binding) before shipping the npm wrapper.
-* **Optional features** – Node-graph crates expose an `urdf_ik` feature (enabled by default) for robotics integrations; WASM
-  crates also expose a `console_error` feature to hook panics into the browser console.
-* **Repo scripts** –
-  * `npm run build:wasm:animation` / `npm run build:wasm:graph` wrap the underlying Node scripts to refresh WASM outputs.
-  * `scripts/build-animation-wasm.mjs` / `scripts/build-graph-wasm.mjs` contain the raw build logic used by the npm shortcuts.
-    - The graph script now forwards `--features urdf_ik` to ensure the packaged wasm exposes the URDF IK/FK node family.
-  * `npm run watch:wasm:animation` / `npm run watch:wasm:graph` trigger `cargo watch` loops that rebuild WASM artifacts on change
-    (requires `cargo-watch`).
-  * `scripts/install-git-hooks.sh` installs pre-commit/pre-push hooks mirroring the CI checks.
-  * `scripts/dry-run-release.sh` runs the publish checks without releasing artifacts.
-
-## Animation Derivatives & Baking
-
-* **Runtime updates** – `Engine::update_values(dt, Inputs)` returns the classic `Outputs` list. Call
-  `Engine::update_values_and_derivatives` (or the WASM wrapper `engine.updateValuesAndDerivatives`) to receive
-  `OutputsWithDerivatives`, where each change includes an optional `derivative` field. Non-numeric tracks emit `None`/`null`.
-* **Baking outputs** – `Engine::bake_animation` returns `BakedAnimationData`. Use
-  `Engine::bake_animation_with_derivatives` to receive the paired derivative tracks. In WASM/TypeScript the bundle is normalised
-  to `{ values, derivatives }`, each mirroring the `tracks`/`frame_rate` schema.
-* **Configuration** – `BakingConfig` now supports `derivative_epsilon` to override the finite-difference window when estimating
-  derivatives. Negative or zero frame rates/config values are rejected during WASM parsing.
-* **Derivative model** – Derivatives use a symmetric finite difference sampled around the current parameter (default epsilon
-  `1e-3`). Quaternion derivatives are currently component-wise (a good approximation for small deltas) with a TODO to upgrade to
-  angular velocity/log mapping. Bool/Text tracks intentionally produce `None`/`null` derivatives.
-* **ABI guard** – The animation WASM exports `abi_version() === 2`. The npm wrapper verifies this during `init()` and throws with
-  guidance when the JS glue or `.wasm` file is stale. Rebuild with `cargo build -p vizij-animation-wasm --target wasm32-unknown-unknown && npm run build:wasm:animation` whenever the ABI changes.
-
-## Examples
-
-### Sample: Using the animation engine in Rust
-
-```rust
-use vizij_animation_core::{Engine, InstanceCfg, parse_stored_animation_json};
-
-let json = std::fs::read_to_string("tests/fixtures/new_format.json")?;
-let stored = parse_stored_animation_json(&json)?;
-let mut engine = Engine::new(Default::default());
-let anim = engine.load_animation(stored);
-let player = engine.create_player("demo");
-engine.add_instance(player, anim, InstanceCfg::default());
-
-let outputs = engine.update_values(1.0 / 60.0, Default::default());
-println!("changes: {:?}", outputs.changes);
+corepack enable
+pnpm install               # install npm workspace deps (wasm wrappers, scripts)
+cargo fetch                # prefetch Rust dependencies (optional but speeds CI)
+rustup target add wasm32-unknown-unknown
 ```
 
-### Sample: Using the animation WASM package in TypeScript
+Install the shared git hooks (formatting, clippy, tests):
 
-```ts
-import { init, Engine } from "@vizij/animation-wasm";
-
-await init();
-const eng = new Engine();
-const anim = eng.loadAnimation({
-  duration: 1000,
-  tracks: [
-    {
-      id: "pos-x",
-      animatableId: "cube/Transform.translation",
-      points: [
-        { id: "k0", stamp: 0.0, value: 0 },
-        { id: "k1", stamp: 1.0, value: 1 },
-      ],
-    },
-  ],
-  groups: {},
-}, { format: "stored" });
-const player = eng.createPlayer("demo");
-eng.addInstance(player, anim);
-console.log(eng.updateValues(1 / 60).changes);
-
-// Derivative-friendly update
-const outputs = eng.updateValuesAndDerivatives(1 / 60);
-for (const change of outputs.changes) {
-  console.log(change.key, change.value, change.derivative ?? null);
-}
-
-// Baking bundle
-const baked = eng.bakeAnimationWithDerivatives(anim, {
-  frame_rate: 60,
-  derivative_epsilon: 5e-4,
-});
-console.log(baked.values.tracks[0].values.length, baked.derivatives.tracks[0].values.length);
+```bash
+bash scripts/install-git-hooks.sh
 ```
 
-### Sample: Evaluating a node graph core-side
+Hooks can be bypassed with `SKIP_GIT_HOOKS=1` or extended using the `HOOK_RUN_*` environment variables documented in `scripts/hook-tasks.sh`.
 
-```rust
-use vizij_graph_core::{evaluate_all, GraphRuntime};
-use vizij_graph_core::spec::GraphSpec;
+---
 
-let spec: GraphSpec = serde_json::from_str(include_str!("tests/fixtures/simple_graph.json"))?;
-let mut runtime = GraphRuntime::default();
-let result = evaluate_all(&mut runtime, &spec)?;
-for (node_id, ports) in &result.nodes {
-    println!("node {node_id:?} ports: {ports:?}");
-}
+## Common Workflows
+
+### Build all crates and wrappers
+
+```bash
+# remember to install first
+pnpm run build
 ```
 
-Refer to the crate and package READMEs for deeper dives into each component, including architecture diagrams, API documentation,
-and troubleshooting tips.
+This command runs the Rust checks followed by each npm wrapper build. The Rust build uses the fast `cargo check --workspace` path; WASM bundles land in `crates/*/*/pkg/` and are copied into `npm/@vizij/*/pkg/`.
+
+### Build a specific WASM stack
+
+```bash
+pnpm run build:wasm:animation
+pnpm run build:wasm:graph
+pnpm run build:wasm:orchestrator
+```
+
+Each script invokes the corresponding Node helper in `scripts/` which runs `cargo build --target wasm32-unknown-unknown`, `wasm-bindgen`, and copies the generated JS+wasm artefacts into the npm package.
+
+### Continuous rebuilds during development
+
+All WASM stacks expose watch scripts that rely on `cargo-watch`:
+
+```bash
+pnpm run watch:wasm:graph
+pnpm run watch:wasm:animation
+pnpm run watch:wasm:orchestrator
+```
+
+These scripts rebuild the WASM artefacts whenever source files change. Combine them with `pnpm run link:wasm` in the `vizij-web` repo to live-reload web apps.
+
+### Link WASM packages locally
+
+1. Build & link from this repo:
+   ```bash
+   pnpm run link:wasm
+   ```
+2. Inside `vizij-web` run the same command to consume the symlinks.
+
+To revert to published versions: `pnpm install` (in both repos) or `pnpm unlink --global @vizij/*-wasm`.
+
+---
+
+## Testing
+
+Rust tests are colocated with their crates. To run the full test suite:
+
+```bash
+pnpm run test:rust        # cargo fmt --check, clippy, test
+pnpm run check:rust       # adds workspace build to the test suite
+```
+
+Per-crate runs are equally useful:
+
+```bash
+cargo test -p vizij-graph-core
+cargo test -p vizij-animation-core
+cargo test -p vizij-orchestrator-core
+```
+
+Many WASM crates include wasm-bindgen integration tests under `tests/` that execute with `wasm-pack test --node`. Trigger them via the package script:
+
+```bash
+pnpm --filter "@vizij/node-graph-wasm" test
+```
+
+Fixtures live in `fixtures/` for repeatable scenario testing. Use them in integration tests or in downstream applications via `npm/@vizij/test-fixtures`.
+
+---
+
+## Publishing & Versioning
+
+Each domain stack keeps crate, WASM crate, and npm wrapper versions in lockstep. When you publish:
+
+1. Bump the version in all three manifests (`Cargo.toml`, `package.json`).
+2. Publish the Rust crates (`cargo publish`).
+3. Rebuild the WASM crate (`pnpm run build:wasm:<stack>`).
+4. Publish the npm package (`pnpm publish` from the wrapper directory).
+
+`scripts/dry-run-release.sh` runs through the entire sequence without pushing artefacts; use it to confirm that crates build, WASM bundling succeeds, and npm tarballs contain the correct files.
+
+---
+
+## Development Tips
+
+- **ABI mismatches**: If you see `ABI mismatch: expected 2` from a wasm wrapper, rebuild the Rust crate and rerun `pnpm run build:wasm:<stack>` to regenerate JS glue.
+- **Time-dependent nodes**: `vizij-orchestrator-core` now advances `GraphRuntime.t`/`dt` on each evaluation. Ensure any custom integrations do the same when you embed `GraphController` elsewhere.
+- **URDF features**: Enable the `urdf_ik` feature on `vizij-graph-core` if you need robotics nodes in native builds (`cargo build -p vizij-graph-core --features urdf_ik`). The WASM package ships with the feature enabled by default.
+- **Diagnostics**: `vizij-orchestrator-core` captures conflict logs and per-pass timings inside `OrchestratorFrame`. Use these to debug controller order and merge behaviour before instrumenting downstream apps.
+- **Fixtures**: The `fixtures/` directory includes ready-to-use JSON files for graphs, animations, and orchestrations. They are mirrored into `npm/@vizij/test-fixtures` for web consumers.
+
+---
+
+## Reference Documentation
+
+- [vizij-animation-core/README](crates/animation/vizij-animation-core/README.md)
+- [vizij-graph-core/README](crates/node-graph/vizij-graph-core/README.md)
+- [vizij-orchestrator-core/README](crates/orchestrator/vizij-orchestrator-core/README.md)
+- [vizij-api-core/README](crates/api/vizij-api-core/README.md)
+- [@vizij/node-graph-wasm/README](npm/@vizij/node-graph-wasm/README.md)
+- [@vizij/orchestrator-wasm/README](npm/@vizij/orchestrator-wasm/README.md)
+
+If you notice gaps or outdated instructions, please open an issue or ping the Vizij runtime team. High-quality documentation is as critical as the code it describes.

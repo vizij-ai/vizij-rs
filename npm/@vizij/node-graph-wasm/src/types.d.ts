@@ -1,5 +1,10 @@
 // Public TypeScript types for @vizij/graph-wasm
 
+import type { ValueJSON as BaseValueJSON, NormalizedValue } from "@vizij/value-json";
+
+export type ValueJSON = BaseValueJSON;
+export type { NormalizedValue };
+
 export type NodeId = string;
 
 /**
@@ -57,27 +62,6 @@ export type NodeType =
   | "urdffk"
   | "input"
   | "output";
-
-/**
- * JSON form used at the wasm boundary.
- * (Core Values are encoded as one-of objects.)
- */
-export type ValueJSON =
-  | { float: number }
-  | { bool: boolean }
-  | { vec2: [number, number] }
-  | { vec3: [number, number, number] }
-  | { vec4: [number, number, number, number] }
-  | { quat: [number, number, number, number] }
-  | { color: [number, number, number, number] }    // ColorRgba
-  | { transform: { pos: [number, number, number]; rot: [number, number, number, number]; scale: [number, number, number] } }
-  | { vector: number[] }
-  | { record: { [key: string]: ValueJSON } }
-  | { array: ValueJSON[] }
-  | { list: ValueJSON[] }
-  | { tuple: ValueJSON[] }
-  | { text: string }
-  | { enum: { tag: string; value: ValueJSON } };
 
 export type ShapeJSON =
   | { id: "Scalar"; meta?: Record<string, string> }

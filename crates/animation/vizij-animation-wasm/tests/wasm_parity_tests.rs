@@ -37,7 +37,7 @@ fn get_scalar_by_key(outputs: JsValue, want_key: &str) -> Option<f64> {
 fn wasm_parity_scalar_ramp() {
     // Fixture matches vizij-animation-core schema
     use vizij_animation_core::parse_stored_animation_json;
-    let ramp_json = include_str!("../../test_fixtures/ramp.json");
+    let ramp_json = include_str!("../../../../fixtures/animations/simple-scalar-ramp.json");
     let anim = parse_stored_animation_json(ramp_json).unwrap();
     let ramp_js = swb::to_value(&anim).unwrap();
 

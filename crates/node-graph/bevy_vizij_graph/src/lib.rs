@@ -36,7 +36,7 @@ fn value_to_f32(v: &Value) -> f32 {
         Value::Vec4(a) => a[0],
         Value::Quat(a) => a[0],
         Value::ColorRgba(a) => a[0],
-        Value::Transform { pos, .. } => pos[0],
+        Value::Transform { translation, .. } => translation[0],
         Value::Vector(vec) => vec.first().copied().unwrap_or(0.0),
         Value::Record(map) => map.values().next().map(value_to_f32).unwrap_or(0.0),
         Value::Array(items) => items.first().map(value_to_f32).unwrap_or(0.0),

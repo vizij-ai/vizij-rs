@@ -125,19 +125,23 @@ impl ValueLayout {
                 Value::ColorRgba(arr)
             }
             ValueLayout::Transform => {
-                let mut pos = [0.0; 3];
-                let mut rot = [0.0; 4];
+                let mut translation = [0.0; 3];
+                let mut rotation = [0.0; 4];
                 let mut scale = [0.0; 3];
-                for (i, slot) in pos.iter_mut().enumerate() {
+                for (i, slot) in translation.iter_mut().enumerate() {
                     *slot = *data.get(i).unwrap_or(&f32::NAN);
                 }
-                for (i, slot) in rot.iter_mut().enumerate() {
+                for (i, slot) in rotation.iter_mut().enumerate() {
                     *slot = *data.get(3 + i).unwrap_or(&f32::NAN);
                 }
                 for (i, slot) in scale.iter_mut().enumerate() {
                     *slot = *data.get(7 + i).unwrap_or(&f32::NAN);
                 }
-                Value::Transform { pos, rot, scale }
+                Value::Transform {
+                    translation,
+                    rotation,
+                    scale,
+                }
             }
             ValueLayout::Vector(len) => {
                 let mut out = Vec::with_capacity(*len);
@@ -225,10 +229,14 @@ pub fn flatten_numeric(value: &Value) -> Option<FlatValue> {
             layout: ValueLayout::ColorRgba,
             data: a.to_vec(),
         }),
-        Value::Transform { pos, rot, scale } => {
+        Value::Transform {
+            translation,
+            rotation,
+            scale,
+        } => {
             let mut data = Vec::with_capacity(10);
-            data.extend_from_slice(pos);
-            data.extend_from_slice(rot);
+            data.extend_from_slice(translation);
+            data.extend_from_slice(rotation);
             data.extend_from_slice(scale);
             Some(FlatValue {
                 layout: ValueLayout::Transform,

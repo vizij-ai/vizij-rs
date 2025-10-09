@@ -1,185 +1,170 @@
 # @vizij/animation-wasm
 
-`@vizij/animation-wasm` is the npm package that re-exports the WebAssembly build of `vizij-animation-core`. It bundles the
-generated `pkg/` artifacts, a stable ESM entry point, and TypeScript definitions so web projects can load Vizij’s animation engine
-with minimal friction.
+> **Vizij’s real-time animation engine for JavaScript and TypeScript.**
+
+This package ships the official WebAssembly build of `vizij-animation-core` together with a TypeScript-friendly wrapper, ABI guards, and sample assets. Use it to load Vizij animation clips, create players/instances, stream outputs, and bake derivative-friendly bundles without compiling Rust.
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Key Concepts](#key-concepts)
+3. [Installation](#installation)
+4. [API](#api)
+5. [Usage](#usage)
+6. [Fixtures](#fixtures)
+7. [Development & Testing](#development--testing)
+8. [Related Packages](#related-packages)
+
+---
 
 ## Overview
 
-* Wraps the Rust crate `vizij-animation-wasm` (compiled with `wasm-bindgen`).
-* Provides a high-level `Engine` class plus the raw `VizijAnimation` bindings for advanced usage.
-* Ships with TypeScript types for the engine, value unions, StoredAnimation JSON, and input/output structures.
-* Designed to run in both browsers and Node (auto-detects environment when loading the WASM binary).
+- Compiled directly from Vizij’s animation runtime (`vizij-animation-core`) via `wasm-bindgen`.
+- Includes a high-level `Engine` class, low-level bindings, TypeScript declarations, and ready-to-use fixtures.
+- Runs in browsers and Node; `init()` chooses the correct loader and validates the ABI (`abi_version() === 2`).
+- Designed and maintained by the Vizij team—this npm package is the canonical distribution of the animation engine for JavaScript consumers.
 
-## Architecture
+---
 
-```
-vizij-animation-core (Rust) --wasm-bindgen--> vizij-animation-wasm (cdylib) --npm--> @vizij/animation-wasm
-       ^                         |                                            |
-       |                         |                                            +-- src/index.ts (Engine wrapper, types)
-       |                         +-- pkg/ (wasm-pack output: .wasm, .js glue)  +-- dist/ (bundled entry)
-       +-- Shared JSON (StoredAnimation, Outputs, Inputs)
-```
+## Key Concepts
 
-* The Rust core owns the animation runtime.
-* `vizij-animation-wasm` exposes the runtime to JS via `wasm-bindgen`.
-* This package re-exports the generated glue with an ergonomic wrapper and additional helpers (`init`, `abi_version`, samples).
+- **StoredAnimation JSON** – Normalised animation format with duration, tracks, and cubic-bezier transitions. Recommended for authoring and interchange.
+- **Engine** – High-level API mirroring the Rust engine (load animations, create players, add instances, prebind targets, update values, bake clips).
+- **Players & Instances** – Players track playback state; instances attach animations with weight/time-scale/start-offset controls.
+- **Outputs & Events** – `updateValues` returns per-target `ValueJSON` payloads plus engine events (play/pause, keyframe hits, warnings).
+- **Derivatives** – Optional finite-difference derivatives are available at runtime and via `bakeAnimationWithDerivatives`.
+- **ABI Guard** – `abi_version()` ensures the JS glue and `.wasm` binary stay in sync. Rebuild when versions diverge.
+
+---
 
 ## Installation
 
-Published packages can be installed via npm:
-
 ```bash
 npm install @vizij/animation-wasm
+# or pnpm add @vizij/animation-wasm
 ```
 
-For local development inside the `vizij-rs` workspace:
+For local development inside the Vizij workspace:
 
 ```bash
-# From repo root
-node scripts/build-animation-wasm.mjs
+pnpm run build:wasm:animation      # regenerate pkg/
 cd npm/@vizij/animation-wasm
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
-To link into the `vizij-web` repo while iterating:
+Link into `vizij-web` while iterating:
 
 ```bash
-(cd npm/@vizij/animation-wasm && npm link)
-# in vizij-web/
-npm link @vizij/animation-wasm
+(cd npm/@vizij/animation-wasm && pnpm link --global)
+(cd ../vizij-web && pnpm link @vizij/animation-wasm)
 ```
 
-## Setup
+---
 
-1. Call `await init()` once during application startup. The helper chooses the correct WASM loading strategy for browser or Node
-   environments. You may pass an explicit `InitInput` if you need custom fetching.
-2. Create an `Engine` (high-level wrapper) or the raw `VizijAnimation` class.
-3. Load animations (StoredAnimation JSON recommended), create players/instances, optionally prebind targets, and call
-   `update(dt)` each frame.
+## API
+
+```ts
+async function init(input?: InitInput): Promise<void>;
+function abi_version(): number;
+
+class Engine {
+  constructor(config?: Config);
+  loadAnimation(data: StoredAnimation | AnimationData, opts?: { format?: "stored" | "core" }): AnimId;
+  createPlayer(name: string): PlayerId;
+  addInstance(player: PlayerId, anim: AnimId, cfg?: InstanceCfg): InstId;
+  prebind(resolver: (path: string) => string | number | null | undefined): void;
+  updateValues(dtSeconds: number, inputs?: Inputs): Outputs;
+  updateValuesAndDerivatives(dtSeconds: number, inputs?: Inputs): OutputsWithDerivatives;
+  update(dtSeconds: number, inputs?: Inputs): Outputs; // alias for compatibility
+  bakeAnimation(anim: AnimId, cfg?: BakingConfig): BakedAnimationData;
+  bakeAnimationWithDerivatives(anim: AnimId, cfg?: BakingConfig): BakedAnimationBundle;
+  listPlayers(): PlayerInfo[];
+  listAnimations(): AnimationInfo[];
+  // …additional helpers mirroring vizij-animation-core
+}
+
+// Raw bindings (rarely needed directly)
+class VizijAnimation { /* same surface but string/JSON based */ }
+```
+
+All types (`StoredAnimation`, `Inputs`, `Outputs`, etc.) are exported from `src/types`.
+
+---
 
 ## Usage
 
-### High-level API
-
 ```ts
-import { init, Engine, abi_version } from "@vizij/animation-wasm";
+import { init, Engine } from "@vizij/animation-wasm";
 
 await init();
-console.log("ABI", abi_version());
 
-const eng = new Engine();
-const animId = eng.loadAnimation(storedAnimationJson, { format: "stored" });
-const playerId = eng.createPlayer("demo");
-eng.addInstance(playerId, animId);
-eng.prebind((path) => path); // optional resolver
+const engine = new Engine();
+const animId = engine.loadAnimation(storedAnimationJson, { format: "stored" });
+const player = engine.createPlayer("demo");
+engine.addInstance(player, animId);
 
-const outputs = eng.updateValues(1 / 60);
-console.log(outputs.changes);
+engine.prebind((path) => path); // map canonical target path to your handle
 
-const rich = eng.updateValuesAndDerivatives(1 / 60);
-console.log(rich.changes.map((c) => ({ key: c.key, derivative: c.derivative ?? null })));
+const outputs = engine.updateValues(1 / 60);
+console.log(outputs.changes, outputs.events);
 
-const baked = eng.bakeAnimationWithDerivatives(animId, {
-  frame_rate: 60,
-  derivative_epsilon: 5e-4,
-});
-console.log(baked.values.tracks[0].values.length, baked.derivatives.tracks[0].values.length);
+const withDerivatives = engine.updateValuesAndDerivatives(1 / 60);
+console.log(withDerivatives.changes.map(({ key, derivative }) => ({ key, derivative })));
+
+const baked = engine.bakeAnimationWithDerivatives(animId, { frame_rate: 60 });
+console.log(baked.values.tracks.length, baked.derivatives.tracks.length);
 ```
 
-### Low-level bindings
+Low-level binding usage (when you want direct control over JSON serialisation):
 
 ```ts
-import init, { VizijAnimation, abi_version } from "@vizij/animation-wasm/pkg";
+import initWasm, { VizijAnimation } from "@vizij/animation-wasm/pkg";
 
-await init();
+await initWasm();
 const raw = new VizijAnimation();
 const animId = raw.load_stored_animation(JSON.stringify(storedAnimationJson));
 const player = raw.create_player("demo");
 raw.add_instance(player, animId, undefined);
 const outputs = JSON.parse(raw.update_values(0.016, undefined));
-const rich = JSON.parse(raw.update_values_and_derivatives(0.016, undefined));
 ```
 
-## Key Details
+---
 
-* **StoredAnimation JSON** – Duration in milliseconds, track keypoints with normalized `stamp` values (0..1), per-keypoint cubic
-  bezier control points via `transitions.in/out`, and support for scalar/vector/quat/color/bool/text values.
-* **Outputs** – `updateValues` returns `{ changes: Change[], events: CoreEvent[] }`. `updateValuesAndDerivatives` augments each
-  change with an optional `derivative` field when the engine can compute one. Events mirror the Rust engine’s playback
-  notifications (started, paused, keypoint reached, warnings, etc.).
-* **Inputs** – Optional `Inputs` payload supports player commands (play/pause/seek/loop) and per-instance updates (weights,
-  timescale, enabled flag, start offset).
-* **Environment detection** – Browser builds load the `.wasm` via fetch relative to the module URL; Node builds read from disk.
-  Bundlers may log that Node modules (`node:path`, `fs`) were externalized—this is expected.
-* **ABI guard** – `abi_version()` ensures the JS wrapper and WASM binary agree. The `Engine` wrapper throws if the numbers differ
-  after `init()`.
-* **Baking helpers** – `bakeAnimation` and `bakeAnimationWithDerivatives` expose the core baking API for tooling. The derivative
-  variant returns `{ values, derivatives }` with aligned track ordering.
-* **TypeScript support** – `src/types.d.ts` exports `Value`, `StoredAnimation`, `Inputs`, `Outputs`, derivative-aware outputs,
-  and baking result types.
-* **Derivative estimation** – Uses symmetric finite difference (default epsilon `1e-3`). Bool/Text tracks emit `null`
-  derivatives; quaternion derivatives are currently component-wise (TODO: angular velocity mapping). Override the epsilon during
-  baking via `derivative_epsilon`.
-* **BakingConfig** – Accepts `{ frame_rate?, start_time?, end_time?, derivative_epsilon? }`. Non-positive frame rates or
-  `end_time < start_time` throw during parsing.
+## Fixtures
 
-## Examples
-
-### StoredAnimation definition
+The package re-exports helpers from `@vizij/test-fixtures`:
 
 ```ts
-const storedAnimation = {
-  name: "Scalar Ramp",
-  duration: 2000,
-  tracks: [
-    {
-      id: "t0",
-      name: "Scalar Demo",
-      animatableId: "cube/scalar",
-      points: [
-        { id: "k0", stamp: 0.0, value: 0 },
-        { id: "k1", stamp: 1.0, value: 1 },
-      ],
-    },
-  ],
-  groups: {},
-};
+import { loadAnimationFixture } from "@vizij/animation-wasm";
+
+const stored = await loadAnimationFixture("pose-quat-transform");
+engine.loadAnimation(stored, { format: "stored" });
 ```
 
-### Player commands & instance updates
+Fixtures are useful for smoke testing integrations or demoing the engine without writing your own assets.
 
-```ts
-eng.updateValues(1 / 60, {
-  player_cmds: [
-    { Play: { player: playerId } },
-    { SetLoopMode: { player: playerId, mode: "Loop" } },
-  ],
-  instance_updates: [
-    { player: playerId, inst: 0, weight: 0.5, enabled: true },
-  ],
-});
-```
+---
 
-## Testing
-
-This package piggybacks on the Rust crate’s tests. To run them locally:
+## Development & Testing
 
 ```bash
-# From repo root
-scripts/run-wasm-tests.sh
+pnpm run build:wasm:animation          # ensure pkg/ is fresh
+cd npm/@vizij/animation-wasm
+pnpm test
 ```
 
-The script builds the WASM binary, runs Node-based tests, and compares results to the native engine. You can also run
-`npm run build` to ensure the wrapper bundles correctly.
+The Vitest suite checks ABI guards, StoredAnimation parsing, and parity with the native engine for common scenarios.
 
-## Troubleshooting
+---
 
-* **Missing default export** – Ensure you import from the npm package (`@vizij/animation-wasm`). The generated `pkg/` exposes a
-  default `init` export; the wrapper re-exports both default and named bindings.
-* **“Call init()” errors** – Always `await init()` before constructing `Engine`/`VizijAnimation`.
-* **ABI mismatch** – Rebuild the WASM package (`node scripts/build-animation-wasm.mjs` or `npm run build:wasm:animation`) and
-  reinstall to align versions.
-* **TypeScript cannot find pkg files** – Re-run the build to regenerate `pkg/` and ensure the wrapper’s `src/index.ts` exports both
-  default and named bindings.
+## Related Packages
+
+- [`vizij-animation-wasm`](../../crates/animation/vizij-animation-wasm/README.md) – Rust source of these bindings.
+- [`vizij-animation-core`](../../crates/animation/vizij-animation-core/README.md) – underlying engine logic.
+- [`@vizij/animation-react`](../../../vizij-web/packages/@vizij/animation-react/README.md) – React provider built on this npm package.
+- [`@vizij/value-json`](../value-json/README.md) – canonical value helpers used internally.
+
+Need help or spotted an inconsistency? Open an issue—reliable bindings keep animation workflows smooth. 🎥

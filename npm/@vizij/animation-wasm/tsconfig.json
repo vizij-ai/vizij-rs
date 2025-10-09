@@ -4,9 +4,11 @@
     "module": "ES2020",
     "declaration": true,
     "outDir": "dist",
+    "rootDir": ".",
     "strict": true,
     "moduleResolution": "Bundler",
+    "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["src"]
+  "include": ["src", "tests"]
 }

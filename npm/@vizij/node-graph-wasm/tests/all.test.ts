@@ -1,15 +1,12 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, resolve } from "node:path";
-
 import {
   init,
   Graph,
   oscillatorBasics,
   vectorPlayground,
-  logicGate,
   tupleSpringDampSlew,
   layeredRigBlend,
   hierarchicalBlend,
@@ -17,6 +14,8 @@ import {
   nestedTelemetry,
   graphSamples,
   urdfIkPosition,
+  loadNodeGraphSpec,
+  loadNodeGraphSpecJson,
   type EvalResult,
   type ValueJSON,
   type GraphSpec,
@@ -28,10 +27,6 @@ type EvalSpec = Parameters<Graph["loadGraph"]>[0];
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-// Prefer local tests/fixtures directory if present, otherwise fallback to dist tests path used in some sources
-const candidateFixtures = resolve(here, "fixtures");
-const fixturesDir = existsSync(candidateFixtures) ? candidateFixtures : resolve(here, "../../tests/fixtures");
-
 function pkgWasmUrl(): URL {
   const wasmPath = resolve(here, "../../pkg/vizij_graph_wasm_bg.wasm");
   if (!existsSync(wasmPath)) {
@@ -42,13 +37,62 @@ function pkgWasmUrl(): URL {
   return pathToFileURL(wasmPath);
 }
 
-function loadJsonFixture(name: string): string {
-  const path = resolve(fixturesDir, name);
-  if (!existsSync(path)) {
-    throw new Error(`Missing JSON fixture ${name} at ${path}`);
+async function loadJsonFixture(key: string): Promise<string> {
+  const raw = await loadNodeGraphSpecJson(key);
+  try {
+    const parsed = JSON.parse(raw) as { spec?: unknown } | undefined;
+    if (parsed && typeof parsed === "object" && "spec" in parsed) {
+      return JSON.stringify((parsed as { spec: unknown }).spec);
+    }
+  } catch (err) {
+    // fall back to raw string if parsing fails
   }
-  return readFileSync(path, "utf8");
+  return raw;
 }
+
+const weightedAverageStage: Record<string, { value: ValueJSON; shape?: ShapeJSON }> = {
+  "samples/weighted.targets": {
+    value: {
+      tuple: [
+        {
+          record: {
+            weight: { float: 0.6 },
+            value: { vec3: [1.5, 0, 0] },
+          },
+        },
+        {
+          record: {
+            weight: { float: 0.25 },
+            value: { vec3: [0, 1, 0.5] },
+          },
+        },
+        {
+          record: {
+            weight: { float: 0.35 },
+            value: { vec3: [0, 0, -1.5] },
+          },
+        },
+      ],
+    },
+  },
+};
+
+const urdfIkPositionStage: Record<string, { value: ValueJSON; shape?: ShapeJSON }> = {
+  "tests/urdf.target_pos": {
+    value: { vec3: [0.95, 0.0, 0.1] },
+  },
+  "tests/urdf.joints": {
+    value: { vector: [0, 0, 0, 0, 0, 0] },
+  },
+};
+
+const fkIkRoundtripSamples: number[][] = [
+  [0, 0, 0, 0, 0, 0],
+  [0.2, -0.1, 0.15, -0.2, 0.1, -0.05],
+  [-0.25, 0.2, -0.18, 0.22, -0.12, 0.08],
+  [0.35, -0.28, 0.24, 0.18, -0.16, 0.12],
+  [-0.3, 0.18, 0.12, -0.26, 0.2, -0.14],
+];
 
 /* ---------- Generic validation helpers (merged) ---------- */
 
@@ -58,63 +102,93 @@ function ensureFiniteNumber(value: number, context: string): void {
   }
 }
 
+function asValueObject(value: ValueJSON | undefined): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
 function assertValueFinite(value: ValueJSON, context: string): void {
-  if ("float" in value) {
-    ensureFiniteNumber(value.float, context);
+  if (typeof value === "number") {
+    ensureFiniteNumber(value, context);
     return;
   }
-  if ("bool" in value) return;
-  if ("text" in value) return;
-  if ("vec2" in value) {
-    value.vec2.forEach((v, idx) => ensureFiniteNumber(v, `${context}.vec2[${idx}]`));
+  if (typeof value === "boolean" || typeof value === "string") {
     return;
   }
-  if ("vec3" in value) {
-    value.vec3.forEach((v, idx) => ensureFiniteNumber(v, `${context}.vec3[${idx}]`));
+  if (!value || typeof value !== "object") {
     return;
   }
-  if ("vec4" in value) {
-    value.vec4.forEach((v, idx) => ensureFiniteNumber(v, `${context}.vec4[${idx}]`));
+  const obj = value as Record<string, unknown>;
+  if ("float" in obj) {
+    ensureFiniteNumber(obj.float as number, context);
     return;
   }
-  if ("quat" in value) {
-    value.quat.forEach((v, idx) => ensureFiniteNumber(v, `${context}.quat[${idx}]`));
+  if ("bool" in obj) return;
+  if ("text" in obj) return;
+  if ("vec2" in obj) {
+    (obj.vec2 as number[]).forEach((v: number, idx: number) => ensureFiniteNumber(v, `${context}.vec2[${idx}]`));
     return;
   }
-  if ("color" in value) {
-    value.color.forEach((v, idx) => ensureFiniteNumber(v, `${context}.color[${idx}]`));
+  if ("vec3" in obj) {
+    (obj.vec3 as number[]).forEach((v: number, idx: number) => ensureFiniteNumber(v, `${context}.vec3[${idx}]`));
     return;
   }
-  if ("transform" in value) {
-    value.transform.pos.forEach((v, idx) => ensureFiniteNumber(v, `${context}.transform.pos[${idx}]`));
-    value.transform.rot.forEach((v, idx) => ensureFiniteNumber(v, `${context}.transform.rot[${idx}]`));
-    value.transform.scale.forEach((v, idx) => ensureFiniteNumber(v, `${context}.transform.scale[${idx}]`));
+  if ("vec4" in obj) {
+    (obj.vec4 as number[]).forEach((v: number, idx: number) => ensureFiniteNumber(v, `${context}.vec4[${idx}]`));
     return;
   }
-  if ("vector" in value) {
-    value.vector.forEach((v, idx) => ensureFiniteNumber(v, `${context}.vector[${idx}]`));
+  if ("quat" in obj) {
+    (obj.quat as number[]).forEach((v: number, idx: number) => ensureFiniteNumber(v, `${context}.quat[${idx}]`));
     return;
   }
-  if ("record" in value) {
-    for (const [key, child] of Object.entries(value.record)) {
+  if ("color" in obj) {
+    (obj.color as number[]).forEach((v: number, idx: number) => ensureFiniteNumber(v, `${context}.color[${idx}]`));
+    return;
+  }
+  if ("transform" in obj) {
+    const transform = obj.transform as {
+      translation: number[];
+      rotation: number[];
+      scale: number[];
+    };
+    transform.translation.forEach((v: number, idx: number) =>
+      ensureFiniteNumber(v, `${context}.transform.translation[${idx}]`),
+    );
+    transform.rotation.forEach((v: number, idx: number) =>
+      ensureFiniteNumber(v, `${context}.transform.rotation[${idx}]`),
+    );
+    transform.scale.forEach((v: number, idx: number) =>
+      ensureFiniteNumber(v, `${context}.transform.scale[${idx}]`),
+    );
+    return;
+  }
+  if ("vector" in obj) {
+    (obj.vector as number[]).forEach((v: number, idx: number) => ensureFiniteNumber(v, `${context}.vector[${idx}]`));
+    return;
+  }
+  if ("record" in obj) {
+    for (const [key, child] of Object.entries(obj.record as Record<string, ValueJSON>)) {
       assertValueFinite(child, `${context}.${key}`);
     }
     return;
   }
-  if ("array" in value) {
-    value.array.forEach((child, idx) => assertValueFinite(child, `${context}[${idx}]`));
+  if ("array" in obj) {
+    (obj.array as ValueJSON[]).forEach((child: ValueJSON, idx: number) => assertValueFinite(child, `${context}[${idx}]`));
     return;
   }
-  if ("list" in value) {
-    value.list.forEach((child, idx) => assertValueFinite(child, `${context}.list[${idx}]`));
+  if ("list" in obj) {
+    (obj.list as ValueJSON[]).forEach((child: ValueJSON, idx: number) => assertValueFinite(child, `${context}.list[${idx}]`));
     return;
   }
-  if ("tuple" in value) {
-    value.tuple.forEach((child, idx) => assertValueFinite(child, `${context}.tuple[${idx}]`));
+  if ("tuple" in obj) {
+    (obj.tuple as ValueJSON[]).forEach((child: ValueJSON, idx: number) => assertValueFinite(child, `${context}.tuple[${idx}]`));
     return;
   }
-  if ("enum" in value) {
-    assertValueFinite(value.enum.value, `${context}<${value.enum.tag}>`);
+  if ("enum" in obj) {
+    const enumVal = obj.enum as { tag: string; value: ValueJSON };
+    assertValueFinite(enumVal.value, `${context}<${enumVal.tag}>`);
     return;
   }
 }
@@ -127,22 +201,30 @@ function assertNearlyEqual(actual: number, expected: number, context: string): v
 }
 
 function expectNumericVector(value: ValueJSON | undefined, expected: number[], label: string): void {
-  if (!value) {
-    throw new Error(`${label} write missing`);
+  if (typeof value === "number") {
+    if (expected.length !== 1) {
+      throw new Error(`${label} expected ${expected.length} entries but received scalar ${value}`);
+    }
+    assertNearlyEqual(value, expected[0], label);
+    return;
   }
-  assertValueFinite(value, label);
+  const obj = asValueObject(value);
+  if (!obj) {
+    throw new Error(`${label} expected numeric vector value`);
+  }
+  assertValueFinite(value!, label);
 
   let actual: number[] | undefined;
-  if ("vector" in value) {
-    actual = value.vector;
-  } else if ("vec2" in value) {
-    actual = value.vec2;
-  } else if ("vec3" in value) {
-    actual = value.vec3;
-  } else if ("vec4" in value) {
-    actual = value.vec4;
-  } else if ("quat" in value) {
-    actual = value.quat;
+  if ("vector" in obj) {
+    actual = (obj.vector as number[]).slice();
+  } else if ("vec2" in obj) {
+    actual = (obj.vec2 as number[]).slice();
+  } else if ("vec3" in obj) {
+    actual = (obj.vec3 as number[]).slice();
+  } else if ("vec4" in obj) {
+    actual = (obj.vec4 as number[]).slice();
+  } else if ("quat" in obj) {
+    actual = (obj.quat as number[]).slice();
   }
 
   if (!actual) {
@@ -151,23 +233,24 @@ function expectNumericVector(value: ValueJSON | undefined, expected: number[], l
   if (actual.length !== expected.length) {
     throw new Error(`${label} expected length ${expected.length} but received ${actual.length}`);
   }
-  actual.forEach((v, idx) => assertNearlyEqual(v, expected[idx], `${label}[${idx}]`));
+  actual.forEach((v: number, idx: number) => assertNearlyEqual(v, expected[idx], `${label}[${idx}]`));
 }
 
 function expectListOfText(value: ValueJSON | undefined, expected: string[], label: string): void {
-  if (!value || !("list" in value)) {
+  if (!value || typeof value !== "object" || value === null || !("list" in value)) {
     throw new Error(`${label} expected list of text values`);
   }
-  const actual = value.list.map((entry, idx) => {
-    if ("text" in entry) {
-      return entry.text;
+  const listEntries = (value as { list: ValueJSON[] }).list;
+  const actual = listEntries.map((entry: ValueJSON, idx: number) => {
+    if (entry && typeof entry === "object" && "text" in entry) {
+      return (entry as { text: string }).text;
     }
     throw new Error(`${label} entry ${idx} expected text but received ${JSON.stringify(entry)}`);
   });
   if (actual.length !== expected.length) {
     throw new Error(`${label} expected ${expected.length} entries but received ${actual.length}`);
   }
-  actual.forEach((text, idx) => {
+  actual.forEach((text: string, idx: number) => {
     if (text !== expected[idx]) {
       throw new Error(`${label}[${idx}] expected '${expected[idx]}' but received '${text}'`);
     }
@@ -175,37 +258,40 @@ function expectListOfText(value: ValueJSON | undefined, expected: string[], labe
 }
 
 function expectTupleOfFloats(value: ValueJSON | undefined, expected: number[], label: string): void {
-  if (!value || !("tuple" in value)) {
+  if (!value || typeof value !== "object" || value === null || !("tuple" in value)) {
     throw new Error(`${label} expected tuple value`);
   }
-  const tuple = value.tuple;
+  const tuple = (value as { tuple: ValueJSON[] }).tuple;
   if (tuple.length !== expected.length) {
     throw new Error(`${label} expected ${expected.length} items but received ${tuple.length}`);
   }
-  tuple.forEach((entry, idx) => {
-    if (!("float" in entry)) {
+  tuple.forEach((entry: ValueJSON, idx: number) => {
+    const obj = asValueObject(entry);
+    if (!obj || typeof obj.float !== "number") {
       throw new Error(`${label}[${idx}] expected float but received ${JSON.stringify(entry)}`);
     }
-    assertNearlyEqual(entry.float, expected[idx], `${label}[${idx}]`);
+    assertNearlyEqual(obj.float, expected[idx], `${label}[${idx}]`);
   });
 }
 
 function expectRecordTexts(value: ValueJSON | undefined, expected: Record<string, string>, label: string): void {
-  if (!value || !("record" in value)) {
+  if (!value || typeof value !== "object" || value === null || !("record" in value)) {
     throw new Error(`${label} expected record value`);
   }
-  const actualEntries = Object.entries(value.record);
+  const recordEntries = (value as { record: Record<string, ValueJSON> }).record;
+  const actualEntries = Object.entries(recordEntries);
   const expectedEntries = Object.entries(expected);
   if (actualEntries.length !== expectedEntries.length) {
     throw new Error(`${label} expected ${expectedEntries.length} fields but received ${actualEntries.length}`);
   }
   for (const [key, expectedText] of expectedEntries) {
-    const entry = value.record[key];
-    if (!entry || !("text" in entry)) {
+    const entry = recordEntries[key];
+    const entryObj = asValueObject(entry);
+    if (!entryObj || typeof entryObj.text !== "string") {
       throw new Error(`${label}.${key} expected text value`);
     }
-    if (entry.text !== expectedText) {
-      throw new Error(`${label}.${key} expected '${expectedText}' but received '${entry.text}'`);
+    if (entryObj.text !== expectedText) {
+      throw new Error(`${label}.${key} expected '${expectedText}' but received '${entryObj.text}'`);
     }
   }
 }
@@ -222,17 +308,24 @@ function approxVector(actual: number[], expected: number[], eps = EPSILON): void
   }
 }
 
-function valueToVector(value: ValueJSON): number[] {
-  if ("vector" in value) return value.vector.slice();
-  if ("vec4" in value) return value.vec4.slice();
-  if ("vec3" in value) return value.vec3.slice();
-  if ("vec2" in value) return value.vec2.slice();
-  if ("quat" in value) return value.quat.slice();
+function valueToVector(value: ValueJSON | undefined): number[] {
+  const obj = asValueObject(value);
+  if (!obj) {
+    if (typeof value === "number") return [value];
+    throw new Error(`Value is not a vector-like payload: ${JSON.stringify(value)}`);
+  }
+  if ("vector" in obj) return (obj.vector as number[]).slice();
+  if ("vec4" in obj) return (obj.vec4 as number[]).slice();
+  if ("vec3" in obj) return (obj.vec3 as number[]).slice();
+  if ("vec2" in obj) return (obj.vec2 as number[]).slice();
+  if ("quat" in obj) return (obj.quat as number[]).slice();
   throw new Error(`Value is not a vector-like payload: ${JSON.stringify(value)}`);
 }
 
-function valueToFloat(value: ValueJSON): number {
-  if ("float" in value) return value.float;
+function valueToFloat(value: ValueJSON | undefined): number {
+  if (typeof value === "number") return value;
+  const obj = asValueObject(value);
+  if (obj && "float" in obj) return obj.float as number;
   throw new Error(`Value is not a float payload: ${JSON.stringify(value)}`);
 }
 
@@ -331,11 +424,10 @@ function requireWrite(result: EvalResult, path: string): WriteOpJSON {
 }
 
 function assertVector(write: WriteOpJSON, expected: number[], epsilon = 1e-4): void {
-  const value: any = write.value;
-  if (!value || !Array.isArray(value.vector)) {
+  const vector = valueToVector(write.value);
+  if (!vector) {
     throw new Error(`Write '${write.path}' does not contain a vector value`);
   }
-  const vector = value.vector as number[];
   if (vector.length !== expected.length) {
     throw new Error(`Vector length mismatch for '${write.path}': expected ${expected.length}, received ${vector.length}`);
   }
@@ -350,11 +442,10 @@ function assertVector(write: WriteOpJSON, expected: number[], epsilon = 1e-4): v
 }
 
 function assertFloat(write: WriteOpJSON, expected: number, epsilon = 1e-4): void {
-  const value: any = write.value;
-  if (!value || typeof value.float !== "number") {
+  const actual = valueToFloat(write.value);
+  if (typeof actual !== "number") {
     throw new Error(`Write '${write.path}' does not contain a float value`);
   }
-  const actual = value.float;
   if (!Number.isFinite(actual)) {
     throw new Error(`Float value for '${write.path}' is not finite`);
   }
@@ -364,22 +455,22 @@ function assertFloat(write: WriteOpJSON, expected: number, epsilon = 1e-4): void
 }
 
 function assertBool(write: WriteOpJSON, expected: boolean): void {
-  const value: any = write.value;
-  if (!value || typeof value.bool !== "boolean") {
+  const obj = asValueObject(write.value);
+  if (!obj || typeof obj.bool !== "boolean") {
     throw new Error(`Write '${write.path}' does not contain a bool value`);
   }
-  if (value.bool !== expected) {
-    throw new Error(`Bool value mismatch for '${write.path}': expected ${expected}, received ${value.bool}`);
+  if (obj.bool !== expected) {
+    throw new Error(`Bool value mismatch for '${write.path}': expected ${expected}, received ${obj.bool}`);
   }
 }
 
 function assertText(write: WriteOpJSON, expected: string): void {
-  const value: any = write.value;
-  if (!value || typeof value.text !== "string") {
+  const obj = asValueObject(write.value);
+  if (!obj || typeof obj.text !== "string") {
     throw new Error(`Write '${write.path}' does not contain a text value`);
   }
-  if (value.text !== expected) {
-    throw new Error(`Text value mismatch for '${write.path}': expected '${expected}', received '${value.text}'`);
+  if (obj.text !== expected) {
+    throw new Error(`Text value mismatch for '${write.path}': expected '${expected}', received '${obj.text}'`);
   }
 }
 
@@ -400,7 +491,7 @@ function assertText(write: WriteOpJSON, expected: string): void {
 
     // Basic smoke checks used across tests
     await runSample("oscillator-basics", oscillatorBasics);
-    await runSample("logic-gate", logicGate);
+    await runSample("logic-gate-fixture", await loadJsonFixture("logic-gate"));
     await runSample("tuple-spring-damp-slew", tupleSpringDampSlew);
     {
 
@@ -421,7 +512,7 @@ function assertText(write: WriteOpJSON, expected: string): void {
 
     // json blend graph
     {
-      const jsonSpec = loadJsonFixture("blend-graph.json");
+      const jsonSpec = await loadJsonFixture("weighted-profile-blend");
       const jsonResult = await runSample("json-blend-graph", jsonSpec);
       const jsonWrites = writesToMap(jsonResult.writes);
       expectNumericVector(jsonWrites.get("samples/json.pose"), [0.005, 0.115, 0.275], "samples/json.pose");
@@ -450,11 +541,10 @@ function assertText(write: WriteOpJSON, expected: string): void {
 
     // weighted-average-from-json (uses fixtures)
     {
-      const weightedSpecJson = readFileSync(resolve(fixturesDir, "weighted-blend-graph.json"), "utf8");
-      const weightedStage: Record<string, { value: ValueJSON; shape?: ShapeJSON }> = JSON.parse(readFileSync(resolve(fixturesDir, "weighted-blend-inputs.json"), "utf8"));
+      const weightedSpecJson = await loadNodeGraphSpecJson("weighted-average");
       await runSample("weighted-average-from-json", weightedSpecJson, {
         prepare: (graph) => {
-          for (const [path, payload] of Object.entries(weightedStage)) {
+          for (const [path, payload] of Object.entries(weightedAverageStage)) {
             graph.stageInput(path, payload.value, payload.shape);
           }
         },
@@ -466,9 +556,34 @@ function assertText(write: WriteOpJSON, expected: string): void {
       });
     }
 
+    // urdf-ik-position (shared fixture)
+    {
+      const urdfSpec = await loadNodeGraphSpec("urdf-ik-position");
+
+      const urdfResult = await runSample("urdf-ik-position-fixture", urdfSpec, {
+        prepare: (graph) => {
+          for (const [path, payload] of Object.entries(urdfIkPositionStage)) {
+            graph.stageInput(path, payload.value, payload.shape);
+          }
+        },
+      });
+
+      const urdfWrites = writesToMap(urdfResult.writes);
+      const solution = urdfWrites.get("tests/urdf.solution");
+      const solutionObj = asValueObject(solution);
+      assert.ok(solutionObj && "record" in solutionObj, "urdf solution must be a record");
+      const record = solutionObj!.record as Record<string, ValueJSON>;
+      const jointNames = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"] as const;
+      jointNames.forEach((joint) => {
+        const entry = asValueObject(record[joint]);
+        assert.ok(entry && typeof entry.float === "number", `missing float for ${joint}`);
+        assertNearlyEqual(entry!.float as number, 0, joint);
+      });
+    }
+
     // New fixture exercising the WeightedSumVector + BlendWeightedAverage nodes
     {
-      const wsSpecJson = readFileSync(resolve(fixturesDir, "weighted-sum-helper-graph.json"), "utf8");
+      const wsSpecJson = await loadNodeGraphSpecJson("weighted-sum-helper");
       await runSample("weighted-sum-helper", wsSpecJson, {
         expectations: [
           { path: "samples/ws.sum", expectFloat: 3.0 },
@@ -492,129 +607,18 @@ function assertText(write: WriteOpJSON, expected: string): void {
     // eslint-disable-next-line no-console
     console.log("All consolidated samples tests passed");
 
-    // URDF FK/IK round-trip coverage across multiple poses.
+    // URDF FK/IK round-trip coverage across multiple poses using shared fixture.
     {
-      const urdfXml = `
-<robot name="planar_arm">
-  <link name="base_link" />
-  <link name="link1" />
-  <link name="link2" />
-  <link name="link3" />
-  <link name="link4" />
-  <link name="link5" />
-  <link name="link6" />
-  <link name="tool" />
-
-  <joint name="joint1" type="revolute">
-    <parent link="base_link" />
-    <child link="link1" />
-    <origin xyz="0 0 0.1" rpy="0 0 0" />
-    <axis xyz="0 0 1" />
-    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="joint2" type="revolute">
-    <parent link="link1" />
-    <child link="link2" />
-    <origin xyz="0.2 0 0" rpy="0 0 0" />
-    <axis xyz="0 1 0" />
-    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="joint3" type="revolute">
-    <parent link="link2" />
-    <child link="link3" />
-    <origin xyz="0.2 0 0" rpy="0 0 0" />
-    <axis xyz="1 0 0" />
-    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="joint4" type="revolute">
-    <parent link="link3" />
-    <child link="link4" />
-    <origin xyz="0.2 0 0" rpy="0 0 0" />
-    <axis xyz="0 0 1" />
-    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="joint5" type="revolute">
-    <parent link="link4" />
-    <child link="link5" />
-    <origin xyz="0.15 0 0" rpy="0 0 0" />
-    <axis xyz="0 1 0" />
-    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="joint6" type="revolute">
-    <parent link="link5" />
-    <child link="link6" />
-    <origin xyz="0.1 0 0" rpy="0 0 0" />
-    <axis xyz="1 0 0" />
-    <limit lower="-3.1416" upper="3.1416" effort="1" velocity="1" />
-  </joint>
-
-  <joint name="tool_joint" type="fixed">
-    <parent link="link6" />
-    <child link="tool" />
-    <origin xyz="0.1 0 0" rpy="0 0 0" />
-  </joint>
-</robot>
-`.trim();
-
-      const fkIkGraph: GraphSpec = {
-        nodes: [
-          {
-            id: "joint_input",
-            type: "input",
-            params: {
-              path: "tests/urdf.joints",
-              value: { vector: [0, 0, 0, 0, 0, 0] },
-            },
-          },
-          {
-            id: "fk",
-            type: "urdffk",
-            params: {
-              urdf_xml: urdfXml,
-              root_link: "base_link",
-              tip_link: "tool",
-            },
-            inputs: { joints: { node_id: "joint_input" } },
-          },
-          {
-            id: "ik",
-            type: "urdfikposition",
-            params: {
-              urdf_xml: urdfXml,
-              root_link: "base_link",
-              tip_link: "tool",
-              max_iters: 256,
-              tol_pos: 0.0005,
-            },
-            inputs: {
-              target_pos: { node_id: "fk", output_key: "position" },
-              seed: { node_id: "joint_input" },
-            },
-          },
-        ],
-      };
+      const fkIkGraph = await loadNodeGraphSpec("urdf-fk-ik-roundtrip");
 
       const fkIkGraphInstance = new Graph();
       fkIkGraphInstance.loadGraph(fkIkGraph);
       fkIkGraphInstance.setTime(0);
 
       const expectedJointNames = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"] as const;
-      const jointSamples: number[][] = [
-        [0, 0, 0, 0, 0, 0],
-        [0.2, -0.1, 0.15, -0.2, 0.1, -0.05],
-        [-0.25, 0.2, -0.18, 0.22, -0.12, 0.08],
-        [0.35, -0.28, 0.24, 0.18, -0.16, 0.12],
-        [-0.3, 0.18, 0.12, -0.26, 0.2, -0.14],
-      ];
-
-      jointSamples.forEach((angles, sampleIdx) => {
+      fkIkRoundtripSamples.forEach((angles, sampleIdx) => {
         // Forward pass: compute FK pose for the chosen joint angles.
-        console.log("FK Target", angles)
+        // console.log("FK Target", angles)
         fkIkGraphInstance.stageInput("tests/urdf.joints", angles);
         const fkResult = fkIkGraphInstance.evalAll();
         const fkNode = fkResult.nodes?.fk as any;
@@ -623,23 +627,28 @@ function assertText(write: WriteOpJSON, expected: string): void {
         assert.ok(fkPositionValue, `fk position missing for sample ${sampleIdx}`);
         assertValueFinite(fkPositionValue, `fk.position[${sampleIdx}]`);
         const targetPosition = valueToVector(fkPositionValue);
-        console.log("ik target", targetPosition);
+        // console.log("ik target", targetPosition);
 
         const ikNode = fkResult.nodes?.ik as any;
         assert.ok(ikNode, `ik node result missing for sample ${sampleIdx}`);
         const ikValue: ValueJSON | undefined = ikNode.out?.value;
-        console.log("ik result", ikValue, "\n");
-        assert.ok(ikValue && "record" in ikValue, `ik output missing record for sample ${sampleIdx}`);
+        // console.log("ik result", ikValue, "\n");
+        const ikObj = asValueObject(ikValue);
+        assert.ok(ikObj && "record" in ikObj, `ik output missing record for sample ${sampleIdx}`);
 
-        const ikRecord = (ikValue as { record: Record<string, ValueJSON> }).record;
+        const ikRecord = (ikObj!.record as Record<string, ValueJSON>);
         expectedJointNames.forEach((jointName) => {
           const entry = ikRecord[jointName];
-          assert.ok(entry && "float" in entry, `ik output missing float for joint '${jointName}' (sample ${sampleIdx})`);
-          const jointAngle = entry.float as number;
+          const entryObj = asValueObject(entry);
+          assert.ok(entryObj && typeof entryObj.float === "number", `ik output missing float for joint '${jointName}' (sample ${sampleIdx})`);
+          const jointAngle = entryObj!.float as number;
           assert.ok(Number.isFinite(jointAngle), `ik joint '${jointName}' produced non-finite value`);
         });
 
-        const ikAngles = expectedJointNames.map((jointName) => (ikRecord[jointName] as any).float as number);
+        const ikAngles = expectedJointNames.map((jointName) => {
+          const entryObj = asValueObject(ikRecord[jointName]);
+          return typeof entryObj?.float === "number" ? (entryObj.float as number) : 0;
+        });
 
         // Backward pass: feed IK joint solution into FK and ensure pose matches.
         fkIkGraphInstance.stageInput("tests/urdf.joints", ikAngles);

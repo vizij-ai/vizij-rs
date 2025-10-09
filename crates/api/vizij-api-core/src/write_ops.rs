@@ -89,69 +89,7 @@ impl<'de> Deserialize<'de> for WriteOp {
 
 /// A batch of write operations. Engines can emit a WriteBatch each tick.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct WriteBatch(#[serde(with = "write_batch_def")] pub Vec<WriteOp>);
-
-/// Custom serde wrapper to ensure WriteOp serialization shape is preserved
-mod write_batch_def {
-    use super::WriteOp;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use serde_json::Value as JsonValue;
-
-    pub fn serialize<S>(v: &[WriteOp], serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut arr: Vec<JsonValue> = Vec::with_capacity(v.len());
-        for op in v {
-            let mut map = serde_json::Map::with_capacity(3);
-            map.insert("path".to_string(), serde_json::json!(op.path.to_string()));
-            map.insert(
-                "value".to_string(),
-                serde_json::to_value(&op.value).map_err(serde::ser::Error::custom)?,
-            );
-            if let Some(shape) = &op.shape {
-                map.insert(
-                    "shape".to_string(),
-                    serde_json::to_value(shape).map_err(serde::ser::Error::custom)?,
-                );
-            }
-            arr.push(JsonValue::Object(map));
-        }
-        arr.serialize(serializer)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<WriteOp>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let vals: Vec<JsonValue> =
-            Vec::<JsonValue>::deserialize(deserializer).map_err(serde::de::Error::custom)?;
-        let mut out = Vec::with_capacity(vals.len());
-        for v in vals {
-            let path_s = v
-                .get("path")
-                .and_then(|p| p.as_str())
-                .ok_or_else(|| serde::de::Error::custom("missing or invalid 'path'"))?;
-            let tp =
-                crate::typed_path::TypedPath::parse(path_s).map_err(serde::de::Error::custom)?;
-            let val = v
-                .get("value")
-                .ok_or_else(|| serde::de::Error::custom("missing 'value'"))?;
-            let value: crate::Value =
-                serde_json::from_value(val.clone()).map_err(serde::de::Error::custom)?;
-            let shape = match v.get("shape") {
-                Some(shape_value) => {
-                    let parsed: crate::Shape = serde_json::from_value(shape_value.clone())
-                        .map_err(serde::de::Error::custom)?;
-                    Some(parsed)
-                }
-                None => None,
-            };
-            out.push(WriteOp::new_with_shape(tp, value, shape));
-        }
-        Ok(out)
-    }
-}
+pub struct WriteBatch(pub Vec<WriteOp>);
 
 impl WriteBatch {
     pub fn new() -> Self {

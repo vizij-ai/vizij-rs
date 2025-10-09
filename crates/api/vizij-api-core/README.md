@@ -1,91 +1,87 @@
 # vizij-api-core
 
-`vizij-api-core` centralizes the shared data contracts that flow between Vizij engines, host applications, and tooling. It
-defines JSON-friendly `Value` and `Shape` types, typed canonical paths, write batches, and helper utilities so that every domain
-stack (animation, node graph, upcoming blackboard/behaviour-tree systems) can speak the same language.
+> **Shared Value/Shape/TypedPath contracts used by every Vizij engine, adapter, and tooling surface.**
+
+`vizij-api-core` provides the canonical data model for Vizij. Engines emit `Value` changes and typed write batches; hosts, Bevy plugins, and WebAssembly bindings all depend on this crate to speak the same language.
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Features](#features)
+3. [Installation](#installation)
+4. [Key Concepts](#key-concepts)
+5. [Examples](#examples)
+6. [Development & Testing](#development--testing)
+7. [Related Packages](#related-packages)
+
+---
 
 ## Overview
 
-* Rust 2021 library with zero runtime dependencies outside of `serde`, `hashbrown`, and `thiserror`.
-* Ships the canonical `Value` enum used for animation samples, graph ports, write operations, and WebAssembly bindings.
-* Provides `Shape`/`ShapeId` metadata so hosts and tooling can validate or coerce structured values consistently.
-* Implements `TypedPath` parsing/formatting for canonical target identifiers shared across engines and adapters.
-* Exposes `WriteOp`/`WriteBatch` helpers that encapsulate external writes emitted by engines.
-* Includes numeric coercion and blending helpers used by higher-level crates.
+- Rust 2021 library with minimal dependencies (`serde`, `hashbrown`, `thiserror`).
+- Defines the tagged `Value` enum and `Shape` metadata shared by animation, graph, and orchestrator stacks.
+- Implements canonical `TypedPath` parsing/formatting for target identifiers.
+- Supplies `WriteOp` / `WriteBatch` helpers so engines can communicate deterministic side effects.
+- Ships JSON normalisation utilities used by the WASM bindings and fixtures.
 
-## Architecture
+---
 
-```
-+--------------------+      +------------------+
-| Value / Shape APIs |<---->| Engines & Tools  |
-+--------------------+      +------------------+
-          ^                          ^
-          |                          |
-+---------+----------+      +-------+--------+
-| TypedPath grammar  |      | WriteOp/Batch  |
-+--------------------+      +----------------+
-```
+## Features
 
-* `value.rs` – Tagged enum for scalars, vectors, quaternions, transforms, structured records, enums, and text.
-* `shape.rs` – Structural metadata describing the shape of `Value` instances (with optional metadata map).
-* `typed_path.rs` – Parser/serializer for canonical target identifiers (namespace/target/field segments).
-* `write_ops.rs` – JSON-compatible `WriteOp` and `WriteBatch` types with serde implementations.
-* `blend.rs` / `coercion.rs` – Utilities for blending/comparing/coercing values that power engine runtimes.
+- Structured values covering scalars, vectors, quaternions, colours, transforms, enums, records, arrays, lists, tuples, text, and bool.
+- Shape metadata (`ShapeId`, `Shape`) for validation and tooling.
+- Deterministic path grammar with serde support.
+- Lightweight write-batch helpers with provenance-friendly metadata.
+- JSON coercion helpers for parsing shorthand payloads into the canonical `{ "type": "...", "data": ... }` envelope.
+
+---
 
 ## Installation
-
-Add the crate to any Rust project that needs to interact with Vizij data contracts (replace the version with the published
-release when available):
 
 ```bash
 cargo add vizij-api-core
 ```
 
-The crate exposes no optional features.
+No feature flags are required; the crate is always built with the full surface enabled.
 
-## Usage
+---
 
-* Construct values with convenience helpers such as `Value::vec3`, `Value::quat`, or by deserializing JSON via `serde_json`.
-* Describe the expected shape of a value using `Shape::new(ShapeId::Vec3)` or composite helpers like
-  `ShapeId::record_from_pairs`.
-* Parse canonical target identifiers via `TypedPath::parse("robot/Arm.joint")`; format them with `to_string()`.
-* Batch engine writes with `WriteBatch::push(WriteOp::new_with_shape(...))` before handing the results to adapters (Bevy, WASM,
-  etc.).
+## Key Concepts
 
-## Key Details
+### Value & Shape
 
-### Values & serde
+- `Value` is a tagged enum serialised with `{ "type": "...", "data": ... }`. Helper constructors (`Value::vec3`, `Value::quat`, etc.) simplify native code.
+- `ShapeId` mirrors the possible structural forms (`Scalar`, `Vec3`, `Transform`, `Record`, …). `Shape` wraps the ID plus optional metadata (`HashMap<String, String>`).
+- Consuming crates rely on shape metadata to catch schema drift early and to build “null-of-shape” placeholders (e.g., NaN vectors).
 
-* The `Value` enum serializes with a `{ "type": "Vec3", "data": [...] }` envelope to remain unambiguous in JSON.
-* Convenience constructors (`Value::f`, `Value::vec3`, `Value::transform`) simplify host-side code when producing values
-  programmatically.
-* `Value::kind()` exposes a lightweight discriminant for quick pattern matching without matching on every variant.
+### TypedPath
 
-### Shapes
+- Canonical identifiers follow `namespace/.../target.field.subfield`.
+- `TypedPath::parse` validates grammar; the type implements `Display`, `FromStr`, `Serialize`, and `Deserialize`.
+- Used everywhere a value needs to be identified consistently across engines (animation targets, graph sinks, blackboard keys).
 
-* `ShapeId` mirrors the runtime surface (scalar, vectors, quaternions, transform, vector-of-f32, record, array, list, tuple,
-  enum).
-* `Shape` wraps a `ShapeId` plus optional metadata (units, coordinate frames, etc.). Metadata is stored as a string map.
-* Helpers like `Shape::with_meta` allow hosts to attach annotations without changing the structural shape.
+### Write Operations
 
-### Typed paths
+- `WriteOp` captures a single `{ path, value, shape? }` produced by an engine.
+- `WriteBatch` is a thin wrapper around `Vec<WriteOp>` with append helpers and serde support.
+- Engines use `WriteBatch` to communicate external side effects to orchestrators or hosts.
 
-* Canonical identifiers follow the `namespace/.../target.field.subfield` grammar, enabling deterministic lookups across engines
-  and adapters.
-* `TypedPath` implements `Display`, `FromStr`, and serde serialization as plain strings so that JSON payloads remain compact.
+### JSON Normalisation
 
-### Write operations
+- The `json` module converts shorthand objects (`{ float: 1 }`, `{ vec3: [0,1,0] }`) into canonical `Value` envelopes.
+- Shared by WASM bindings (`vizij-*-wasm`), fixtures, and hosted tools to ensure identical parsing across environments.
+- Legacy helpers (`value_to_legacy_json`, `writebatch_to_legacy_json`) keep older tools functioning during transitions.
 
-* `WriteOp` captures `{ path, value, shape }` produced by engines. The optional `shape` travels with the value to avoid schema
-  guessing downstream.
-* `WriteBatch` is a thin Vec wrapper with iterators, append helpers, and custom serde to preserve the inline JSON format.
+---
 
 ## Examples
 
 ```rust
 use vizij_api_core::{Shape, ShapeId, TypedPath, Value, WriteBatch, WriteOp};
 
-let path = TypedPath::parse("robot/Arm/Joint3.rotation").expect("valid path");
+let path = TypedPath::parse("robot/Arm/Joint3.rotation")?;
 let value = Value::quat(0.0, 0.0, 0.0, 1.0);
 let shape = Shape::new(ShapeId::Quat);
 
@@ -93,14 +89,37 @@ let mut batch = WriteBatch::new();
 batch.push(WriteOp::new_with_shape(path.clone(), value.clone(), Some(shape.clone())));
 
 for op in batch.iter() {
-    println!("{} => {:?} (shape {:?})", op.path, op.value, op.shape.as_ref().map(|s| &s.id));
+    println!("{} => {:?} ({:?})", op.path, op.value, op.shape.as_ref().map(|s| &s.id));
 }
 ```
 
-## Testing
+Parsing JSON using the normaliser:
 
-The crate ships unit tests alongside each module. Run them with:
+```rust
+use vizij_api_core::json;
+use serde_json::json;
+
+let raw = json!({ "vec3": [0.0, 1.0, 0.0] });
+let canonical = json::normalize_value_json(raw);
+let value: vizij_api_core::Value = serde_json::from_value(canonical)?;
+```
+
+---
+
+## Development & Testing
 
 ```bash
 cargo test -p vizij-api-core
 ```
+
+Modules include unit tests for parsing, coercion, and normalisation. Run `pnpm run test:rust` from the repo root to exercise the entire workspace.
+
+---
+
+## Related Packages
+
+- [`vizij-api-wasm`](../vizij-api-wasm/README.md) – wasm helpers that mirror the same normalisation logic for JavaScript.
+- [`bevy_vizij_api`](../bevy_vizij_api/README.md) – Bevy utilities built on top of this crate.
+- Engine stacks (`vizij-animation-core`, `vizij-graph-core`, `vizij-orchestrator-core`) all depend on these contracts.
+
+Questions or improvements? Open an issue—shared contracts are the backbone of Vizij interoperability. 🔗

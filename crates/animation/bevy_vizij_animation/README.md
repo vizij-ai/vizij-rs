@@ -1,116 +1,47 @@
 # bevy_vizij_animation
 
-`bevy_vizij_animation` adapts `vizij-animation-core` for the Bevy game engine. It injects the core engine as a resource, builds a
-binding index from the ECS world, runs fixed-timestep updates, and applies sampled animation outputs to Bevy components.
+> **Bevy plugin that embeds Vizij’s animation engine into ECS schedules.**
+
+`bevy_vizij_animation` wraps `vizij-animation-core` for Bevy applications. It constructs bindings from your scene graph, advances the engine on a fixed timestep, and applies sampled values to Bevy components.
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Installation](#installation)
+3. [Quick Start](#quick-start)
+4. [Key Concepts](#key-concepts)
+5. [Configuration](#configuration)
+6. [Development & Testing](#development--testing)
+7. [Related Crates](#related-crates)
+
+---
 
 ## Overview
 
-* Ships as a standard Bevy plugin (`VizijAnimationPlugin`).
-* Provides ECS components/resources to mark animation roots, override binding paths, and access the core engine instance.
-* Integrates tightly with Bevy schedules (`Startup`, `Update`, `FixedUpdate`).
-* Suitable for games, robotics simulators, or any Bevy app that needs deterministic animation playback.
+- Adds `VizijAnimationPlugin` to your Bevy app.
+- Provides ECS components/resources for binding discovery (`VizijTargetRoot`, `VizijBindingHint`), engine access (`VizijEngine`), and fixed timestep control (`FixedDt`).
+- Runs systems to rebuild bindings, prebind targets, advance the engine, and apply outputs.
+- Supports StoredAnimation and AnimationData loading via the shared engine resource.
 
-## Architecture
-
-```
-+------------------------------+
-| VizijAnimationPlugin         |
-|  - Adds resources & systems  |
-+------------------------------+
-            |
-            v
-+------------------------------+
-| Resources                    |
-|  VizijEngine(Engine)        |
-|  BindingIndex               |
-|  PendingOutputs             |
-|  FixedDt                    |
-+------------------------------+
-            |
-            v
-+------------------------------+
-| Systems                      |
-|  build_binding_index         |
-|  prebind_core                |
-|  fixed_update_core           |
-|  apply_outputs               |
-+------------------------------+
-            |
-            v
-+------------------------------+
-| Bevy World                   |
-|  VizijTargetRoot component   |
-|  VizijBindingHint component  |
-|  Transform updates           |
-+------------------------------+
-```
-
-* **Binding index** – Traverses the world under `VizijTargetRoot` to map canonical paths (e.g., `"Arm/Transform.rotation"`) to
-  entities/target properties.
-* **Prebinding** – Calls into the core engine to resolve canonical strings to handles before the hot update loop.
-* **Fixed update** – Uses `FixedDt` (default 1/60s) to advance the engine deterministically. Outputs are staged in
-  `PendingOutputs` and applied to `Transform` components.
+---
 
 ## Installation
-
-Add the crate to your Bevy project (replace the version with the published release):
 
 ```bash
 cargo add bevy_vizij_animation
 ```
 
-Optional feature:
+Feature flags:
 
-* `urdf_ik` – Enables robotics/inverse kinematics helpers in the core engine. Enabled by default; disable with
-  `--no-default-features` if you do not need URDF support.
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `urdf_ik` | ✔ | Pulls in robotics helpers from the core engine. Disable with `--no-default-features` if not needed. |
 
-## Setup
+---
 
-1. **Add the plugin** to your app:
-   ```rust
-   use bevy::prelude::*;
-   use bevy_vizij_animation::VizijAnimationPlugin;
-
-   App::new()
-       .add_plugins(DefaultPlugins)
-       .add_plugins(VizijAnimationPlugin)
-       .run();
-   ```
-2. **Mark an animation root** using `VizijTargetRoot` and spawn named entities beneath it. The plugin will discover bindings
-   automatically.
-3. **Load animations** into the `VizijEngine` resource during startup or when assets become available.
-4. **(Optional) Adjust fixed timestep** by setting the `FixedDt` resource if you need a cadence other than 1/60s.
-
-## Usage
-
-Common ECS elements exposed by the crate:
-
-* `VizijEngine` – Wrapper around the core `Engine`. Access it via `ResMut<VizijEngine>` to load animations, create players, and
-  configure instances.
-* `VizijTargetRoot` – Component marking a subtree for automatic binding discovery.
-* `VizijBindingHint` – Component to override the canonical path base for an entity (instead of using the `Name` component).
-* `BindingIndex` – Resource mapping canonical paths to `(Entity, TargetProp)` pairs. Mostly used internally but available for
-  debugging/inspection.
-* `PendingOutputs` – Staging area for the most recent outputs. Systems can inspect this if they want to react before the default
-  application step runs.
-
-## Key Details
-
-* **Canonical paths** – Defaults to `<EntityName>/Transform.translation|rotation|scale`. Use `VizijBindingHint { path }` to
-  override the base for an entity or to create hierarchical names that differ from Bevy’s `Name`.
-* **Supported targets** – The plugin currently applies outputs to `Transform` components (translation/rotation/scale). Extend the
-  `apply_outputs` system if you need to drive additional components.
-* **Scheduling** –
-  * `build_binding_index_system` (Update) maintains the binding map when the world changes.
-  * `prebind_core_system` (Update) refreshes core bindings when new canonical paths appear.
-  * `fixed_update_core_system` (FixedUpdate) advances the engine using the configured timestep.
-  * `apply_outputs_system` (FixedUpdate) applies changes to Bevy components.
-* **Player/instance control** – Use the inputs API from `vizij-animation-core` (player commands, instance updates) via
-  `VizijEngine::update_with_inputs` or by mutating players/instances on the core engine directly.
-
-## Examples
-
-### Minimal Bevy app
+## Quick Start
 
 ```rust
 use bevy::prelude::*;
@@ -134,7 +65,7 @@ fn setup_scene(mut commands: Commands) {
 }
 
 fn load_animation(mut eng: ResMut<VizijEngine>) {
-    let json = include_str!("../../vizij-animation-core/tests/fixtures/new_format.json");
+    let json = include_str!("../../../fixtures/animations/vector-pose-combo.json");
     let stored = parse_stored_animation_json(json).expect("valid animation");
 
     let anim = eng.0.load_animation(stored);
@@ -143,38 +74,51 @@ fn load_animation(mut eng: ResMut<VizijEngine>) {
 }
 ```
 
-### Adjusting the fixed timestep
+---
 
-```rust
-use bevy::prelude::*;
-use bevy_vizij_animation::{VizijAnimationPlugin, FixedDt};
+## Key Concepts
 
-fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugins(VizijAnimationPlugin)
-        .insert_resource(FixedDt(1.0 / 120.0)) // 120 Hz update
-        .run();
-}
-```
+| Component/Resource | Purpose |
+|--------------------|---------|
+| `VizijTargetRoot` | Marks the root of a hierarchy that should be scanned for canonical bindings. |
+| `VizijBindingHint` | Overrides the canonical path for an entity (defaults to the entity’s `Name`). |
+| `VizijEngine` | Wrapper around `vizij_animation_core::Engine`; use it to load animations, manage players, enqueue inputs. |
+| `FixedDt` | Controls the fixed timestep used for animation updates (default `1.0 / 60.0`). |
+| `PendingOutputs` | Internal staging of the most recent engine outputs prior to applying them to components. |
 
-## Testing
+Systems inserted by the plugin (simplified):
 
-Run the crate’s integration tests from the workspace root:
+1. **Binding rebuild** – Scans `VizijTargetRoot` subtrees and populates the binding index.
+2. **Prebind** – Calls into the core engine to resolve canonical paths to handles.
+3. **Fixed update** – Advances the engine using `FixedDt` and records outputs.
+4. **Apply outputs** – Writes values to `Transform` components (translation/rotation/scale). Extend this stage to support additional component types.
+
+---
+
+## Configuration
+
+- Override the fixed timestep by inserting `FixedDt(desired_delta)` before the plugin runs.
+- Attach `VizijBindingHint { path: "custom/path" }` to entities when animation target names do not match Bevy `Name`s.
+- The plugin currently applies animation changes to `Transform`. For custom behaviour, add your own system after `apply_outputs` to consume `PendingOutputs`.
+
+---
+
+## Development & Testing
 
 ```bash
 cargo test -p bevy_vizij_animation
 ```
 
-Tests construct a Bevy `App`, load StoredAnimation fixtures, and verify that `Transform` components receive the expected values
-and that canonical binding hints resolve correctly.
+Tests cover binding discovery, fixed-update progression, and component updates using sample animations.
 
-## Troubleshooting
+For live experimentation run the `apps/demo-animation-studio` workspace in `vizij-web` after linking the local WASM builds.
 
-* **No animation applied** – Ensure the animated entity is a descendant of a `VizijTargetRoot` and has either a `Name` component
-  or an explicit `VizijBindingHint`.
-* **Bindings missing after spawning entities at runtime** – The binding index updates during the `Update` schedule. If you spawn
-  entities and expect immediate binding, make sure the systems run in the correct order or trigger a manual rebuild by removing
-  and re-adding `VizijTargetRoot`.
-* **Mismatch between StoredAnimation targets and Bevy names** – Use `VizijBindingHint { path: "custom/path" }` to match the JSON
-  animation target keys.
+---
+
+## Related Crates
+
+- [`vizij-animation-core`](../vizij-animation-core/README.md) – underlying engine logic.
+- [`bevy_vizij_api`](../../api/bevy_vizij_api/README.md) – shared write-application utilities used by this plugin.
+- [`vizij-orchestrator-core`](../../orchestrator/vizij-orchestrator-core/README.md) – can drive the engine alongside graphs via the orchestrator.
+
+Questions or improvements? Open an issue—polished ECS integrations keep Vizij animation easy to adopt. 🎥

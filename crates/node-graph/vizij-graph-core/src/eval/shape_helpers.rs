@@ -195,8 +195,8 @@ pub fn null_of_shape_numeric(shape: &ShapeId) -> Value {
         ShapeId::Quat => Value::Quat([f32::NAN; 4]),
         ShapeId::ColorRgba => Value::ColorRgba([f32::NAN; 4]),
         ShapeId::Transform => Value::Transform {
-            pos: [f32::NAN; 3],
-            rot: [f32::NAN; 4],
+            translation: [f32::NAN; 3],
+            rotation: [f32::NAN; 4],
             scale: [f32::NAN; 3],
         },
         ShapeId::Vector { len } => Value::Vector(match len {
@@ -253,11 +253,13 @@ pub fn project_by_selector(
                         .get(field)
                         .cloned()
                         .ok_or_else(|| format!("selector field '{}' missing in record", field))?,
-                    Value::Transform { pos, rot, scale } => {
-                        transform_field_value(field, pos, rot, scale).ok_or_else(|| {
-                            format!("selector field '{}' invalid for transform", field)
-                        })?
-                    }
+                    Value::Transform {
+                        translation,
+                        rotation,
+                        scale,
+                    } => transform_field_value(field, translation, rotation, scale).ok_or_else(
+                        || format!("selector field '{}' invalid for transform", field),
+                    )?,
                     Value::Enum(tag, payload) => {
                         if tag == field {
                             (**payload).clone()
@@ -449,14 +451,14 @@ fn build_numeric_value(shape: &ShapeId, scalars: &[f32], offset: &mut usize) -> 
             Some(Value::ColorRgba(arr))
         }
         ShapeId::Transform => {
-            let mut pos = [0.0; 3];
-            let mut rot = [0.0; 4];
+            let mut translation = [0.0; 3];
+            let mut rotation = [0.0; 4];
             let mut scale = [0.0; 3];
-            for slot in pos.iter_mut() {
+            for slot in translation.iter_mut() {
                 *slot = *scalars.get(*offset)?;
                 *offset += 1;
             }
-            for slot in rot.iter_mut() {
+            for slot in rotation.iter_mut() {
                 *slot = *scalars.get(*offset)?;
                 *offset += 1;
             }
@@ -464,7 +466,11 @@ fn build_numeric_value(shape: &ShapeId, scalars: &[f32], offset: &mut usize) -> 
                 *slot = *scalars.get(*offset)?;
                 *offset += 1;
             }
-            Some(Value::Transform { pos, rot, scale })
+            Some(Value::Transform {
+                translation,
+                rotation,
+                scale,
+            })
         }
         ShapeId::Vector {
             len: Some(expected),
@@ -508,13 +514,13 @@ fn build_numeric_value(shape: &ShapeId, scalars: &[f32], offset: &mut usize) -> 
 
 fn transform_field_value(
     field: &str,
-    pos: &[f32; 3],
-    rot: &[f32; 4],
+    translation: &[f32; 3],
+    rotation: &[f32; 4],
     scale: &[f32; 3],
 ) -> Option<Value> {
     match field {
-        "pos" | "position" => Some(Value::Vec3(*pos)),
-        "rot" | "rotation" => Some(Value::Quat(*rot)),
+        "translation" | "position" => Some(Value::Vec3(*translation)),
+        "rotation" => Some(Value::Quat(*rotation)),
         "scale" => Some(Value::Vec3(*scale)),
         _ => None,
     }
@@ -522,8 +528,8 @@ fn transform_field_value(
 
 fn transform_field_shape(field: &str) -> Option<ShapeId> {
     match field {
-        "pos" | "position" => Some(ShapeId::Vec3),
-        "rot" | "rotation" => Some(ShapeId::Quat),
+        "translation" | "position" => Some(ShapeId::Vec3),
+        "rotation" => Some(ShapeId::Quat),
         "scale" => Some(ShapeId::Vec3),
         _ => None,
     }

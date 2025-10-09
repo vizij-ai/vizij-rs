@@ -28,7 +28,7 @@ pub enum ValueKind {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "type", content = "data")]
+#[serde(tag = "type", content = "data", rename_all = "lowercase")]
 pub enum Value {
     /// Scalar float
     Float(f32),
@@ -53,8 +53,8 @@ pub enum Value {
 
     /// Transform with translation, rotation (quat), scale
     Transform {
-        pos: [f32; 3],
-        rot: [f32; 4], // quat (x,y,z,w)
+        translation: [f32; 3],
+        rotation: [f32; 4], // quat (x,y,z,w)
         scale: [f32; 3],
     },
 
@@ -116,7 +116,11 @@ impl Value {
         Value::Quat([x, y, z, w])
     }
 
-    pub fn transform(pos: [f32; 3], rot: [f32; 4], scale: [f32; 3]) -> Self {
-        Value::Transform { pos, rot, scale }
+    pub fn transform(translation: [f32; 3], rotation: [f32; 4], scale: [f32; 3]) -> Self {
+        Value::Transform {
+            translation,
+            rotation,
+            scale,
+        }
     }
 }

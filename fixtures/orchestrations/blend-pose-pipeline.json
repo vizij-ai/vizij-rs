@@ -1,0 +1,95 @@
+{
+  "description": "Blend pipeline combining pose/quaternion animation with weighted profile graph",
+  "animation": "pose-quat-transform",
+  "graph": "weighted-profile-blend",
+  "initial_inputs": [],
+  "steps": [
+    {
+      "delta": 0.0,
+      "expect": {
+        "samples/json.pose": {
+          "vec3": [
+            0.005,
+            0.115,
+            0.275
+          ]
+        },
+        "samples/json.weights": {
+          "vector": [
+            0.1,
+            0.3,
+            0.6
+          ]
+        },
+        "samples/json.channels": {
+          "record": {
+            "primary": {
+              "text": "left"
+            },
+            "secondary": {
+              "text": "foot"
+            }
+          }
+        }
+      }
+    },
+    {
+      "delta": 1.5,
+      "expect": {
+        "samples/json.pose": {
+          "vec3": [
+            0.005,
+            0.115,
+            0.275
+          ]
+        },
+        "samples/json.weights": {
+          "vector": [
+            0.1,
+            0.3,
+            0.6
+          ]
+        },
+        "samples/json.channels": {
+          "record": {
+            "primary": {
+              "text": "left"
+            },
+            "secondary": {
+              "text": "foot"
+            }
+          }
+        }
+      }
+    },
+    {
+      "delta": 1.5,
+      "expect": {
+        "samples/json.pose": {
+          "vec3": [
+            0.005,
+            0.115,
+            0.275
+          ]
+        },
+        "samples/json.weights": {
+          "vector": [
+            0.1,
+            0.3,
+            0.6
+          ]
+        },
+        "samples/json.channels": {
+          "record": {
+            "primary": {
+              "text": "left"
+            },
+            "secondary": {
+              "text": "foot"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

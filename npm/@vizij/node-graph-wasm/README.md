@@ -1,165 +1,186 @@
 # @vizij/node-graph-wasm
 
-`@vizij/node-graph-wasm` repackages the WebAssembly build of `vizij-graph-wasm` for JavaScript/TypeScript consumers. It ships the
-wasm-bindgen output, a friendly wrapper, TypeScript definitions, and ready-to-run graph samples.
+> **Vizij’s node graph engine for JavaScript.**
+
+This package ships the WebAssembly build of `vizij-graph-core` together with a TypeScript wrapper, schema helpers, and sample graphs. Load Vizij GraphSpecs, stage host inputs, evaluate outputs, and update node parameters from any modern JS runtime without compiling Rust.
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Key Concepts](#key-concepts)
+3. [Installation](#installation)
+4. [API](#api)
+5. [Usage](#usage)
+6. [Samples & Fixtures](#samples--fixtures)
+7. [Development & Testing](#development--testing)
+8. [Related Packages](#related-packages)
+
+---
 
 ## Overview
 
-* Wraps the `vizij-graph-wasm` Rust crate (built with `wasm-pack`).
-* Exposes a high-level `Graph` class with helpers to normalize graph specs, stage typed inputs, evaluate graphs, and inspect
-  outputs/writes.
-* Bundles a library of sample graphs for demos and automated tests.
-* Supports both browser and Node runtimes; `init()` auto-detects the environment to load the `.wasm` file.
+- Built from `vizij-graph-core` with `wasm-bindgen`; the npm package is the canonical JavaScript distribution maintained by the Vizij team.
+- Provides a high-level `Graph` class, low-level bindings, TypeScript definitions, and ready-to-use fixtures.
+- Supports both browser and Node environments—`init()` chooses the right loader and validates the ABI (`abi_version() === 2`).
+- Ships GraphSpec normalisers and schema inspection helpers so editors and tooling can speak the same language as Vizij runtimes.
 
-## Architecture
+---
 
-```
-vizij-graph-core (Rust) --wasm-bindgen--> vizij-graph-wasm (cdylib) --npm--> @vizij/node-graph-wasm
-       ^                           |                                     |
-       |                           |                                     +-- src/index.ts (wrapper, helpers, samples)
-       |                           +-- pkg/ (wasm-pack output)           +-- pkg/ (distributed glue + .wasm)
-       +-- Shared schemas (GraphSpec, ValueJSON, ShapeJSON)
-```
+## Key Concepts
+
+- **GraphSpec** – Declarative JSON describing nodes, parameters, and their `inputs` maps (selectors, output keys). The package normalises shorthand specs automatically.
+- **Graph Runtime** – The `Graph` class owns a `GraphRuntime`, handling `loadGraph`, `stageInput`, `setParam`, `step`, and `evalAll`.
+- **Staged Inputs** – Host-provided values keyed by `TypedPath`. They are latched until you replace or remove them.
+- **Evaluation Result** – `evalAll()` returns per-node port snapshots plus a `WriteBatch` of sink writes (each with Value + Shape metadata).
+- **Node Schema Registry** – `getNodeSchemas()` exposes the runtime-supported nodes, ideal for palettes/editors.
+- **ABI Guard** – `abi_version()` ensures the JS glue and `.wasm` binary are compatible. Rebuild when versions change.
+
+---
 
 ## Installation
 
-Install the published package:
-
 ```bash
 npm install @vizij/node-graph-wasm
+# or pnpm add @vizij/node-graph-wasm
 ```
 
-For local development inside `vizij-rs`:
+For local development inside Vizij:
 
 ```bash
-# From repo root
-node scripts/build-graph-wasm.mjs
+pnpm run build:wasm:graph
 cd npm/@vizij/node-graph-wasm
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
-Link into `vizij-web` during development:
+Link into `vizij-web` while iterating:
 
 ```bash
-(cd npm/@vizij/node-graph-wasm && npm link)
-# in vizij-web/
-npm link @vizij/node-graph-wasm
+(cd npm/@vizij/node-graph-wasm && pnpm link --global)
+(cd ../vizij-web && pnpm link @vizij/node-graph-wasm)
 ```
 
-## Setup
+---
 
-1. `await init()` once in your application to load the WASM binary.
-2. Create a `Graph` instance from the wrapper or use the raw bindings from the generated `pkg/` folder.
-3. Normalize graph JSON with `normalizeGraphSpec` (recommended) before loading to ensure canonical shapes/values.
-4. Stage host inputs before each evaluation using `graph.stageInput(path, value, declaredShape?)`.
-5. Call `graph.evalAll()` every frame (optionally using `graph.step(dt)`/`graph.setTime(t)` to manage internal time).
+## API
+
+```ts
+async function init(input?: InitInput): Promise<void>;
+function abi_version(): number;
+async function normalizeGraphSpec(spec: GraphSpec | string): Promise<GraphSpec>;
+async function getNodeSchemas(): Promise<Registry>;
+const graphSamples: Record<string, GraphSpec>;
+
+class Graph {
+  constructor();
+  loadGraph(specOrJson: GraphSpec | string): void;
+  unloadGraph(): void;
+  stageInput(path: string, value: ValueInput, shape?: ShapeJSON, immediateEval?: boolean): void;
+  clearStagedInputs(): void;
+  applyStagedInputs(): void;
+  evalAll(): EvalResult;
+  setParam(nodeId: string, key: string, value: ValueInput): void;
+  setTime(t: number): void;
+  step(dt: number): void;
+  getWrites(): WriteOpJSON[];
+  clearWrites(): void;
+  waitForGraphReady?(): Promise<void>; // only populated when used through React provider
+}
+```
+
+Types (`GraphSpec`, `EvalResult`, `ValueJSON`, `ShapeJSON`, etc.) are exported from `src/types`.
+
+---
 
 ## Usage
-
-### Wrapper API
 
 ```ts
 import {
   init,
   Graph,
   normalizeGraphSpec,
-  getNodeSchemas,
   graphSamples,
-  type EvalResult,
-  type ShapeJSON,
+  valueAsNumber,
 } from "@vizij/node-graph-wasm";
 
 await init();
 
 const graph = new Graph();
 const spec = await normalizeGraphSpec(graphSamples.vectorPlayground);
-
 graph.loadGraph(spec);
+
+graph.stageInput("nodes.inputA.inputs.in", { float: 1 }, undefined, true);
+const result = graph.evalAll();
+
+const nodeValue =
+  result.nodes["const"]?.out?.value ?? { type: "float", data: NaN };
+console.log("Node value", valueAsNumber(nodeValue));
+
+for (const write of result.writes) {
+  console.log("Write", write.path, write.value);
+}
+```
+
+Manual time control:
+
+```ts
 graph.setTime(0);
-graph.stageInput("robot/Arm/ik_target", { vec3: [0.1, 0.2, 0.3] }, { id: "Vec3" });
-
-const result: EvalResult = graph.evalAll();
-console.log(result.nodes, result.writes);
+graph.step(1 / 60);
+graph.evalAll();
 ```
 
-### Raw bindings
+Staging inputs lazily:
 
 ```ts
-import initWasm, { WasmGraph, normalize_graph_spec_json } from "@vizij/node-graph-wasm/pkg";
-
-await initWasm();
-const raw = new WasmGraph();
-const normalized = normalize_graph_spec_json(JSON.stringify(rawGraphJson));
-raw.load_graph(normalized);
-raw.set_time(0);
-raw.stage_input("robot/Arm/ik_target", JSON.stringify({ vec3: [0.1, 0.2, 0.3] }), JSON.stringify({ id: "Vec3" }));
-const resultJson = raw.eval_all();
-console.log(JSON.parse(resultJson));
+graph.stageInput("demo/path", { vec3: [0, 1, 0] });
+graph.applyStagedInputs();
+graph.evalAll();
 ```
 
-## Key Details
+---
 
-* **JSON normalization** – `normalizeGraphSpec` accepts plain JSON and rewrites shorthand values (numbers, bools, arrays, alias
-  objects) into the explicit `ValueJSON` envelopes expected by the core crate. Output shapes expressed as strings are normalized
-  to `{ id: "ShapeId" }` objects.
-* **Typed inputs** – `graph.stageInput(path, value, declaredShape?)` mirrors `GraphRuntime::set_input`. Raw arrays default to the
-  `Vector` shape unless you wrap them in explicit envelopes (e.g., `{ vec3: [...] }`). Declared shapes enable numeric coercions
-  and NaN fallbacks.
-* **Evaluation result** – `EvalResult` contains two fields:
-  * `nodes: Record<NodeId, Record<PortId, { value: ValueJSON; shape: ShapeJSON }>>`
-  * `writes: Array<{ path: string; value: ValueJSON; shape: ShapeJSON }>`
-  Writes forward the shape metadata from the Rust core (`WriteOp.shape`).
-* **Parameter updates** – `graph.setParam(nodeId, key, value)` validates types (numeric params must receive numeric JSON) and
-  supports robotics-focused keys (`urdf_xml`, `root_link`, `tip_link`, `weights`, etc.).
-* **Samples** – `graphSamples`, `oscillatorBasics`, `vectorPlayground`, `logicGate`, and `tupleSpringDampSlew` demonstrate modern
-  graph patterns (selectors, Input nodes, typed writes).
+## Samples & Fixtures
 
-## Examples
+The package exports several ready-to-run specs:
 
-### Iterating writes
+- `graphSamples` map (e.g., `vectorPlayground`, `oscillatorBasics`, `logicGate`).
+- Named exports (`oscillatorBasics`, `nestedTelemetry`, etc.) for convenience.
+- Helpers:
+  ```ts
+  import { loadNodeGraphBundle } from "@vizij/node-graph-wasm";
 
-```ts
-const { writes } = graph.evalAll();
-for (const write of writes) {
-  console.log(`apply ${write.path}`, write.value, write.shape);
-}
-```
-
-### Inspecting node outputs
-
-```ts
-const { nodes } = graph.evalAll();
-for (const [nodeId, ports] of Object.entries(nodes)) {
-  for (const [port, snapshot] of Object.entries(ports)) {
-    console.log(nodeId, port, snapshot.value, snapshot.shape);
+  const { spec, stage } = await loadNodeGraphBundle("urdf-ik-position");
+  graph.loadGraph(spec);
+  if (stage) {
+    for (const [path, payload] of Object.entries(stage)) {
+      graph.stageInput(path, payload.value, payload.shape);
+    }
   }
-}
-```
+  ```
 
-## Testing
+Fixtures originate from `@vizij/test-fixtures` so tests and demos share the same assets.
 
-Run the bundled tests to ensure the wasm build and samples work:
+---
+
+## Development & Testing
 
 ```bash
-node scripts/build-graph-wasm.mjs
+pnpm run build:wasm:graph          # regenerate pkg/
 cd npm/@vizij/node-graph-wasm
-npm test
+pnpm test
 ```
 
-The script initializes the wasm module, loads each sample graph, evaluates a couple of ticks, and asserts that typed writes are
-produced. You can also run the underlying Rust tests:
+The Vitest suite runs sample graphs through the wasm bridge, checking evaluation results and write batches. For Rust-side coverage, run `cargo test -p vizij-graph-wasm`.
 
-```bash
-cargo test -p vizij-graph-wasm
-```
+---
 
-## Troubleshooting
+## Related Packages
 
-* **Graph fails to load** – Normalize the JSON first and inspect the expanded structure for type mismatches or invalid node kinds.
-* **Inputs seem stale** – Inputs staged after `graph.evalAll()` apply to the next frame. Stage values before calling `evalAll` to
-  make them visible immediately.
-* **Strict parameter errors** – Ensure numeric params receive numbers, vectors use arrays, and robotics params provide the
-  expected JSON shapes (strings for URDF, arrays for weights, etc.).
-* **Missing write shapes** – Graph specs must use explicit `Output` nodes. The wrapper forwards any shape metadata attached by the
-  core runtime.
+- [`vizij-graph-wasm`](../../crates/node-graph/vizij-graph-wasm/README.md) – Rust crate producing the wasm build.
+- [`vizij-graph-core`](../../crates/node-graph/vizij-graph-core/README.md) – underlying evaluator.
+- [`@vizij/node-graph-react`](../../../vizij-web/packages/@vizij/node-graph-react/README.md) – React integration built on this npm package.
+- [`@vizij/value-json`](../value-json/README.md) – shared value helpers used during staging.
+
+Need assistance or spot a bug? Open an issue—robust bindings keep Vizij graphs portable. 🧠

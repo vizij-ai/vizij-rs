@@ -25,7 +25,7 @@ pub fn to_float(v: &Value) -> f32 {
         Value::Vec4(a) => a[0],
         Value::Quat(a) => a[0],
         Value::ColorRgba(a) => a[0],
-        Value::Transform { pos, .. } => pos[0],
+        Value::Transform { translation, .. } => translation[0],
         Value::Vector(vec) => vec.first().copied().unwrap_or(0.0),
         Value::Record(map) => map.values().next().map(to_float).unwrap_or(0.0),
         Value::Array(items) => items.first().map(to_float).unwrap_or(0.0),
@@ -41,7 +41,7 @@ pub fn to_float(v: &Value) -> f32 {
 /// - Float -> single-element vec
 /// - Bool -> single 0/1
 /// - Vector -> clone
-/// - Transform -> pos components
+/// - Transform -> translation components
 /// - Enum -> recurse into payload
 pub fn to_vector(v: &Value) -> Vec<f32> {
     match v {
@@ -52,7 +52,9 @@ pub fn to_vector(v: &Value) -> Vec<f32> {
         Value::Vec4(a) => vec![a[0], a[1], a[2], a[3]],
         Value::Quat(a) => vec![a[0], a[1], a[2], a[3]],
         Value::ColorRgba(a) => vec![a[0], a[1], a[2], a[3]],
-        Value::Transform { pos, .. } => vec![pos[0], pos[1], pos[2]],
+        Value::Transform { translation, .. } => {
+            vec![translation[0], translation[1], translation[2]]
+        }
         Value::Vector(vec) => vec.clone(),
         Value::Record(map) => map.values().flat_map(to_vector).collect(),
         Value::Array(items) => items.iter().flat_map(to_vector).collect(),
@@ -85,7 +87,7 @@ pub fn to_vec3(v: &Value) -> [f32; 3] {
             }
             out
         }
-        Value::Transform { pos, .. } => *pos,
+        Value::Transform { translation, .. } => *translation,
         Value::Record(map) => {
             let mut out = [0.0f32; 3];
             let mut iter = map.values().flat_map(to_vector);

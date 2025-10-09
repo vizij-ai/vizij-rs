@@ -20,7 +20,7 @@ use crate::sampling::{sample_track, sample_track_with_derivative};
 use crate::scratch::Scratch;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use vizij_api_core::{TypedPath, WriteBatch, WriteOp};
+use vizij_api_core::WriteBatch;
 
 /// Per-player controller and instance list.
 #[derive(Debug)]
@@ -655,14 +655,7 @@ impl Engine {
         // Populate self.outputs as usual.
         let _ = self.update_values(dt, inputs);
 
-        let mut batch = WriteBatch::new();
-        for ch in self.outputs.changes.iter() {
-            // Parse the canonical path into a TypedPath; skip on parse error.
-            if let Ok(tp) = TypedPath::parse(&ch.key) {
-                batch.push(WriteOp::new(tp, ch.value.clone()));
-            }
-        }
-        batch
+        self.outputs.to_writebatch()
     }
 
     /// Remove an instance from a player. Returns true if removed.

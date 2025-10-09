@@ -1,0 +1,11 @@
+import type { FixturesManifest, NodeGraphManifestEntry, OrchestrationManifestEntry } from "./shared.js";
+export type { FixturesManifest, NodeGraphManifestEntry, OrchestrationManifestEntry };
+export declare function fixturesRoot(): string;
+export declare function manifest(): FixturesManifest;
+export declare function resolveFixturePath(relPath: string): string;
+export declare function readFixture(relPath: string): string;
+export declare function loadFixture<T>(relPath: string): T;
+export declare function animationEntry(name: string): string;
+export declare function nodeGraphEntry(name: string): NodeGraphManifestEntry;
+export declare function orchestrationEntry(name: string): OrchestrationManifestEntry;
+export declare function orchestrationPath(entry: OrchestrationManifestEntry): string;

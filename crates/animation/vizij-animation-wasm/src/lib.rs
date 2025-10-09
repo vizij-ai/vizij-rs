@@ -172,7 +172,7 @@ impl VizijAnimation {
     }
 
     /// Load a StoredAnimation JSON (new format: tracks with keypoints and transitions.in/out) into the engine.
-    /// Accepts any JS object compatible with tests/fixtures/new_format.json. Returns an AnimId (u32).
+    /// Accepts any compatible JS object, e.g. fixtures/animations/vector-pose-combo.json. Returns an AnimId (u32).
     #[wasm_bindgen(js_name = load_stored_animation)]
     pub fn load_stored_animation(&mut self, data_json: JsValue) -> Result<u32, JsError> {
         if jsvalue_is_undefined_or_null(&data_json) {

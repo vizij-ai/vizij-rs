@@ -1,0 +1,29 @@
+{
+  "spec": {
+    "nodes": [
+      {
+        "id": "sign_in",
+        "type": "input",
+        "params": {
+          "path": "chain/sign.value",
+          "value": 0
+        }
+      },
+      {
+        "id": "slew",
+        "type": "slew",
+        "inputs": { "in": { "node_id": "sign_in" } }
+      },
+      {
+        "id": "slew_out",
+        "type": "output",
+        "params": { "path": "chain/slewed.value" },
+        "inputs": { "in": { "node_id": "slew" } }
+      }
+    ]
+  },
+  "subs": {
+    "inputs": ["chain/sign.value"],
+    "outputs": ["chain/slewed.value"]
+  }
+}

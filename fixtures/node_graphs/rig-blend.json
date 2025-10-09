@@ -26,7 +26,7 @@
             "weights": { "vector": [0.2, 0.8] },
             "metadata": {
               "record": {
-                "mode": { "type": "Text", "data": "demo" }
+                "mode": { "type": "text", "data": "demo" }
               }
             }
           }
