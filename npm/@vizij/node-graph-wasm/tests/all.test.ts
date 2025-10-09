@@ -2,27 +2,6 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, resolve } from "node:path";
-
-type TestFixturesModule = typeof import("@vizij/test-fixtures");
-
-let fixturesModule: TestFixturesModule | null = null;
-const fixturesPromise: Promise<TestFixturesModule> = import("@vizij/test-fixtures").then(
-  (module): TestFixturesModule => {
-    fixturesModule = module as TestFixturesModule;
-    return fixturesModule;
-  },
-);
-
-function fixtures(): TestFixturesModule {
-  if (!fixturesModule) {
-    throw new Error("Test fixtures module not loaded yet");
-  }
-  return fixturesModule;
-}
-
-function nodeGraphFixtures(): TestFixturesModule["nodeGraphs"] {
-  return fixtures().nodeGraphs;
-}
 import {
   init,
   Graph,
@@ -36,6 +15,7 @@ import {
   graphSamples,
   urdfIkPosition,
   loadNodeGraphSpec,
+  loadNodeGraphSpecJson,
   type EvalResult,
   type ValueJSON,
   type GraphSpec,
@@ -57,8 +37,8 @@ function pkgWasmUrl(): URL {
   return pathToFileURL(wasmPath);
 }
 
-function loadJsonFixture(key: string): string {
-  const raw = nodeGraphFixtures().nodeGraphSpecJson(key);
+async function loadJsonFixture(key: string): Promise<string> {
+  const raw = await loadNodeGraphSpecJson(key);
   try {
     const parsed = JSON.parse(raw) as { spec?: unknown } | undefined;
     if (parsed && typeof parsed === "object" && "spec" in parsed) {
@@ -497,7 +477,6 @@ function assertText(write: WriteOpJSON, expected: string): void {
 /* ---------- Entrypoint: run all grouped checks ---------- */
 (async () => {
   try {
-    await fixturesPromise;
     await init(pkgWasmUrl());
 
     const urdfSample = graphSamples["urdf-ik-position"];
@@ -512,7 +491,7 @@ function assertText(write: WriteOpJSON, expected: string): void {
 
     // Basic smoke checks used across tests
     await runSample("oscillator-basics", oscillatorBasics);
-    await runSample("logic-gate-fixture", loadJsonFixture("logic-gate"));
+    await runSample("logic-gate-fixture", await loadJsonFixture("logic-gate"));
     await runSample("tuple-spring-damp-slew", tupleSpringDampSlew);
     {
 
@@ -533,7 +512,7 @@ function assertText(write: WriteOpJSON, expected: string): void {
 
     // json blend graph
     {
-      const jsonSpec = loadJsonFixture("weighted-profile-blend");
+      const jsonSpec = await loadJsonFixture("weighted-profile-blend");
       const jsonResult = await runSample("json-blend-graph", jsonSpec);
       const jsonWrites = writesToMap(jsonResult.writes);
       expectNumericVector(jsonWrites.get("samples/json.pose"), [0.005, 0.115, 0.275], "samples/json.pose");
@@ -562,7 +541,7 @@ function assertText(write: WriteOpJSON, expected: string): void {
 
     // weighted-average-from-json (uses fixtures)
     {
-      const weightedSpecJson = nodeGraphFixtures().nodeGraphSpecJson("weighted-average");
+      const weightedSpecJson = await loadNodeGraphSpecJson("weighted-average");
       await runSample("weighted-average-from-json", weightedSpecJson, {
         prepare: (graph) => {
           for (const [path, payload] of Object.entries(weightedAverageStage)) {
@@ -579,11 +558,9 @@ function assertText(write: WriteOpJSON, expected: string): void {
 
     // urdf-ik-position (shared fixture)
     {
-      const urdfFixture = nodeGraphFixtures().nodeGraphSpec(
-        "urdf-ik-position",
-      ) as { spec: GraphSpec };
+      const urdfSpec = await loadNodeGraphSpec("urdf-ik-position");
 
-      const urdfResult = await runSample("urdf-ik-position-fixture", urdfFixture.spec, {
+      const urdfResult = await runSample("urdf-ik-position-fixture", urdfSpec, {
         prepare: (graph) => {
           for (const [path, payload] of Object.entries(urdfIkPositionStage)) {
             graph.stageInput(path, payload.value, payload.shape);
@@ -606,7 +583,7 @@ function assertText(write: WriteOpJSON, expected: string): void {
 
     // New fixture exercising the WeightedSumVector + BlendWeightedAverage nodes
     {
-      const wsSpecJson = nodeGraphFixtures().nodeGraphSpecJson("weighted-sum-helper");
+      const wsSpecJson = await loadNodeGraphSpecJson("weighted-sum-helper");
       await runSample("weighted-sum-helper", wsSpecJson, {
         expectations: [
           { path: "samples/ws.sum", expectFloat: 3.0 },

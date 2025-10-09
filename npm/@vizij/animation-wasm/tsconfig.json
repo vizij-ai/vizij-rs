@@ -8,12 +8,7 @@
     "strict": true,
     "moduleResolution": "Bundler",
     "types": ["node"],
-    "skipLibCheck": true,
-    "baseUrl": "./",
-    "paths": {
-      "@vizij/test-fixtures": ["../test-fixtures/dist/index.d.ts"],
-      "@vizij/test-fixtures/*": ["../test-fixtures/dist/*.d.ts"]
-    }
+    "skipLibCheck": true
   },
   "include": ["src", "tests"]
 }

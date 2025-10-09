@@ -115,6 +115,7 @@ Hooks can be bypassed with `SKIP_GIT_HOOKS=1` or extended using the `HOOK_RUN_*`
 ### Build all crates and wrappers
 
 ```bash
+# remember to install first
 pnpm run build
 ```
 

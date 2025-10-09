@@ -1,42 +1,56 @@
+import bundle from "./generated/fixtures-bundle.js";
 import type { StoredAnimation } from "./types.js";
 
-type AnimationModule = typeof import("@vizij/test-fixtures")["animations"];
+type FixturesManifest = typeof bundle.manifest;
 
-let loader: Promise<AnimationModule> | null = null;
+const manifest: FixturesManifest = bundle.manifest;
+const files = bundle.files as Record<string, string>;
 
-function fixturesModule(): Promise<AnimationModule> {
-  if (!loader) {
-    loader = import("@vizij/test-fixtures")
-      .then((mod) => mod.animations)
-      .catch((err) => {
-        throw new Error(
-          `Failed to load @vizij/test-fixtures. Install the workspace package alongside @vizij/animation-wasm to access shared samples. Original error: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
-  }
-  return loader;
+function animationsMap(): Record<string, string> {
+  return (manifest.animations ?? {}) as Record<string, string>;
 }
 
-/** List the animation fixture keys available via the shared manifest. */
+function normalizeRelPath(relPath: string): string {
+  return relPath.replace(/^[.][/\\]/, "").replace(/\\/g, "/");
+}
+
+function animationEntry(name: string): string {
+  const rel = animationsMap()[name];
+  if (!rel) {
+    throw new Error(`Unknown animation fixture: ${name}`);
+  }
+  return rel;
+}
+
+function readFixture(relPath: string): string {
+  const normalized = normalizeRelPath(relPath);
+  const raw = files[normalized];
+  if (typeof raw !== "string") {
+    throw new Error(`Fixture '${relPath}' was not embedded in this build`);
+  }
+  return raw;
+}
+
+function loadFixture<T>(relPath: string): T {
+  return JSON.parse(readFixture(relPath)) as T;
+}
+
+/** List the animation fixture keys available via the embedded manifest. */
 export async function listAnimationFixtures(): Promise<string[]> {
-  const module = await fixturesModule();
-  return module.animationNames();
+  return Object.keys(manifest.animations ?? {});
 }
 
 /** Load the StoredAnimation-compatible fixture payload for the given key. */
 export async function loadAnimationFixture<T = StoredAnimation>(name: string): Promise<T> {
-  const module = await fixturesModule();
-  return module.animationFixture<T>(name);
+  return loadFixture<T>(animationEntry(name));
 }
 
 /** Load the raw JSON text for the given animation fixture key. */
 export async function loadAnimationJson(name: string): Promise<string> {
-  const module = await fixturesModule();
-  return module.animationJson(name);
+  return readFixture(animationEntry(name));
 }
 
-/** Resolve the filesystem path for the given animation fixture key. */
+/** Resolve the virtual fixtures/ path for the given animation fixture key. */
 export async function resolveAnimationPath(name: string): Promise<string> {
-  const module = await fixturesModule();
-  return module.animationPath(name);
+  return `fixtures/${normalizeRelPath(animationEntry(name))}`;
 }

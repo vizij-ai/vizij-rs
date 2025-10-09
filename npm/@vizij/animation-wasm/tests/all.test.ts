@@ -13,23 +13,6 @@ import {
   type ValueJSON,
 } from "@vizij/value-json";
 
-type TestFixturesModule = typeof import("@vizij/test-fixtures");
-
-let fixturesModule: TestFixturesModule | null = null;
-const fixturesPromise: Promise<TestFixturesModule> = import("@vizij/test-fixtures").then(
-  (module): TestFixturesModule => {
-    fixturesModule = module as TestFixturesModule;
-    return fixturesModule;
-  },
-);
-
-function fixtures(): TestFixturesModule {
-  if (!fixturesModule) {
-    throw new Error("Test fixtures module not loaded yet");
-  }
-  return fixturesModule;
-}
-
 function requireNumber(value: ValueJSON | undefined, label: string): number {
   const num = valueAsNumber(value);
   assert.ok(Number.isFinite(num), `${label} should resolve to a finite number`);
@@ -96,8 +79,7 @@ function pkgWasmUrl(): URL {
 async function testLoadAnimationFromTypescriptObject(): Promise<void> {
   const engine = new Engine();
 
-  const { animations } = fixtures();
-  const storedAnimation = animations.animationFixture<StoredAnimation>("simple-scalar-ramp");
+  const storedAnimation = await loadAnimationFixture<StoredAnimation>("simple-scalar-ramp");
 
   const animId = engine.loadAnimation(storedAnimation);
   assert.equal(typeof animId, "number", "loadAnimation should return numeric id");
@@ -119,8 +101,7 @@ async function testLoadAnimationFromTypescriptObject(): Promise<void> {
 }
 
 async function testLoadAnimationFromVectorFixture(): Promise<void> {
-  const { animations } = fixtures();
-  const storedAnimation = animations.animationFixture<StoredAnimation>("constant-vec3");
+  const storedAnimation = await loadAnimationFixture<StoredAnimation>("constant-vec3");
   const engine = new Engine();
 
   const animId = engine.loadAnimation(storedAnimation);
@@ -138,8 +119,7 @@ async function testLoadAnimationFromVectorFixture(): Promise<void> {
 }
 
 async function testLoadAnimationStateToggleFixture(): Promise<void> {
-  const { animations } = fixtures();
-  const storedAnimation = animations.animationFixture<StoredAnimation>("state-toggle");
+  const storedAnimation = await loadAnimationFixture<StoredAnimation>("state-toggle");
   const engine = new Engine();
 
   const animId = engine.loadAnimation(storedAnimation);
@@ -275,7 +255,6 @@ process.env.RUST_BACKTRACE = "1";
 
 (async () => {
   try {
-    await fixturesPromise;
     await init(pkgWasmUrl());
     await testLoadAnimationFromTypescriptObject();
     await testLoadAnimationFromVectorFixture();

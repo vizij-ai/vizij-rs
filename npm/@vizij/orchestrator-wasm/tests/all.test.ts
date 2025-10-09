@@ -14,35 +14,10 @@ import {
 } from "@vizij/value-json";
 import type { GraphRegistrationConfig, AnimationRegistrationConfig } from "../src/index.js";
 import { init, createOrchestrator, loadOrchestrationBundle } from "../src/index.js";
-
-type TestFixturesModule = typeof import("@vizij/test-fixtures");
-
-let fixturesModule: TestFixturesModule | null = null;
-const fixturesPromise: Promise<TestFixturesModule> = import("@vizij/test-fixtures").then(
-  (module): TestFixturesModule => {
-    fixturesModule = module as TestFixturesModule;
-    return fixturesModule;
-  },
-);
-
-function fixtures(): TestFixturesModule {
-  if (!fixturesModule) {
-    throw new Error("Test fixtures module not loaded yet");
-  }
-  return fixturesModule;
-}
-
-function animationFixtures(): TestFixturesModule["animations"] {
-  return fixtures().animations;
-}
-
-function nodeGraphFixtures(): TestFixturesModule["nodeGraphs"] {
-  return fixtures().nodeGraphs;
-}
-
-function orchestrationFixtures(): TestFixturesModule["orchestrations"] {
-  return fixtures().orchestrations;
-}
+import {
+  loadAnimationFixture as loadEmbeddedAnimation,
+  loadNodeGraphSpec as loadEmbeddedGraphSpec,
+} from "../src/fixtures.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -206,15 +181,15 @@ async function testScalarRampPipeline(): Promise<void> {
 async function testChainedSlewPipeline(): Promise<void> {
   const orch = await createOrchestrator({ schedule: "SinglePass" });
 
-  const signGraph = nodeGraphFixtures().nodeGraphSpec("sign-graph") as GraphRegistrationConfig;
-  const slewGraph = nodeGraphFixtures().nodeGraphSpec("slew-graph") as GraphRegistrationConfig;
+  const signGraph = await loadEmbeddedGraphSpec("sign-graph");
+  const slewGraph = await loadEmbeddedGraphSpec("slew-graph");
   const signId = orch.registerGraph(signGraph);
   const slewId = orch.registerGraph(slewGraph);
   assert.ok(signId && slewId);
 
   const animationConfig = {
     setup: {
-      animation: animationFixtures().animationFixture("chain-ramp"),
+      animation: await loadEmbeddedAnimation("chain-ramp"),
       player: { name: "chain-player", loop_mode: "once" as const },
     },
   };
@@ -301,14 +276,14 @@ async function testBlendPosePipeline(): Promise<void> {
 
 //   const animationConfig = {
 //     setup: {
-//       animation: animationFixtures().animationFixture("control-linear"),
+//       animation: await loadEmbeddedAnimation("control-linear"),
 //       player: { name: "controller-player", loop_mode: "loop" as const },
 //     },
 //   };
 //   const animId = orch.registerAnimation(animationConfig);
 //   assert.ok(animId);
 
-//   const driverGraph = nodeGraphFixtures().nodeGraphSpec("sine-driver") as GraphRegistrationConfig;
+//   const driverGraph = await loadEmbeddedGraphSpec("sine-driver");
 //   const driverGraphId = orch.registerGraph(driverGraph);
 //   assert.ok(driverGraphId);
 
@@ -348,7 +323,6 @@ process.env.RUST_BACKTRACE = "1";
 
 (async () => {
   try {
-    await fixturesPromise;
     await init(pkgWasmUrl());
     await testScalarRampPipeline();
     await testChainedSlewPipeline();
