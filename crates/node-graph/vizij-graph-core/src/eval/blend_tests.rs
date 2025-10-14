@@ -17,6 +17,7 @@ fn constant_node(id: &str, value: Value) -> NodeSpec {
             ..Default::default()
         },
         output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
     }
 }
 
@@ -50,6 +51,7 @@ fn weighted_sum_vector_scalar_weight_broadcasts_and_outputs_descriptive_ports() 
                 kind: NodeType::WeightedSumVector,
                 params: NodeParams::default(),
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
         links: vec![link("vals", "ws", "values"), link("w", "ws", "weights")],
@@ -104,6 +106,7 @@ fn weighted_sum_vector_length_mismatch_returns_nans() {
                 kind: NodeType::WeightedSumVector,
                 params: NodeParams::default(),
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
         links: vec![link("vals", "ws", "values"), link("w", "ws", "weights")],
@@ -142,12 +145,14 @@ fn blend_weighted_average_computes_normalized_average() {
                 kind: NodeType::WeightedSumVector,
                 params: NodeParams::default(),
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
             NodeSpec {
                 id: "bavg".to_string(),
                 kind: NodeType::BlendWeightedAverage,
                 params: NodeParams::default(),
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
         links: vec![
@@ -181,6 +186,7 @@ fn blend_multiply_computes_product_of_terms() {
                 kind: NodeType::BlendMultiply,
                 params: NodeParams::default(),
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
         links: vec![link("vals", "mult", "values"), link("w", "mult", "weights")],
@@ -208,6 +214,7 @@ fn blend_max_selects_value_of_highest_effective_weight() {
                 kind: NodeType::BlendMax,
                 params: NodeParams::default(),
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
         links: vec![link("vals", "max", "values"), link("w", "max", "weights")],
@@ -245,12 +252,14 @@ fn default_blend_matches_expected_vec3_output() {
                 kind: NodeType::Join,
                 params: NodeParams::default(),
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
             NodeSpec {
                 id: "blend".to_string(),
                 kind: NodeType::DefaultBlend,
                 params: NodeParams::default(),
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
         links: vec![
@@ -319,6 +328,7 @@ fn default_blend_emits_nan_value_when_weight_length_mismatch() {
                 kind: NodeType::DefaultBlend,
                 params: NodeParams::default(),
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
         links: vec![
@@ -358,6 +368,7 @@ fn case_node_routes_based_on_case_labels_param() {
                 kind: NodeType::Case,
                 params,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
         links: vec![

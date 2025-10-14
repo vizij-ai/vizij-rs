@@ -1507,6 +1507,16 @@ fn align_input_to_declared(
     ))
 }
 
+fn default_port(conn: &InputConnection) -> Option<PortValue> {
+    conn.default_value.as_ref().map(|value| {
+        if let Some(shape) = &conn.default_shape {
+            PortValue::with_shape(value.clone(), shape.clone())
+        } else {
+            PortValue::new(value.clone())
+        }
+    })
+}
+
 /// Gather the most recent outputs for each of the node's input connections, applying selectors.
 fn read_inputs(
     rt: &GraphRuntime,
@@ -1515,20 +1525,25 @@ fn read_inputs(
     let mut resolved = HashMap::with_capacity(inputs.len());
 
     for (input_key, conn) in inputs.iter() {
-        let mut port = rt
-            .outputs
-            .get(&conn.node_id)
-            .and_then(|outputs| outputs.get(&conn.output_key))
-            .cloned()
-            .unwrap_or_else(|| PortValue::new(Value::Float(0.0)));
+        let mut port = match conn.node_id.as_ref() {
+            Some(node_id) => rt
+                .outputs
+                .get(node_id)
+                .and_then(|outputs| outputs.get(&conn.output_key))
+                .cloned()
+                .or_else(|| default_port(conn))
+                .unwrap_or_else(|| PortValue::new(Value::Float(0.0))),
+            None => default_port(conn).unwrap_or_else(|| PortValue::new(Value::Float(0.0))),
+        };
 
         if let Some(selector) = &conn.selector {
+            let source_label = conn.node_id.as_deref().unwrap_or("<default>");
             let (value, shape_id) =
                 project_by_selector(&port.value, Some(&port.shape.id), selector).map_err(
                     |err| {
                         format!(
                             "selector {:?} on edge {}:{} -> {} failed: {}",
-                            selector, conn.node_id, conn.output_key, input_key, err
+                            selector, source_label, conn.output_key, input_key, err
                         )
                     },
                 )?;

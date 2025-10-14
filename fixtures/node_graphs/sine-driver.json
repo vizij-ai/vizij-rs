@@ -36,37 +36,31 @@
         "type": "sin"
       },
       {
-        "id": "one",
-        "type": "constant",
-        "params": {
-          "value": 1
-        }
-      },
-      {
         "id": "shifted",
-        "type": "add"
-      },
-      {
-        "id": "half",
-        "type": "constant",
-        "params": {
-          "value": 0.5
+        "type": "add",
+        "input_defaults": {
+          "rhs": {
+            "value": 1
+          }
         }
       },
       {
         "id": "normalized",
-        "type": "multiply"
-      },
-      {
-        "id": "duration",
-        "type": "constant",
-        "params": {
-          "value": 2
+        "type": "multiply",
+        "input_defaults": {
+          "b": {
+            "value": 0.5
+          }
         }
       },
       {
         "id": "seek_seconds",
-        "type": "multiply"
+        "type": "multiply",
+        "input_defaults": {
+          "b": {
+            "value": 2
+          }
+        }
       },
       {
         "id": "seek_out",
@@ -133,15 +127,6 @@
       },
       {
         "from": {
-          "node_id": "one"
-        },
-        "to": {
-          "node_id": "shifted",
-          "input": "rhs"
-        }
-      },
-      {
-        "from": {
           "node_id": "shifted"
         },
         "to": {
@@ -151,29 +136,11 @@
       },
       {
         "from": {
-          "node_id": "half"
-        },
-        "to": {
-          "node_id": "normalized",
-          "input": "b"
-        }
-      },
-      {
-        "from": {
           "node_id": "normalized"
         },
         "to": {
           "node_id": "seek_seconds",
           "input": "a"
-        }
-      },
-      {
-        "from": {
-          "node_id": "duration"
-        },
-        "to": {
-          "node_id": "seek_seconds",
-          "input": "b"
         }
       },
       {

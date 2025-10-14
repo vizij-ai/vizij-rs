@@ -166,6 +166,8 @@ pub struct NodeSpec {
     pub params: NodeParams,
     #[serde(default)]
     pub output_shapes: HashMap<String, Shape>,
+    #[serde(default)]
+    pub input_defaults: HashMap<String, InputDefault>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -177,15 +179,40 @@ pub struct GraphSpec {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputConnection {
-    pub node_id: NodeId,
+    #[serde(default)]
+    pub node_id: Option<NodeId>,
     #[serde(default = "default_output_key")]
     pub output_key: String,
     #[serde(default)]
     pub selector: Option<Selector>,
+    #[serde(rename = "default", default)]
+    pub default_value: Option<Value>,
+    #[serde(default)]
+    pub default_shape: Option<Shape>,
 }
 
 fn default_output_key() -> String {
     "out".to_string()
+}
+
+impl Default for InputConnection {
+    fn default() -> Self {
+        Self {
+            node_id: None,
+            output_key: default_output_key(),
+            selector: None,
+            default_value: None,
+            default_shape: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputDefault {
+    #[serde(rename = "value")]
+    pub value: Value,
+    #[serde(default)]
+    pub shape: Option<Shape>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -217,6 +244,26 @@ impl GraphSpec {
         let mut map: HashMap<NodeId, HashMap<String, InputConnection>> = HashMap::new();
         let known: HashSet<&NodeId> = self.nodes.iter().map(|n| &n.id).collect();
 
+        for node in &self.nodes {
+            if node.input_defaults.is_empty() {
+                continue;
+            }
+
+            let entry = map.entry(node.id.clone()).or_default();
+            for (input, default_spec) in &node.input_defaults {
+                entry.insert(
+                    input.clone(),
+                    InputConnection {
+                        default_value: Some(default_spec.value.clone()),
+                        default_shape: default_spec.shape.clone(),
+                        ..InputConnection::default()
+                    },
+                );
+            }
+        }
+
+        let mut seen_inputs: HashSet<(NodeId, String)> = HashSet::new();
+
         for link in &self.links {
             if !known.contains(&link.from.node_id) {
                 return Err(format!(
@@ -231,22 +278,19 @@ impl GraphSpec {
                 ));
             }
 
-            let entry = map.entry(link.to.node_id.clone()).or_default();
-            if entry.contains_key(&link.to.input) {
-                return Err(format!(
-                    "duplicate link for input '{}:{}'",
-                    link.to.node_id, link.to.input
-                ));
+            let key = (link.to.node_id.clone(), link.to.input.clone());
+            if !seen_inputs.insert(key.clone()) {
+                return Err(format!("duplicate link for input '{}:{}'", key.0, key.1));
             }
 
-            entry.insert(
-                link.to.input.clone(),
-                InputConnection {
-                    node_id: link.from.node_id.clone(),
-                    output_key: link.from.output.clone(),
-                    selector: link.selector.clone(),
-                },
-            );
+            let entry = map.entry(link.to.node_id.clone()).or_default();
+            let connection_entry = entry
+                .entry(link.to.input.clone())
+                .or_insert_with(InputConnection::default);
+
+            connection_entry.node_id = Some(link.from.node_id.clone());
+            connection_entry.output_key = link.from.output.clone();
+            connection_entry.selector = link.selector.clone();
         }
 
         Ok(map)

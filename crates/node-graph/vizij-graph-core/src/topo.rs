@@ -74,12 +74,14 @@ mod tests {
                         ..Default::default()
                     },
                     output_shapes: Default::default(),
+                    input_defaults: Default::default(),
                 },
                 NodeSpec {
                     id: "b".into(),
                     kind: NodeType::Add,
                     params: Default::default(),
                     output_shapes: Default::default(),
+                    input_defaults: Default::default(),
                 },
             ],
             links: vec![LinkSpec {

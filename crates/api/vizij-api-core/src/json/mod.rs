@@ -166,6 +166,42 @@ fn normalize_value_json_with_policy(value: JsonValue, policy: NumericArrayPolicy
     }
 }
 
+fn normalize_shape_json(shape: JsonValue) -> JsonValue {
+    match shape {
+        JsonValue::String(id) => json!({ "id": id }),
+        JsonValue::Object(obj) => JsonValue::Object(obj),
+        other => other,
+    }
+}
+
+fn normalize_input_default_entry(value: JsonValue) -> JsonValue {
+    match value {
+        JsonValue::Object(mut map) => {
+            let payload = if let Some(val) = map.remove("value") {
+                normalize_value_json(val)
+            } else if let Some(val) = map.remove("default") {
+                normalize_value_json(val)
+            } else {
+                normalize_value_json(JsonValue::Object(map.clone()))
+            };
+
+            let mut normalized = Map::new();
+            normalized.insert("value".to_string(), payload);
+
+            if let Some(shape_val) = map.remove("shape").or_else(|| map.remove("default_shape")) {
+                normalized.insert("shape".to_string(), normalize_shape_json(shape_val));
+            }
+
+            JsonValue::Object(normalized)
+        }
+        other => {
+            let mut normalized = Map::new();
+            normalized.insert("value".to_string(), normalize_value_json(other));
+            JsonValue::Object(normalized)
+        }
+    }
+}
+
 /// Convenience helper that normalizes Value JSON then deserializes it into the
 /// strongly typed [`Value`] enum. This keeps JSON shorthands consistent across
 /// call-sites (blackboard, wasm wrappers, tests).
@@ -257,32 +293,84 @@ pub fn normalize_graph_spec_value(root: &mut JsonValue) {
             }
 
             if let Some(node_map) = node.as_object_mut() {
+                let mut input_defaults_map =
+                    if let Some(existing_defaults) = node_map.remove("input_defaults") {
+                        if let Some(obj) = existing_defaults.as_object() {
+                            let mut normalized = Map::new();
+                            for (input, default_value) in obj {
+                                normalized.insert(
+                                    input.clone(),
+                                    normalize_input_default_entry(default_value.clone()),
+                                );
+                            }
+                            normalized
+                        } else {
+                            Map::new()
+                        }
+                    } else {
+                        Map::new()
+                    };
+
                 if let Some(inputs_value) = node_map.remove("inputs") {
                     if let Some(inputs_obj) = inputs_value.as_object() {
                         for (input_key, conn_value) in inputs_obj.iter() {
                             let mut from_node: Option<String> = None;
                             let mut output_key: Option<String> = None;
                             let mut selector: Option<JsonValue> = None;
+                            let mut default_payload: Option<JsonValue> = None;
+                            let mut default_shape_payload: Option<JsonValue> = None;
 
                             match conn_value {
                                 JsonValue::String(node_id) => {
                                     from_node = Some(node_id.clone());
                                 }
                                 JsonValue::Object(map) => {
-                                    if let Some(id_val) =
-                                        map.get("node_id").and_then(|v| v.as_str())
+                                    if let Some(id_val) = map
+                                        .get("node_id")
+                                        .or_else(|| map.get("node"))
+                                        .and_then(|v| v.as_str())
                                     {
                                         from_node = Some(id_val.to_string());
                                     }
                                     output_key = map
                                         .get("output_key")
+                                        .or_else(|| map.get("output"))
                                         .and_then(|v| v.as_str())
                                         .map(|s| s.to_string());
                                     if let Some(sel_val) = map.get("selector") {
                                         selector = Some(sel_val.clone());
                                     }
+                                    if let Some(default_val) =
+                                        map.get("default").or_else(|| map.get("value"))
+                                    {
+                                        default_payload = Some(default_val.clone());
+                                    }
+                                    if let Some(shape_val) =
+                                        map.get("default_shape").or_else(|| map.get("shape"))
+                                    {
+                                        default_shape_payload = Some(shape_val.clone());
+                                    }
+                                    if from_node.is_none() && default_payload.is_none() {
+                                        default_payload = Some(JsonValue::Object(map.clone()));
+                                    }
                                 }
-                                _ => {}
+                                other => {
+                                    default_payload = Some(other.clone());
+                                }
+                            }
+
+                            if let Some(payload) = default_payload {
+                                let default_entry = if let Some(shape_payload) =
+                                    default_shape_payload
+                                {
+                                    let mut default_obj = Map::new();
+                                    default_obj.insert("value".to_string(), payload);
+                                    default_obj.insert("shape".to_string(), shape_payload);
+                                    normalize_input_default_entry(JsonValue::Object(default_obj))
+                                } else {
+                                    normalize_input_default_entry(payload)
+                                };
+                                input_defaults_map.insert(input_key.clone(), default_entry);
                             }
 
                             if let Some(source_id) = from_node {
@@ -314,6 +402,13 @@ pub fn normalize_graph_spec_value(root: &mut JsonValue) {
                             }
                         }
                     }
+                }
+
+                if !input_defaults_map.is_empty() {
+                    node_map.insert(
+                        "input_defaults".to_string(),
+                        JsonValue::Object(input_defaults_map),
+                    );
                 }
             }
         }
@@ -594,5 +689,84 @@ mod tests {
             Some(0),
             "normalizer should emit an empty links array"
         );
+    }
+
+    #[test]
+    fn graph_spec_normalization_preserves_default_only_inputs() {
+        let mut root = json!({
+            "nodes": [
+                { "id": "num", "type": "constant" },
+                {
+                    "id": "div",
+                    "type": "divide",
+                    "inputs": {
+                        "lhs": "num",
+                        "rhs": 2.0
+                    }
+                }
+            ]
+        });
+
+        normalize_graph_spec_value(&mut root);
+
+        let div = &root["nodes"][1];
+        assert!(div.get("inputs").is_none(), "inputs should be stripped");
+
+        let defaults = div["input_defaults"]
+            .as_object()
+            .expect("defaults map present");
+        let rhs_default = defaults.get("rhs").expect("rhs default retained");
+        assert_eq!(rhs_default["value"]["type"], "float");
+        assert_eq!(rhs_default["value"]["data"], 2.0);
+
+        let links = root["links"].as_array().expect("links array");
+        assert_eq!(links.len(), 1, "only the lhs connection becomes a link");
+        let lhs_link = &links[0];
+        assert_eq!(lhs_link["to"]["node_id"], "div");
+        assert_eq!(lhs_link["to"]["input"], "lhs");
+    }
+
+    #[test]
+    fn graph_spec_normalization_extracts_defaults_from_connections() {
+        let mut root = json!({
+            "nodes": [
+                { "id": "config", "type": "constant" },
+                {
+                    "id": "div",
+                    "type": "divide",
+                    "inputs": {
+                        "rhs": {
+                            "node_id": "config",
+                            "output_key": "gain",
+                            "selector": [ { "index": 0 } ],
+                            "default": { "float": 0.5 },
+                            "default_shape": "Scalar"
+                        }
+                    }
+                }
+            ]
+        });
+
+        normalize_graph_spec_value(&mut root);
+
+        let div = &root["nodes"][1];
+        let defaults = div["input_defaults"]
+            .as_object()
+            .expect("defaults map present");
+        let rhs_default = defaults.get("rhs").expect("rhs default retained");
+        assert_eq!(rhs_default["value"]["type"], "float");
+        assert_eq!(rhs_default["value"]["data"], 0.5);
+        assert_eq!(rhs_default["shape"]["id"], "Scalar");
+
+        let links = root["links"].as_array().expect("links array");
+        assert_eq!(links.len(), 1, "single link retained");
+        let link = &links[0];
+        assert_eq!(link["from"]["node_id"], "config");
+        assert_eq!(link["from"]["output"], "gain");
+        let selector = link["selector"]
+            .as_array()
+            .expect("selector preserved for link");
+        assert_eq!(selector.len(), 1);
+        assert_eq!(selector[0]["index"], 0);
     }
 }

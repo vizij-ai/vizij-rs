@@ -73,6 +73,35 @@ No feature flags are required; the crate is always built with the full surface e
 - The `json` module converts shorthand objects (`{ float: 1 }`, `{ vec3: [0,1,0] }`) into canonical `Value` envelopes.
 - Shared by WASM bindings (`vizij-*-wasm`), fixtures, and hosted tools to ensure identical parsing across environments.
 - Legacy helpers (`value_to_legacy_json`, `writebatch_to_legacy_json`) keep older tools functioning during transitions.
+- Graph specs are normalised so node shorthands stay ergonomic while the runtime always sees the canonical schema:
+  - Node `type` strings are lowercased and legacy `kind` aliases are rewritten.
+  - Inline `inputs` maps are expanded into the top-level `links` array so wiring is explicit.
+  - Scalar/boolean/vector literals placed on an input (for example `"rhs": 2`) are lifted into `node.input_defaults` and survive the `inputs → links` rewrite.
+  - Connection objects can provide both wiring and fallbacks (`{ "node_id": "config", "default": 0.5 }`), which normalise into a link plus an `input_defaults` entry.
+  - Optional `default_shape` or `shape` keys are accepted (string IDs become `{ "id": "Scalar" }`) so downstream coercion can infer the intended layout.
+
+  ```jsonc
+  // authoring shorthand
+  {
+    "id": "scale",
+    "type": "multiply",
+    "inputs": {
+      "lhs": "sensor_gain",
+      "rhs": 2
+    }
+  }
+
+  // normalised representation consumed by vizij-graph-core
+  {
+    "id": "scale",
+    "type": "multiply",
+    "input_defaults": {
+      "rhs": { "value": { "type": "float", "data": 2.0 } }
+    }
+  }
+  ```
+
+  This means authors can skip boilerplate constant nodes, but hosts still receive a deterministic graph definition with explicit links and defaults.
 
 ---
 

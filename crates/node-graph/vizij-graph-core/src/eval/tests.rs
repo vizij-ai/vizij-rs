@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::types::{
-    GraphSpec, LinkInputEndpoint, LinkOutputEndpoint, LinkSpec, NodeParams, NodeSpec, NodeType,
-    SelectorSegment,
+    GraphSpec, InputDefault, LinkInputEndpoint, LinkOutputEndpoint, LinkSpec, NodeParams, NodeSpec,
+    NodeType, SelectorSegment,
 };
 use hashbrown::HashMap;
 use vizij_api_core::shape::Field;
@@ -18,6 +18,7 @@ fn constant_node(id: &str, value: Value) -> NodeSpec {
             ..Default::default()
         },
         output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
     }
 }
 
@@ -101,6 +102,7 @@ fn it_should_emit_write_for_output_nodes() {
                     ..Default::default()
                 },
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
         links: vec![link("src", "out", "in")],
@@ -135,6 +137,7 @@ fn writes_batch_json_roundtrip_from_graph() {
                     ..Default::default()
                 },
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
         links: vec![link("src", "out", "in")],
@@ -147,6 +150,117 @@ fn writes_batch_json_roundtrip_from_graph() {
     let json = serde_json::to_string(&original).expect("serialize writes");
     let parsed: WriteBatch = serde_json::from_str(&json).expect("parse writes");
     assert_eq!(original, parsed, "writes batch should roundtrip via JSON");
+}
+
+#[test]
+fn input_defaults_supply_missing_connections() {
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "rhs".to_string(),
+        InputDefault {
+            value: Value::Float(2.0),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("numerator", Value::Float(10.0)),
+            NodeSpec {
+                id: "div".to_string(),
+                kind: NodeType::Divide,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        links: vec![link("numerator", "div", "lhs")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("defaults should evaluate");
+    let outputs = rt.outputs.get("div").expect("divide outputs present");
+    let value = outputs.get("out").expect("out port").value.clone();
+    match value {
+        Value::Float(f) => assert_eq!(f, 5.0),
+        other => panic!("expected float result, got {:?}", other),
+    }
+}
+
+#[test]
+fn linked_inputs_override_defaults() {
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "rhs".to_string(),
+        InputDefault {
+            value: Value::Float(2.0),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("numerator", Value::Float(10.0)),
+            constant_node("denominator", Value::Float(5.0)),
+            NodeSpec {
+                id: "div".to_string(),
+                kind: NodeType::Divide,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        links: vec![
+            link("numerator", "div", "lhs"),
+            link("denominator", "div", "rhs"),
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("graph should evaluate");
+    let outputs = rt.outputs.get("div").expect("divide outputs present");
+    match outputs.get("out").map(|port| &port.value) {
+        Some(Value::Float(f)) => assert_eq!(*f, 2.0),
+        other => panic!("expected float output, got {:?}", other),
+    }
+}
+
+#[test]
+fn defaults_apply_when_output_key_missing() {
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "rhs".to_string(),
+        InputDefault {
+            value: Value::Float(0.25),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("numerator", Value::Float(1.0)),
+            constant_node("config", Value::Float(10.0)),
+            NodeSpec {
+                id: "div".to_string(),
+                kind: NodeType::Divide,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        links: vec![
+            link("numerator", "div", "lhs"),
+            link_with_output("config", "missing", "div", "rhs"),
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("graph should evaluate");
+    let outputs = rt.outputs.get("div").expect("divide outputs present");
+    match outputs.get("out").map(|port| &port.value) {
+        Some(Value::Float(f)) => assert_eq!(*f, 4.0),
+        other => panic!("expected float output using default, got {:?}", other),
+    }
 }
 
 // --- Variadic & oscillator behaviour ------------------------------------
@@ -163,6 +277,7 @@ fn join_respects_operand_order() {
                 kind: NodeType::Join,
                 params: NodeParams::default(),
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
         links: vec![
@@ -193,6 +308,7 @@ fn oscillator_broadcasts_vector_inputs() {
                 kind: NodeType::Oscillator,
                 params: NodeParams::default(),
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
         links: vec![
@@ -314,6 +430,7 @@ fn input_node_emits_staged_value_with_declared_shape() {
         kind: NodeType::Input,
         params,
         output_shapes,
+        input_defaults: HashMap::new(),
     };
 
     let graph = GraphSpec {
@@ -363,6 +480,7 @@ fn input_node_coerces_vector_to_declared_vec3() {
             kind: NodeType::Input,
             params,
             output_shapes,
+            input_defaults: HashMap::new(),
         }],
         ..Default::default()
     };
@@ -408,6 +526,7 @@ fn input_node_missing_numeric_returns_null() {
             kind: NodeType::Input,
             params,
             output_shapes,
+            input_defaults: HashMap::new(),
         }],
         ..Default::default()
     };
@@ -446,6 +565,7 @@ fn input_node_missing_non_numeric_errors() {
             kind: NodeType::Input,
             params,
             output_shapes,
+            input_defaults: HashMap::new(),
         }],
         ..Default::default()
     };
@@ -473,6 +593,7 @@ fn input_node_requires_restaging_each_epoch() {
             kind: NodeType::Input,
             params,
             output_shapes,
+            input_defaults: HashMap::new(),
         }],
         ..Default::default()
     };
@@ -521,6 +642,7 @@ fn selector_projects_record_field() {
                 kind: NodeType::Output,
                 params: NodeParams::default(),
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
         links: vec![link_with_selector(
@@ -565,6 +687,7 @@ fn selector_projects_transform_field_and_nested_index() {
                 kind: NodeType::Output,
                 params: NodeParams::default(),
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
         links: vec![link_with_selector(
@@ -606,6 +729,7 @@ fn selector_index_out_of_bounds_errors() {
                 kind: NodeType::Output,
                 params: NodeParams::default(),
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
         links: vec![link_with_selector(
@@ -639,6 +763,7 @@ fn spring_node_transitions_toward_new_target() {
             ..Default::default()
         },
         output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
     };
 
     let mut spec = GraphSpec {
@@ -701,6 +826,7 @@ fn damp_node_smooths_toward_target() {
             ..Default::default()
         },
         output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
     };
 
     let mut spec = GraphSpec {
@@ -760,6 +886,7 @@ fn slew_node_limits_rate_of_change() {
             ..Default::default()
         },
         output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
     };
 
     let mut spec = GraphSpec {
@@ -845,6 +972,7 @@ fn end_to_end_input_selector_scalar_math_output() {
         kind: NodeType::Input,
         params: input_params,
         output_shapes: input_output_shapes,
+        input_defaults: HashMap::new(),
     };
 
     let add_node = NodeSpec {
@@ -852,6 +980,7 @@ fn end_to_end_input_selector_scalar_math_output() {
         kind: NodeType::Add,
         params: NodeParams::default(),
         output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
     };
 
     let output_node = NodeSpec {
@@ -862,6 +991,7 @@ fn end_to_end_input_selector_scalar_math_output() {
             ..Default::default()
         },
         output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
     };
 
     let graph = GraphSpec {
