@@ -31,6 +31,7 @@ This package publishes the WebAssembly build of `vizij-orchestrator-core` togeth
 ## Key Concepts
 
 - **Controllers** – Graph and animation controllers registered with IDs; each has its own configuration (`spec`, `subscriptions`, `setup`).
+- **Graph merging** – `registerMergedGraph` rewires compatible graph specs into a single controller so shared paths become direct links.
 - **Blackboard** – Shared typed key-value store (`TypedPath`, `ValueJSON`, `ShapeJSON`) where controllers read/write.
 - **Schedule** – `SinglePass`, `TwoPass`, or future `RateDecoupled` determine evaluation order.
 - **Merged Writes** – Deterministic ordered batch of writes produced during a frame, suitable for UI or downstream consumers.
@@ -77,6 +78,7 @@ async function loadOrchestrationBundle(key: string): Promise<OrchestrationBundle
 
 ```ts
 registerGraph(cfg: GraphRegistrationInput | string): string;
+registerMergedGraph(cfg: MergedGraphRegistrationConfig): string;
 registerAnimation(cfg: AnimationRegistrationConfig): string;
 prebind(resolver: (path: string) => string | number | null | undefined): void;
 setInput(path: string, value: ValueJSON, shape?: ShapeJSON): void;
@@ -108,6 +110,40 @@ orchestrator.setInput("demo/input/value", { float: 1.0 });
 
 const frame = orchestrator.step(1 / 60);
 console.log(frame.merged_writes, frame.timings_ms);
+
+// Merge two graph specs into a single controller (auto-link shared output/input paths)
+const mergedGraphId = orchestrator.registerMergedGraph({
+  graphs: [
+    {
+      spec: {
+        nodes: [
+          { id: "source", type: "constant", params: { value: 1 } },
+          { id: "publish", type: "output", params: { path: "shared/value" } },
+        ],
+        links: [
+          { from: { node_id: "source" }, to: { node_id: "publish", input: "in" } },
+        ],
+      },
+    },
+    {
+      spec: {
+        nodes: [
+          { id: "input", type: "input", params: { path: "shared/value" } },
+          {
+            id: "double",
+            type: "multiply",
+            input_defaults: { rhs: { value: 2 } },
+          },
+          { id: "publish", type: "output", params: { path: "shared/doubled" } },
+        ],
+        links: [
+          { from: { node_id: "input" }, to: { node_id: "double", input: "lhs" } },
+          { from: { node_id: "double" }, to: { node_id: "publish", input: "in" } },
+        ],
+      },
+    },
+  ],
+});
 ```
 
 Removing controllers:

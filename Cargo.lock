@@ -3957,6 +3957,7 @@ dependencies = [
  "indexmap",
  "serde",
  "serde_json",
+ "thiserror",
  "vizij-animation-core",
  "vizij-api-core",
  "vizij-graph-core",

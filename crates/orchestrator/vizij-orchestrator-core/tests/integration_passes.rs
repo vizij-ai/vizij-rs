@@ -3,9 +3,11 @@ use vizij_api_core::{
     json::{normalize_graph_spec_json_string, parse_value},
     TypedPath, Value, WriteBatch, WriteOp,
 };
+use vizij_graph_core::eval::{evaluate_all, GraphRuntime};
 use vizij_graph_core::types::GraphSpec;
 use vizij_orchestrator::{
-    AnimationControllerConfig, GraphControllerConfig, Orchestrator, Schedule, Subscriptions,
+    AnimationControllerConfig, GraphControllerConfig, GraphMergeError, GraphMergeOptions,
+    Orchestrator, OutputConflictStrategy, Schedule, Subscriptions,
 };
 use vizij_test_fixtures::{animations, node_graphs};
 
@@ -105,6 +107,516 @@ fn two_pass_applies_graph_then_anim_then_graph_writes_and_merges() {
     assert_eq!(be_a.value, Value::Float(1.0));
     let be_b = orch.blackboard.get(&tp2.to_string()).expect("entry b");
     assert_eq!(be_b.value, Value::Float(2.0));
+}
+
+#[test]
+fn graph_uses_input_defaults_when_link_missing() {
+    let graph_json = json!({
+        "nodes": [
+            {
+                "id": "source",
+                "type": "input",
+                "params": {
+                    "path": "demo/input/value"
+                }
+            },
+            {
+                "id": "doubler",
+                "type": "multiply",
+                "input_defaults": {
+                    "rhs": {
+                        "value": { "type": "float", "data": 2.0 }
+                    }
+                }
+            },
+            {
+                "id": "out",
+                "type": "output",
+                "params": {
+                    "path": "demo/output/value"
+                }
+            }
+        ],
+        "links": [
+            {
+                "from": { "node_id": "source" },
+                "to": { "node_id": "doubler", "input": "lhs" }
+            },
+            {
+                "from": { "node_id": "doubler" },
+                "to": { "node_id": "out", "input": "in" }
+            }
+        ]
+    });
+
+    let spec: GraphSpec = serde_json::from_value(graph_json).expect("graph spec json");
+    let subs = Subscriptions {
+        inputs: vec![TypedPath::parse("demo/input/value").expect("typed path")],
+        outputs: vec![TypedPath::parse("demo/output/value").expect("typed path")],
+        mirror_writes: true,
+    };
+
+    let cfg = GraphControllerConfig {
+        id: "defaults-graph".into(),
+        spec,
+        subs,
+    };
+
+    let mut orch = Orchestrator::new(Schedule::SinglePass).with_graph(cfg);
+
+    orch.set_input(
+        "demo/input/value",
+        json!({ "type": "float", "data": 1.5 }),
+        None,
+    )
+    .expect("set input");
+
+    let frame = orch.step(1.0 / 60.0).expect("step ok");
+    let output = read_scalar_write(&frame.merged_writes, "demo/output/value");
+    assert!(
+        (output - 3.0).abs() < 1e-6,
+        "expected output 3.0 when using default rhs, got {output}"
+    );
+}
+
+#[test]
+fn merged_graph_rewires_shared_output() {
+    let producer_spec: GraphSpec = serde_json::from_value(json!({
+        "nodes": [
+            {
+                "id": "const_one",
+                "type": "constant",
+                "params": { "value": { "type": "float", "data": 1.0 } }
+            },
+            {
+                "id": "publish",
+                "type": "output",
+                "params": { "path": "shared/value" }
+            }
+        ],
+        "links": [
+            { "from": { "node_id": "const_one" }, "to": { "node_id": "publish", "input": "in" } }
+        ]
+    }))
+    .expect("producer graph");
+
+    let consumer_spec: GraphSpec = serde_json::from_value(json!({
+        "nodes": [
+            {
+                "id": "shared_input",
+                "type": "input",
+                "params": { "path": "shared/value" }
+            },
+            {
+                "id": "scale",
+                "type": "multiply",
+                "input_defaults": {
+                    "rhs": { "value": { "type": "float", "data": 2.0 } }
+                }
+            },
+            {
+                "id": "result",
+                "type": "output",
+                "params": { "path": "shared/doubled" }
+            }
+        ],
+        "links": [
+            { "from": { "node_id": "shared_input" }, "to": { "node_id": "scale", "input": "lhs" } },
+            { "from": { "node_id": "scale" }, "to": { "node_id": "result", "input": "in" } }
+        ]
+    }))
+    .expect("consumer graph");
+
+    let producer_cfg = GraphControllerConfig {
+        id: "producer".into(),
+        spec: producer_spec,
+        subs: Subscriptions {
+            inputs: Vec::new(),
+            outputs: vec![TypedPath::parse("shared/value").expect("typed path")],
+            mirror_writes: true,
+        },
+    };
+    let consumer_cfg = GraphControllerConfig {
+        id: "consumer".into(),
+        spec: consumer_spec,
+        subs: Subscriptions {
+            inputs: vec![TypedPath::parse("shared/value").expect("typed path")],
+            outputs: vec![TypedPath::parse("shared/doubled").expect("typed path")],
+            mirror_writes: true,
+        },
+    };
+
+    let merged_cfg =
+        GraphControllerConfig::merged("merged", vec![producer_cfg, consumer_cfg]).expect("merge");
+
+    let mut orch = Orchestrator::new(Schedule::SinglePass).with_graph(merged_cfg);
+    let frame = orch.step(1.0 / 60.0).expect("step ok");
+    let doubled = read_scalar_write(&frame.merged_writes, "shared/doubled");
+    assert!(
+        (doubled - 2.0).abs() < 1e-6,
+        "expected merged graph to output doubled value"
+    );
+}
+
+#[test]
+fn merged_graph_final_overlap_still_errors_with_blend_strategy() {
+    let cfg_from_json = |id: &str, spec_json: serde_json::Value| -> GraphControllerConfig {
+        let mut spec_json = spec_json;
+        vizij_api_core::json::normalize_graph_spec_value(&mut spec_json);
+        GraphControllerConfig {
+            id: id.to_string(),
+            spec: serde_json::from_value(spec_json).expect("graph spec json"),
+            subs: Subscriptions::default(),
+        }
+    };
+
+    let producer = json!({
+        "nodes": [
+            { "id": "value", "type": "constant", "params": { "value": { "float": 1.0 } } },
+            { "id": "out_final1", "type": "output", "params": { "path": "shared/a" } },
+            { "id": "out_final2", "type": "output", "params": { "path": "final/a" } }
+        ],
+        "links": [
+            { "from": { "node_id": "value" }, "to": { "node_id": "out_final1", "input": "in" } },
+            { "from": { "node_id": "value" }, "to": { "node_id": "out_final2", "input": "in" } }
+        ]
+    });
+    let consumer = json!({
+        "nodes": [
+            { "id": "value", "type": "constant", "params": { "value": { "float": 2.0 } } },
+            { "id": "in_a", "type": "input", "params": { "path": "shared/a" } },
+            { "id": "add", "type": "add", "params": { "path": "final/a" } },
+            { "id": "publish", "type": "output", "params": { "path": "final/a" } }
+        ],
+        "links": [
+            { "from": { "node_id": "in_a" }, "to": { "node_id": "add", "input": "in" } },
+            { "from": { "node_id": "value" }, "to": { "node_id": "add", "input": "in" } },
+            { "from": { "node_id": "add" }, "to": { "node_id": "publish", "input": "in" } }
+        ]
+    });
+
+    let cfg_producer = cfg_from_json("producer", producer);
+    let cfg_consumer = cfg_from_json("consumer", consumer);
+
+    let err = GraphControllerConfig::merged_with_options(
+        "bundle",
+        vec![cfg_producer, cfg_consumer],
+        GraphMergeOptions {
+            output_conflicts: OutputConflictStrategy::Error,
+            intermediate_conflicts: OutputConflictStrategy::BlendEqualWeights,
+        },
+    )
+    .expect_err("merge should fail due to final output conflict");
+
+    match err {
+        GraphMergeError::ConflictingOutputs { path, .. } => {
+            assert_eq!(path, "final/a");
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+#[test]
+fn merge_reports_conflicting_outputs() {
+    let spec_a: GraphSpec = serde_json::from_value(json!({
+        "nodes": [
+            { "id": "const_a", "type": "constant", "params": { "value": { "type": "float", "data": 1.0 } } },
+            { "id": "out_a", "type": "output", "params": { "path": "shared/value" } }
+        ],
+        "links": [
+            { "from": { "node_id": "const_a" }, "to": { "node_id": "out_a", "input": "in" } }
+        ]
+    }))
+    .expect("spec a");
+
+    let spec_b: GraphSpec = serde_json::from_value(json!({
+        "nodes": [
+            { "id": "const_b", "type": "constant", "params": { "value": { "type": "float", "data": 2.0 } } },
+            { "id": "out_b", "type": "output", "params": { "path": "shared/value" } }
+        ],
+        "links": [
+            { "from": { "node_id": "const_b" }, "to": { "node_id": "out_b", "input": "in" } }
+        ]
+    }))
+    .expect("spec b");
+
+    let cfg_a = GraphControllerConfig {
+        id: "a".into(),
+        spec: spec_a,
+        subs: Subscriptions::default(),
+    };
+    let cfg_b = GraphControllerConfig {
+        id: "b".into(),
+        spec: spec_b,
+        subs: Subscriptions::default(),
+    };
+
+    let err = GraphControllerConfig::merged("merged", vec![cfg_a, cfg_b])
+        .expect_err("merge should fail due to conflicting outputs");
+    match err {
+        GraphMergeError::ConflictingOutputs { path, .. } => {
+            assert_eq!(path, "shared/value");
+        }
+        other => panic!("unexpected merge error: {other:?}"),
+    }
+}
+
+#[test]
+fn merged_graph_parallel_blend_pipeline() {
+    fn cfg_from_json(id: &str, spec_json: serde_json::Value) -> GraphControllerConfig {
+        let mut spec_json = spec_json;
+        vizij_api_core::json::normalize_graph_spec_value(&mut spec_json);
+        GraphControllerConfig {
+            id: id.to_string(),
+            spec: serde_json::from_value(spec_json).expect("graph spec json"),
+            subs: Subscriptions::default(),
+        }
+    }
+
+    fn sanitize(path: &str) -> String {
+        path.chars()
+            .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
+            .collect()
+    }
+
+    let graph_one = json!({
+        "nodes": [
+            { "id": "const_a", "type": "constant", "params": { "value": { "float": 10.0 } } },
+            { "id": "const_b", "type": "constant", "params": { "value": { "float": 20.0 } } },
+            { "id": "const_c", "type": "constant", "params": { "value": { "float": 30.0 } } },
+            { "id": "out_a", "type": "output", "params": { "path": "shared/a" } },
+            { "id": "out_b", "type": "output", "params": { "path": "shared/b" } },
+            { "id": "out_c", "type": "output", "params": { "path": "shared/c" } }
+        ],
+        "links": [
+            { "from": { "node_id": "const_a" }, "to": { "node_id": "out_a", "input": "in" } },
+            { "from": { "node_id": "const_b" }, "to": { "node_id": "out_b", "input": "in" } },
+            { "from": { "node_id": "const_c" }, "to": { "node_id": "out_c", "input": "in" } }
+        ]
+    });
+    let graph_two = json!({
+        "nodes": [
+            { "id": "const_b", "type": "constant", "params": { "value": { "float": 200.0 } } },
+            { "id": "const_c", "type": "constant", "params": { "value": { "float": 300.0 } } },
+            { "id": "const_d", "type": "constant", "params": { "value": { "float": 400.0 } } },
+            { "id": "out_b", "type": "output", "params": { "path": "shared/b" } },
+            { "id": "out_c", "type": "output", "params": { "path": "shared/c" } },
+            { "id": "out_d", "type": "output", "params": { "path": "shared/d" } }
+        ],
+        "links": [
+            { "from": { "node_id": "const_b" }, "to": { "node_id": "out_b", "input": "in" } },
+            { "from": { "node_id": "const_c" }, "to": { "node_id": "out_c", "input": "in" } },
+            { "from": { "node_id": "const_d" }, "to": { "node_id": "out_d", "input": "in" } }
+        ]
+    });
+    let graph_three = json!({
+        "nodes": [
+            { "id": "const_c", "type": "constant", "params": { "value": { "float": 3000.0 } } },
+            { "id": "const_d", "type": "constant", "params": { "value": { "float": 4000.0 } } },
+            { "id": "const_e", "type": "constant", "params": { "value": { "float": 5000.0 } } },
+            { "id": "const_f", "type": "constant", "params": { "value": { "float": 6000.0 } } },
+            { "id": "out_c", "type": "output", "params": { "path": "shared/c" } },
+            { "id": "out_d", "type": "output", "params": { "path": "shared/d" } },
+            { "id": "out_e", "type": "output", "params": { "path": "shared/e" } },
+            { "id": "out_f", "type": "output", "params": { "path": "shared/f" } }
+        ],
+        "links": [
+            { "from": { "node_id": "const_c" }, "to": { "node_id": "out_c", "input": "in" } },
+            { "from": { "node_id": "const_d" }, "to": { "node_id": "out_d", "input": "in" } },
+            { "from": { "node_id": "const_e" }, "to": { "node_id": "out_e", "input": "in" } },
+            { "from": { "node_id": "const_f" }, "to": { "node_id": "out_f", "input": "in" } }
+        ]
+    });
+    let graph_four = json!({
+        "nodes": [
+            { "id": "in_a", "type": "input", "params": { "path": "shared/a" } },
+            { "id": "in_b", "type": "input", "params": { "path": "shared/b" } },
+            { "id": "in_c", "type": "input", "params": { "path": "shared/c" } },
+            { "id": "in_d", "type": "input", "params": { "path": "shared/d" } },
+            { "id": "in_e", "type": "input", "params": { "path": "shared/e" } },
+            { "id": "in_f", "type": "input", "params": { "path": "shared/f" } },
+            { "id": "out_a_final", "type": "output", "params": { "path": "final/a" } },
+            { "id": "out_b_final", "type": "output", "params": { "path": "final/b" } },
+            { "id": "out_c_final", "type": "output", "params": { "path": "final/c" } },
+            { "id": "out_d_final", "type": "output", "params": { "path": "final/d" } },
+            { "id": "out_e_final", "type": "output", "params": { "path": "final/e" } },
+            { "id": "out_f_final", "type": "output", "params": { "path": "final/f" } }
+        ],
+        "links": [
+            { "from": { "node_id": "in_a" }, "to": { "node_id": "out_a_final", "input": "in" } },
+            { "from": { "node_id": "in_b" }, "to": { "node_id": "out_b_final", "input": "in" } },
+            { "from": { "node_id": "in_c" }, "to": { "node_id": "out_c_final", "input": "in" } },
+            { "from": { "node_id": "in_d" }, "to": { "node_id": "out_d_final", "input": "in" } },
+            { "from": { "node_id": "in_e" }, "to": { "node_id": "out_e_final", "input": "in" } },
+            { "from": { "node_id": "in_f" }, "to": { "node_id": "out_f_final", "input": "in" } }
+        ]
+    });
+
+    let mut cfg1 = cfg_from_json("first", graph_one);
+    cfg1.subs.outputs = vec![
+        TypedPath::parse("shared/a").unwrap(),
+        TypedPath::parse("shared/b").unwrap(),
+        TypedPath::parse("shared/c").unwrap(),
+    ];
+    let mut cfg2 = cfg_from_json("second", graph_two);
+    cfg2.subs.outputs = vec![
+        TypedPath::parse("shared/b").unwrap(),
+        TypedPath::parse("shared/c").unwrap(),
+        TypedPath::parse("shared/d").unwrap(),
+    ];
+    let mut cfg3 = cfg_from_json("third", graph_three);
+    cfg3.subs.outputs = vec![
+        TypedPath::parse("shared/c").unwrap(),
+        TypedPath::parse("shared/d").unwrap(),
+        TypedPath::parse("shared/e").unwrap(),
+        TypedPath::parse("shared/f").unwrap(),
+    ];
+    let mut cfg4 = cfg_from_json("fourth", graph_four);
+    cfg4.subs.inputs = vec![
+        TypedPath::parse("shared/a").unwrap(),
+        TypedPath::parse("shared/b").unwrap(),
+        TypedPath::parse("shared/c").unwrap(),
+        TypedPath::parse("shared/d").unwrap(),
+        TypedPath::parse("shared/e").unwrap(),
+        TypedPath::parse("shared/f").unwrap(),
+    ];
+    cfg4.subs.outputs = vec![
+        TypedPath::parse("final/a").unwrap(),
+        TypedPath::parse("final/b").unwrap(),
+        TypedPath::parse("final/c").unwrap(),
+        TypedPath::parse("final/d").unwrap(),
+        TypedPath::parse("final/e").unwrap(),
+        TypedPath::parse("final/f").unwrap(),
+    ];
+
+    let merged = GraphControllerConfig::merged_with_options(
+        "bundle",
+        vec![cfg1, cfg2, cfg3, cfg4],
+        GraphMergeOptions {
+            output_conflicts: OutputConflictStrategy::Error,
+            intermediate_conflicts: OutputConflictStrategy::BlendEqualWeights,
+        },
+    )
+    .expect("merged");
+
+    let spec = &merged.spec;
+
+    let blend_paths = ["shared/b", "shared/c", "shared/d"];
+    for path in blend_paths {
+        let token = format!("blend_{}", sanitize(path));
+        let blend_node = spec
+            .nodes
+            .iter()
+            .find(|node| {
+                matches!(node.kind, vizij_graph_core::types::NodeType::DefaultBlend)
+                    && node.id.contains(&token)
+            })
+            .unwrap_or_else(|| panic!("blend node for {} missing", path));
+        let target_links: Vec<_> = spec
+            .links
+            .iter()
+            .filter(|link| link.to.node_id == blend_node.id && link.to.input.starts_with("target_"))
+            .collect();
+        let expected_sources = match path {
+            "shared/b" => 2,
+            "shared/c" => 3,
+            "shared/d" => 2,
+            _ => unreachable!(),
+        };
+        assert_eq!(
+            target_links.len(),
+            expected_sources,
+            "blend node for {} should have {} inputs",
+            path,
+            expected_sources
+        );
+        assert!(
+            !spec.nodes.iter().any(|node| matches!(
+                node.kind,
+                vizij_graph_core::types::NodeType::Input
+            ) && node.params.path.as_ref().map(|p| p.to_string())
+                == Some(path.to_string())),
+            "input node for {} should have been removed",
+            path
+        );
+    }
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, spec).expect("evaluation succeeds");
+    let writes = rt
+        .writes
+        .iter()
+        .map(|op| (op.path.to_string(), op.value.clone()))
+        .collect::<std::collections::HashMap<_, _>>();
+
+    let final_expected = [
+        ("final/a", 10.0),
+        ("final/b", (20.0 + 200.0) / 2.0),
+        ("final/c", (30.0 + 300.0 + 3000.0) / 3.0),
+        ("final/d", (400.0 + 4000.0) / 2.0),
+        ("final/e", 5000.0),
+        ("final/f", 6000.0),
+    ];
+    for (path, value) in final_expected {
+        let actual = writes
+            .get(path)
+            .unwrap_or_else(|| panic!("expected final write for {}", path));
+        match actual {
+            Value::Float(v) => assert!(
+                (v - value).abs() < 1e-6,
+                "expected {} -> {}, got {}",
+                path,
+                value,
+                v
+            ),
+            other => panic!("expected float value for {}, got {:?}", path, other),
+        }
+    }
+
+    let per_graph_expected = [
+        ("first/shared/b", 20.0),
+        ("first/shared/c", 30.0),
+        ("second/shared/b", 200.0),
+        ("second/shared/c", 300.0),
+        ("second/shared/d", 400.0),
+        ("third/shared/c", 3000.0),
+        ("third/shared/d", 4000.0),
+    ];
+    for (path, value) in per_graph_expected {
+        let actual = writes
+            .get(path)
+            .unwrap_or_else(|| panic!("expected namespaced write for {}", path));
+        match actual {
+            Value::Float(v) => assert!(
+                (v - value).abs() < 1e-6,
+                "expected {} -> {}, got {}",
+                path,
+                value,
+                v
+            ),
+            other => panic!("expected float value for {}, got {:?}", path, other),
+        }
+    }
+
+    let blend_expected = [
+        ("blend/shared/b", (20.0 + 200.0) / 2.0),
+        ("blend/shared/c", (30.0 + 300.0 + 3000.0) / 3.0),
+        ("blend/shared/d", (400.0 + 4000.0) / 2.0),
+    ];
+    for (path, value) in blend_expected {
+        let actual = writes
+            .get(path)
+            .unwrap_or_else(|| panic!("expected blend write for {}", path));
+        match actual {
+            Value::Float(v) => assert!(
+                (v - value).abs() < 1e-6,
+                "expected {} -> {}, got {}",
+                path,
+                value,
+                v
+            ),
+            other => panic!("expected float value for {}, got {:?}", path, other),
+        }
+    }
 }
 
 fn graph_fixture(name: &str) -> GraphControllerConfig {

@@ -20,7 +20,10 @@ use std::collections::HashMap;
 use vizij_api_core::WriteBatch;
 
 pub use crate::blackboard::{Blackboard, BlackboardEntry, ConflictLog};
-pub use crate::controllers::{AnimationControllerConfig, GraphControllerConfig, Subscriptions};
+pub use crate::controllers::{
+    AnimationControllerConfig, GraphControllerConfig, GraphMergeError, GraphMergeOptions,
+    OutputConflictStrategy, Subscriptions,
+};
 pub use crate::scheduler::Schedule;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,6 +67,29 @@ impl Orchestrator {
         let g = crate::controllers::graph::GraphController::new(cfg);
         self.graphs.insert(g.id.clone(), g);
         self
+    }
+
+    /// Merge multiple graph configs into a single graph controller and register it.
+    pub fn with_merged_graph(
+        self,
+        id: impl Into<String>,
+        graphs: Vec<GraphControllerConfig>,
+    ) -> Result<Self, crate::controllers::graph::GraphMergeError> {
+        self.with_merged_graph_with_options(id, graphs, GraphMergeOptions::default())
+    }
+
+    /// Merge multiple graph configs with explicit conflict options.
+    pub fn with_merged_graph_with_options(
+        mut self,
+        id: impl Into<String>,
+        graphs: Vec<GraphControllerConfig>,
+        options: GraphMergeOptions,
+    ) -> Result<Self, crate::controllers::graph::GraphMergeError> {
+        let merged_cfg = GraphControllerConfig::merged_with_options(id, graphs, options)?;
+        let graph_id = merged_cfg.id.clone();
+        let controller = crate::controllers::graph::GraphController::new(merged_cfg);
+        self.graphs.insert(graph_id, controller);
+        Ok(self)
     }
 
     /// Register an animation controller.

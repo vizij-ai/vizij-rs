@@ -31,7 +31,7 @@
 
 | Export | Description |
 |--------|-------------|
-| `class VizijOrchestrator` | Methods: constructor, `register_graph`, `register_animation`, `prebind`, `set_input`, `remove_input`, `step`, `list_controllers`, `remove_graph`, `remove_animation`. |
+| `class VizijOrchestrator` | Methods: constructor, `register_graph`, `register_merged_graph`, `register_animation`, `prebind`, `set_input`, `remove_input`, `step`, `list_controllers`, `remove_graph`, `remove_animation`. |
 | `normalize_graph_spec_json(json: &str) -> String` | Normalises GraphSpec JSON (used internally and exposed for tooling). |
 | `abi_version() -> u32` | Returns `2`; npm wrapper enforces this at init time. |
 | `utils::value_to_legacy_json` et al. | Convert `Value`/`WriteBatch` into legacy `{ vec3: [...] }` style JSON (handy for older tooling). |
@@ -70,6 +70,22 @@ console.log("ABI version", abi_version());
 const orchestrator = new VizijOrchestrator({ schedule: "SinglePass" });
 
 const graphId = orchestrator.register_graph({ spec: { nodes: [] } });
+const mergedGraphId = orchestrator.register_merged_graph({
+  graphs: [
+    { spec: { nodes: [{ id: "source", type: "constant", params: { value: 1 } }] } },
+    {
+      spec: {
+        nodes: [
+          { id: "input", type: "input", params: { path: "shared/value" } },
+          { id: "out", type: "output", params: { path: "shared/result" } }
+        ],
+        links: [
+          { from: { node_id: "input" }, to: { node_id: "out", input: "in" } }
+        ]
+      }
+    }
+  ]
+});
 const animId = orchestrator.register_animation({ setup: {} });
 
 // Optional: resolve animation targets

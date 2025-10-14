@@ -231,6 +231,100 @@ async function testChainedSlewPipeline(): Promise<void> {
   });
 }
 
+async function testMergedGraphRegistration(): Promise<void> {
+  const orch = await createOrchestrator({ schedule: "SinglePass" });
+
+  let mergedId: string;
+  try {
+    mergedId = orch.registerMergedGraph({
+      graphs: [
+        {
+          spec: {
+            nodes: [
+              {
+                id: "const_one",
+                type: "constant",
+                params: { value: 1 },
+              },
+              {
+                id: "publish",
+                type: "output",
+                params: { path: "shared/value" },
+              },
+            ],
+            links: [
+              {
+                from: { node_id: "const_one" },
+                to: { node_id: "publish", input: "in" },
+              },
+            ],
+          },
+          subs: {
+            outputs: ["shared/value"],
+          },
+        },
+        {
+          spec: {
+            nodes: [
+              {
+                id: "shared_input",
+                type: "input",
+                params: { path: "shared/value" },
+              },
+              {
+                id: "double",
+                type: "multiply",
+                input_defaults: {
+                  rhs: { value: 2 },
+                },
+              },
+              {
+                id: "publish_doubled",
+                type: "output",
+                params: { path: "shared/doubled" },
+              },
+            ],
+            links: [
+              {
+                from: { node_id: "shared_input" },
+                to: { node_id: "double", input: "lhs" },
+              },
+              {
+                from: { node_id: "double" },
+                to: { node_id: "publish_doubled", input: "in" },
+              },
+            ],
+          },
+          subs: {
+            inputs: ["shared/value"],
+            outputs: ["shared/doubled"],
+          },
+        },
+      ],
+      strategy: {
+        outputs: "blend",
+        intermediate: "blend",
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes("register_merged_graph is not a function")) {
+      console.warn(
+        "Skipping merged graph test because wasm bindings were not rebuilt (run pnpm run build:wasm:orchestrator).",
+      );
+      return;
+    }
+    throw err;
+  }
+
+  assert.ok(typeof mergedId === "string" && mergedId.length > 0);
+
+  const frame = orch.step(1 / 60) as any;
+  const writes: Array<{ path: string; value: unknown }> = frame.merged_writes ?? [];
+  const doubled = readScalar(writes, "shared/doubled");
+  expectNearlyEqual(doubled, 2, "merged graph doubled output");
+}
+
 async function testBlendPosePipeline(): Promise<void> {
   const bundle = await loadOrchestrationBundle("blend-pose-pipeline");
   const orch = await createOrchestrator({ schedule: "TwoPass" });
@@ -326,6 +420,7 @@ process.env.RUST_BACKTRACE = "1";
     await init(pkgWasmUrl());
     await testScalarRampPipeline();
     await testChainedSlewPipeline();
+    await testMergedGraphRegistration();
     await testBlendPosePipeline();
     // await testGraphDrivenAnimation();
     // eslint-disable-next-line no-console

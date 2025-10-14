@@ -31,6 +31,7 @@
 ## Features
 
 - **Subscriptions** control which blackboard paths a graph consumes (`inputs`) and which writes are published (`outputs`) with optional mirroring for internal state.
+- **Graph merging** lets you author independent graph specs and merge them into a single controller via `GraphControllerConfig::merged` / `Orchestrator::with_merged_graph`, automatically rewiring outputs to downstream inputs and namespacing node identifiers.
 - **Epoch-based staging** ensures graph runtimes only see current-frame inputs; stale entries are dropped automatically.
 - **Conflict logging** records previous vs. new values whenever multiple controllers write to the same path.
 - **Animation mapping** translates blackboard entries into `vizij-animation-core::Inputs` using a conservative naming convention.
@@ -66,7 +67,21 @@ let graph_cfg = GraphControllerConfig {
 };
 
 let mut orchestrator = Orchestrator::new(Schedule::SinglePass)
-    .with_graph(graph_cfg);
+    .with_graph(graph_cfg.clone());
+
+// Merge multiple graph specs into a single controller (auto-link shared paths)
+let merged_graph = GraphControllerConfig::merged(
+    "graph:merged",
+    vec![
+        graph_cfg,
+        GraphControllerConfig {
+            id: "graph:additional".into(),
+            spec: GraphSpec::default(),
+            subs: Subscriptions::default(),
+        },
+    ],
+)?;
+let mut orchestrator = orchestrator.with_graph(merged_graph);
 
 // Optional: inject staged inputs directly onto the blackboard
 orchestrator.set_input(

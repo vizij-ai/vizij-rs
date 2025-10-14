@@ -5,6 +5,9 @@ import type {
   AnimationSetup,
   GraphRegistrationInput,
   GraphSubscriptions,
+  MergedGraphRegistrationConfig,
+  MergeStrategyOptions,
+  MergeConflictStrategy,
   OrchestratorFrame,
   ValueJSON,
   ShapeJSON,
@@ -18,6 +21,7 @@ type WasmResolver = (path: string) => string | number | null | undefined;
 
 interface WasmOrchestratorInstance {
   register_graph(cfg: GraphRegistrationConfig | string): string;
+  register_merged_graph(cfg: MergedGraphRegistrationConfig): string;
   register_animation(cfg: AnimationRegistrationConfig): string;
   prebind(resolver: WasmResolver): void;
   set_input(path: string, value: ValueJSON, shape?: ShapeJSON): void;
@@ -101,7 +105,10 @@ export type {
   OrchestratorFrame,
   ConflictLog,
   GraphRegistrationConfig,
+  MergeStrategyOptions,
+  MergeConflictStrategy,
   GraphRegistrationInput,
+  MergedGraphRegistrationConfig,
   GraphSubscriptions,
   AnimationRegistrationConfig,
   AnimationSetup,
@@ -151,6 +158,10 @@ export class Orchestrator {
    */
   registerGraph(cfg: GraphRegistrationInput): string {
     return this.inner.register_graph(cfg);
+  }
+
+  registerMergedGraph(cfg: MergedGraphRegistrationConfig): string {
+    return this.inner.register_merged_graph(cfg);
   }
 
   /**
