@@ -224,7 +224,7 @@ impl VizijAnimation {
     #[wasm_bindgen]
     pub fn prebind(&mut self, resolver: Function) {
         let mut js_resolver = JsResolver { f: resolver };
-        self.core.prebind(&mut js_resolver);
+        let _ = self.core.prebind_with_report(&mut js_resolver);
     }
 
     /// Step the simulation by dt (seconds) with inputs JSON. Returns Outputs JSON.

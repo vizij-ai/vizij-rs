@@ -30,7 +30,7 @@ pub use baking::{
 pub use binding::{BindingSet, BindingTable, ChannelKey, TargetHandle, TargetResolver};
 pub use config::Config;
 pub use data::{AnimationData, Keypoint, Track, Transitions, Vec2};
-pub use engine::{Engine, InstanceCfg, Player};
+pub use engine::{Engine, InstanceCfg, Player, PrebindReport};
 pub use ids::{AnimId, InstId, PlayerId};
 pub use inputs::{Inputs, InstanceUpdate, LoopMode, PlayerCommand};
 pub use interp::InterpRegistry;

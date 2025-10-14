@@ -22,6 +22,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use vizij_api_core::WriteBatch;
 
+#[derive(Clone, Debug, Default)]
+pub struct PrebindReport {
+    pub total: usize,
+    pub resolved: usize,
+    pub unresolved: Vec<String>,
+}
+
 /// Per-player controller and instance list.
 #[derive(Debug)]
 pub struct Player {
@@ -349,9 +356,12 @@ impl Engine {
 
     /// One-time binding against a provided resolver.
     /// Iterates all animations/tracks and resolves canonical target paths into handles.
-    pub fn prebind(&mut self, resolver: &mut dyn TargetResolver) {
+    /// Returns a report indicating how many bindings were resolved.
+    pub fn prebind_with_report(&mut self, resolver: &mut dyn TargetResolver) -> PrebindReport {
+        let mut report = PrebindReport::default();
         for (anim_id, data) in self.anims.iter() {
             for (idx, track) in data.tracks.iter().enumerate() {
+                report.total += 1;
                 if let Some(handle) = resolver.resolve(&track.animatable_id) {
                     self.binds.upsert(
                         ChannelKey {
@@ -360,9 +370,18 @@ impl Engine {
                         },
                         handle,
                     );
+                    report.resolved += 1;
+                } else {
+                    report.unresolved.push(track.animatable_id.clone());
                 }
             }
         }
+        report
+    }
+
+    /// Backwards compatible wrapper accepting resolvers that ignore the report.
+    pub fn prebind(&mut self, resolver: &mut dyn TargetResolver) {
+        let _ = self.prebind_with_report(resolver);
     }
 
     /// Recalculate a player's full length (seconds) from its instances.
