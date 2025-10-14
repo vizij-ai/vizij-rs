@@ -117,6 +117,7 @@ impl GraphControllerConfig {
             node_id: String,
             path: Option<TypedPath>,
             graph_label: String,
+            has_default_in: bool,
         }
 
         #[derive(Clone)]
@@ -172,10 +173,12 @@ impl GraphControllerConfig {
                     }
                     NodeType::Output => {
                         let path = node.params.path.clone();
+                        let has_default_in = node.input_defaults.contains_key("in");
                         output_nodes.push(OutputNodeInfo {
                             node_id: candidate.clone(),
                             path,
                             graph_label: id.clone(),
+                            has_default_in,
                         });
                     }
                     _ => {}
@@ -205,6 +208,7 @@ impl GraphControllerConfig {
                         node_id: info.node_id.clone(),
                         path: info.path.clone(),
                         graph_label: info.graph_label.clone(),
+                        has_default_in: info.has_default_in,
                     },
                 )
             })
@@ -233,6 +237,7 @@ impl GraphControllerConfig {
                         node_id: info.node_id.clone(),
                         path: info.path.clone(),
                         graph_label: info.graph_label.clone(),
+                        has_default_in: info.has_default_in,
                     });
             }
         }
@@ -257,7 +262,7 @@ impl GraphControllerConfig {
 
         for info in &output_nodes {
             if let Some(path) = info.path.as_ref() {
-                if !bindings_by_path.contains_key(&path.to_string()) {
+                if !bindings_by_path.contains_key(&path.to_string()) && !info.has_default_in {
                     return Err(GraphMergeError::OutputMissingUpstream {
                         node_id: info.node_id.clone(),
                         graph: info.graph_label.clone(),
@@ -709,6 +714,39 @@ mod tests {
             GraphMergeError::OutputMissingUpstream { node_id, .. }
             if node_id.contains("orphan")
         ));
+    }
+
+    #[test]
+    fn merged_graph_allows_output_defaults_without_links() {
+        let spec = json!({
+            "nodes": [
+                {
+                    "id": "constant_out",
+                    "type": "output",
+                    "params": { "path": "shared/value" },
+                    "input_defaults": {
+                        "in": {
+                            "value": { "type": "float", "data": 1.0 }
+                        }
+                    }
+                }
+            ],
+            "links": []
+        });
+
+        let cfg = cfg_from_json("solo", spec);
+        let merged = GraphControllerConfig::merged("merged", vec![cfg]).expect("merge ok");
+
+        let output_node = merged
+            .spec
+            .nodes
+            .iter()
+            .find(|node| matches!(node.kind, NodeType::Output))
+            .expect("output node present");
+        assert!(
+            output_node.input_defaults.contains_key("in"),
+            "output defaults should be preserved"
+        );
     }
 
     #[test]
