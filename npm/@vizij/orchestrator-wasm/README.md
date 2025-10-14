@@ -31,11 +31,12 @@ This package publishes the WebAssembly build of `vizij-orchestrator-core` togeth
 ## Key Concepts
 
 - **Controllers** – Graph and animation controllers registered with IDs; each has its own configuration (`spec`, `subscriptions`, `setup`).
-- **Graph merging** – `registerMergedGraph` rewires compatible graph specs into a single controller so shared paths become direct links.
+- **Graph merging** – `registerMergedGraph` rewires compatible graph specs into a single controller so shared paths become direct links. Conflict strategies (`error`, `namespace`, `blend`) are available through `MergeStrategyOptions`.
 - **Blackboard** – Shared typed key-value store (`TypedPath`, `ValueJSON`, `ShapeJSON`) where controllers read/write.
 - **Schedule** – `SinglePass`, `TwoPass`, or future `RateDecoupled` determine evaluation order.
 - **Merged Writes** – Deterministic ordered batch of writes produced during a frame, suitable for UI or downstream consumers.
 - **Conflicts** – Diagnostics when multiple controllers write to the same path; useful for debugging data races.
+- **Subscriptions** – Graph controllers accept `subs.inputs`, `subs.outputs`, and `subs.mirrorWrites` to control which writes feed the blackboard vs. the merged frame.
 - **ABI Guard** – `abi_version()` ensures the JS glue matches the `.wasm` binary. Rebuild when versions change.
 
 ---
@@ -78,7 +79,7 @@ async function loadOrchestrationBundle(key: string): Promise<OrchestrationBundle
 
 ```ts
 registerGraph(cfg: GraphRegistrationInput | string): string;
-registerMergedGraph(cfg: MergedGraphRegistrationConfig): string;
+registerMergedGraph(cfg: MergedGraphRegistrationConfig): string; // merge multiple specs w/ conflict strategies
 registerAnimation(cfg: AnimationRegistrationConfig): string;
 prebind(resolver: (path: string) => string | number | null | undefined): void;
 setInput(path: string, value: ValueJSON, shape?: ShapeJSON): void;

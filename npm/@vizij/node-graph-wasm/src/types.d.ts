@@ -44,6 +44,7 @@ export type NodeType =
   | "equal"
   | "notequal"
   | "if"
+  | "case"
   | "clamp"
   | "remap"
   | "vec3cross"
@@ -63,6 +64,14 @@ export type NodeType =
   | "vectormean"
   | "vectormedian"
   | "vectormode"
+  | "weightedsumvector"
+  | "default-blend"
+  | "blendweightedaverage"
+  | "blendadditive"
+  | "blendmultiply"
+  | "blendweightedoverlay"
+  | "blendweightedaverageoverlay"
+  | "blendmax"
   | "inversekinematics"
   | "urdfikposition"
   | "urdfikpose"
@@ -117,6 +126,7 @@ export interface NodeParams {
   tol_pos?: number;
   tol_rot?: number;
   joint_defaults?: [string, number][];
+  case_labels?: string[];
 }
 
 export type SelectorSegmentJSON =

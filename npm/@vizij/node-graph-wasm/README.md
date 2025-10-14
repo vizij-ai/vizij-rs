@@ -90,6 +90,12 @@ class Graph {
 }
 ```
 
+### Normalization & Schema Helpers
+
+- `normalizeGraphSpec(spec)` – round-trips any GraphSpec (object or JSON string) through the Rust normaliser so shorthand inputs/legacy `inputs` maps come back with explicit `links`, typed paths, and canonical casing.
+- `getNodeSchemas()` – returns the runtime node registry (including new controllers like `case`, `default-blend`, weighted blend helpers, etc.) for palette/editor usage.
+- `graphSamples` – curated ready-to-load specs that already reflect the canonical `links` form and typed `path` parameters.
+
 Types (`GraphSpec`, `EvalResult`, `ValueJSON`, `ShapeJSON`, etc.) are exported from `src/types`.
 
 ---
