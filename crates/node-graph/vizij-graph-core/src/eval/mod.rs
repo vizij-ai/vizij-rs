@@ -13,7 +13,8 @@
 //!
 //! Integration code should primarily interact with [`GraphRuntime`] and [`evaluate_all`].
 
-use crate::types::GraphSpec;
+use crate::types::{GraphSpec, InputConnection};
+use hashbrown::HashMap;
 use vizij_api_core::WriteBatch;
 
 pub mod eval_node;
@@ -44,10 +45,13 @@ pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), Strin
     rt.node_states
         .retain(|id, _| spec.nodes.iter().any(|node| node.id == *id));
 
-    let order = crate::topo::topo_order(&spec.nodes)?;
+    let inputs_map = spec.input_connections()?;
+    let order = crate::topo::topo_order(&spec.nodes, &spec.links)?;
+    let empty_inputs: HashMap<String, InputConnection> = HashMap::new();
     for id in order {
         if let Some(node) = spec.nodes.iter().find(|n| n.id == id) {
-            eval_node::eval_node(rt, node)?;
+            let connections = inputs_map.get(&id).unwrap_or(&empty_inputs);
+            eval_node::eval_node(rt, node, connections)?;
         }
     }
     Ok(())

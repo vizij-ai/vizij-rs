@@ -1,4 +1,22 @@
-import type { GraphSpec } from "./types";
+import type {
+  GraphSpec,
+  LinkSpec,
+  SelectorSegmentJSON,
+} from "./types";
+
+const link = (
+  from: string,
+  to: string,
+  input: string,
+  options: { output?: string; selector?: SelectorSegmentJSON[] } = {},
+): LinkSpec => ({
+  from: {
+    node_id: from,
+    ...(options.output ? { output: options.output } : {}),
+  },
+  to: { node_id: to, input },
+  ...(options.selector ? { selector: options.selector } : {}),
+});
 
 /**
  * Minimal URDF IK Position sample.
@@ -29,17 +47,17 @@ export const urdfIkPosition: GraphSpec = {
         max_iters: 128,
         tol_pos: 0.005,
       },
-      inputs: {
-        target_pos: { node_id: "target_pos" },
-        seed: { node_id: "seed" },
-      },
     },
     {
       id: "ik_out",
       type: "output",
       params: { path: "samples/urdf.angles" },
-      inputs: { in: { node_id: "ik" } },
     },
+  ],
+  links: [
+    link("target_pos", "ik", "target_pos"),
+    link("seed", "ik", "seed"),
+    link("ik", "ik_out", "in"),
   ],
 };
 

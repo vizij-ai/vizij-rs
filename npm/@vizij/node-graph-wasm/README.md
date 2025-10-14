@@ -30,7 +30,7 @@ This package ships the WebAssembly build of `vizij-graph-core` together with a T
 
 ## Key Concepts
 
-- **GraphSpec** – Declarative JSON describing nodes, parameters, and their `inputs` maps (selectors, output keys). The package normalises shorthand specs automatically.
+- **GraphSpec** – Declarative JSON describing nodes, parameters, and the explicit `links` array that connects node outputs to inputs (selectors, output keys). The package normalises shorthand specs automatically.
 - **Graph Runtime** – The `Graph` class owns a `GraphRuntime`, handling `loadGraph`, `stageInput`, `setParam`, `step`, and `evalAll`.
 - **Staged Inputs** – Host-provided values keyed by `TypedPath`. They are latched until you replace or remove them.
 - **Evaluation Result** – `evalAll()` returns per-node port snapshots plus a `WriteBatch` of sink writes (each with Value + Shape metadata).
@@ -111,7 +111,7 @@ const graph = new Graph();
 const spec = await normalizeGraphSpec(graphSamples.vectorPlayground);
 graph.loadGraph(spec);
 
-graph.stageInput("nodes.inputA.inputs.in", { float: 1 }, undefined, true);
+graph.stageInput("demo/path", { float: 1 }, undefined, true);
 const result = graph.evalAll();
 
 const nodeValue =

@@ -40,8 +40,12 @@ fn single_output(value: Value) -> OutputMap {
 }
 
 /// Evaluate a single node, updating `rt` with new outputs and queued writes.
-pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) -> Result<(), String> {
-    let inputs = read_inputs(rt, &spec.inputs)?;
+pub fn eval_node(
+    rt: &mut GraphRuntime,
+    spec: &NodeSpec,
+    connections: &HashMap<String, InputConnection>,
+) -> Result<(), String> {
+    let inputs = read_inputs(rt, connections)?;
     let mut outputs = evaluate_kind(rt, spec, &inputs)?;
     let pending_path = spec.params.path.clone();
 

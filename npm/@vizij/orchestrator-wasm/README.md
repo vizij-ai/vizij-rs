@@ -100,7 +100,7 @@ import { init, createOrchestrator } from "@vizij/orchestrator-wasm";
 await init();
 const orchestrator = await createOrchestrator({ schedule: "SinglePass" });
 
-const graphId = orchestrator.registerGraph({ spec: { nodes: [] } });
+const graphId = orchestrator.registerGraph({ spec: { nodes: [], links: [] } });
 const animId = orchestrator.registerAnimation({ setup: {} });
 
 orchestrator.prebind((path) => path.toUpperCase());

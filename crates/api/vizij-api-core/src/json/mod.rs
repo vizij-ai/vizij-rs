@@ -185,6 +185,8 @@ pub fn parse_value_staging(value: JsonValue) -> Result<Value, serde_json::Error>
 /// Normalize a graph specification JSON value in-place. This mirrors the wasm
 /// helpers previously implemented in individual crates.
 pub fn normalize_graph_spec_value(root: &mut JsonValue) {
+    let mut converted_links: Vec<JsonValue> = Vec::new();
+
     if let Some(nodes) = root.get_mut("nodes").and_then(|n| n.as_array_mut()) {
         for node in nodes.iter_mut() {
             if let Some(kind) = node.get("kind") {
@@ -253,7 +255,85 @@ pub fn normalize_graph_spec_value(root: &mut JsonValue) {
                     }
                 }
             }
+
+            if let Some(node_map) = node.as_object_mut() {
+                if let Some(inputs_value) = node_map.remove("inputs") {
+                    if let Some(inputs_obj) = inputs_value.as_object() {
+                        for (input_key, conn_value) in inputs_obj.iter() {
+                            let mut from_node: Option<String> = None;
+                            let mut output_key: Option<String> = None;
+                            let mut selector: Option<JsonValue> = None;
+
+                            match conn_value {
+                                JsonValue::String(node_id) => {
+                                    from_node = Some(node_id.clone());
+                                }
+                                JsonValue::Object(map) => {
+                                    if let Some(id_val) =
+                                        map.get("node_id").and_then(|v| v.as_str())
+                                    {
+                                        from_node = Some(id_val.to_string());
+                                    }
+                                    output_key = map
+                                        .get("output_key")
+                                        .and_then(|v| v.as_str())
+                                        .map(|s| s.to_string());
+                                    if let Some(sel_val) = map.get("selector") {
+                                        selector = Some(sel_val.clone());
+                                    }
+                                }
+                                _ => {}
+                            }
+
+                            if let Some(source_id) = from_node {
+                                let mut link = serde_json::Map::new();
+                                let mut from_obj = serde_json::Map::new();
+                                from_obj
+                                    .insert("node_id".to_string(), JsonValue::String(source_id));
+                                if let Some(output) = output_key.clone() {
+                                    from_obj
+                                        .insert("output".to_string(), JsonValue::String(output));
+                                }
+                                let mut to_obj = serde_json::Map::new();
+                                let node_id = node_map
+                                    .get("id")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or_default()
+                                    .to_string();
+                                to_obj.insert("node_id".to_string(), JsonValue::String(node_id));
+                                to_obj.insert(
+                                    "input".to_string(),
+                                    JsonValue::String(input_key.clone()),
+                                );
+                                link.insert("from".to_string(), JsonValue::Object(from_obj));
+                                link.insert("to".to_string(), JsonValue::Object(to_obj));
+                                if let Some(sel) = selector.clone() {
+                                    link.insert("selector".to_string(), sel);
+                                }
+                                converted_links.push(JsonValue::Object(link));
+                            }
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    if !converted_links.is_empty() {
+        match root.get_mut("links") {
+            Some(existing) => {
+                if let Some(array) = existing.as_array_mut() {
+                    array.extend(converted_links);
+                } else {
+                    *existing = JsonValue::Array(converted_links);
+                }
+            }
+            None => {
+                root["links"] = JsonValue::Array(converted_links);
+            }
+        }
+    } else if root.get("links").is_none() {
+        root["links"] = JsonValue::Array(Vec::new());
     }
 }
 
@@ -455,5 +535,64 @@ mod tests {
         assert_eq!(root["nodes"][0]["type"], "node");
         assert_eq!(root["nodes"][0]["params"]["value"]["type"], "float");
         assert_eq!(root["nodes"][0]["output_shapes"]["value"]["id"], "vec3");
+    }
+
+    #[test]
+    fn graph_spec_normalization_converts_inputs_to_links() {
+        let mut root = json!({
+            "nodes": [
+                { "id": "constant", "type": "constant" },
+                {
+                    "id": "adder",
+                    "type": "add",
+                    "inputs": {
+                        "lhs": { "node_id": "constant", "output_key": "value" },
+                        "rhs": { "node_id": "constant" }
+                    }
+                }
+            ]
+        });
+
+        normalize_graph_spec_value(&mut root);
+
+        assert!(
+            root["nodes"][1].get("inputs").is_none(),
+            "inputs should be removed"
+        );
+
+        let links = root["links"].as_array().expect("links array");
+        assert_eq!(links.len(), 2, "expected two generated links");
+
+        let lhs = &links[0];
+        assert_eq!(lhs["from"]["node_id"], "constant");
+        assert_eq!(lhs["from"]["output"], "value");
+        assert_eq!(lhs["to"]["node_id"], "adder");
+        assert_eq!(lhs["to"]["input"], "lhs");
+
+        let rhs = &links[1];
+        assert_eq!(rhs["from"]["node_id"], "constant");
+        assert!(
+            rhs["from"].get("output").is_none(),
+            "default output key omitted"
+        );
+        assert_eq!(rhs["to"]["node_id"], "adder");
+        assert_eq!(rhs["to"]["input"], "rhs");
+    }
+
+    #[test]
+    fn graph_spec_normalization_injects_empty_links_array() {
+        let mut root = json!({
+            "nodes": [
+                { "id": "constant", "type": "constant" }
+            ]
+        });
+
+        normalize_graph_spec_value(&mut root);
+
+        assert_eq!(
+            root["links"].as_array().map(|a| a.len()),
+            Some(0),
+            "normalizer should emit an empty links array"
+        );
     }
 }

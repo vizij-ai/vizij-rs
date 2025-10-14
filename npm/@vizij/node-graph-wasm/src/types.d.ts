@@ -121,17 +121,28 @@ export interface NodeSpec {
   /** Rust field name is `type`, but `type` is a TS keyword; JSON still uses `"type"`. */
   type: NodeType;
   params?: NodeParams;
-  /**
-   * Map of input name to a connection specifying the source node, which output key to read,
-   * and optional selector segments for projecting structured values.
-   * Matches Rust: HashMap<String, InputConnection> where `selector` is an Option<Vec<SelectorSeg>>.
-   */
-  inputs?: Record<string, { node_id: string; output_key?: string; selector?: SelectorSegmentJSON[] }>;
   output_shapes?: Record<string, ShapeJSON>;
+}
+
+export interface LinkOutputEndpoint {
+  node_id: NodeId;
+  output?: string;
+}
+
+export interface LinkInputEndpoint {
+  node_id: NodeId;
+  input: string;
+}
+
+export interface LinkSpec {
+  from: LinkOutputEndpoint;
+  to: LinkInputEndpoint;
+  selector?: SelectorSegmentJSON[];
 }
 
 export interface GraphSpec {
   nodes: NodeSpec[];
+  links?: LinkSpec[];
 }
 
 export interface PortSnapshot {

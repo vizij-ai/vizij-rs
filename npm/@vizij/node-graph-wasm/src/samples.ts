@@ -1,4 +1,23 @@
-import type { GraphSpec, ValueJSON } from "./types";
+import type {
+  GraphSpec,
+  LinkSpec,
+  SelectorSegmentJSON,
+  ValueJSON,
+} from "./types";
+
+const link = (
+  from: string,
+  to: string,
+  input: string,
+  options: { output?: string; selector?: SelectorSegmentJSON[] } = {},
+): LinkSpec => ({
+  from: {
+    node_id: from,
+    ...(options.output ? { output: options.output } : {}),
+  },
+  to: { node_id: to, input },
+  ...(options.selector ? { selector: options.selector } : {}),
+});
 
 const textValue = (text: string): ValueJSON =>
   ({ type: "text", data: text } as unknown as ValueJSON);
@@ -18,52 +37,37 @@ export const oscillatorBasics: GraphSpec = {
   nodes: [
     { id: "time", type: "time" },
     { id: "freq", type: "slider", params: { value: 0.5, min: 0, max: 2 } },
-    {
-      id: "osc",
-      type: "oscillator",
-      inputs: {
-        frequency: { node_id: "freq" },
-        phase: { node_id: "time" },
-      },
-    },
+    { id: "osc", type: "oscillator" },
     { id: "offset", type: "constant", params: { value: 0.3 } },
-    {
-      id: "add1",
-      type: "add",
-      inputs: { a: { node_id: "osc" }, b: { node_id: "offset" } },
-    },
+    { id: "add1", type: "add" },
     { id: "const0", type: "constant", params: { value: 0 } },
     { id: "clamp_max", type: "constant", params: { value: 1 } },
-    {
-      id: "clamp1",
-      type: "clamp",
-      inputs: {
-        in: { node_id: "add1" },
-        min: { node_id: "const0" },
-        max: { node_id: "clamp_max" },
-      },
-    },
+    { id: "clamp1", type: "clamp" },
     { id: "remap_in_min", type: "constant", params: { value: 0 } },
     { id: "remap_in_max", type: "constant", params: { value: 1 } },
     { id: "remap_out_min", type: "constant", params: { value: -1 } },
     { id: "remap_out_max", type: "constant", params: { value: 1 } },
-    {
-      id: "remap1",
-      type: "remap",
-      inputs: {
-        in: { node_id: "clamp1" },
-        in_min: { node_id: "remap_in_min" },
-        in_max: { node_id: "remap_in_max" },
-        out_min: { node_id: "remap_out_min" },
-        out_max: { node_id: "remap_out_max" },
-      },
-    },
+    { id: "remap1", type: "remap" },
     {
       id: "out",
       type: "output",
       params: { path: "samples/oscillator.signal" },
-      inputs: { in: { node_id: "remap1" } },
     },
+  ],
+  links: [
+    link("freq", "osc", "frequency"),
+    link("time", "osc", "phase"),
+    link("osc", "add1", "a"),
+    link("offset", "add1", "b"),
+    link("add1", "clamp1", "in"),
+    link("const0", "clamp1", "min"),
+    link("clamp_max", "clamp1", "max"),
+    link("clamp1", "remap1", "in"),
+    link("remap_in_min", "remap1", "in_min"),
+    link("remap_in_max", "remap1", "in_max"),
+    link("remap_out_min", "remap1", "out_min"),
+    link("remap_out_max", "remap1", "out_max"),
+    link("remap1", "out", "in"),
   ],
 };
 
@@ -91,56 +95,45 @@ export const vectorPlayground: GraphSpec = {
         value: { vec3: [0, 1, 0] },
       },
     },
-    {
-      id: "vadd",
-      type: "vectoradd",
-      inputs: { a: { node_id: "v1_in" }, b: { node_id: "v2_in" } },
-    },
-    {
-      id: "vsub",
-      type: "vectorsubtract",
-      inputs: { a: { node_id: "v1_in" }, b: { node_id: "v2_in" } },
-    },
-    {
-      id: "vnorm",
-      type: "vectornormalize",
-      inputs: { in: { node_id: "v2_in" } },
-    },
-    {
-      id: "vdot",
-      type: "vectordot",
-      inputs: { a: { node_id: "vadd" }, b: { node_id: "vnorm" } },
-    },
-    {
-      id: "vlen",
-      type: "vectorlength",
-      inputs: { in: { node_id: "vadd" } },
-    },
-    // Publish each result via separate Output nodes so writes are explicit
+    { id: "vadd", type: "vectoradd" },
+    { id: "vsub", type: "vectorsubtract" },
+    { id: "vnorm", type: "vectornormalize" },
+    { id: "vdot", type: "vectordot" },
+    { id: "vlen", type: "vectorlength" },
     {
       id: "out_sum",
       type: "output",
       params: { path: "samples/vector.sum" },
-      inputs: { in: { node_id: "vadd" } },
     },
     {
       id: "out_sub",
       type: "output",
       params: { path: "samples/vector.sub" },
-      inputs: { in: { node_id: "vsub" } },
     },
     {
       id: "out_dot",
       type: "output",
       params: { path: "samples/vector.dot" },
-      inputs: { in: { node_id: "vdot" } },
     },
     {
       id: "out_len",
       type: "output",
       params: { path: "samples/vector.len" },
-      inputs: { in: { node_id: "vlen" } },
     },
+  ],
+  links: [
+    link("v1_in", "vadd", "a"),
+    link("v2_in", "vadd", "b"),
+    link("v1_in", "vsub", "a"),
+    link("v2_in", "vsub", "b"),
+    link("v2_in", "vnorm", "in"),
+    link("vadd", "vdot", "a"),
+    link("vnorm", "vdot", "b"),
+    link("vadd", "vlen", "in"),
+    link("vadd", "out_sum", "in"),
+    link("vsub", "out_sub", "in"),
+    link("vdot", "out_dot", "in"),
+    link("vlen", "out_len", "in"),
   ],
 };
 
@@ -151,30 +144,26 @@ export const vectorPlayground: GraphSpec = {
 export const logicGate: GraphSpec = {
   nodes: [
     { id: "time", type: "time" },
-    { id: "sin", type: "sin", inputs: { in: { node_id: "time" } } },
+    { id: "sin", type: "sin" },
     { id: "threshold", type: "constant", params: { value: 0 } },
-    {
-      id: "greater",
-      type: "greaterthan",
-      inputs: { lhs: { node_id: "sin" }, rhs: { node_id: "threshold" } },
-    },
+    { id: "greater", type: "greaterthan" },
     { id: "then", type: "constant", params: { value: 1 } },
     { id: "else", type: "constant", params: { value: -1 } },
-    {
-      id: "gate",
-      type: "if",
-      inputs: {
-        cond: { node_id: "greater" },
-        then: { node_id: "then" },
-        else: { node_id: "else" },
-      },
-    },
+    { id: "gate", type: "if" },
     {
       id: "out",
       type: "output",
       params: { path: "samples/logic.gated" },
-      inputs: { in: { node_id: "gate" } },
     },
+  ],
+  links: [
+    link("time", "sin", "in"),
+    link("sin", "greater", "lhs"),
+    link("threshold", "greater", "rhs"),
+    link("greater", "gate", "cond"),
+    link("then", "gate", "then"),
+    link("else", "gate", "else"),
+    link("gate", "out", "in"),
   ],
 };
 
@@ -198,83 +187,71 @@ export const tupleSpringDampSlew: GraphSpec = {
         },
       },
     },
-
-    // Spring over pos (index 0) and rot (index 1)
     {
       id: "spring_pos",
       type: "spring",
-      inputs: { in: { node_id: "pair", selector: [{ index: 0 }] } },
       params: { stiffness: 120, damping: 20, mass: 1 },
     },
     {
       id: "spring_rot",
       type: "spring",
-      inputs: { in: { node_id: "pair", selector: [{ index: 1 }] } },
       params: { stiffness: 120, damping: 20, mass: 1 },
     },
-    // Damp
     {
       id: "damp_pos",
       type: "damp",
-      inputs: { in: { node_id: "pair", selector: [{ index: 0 }] } },
       params: { half_life: 0.1 },
     },
     {
       id: "damp_rot",
       type: "damp",
-      inputs: { in: { node_id: "pair", selector: [{ index: 1 }] } },
       params: { half_life: 0.1 },
     },
-    // Slew
     {
       id: "slew_pos",
       type: "slew",
-      inputs: { in: { node_id: "pair", selector: [{ index: 0 }] } },
       params: { max_rate: 1.0 },
     },
     {
       id: "slew_rot",
       type: "slew",
-      inputs: { in: { node_id: "pair", selector: [{ index: 1 }] } },
       params: { max_rate: 1.0 },
     },
-
-    // Re-assemble each result as a concatenated Vector [pos..., rot...]
-    {
-      id: "join_spring",
-      type: "join",
-      inputs: { a: { node_id: "spring_pos" }, b: { node_id: "spring_rot" } },
-    },
-    {
-      id: "join_damp",
-      type: "join",
-      inputs: { a: { node_id: "damp_pos" }, b: { node_id: "damp_rot" } },
-    },
-    {
-      id: "join_slew",
-      type: "join",
-      inputs: { a: { node_id: "slew_pos" }, b: { node_id: "slew_rot" } },
-    },
-
-    // Outputs
+    { id: "join_spring", type: "join" },
+    { id: "join_damp", type: "join" },
+    { id: "join_slew", type: "join" },
     {
       id: "out_spring",
       type: "output",
       params: { path: "samples/tuple.spring" },
-      inputs: { in: { node_id: "join_spring" } },
     },
     {
       id: "out_damp",
       type: "output",
       params: { path: "samples/tuple.damp" },
-      inputs: { in: { node_id: "join_damp" } },
     },
     {
       id: "out_slew",
       type: "output",
       params: { path: "samples/tuple.slew" },
-      inputs: { in: { node_id: "join_slew" } },
     },
+  ],
+  links: [
+    link("pair", "spring_pos", "in", { selector: [{ index: 0 }] }),
+    link("pair", "spring_rot", "in", { selector: [{ index: 1 }] }),
+    link("pair", "damp_pos", "in", { selector: [{ index: 0 }] }),
+    link("pair", "damp_rot", "in", { selector: [{ index: 1 }] }),
+    link("pair", "slew_pos", "in", { selector: [{ index: 0 }] }),
+    link("pair", "slew_rot", "in", { selector: [{ index: 1 }] }),
+    link("spring_pos", "join_spring", "a"),
+    link("spring_rot", "join_spring", "b"),
+    link("damp_pos", "join_damp", "a"),
+    link("damp_rot", "join_damp", "b"),
+    link("slew_pos", "join_slew", "a"),
+    link("slew_rot", "join_slew", "b"),
+    link("join_spring", "out_spring", "in"),
+    link("join_damp", "out_damp", "in"),
+    link("join_slew", "out_slew", "in"),
   ],
 };
 
@@ -332,170 +309,106 @@ export const nestedTelemetry: GraphSpec = {
     },
     { id: "zero", type: "constant", params: { value: 0 } },
     { id: "two", type: "constant", params: { value: 2 } },
-    {
-      id: "accel_corrected",
-      type: "vectorsubtract",
-      inputs: {
-        a: {
-          node_id: "payload",
-          selector: [
-            { field: "sensors" },
-            { field: "accel" },
-          ],
-        },
-        b: {
-          node_id: "payload",
-          selector: [
-            { field: "calibration" },
-            { field: "offsets" },
-            { index: 0 },
-          ],
-        },
-      },
-    },
-    {
-      id: "gyro_blended",
-      type: "vectoradd",
-      inputs: {
-        a: {
-          node_id: "payload",
-          selector: [
-            { field: "sensors" },
-            { field: "gyro" },
-          ],
-        },
-        b: {
-          node_id: "payload",
-          selector: [
-            { field: "calibration" },
-            { field: "offsets" },
-            { index: 1 },
-          ],
-        },
-      },
-    },
-    {
-      id: "telemetry_join",
-      type: "join",
-      inputs: {
-        segment_1: { node_id: "accel_corrected" },
-        segment_2: { node_id: "gyro_blended" },
-      },
-    },
-    {
-      id: "calibration_pack",
-      type: "join",
-      inputs: {
-        segment_1: {
-          node_id: "payload",
-          selector: [
-            { field: "calibration" },
-            { field: "offsets" },
-            { index: 0 },
-          ],
-        },
-        segment_2: {
-          node_id: "payload",
-          selector: [
-            { field: "calibration" },
-            { field: "offsets" },
-            { index: 1 },
-          ],
-        },
-      },
-    },
-    {
-      id: "gain0_x",
-      type: "vectorindex",
-      inputs: {
-        v: {
-          node_id: "payload",
-          selector: [
-            { field: "calibration" },
-            { field: "gains" },
-            { index: 0 },
-          ],
-        },
-        index: { node_id: "zero" },
-      },
-    },
-    {
-      id: "gain1_x",
-      type: "vectorindex",
-      inputs: {
-        v: {
-          node_id: "payload",
-          selector: [
-            { field: "calibration" },
-            { field: "gains" },
-            { index: 1 },
-          ],
-        },
-        index: { node_id: "zero" },
-      },
-    },
-    {
-      id: "gain_sum",
-      type: "add",
-      inputs: {
-        lhs: { node_id: "gain0_x" },
-        rhs: { node_id: "gain1_x" },
-      },
-    },
-    {
-      id: "gain_avg",
-      type: "divide",
-      inputs: {
-        lhs: { node_id: "gain_sum" },
-        rhs: { node_id: "two" },
-      },
-    },
+    { id: "accel_corrected", type: "vectorsubtract" },
+    { id: "gyro_blended", type: "vectoradd" },
+    { id: "telemetry_join", type: "join" },
+    { id: "calibration_pack", type: "join" },
+    { id: "gain0_x", type: "vectorindex" },
+    { id: "gain1_x", type: "vectorindex" },
+    { id: "gain_sum", type: "add" },
+    { id: "gain_avg", type: "divide" },
     {
       id: "telemetry_vector_out",
       type: "output",
       params: { path: "samples/telemetry.corrected" },
-      inputs: { in: { node_id: "telemetry_join" } },
     },
     {
       id: "telemetry_gain_out",
       type: "output",
       params: { path: "samples/telemetry.gain" },
-      inputs: { in: { node_id: "gain_avg" } },
     },
     {
       id: "telemetry_offsets_out",
       type: "output",
       params: { path: "samples/telemetry.offsets" },
-      inputs: { in: { node_id: "calibration_pack" } },
     },
     {
       id: "telemetry_label_out",
       type: "output",
       params: { path: "samples/telemetry.label" },
-      inputs: {
-        in: {
-          node_id: "payload",
-          selector: [
-            { field: "metadata" },
-            { field: "label" },
-          ],
-        },
-      },
     },
     {
       id: "telemetry_active_out",
       type: "output",
       params: { path: "samples/telemetry.active" },
-      inputs: {
-        in: {
-          node_id: "payload",
-          selector: [
-            { field: "metadata" },
-            { field: "active" },
-          ],
-        },
-      },
     },
+  ],
+  links: [
+    link("payload", "accel_corrected", "a", {
+      selector: [{ field: "sensors" }, { field: "accel" }],
+    }),
+    link("payload", "accel_corrected", "b", {
+      selector: [
+        { field: "calibration" },
+        { field: "offsets" },
+        { index: 0 },
+      ],
+    }),
+    link("payload", "gyro_blended", "a", {
+      selector: [{ field: "sensors" }, { field: "gyro" }],
+    }),
+    link("payload", "gyro_blended", "b", {
+      selector: [
+        { field: "calibration" },
+        { field: "offsets" },
+        { index: 1 },
+      ],
+    }),
+    link("accel_corrected", "telemetry_join", "segment_1"),
+    link("gyro_blended", "telemetry_join", "segment_2"),
+    link("payload", "calibration_pack", "segment_1", {
+      selector: [
+        { field: "calibration" },
+        { field: "offsets" },
+        { index: 0 },
+      ],
+    }),
+    link("payload", "calibration_pack", "segment_2", {
+      selector: [
+        { field: "calibration" },
+        { field: "offsets" },
+        { index: 1 },
+      ],
+    }),
+    link("payload", "gain0_x", "v", {
+      selector: [
+        { field: "calibration" },
+        { field: "gains" },
+        { index: 0 },
+      ],
+    }),
+    link("zero", "gain0_x", "index"),
+    link("payload", "gain1_x", "v", {
+      selector: [
+        { field: "calibration" },
+        { field: "gains" },
+        { index: 1 },
+      ],
+    }),
+    link("zero", "gain1_x", "index"),
+    link("gain0_x", "gain_sum", "lhs"),
+    link("gain1_x", "gain_sum", "rhs"),
+    link("gain_sum", "gain_avg", "lhs"),
+    link("two", "gain_avg", "rhs"),
+    link("telemetry_join", "telemetry_vector_out", "in"),
+    link("gain_avg", "telemetry_gain_out", "in"),
+    link("calibration_pack", "telemetry_offsets_out", "in"),
+    link("payload", "telemetry_label_out", "in", {
+      selector: [{ field: "metadata" }, { field: "label" }],
+    }),
+    link("payload", "telemetry_active_out", "in", {
+      selector: [{ field: "metadata" }, { field: "active" }],
+    }),
   ],
 };
 
@@ -568,201 +481,141 @@ export const nestedRigWeightedPose: GraphSpec = {
         },
       },
     },
-    {
-      id: "limb0",
-      type: "vectorscale",
-      inputs: {
-        scalar: {
-          node_id: "config",
-          selector: [
-            { field: "rig" },
-            { field: "limbs" },
-            { index: 0 },
-            { field: "weight" },
-          ],
-        },
-        v: {
-          node_id: "config",
-          selector: [
-            { field: "rig" },
-            { field: "limbs" },
-            { index: 0 },
-            { field: "offset" },
-          ],
-        },
-      },
-    },
-    {
-      id: "limb1",
-      type: "vectorscale",
-      inputs: {
-        scalar: {
-          node_id: "config",
-          selector: [
-            { field: "rig" },
-            { field: "limbs" },
-            { index: 1 },
-            { field: "weight" },
-          ],
-        },
-        v: {
-          node_id: "config",
-          selector: [
-            { field: "rig" },
-            { field: "limbs" },
-            { index: 1 },
-            { field: "offset" },
-          ],
-        },
-      },
-    },
-    {
-      id: "limb_sum",
-      type: "vectoradd",
-      inputs: {
-        a: { node_id: "limb0" },
-        b: { node_id: "limb1" },
-      },
-    },
-    {
-      id: "pose_sum",
-      type: "vectoradd",
-      inputs: {
-        a: {
-          node_id: "config",
-          selector: [{ field: "rig" }, { field: "root" }],
-        },
-        b: { node_id: "limb_sum" },
-      },
-    },
-    {
-      id: "harmonic0",
-      type: "multiply",
-      inputs: {
-        operands_1: {
-          node_id: "config",
-          selector: [
-            { field: "rig" },
-            { field: "controls" },
-            { field: "harmonics" },
-            { index: 0 },
-            { field: "amplitude" },
-          ],
-        },
-        operands_2: {
-          node_id: "config",
-          selector: [
-            { field: "rig" },
-            { field: "controls" },
-            { field: "harmonics" },
-            { index: 0 },
-            { field: "frequency" },
-          ],
-        },
-      },
-    },
-    {
-      id: "harmonic1",
-      type: "multiply",
-      inputs: {
-        operands_1: {
-          node_id: "config",
-          selector: [
-            { field: "rig" },
-            { field: "controls" },
-            { field: "harmonics" },
-            { index: 1 },
-            { field: "amplitude" },
-          ],
-        },
-        operands_2: {
-          node_id: "config",
-          selector: [
-            { field: "rig" },
-            { field: "controls" },
-            { field: "harmonics" },
-            { index: 1 },
-            { field: "frequency" },
-          ],
-        },
-      },
-    },
-    {
-      id: "phase_sum",
-      type: "add",
-      inputs: {
-        operands_1: {
-          node_id: "config",
-          selector: [{ field: "rig" }, { field: "controls" }, { field: "phase" }],
-        },
-        operands_2: { node_id: "harmonic0" },
-        operands_3: { node_id: "harmonic1" },
-      },
-    },
-    {
-      id: "target_scaled",
-      type: "vectorscale",
-      inputs: {
-        scalar: { node_id: "phase_sum" },
-        v: {
-          node_id: "config",
-          selector: [
-            { field: "rig" },
-            { field: "controls" },
-            { field: "localTarget" },
-            { index: 1 },
-          ],
-        },
-      },
-    },
-    {
-      id: "target_combined",
-      type: "vectoradd",
-      inputs: {
-        a: {
-          node_id: "config",
-          selector: [
-            { field: "rig" },
-            { field: "controls" },
-            { field: "localTarget" },
-            { index: 0 },
-          ],
-        },
-        b: { node_id: "target_scaled" },
-      },
-    },
-    {
-      id: "pose_mix",
-      type: "vectoradd",
-      inputs: {
-        a: { node_id: "pose_sum" },
-        b: { node_id: "target_combined" },
-      },
-    },
+    { id: "limb0", type: "vectorscale" },
+    { id: "limb1", type: "vectorscale" },
+    { id: "limb_sum", type: "vectoradd" },
+    { id: "pose_sum", type: "vectoradd" },
+    { id: "harmonic0", type: "multiply" },
+    { id: "harmonic1", type: "multiply" },
+    { id: "phase_sum", type: "add" },
+    { id: "target_scaled", type: "vectorscale" },
+    { id: "target_combined", type: "vectoradd" },
+    { id: "pose_mix", type: "vectoradd" },
     {
       id: "out_pose",
       type: "output",
       params: { path: "samples/nested.pose" },
-      inputs: { in: { node_id: "pose_sum" } },
     },
     {
       id: "out_phase",
       type: "output",
       params: { path: "samples/nested.phase" },
-      inputs: { in: { node_id: "phase_sum" } },
     },
     {
       id: "out_target",
       type: "output",
       params: { path: "samples/nested.target" },
-      inputs: { in: { node_id: "target_combined" } },
     },
     {
       id: "out_pose_mix",
       type: "output",
       params: { path: "samples/nested.pose_mix" },
-      inputs: { in: { node_id: "pose_mix" } },
     },
+  ],
+  links: [
+    link("config", "limb0", "scalar", {
+      selector: [
+        { field: "rig" },
+        { field: "limbs" },
+        { index: 0 },
+        { field: "weight" },
+      ],
+    }),
+    link("config", "limb0", "v", {
+      selector: [
+        { field: "rig" },
+        { field: "limbs" },
+        { index: 0 },
+        { field: "offset" },
+      ],
+    }),
+    link("config", "limb1", "scalar", {
+      selector: [
+        { field: "rig" },
+        { field: "limbs" },
+        { index: 1 },
+        { field: "weight" },
+      ],
+    }),
+    link("config", "limb1", "v", {
+      selector: [
+        { field: "rig" },
+        { field: "limbs" },
+        { index: 1 },
+        { field: "offset" },
+      ],
+    }),
+    link("limb0", "limb_sum", "a"),
+    link("limb1", "limb_sum", "b"),
+    link("config", "pose_sum", "a", {
+      selector: [{ field: "rig" }, { field: "root" }],
+    }),
+    link("limb_sum", "pose_sum", "b"),
+    link("config", "harmonic0", "operands_1", {
+      selector: [
+        { field: "rig" },
+        { field: "controls" },
+        { field: "harmonics" },
+        { index: 0 },
+        { field: "amplitude" },
+      ],
+    }),
+    link("config", "harmonic0", "operands_2", {
+      selector: [
+        { field: "rig" },
+        { field: "controls" },
+        { field: "harmonics" },
+        { index: 0 },
+        { field: "frequency" },
+      ],
+    }),
+    link("config", "harmonic1", "operands_1", {
+      selector: [
+        { field: "rig" },
+        { field: "controls" },
+        { field: "harmonics" },
+        { index: 1 },
+        { field: "amplitude" },
+      ],
+    }),
+    link("config", "harmonic1", "operands_2", {
+      selector: [
+        { field: "rig" },
+        { field: "controls" },
+        { field: "harmonics" },
+        { index: 1 },
+        { field: "frequency" },
+      ],
+    }),
+    link("config", "phase_sum", "operands_1", {
+      selector: [{ field: "rig" }, { field: "controls" }, { field: "phase" }],
+    }),
+    link("harmonic0", "phase_sum", "operands_2"),
+    link("harmonic1", "phase_sum", "operands_3"),
+    link("phase_sum", "target_scaled", "scalar"),
+    link("config", "target_scaled", "v", {
+      selector: [
+        { field: "rig" },
+        { field: "controls" },
+        { field: "localTarget" },
+        { index: 1 },
+      ],
+    }),
+    link("config", "target_combined", "a", {
+      selector: [
+        { field: "rig" },
+        { field: "controls" },
+        { field: "localTarget" },
+        { index: 0 },
+      ],
+    }),
+    link("target_scaled", "target_combined", "b"),
+    link("pose_sum", "pose_mix", "a"),
+    link("target_combined", "pose_mix", "b"),
+    link("pose_sum", "out_pose", "in"),
+    link("phase_sum", "out_phase", "in"),
+    link("target_combined", "out_target", "in"),
+    link("pose_mix", "out_pose_mix", "in"),
   ],
 };
 
@@ -817,148 +670,102 @@ export const selectorCascade: GraphSpec = {
     },
     { id: "two", type: "constant", params: { value: 2.0 } },
     { id: "zero", type: "constant", params: { value: 0.0 } },
-    {
-      id: "primary_sum",
-      type: "add",
-      inputs: {
-        operands_1: {
-          node_id: "payload",
-          selector: [
-            { field: "metrics" },
-            { field: "nested" },
-            { index: 0 },
-            { field: "values" },
-            { index: 0 },
-          ],
-        },
-        operands_2: {
-          node_id: "payload",
-          selector: [
-            { field: "metrics" },
-            { field: "nested" },
-            { index: 0 },
-            { field: "values" },
-            { index: 2 },
-          ],
-        },
-      },
-    },
-    {
-      id: "primary_weighted",
-      type: "multiply",
-      inputs: {
-        operands_1: { node_id: "primary_sum" },
-        operands_2: {
-          node_id: "payload",
-          selector: [
-            { field: "metrics" },
-            { field: "nested" },
-            { index: 0 },
-            { field: "weight" },
-          ],
-        },
-      },
-    },
-    {
-      id: "secondary_sum",
-      type: "add",
-      inputs: {
-        operands_1: {
-          node_id: "payload",
-          selector: [
-            { field: "metrics" },
-            { field: "nested" },
-            { index: 1 },
-            { field: "values" },
-            { index: 0 },
-          ],
-        },
-        operands_2: {
-          node_id: "payload",
-          selector: [
-            { field: "metrics" },
-            { field: "nested" },
-            { index: 1 },
-            { field: "values" },
-            { index: 1 },
-          ],
-        },
-      },
-    },
-    {
-      id: "secondary_mean",
-      type: "divide",
-      inputs: {
-        lhs: { node_id: "secondary_sum" },
-        rhs: { node_id: "two" },
-      },
-    },
-    {
-      id: "secondary_weighted",
-      type: "multiply",
-      inputs: {
-        operands_1: { node_id: "secondary_mean" },
-        operands_2: {
-          node_id: "payload",
-          selector: [
-            { field: "metrics" },
-            { field: "nested" },
-            { index: 1 },
-            { field: "weight" },
-          ],
-        },
-      },
-    },
-    {
-      id: "offset_component",
-      type: "vectorindex",
-      inputs: {
-        v: {
-          node_id: "payload",
-          selector: [{ field: "offsets" }],
-        },
-        index: { node_id: "two" },
-      },
-    },
-    {
-      id: "gated_bias",
-      type: "if",
-      inputs: {
-        cond: {
-          node_id: "payload",
-          selector: [{ field: "toggle" }],
-        },
-        then: { node_id: "offset_component" },
-        else: { node_id: "zero" },
-      },
-    },
-    {
-      id: "final_score",
-      type: "add",
-      inputs: {
-        operands_1: { node_id: "primary_weighted" },
-        operands_2: { node_id: "secondary_weighted" },
-        operands_3: { node_id: "gated_bias" },
-      },
-    },
+    { id: "primary_sum", type: "add" },
+    { id: "primary_weighted", type: "multiply" },
+    { id: "secondary_sum", type: "add" },
+    { id: "secondary_mean", type: "divide" },
+    { id: "secondary_weighted", type: "multiply" },
+    { id: "offset_component", type: "vectorindex" },
+    { id: "gated_bias", type: "if" },
+    { id: "final_score", type: "add" },
     {
       id: "out_score",
       type: "output",
       params: { path: "samples/selector.score" },
-      inputs: { in: { node_id: "final_score" } },
     },
     {
       id: "out_secondary",
       type: "output",
       params: { path: "samples/selector.secondary_mean" },
-      inputs: { in: { node_id: "secondary_mean" } },
     },
     {
       id: "out_primary",
       type: "output",
       params: { path: "samples/selector.primary_weighted" },
-      inputs: { in: { node_id: "primary_weighted" } },
     },
+  ],
+  links: [
+    link("payload", "primary_sum", "operands_1", {
+      selector: [
+        { field: "metrics" },
+        { field: "nested" },
+        { index: 0 },
+        { field: "values" },
+        { index: 0 },
+      ],
+    }),
+    link("payload", "primary_sum", "operands_2", {
+      selector: [
+        { field: "metrics" },
+        { field: "nested" },
+        { index: 0 },
+        { field: "values" },
+        { index: 2 },
+      ],
+    }),
+    link("primary_sum", "primary_weighted", "operands_1"),
+    link("payload", "primary_weighted", "operands_2", {
+      selector: [
+        { field: "metrics" },
+        { field: "nested" },
+        { index: 0 },
+        { field: "weight" },
+      ],
+    }),
+    link("payload", "secondary_sum", "operands_1", {
+      selector: [
+        { field: "metrics" },
+        { field: "nested" },
+        { index: 1 },
+        { field: "values" },
+        { index: 0 },
+      ],
+    }),
+    link("payload", "secondary_sum", "operands_2", {
+      selector: [
+        { field: "metrics" },
+        { field: "nested" },
+        { index: 1 },
+        { field: "values" },
+        { index: 1 },
+      ],
+    }),
+    link("secondary_sum", "secondary_mean", "lhs"),
+    link("two", "secondary_mean", "rhs"),
+    link("secondary_mean", "secondary_weighted", "operands_1"),
+    link("payload", "secondary_weighted", "operands_2", {
+      selector: [
+        { field: "metrics" },
+        { field: "nested" },
+        { index: 1 },
+        { field: "weight" },
+      ],
+    }),
+    link("payload", "offset_component", "v", {
+      selector: [{ field: "offsets" }],
+    }),
+    link("two", "offset_component", "index"),
+    link("payload", "gated_bias", "cond", {
+      selector: [{ field: "toggle" }],
+    }),
+    link("offset_component", "gated_bias", "then"),
+    link("zero", "gated_bias", "else"),
+    link("primary_weighted", "final_score", "operands_1"),
+    link("secondary_weighted", "final_score", "operands_2"),
+    link("gated_bias", "final_score", "operands_3"),
+    link("final_score", "out_score", "in"),
+    link("secondary_mean", "out_secondary", "in"),
+    link("primary_weighted", "out_primary", "in"),
   ],
 };
 
@@ -1009,124 +816,78 @@ export const layeredRigBlend: GraphSpec = {
         },
       },
     },
-
-    {
-      id: "layer0_scaled",
-      type: "vectorscale",
-      inputs: {
-        v: {
-          node_id: "rig_config",
-          selector: [{ field: "layers" }, { index: 0 }, { field: "offset" }],
-        },
-        scalar: {
-          node_id: "rig_config",
-          selector: [{ field: "layers" }, { index: 0 }, { field: "weight" }],
-        },
-      },
-    },
-    {
-      id: "layer1_scaled",
-      type: "vectorscale",
-      inputs: {
-        v: {
-          node_id: "rig_config",
-          selector: [{ field: "layers" }, { index: 1 }, { field: "offset" }],
-        },
-        scalar: {
-          node_id: "rig_config",
-          selector: [{ field: "layers" }, { index: 1 }, { field: "weight" }],
-        },
-      },
-    },
-    {
-      id: "layer_sum",
-      type: "vectoradd",
-      inputs: {
-        a: { node_id: "layer0_scaled" },
-        b: { node_id: "layer1_scaled" },
-      },
-    },
-    {
-      id: "gain_scale",
-      type: "vectorscale",
-      inputs: {
-        v: { node_id: "layer_sum" },
-        scalar: { node_id: "rig_config", selector: [{ field: "gain" }] },
-      },
-    },
-    {
-      id: "pose_result",
-      type: "vectoradd",
-      inputs: {
-        a: { node_id: "gain_scale" },
-        b: { node_id: "rig_config", selector: [{ field: "base_pose" }] },
-      },
-    },
-
-    {
-      id: "weight_sum",
-      type: "add",
-      inputs: {
-        a: {
-          node_id: "rig_config",
-          selector: [{ field: "layers" }, { index: 0 }, { field: "weight" }],
-        },
-        b: {
-          node_id: "rig_config",
-          selector: [{ field: "layers" }, { index: 1 }, { field: "weight" }],
-        },
-      },
-    },
-    {
-      id: "weights_vector",
-      type: "join",
-      inputs: {
-        first: {
-          node_id: "rig_config",
-          selector: [{ field: "layers" }, { index: 0 }, { field: "weight" }],
-        },
-        second: {
-          node_id: "rig_config",
-          selector: [{ field: "layers" }, { index: 1 }, { field: "weight" }],
-        },
-        total: { node_id: "weight_sum" },
-      },
-    },
-
+    { id: "layer0_scaled", type: "vectorscale" },
+    { id: "layer1_scaled", type: "vectorscale" },
+    { id: "layer_sum", type: "vectoradd" },
+    { id: "gain_scale", type: "vectorscale" },
+    { id: "pose_result", type: "vectoradd" },
+    { id: "weight_sum", type: "add" },
+    { id: "weights_vector", type: "join" },
     {
       id: "out_pose",
       type: "output",
       params: { path: "samples/rig.pose" },
-      inputs: { in: { node_id: "pose_result" } },
     },
     {
       id: "out_weights",
       type: "output",
       params: { path: "samples/rig.weights" },
-      inputs: { in: { node_id: "weights_vector" } },
     },
     {
       id: "out_tags",
       type: "output",
       params: { path: "samples/rig.tags" },
-      inputs: {
-        in: {
-          node_id: "rig_config",
-          selector: [{ field: "info" }, { field: "tags" }],
-        },
-      },
     },
     {
       id: "out_counters",
       type: "output",
       params: { path: "samples/rig.counterTuple" },
-      inputs: {
-        in: {
-          node_id: "rig_config",
-          selector: [{ field: "info" }, { field: "counters" }],
-        },
-      },
     },
+  ],
+  links: [
+    link("rig_config", "layer0_scaled", "v", {
+      selector: [{ field: "layers" }, { index: 0 }, { field: "offset" }],
+    }),
+    link("rig_config", "layer0_scaled", "scalar", {
+      selector: [{ field: "layers" }, { index: 0 }, { field: "weight" }],
+    }),
+    link("rig_config", "layer1_scaled", "v", {
+      selector: [{ field: "layers" }, { index: 1 }, { field: "offset" }],
+    }),
+    link("rig_config", "layer1_scaled", "scalar", {
+      selector: [{ field: "layers" }, { index: 1 }, { field: "weight" }],
+    }),
+    link("layer0_scaled", "layer_sum", "a"),
+    link("layer1_scaled", "layer_sum", "b"),
+    link("layer_sum", "gain_scale", "v"),
+    link("rig_config", "gain_scale", "scalar", {
+      selector: [{ field: "gain" }],
+    }),
+    link("gain_scale", "pose_result", "a"),
+    link("rig_config", "pose_result", "b", {
+      selector: [{ field: "base_pose" }],
+    }),
+    link("rig_config", "weight_sum", "a", {
+      selector: [{ field: "layers" }, { index: 0 }, { field: "weight" }],
+    }),
+    link("rig_config", "weight_sum", "b", {
+      selector: [{ field: "layers" }, { index: 1 }, { field: "weight" }],
+    }),
+    link("rig_config", "weights_vector", "first", {
+      selector: [{ field: "layers" }, { index: 0 }, { field: "weight" }],
+    }),
+    link("rig_config", "weights_vector", "second", {
+      selector: [{ field: "layers" }, { index: 1 }, { field: "weight" }],
+    }),
+    link("weight_sum", "weights_vector", "total"),
+    link("pose_result", "out_pose", "in"),
+    link("weights_vector", "out_weights", "in"),
+    link("rig_config", "out_tags", "in", {
+      selector: [{ field: "info" }, { field: "tags" }],
+    }),
+    link("rig_config", "out_counters", "in", {
+      selector: [{ field: "info" }, { field: "counters" }],
+    }),
   ],
 };
 
@@ -1170,134 +931,97 @@ export const hierarchicalBlend: GraphSpec = {
         },
       },
     },
-    {
-      id: "ctrl0",
-      type: "vectorscale",
-      inputs: {
-        v: {
-          node_id: "rig",
-          selector: [
-            { field: "controls" },
-            { index: 0 },
-            { field: "offset" },
-          ],
-        },
-        scalar: {
-          node_id: "rig",
-          selector: [
-            { field: "controls" },
-            { index: 0 },
-            { field: "weight" },
-          ],
-        },
-      },
-    },
-    {
-      id: "ctrl1",
-      type: "vectorscale",
-      inputs: {
-        v: {
-          node_id: "rig",
-          selector: [
-            { field: "controls" },
-            { index: 1 },
-            { field: "offset" },
-          ],
-        },
-        scalar: {
-          node_id: "rig",
-          selector: [
-            { field: "controls" },
-            { index: 1 },
-            { field: "weight" },
-          ],
-        },
-      },
-    },
-    {
-      id: "combined",
-      type: "vectoradd",
-      inputs: { a: { node_id: "ctrl0" }, b: { node_id: "ctrl1" } },
-    },
-    {
-      id: "biased",
-      type: "vectoradd",
-      inputs: {
-        a: { node_id: "combined" },
-        b: { node_id: "rig", selector: [{ field: "bias" }] },
-      },
-    },
-    {
-      id: "offset_split",
-      type: "split",
-      params: { sizes: [2, 1] },
-      inputs: { in: { node_id: "biased" } },
-    },
+    { id: "ctrl0", type: "vectorscale" },
+    { id: "ctrl1", type: "vectorscale" },
+    { id: "combined", type: "vectoradd" },
+    { id: "biased", type: "vectoradd" },
+    { id: "offset_split", type: "split", params: { sizes: [2, 1] } },
     { id: "component_index", type: "constant", params: { value: 2 } },
-    {
-      id: "weight_component",
-      type: "vectorindex",
-      inputs: {
-        v: { node_id: "rig", selector: [{ field: "weights" }] },
-        index: { node_id: "component_index" },
-      },
-    },
-    {
-      id: "aim_diff",
-      type: "vectorsubtract",
-      inputs: {
-        a: {
-          node_id: "rig",
-          selector: [{ field: "aim" }, { index: 1 }],
-        },
-        b: {
-          node_id: "rig",
-          selector: [{ field: "aim" }, { index: 0 }],
-        },
-      },
-    },
-    { id: "aim_distance", type: "vectorlength", inputs: { in: { node_id: "aim_diff" } } },
-    {
-      id: "pose_join",
-      type: "join",
-      inputs: { a: { node_id: "biased" }, b: { node_id: "aim_diff" } },
-    },
+    { id: "weight_component", type: "vectorindex" },
+    { id: "aim_diff", type: "vectorsubtract" },
+    { id: "aim_distance", type: "vectorlength" },
+    { id: "pose_join", type: "join" },
     {
       id: "pose_out",
       type: "output",
       params: { path: "samples/nested.pose" },
-      inputs: { in: { node_id: "pose_join" } },
     },
     {
       id: "offset_xy_out",
       type: "output",
       params: { path: "samples/nested.offset_xy" },
-      inputs: { in: { node_id: "offset_split", output_key: "part1" } },
     },
     {
       id: "offset_z_out",
       type: "output",
       params: { path: "samples/nested.offset_z" },
-      inputs: {
-        in: {
-          node_id: "offset_split",
-          output_key: "part2",
-          selector: [{ index: 0 }],
-        },
-      },
     },
     {
       id: "aim_distance_out",
       type: "output",
       params: { path: "samples/nested.aim_distance" },
-      inputs: { in: { node_id: "aim_distance" } },
     },
     {
       id: "weight_component_out",
       type: "output",
       params: { path: "samples/nested.weight_2" },
-      inputs: { in: { node_id: "weight_component" } },
     },
+  ],
+  links: [
+    link("rig", "ctrl0", "v", {
+      selector: [
+        { field: "controls" },
+        { index: 0 },
+        { field: "offset" },
+      ],
+    }),
+    link("rig", "ctrl0", "scalar", {
+      selector: [
+        { field: "controls" },
+        { index: 0 },
+        { field: "weight" },
+      ],
+    }),
+    link("rig", "ctrl1", "v", {
+      selector: [
+        { field: "controls" },
+        { index: 1 },
+        { field: "offset" },
+      ],
+    }),
+    link("rig", "ctrl1", "scalar", {
+      selector: [
+        { field: "controls" },
+        { index: 1 },
+        { field: "weight" },
+      ],
+    }),
+    link("ctrl0", "combined", "a"),
+    link("ctrl1", "combined", "b"),
+    link("combined", "biased", "a"),
+    link("rig", "biased", "b", { selector: [{ field: "bias" }] }),
+    link("biased", "offset_split", "in"),
+    link("rig", "weight_component", "v", {
+      selector: [{ field: "weights" }],
+    }),
+    link("component_index", "weight_component", "index"),
+    link("rig", "aim_diff", "a", {
+      selector: [{ field: "aim" }, { index: 1 }],
+    }),
+    link("rig", "aim_diff", "b", {
+      selector: [{ field: "aim" }, { index: 0 }],
+    }),
+    link("aim_diff", "aim_distance", "in"),
+    link("biased", "pose_join", "a"),
+    link("aim_diff", "pose_join", "b"),
+    link("pose_join", "pose_out", "in"),
+    link("offset_split", "offset_xy_out", "in", { output: "part1" }),
+    link("offset_split", "offset_z_out", "in", {
+      output: "part2",
+      selector: [{ index: 0 }],
+    }),
+    link("aim_distance", "aim_distance_out", "in"),
+    link("weight_component", "weight_component_out", "in"),
   ],
 };
 
@@ -1336,105 +1060,70 @@ export const weightedAverage: GraphSpec = {
         },
       },
     },
-    {
-      id: "weighted_0",
-      type: "vectorscale",
-      inputs: {
-        v: {
-          node_id: "targets",
-          selector: [{ index: 0 }, { field: "value" }],
-        },
-        scalar: {
-          node_id: "targets",
-          selector: [{ index: 0 }, { field: "weight" }],
-        },
-      },
-    },
-    {
-      id: "weighted_1",
-      type: "vectorscale",
-      inputs: {
-        v: {
-          node_id: "targets",
-          selector: [{ index: 1 }, { field: "value" }],
-        },
-        scalar: {
-          node_id: "targets",
-          selector: [{ index: 1 }, { field: "weight" }],
-        },
-      },
-    },
-    {
-      id: "weighted_2",
-      type: "vectorscale",
-      inputs: {
-        v: {
-          node_id: "targets",
-          selector: [{ index: 2 }, { field: "value" }],
-        },
-        scalar: {
-          node_id: "targets",
-          selector: [{ index: 2 }, { field: "weight" }],
-        },
-      },
-    },
-    {
-      id: "weighted_sum_ab",
-      type: "vectoradd",
-      inputs: { a: { node_id: "weighted_0" }, b: { node_id: "weighted_1" } },
-    },
-    {
-      id: "weighted_sum",
-      type: "vectoradd",
-      inputs: { a: { node_id: "weighted_sum_ab" }, b: { node_id: "weighted_2" } },
-    },
-    {
-      id: "weight_sum",
-      type: "add",
-      inputs: {
-        weight_0: {
-          node_id: "targets",
-          selector: [{ index: 0 }, { field: "weight" }],
-        },
-        weight_1: {
-          node_id: "targets",
-          selector: [{ index: 1 }, { field: "weight" }],
-        },
-        weight_2: {
-          node_id: "targets",
-          selector: [{ index: 2 }, { field: "weight" }],
-        },
-      },
-    },
+    { id: "weighted_0", type: "vectorscale" },
+    { id: "weighted_1", type: "vectorscale" },
+    { id: "weighted_2", type: "vectorscale" },
+    { id: "weighted_sum_ab", type: "vectoradd" },
+    { id: "weighted_sum", type: "vectoradd" },
+    { id: "weight_sum", type: "add" },
     { id: "one", type: "constant", params: { value: 1 } },
-    {
-      id: "inv_weight",
-      type: "divide",
-      inputs: { lhs: { node_id: "one" }, rhs: { node_id: "weight_sum" } },
-    },
-    {
-      id: "average",
-      type: "vectorscale",
-      inputs: { v: { node_id: "weighted_sum" }, scalar: { node_id: "inv_weight" } },
-    },
+    { id: "inv_weight", type: "divide" },
+    { id: "average", type: "vectorscale" },
     {
       id: "sum_out",
       type: "output",
       params: { path: "samples/weighted.sum" },
-      inputs: { in: { node_id: "weighted_sum" } },
     },
     {
       id: "avg_out",
       type: "output",
       params: { path: "samples/weighted.average" },
-      inputs: { in: { node_id: "average" } },
     },
     {
       id: "total_out",
       type: "output",
       params: { path: "samples/weighted.total" },
-      inputs: { in: { node_id: "weight_sum" } },
     },
+  ],
+  links: [
+    link("targets", "weighted_0", "v", {
+      selector: [{ index: 0 }, { field: "value" }],
+    }),
+    link("targets", "weighted_0", "scalar", {
+      selector: [{ index: 0 }, { field: "weight" }],
+    }),
+    link("targets", "weighted_1", "v", {
+      selector: [{ index: 1 }, { field: "value" }],
+    }),
+    link("targets", "weighted_1", "scalar", {
+      selector: [{ index: 1 }, { field: "weight" }],
+    }),
+    link("targets", "weighted_2", "v", {
+      selector: [{ index: 2 }, { field: "value" }],
+    }),
+    link("targets", "weighted_2", "scalar", {
+      selector: [{ index: 2 }, { field: "weight" }],
+    }),
+    link("weighted_0", "weighted_sum_ab", "a"),
+    link("weighted_1", "weighted_sum_ab", "b"),
+    link("weighted_sum_ab", "weighted_sum", "a"),
+    link("weighted_2", "weighted_sum", "b"),
+    link("targets", "weight_sum", "weight_0", {
+      selector: [{ index: 0 }, { field: "weight" }],
+    }),
+    link("targets", "weight_sum", "weight_1", {
+      selector: [{ index: 1 }, { field: "weight" }],
+    }),
+    link("targets", "weight_sum", "weight_2", {
+      selector: [{ index: 2 }, { field: "weight" }],
+    }),
+    link("one", "inv_weight", "lhs"),
+    link("weight_sum", "inv_weight", "rhs"),
+    link("weighted_sum", "average", "v"),
+    link("inv_weight", "average", "scalar"),
+    link("weighted_sum", "sum_out", "in"),
+    link("average", "avg_out", "in"),
+    link("weight_sum", "total_out", "in"),
   ],
 };
 

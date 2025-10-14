@@ -9,66 +9,191 @@
           "value": 0
         }
       },
-      { "id": "freq", "type": "constant", "params": { "value": 0.5 } },
       {
-        "id": "time_scaled",
-        "type": "multiply",
-        "inputs": {
-          "a": { "node_id": "host_time" },
-          "b": { "node_id": "freq" }
+        "id": "freq",
+        "type": "constant",
+        "params": {
+          "value": 0.5
         }
       },
-      { "id": "tau", "type": "constant", "params": { "value": 6.283185307179586 } },
+      {
+        "id": "time_scaled",
+        "type": "multiply"
+      },
+      {
+        "id": "tau",
+        "type": "constant",
+        "params": {
+          "value": 6.283185307179586
+        }
+      },
       {
         "id": "phase",
-        "type": "multiply",
-        "inputs": {
-          "a": { "node_id": "time_scaled" },
-          "b": { "node_id": "tau" }
-        }
+        "type": "multiply"
       },
       {
         "id": "sin_val",
-        "type": "sin",
-        "inputs": { "in": { "node_id": "phase" } }
+        "type": "sin"
       },
-      { "id": "one", "type": "constant", "params": { "value": 1 } },
+      {
+        "id": "one",
+        "type": "constant",
+        "params": {
+          "value": 1
+        }
+      },
       {
         "id": "shifted",
-        "type": "add",
-        "inputs": {
-          "lhs": { "node_id": "sin_val" },
-          "rhs": { "node_id": "one" }
+        "type": "add"
+      },
+      {
+        "id": "half",
+        "type": "constant",
+        "params": {
+          "value": 0.5
         }
       },
-      { "id": "half", "type": "constant", "params": { "value": 0.5 } },
       {
         "id": "normalized",
-        "type": "multiply",
-        "inputs": {
-          "a": { "node_id": "shifted" },
-          "b": { "node_id": "half" }
+        "type": "multiply"
+      },
+      {
+        "id": "duration",
+        "type": "constant",
+        "params": {
+          "value": 2
         }
       },
-      { "id": "duration", "type": "constant", "params": { "value": 2 } },
       {
         "id": "seek_seconds",
-        "type": "multiply",
-        "inputs": {
-          "a": { "node_id": "normalized" },
-          "b": { "node_id": "duration" }
-        }
+        "type": "multiply"
       },
       {
         "id": "seek_out",
         "type": "output",
-        "params": { "path": "anim/player/0/cmd/seek" },
-        "inputs": { "in": { "node_id": "seek_seconds" } }
+        "params": {
+          "path": "anim/player/0/cmd/seek"
+        }
+      }
+    ],
+    "links": [
+      {
+        "from": {
+          "node_id": "host_time"
+        },
+        "to": {
+          "node_id": "time_scaled",
+          "input": "a"
+        }
+      },
+      {
+        "from": {
+          "node_id": "freq"
+        },
+        "to": {
+          "node_id": "time_scaled",
+          "input": "b"
+        }
+      },
+      {
+        "from": {
+          "node_id": "time_scaled"
+        },
+        "to": {
+          "node_id": "phase",
+          "input": "a"
+        }
+      },
+      {
+        "from": {
+          "node_id": "tau"
+        },
+        "to": {
+          "node_id": "phase",
+          "input": "b"
+        }
+      },
+      {
+        "from": {
+          "node_id": "phase"
+        },
+        "to": {
+          "node_id": "sin_val",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "sin_val"
+        },
+        "to": {
+          "node_id": "shifted",
+          "input": "lhs"
+        }
+      },
+      {
+        "from": {
+          "node_id": "one"
+        },
+        "to": {
+          "node_id": "shifted",
+          "input": "rhs"
+        }
+      },
+      {
+        "from": {
+          "node_id": "shifted"
+        },
+        "to": {
+          "node_id": "normalized",
+          "input": "a"
+        }
+      },
+      {
+        "from": {
+          "node_id": "half"
+        },
+        "to": {
+          "node_id": "normalized",
+          "input": "b"
+        }
+      },
+      {
+        "from": {
+          "node_id": "normalized"
+        },
+        "to": {
+          "node_id": "seek_seconds",
+          "input": "a"
+        }
+      },
+      {
+        "from": {
+          "node_id": "duration"
+        },
+        "to": {
+          "node_id": "seek_seconds",
+          "input": "b"
+        }
+      },
+      {
+        "from": {
+          "node_id": "seek_seconds"
+        },
+        "to": {
+          "node_id": "seek_out",
+          "input": "in"
+        }
       }
     ]
   },
   "subs": {
-    "inputs": ["driver/time.seconds"],
-    "outputs": ["anim/player/0/cmd/seek"]
-  }
+    "inputs": [
+      "driver/time.seconds"
+    ],
+    "outputs": [
+      "anim/player/0/cmd/seek"
+    ]
+  },
+  "links": []
 }

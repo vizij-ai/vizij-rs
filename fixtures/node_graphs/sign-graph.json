@@ -9,53 +9,160 @@
           "value": 0
         }
       },
-      { "id": "zero", "type": "constant", "params": { "value": 0 } },
-      { "id": "one", "type": "constant", "params": { "value": 1 } },
-      { "id": "neg_one", "type": "constant", "params": { "value": -1 } },
+      {
+        "id": "zero",
+        "type": "constant",
+        "params": {
+          "value": 0
+        }
+      },
+      {
+        "id": "one",
+        "type": "constant",
+        "params": {
+          "value": 1
+        }
+      },
+      {
+        "id": "neg_one",
+        "type": "constant",
+        "params": {
+          "value": -1
+        }
+      },
       {
         "id": "gt_zero",
-        "type": "greaterthan",
-        "inputs": {
-          "lhs": { "node_id": "ramp_in" },
-          "rhs": { "node_id": "zero" }
-        }
+        "type": "greaterthan"
       },
       {
         "id": "lt_zero",
-        "type": "lessthan",
-        "inputs": {
-          "lhs": { "node_id": "ramp_in" },
-          "rhs": { "node_id": "zero" }
-        }
+        "type": "lessthan"
       },
       {
         "id": "neg_or_zero",
-        "type": "if",
-        "inputs": {
-          "cond": { "node_id": "lt_zero" },
-          "then": { "node_id": "neg_one" },
-          "else": { "node_id": "zero" }
-        }
+        "type": "if"
       },
       {
         "id": "sign_value",
-        "type": "if",
-        "inputs": {
-          "cond": { "node_id": "gt_zero" },
-          "then": { "node_id": "one" },
-          "else": { "node_id": "neg_or_zero" }
-        }
+        "type": "if"
       },
       {
         "id": "sign_out",
         "type": "output",
-        "params": { "path": "chain/sign.value" },
-        "inputs": { "in": { "node_id": "sign_value" } }
+        "params": {
+          "path": "chain/sign.value"
+        }
+      }
+    ],
+    "links": [
+      {
+        "from": {
+          "node_id": "ramp_in"
+        },
+        "to": {
+          "node_id": "gt_zero",
+          "input": "lhs"
+        }
+      },
+      {
+        "from": {
+          "node_id": "zero"
+        },
+        "to": {
+          "node_id": "gt_zero",
+          "input": "rhs"
+        }
+      },
+      {
+        "from": {
+          "node_id": "ramp_in"
+        },
+        "to": {
+          "node_id": "lt_zero",
+          "input": "lhs"
+        }
+      },
+      {
+        "from": {
+          "node_id": "zero"
+        },
+        "to": {
+          "node_id": "lt_zero",
+          "input": "rhs"
+        }
+      },
+      {
+        "from": {
+          "node_id": "lt_zero"
+        },
+        "to": {
+          "node_id": "neg_or_zero",
+          "input": "cond"
+        }
+      },
+      {
+        "from": {
+          "node_id": "neg_one"
+        },
+        "to": {
+          "node_id": "neg_or_zero",
+          "input": "then"
+        }
+      },
+      {
+        "from": {
+          "node_id": "zero"
+        },
+        "to": {
+          "node_id": "neg_or_zero",
+          "input": "else"
+        }
+      },
+      {
+        "from": {
+          "node_id": "gt_zero"
+        },
+        "to": {
+          "node_id": "sign_value",
+          "input": "cond"
+        }
+      },
+      {
+        "from": {
+          "node_id": "one"
+        },
+        "to": {
+          "node_id": "sign_value",
+          "input": "then"
+        }
+      },
+      {
+        "from": {
+          "node_id": "neg_or_zero"
+        },
+        "to": {
+          "node_id": "sign_value",
+          "input": "else"
+        }
+      },
+      {
+        "from": {
+          "node_id": "sign_value"
+        },
+        "to": {
+          "node_id": "sign_out",
+          "input": "in"
+        }
       }
     ]
   },
   "subs": {
-    "inputs": ["chain/ramp.value"],
-    "outputs": ["chain/sign.value"]
-  }
+    "inputs": [
+      "chain/ramp.value"
+    ],
+    "outputs": [
+      "chain/sign.value"
+    ]
+  },
+  "links": []
 }

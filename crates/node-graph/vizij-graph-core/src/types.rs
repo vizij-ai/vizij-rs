@@ -1,4 +1,4 @@
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use vizij_api_core::{Shape, TypedPath, Value};
 
@@ -157,6 +157,25 @@ pub struct NodeParams {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeSpec {
+    pub id: NodeId,
+    /// Accept either `"type"` (preferred) or legacy `"kind"` in incoming JSON.
+    #[serde(rename = "type", alias = "kind")]
+    pub kind: NodeType,
+    #[serde(default)]
+    pub params: NodeParams,
+    #[serde(default)]
+    pub output_shapes: HashMap<String, Shape>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GraphSpec {
+    pub nodes: Vec<NodeSpec>,
+    #[serde(default)]
+    pub links: Vec<LinkSpec>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputConnection {
     pub node_id: NodeId,
     #[serde(default = "default_output_key")]
@@ -170,20 +189,66 @@ fn default_output_key() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NodeSpec {
-    pub id: NodeId,
-    /// Accept either `"type"` (preferred) or legacy `"kind"` in incoming JSON.
-    #[serde(rename = "type", alias = "kind")]
-    pub kind: NodeType,
-    #[serde(default)]
-    pub params: NodeParams,
-    #[serde(default)]
-    pub inputs: HashMap<String, InputConnection>,
-    #[serde(default)]
-    pub output_shapes: HashMap<String, Shape>,
+pub struct LinkOutputEndpoint {
+    pub node_id: NodeId,
+    #[serde(default = "default_output_key")]
+    pub output: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct GraphSpec {
-    pub nodes: Vec<NodeSpec>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkInputEndpoint {
+    pub node_id: NodeId,
+    pub input: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkSpec {
+    pub from: LinkOutputEndpoint,
+    pub to: LinkInputEndpoint,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub selector: Option<Selector>,
+}
+
+impl GraphSpec {
+    pub fn input_connections(
+        &self,
+    ) -> Result<HashMap<NodeId, HashMap<String, InputConnection>>, String> {
+        let mut map: HashMap<NodeId, HashMap<String, InputConnection>> = HashMap::new();
+        let known: HashSet<&NodeId> = self.nodes.iter().map(|n| &n.id).collect();
+
+        for link in &self.links {
+            if !known.contains(&link.from.node_id) {
+                return Err(format!(
+                    "link references missing source node '{}'",
+                    link.from.node_id
+                ));
+            }
+            if !known.contains(&link.to.node_id) {
+                return Err(format!(
+                    "link references missing target node '{}'",
+                    link.to.node_id
+                ));
+            }
+
+            let entry = map.entry(link.to.node_id.clone()).or_default();
+            if entry.contains_key(&link.to.input) {
+                return Err(format!(
+                    "duplicate link for input '{}:{}'",
+                    link.to.node_id, link.to.input
+                ));
+            }
+
+            entry.insert(
+                link.to.input.clone(),
+                InputConnection {
+                    node_id: link.from.node_id.clone(),
+                    output_key: link.from.output.clone(),
+                    selector: link.selector.clone(),
+                },
+            );
+        }
+
+        Ok(map)
+    }
 }

@@ -13,159 +13,343 @@
                   "record": {
                     "samples": {
                       "tuple": [
-                        { "vector": [0.1, 0.2, 0.3] },
-                        { "vector": [-0.1, 0.4, 0.5] }
+                        {
+                          "vector": [
+                            0.1,
+                            0.2,
+                            0.3
+                          ]
+                        },
+                        {
+                          "vector": [
+                            -0.1,
+                            0.4,
+                            0.5
+                          ]
+                        }
                       ]
                     },
-                    "gain": { "float": 1.2 }
+                    "gain": {
+                      "float": 1.2
+                    }
                   }
                 },
                 {
                   "record": {
                     "samples": {
                       "tuple": [
-                        { "vector": [0.05, -0.05, 0.1] },
-                        { "vector": [0.25, 0.15, -0.05] }
+                        {
+                          "vector": [
+                            0.05,
+                            -0.05,
+                            0.1
+                          ]
+                        },
+                        {
+                          "vector": [
+                            0.25,
+                            0.15,
+                            -0.05
+                          ]
+                        }
                       ]
                     },
-                    "gain": { "float": 0.6 }
+                    "gain": {
+                      "float": 0.6
+                    }
                   }
                 }
               ]
             },
             "mask": {
               "array": [
-                { "bool": true },
-                { "bool": false }
+                {
+                  "bool": true
+                },
+                {
+                  "bool": false
+                }
               ]
             },
-            "bias": { "float": -0.15 }
+            "bias": {
+              "float": -0.15
+            }
           }
         }
       }
     },
     {
       "id": "primary_scale",
-      "type": "vectorscale",
-      "inputs": {
-        "scalar": {
-          "node_id": "payload",
-          "selector": [
-            { "field": "layers" },
-            { "index": 0 },
-            { "field": "gain" }
-          ]
-        },
-        "v": {
-          "node_id": "payload",
-          "selector": [
-            { "field": "layers" },
-            { "index": 0 },
-            { "field": "samples" },
-            { "index": 1 }
-          ]
-        }
-      }
+      "type": "vectorscale"
     },
     {
       "id": "primary_blend",
-      "type": "vectoradd",
-      "inputs": {
-        "a": {
-          "node_id": "payload",
-          "selector": [
-            { "field": "layers" },
-            { "index": 0 },
-            { "field": "samples" },
-            { "index": 0 }
-          ]
-        },
-        "b": { "node_id": "primary_scale" }
-      }
+      "type": "vectoradd"
     },
     {
       "id": "secondary_scale",
-      "type": "vectorscale",
-      "inputs": {
-        "scalar": {
-          "node_id": "payload",
-          "selector": [
-            { "field": "layers" },
-            { "index": 1 },
-            { "field": "gain" }
-          ]
-        },
-        "v": {
-          "node_id": "payload",
-          "selector": [
-            { "field": "layers" },
-            { "index": 1 },
-            { "field": "samples" },
-            { "index": 1 }
-          ]
-        }
-      }
+      "type": "vectorscale"
     },
     {
       "id": "secondary_blend",
-      "type": "vectoradd",
-      "inputs": {
-        "a": {
-          "node_id": "payload",
-          "selector": [
-            { "field": "layers" },
-            { "index": 1 },
-            { "field": "samples" },
-            { "index": 0 }
-          ]
-        },
-        "b": { "node_id": "secondary_scale" }
-      }
+      "type": "vectoradd"
     },
     {
       "id": "combined",
-      "type": "vectoradd",
-      "inputs": {
-        "a": { "node_id": "primary_blend" },
-        "b": { "node_id": "secondary_blend" }
-      }
+      "type": "vectoradd"
     },
     {
       "id": "bias_const",
       "type": "constant",
-      "params": { "value": 0.2 }
+      "params": {
+        "value": 0.2
+      }
     },
     {
       "id": "bias_gate",
-      "type": "if",
-      "inputs": {
-        "cond": {
-          "node_id": "payload",
-          "selector": [
-            { "field": "mask" },
-            { "index": 1 }
-          ]
-        },
-        "then": {
-          "node_id": "payload",
-          "selector": [
-            { "field": "bias" }
-          ]
-        },
-        "else": { "node_id": "bias_const" }
-      }
+      "type": "if"
     },
     {
       "id": "out_vec",
       "type": "output",
-      "params": { "path": "samples/json.combined" },
-      "inputs": { "in": { "node_id": "combined" } }
+      "params": {
+        "path": "samples/json.combined"
+      }
     },
     {
       "id": "out_bias",
       "type": "output",
-      "params": { "path": "samples/json.bias" },
-      "inputs": { "in": { "node_id": "bias_gate" } }
+      "params": {
+        "path": "samples/json.bias"
+      }
+    }
+  ],
+  "links": [
+    {
+      "from": {
+        "node_id": "payload"
+      },
+      "to": {
+        "node_id": "primary_scale",
+        "input": "scalar"
+      },
+      "selector": [
+        {
+          "field": "layers"
+        },
+        {
+          "index": 0
+        },
+        {
+          "field": "gain"
+        }
+      ]
+    },
+    {
+      "from": {
+        "node_id": "payload"
+      },
+      "to": {
+        "node_id": "primary_scale",
+        "input": "v"
+      },
+      "selector": [
+        {
+          "field": "layers"
+        },
+        {
+          "index": 0
+        },
+        {
+          "field": "samples"
+        },
+        {
+          "index": 1
+        }
+      ]
+    },
+    {
+      "from": {
+        "node_id": "payload"
+      },
+      "to": {
+        "node_id": "primary_blend",
+        "input": "a"
+      },
+      "selector": [
+        {
+          "field": "layers"
+        },
+        {
+          "index": 0
+        },
+        {
+          "field": "samples"
+        },
+        {
+          "index": 0
+        }
+      ]
+    },
+    {
+      "from": {
+        "node_id": "primary_scale"
+      },
+      "to": {
+        "node_id": "primary_blend",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "payload"
+      },
+      "to": {
+        "node_id": "secondary_scale",
+        "input": "scalar"
+      },
+      "selector": [
+        {
+          "field": "layers"
+        },
+        {
+          "index": 1
+        },
+        {
+          "field": "gain"
+        }
+      ]
+    },
+    {
+      "from": {
+        "node_id": "payload"
+      },
+      "to": {
+        "node_id": "secondary_scale",
+        "input": "v"
+      },
+      "selector": [
+        {
+          "field": "layers"
+        },
+        {
+          "index": 1
+        },
+        {
+          "field": "samples"
+        },
+        {
+          "index": 1
+        }
+      ]
+    },
+    {
+      "from": {
+        "node_id": "payload"
+      },
+      "to": {
+        "node_id": "secondary_blend",
+        "input": "a"
+      },
+      "selector": [
+        {
+          "field": "layers"
+        },
+        {
+          "index": 1
+        },
+        {
+          "field": "samples"
+        },
+        {
+          "index": 0
+        }
+      ]
+    },
+    {
+      "from": {
+        "node_id": "secondary_scale"
+      },
+      "to": {
+        "node_id": "secondary_blend",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "primary_blend"
+      },
+      "to": {
+        "node_id": "combined",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "secondary_blend"
+      },
+      "to": {
+        "node_id": "combined",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "payload"
+      },
+      "to": {
+        "node_id": "bias_gate",
+        "input": "cond"
+      },
+      "selector": [
+        {
+          "field": "mask"
+        },
+        {
+          "index": 1
+        }
+      ]
+    },
+    {
+      "from": {
+        "node_id": "payload"
+      },
+      "to": {
+        "node_id": "bias_gate",
+        "input": "then"
+      },
+      "selector": [
+        {
+          "field": "bias"
+        }
+      ]
+    },
+    {
+      "from": {
+        "node_id": "bias_const"
+      },
+      "to": {
+        "node_id": "bias_gate",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "combined"
+      },
+      "to": {
+        "node_id": "out_vec",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "bias_gate"
+      },
+      "to": {
+        "node_id": "out_bias",
+        "input": "in"
+      }
     }
   ]
 }

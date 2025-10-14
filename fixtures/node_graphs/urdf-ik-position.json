@@ -41,14 +41,6 @@
           "tip_link": "tool",
           "max_iters": 512,
           "tol_pos": 0.02
-        },
-        "inputs": {
-          "target_pos": {
-            "node_id": "target_pos"
-          },
-          "seed": {
-            "node_id": "seed"
-          }
         }
       },
       {
@@ -56,11 +48,35 @@
         "type": "output",
         "params": {
           "path": "tests/urdf.solution"
+        }
+      }
+    ],
+    "links": [
+      {
+        "from": {
+          "node_id": "target_pos"
         },
-        "inputs": {
-          "in": {
-            "node_id": "ik"
-          }
+        "to": {
+          "node_id": "ik",
+          "input": "target_pos"
+        }
+      },
+      {
+        "from": {
+          "node_id": "seed"
+        },
+        "to": {
+          "node_id": "ik",
+          "input": "seed"
+        }
+      },
+      {
+        "from": {
+          "node_id": "ik"
+        },
+        "to": {
+          "node_id": "ik_out",
+          "input": "in"
         }
       }
     ]
@@ -73,5 +89,6 @@
     "outputs": [
       "tests/urdf.solution"
     ]
-  }
+  },
+  "links": []
 }
