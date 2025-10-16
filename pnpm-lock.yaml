@@ -24,6 +24,22 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
+  npm/@vizij/blackboard-wasm:
+    dependencies:
+      '@vizij/value-json':
+        specifier: ^0.1.0
+        version: link:../value-json
+      '@vizij/wasm-loader':
+        specifier: ^0.1.0
+        version: link:../wasm-loader
+    devDependencies:
+      '@types/node':
+        specifier: latest
+        version: 24.8.0
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
   npm/@vizij/node-graph-wasm:
     dependencies:
       '@vizij/value-json':
