@@ -244,6 +244,7 @@ export interface NodeSignature {
   type_id: NodeType;
   name: string;
   category: string;
+  doc?: string;
   inputs: PortSpec[];
   variadic_inputs?: VariadicSpec;
   outputs: PortSpec[];

@@ -71,6 +71,7 @@ async function init(input?: InitInput): Promise<void>;
 function abi_version(): number;
 async function normalizeGraphSpec(spec: GraphSpec | string): Promise<GraphSpec>;
 async function getNodeSchemas(): Promise<Registry>;
+async function logNodeSchemaDocs(nodeType?: NodeType | string): Promise<void>;
 const graphSamples: Record<string, GraphSpec>;
 
 class Graph {
@@ -90,10 +91,11 @@ class Graph {
 }
 ```
 
-### Normalization & Schema Helpers
+### Normalization, Schema & Docs Helpers
 
 - `normalizeGraphSpec(spec)` – round-trips any GraphSpec (object or JSON string) through the Rust normaliser so shorthand inputs/legacy `inputs` maps come back with explicit `links`, typed paths, and canonical casing.
-- `getNodeSchemas()` – returns the runtime node registry (including new controllers like `case`, `default-blend`, weighted blend helpers, etc.) for palette/editor usage.
+- `getNodeSchemas()` – returns the runtime node registry (including node, port, and param documentation strings) for palette/editor usage.
+- `logNodeSchemaDocs(nodeType?)` – pretty-prints the schema docs for every node or a specific `NodeType` right to the console (handy while prototyping editors).
 - `graphSamples` – curated ready-to-load specs that already reflect the canonical `links` form and typed `path` parameters.
 
 Types (`GraphSpec`, `EvalResult`, `ValueJSON`, `ShapeJSON`, etc.) are exported from `src/types`.
@@ -190,3 +192,29 @@ The Vitest suite runs sample graphs through the wasm bridge, checking evaluation
 - [`@vizij/value-json`](../value-json/README.md) – shared value helpers used during staging.
 
 Need assistance or spot a bug? Open an issue—robust bindings keep Vizij graphs portable. 🧠
+### Inspecting Schema Documentation
+
+Each `NodeSignature` in the schema registry now ships with human-friendly descriptions for the node itself, its ports, and parameters.
+
+```ts
+import { getNodeSchemas, logNodeSchemaDocs } from "@vizij/node-graph-wasm";
+
+await init();
+
+// Fetch the registry and inspect docs programmatically.
+const registry = await getNodeSchemas();
+for (const node of registry.nodes) {
+  console.log(node.name, node.doc);        // node.doc is a plain string
+  for (const port of node.inputs) {
+    console.log("  input:", port.label, port.doc);
+  }
+}
+
+// Or print a nicely formatted summary for all nodes…
+await logNodeSchemaDocs();
+
+// …or just a single node type.
+await logNodeSchemaDocs("remap");
+```
+
+The same documentation is embedded in the wasm JSON (`get_node_schemas_json`) so downstream tools can consume it without relying on these helpers.

@@ -66,6 +66,8 @@ pub struct NodeSignature {
     pub type_id: NodeType,
     pub name: &'static str,
     pub category: &'static str,
+    #[serde(default)]
+    pub doc: &'static str,
     pub inputs: Vec<PortSpec>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub variadic_inputs: Option<VariadicSpec>,
@@ -87,7 +89,7 @@ fn p_in() -> PortSpec {
         id: "in",
         ty: PortType::Float,
         label: "In",
-        doc: "",
+        doc: "Input scalar value.",
         optional: false,
     }
 }
@@ -96,7 +98,7 @@ fn p_bool_in() -> PortSpec {
         id: "in",
         ty: PortType::Bool,
         label: "In",
-        doc: "",
+        doc: "Input boolean value.",
         optional: false,
     }
 }
@@ -105,7 +107,7 @@ fn p_vector_in() -> PortSpec {
         id: "in",
         ty: PortType::Vector,
         label: "In",
-        doc: "",
+        doc: "Input numeric vector; accepts scalars and arrays.",
         optional: false,
     }
 }
@@ -114,7 +116,7 @@ fn p_out_float() -> PortSpec {
         id: "out",
         ty: PortType::Float,
         label: "Out",
-        doc: "",
+        doc: "Computed scalar result.",
         optional: false,
     }
 }
@@ -123,7 +125,7 @@ fn p_out_bool() -> PortSpec {
         id: "out",
         ty: PortType::Bool,
         label: "Out",
-        doc: "",
+        doc: "Computed boolean result.",
         optional: false,
     }
 }
@@ -132,7 +134,7 @@ fn p_out_vec3() -> PortSpec {
         id: "out",
         ty: PortType::Vec3,
         label: "Out",
-        doc: "",
+        doc: "Computed 3D vector.",
         optional: false,
     }
 }
@@ -141,7 +143,7 @@ fn p_out_vector() -> PortSpec {
         id: "out",
         ty: PortType::Vector,
         label: "Out",
-        doc: "",
+        doc: "Computed numeric vector result.",
         optional: false,
     }
 }
@@ -155,6 +157,7 @@ pub fn registry() -> Registry {
         type_id: Constant,
         name: "Constant",
         category: "Math",
+        doc: "Outputs the configured value every frame; defaults to 0.0 when unspecified.",
         inputs: vec![],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
@@ -163,7 +166,7 @@ pub fn registry() -> Registry {
             id: "value",
             ty: ParamType::Any,
             label: "Value",
-            doc: "",
+            doc: "Value to emit on the output port each tick.",
             default_json: Some(serde_json::json!({ "float": 0.0 })),
             min: None,
             max: None,
@@ -174,6 +177,7 @@ pub fn registry() -> Registry {
         type_id: Slider,
         name: "Slider",
         category: "Math",
+        doc: "Provides a tunable scalar value constrained to the configured min/max range.",
         inputs: vec![],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
@@ -183,7 +187,7 @@ pub fn registry() -> Registry {
                 id: "value",
                 ty: ParamType::Float,
                 label: "Value",
-                doc: "",
+                doc: "Initial slider position.",
                 default_json: Some(serde_json::json!({ "float": 0.0 })),
                 min: None,
                 max: None,
@@ -192,7 +196,7 @@ pub fn registry() -> Registry {
                 id: "min",
                 ty: ParamType::Float,
                 label: "Min",
-                doc: "",
+                doc: "Lower bound for the slider value.",
                 default_json: Some(serde_json::json!({ "float": 0.0 })),
                 min: None,
                 max: None,
@@ -201,7 +205,7 @@ pub fn registry() -> Registry {
                 id: "max",
                 ty: ParamType::Float,
                 label: "Max",
-                doc: "",
+                doc: "Upper bound for the slider value.",
                 default_json: Some(serde_json::json!({ "float": 1.0 })),
                 min: None,
                 max: None,
@@ -213,6 +217,7 @@ pub fn registry() -> Registry {
         type_id: MultiSlider,
         name: "Multi Slider",
         category: "Math",
+        doc: "Provides three independent slider-controlled scalar outputs for X, Y, and Z.",
         inputs: vec![],
         variadic_inputs: None,
         outputs: vec![
@@ -220,21 +225,21 @@ pub fn registry() -> Registry {
                 id: "x",
                 ty: PortType::Float,
                 label: "X",
-                doc: "",
+                doc: "Current X slider value.",
                 optional: false,
             },
             PortSpec {
                 id: "y",
                 ty: PortType::Float,
                 label: "Y",
-                doc: "",
+                doc: "Current Y slider value.",
                 optional: false,
             },
             PortSpec {
                 id: "z",
                 ty: PortType::Float,
                 label: "Z",
-                doc: "",
+                doc: "Current Z slider value.",
                 optional: false,
             },
         ],
@@ -244,7 +249,7 @@ pub fn registry() -> Registry {
                 id: "x",
                 ty: ParamType::Float,
                 label: "X",
-                doc: "",
+                doc: "Initial X slider value.",
                 default_json: Some(serde_json::json!({ "float": 0.0 })),
                 min: None,
                 max: None,
@@ -253,7 +258,7 @@ pub fn registry() -> Registry {
                 id: "y",
                 ty: ParamType::Float,
                 label: "Y",
-                doc: "",
+                doc: "Initial Y slider value.",
                 default_json: Some(serde_json::json!({ "float": 0.0 })),
                 min: None,
                 max: None,
@@ -262,7 +267,7 @@ pub fn registry() -> Registry {
                 id: "z",
                 ty: ParamType::Float,
                 label: "Z",
-                doc: "",
+                doc: "Initial Z slider value.",
                 default_json: Some(serde_json::json!({ "float": 0.0 })),
                 min: None,
                 max: None,
@@ -274,12 +279,13 @@ pub fn registry() -> Registry {
         type_id: Add,
         name: "Add",
         category: "Math",
+        doc: "Sums all incoming operands, treating missing inputs as 0.",
         inputs: vec![],
         variadic_inputs: Some(VariadicSpec {
             id: "operands",
             ty: PortType::Float,
             label: "Operand",
-            doc: "",
+            doc: "Each scalar to include in the sum.",
             min: 2,
             max: None,
         }),
@@ -292,19 +298,20 @@ pub fn registry() -> Registry {
         type_id: Subtract,
         name: "Subtract",
         category: "Math",
+        doc: "Subtracts RHS from LHS; missing inputs default to 0.",
         inputs: vec![
             PortSpec {
                 id: "lhs",
                 ty: PortType::Float,
                 label: "LHS",
-                doc: "",
+                doc: "Minuend value.",
                 optional: false,
             },
             PortSpec {
                 id: "rhs",
                 ty: PortType::Float,
                 label: "RHS",
-                doc: "",
+                doc: "Subtrahend value.",
                 optional: false,
             },
         ],
@@ -318,12 +325,13 @@ pub fn registry() -> Registry {
         type_id: Multiply,
         name: "Multiply",
         category: "Math",
+        doc: "Multiplies all incoming operands; missing inputs act as 1.",
         inputs: vec![],
         variadic_inputs: Some(VariadicSpec {
             id: "operands",
             ty: PortType::Float,
             label: "Operand",
-            doc: "",
+            doc: "Each scalar to include in the product.",
             min: 2,
             max: None,
         }),
@@ -336,19 +344,20 @@ pub fn registry() -> Registry {
         type_id: Divide,
         name: "Divide",
         category: "Math",
+        doc: "Divides LHS by RHS; division by zero yields NaN.",
         inputs: vec![
             PortSpec {
                 id: "lhs",
                 ty: PortType::Float,
                 label: "LHS",
-                doc: "",
+                doc: "Dividend value.",
                 optional: false,
             },
             PortSpec {
                 id: "rhs",
                 ty: PortType::Float,
                 label: "RHS",
-                doc: "",
+                doc: "Divisor value; zero produces NaN.",
                 optional: false,
             },
         ],
@@ -362,19 +371,20 @@ pub fn registry() -> Registry {
         type_id: Power,
         name: "Power",
         category: "Math",
+        doc: "Raises Base to the given Exponent using f32 powf semantics.",
         inputs: vec![
             PortSpec {
                 id: "base",
                 ty: PortType::Float,
                 label: "Base",
-                doc: "",
+                doc: "Base value.",
                 optional: false,
             },
             PortSpec {
                 id: "exp",
                 ty: PortType::Float,
                 label: "Exponent",
-                doc: "",
+                doc: "Exponent value.",
                 optional: false,
             },
         ],
@@ -388,19 +398,20 @@ pub fn registry() -> Registry {
         type_id: Log,
         name: "Log",
         category: "Math",
+        doc: "Computes logarithm of Value in the provided Base; invalid bases yield NaN.",
         inputs: vec![
             PortSpec {
                 id: "value",
                 ty: PortType::Float,
                 label: "Value",
-                doc: "",
+                doc: "Argument whose logarithm is evaluated.",
                 optional: false,
             },
             PortSpec {
                 id: "base",
                 ty: PortType::Float,
                 label: "Base",
-                doc: "",
+                doc: "Logarithm base; non-positive or 1.0 results produce NaN.",
                 optional: false,
             },
         ],
@@ -410,11 +421,20 @@ pub fn registry() -> Registry {
         params: vec![],
     });
 
-    for (nt, name) in [(Sin, "Sin"), (Cos, "Cos"), (Tan, "Tan")] {
+    for (nt, name, doc) in [
+        (Sin, "Sin", "Computes the sine of the input angle (radians)."),
+        (Cos, "Cos", "Computes the cosine of the input angle (radians)."),
+        (
+            Tan,
+            "Tan",
+            "Computes the tangent of the input angle (radians); results blow up near π/2 + kπ.",
+        ),
+    ] {
         nodes.push(NodeSignature {
             type_id: nt,
             name,
             category: "Math",
+            doc,
             inputs: vec![p_in()],
             variadic_inputs: None,
             outputs: vec![p_out_float()],
@@ -428,6 +448,7 @@ pub fn registry() -> Registry {
         type_id: Time,
         name: "Time",
         category: "Time",
+        doc: "Outputs the graph runtime's elapsed seconds.",
         inputs: vec![],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
@@ -439,19 +460,20 @@ pub fn registry() -> Registry {
         type_id: Oscillator,
         name: "Oscillator",
         category: "Time",
+        doc: "Generates a sine wave using the provided frequency and phase inputs.",
         inputs: vec![
             PortSpec {
                 id: "frequency",
                 ty: PortType::Float,
                 label: "Frequency",
-                doc: "",
+                doc: "Oscillation rate in Hz; accepts scalars or vectors.",
                 optional: false,
             },
             PortSpec {
                 id: "phase",
                 ty: PortType::Float,
                 label: "Phase",
-                doc: "",
+                doc: "Phase offset in radians; broadcast across vector frequency inputs.",
                 optional: false,
             },
         ],
@@ -466,6 +488,7 @@ pub fn registry() -> Registry {
         type_id: Spring,
         name: "Spring",
         category: "Transitions",
+        doc: "Integrates a critically damped spring toward the Target; zero or non-finite dt snaps to Target.",
         inputs: vec![PortSpec {
             id: "in",
             ty: PortType::Vector,
@@ -517,6 +540,7 @@ pub fn registry() -> Registry {
         type_id: Damp,
         name: "Damp",
         category: "Transitions",
+        doc: "Exponentially decays toward the Target using a configurable half-life; zero dt or half-life snaps to Target.",
         inputs: vec![PortSpec {
             id: "in",
             ty: PortType::Vector,
@@ -548,6 +572,7 @@ pub fn registry() -> Registry {
         type_id: Slew,
         name: "Slew",
         category: "Transitions",
+        doc: "Limits the rate of change toward Target using max_rate units per second; zero dt or max_rate snaps to Target.",
         inputs: vec![PortSpec {
             id: "in",
             ty: PortType::Vector,
@@ -580,19 +605,20 @@ pub fn registry() -> Registry {
         type_id: And,
         name: "And",
         category: "Logic",
+        doc: "Outputs true when both inputs are true; missing inputs default to false.",
         inputs: vec![
             PortSpec {
                 id: "lhs",
                 ty: PortType::Bool,
                 label: "LHS",
-                doc: "",
+                doc: "Left-hand boolean operand.",
                 optional: false,
             },
             PortSpec {
                 id: "rhs",
                 ty: PortType::Bool,
                 label: "RHS",
-                doc: "",
+                doc: "Right-hand boolean operand.",
                 optional: false,
             },
         ],
@@ -605,19 +631,20 @@ pub fn registry() -> Registry {
         type_id: Or,
         name: "Or",
         category: "Logic",
+        doc: "Outputs true when either input is true; missing inputs default to false.",
         inputs: vec![
             PortSpec {
                 id: "lhs",
                 ty: PortType::Bool,
                 label: "LHS",
-                doc: "",
+                doc: "Left-hand boolean operand.",
                 optional: false,
             },
             PortSpec {
                 id: "rhs",
                 ty: PortType::Bool,
                 label: "RHS",
-                doc: "",
+                doc: "Right-hand boolean operand.",
                 optional: false,
             },
         ],
@@ -630,19 +657,20 @@ pub fn registry() -> Registry {
         type_id: Xor,
         name: "Xor",
         category: "Logic",
+        doc: "Outputs true when exactly one input is true; missing inputs default to false.",
         inputs: vec![
             PortSpec {
                 id: "lhs",
                 ty: PortType::Bool,
                 label: "LHS",
-                doc: "",
+                doc: "Left-hand boolean operand.",
                 optional: false,
             },
             PortSpec {
                 id: "rhs",
                 ty: PortType::Bool,
                 label: "RHS",
-                doc: "",
+                doc: "Right-hand boolean operand.",
                 optional: false,
             },
         ],
@@ -655,6 +683,7 @@ pub fn registry() -> Registry {
         type_id: Not,
         name: "Not",
         category: "Logic",
+        doc: "Outputs the logical negation of the input; missing input defaults to false.",
         inputs: vec![p_bool_in()],
         variadic_inputs: None,
         outputs: vec![p_out_bool()],
@@ -667,19 +696,20 @@ pub fn registry() -> Registry {
         type_id: GreaterThan,
         name: "Greater Than",
         category: "Logic",
+        doc: "Outputs true when LHS is strictly greater than RHS.",
         inputs: vec![
             PortSpec {
                 id: "lhs",
                 ty: PortType::Float,
                 label: "LHS",
-                doc: "",
+                doc: "Left-hand scalar operand.",
                 optional: false,
             },
             PortSpec {
                 id: "rhs",
                 ty: PortType::Float,
                 label: "RHS",
-                doc: "",
+                doc: "Right-hand scalar operand.",
                 optional: false,
             },
         ],
@@ -692,19 +722,20 @@ pub fn registry() -> Registry {
         type_id: LessThan,
         name: "Less Than",
         category: "Logic",
+        doc: "Outputs true when LHS is strictly less than RHS.",
         inputs: vec![
             PortSpec {
                 id: "lhs",
                 ty: PortType::Float,
                 label: "LHS",
-                doc: "",
+                doc: "Left-hand scalar operand.",
                 optional: false,
             },
             PortSpec {
                 id: "rhs",
                 ty: PortType::Float,
                 label: "RHS",
-                doc: "",
+                doc: "Right-hand scalar operand.",
                 optional: false,
             },
         ],
@@ -717,19 +748,20 @@ pub fn registry() -> Registry {
         type_id: Equal,
         name: "Equal",
         category: "Logic",
+        doc: "Outputs true when LHS and RHS differ by less than 1e-6.",
         inputs: vec![
             PortSpec {
                 id: "lhs",
                 ty: PortType::Float,
                 label: "LHS",
-                doc: "",
+                doc: "Left-hand scalar operand.",
                 optional: false,
             },
             PortSpec {
                 id: "rhs",
                 ty: PortType::Float,
                 label: "RHS",
-                doc: "",
+                doc: "Right-hand scalar operand.",
                 optional: false,
             },
         ],
@@ -742,19 +774,20 @@ pub fn registry() -> Registry {
         type_id: NotEqual,
         name: "Not Equal",
         category: "Logic",
+        doc: "Outputs true when LHS and RHS differ by more than 1e-6.",
         inputs: vec![
             PortSpec {
                 id: "lhs",
                 ty: PortType::Float,
                 label: "LHS",
-                doc: "",
+                doc: "Left-hand scalar operand.",
                 optional: false,
             },
             PortSpec {
                 id: "rhs",
                 ty: PortType::Float,
                 label: "RHS",
-                doc: "",
+                doc: "Right-hand scalar operand.",
                 optional: false,
             },
         ],
@@ -769,26 +802,27 @@ pub fn registry() -> Registry {
         type_id: If,
         name: "If",
         category: "Logic",
+        doc: "Routes Then when Condition is true, otherwise Else; missing branches default to 0.",
         inputs: vec![
             PortSpec {
                 id: "cond",
                 ty: PortType::Bool,
                 label: "Condition",
-                doc: "",
+                doc: "Boolean condition to evaluate.",
                 optional: false,
             },
             PortSpec {
                 id: "then",
                 ty: PortType::Vector,
                 label: "Then",
-                doc: "Value",
+                doc: "Value emitted when Condition is true.",
                 optional: true,
             },
             PortSpec {
                 id: "else",
                 ty: PortType::Vector,
                 label: "Else",
-                doc: "Value",
+                doc: "Value emitted when Condition is false.",
                 optional: true,
             },
         ],
@@ -803,26 +837,27 @@ pub fn registry() -> Registry {
         type_id: Clamp,
         name: "Clamp",
         category: "Math",
+        doc: "Constrains In between Min and Max; expects Min ≤ Max.",
         inputs: vec![
             PortSpec {
                 id: "in",
                 ty: PortType::Float,
                 label: "In",
-                doc: "",
+                doc: "Value to clamp.",
                 optional: false,
             },
             PortSpec {
                 id: "min",
                 ty: PortType::Float,
                 label: "Min",
-                doc: "",
+                doc: "Lower bound.",
                 optional: false,
             },
             PortSpec {
                 id: "max",
                 ty: PortType::Float,
                 label: "Max",
-                doc: "",
+                doc: "Upper bound.",
                 optional: false,
             },
         ],
@@ -836,40 +871,41 @@ pub fn registry() -> Registry {
         type_id: Remap,
         name: "Remap",
         category: "Math",
+        doc: "Normalizes In from the [In Min, In Max] range into [Out Min, Out Max]; input is clamped to the source range and divide-by-zero yields NaN.",
         inputs: vec![
             PortSpec {
                 id: "in",
                 ty: PortType::Float,
                 label: "In",
-                doc: "",
+                doc: "Value to remap.",
                 optional: false,
             },
             PortSpec {
                 id: "in_min",
                 ty: PortType::Float,
                 label: "In Min",
-                doc: "",
+                doc: "Lower bound of the input range.",
                 optional: false,
             },
             PortSpec {
                 id: "in_max",
                 ty: PortType::Float,
                 label: "In Max",
-                doc: "",
+                doc: "Upper bound of the input range.",
                 optional: false,
             },
             PortSpec {
                 id: "out_min",
                 ty: PortType::Float,
                 label: "Out Min",
-                doc: "",
+                doc: "Lower bound of the output range.",
                 optional: false,
             },
             PortSpec {
                 id: "out_max",
                 ty: PortType::Float,
                 label: "Out Max",
-                doc: "",
+                doc: "Upper bound of the output range.",
                 optional: false,
             },
         ],
@@ -884,19 +920,20 @@ pub fn registry() -> Registry {
         type_id: Vec3Cross,
         name: "Vec3 Cross",
         category: "Vectors",
+        doc: "Computes the cross product A × B; mismatched shapes yield NaN components.",
         inputs: vec![
             PortSpec {
                 id: "a",
                 ty: PortType::Vec3,
                 label: "A",
-                doc: "",
+                doc: "First 3D vector operand.",
                 optional: false,
             },
             PortSpec {
                 id: "b",
                 ty: PortType::Vec3,
                 label: "B",
-                doc: "",
+                doc: "Second 3D vector operand.",
                 optional: false,
             },
         ],
@@ -911,6 +948,7 @@ pub fn registry() -> Registry {
         type_id: VectorConstant,
         name: "Vector Constant",
         category: "Vectors",
+        doc: "Outputs the configured vector value each frame.",
         inputs: vec![],
         variadic_inputs: None,
         outputs: vec![p_out_vector()],
@@ -919,35 +957,48 @@ pub fn registry() -> Registry {
             id: "value",
             ty: ParamType::Any,
             label: "Value",
-            doc: "",
+            doc: "Vector or numeric value to emit.",
             default_json: Some(serde_json::json!({ "vector": [] })),
             min: None,
             max: None,
         }],
     });
 
-    for (nt, name) in [
-        (VectorAdd, "Vector Add"),
-        (VectorSubtract, "Vector Subtract"),
-        (VectorMultiply, "Vector Multiply"),
+    for (nt, name, doc) in [
+        (
+            VectorAdd,
+            "Vector Add",
+            "Element-wise sum of A and B; mismatched shapes produce NaN.",
+        ),
+        (
+            VectorSubtract,
+            "Vector Subtract",
+            "Element-wise subtraction A - B; mismatched shapes produce NaN.",
+        ),
+        (
+            VectorMultiply,
+            "Vector Multiply",
+            "Element-wise product of A and B; mismatched shapes produce NaN.",
+        ),
     ] {
         nodes.push(NodeSignature {
             type_id: nt,
             name,
             category: "Vectors",
+            doc,
             inputs: vec![
                 PortSpec {
                     id: "a",
                     ty: PortType::Vector,
                     label: "A",
-                    doc: "",
+                    doc: "First vector operand.",
                     optional: false,
                 },
                 PortSpec {
                     id: "b",
                     ty: PortType::Vector,
                     label: "B",
-                    doc: "",
+                    doc: "Second vector operand.",
                     optional: false,
                 },
             ],
@@ -962,19 +1013,20 @@ pub fn registry() -> Registry {
         type_id: VectorScale,
         name: "Vector Scale",
         category: "Vectors",
+        doc: "Multiplies Vector by Scalar; scalar broadcasts across components.",
         inputs: vec![
             PortSpec {
                 id: "scalar",
                 ty: PortType::Float,
                 label: "Scalar",
-                doc: "",
+                doc: "Scalar multiplier.",
                 optional: false,
             },
             PortSpec {
                 id: "v",
                 ty: PortType::Vector,
                 label: "Vector",
-                doc: "",
+                doc: "Vector to scale.",
                 optional: false,
             },
         ],
@@ -988,6 +1040,7 @@ pub fn registry() -> Registry {
         type_id: VectorNormalize,
         name: "Vector Normalize",
         category: "Vectors",
+        doc: "Normalizes the input vector to unit length; zero-length inputs yield NaN components.",
         inputs: vec![p_vector_in()],
         variadic_inputs: None,
         outputs: vec![p_out_vector()],
@@ -999,19 +1052,20 @@ pub fn registry() -> Registry {
         type_id: VectorDot,
         name: "Vector Dot",
         category: "Vectors",
+        doc: "Computes the dot product of A and B; mismatched shapes yield NaN.",
         inputs: vec![
             PortSpec {
                 id: "a",
                 ty: PortType::Vector,
                 label: "A",
-                doc: "",
+                doc: "First vector operand.",
                 optional: false,
             },
             PortSpec {
                 id: "b",
                 ty: PortType::Vector,
                 label: "B",
-                doc: "",
+                doc: "Second vector operand.",
                 optional: false,
             },
         ],
@@ -1025,6 +1079,7 @@ pub fn registry() -> Registry {
         type_id: VectorLength,
         name: "Vector Length",
         category: "Vectors",
+        doc: "Computes the Euclidean length of the input vector; non-numeric inputs yield NaN.",
         inputs: vec![p_vector_in()],
         variadic_inputs: None,
         outputs: vec![p_out_float()],
@@ -1036,19 +1091,20 @@ pub fn registry() -> Registry {
         type_id: VectorIndex,
         name: "Vector Index",
         category: "Vectors",
+        doc: "Extracts the element at floor(Index); out-of-range indices yield NaN.",
         inputs: vec![
             PortSpec {
                 id: "v",
                 ty: PortType::Vector,
                 label: "Vector",
-                doc: "",
+                doc: "Vector to sample from.",
                 optional: false,
             },
             PortSpec {
                 id: "index",
                 ty: PortType::Float,
                 label: "Index",
-                doc: "0-based index; non-integer values are floored",
+                doc: "0-based index; non-integer values are floored; out-of-range produces NaN.",
                 optional: false,
             },
         ],
@@ -1063,12 +1119,13 @@ pub fn registry() -> Registry {
         type_id: Join,
         name: "Join",
         category: "Vectors",
+        doc: "Concatenates all Operand inputs into a single numeric vector, skipping non-numeric entries.",
         inputs: vec![],
         variadic_inputs: Some(VariadicSpec {
             id: "operands",
             ty: PortType::Vector,
             label: "Operand",
-            doc: "",
+            doc: "Each vector or scalar slice to append in order.",
             min: 1,
             max: None,
         }),
@@ -1082,6 +1139,7 @@ pub fn registry() -> Registry {
         type_id: Split,
         name: "Split",
         category: "Vectors",
+        doc: "Splits In into Parts sized by the Sizes param; mismatched totals return NaN-filled segments.",
         inputs: vec![p_vector_in()],
         variadic_inputs: None,
         outputs: vec![],
@@ -1089,7 +1147,7 @@ pub fn registry() -> Registry {
             id: "parts",
             ty: PortType::Vector,
             label: "Part",
-            doc: "",
+            doc: "Returned segment corresponding to each requested size.",
             min: 1,
             max: None,
         }),
@@ -1107,17 +1165,38 @@ pub fn registry() -> Registry {
     });
 
     // Reducers: vector -> float
-    for (nt, name) in [
-        (VectorMin, "Vector Min"),
-        (VectorMax, "Vector Max"),
-        (VectorMean, "Vector Mean"),
-        (VectorMedian, "Vector Median"),
-        (VectorMode, "Vector Mode"),
+    for (nt, name, doc) in [
+        (
+            VectorMin,
+            "Vector Min",
+            "Returns the minimum element of In; empty vectors yield NaN.",
+        ),
+        (
+            VectorMax,
+            "Vector Max",
+            "Returns the maximum element of In; empty vectors yield NaN.",
+        ),
+        (
+            VectorMean,
+            "Vector Mean",
+            "Returns the arithmetic mean of In; empty vectors yield NaN.",
+        ),
+        (
+            VectorMedian,
+            "Vector Median",
+            "Returns the median of In (average of middle pair for even counts); empty vectors yield NaN.",
+        ),
+        (
+            VectorMode,
+            "Vector Mode",
+            "Returns the most frequent non-NaN value in In; ties choose the smallest value; empty vectors yield NaN.",
+        ),
     ] {
         nodes.push(NodeSignature {
             type_id: nt,
             name,
             category: "Vectors",
+            doc,
             inputs: vec![p_vector_in()],
             variadic_inputs: None,
             outputs: vec![p_out_float()],
@@ -1131,6 +1210,7 @@ pub fn registry() -> Registry {
         type_id: WeightedSumVector,
         name: "Weighted Sum Vector",
         category: "Blend",
+        doc: "Pre-computes aggregate blend statistics from Values, optionally applying Weights and Masks; mismatched lengths return NaNs.",
         inputs: vec![
             PortSpec {
                 id: "values",
@@ -1193,6 +1273,7 @@ pub fn registry() -> Registry {
         type_id: DefaultBlend,
         name: "Default Blend",
         category: "Blend",
+        doc: "Produces a weighted sum of Target inputs plus Baseline and Offset; handles weight broadcasting and falls back to neutral/null when counts mismatch.",
         inputs: vec![
             PortSpec {
                 id: "baseline",
@@ -1239,6 +1320,7 @@ pub fn registry() -> Registry {
         type_id: BlendWeightedAverage,
         name: "Blend - Weighted Average",
         category: "Blend",
+        doc: "Normalises Total Weighted Sum by Total Weight / Max Effective Weight; falls back when the divisor is invalid.",
         inputs: vec![
             PortSpec {
                 id: "total_weighted_sum",
@@ -1279,6 +1361,7 @@ pub fn registry() -> Registry {
         type_id: BlendAdditive,
         name: "Blend - Additive",
         category: "Blend",
+        doc: "Outputs Total Weighted Sum when any inputs contribute; otherwise emits Fallback or NaN.",
         inputs: vec![
             PortSpec {
                 id: "total_weighted_sum",
@@ -1312,6 +1395,7 @@ pub fn registry() -> Registry {
         type_id: BlendMultiply,
         name: "Blend - Multiply",
         category: "Blend",
+        doc: "Multiplies contributions using (1 - weight) + value × weight × mask for each entry; mismatched lengths yield NaN, empty input returns 1.",
         inputs: vec![
             PortSpec {
                 id: "values",
@@ -1351,6 +1435,7 @@ pub fn registry() -> Registry {
         type_id: BlendWeightedOverlay,
         name: "Blend - Weighted Overlay",
         category: "Blend",
+        doc: "Interpolates between Base and Total Weighted Sum using Max Effective Weight as the blend factor; invalid weights yield NaN.",
         inputs: vec![
             PortSpec {
                 id: "total_weighted_sum",
@@ -1384,6 +1469,7 @@ pub fn registry() -> Registry {
         type_id: BlendWeightedAverageOverlay,
         name: "Blend - Weighted Average Overlay",
         category: "Blend",
+        doc: "Computes an averaged offset and adds it to Base; falls back to Base when averaging fails.",
         inputs: vec![
             PortSpec {
                 id: "total_weighted_sum",
@@ -1424,6 +1510,7 @@ pub fn registry() -> Registry {
         type_id: BlendMax,
         name: "Blend - Max",
         category: "Blend",
+        doc: "Selects the value whose weight × mask is largest; scales it by that effective weight or falls back to Base when none contribute.",
         inputs: vec![
             PortSpec {
                 id: "values",
@@ -1465,6 +1552,7 @@ pub fn registry() -> Registry {
         type_id: Case, // reuse If's union output typing; runtime uses NodeType::If/Case mapping. Keep name as 'Case' in types.
         name: "Case",
         category: "Logic",
+        doc: "Selects the case value whose label matches Selector; returns Default or NaN when no match is found.",
         inputs: vec![
             PortSpec {
                 id: "selector",
@@ -1513,47 +1601,48 @@ pub fn registry() -> Registry {
         type_id: InverseKinematics,
         name: "Inverse Kinematics",
         category: "Robotics",
+        doc: "Analytic planar 3-bone IK solver; returns joint angles or NaNs when the target is unreachable.",
         inputs: vec![
             PortSpec {
                 id: "bone1",
                 ty: PortType::Float,
                 label: "Bone1",
-                doc: "",
+                doc: "Length of the first bone segment.",
                 optional: false,
             },
             PortSpec {
                 id: "bone2",
                 ty: PortType::Float,
                 label: "Bone2",
-                doc: "",
+                doc: "Length of the second bone segment.",
                 optional: false,
             },
             PortSpec {
                 id: "bone3",
                 ty: PortType::Float,
                 label: "Bone3",
-                doc: "",
+                doc: "Length of the end-effector segment.",
                 optional: false,
             },
             PortSpec {
                 id: "theta",
                 ty: PortType::Float,
                 label: "Theta",
-                doc: "",
+                doc: "Desired end-effector orientation in radians.",
                 optional: false,
             },
             PortSpec {
                 id: "x",
                 ty: PortType::Float,
                 label: "Target X",
-                doc: "",
+                doc: "Target X coordinate.",
                 optional: false,
             },
             PortSpec {
                 id: "y",
                 ty: PortType::Float,
                 label: "Target Y",
-                doc: "",
+                doc: "Target Y coordinate.",
                 optional: false,
             },
         ],
@@ -1569,6 +1658,7 @@ pub fn registry() -> Registry {
             type_id: UrdfIkPosition,
             name: "URDF IK (Position)",
             category: "Robotics",
+            doc: "Solves for joint angles that reach Target Position using the configured URDF chain; errors when URDF data is missing or the target is unreachable.",
             inputs: vec![
                 PortSpec {
                     id: "target_pos",
@@ -1656,6 +1746,7 @@ pub fn registry() -> Registry {
             type_id: UrdfIkPose,
             name: "URDF IK (Pose)",
             category: "Robotics",
+            doc: "Solves for joint angles matching both Target Position and Target Rotation; errors when the pose is unreachable or input shapes are invalid.",
             inputs: vec![
                 PortSpec {
                     id: "target_pos",
@@ -1759,6 +1850,7 @@ pub fn registry() -> Registry {
             type_id: UrdfFk,
             name: "URDF FK",
             category: "Robotics",
+            doc: "Applies forward kinematics for the configured URDF chain using provided joint values or defaults.",
             inputs: vec![PortSpec {
                 id: "joints",
                 ty: PortType::Any,
@@ -1837,6 +1929,7 @@ pub fn registry() -> Registry {
         type_id: Input,
         name: "Input",
         category: "IO",
+        doc: "Reads a staged value from the host path or emits the configured Default; enforces declared output shape when provided.",
         inputs: vec![],
         variadic_inputs: None,
         outputs: vec![PortSpec {
@@ -1873,6 +1966,7 @@ pub fn registry() -> Registry {
         type_id: Output,
         name: "Output",
         category: "IO",
+        doc: "Publishes In to the host path while passing the value through for downstream nodes.",
         inputs: vec![PortSpec {
             id: "in",
             ty: PortType::Any,
