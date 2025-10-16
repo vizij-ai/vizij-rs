@@ -39,6 +39,8 @@ Feature flags:
 |---------|---------|-------------|
 | `urdf_ik` | ✔ | Pulls in robotics helpers from the core engine. Disable with `--no-default-features` if not needed. |
 
+Enabling `urdf_ik` turns on the same feature flag in `vizij-animation-core`, compiling the robotics interpolation helpers that the wasm build ships with by default. Disable it only if you are certain no controllers rely on URDF-derived targets.
+
 ---
 
 ## Quick Start
@@ -93,6 +95,17 @@ Systems inserted by the plugin (simplified):
 3. **Fixed update** – Advances the engine using `FixedDt` and records outputs.
 4. **Apply outputs** – Writes values to `Transform` components (translation/rotation/scale). Extend this stage to support additional component types.
 
+### System ordering
+
+| Schedule | System | Notes |
+|----------|--------|-------|
+| `Update` | `build_binding_index_system` | Runs every frame to catch hierarchy changes. |
+| `Update` | `prebind_core_system` | Declared with `.after(build_binding_index_system)` to guarantee bindings exist. |
+| `FixedUpdate` | `fixed_update_core_system` | Consumes the fixed timestep (`FixedDt`) and advances the engine. |
+| `FixedUpdate` | `apply_outputs_system` | Declared `.after(fixed_update_core_system)` so all sampled values are applied before the next frame. |
+
+Insert custom systems with `.before(...)` / `.after(...)` against these labels, or move the fixed update stage to a different schedule with `.add_plugins(VizijAnimationPlugin::default())` plus `app.edit_schedule`.
+
 ---
 
 ## Configuration
@@ -100,6 +113,54 @@ Systems inserted by the plugin (simplified):
 - Override the fixed timestep by inserting `FixedDt(desired_delta)` before the plugin runs.
 - Attach `VizijBindingHint { path: "custom/path" }` to entities when animation target names do not match Bevy `Name`s.
 - The plugin currently applies animation changes to `Transform`. For custom behaviour, add your own system after `apply_outputs` to consume `PendingOutputs`.
+
+### Non-`Transform` setters
+
+You can register additional setters via the shared `WriterRegistry` resource to animate arbitrary components:
+
+```rust
+use bevy::prelude::*;
+use bevy_vizij_animation::VizijAnimationPlugin;
+use bevy_vizij_api::WriterRegistry;
+use vizij_api_core::Value;
+
+#[derive(Component)]
+struct AnimatedLight;
+
+fn main() {
+    App::new()
+        .add_plugins((DefaultPlugins, VizijAnimationPlugin))
+        .add_systems(Startup, (spawn_light, register_light_setter))
+        .run();
+}
+
+fn spawn_light(mut commands: Commands) -> Entity {
+    commands
+        .spawn((AnimatedLight, PointLight {
+            intensity: 0.0,
+            ..Default::default()
+        }))
+        .id()
+}
+
+fn register_light_setter(
+    light: Query<Entity, With<AnimatedLight>>,
+    mut registry: ResMut<WriterRegistry>,
+) {
+    let entity = light.single();
+    registry.register_setter("rig/Lights/Main.intensity", move |world, _, value| {
+        if let Some(mut e) = world.get_entity_mut(entity) {
+            if let Some(mut light) = e.get_mut::<PointLight>() {
+                if let Value::Float(intensity) = value {
+                    light.intensity = *intensity;
+                }
+            }
+        }
+    });
+}
+```
+
+Any writes against `rig/Lights/Main.intensity` are now routed to the light component, enabling material, audio, or VFX controls alongside transforms.
 
 ---
 

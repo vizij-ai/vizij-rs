@@ -111,9 +111,53 @@ fn stage_inputs(mut pending: ResMut<PendingInputs>) {
 
 ## Configuration
 
-- The plugin runs evaluation in the `Update` schedule by default. Use `VizijGraphPlugin::with_schedule` or `.with_fixed_timestep` (if provided) to move evaluation elsewhere.
+- The plugin runs evaluation in the `Update` schedule by default. To drive graphs at a custom cadence, either mutate the public `GraphTime` resource before evaluation or wire the systems manually as shown below.
 - Feature flag `urdf_ik` controls whether URDF IK/FK helpers are registered in the runtime. Disable it if you don’t need robotics nodes to reduce dependencies.
 - Systems are ordered so staging happens before evaluation. Insert additional systems before/after to customise flow.
+
+### Fixed timestep evaluation
+
+The stock plugin samples `Time` each frame. For deterministic fixed stepping you can wire the core pieces yourself and schedule them in `FixedUpdate`:
+
+```rust
+use bevy::prelude::*;
+use bevy_vizij_graph::{GraphOutputs, GraphResource, GraphRuntimeResource};
+use vizij_graph_core::{evaluate_all, GraphRuntime};
+
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins.set(FixedTime::new_from_secs(1.0 / 120.0)))
+        .insert_resource(GraphResource::default())
+        .insert_resource(GraphRuntimeResource(GraphRuntime::default()))
+        .insert_resource(GraphOutputs::default())
+        .add_systems(FixedUpdate, step_graph_fixed)
+        .run();
+}
+
+fn step_graph_fixed(
+    mut runtime: ResMut<GraphRuntimeResource>,
+    spec: Res<GraphResource>,
+    mut outputs: ResMut<GraphOutputs>,
+) {
+    if let Err(err) = evaluate_all(&mut runtime.0, &spec.0) {
+        bevy::log::error!("graph evaluation error: {err}");
+        return;
+    }
+    outputs.0 = runtime.0.outputs.clone();
+}
+```
+
+This approach gives you full control over cadence while reusing the same resources the plugin exposes. If you stick with `VizijGraphPlugin`, you can still override the timestep by mutating the public `GraphTime` resource before the plugin’s `system_eval` runs.
+
+### Integrating with the orchestrator
+
+- `EvalResultRes.writes` contains the `WriteBatch` produced by graph `Output` nodes. Forward it to `vizij-orchestrator-core` by calling `orchestrator.apply_writebatch(...)` or staging inputs on the orchestrator’s blackboard.
+- When using merged controllers, allow the orchestrator to own graph evaluation and treat `bevy_vizij_graph` as a visualiser: read `EvalResultRes.nodes` to render inspector panels while letting the orchestrator apply writes.
+
+### Logging & telemetry
+
+- Evaluation errors are logged via `bevy::log::error!` inside the plugin. Hook your own diagnostics by adding a system after evaluation that inspects `EvalResultRes` and records metrics (`events.spawn(GraphEvalDiagnostics { frame, writes: result.writes.len() })`).
+- `GraphTime` tracks the accumulated simulation time (`t`) and last delta (`dt`). Emit these values through your telemetry stack to correlate graph load with frame timing.
 
 ---
 
@@ -130,7 +174,7 @@ Tests cover staging, evaluation, and write propagation using sample graphs. For 
 ## Related Crates
 
 - [`vizij-graph-core`](../vizij-graph-core/README.md) – core evaluator used by this plugin.
-|- [`vizij-orchestrator-core`](../../orchestrator/vizij-orchestrator-core/README.md) – can feed `WriteBatch` results into other controllers.
+- [`vizij-orchestrator-core`](../../orchestrator/vizij-orchestrator-core/README.md) – can feed `WriteBatch` results into other controllers.
 - [`bevy_vizij_animation`](../../animation/bevy_vizij_animation/README.md) – sister plugin for Vizij animations.
 
 Need more bindings? Open an issue—well-documented ECS integration keeps graph evaluation straightforward. 🧩

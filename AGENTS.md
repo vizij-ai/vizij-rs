@@ -8,6 +8,7 @@ file summarises, it does not replace, those sources.
 ## Agent Workflow Checklist
 - Scan `README.md` + any touched crate README before editing so you understand
   current stack boundaries and scripts.
+- Skim `ROADMAP.md` for in-flight initiatives that might influence the work.
 - Decide early whether the task needs the planning tool; when you use it,
   produce multi-step plans and keep them updated as work progresses.
 - Prefer fast discovery commands: `rg`/`rg --files` for search and list, `cargo
@@ -30,6 +31,11 @@ file summarises, it does not replace, those sources.
   `vizij-graph-wasm`, and npm `@vizij/node-graph-wasm`.
 - **Orchestrator stack**: `vizij-orchestrator-core` runtime coordinating
   graphs/animations, `vizij-orchestrator-wasm`, and npm `@vizij/orchestrator-wasm`.
+- **Test fixtures**: `vizij-test-fixtures` crate that exposes the shared JSON
+  manifest, mirrored to npm `@vizij/test-fixtures` for browsers.
+- **Support packages**: npm `@vizij/value-json`, `@vizij/wasm-loader`, and
+  `@vizij/test-fixtures` build quickly via `pnpm run build:shared`; rebuild
+  them whenever API contracts or fixtures change.
 - **Scripts**: Build/link helpers in `scripts/` (see README "Setup" and
   "Usage"), git hooks installer, dry-run release script.
 - **npm workspace**: Wrapper packages under `npm/@vizij` re-export wasm `pkg`
@@ -44,16 +50,18 @@ file summarises, it does not replace, those sources.
 | Test full workspace | `cargo test --workspace` |
 | Test a single crate | `cargo test -p vizij-orchestrator-core` (replace crate name) |
 | Build orchestrator examples | `cargo build --manifest-path crates/orchestrator/vizij-orchestrator-core/Cargo.toml --examples` |
+| Build support crates | `pnpm run build:shared` |
+| Run wasm/npm tests | `pnpm run test` |
 
 ### WASM builds and watchers
 | Task | Command |
 |------|---------|
-| Build animation WASM pkg | `npm run build:wasm:animation` |
-| Build node-graph WASM pkg | `npm run build:wasm:graph` |
-| Build orchestrator WASM pkg | `npm run build:wasm:orchestrator` |
-| Watch animation WASM | `npm run watch:wasm:animation` *(needs `cargo-watch`)* |
-| Watch node-graph WASM | `npm run watch:wasm:graph` *(needs `cargo-watch`)* |
-| Watch orchestrator WASM | `npm run watch:wasm:orchestrator` *(needs `cargo-watch`)* |
+| Build animation WASM pkg | `pnpm run build:wasm:animation` |
+| Build node-graph WASM pkg | `pnpm run build:wasm:graph` |
+| Build orchestrator WASM pkg | `pnpm run build:wasm:orchestrator` |
+| Watch animation WASM | `pnpm run watch:wasm:animation` *(needs `cargo-watch`)* |
+| Watch node-graph WASM | `pnpm run watch:wasm:graph` *(needs `cargo-watch`)* |
+| Watch orchestrator WASM | `pnpm run watch:wasm:orchestrator` *(needs `cargo-watch`)* |
 
 Install the watcher dependency once with `cargo install cargo-watch`.
 
@@ -64,9 +72,11 @@ Install the watcher dependency once with `cargo install cargo-watch`.
 | Run hook jobs manually | `./.githooks/pre-commit` / `./.githooks/pre-push` |
 | Dry-run crates + npm release | `bash scripts/dry-run-release.sh` |
 | Link npm packages for vizij-web | Build locally, then use temporary `link:` deps in `vizij-web` (see its README) |
-| Rebuild after ABI bumps | `cargo build -p <wasm-crate> --target wasm32-unknown-unknown && npm run build:wasm:<stack>` |
+| Rebuild after ABI bumps | `cargo build -p <wasm-crate> --target wasm32-unknown-unknown && pnpm run build:wasm:<stack>` |
 
-Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unknown` before running the rebuild command above.
+Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unknown` before running the rebuild command above. Install `cargo-watch` (`cargo install cargo-watch --locked`) to use the `pnpm run watch:wasm:*` scripts.
+
+`ROADMAP.md` aggregates documentation TODOs and engineering follow-ups pulled from crate READMEs—consult it when prioritising work or updating docs.
 
 ## Stack Briefs
 - **API**: Hub for `TypedPath`, `ValueJSON`, and WriteBatch tooling. Read
@@ -82,6 +92,9 @@ Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unkno
   coordinates animation engines and graph controllers. Check the crate README
   for scheduler semantics, blackboard conventions, and example entry points.
   The wasm crate mirrors the Rust API and serialises frames for JS consumers.
+- **Test fixtures**: `vizij-test-fixtures` maps names from `fixtures/manifest.json`
+  to on-disk JSON assets and offers helpers to load them in tests. The npm
+  package ships pre-bundled fixture JSON for browser scenarios.
 
 ## Coding & Testing Expectations
 - Keep solutions simple and aligned with existing patterns; prefer incremental

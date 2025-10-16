@@ -23,6 +23,7 @@
 - Depends solely on `vizij-api-core` for Value/Shape/TypedPath definitions.
 - Provides string-based validation helpers plus converters that return proper JS objects via `serde_wasm_bindgen`.
 - Emits ergonomic error messages (mirroring the Rust core) for tooling and editor integrations.
+- Shared dependency: `vizij-animation-wasm`, `vizij-graph-wasm`, and `vizij-orchestrator-wasm` call into these helpers before exposing higher-level APIs. Keeping this crate current ensures every wasm surface normalises JSON in the same way.
 
 ---
 
@@ -81,6 +82,22 @@ console.log(writes.writes[0].value); // { type: "float", data: 1 }
 ```
 
 Errors returned by `validate_*` include the same context as the Rust parsing layer, making them ideal for diagnostics in editors or CLI tooling.
+
+```ts
+try {
+  validate_value_json('{"vec3":[0,1]}'); // missing component
+} catch (err) {
+  const message = err instanceof Error ? err.message : String(err);
+  console.warn("Vizij value rejected:", message);
+  // Example message: `invalid vec3 length (expected 3, found 2)`
+}
+```
+
+### When to use the low-level APIs
+
+- Use `vizij-api-wasm` when you need raw normalisation/validation (editor plugins, custom bridge code, Node CLIs) without pulling the heavier animation/graph/orchestrator wasm modules.
+- Reach for `@vizij/value-json` when you are already in TypeScript and prefer type-safe helpers that work purely on the JS side. The npm package internally mirrors this crate’s logic and is tree-shakeable.
+- Engine wasm packages (`@vizij/animation-wasm`, `@vizij/node-graph-wasm`, `@vizij/orchestrator-wasm`) call into these bindings automatically—most app code does not need to import them directly unless you are authoring tooling.
 
 ---
 

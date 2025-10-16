@@ -56,6 +56,14 @@ wasm-pack build crates/animation/vizij-animation-wasm \
 
 The result lands in `crates/animation/vizij-animation-wasm/pkg/` and is copied into the npm package during the build script.
 
+### Choosing a wasm-pack target
+
+- `--target bundler` (default in the workspace scripts): ideal for Vite, Webpack, and other bundlers that understand ES modules and handle `.wasm` assets automatically.
+- `--target web`: emits self-contained ESM that fetches the `.wasm` file at runtime—prefer this when shipping straight to browsers without a bundler.
+- `--target nodejs`: produces CommonJS + Node glue, useful for server-side baking or CLI tools.
+
+If you change the target, rebuild the npm wrapper so the generated JS and type definitions stay aligned.
+
 ---
 
 ## Usage
@@ -95,6 +103,22 @@ const result = raw.update_values(1 / 60, "{}");
 console.log(JSON.parse(result));
 ```
 
+### Custom `.wasm` location
+
+```ts
+import { init } from "@vizij/animation-wasm";
+
+// Host the wasm binary on your CDN:
+await init(new URL("https://cdn.example.com/vizij/animation_wasm_bg.wasm"));
+
+// …or provide raw bytes (Node/Electron):
+import { readFile } from "node:fs/promises";
+const bytes = await readFile("dist/animation_wasm_bg.wasm");
+await init(bytes);
+```
+
+Any `Response`, `URL`, `ArrayBuffer`, or `Uint8Array` accepted by wasm-bindgen works here; the npm wrapper forwards it to the loader.
+
 ---
 
 ## Key Details
@@ -107,6 +131,13 @@ console.log(JSON.parse(result));
 - **Error Handling** – Invalid JSON or configuration errors throw `JsError` with helpful messages (e.g., negative frame rate, mismatched value kinds).
 
 ---
+
+## Troubleshooting
+
+- `TypeError: WebAssembly.instantiateStreaming` – Occurs when serving over `file://` or an HTTP server without the correct MIME type. Use `await init(fetch(url))` or pass bytes directly.
+- `ABI mismatch: expected 2` – Indicates stale JS glue. Re-run `pnpm run build:wasm:animation` so the `.wasm` binary and JS wrapper agree on `abi_version()`.
+- Silent failures when prebinding – Ensure your resolver returns `null` for unknown paths; throwing from the resolver prevents bindings from being applied.
+- Large bundles – Use `wasm-pack build --release` and rely on `--target bundler` so tree-shaking removes unused helpers.
 
 ## Development & Testing
 

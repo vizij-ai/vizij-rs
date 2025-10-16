@@ -93,6 +93,13 @@ normalizeGraphSpec(spec: GraphSpec | string): Promise<GraphSpec>; // convenience
 
 All types (`GraphSpec`, `ValueJSON`, `OrchestratorFrame`, etc.) are exported from `src/types`.
 
+### Registration payloads
+
+- `registerGraph({ id?, spec, subs? })` expects a canonical `GraphSpec` object. Optional `subs.inputs`/`subs.outputs` arrays accept canonical TypedPath strings; invalid paths throw descriptive errors.
+- `registerMergedGraph({ id?, graphs: GraphConfig[], strategy? })` mirrors the single-graph shape. `strategy.outputs`/`strategy.intermediate` accept `"error"`, `"namespace"`, or `"blend"` to resolve conflicts when multiple graphs publish the same path.
+- `registerAnimation({ id?, setup? })` forwards the payload to the Rust controller. Supply the animation JSON and optional player/instance overrides.
+- All registration helpers auto-generate ids (`graph:0`, `anim:0`) when omitted.
+
 ---
 
 ## Usage
@@ -155,6 +162,10 @@ graphs.forEach((id) => orchestrator.removeGraph(id));
 anims.forEach((id) => orchestrator.removeAnimation(id));
 ```
 
+### Custom loader options
+
+`init(input?: InitInput)` accepts any loader supported by `@vizij/wasm-loader` (`URL`, `Response`, `ArrayBuffer`, `Uint8Array`, or `WebAssembly.Module`). Use this when hosting the wasm binary on a CDN or inside desktop bundles.
+
 ---
 
 ## Fixtures
@@ -207,9 +218,18 @@ Available fixture keys today:
 - `scalar-ramp-pipeline` – single graph + animation demonstrating gain/offset staging.
 - `blend-pose-pipeline` – TwoPass orchestration mirroring the weighted pose blend demo.
 - `chain-sign-slew-pipeline` – multi-graph example (sign → slew) showcasing chained controllers.
- - `merged-blend-pipeline` – merged controller example that rewires shared outputs and applies blend strategies.
+- `merged-blend-pipeline` – merged controller example that rewires shared outputs and applies blend strategies.
 
 Fixtures are sourced from `@vizij/test-fixtures` so demos/tests align with the Rust workspace.
+
+---
+
+## Troubleshooting
+
+- **ABI mismatch** – Re-run `pnpm run build:wasm:orchestrator` if `abi_version()` differs from the value expected by the wrapper.
+- **Graph registration errors** – `registerGraph` and `registerMergedGraph` throw `JsError` when the payload is missing `spec` or contains invalid TypedPaths. Normalise specs first with `normalizeGraphSpec`.
+- **Merge strategy failures** – The `strategy` object only accepts "error", "namespace", or "blend". Any other string results in `merge strategy error`.
+- **Empty writes** – Controllers must emit `Output` nodes with `params.path`; otherwise the orchestrator returns an empty `merged_writes` array.
 
 ---
 

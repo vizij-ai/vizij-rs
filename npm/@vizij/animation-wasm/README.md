@@ -131,6 +131,24 @@ raw.add_instance(player, animId, undefined);
 const outputs = JSON.parse(raw.update_values(0.016, undefined));
 ```
 
+### Custom loader options
+
+`init(input?: InitInput)` accepts anything understood by `@vizij/wasm-loader`: `URL`, `Response`, `ArrayBuffer`, `Uint8Array`, or a precompiled `WebAssembly.Module`.
+
+```ts
+import { init } from "@vizij/animation-wasm";
+import { readFile } from "node:fs/promises";
+
+// CDN or edge deploy
+await init(new URL("https://cdn.example.com/vizij/animation_wasm_bg.wasm"));
+
+// Node / Electron / tests
+const bytes = await readFile("dist/animation_wasm_bg.wasm");
+await init(bytes);
+```
+
+Provide your own loader when running inside service workers or sandboxed environments that restrict network access.
+
 ---
 
 ## Fixtures
@@ -145,6 +163,25 @@ engine.loadAnimation(stored, { format: "stored" });
 ```
 
 Fixtures are useful for smoke testing integrations or demoing the engine without writing your own assets.
+
+Available fixture names (synchronised with `vizij-test-fixtures`):
+
+| Fixture | Description |
+|---------|-------------|
+| `pose-quat-transform` | Transform animation showcasing translation + quaternion tracks. |
+| `vector-pose-combo` | Mixed scalar/vector tracks for blending tests. |
+| `loop-window` | Demonstrates loop windows and playback commands. |
+
+Use `listAnimationFixtures()` to enumerate available fixtures at runtime.
+
+---
+
+## Bundler Notes
+
+- ESM entry (`dist/index.js`) is optimised for modern bundlers; CJS (`dist/index.cjs`) supports Node-only tooling.
+- For Vite, add `optimizeDeps.exclude = ["@vizij/animation-wasm"]` to avoid pre-bundling the wasm artefact.
+- Webpack >=5 handles wasm automatically. Enable `experiments.asyncWebAssembly = true` if you are on an older configuration.
+- The package delegates loading to `@vizij/wasm-loader`, which memoises initialisation so multiple `init()` calls reuse the same module.
 
 ---
 

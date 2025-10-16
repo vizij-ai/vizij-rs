@@ -28,6 +28,35 @@ All crates share the same data model (`StoredAnimation`, `AnimationData`, `Chang
 
 ---
 
+## Architecture Flow
+
+```text
+fixtures/manifest.json
+      │
+      ▼
+vizij-test-fixtures ── loads canonical StoredAnimation JSON
+      │
+      ▼
+vizij-animation-core ── parses → stores → samples animations
+      │                                │
+      │                         emits Outputs / Events
+      │                                │
+      │          ┌─────────────────────┴─────────────────────┐
+      ▼          ▼                                           ▼
+bevy_vizij_animation      vizij-animation-wasm      vizij-orchestrator-core
+  (ECS bindings)            (wasm-bindgen bridge)        (drives Engine instances)
+      │                           │
+      ▼                           ▼
+Bevy host                         npm/@vizij/animation-wasm
+                                  │
+                                  ▼
+Browser / Node consumers (vizij-web, tooling)
+```
+
+The swim-lane highlights that fixture assets flow through the core engine before being adapted for Bevy, wasm, or orchestrator hosts. When you change the core APIs, remember that both the plugin and the wasm binding must remain in sync.
+
+---
+
 ## Typical Workflows
 
 ### Native Rust host
@@ -50,6 +79,34 @@ All crates share the same data model (`StoredAnimation`, `AnimationData`, `Chang
 2. Call `await init()` once to initialise the WASM module (includes ABI guard).
 3. Construct the provided `Engine` wrapper, load stored animations, and use the same player/instance/update loop as the Rust engine.
 4. Use helpers like `bakeAnimationWithDerivatives` when you need baked outputs for tooling.
+
+### CLI smoke test (Rust)
+
+Run a single-frame playback straight from fixtures:
+
+```rust
+use vizij_animation_core::{Engine, InstanceCfg, Inputs};
+use vizij_animation_core::stored_animation::parse_stored_animation_json;
+use vizij_test_fixtures::animations;
+
+fn main() -> anyhow::Result<()> {
+    let json = animations::json("pose-quat-transform")?;
+    let stored = parse_stored_animation_json(&json)?;
+
+    let mut engine = Engine::default();
+    let anim = engine.load_animation(stored);
+    let player = engine.create_player("demo");
+    engine.add_instance(player, anim, InstanceCfg::default());
+
+    let outputs = engine.update_values(1.0 / 60.0, Inputs::default());
+    for change in outputs.changes {
+        println!("{} => {:?}", change.key, change.value);
+    }
+    Ok(())
+}
+```
+
+This minimal example mirrors the flow used by Bevy and the wasm wrapper—great for sanity checks when adjusting animation parsing or sampling behaviour.
 
 ---
 
@@ -90,6 +147,13 @@ When preparing a release, keep crate and npm package versions in sync:
 5. Update change logs as needed.
 
 The helper script `scripts/dry-run-release.sh` runs through the build/publish checks without pushing artifacts.
+
+### ABI / version checklist
+
+- Confirm `vizij-animation-wasm::abi_version()` matches the constant asserted inside `@vizij/animation-wasm` (rebuild the wasm crate if you touch the core).
+- Bump versions across Rust + npm manifests together so local links and CI builds stay consistent.
+- After publishing crates, rerun `pnpm run build:wasm:animation` to regenerate the JS glue that the npm package will ship.
+- If ABI drift is intentional, update the wrapper’s error message to mention the new version so downstream teams know which release to pull.
 
 ---
 

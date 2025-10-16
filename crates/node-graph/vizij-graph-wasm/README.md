@@ -60,6 +60,14 @@ wasm-pack build crates/node-graph/vizij-graph-wasm \
 
 The `pkg/` directory is consumed by `npm/@vizij/node-graph-wasm`.
 
+### Build targets
+
+- `--target bundler` – ESM glue for Vite/Webpack/Rspack (default in repo scripts).
+- `--target web` – Fetch-based ESM for direct browser usage without a bundler.
+- `--target nodejs` – CommonJS glue for Node environments (CLI tools, offline baking).
+
+Rebuild the npm wrapper after switching targets so generated type definitions stay aligned.
+
 ---
 
 ## Usage
@@ -108,8 +116,36 @@ console.log(JSON.parse(evalJson));
 - **Normalisation** – Accepts shorthands like `{ vec3: [...] }`, auto-lowers node type names, rewrites `kind` → `type`, and upgrades simple numbers/bools/arrays into tagged `ValueJSON`.
 - **Staging** – `stage_input` mirrors `GraphRuntime::set_input`. Passing `undefined` (via the npm wrapper) removes staged entries safely.
 - **Evaluation Result** – `eval_all` returns `{ nodes: { [id]: { port: { value, shape } } }, writes: WriteOpJSON[] }`. Shapes mirror `vizij_api_core::Shape`.
+  ```jsonc
+  {
+    "nodes": {
+      "oscillator": {
+        "out": {
+          "value": { "type": "float", "data": 0.707 },
+          "shape": { "id": "Scalar" }
+        }
+      }
+    },
+    "writes": [
+      {
+        "path": "demo/output/value",
+        "value": { "float": 0.707 },
+        "shape": { "id": "Scalar" }
+      }
+    ]
+  }
+  ```
 - **Parameter updates** – `set_param` validates types strictly (no silent coercion). All core node parameters plus robotics settings are supported.
 - **Time management** – Call `set_time`/`step` as needed. `eval_all` computes `dt` based on internal time values when both are invoked.
+
+---
+
+## Troubleshooting
+
+- **Selector errors**: Messages like `selector index 5 out of bounds` indicate the selector chain projected past the available elements. Normalise the spec and double-check link selectors.
+- **`set_param` failures**: The binding validates node-specific types (`Float`, `Text`, tuple pairs). Use `normalize_graph_spec_json` or the npm wrapper helpers before calling `set_param`.
+- **Empty `writes`**: Ensure your graph contains `Output` nodes with `params.path` assigned; internal nodes do not emit writes automatically.
+- **Streaming issues**: Serve the generated `.wasm` with `application/wasm` and prefer `wasm-pack build --release` to minimise payload size.
 
 ---
 

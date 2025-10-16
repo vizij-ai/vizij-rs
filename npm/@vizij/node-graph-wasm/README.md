@@ -98,6 +98,15 @@ class Graph {
 - `logNodeSchemaDocs(nodeType?)` – pretty-prints the schema docs for every node or a specific `NodeType` right to the console (handy while prototyping editors).
 - `graphSamples` – curated ready-to-load specs that already reflect the canonical `links` form and typed `path` parameters.
 
+Each registry entry exposes:
+
+| Field | Description |
+|-------|-------------|
+| `doc` / `short_doc` | Human-readable description for node palettes and tooltips. |
+| `inputs` / `outputs` | Port metadata (`label`, `doc`, `shape` hints) useful for editors. |
+| `params` | Parameter schema with expected value types and default values. |
+| `categories` | Optional grouping tags for UI organisation. |
+
 Types (`GraphSpec`, `EvalResult`, `ValueJSON`, `ShapeJSON`, etc.) are exported from `src/types`.
 
 ---
@@ -147,6 +156,24 @@ graph.applyStagedInputs();
 graph.evalAll();
 ```
 
+### Custom loader options
+
+`init(input?: InitInput)` accepts any input supported by `@vizij/wasm-loader`:
+
+```ts
+import { init } from "@vizij/node-graph-wasm";
+import { readFile } from "node:fs/promises";
+
+// Host wasm from your CDN
+await init(new URL("https://cdn.example.com/vizij/node_graph_wasm_bg.wasm"));
+
+// Node / Electron / tests
+const bytes = await readFile("dist/node_graph_wasm_bg.wasm");
+await init(bytes);
+```
+
+This is useful for service workers, Electron, or any environment that needs explicit control over fetch behaviour.
+
 ---
 
 ## Samples & Fixtures
@@ -169,6 +196,15 @@ The package exports several ready-to-run specs:
   ```
 
 Fixtures originate from `@vizij/test-fixtures` so tests and demos share the same assets.
+
+---
+
+## Troubleshooting
+
+- **Selector mismatch** – Errors such as `selector index 5 out of bounds` mean the GraphSpec referenced an array element that does not exist. Normalise the spec and confirm upstream nodes emit the expected shape.
+- **`set_param` validation** – Parameters enforce specific value types (`float`, `text`, tuple pairs). Coerce values with `normalizeValueJSON` before calling `setParam` to avoid runtime throws.
+- **ABI mismatch** – Re-run `pnpm run build:wasm:graph` if `abi_version()` differs from the expected version logged by the package.
+- **Missing fixtures** – `loadNodeGraphBundle` resolves names from `@vizij/test-fixtures`. Ensure `pnpm run build:shared` has been executed in local development.
 
 ---
 

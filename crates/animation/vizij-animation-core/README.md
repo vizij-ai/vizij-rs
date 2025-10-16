@@ -74,6 +74,48 @@ for change in &outputs.changes {
 }
 ```
 
+### Multi-player blending
+
+```rust
+use vizij_animation_core::{Engine, InstanceCfg, Inputs};
+use vizij_animation_core::stored_animation::parse_stored_animation_json;
+use vizij_test_fixtures::animations;
+
+fn main() -> anyhow::Result<()> {
+    let locomotion = parse_stored_animation_json(&animations::json("vector-pose-combo")?)?;
+    let accent = parse_stored_animation_json(&animations::json("loop-window")?)?;
+
+    let mut engine = Engine::default();
+    let player = engine.create_player("character");
+    engine.add_instance(
+        player,
+        engine.load_animation(locomotion),
+        InstanceCfg {
+            weight: 1.0,
+            time_scale: 1.0,
+            ..Default::default()
+        },
+    );
+    engine.add_instance(
+        player,
+        engine.load_animation(accent),
+        InstanceCfg {
+            weight: 0.35,
+            time_scale: 1.0,
+            ..Default::default()
+        },
+    );
+
+    let outputs = engine.update_values(1.0 / 60.0, Inputs::default());
+    for change in outputs.changes {
+        println!("{} => {:?}", change.key, change.value);
+    }
+    Ok(())
+}
+```
+
+Instances are blended in insertion order. Adjust `weight`, `time_scale`, and `start_offset` to compose layered motion before applying the resulting `Outputs` to your rig.
+
 ---
 
 ## Usage Workflow
@@ -82,7 +124,7 @@ for change in &outputs.changes {
    - Use `parse_stored_animation_json` for assets exported from Vizij tooling.
    - Alternatively deserialize `AnimationData` directly if you control authoring pipelines.
 2. **Construct an Engine**
-   - `Engine::new(Config)` accepts optional tuning for scratch buffer sizes, event limits, and derivative output.
+   - `Engine::new(Config)` (or `Engine::default()`) accepts buffer sizing hints via [`Config`](#engineconfig-tuning): adjust scratch capacities when sampling dense rigs, raise `max_events_per_tick` for verbose telemetry, or carry feature toggles.
 3. **Load Animations**
    - `Engine::load_animation(data)` stores animation content and returns an `AnimId` handle.
 4. **Create Players**
@@ -114,6 +156,14 @@ for change in &outputs.changes {
 - **Bindings** – Map canonical target paths to host IDs via a `TargetResolver`. Prevents string comparisons during updates.
 - **Outputs** – Provide a list of `Change { player, key, value }` and associated events. `OutputsWithDerivatives` adds optional derivative values per change.
 
+### EngineConfig tuning
+
+- `scratch_samples`, `scratch_values_*` – preallocate scratch buffers; raise these when you drive large skeletons or many numeric targets to minimise reallocations.
+- `max_events_per_tick` – cap on events retained per frame; lower to apply backpressure or raise when authoring dense instrumentation.
+- `features` – reserved for future toggles (SIMD, parallel). Leave at default unless experimenting with feature branches.
+
+Most projects can rely on `Config::default()`, but headless baking tools or orchestration-heavy hosts benefit from tailoring these hints to their workload.
+
 ### Baking & Derivatives
 
 - `bake_animation_data` – Generates sampled animation data at a fixed frame rate for export.
@@ -124,6 +174,12 @@ for change in &outputs.changes {
 
 - **Inputs** – Aggregate player commands (`Play`, `Pause`, `Seek`, `SetSpeed`, `SetLoopMode`) and per-instance updates (weight/time-scale/start offset/enabled).
 - **Events** – Emitted for playback state transitions, loop completions, custom animation events, and warnings (e.g., binding failures).
+
+### Outputs & derivatives
+
+- `Outputs.changes[n]` and `OutputsWithDerivatives.changes[n]` reference the same sampled value ordering. When derivatives are requested, each `ChangeWithDerivative` carries the numeric derivative in the same slot as the value that produced it.
+- Derivatives are optional (`Option<Value>`). Non-numeric tracks (booleans, text) persist `None`, whereas numeric tracks use the same typed envelope as the primary value (`Float`, `Vec3`, etc.).
+- Events are shared between both output structures; switching to derivatives does not drop instrumentation signals.
 
 ---
 

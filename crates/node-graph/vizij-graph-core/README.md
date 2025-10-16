@@ -115,14 +115,38 @@ for write in &result.writes {
 ### Selectors
 
 - Edges can include selectors composed of field/index segments.
-- Example: `{"selector": ["outputs", "blend", 1]}` picks the second element of the `blend` array.
-- Selector evaluation respects shapes; invalid paths throw descriptive errors rather than guessing.
+- Field selectors drill into records or structs (`["state", "translation"]`), while index selectors pick array/list elements (`["translation", 1]`).
+- Example: `{"selector": ["translation", 1]}` on a `Transform` output lifts the Y component; chaining `["record_field", 2, "nested_field"]` is also supported.
+- Selector evaluation respects shapes; invalid paths throw descriptive errors (“selector index 5 out of bounds for vec3”) instead of guessing. Catch these errors during development to keep graph definitions deterministic.
 
 ### Shapes & Values
 
 - Values use `vizij_api_core::Value` (scalar, vector, quat, record, array, tuple, text, bool, etc.).
 - Shapes (`ShapeId`) describe numeric layouts and support inference.
 - Declared shapes on node outputs guard against schema drift and provide better error messages.
+
+### Parameter updates
+
+- `NodeParams` live on each `NodeSpec`. Mutate them before evaluation to tweak graph behaviour:
+  ```rust
+  if let Some(node) = spec.nodes.iter_mut().find(|n| n.id == "gain") {
+      node.params.value = Some(Value::Float(0.5));
+  }
+  evaluate_all(&mut runtime, &spec)?;
+  ```
+- Shapes are checked during evaluation; incompatible updates surface as detailed `Err(String)` messages (`"set_param: node 'gain' key 'value' expects Float"` in wasm bindings).
+- High-level adapters (`vizij-graph-wasm::WasmGraph::set_param`, `bevy_vizij_graph` events) wrap the same pattern—normalise input JSON, update `NodeParams`, re-run `evaluate_all`.
+
+### Cached outputs
+
+- `GraphRuntime.outputs` stores a `HashMap<NodeId, HashMap<String, PortValue>>` containing the last evaluated value for every output port.
+- Each `PortValue` carries both the `Value` and its inferred `Shape`. Reuse these snapshots between frames to drive inspectors or diffing tools:
+  ```rust
+  if let Some(port) = runtime.outputs.get("oscillator").and_then(|ports| ports.get("out")) {
+      println!("shape: {:?}, value: {:?}", port.shape.id, port.value);
+  }
+  ```
+- Cached values persist until the node is removed from the spec; the runtime automatically purges entries when graphs change or when you clear the runtime.
 
 ### External Writes
 
