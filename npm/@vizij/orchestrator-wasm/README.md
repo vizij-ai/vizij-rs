@@ -160,23 +160,54 @@ anims.forEach((id) => orchestrator.removeAnimation(id));
 ## Fixtures
 
 ```ts
-import { loadOrchestrationBundle } from "@vizij/orchestrator-wasm";
+import {
+  createOrchestrator,
+  loadOrchestrationBundle,
+} from "@vizij/orchestrator-wasm";
+import { toValueJSON, type ValueInput } from "@vizij/value-json";
 
-const bundle = await loadOrchestrationBundle("scalar-ramp-pipeline");
-const orchestrator = await createOrchestrator();
+const bundle = await loadOrchestrationBundle("chain-sign-slew-pipeline");
+const schedule = bundle.descriptor.schedule ?? "SinglePass";
+const orchestrator = await createOrchestrator({ schedule });
 
-if (bundle.graphSpec) {
-  orchestrator.registerGraph({ id: "graph", spec: bundle.graphSpec });
+for (const binding of bundle.graphs) {
+  const config = { ...binding.config };
+  if (binding.id) config.id = binding.id;
+  orchestrator.registerGraph(config);
 }
-if (bundle.animation) {
-  orchestrator.registerAnimation({ id: "anim", setup: { animation: bundle.animation } });
+
+for (const merged of bundle.mergedGraphs) {
+  const configs = merged.graphs.map((binding) => {
+    const config = { ...binding.config };
+    if (binding.id) config.id = binding.id;
+    return config;
+  });
+  orchestrator.registerMergedGraph({ id: merged.id, graphs: configs, strategy: merged.strategy });
 }
-if (bundle.graphStage) {
-  for (const [path, payload] of Object.entries(bundle.graphStage)) {
-    orchestrator.setInput(path, payload.value, payload.shape);
-  }
+
+const primaryAnimation = bundle.animations[0];
+if (primaryAnimation) {
+  orchestrator.registerAnimation({
+    id: primaryAnimation.id,
+    setup: primaryAnimation.setup,
+  });
+}
+
+for (const input of bundle.initialInputs) {
+  orchestrator.setInput(
+    input.path,
+    toValueJSON(input.value as ValueInput),
+    input.shape ? structuredClone(input.shape) : undefined,
+  );
 }
 ```
+
+Available fixture keys today:
+
+- `scalar-ramp-pipeline` – single graph + animation demonstrating gain/offset staging.
+- `blend-pose-pipeline` – TwoPass orchestration mirroring the weighted pose blend demo.
+- `chain-sign-slew-pipeline` – multi-graph example (sign → slew) showcasing chained controllers.
+ - `merged-blend-pipeline` – merged controller example that rewires shared outputs and applies blend strategies.
 
 Fixtures are sourced from `@vizij/test-fixtures` so demos/tests align with the Rust workspace.
 

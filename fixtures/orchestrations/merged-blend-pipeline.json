@@ -1,0 +1,44 @@
+{
+  "description": "Merged graph pipeline bundling shared outputs",
+  "schedule": "SinglePass",
+  "animations": [
+    {
+      "fixture": "simple-scalar-ramp",
+      "id": "ramp",
+      "player": {
+        "name": "merged-player",
+        "loop_mode": "loop"
+      }
+    }
+  ],
+  "graphs": [],
+  "initial_inputs": [],
+  "steps": [],
+  "merged_graphs": [
+    {
+      "id": "bundle",
+      "graphs": [
+        {
+          "fixture": "merged-source-primary",
+          "id": "first"
+        },
+        {
+          "fixture": "merged-source-secondary",
+          "id": "second"
+        },
+        {
+          "fixture": "merged-source-tertiary",
+          "id": "third"
+        },
+        {
+          "fixture": "merged-consumer",
+          "id": "fourth"
+        }
+      ],
+      "strategy": {
+        "outputs": "error",
+        "intermediate": "blend"
+      }
+    }
+  ]
+}

@@ -45,10 +45,24 @@
     },
     "urdf-fk-ik-roundtrip": {
       "spec": "node_graphs/urdf-fk-ik-roundtrip.json"
+    },
+    "merged-source-primary": {
+      "spec": "node_graphs/merged-source-primary.json"
+    },
+    "merged-source-secondary": {
+      "spec": "node_graphs/merged-source-secondary.json"
+    },
+    "merged-source-tertiary": {
+      "spec": "node_graphs/merged-source-tertiary.json"
+    },
+    "merged-consumer": {
+      "spec": "node_graphs/merged-consumer.json"
     }
   },
   "orchestrations": {
     "scalar-ramp-pipeline": "orchestrations/scalar-ramp-pipeline.json",
-    "blend-pose-pipeline": "orchestrations/blend-pose-pipeline.json"
+    "blend-pose-pipeline": "orchestrations/blend-pose-pipeline.json",
+    "chain-sign-slew-pipeline": "orchestrations/chain-sign-slew-pipeline.json",
+    "merged-blend-pipeline": "orchestrations/merged-blend-pipeline.json"
   }
 }

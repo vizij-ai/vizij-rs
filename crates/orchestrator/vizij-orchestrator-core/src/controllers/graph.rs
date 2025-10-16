@@ -12,7 +12,7 @@ use crate::blackboard::Blackboard;
 /// Subscriptions specify which blackboard paths a graph consumes/produces.
 /// Only subscribed input paths will be staged into the GraphRuntime to reduce
 /// unnecessary work and keep evaluation deterministic.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Subscriptions {
     pub inputs: Vec<TypedPath>,
     pub outputs: Vec<TypedPath>,
@@ -23,16 +23,6 @@ pub struct Subscriptions {
     /// `merged_writes`, but the blackboard receives every write produced by the graph so
     /// downstream passes have access to the internal state.
     pub mirror_writes: bool,
-}
-
-impl Default for Subscriptions {
-    fn default() -> Self {
-        Self {
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            mirror_writes: true,
-        }
-    }
 }
 
 /// Lightweight config for registering a graph with the orchestrator.

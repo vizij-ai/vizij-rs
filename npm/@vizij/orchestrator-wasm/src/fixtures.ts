@@ -8,6 +8,80 @@ type NodeGraphManifestEntry = {
 };
 type OrchestrationManifestEntry = string | { path: string };
 
+interface StageEntry {
+  path: string;
+  value: unknown;
+  shape?: unknown;
+}
+
+type GraphSeed =
+  | string
+  | {
+      fixture: string;
+      id?: string;
+      subs?: GraphSubscriptions;
+      mirrorWrites?: boolean;
+      stage?: StageEntry[];
+    };
+
+type AnimationSeed =
+  | string
+  | {
+      fixture: string;
+      id?: string;
+      setup?: AnimationSetup;
+      player?: AnimationSetup["player"];
+      instance?: AnimationSetup["instance"];
+    };
+
+interface MergeStrategySeed {
+  outputs?: string;
+  intermediate?: string;
+}
+
+interface MergedGraphSeed {
+  id: string;
+  graphs: GraphSeed[];
+  strategy?: MergeStrategySeed;
+}
+
+interface PipelineDescriptor {
+  description?: string;
+  schedule?: string;
+  animations?: AnimationSeed[];
+  graphs?: GraphSeed[];
+  mergedGraphs?: MergedGraphSeed[];
+  initial_inputs?: StageEntry[];
+  steps?: Array<{ delta: number; expect: Record<string, unknown> }>;
+  [key: string]: unknown;
+}
+
+type GraphBinding = {
+  key: string;
+  id?: string;
+  config: GraphRegistrationConfig;
+  mirrorWrites: boolean;
+  stage: StageEntry[];
+};
+
+type MergeStrategy = "error" | "namespace" | "blend";
+
+type MergedGraphBinding = {
+  id: string;
+  graphs: GraphBinding[];
+  strategy: {
+    outputs: MergeStrategy;
+    intermediate: MergeStrategy;
+  };
+};
+
+type AnimationBinding = {
+  key: string;
+  id?: string;
+  animation: AnimationSetup["animation"];
+  setup: AnimationSetup;
+};
+
 const manifest: FixturesManifest = bundle.manifest;
 const files = bundle.files as Record<string, string>;
 
@@ -24,7 +98,7 @@ function orchestrationMap(): Record<string, OrchestrationManifestEntry> {
 }
 
 function normalizeRelPath(relPath: string): string {
-  return relPath.replace(/^[.][/\\]/, "").replace(/\\/g, "/");
+  return relPath.replace(/^[.][\\/]/, "").replace(/\\/g, "/");
 }
 
 function readFixture(relPath: string): string {
@@ -77,6 +151,50 @@ function orchestrationRelPath(name: string): string {
 
 export async function loadAnimationFixture(name: string): Promise<AnimationSetup["animation"]> {
   return loadFixture<AnimationSetup["animation"]>(animationEntry(name));
+}
+
+function cloneStage(entries?: StageEntry[]): StageEntry[] {
+  if (!entries) return [];
+  return entries.map((entry) => ({ ...entry }));
+}
+
+function normalizeAnimationSeeds(seeds: AnimationSeed[] | undefined) {
+  return (seeds ?? []).map((seed) =>
+    typeof seed === "string"
+      ? { fixture: seed }
+      : seed,
+  );
+}
+
+function normalizeGraphSeeds(seeds: GraphSeed[] | undefined) {
+  return (seeds ?? []).map((seed) =>
+    typeof seed === "string"
+      ? { fixture: seed, mirrorWrites: false, stage: [] as StageEntry[] }
+      : {
+          fixture: seed.fixture,
+          id: seed.id,
+          subs: seed.subs,
+          mirrorWrites: seed.mirrorWrites ?? false,
+          stage: cloneStage(seed.stage),
+        },
+  );
+}
+
+function normalizeMergedGraphSeeds(seeds: MergedGraphSeed[] | undefined) {
+  return (seeds ?? []).map((seed) => ({
+    id: seed.id,
+    graphs: normalizeGraphSeeds(seed.graphs),
+    strategy: seed.strategy ?? {},
+  }));
+}
+
+function toMergeStrategy(value: string | undefined, field: string, name: string): MergeStrategy {
+  if (!value) return "error";
+  const normalized = value.toLowerCase();
+  if (normalized === "error") return "error";
+  if (normalized === "namespace") return "namespace";
+  if (normalized === "blend" || normalized === "blend-equal-weights") return "blend";
+  throw new Error(`Orchestration '${name}' provided unknown merge strategy '${value}' for ${field}`);
 }
 
 function asGraphSubscriptions(value: unknown): GraphSubscriptions | undefined {
@@ -147,43 +265,153 @@ export async function loadOrchestrationJson(name: string): Promise<string> {
   return readFixture(orchestrationRelPath(name));
 }
 
-/**
- * Load a complete orchestration bundle containing the descriptor, resolved animation,
- * graph spec, and optional staged inputs. Useful for bootstrapping integration tests.
- */
-type PipelineDescriptor = {
-  animation: string;
-  graph: string;
-  initial_inputs?: Array<{ path: string; value: unknown }>;
-  steps?: Array<{ delta: number; expect: Record<string, unknown> }>;
-  [key: string]: unknown;
-};
+function mergeSubscriptions(
+  base: GraphSubscriptions | undefined,
+  override: GraphSubscriptions | undefined,
+  mirrorWrites: boolean,
+): GraphSubscriptions {
+  const subs: GraphSubscriptions = {
+    inputs: base?.inputs ? [...base.inputs] : undefined,
+    outputs: base?.outputs ? [...base.outputs] : undefined,
+    mirrorWrites,
+  };
+  if (override?.inputs) subs.inputs = [...override.inputs];
+  if (override?.outputs) subs.outputs = [...override.outputs];
+  if (typeof override?.mirrorWrites === "boolean") {
+    subs.mirrorWrites = override.mirrorWrites;
+  }
+  return subs;
+}
+
+async function loadGraphBinding(seed: {
+  fixture: string;
+  id?: string;
+  subs?: GraphSubscriptions;
+  mirrorWrites: boolean;
+  stage: StageEntry[];
+}): Promise<GraphBinding> {
+  const baseConfig = await loadNodeGraphConfig(seed.fixture);
+  const config: GraphRegistrationConfig = {
+    ...baseConfig,
+    spec: baseConfig.spec,
+  };
+  if (seed.id) {
+    config.id = seed.id;
+  }
+  const mergedSubs = mergeSubscriptions(baseConfig.subs, seed.subs, seed.mirrorWrites);
+  if (mergedSubs.inputs || mergedSubs.outputs || typeof mergedSubs.mirrorWrites === "boolean") {
+    config.subs = mergedSubs;
+  }
+  return {
+    key: seed.fixture,
+    id: seed.id,
+    config,
+    mirrorWrites: mergedSubs.mirrorWrites ?? false,
+    stage: cloneStage(seed.stage),
+  };
+}
+
+async function loadMergedGraphBinding(seed: {
+  id: string;
+  graphs: Array<{
+    fixture: string;
+    id?: string;
+    subs?: GraphSubscriptions;
+    mirrorWrites: boolean;
+    stage: StageEntry[];
+  }>;
+  strategy: MergeStrategySeed;
+}): Promise<MergedGraphBinding> {
+  if (!seed.graphs.length) {
+    throw new Error(`Orchestration '${seed.id}' merged graph is missing component graphs`);
+  }
+  const graphs = await Promise.all(seed.graphs.map((graph) => loadGraphBinding(graph)));
+  return {
+    id: seed.id,
+    graphs,
+    strategy: {
+      outputs: toMergeStrategy(seed.strategy.outputs, "outputs", seed.id),
+      intermediate: toMergeStrategy(seed.strategy.intermediate, "intermediate", seed.id),
+    },
+  };
+}
+
+async function loadAnimationBinding(
+  seed: AnimationSeed,
+  index: number,
+): Promise<AnimationBinding> {
+  const normalized =
+    typeof seed === "string"
+      ? { fixture: seed }
+      : seed;
+  const animation = await loadAnimationFixture(normalized.fixture);
+  const setup =
+    normalized.setup ??
+    {
+      animation,
+      player: normalized.player ?? {
+        name: index === 0 ? "fixture-player" : `fixture-player-${index}`,
+        loop_mode: "loop",
+      },
+      ...(normalized.instance ? { instance: normalized.instance } : {}),
+    };
+  return {
+    key: normalized.fixture,
+    id: normalized.id,
+    animation,
+    setup,
+  };
+}
 
 export async function loadOrchestrationBundle(
   name: string,
 ): Promise<{
   descriptor: PipelineDescriptor;
-  animation: AnimationSetup["animation"];
-  graphSpec: GraphRegistrationConfig;
+  animations: AnimationBinding[];
+  graphs: GraphBinding[];
+  mergedGraphs: MergedGraphBinding[];
+  initialInputs: StageEntry[];
 }> {
   const descriptor = await loadOrchestrationDescriptor<PipelineDescriptor>(name);
   if (!descriptor || typeof descriptor !== "object") {
     throw new Error(`Orchestration descriptor '${name}' did not resolve to an object`);
   }
 
-  if (typeof descriptor.animation !== "string") {
-    throw new Error(`Orchestration '${name}' descriptor is missing animation reference`);
+  const animations = normalizeAnimationSeeds(descriptor.animations);
+  const graphs = normalizeGraphSeeds(descriptor.graphs);
+  const mergedGraphs = normalizeMergedGraphSeeds(
+    (descriptor as Record<string, unknown>).mergedGraphs as MergedGraphSeed[] | undefined ??
+      (descriptor as Record<string, unknown>).merged_graphs as MergedGraphSeed[] | undefined,
+  );
+
+  if (!animations.length) {
+    throw new Error(`Orchestration '${name}' descriptor is missing animation references`);
   }
-  if (typeof descriptor.graph !== "string") {
-    throw new Error(`Orchestration '${name}' descriptor is missing graph reference`);
+  if (!graphs.length && !mergedGraphs.length) {
+    throw new Error(`Orchestration '${name}' descriptor is missing graph references`);
   }
 
-  const animation = await loadAnimationFixture(descriptor.animation);
-  const graphConfig = await loadNodeGraphConfig(descriptor.graph);
+  const animationBindings = await Promise.all(
+    animations.map((seed, idx) => loadAnimationBinding(seed, idx)),
+  );
+  const graphBindings = await Promise.all(graphs.map((seed) => loadGraphBinding(seed)));
+  const mergedBindings = await Promise.all(
+    mergedGraphs.map((seed) => loadMergedGraphBinding(seed)),
+  );
+
+  const initialInputs: StageEntry[] = [
+    ...(descriptor.initial_inputs ? cloneStage(descriptor.initial_inputs) : []),
+    ...graphBindings.flatMap((binding) => cloneStage(binding.stage)),
+    ...mergedBindings.flatMap((merged) =>
+      merged.graphs.flatMap((binding) => cloneStage(binding.stage)),
+    ),
+  ];
 
   return {
     descriptor,
-    animation,
-    graphSpec: graphConfig,
+    animations: animationBindings,
+    graphs: graphBindings,
+    mergedGraphs: mergedBindings,
+    initialInputs,
   };
 }

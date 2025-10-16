@@ -422,8 +422,16 @@ pub fn registry() -> Registry {
     });
 
     for (nt, name, doc) in [
-        (Sin, "Sin", "Computes the sine of the input angle (radians)."),
-        (Cos, "Cos", "Computes the cosine of the input angle (radians)."),
+        (
+            Sin,
+            "Sin",
+            "Computes the sine of the input angle (radians).",
+        ),
+        (
+            Cos,
+            "Cos",
+            "Computes the cosine of the input angle (radians).",
+        ),
         (
             Tan,
             "Tan",

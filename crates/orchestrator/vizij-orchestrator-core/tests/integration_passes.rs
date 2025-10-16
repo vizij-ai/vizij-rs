@@ -6,6 +6,7 @@ use vizij_api_core::{
 use vizij_graph_core::eval::{evaluate_all, GraphRuntime};
 use vizij_graph_core::types::GraphSpec;
 use vizij_orchestrator::{
+    fixtures::{self, DemoFixture},
     AnimationControllerConfig, GraphControllerConfig, GraphMergeError, GraphMergeOptions,
     Orchestrator, OutputConflictStrategy, Schedule, Subscriptions,
 };
@@ -362,141 +363,17 @@ fn merge_reports_conflicting_outputs() {
 
 #[test]
 fn merged_graph_parallel_blend_pipeline() {
-    fn cfg_from_json(id: &str, spec_json: serde_json::Value) -> GraphControllerConfig {
-        let mut spec_json = spec_json;
-        vizij_api_core::json::normalize_graph_spec_value(&mut spec_json);
-        GraphControllerConfig {
-            id: id.to_string(),
-            spec: serde_json::from_value(spec_json).expect("graph spec json"),
-            subs: Subscriptions::default(),
-        }
-    }
-
     fn sanitize(path: &str) -> String {
         path.chars()
             .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
             .collect()
     }
-
-    let graph_one = json!({
-        "nodes": [
-            { "id": "const_a", "type": "constant", "params": { "value": { "float": 10.0 } } },
-            { "id": "const_b", "type": "constant", "params": { "value": { "float": 20.0 } } },
-            { "id": "const_c", "type": "constant", "params": { "value": { "float": 30.0 } } },
-            { "id": "out_a", "type": "output", "params": { "path": "shared/a" } },
-            { "id": "out_b", "type": "output", "params": { "path": "shared/b" } },
-            { "id": "out_c", "type": "output", "params": { "path": "shared/c" } }
-        ],
-        "links": [
-            { "from": { "node_id": "const_a" }, "to": { "node_id": "out_a", "input": "in" } },
-            { "from": { "node_id": "const_b" }, "to": { "node_id": "out_b", "input": "in" } },
-            { "from": { "node_id": "const_c" }, "to": { "node_id": "out_c", "input": "in" } }
-        ]
-    });
-    let graph_two = json!({
-        "nodes": [
-            { "id": "const_b", "type": "constant", "params": { "value": { "float": 200.0 } } },
-            { "id": "const_c", "type": "constant", "params": { "value": { "float": 300.0 } } },
-            { "id": "const_d", "type": "constant", "params": { "value": { "float": 400.0 } } },
-            { "id": "out_b", "type": "output", "params": { "path": "shared/b" } },
-            { "id": "out_c", "type": "output", "params": { "path": "shared/c" } },
-            { "id": "out_d", "type": "output", "params": { "path": "shared/d" } }
-        ],
-        "links": [
-            { "from": { "node_id": "const_b" }, "to": { "node_id": "out_b", "input": "in" } },
-            { "from": { "node_id": "const_c" }, "to": { "node_id": "out_c", "input": "in" } },
-            { "from": { "node_id": "const_d" }, "to": { "node_id": "out_d", "input": "in" } }
-        ]
-    });
-    let graph_three = json!({
-        "nodes": [
-            { "id": "const_c", "type": "constant", "params": { "value": { "float": 3000.0 } } },
-            { "id": "const_d", "type": "constant", "params": { "value": { "float": 4000.0 } } },
-            { "id": "const_e", "type": "constant", "params": { "value": { "float": 5000.0 } } },
-            { "id": "const_f", "type": "constant", "params": { "value": { "float": 6000.0 } } },
-            { "id": "out_c", "type": "output", "params": { "path": "shared/c" } },
-            { "id": "out_d", "type": "output", "params": { "path": "shared/d" } },
-            { "id": "out_e", "type": "output", "params": { "path": "shared/e" } },
-            { "id": "out_f", "type": "output", "params": { "path": "shared/f" } }
-        ],
-        "links": [
-            { "from": { "node_id": "const_c" }, "to": { "node_id": "out_c", "input": "in" } },
-            { "from": { "node_id": "const_d" }, "to": { "node_id": "out_d", "input": "in" } },
-            { "from": { "node_id": "const_e" }, "to": { "node_id": "out_e", "input": "in" } },
-            { "from": { "node_id": "const_f" }, "to": { "node_id": "out_f", "input": "in" } }
-        ]
-    });
-    let graph_four = json!({
-        "nodes": [
-            { "id": "in_a", "type": "input", "params": { "path": "shared/a" } },
-            { "id": "in_b", "type": "input", "params": { "path": "shared/b" } },
-            { "id": "in_c", "type": "input", "params": { "path": "shared/c" } },
-            { "id": "in_d", "type": "input", "params": { "path": "shared/d" } },
-            { "id": "in_e", "type": "input", "params": { "path": "shared/e" } },
-            { "id": "in_f", "type": "input", "params": { "path": "shared/f" } },
-            { "id": "out_a_final", "type": "output", "params": { "path": "final/a" } },
-            { "id": "out_b_final", "type": "output", "params": { "path": "final/b" } },
-            { "id": "out_c_final", "type": "output", "params": { "path": "final/c" } },
-            { "id": "out_d_final", "type": "output", "params": { "path": "final/d" } },
-            { "id": "out_e_final", "type": "output", "params": { "path": "final/e" } },
-            { "id": "out_f_final", "type": "output", "params": { "path": "final/f" } }
-        ],
-        "links": [
-            { "from": { "node_id": "in_a" }, "to": { "node_id": "out_a_final", "input": "in" } },
-            { "from": { "node_id": "in_b" }, "to": { "node_id": "out_b_final", "input": "in" } },
-            { "from": { "node_id": "in_c" }, "to": { "node_id": "out_c_final", "input": "in" } },
-            { "from": { "node_id": "in_d" }, "to": { "node_id": "out_d_final", "input": "in" } },
-            { "from": { "node_id": "in_e" }, "to": { "node_id": "out_e_final", "input": "in" } },
-            { "from": { "node_id": "in_f" }, "to": { "node_id": "out_f_final", "input": "in" } }
-        ]
-    });
-
-    let mut cfg1 = cfg_from_json("first", graph_one);
-    cfg1.subs.outputs = vec![
-        TypedPath::parse("shared/a").unwrap(),
-        TypedPath::parse("shared/b").unwrap(),
-        TypedPath::parse("shared/c").unwrap(),
-    ];
-    let mut cfg2 = cfg_from_json("second", graph_two);
-    cfg2.subs.outputs = vec![
-        TypedPath::parse("shared/b").unwrap(),
-        TypedPath::parse("shared/c").unwrap(),
-        TypedPath::parse("shared/d").unwrap(),
-    ];
-    let mut cfg3 = cfg_from_json("third", graph_three);
-    cfg3.subs.outputs = vec![
-        TypedPath::parse("shared/c").unwrap(),
-        TypedPath::parse("shared/d").unwrap(),
-        TypedPath::parse("shared/e").unwrap(),
-        TypedPath::parse("shared/f").unwrap(),
-    ];
-    let mut cfg4 = cfg_from_json("fourth", graph_four);
-    cfg4.subs.inputs = vec![
-        TypedPath::parse("shared/a").unwrap(),
-        TypedPath::parse("shared/b").unwrap(),
-        TypedPath::parse("shared/c").unwrap(),
-        TypedPath::parse("shared/d").unwrap(),
-        TypedPath::parse("shared/e").unwrap(),
-        TypedPath::parse("shared/f").unwrap(),
-    ];
-    cfg4.subs.outputs = vec![
-        TypedPath::parse("final/a").unwrap(),
-        TypedPath::parse("final/b").unwrap(),
-        TypedPath::parse("final/c").unwrap(),
-        TypedPath::parse("final/d").unwrap(),
-        TypedPath::parse("final/e").unwrap(),
-        TypedPath::parse("final/f").unwrap(),
-    ];
-
-    let merged = GraphControllerConfig::merged_with_options(
-        "bundle",
-        vec![cfg1, cfg2, cfg3, cfg4],
-        GraphMergeOptions {
-            output_conflicts: OutputConflictStrategy::Error,
-            intermediate_conflicts: OutputConflictStrategy::BlendEqualWeights,
-        },
-    )
-    .expect("merged");
+    let pipeline = vizij_orchestrator::fixtures::load_pipeline("merged-blend-pipeline");
+    let merged_fixture = pipeline
+        .merged_graphs()
+        .first()
+        .expect("merged graph fixture available");
+    let merged = merged_fixture.controller_config();
 
     let spec = &merged.spec;
 
@@ -648,10 +525,14 @@ fn graph_fixture(name: &str) -> GraphControllerConfig {
             })
             .unwrap_or_default()
     };
+    let mirror_writes = subs_value
+        .get("mirrorWrites")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let subs = Subscriptions {
         inputs: parse_paths("inputs"),
         outputs: parse_paths("outputs"),
-        mirror_writes: true,
+        mirror_writes,
     };
     GraphControllerConfig {
         id: name.into(),
@@ -778,6 +659,53 @@ fn assert_values_close(actual: &Value, expected: &Value, path: &str) {
     }
 }
 
+fn schedule_from_fixture(fixture: &DemoFixture, default: Schedule) -> Schedule {
+    let schedule = fixture.schedule().unwrap_or(match default {
+        Schedule::SinglePass => "SinglePass",
+        Schedule::TwoPass => "TwoPass",
+        Schedule::RateDecoupled => "RateDecoupled",
+    });
+    match schedule.to_ascii_lowercase().as_str() {
+        "singlepass" | "single-pass" => Schedule::SinglePass,
+        "twopass" | "two-pass" => Schedule::TwoPass,
+        "ratedecoupled" | "rate-decoupled" => Schedule::RateDecoupled,
+        other => panic!("unknown schedule '{other}' in fixture"),
+    }
+}
+
+fn register_fixture_graphs(mut orch: Orchestrator, fixture: &DemoFixture) -> Orchestrator {
+    for graph in fixture.graphs() {
+        orch = orch.with_graph(graph.controller_config());
+    }
+    for merged in fixture.merged_graphs() {
+        orch = orch.with_graph(merged.controller_config());
+    }
+    orch
+}
+
+fn register_fixture_animations(mut orch: Orchestrator, fixture: &DemoFixture) -> Orchestrator {
+    for (idx, anim) in fixture.animations().iter().enumerate() {
+        let id = anim
+            .id
+            .clone()
+            .or_else(|| anim.key.clone())
+            .unwrap_or_else(|| format!("animation-{idx}"));
+        let cfg = AnimationControllerConfig {
+            id,
+            setup: anim.setup.clone(),
+        };
+        orch = orch.with_animation(cfg);
+    }
+    orch
+}
+
+fn apply_fixture_inputs(orch: &mut Orchestrator, fixture: &DemoFixture) {
+    for input in fixture.initial_inputs() {
+        orch.set_input(&input.path, input.value.clone(), input.shape.clone())
+            .expect("set input from fixture");
+    }
+}
+
 #[test]
 fn mirror_writes_false_limits_blackboard() {
     let tp_public = TypedPath::parse("graph/public.value").expect("public path");
@@ -868,24 +796,14 @@ fn mirror_writes_true_mirrors_full_batch() {
 
 #[test]
 fn scalar_ramp_pipeline_shared_fixture_executes() {
-    let fixture = vizij_orchestrator::fixtures::demo_single_pass();
+    let fixture = fixtures::demo_single_pass();
+    let schedule = schedule_from_fixture(&fixture, Schedule::SinglePass);
+    let mut orch = Orchestrator::new(schedule);
+    orch = register_fixture_graphs(orch, &fixture);
+    orch = register_fixture_animations(orch, &fixture);
+    apply_fixture_inputs(&mut orch, &fixture);
 
-    let mut orch = Orchestrator::new(Schedule::SinglePass);
-    let graph_cfg = graph_fixture("simple-gain-offset");
-    orch = orch.with_graph(graph_cfg);
-
-    let anim_cfg = AnimationControllerConfig {
-        id: "anim".into(),
-        setup: fixture.animation.setup.clone(),
-    };
-    orch = orch.with_animation(anim_cfg);
-
-    for input in fixture.initial_inputs.iter() {
-        orch.set_input(&input.path, input.value.clone(), None)
-            .expect("set input");
-    }
-
-    for step in fixture.steps.iter() {
+    for step in fixture.steps() {
         let frame = orch.step(step.delta as f32).expect("step ok");
         let out = read_scalar_write(&frame.merged_writes, "demo/output/value");
         assert!(out.is_finite(), "output should be finite");
@@ -894,37 +812,44 @@ fn scalar_ramp_pipeline_shared_fixture_executes() {
 
 #[test]
 fn chain_sign_slew_pipeline_uses_shared_fixtures() {
-    let mut orch = Orchestrator::new(Schedule::SinglePass);
-    orch = orch.with_graph(graph_fixture("sign-graph"));
-    orch = orch.with_graph(graph_fixture("slew-graph"));
+    let fixture = fixtures::load_pipeline("chain-sign-slew-pipeline");
+    let schedule = schedule_from_fixture(&fixture, Schedule::SinglePass);
+    let mut orch = Orchestrator::new(schedule);
+    orch = register_fixture_graphs(orch, &fixture);
+    orch = register_fixture_animations(orch, &fixture);
+    apply_fixture_inputs(&mut orch, &fixture);
 
-    let anim_cfg = AnimationControllerConfig {
-        id: "chain".into(),
-        setup: animation_setup("chain-ramp", ("chain-player", "once")),
-    };
-    orch = orch.with_animation(anim_cfg);
-
-    let steps = [
-        (0.0_f32, -1.0_f32, -1.0_f32),
-        (1.0_f32, 0.0_f32, 0.0_f32),
-        (1.0_f32, 1.0_f32, 1.0_f32),
-        (1.0_f32, 1.0_f32, 1.0_f32),
-    ];
-
-    let mut prev_slew = steps[0].2;
+    let mut prev_slew = fixture
+        .steps()
+        .first()
+        .and_then(|step| step.expected("chain/slewed.value"))
+        .and_then(|value| value.as_f64())
+        .unwrap_or(0.0) as f32;
     let max_rate = 1.0_f32;
 
-    for (idx, (dt, expected_sign, expected_slew)) in steps.iter().enumerate() {
-        let frame = orch.step(*dt).expect("step ok");
+    for (idx, step) in fixture.steps().iter().enumerate() {
+        let frame = orch.step(step.delta as f32).expect("step ok");
         let writes = &frame.merged_writes;
         let sign = read_scalar_write(writes, "chain/sign.value");
         let slew = read_scalar_write(writes, "chain/slewed.value");
+
+        let expected_sign = step
+            .expected("chain/sign.value")
+            .and_then(|value| value.as_f64())
+            .unwrap_or_else(|| panic!("missing expected sign value for step {idx}"))
+            as f32;
+        let expected_slew = step
+            .expected("chain/slewed.value")
+            .and_then(|value| value.as_f64())
+            .unwrap_or_else(|| panic!("missing expected slew value for step {idx}"))
+            as f32;
+
         assert!(
             (sign - expected_sign).abs() < 1e-3,
             "sign {sign} vs {expected_sign}"
         );
         if idx > 0 {
-            let allowed = max_rate * dt + 1e-6;
+            let allowed = max_rate * step.delta as f32 + 1e-6;
             let delta = (slew - prev_slew).abs();
             assert!(delta <= allowed, "slew delta {delta} exceeded {allowed}");
         }
@@ -970,24 +895,14 @@ fn sine_driver_graph_controls_animation_seek() {
 
 #[test]
 fn blend_pose_pipeline_shared_fixture_executes() {
-    let fixture = vizij_orchestrator::fixtures::blend_pose_pipeline();
+    let fixture = fixtures::blend_pose_pipeline();
+    let schedule = schedule_from_fixture(&fixture, Schedule::TwoPass);
+    let mut orch = Orchestrator::new(schedule);
+    orch = register_fixture_graphs(orch, &fixture);
+    orch = register_fixture_animations(orch, &fixture);
+    apply_fixture_inputs(&mut orch, &fixture);
 
-    let mut orch = Orchestrator::new(Schedule::TwoPass);
-    let graph_cfg = graph_fixture("weighted-profile-blend");
-    orch = orch.with_graph(graph_cfg);
-
-    let anim_cfg = AnimationControllerConfig {
-        id: "pose".into(),
-        setup: fixture.animation.setup.clone(),
-    };
-    orch = orch.with_animation(anim_cfg);
-
-    for input in fixture.initial_inputs.iter() {
-        orch.set_input(&input.path, input.value.clone(), None)
-            .expect("set input");
-    }
-
-    for step in fixture.steps.iter() {
+    for step in fixture.steps() {
         let frame = orch.step(step.delta as f32).expect("step ok");
         for (path, expected) in step.expect.iter() {
             assert_write_matches(&frame.merged_writes, path, expected);
@@ -1012,4 +927,33 @@ fn blend_pose_pipeline_shared_fixture_executes() {
             panic!("rig/root.transform should be transform value, got {transform:?}");
         }
     }
+}
+
+#[test]
+fn merged_blend_pipeline_fixture_executes() {
+    let fixture = fixtures::load_pipeline("merged-blend-pipeline");
+    let schedule = schedule_from_fixture(&fixture, Schedule::SinglePass);
+    let mut orch = Orchestrator::new(schedule);
+    orch = register_fixture_graphs(orch, &fixture);
+    orch = register_fixture_animations(orch, &fixture);
+    apply_fixture_inputs(&mut orch, &fixture);
+
+    // Step once to evaluate merged graph outputs.
+    let frame = orch.step(1.0).expect("step ok");
+    let writes = &frame.merged_writes;
+
+    let expect_scalar = |path: &str, expected: f32| {
+        let actual = read_scalar_write(writes, path);
+        assert!(
+            (actual - expected).abs() <= 1e-3,
+            "expected {path} ~= {expected}, got {actual}"
+        );
+    };
+
+    expect_scalar("final/a", 10.0);
+    expect_scalar("final/b", 110.0);
+    expect_scalar("final/c", 1110.0);
+    expect_scalar("final/d", 2200.0);
+    expect_scalar("final/e", 5000.0);
+    expect_scalar("final/f", 6000.0);
 }

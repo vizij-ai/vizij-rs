@@ -141,17 +141,13 @@ pnpm run watch:wasm:animation
 pnpm run watch:wasm:orchestrator
 ```
 
-These scripts rebuild the WASM artefacts whenever source files change. Combine them with `pnpm run link:wasm` in the `vizij-web` repo to live-reload web apps.
+These scripts rebuild the WASM artefacts whenever source files change. For short-lived experiments you can still publish a global link via the `link:wasm:*` scripts, but the recommended flow is:
 
-### Link WASM packages locally
+1. Build the desired stack(s) here (`pnpm run build:wasm:graph` etc.).
+2. In `vizij-web`, temporarily depend on those builds using `pnpm add @vizij/<pkg>@link:../vizij-rs/npm/@vizij/<pkg>`.
+3. Revert those `link:` dependencies before committing to return to the published packages.
 
-1. Build & link from this repo:
-   ```bash
-   pnpm run link:wasm
-   ```
-2. Inside `vizij-web` run the same command to consume the symlinks.
-
-To revert to published versions: `pnpm install` (in both repos) or `pnpm unlink --global @vizij/*-wasm`.
+This keeps the published versions as the default source of truth while still allowing synchronous iteration when necessary.
 
 ---
 

@@ -20,6 +20,7 @@ import {
 } from "../src/fixtures.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
+type OrchestrationBundleResult = Awaited<ReturnType<typeof loadOrchestrationBundle>>;
 
 function pkgWasmUrl(): URL {
   const wasmPath = resolve(here, "../../pkg/vizij_orchestrator_wasm_bg.wasm");
@@ -39,11 +40,31 @@ function readScalar(writes: Array<{ path: string; value: unknown }>, path: strin
   return value!;
 }
 
+function cloneDeep<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 function graphConfigFromFixture(spec: unknown): GraphRegistrationConfig {
   if (spec && typeof spec === "object" && "spec" in (spec as Record<string, unknown>)) {
-    return spec as GraphRegistrationConfig;
+    return cloneDeep(spec as GraphRegistrationConfig);
   }
-  return { spec } as GraphRegistrationConfig;
+  return { spec: cloneDeep(spec) } as GraphRegistrationConfig;
+}
+
+function graphConfigFromBinding(
+  binding: OrchestrationBundleResult["graphs"][number],
+): GraphRegistrationConfig {
+  const config = cloneDeep(binding.config);
+  const sanitized: GraphRegistrationConfig = {
+    spec: config.spec,
+  };
+  if (binding.id || config.id) {
+    sanitized.id = binding.id ?? config.id;
+  }
+  if (config.subs) {
+    sanitized.subs = config.subs;
+  }
+  return sanitized;
 }
 
 function asValueObject(value: ValueJSON | undefined): Record<string, unknown> | null {
@@ -145,23 +166,32 @@ function expectWriteMatches(
 
 async function testScalarRampPipeline(): Promise<void> {
   const bundle = await loadOrchestrationBundle("scalar-ramp-pipeline");
-  const orch = await createOrchestrator({ schedule: "SinglePass" });
+  const schedule =
+    (typeof bundle.descriptor.schedule === "string" && bundle.descriptor.schedule) ||
+    "SinglePass";
+  const orch = await createOrchestrator({ schedule });
 
-  const graphConfig = graphConfigFromFixture(bundle.graphSpec);
-  const graphId = orch.registerGraph(graphConfig);
-  assert.ok(typeof graphId === "string" && graphId.length > 0);
+  const graphIds = bundle.graphs.map((binding) => {
+    const config = graphConfigFromBinding(binding);
+    const graphId = orch.registerGraph(config);
+    assert.ok(typeof graphId === "string" && graphId.length > 0);
+    return graphId;
+  });
+  assert.ok(graphIds.length > 0, "expected at least one graph binding");
 
+  const primaryAnimation = bundle.animations[0];
   const animationConfig: AnimationRegistrationConfig = {
-    setup: {
-      animation: bundle.animation,
-      player: { name: "fixture-player", loop_mode: "once" as const },
-    },
+    ...(primaryAnimation?.id ? { id: primaryAnimation.id } : {}),
+    setup: cloneDeep(
+      primaryAnimation?.setup ?? { animation: primaryAnimation?.animation },
+    ),
   };
   const animId = orch.registerAnimation(animationConfig);
   assert.ok(typeof animId === "string" && animId.length > 0);
 
-  for (const input of bundle.descriptor.initial_inputs ?? []) {
-    orch.setInput(input.path, toValueJSON(input.value as ValueInput));
+  for (const input of bundle.initialInputs ?? []) {
+    const shape = input.shape ? cloneDeep(input.shape) : undefined;
+    orch.setInput(input.path, toValueJSON(input.value as ValueInput), shape);
   }
 
   for (const step of bundle.descriptor.steps ?? []) {
@@ -228,6 +258,59 @@ async function testChainedSlewPipeline(): Promise<void> {
       `expected slew ${step.slewed}, got ${slewValue}`,
     );
     previousSlew = slewValue;
+  });
+}
+
+async function testChainSignSlewFixture(): Promise<void> {
+  const bundle = await loadOrchestrationBundle("chain-sign-slew-pipeline");
+  const schedule =
+    (typeof bundle.descriptor.schedule === "string" && bundle.descriptor.schedule) ||
+    "SinglePass";
+  const orch = await createOrchestrator({ schedule });
+
+  assert.ok(
+    bundle.initialInputs?.some((input) => input.path === "chain/ramp.value"),
+    "expected staged ramp value in initial inputs",
+  );
+
+  bundle.graphs.forEach((binding) => {
+    const config = graphConfigFromBinding(binding);
+    orch.registerGraph(config);
+  });
+
+  const primaryAnimation = bundle.animations[0];
+  const animationConfig: AnimationRegistrationConfig = {
+    ...(primaryAnimation?.id ? { id: primaryAnimation.id } : {}),
+    setup: cloneDeep(
+      primaryAnimation?.setup ?? { animation: primaryAnimation?.animation },
+    ),
+  };
+  orch.registerAnimation(animationConfig);
+
+  for (const input of bundle.initialInputs ?? []) {
+    const shape = input.shape ? cloneDeep(input.shape) : undefined;
+    orch.setInput(input.path, toValueJSON(input.value as ValueInput), shape);
+  }
+
+  let previousSlew = 0;
+  bundle.descriptor.steps?.forEach((step, index) => {
+    const frame = orch.step(step.delta) as any;
+    const writes: Array<{ path: string; value: unknown }> = frame.merged_writes ?? [];
+    for (const [path, expectedRaw] of Object.entries(step.expect ?? {})) {
+      const expected = Number(expectedRaw);
+      const actual = readScalar(writes, path);
+      expectNearlyEqual(actual, expected, path);
+      if (path === "chain/slewed.value" && index > 0) {
+        // Slew node should be rate-limited to 1 unit per second.
+        const allowedDelta = step.delta + 1e-6;
+        const delta = Math.abs(actual - previousSlew);
+        assert.ok(delta <= allowedDelta, `slew delta ${delta} exceeded limit ${allowedDelta}`);
+        previousSlew = actual;
+      }
+      if (path === "chain/slewed.value" && index === 0) {
+        previousSlew = actual;
+      }
+    }
   });
 }
 
@@ -327,16 +410,25 @@ async function testMergedGraphRegistration(): Promise<void> {
 
 async function testBlendPosePipeline(): Promise<void> {
   const bundle = await loadOrchestrationBundle("blend-pose-pipeline");
-  const orch = await createOrchestrator({ schedule: "TwoPass" });
+  const schedule =
+    (typeof bundle.descriptor.schedule === "string" && bundle.descriptor.schedule) ||
+    "TwoPass";
+  const orch = await createOrchestrator({ schedule });
 
-  const graphConfig = graphConfigFromFixture(bundle.graphSpec);
-  orch.registerGraph(graphConfig);
+  bundle.graphs.forEach((binding) => {
+    const config = graphConfigFromBinding(binding);
+    orch.registerGraph(config);
+  });
 
+  const primaryAnimation = bundle.animations[0];
   const animationConfig: AnimationRegistrationConfig = {
-    setup: {
-      animation: bundle.animation,
-      player: { name: "pose-player", loop_mode: "loop" as const },
-    },
+    ...(primaryAnimation?.id ? { id: primaryAnimation.id } : {}),
+    setup: cloneDeep(
+      primaryAnimation?.setup ?? {
+        animation: primaryAnimation?.animation,
+        player: { name: "pose-player", loop_mode: "loop" as const },
+      },
+    ),
   };
   try {
     orch.registerAnimation(animationConfig);
@@ -346,14 +438,17 @@ async function testBlendPosePipeline(): Promise<void> {
       message.includes("RawValue") || message.includes("stored animation parse error");
     assert.ok(expected, `unexpected animation registration failure: ${message}`);
     assert.ok(
-      Array.isArray((bundle.animation as Record<string, unknown>).tracks as unknown[]),
+      Array.isArray(
+        ((primaryAnimation?.animation ?? {}) as Record<string, unknown>).tracks as unknown[],
+      ),
       "blend pose animation tracks missing",
     );
     return;
   }
 
-  for (const input of bundle.descriptor.initial_inputs ?? []) {
-    orch.setInput(input.path, toValueJSON(input.value as ValueInput));
+  for (const input of bundle.initialInputs ?? []) {
+    const shape = input.shape ? cloneDeep(input.shape) : undefined;
+    orch.setInput(input.path, toValueJSON(input.value as ValueInput), shape);
   }
 
   for (const step of bundle.descriptor.steps ?? []) {
@@ -363,6 +458,74 @@ async function testBlendPosePipeline(): Promise<void> {
       expectWriteMatches(mergedWrites, path, expected);
     }
   }
+}
+
+async function testMergedFixtureBundle(): Promise<void> {
+  const bundle = await loadOrchestrationBundle("merged-blend-pipeline");
+  assert.ok(bundle.mergedGraphs.length === 1, "merged graphs fixture missing");
+  const merged = bundle.mergedGraphs[0];
+  assert.equal(merged.id, "bundle");
+  assert.ok(Array.isArray(merged.graphs) && merged.graphs.length === 4);
+  merged.graphs.forEach((binding) => {
+    assert.ok(typeof binding.key === "string" && binding.key.length > 0);
+    const config = graphConfigFromBinding(binding);
+    assert.ok(config.spec, `missing spec for ${binding.key}`);
+  });
+  assert.ok(Array.isArray(bundle.initialInputs), "initialInputs should be array");
+
+  const schedule =
+    (typeof bundle.descriptor.schedule === "string" && bundle.descriptor.schedule) ||
+    "SinglePass";
+  const orch = await createOrchestrator({ schedule });
+
+  const mergedGraphs = merged.graphs.map((binding) => graphConfigFromBinding(binding));
+  let mergedId: string;
+  try {
+    mergedId = orch.registerMergedGraph({
+      id: merged.id,
+      graphs: mergedGraphs,
+      strategy: merged.strategy,
+    });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("merged fixture payload", JSON.stringify({
+      id: merged.id,
+      graphs: mergedGraphs,
+      strategy: merged.strategy,
+    }, null, 2));
+    throw error;
+  }
+  assert.ok(typeof mergedId === "string" && mergedId.length > 0);
+
+  const primaryAnimation = bundle.animations[0];
+  if (primaryAnimation) {
+    orch.registerAnimation({
+      ...(primaryAnimation.id ? { id: primaryAnimation.id } : {}),
+      setup: cloneDeep(
+        primaryAnimation.setup ?? { animation: primaryAnimation.animation },
+      ),
+    });
+  }
+
+  for (const input of bundle.initialInputs ?? []) {
+    const shape = input.shape ? cloneDeep(input.shape) : undefined;
+    orch.setInput(input.path, toValueJSON(input.value as ValueInput), shape);
+  }
+
+  const frame = orch.step(1.0);
+  const writes: Array<{ path: string; value: unknown }> = frame.merged_writes ?? [];
+
+  const expectScalar = (path: string, expected: number) => {
+    const actual = readScalar(writes, path);
+    expectNearlyEqual(actual, expected, path);
+  };
+
+  expectScalar("final/a", 10);
+  expectScalar("final/b", 110);
+  expectScalar("final/c", 1110);
+  expectScalar("final/d", 2200);
+  expectScalar("final/e", 5000);
+  expectScalar("final/f", 6000);
 }
 
 // async function testGraphDrivenAnimation(): Promise<void> {
@@ -420,8 +583,10 @@ process.env.RUST_BACKTRACE = "1";
     await init(pkgWasmUrl());
     await testScalarRampPipeline();
     await testChainedSlewPipeline();
+    await testChainSignSlewFixture();
     await testMergedGraphRegistration();
     await testBlendPosePipeline();
+    await testMergedFixtureBundle();
     // await testGraphDrivenAnimation();
     // eslint-disable-next-line no-console
     console.log("@vizij/orchestrator-wasm smoke tests passed");

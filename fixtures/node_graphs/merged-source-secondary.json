@@ -1,0 +1,91 @@
+{
+  "spec": {
+    "nodes": [
+      {
+        "id": "const_b",
+        "type": "constant",
+        "params": {
+          "value": {
+            "float": 200.0
+          }
+        }
+      },
+      {
+        "id": "const_c",
+        "type": "constant",
+        "params": {
+          "value": {
+            "float": 300.0
+          }
+        }
+      },
+      {
+        "id": "const_d",
+        "type": "constant",
+        "params": {
+          "value": {
+            "float": 400.0
+          }
+        }
+      },
+      {
+        "id": "out_b",
+        "type": "output",
+        "params": {
+          "path": "shared/b"
+        }
+      },
+      {
+        "id": "out_c",
+        "type": "output",
+        "params": {
+          "path": "shared/c"
+        }
+      },
+      {
+        "id": "out_d",
+        "type": "output",
+        "params": {
+          "path": "shared/d"
+        }
+      }
+    ],
+    "links": [
+      {
+        "from": {
+          "node_id": "const_b"
+        },
+        "to": {
+          "node_id": "out_b",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "const_c"
+        },
+        "to": {
+          "node_id": "out_c",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "const_d"
+        },
+        "to": {
+          "node_id": "out_d",
+          "input": "in"
+        }
+      }
+    ]
+  },
+  "subs": {
+    "outputs": [
+      "shared/b",
+      "shared/c",
+      "shared/d"
+    ]
+  },
+  "links": []
+}

@@ -192,10 +192,14 @@ mod tests {
             .expect("load blend-pose-pipeline descriptor");
         let value: serde_json::Value =
             serde_json::from_str(&json).expect("parse blend-pose-pipeline descriptor JSON");
-        let animation = value
-            .get("animation")
-            .and_then(|anim| anim.as_str())
-            .unwrap_or_default();
-        assert_eq!(animation, "pose-quat-transform");
+        let legacy_animation = value.get("animation").and_then(|anim| anim.as_str());
+        let primary_animation = value
+            .get("animations")
+            .and_then(|anims| anims.as_array())
+            .and_then(|anims| anims.first())
+            .and_then(|entry| entry.get("fixture"))
+            .and_then(|fixture| fixture.as_str());
+        let resolved = primary_animation.or(legacy_animation).unwrap_or_default();
+        assert_eq!(resolved, "pose-quat-transform");
     }
 }

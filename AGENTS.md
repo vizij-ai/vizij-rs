@@ -63,7 +63,7 @@ Install the watcher dependency once with `cargo install cargo-watch`.
 | Install git hooks (fmt/clippy/test) | `bash scripts/install-git-hooks.sh` |
 | Run hook jobs manually | `./.githooks/pre-commit` / `./.githooks/pre-push` |
 | Dry-run crates + npm release | `bash scripts/dry-run-release.sh` |
-| Link npm packages for vizij-web | `npm run link:wasm` (then run the companion script in `vizij-web`) |
+| Link npm packages for vizij-web | Build locally, then use temporary `link:` deps in `vizij-web` (see its README) |
 | Rebuild after ABI bumps | `cargo build -p <wasm-crate> --target wasm32-unknown-unknown && npm run build:wasm:<stack>` |
 
 Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unknown` before running the rebuild command above.
@@ -97,9 +97,11 @@ Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unkno
   steps you skipped.
 
 ## Cross-Repo Workflow Notes
-- During local development, link the wasm npm packages into `vizij-web` using
-  `npm run link:wasm` here followed by the matching script in the web repo. The
-  Vite dev server reloads automatically when the linked `pkg/` outputs change.
+- Build the WASM stacks you need (`pnpm run build:wasm:<stack>`) before testing
+  them in `vizij-web`.
+- In the web repo, temporarily depend on those builds with
+  `pnpm add @vizij/<pkg>@link:../vizij-rs/npm/@vizij/<pkg>`; revert the `link:`
+  dependencies before committing so published packages remain the default.
 - When introducing breaking changes to JSON schemas or ABI versions, update the
   corresponding npm wrapper README and ensure `vizij-web` has compatible code
   before publishing.
