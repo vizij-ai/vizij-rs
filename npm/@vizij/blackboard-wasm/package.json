@@ -30,8 +30,13 @@
         "build": "tsc -p tsconfig.json",
         "prepublishOnly": "node -e \"const fs=require('fs');if(!fs.existsSync('pkg')){console.error('Missing pkg/. Run wasm-pack build.');process.exit(1);}\""
     },
+    "dependencies": {
+        "@vizij/value-json": "^0.1.0",
+        "@vizij/wasm-loader": "^0.1.0"
+    },
     "devDependencies": {
-        "typescript": "^5.5.0"
+        "typescript": "^5.5.0",
+        "@types/node": "latest"
     },
     "publishConfig": {
         "access": "public",
