@@ -5,4 +5,5 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-pnpm run hook:pre-commit
+# Run the shared task runner directly (no node/pnpm dependency)
+bash scripts/hook-tasks.sh pre-commit

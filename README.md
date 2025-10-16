@@ -23,6 +23,7 @@ What you read here should give you everything you need to build, test, and publi
 7. [Publishing & Versioning](#publishing--versioning)
 8. [Development Tips](#development-tips)
 9. [Reference Documentation](#reference-documentation)
+10. [Development in Windows](#development-in-windows)
 
 ---
 
@@ -216,3 +217,9 @@ Each domain stack keeps crate, WASM crate, and npm wrapper versions in lockstep.
 - [@vizij/orchestrator-wasm/README](npm/@vizij/orchestrator-wasm/README.md)
 
 If you notice gaps or outdated instructions, please open an issue or ping the Vizij runtime team. High-quality documentation is as critical as the code it describes.
+
+---
+
+## Development in Windows
+
+Make sure your Rust and Node directories are on the SYSTEM PATH (not just user PATH)
