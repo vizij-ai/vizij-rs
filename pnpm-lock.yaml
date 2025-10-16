@@ -34,8 +34,8 @@ importers:
         version: link:../wasm-loader
     devDependencies:
       '@types/node':
-        specifier: ^24.8.0
-        version: 24.8.0
+        specifier: ^24.6.2
+        version: 24.6.2
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
