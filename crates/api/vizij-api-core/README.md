@@ -93,8 +93,8 @@ Use the canonical JSON form when serialising fixtures or interoperating with oth
 - Legacy helpers (`value_to_legacy_json`, `writebatch_to_legacy_json`) keep older tools functioning during transitions.
 - Graph specs are normalised so node shorthands stay ergonomic while the runtime always sees the canonical schema:
   - Node `type` strings are lowercased and legacy `kind` aliases are rewritten.
-  - Inline `inputs` maps are expanded into the top-level `links` array so wiring is explicit.
-  - Scalar/boolean/vector literals placed on an input (for example `"rhs": 2`) are lifted into `node.input_defaults` and survive the `inputs → links` rewrite.
+  - Inline `inputs` maps are expanded into the top-level `edges` array so wiring is explicit.
+  - Scalar/boolean/vector literals placed on an input (for example `"rhs": 2`) are lifted into `node.input_defaults` and survive the `inputs → edges` rewrite.
   - Connection objects can provide both wiring and fallbacks (`{ "node_id": "config", "default": 0.5 }`), which normalise into a link plus an `input_defaults` entry.
   - Optional `default_shape` or `shape` keys are accepted (string IDs become `{ "id": "Scalar" }`) so downstream coercion can infer the intended layout.
 
@@ -119,7 +119,7 @@ Use the canonical JSON form when serialising fixtures or interoperating with oth
   }
   ```
 
-  This means authors can skip boilerplate constant nodes, but hosts still receive a deterministic graph definition with explicit links and defaults.
+  This means authors can skip boilerplate constant nodes, but hosts still receive a deterministic graph definition with explicit edges and defaults.
 
   ```jsonc
   // enum/record defaults survive normalisation

@@ -101,14 +101,14 @@
       }
     }
   ],
-  "links": [
+  "edges": [
     {
       "from": {
         "node_id": "scene"
       },
       "to": {
         "node_id": "blend0",
-        "input": "lhs"
+        "input": "operand_1"
       },
       "selector": [
         {
@@ -128,7 +128,7 @@
       },
       "to": {
         "node_id": "blend0",
-        "input": "rhs"
+        "input": "operand_2"
       },
       "selector": [
         {
@@ -145,7 +145,7 @@
       },
       "to": {
         "node_id": "blend1",
-        "input": "lhs"
+        "input": "operand_1"
       },
       "selector": [
         {
@@ -165,7 +165,7 @@
       },
       "to": {
         "node_id": "blend1",
-        "input": "rhs"
+        "input": "operand_2"
       },
       "selector": [
         {
@@ -182,7 +182,7 @@
       },
       "to": {
         "node_id": "blend_sum",
-        "input": "lhs"
+        "input": "operand_1"
       }
     },
     {
@@ -191,7 +191,7 @@
       },
       "to": {
         "node_id": "blend_sum",
-        "input": "rhs"
+        "input": "operand_2"
       }
     },
     {
@@ -200,7 +200,7 @@
       },
       "to": {
         "node_id": "joint0_limits",
-        "input": "segment_1"
+        "input": "operand_1"
       },
       "selector": [
         {
@@ -223,7 +223,7 @@
       },
       "to": {
         "node_id": "joint0_limits",
-        "input": "segment_2"
+        "input": "operand_2"
       },
       "selector": [
         {

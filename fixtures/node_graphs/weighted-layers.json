@@ -124,7 +124,7 @@
       }
     }
   ],
-  "links": [
+  "edges": [
     {
       "from": {
         "node_id": "payload"

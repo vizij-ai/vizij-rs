@@ -30,7 +30,7 @@ This package ships the WebAssembly build of `vizij-graph-core` together with a T
 
 ## Key Concepts
 
-- **GraphSpec** – Declarative JSON describing nodes, parameters, and the explicit `links` array that connects node outputs to inputs (selectors, output keys). The package normalises shorthand specs automatically.
+- **GraphSpec** – Declarative JSON describing nodes, parameters, and the explicit `edges` array that connects node outputs to inputs (selectors, output keys). The package normalises shorthand specs automatically.
 - **Graph Runtime** – The `Graph` class owns a `GraphRuntime`, handling `loadGraph`, `stageInput`, `setParam`, `step`, and `evalAll`.
 - **Staged Inputs** – Host-provided values keyed by `TypedPath`. They are latched until you replace or remove them.
 - **Evaluation Result** – `evalAll()` returns per-node port snapshots plus a `WriteBatch` of sink writes (each with Value + Shape metadata).
@@ -93,10 +93,10 @@ class Graph {
 
 ### Normalization, Schema & Docs Helpers
 
-- `normalizeGraphSpec(spec)` – round-trips any GraphSpec (object or JSON string) through the Rust normaliser so shorthand inputs/legacy `inputs` maps come back with explicit `links`, typed paths, and canonical casing.
+- `normalizeGraphSpec(spec)` – round-trips any GraphSpec (object or JSON string) through the Rust normaliser so shorthand inputs/legacy `inputs` maps come back with explicit `edges`, typed paths, and canonical casing.
 - `getNodeSchemas()` – returns the runtime node registry (including node, port, and param documentation strings) for palette/editor usage.
 - `logNodeSchemaDocs(nodeType?)` – pretty-prints the schema docs for every node or a specific `NodeType` right to the console (handy while prototyping editors).
-- `graphSamples` – curated ready-to-load specs that already reflect the canonical `links` form and typed `path` parameters.
+- `graphSamples` – curated ready-to-load specs that already reflect the canonical `edges` form and typed `path` parameters.
 
 Each registry entry exposes:
 

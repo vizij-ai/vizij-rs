@@ -1,7 +1,7 @@
 //! Per-node evaluation logic for the Vizij graph runtime.
 
 use crate::eval::graph_runtime::{GraphRuntime, StagedInput};
-use crate::eval::variadic::{compare_variadic_keys, parse_variadic_key};
+use crate::eval::variadic::collect_operand_ports;
 use crate::types::{InputConnection, NodeParams, NodeSpec, NodeType};
 use hashbrown::HashMap;
 use vizij_api_core::{coercion, Shape, Value, WriteOp};
@@ -183,12 +183,18 @@ fn eval_multi_slider(params: &NodeParams) -> OutputMap {
 fn eval_arithmetic(kind: &NodeType, inputs: &HashMap<String, PortValue>) -> OutputMap {
     match kind {
         NodeType::Add => {
-            let values: Vec<Value> = inputs.values().map(|pv| pv.value.clone()).collect();
+            let values: Vec<Value> = collect_operand_ports(inputs)
+                .into_iter()
+                .map(|pv| pv.value.clone())
+                .collect();
             let result = fold_numeric_variadic(&values, |x, y| x + y, Value::Float(0.0));
             single_output(result)
         }
         NodeType::Multiply => {
-            let values: Vec<Value> = inputs.values().map(|pv| pv.value.clone()).collect();
+            let values: Vec<Value> = collect_operand_ports(inputs)
+                .into_iter()
+                .map(|pv| pv.value.clone())
+                .collect();
             let result = fold_numeric_variadic(&values, |x, y| x * y, Value::Float(1.0));
             single_output(result)
         }
@@ -619,11 +625,8 @@ fn eval_vector_index(inputs: &HashMap<String, PortValue>) -> OutputMap {
 }
 
 fn eval_join(inputs: &HashMap<String, PortValue>) -> OutputMap {
-    let mut entries: Vec<_> = inputs.iter().collect();
-    entries.sort_by(|(a, _), (b, _)| compare_variadic_keys(a, b));
-
     let mut out: Vec<f32> = Vec::new();
-    for (_, port) in entries {
+    for port in collect_operand_ports(inputs) {
         if let Some(flat) = flatten_numeric(&port.value) {
             out.extend(flat.data);
         }
@@ -759,21 +762,7 @@ fn eval_default_blend(inputs: &HashMap<String, PortValue>) -> OutputMap {
     let baseline_port = input_or_default(inputs, "baseline");
     let offset_port = input_or_default(inputs, "offset");
 
-    let mut target_entries: Vec<(&str, &PortValue)> = inputs
-        .iter()
-        .filter_map(|(key, port)| {
-            let (prefix, _) = parse_variadic_key(key);
-            if prefix == "target" {
-                Some((key.as_str(), port))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    target_entries.sort_by(|(a, _), (b, _)| compare_variadic_keys(a, b));
-    let target_ports: Vec<&PortValue> = target_entries.into_iter().map(|(_, port)| port).collect();
-
+    let target_ports = collect_operand_ports(inputs);
     let mut weights = vec_port_to_vec(inputs, "weights");
     if !target_ports.is_empty() {
         if weights.is_empty() {
@@ -1098,19 +1087,14 @@ fn eval_case(params: &NodeParams, inputs: &HashMap<String, PortValue>) -> Output
     let selector = inputs.get("selector").map(|p| p.value.clone());
     let default = inputs.get("default").map(|p| p.value.clone());
 
-    // Gather variadic case inputs in order (keys like "cases_1", "cases_2", etc.)
-    let mut entries: Vec<_> = inputs
-        .iter()
-        .filter(|(k, _)| k.starts_with("cases"))
-        .collect();
-    entries.sort_by(|(a, _), (b, _)| compare_variadic_keys(a, b));
-
+    // Gather variadic case inputs in order (`operand_*`).
+    let case_ports = collect_operand_ports(inputs);
     let labels = params.case_labels.clone().unwrap_or_default();
 
     // Compare selector (prefer Text comparison) against labels.
     if let Some(sel_val) = selector {
         if let Value::Text(sel_s) = sel_val {
-            for (i, (_k, port)) in entries.iter().enumerate() {
+            for (i, port) in case_ports.iter().enumerate() {
                 if let Some(label) = labels.get(i) {
                     if sel_s == *label {
                         return single_output(port.value.clone());
@@ -1119,7 +1103,7 @@ fn eval_case(params: &NodeParams, inputs: &HashMap<String, PortValue>) -> Output
             }
         } else {
             // Fallback: try direct equality against case values (shallow)
-            for (i, (_k, port)) in entries.iter().enumerate() {
+            for (i, port) in case_ports.iter().enumerate() {
                 if params.case_labels.is_some() {
                     // labels provided — compare selector to label string if possible
                     if let Some(label) = labels.get(i) {

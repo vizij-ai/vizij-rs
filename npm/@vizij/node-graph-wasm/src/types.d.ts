@@ -149,25 +149,25 @@ export interface NodeSpec {
   >;
 }
 
-export interface LinkOutputEndpoint {
+export interface EdgeOutputEndpoint {
   node_id: NodeId;
   output?: string;
 }
 
-export interface LinkInputEndpoint {
+export interface EdgeInputEndpoint {
   node_id: NodeId;
   input: string;
 }
 
-export interface LinkSpec {
-  from: LinkOutputEndpoint;
-  to: LinkInputEndpoint;
+export interface EdgeSpec {
+  from: EdgeOutputEndpoint;
+  to: EdgeInputEndpoint;
   selector?: SelectorSegmentJSON[];
 }
 
 export interface GraphSpec {
   nodes: NodeSpec[];
-  links?: LinkSpec[];
+  edges?: EdgeSpec[];
 }
 
 export interface PortSnapshot {

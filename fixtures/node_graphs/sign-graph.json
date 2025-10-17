@@ -54,7 +54,7 @@
         }
       }
     ],
-    "links": [
+    "edges": [
       {
         "from": {
           "node_id": "ramp_in"
@@ -164,5 +164,5 @@
       "chain/sign.value"
     ]
   },
-  "links": []
+  "edges": []
 }

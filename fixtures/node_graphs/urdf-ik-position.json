@@ -51,7 +51,7 @@
         }
       }
     ],
-    "links": [
+    "edges": [
       {
         "from": {
           "node_id": "target_pos"
@@ -90,5 +90,5 @@
       "tests/urdf.solution"
     ]
   },
-  "links": []
+  "edges": []
 }

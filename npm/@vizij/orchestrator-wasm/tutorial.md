@@ -51,7 +51,7 @@ const gainGraph = {
       { id: "mix", type: "add" },
       { id: "publish", type: "output", params: { path: "demo/output/value" } },
     ],
-    links: [
+    edges: [
       { from: { node_id: "input" }, to: { node_id: "mix", input: "lhs" } },
       { from: { node_id: "offset" }, to: { node_id: "mix", input: "rhs" } },
       { from: { node_id: "mix" }, to: { node_id: "publish", input: "in" } },
@@ -97,7 +97,7 @@ orchestrator.prebind((path) => {
 ## 5. Merging Graphs
 
 `registerMergedGraph` rewires multiple graph specs into a single controller, namespacing node IDs
-and replacing blackboard hops with direct links when possible:
+and replacing blackboard hops with direct edges when possible:
 
 ```ts
 const mergedId = orchestrator.registerMergedGraph({
@@ -108,7 +108,7 @@ const mergedId = orchestrator.registerMergedGraph({
           { id: "source", type: "constant", params: { value: 1 } },
           { id: "publish", type: "output", params: { path: "shared/value" } },
         ],
-        links: [{ from: { node_id: "source" }, to: { node_id: "publish", input: "in" } }],
+        edges: [{ from: { node_id: "source" }, to: { node_id: "publish", input: "in" } }],
       },
       subs: { outputs: ["shared/value"] },
     },
@@ -123,7 +123,7 @@ const mergedId = orchestrator.registerMergedGraph({
           },
           { id: "publish", type: "output", params: { path: "shared/doubled" } },
         ],
-        links: [
+        edges: [
           { from: { node_id: "input" }, to: { node_id: "double", input: "lhs" } },
           { from: { node_id: "double" }, to: { node_id: "publish", input: "in" } },
         ],

@@ -2,9 +2,12 @@
 
 use std::cmp::Ordering;
 
+use hashbrown::HashMap;
+
 use vizij_api_core::Value;
 
 use super::numeric::binary_numeric;
+use super::PortValue;
 
 /// Split a variadic input key into its prefix and optional positional suffix.
 pub fn parse_variadic_key(key: &str) -> (&str, Option<usize>) {
@@ -30,6 +33,23 @@ pub fn compare_variadic_keys(a: &str, b: &str) -> Ordering {
         },
         other => other,
     }
+}
+
+/// Collect operand_* ports in a stable order (numeric suffix ascending, then lexical).
+pub fn collect_operand_ports(inputs: &HashMap<String, PortValue>) -> Vec<&PortValue> {
+    let mut entries: Vec<(&str, &PortValue)> = inputs
+        .iter()
+        .filter_map(|(key, port)| {
+            let (prefix, _) = parse_variadic_key(key);
+            if prefix == "operand" {
+                Some((key.as_str(), port))
+            } else {
+                None
+            }
+        })
+        .collect();
+    entries.sort_by(|(a, _), (b, _)| compare_variadic_keys(a, b));
+    entries.into_iter().map(|(_, port)| port).collect()
 }
 
 /// Fold a variadic collection of values with the provided numeric operator.

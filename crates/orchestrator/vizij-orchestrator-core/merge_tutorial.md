@@ -22,7 +22,7 @@ This introduces frame latency, extra blackboard traffic, and complex pass orderi
 `GraphControllerConfig::merged` (or `merged_with_options`) builds a single `GraphSpec` that rewires compatible input/output
 pairs directly:
 
-- `Output` → `Input` links become explicit graph edges.
+- `Output` → `Input` edges become explicit graph edges.
 - Both nodes execute in the same topological order.
 - Shared values no longer traverse the blackboard, eliminating pass dependencies.
 
@@ -72,7 +72,7 @@ let orch = Orchestrator::new(Schedule::SinglePass)
 | `BlendEqualWeights` | Inject a `default-blend` node (plus equal-weight constant) so downstream consumers see a single averaged value. |
 
 Separate `output_conflicts` and `intermediate_conflicts` let you choose different policies for
-terminal outputs (host-facing) vs. intermediate links consumed by another graph in the merged set.
+terminal outputs (host-facing) vs. intermediate edges consumed by another graph in the merged set.
 Namespace is only supported for final outputs—intermediate overlaps must be blended or produce an
 error.
 
@@ -101,7 +101,7 @@ error.
      edges so they originate from the upstream node.
    - Selectors compose: binding selector is prepended to the original link selector, preserving
      projection semantics.
-   - Inputs replaced by direct links are removed from the merged node list and their paths are
+   - Inputs replaced by direct edges are removed from the merged node list and their paths are
      filtered out of the subscription list.
 
 6. **Subscriptions and mirror writes.**

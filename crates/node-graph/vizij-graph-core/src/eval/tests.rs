@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::types::{
-    GraphSpec, InputDefault, LinkInputEndpoint, LinkOutputEndpoint, LinkSpec, NodeParams, NodeSpec,
+    EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, InputDefault, NodeParams, NodeSpec,
     NodeType, SelectorSegment,
 };
 use hashbrown::HashMap;
@@ -22,17 +22,17 @@ fn constant_node(id: &str, value: Value) -> NodeSpec {
     }
 }
 
-fn link(from: &str, to: &str, input: &str) -> LinkSpec {
+fn link(from: &str, to: &str, input: &str) -> EdgeSpec {
     link_with_output(from, "out", to, input)
 }
 
-fn link_with_output(from: &str, output_key: &str, to: &str, input: &str) -> LinkSpec {
-    LinkSpec {
-        from: LinkOutputEndpoint {
+fn link_with_output(from: &str, output_key: &str, to: &str, input: &str) -> EdgeSpec {
+    EdgeSpec {
+        from: EdgeOutputEndpoint {
             node_id: from.to_string(),
             output: output_key.to_string(),
         },
-        to: LinkInputEndpoint {
+        to: EdgeInputEndpoint {
             node_id: to.to_string(),
             input: input.to_string(),
         },
@@ -46,8 +46,8 @@ fn link_with_selector(
     to: &str,
     input: &str,
     selector: Vec<SelectorSegment>,
-) -> LinkSpec {
-    LinkSpec {
+) -> EdgeSpec {
+    EdgeSpec {
         selector: Some(selector),
         ..link_with_output(from, output_key, to, input)
     }
@@ -105,7 +105,7 @@ fn it_should_emit_write_for_output_nodes() {
                 input_defaults: HashMap::new(),
             },
         ],
-        links: vec![link("src", "out", "in")],
+        edges: vec![link("src", "out", "in")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -140,7 +140,7 @@ fn writes_batch_json_roundtrip_from_graph() {
                 input_defaults: HashMap::new(),
             },
         ],
-        links: vec![link("src", "out", "in")],
+        edges: vec![link("src", "out", "in")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -174,7 +174,7 @@ fn input_defaults_supply_missing_connections() {
                 input_defaults: defaults,
             },
         ],
-        links: vec![link("numerator", "div", "lhs")],
+        edges: vec![link("numerator", "div", "lhs")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -210,7 +210,7 @@ fn linked_inputs_override_defaults() {
                 input_defaults: defaults,
             },
         ],
-        links: vec![
+        edges: vec![
             link("numerator", "div", "lhs"),
             link("denominator", "div", "rhs"),
         ],
@@ -248,7 +248,7 @@ fn defaults_apply_when_output_key_missing() {
                 input_defaults: defaults,
             },
         ],
-        links: vec![
+        edges: vec![
             link("numerator", "div", "lhs"),
             link_with_output("config", "missing", "div", "rhs"),
         ],
@@ -280,10 +280,10 @@ fn join_respects_operand_order() {
                 input_defaults: HashMap::new(),
             },
         ],
-        links: vec![
-            link("a", "join", "operands_1"),
-            link("b", "join", "operands_2"),
-            link("c", "join", "operands_3"),
+        edges: vec![
+            link("a", "join", "operand_1"),
+            link("b", "join", "operand_2"),
+            link("c", "join", "operand_3"),
         ],
     };
 
@@ -311,7 +311,7 @@ fn oscillator_broadcasts_vector_inputs() {
                 input_defaults: HashMap::new(),
             },
         ],
-        links: vec![
+        edges: vec![
             link("freq", "osc", "frequency"),
             link("phase", "osc", "phase"),
         ],
@@ -645,7 +645,7 @@ fn selector_projects_record_field() {
                 input_defaults: HashMap::new(),
             },
         ],
-        links: vec![link_with_selector(
+        edges: vec![link_with_selector(
             "src",
             "out",
             "out",
@@ -690,7 +690,7 @@ fn selector_projects_transform_field_and_nested_index() {
                 input_defaults: HashMap::new(),
             },
         ],
-        links: vec![link_with_selector(
+        edges: vec![link_with_selector(
             "src",
             "out",
             "out",
@@ -732,7 +732,7 @@ fn selector_index_out_of_bounds_errors() {
                 input_defaults: HashMap::new(),
             },
         ],
-        links: vec![link_with_selector(
+        edges: vec![link_with_selector(
             "src",
             "out",
             "out",
@@ -768,7 +768,7 @@ fn spring_node_transitions_toward_new_target() {
 
     let mut spec = GraphSpec {
         nodes: vec![constant_node("target", Value::Float(0.0)), spring],
-        links: vec![link("target", "spring", "in")],
+        edges: vec![link("target", "spring", "in")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -831,7 +831,7 @@ fn damp_node_smooths_toward_target() {
 
     let mut spec = GraphSpec {
         nodes: vec![constant_node("target", Value::Float(0.0)), damp],
-        links: vec![link("target", "damp", "in")],
+        edges: vec![link("target", "damp", "in")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -891,7 +891,7 @@ fn slew_node_limits_rate_of_change() {
 
     let mut spec = GraphSpec {
         nodes: vec![constant_node("target", Value::Float(0.0)), slew],
-        links: vec![link("target", "slew", "in")],
+        edges: vec![link("target", "slew", "in")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -1001,18 +1001,18 @@ fn end_to_end_input_selector_scalar_math_output() {
             add_node,
             output_node,
         ],
-        links: vec![
+        edges: vec![
             link_with_selector(
                 "in",
                 "out",
                 "sum",
-                "lhs",
+                "operand_1",
                 vec![
                     SelectorSegment::Field("translation".to_string()),
                     SelectorSegment::Index(1),
                 ],
             ),
-            link("two", "sum", "rhs"),
+            link("two", "sum", "operand_2"),
             link("sum", "out", "in"),
         ],
     };

@@ -31,7 +31,7 @@ This package publishes the WebAssembly build of `vizij-orchestrator-core` togeth
 ## Key Concepts
 
 - **Controllers** – Graph and animation controllers registered with IDs; each has its own configuration (`spec`, `subscriptions`, `setup`).
-- **Graph merging** – `registerMergedGraph` rewires compatible graph specs into a single controller so shared paths become direct links. Conflict strategies (`error`, `namespace`, `blend`) are available through `MergeStrategyOptions`.
+- **Graph merging** – `registerMergedGraph` rewires compatible graph specs into a single controller so shared paths become direct edges. Conflict strategies (`error`, `namespace`, `blend`) are available through `MergeStrategyOptions`.
 - **Blackboard** – Shared typed key-value store (`TypedPath`, `ValueJSON`, `ShapeJSON`) where controllers read/write.
 - **Schedule** – `SinglePass`, `TwoPass`, or future `RateDecoupled` determine evaluation order.
 - **Merged Writes** – Deterministic ordered batch of writes produced during a frame, suitable for UI or downstream consumers.
@@ -110,7 +110,7 @@ import { init, createOrchestrator } from "@vizij/orchestrator-wasm";
 await init();
 const orchestrator = await createOrchestrator({ schedule: "SinglePass" });
 
-const graphId = orchestrator.registerGraph({ spec: { nodes: [], links: [] } });
+const graphId = orchestrator.registerGraph({ spec: { nodes: [], edges: [] } });
 const animId = orchestrator.registerAnimation({ setup: {} });
 
 orchestrator.prebind((path) => path.toUpperCase());
@@ -128,7 +128,7 @@ const mergedGraphId = orchestrator.registerMergedGraph({
           { id: "source", type: "constant", params: { value: 1 } },
           { id: "publish", type: "output", params: { path: "shared/value" } },
         ],
-        links: [
+        edges: [
           { from: { node_id: "source" }, to: { node_id: "publish", input: "in" } },
         ],
       },
@@ -144,7 +144,7 @@ const mergedGraphId = orchestrator.registerMergedGraph({
           },
           { id: "publish", type: "output", params: { path: "shared/doubled" } },
         ],
-        links: [
+        edges: [
           { from: { node_id: "input" }, to: { node_id: "double", input: "lhs" } },
           { from: { node_id: "double" }, to: { node_id: "publish", input: "in" } },
         ],

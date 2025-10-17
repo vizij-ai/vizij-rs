@@ -155,7 +155,8 @@ fn build_graph_controller_config(
     mut graph: JsGraphConfig,
     fallback_id: String,
 ) -> Result<GraphControllerConfig, String> {
-    json::normalize_graph_spec_value(&mut graph.spec);
+    json::normalize_graph_spec_value(&mut graph.spec)
+        .map_err(|e| format!("normalize graph spec error: {}", e))?;
     let spec: GraphSpec = serde_json::from_value(graph.spec)
         .map_err(|e| format!("graph spec deserialize error: {}", e))?;
     let subs = map_graph_subscriptions(graph.subs)?;
@@ -231,7 +232,8 @@ impl VizijOrchestrator {
             (obj.id, obj.spec, obj.subs)
         };
 
-        json::normalize_graph_spec_value(&mut spec_val);
+        json::normalize_graph_spec_value(&mut spec_val)
+            .map_err(|e| JsError::new(&format!("normalize graph spec error: {}", e)))?;
 
         // Deserialize GraphSpec
         let spec: vizij_graph_core::types::GraphSpec = serde_json::from_value(spec_val)

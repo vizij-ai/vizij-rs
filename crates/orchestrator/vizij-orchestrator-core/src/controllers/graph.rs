@@ -119,7 +119,7 @@ impl GraphControllerConfig {
         }
 
         let mut merged_nodes = Vec::new();
-        let mut merged_links = Vec::new();
+        let mut merged_edges = Vec::new();
         let mut existing_ids: HashSet<String> = HashSet::new();
         let mut input_nodes: Vec<InputNodeInfo> = Vec::new();
         let mut output_nodes: Vec<OutputNodeInfo> = Vec::new();
@@ -177,14 +177,14 @@ impl GraphControllerConfig {
                 merged_nodes.push(node);
             }
 
-            for mut link in spec.links {
-                if let Some(new_id) = id_map.get(&link.from.node_id) {
-                    link.from.node_id = new_id.clone();
+            for mut edge in spec.edges {
+                if let Some(new_id) = id_map.get(&edge.from.node_id) {
+                    edge.from.node_id = new_id.clone();
                 }
-                if let Some(new_id) = id_map.get(&link.to.node_id) {
-                    link.to.node_id = new_id.clone();
+                if let Some(new_id) = id_map.get(&edge.to.node_id) {
+                    edge.to.node_id = new_id.clone();
                 }
-                merged_links.push(link);
+                merged_edges.push(edge);
             }
         }
 
@@ -233,13 +233,13 @@ impl GraphControllerConfig {
         }
 
         let mut bindings_by_path: HashMap<String, Vec<OutputBinding>> = HashMap::new();
-        for link in &merged_links {
-            if let Some(info) = output_lookup.get(&link.to.node_id) {
+        for edge in &merged_edges {
+            if let Some(info) = output_lookup.get(&edge.to.node_id) {
                 if let Some(path) = info.path.as_ref() {
                     let binding = OutputBinding {
-                        source_node_id: link.from.node_id.clone(),
-                        source_port: link.from.output.clone(),
-                        selector: link.selector.clone(),
+                        source_node_id: edge.from.node_id.clone(),
+                        source_port: edge.from.output.clone(),
+                        selector: edge.selector.clone(),
                         graph_label: info.graph_label.clone(),
                     };
                     bindings_by_path
@@ -329,14 +329,14 @@ impl GraphControllerConfig {
                     });
 
                     for (idx, binding) in bindings.iter().enumerate() {
-                        merged_links.push(vizij_graph_core::types::LinkSpec {
-                            from: vizij_graph_core::types::LinkOutputEndpoint {
+                        merged_edges.push(vizij_graph_core::types::EdgeSpec {
+                            from: vizij_graph_core::types::EdgeOutputEndpoint {
                                 node_id: binding.source_node_id.clone(),
                                 output: binding.source_port.clone(),
                             },
-                            to: vizij_graph_core::types::LinkInputEndpoint {
+                            to: vizij_graph_core::types::EdgeInputEndpoint {
                                 node_id: blend_node_id.clone(),
-                                input: format!("target_{}", idx + 1),
+                                input: format!("operand_{}", idx + 1),
                             },
                             selector: binding.selector.clone(),
                         });
@@ -358,12 +358,12 @@ impl GraphControllerConfig {
                         input_defaults: Default::default(),
                     });
 
-                    merged_links.push(vizij_graph_core::types::LinkSpec {
-                        from: vizij_graph_core::types::LinkOutputEndpoint {
+                    merged_edges.push(vizij_graph_core::types::EdgeSpec {
+                        from: vizij_graph_core::types::EdgeOutputEndpoint {
                             node_id: weights_node_id.clone(),
                             output: "out".to_string(),
                         },
-                        to: vizij_graph_core::types::LinkInputEndpoint {
+                        to: vizij_graph_core::types::EdgeInputEndpoint {
                             node_id: blend_node_id.clone(),
                             input: "weights".to_string(),
                         },
@@ -416,12 +416,12 @@ impl GraphControllerConfig {
                             output_shapes: Default::default(),
                             input_defaults: Default::default(),
                         });
-                        merged_links.push(vizij_graph_core::types::LinkSpec {
-                            from: vizij_graph_core::types::LinkOutputEndpoint {
+                        merged_edges.push(vizij_graph_core::types::EdgeSpec {
+                            from: vizij_graph_core::types::EdgeOutputEndpoint {
                                 node_id: blend_node_id.clone(),
                                 output: "out".to_string(),
                             },
-                            to: vizij_graph_core::types::LinkInputEndpoint {
+                            to: vizij_graph_core::types::EdgeInputEndpoint {
                                 node_id: blend_output_node_id.clone(),
                                 input: "in".to_string(),
                             },
@@ -430,10 +430,10 @@ impl GraphControllerConfig {
                         merged_output_paths.insert(blend_output_typed);
 
                         for consumer in consumers {
-                            for link in merged_links.iter_mut() {
-                                if link.from.node_id == consumer.node_id {
-                                    link.from.node_id = blend_node_id.clone();
-                                    link.from.output = "out".to_string();
+                            for edge in merged_edges.iter_mut() {
+                                if edge.from.node_id == consumer.node_id {
+                                    edge.from.node_id = blend_node_id.clone();
+                                    edge.from.output = "out".to_string();
                                 }
                             }
                             inputs_to_remove.insert(consumer.node_id.clone());
@@ -471,12 +471,12 @@ impl GraphControllerConfig {
                             input_defaults: Default::default(),
                         });
 
-                        merged_links.push(vizij_graph_core::types::LinkSpec {
-                            from: vizij_graph_core::types::LinkOutputEndpoint {
+                        merged_edges.push(vizij_graph_core::types::EdgeSpec {
+                            from: vizij_graph_core::types::EdgeOutputEndpoint {
                                 node_id: blend_node_id.clone(),
                                 output: "out".to_string(),
                             },
-                            to: vizij_graph_core::types::LinkInputEndpoint {
+                            to: vizij_graph_core::types::EdgeInputEndpoint {
                                 node_id: output_node_id.clone(),
                                 input: "in".to_string(),
                             },
@@ -494,12 +494,12 @@ impl GraphControllerConfig {
             }
             if let Some(path) = input.path.as_ref() {
                 if let Some(binding) = unique_bindings.get(&path.to_string()) {
-                    for link in merged_links.iter_mut() {
-                        if link.from.node_id == input.node_id {
-                            link.from.node_id = binding.source_node_id.clone();
-                            link.from.output = binding.source_port.clone();
+                    for edge in merged_edges.iter_mut() {
+                        if edge.from.node_id == input.node_id {
+                            edge.from.node_id = binding.source_node_id.clone();
+                            edge.from.output = binding.source_port.clone();
                             if let Some(binding_selector) = binding.selector.as_ref() {
-                                link.selector = match link.selector.take() {
+                                edge.selector = match edge.selector.take() {
                                     Some(existing) => {
                                         let mut composed = binding_selector.clone();
                                         composed.extend(existing);
@@ -516,15 +516,15 @@ impl GraphControllerConfig {
             }
         }
 
-        // Drop nodes/links scheduled for removal.
+        // Drop nodes/edges scheduled for removal.
         merged_nodes.retain(|node| {
             !nodes_to_remove.contains(&node.id) && !inputs_to_remove.contains(&node.id)
         });
-        merged_links.retain(|link| {
-            !nodes_to_remove.contains(&link.from.node_id)
-                && !nodes_to_remove.contains(&link.to.node_id)
-                && !inputs_to_remove.contains(&link.from.node_id)
-                && !inputs_to_remove.contains(&link.to.node_id)
+        merged_edges.retain(|edge| {
+            !nodes_to_remove.contains(&edge.from.node_id)
+                && !nodes_to_remove.contains(&edge.to.node_id)
+                && !inputs_to_remove.contains(&edge.from.node_id)
+                && !inputs_to_remove.contains(&edge.to.node_id)
         });
 
         for node in &merged_nodes {
@@ -543,7 +543,7 @@ impl GraphControllerConfig {
 
         let merged_spec = GraphSpec {
             nodes: merged_nodes,
-            links: merged_links,
+            edges: merged_edges,
         };
 
         Ok(GraphControllerConfig {
@@ -673,7 +673,8 @@ mod tests {
 
     fn cfg_from_json(id: &str, spec_json: serde_json::Value) -> GraphControllerConfig {
         let mut spec_json = spec_json;
-        vizij_api_core::json::normalize_graph_spec_value(&mut spec_json);
+        vizij_api_core::json::normalize_graph_spec_value(&mut spec_json)
+            .expect("normalize graph spec");
         GraphControllerConfig {
             id: id.to_string(),
             spec: serde_json::from_value(spec_json).expect("graph spec json"),
@@ -694,7 +695,7 @@ mod tests {
             "nodes": [
                 { "id": "orphan", "type": "output", "params": { "path": "shared/value" } }
             ],
-            "links": []
+            "edges": []
         });
         let cfg = cfg_from_json("solo", spec);
         let err =
@@ -707,7 +708,7 @@ mod tests {
     }
 
     #[test]
-    fn merged_graph_allows_output_defaults_without_links() {
+    fn merged_graph_allows_output_defaults_without_edges() {
         let spec = json!({
             "nodes": [
                 {
@@ -721,7 +722,7 @@ mod tests {
                     }
                 }
             ],
-            "links": []
+            "edges": []
         });
 
         let cfg = cfg_from_json("solo", spec);
@@ -746,7 +747,7 @@ mod tests {
                 { "id": "shared", "type": "constant", "params": { "value": { "type": "float", "data": 1.0 } } },
                 { "id": "out", "type": "output", "params": { "path": "shared/value" } }
             ],
-            "links": [
+            "edges": [
                 { "from": { "node_id": "shared" }, "to": { "node_id": "out", "input": "in" } }
             ]
         });
@@ -755,7 +756,7 @@ mod tests {
                 { "id": "shared", "type": "input", "params": { "path": "shared/value" } },
                 { "id": "consumer", "type": "add" }
             ],
-            "links": [
+            "edges": [
                 { "from": { "node_id": "shared" }, "to": { "node_id": "consumer", "input": "lhs" } }
             ]
         });
@@ -790,7 +791,7 @@ mod tests {
                 { "id": "value", "type": "constant", "params": { "value": { "type": "float", "data": 1.0 } } },
                 { "id": "out", "type": "output", "params": { "path": "shared/value" } }
             ],
-            "links": [
+            "edges": [
                 { "from": { "node_id": "value" }, "to": { "node_id": "out", "input": "in" } }
             ]
         });
@@ -801,7 +802,7 @@ mod tests {
                 { "id": "sum", "type": "add" },
                 { "id": "publish", "type": "output", "params": { "path": "result/value" } }
             ],
-            "links": [
+            "edges": [
                 { "from": { "node_id": "shared_input" }, "to": { "node_id": "sum", "input": "lhs" } },
                 { "from": { "node_id": "external_input" }, "to": { "node_id": "sum", "input": "rhs" } },
                 { "from": { "node_id": "sum" }, "to": { "node_id": "publish", "input": "in" } }
@@ -846,7 +847,7 @@ mod tests {
                 { "id": "source", "type": "constant", "params": { "value": { "type": "vector", "data": [0, 1, 2, 3] } } },
                 { "id": "publish", "type": "output", "params": { "path": "shared/value" } }
             ],
-            "links": [
+            "edges": [
                 {
                     "from": { "node_id": "source" },
                     "to": { "node_id": "publish", "input": "in" },
@@ -859,7 +860,7 @@ mod tests {
                 { "id": "shared_input", "type": "input", "params": { "path": "shared/value" } },
                 { "id": "extract", "type": "split" }
             ],
-            "links": [
+            "edges": [
                 {
                     "from": { "node_id": "shared_input" },
                     "to": { "node_id": "extract", "input": "in" },
@@ -877,17 +878,17 @@ mod tests {
         )
         .expect("merge ok");
 
-        let link = merged
+        let edge = merged
             .spec
-            .links
+            .edges
             .iter()
-            .find(|l| l.to.node_id.ends_with("consumer::extract"))
-            .expect("link to extract");
+            .find(|edge| edge.to.node_id.ends_with("consumer::extract"))
+            .expect("edge to extract");
         assert!(
-            link.from.node_id.ends_with("producer::source"),
-            "rewired link should originate from producer source"
+            edge.from.node_id.ends_with("producer::source"),
+            "rewired edge should originate from producer source"
         );
-        let selector = link.selector.as_ref().expect("composed selector");
+        let selector = edge.selector.as_ref().expect("composed selector");
         assert_eq!(
             selector,
             &vec![
@@ -905,7 +906,7 @@ mod tests {
                 { "id": "const", "type": "constant", "params": { "value": { "float": 1.0 } } },
                 { "id": "publish", "type": "output", "params": { "path": "shared/value" } }
             ],
-            "links": [
+            "edges": [
                 { "from": { "node_id": "const" }, "to": { "node_id": "publish", "input": "in" } }
             ]
         });
@@ -914,7 +915,7 @@ mod tests {
                 { "id": "const", "type": "constant", "params": { "value": { "float": 3.0 } } },
                 { "id": "publish", "type": "output", "params": { "path": "shared/value" } }
             ],
-            "links": [
+            "edges": [
                 { "from": { "node_id": "const" }, "to": { "node_id": "publish", "input": "in" } }
             ]
         });
@@ -954,7 +955,7 @@ mod tests {
                 { "id": "const", "type": "constant", "params": { "value": { "float": 2.0 } } },
                 { "id": "publish", "type": "output", "params": { "path": "shared/value" } }
             ],
-            "links": [
+            "edges": [
                 { "from": { "node_id": "const" }, "to": { "node_id": "publish", "input": "in" } }
             ]
         });
@@ -963,7 +964,7 @@ mod tests {
                 { "id": "const", "type": "constant", "params": { "value": { "float": 4.0 } } },
                 { "id": "publish", "type": "output", "params": { "path": "shared/value" } }
             ],
-            "links": [
+            "edges": [
                 { "from": { "node_id": "const" }, "to": { "node_id": "publish", "input": "in" } }
             ]
         });
@@ -972,7 +973,7 @@ mod tests {
                 { "id": "shared_input", "type": "input", "params": { "path": "shared/value" } },
                 { "id": "publish", "type": "output", "params": { "path": "result/value" } }
             ],
-            "links": [
+            "edges": [
                 { "from": { "node_id": "shared_input" }, "to": { "node_id": "publish", "input": "in" } }
             ]
         });
@@ -1013,7 +1014,7 @@ mod tests {
                 { "id": "const", "type": "constant", "params": { "value": { "float": 1.0 } } },
                 { "id": "publish", "type": "output", "params": { "path": "shared/value" } }
             ],
-            "links": [
+            "edges": [
                 { "from": { "node_id": "const" }, "to": { "node_id": "publish", "input": "in" } }
             ]
         });
@@ -1022,7 +1023,7 @@ mod tests {
                 { "id": "const", "type": "constant", "params": { "value": { "float": 2.0 } } },
                 { "id": "publish", "type": "output", "params": { "path": "shared/value" } }
             ],
-            "links": [
+            "edges": [
                 { "from": { "node_id": "const" }, "to": { "node_id": "publish", "input": "in" } }
             ]
         });
@@ -1071,7 +1072,7 @@ mod tests {
                 { "id": "const", "type": "constant", "params": { "value": { "float": 1.0 } } },
                 { "id": "publish", "type": "output", "params": { "path": "shared/value" } }
             ],
-            "links": [
+            "edges": [
                 { "from": { "node_id": "const" }, "to": { "node_id": "publish", "input": "in" } }
             ]
         });
@@ -1080,7 +1081,7 @@ mod tests {
                 { "id": "const", "type": "constant", "params": { "value": { "float": 2.0 } } },
                 { "id": "publish", "type": "output", "params": { "path": "shared/value" } }
             ],
-            "links": [
+            "edges": [
                 { "from": { "node_id": "const" }, "to": { "node_id": "publish", "input": "in" } }
             ]
         });
@@ -1089,7 +1090,7 @@ mod tests {
                 { "id": "input", "type": "input", "params": { "path": "shared/value" } },
                 { "id": "publish", "type": "output", "params": { "path": "result/value" } }
             ],
-            "links": [
+            "edges": [
                 { "from": { "node_id": "input" }, "to": { "node_id": "publish", "input": "in" } }
             ]
         });

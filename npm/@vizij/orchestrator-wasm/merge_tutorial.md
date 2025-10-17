@@ -77,9 +77,9 @@ g1_consumer::node_name // graph 1
 During merging, the orchestrator:
 
 1. Finds every `Output` node with a `params.path`.
-2. Tracks its upstream link (source node + output port).
+2. Tracks its upstream edge (source node + output port).
 3. Searches for `Input` nodes whose `params.path` matches.
-4. Replaces the input node in all outbound links with the upstream node, removing the original
+4. Replaces the input node in all outbound edges with the upstream node, removing the original
    `Input` node if it is fully satisfied by the merge.
 5. Composes selectors (binding selector first, consumer selector second).
 
@@ -127,8 +127,8 @@ graph merge error: output node 'g0_graphA::publish' in graph 'graphA' is missing
 ```
 
 Resolution:
-- Verify the graph spec includes links into every `Output` node.
-- Check for typos in node IDs within `links`.
+- Verify the graph spec includes edges into every `Output` node.
+- Check for typos in node IDs within `edges`.
 
 ### Empty bundle
 
@@ -178,7 +178,7 @@ const mergedId = orchestrator.registerMergedGraph({
           { id: "osc", type: "oscillator", params: { frequency: 0.5 } },
           { id: "publish", type: "output", params: { path: "shared/motion" } },
         ],
-        links: [
+        edges: [
           { from: { node_id: "time" }, to: { node_id: "osc", input: "phase" } },
           { from: { node_id: "osc" }, to: { node_id: "publish", input: "in" } },
         ],
@@ -196,7 +196,7 @@ const mergedId = orchestrator.registerMergedGraph({
           { id: "remap", type: "remap", input_defaults: { in_min: 0, in_max: 1, out_min: -1, out_max: 1 } },
           { id: "publish", type: "output", params: { path: "rig/arm.position" } },
         ],
-        links: [
+        edges: [
           { from: { node_id: "shared" }, to: { node_id: "remap", input: "value" } },
           { from: { node_id: "remap" }, to: { node_id: "publish", input: "in" } },
         ],

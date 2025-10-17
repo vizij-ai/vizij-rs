@@ -46,7 +46,7 @@
         }
       }
     ],
-    "links": [
+    "edges": [
       {
         "from": {
           "node_id": "time"
@@ -118,5 +118,5 @@
       "samples/logic.gated"
     ]
   },
-  "links": []
+  "edges": []
 }

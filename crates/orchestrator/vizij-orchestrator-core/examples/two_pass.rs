@@ -18,7 +18,7 @@ fn main() -> anyhow::Result<()> {
                 "params": { "path": "shared/value" }
             }
         ],
-        "links": [
+        "edges": [
             { "from": { "node_id": "constant_one" }, "to": { "node_id": "publish", "input": "in" } }
         ]
     }))?;
@@ -44,7 +44,7 @@ fn main() -> anyhow::Result<()> {
                 "params": { "path": "shared/doubled" }
             }
         ],
-        "links": [
+        "edges": [
             { "from": { "node_id": "shared_input" }, "to": { "node_id": "scale", "input": "lhs" } },
             { "from": { "node_id": "scale" }, "to": { "node_id": "result", "input": "in" } }
         ]

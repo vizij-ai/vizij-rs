@@ -79,7 +79,7 @@ const mergedGraphId = orchestrator.register_merged_graph({
           { id: "input", type: "input", params: { path: "shared/value" } },
           { id: "out", type: "output", params: { path: "shared/result" } }
         ],
-        links: [
+        edges: [
           { from: { node_id: "input" }, to: { node_id: "out", input: "in" } }
         ]
       }

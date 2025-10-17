@@ -41,14 +41,14 @@
         }
       }
     ],
-    "links": [
+    "edges": [
       {
         "from": {
           "node_id": "anim_input"
         },
         "to": {
           "node_id": "scaled",
-          "input": "a"
+          "input": "operand_1"
         }
       },
       {
@@ -57,7 +57,7 @@
         },
         "to": {
           "node_id": "scaled",
-          "input": "b"
+          "input": "operand_2"
         }
       },
       {
@@ -66,7 +66,7 @@
         },
         "to": {
           "node_id": "output_sum",
-          "input": "lhs"
+          "input": "operand_1"
         }
       },
       {
@@ -75,7 +75,7 @@
         },
         "to": {
           "node_id": "output_sum",
-          "input": "rhs"
+          "input": "operand_2"
         }
       },
       {
@@ -99,5 +99,5 @@
       "demo/output/value"
     ]
   },
-  "links": []
+  "edges": []
 }

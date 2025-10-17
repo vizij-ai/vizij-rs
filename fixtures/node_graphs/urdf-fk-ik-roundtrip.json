@@ -46,7 +46,7 @@
         }
       }
     ],
-    "links": [
+    "edges": [
       {
         "from": {
           "node_id": "joint_input"
@@ -86,5 +86,5 @@
       }
     ]
   },
-  "links": []
+  "edges": []
 }

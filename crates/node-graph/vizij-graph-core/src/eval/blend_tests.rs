@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::types::{
-    GraphSpec, LinkInputEndpoint, LinkOutputEndpoint, LinkSpec, NodeParams, NodeSpec, NodeType,
+    EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
 };
 use hashbrown::HashMap;
 use vizij_api_core::Value;
@@ -21,17 +21,17 @@ fn constant_node(id: &str, value: Value) -> NodeSpec {
     }
 }
 
-fn link(from: &str, to: &str, input: &str) -> LinkSpec {
+fn link(from: &str, to: &str, input: &str) -> EdgeSpec {
     link_with_output(from, "out", to, input)
 }
 
-fn link_with_output(from: &str, output_key: &str, to: &str, input: &str) -> LinkSpec {
-    LinkSpec {
-        from: LinkOutputEndpoint {
+fn link_with_output(from: &str, output_key: &str, to: &str, input: &str) -> EdgeSpec {
+    EdgeSpec {
+        from: EdgeOutputEndpoint {
             node_id: from.to_string(),
             output: output_key.to_string(),
         },
-        to: LinkInputEndpoint {
+        to: EdgeInputEndpoint {
             node_id: to.to_string(),
             input: input.to_string(),
         },
@@ -54,7 +54,7 @@ fn weighted_sum_vector_scalar_weight_broadcasts_and_outputs_descriptive_ports() 
                 input_defaults: HashMap::new(),
             },
         ],
-        links: vec![link("vals", "ws", "values"), link("w", "ws", "weights")],
+        edges: vec![link("vals", "ws", "values"), link("w", "ws", "weights")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -109,7 +109,7 @@ fn weighted_sum_vector_length_mismatch_returns_nans() {
                 input_defaults: HashMap::new(),
             },
         ],
-        links: vec![link("vals", "ws", "values"), link("w", "ws", "weights")],
+        edges: vec![link("vals", "ws", "values"), link("w", "ws", "weights")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -155,7 +155,7 @@ fn blend_weighted_average_computes_normalized_average() {
                 input_defaults: HashMap::new(),
             },
         ],
-        links: vec![
+        edges: vec![
             link("vals", "ws", "values"),
             link("w", "ws", "weights"),
             link_with_output("ws", "total_weighted_sum", "bavg", "total_weighted_sum"),
@@ -189,7 +189,7 @@ fn blend_multiply_computes_product_of_terms() {
                 input_defaults: HashMap::new(),
             },
         ],
-        links: vec![link("vals", "mult", "values"), link("w", "mult", "weights")],
+        edges: vec![link("vals", "mult", "values"), link("w", "mult", "weights")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -217,7 +217,7 @@ fn blend_max_selects_value_of_highest_effective_weight() {
                 input_defaults: HashMap::new(),
             },
         ],
-        links: vec![link("vals", "max", "values"), link("w", "max", "weights")],
+        edges: vec![link("vals", "max", "values"), link("w", "max", "weights")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -262,14 +262,14 @@ fn default_blend_matches_expected_vec3_output() {
                 input_defaults: HashMap::new(),
             },
         ],
-        links: vec![
-            link("w1", "weights", "operands_1"),
-            link("w2", "weights", "operands_2"),
+        edges: vec![
+            link("w1", "weights", "operand_1"),
+            link("w2", "weights", "operand_2"),
             link("baseline", "blend", "baseline"),
             link("offset", "blend", "offset"),
             link("weights", "blend", "weights"),
-            link("t1", "blend", "target_1"),
-            link("t2", "blend", "target_2"),
+            link("t1", "blend", "operand_1"),
+            link("t2", "blend", "operand_2"),
         ],
     };
 
@@ -331,10 +331,10 @@ fn default_blend_emits_nan_value_when_weight_length_mismatch() {
                 input_defaults: HashMap::new(),
             },
         ],
-        links: vec![
+        edges: vec![
             link("baseline", "blend", "baseline"),
-            link("t1", "blend", "target_1"),
-            link("t2", "blend", "target_2"),
+            link("t1", "blend", "operand_1"),
+            link("t2", "blend", "operand_2"),
             link("weights", "blend", "weights"),
         ],
     };
@@ -371,10 +371,10 @@ fn case_node_routes_based_on_case_labels_param() {
                 input_defaults: HashMap::new(),
             },
         ],
-        links: vec![
+        edges: vec![
             link("sel", "case", "selector"),
-            link("c1", "case", "cases_1"),
-            link("c2", "case", "cases_2"),
+            link("c1", "case", "operand_1"),
+            link("c2", "case", "operand_2"),
             link("d", "case", "default"),
         ],
     };

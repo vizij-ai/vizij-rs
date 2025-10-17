@@ -335,7 +335,7 @@ async function testMergedGraphRegistration(): Promise<void> {
                 params: { path: "shared/value" },
               },
             ],
-            links: [
+            edges: [
               {
                 from: { node_id: "const_one" },
                 to: { node_id: "publish", input: "in" },
@@ -367,7 +367,7 @@ async function testMergedGraphRegistration(): Promise<void> {
                 params: { path: "shared/doubled" },
               },
             ],
-            links: [
+            edges: [
               {
                 from: { node_id: "shared_input" },
                 to: { node_id: "double", input: "lhs" },

@@ -58,7 +58,7 @@ fn build_graph_spec() -> GraphSpec {
             { "id": "multiply", "type": "multiply" },
             { "id": "publish", "type": "output", "params": { "path": "demo/output/value" } }
         ],
-        "links": [
+        "edges": [
             { "from": { "node_id": "input_gain" }, "to": { "node_id": "multiply", "input": "lhs" } },
             { "from": { "node_id": "const_offset" }, "to": { "node_id": "multiply", "input": "rhs" } },
             { "from": { "node_id": "multiply" }, "to": { "node_id": "publish", "input": "in" } }
@@ -192,7 +192,7 @@ let mut orch = Orchestrator::new(Schedule::SinglePass)
 
 ### What merge does
 - Namespaces node IDs (`g0_io::node`, `g1_compute::node`) to avoid collisions.
-- Replaces matching `Input` nodes that read an upstream graph’s output path with direct links.
+- Replaces matching `Input` nodes that read an upstream graph’s output path with direct edges.
 - Preserves unmatched inputs and their subscriptions so you can still stage host values.
 - Emits `GraphMergeError::ConflictingOutputs` if two graphs drive the same path, or
   `GraphMergeError::OutputMissingUpstream` if an output node has no source (e.g., partially defined).

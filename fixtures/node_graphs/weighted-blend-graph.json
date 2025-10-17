@@ -114,7 +114,7 @@
       }
     }
   ],
-  "links": [
+  "edges": [
     {
       "from": {
         "node_id": "targets"
@@ -259,7 +259,7 @@
       },
       "to": {
         "node_id": "weight_sum",
-        "input": "weight_0"
+        "input": "operand_1"
       },
       "selector": [
         {
@@ -276,7 +276,7 @@
       },
       "to": {
         "node_id": "weight_sum",
-        "input": "weight_1"
+        "input": "operand_2"
       },
       "selector": [
         {
@@ -293,7 +293,7 @@
       },
       "to": {
         "node_id": "weight_sum",
-        "input": "weight_2"
+        "input": "operand_3"
       },
       "selector": [
         {

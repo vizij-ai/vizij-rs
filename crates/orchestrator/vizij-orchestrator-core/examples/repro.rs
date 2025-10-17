@@ -47,7 +47,7 @@ fn main() {
                 "params": { "path": "demo/output/value" }
             }
         ],
-        "links": [
+        "edges": [
             {
                 "from": { "node_id": "anim_input" },
                 "to": { "node_id": "scaled", "input": "lhs" }

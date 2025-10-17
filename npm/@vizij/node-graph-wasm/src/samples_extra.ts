@@ -1,15 +1,15 @@
 import type {
   GraphSpec,
-  LinkSpec,
+  EdgeSpec,
   SelectorSegmentJSON,
 } from "./types";
 
-const link = (
+const edge = (
   from: string,
   to: string,
   input: string,
   options: { output?: string; selector?: SelectorSegmentJSON[] } = {},
-): LinkSpec => ({
+): EdgeSpec => ({
   from: {
     node_id: from,
     ...(options.output ? { output: options.output } : {}),
@@ -54,10 +54,10 @@ export const urdfIkPosition: GraphSpec = {
       params: { path: "samples/urdf.angles" },
     },
   ],
-  links: [
-    link("target_pos", "ik", "target_pos"),
-    link("seed", "ik", "seed"),
-    link("ik", "ik_out", "in"),
+  edges: [
+    edge("target_pos", "ik", "target_pos"),
+    edge("seed", "ik", "seed"),
+    edge("ik", "ik_out", "in"),
   ],
 };
 

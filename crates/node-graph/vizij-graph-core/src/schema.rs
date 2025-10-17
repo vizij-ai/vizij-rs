@@ -282,7 +282,7 @@ pub fn registry() -> Registry {
         doc: "Sums all incoming operands, treating missing inputs as 0.",
         inputs: vec![],
         variadic_inputs: Some(VariadicSpec {
-            id: "operands",
+            id: "operand",
             ty: PortType::Float,
             label: "Operand",
             doc: "Each scalar to include in the sum.",
@@ -328,7 +328,7 @@ pub fn registry() -> Registry {
         doc: "Multiplies all incoming operands; missing inputs act as 1.",
         inputs: vec![],
         variadic_inputs: Some(VariadicSpec {
-            id: "operands",
+            id: "operand",
             ty: PortType::Float,
             label: "Operand",
             doc: "Each scalar to include in the product.",
@@ -1130,7 +1130,7 @@ pub fn registry() -> Registry {
         doc: "Concatenates all Operand inputs into a single numeric vector, skipping non-numeric entries.",
         inputs: vec![],
         variadic_inputs: Some(VariadicSpec {
-            id: "operands",
+            id: "operand",
             ty: PortType::Vector,
             label: "Operand",
             doc: "Each vector or scalar slice to append in order.",
@@ -1281,7 +1281,7 @@ pub fn registry() -> Registry {
         type_id: DefaultBlend,
         name: "Default Blend",
         category: "Blend",
-        doc: "Produces a weighted sum of Target inputs plus Baseline and Offset; handles weight broadcasting and falls back to neutral/null when counts mismatch.",
+        doc: "Produces a weighted sum of operand inputs plus Baseline and Offset; handles weight broadcasting and falls back to neutral/null when counts mismatch.",
         inputs: vec![
             PortSpec {
                 id: "baseline",
@@ -1306,10 +1306,10 @@ pub fn registry() -> Registry {
             },
         ],
         variadic_inputs: Some(VariadicSpec {
-            id: "target",
+            id: "operand",
             ty: PortType::Any,
-            label: "Target",
-            doc: "Target values to blend before adding baseline and offset.",
+            label: "Operand",
+            doc: "Operand values to blend before adding baseline and offset.",
             min: 0,
             max: None,
         }),
@@ -1578,7 +1578,7 @@ pub fn registry() -> Registry {
             },
         ],
         variadic_inputs: Some(VariadicSpec {
-            id: "cases",
+            id: "operand",
             ty: PortType::Any,
             label: "Case Value",
             doc: "Values routed when their corresponding case_labels entry equals the selector.",
@@ -1597,7 +1597,7 @@ pub fn registry() -> Registry {
             id: "case_labels",
             ty: ParamType::Any,
             label: "Case Labels",
-            doc: "Array of string labels; entry i maps to variadic input cases_i.",
+            doc: "Array of string labels; entry i maps to variadic input operand_i.",
             default_json: Some(serde_json::json!([])),
             min: None,
             max: None,

@@ -111,7 +111,7 @@ fn two_pass_applies_graph_then_anim_then_graph_writes_and_merges() {
 }
 
 #[test]
-fn graph_uses_input_defaults_when_link_missing() {
+fn graph_uses_input_defaults_when_edge_missing() {
     let graph_json = json!({
         "nodes": [
             {
@@ -125,7 +125,7 @@ fn graph_uses_input_defaults_when_link_missing() {
                 "id": "doubler",
                 "type": "multiply",
                 "input_defaults": {
-                    "rhs": {
+                    "operand_2": {
                         "value": { "type": "float", "data": 2.0 }
                     }
                 }
@@ -138,10 +138,10 @@ fn graph_uses_input_defaults_when_link_missing() {
                 }
             }
         ],
-        "links": [
+        "edges": [
             {
                 "from": { "node_id": "source" },
-                "to": { "node_id": "doubler", "input": "lhs" }
+                "to": { "node_id": "doubler", "input": "operand_1" }
             },
             {
                 "from": { "node_id": "doubler" },
@@ -195,7 +195,7 @@ fn merged_graph_rewires_shared_output() {
                 "params": { "path": "shared/value" }
             }
         ],
-        "links": [
+        "edges": [
             { "from": { "node_id": "const_one" }, "to": { "node_id": "publish", "input": "in" } }
         ]
     }))
@@ -212,7 +212,7 @@ fn merged_graph_rewires_shared_output() {
                 "id": "scale",
                 "type": "multiply",
                 "input_defaults": {
-                    "rhs": { "value": { "type": "float", "data": 2.0 } }
+                    "operand_2": { "value": { "type": "float", "data": 2.0 } }
                 }
             },
             {
@@ -221,8 +221,8 @@ fn merged_graph_rewires_shared_output() {
                 "params": { "path": "shared/doubled" }
             }
         ],
-        "links": [
-            { "from": { "node_id": "shared_input" }, "to": { "node_id": "scale", "input": "lhs" } },
+        "edges": [
+            { "from": { "node_id": "shared_input" }, "to": { "node_id": "scale", "input": "operand_1" } },
             { "from": { "node_id": "scale" }, "to": { "node_id": "result", "input": "in" } }
         ]
     }))
@@ -263,7 +263,8 @@ fn merged_graph_rewires_shared_output() {
 fn merged_graph_final_overlap_still_errors_with_blend_strategy() {
     let cfg_from_json = |id: &str, spec_json: serde_json::Value| -> GraphControllerConfig {
         let mut spec_json = spec_json;
-        vizij_api_core::json::normalize_graph_spec_value(&mut spec_json);
+        vizij_api_core::json::normalize_graph_spec_value(&mut spec_json)
+            .expect("normalize graph spec");
         GraphControllerConfig {
             id: id.to_string(),
             spec: serde_json::from_value(spec_json).expect("graph spec json"),
@@ -277,7 +278,7 @@ fn merged_graph_final_overlap_still_errors_with_blend_strategy() {
             { "id": "out_final1", "type": "output", "params": { "path": "shared/a" } },
             { "id": "out_final2", "type": "output", "params": { "path": "final/a" } }
         ],
-        "links": [
+        "edges": [
             { "from": { "node_id": "value" }, "to": { "node_id": "out_final1", "input": "in" } },
             { "from": { "node_id": "value" }, "to": { "node_id": "out_final2", "input": "in" } }
         ]
@@ -289,7 +290,7 @@ fn merged_graph_final_overlap_still_errors_with_blend_strategy() {
             { "id": "add", "type": "add", "params": { "path": "final/a" } },
             { "id": "publish", "type": "output", "params": { "path": "final/a" } }
         ],
-        "links": [
+        "edges": [
             { "from": { "node_id": "in_a" }, "to": { "node_id": "add", "input": "in" } },
             { "from": { "node_id": "value" }, "to": { "node_id": "add", "input": "in" } },
             { "from": { "node_id": "add" }, "to": { "node_id": "publish", "input": "in" } }
@@ -323,7 +324,7 @@ fn merge_reports_conflicting_outputs() {
             { "id": "const_a", "type": "constant", "params": { "value": { "type": "float", "data": 1.0 } } },
             { "id": "out_a", "type": "output", "params": { "path": "shared/value" } }
         ],
-        "links": [
+        "edges": [
             { "from": { "node_id": "const_a" }, "to": { "node_id": "out_a", "input": "in" } }
         ]
     }))
@@ -334,7 +335,7 @@ fn merge_reports_conflicting_outputs() {
             { "id": "const_b", "type": "constant", "params": { "value": { "type": "float", "data": 2.0 } } },
             { "id": "out_b", "type": "output", "params": { "path": "shared/value" } }
         ],
-        "links": [
+        "edges": [
             { "from": { "node_id": "const_b" }, "to": { "node_id": "out_b", "input": "in" } }
         ]
     }))
@@ -388,10 +389,12 @@ fn merged_graph_parallel_blend_pipeline() {
                     && node.id.contains(&token)
             })
             .unwrap_or_else(|| panic!("blend node for {} missing", path));
-        let target_links: Vec<_> = spec
-            .links
+        let operand_edges: Vec<_> = spec
+            .edges
             .iter()
-            .filter(|link| link.to.node_id == blend_node.id && link.to.input.starts_with("target_"))
+            .filter(|link| {
+                link.to.node_id == blend_node.id && link.to.input.starts_with("operand_")
+            })
             .collect();
         let expected_sources = match path {
             "shared/b" => 2,
@@ -400,7 +403,7 @@ fn merged_graph_parallel_blend_pipeline() {
             _ => unreachable!(),
         };
         assert_eq!(
-            target_links.len(),
+            operand_edges.len(),
             expected_sources,
             "blend node for {} should have {} inputs",
             path,

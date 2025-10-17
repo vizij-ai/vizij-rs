@@ -174,7 +174,7 @@ pub struct NodeSpec {
 pub struct GraphSpec {
     pub nodes: Vec<NodeSpec>,
     #[serde(default)]
-    pub links: Vec<LinkSpec>,
+    pub edges: Vec<EdgeSpec>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -216,22 +216,22 @@ pub struct InputDefault {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LinkOutputEndpoint {
+pub struct EdgeOutputEndpoint {
     pub node_id: NodeId,
     #[serde(default = "default_output_key")]
     pub output: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LinkInputEndpoint {
+pub struct EdgeInputEndpoint {
     pub node_id: NodeId,
     pub input: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LinkSpec {
-    pub from: LinkOutputEndpoint,
-    pub to: LinkInputEndpoint,
+pub struct EdgeSpec {
+    pub from: EdgeOutputEndpoint,
+    pub to: EdgeInputEndpoint,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub selector: Option<Selector>,
@@ -264,33 +264,33 @@ impl GraphSpec {
 
         let mut seen_inputs: HashSet<(NodeId, String)> = HashSet::new();
 
-        for link in &self.links {
-            if !known.contains(&link.from.node_id) {
+        for edge in &self.edges {
+            if !known.contains(&edge.from.node_id) {
                 return Err(format!(
-                    "link references missing source node '{}'",
-                    link.from.node_id
+                    "edge references missing source node '{}'",
+                    edge.from.node_id
                 ));
             }
-            if !known.contains(&link.to.node_id) {
+            if !known.contains(&edge.to.node_id) {
                 return Err(format!(
-                    "link references missing target node '{}'",
-                    link.to.node_id
+                    "edge references missing target node '{}'",
+                    edge.to.node_id
                 ));
             }
 
-            let key = (link.to.node_id.clone(), link.to.input.clone());
+            let key = (edge.to.node_id.clone(), edge.to.input.clone());
             if !seen_inputs.insert(key.clone()) {
-                return Err(format!("duplicate link for input '{}:{}'", key.0, key.1));
+                return Err(format!("duplicate edge for input '{}:{}'", key.0, key.1));
             }
 
-            let entry = map.entry(link.to.node_id.clone()).or_default();
+            let entry = map.entry(edge.to.node_id.clone()).or_default();
             let connection_entry = entry
-                .entry(link.to.input.clone())
+                .entry(edge.to.input.clone())
                 .or_insert_with(InputConnection::default);
 
-            connection_entry.node_id = Some(link.from.node_id.clone());
-            connection_entry.output_key = link.from.output.clone();
-            connection_entry.selector = link.selector.clone();
+            connection_entry.node_id = Some(edge.from.node_id.clone());
+            connection_entry.output_key = edge.from.output.clone();
+            connection_entry.selector = edge.selector.clone();
         }
 
         Ok(map)

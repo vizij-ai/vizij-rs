@@ -39,7 +39,7 @@
         "id": "shifted",
         "type": "add",
         "input_defaults": {
-          "rhs": {
+          "operand_2": {
             "value": 1
           }
         }
@@ -48,7 +48,7 @@
         "id": "normalized",
         "type": "multiply",
         "input_defaults": {
-          "b": {
+          "operand_2": {
             "value": 0.5
           }
         }
@@ -57,7 +57,7 @@
         "id": "seek_seconds",
         "type": "multiply",
         "input_defaults": {
-          "b": {
+          "operand_2": {
             "value": 2
           }
         }
@@ -70,14 +70,14 @@
         }
       }
     ],
-    "links": [
+    "edges": [
       {
         "from": {
           "node_id": "host_time"
         },
         "to": {
           "node_id": "time_scaled",
-          "input": "a"
+          "input": "operand_1"
         }
       },
       {
@@ -86,7 +86,7 @@
         },
         "to": {
           "node_id": "time_scaled",
-          "input": "b"
+          "input": "operand_2"
         }
       },
       {
@@ -95,7 +95,7 @@
         },
         "to": {
           "node_id": "phase",
-          "input": "a"
+          "input": "operand_1"
         }
       },
       {
@@ -104,7 +104,7 @@
         },
         "to": {
           "node_id": "phase",
-          "input": "b"
+          "input": "operand_2"
         }
       },
       {
@@ -122,7 +122,7 @@
         },
         "to": {
           "node_id": "shifted",
-          "input": "lhs"
+          "input": "operand_1"
         }
       },
       {
@@ -131,7 +131,7 @@
         },
         "to": {
           "node_id": "normalized",
-          "input": "a"
+          "input": "operand_1"
         }
       },
       {
@@ -140,7 +140,7 @@
         },
         "to": {
           "node_id": "seek_seconds",
-          "input": "a"
+          "input": "operand_1"
         }
       },
       {
@@ -162,5 +162,5 @@
       "anim/player/0/cmd/seek"
     ]
   },
-  "links": []
+  "edges": []
 }

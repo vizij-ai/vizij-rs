@@ -86,7 +86,7 @@
         }
       }
     ],
-    "links": [
+    "edges": [
       {
         "from": {
           "node_id": "in_a"
@@ -161,5 +161,5 @@
       "final/f"
     ]
   },
-  "links": []
+  "edges": []
 }

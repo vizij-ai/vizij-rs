@@ -1,7 +1,7 @@
-use crate::types::{LinkSpec, NodeId, NodeSpec};
+use crate::types::{EdgeSpec, NodeId, NodeSpec};
 use std::collections::{HashMap, VecDeque};
 
-pub fn topo_order(nodes: &[NodeSpec], links: &[LinkSpec]) -> Result<Vec<NodeId>, String> {
+pub fn topo_order(nodes: &[NodeSpec], edges: &[EdgeSpec]) -> Result<Vec<NodeId>, String> {
     let mut indeg: HashMap<NodeId, usize> = HashMap::new();
     let mut adj: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
 
@@ -9,23 +9,23 @@ pub fn topo_order(nodes: &[NodeSpec], links: &[LinkSpec]) -> Result<Vec<NodeId>,
         indeg.entry(n.id.clone()).or_insert(0);
     }
 
-    for link in links {
-        if !indeg.contains_key(&link.from.node_id) {
+    for edge in edges {
+        if !indeg.contains_key(&edge.from.node_id) {
             return Err(format!(
                 "topo_order: missing source node '{}'",
-                link.from.node_id
+                edge.from.node_id
             ));
         }
-        if !indeg.contains_key(&link.to.node_id) {
+        if !indeg.contains_key(&edge.to.node_id) {
             return Err(format!(
                 "topo_order: missing target node '{}'",
-                link.to.node_id
+                edge.to.node_id
             ));
         }
-        adj.entry(link.from.node_id.clone())
+        adj.entry(edge.from.node_id.clone())
             .or_default()
-            .push(link.to.node_id.clone());
-        *indeg.entry(link.to.node_id.clone()).or_insert(0) += 1;
+            .push(edge.to.node_id.clone());
+        *indeg.entry(edge.to.node_id.clone()).or_insert(0) += 1;
     }
 
     let mut q: VecDeque<NodeId> = indeg
@@ -59,7 +59,7 @@ pub fn topo_order(nodes: &[NodeSpec], links: &[LinkSpec]) -> Result<Vec<NodeId>,
 mod tests {
     use super::*;
     use crate::types::{
-        GraphSpec, LinkInputEndpoint, LinkOutputEndpoint, LinkSpec, NodeParams, NodeType,
+        EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeType,
     };
     use vizij_api_core::Value;
     #[test]
@@ -84,19 +84,19 @@ mod tests {
                     input_defaults: Default::default(),
                 },
             ],
-            links: vec![LinkSpec {
-                from: LinkOutputEndpoint {
+            edges: vec![EdgeSpec {
+                from: EdgeOutputEndpoint {
                     node_id: "a".into(),
                     output: "out".into(),
                 },
-                to: LinkInputEndpoint {
+                to: EdgeInputEndpoint {
                     node_id: "b".into(),
                     input: "lhs".into(),
                 },
                 selector: None,
             }],
         };
-        let order = topo_order(&g.nodes, &g.links).unwrap();
+        let order = topo_order(&g.nodes, &g.edges).unwrap();
         assert_eq!(order.len(), 2);
     }
 }

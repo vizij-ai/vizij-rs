@@ -1,16 +1,16 @@
 import type {
   GraphSpec,
-  LinkSpec,
+  EdgeSpec,
   SelectorSegmentJSON,
   ValueJSON,
 } from "./types";
 
-const link = (
+const edge = (
   from: string,
   to: string,
   input: string,
   options: { output?: string; selector?: SelectorSegmentJSON[] } = {},
-): LinkSpec => ({
+): EdgeSpec => ({
   from: {
     node_id: from,
     ...(options.output ? { output: options.output } : {}),
@@ -54,20 +54,20 @@ export const oscillatorBasics: GraphSpec = {
       params: { path: "samples/oscillator.signal" },
     },
   ],
-  links: [
-    link("freq", "osc", "frequency"),
-    link("time", "osc", "phase"),
-    link("osc", "add1", "a"),
-    link("offset", "add1", "b"),
-    link("add1", "clamp1", "in"),
-    link("const0", "clamp1", "min"),
-    link("clamp_max", "clamp1", "max"),
-    link("clamp1", "remap1", "in"),
-    link("remap_in_min", "remap1", "in_min"),
-    link("remap_in_max", "remap1", "in_max"),
-    link("remap_out_min", "remap1", "out_min"),
-    link("remap_out_max", "remap1", "out_max"),
-    link("remap1", "out", "in"),
+  edges: [
+    edge("freq", "osc", "frequency"),
+    edge("time", "osc", "phase"),
+    edge("osc", "add1", "a"),
+    edge("offset", "add1", "b"),
+    edge("add1", "clamp1", "in"),
+    edge("const0", "clamp1", "min"),
+    edge("clamp_max", "clamp1", "max"),
+    edge("clamp1", "remap1", "in"),
+    edge("remap_in_min", "remap1", "in_min"),
+    edge("remap_in_max", "remap1", "in_max"),
+    edge("remap_out_min", "remap1", "out_min"),
+    edge("remap_out_max", "remap1", "out_max"),
+    edge("remap1", "out", "in"),
   ],
 };
 
@@ -121,19 +121,19 @@ export const vectorPlayground: GraphSpec = {
       params: { path: "samples/vector.len" },
     },
   ],
-  links: [
-    link("v1_in", "vadd", "a"),
-    link("v2_in", "vadd", "b"),
-    link("v1_in", "vsub", "a"),
-    link("v2_in", "vsub", "b"),
-    link("v2_in", "vnorm", "in"),
-    link("vadd", "vdot", "a"),
-    link("vnorm", "vdot", "b"),
-    link("vadd", "vlen", "in"),
-    link("vadd", "out_sum", "in"),
-    link("vsub", "out_sub", "in"),
-    link("vdot", "out_dot", "in"),
-    link("vlen", "out_len", "in"),
+  edges: [
+    edge("v1_in", "vadd", "a"),
+    edge("v2_in", "vadd", "b"),
+    edge("v1_in", "vsub", "a"),
+    edge("v2_in", "vsub", "b"),
+    edge("v2_in", "vnorm", "in"),
+    edge("vadd", "vdot", "a"),
+    edge("vnorm", "vdot", "b"),
+    edge("vadd", "vlen", "in"),
+    edge("vadd", "out_sum", "in"),
+    edge("vsub", "out_sub", "in"),
+    edge("vdot", "out_dot", "in"),
+    edge("vlen", "out_len", "in"),
   ],
 };
 
@@ -156,14 +156,14 @@ export const logicGate: GraphSpec = {
       params: { path: "samples/logic.gated" },
     },
   ],
-  links: [
-    link("time", "sin", "in"),
-    link("sin", "greater", "lhs"),
-    link("threshold", "greater", "rhs"),
-    link("greater", "gate", "cond"),
-    link("then", "gate", "then"),
-    link("else", "gate", "else"),
-    link("gate", "out", "in"),
+  edges: [
+    edge("time", "sin", "in"),
+    edge("sin", "greater", "lhs"),
+    edge("threshold", "greater", "rhs"),
+    edge("greater", "gate", "cond"),
+    edge("then", "gate", "then"),
+    edge("else", "gate", "else"),
+    edge("gate", "out", "in"),
   ],
 };
 
@@ -236,22 +236,22 @@ export const tupleSpringDampSlew: GraphSpec = {
       params: { path: "samples/tuple.slew" },
     },
   ],
-  links: [
-    link("pair", "spring_pos", "in", { selector: [{ index: 0 }] }),
-    link("pair", "spring_rot", "in", { selector: [{ index: 1 }] }),
-    link("pair", "damp_pos", "in", { selector: [{ index: 0 }] }),
-    link("pair", "damp_rot", "in", { selector: [{ index: 1 }] }),
-    link("pair", "slew_pos", "in", { selector: [{ index: 0 }] }),
-    link("pair", "slew_rot", "in", { selector: [{ index: 1 }] }),
-    link("spring_pos", "join_spring", "a"),
-    link("spring_rot", "join_spring", "b"),
-    link("damp_pos", "join_damp", "a"),
-    link("damp_rot", "join_damp", "b"),
-    link("slew_pos", "join_slew", "a"),
-    link("slew_rot", "join_slew", "b"),
-    link("join_spring", "out_spring", "in"),
-    link("join_damp", "out_damp", "in"),
-    link("join_slew", "out_slew", "in"),
+  edges: [
+    edge("pair", "spring_pos", "in", { selector: [{ index: 0 }] }),
+    edge("pair", "spring_rot", "in", { selector: [{ index: 1 }] }),
+    edge("pair", "damp_pos", "in", { selector: [{ index: 0 }] }),
+    edge("pair", "damp_rot", "in", { selector: [{ index: 1 }] }),
+    edge("pair", "slew_pos", "in", { selector: [{ index: 0 }] }),
+    edge("pair", "slew_rot", "in", { selector: [{ index: 1 }] }),
+    edge("spring_pos", "join_spring", "a"),
+    edge("spring_rot", "join_spring", "b"),
+    edge("damp_pos", "join_damp", "a"),
+    edge("damp_rot", "join_damp", "b"),
+    edge("slew_pos", "join_slew", "a"),
+    edge("slew_rot", "join_slew", "b"),
+    edge("join_spring", "out_spring", "in"),
+    edge("join_damp", "out_damp", "in"),
+    edge("join_slew", "out_slew", "in"),
   ],
 };
 
@@ -343,70 +343,70 @@ export const nestedTelemetry: GraphSpec = {
       params: { path: "samples/telemetry.active" },
     },
   ],
-  links: [
-    link("payload", "accel_corrected", "a", {
+  edges: [
+    edge("payload", "accel_corrected", "a", {
       selector: [{ field: "sensors" }, { field: "accel" }],
     }),
-    link("payload", "accel_corrected", "b", {
+    edge("payload", "accel_corrected", "b", {
       selector: [
         { field: "calibration" },
         { field: "offsets" },
         { index: 0 },
       ],
     }),
-    link("payload", "gyro_blended", "a", {
+    edge("payload", "gyro_blended", "a", {
       selector: [{ field: "sensors" }, { field: "gyro" }],
     }),
-    link("payload", "gyro_blended", "b", {
+    edge("payload", "gyro_blended", "b", {
       selector: [
         { field: "calibration" },
         { field: "offsets" },
         { index: 1 },
       ],
     }),
-    link("accel_corrected", "telemetry_join", "segment_1"),
-    link("gyro_blended", "telemetry_join", "segment_2"),
-    link("payload", "calibration_pack", "segment_1", {
+    edge("accel_corrected", "telemetry_join", "segment_1"),
+    edge("gyro_blended", "telemetry_join", "segment_2"),
+    edge("payload", "calibration_pack", "segment_1", {
       selector: [
         { field: "calibration" },
         { field: "offsets" },
         { index: 0 },
       ],
     }),
-    link("payload", "calibration_pack", "segment_2", {
+    edge("payload", "calibration_pack", "segment_2", {
       selector: [
         { field: "calibration" },
         { field: "offsets" },
         { index: 1 },
       ],
     }),
-    link("payload", "gain0_x", "v", {
+    edge("payload", "gain0_x", "v", {
       selector: [
         { field: "calibration" },
         { field: "gains" },
         { index: 0 },
       ],
     }),
-    link("zero", "gain0_x", "index"),
-    link("payload", "gain1_x", "v", {
+    edge("zero", "gain0_x", "index"),
+    edge("payload", "gain1_x", "v", {
       selector: [
         { field: "calibration" },
         { field: "gains" },
         { index: 1 },
       ],
     }),
-    link("zero", "gain1_x", "index"),
-    link("gain0_x", "gain_sum", "lhs"),
-    link("gain1_x", "gain_sum", "rhs"),
-    link("gain_sum", "gain_avg", "lhs"),
-    link("two", "gain_avg", "rhs"),
-    link("telemetry_join", "telemetry_vector_out", "in"),
-    link("gain_avg", "telemetry_gain_out", "in"),
-    link("calibration_pack", "telemetry_offsets_out", "in"),
-    link("payload", "telemetry_label_out", "in", {
+    edge("zero", "gain1_x", "index"),
+    edge("gain0_x", "gain_sum", "lhs"),
+    edge("gain1_x", "gain_sum", "rhs"),
+    edge("gain_sum", "gain_avg", "lhs"),
+    edge("two", "gain_avg", "rhs"),
+    edge("telemetry_join", "telemetry_vector_out", "in"),
+    edge("gain_avg", "telemetry_gain_out", "in"),
+    edge("calibration_pack", "telemetry_offsets_out", "in"),
+    edge("payload", "telemetry_label_out", "in", {
       selector: [{ field: "metadata" }, { field: "label" }],
     }),
-    link("payload", "telemetry_active_out", "in", {
+    edge("payload", "telemetry_active_out", "in", {
       selector: [{ field: "metadata" }, { field: "active" }],
     }),
   ],
@@ -512,8 +512,8 @@ export const nestedRigWeightedPose: GraphSpec = {
       params: { path: "samples/nested.pose_mix" },
     },
   ],
-  links: [
-    link("config", "limb0", "scalar", {
+  edges: [
+    edge("config", "limb0", "scalar", {
       selector: [
         { field: "rig" },
         { field: "limbs" },
@@ -521,7 +521,7 @@ export const nestedRigWeightedPose: GraphSpec = {
         { field: "weight" },
       ],
     }),
-    link("config", "limb0", "v", {
+    edge("config", "limb0", "v", {
       selector: [
         { field: "rig" },
         { field: "limbs" },
@@ -529,7 +529,7 @@ export const nestedRigWeightedPose: GraphSpec = {
         { field: "offset" },
       ],
     }),
-    link("config", "limb1", "scalar", {
+    edge("config", "limb1", "scalar", {
       selector: [
         { field: "rig" },
         { field: "limbs" },
@@ -537,7 +537,7 @@ export const nestedRigWeightedPose: GraphSpec = {
         { field: "weight" },
       ],
     }),
-    link("config", "limb1", "v", {
+    edge("config", "limb1", "v", {
       selector: [
         { field: "rig" },
         { field: "limbs" },
@@ -545,13 +545,13 @@ export const nestedRigWeightedPose: GraphSpec = {
         { field: "offset" },
       ],
     }),
-    link("limb0", "limb_sum", "a"),
-    link("limb1", "limb_sum", "b"),
-    link("config", "pose_sum", "a", {
+    edge("limb0", "limb_sum", "a"),
+    edge("limb1", "limb_sum", "b"),
+    edge("config", "pose_sum", "a", {
       selector: [{ field: "rig" }, { field: "root" }],
     }),
-    link("limb_sum", "pose_sum", "b"),
-    link("config", "harmonic0", "operands_1", {
+    edge("limb_sum", "pose_sum", "b"),
+    edge("config", "harmonic0", "operand_1", {
       selector: [
         { field: "rig" },
         { field: "controls" },
@@ -560,7 +560,7 @@ export const nestedRigWeightedPose: GraphSpec = {
         { field: "amplitude" },
       ],
     }),
-    link("config", "harmonic0", "operands_2", {
+    edge("config", "harmonic0", "operand_2", {
       selector: [
         { field: "rig" },
         { field: "controls" },
@@ -569,7 +569,7 @@ export const nestedRigWeightedPose: GraphSpec = {
         { field: "frequency" },
       ],
     }),
-    link("config", "harmonic1", "operands_1", {
+    edge("config", "harmonic1", "operand_1", {
       selector: [
         { field: "rig" },
         { field: "controls" },
@@ -578,7 +578,7 @@ export const nestedRigWeightedPose: GraphSpec = {
         { field: "amplitude" },
       ],
     }),
-    link("config", "harmonic1", "operands_2", {
+    edge("config", "harmonic1", "operand_2", {
       selector: [
         { field: "rig" },
         { field: "controls" },
@@ -587,13 +587,13 @@ export const nestedRigWeightedPose: GraphSpec = {
         { field: "frequency" },
       ],
     }),
-    link("config", "phase_sum", "operands_1", {
+    edge("config", "phase_sum", "operand_1", {
       selector: [{ field: "rig" }, { field: "controls" }, { field: "phase" }],
     }),
-    link("harmonic0", "phase_sum", "operands_2"),
-    link("harmonic1", "phase_sum", "operands_3"),
-    link("phase_sum", "target_scaled", "scalar"),
-    link("config", "target_scaled", "v", {
+    edge("harmonic0", "phase_sum", "operand_2"),
+    edge("harmonic1", "phase_sum", "operand_3"),
+    edge("phase_sum", "target_scaled", "scalar"),
+    edge("config", "target_scaled", "v", {
       selector: [
         { field: "rig" },
         { field: "controls" },
@@ -601,7 +601,7 @@ export const nestedRigWeightedPose: GraphSpec = {
         { index: 1 },
       ],
     }),
-    link("config", "target_combined", "a", {
+    edge("config", "target_combined", "a", {
       selector: [
         { field: "rig" },
         { field: "controls" },
@@ -609,13 +609,13 @@ export const nestedRigWeightedPose: GraphSpec = {
         { index: 0 },
       ],
     }),
-    link("target_scaled", "target_combined", "b"),
-    link("pose_sum", "pose_mix", "a"),
-    link("target_combined", "pose_mix", "b"),
-    link("pose_sum", "out_pose", "in"),
-    link("phase_sum", "out_phase", "in"),
-    link("target_combined", "out_target", "in"),
-    link("pose_mix", "out_pose_mix", "in"),
+    edge("target_scaled", "target_combined", "b"),
+    edge("pose_sum", "pose_mix", "a"),
+    edge("target_combined", "pose_mix", "b"),
+    edge("pose_sum", "out_pose", "in"),
+    edge("phase_sum", "out_phase", "in"),
+    edge("target_combined", "out_target", "in"),
+    edge("pose_mix", "out_pose_mix", "in"),
   ],
 };
 
@@ -694,8 +694,8 @@ export const selectorCascade: GraphSpec = {
       params: { path: "samples/selector.primary_weighted" },
     },
   ],
-  links: [
-    link("payload", "primary_sum", "operands_1", {
+  edges: [
+    edge("payload", "primary_sum", "operand_1", {
       selector: [
         { field: "metrics" },
         { field: "nested" },
@@ -704,7 +704,7 @@ export const selectorCascade: GraphSpec = {
         { index: 0 },
       ],
     }),
-    link("payload", "primary_sum", "operands_2", {
+    edge("payload", "primary_sum", "operand_2", {
       selector: [
         { field: "metrics" },
         { field: "nested" },
@@ -713,8 +713,8 @@ export const selectorCascade: GraphSpec = {
         { index: 2 },
       ],
     }),
-    link("primary_sum", "primary_weighted", "operands_1"),
-    link("payload", "primary_weighted", "operands_2", {
+    edge("primary_sum", "primary_weighted", "operand_1"),
+    edge("payload", "primary_weighted", "operand_2", {
       selector: [
         { field: "metrics" },
         { field: "nested" },
@@ -722,7 +722,7 @@ export const selectorCascade: GraphSpec = {
         { field: "weight" },
       ],
     }),
-    link("payload", "secondary_sum", "operands_1", {
+    edge("payload", "secondary_sum", "operand_1", {
       selector: [
         { field: "metrics" },
         { field: "nested" },
@@ -731,7 +731,7 @@ export const selectorCascade: GraphSpec = {
         { index: 0 },
       ],
     }),
-    link("payload", "secondary_sum", "operands_2", {
+    edge("payload", "secondary_sum", "operand_2", {
       selector: [
         { field: "metrics" },
         { field: "nested" },
@@ -740,10 +740,10 @@ export const selectorCascade: GraphSpec = {
         { index: 1 },
       ],
     }),
-    link("secondary_sum", "secondary_mean", "lhs"),
-    link("two", "secondary_mean", "rhs"),
-    link("secondary_mean", "secondary_weighted", "operands_1"),
-    link("payload", "secondary_weighted", "operands_2", {
+    edge("secondary_sum", "secondary_mean", "lhs"),
+    edge("two", "secondary_mean", "rhs"),
+    edge("secondary_mean", "secondary_weighted", "operand_1"),
+    edge("payload", "secondary_weighted", "operand_2", {
       selector: [
         { field: "metrics" },
         { field: "nested" },
@@ -751,21 +751,21 @@ export const selectorCascade: GraphSpec = {
         { field: "weight" },
       ],
     }),
-    link("payload", "offset_component", "v", {
+    edge("payload", "offset_component", "v", {
       selector: [{ field: "offsets" }],
     }),
-    link("two", "offset_component", "index"),
-    link("payload", "gated_bias", "cond", {
+    edge("two", "offset_component", "index"),
+    edge("payload", "gated_bias", "cond", {
       selector: [{ field: "toggle" }],
     }),
-    link("offset_component", "gated_bias", "then"),
-    link("zero", "gated_bias", "else"),
-    link("primary_weighted", "final_score", "operands_1"),
-    link("secondary_weighted", "final_score", "operands_2"),
-    link("gated_bias", "final_score", "operands_3"),
-    link("final_score", "out_score", "in"),
-    link("secondary_mean", "out_secondary", "in"),
-    link("primary_weighted", "out_primary", "in"),
+    edge("offset_component", "gated_bias", "then"),
+    edge("zero", "gated_bias", "else"),
+    edge("primary_weighted", "final_score", "operand_1"),
+    edge("secondary_weighted", "final_score", "operand_2"),
+    edge("gated_bias", "final_score", "operand_3"),
+    edge("final_score", "out_score", "in"),
+    edge("secondary_mean", "out_secondary", "in"),
+    edge("primary_weighted", "out_primary", "in"),
   ],
 };
 
@@ -844,48 +844,48 @@ export const layeredRigBlend: GraphSpec = {
       params: { path: "samples/rig.counterTuple" },
     },
   ],
-  links: [
-    link("rig_config", "layer0_scaled", "v", {
+  edges: [
+    edge("rig_config", "layer0_scaled", "v", {
       selector: [{ field: "layers" }, { index: 0 }, { field: "offset" }],
     }),
-    link("rig_config", "layer0_scaled", "scalar", {
+    edge("rig_config", "layer0_scaled", "scalar", {
       selector: [{ field: "layers" }, { index: 0 }, { field: "weight" }],
     }),
-    link("rig_config", "layer1_scaled", "v", {
+    edge("rig_config", "layer1_scaled", "v", {
       selector: [{ field: "layers" }, { index: 1 }, { field: "offset" }],
     }),
-    link("rig_config", "layer1_scaled", "scalar", {
+    edge("rig_config", "layer1_scaled", "scalar", {
       selector: [{ field: "layers" }, { index: 1 }, { field: "weight" }],
     }),
-    link("layer0_scaled", "layer_sum", "a"),
-    link("layer1_scaled", "layer_sum", "b"),
-    link("layer_sum", "gain_scale", "v"),
-    link("rig_config", "gain_scale", "scalar", {
+    edge("layer0_scaled", "layer_sum", "a"),
+    edge("layer1_scaled", "layer_sum", "b"),
+    edge("layer_sum", "gain_scale", "v"),
+    edge("rig_config", "gain_scale", "scalar", {
       selector: [{ field: "gain" }],
     }),
-    link("gain_scale", "pose_result", "a"),
-    link("rig_config", "pose_result", "b", {
+    edge("gain_scale", "pose_result", "a"),
+    edge("rig_config", "pose_result", "b", {
       selector: [{ field: "base_pose" }],
     }),
-    link("rig_config", "weight_sum", "a", {
+    edge("rig_config", "weight_sum", "a", {
       selector: [{ field: "layers" }, { index: 0 }, { field: "weight" }],
     }),
-    link("rig_config", "weight_sum", "b", {
+    edge("rig_config", "weight_sum", "b", {
       selector: [{ field: "layers" }, { index: 1 }, { field: "weight" }],
     }),
-    link("rig_config", "weights_vector", "first", {
+    edge("rig_config", "weights_vector", "first", {
       selector: [{ field: "layers" }, { index: 0 }, { field: "weight" }],
     }),
-    link("rig_config", "weights_vector", "second", {
+    edge("rig_config", "weights_vector", "second", {
       selector: [{ field: "layers" }, { index: 1 }, { field: "weight" }],
     }),
-    link("weight_sum", "weights_vector", "total"),
-    link("pose_result", "out_pose", "in"),
-    link("weights_vector", "out_weights", "in"),
-    link("rig_config", "out_tags", "in", {
+    edge("weight_sum", "weights_vector", "total"),
+    edge("pose_result", "out_pose", "in"),
+    edge("weights_vector", "out_weights", "in"),
+    edge("rig_config", "out_tags", "in", {
       selector: [{ field: "info" }, { field: "tags" }],
     }),
-    link("rig_config", "out_counters", "in", {
+    edge("rig_config", "out_counters", "in", {
       selector: [{ field: "info" }, { field: "counters" }],
     }),
   ],
@@ -967,61 +967,61 @@ export const hierarchicalBlend: GraphSpec = {
       params: { path: "samples/nested.weight_2" },
     },
   ],
-  links: [
-    link("rig", "ctrl0", "v", {
+  edges: [
+    edge("rig", "ctrl0", "v", {
       selector: [
         { field: "controls" },
         { index: 0 },
         { field: "offset" },
       ],
     }),
-    link("rig", "ctrl0", "scalar", {
+    edge("rig", "ctrl0", "scalar", {
       selector: [
         { field: "controls" },
         { index: 0 },
         { field: "weight" },
       ],
     }),
-    link("rig", "ctrl1", "v", {
+    edge("rig", "ctrl1", "v", {
       selector: [
         { field: "controls" },
         { index: 1 },
         { field: "offset" },
       ],
     }),
-    link("rig", "ctrl1", "scalar", {
+    edge("rig", "ctrl1", "scalar", {
       selector: [
         { field: "controls" },
         { index: 1 },
         { field: "weight" },
       ],
     }),
-    link("ctrl0", "combined", "a"),
-    link("ctrl1", "combined", "b"),
-    link("combined", "biased", "a"),
-    link("rig", "biased", "b", { selector: [{ field: "bias" }] }),
-    link("biased", "offset_split", "in"),
-    link("rig", "weight_component", "v", {
+    edge("ctrl0", "combined", "a"),
+    edge("ctrl1", "combined", "b"),
+    edge("combined", "biased", "a"),
+    edge("rig", "biased", "b", { selector: [{ field: "bias" }] }),
+    edge("biased", "offset_split", "in"),
+    edge("rig", "weight_component", "v", {
       selector: [{ field: "weights" }],
     }),
-    link("component_index", "weight_component", "index"),
-    link("rig", "aim_diff", "a", {
+    edge("component_index", "weight_component", "index"),
+    edge("rig", "aim_diff", "a", {
       selector: [{ field: "aim" }, { index: 1 }],
     }),
-    link("rig", "aim_diff", "b", {
+    edge("rig", "aim_diff", "b", {
       selector: [{ field: "aim" }, { index: 0 }],
     }),
-    link("aim_diff", "aim_distance", "in"),
-    link("biased", "pose_join", "a"),
-    link("aim_diff", "pose_join", "b"),
-    link("pose_join", "pose_out", "in"),
-    link("offset_split", "offset_xy_out", "in", { output: "part1" }),
-    link("offset_split", "offset_z_out", "in", {
+    edge("aim_diff", "aim_distance", "in"),
+    edge("biased", "pose_join", "a"),
+    edge("aim_diff", "pose_join", "b"),
+    edge("pose_join", "pose_out", "in"),
+    edge("offset_split", "offset_xy_out", "in", { output: "part1" }),
+    edge("offset_split", "offset_z_out", "in", {
       output: "part2",
       selector: [{ index: 0 }],
     }),
-    link("aim_distance", "aim_distance_out", "in"),
-    link("weight_component", "weight_component_out", "in"),
+    edge("aim_distance", "aim_distance_out", "in"),
+    edge("weight_component", "weight_component_out", "in"),
   ],
 };
 
@@ -1085,45 +1085,45 @@ export const weightedAverage: GraphSpec = {
       params: { path: "samples/weighted.total" },
     },
   ],
-  links: [
-    link("targets", "weighted_0", "v", {
+  edges: [
+    edge("targets", "weighted_0", "v", {
       selector: [{ index: 0 }, { field: "value" }],
     }),
-    link("targets", "weighted_0", "scalar", {
+    edge("targets", "weighted_0", "scalar", {
       selector: [{ index: 0 }, { field: "weight" }],
     }),
-    link("targets", "weighted_1", "v", {
+    edge("targets", "weighted_1", "v", {
       selector: [{ index: 1 }, { field: "value" }],
     }),
-    link("targets", "weighted_1", "scalar", {
+    edge("targets", "weighted_1", "scalar", {
       selector: [{ index: 1 }, { field: "weight" }],
     }),
-    link("targets", "weighted_2", "v", {
+    edge("targets", "weighted_2", "v", {
       selector: [{ index: 2 }, { field: "value" }],
     }),
-    link("targets", "weighted_2", "scalar", {
+    edge("targets", "weighted_2", "scalar", {
       selector: [{ index: 2 }, { field: "weight" }],
     }),
-    link("weighted_0", "weighted_sum_ab", "a"),
-    link("weighted_1", "weighted_sum_ab", "b"),
-    link("weighted_sum_ab", "weighted_sum", "a"),
-    link("weighted_2", "weighted_sum", "b"),
-    link("targets", "weight_sum", "weight_0", {
+    edge("weighted_0", "weighted_sum_ab", "a"),
+    edge("weighted_1", "weighted_sum_ab", "b"),
+    edge("weighted_sum_ab", "weighted_sum", "a"),
+    edge("weighted_2", "weighted_sum", "b"),
+    edge("targets", "weight_sum", "weight_0", {
       selector: [{ index: 0 }, { field: "weight" }],
     }),
-    link("targets", "weight_sum", "weight_1", {
+    edge("targets", "weight_sum", "weight_1", {
       selector: [{ index: 1 }, { field: "weight" }],
     }),
-    link("targets", "weight_sum", "weight_2", {
+    edge("targets", "weight_sum", "weight_2", {
       selector: [{ index: 2 }, { field: "weight" }],
     }),
-    link("one", "inv_weight", "lhs"),
-    link("weight_sum", "inv_weight", "rhs"),
-    link("weighted_sum", "average", "v"),
-    link("inv_weight", "average", "scalar"),
-    link("weighted_sum", "sum_out", "in"),
-    link("average", "avg_out", "in"),
-    link("weight_sum", "total_out", "in"),
+    edge("one", "inv_weight", "lhs"),
+    edge("weight_sum", "inv_weight", "rhs"),
+    edge("weighted_sum", "average", "v"),
+    edge("inv_weight", "average", "scalar"),
+    edge("weighted_sum", "sum_out", "in"),
+    edge("average", "avg_out", "in"),
+    edge("weight_sum", "total_out", "in"),
   ],
 };
 

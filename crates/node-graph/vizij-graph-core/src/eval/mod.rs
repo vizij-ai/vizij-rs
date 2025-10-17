@@ -46,7 +46,7 @@ pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), Strin
         .retain(|id, _| spec.nodes.iter().any(|node| node.id == *id));
 
     let inputs_map = spec.input_connections()?;
-    let order = crate::topo::topo_order(&spec.nodes, &spec.links)?;
+    let order = crate::topo::topo_order(&spec.nodes, &spec.edges)?;
     let empty_inputs: HashMap<String, InputConnection> = HashMap::new();
     for id in order {
         if let Some(node) = spec.nodes.iter().find(|n| n.id == id) {

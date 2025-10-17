@@ -21,7 +21,7 @@
         }
       }
     ],
-    "links": [
+    "edges": [
       {
         "from": {
           "node_id": "sign_in"
@@ -50,5 +50,5 @@
       "chain/slewed.value"
     ]
   },
-  "links": []
+  "edges": []
 }

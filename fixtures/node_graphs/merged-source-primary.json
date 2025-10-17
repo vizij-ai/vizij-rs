@@ -50,7 +50,7 @@
         }
       }
     ],
-    "links": [
+    "edges": [
       {
         "from": {
           "node_id": "const_a"
@@ -87,5 +87,5 @@
       "shared/c"
     ]
   },
-  "links": []
+  "edges": []
 }

@@ -150,14 +150,14 @@
         }
       }
     ],
-    "links": [
+    "edges": [
       {
         "from": {
           "node_id": "profile"
         },
         "to": {
           "node_id": "weight0",
-          "input": "a"
+          "input": "operand_1"
         },
         "selector": [
           {
@@ -177,7 +177,7 @@
         },
         "to": {
           "node_id": "weight0",
-          "input": "b"
+          "input": "operand_2"
         },
         "selector": [
           {
@@ -194,7 +194,7 @@
         },
         "to": {
           "node_id": "weight1",
-          "input": "a"
+          "input": "operand_1"
         },
         "selector": [
           {
@@ -214,7 +214,7 @@
         },
         "to": {
           "node_id": "weight1",
-          "input": "b"
+          "input": "operand_2"
         },
         "selector": [
           {
@@ -231,7 +231,7 @@
         },
         "to": {
           "node_id": "weight2",
-          "input": "a"
+          "input": "operand_1"
         },
         "selector": [
           {
@@ -251,7 +251,7 @@
         },
         "to": {
           "node_id": "weight2",
-          "input": "b"
+          "input": "operand_2"
         },
         "selector": [
           {
@@ -414,7 +414,7 @@
         },
         "to": {
           "node_id": "weights_join",
-          "input": "first"
+          "input": "operand_1"
         }
       },
       {
@@ -423,7 +423,7 @@
         },
         "to": {
           "node_id": "weights_join",
-          "input": "second"
+          "input": "operand_2"
         }
       },
       {
@@ -432,7 +432,7 @@
         },
         "to": {
           "node_id": "weights_join",
-          "input": "third"
+          "input": "operand_3"
         }
       },
       {
@@ -477,5 +477,5 @@
       "samples/json.channels"
     ]
   },
-  "links": []
+  "edges": []
 }
