@@ -100,6 +100,7 @@ fn evaluate_kind(
         NodeType::If => Ok(eval_if(inputs)),
         NodeType::Clamp => eval_clamp(inputs),
         NodeType::Remap => eval_remap(inputs),
+        NodeType::CenteredRemap => eval_centered_remap(inputs),
         NodeType::Vec3Cross => Ok(eval_vec3_cross(inputs)),
         NodeType::VectorConstant => Ok(eval_vector_constant(params)),
         node_type @ (NodeType::VectorAdd
@@ -507,6 +508,59 @@ fn eval_remap(inputs: &HashMap<String, PortValue>) -> Result<OutputMap, String> 
         &out_min.value,
         |scaled, min| scaled + min,
     )))
+}
+
+fn eval_centered_remap(inputs: &HashMap<String, PortValue>) -> Result<OutputMap, String> {
+    let value = inputs
+        .get("in")
+        .ok_or_else(|| "CenteredRemap requires 'in' input".to_string())?;
+    let in_low = inputs
+        .get("in_low")
+        .ok_or_else(|| "CenteredRemap requires 'in_low' input".to_string())?;
+    let in_anchor = inputs
+        .get("in_anchor")
+        .ok_or_else(|| "CenteredRemap requires 'in_anchor' input".to_string())?;
+    let in_high = inputs
+        .get("in_high")
+        .ok_or_else(|| "CenteredRemap requires 'in_high' input".to_string())?;
+    let out_low = inputs
+        .get("out_low")
+        .ok_or_else(|| "CenteredRemap requires 'out_low' input".to_string())?;
+    let out_anchor = inputs
+        .get("out_anchor")
+        .ok_or_else(|| "CenteredRemap requires 'out_anchor' input".to_string())?;
+    let out_high = inputs
+        .get("out_high")
+        .ok_or_else(|| "CenteredRemap requires 'out_high' input".to_string())?;
+
+    let in_low = as_float(&in_low.value);
+    let in_anchor = as_float(&in_anchor.value);
+    let in_high = as_float(&in_high.value);
+    let out_low = as_float(&out_low.value);
+    let out_anchor = as_float(&out_anchor.value);
+    let out_high = as_float(&out_high.value);
+
+    let below_span = in_anchor - in_low;
+    let above_span = in_high - in_anchor;
+    let below_slope = if below_span.abs() > f32::EPSILON {
+        (out_anchor - out_low) / below_span
+    } else {
+        0.0
+    };
+    let above_slope = if above_span.abs() > f32::EPSILON {
+        (out_high - out_anchor) / above_span
+    } else {
+        0.0
+    };
+
+    let remapped = unary_numeric(&value.value, |x| {
+        if x <= in_anchor {
+            out_anchor + below_slope * (x - in_anchor)
+        } else {
+            out_anchor + above_slope * (x - in_anchor)
+        }
+    });
+    Ok(single_output(remapped))
 }
 
 fn eval_vec3_cross(inputs: &HashMap<String, PortValue>) -> OutputMap {

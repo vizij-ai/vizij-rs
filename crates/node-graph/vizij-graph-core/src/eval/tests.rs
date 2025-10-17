@@ -1048,3 +1048,218 @@ fn end_to_end_input_selector_scalar_math_output() {
         ref other => panic!("expected scalar value, got {:?}", other),
     }
 }
+
+#[test]
+fn centered_remap_handles_anchor_segments() {
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "in_low".to_string(),
+        InputDefault {
+            value: Value::Float(-1.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "in_anchor".to_string(),
+        InputDefault {
+            value: Value::Float(0.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "in_high".to_string(),
+        InputDefault {
+            value: Value::Float(1.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "out_low".to_string(),
+        InputDefault {
+            value: Value::Float(0.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "out_anchor".to_string(),
+        InputDefault {
+            value: Value::Float(9.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "out_high".to_string(),
+        InputDefault {
+            value: Value::Float(10.0),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            NodeSpec {
+                id: "input".to_string(),
+                kind: NodeType::Input,
+                params: NodeParams {
+                    path: Some(TypedPath::parse("demo/value").expect("typed path")),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "remap".to_string(),
+                kind: NodeType::CenteredRemap,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        edges: vec![link("input", "remap", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+
+    let cases = [
+        (-1.0, 0.0),
+        (0.0, 9.0),
+        (1.0, 10.0),
+        (2.0, 11.0),
+        (-2.0, -9.0),
+        (0.5, 9.5),
+        (-0.5, 4.5),
+    ];
+
+    for (input_value, expected) in cases {
+        rt.set_input(
+            TypedPath::parse("demo/value").expect("typed path"),
+            Value::Float(input_value),
+            None,
+        );
+        evaluate_all(&mut rt, &graph).expect("centered remap should evaluate");
+        let outputs = rt.outputs.get("remap").expect("remap outputs present");
+        let out_port = outputs.get("out").expect("out port present");
+        match &out_port.value {
+            Value::Float(actual) => {
+                assert!(
+                    (actual - expected).abs() < 1e-6,
+                    "expected {expected}, got {actual}"
+                );
+            }
+            other => panic!("expected float, got {:?}", other),
+        }
+    }
+}
+
+#[test]
+fn centered_remap_supports_asymmetric_ranges_and_vectors() {
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "in_low".to_string(),
+        InputDefault {
+            value: Value::Float(0.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "in_anchor".to_string(),
+        InputDefault {
+            value: Value::Float(0.5),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "in_high".to_string(),
+        InputDefault {
+            value: Value::Float(1.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "out_low".to_string(),
+        InputDefault {
+            value: Value::Float(1.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "out_anchor".to_string(),
+        InputDefault {
+            value: Value::Float(3.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "out_high".to_string(),
+        InputDefault {
+            value: Value::Float(6.0),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            NodeSpec {
+                id: "input".to_string(),
+                kind: NodeType::Input,
+                params: NodeParams {
+                    path: Some(TypedPath::parse("demo/value").expect("typed path")),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "remap".to_string(),
+                kind: NodeType::CenteredRemap,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        edges: vec![link("input", "remap", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    let path = TypedPath::parse("demo/value").expect("typed path");
+
+    let cases = [(0.25, 2.0), (2.0, 12.0), (-1.0, -3.0)];
+
+    for (input_value, expected) in cases {
+        rt.set_input(path.clone(), Value::Float(input_value), None);
+        evaluate_all(&mut rt, &graph).expect("centered remap should evaluate");
+        let outputs = rt.outputs.get("remap").expect("remap outputs present");
+        let out_port = outputs.get("out").expect("out port present");
+        match &out_port.value {
+            Value::Float(actual) => {
+                assert!(
+                    (actual - expected).abs() < 1e-6,
+                    "expected {expected}, got {actual}"
+                );
+            }
+            other => panic!("expected float, got {:?}", other),
+        }
+    }
+
+    // Vector input is remapped component-wise.
+    rt.set_input(
+        path,
+        Value::Vec3([0.25, 0.5, 1.25]),
+        Some(Shape::new(ShapeId::Vec3)),
+    );
+    evaluate_all(&mut rt, &graph).expect("centered remap should evaluate");
+    let outputs = rt.outputs.get("remap").expect("remap outputs present");
+    let out_port = outputs.get("out").expect("out port present");
+    match &out_port.value {
+        Value::Vec3(values) => {
+            let expected = [2.0, 3.0, 7.5];
+            for (actual, expected) in values.iter().zip(expected.iter()) {
+                assert!(
+                    (actual - expected).abs() < 1e-6,
+                    "expected {expected}, got {actual}"
+                );
+            }
+        }
+        other => panic!("expected vec3, got {:?}", other),
+    }
+}

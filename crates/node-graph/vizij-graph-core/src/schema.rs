@@ -923,6 +923,68 @@ pub fn registry() -> Registry {
         params: vec![],
     });
 
+    nodes.push(NodeSignature {
+        type_id: CenteredRemap,
+        name: "Centered Remap",
+        category: "Math",
+        doc: "Linearly remaps In around an anchor without clamping: values ≤ Anchor use the [In Low, Anchor] span while values ≥ Anchor use [Anchor, In High]; spans may collapse to anchor to pin one side.",
+        inputs: vec![
+            PortSpec {
+                id: "in",
+                ty: PortType::Float,
+                label: "In",
+                doc: "Value to remap.",
+                optional: false,
+            },
+            PortSpec {
+                id: "in_low",
+                ty: PortType::Float,
+                label: "In Low",
+                doc: "Reference point for values below the anchor.",
+                optional: false,
+            },
+            PortSpec {
+                id: "in_anchor",
+                ty: PortType::Float,
+                label: "In Anchor",
+                doc: "Anchor point separating the low/high spans.",
+                optional: false,
+            },
+            PortSpec {
+                id: "in_high",
+                ty: PortType::Float,
+                label: "In High",
+                doc: "Reference point for values above the anchor.",
+                optional: false,
+            },
+            PortSpec {
+                id: "out_low",
+                ty: PortType::Float,
+                label: "Out Low",
+                doc: "Output mapped to In Low.",
+                optional: false,
+            },
+            PortSpec {
+                id: "out_anchor",
+                ty: PortType::Float,
+                label: "Out Anchor",
+                doc: "Output corresponding to the anchor.",
+                optional: false,
+            },
+            PortSpec {
+                id: "out_high",
+                ty: PortType::Float,
+                label: "Out High",
+                doc: "Output mapped to In High.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
     // 3D-specific utility kept
     nodes.push(NodeSignature {
         type_id: Vec3Cross,
