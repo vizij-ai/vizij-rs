@@ -11,6 +11,9 @@ pub use crate::bb::abb_traits::{
     ABBNodeTrait, ArcABBPathNodeTrait, ArcAroraBlackboardTrait, ArcNamespacedSetterTrait,
     ItemsFormattable, TreeFormattable,
 };
+pub use crate::bb::blackboard_ref::{
+    BlackboardInterface, BlackboardNodeAccess, BlackboardRef, BlackboardType,
+};
 
 // Utility function to split a namespace path into components
 pub fn split_path(path: &str) -> Vec<String> {

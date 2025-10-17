@@ -57,8 +57,6 @@ pub trait BlackboardInterface {
     fn lookup_by_id(&self, id: &Uuid) -> Option<Value>;
     fn lookup_kv_by_id(&self, id: &Uuid) -> Result<Option<KeyValue>, String>;
     fn to_json(&self) -> Result<JsonValue, String>;
-    fn lookup_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Arc<Mutex<ArcABBNode>>>;
-    fn lookup_node_by_id(&self, id: &Uuid) -> Option<Arc<Mutex<ArcABBNode>>>;
 }
 
 /// Thread-safe access helpers that expose raw node handles.
@@ -249,54 +247,6 @@ impl BlackboardInterface for BlackboardRef {
         }
     }
 
-    fn lookup_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Arc<Mutex<ArcABBNode>>> {
-        let res = match self.bb_type {
-            BlackboardType::Simple => {
-                unimplemented!("SimpleBlackboard does not support node lookup")
-            }
-            BlackboardType::ArcArora => {
-                if let Some(bb) = &self.arc_arora_bb {
-                    let arc_node = bb
-                        .get(path)
-                        .expect("Failed to get node from ArcAroraBlackboard");
-                    match arc_node {
-                        Some(node) => Ok(node),
-                        None => Err(format!(
-                            "Node '{}' not found in ArcAroraBlackboard",
-                            path.to_string()
-                        )),
-                    }
-                } else {
-                    Err("ArcAroraBlackboard is not initialized".to_string())
-                }
-            }
-        };
-        res.ok()
-    }
-
-    fn lookup_node_by_id(&self, id: &Uuid) -> Option<Arc<Mutex<ArcABBNode>>> {
-        let res = match self.bb_type {
-            BlackboardType::Simple => {
-                unimplemented!("SimpleBlackboard does not support node lookup by ID")
-            }
-            BlackboardType::ArcArora => {
-                if let Some(bb) = &self.arc_arora_bb {
-                    bb.get_node_by_id(id).map_err(|e| e.to_string())
-                } else {
-                    Err("ArcAroraBlackboard is not initialized".to_string())
-                }
-            }
-        };
-        match res {
-            Ok(node) => node,
-            Err(e) => {
-                let error_msg = format!("Failed to lookup node by ID: {}", e);
-                self.debug_message(&error_msg);
-                None
-            }
-        }
-    }
-
     fn set_with_id<S: ToString + ?Sized>(
         &mut self,
         path: &S,
@@ -410,6 +360,56 @@ impl BlackboardInterface for BlackboardRef {
     }
 }
 
+impl BlackboardNodeAccess for BlackboardRef {
+    fn lookup_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Arc<Mutex<ArcABBNode>>> {
+        let res = match self.bb_type {
+            BlackboardType::Simple => {
+                unimplemented!("SimpleBlackboard does not support node lookup")
+            }
+            BlackboardType::ArcArora => {
+                if let Some(bb) = &self.arc_arora_bb {
+                    let arc_node = bb
+                        .get(path)
+                        .expect("Failed to get node from ArcAroraBlackboard");
+                    match arc_node {
+                        Some(node) => Ok(node),
+                        None => Err(format!(
+                            "Node '{}' not found in ArcAroraBlackboard",
+                            path.to_string()
+                        )),
+                    }
+                } else {
+                    Err("ArcAroraBlackboard is not initialized".to_string())
+                }
+            }
+        };
+        res.ok()
+    }
+
+    fn lookup_node_by_id(&self, id: &Uuid) -> Option<Arc<Mutex<ArcABBNode>>> {
+        let res = match self.bb_type {
+            BlackboardType::Simple => {
+                unimplemented!("SimpleBlackboard does not support node lookup by ID")
+            }
+            BlackboardType::ArcArora => {
+                if let Some(bb) = &self.arc_arora_bb {
+                    bb.get_node_by_id(id).map_err(|e| e.to_string())
+                } else {
+                    Err("ArcAroraBlackboard is not initialized".to_string())
+                }
+            }
+        };
+        match res {
+            Ok(node) => node,
+            Err(e) => {
+                let error_msg = format!("Failed to lookup node by ID: {}", e);
+                self.debug_message(&error_msg);
+                None
+            }
+        }
+    }
+}
+
 impl BlackboardInterface for Arc<Mutex<BlackboardRef>> {
     fn print(&self, tree_only: bool) -> Result<(), String> {
         self.lock()
@@ -454,13 +454,6 @@ impl BlackboardInterface for Arc<Mutex<BlackboardRef>> {
             .and_then(|bb| bb.lookup(path))
     }
 
-    fn lookup_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Arc<Mutex<ArcABBNode>>> {
-        self.lock()
-            .map_err(|_| "Failed to lock the blackboard")
-            .ok()
-            .and_then(|bb| bb.lookup_node(path))
-    }
-
     fn lookup_by_id(&self, id: &Uuid) -> Option<Value> {
         self.lock()
             .map_err(|_| "Failed to lock the blackboard")
@@ -474,16 +467,25 @@ impl BlackboardInterface for Arc<Mutex<BlackboardRef>> {
             .lookup_kv_by_id(id)
     }
 
+    fn to_json(&self) -> Result<JsonValue, String> {
+        self.lock()
+            .map_err(|_| "Failed to lock the blackboard")?
+            .to_json()
+    }
+}
+
+impl BlackboardNodeAccess for Arc<Mutex<BlackboardRef>> {
+    fn lookup_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Arc<Mutex<ArcABBNode>>> {
+        self.lock()
+            .map_err(|_| "Failed to lock the blackboard")
+            .ok()
+            .and_then(|bb| bb.lookup_node(path))
+    }
+
     fn lookup_node_by_id(&self, id: &Uuid) -> Option<Arc<Mutex<ArcABBNode>>> {
         self.lock()
             .map_err(|_| "Failed to lock the blackboard")
             .ok()
             .and_then(|bb| bb.lookup_node_by_id(id))
-    }
-
-    fn to_json(&self) -> Result<JsonValue, String> {
-        self.lock()
-            .map_err(|_| "Failed to lock the blackboard")?
-            .to_json()
     }
 }
