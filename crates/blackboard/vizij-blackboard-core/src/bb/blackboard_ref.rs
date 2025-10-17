@@ -61,6 +61,12 @@ pub trait BlackboardInterface {
     fn lookup_node_by_id(&self, id: &Uuid) -> Option<Arc<Mutex<ArcABBNode>>>;
 }
 
+/// Thread-safe access helpers that expose raw node handles.
+pub trait BlackboardNodeAccess {
+    fn lookup_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Arc<Mutex<ArcABBNode>>>;
+    fn lookup_node_by_id(&self, id: &Uuid) -> Option<Arc<Mutex<ArcABBNode>>>;
+}
+
 // This struct provides a unified interface to different blackboard implementations
 pub struct BlackboardRef {
     bb_type: BlackboardType,

@@ -8,8 +8,10 @@ Always follow these steps for every task:
 4. Conclude each report by asking whether to proceed with the next task, and continue only after approval.
 
 ## Epic A – Interface Decomposition & Preparation
-- [ ] **A1 – Audit trait boundaries**: Catalogue every `BlackboardInterface` method in `bb/blackboard_ref.rs`, flagging the ones that return `Arc<Mutex<ArcABBNode>>` or otherwise leak thread-safe wrappers.
-- [ ] **A2 – Define node-access trait**: Add a new trait (working name `BlackboardNodeAccess`) colocated with `BlackboardInterface` that carries `lookup_node`, `lookup_node_by_id`, and other Arc/Mutex-centric helpers.
+- [x] **A1 – Audit trait boundaries**: Catalogue every `BlackboardInterface` method in `bb/blackboard_ref.rs`, flagging the ones that return `Arc<Mutex<ArcABBNode>>` or otherwise leak thread-safe wrappers.
+	- Plain-data methods: `get_name`, `print`, `set`, `set_with_id`, `set_by_id`, `lookup`, `lookup_by_id`, `lookup_kv_by_id`, `to_json`.
+	- Thread-safe leaks: `lookup_node`, `lookup_node_by_id` (both return `Option<Arc<Mutex<ArcABBNode>>>`).
+- [x] **A2 – Define node-access trait**: Add a new trait (working name `BlackboardNodeAccess`) colocated with `BlackboardInterface` that carries `lookup_node`, `lookup_node_by_id`, and other Arc/Mutex-centric helpers.
 - [ ] **A3 – Refactor implementations**: Update `BlackboardRef` and its `Arc<Mutex<_>>` wrapper to implement both `BlackboardInterface` and the new node-access trait; keep compile-time separation clean.
 - [ ] **A4 – Plumb through call sites**: Adjust modules/tests that rely on node-level access (e.g., areas instantiating `BlackboardRef`) so they bound against the new trait where necessary.
 - [ ] **A5 – Document the split**: Add short rustdoc/comments explaining when to pick the thread-safe API versus the slim interface, covering both `blackboard_ref.rs` and crate-level `README` notes if needed.
