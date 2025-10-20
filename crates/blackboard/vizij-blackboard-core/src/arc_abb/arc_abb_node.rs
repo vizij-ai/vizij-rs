@@ -10,12 +10,12 @@ use std::{
 use arora_schema::value::Value;
 use uuid::Uuid;
 
-use crate::bb::{
-    abb_traits::ABBNodeTrait, ArcABBPathNodeTrait, ArcAroraBlackboardTrait,
+use crate::arc_abb::{
+    arc_abb_traits::ABBNodeTrait, ArcABBPathNodeTrait, ArcAroraBlackboardTrait,
     ArcNamespacedSetterTrait, ItemsFormattable, TreeFormattable,
 };
 use crate::{
-    bb::{ABBItemNode, ArcABBPathNode},
+    arc_abb::{ABBItemNode, ArcABBPathNode},
     ArcAroraBlackboard,
 };
 

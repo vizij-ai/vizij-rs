@@ -1,4 +1,4 @@
-use crate::{adt, bb::ABBNodeTrait};
+use crate::{adt, arc_abb::ABBNodeTrait};
 use arora_schema::{
     gen_bb_uuid,
     value::{Type, Value},

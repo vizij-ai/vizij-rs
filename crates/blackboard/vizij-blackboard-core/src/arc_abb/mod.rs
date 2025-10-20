@@ -1,17 +1,16 @@
-pub mod abb_itemnode;
-pub mod abb_node;
-pub mod abb_pathnode;
-pub mod abb_traits;
-pub mod blackboard_ref;
+pub mod arc_abb_itemnode;
+pub mod arc_abb_node;
+pub mod arc_abb_pathnode;
+pub mod arc_abb_traits;
 
-pub use crate::bb::abb_itemnode::ABBItemNode;
-pub use crate::bb::abb_node::ArcABBNode;
-pub use crate::bb::abb_pathnode::ArcABBPathNode;
-pub use crate::bb::abb_traits::{
+pub use crate::arc_abb::arc_abb_itemnode::ABBItemNode;
+pub use crate::arc_abb::arc_abb_node::ArcABBNode;
+pub use crate::arc_abb::arc_abb_pathnode::ArcABBPathNode;
+pub use crate::arc_abb::arc_abb_traits::{
     ABBNodeTrait, ArcABBPathNodeTrait, ArcAroraBlackboardTrait, ArcNamespacedSetterTrait,
     ItemsFormattable, TreeFormattable,
 };
-pub use crate::bb::blackboard_ref::{
+pub use crate::blackboard_ref::{
     BlackboardInterface, BlackboardNodeAccess, BlackboardRef, BlackboardType,
 };
 

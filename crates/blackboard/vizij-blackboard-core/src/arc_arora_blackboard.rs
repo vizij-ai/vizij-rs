@@ -22,11 +22,11 @@ use std::{
 };
 use uuid::Uuid;
 
-use super::bb::{ArcABBNode, ArcABBPathNode};
+use super::arc_abb::{ArcABBNode, ArcABBPathNode};
 
 use super::{
     adt,
-    bb::{
+    arc_abb::{
         ABBItemNode, ABBNodeTrait, ArcABBPathNodeTrait, ArcAroraBlackboardTrait,
         ArcNamespacedSetterTrait, ItemsFormattable, TreeFormattable,
     },
