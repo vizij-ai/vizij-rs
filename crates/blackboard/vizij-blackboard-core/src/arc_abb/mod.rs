@@ -7,8 +7,7 @@ pub use crate::arc_abb::arc_abb_itemnode::ABBItemNode;
 pub use crate::arc_abb::arc_abb_node::ArcABBNode;
 pub use crate::arc_abb::arc_abb_pathnode::ArcABBPathNode;
 pub use crate::arc_abb::arc_abb_traits::{
-    ABBNodeTrait, ArcABBPathNodeTrait, ArcAroraBlackboardTrait, ArcNamespacedSetterTrait,
-    ItemsFormattable, TreeFormattable,
+    ArcABBPathNodeTrait, ArcAroraBlackboardTrait, ArcNamespacedSetterTrait,
 };
 pub use crate::blackboard_ref::{
     BlackboardInterface, BlackboardNodeAccess, BlackboardRef, BlackboardType,

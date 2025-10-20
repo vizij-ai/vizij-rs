@@ -1,10 +1,10 @@
 #![allow(unused_must_use)]
 
 use crate::arc_abb::{
-    ABBNodeTrait, ArcABBNode, ArcABBPathNodeTrait, ArcAroraBlackboardTrait,
-    ArcNamespacedSetterTrait, ItemsFormattable,
+    ArcABBNode, ArcABBPathNodeTrait, ArcAroraBlackboardTrait, ArcNamespacedSetterTrait,
 };
 use crate::arc_arora_blackboard::{ArcAroraBlackboard, JsonSerializable};
+use crate::general_bb::traits::{BBNodeTrait, ItemsFormattable, TreeFormattable};
 use crate::simple_blackboard::{ItemHolder, SimpleBlackboard};
 use arora_schema::gen_bb_uuid;
 use arora_schema::keyvalue::KeyValue;

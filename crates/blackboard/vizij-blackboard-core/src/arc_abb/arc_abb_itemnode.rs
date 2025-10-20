@@ -1,4 +1,4 @@
-use crate::{adt, arc_abb::ABBNodeTrait};
+use crate::{adt, general_bb::traits::BBNodeTrait};
 use arora_schema::{
     gen_bb_uuid,
     value::{Type, Value},
@@ -100,7 +100,7 @@ impl ABBItemNode {
 /// Implementation of `ABBNodeTrait` for `ABBItemNode`
 ///
 /// This trait provides methods to access the name, ID, and path status of the node.
-impl ABBNodeTrait for ABBItemNode {
+impl BBNodeTrait for ABBItemNode {
     /// Returns the unique ID of the item
     fn get_id_ref(&self) -> Result<&Uuid, String> {
         Ok(&self.id)

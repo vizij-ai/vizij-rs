@@ -10,13 +10,14 @@ use std::{
 use arora_schema::value::Value;
 use uuid::Uuid;
 
-use crate::arc_abb::{
-    arc_abb_traits::ABBNodeTrait, ArcABBPathNodeTrait, ArcAroraBlackboardTrait,
-    ArcNamespacedSetterTrait, ItemsFormattable, TreeFormattable,
-};
 use crate::{
     arc_abb::{ABBItemNode, ArcABBPathNode},
+    general_bb::traits::{BBPathNodeTrait, ItemsFormattable, TreeFormattable},
     ArcAroraBlackboard,
+};
+use crate::{
+    arc_abb::{ArcABBPathNodeTrait, ArcAroraBlackboardTrait, ArcNamespacedSetterTrait},
+    general_bb::traits::BBNodeTrait,
 };
 
 /// An abstract node in the blackboard structure, which can be either a path or an item.
@@ -68,7 +69,7 @@ impl ArcABBNode {
 ///
 /// This implementation allows `ABBNode` to be used in the blackboard hierarchy,
 /// delegating to the appropriate variant (Path or Item).
-impl ABBNodeTrait for ArcABBNode {
+impl BBNodeTrait for ArcABBNode {
     /// Returns a reference to the ID of this node.
     ///
     /// # Returns
@@ -129,7 +130,7 @@ impl ABBNodeTrait for ArcABBNode {
 ///
 /// This implementation allows `ABBNode` to be used in a thread-safe manner,
 /// wrapping it in an `Arc<Mutex<>>` to enable shared ownership and mutable access.
-impl ABBNodeTrait for Arc<Mutex<ArcABBNode>> {
+impl BBNodeTrait for Arc<Mutex<ArcABBNode>> {
     /// Not implemented for `Arc<Mutex<ABBNode>>` directly.
     ///
     /// # Returns
@@ -190,7 +191,7 @@ impl ABBNodeTrait for Arc<Mutex<ArcABBNode>> {
 /// Implementation of `ABBPathNodeTrait` for `Arc<Mutex<ABBNode>>`.
 ///
 /// This implementation provides methods to manipulate and access path nodes in a thread-safe manner.
-impl ArcABBPathNodeTrait for Arc<Mutex<ArcABBNode>> {
+impl BBPathNodeTrait for Arc<Mutex<ArcABBNode>> {
     /// Checks if the given name exists in this path.
     ///
     /// # Arguments
@@ -249,6 +250,48 @@ impl ArcABBPathNodeTrait for Arc<Mutex<ArcABBNode>> {
         }
     }
 
+    /// Returns a copy of the map of item names and IDs in this path.
+    ///
+    /// # Returns
+    /// A `Result<HashMap<String, String>, String>` containing name-to-ID mappings, or an error message
+    fn get_names_copy(&self) -> Result<HashMap<String, Uuid>, String> {
+        if let Ok(guard) = self.lock() {
+            if let ArcABBNode::Path(path) = &*guard {
+                path.get_names_copy()
+            } else {
+                Err("The given ABBNode is not a path node.".to_string())
+            }
+        } else {
+            Err("Failed to lock mutex".to_string())
+        }
+    }
+
+    fn _format_tree_recursively(
+        &self,
+        name: &str,
+        id: &Uuid,
+        depth: usize,
+        show_ids: bool,
+        output: &mut String,
+    ) {
+        if let Ok(guard) = self.lock() {
+            if let ArcABBNode::Path(path) = &*guard {
+                ArcABBPathNodeTrait::_format_tree_recursively(
+                    path, name, id, depth, show_ids, output,
+                )
+            } else {
+                output.push_str("The given ABBNode is not a path node.\n");
+            }
+        } else {
+            output.push_str("Failed to lock mutex\n");
+        }
+    }
+}
+
+/// Implementation of `ABBPathNodeTrait` for `Arc<Mutex<ABBNode>>`.
+///
+/// This implementation provides methods to manipulate and access path nodes in a thread-safe manner.
+impl ArcABBPathNodeTrait for Arc<Mutex<ArcABBNode>> {
     /// Retrieves a node by its ID from the blackboard.
     ///
     /// # Arguments
@@ -260,22 +303,6 @@ impl ArcABBPathNodeTrait for Arc<Mutex<ArcABBNode>> {
         if let Ok(guard) = self.lock() {
             if let ArcABBNode::Path(path) = &*guard {
                 path.get_node_by_id(id)
-            } else {
-                Err("The given ABBNode is not a path node.".to_string())
-            }
-        } else {
-            Err("Failed to lock mutex".to_string())
-        }
-    }
-
-    /// Returns a copy of the map of item names and IDs in this path.
-    ///
-    /// # Returns
-    /// A `Result<HashMap<String, String>, String>` containing name-to-ID mappings, or an error message
-    fn get_names_copy(&self) -> Result<HashMap<String, Uuid>, String> {
-        if let Ok(guard) = self.lock() {
-            if let ArcABBNode::Path(path) = &*guard {
-                path.get_names_copy()
             } else {
                 Err("The given ABBNode is not a path node.".to_string())
             }

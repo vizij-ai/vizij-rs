@@ -10,12 +10,9 @@ use arora_schema::gen_bb_uuid;
 use arora_schema::value::Value;
 use uuid::Uuid;
 
+use super::{ArcABBNode, ArcABBPathNodeTrait, ArcAroraBlackboardTrait, ArcNamespacedSetterTrait};
+use crate::general_bb::traits::{BBNodeTrait, BBPathNodeTrait, ItemsFormattable, TreeFormattable};
 use crate::ArcAroraBlackboard;
-
-use super::{
-    ABBNodeTrait, ArcABBNode, ArcABBPathNodeTrait, ArcAroraBlackboardTrait,
-    ArcNamespacedSetterTrait, ItemsFormattable, TreeFormattable,
-};
 
 /// A node that represents a path in the blackboard structure.
 ///
@@ -137,7 +134,7 @@ impl ArcABBPathNode {
 /// Implementation of `ABBNodeTrait` for `ABBPathNode`.
 ///
 /// This trait provides methods to access the name and ID of the path node,
-impl ABBNodeTrait for ArcABBPathNode {
+impl BBNodeTrait for ArcABBPathNode {
     /// Returns a reference to the ID of this path node.
     ///
     /// # Returns
@@ -182,7 +179,7 @@ impl ABBNodeTrait for ArcABBPathNode {
 /// Implementation of `ABBPathNodeTrait` for `ABBPathNode`.
 ///
 /// This trait provides methods to manage name-to-ID mappings and retrieve nodes by ID.
-impl ArcABBPathNodeTrait for ArcABBPathNode {
+impl BBPathNodeTrait for ArcABBPathNode {
     /// Checks if the given name exists in this path node.
     ///
     /// # Arguments
@@ -215,6 +212,30 @@ impl ArcABBPathNodeTrait for ArcABBPathNode {
         Ok(self.names.get(name).cloned())
     }
 
+    /// Returns a copy of all name-to-ID mappings in this path node.
+    ///
+    /// # Returns
+    /// A `Result` containing a `HashMap<String, String>` with name-to-ID mappings
+    fn get_names_copy(&self) -> Result<HashMap<String, Uuid>, String> {
+        Ok(self.names.clone())
+    }
+
+    fn _format_tree_recursively(
+        &self,
+        name: &str,
+        id: &Uuid,
+        depth: usize,
+        show_ids: bool,
+        output: &mut String,
+    ) {
+        ArcABBPathNodeTrait::_format_tree_recursively(self, name, id, depth, show_ids, output);
+    }
+}
+
+/// Implementation of `ABBPathNodeTrait` for `ABBPathNode`.
+///
+/// This trait provides methods to manage name-to-ID mappings and retrieve nodes by ID.
+impl ArcABBPathNodeTrait for ArcABBPathNode {
     /// Retrieves a node by its ID from the blackboard.
     ///
     /// This method delegates to the blackboard for the actual lookup using the hashed ID.
@@ -246,14 +267,6 @@ impl ArcABBPathNodeTrait for ArcABBPathNode {
         } else {
             Err("No blackboard reference available".to_string())
         }
-    }
-
-    /// Returns a copy of all name-to-ID mappings in this path node.
-    ///
-    /// # Returns
-    /// A `Result` containing a `HashMap<String, String>` with name-to-ID mappings
-    fn get_names_copy(&self) -> Result<HashMap<String, Uuid>, String> {
-        Ok(self.names.clone())
     }
 }
 
@@ -354,7 +367,14 @@ impl TreeFormattable for ArcABBPathNode {
             return format!("Error getting names: {}", e);
         }
         for (name, ref_id) in names.unwrap() {
-            self._format_tree_recursively(&name, &ref_id, 1, show_ids, &mut output);
+            ArcABBPathNodeTrait::_format_tree_recursively(
+                self,
+                &name,
+                &ref_id,
+                1,
+                show_ids,
+                &mut output,
+            );
         }
         output
     }

@@ -4,7 +4,8 @@ use arora_schema::{gen_bb_uuid, gen_uuid_from_str};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 use vizij_blackboard_core::{
-    arc_abb::{ABBNodeTrait, ArcABBNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait},
+    arc_abb::{ArcABBNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait},
+    general_bb::traits::{BBNodeTrait, BBPathNodeTrait},
     ArcAroraBlackboard,
 };
 

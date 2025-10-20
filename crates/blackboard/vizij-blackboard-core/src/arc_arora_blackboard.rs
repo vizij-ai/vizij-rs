@@ -23,12 +23,12 @@ use std::{
 use uuid::Uuid;
 
 use super::arc_abb::{ArcABBNode, ArcABBPathNode};
+use crate::general_bb::traits::{BBNodeTrait, BBPathNodeTrait, ItemsFormattable, TreeFormattable};
 
 use super::{
     adt,
     arc_abb::{
-        ABBItemNode, ABBNodeTrait, ArcABBPathNodeTrait, ArcAroraBlackboardTrait,
-        ArcNamespacedSetterTrait, ItemsFormattable, TreeFormattable,
+        ABBItemNode, ArcABBPathNodeTrait, ArcAroraBlackboardTrait, ArcNamespacedSetterTrait,
     },
 };
 
@@ -273,11 +273,11 @@ impl JsonSerializable for ArcAroraBlackboard {
     }
 }
 
-/// Implementation of `ABBNodeTrait` for `ArcAroraBlackboard`
+/// Implementation of `BBNodeTrait` for `ArcAroraBlackboard`
 ///
 /// This implementation allows the blackboard itself to be treated as a node in the
 /// hierarchy, with the blackboard ID serving as its name and identifier.
-impl ABBNodeTrait for ArcAroraBlackboard {
+impl BBNodeTrait for ArcAroraBlackboard {
     /// Returns a reference to the ID of the blackboard.
     ///
     /// # Returns
@@ -340,10 +340,10 @@ impl ABBNodeTrait for ArcAroraBlackboard {
     }
 }
 
-/// Implementation of `ABBPathNodeTrait` for `ArcAroraBlackboard`
+/// Implementation of `BBPathNodeTrait` for `ArcAroraBlackboard`
 ///
 /// This implementation allows the blackboard to be treated as a path node.
-impl ArcABBPathNodeTrait for ArcAroraBlackboard {
+impl BBPathNodeTrait for ArcAroraBlackboard {
     /// Checks if the given name exists in the root namespace of the blackboard.
     ///
     /// This delegates to the path node at the root of the blackboard.
@@ -410,17 +410,6 @@ impl ArcABBPathNodeTrait for ArcAroraBlackboard {
         Ok(None)
     }
 
-    /// Retrieves a node by its ID from the blackboard.
-    ///
-    /// # Arguments
-    /// * `id` - The ID of the node to retrieve
-    ///
-    /// # Returns
-    /// A `Result` containing an `Option<Arc<Mutex<ABBNode>>>` with the node if found, or `None` if not found
-    fn get_node_by_id(&self, id: &Uuid) -> Result<Option<Arc<Mutex<ArcABBNode>>>, String> {
-        Ok(self.items.get(id).cloned())
-    }
-
     /// Returns a copy of all name-to-ID mappings in the root namespace.
     ///
     /// # Returns
@@ -435,6 +424,44 @@ impl ArcABBPathNodeTrait for ArcAroraBlackboard {
         }
         // Return empty HashMap if the base node isn't found or isn't a BBPath
         Ok(HashMap::new())
+    }
+
+    fn _format_tree_recursively(
+        &self,
+        name: &str,
+        id: &Uuid,
+        depth: usize,
+        show_ids: bool,
+        out: &mut String,
+    ) {
+        // Get the base node and delegate to its implementation
+        if let Some(base_node) = self.items.get(&self.id) {
+            if let Ok(node_guard) = base_node.lock() {
+                if let ArcABBNode::Path(path) = &*node_guard {
+                    ArcABBPathNodeTrait::_format_tree_recursively(
+                        path, name, id, depth, show_ids, out,
+                    );
+                    return;
+                }
+            }
+        }
+        out.push_str("Failed to format tree for blackboard\n");
+    }
+}
+
+/// Implementation of `ArcABBPathNodeTrait` for `ArcAroraBlackboard`.
+/// This implementation allows the blackboard to be treated as an arc path node.
+/// This is useful for traversing the blackboard structure.
+impl ArcABBPathNodeTrait for ArcAroraBlackboard {
+    /// Retrieves a node by its ID from the blackboard.
+    ///
+    /// # Arguments
+    /// * `id` - The ID of the node to retrieve
+    ///
+    /// # Returns
+    /// A `Result` containing an `Option<Arc<Mutex<ABBNode>>>` with the node if found, or `None` if not found
+    fn get_node_by_id(&self, id: &Uuid) -> Result<Option<Arc<Mutex<ArcABBNode>>>, String> {
+        Ok(self.items.get(id).cloned())
     }
 }
 
@@ -558,7 +585,7 @@ impl ArcNamespacedSetterTrait for ArcAroraBlackboard {
 ///
 /// This implementation allows the Arc blackboard to be treated as a node in the
 /// hierarchy, with the blackboard ID serving as its name and identifier.
-impl ABBNodeTrait for Arc<Mutex<ArcAroraBlackboard>> {
+impl BBNodeTrait for Arc<Mutex<ArcAroraBlackboard>> {
     /// Not implemented for `Arc<Mutex<ArcAroraBlackboard>>`.
     ///
     /// # Returns
@@ -616,7 +643,7 @@ impl ABBNodeTrait for Arc<Mutex<ArcAroraBlackboard>> {
 ///
 /// This implementation allows the Arc blackboard to be treated as a path node,
 /// which is necessary for the namespaced structure of the blackboard.
-impl ArcABBPathNodeTrait for Arc<Mutex<ArcAroraBlackboard>> {
+impl BBPathNodeTrait for Arc<Mutex<ArcAroraBlackboard>> {
     /// Checks if the given name exists in the root namespace of the blackboard.
     fn contains(&self, name: &str) -> Result<bool, String> {
         if let Ok(guard) = self.lock() {
@@ -644,19 +671,38 @@ impl ArcABBPathNodeTrait for Arc<Mutex<ArcAroraBlackboard>> {
         }
     }
 
-    /// Retrieves a node by its ID from the blackboard.
-    fn get_node_by_id(&self, id: &Uuid) -> Result<Option<Arc<Mutex<ArcABBNode>>>, String> {
+    /// Returns a copy of all name-to-ID mappings in the root namespace.
+    fn get_names_copy(&self) -> Result<HashMap<String, Uuid>, String> {
         if let Ok(guard) = self.lock() {
-            guard.get_node_by_id(id)
+            guard.get_names_copy()
         } else {
             Err("Failed to lock mutex".to_string())
         }
     }
 
-    /// Returns a copy of all name-to-ID mappings in the root namespace.
-    fn get_names_copy(&self) -> Result<HashMap<String, Uuid>, String> {
+    fn _format_tree_recursively(
+        &self,
+        name: &str,
+        id: &Uuid,
+        depth: usize,
+        show_ids: bool,
+        out: &mut String,
+    ) {
         if let Ok(guard) = self.lock() {
-            guard.get_names_copy()
+            ArcABBPathNodeTrait::_format_tree_recursively(&*guard, name, id, depth, show_ids, out);
+        }
+    }
+}
+
+/// Implementation of `ABBPathNodeTrait` for `Arc<Mutex<ArcAroraBlackboard>>`.
+///
+/// This implementation allows the Arc blackboard to be treated as a path node,
+/// which is necessary for the namespaced structure of the blackboard.
+impl ArcABBPathNodeTrait for Arc<Mutex<ArcAroraBlackboard>> {
+    /// Retrieves a node by its ID from the blackboard.
+    fn get_node_by_id(&self, id: &Uuid) -> Result<Option<Arc<Mutex<ArcABBNode>>>, String> {
+        if let Ok(guard) = self.lock() {
+            guard.get_node_by_id(id)
         } else {
             Err("Failed to lock mutex".to_string())
         }
@@ -733,7 +779,14 @@ impl TreeFormattable for ArcAroraBlackboard {
             return format!("Error getting names: {}", names.unwrap_err());
         }
         for (name, ref_id) in names.unwrap() {
-            self._format_tree_recursively(&name, &ref_id, 1, show_ids, &mut output);
+            ArcABBPathNodeTrait::_format_tree_recursively(
+                self,
+                &name,
+                &ref_id,
+                1,
+                show_ids,
+                &mut output,
+            );
         }
         output
     }
