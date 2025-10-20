@@ -20,11 +20,12 @@ use crate::{
     general_bb::{
         split_path,
         traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, CheckPathResult},
+        ABBItemNode,
     },
     ArcAroraBlackboard,
 };
 
-use super::{ABBItemNode, ArcABBNode, ArcABBPathNode};
+use super::{ArcABBNode, ArcABBPathNode};
 
 /// This is the main trait for objects that can be used as paths in the blackboard.
 ///

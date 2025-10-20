@@ -23,13 +23,14 @@ use std::{
 use uuid::Uuid;
 
 use super::arc_abb::{ArcABBNode, ArcABBPathNode};
-use crate::general_bb::traits::{
-    BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, TreeFormattable,
+use crate::general_bb::{
+    traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, TreeFormattable},
+    ABBItemNode,
 };
 
 use super::{
     adt,
-    arc_abb::{ABBItemNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait},
+    arc_abb::{ArcABBPathNodeTrait, ArcNamespacedSetterTrait},
 };
 
 /// A struct representing the blackboard, which contains a collection of nodes indexed by their IDs.
