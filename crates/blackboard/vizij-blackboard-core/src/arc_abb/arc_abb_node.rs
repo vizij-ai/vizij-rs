@@ -11,13 +11,11 @@ use arora_schema::value::Value;
 use uuid::Uuid;
 
 use crate::{
-    arc_abb::{ABBItemNode, ArcABBPathNode},
-    general_bb::traits::{BBPathNodeTrait, ItemsFormattable, TreeFormattable},
+    arc_abb::{ABBItemNode, ArcABBPathNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait},
+    general_bb::traits::{
+        BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, TreeFormattable,
+    },
     ArcAroraBlackboard,
-};
-use crate::{
-    arc_abb::{ArcABBPathNodeTrait, ArcAroraBlackboardTrait, ArcNamespacedSetterTrait},
-    general_bb::traits::BBNodeTrait,
 };
 
 /// An abstract node in the blackboard structure, which can be either a path or an item.
@@ -312,7 +310,7 @@ impl ArcABBPathNodeTrait for Arc<Mutex<ArcABBNode>> {
     }
 }
 
-impl ArcAroraBlackboardTrait for Arc<Mutex<ArcABBNode>> {
+impl BlackboardTrait for Arc<Mutex<ArcABBNode>> {
     /// Sets an item into the blackboard, given a Value and an ID.
     ///
     /// # Arguments

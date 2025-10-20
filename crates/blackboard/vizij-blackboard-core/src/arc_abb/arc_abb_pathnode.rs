@@ -10,8 +10,10 @@ use arora_schema::gen_bb_uuid;
 use arora_schema::value::Value;
 use uuid::Uuid;
 
-use super::{ArcABBNode, ArcABBPathNodeTrait, ArcAroraBlackboardTrait, ArcNamespacedSetterTrait};
-use crate::general_bb::traits::{BBNodeTrait, BBPathNodeTrait, ItemsFormattable, TreeFormattable};
+use super::{ArcABBNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait};
+use crate::general_bb::traits::{
+    BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, TreeFormattable,
+};
 use crate::ArcAroraBlackboard;
 
 /// A node that represents a path in the blackboard structure.
@@ -273,7 +275,7 @@ impl ArcABBPathNodeTrait for ArcABBPathNode {
 /// Implementation of `AroraBlackboardTrait` for `ABBPathNode`.
 ///
 /// This trait provides methods to interact with the blackboard, such as printing items and setting values.
-impl ArcAroraBlackboardTrait for ArcABBPathNode {
+impl BlackboardTrait for ArcABBPathNode {
     /// Sets an item into the blackboard with the given value, ID, and optional name.
     ///
     /// This method delegates to the blackboard reference.

@@ -23,13 +23,13 @@ use std::{
 use uuid::Uuid;
 
 use super::arc_abb::{ArcABBNode, ArcABBPathNode};
-use crate::general_bb::traits::{BBNodeTrait, BBPathNodeTrait, ItemsFormattable, TreeFormattable};
+use crate::general_bb::traits::{
+    BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, TreeFormattable,
+};
 
 use super::{
     adt,
-    arc_abb::{
-        ABBItemNode, ArcABBPathNodeTrait, ArcAroraBlackboardTrait, ArcNamespacedSetterTrait,
-    },
+    arc_abb::{ABBItemNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait},
 };
 
 /// A struct representing the blackboard, which contains a collection of nodes indexed by their IDs.
@@ -469,7 +469,7 @@ impl ArcABBPathNodeTrait for ArcAroraBlackboard {
 ///
 /// This implementation provides methods to interact with the blackboard,
 /// such as printing items and setting items with values.
-impl ArcAroraBlackboardTrait for ArcAroraBlackboard {
+impl BlackboardTrait for ArcAroraBlackboard {
     /// Sets an item into the blackboard with the given value, ID, and optional name.
     ///
     /// If the item already exists, its value is updated. If it doesn't exist,
@@ -713,7 +713,7 @@ impl ArcABBPathNodeTrait for Arc<Mutex<ArcAroraBlackboard>> {
 ///
 /// This implementation provides methods to interact with the Arc blackboard,
 /// such as printing items and setting items with values.
-impl ArcAroraBlackboardTrait for Arc<Mutex<ArcAroraBlackboard>> {
+impl BlackboardTrait for Arc<Mutex<ArcAroraBlackboard>> {
     /// Sets an item into the blackboard with the given value, ID, and optional name.
     ///
     /// If the item already exists, its value is updated. If it doesn't exist,

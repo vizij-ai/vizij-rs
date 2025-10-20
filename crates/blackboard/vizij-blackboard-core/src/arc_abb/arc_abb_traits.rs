@@ -17,11 +17,14 @@ use uuid::Uuid;
 
 use crate::{
     adt,
-    general_bb::traits::{BBNodeTrait, BBPathNodeTrait, CheckPathResult, ItemsFormattable},
+    general_bb::{
+        split_path,
+        traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, CheckPathResult},
+    },
     ArcAroraBlackboard,
 };
 
-use super::{split_path, ABBItemNode, ArcABBNode, ArcABBPathNode};
+use super::{ABBItemNode, ArcABBNode, ArcABBPathNode};
 
 /// This is the main trait for objects that can be used as paths in the blackboard.
 ///
@@ -435,52 +438,11 @@ pub trait ArcABBPathNodeTrait: BBPathNodeTrait {
     }
 }
 
-/// Define a trait for blackboard item manipulation.
-///
-/// This allows both the BB main object and also path nodes to act as a blackboard manipulator.
-/// The difference is that depending on where we are, the item path will be different:
-/// - Manipulating items on the BB object means manipulating at the root path
-/// - Manipulating items on a path node means manipulating at the current path
-pub trait ArcAroraBlackboardTrait: ArcABBPathNodeTrait + ItemsFormattable {
-    /// Sets an item into the blackboard, given a Value and an ID.
-    ///
-    /// The item ID is a string that will be used as the item hash for fast retrieval.
-    /// This will create a new ABBItemNode object and insert it into the blackboard associated with the id.
-    /// The name is necessary in case the item does not exist yet, because we need it for the ABBItemNode.
-    ///
-    /// # Arguments
-    /// * `value` - The value to set
-    /// * `item_id` - The ID for the item
-    /// * `name` - Optional name for the item (required when creating a new item)
-    ///
-    /// # Returns
-    /// `Result<bool, String>` indicating success or an error message
-    fn set_bb_item(
-        &mut self,
-        value: Value,
-        item_id: &Uuid,
-        name: Option<String>,
-        full_path: Option<&str>,
-    ) -> Result<bool, String>;
-
-    /// Syntactic sugar to set an existing item into the blackboard given we don't have to provide a name.
-    ///
-    /// # Arguments
-    /// * `value` - The value to set
-    /// * `item_id` - The ID for the existing item
-    ///
-    /// # Returns
-    /// `Result<bool, String>` indicating success or an error message
-    fn set_existing_bb_item(&mut self, value: Value, item_id: &Uuid) -> Result<bool, String> {
-        self.set_bb_item(value, item_id, None, None)
-    }
-}
-
 /// Define a trait for setting items in a namespaced manner.
 ///
 /// This trait is used to set items in the blackboard, either in the root or in a path node.
 /// It provides methods for navigating the namespace hierarchy and setting values at specific paths.
-pub trait ArcNamespacedSetterTrait: ArcAroraBlackboardTrait {
+pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
     /// Get a reference to the blackboard.
     ///
     /// Because this trait can be implemented by both the blackboard and path nodes,
