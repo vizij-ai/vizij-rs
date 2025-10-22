@@ -79,6 +79,44 @@ All merge strategies that create synthetic outputs publish the composed result a
 
 Once a merge is registered, inspect the resulting `GraphSpec` with `Orchestrator::export_graph_json("controller-id")` (or `_pretty` for formatted output). The WASM facade mirrors this via `vizijOrchestrator.exportGraph(id)` so browser tooling can render the merged topology.
 
+#### Selecting strategies in Rust
+
+```rust
+let options = GraphMergeOptions {
+    output_conflicts: OutputConflictStrategy::Add,
+    intermediate_conflicts: OutputConflictStrategy::DefaultBlend,
+};
+
+let merged = GraphControllerConfig::merged_with_options(
+    "rigs:merged",
+    vec![rig_a_cfg, rig_b_cfg, consumer_cfg],
+    options,
+)?;
+```
+
+`OutputConflictStrategy::Add` forwards duplicate host-facing outputs through a variadic `Add` node so downstream consumers see the total sum. `OutputConflictStrategy::DefaultBlend` keeps intermediate conflicts adjustable—each contributing graph gets a dedicated weight input at `blend_weights/<path>/<graph_id>`.
+
+#### Selecting strategies in WASM / JS
+
+`registerMergedGraph` accepts lowercase strings for each strategy:
+
+```js
+const mergedId = orchestrator.registerMergedGraph({
+  id: "rigs:merged",
+  graphs: [rigAConfig, rigBConfig, consumerConfig],
+  strategy: {
+    outputs: "add",              // other options: "error", "namespace", "blend"
+    intermediate: "default-blend" // also accepts "blend", "add", or "error"
+  },
+});
+```
+
+Aliases accepted by the wasm bridge:
+- `add`, `sum`, `blend-sum`, or `additive` → `OutputConflictStrategy::Add`
+- `default-blend`, `blend-default`, `blend-weights`, or `weights` → `OutputConflictStrategy::DefaultBlend`
+- `blend`, `blend_equal`, `blend_equal_weights` → `OutputConflictStrategy::BlendEqualWeights`
+- `namespace` and `error` map directly.
+
 Separate `output_conflicts` and `intermediate_conflicts` let you choose different policies for
 terminal outputs (host-facing) vs. intermediate edges consumed by another graph in the merged set.
 Namespace is only supported for final outputs—intermediate overlaps must be blended or produce an

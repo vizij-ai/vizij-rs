@@ -31,7 +31,7 @@ This package publishes the WebAssembly build of `vizij-orchestrator-core` togeth
 ## Key Concepts
 
 - **Controllers** – Graph and animation controllers registered with IDs; each has its own configuration (`spec`, `subscriptions`, `setup`).
-- **Graph merging** – `registerMergedGraph` rewires compatible graph specs into a single controller so shared paths become direct edges. Conflict strategies (`error`, `namespace`, `blend`) are available through `MergeStrategyOptions`.
+- **Graph merging** – `registerMergedGraph` rewires compatible graph specs into a single controller so shared paths become direct edges. Conflict strategies (`error`, `namespace`, `blend`, `add`, `default-blend`) are available through `MergeStrategyOptions`, letting you average, sum, or weight competing outputs.
 - **Blackboard** – Shared typed key-value store (`TypedPath`, `ValueJSON`, `ShapeJSON`) where controllers read/write.
 - **Schedule** – `SinglePass`, `TwoPass`, or future `RateDecoupled` determine evaluation order.
 - **Merged Writes** – Deterministic ordered batch of writes produced during a frame, suitable for UI or downstream consumers.
@@ -81,6 +81,7 @@ async function loadOrchestrationBundle(key: string): Promise<OrchestrationBundle
 registerGraph(cfg: GraphRegistrationInput | string): string;
 registerMergedGraph(cfg: MergedGraphRegistrationConfig): string; // merge multiple specs w/ conflict strategies
 registerAnimation(cfg: AnimationRegistrationConfig): string;
+exportGraph(id: string): GraphSpec; // inspect merged controller specs
 prebind(resolver: (path: string) => string | number | null | undefined): void;
 setInput(path: string, value: ValueJSON, shape?: ShapeJSON): void;
 removeInput(path: string): boolean;
@@ -96,7 +97,12 @@ All types (`GraphSpec`, `ValueJSON`, `OrchestratorFrame`, etc.) are exported fro
 ### Registration payloads
 
 - `registerGraph({ id?, spec, subs? })` expects a canonical `GraphSpec` object. Optional `subs.inputs`/`subs.outputs` arrays accept canonical TypedPath strings; invalid paths throw descriptive errors.
-- `registerMergedGraph({ id?, graphs: GraphConfig[], strategy? })` mirrors the single-graph shape. `strategy.outputs`/`strategy.intermediate` accept `"error"`, `"namespace"`, or `"blend"` to resolve conflicts when multiple graphs publish the same path.
+- `registerMergedGraph({ id?, graphs: GraphConfig[], strategy? })` mirrors the single-graph shape. `strategy.outputs`/`strategy.intermediate` accept:
+  - `"error"` – fail merges when conflicts occur.
+  - `"namespace"` – rename colliding final outputs to `graphId/original/path`.
+  - `"blend"`, `"blend_equal"`, or `"blend_equal_weights"` – average conflicts with equal weights.
+  - `"add"`, `"sum"`, `"blend-sum"`, or `"additive"` – route conflicts through a variadic `add` node so consumers see the sum.
+  - `"default-blend"`, `"blend-default"`, `"blend-weights"`, or `"weights"` – inject a `default-blend` node where each contributor gets a dedicated weight input at `blend_weights/<path>/<graph>` (defaults to `1.0`).
 - `registerAnimation({ id?, setup? })` forwards the payload to the Rust controller. Supply the animation JSON and optional player/instance overrides.
 - All registration helpers auto-generate ids (`graph:0`, `anim:0`) when omitted.
 
@@ -151,7 +157,15 @@ const mergedGraphId = orchestrator.registerMergedGraph({
       },
     },
   ],
+  strategy: {
+    outputs: "add",
+    intermediate: "default-blend",
+  },
 });
+
+// Inspect the merged spec (useful for tooling/debug)
+const mergedSpec = orchestrator.exportGraph(mergedGraphId);
+console.log(mergedSpec.nodes.length, "nodes in merged graph");
 ```
 
 Removing controllers:
