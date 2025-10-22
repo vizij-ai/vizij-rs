@@ -1,0 +1,10 @@
+import path from "path";
+import fs from "fs";
+const modulePath = path.join(path.dirname(new URL(import.meta.url).pathname), 'dist/src/index.js');
+const { init, createGraph, normalizeGraphSpec } = await import(modulePath);
+const spec = JSON.parse(fs.readFileSync("/home/chris/Downloads/q-short_emotion_rig (1).json", "utf8"));
+await init();
+const normalized = await normalizeGraphSpec(spec);
+const graph = await createGraph(normalized);
+const result = graph.evalAll();
+console.log(JSON.stringify(result.nodes.pose_blend, null, 2));

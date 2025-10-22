@@ -190,6 +190,10 @@ let mut orch = Orchestrator::new(Schedule::SinglePass)
     .with_graph(merged);
 ```
 
+Swap `intermediate_conflicts` to `OutputConflictStrategy::Add` when you need a summed value, or to `OutputConflictStrategy::DefaultBlend` if you want runtime weight controls for each contributor.
+
+Call `orchestrator.export_graph_json("graph:merged")?` (or `_pretty` for a formatted string) whenever you need to inspect the merged `GraphSpec` that is driving execution. The WASM wrapper mirrors this through `vizijOrchestrator.exportGraph(id)`.
+
 ### What merge does
 - Namespaces node IDs (`g0_io::node`, `g1_compute::node`) to avoid collisions.
 - Replaces matching `Input` nodes that read an upstream graph’s output path with direct edges.
@@ -199,6 +203,8 @@ let mut orch = Orchestrator::new(Schedule::SinglePass)
 - `GraphMergeOptions` lets you choose how to handle overlaps:
   - `Error` keeps the original behaviour (panic on conflicts).
   - `BlendEqualWeights` injects a `default-blend` node with equal weights so downstream graphs see one value.
+  - `Add` inserts an `add` node so overlapping outputs are summed.
+  - `DefaultBlend` injects a `default-blend` node plus per-graph weight inputs (`blend_weights/<path>/<graph>`) so you can adjust contributions at runtime.
   - `Namespace` rewrites final output paths to `graph_id/original/path` to keep parallel values distinct.
 
 See `controllers::graph::tests::*` for edge-case coverage and expected behavior.

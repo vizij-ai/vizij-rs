@@ -65,11 +65,19 @@ let orch = Orchestrator::new(Schedule::SinglePass)
     .with_graph(merged);
 ```
 
+Use `OutputConflictStrategy::Add` when you want downstream graphs to see the sum of overlapping values, or `OutputConflictStrategy::DefaultBlend` when you need adjustable per-rig weights staged at runtime.
+
 | Strategy | Effect |
 |----------|--------|
 | `Error` | Preserve the legacy behaviour; merging fails with `GraphMergeError::ConflictingOutputs`. |
 | `Namespace` | Keep each producer’s output separate by renaming the final `Output` paths to `graph_id/original/path`. |
 | `BlendEqualWeights` | Inject a `default-blend` node (plus equal-weight constant) so downstream consumers see a single averaged value. |
+| `Add` | Insert a variadic `add` node so conflicts resolve to the sum of all producer outputs. |
+| `DefaultBlend` | Insert a `default-blend` node and expose per-rig weight inputs at `blend_weights/<path>/<graph>` so hosts can dial individual contributions. |
+
+All merge strategies that create synthetic outputs publish the composed result at `blend/<path>`. When `DefaultBlend` is selected the merger also injects `Input` nodes with a default weight of `1.0`; write to the corresponding `blend_weights/<path>/<graph>` paths to mute or emphasise individual rigs without affecting their peers.
+
+Once a merge is registered, inspect the resulting `GraphSpec` with `Orchestrator::export_graph_json("controller-id")` (or `_pretty` for formatted output). The WASM facade mirrors this via `vizijOrchestrator.exportGraph(id)` so browser tooling can render the merged topology.
 
 Separate `output_conflicts` and `intermediate_conflicts` let you choose different policies for
 terminal outputs (host-facing) vs. intermediate edges consumed by another graph in the merged set.

@@ -270,6 +270,10 @@ fn parse_strategy(
     match value.map(|s| s.to_ascii_lowercase()).as_deref() {
         Some("namespace") => Namespace,
         Some("blend") | Some("blend-equal-weights") => BlendEqualWeights,
+        Some("add") | Some("sum") | Some("blend-sum") | Some("additive") => Add,
+        Some("default-blend") | Some("blend-default") | Some("blend-weights") | Some("weights") => {
+            DefaultBlend
+        }
         Some("error") | None => Error,
         Some(other) => {
             panic!("orchestration '{name}' provided unknown merge strategy '{other}' for {field}")

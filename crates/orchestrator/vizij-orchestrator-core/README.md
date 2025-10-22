@@ -36,6 +36,9 @@
   - `OutputConflictStrategy::Error` (default) rejects duplicate output paths.
   - `OutputConflictStrategy::Namespace` preserves both outputs by renaming the conflicting paths with graph labels.
   - `OutputConflictStrategy::BlendEqualWeights` inserts blend nodes so overlapping outputs are averaged deterministically.
+  - `OutputConflictStrategy::Add` routes conflicts through a variadic `Add` node so downstream consumers receive the summed value.
+  - `OutputConflictStrategy::DefaultBlend` injects a `default-blend` node with per-producer weight inputs (`blend_weights/<path>/<graph>`) so hosts can tune individual contributions.
+- **Graph export** provides `Orchestrator::export_graph_json[_pretty]` and the WASM `export_graph(id)` hook so merged specs can be inspected or persisted as JSON.
 - **Epoch-based staging** ensures graph runtimes only see current-frame inputs; stale entries are dropped automatically.
 - **Conflict logging** records previous vs. new values whenever multiple controllers write to the same path.
 - **Animation mapping** translates blackboard entries into `vizij-animation-core::Inputs` using a conservative naming convention.

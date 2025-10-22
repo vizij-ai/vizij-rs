@@ -55,6 +55,8 @@ pub enum OutputConflictStrategy {
     Error,
     Namespace,
     BlendEqualWeights,
+    Add,
+    DefaultBlend,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -266,6 +268,144 @@ impl GraphControllerConfig {
         let mut inputs_to_remove: HashSet<String> = HashSet::new();
         let mut removed_input_paths: HashSet<String> = HashSet::new();
 
+        struct ResolutionContext<'a> {
+            merged_nodes: &'a mut Vec<vizij_graph_core::types::NodeSpec>,
+            merged_edges: &'a mut Vec<vizij_graph_core::types::EdgeSpec>,
+            merged_output_paths: &'a mut IndexSet<TypedPath>,
+            inputs_to_remove: &'a mut HashSet<String>,
+            removed_input_paths: &'a mut HashSet<String>,
+            nodes_to_remove: &'a mut HashSet<String>,
+            existing_ids: &'a mut HashSet<String>,
+        }
+
+        fn attach_conflict_resolution(
+            path: &str,
+            source_node_id: &str,
+            source_output_port: &str,
+            has_consumers: bool,
+            outputs_for_path: &[OutputNodeInfo],
+            consumers: Vec<InputNodeInfo>,
+            ctx: &mut ResolutionContext<'_>,
+        ) -> Result<(), GraphMergeError> {
+            let source_node_id = source_node_id.to_string();
+            let source_output_port = source_output_port.to_string();
+
+            if has_consumers {
+                for output in outputs_for_path {
+                    let original_path = output.path.clone().ok_or_else(|| {
+                        GraphMergeError::OutputPathUnavailable {
+                            node_id: output.node_id.clone(),
+                        }
+                    })?;
+                    let sanitized_prefix = sanitize_identifier(&output.graph_label);
+                    let namespaced_string = format!("{}/{}", sanitized_prefix, original_path);
+                    let namespaced_path =
+                        TypedPath::parse(&namespaced_string).map_err(|reason| {
+                            GraphMergeError::InvalidNamespacedPath {
+                                path: namespaced_string.clone(),
+                                reason,
+                            }
+                        })?;
+                    if let Some(node) = find_node_mut(ctx.merged_nodes, &output.node_id) {
+                        node.params.path = Some(namespaced_path.clone());
+                    }
+                    let _ = ctx.merged_output_paths.shift_remove(&original_path);
+                    ctx.merged_output_paths.insert(namespaced_path);
+                }
+
+                let blend_output_path = format!("blend/{}", path);
+                let blend_output_typed =
+                    TypedPath::parse(&blend_output_path).map_err(|reason| {
+                        GraphMergeError::InvalidNamespacedPath {
+                            path: blend_output_path.clone(),
+                            reason,
+                        }
+                    })?;
+                let blend_output_node_id = unique_node_id(
+                    &format!("blend_output_{}", sanitize_identifier(path)),
+                    ctx.existing_ids,
+                );
+                ctx.merged_nodes.push(vizij_graph_core::types::NodeSpec {
+                    id: blend_output_node_id.clone(),
+                    kind: NodeType::Output,
+                    params: vizij_graph_core::types::NodeParams {
+                        path: Some(blend_output_typed.clone()),
+                        ..Default::default()
+                    },
+                    output_shapes: Default::default(),
+                    input_defaults: Default::default(),
+                });
+                ctx.merged_edges.push(vizij_graph_core::types::EdgeSpec {
+                    from: vizij_graph_core::types::EdgeOutputEndpoint {
+                        node_id: source_node_id.clone(),
+                        output: source_output_port.clone(),
+                    },
+                    to: vizij_graph_core::types::EdgeInputEndpoint {
+                        node_id: blend_output_node_id.clone(),
+                        input: "in".to_string(),
+                    },
+                    selector: None,
+                });
+                ctx.merged_output_paths.insert(blend_output_typed);
+
+                for consumer in consumers {
+                    for edge in ctx.merged_edges.iter_mut() {
+                        if edge.from.node_id == consumer.node_id {
+                            edge.from.node_id = source_node_id.clone();
+                            edge.from.output = source_output_port.clone();
+                        }
+                    }
+                    ctx.inputs_to_remove.insert(consumer.node_id.clone());
+                    if let Some(tp) = consumer.path {
+                        ctx.removed_input_paths.insert(tp.to_string());
+                    }
+                }
+            } else {
+                for output in outputs_for_path {
+                    ctx.nodes_to_remove.insert(output.node_id.clone());
+                }
+
+                let representative = outputs_for_path
+                    .first()
+                    .expect("outputs_for_path non-empty when resolving final outputs");
+                let original_path = representative.path.clone().ok_or_else(|| {
+                    GraphMergeError::OutputPathUnavailable {
+                        node_id: representative.node_id.clone(),
+                    }
+                })?;
+
+                let output_node_id = unique_node_id(
+                    &format!("output_{}", sanitize_identifier(path)),
+                    ctx.existing_ids,
+                );
+
+                ctx.merged_nodes.push(vizij_graph_core::types::NodeSpec {
+                    id: output_node_id.clone(),
+                    kind: NodeType::Output,
+                    params: vizij_graph_core::types::NodeParams {
+                        path: Some(original_path.clone()),
+                        ..Default::default()
+                    },
+                    output_shapes: Default::default(),
+                    input_defaults: Default::default(),
+                });
+
+                ctx.merged_edges.push(vizij_graph_core::types::EdgeSpec {
+                    from: vizij_graph_core::types::EdgeOutputEndpoint {
+                        node_id: source_node_id,
+                        output: source_output_port,
+                    },
+                    to: vizij_graph_core::types::EdgeInputEndpoint {
+                        node_id: output_node_id,
+                        input: "in".to_string(),
+                    },
+                    selector: None,
+                });
+            }
+
+            Ok(())
+        }
+
         for (path, bindings) in bindings_by_path.into_iter() {
             let consumers = input_nodes_by_path.remove(&path).unwrap_or_default();
             let outputs_for_path = output_nodes_by_path.get(&path).cloned().unwrap_or_default();
@@ -316,8 +456,127 @@ impl GraphControllerConfig {
                     }
                 }
                 OutputConflictStrategy::BlendEqualWeights => {
+                    let sanitized_path = sanitize_identifier(&path);
+                    let blend_node_id =
+                        unique_node_id(&format!("blend_{}", sanitized_path), &mut existing_ids);
+                    merged_nodes.push(vizij_graph_core::types::NodeSpec {
+                        id: blend_node_id.clone(),
+                        kind: NodeType::DefaultBlend,
+                        params: vizij_graph_core::types::NodeParams::default(),
+                        output_shapes: Default::default(),
+                        input_defaults: Default::default(),
+                    });
+
+                    for (idx, binding) in bindings.iter().enumerate() {
+                        merged_edges.push(vizij_graph_core::types::EdgeSpec {
+                            from: vizij_graph_core::types::EdgeOutputEndpoint {
+                                node_id: binding.source_node_id.clone(),
+                                output: binding.source_port.clone(),
+                            },
+                            to: vizij_graph_core::types::EdgeInputEndpoint {
+                                node_id: blend_node_id.clone(),
+                                input: format!("operand_{}", idx + 1),
+                            },
+                            selector: binding.selector.clone(),
+                        });
+                    }
+
+                    let weights_node_id = unique_node_id(
+                        &format!("blend_weights_{}", sanitized_path),
+                        &mut existing_ids,
+                    );
+                    let weight = 1.0f32 / bindings.len() as f32;
+                    merged_nodes.push(vizij_graph_core::types::NodeSpec {
+                        id: weights_node_id.clone(),
+                        kind: NodeType::Constant,
+                        params: vizij_graph_core::types::NodeParams {
+                            value: Some(Value::Vector(vec![weight; bindings.len()])),
+                            ..Default::default()
+                        },
+                        output_shapes: Default::default(),
+                        input_defaults: Default::default(),
+                    });
+
+                    merged_edges.push(vizij_graph_core::types::EdgeSpec {
+                        from: vizij_graph_core::types::EdgeOutputEndpoint {
+                            node_id: weights_node_id,
+                            output: "out".to_string(),
+                        },
+                        to: vizij_graph_core::types::EdgeInputEndpoint {
+                            node_id: blend_node_id.clone(),
+                            input: "weights".to_string(),
+                        },
+                        selector: None,
+                    });
+
+                    let mut ctx = ResolutionContext {
+                        merged_nodes: &mut merged_nodes,
+                        merged_edges: &mut merged_edges,
+                        merged_output_paths: &mut merged_output_paths,
+                        inputs_to_remove: &mut inputs_to_remove,
+                        removed_input_paths: &mut removed_input_paths,
+                        nodes_to_remove: &mut nodes_to_remove,
+                        existing_ids: &mut existing_ids,
+                    };
+                    attach_conflict_resolution(
+                        &path,
+                        &blend_node_id,
+                        "out",
+                        has_consumers,
+                        &outputs_for_path,
+                        consumers,
+                        &mut ctx,
+                    )?;
+                }
+                OutputConflictStrategy::Add => {
+                    let sanitized_path = sanitize_identifier(&path);
+                    let add_node_id =
+                        unique_node_id(&format!("sum_{}", sanitized_path), &mut existing_ids);
+                    merged_nodes.push(vizij_graph_core::types::NodeSpec {
+                        id: add_node_id.clone(),
+                        kind: NodeType::Add,
+                        params: vizij_graph_core::types::NodeParams::default(),
+                        output_shapes: Default::default(),
+                        input_defaults: Default::default(),
+                    });
+
+                    for (idx, binding) in bindings.iter().enumerate() {
+                        merged_edges.push(vizij_graph_core::types::EdgeSpec {
+                            from: vizij_graph_core::types::EdgeOutputEndpoint {
+                                node_id: binding.source_node_id.clone(),
+                                output: binding.source_port.clone(),
+                            },
+                            to: vizij_graph_core::types::EdgeInputEndpoint {
+                                node_id: add_node_id.clone(),
+                                input: format!("operand_{}", idx + 1),
+                            },
+                            selector: binding.selector.clone(),
+                        });
+                    }
+
+                    let mut ctx = ResolutionContext {
+                        merged_nodes: &mut merged_nodes,
+                        merged_edges: &mut merged_edges,
+                        merged_output_paths: &mut merged_output_paths,
+                        inputs_to_remove: &mut inputs_to_remove,
+                        removed_input_paths: &mut removed_input_paths,
+                        nodes_to_remove: &mut nodes_to_remove,
+                        existing_ids: &mut existing_ids,
+                    };
+                    attach_conflict_resolution(
+                        &path,
+                        &add_node_id,
+                        "out",
+                        has_consumers,
+                        &outputs_for_path,
+                        consumers,
+                        &mut ctx,
+                    )?;
+                }
+                OutputConflictStrategy::DefaultBlend => {
+                    let sanitized_path = sanitize_identifier(&path);
                     let blend_node_id = unique_node_id(
-                        &format!("blend_{}", sanitize_identifier(&path)),
+                        &format!("blend_default_{}", sanitized_path),
                         &mut existing_ids,
                     );
                     merged_nodes.push(vizij_graph_core::types::NodeSpec {
@@ -342,25 +601,60 @@ impl GraphControllerConfig {
                         });
                     }
 
-                    let weights_node_id = unique_node_id(
-                        &format!("blend_weights_{}", sanitize_identifier(&path)),
+                    let join_node_id = unique_node_id(
+                        &format!("blend_weight_join_{}", sanitized_path),
                         &mut existing_ids,
                     );
-                    let weight = 1.0f32 / bindings.len() as f32;
                     merged_nodes.push(vizij_graph_core::types::NodeSpec {
-                        id: weights_node_id.clone(),
-                        kind: NodeType::Constant,
-                        params: vizij_graph_core::types::NodeParams {
-                            value: Some(Value::Vector(vec![weight; bindings.len()])),
-                            ..Default::default()
-                        },
+                        id: join_node_id.clone(),
+                        kind: NodeType::Join,
+                        params: vizij_graph_core::types::NodeParams::default(),
                         output_shapes: Default::default(),
                         input_defaults: Default::default(),
                     });
 
+                    for (idx, binding) in bindings.iter().enumerate() {
+                        let weight_input_id = unique_node_id(
+                            &format!("blend_weight_input_{}_{}", sanitized_path, idx + 1),
+                            &mut existing_ids,
+                        );
+                        let sanitized_label = sanitize_identifier(&binding.graph_label);
+                        let weight_path_string =
+                            format!("blend_weights/{}/{}", sanitized_path, sanitized_label);
+                        let weight_path =
+                            TypedPath::parse(&weight_path_string).map_err(|reason| {
+                                GraphMergeError::InvalidNamespacedPath {
+                                    path: weight_path_string.clone(),
+                                    reason,
+                                }
+                            })?;
+                        merged_nodes.push(vizij_graph_core::types::NodeSpec {
+                            id: weight_input_id.clone(),
+                            kind: NodeType::Input,
+                            params: vizij_graph_core::types::NodeParams {
+                                value: Some(Value::Float(1.0)),
+                                path: Some(weight_path),
+                                ..Default::default()
+                            },
+                            output_shapes: Default::default(),
+                            input_defaults: Default::default(),
+                        });
+                        merged_edges.push(vizij_graph_core::types::EdgeSpec {
+                            from: vizij_graph_core::types::EdgeOutputEndpoint {
+                                node_id: weight_input_id,
+                                output: "out".to_string(),
+                            },
+                            to: vizij_graph_core::types::EdgeInputEndpoint {
+                                node_id: join_node_id.clone(),
+                                input: format!("operand_{}", idx + 1),
+                            },
+                            selector: None,
+                        });
+                    }
+
                     merged_edges.push(vizij_graph_core::types::EdgeSpec {
                         from: vizij_graph_core::types::EdgeOutputEndpoint {
-                            node_id: weights_node_id.clone(),
+                            node_id: join_node_id,
                             output: "out".to_string(),
                         },
                         to: vizij_graph_core::types::EdgeInputEndpoint {
@@ -370,119 +664,24 @@ impl GraphControllerConfig {
                         selector: None,
                     });
 
-                    if has_consumers {
-                        for output in &outputs_for_path {
-                            let original_path = output.path.clone().ok_or_else(|| {
-                                GraphMergeError::OutputPathUnavailable {
-                                    node_id: output.node_id.clone(),
-                                }
-                            })?;
-                            let sanitized_prefix = sanitize_identifier(&output.graph_label);
-                            let namespaced_string =
-                                format!("{}/{}", sanitized_prefix, original_path);
-                            let namespaced_path =
-                                TypedPath::parse(&namespaced_string).map_err(|reason| {
-                                    GraphMergeError::InvalidNamespacedPath {
-                                        path: namespaced_string.clone(),
-                                        reason,
-                                    }
-                                })?;
-                            if let Some(node) = find_node_mut(&mut merged_nodes, &output.node_id) {
-                                node.params.path = Some(namespaced_path.clone());
-                            }
-                            let _ = merged_output_paths.shift_remove(&original_path);
-                            merged_output_paths.insert(namespaced_path);
-                        }
-
-                        let blend_output_path = format!("blend/{}", path);
-                        let blend_output_typed =
-                            TypedPath::parse(&blend_output_path).map_err(|reason| {
-                                GraphMergeError::InvalidNamespacedPath {
-                                    path: blend_output_path.clone(),
-                                    reason,
-                                }
-                            })?;
-                        let blend_output_node_id = unique_node_id(
-                            &format!("blend_output_{}", sanitize_identifier(&path)),
-                            &mut existing_ids,
-                        );
-                        merged_nodes.push(vizij_graph_core::types::NodeSpec {
-                            id: blend_output_node_id.clone(),
-                            kind: NodeType::Output,
-                            params: vizij_graph_core::types::NodeParams {
-                                path: Some(blend_output_typed.clone()),
-                                ..Default::default()
-                            },
-                            output_shapes: Default::default(),
-                            input_defaults: Default::default(),
-                        });
-                        merged_edges.push(vizij_graph_core::types::EdgeSpec {
-                            from: vizij_graph_core::types::EdgeOutputEndpoint {
-                                node_id: blend_node_id.clone(),
-                                output: "out".to_string(),
-                            },
-                            to: vizij_graph_core::types::EdgeInputEndpoint {
-                                node_id: blend_output_node_id.clone(),
-                                input: "in".to_string(),
-                            },
-                            selector: None,
-                        });
-                        merged_output_paths.insert(blend_output_typed);
-
-                        for consumer in consumers {
-                            for edge in merged_edges.iter_mut() {
-                                if edge.from.node_id == consumer.node_id {
-                                    edge.from.node_id = blend_node_id.clone();
-                                    edge.from.output = "out".to_string();
-                                }
-                            }
-                            inputs_to_remove.insert(consumer.node_id.clone());
-                            if let Some(tp) = consumer.path {
-                                removed_input_paths.insert(tp.to_string());
-                            }
-                        }
-                    } else {
-                        for output in &outputs_for_path {
-                            nodes_to_remove.insert(output.node_id.clone());
-                        }
-
-                        let representative = outputs_for_path
-                            .first()
-                            .expect("outputs_for_path non-empty when blending final outputs");
-                        let original_path = representative.path.clone().ok_or_else(|| {
-                            GraphMergeError::OutputPathUnavailable {
-                                node_id: representative.node_id.clone(),
-                            }
-                        })?;
-
-                        let output_node_id = unique_node_id(
-                            &format!("output_{}", sanitize_identifier(&path)),
-                            &mut existing_ids,
-                        );
-
-                        merged_nodes.push(vizij_graph_core::types::NodeSpec {
-                            id: output_node_id.clone(),
-                            kind: NodeType::Output,
-                            params: vizij_graph_core::types::NodeParams {
-                                path: Some(original_path.clone()),
-                                ..Default::default()
-                            },
-                            output_shapes: Default::default(),
-                            input_defaults: Default::default(),
-                        });
-
-                        merged_edges.push(vizij_graph_core::types::EdgeSpec {
-                            from: vizij_graph_core::types::EdgeOutputEndpoint {
-                                node_id: blend_node_id.clone(),
-                                output: "out".to_string(),
-                            },
-                            to: vizij_graph_core::types::EdgeInputEndpoint {
-                                node_id: output_node_id.clone(),
-                                input: "in".to_string(),
-                            },
-                            selector: None,
-                        });
-                    }
+                    let mut ctx = ResolutionContext {
+                        merged_nodes: &mut merged_nodes,
+                        merged_edges: &mut merged_edges,
+                        merged_output_paths: &mut merged_output_paths,
+                        inputs_to_remove: &mut inputs_to_remove,
+                        removed_input_paths: &mut removed_input_paths,
+                        nodes_to_remove: &mut nodes_to_remove,
+                        existing_ids: &mut existing_ids,
+                    };
+                    attach_conflict_resolution(
+                        &path,
+                        &blend_node_id,
+                        "out",
+                        has_consumers,
+                        &outputs_for_path,
+                        consumers,
+                        &mut ctx,
+                    )?;
                 }
             }
         }
@@ -837,6 +1036,242 @@ mod tests {
         assert!(
             input_paths.contains(&"external/drive".to_string()),
             "subscriptions retain external path"
+        );
+    }
+
+    #[test]
+    fn merged_graph_add_strategy_sums_outputs() {
+        let producer_a = json!({
+            "nodes": [
+                { "id": "a_constant", "type": "constant", "params": { "value": { "type": "float", "data": 1.0 } } },
+                { "id": "a_out", "type": "output", "params": { "path": "shared/value" } }
+            ],
+            "edges": [
+                { "from": { "node_id": "a_constant" }, "to": { "node_id": "a_out", "input": "in" } }
+            ]
+        });
+        let producer_b = json!({
+            "nodes": [
+                { "id": "b_constant", "type": "constant", "params": { "value": { "type": "float", "data": 2.0 } } },
+                { "id": "b_out", "type": "output", "params": { "path": "shared/value" } }
+            ],
+            "edges": [
+                { "from": { "node_id": "b_constant" }, "to": { "node_id": "b_out", "input": "in" } }
+            ]
+        });
+
+        let mut cfg_a = cfg_from_json("rig_a", producer_a);
+        cfg_a.subs.outputs = vec![TypedPath::parse("shared/value").expect("typed path")];
+        let mut cfg_b = cfg_from_json("rig_b", producer_b);
+        cfg_b.subs.outputs = vec![TypedPath::parse("shared/value").expect("typed path")];
+
+        let merged = GraphControllerConfig::merged_with_options(
+            "merged",
+            vec![cfg_a, cfg_b],
+            GraphMergeOptions {
+                output_conflicts: OutputConflictStrategy::Add,
+                intermediate_conflicts: OutputConflictStrategy::Error,
+            },
+        )
+        .expect("merge ok");
+
+        let mut add_nodes = merged
+            .spec
+            .nodes
+            .iter()
+            .filter(|node| matches!(node.kind, NodeType::Add));
+        let add_node = add_nodes
+            .next()
+            .expect("addition node inserted for conflicting outputs");
+        assert!(
+            add_nodes.next().is_none(),
+            "only one additive node expected"
+        );
+
+        let output_nodes: Vec<&vizij_graph_core::types::NodeSpec> = merged
+            .spec
+            .nodes
+            .iter()
+            .filter(|node| matches!(node.kind, NodeType::Output))
+            .collect();
+        assert_eq!(
+            output_nodes.len(),
+            1,
+            "final outputs collapsed to a single node"
+        );
+        let final_output = output_nodes[0];
+        let final_path = final_output
+            .params
+            .path
+            .as_ref()
+            .expect("final output path present")
+            .to_string();
+        assert_eq!(
+            final_path, "shared/value",
+            "sum strategy retains the original output path"
+        );
+
+        let has_sum_edge = merged
+            .spec
+            .edges
+            .iter()
+            .any(|edge| edge.from.node_id == add_node.id && edge.to.node_id == final_output.id);
+        assert!(
+            has_sum_edge,
+            "summed value should route into the final output node"
+        );
+
+        let operand_edges: Vec<_> = merged
+            .spec
+            .edges
+            .iter()
+            .filter(|edge| edge.to.node_id == add_node.id)
+            .collect();
+        assert_eq!(
+            operand_edges.len(),
+            2,
+            "both sources should connect into the additive node"
+        );
+    }
+
+    #[test]
+    fn merged_graph_default_blend_strategy_inserts_weight_inputs() {
+        let producer_a = json!({
+            "nodes": [
+                { "id": "a_constant", "type": "constant", "params": { "value": { "type": "float", "data": 1.0 } } },
+                { "id": "a_out", "type": "output", "params": { "path": "shared/value" } }
+            ],
+            "edges": [
+                { "from": { "node_id": "a_constant" }, "to": { "node_id": "a_out", "input": "in" } }
+            ]
+        });
+        let producer_b = json!({
+            "nodes": [
+                { "id": "b_constant", "type": "constant", "params": { "value": { "type": "float", "data": 3.0 } } },
+                { "id": "b_out", "type": "output", "params": { "path": "shared/value" } }
+            ],
+            "edges": [
+                { "from": { "node_id": "b_constant" }, "to": { "node_id": "b_out", "input": "in" } }
+            ]
+        });
+        let consumer = json!({
+            "nodes": [
+                { "id": "shared_in", "type": "input", "params": { "path": "shared/value" } },
+                { "id": "forward", "type": "output", "params": { "path": "final/value" } }
+            ],
+            "edges": [
+                { "from": { "node_id": "shared_in" }, "to": { "node_id": "forward", "input": "in" } }
+            ]
+        });
+
+        let mut cfg_a = cfg_from_json("rig_a", producer_a);
+        cfg_a.subs.outputs = vec![TypedPath::parse("shared/value").expect("typed path")];
+        let mut cfg_b = cfg_from_json("rig_b", producer_b);
+        cfg_b.subs.outputs = vec![TypedPath::parse("shared/value").expect("typed path")];
+        let mut cfg_consumer = cfg_from_json("consumer", consumer);
+        cfg_consumer.subs.inputs = vec![TypedPath::parse("shared/value").expect("typed path")];
+        cfg_consumer.subs.outputs = vec![TypedPath::parse("final/value").expect("typed path")];
+
+        let merged = GraphControllerConfig::merged_with_options(
+            "merged",
+            vec![cfg_a, cfg_b, cfg_consumer],
+            GraphMergeOptions {
+                output_conflicts: OutputConflictStrategy::Error,
+                intermediate_conflicts: OutputConflictStrategy::DefaultBlend,
+            },
+        )
+        .expect("merge ok");
+
+        let blend_node = merged
+            .spec
+            .nodes
+            .iter()
+            .find(|node| matches!(node.kind, NodeType::DefaultBlend))
+            .expect("default blend node injected for intermediate conflict");
+
+        assert!(
+            merged
+                .spec
+                .nodes
+                .iter()
+                .any(|node| matches!(node.kind, NodeType::Join)),
+            "weight join node should be present"
+        );
+
+        let weight_inputs: Vec<&vizij_graph_core::types::NodeSpec> = merged
+            .spec
+            .nodes
+            .iter()
+            .filter(|node| {
+                matches!(node.kind, NodeType::Input)
+                    && node
+                        .params
+                        .path
+                        .as_ref()
+                        .map(|tp| tp.to_string().starts_with("blend_weights/"))
+                        .unwrap_or(false)
+            })
+            .collect();
+        assert_eq!(
+            weight_inputs.len(),
+            2,
+            "weight control inputs should be created for each producer"
+        );
+        for input in &weight_inputs {
+            assert_eq!(
+                input.params.value,
+                Some(Value::Float(1.0)),
+                "weight inputs should default to 1.0"
+            );
+        }
+
+        let subscription_paths: Vec<String> =
+            merged.subs.inputs.iter().map(|tp| tp.to_string()).collect();
+        for input in &weight_inputs {
+            let path_str = input.params.path.as_ref().unwrap().to_string();
+            assert!(
+                subscription_paths.contains(&path_str),
+                "subscriptions should include weight control path {}",
+                path_str
+            );
+        }
+
+        assert!(
+            merged
+                .spec
+                .nodes
+                .iter()
+                .any(|node| matches!(node.kind, NodeType::Output)
+                    && node
+                        .params
+                        .path
+                        .as_ref()
+                        .map(|tp| tp.to_string() == "blend/shared/value")
+                        .unwrap_or(false)),
+            "blend output should surface aggregated value for tooling"
+        );
+
+        let consumer_output = merged
+            .spec
+            .nodes
+            .iter()
+            .find(|node| {
+                matches!(node.kind, NodeType::Output)
+                    && node
+                        .params
+                        .path
+                        .as_ref()
+                        .map(|tp| tp.to_string() == "final/value")
+                        .unwrap_or(false)
+            })
+            .expect("consumer output present");
+
+        let rewired = merged.spec.edges.iter().any(|edge| {
+            edge.from.node_id == blend_node.id && edge.to.node_id == consumer_output.id
+        });
+        assert!(
+            rewired,
+            "consumer should read from the default blend output"
         );
     }
 

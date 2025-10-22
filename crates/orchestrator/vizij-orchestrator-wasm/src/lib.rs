@@ -131,8 +131,17 @@ fn parse_conflict_strategy(value: &str) -> Result<OutputConflictStrategy, String
         "blend" | "blend_equal" | "blend_equal_weights" => {
             Ok(OutputConflictStrategy::BlendEqualWeights)
         }
+        "add" | "sum" | "blend_sum" | "blend-sum" | "additive" => {
+            Ok(OutputConflictStrategy::Add)
+        }
+        "default_blend"
+        | "default-blend"
+        | "blend-default"
+        | "blend_weights"
+        | "blend-weights"
+        | "weights" => Ok(OutputConflictStrategy::DefaultBlend),
         other => Err(format!(
-            "unknown merge conflict strategy '{}'; expected 'error', 'namespace', or 'blend'",
+            "unknown merge conflict strategy '{}'; expected 'error', 'namespace', 'blend', 'add', or 'default-blend'",
             other
         )),
     }
@@ -255,6 +264,16 @@ impl VizijOrchestrator {
         self.core.graphs.insert(id.clone(), controller);
 
         Ok(id)
+    }
+
+    /// Export a graph spec as a JS object for inspection.
+    #[wasm_bindgen(js_name = export_graph)]
+    pub fn export_graph(&self, id: &str) -> Result<JsValue, JsError> {
+        let value = self
+            .core
+            .export_graph_json(id)
+            .map_err(|e| JsError::new(&format!("export_graph error: {e}")))?;
+        swb::to_value(&value).map_err(|e| JsError::new(&format!("serialize graph spec error: {e}")))
     }
 
     /// Register multiple graph specs as a single merged controller.
