@@ -235,12 +235,15 @@ Document skipped steps in PR descriptions so reviewers have the right context.
 
 ## Publishing & Versioning
 
-Each domain stack keeps crate, WASM crate, and npm wrapper versions in lockstep. When you publish:
+Each domain stack keeps the Rust crate, WASM crate, and npm wrapper versions in lockstep. Publishing now flows through [Changesets](.changeset/README.md):
 
-1. Bump the version in all three manifests (`Cargo.toml`, `package.json`).
-2. Use the appropriate tags on the main branch to trigger the workflow. Use `git push && git push --tags` after tagging them appropriately.
+1. Bump the Rust crate + WASM crate versions in their `Cargo.toml` files (the npm wrapper will be handled by Changesets).
+2. Run `pnpm changeset` and select the npm packages under `npm/@vizij/*` that changed. Capture a short summary for the changelog entry.
+3. Review the generated markdown under `.changeset/`, adjust as needed, and commit it alongside the code changes.
+4. When you are ready to publish, run `pnpm version:packages` followed by `pnpm release`. The release script reinstalls dependencies and rebuilds the wasm/shared bundles so you can inspect the generated artefacts.
+5. Tag the release (`npm-animation-vX.Y.Z`, `npm-graph-vX.Y.Z`, etc.) on `main` so the GitHub workflows publish the npm packages and upload any additional artefacts.
 
-`scripts/dry-run-release.sh` runs through the entire sequence without pushing artefacts; use it to confirm that crates build, WASM bundling succeeds, and npm tarballs contain the correct files.
+Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wasm bundling, npm pack contents) before pushing real releases.
 
 ---
 

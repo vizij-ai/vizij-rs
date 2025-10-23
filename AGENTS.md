@@ -13,6 +13,8 @@ file summarises, it does not replace, those sources.
   produce multi-step plans and keep them updated as work progresses.
 - Prefer fast discovery commands: `rg`/`rg --files` for search and list, `cargo
   metadata --no-deps` for crate info, `just`-style helpers are not configured.
+- Queue npm releases with Changesets: run `pnpm changeset` for publishable
+  changes and commit the generated entry with your code.
 - Always pass `workdir` to shell calls (the harness requires it) and watch for
   unexpected filesystem changes -- ask the user if something looks off.
 - Install the local git hooks (`bash scripts/install-git-hooks.sh`) to wire the
@@ -71,6 +73,9 @@ Install the watcher dependency once with `cargo install cargo-watch`.
 | Install git hooks (fmt/clippy/test) | `bash scripts/install-git-hooks.sh` |
 | Run hook jobs manually | `./.githooks/pre-commit` / `./.githooks/pre-push` |
 | Dry-run crates + npm release | `bash scripts/dry-run-release.sh` |
+| Create a Changeset entry | `pnpm changeset` |
+| Apply versions from queued changesets | `pnpm version:packages` |
+| Validate wasm/shared builds before tagging | `pnpm release` |
 | Link npm packages for vizij-web | Build locally, then use temporary `link:` deps in `vizij-web` (see its README) |
 | Rebuild after ABI bumps | `cargo build -p <wasm-crate> --target wasm32-unknown-unknown && pnpm run build:wasm:<stack>` |
 
