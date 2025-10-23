@@ -64,7 +64,7 @@ type GraphBinding = {
   stage: StageEntry[];
 };
 
-type MergeStrategy = "error" | "namespace" | "blend";
+type MergeStrategy = "error" | "namespace" | "blend" | "add" | "default-blend";
 
 type MergedGraphBinding = {
   id: string;
@@ -193,7 +193,28 @@ function toMergeStrategy(value: string | undefined, field: string, name: string)
   const normalized = value.toLowerCase();
   if (normalized === "error") return "error";
   if (normalized === "namespace") return "namespace";
-  if (normalized === "blend" || normalized === "blend-equal-weights") return "blend";
+  if (normalized === "blend" || normalized === "blend-equal-weights" || normalized === "blend_equal_weights" || normalized === "blend_equal") {
+    return "blend";
+  }
+  if (
+    normalized === "add" ||
+    normalized === "sum" ||
+    normalized === "blend_sum" ||
+    normalized === "blend-sum" ||
+    normalized === "additive"
+  ) {
+    return "add";
+  }
+  if (
+    normalized === "default-blend" ||
+    normalized === "default_blend" ||
+    normalized === "blend-default" ||
+    normalized === "blend_weights" ||
+    normalized === "blend-weights" ||
+    normalized === "weights"
+  ) {
+    return "default-blend";
+  }
   throw new Error(`Orchestration '${name}' provided unknown merge strategy '${value}' for ${field}`);
 }
 

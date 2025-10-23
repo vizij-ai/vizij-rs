@@ -123,7 +123,23 @@ export interface GraphSubscriptions {
 
 export type GraphRegistrationInput = string | GraphRegistrationConfig;
 
-export type MergeConflictStrategy = "error" | "namespace" | "blend";
+export type MergeConflictStrategy =
+  | "error"
+  | "namespace"
+  | "blend"
+  | "blend_equal"
+  | "blend_equal_weights"
+  | "add"
+  | "sum"
+  | "blend_sum"
+  | "blend-sum"
+  | "additive"
+  | "default_blend"
+  | "default-blend"
+  | "blend-default"
+  | "blend_weights"
+  | "blend-weights"
+  | "weights";
 
 export interface MergeStrategyOptions {
   outputs?: MergeConflictStrategy;

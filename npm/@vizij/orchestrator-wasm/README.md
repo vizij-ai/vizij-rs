@@ -100,9 +100,9 @@ All types (`GraphSpec`, `ValueJSON`, `OrchestratorFrame`, etc.) are exported fro
 - `registerMergedGraph({ id?, graphs: GraphConfig[], strategy? })` mirrors the single-graph shape. `strategy.outputs`/`strategy.intermediate` accept:
   - `"error"` – fail merges when conflicts occur.
   - `"namespace"` – rename colliding final outputs to `graphId/original/path`.
-  - `"blend"`, `"blend_equal"`, or `"blend_equal_weights"` – average conflicts with equal weights.
-  - `"add"`, `"sum"`, `"blend-sum"`, or `"additive"` – route conflicts through a variadic `add` node so consumers see the sum.
-  - `"default-blend"`, `"blend-default"`, `"blend-weights"`, or `"weights"` – inject a `default-blend` node where each contributor gets a dedicated weight input at `blend_weights/<path>/<graph>` (defaults to `1.0`).
+  - `"blend"`, `"blend_equal"`, `"blend_equal_weights"`, or `"blend-equal-weights"` – average conflicts with equal weights.
+  - `"add"`, `"sum"`, `"blend_sum"`, `"blend-sum"`, or `"additive"` – route conflicts through a variadic `add` node so consumers see the sum.
+  - `"default-blend"`, `"default_blend"`, `"blend-default"`, `"blend_weights"`, `"blend-weights"`, or `"weights"` – inject a `default-blend` node where each contributor gets a dedicated weight input at `blend_weights/<path>/<graph>` (defaults to `1.0`).
 - `registerAnimation({ id?, setup? })` forwards the payload to the Rust controller. Supply the animation JSON and optional player/instance overrides.
 - All registration helpers auto-generate ids (`graph:0`, `anim:0`) when omitted.
 
@@ -242,7 +242,7 @@ Fixtures are sourced from `@vizij/test-fixtures` so demos/tests align with the R
 
 - **ABI mismatch** – Re-run `pnpm run build:wasm:orchestrator` if `abi_version()` differs from the value expected by the wrapper.
 - **Graph registration errors** – `registerGraph` and `registerMergedGraph` throw `JsError` when the payload is missing `spec` or contains invalid TypedPaths. Normalise specs first with `normalizeGraphSpec`.
-- **Merge strategy failures** – The `strategy` object only accepts "error", "namespace", or "blend". Any other string results in `merge strategy error`.
+- **Merge strategy failures** – The `strategy` object accepts the strings listed above (including aliases such as `"sum"` or `"weights"`). Any other string results in `merge strategy error`.
 - **Empty writes** – Controllers must emit `Output` nodes with `params.path`; otherwise the orchestrator returns an empty `merged_writes` array.
 
 ---
