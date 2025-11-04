@@ -1,5 +1,11 @@
 # @vizij/animation-wasm
 
+## 0.3.3
+
+### Patch Changes
+
+- Fix wasm entrypoints to resolve their generated JS shim from pkg/… when packaged. Adds ambient module shims so TypeScript accepts the path.
+
 ## 0.3.2
 
 ### Patch Changes

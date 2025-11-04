@@ -1,5 +1,11 @@
 # @vizij/node-graph-wasm
 
+## 0.4.4
+
+### Patch Changes
+
+- Fix wasm entrypoints to resolve their generated JS shim from pkg/… when packaged. Adds ambient module shims so TypeScript accepts the path.
+
 ## 0.4.3
 
 ### Patch Changes

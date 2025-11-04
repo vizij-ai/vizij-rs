@@ -93,7 +93,7 @@ function pkgWasmJsUrl(): URL {
 }
 
 function importStaticWasmModule(): Promise<unknown> {
-  return import("../pkg/vizij_animation_wasm.js");
+  return import("../../pkg/vizij_animation_wasm.js");
 }
 
 function importDynamicWasmModule(): Promise<unknown> {

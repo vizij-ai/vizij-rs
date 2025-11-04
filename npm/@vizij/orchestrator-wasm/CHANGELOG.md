@@ -1,5 +1,11 @@
 # @vizij/orchestrator-wasm
 
+## 0.2.5
+
+### Patch Changes
+
+- Fix wasm entrypoints to resolve their generated JS shim from pkg/… when packaged. Adds ambient module shims so TypeScript accepts the path.
+
 ## 0.2.4
 
 ### Patch Changes
