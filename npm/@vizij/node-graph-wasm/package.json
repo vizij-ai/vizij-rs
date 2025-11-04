@@ -1,6 +1,6 @@
 {
   "name": "@vizij/node-graph-wasm",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "WASM bindings for Vizij node-graph core.",
   "license": "MIT",
   "repository": {
@@ -45,7 +45,7 @@
   },
   "dependencies": {
     "@vizij/value-json": "^0.1.0",
-    "@vizij/wasm-loader": "^0.1.0"
+    "@vizij/wasm-loader": "^0.1.1"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

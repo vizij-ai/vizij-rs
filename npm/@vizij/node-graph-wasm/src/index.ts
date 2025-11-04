@@ -63,21 +63,49 @@ interface WasmBindings {
 }
 
 const bindingCache: { current: WasmBindings | null } = { current: null };
+let wasmModulePromise: Promise<WasmBindings | unknown> | null = null;
+let wasmUrlCache: string | null = null;
 
 function pkgWasmJsUrl(): URL {
   // Resolve package-local pkg/ for both src/ and dist/src/ callers
   return new URL("../../pkg/vizij_graph_wasm.js", import.meta.url);
 }
 
-function defaultWasmUrl(): URL {
-  return new URL("../../pkg/vizij_graph_wasm_bg.wasm", import.meta.url);
+function importStaticWasmModule(): Promise<unknown> {
+  return import("../pkg/vizij_graph_wasm.js");
+}
+
+function importDynamicWasmModule(): Promise<unknown> {
+  return import(/* @vite-ignore */ pkgWasmJsUrl().toString());
+}
+
+async function importWasmModule(): Promise<unknown> {
+  if (!wasmModulePromise) {
+    wasmModulePromise = importStaticWasmModule().catch((err) => {
+      if (typeof console !== "undefined" && typeof console.warn === "function") {
+        console.warn(
+          "@vizij/node-graph-wasm: static wasm import failed, falling back to runtime URL import.",
+          err
+        );
+      }
+      return importDynamicWasmModule();
+    });
+  }
+  return wasmModulePromise;
+}
+
+function defaultWasmUrl(): string {
+  if (!wasmUrlCache) {
+    wasmUrlCache = new URL("../../pkg/vizij_graph_wasm_bg.wasm", import.meta.url).toString();
+  }
+  return wasmUrlCache;
 }
 
 async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
   await loadWasmBindings<WasmBindings>(
     {
       cache: bindingCache,
-      importModule: () => import(/* @vite-ignore */ pkgWasmJsUrl().toString()),
+      importModule: () => importWasmModule(),
       defaultWasmUrl,
       init: async (module: unknown, initArg: unknown) => {
         const typed = module as WasmBindings;

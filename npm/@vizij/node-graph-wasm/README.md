@@ -65,6 +65,34 @@ Link into `vizij-web` while iterating:
 
 ---
 
+## Bundler Configuration
+
+Like the other Vizij wasm packages, this module now exports an ESM wrapper that first attempts a static import of the wasm-bindgen JS glue. Bundlers that support async WebAssembly (Webpack 5, Vite, etc.) should treat `pkg/vizij_graph_wasm_bg.wasm` as an emitted asset. For Next.js configure:
+
+```js
+// next.config.js
+module.exports = {
+  webpack: (config) => {
+    config.experiments = { ...(config.experiments ?? {}), asyncWebAssembly: true };
+    config.module.rules.push({
+      test: /\.wasm$/,
+      type: "asset/resource",
+    });
+    return config;
+  },
+};
+```
+
+If you host the wasm binary elsewhere, pass a string URL to `init()`:
+
+```ts
+await init("https://cdn.example.com/vizij/node_graph_wasm_bg.wasm");
+```
+
+Passing a string avoids Webpack’s `RelativeURL` helper, which previously attempted to call `.replace()` on a `URL` object.
+
+---
+
 ## API
 
 ```ts

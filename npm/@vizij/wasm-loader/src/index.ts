@@ -3,7 +3,7 @@ export type InitInput = string | URL | ArrayBufferView | ArrayBuffer | WebAssemb
 export interface LoadBindingsOptions<TBindings> {
   cache: { current: TBindings | null };
   importModule: () => Promise<any>;
-  defaultWasmUrl: () => URL;
+  defaultWasmUrl: () => URL | string;
   init: (module: any, initArg: unknown) => Promise<void>;
   getBindings?: (module: any) => TBindings;
   expectedAbi?: number;
@@ -26,11 +26,9 @@ async function maybeReadFileBytes(initArg: unknown): Promise<unknown> {
   }
 
   try {
-    const fsSpec = "node:fs/promises";
-    const urlSpec = "node:url";
     const [{ readFile }, { fileURLToPath }] = await Promise.all([
-      import(/* @vite-ignore */ fsSpec),
-      import(/* @vite-ignore */ urlSpec),
+      import(/* webpackIgnore: true, @vite-ignore */ "node:fs/promises"),
+      import(/* webpackIgnore: true, @vite-ignore */ "node:url"),
     ]);
     const path = isUrlObject
       ? fileURLToPath(initArg as URL)

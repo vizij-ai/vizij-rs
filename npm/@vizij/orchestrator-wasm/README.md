@@ -66,6 +66,34 @@ Link into `vizij-web` while iterating:
 
 ---
 
+## Bundler Configuration
+
+This package now ships an ESM-friendly wrapper that prefers static imports so bundlers like Next.js/Webpack can emit plain asset URLs. Make sure your host enables async WebAssembly and treats the `.wasm` file as an emitted asset. For example, in Next.js:
+
+```js
+// next.config.js
+module.exports = {
+  webpack: (config) => {
+    config.experiments = { ...(config.experiments ?? {}), asyncWebAssembly: true };
+    config.module.rules.push({
+      test: /\.wasm$/,
+      type: "asset/resource",
+    });
+    return config;
+  },
+};
+```
+
+When overriding the default wasm location (CDN or custom asset pipeline), pass a string URL to `init()`:
+
+```ts
+await init("https://cdn.example.com/vizij/vizij_orchestrator_wasm_bg.wasm");
+```
+
+The loader still accepts `URL`, `Response`, `ArrayBuffer`, or `WebAssembly.Module`, but providing a string keeps Webpack from wrapping the input in `RelativeURL`.
+
+---
+
 ## API
 
 ```ts

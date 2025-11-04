@@ -45,7 +45,7 @@ declare module "@vizij/wasm-loader" {
   export interface LoadBindingsOptions<TBindings> {
     cache: { current: TBindings | null };
     importModule: () => Promise<any>;
-    defaultWasmUrl: () => URL;
+    defaultWasmUrl: () => URL | string;
     init: (module: any, initArg: unknown) => Promise<void>;
     getBindings?: (module: any) => TBindings;
     expectedAbi?: number;

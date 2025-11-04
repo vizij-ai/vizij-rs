@@ -64,6 +64,34 @@ Link into `vizij-web` while iterating:
 
 ---
 
+## Bundler Configuration
+
+`@vizij/animation-wasm` now mirrors the import strategy used by the orchestrator and node-graph packages: it tries a static ESM import first, then falls back to a runtime URL when necessary. Ensure your bundler is configured to emit the `.wasm` file. For Webpack/Next.js:
+
+```js
+// next.config.js
+module.exports = {
+  webpack: (config) => {
+    config.experiments = { ...(config.experiments ?? {}), asyncWebAssembly: true };
+    config.module.rules.push({
+      test: /\.wasm$/,
+      type: "asset/resource",
+    });
+    return config;
+  },
+};
+```
+
+When serving the binary from a custom location, hand `init()` a string URL:
+
+```ts
+await init("https://cdn.example.com/vizij/vizij_animation_wasm_bg.wasm");
+```
+
+String URLs keep Webpack’s helper from wrapping the value and calling `.replace()` on a `URL` object.
+
+---
+
 ## API
 
 ```ts

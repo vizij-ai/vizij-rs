@@ -33,7 +33,7 @@ import { loadBindings, type LoadBindingsOptions, type InitInput } from "@vizij/w
 interface LoadBindingsOptions<TBindings> {
   cache: { current: TBindings | null };
   importModule: () => Promise<any>;
-  defaultWasmUrl: () => URL;
+  defaultWasmUrl: () => URL | string;
   init: (module: any, initArg: unknown) => Promise<void>;
   getBindings?: (module: any) => TBindings;
   expectedAbi?: number;
@@ -43,7 +43,7 @@ interface LoadBindingsOptions<TBindings> {
 
 - `cache` – Mutable holder for the currently loaded bindings (passed by reference from the consuming package).
 - `importModule` – Dynamic import that resolves to the wasm-bindgen JS shim.
-- `defaultWasmUrl` – Function returning the default `.wasm` URL (often `new URL("./pkg/package_bg.wasm", import.meta.url)`).
+- `defaultWasmUrl` – Function returning the default `.wasm` location (`new URL("./pkg/package_bg.wasm", import.meta.url).toString()` in many packages).
 - `init` – Async function that initialises the wasm module (`module.default(initArg)` for wasm-bindgen).
 - `getBindings` – Optional extractor (defaults to returning the module itself).
 - `expectedAbi` / `getAbiVersion` – Optional ABI guard to ensure wasm packages are rebuilt together.
@@ -63,7 +63,8 @@ export async function init(input?: InitInput): Promise<void> {
   await loadBindings({
     cache,
     importModule: () => import("./pkg/animation_wasm.js"),
-    defaultWasmUrl: () => new URL("./pkg/animation_wasm_bg.wasm", import.meta.url),
+    defaultWasmUrl: () =>
+      new URL("./pkg/animation_wasm_bg.wasm", import.meta.url).toString(),
     init: (module, initArg) => module.default(initArg),
     getBindings: (module) => module,
     expectedAbi: 2,
@@ -117,4 +118,3 @@ Vitest covers caching behaviour, file URL resolution, and ABI mismatch errors.
 
 - [`@vizij/animation-wasm`](../animation-wasm/README.md), [`@vizij/node-graph-wasm`](../node-graph-wasm/README.md), [`@vizij/orchestrator-wasm`](../orchestrator-wasm/README.md) – primary consumers of this loader.
 - [`vizij-animation-wasm`](../../../crates/animation/vizij-animation-wasm/README.md) et al. – Rust crates that produce the wasm artefacts loaded through this helper.
-
