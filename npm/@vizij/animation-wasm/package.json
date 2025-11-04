@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@vizij/value-json": "^0.1.0",
-    "@vizij/wasm-loader": "^0.1.0"
+    "@vizij/wasm-loader": "^0.1.1"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

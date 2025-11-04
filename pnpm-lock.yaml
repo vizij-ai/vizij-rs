@@ -18,8 +18,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.0
       '@vizij/wasm-loader':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.1.1
+        version: 0.1.1
     devDependencies:
       '@types/node':
         specifier: latest
@@ -34,8 +34,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.0
       '@vizij/wasm-loader':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.1.1
+        version: 0.1.1
     devDependencies:
       '@types/node':
         specifier: ^20.12.7
@@ -50,8 +50,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.0
       '@vizij/wasm-loader':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.1.1
+        version: 0.1.1
     devDependencies:
       '@types/node':
         specifier: ^20.12.7
@@ -184,8 +184,8 @@ packages:
   '@vizij/value-json@0.1.0':
     resolution: {integrity: sha512-NzSX14YLnA1ZPaxib0qhgHn5+cVxPZpiTINhqfQwD07FBtkLHPNh/FdQTUmyNAdhZB/RVvdobbEnFCEVLRQJqw==}
 
-  '@vizij/wasm-loader@0.1.0':
-    resolution: {integrity: sha512-0+6JgrJbkLgSZX6rmbe9e3e3WEERwA7eIv0l7DdfDiRV6e1lFLNMLzf+ryRQ9+ERznmqbUHf6sey3nNjo3oe3g==}
+  '@vizij/wasm-loader@0.1.1':
+    resolution: {integrity: sha512-Jsll3SSgx8By9NP69Mb6T167ou334x2VjTFOJZaEm/9yEdVV2DHlFE/o/3u/dm/G6D7kWUt3Tph68qnvuuc44w==}
 
   ansi-colors@4.1.3:
     resolution: {integrity: sha512-/6w/C21Pm1A7aZitlI5Ni/2J6FFQN8i1Cvz3kHABAAbw93v/NlvKdVOqz7CCWz/3iv/JplRSEEZ83XION15ovw==}
@@ -672,7 +672,7 @@ snapshots:
 
   '@vizij/value-json@0.1.0': {}
 
-  '@vizij/wasm-loader@0.1.0': {}
+  '@vizij/wasm-loader@0.1.1': {}
 
   ansi-colors@4.1.3: {}
 
