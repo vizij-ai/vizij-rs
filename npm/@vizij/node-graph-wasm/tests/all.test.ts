@@ -16,6 +16,12 @@ import {
   urdfIkPosition,
   loadNodeGraphSpec,
   loadNodeGraphSpecJson,
+  getNodeRegistry,
+  findNodeSignature,
+  requireNodeSignature,
+  listNodeTypeIds,
+  groupNodeSignaturesByCategory,
+  nodeRegistryVersion,
   type EvalResult,
   type ValueJSON,
   type GraphSpec,
@@ -478,6 +484,27 @@ function assertText(write: WriteOpJSON, expected: string): void {
 (async () => {
   try {
     await init(pkgWasmUrl());
+
+    const registry = getNodeRegistry();
+    assert.ok(Array.isArray(registry.nodes) && registry.nodes.length > 0, "registry should contain nodes");
+    assert.ok(typeof nodeRegistryVersion === "string" && nodeRegistryVersion.length > 0, "registry exposes version");
+    const typeIds = listNodeTypeIds();
+    assert.ok(typeIds.includes("constant"), "node type list includes constant");
+    const constantSignature = requireNodeSignature("constant");
+    assert.equal(constantSignature.type_id, "constant", "constant signature should match type id");
+    assert.equal(
+      findNodeSignature("Constant"),
+      constantSignature,
+      "lookup should be case-insensitive",
+    );
+    assert.equal(
+      findNodeSignature("does-not-exist"),
+      undefined,
+      "lookup should return undefined for missing nodes",
+    );
+    const groupedByCategory = groupNodeSignaturesByCategory();
+    assert.ok(groupedByCategory instanceof Map, "grouping should return a Map");
+    assert.ok(groupedByCategory.size > 0, "category grouping should not be empty");
 
     const urdfSample = graphSamples["urdf-ik-position"];
     assert.ok(urdfSample, "graphSamples exposes urdf-ik-position");

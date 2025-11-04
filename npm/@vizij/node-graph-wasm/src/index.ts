@@ -377,3 +377,12 @@ export {
   layeredRigBlend,
   urdfIkPosition,
 };
+
+export {
+  getNodeRegistry,
+  findNodeSignature,
+  requireNodeSignature,
+  listNodeTypeIds,
+  groupNodeSignaturesByCategory,
+  nodeRegistryVersion,
+} from "./metadata/index.js";

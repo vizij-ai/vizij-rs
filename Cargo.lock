@@ -3936,6 +3936,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "vizij-graph-registry-export"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "vizij-graph-core",
+]
+
+[[package]]
 name = "vizij-graph-wasm"
 version = "0.3.0"
 dependencies = [

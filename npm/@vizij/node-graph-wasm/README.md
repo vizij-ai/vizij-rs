@@ -25,6 +25,7 @@ This package ships the WebAssembly build of `vizij-graph-core` together with a T
 - Provides a high-level `Graph` class, low-level bindings, TypeScript definitions, and ready-to-use fixtures.
 - Supports both browser and Node environments—`init()` chooses the right loader and validates the ABI (`abi_version() === 2`).
 - Ships GraphSpec normalisers and schema inspection helpers so editors and tooling can speak the same language as Vizij runtimes.
+- Bakes the node registry (`metadata/registry.json`) straight from the Rust core so build-time tooling and authoring UIs stay in sync with the runtime.
 
 ---
 
@@ -71,6 +72,12 @@ async function init(input?: InitInput): Promise<void>;
 function abi_version(): number;
 async function normalizeGraphSpec(spec: GraphSpec | string): Promise<GraphSpec>;
 async function getNodeSchemas(): Promise<Registry>;
+function getNodeRegistry(): Registry;
+function findNodeSignature(typeId: NodeType | string): NodeSignature | undefined;
+function requireNodeSignature(typeId: NodeType | string): NodeSignature;
+function listNodeTypeIds(): NodeType[];
+function groupNodeSignaturesByCategory(): Map<string, NodeSignature[]>;
+const nodeRegistryVersion: string;
 async function logNodeSchemaDocs(nodeType?: NodeType | string): Promise<void>;
 const graphSamples: Record<string, GraphSpec>;
 
@@ -94,7 +101,9 @@ class Graph {
 ### Normalization, Schema & Docs Helpers
 
 - `normalizeGraphSpec(spec)` – round-trips any GraphSpec (object or JSON string) through the Rust normaliser so shorthand inputs/legacy `inputs` maps come back with explicit `edges`, typed paths, and canonical casing.
-- `getNodeSchemas()` – returns the runtime node registry (including node, port, and param documentation strings) for palette/editor usage.
+- `getNodeSchemas()` / `getNodeRegistry()` – runtime and baked access to the node registry (including ports and params) for palette/editor usage.
+- `findNodeSignature(typeId)` / `requireNodeSignature(typeId)` – quick lookups into the baked registry.
+- `listNodeTypeIds()` / `groupNodeSignaturesByCategory()` – helpers for palettes or UI grouping.
 - `logNodeSchemaDocs(nodeType?)` – pretty-prints the schema docs for every node or a specific `NodeType` right to the console (handy while prototyping editors).
 - `graphSamples` – curated ready-to-load specs that already reflect the canonical `edges` form and typed `path` parameters.
 

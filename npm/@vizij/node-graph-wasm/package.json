@@ -1,6 +1,6 @@
 {
   "name": "@vizij/node-graph-wasm",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "WASM bindings for Vizij node-graph core.",
   "license": "MIT",
   "repository": {
@@ -30,11 +30,16 @@
     ".": {
       "import": "./dist/src/index.js",
       "types": "./dist/src/index.d.ts"
-    }
+    },
+    "./metadata": {
+      "import": "./dist/src/metadata/index.js",
+      "types": "./dist/src/metadata/index.d.ts"
+    },
+    "./metadata/registry.json": "./dist/src/metadata/registry.json"
   },
   "sideEffects": false,
   "scripts": {
-    "build": "node ../../../scripts/embed-fixtures.mjs node-graph-wasm && tsc -p tsconfig.json",
+    "build": "node ../../../scripts/generate-node-registry.mjs && node ../../../scripts/embed-fixtures.mjs node-graph-wasm && tsc -p tsconfig.json",
     "test": "pnpm run build && node dist/tests/all.test.js",
     "prepublishOnly": "node -e \"const fs=require('fs');if(!fs.existsSync('pkg')){console.error('Missing pkg/. Run wasm-pack build.');process.exit(1);}\""
   },

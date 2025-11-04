@@ -47,6 +47,7 @@ export type NodeType =
   | "case"
   | "clamp"
   | "remap"
+  | "centered_remap"
   | "vec3cross"
   | "vectorconstant"
   | "vectoradd"
@@ -235,7 +236,11 @@ export interface ParamSpec {
   ty: ParamType;
   label: string;
   doc?: string;
-  default_json?: ValueJSON;  // default value encoded as ValueJSON when applicable
+  /**
+   * Raw JSON default value as emitted by the Rust registry.
+   * Usually encoded as ValueJSON but may also be primitive types or arrays.
+   */
+  default_json?: unknown;
   min?: number;
   max?: number;
 }

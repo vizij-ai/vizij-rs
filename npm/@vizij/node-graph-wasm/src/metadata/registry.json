@@ -1,0 +1,2291 @@
+{
+  "version": "1.0.0",
+  "nodes": [
+    {
+      "type_id": "constant",
+      "name": "Constant",
+      "category": "Math",
+      "doc": "Outputs the configured value every frame; defaults to 0.0 when unspecified.",
+      "inputs": [],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "value",
+          "ty": "any",
+          "label": "Value",
+          "doc": "Value to emit on the output port each tick.",
+          "default_json": {
+            "float": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "type_id": "slider",
+      "name": "Slider",
+      "category": "Math",
+      "doc": "Provides a tunable scalar value constrained to the configured min/max range.",
+      "inputs": [],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "value",
+          "ty": "float",
+          "label": "Value",
+          "doc": "Initial slider position.",
+          "default_json": {
+            "float": 0.0
+          }
+        },
+        {
+          "id": "min",
+          "ty": "float",
+          "label": "Min",
+          "doc": "Lower bound for the slider value.",
+          "default_json": {
+            "float": 0.0
+          }
+        },
+        {
+          "id": "max",
+          "ty": "float",
+          "label": "Max",
+          "doc": "Upper bound for the slider value.",
+          "default_json": {
+            "float": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "type_id": "multislider",
+      "name": "Multi Slider",
+      "category": "Math",
+      "doc": "Provides three independent slider-controlled scalar outputs for X, Y, and Z.",
+      "inputs": [],
+      "outputs": [
+        {
+          "id": "x",
+          "ty": "float",
+          "label": "X",
+          "doc": "Current X slider value.",
+          "optional": false
+        },
+        {
+          "id": "y",
+          "ty": "float",
+          "label": "Y",
+          "doc": "Current Y slider value.",
+          "optional": false
+        },
+        {
+          "id": "z",
+          "ty": "float",
+          "label": "Z",
+          "doc": "Current Z slider value.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "x",
+          "ty": "float",
+          "label": "X",
+          "doc": "Initial X slider value.",
+          "default_json": {
+            "float": 0.0
+          }
+        },
+        {
+          "id": "y",
+          "ty": "float",
+          "label": "Y",
+          "doc": "Initial Y slider value.",
+          "default_json": {
+            "float": 0.0
+          }
+        },
+        {
+          "id": "z",
+          "ty": "float",
+          "label": "Z",
+          "doc": "Initial Z slider value.",
+          "default_json": {
+            "float": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "type_id": "add",
+      "name": "Add",
+      "category": "Math",
+      "doc": "Sums all incoming operands, treating missing inputs as 0.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "operand",
+        "ty": "float",
+        "label": "Operand",
+        "doc": "Each scalar to include in the sum.",
+        "min": 2
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "subtract",
+      "name": "Subtract",
+      "category": "Math",
+      "doc": "Subtracts RHS from LHS; missing inputs default to 0.",
+      "inputs": [
+        {
+          "id": "lhs",
+          "ty": "float",
+          "label": "LHS",
+          "doc": "Minuend value.",
+          "optional": false
+        },
+        {
+          "id": "rhs",
+          "ty": "float",
+          "label": "RHS",
+          "doc": "Subtrahend value.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "multiply",
+      "name": "Multiply",
+      "category": "Math",
+      "doc": "Multiplies all incoming operands; missing inputs act as 1.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "operand",
+        "ty": "float",
+        "label": "Operand",
+        "doc": "Each scalar to include in the product.",
+        "min": 2
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "divide",
+      "name": "Divide",
+      "category": "Math",
+      "doc": "Divides LHS by RHS; division by zero yields NaN.",
+      "inputs": [
+        {
+          "id": "lhs",
+          "ty": "float",
+          "label": "LHS",
+          "doc": "Dividend value.",
+          "optional": false
+        },
+        {
+          "id": "rhs",
+          "ty": "float",
+          "label": "RHS",
+          "doc": "Divisor value; zero produces NaN.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "power",
+      "name": "Power",
+      "category": "Math",
+      "doc": "Raises Base to the given Exponent using f32 powf semantics.",
+      "inputs": [
+        {
+          "id": "base",
+          "ty": "float",
+          "label": "Base",
+          "doc": "Base value.",
+          "optional": false
+        },
+        {
+          "id": "exp",
+          "ty": "float",
+          "label": "Exponent",
+          "doc": "Exponent value.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "log",
+      "name": "Log",
+      "category": "Math",
+      "doc": "Computes logarithm of Value in the provided Base; invalid bases yield NaN.",
+      "inputs": [
+        {
+          "id": "value",
+          "ty": "float",
+          "label": "Value",
+          "doc": "Argument whose logarithm is evaluated.",
+          "optional": false
+        },
+        {
+          "id": "base",
+          "ty": "float",
+          "label": "Base",
+          "doc": "Logarithm base; non-positive or 1.0 results produce NaN.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "sin",
+      "name": "Sin",
+      "category": "Math",
+      "doc": "Computes the sine of the input angle (radians).",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "float",
+          "label": "In",
+          "doc": "Input scalar value.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "cos",
+      "name": "Cos",
+      "category": "Math",
+      "doc": "Computes the cosine of the input angle (radians).",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "float",
+          "label": "In",
+          "doc": "Input scalar value.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "tan",
+      "name": "Tan",
+      "category": "Math",
+      "doc": "Computes the tangent of the input angle (radians); results blow up near π/2 + kπ.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "float",
+          "label": "In",
+          "doc": "Input scalar value.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "time",
+      "name": "Time",
+      "category": "Time",
+      "doc": "Outputs the graph runtime's elapsed seconds.",
+      "inputs": [],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "oscillator",
+      "name": "Oscillator",
+      "category": "Time",
+      "doc": "Generates a sine wave using the provided frequency and phase inputs.",
+      "inputs": [
+        {
+          "id": "frequency",
+          "ty": "float",
+          "label": "Frequency",
+          "doc": "Oscillation rate in Hz; accepts scalars or vectors.",
+          "optional": false
+        },
+        {
+          "id": "phase",
+          "ty": "float",
+          "label": "Phase",
+          "doc": "Phase offset in radians; broadcast across vector frequency inputs.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "spring",
+      "name": "Spring",
+      "category": "Transitions",
+      "doc": "Integrates a critically damped spring toward the Target; zero or non-finite dt snaps to Target.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "vector",
+          "label": "Target",
+          "doc": "Target value to spring toward (scalar or vector).",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "vector",
+          "label": "Value",
+          "doc": "Spring-integrated value.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "stiffness",
+          "ty": "float",
+          "label": "Stiffness",
+          "doc": "Hooke's spring constant controlling acceleration toward the target.",
+          "default_json": {
+            "float": 120.0
+          },
+          "min": 0.0
+        },
+        {
+          "id": "damping",
+          "ty": "float",
+          "label": "Damping",
+          "doc": "Velocity damping applied each step.",
+          "default_json": {
+            "float": 20.0
+          },
+          "min": 0.0
+        },
+        {
+          "id": "mass",
+          "ty": "float",
+          "label": "Mass",
+          "doc": "Effective mass of the spring system.",
+          "default_json": {
+            "float": 1.0
+          },
+          "min": 0.0
+        }
+      ]
+    },
+    {
+      "type_id": "damp",
+      "name": "Damp",
+      "category": "Transitions",
+      "doc": "Exponentially decays toward the Target using a configurable half-life; zero dt or half-life snaps to Target.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "vector",
+          "label": "Target",
+          "doc": "Target value to smooth toward.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "vector",
+          "label": "Value",
+          "doc": "Exponentially smoothed output.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "half_life",
+          "ty": "float",
+          "label": "Half-Life",
+          "doc": "Seconds for the remaining error to halve.",
+          "default_json": {
+            "float": 0.2
+          },
+          "min": 0.0
+        }
+      ]
+    },
+    {
+      "type_id": "slew",
+      "name": "Slew",
+      "category": "Transitions",
+      "doc": "Limits the rate of change toward Target using max_rate units per second; zero dt or max_rate snaps to Target.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "vector",
+          "label": "Target",
+          "doc": "Target value to chase.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "vector",
+          "label": "Value",
+          "doc": "Rate-limited output value.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "max_rate",
+          "ty": "float",
+          "label": "Max Rate",
+          "doc": "Maximum units per second the value may change.",
+          "default_json": {
+            "float": 1.0
+          },
+          "min": 0.0
+        }
+      ]
+    },
+    {
+      "type_id": "and",
+      "name": "And",
+      "category": "Logic",
+      "doc": "Outputs true when both inputs are true; missing inputs default to false.",
+      "inputs": [
+        {
+          "id": "lhs",
+          "ty": "bool",
+          "label": "LHS",
+          "doc": "Left-hand boolean operand.",
+          "optional": false
+        },
+        {
+          "id": "rhs",
+          "ty": "bool",
+          "label": "RHS",
+          "doc": "Right-hand boolean operand.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "bool",
+          "label": "Out",
+          "doc": "Computed boolean result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "or",
+      "name": "Or",
+      "category": "Logic",
+      "doc": "Outputs true when either input is true; missing inputs default to false.",
+      "inputs": [
+        {
+          "id": "lhs",
+          "ty": "bool",
+          "label": "LHS",
+          "doc": "Left-hand boolean operand.",
+          "optional": false
+        },
+        {
+          "id": "rhs",
+          "ty": "bool",
+          "label": "RHS",
+          "doc": "Right-hand boolean operand.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "bool",
+          "label": "Out",
+          "doc": "Computed boolean result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "xor",
+      "name": "Xor",
+      "category": "Logic",
+      "doc": "Outputs true when exactly one input is true; missing inputs default to false.",
+      "inputs": [
+        {
+          "id": "lhs",
+          "ty": "bool",
+          "label": "LHS",
+          "doc": "Left-hand boolean operand.",
+          "optional": false
+        },
+        {
+          "id": "rhs",
+          "ty": "bool",
+          "label": "RHS",
+          "doc": "Right-hand boolean operand.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "bool",
+          "label": "Out",
+          "doc": "Computed boolean result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "not",
+      "name": "Not",
+      "category": "Logic",
+      "doc": "Outputs the logical negation of the input; missing input defaults to false.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "bool",
+          "label": "In",
+          "doc": "Input boolean value.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "bool",
+          "label": "Out",
+          "doc": "Computed boolean result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "greaterthan",
+      "name": "Greater Than",
+      "category": "Logic",
+      "doc": "Outputs true when LHS is strictly greater than RHS.",
+      "inputs": [
+        {
+          "id": "lhs",
+          "ty": "float",
+          "label": "LHS",
+          "doc": "Left-hand scalar operand.",
+          "optional": false
+        },
+        {
+          "id": "rhs",
+          "ty": "float",
+          "label": "RHS",
+          "doc": "Right-hand scalar operand.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "bool",
+          "label": "Out",
+          "doc": "Computed boolean result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "lessthan",
+      "name": "Less Than",
+      "category": "Logic",
+      "doc": "Outputs true when LHS is strictly less than RHS.",
+      "inputs": [
+        {
+          "id": "lhs",
+          "ty": "float",
+          "label": "LHS",
+          "doc": "Left-hand scalar operand.",
+          "optional": false
+        },
+        {
+          "id": "rhs",
+          "ty": "float",
+          "label": "RHS",
+          "doc": "Right-hand scalar operand.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "bool",
+          "label": "Out",
+          "doc": "Computed boolean result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "equal",
+      "name": "Equal",
+      "category": "Logic",
+      "doc": "Outputs true when LHS and RHS differ by less than 1e-6.",
+      "inputs": [
+        {
+          "id": "lhs",
+          "ty": "float",
+          "label": "LHS",
+          "doc": "Left-hand scalar operand.",
+          "optional": false
+        },
+        {
+          "id": "rhs",
+          "ty": "float",
+          "label": "RHS",
+          "doc": "Right-hand scalar operand.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "bool",
+          "label": "Out",
+          "doc": "Computed boolean result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "notequal",
+      "name": "Not Equal",
+      "category": "Logic",
+      "doc": "Outputs true when LHS and RHS differ by more than 1e-6.",
+      "inputs": [
+        {
+          "id": "lhs",
+          "ty": "float",
+          "label": "LHS",
+          "doc": "Left-hand scalar operand.",
+          "optional": false
+        },
+        {
+          "id": "rhs",
+          "ty": "float",
+          "label": "RHS",
+          "doc": "Right-hand scalar operand.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "bool",
+          "label": "Out",
+          "doc": "Computed boolean result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "if",
+      "name": "If",
+      "category": "Logic",
+      "doc": "Routes Then when Condition is true, otherwise Else; missing branches default to 0.",
+      "inputs": [
+        {
+          "id": "cond",
+          "ty": "bool",
+          "label": "Condition",
+          "doc": "Boolean condition to evaluate.",
+          "optional": false
+        },
+        {
+          "id": "then",
+          "ty": "vector",
+          "label": "Then",
+          "doc": "Value emitted when Condition is true.",
+          "optional": true
+        },
+        {
+          "id": "else",
+          "ty": "vector",
+          "label": "Else",
+          "doc": "Value emitted when Condition is false.",
+          "optional": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "vector",
+          "label": "Out",
+          "doc": "Computed numeric vector result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "clamp",
+      "name": "Clamp",
+      "category": "Math",
+      "doc": "Constrains In between Min and Max; expects Min ≤ Max.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "float",
+          "label": "In",
+          "doc": "Value to clamp.",
+          "optional": false
+        },
+        {
+          "id": "min",
+          "ty": "float",
+          "label": "Min",
+          "doc": "Lower bound.",
+          "optional": false
+        },
+        {
+          "id": "max",
+          "ty": "float",
+          "label": "Max",
+          "doc": "Upper bound.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "remap",
+      "name": "Remap",
+      "category": "Math",
+      "doc": "Normalizes In from the [In Min, In Max] range into [Out Min, Out Max]; input is clamped to the source range and divide-by-zero yields NaN.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "float",
+          "label": "In",
+          "doc": "Value to remap.",
+          "optional": false
+        },
+        {
+          "id": "in_min",
+          "ty": "float",
+          "label": "In Min",
+          "doc": "Lower bound of the input range.",
+          "optional": false
+        },
+        {
+          "id": "in_max",
+          "ty": "float",
+          "label": "In Max",
+          "doc": "Upper bound of the input range.",
+          "optional": false
+        },
+        {
+          "id": "out_min",
+          "ty": "float",
+          "label": "Out Min",
+          "doc": "Lower bound of the output range.",
+          "optional": false
+        },
+        {
+          "id": "out_max",
+          "ty": "float",
+          "label": "Out Max",
+          "doc": "Upper bound of the output range.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "centered_remap",
+      "name": "Centered Remap",
+      "category": "Math",
+      "doc": "Linearly remaps In around an anchor without clamping: values ≤ Anchor use the [In Low, Anchor] span while values ≥ Anchor use [Anchor, In High]; spans may collapse to anchor to pin one side.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "float",
+          "label": "In",
+          "doc": "Value to remap.",
+          "optional": false
+        },
+        {
+          "id": "in_low",
+          "ty": "float",
+          "label": "In Low",
+          "doc": "Reference point for values below the anchor.",
+          "optional": false
+        },
+        {
+          "id": "in_anchor",
+          "ty": "float",
+          "label": "In Anchor",
+          "doc": "Anchor point separating the low/high spans.",
+          "optional": false
+        },
+        {
+          "id": "in_high",
+          "ty": "float",
+          "label": "In High",
+          "doc": "Reference point for values above the anchor.",
+          "optional": false
+        },
+        {
+          "id": "out_low",
+          "ty": "float",
+          "label": "Out Low",
+          "doc": "Output mapped to In Low.",
+          "optional": false
+        },
+        {
+          "id": "out_anchor",
+          "ty": "float",
+          "label": "Out Anchor",
+          "doc": "Output corresponding to the anchor.",
+          "optional": false
+        },
+        {
+          "id": "out_high",
+          "ty": "float",
+          "label": "Out High",
+          "doc": "Output mapped to In High.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "vec3cross",
+      "name": "Vec3 Cross",
+      "category": "Vectors",
+      "doc": "Computes the cross product A × B; mismatched shapes yield NaN components.",
+      "inputs": [
+        {
+          "id": "a",
+          "ty": "vec3",
+          "label": "A",
+          "doc": "First 3D vector operand.",
+          "optional": false
+        },
+        {
+          "id": "b",
+          "ty": "vec3",
+          "label": "B",
+          "doc": "Second 3D vector operand.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "vec3",
+          "label": "Out",
+          "doc": "Computed 3D vector.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "vectorconstant",
+      "name": "Vector Constant",
+      "category": "Vectors",
+      "doc": "Outputs the configured vector value each frame.",
+      "inputs": [],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "vector",
+          "label": "Out",
+          "doc": "Computed numeric vector result.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "value",
+          "ty": "any",
+          "label": "Value",
+          "doc": "Vector or numeric value to emit.",
+          "default_json": {
+            "vector": []
+          }
+        }
+      ]
+    },
+    {
+      "type_id": "vectoradd",
+      "name": "Vector Add",
+      "category": "Vectors",
+      "doc": "Element-wise sum of A and B; mismatched shapes produce NaN.",
+      "inputs": [
+        {
+          "id": "a",
+          "ty": "vector",
+          "label": "A",
+          "doc": "First vector operand.",
+          "optional": false
+        },
+        {
+          "id": "b",
+          "ty": "vector",
+          "label": "B",
+          "doc": "Second vector operand.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "vector",
+          "label": "Out",
+          "doc": "Computed numeric vector result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "vectorsubtract",
+      "name": "Vector Subtract",
+      "category": "Vectors",
+      "doc": "Element-wise subtraction A - B; mismatched shapes produce NaN.",
+      "inputs": [
+        {
+          "id": "a",
+          "ty": "vector",
+          "label": "A",
+          "doc": "First vector operand.",
+          "optional": false
+        },
+        {
+          "id": "b",
+          "ty": "vector",
+          "label": "B",
+          "doc": "Second vector operand.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "vector",
+          "label": "Out",
+          "doc": "Computed numeric vector result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "vectormultiply",
+      "name": "Vector Multiply",
+      "category": "Vectors",
+      "doc": "Element-wise product of A and B; mismatched shapes produce NaN.",
+      "inputs": [
+        {
+          "id": "a",
+          "ty": "vector",
+          "label": "A",
+          "doc": "First vector operand.",
+          "optional": false
+        },
+        {
+          "id": "b",
+          "ty": "vector",
+          "label": "B",
+          "doc": "Second vector operand.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "vector",
+          "label": "Out",
+          "doc": "Computed numeric vector result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "vectorscale",
+      "name": "Vector Scale",
+      "category": "Vectors",
+      "doc": "Multiplies Vector by Scalar; scalar broadcasts across components.",
+      "inputs": [
+        {
+          "id": "scalar",
+          "ty": "float",
+          "label": "Scalar",
+          "doc": "Scalar multiplier.",
+          "optional": false
+        },
+        {
+          "id": "v",
+          "ty": "vector",
+          "label": "Vector",
+          "doc": "Vector to scale.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "vector",
+          "label": "Out",
+          "doc": "Computed numeric vector result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "vectornormalize",
+      "name": "Vector Normalize",
+      "category": "Vectors",
+      "doc": "Normalizes the input vector to unit length; zero-length inputs yield NaN components.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "vector",
+          "label": "In",
+          "doc": "Input numeric vector; accepts scalars and arrays.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "vector",
+          "label": "Out",
+          "doc": "Computed numeric vector result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "vectordot",
+      "name": "Vector Dot",
+      "category": "Vectors",
+      "doc": "Computes the dot product of A and B; mismatched shapes yield NaN.",
+      "inputs": [
+        {
+          "id": "a",
+          "ty": "vector",
+          "label": "A",
+          "doc": "First vector operand.",
+          "optional": false
+        },
+        {
+          "id": "b",
+          "ty": "vector",
+          "label": "B",
+          "doc": "Second vector operand.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "vectorlength",
+      "name": "Vector Length",
+      "category": "Vectors",
+      "doc": "Computes the Euclidean length of the input vector; non-numeric inputs yield NaN.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "vector",
+          "label": "In",
+          "doc": "Input numeric vector; accepts scalars and arrays.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "vectorindex",
+      "name": "Vector Index",
+      "category": "Vectors",
+      "doc": "Extracts the element at floor(Index); out-of-range indices yield NaN.",
+      "inputs": [
+        {
+          "id": "v",
+          "ty": "vector",
+          "label": "Vector",
+          "doc": "Vector to sample from.",
+          "optional": false
+        },
+        {
+          "id": "index",
+          "ty": "float",
+          "label": "Index",
+          "doc": "0-based index; non-integer values are floored; out-of-range produces NaN.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "join",
+      "name": "Join",
+      "category": "Vectors",
+      "doc": "Concatenates all Operand inputs into a single numeric vector, skipping non-numeric entries.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "operand",
+        "ty": "vector",
+        "label": "Operand",
+        "doc": "Each vector or scalar slice to append in order.",
+        "min": 1
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "vector",
+          "label": "Out",
+          "doc": "Computed numeric vector result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "split",
+      "name": "Split",
+      "category": "Vectors",
+      "doc": "Splits In into Parts sized by the Sizes param; mismatched totals return NaN-filled segments.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "vector",
+          "label": "In",
+          "doc": "Input numeric vector; accepts scalars and arrays.",
+          "optional": false
+        }
+      ],
+      "outputs": [],
+      "variadic_outputs": {
+        "id": "parts",
+        "ty": "vector",
+        "label": "Part",
+        "doc": "Returned segment corresponding to each requested size.",
+        "min": 1
+      },
+      "params": [
+        {
+          "id": "sizes",
+          "ty": "vector",
+          "label": "Sizes",
+          "doc": "Vector of sizes (floored to integers). Sum must equal input length; otherwise each part is NaNs of requested size.",
+          "default_json": {
+            "vector": []
+          }
+        }
+      ]
+    },
+    {
+      "type_id": "vectormin",
+      "name": "Vector Min",
+      "category": "Vectors",
+      "doc": "Returns the minimum element of In; empty vectors yield NaN.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "vector",
+          "label": "In",
+          "doc": "Input numeric vector; accepts scalars and arrays.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "vectormax",
+      "name": "Vector Max",
+      "category": "Vectors",
+      "doc": "Returns the maximum element of In; empty vectors yield NaN.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "vector",
+          "label": "In",
+          "doc": "Input numeric vector; accepts scalars and arrays.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "vectormean",
+      "name": "Vector Mean",
+      "category": "Vectors",
+      "doc": "Returns the arithmetic mean of In; empty vectors yield NaN.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "vector",
+          "label": "In",
+          "doc": "Input numeric vector; accepts scalars and arrays.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "vectormedian",
+      "name": "Vector Median",
+      "category": "Vectors",
+      "doc": "Returns the median of In (average of middle pair for even counts); empty vectors yield NaN.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "vector",
+          "label": "In",
+          "doc": "Input numeric vector; accepts scalars and arrays.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "vectormode",
+      "name": "Vector Mode",
+      "category": "Vectors",
+      "doc": "Returns the most frequent non-NaN value in In; ties choose the smallest value; empty vectors yield NaN.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "vector",
+          "label": "In",
+          "doc": "Input numeric vector; accepts scalars and arrays.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "weightedsumvector",
+      "name": "Weighted Sum Vector",
+      "category": "Blend",
+      "doc": "Pre-computes aggregate blend statistics from Values, optionally applying Weights and Masks; mismatched lengths return NaNs.",
+      "inputs": [
+        {
+          "id": "values",
+          "ty": "vector",
+          "label": "Values",
+          "doc": "Per-input channel values used when computing blend sums.",
+          "optional": false
+        },
+        {
+          "id": "weights",
+          "ty": "vector",
+          "label": "Weights",
+          "doc": "Per-input weights (single scalar broadcasts to all values).",
+          "optional": true
+        },
+        {
+          "id": "masks",
+          "ty": "vector",
+          "label": "Masks",
+          "doc": "Optional 0/1 mask enabling contributions; single scalar broadcasts to all values.",
+          "optional": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "total_weighted_sum",
+          "ty": "float",
+          "label": "Total Weighted Sum",
+          "doc": "Σ(value_i × weight_i × mask_i).",
+          "optional": false
+        },
+        {
+          "id": "total_weight",
+          "ty": "float",
+          "label": "Total Weight",
+          "doc": "Σ(weight_i × mask_i).",
+          "optional": false
+        },
+        {
+          "id": "max_effective_weight",
+          "ty": "float",
+          "label": "Max Effective Weight",
+          "doc": "max(weight_i × mask_i); 0.0 when no inputs provided.",
+          "optional": false
+        },
+        {
+          "id": "input_count",
+          "ty": "float",
+          "label": "Input Count",
+          "doc": "Number of values considered (as Float).",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "default-blend",
+      "name": "Default Blend",
+      "category": "Blend",
+      "doc": "Produces a weighted sum of operand inputs plus Baseline and Offset; handles weight broadcasting and falls back to neutral/null when counts mismatch.",
+      "inputs": [
+        {
+          "id": "baseline",
+          "ty": "any",
+          "label": "Baseline",
+          "doc": "Base value scaled by the remaining weight (clamped at zero).",
+          "optional": true
+        },
+        {
+          "id": "offset",
+          "ty": "any",
+          "label": "Offset",
+          "doc": "Optional offset added after blending.",
+          "optional": true
+        },
+        {
+          "id": "weights",
+          "ty": "vector",
+          "label": "Weights",
+          "doc": "Optional per-target weights; single value broadcasts to all targets.",
+          "optional": true
+        }
+      ],
+      "variadic_inputs": {
+        "id": "operand",
+        "ty": "any",
+        "label": "Operand",
+        "doc": "Operand values to blend before adding baseline and offset.",
+        "min": 0
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "any",
+          "label": "Out",
+          "doc": "Blended value.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "blendweightedaverage",
+      "name": "Blend - Weighted Average",
+      "category": "Blend",
+      "doc": "Normalises Total Weighted Sum by Total Weight / Max Effective Weight; falls back when the divisor is invalid.",
+      "inputs": [
+        {
+          "id": "total_weighted_sum",
+          "ty": "float",
+          "label": "Total Weighted Sum",
+          "doc": "Σ(value_i × weight_i × mask_i).",
+          "optional": false
+        },
+        {
+          "id": "total_weight",
+          "ty": "float",
+          "label": "Total Weight",
+          "doc": "Σ(weight_i × mask_i).",
+          "optional": false
+        },
+        {
+          "id": "max_effective_weight",
+          "ty": "float",
+          "label": "Max Effective Weight",
+          "doc": "max(weight_i × mask_i); used to normalise the divisor.",
+          "optional": false
+        },
+        {
+          "id": "fallback",
+          "ty": "float",
+          "label": "Fallback",
+          "doc": "Used when total_weight is zero or the average cannot be computed.",
+          "optional": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "blendadditive",
+      "name": "Blend - Additive",
+      "category": "Blend",
+      "doc": "Outputs Total Weighted Sum when any inputs contribute; otherwise emits Fallback or NaN.",
+      "inputs": [
+        {
+          "id": "total_weighted_sum",
+          "ty": "float",
+          "label": "Total Weighted Sum",
+          "doc": "Σ(value_i × weight_i × mask_i).",
+          "optional": false
+        },
+        {
+          "id": "total_weight",
+          "ty": "float",
+          "label": "Total Weight",
+          "doc": "Σ(weight_i × mask_i).",
+          "optional": false
+        },
+        {
+          "id": "fallback",
+          "ty": "float",
+          "label": "Fallback",
+          "doc": "Fallback value when no inputs contribute.",
+          "optional": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "blendmultiply",
+      "name": "Blend - Multiply",
+      "category": "Blend",
+      "doc": "Multiplies contributions using (1 - weight) + value × weight × mask for each entry; mismatched lengths yield NaN, empty input returns 1.",
+      "inputs": [
+        {
+          "id": "values",
+          "ty": "vector",
+          "label": "Values",
+          "doc": "Per-input channel values.",
+          "optional": false
+        },
+        {
+          "id": "weights",
+          "ty": "vector",
+          "label": "Weights",
+          "doc": "Per-input weights (single scalar broadcasts to all values).",
+          "optional": true
+        },
+        {
+          "id": "masks",
+          "ty": "vector",
+          "label": "Masks",
+          "doc": "Optional 0/1 mask enabling contributions; single scalar broadcasts to all values.",
+          "optional": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Product over inputs of (1 - weight_i) + value_i × weight_i × mask_i.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "blendweightedoverlay",
+      "name": "Blend - Weighted Overlay",
+      "category": "Blend",
+      "doc": "Interpolates between Base and Total Weighted Sum using Max Effective Weight as the blend factor; invalid weights yield NaN.",
+      "inputs": [
+        {
+          "id": "total_weighted_sum",
+          "ty": "float",
+          "label": "Total Weighted Sum",
+          "doc": "Σ(value_i × weight_i × mask_i).",
+          "optional": false
+        },
+        {
+          "id": "max_effective_weight",
+          "ty": "float",
+          "label": "Max Effective Weight",
+          "doc": "max(weight_i × mask_i) used as interpolation factor.",
+          "optional": false
+        },
+        {
+          "id": "base",
+          "ty": "float",
+          "label": "Base",
+          "doc": "Optional base value to blend from.",
+          "optional": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "blendweightedaverageoverlay",
+      "name": "Blend - Weighted Average Overlay",
+      "category": "Blend",
+      "doc": "Computes an averaged offset and adds it to Base; falls back to Base when averaging fails.",
+      "inputs": [
+        {
+          "id": "total_weighted_sum",
+          "ty": "float",
+          "label": "Total Weighted Sum",
+          "doc": "Σ(delta_i × weight_i × mask_i) where delta is (value - base).",
+          "optional": false
+        },
+        {
+          "id": "total_weight",
+          "ty": "float",
+          "label": "Total Weight",
+          "doc": "Σ(weight_i × mask_i) for the deltas.",
+          "optional": false
+        },
+        {
+          "id": "max_effective_weight",
+          "ty": "float",
+          "label": "Max Effective Weight",
+          "doc": "max(weight_i × mask_i) used to normalise the divisor.",
+          "optional": false
+        },
+        {
+          "id": "base",
+          "ty": "float",
+          "label": "Base",
+          "doc": "Optional base value the averaged delta is applied to.",
+          "optional": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "blendmax",
+      "name": "Blend - Max",
+      "category": "Blend",
+      "doc": "Selects the value whose weight × mask is largest; scales it by that effective weight or falls back to Base when none contribute.",
+      "inputs": [
+        {
+          "id": "values",
+          "ty": "vector",
+          "label": "Values",
+          "doc": "Per-input channel values.",
+          "optional": false
+        },
+        {
+          "id": "weights",
+          "ty": "vector",
+          "label": "Weights",
+          "doc": "Per-input weights (single scalar broadcasts to all values).",
+          "optional": true
+        },
+        {
+          "id": "masks",
+          "ty": "vector",
+          "label": "Masks",
+          "doc": "Optional 0/1 mask enabling contributions; single scalar broadcasts to all values.",
+          "optional": true
+        },
+        {
+          "id": "base",
+          "ty": "float",
+          "label": "Base",
+          "doc": "Fallback value returned when no effective weight is positive.",
+          "optional": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "case",
+      "name": "Case",
+      "category": "Logic",
+      "doc": "Selects the case value whose label matches Selector; returns Default or NaN when no match is found.",
+      "inputs": [
+        {
+          "id": "selector",
+          "ty": "any",
+          "label": "Selector",
+          "doc": "Value compared against the configured case_labels (exact match).",
+          "optional": false
+        },
+        {
+          "id": "default",
+          "ty": "any",
+          "label": "Default",
+          "doc": "Value returned when no case label matches the selector.",
+          "optional": true
+        }
+      ],
+      "variadic_inputs": {
+        "id": "operand",
+        "ty": "any",
+        "label": "Case Value",
+        "doc": "Values routed when their corresponding case_labels entry equals the selector.",
+        "min": 0
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "any",
+          "label": "Out",
+          "doc": "Clone of the matched case value or the default when no match is found.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "case_labels",
+          "ty": "any",
+          "label": "Case Labels",
+          "doc": "Array of string labels; entry i maps to variadic input operand_i.",
+          "default_json": []
+        }
+      ]
+    },
+    {
+      "type_id": "inversekinematics",
+      "name": "Inverse Kinematics",
+      "category": "Robotics",
+      "doc": "Analytic planar 3-bone IK solver; returns joint angles or NaNs when the target is unreachable.",
+      "inputs": [
+        {
+          "id": "bone1",
+          "ty": "float",
+          "label": "Bone1",
+          "doc": "Length of the first bone segment.",
+          "optional": false
+        },
+        {
+          "id": "bone2",
+          "ty": "float",
+          "label": "Bone2",
+          "doc": "Length of the second bone segment.",
+          "optional": false
+        },
+        {
+          "id": "bone3",
+          "ty": "float",
+          "label": "Bone3",
+          "doc": "Length of the end-effector segment.",
+          "optional": false
+        },
+        {
+          "id": "theta",
+          "ty": "float",
+          "label": "Theta",
+          "doc": "Desired end-effector orientation in radians.",
+          "optional": false
+        },
+        {
+          "id": "x",
+          "ty": "float",
+          "label": "Target X",
+          "doc": "Target X coordinate.",
+          "optional": false
+        },
+        {
+          "id": "y",
+          "ty": "float",
+          "label": "Target Y",
+          "doc": "Target Y coordinate.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "vec3",
+          "label": "Out",
+          "doc": "Computed 3D vector.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "urdfikposition",
+      "name": "URDF IK (Position)",
+      "category": "Robotics",
+      "doc": "Solves for joint angles that reach Target Position using the configured URDF chain; errors when URDF data is missing or the target is unreachable.",
+      "inputs": [
+        {
+          "id": "target_pos",
+          "ty": "vec3",
+          "label": "Target Position",
+          "doc": "World-space XYZ target (meters).",
+          "optional": false
+        },
+        {
+          "id": "seed",
+          "ty": "vector",
+          "label": "Seed",
+          "doc": "Optional joint seed vector.",
+          "optional": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "any",
+          "label": "Joint Angles",
+          "doc": "Record mapping joint_name → angle radians.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "urdf_xml",
+          "ty": "any",
+          "label": "URDF XML",
+          "doc": "Robot URDF definition (string).",
+          "default_json": {
+            "text": ""
+          }
+        },
+        {
+          "id": "root_link",
+          "ty": "any",
+          "label": "Root Link",
+          "doc": "Chain root link name.",
+          "default_json": {
+            "text": "base_link"
+          }
+        },
+        {
+          "id": "tip_link",
+          "ty": "any",
+          "label": "Tip Link",
+          "doc": "Chain tip link name.",
+          "default_json": {
+            "text": "tool0"
+          }
+        },
+        {
+          "id": "weights",
+          "ty": "vector",
+          "label": "Joint Weights",
+          "doc": "Optional per-joint weights.",
+          "default_json": {
+            "vector": []
+          }
+        },
+        {
+          "id": "max_iters",
+          "ty": "float",
+          "label": "Max Iterations",
+          "doc": "Solver iteration cap.",
+          "default_json": {
+            "float": 100.0
+          }
+        },
+        {
+          "id": "tol_pos",
+          "ty": "float",
+          "label": "Position Tolerance",
+          "doc": "Solver position tolerance (m).",
+          "default_json": {
+            "float": 0.001
+          }
+        }
+      ]
+    },
+    {
+      "type_id": "urdfikpose",
+      "name": "URDF IK (Pose)",
+      "category": "Robotics",
+      "doc": "Solves for joint angles matching both Target Position and Target Rotation; errors when the pose is unreachable or input shapes are invalid.",
+      "inputs": [
+        {
+          "id": "target_pos",
+          "ty": "vec3",
+          "label": "Target Position",
+          "doc": "World-space XYZ target (meters).",
+          "optional": false
+        },
+        {
+          "id": "target_rot",
+          "ty": "vector",
+          "label": "Target Rotation",
+          "doc": "Target quaternion (x, y, z, w).",
+          "optional": false
+        },
+        {
+          "id": "seed",
+          "ty": "vector",
+          "label": "Seed",
+          "doc": "Optional joint seed vector.",
+          "optional": true
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "any",
+          "label": "Joint Angles",
+          "doc": "Record mapping joint_name → angle radians.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "urdf_xml",
+          "ty": "any",
+          "label": "URDF XML",
+          "doc": "Robot URDF definition (string).",
+          "default_json": {
+            "text": ""
+          }
+        },
+        {
+          "id": "root_link",
+          "ty": "any",
+          "label": "Root Link",
+          "doc": "Chain root link name.",
+          "default_json": {
+            "text": "base_link"
+          }
+        },
+        {
+          "id": "tip_link",
+          "ty": "any",
+          "label": "Tip Link",
+          "doc": "Chain tip link name.",
+          "default_json": {
+            "text": "tool0"
+          }
+        },
+        {
+          "id": "weights",
+          "ty": "vector",
+          "label": "Joint Weights",
+          "doc": "Optional per-joint weights.",
+          "default_json": {
+            "vector": []
+          }
+        },
+        {
+          "id": "max_iters",
+          "ty": "float",
+          "label": "Max Iterations",
+          "doc": "Solver iteration cap.",
+          "default_json": {
+            "float": 100.0
+          }
+        },
+        {
+          "id": "tol_pos",
+          "ty": "float",
+          "label": "Position Tolerance",
+          "doc": "Solver position tolerance (m).",
+          "default_json": {
+            "float": 0.001
+          }
+        },
+        {
+          "id": "tol_rot",
+          "ty": "float",
+          "label": "Rotation Tolerance",
+          "doc": "Solver rotation tolerance (rad).",
+          "default_json": {
+            "float": 0.001
+          }
+        }
+      ]
+    },
+    {
+      "type_id": "urdffk",
+      "name": "URDF FK",
+      "category": "Robotics",
+      "doc": "Applies forward kinematics for the configured URDF chain using provided joint values or defaults.",
+      "inputs": [
+        {
+          "id": "joints",
+          "ty": "any",
+          "label": "Joint Values",
+          "doc": "Record or array of joint angles (radians).",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "position",
+          "ty": "vec3",
+          "label": "Position",
+          "doc": "Tip position in root frame (meters).",
+          "optional": false
+        },
+        {
+          "id": "rotation",
+          "ty": "quat",
+          "label": "Rotation",
+          "doc": "Tip orientation as quaternion (x, y, z, w).",
+          "optional": false
+        },
+        {
+          "id": "transform",
+          "ty": "transform",
+          "label": "Transform",
+          "doc": "Full pose convenience output (pos + rot + unit scale).",
+          "optional": true
+        }
+      ],
+      "params": [
+        {
+          "id": "urdf_xml",
+          "ty": "any",
+          "label": "URDF XML",
+          "doc": "Robot URDF definition (string).",
+          "default_json": {
+            "text": ""
+          }
+        },
+        {
+          "id": "root_link",
+          "ty": "any",
+          "label": "Root Link",
+          "doc": "Chain root link name.",
+          "default_json": {
+            "text": "base_link"
+          }
+        },
+        {
+          "id": "tip_link",
+          "ty": "any",
+          "label": "Tip Link",
+          "doc": "Chain tip link name.",
+          "default_json": {
+            "text": "tool0"
+          }
+        },
+        {
+          "id": "joint_defaults",
+          "ty": "any",
+          "label": "Joint Defaults",
+          "doc": "Fallback joint list [[name, angle], ...] when input misses entries.",
+          "default_json": {
+            "list": []
+          }
+        }
+      ]
+    },
+    {
+      "type_id": "input",
+      "name": "Input",
+      "category": "IO",
+      "doc": "Reads a staged value from the host path or emits the configured Default; enforces declared output shape when provided.",
+      "inputs": [],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "any",
+          "label": "Out",
+          "doc": "Staged input value forwarded into the graph.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "path",
+          "ty": "any",
+          "label": "Path",
+          "doc": "TypedPath string used to stage host inputs (e.g. robot1/Joint.angle)."
+        },
+        {
+          "id": "value",
+          "ty": "any",
+          "label": "Default",
+          "doc": "Optional fallback emitted when no staged input is present."
+        }
+      ]
+    },
+    {
+      "type_id": "output",
+      "name": "Output",
+      "category": "IO",
+      "doc": "Publishes In to the host path while passing the value through for downstream nodes.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "any",
+          "label": "In",
+          "doc": "Value to publish via TypedPath write.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "any",
+          "label": "Out",
+          "doc": "Passthrough copy of the input value for chaining.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "path",
+          "ty": "any",
+          "label": "Path",
+          "doc": "TypedPath string used when queuing external writes."
+        }
+      ]
+    }
+  ]
+}
