@@ -1,5 +1,11 @@
 # @vizij/wasm-loader
 
+## 0.1.2
+
+### Patch Changes
+
+- Add browser-specific entry point and shared loader core so bundlers choose a version without `fs/promises`, fixing Next.js builds while keeping the Node path intact.
+
 ## 0.1.1
 
 ### Patch Changes
