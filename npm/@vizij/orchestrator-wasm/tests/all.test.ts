@@ -23,7 +23,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 type OrchestrationBundleResult = Awaited<ReturnType<typeof loadOrchestrationBundle>>;
 
 function pkgWasmUrl(): URL {
-  const wasmPath = resolve(here, "../../pkg/vizij_orchestrator_wasm_bg.wasm");
+  const wasmPath = resolve(here, "../../../pkg/vizij_orchestrator_wasm_bg.wasm");
   if (!existsSync(wasmPath)) {
     throw new Error(
       "Missing pkg/vizij_orchestrator_wasm_bg.wasm. Run:\n  npm run build:wasm:orchestrator (from repo root)"
