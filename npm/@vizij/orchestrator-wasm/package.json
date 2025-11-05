@@ -1,6 +1,6 @@
 {
   "name": "@vizij/orchestrator-wasm",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "WASM bindings for Vizij orchestrator core (JS wrapper)",
   "license": "MIT",
   "repository": {
@@ -8,9 +8,9 @@
     "url": "https://github.com/vizij-ai/vizij-rs"
   },
   "type": "module",
-  "main": "dist/src/index.js",
-  "module": "dist/src/index.js",
-  "types": "dist/src/index.d.ts",
+  "main": "dist/orchestrator-wasm/src/index.js",
+  "module": "dist/orchestrator-wasm/src/index.js",
+  "types": "dist/orchestrator-wasm/src/index.d.ts",
   "files": [
     "dist/",
     "pkg/",
@@ -18,8 +18,8 @@
   ],
   "exports": {
     ".": {
-      "import": "./dist/src/index.js",
-      "types": "./dist/src/index.d.ts"
+      "import": "./dist/orchestrator-wasm/src/index.js",
+      "types": "./dist/orchestrator-wasm/src/index.d.ts"
     }
   },
   "sideEffects": false,
