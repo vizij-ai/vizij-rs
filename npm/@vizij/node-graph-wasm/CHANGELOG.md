@@ -1,5 +1,11 @@
 # @vizij/node-graph-wasm
 
+## 0.4.5
+
+### Patch Changes
+
+- Switch node-graph-wasm to the browser-aware loader split, ensuring bundlers avoid `fs/promises` while keeping Node support, and bump the loader dependency accordingly.
+
 ## 0.4.4
 
 ### Patch Changes

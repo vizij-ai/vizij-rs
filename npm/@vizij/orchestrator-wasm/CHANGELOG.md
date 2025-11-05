@@ -1,5 +1,11 @@
 # @vizij/orchestrator-wasm
 
+## 0.2.6
+
+### Patch Changes
+
+- Update orchestrator-wasm to use the browser-aware loader entry, matching the split in @vizij/wasm-loader so web bundlers no longer see Node-only imports.
+
 ## 0.2.5
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@vizij/orchestrator-wasm",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "WASM bindings for Vizij orchestrator core (JS wrapper)",
   "license": "MIT",
   "repository": {
@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@vizij/value-json": "^0.1.0",
-    "@vizij/wasm-loader": "^0.1.1"
+    "@vizij/wasm-loader": "^0.1.2"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

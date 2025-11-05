@@ -16,7 +16,11 @@ import type {
   GraphRegistrationConfig,
 } from "./types";
 import { toValueJSON, type ValueInput } from "@vizij/value-json";
-import { loadBindings as loadWasmBindings, type InitInput as LoaderInitInput } from "@vizij/wasm-loader";
+import {
+  loadBindings as loadWasmBindings,
+  type InitInput as LoaderInitInput,
+} from "@vizij/wasm-loader";
+import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 type WasmResolver = (path: string) => string | number | null | undefined;
 
 interface WasmOrchestratorInstance {
@@ -81,8 +85,11 @@ function defaultWasmUrl(): string {
   return wasmUrlCache;
 }
 
+const loadBindingsImpl: typeof loadWasmBindings =
+  typeof window === "undefined" ? loadWasmBindings : loadWasmBindingsBrowser;
+
 async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
-  await loadWasmBindings<WasmBindings>(
+  await loadBindingsImpl<WasmBindings>(
     {
       cache: bindingCache,
       importModule: () => importWasmModule(),

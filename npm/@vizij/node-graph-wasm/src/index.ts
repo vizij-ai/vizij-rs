@@ -1,7 +1,11 @@
 // Stable ESM entry for @vizij/node-graph-wasm
 // Wraps the wasm-pack output in ../../pkg (built with `--target web`).
 // Adjust the import path if your pkg name differs.
-import { loadBindings as loadWasmBindings, type InitInput as LoaderInitInput } from "@vizij/wasm-loader";
+import {
+  loadBindings as loadWasmBindings,
+  type InitInput as LoaderInitInput,
+} from "@vizij/wasm-loader";
+import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 import { toValueJSON, type ValueJSON, type ValueInput } from "@vizij/value-json";
 import type {
   NodeId,
@@ -101,8 +105,13 @@ function defaultWasmUrl(): string {
   return wasmUrlCache;
 }
 
+const loadBindingsImpl =
+  typeof window === "undefined"
+    ? loadWasmBindings
+    : (loadWasmBindingsBrowser as typeof loadWasmBindings);
+
 async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
-  await loadWasmBindings<WasmBindings>(
+  await loadBindingsImpl<WasmBindings>(
     {
       cache: bindingCache,
       importModule: () => importWasmModule(),

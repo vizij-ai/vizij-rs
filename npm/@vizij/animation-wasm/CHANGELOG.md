@@ -1,5 +1,11 @@
 # @vizij/animation-wasm
 
+## 0.3.4
+
+### Patch Changes
+
+- Adopt the browser-aware wasm loader and updated TypeScript path mapping so animation-wasm works in browser bundlers without Node APIs; bump the loader dependency to the patched release.
+
 ## 0.3.3
 
 ### Patch Changes

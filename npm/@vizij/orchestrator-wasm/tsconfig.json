@@ -4,11 +4,15 @@
     "module": "ES2020",
     "declaration": true,
     "outDir": "dist",
-    "rootDir": ".",
     "strict": true,
     "moduleResolution": "Bundler",
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@vizij/wasm-loader": ["../wasm-loader/src/index.ts"],
+      "@vizij/wasm-loader/browser": ["../wasm-loader/src/browser.ts"],
+      "@vizij/wasm-loader/shared": ["../wasm-loader/src/shared.ts"]
+    }
   },
   "include": ["src", "tests"]
 }

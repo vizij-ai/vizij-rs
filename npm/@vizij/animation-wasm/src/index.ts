@@ -1,6 +1,10 @@
 // Stable ESM entry for @vizij/animation-wasm
 // Wraps the wasm-pack output in ../pkg (built with `--target web`).
-import { loadBindings as loadWasmBindings, type InitInput as LoaderInitInput } from "@vizij/wasm-loader";
+import {
+  loadBindings as loadWasmBindings,
+  type InitInput as LoaderInitInput,
+} from "@vizij/wasm-loader";
+import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 import type {
   InitInput,
   Config,
@@ -122,8 +126,13 @@ function defaultWasmUrl(): string {
   return wasmUrlCache;
 }
 
+const loadBindingsImpl =
+  typeof window === "undefined"
+    ? loadWasmBindings
+    : (loadWasmBindingsBrowser as typeof loadWasmBindings);
+
 async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
-  await loadWasmBindings<WasmBindings>(
+  await loadBindingsImpl<WasmBindings>(
     {
       cache: bindingCache,
       importModule: () => importWasmModule(),
