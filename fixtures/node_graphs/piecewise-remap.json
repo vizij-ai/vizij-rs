@@ -1,0 +1,103 @@
+{
+  "spec": {
+    "nodes": [
+      {
+        "id": "value_in",
+        "type": "input",
+        "params": {
+          "path": "demo/input/value",
+          "value": 0
+        }
+      },
+      {
+        "id": "breakpoints_in",
+        "type": "constant",
+        "params": {
+          "value": {
+            "vector": [
+              -1.0,
+              0.0,
+              0.5,
+              1.0
+            ]
+          }
+        }
+      },
+      {
+        "id": "breakpoints_out",
+        "type": "constant",
+        "params": {
+          "value": {
+            "vector": [
+              -0.5,
+              0.0,
+              1.0,
+              2.0
+            ]
+          }
+        }
+      },
+      {
+        "id": "piecewise",
+        "type": "piecewise_remap",
+        "params": {
+          "clamp": false
+        }
+      },
+      {
+        "id": "out",
+        "type": "output",
+        "params": {
+          "path": "demo/output/shaped"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node_id": "value_in"
+        },
+        "to": {
+          "node_id": "piecewise",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "breakpoints_in"
+        },
+        "to": {
+          "node_id": "piecewise",
+          "input": "input_breakpoints"
+        }
+      },
+      {
+        "from": {
+          "node_id": "breakpoints_out"
+        },
+        "to": {
+          "node_id": "piecewise",
+          "input": "output_breakpoints"
+        }
+      },
+      {
+        "from": {
+          "node_id": "piecewise"
+        },
+        "to": {
+          "node_id": "out",
+          "input": "in"
+        }
+      }
+    ]
+  },
+  "subs": {
+    "inputs": [
+      "demo/input/value"
+    ],
+    "outputs": [
+      "demo/output/shaped"
+    ]
+  },
+  "edges": []
+}

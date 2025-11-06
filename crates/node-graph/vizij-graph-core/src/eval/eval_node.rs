@@ -20,6 +20,9 @@ use super::variadic::fold_numeric_variadic;
 
 type OutputMap = HashMap<String, PortValue>;
 
+const PIECEWISE_BREAKPOINT_EPS: f32 = 1e-6;
+const PIECEWISE_OUTPUT_EPS: f32 = 1e-5;
+
 /// Build an output map containing a single port.
 fn keyed_output(key: &str, value: Value) -> OutputMap {
     let mut map = HashMap::with_capacity(1);
@@ -101,6 +104,7 @@ fn evaluate_kind(
         NodeType::Clamp => eval_clamp(inputs),
         NodeType::Remap => eval_remap(inputs),
         NodeType::CenteredRemap => eval_centered_remap(inputs),
+        NodeType::PiecewiseRemap => eval_piecewise_remap(params, inputs),
         NodeType::Vec3Cross => Ok(eval_vec3_cross(inputs)),
         NodeType::VectorConstant => Ok(eval_vector_constant(params)),
         node_type @ (NodeType::VectorAdd
@@ -561,6 +565,201 @@ fn eval_centered_remap(inputs: &HashMap<String, PortValue>) -> Result<OutputMap,
         }
     });
     Ok(single_output(remapped))
+}
+
+fn eval_piecewise_remap(
+    params: &NodeParams,
+    inputs: &HashMap<String, PortValue>,
+) -> Result<OutputMap, String> {
+    let value_port = inputs
+        .get("in")
+        .ok_or_else(|| "PiecewiseRemap requires 'in' input".to_string())?;
+    let input_breakpoints_port = inputs
+        .get("input_breakpoints")
+        .ok_or_else(|| "PiecewiseRemap requires 'input_breakpoints' input".to_string())?;
+    let output_breakpoints_port = inputs
+        .get("output_breakpoints")
+        .ok_or_else(|| "PiecewiseRemap requires 'output_breakpoints' input".to_string())?;
+
+    let input_flat = flatten_numeric(&input_breakpoints_port.value)
+        .ok_or_else(|| "PiecewiseRemap expects numeric input breakpoints".to_string())?;
+    let output_flat = flatten_numeric(&output_breakpoints_port.value)
+        .ok_or_else(|| "PiecewiseRemap expects numeric output breakpoints".to_string())?;
+
+    let config = prepare_piecewise_breakpoints(input_flat.data, output_flat.data)?;
+    let clamp_enabled = params.clamp.unwrap_or(true);
+
+    let remapped = match flatten_numeric(&value_port.value) {
+        Some(flat) => {
+            let data: Vec<f32> = flat
+                .data
+                .iter()
+                .map(|component| {
+                    remap_piecewise_scalar(
+                        *component,
+                        &config.inputs,
+                        &config.outputs,
+                        clamp_enabled,
+                        config.constant,
+                    )
+                })
+                .collect();
+            flat.layout.reconstruct(&data)
+        }
+        None => Value::Float(f32::NAN),
+    };
+
+    Ok(single_output(remapped))
+}
+
+struct PiecewiseConfig {
+    inputs: Vec<f32>,
+    outputs: Vec<f32>,
+    constant: Option<f32>,
+}
+
+fn prepare_piecewise_breakpoints(
+    inputs: Vec<f32>,
+    outputs: Vec<f32>,
+) -> Result<PiecewiseConfig, String> {
+    if inputs.len() != outputs.len() {
+        return Err(
+            "PiecewiseRemap requires equal numbers of input and output breakpoints".to_string(),
+        );
+    }
+    if inputs.len() < 2 {
+        return Err("PiecewiseRemap requires at least two breakpoints".to_string());
+    }
+
+    for (idx, value) in inputs.iter().enumerate() {
+        if !value.is_finite() {
+            return Err(format!(
+                "PiecewiseRemap input_breakpoints[{idx}] must be finite"
+            ));
+        }
+    }
+    for (idx, value) in outputs.iter().enumerate() {
+        if !value.is_finite() {
+            return Err(format!(
+                "PiecewiseRemap output_breakpoints[{idx}] must be finite"
+            ));
+        }
+    }
+
+    let mut unique_inputs = Vec::with_capacity(inputs.len());
+    let mut unique_outputs = Vec::with_capacity(outputs.len());
+
+    for (idx, (input, output)) in inputs.into_iter().zip(outputs.into_iter()).enumerate() {
+        if let Some(&prev_input) = unique_inputs.last() {
+            let delta: f32 = input - prev_input;
+            if delta < -PIECEWISE_BREAKPOINT_EPS {
+                return Err(format!(
+                    "PiecewiseRemap requires non-decreasing input breakpoints; index {idx} violates ordering"
+                ));
+            }
+            if delta.abs() <= PIECEWISE_BREAKPOINT_EPS {
+                if let Some(&prev_output) = unique_outputs.last() {
+                    let output_delta: f32 = output - prev_output;
+                    if output_delta.abs() > PIECEWISE_OUTPUT_EPS {
+                        return Err(format!(
+                            "PiecewiseRemap requires equal outputs for duplicate input breakpoints (index {idx})"
+                        ));
+                    }
+                } else {
+                    return Err(format!(
+                        "PiecewiseRemap could not resolve duplicate breakpoints at index {idx}"
+                    ));
+                }
+                continue;
+            }
+        }
+        unique_inputs.push(input);
+        unique_outputs.push(output);
+    }
+
+    if unique_inputs.len() == 1 {
+        let constant = unique_outputs.first().copied();
+        return Ok(PiecewiseConfig {
+            inputs: unique_inputs,
+            outputs: unique_outputs,
+            constant,
+        });
+    }
+
+    Ok(PiecewiseConfig {
+        inputs: unique_inputs,
+        outputs: unique_outputs,
+        constant: None,
+    })
+}
+
+fn remap_piecewise_scalar(
+    value: f32,
+    inputs: &[f32],
+    outputs: &[f32],
+    clamp: bool,
+    constant: Option<f32>,
+) -> f32 {
+    if !value.is_finite() {
+        return f32::NAN;
+    }
+    if let Some(constant_value) = constant {
+        return constant_value;
+    }
+
+    debug_assert!(
+        inputs.len() >= 2 && inputs.len() == outputs.len(),
+        "prepare_piecewise_breakpoints should ensure at least two segments"
+    );
+
+    if approx_equal(value, inputs[0]) {
+        return outputs[0];
+    }
+    if approx_equal(value, *inputs.last().unwrap()) {
+        return *outputs.last().unwrap();
+    }
+
+    if value < inputs[0] {
+        if clamp {
+            return outputs[0];
+        }
+        let slope = (outputs[1] - outputs[0]) / (inputs[1] - inputs[0]);
+        return outputs[0] + (value - inputs[0]) * slope;
+    }
+
+    let last_idx = inputs.len() - 1;
+    if value > inputs[last_idx] {
+        if clamp {
+            return outputs[last_idx];
+        }
+        let slope =
+            (outputs[last_idx] - outputs[last_idx - 1]) / (inputs[last_idx] - inputs[last_idx - 1]);
+        return outputs[last_idx] + (value - inputs[last_idx]) * slope;
+    }
+
+    for idx in 1..inputs.len() {
+        if approx_equal(value, inputs[idx]) {
+            return outputs[idx];
+        }
+        if value < inputs[idx] {
+            let x0 = inputs[idx - 1];
+            let x1 = inputs[idx];
+            let y0 = outputs[idx - 1];
+            let y1 = outputs[idx];
+            let span = x1 - x0;
+            if span.abs() <= PIECEWISE_BREAKPOINT_EPS {
+                return y1;
+            }
+            let t = (value - x0) / span;
+            return y0 + t * (y1 - y0);
+        }
+    }
+
+    outputs[last_idx]
+}
+
+fn approx_equal(a: f32, b: f32) -> bool {
+    (a - b).abs() <= PIECEWISE_BREAKPOINT_EPS
 }
 
 fn eval_vec3_cross(inputs: &HashMap<String, PortValue>) -> OutputMap {

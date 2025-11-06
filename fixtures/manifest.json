@@ -40,6 +40,9 @@
     "sine-driver": {
       "spec": "node_graphs/sine-driver.json"
     },
+    "piecewise-remap-demo": {
+      "spec": "node_graphs/piecewise-remap.json"
+    },
     "urdf-ik-position": {
       "spec": "node_graphs/urdf-ik-position.json"
     },

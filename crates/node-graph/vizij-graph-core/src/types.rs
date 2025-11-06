@@ -59,6 +59,8 @@ pub enum NodeType {
     Remap,
     #[serde(rename = "centered_remap")]
     CenteredRemap,
+    #[serde(rename = "piecewise_remap")]
+    PiecewiseRemap,
 
     // 3D-specific utilities
     Vec3Cross,
@@ -122,6 +124,9 @@ pub struct NodeParams {
     pub in_max: Option<f32>,
     pub out_min: Option<f32>,
     pub out_max: Option<f32>,
+    // For Piecewise Remap
+    #[serde(default)]
+    pub clamp: Option<bool>,
     // For Centered Remap
     pub in_low: Option<f32>,
     pub in_anchor: Option<f32>,

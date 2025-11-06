@@ -24,7 +24,7 @@
 - **Pure Rust runtime** that interprets `GraphSpec` documents using the shared `vizij-api-core` Value/Shape contract.
 - **GraphRuntime** retains staged inputs, node-local state, and cached outputs across frames.
 - **evaluate_all** walks the graph in topological order, performs selector projection, enforces declared shapes, and collects sink writes.
-- **Extensible node library** covering math, logic, vector ops, time/transition nodes (Spring/Damp/Slew), blending, and (optionally) robotics IK/FK helpers behind the `urdf_ik` feature flag.
+- **Extensible node library** covering math, logic, vector ops, time/transition nodes (Spring/Damp/Slew), blending, range tools (including multi-segment piecewise remaps), and (optionally) robotics IK/FK helpers behind the `urdf_ik` feature flag.
 
 ---
 

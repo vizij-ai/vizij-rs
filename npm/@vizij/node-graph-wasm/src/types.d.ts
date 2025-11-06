@@ -48,6 +48,7 @@ export type NodeType =
   | "clamp"
   | "remap"
   | "centered_remap"
+  | "piecewise_remap"
   | "vec3cross"
   | "vectorconstant"
   | "vectoradd"

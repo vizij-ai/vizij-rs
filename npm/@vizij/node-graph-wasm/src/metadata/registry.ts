@@ -1011,6 +1011,55 @@ const registry: Registry = {
       "params": []
     },
     {
+      "type_id": "piecewise_remap",
+      "name": "Piecewise Remap",
+      "category": "Math",
+      "doc": "Remaps In across ordered breakpoint pairs; supports n segments, optional clamping, and extrapolation when Clamp is disabled.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "float",
+          "label": "In",
+          "doc": "Value to remap.",
+          "optional": false
+        },
+        {
+          "id": "input_breakpoints",
+          "ty": "vector",
+          "label": "Input Breakpoints",
+          "doc": "Ordered numeric domain breakpoints (length ≥ 2).",
+          "optional": false
+        },
+        {
+          "id": "output_breakpoints",
+          "ty": "vector",
+          "label": "Output Breakpoints",
+          "doc": "Output values paired element-wise with Input Breakpoints.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "clamp",
+          "ty": "bool",
+          "label": "Clamp",
+          "doc": "Clamp to the first/last segment when true (default); otherwise extrapolate beyond the breakpoint range.",
+          "default_json": {
+            "bool": true
+          }
+        }
+      ]
+    },
+    {
       "type_id": "vec3cross",
       "name": "Vec3 Cross",
       "category": "Vectors",

@@ -985,6 +985,48 @@ pub fn registry() -> Registry {
         params: vec![],
     });
 
+    nodes.push(NodeSignature {
+        type_id: PiecewiseRemap,
+        name: "Piecewise Remap",
+        category: "Math",
+        doc: "Remaps In across ordered breakpoint pairs; supports n segments, optional clamping, and extrapolation when Clamp is disabled.",
+        inputs: vec![
+            PortSpec {
+                id: "in",
+                ty: PortType::Float,
+                label: "In",
+                doc: "Value to remap.",
+                optional: false,
+            },
+            PortSpec {
+                id: "input_breakpoints",
+                ty: PortType::Vector,
+                label: "Input Breakpoints",
+                doc: "Ordered numeric domain breakpoints (length ≥ 2).",
+                optional: false,
+            },
+            PortSpec {
+                id: "output_breakpoints",
+                ty: PortType::Vector,
+                label: "Output Breakpoints",
+                doc: "Output values paired element-wise with Input Breakpoints.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![ParamSpec {
+            id: "clamp",
+            ty: ParamType::Bool,
+            label: "Clamp",
+            doc: "Clamp to the first/last segment when true (default); otherwise extrapolate beyond the breakpoint range.",
+            default_json: Some(serde_json::json!({ "bool": true })),
+            min: None,
+            max: None,
+        }],
+    });
+
     // 3D-specific utility kept
     nodes.push(NodeSignature {
         type_id: Vec3Cross,

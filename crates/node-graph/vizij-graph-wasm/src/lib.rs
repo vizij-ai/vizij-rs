@@ -260,6 +260,16 @@ impl WasmGraph {
                 )))
             }
         }
+        fn expect_bool(node_id: &str, key: &str, v: &Value) -> Result<bool, JsValue> {
+            if let Value::Bool(b) = v {
+                Ok(*b)
+            } else {
+                Err(JsValue::from_str(&format!(
+                    "set_param: node '{}' key '{}' expects Bool",
+                    node_id, key
+                )))
+            }
+        }
         fn expect_text<'a>(node_id: &str, key: &str, v: &'a Value) -> Result<&'a str, JsValue> {
             if let Value::Text(s) = v {
                 Ok(s.as_str())
@@ -366,6 +376,7 @@ impl WasmGraph {
                 "in_max" => node.params.in_max = Some(expect_float(node_id, key, &val)?),
                 "out_min" => node.params.out_min = Some(expect_float(node_id, key, &val)?),
                 "out_max" => node.params.out_max = Some(expect_float(node_id, key, &val)?),
+                "clamp" => node.params.clamp = Some(expect_bool(node_id, key, &val)?),
                 "x" => node.params.x = Some(expect_float(node_id, key, &val)?),
                 "y" => node.params.y = Some(expect_float(node_id, key, &val)?),
                 "z" => node.params.z = Some(expect_float(node_id, key, &val)?),

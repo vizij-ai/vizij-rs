@@ -37,7 +37,7 @@
     "test:shared": "pnpm --filter @vizij/value-json run test",
     "clean:shared": "pnpm --filter @vizij/value-json --filter @vizij/wasm-loader --filter @vizij/test-fixtures run clean",
     "build": "pnpm run build:rust && pnpm run build:wasm && pnpm run build:shared",
-    "test": "pnpm run test:wasm && pnpm run test:shared",
+    "test": "pnpm run test:rust && pnpm run test:wasm && pnpm run test:shared",
     "clean": "pnpm run clean:shared && pnpm run clean:wasm",
     "changeset": "changeset",
     "version:packages": "changeset version",
