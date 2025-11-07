@@ -26,6 +26,13 @@ pub enum NodeType {
     Divide,
     Power,
     Log,
+    Abs,
+    Modulo,
+    Sqrt,
+    Sign,
+    Min,
+    Max,
+    Round,
     Sin,
     Cos,
     Tan,
@@ -124,6 +131,8 @@ pub struct NodeParams {
     pub in_max: Option<f32>,
     pub out_min: Option<f32>,
     pub out_max: Option<f32>,
+    #[serde(default)]
+    pub round_mode: Option<RoundMode>,
     // For Piecewise Remap
     #[serde(default)]
     pub clamp: Option<bool>,
@@ -168,6 +177,15 @@ pub struct NodeParams {
     // Example: "robot1/Arm/Joint3.translation"
     #[serde(default)]
     pub path: Option<TypedPath>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum RoundMode {
+    #[default]
+    Floor,
+    Ceil,
+    Trunc,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

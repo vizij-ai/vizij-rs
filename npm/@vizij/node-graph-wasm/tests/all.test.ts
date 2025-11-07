@@ -620,6 +620,24 @@ function assertText(write: WriteOpJSON, expected: string): void {
       });
     }
 
+    // math-toolbox fixture ensures scalar math nodes survive bundling and JSON normalization
+    {
+      const mathSpecJson = await loadJsonFixture("math-toolbox");
+      const mathGraph = new Graph();
+      mathGraph.loadGraph(mathSpecJson);
+      mathGraph.stageInput("demo/input/value", -2.75);
+      mathGraph.stageInput("demo/input/divisor", 2.0);
+      const mathResult = mathGraph.evalAll();
+      const mathWrites = writesToMap(mathResult.writes);
+      assertNearlyEqual(valueToFloat(mathWrites.get("demo/output/abs")), 2.75, "math.abs");
+      assertNearlyEqual(valueToFloat(mathWrites.get("demo/output/sign")), -1.0, "math.sign");
+      assertNearlyEqual(valueToFloat(mathWrites.get("demo/output/round")), -2.0, "math.round");
+      assertNearlyEqual(valueToFloat(mathWrites.get("demo/output/modulo")), -0.75, "math.modulo");
+      assertNearlyEqual(valueToFloat(mathWrites.get("demo/output/min")), -4.0, "math.min");
+      assertNearlyEqual(valueToFloat(mathWrites.get("demo/output/max")), 3.5, "math.max");
+      approxVector(valueToVector(mathWrites.get("demo/output/sqrt")), [2.0, 3.0], 1e-6);
+    }
+
     // nested telemetry checks
     {
       const telemetryResult = await runSample("nested-telemetry", nestedTelemetry);

@@ -2,7 +2,7 @@
 
 use crate::eval::graph_runtime::{GraphRuntime, StagedInput};
 use crate::eval::variadic::collect_operand_ports;
-use crate::types::{InputConnection, NodeParams, NodeSpec, NodeType};
+use crate::types::{InputConnection, NodeParams, NodeSpec, NodeType, RoundMode};
 use hashbrown::HashMap;
 use vizij_api_core::{coercion, Shape, Value, WriteOp};
 
@@ -84,10 +84,16 @@ fn evaluate_kind(
         | NodeType::Multiply
         | NodeType::Divide
         | NodeType::Power
-        | NodeType::Log) => Ok(eval_arithmetic(node_type, inputs)),
+        | NodeType::Log
+        | NodeType::Modulo) => Ok(eval_arithmetic(node_type, inputs)),
         node_type @ (NodeType::Sin | NodeType::Cos | NodeType::Tan) => {
             Ok(eval_trig(node_type, inputs))
         }
+        node_type @ (NodeType::Abs | NodeType::Sqrt | NodeType::Sign) => {
+            Ok(eval_unary_scalar(node_type, inputs))
+        }
+        node_type @ (NodeType::Min | NodeType::Max) => Ok(eval_min_max(node_type, inputs)),
+        NodeType::Round => Ok(eval_round(params, inputs)),
         NodeType::Time => Ok(eval_time(rt)),
         NodeType::Oscillator => Ok(eval_oscillator(rt, inputs)),
         node_type @ (NodeType::Spring | NodeType::Damp | NodeType::Slew) => {
@@ -219,6 +225,17 @@ fn eval_arithmetic(kind: &NodeType, inputs: &HashMap<String, PortValue>) -> Outp
                 }
             }))
         }
+        NodeType::Modulo => {
+            let lhs = input_or_default(inputs, "lhs");
+            let rhs = input_or_default(inputs, "rhs");
+            single_output(binary_numeric(&lhs.value, &rhs.value, |x, y| {
+                if y != 0.0 {
+                    x % y
+                } else {
+                    f32::NAN
+                }
+            }))
+        }
         NodeType::Power => {
             let base = input_or_default(inputs, "base");
             let exp = input_or_default(inputs, "exp");
@@ -231,6 +248,50 @@ fn eval_arithmetic(kind: &NodeType, inputs: &HashMap<String, PortValue>) -> Outp
         }
         _ => unreachable!(),
     }
+}
+
+fn eval_unary_scalar(kind: &NodeType, inputs: &HashMap<String, PortValue>) -> OutputMap {
+    let input = input_or_default(inputs, "in");
+    match kind {
+        NodeType::Abs => single_output(unary_numeric(&input.value, |x| x.abs())),
+        NodeType::Sqrt => single_output(unary_numeric(&input.value, |x| x.sqrt())),
+        NodeType::Sign => single_output(unary_numeric(&input.value, |x| {
+            if x > 0.0 {
+                1.0
+            } else if x < 0.0 {
+                -1.0
+            } else {
+                0.0
+            }
+        })),
+        _ => unreachable!(),
+    }
+}
+
+fn eval_min_max(kind: &NodeType, inputs: &HashMap<String, PortValue>) -> OutputMap {
+    let values: Vec<Value> = collect_operand_ports(inputs)
+        .into_iter()
+        .map(|pv| pv.value.clone())
+        .collect();
+    let empty = Value::Float(f32::NAN);
+    let op = match kind {
+        NodeType::Min => f32::min,
+        NodeType::Max => f32::max,
+        _ => unreachable!(),
+    };
+    let result = fold_numeric_variadic(&values, op, empty);
+    single_output(result)
+}
+
+fn eval_round(params: &NodeParams, inputs: &HashMap<String, PortValue>) -> OutputMap {
+    let input = input_or_default(inputs, "in");
+    let mode = params.round_mode.clone().unwrap_or_default();
+    let op: fn(f32) -> f32 = match mode {
+        RoundMode::Floor => f32::floor,
+        RoundMode::Ceil => f32::ceil,
+        RoundMode::Trunc => f32::trunc,
+    };
+    single_output(unary_numeric(&input.value, op))
 }
 
 fn eval_trig(kind: &NodeType, inputs: &HashMap<String, PortValue>) -> OutputMap {

@@ -1,5 +1,6 @@
 use hashbrown::HashMap;
 use vizij_api_core::{coercion, json, Shape, TypedPath, Value};
+use vizij_graph_core::types::RoundMode;
 use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, PortValue};
 use wasm_bindgen::prelude::*;
 
@@ -360,6 +361,19 @@ impl WasmGraph {
                 ))),
             }
         }
+        fn parse_round_mode(node_id: &str, key: &str, v: &Value) -> Result<RoundMode, JsValue> {
+            let raw = expect_text(node_id, key, v)?;
+            let normalized = raw.trim().to_ascii_lowercase();
+            match normalized.as_str() {
+                "floor" => Ok(RoundMode::Floor),
+                "ceil" => Ok(RoundMode::Ceil),
+                "trunc" => Ok(RoundMode::Trunc),
+                other => Err(JsValue::from_str(&format!(
+                    "set_param: node '{}' key '{}' expects \"floor\", \"ceil\", or \"trunc\" (got '{}')",
+                    node_id, key, other
+                ))),
+            }
+        }
 
         if let Some(node) = self.spec.nodes.iter_mut().find(|n| n.id == node_id) {
             match key {
@@ -389,6 +403,9 @@ impl WasmGraph {
                 "mass" => node.params.mass = Some(expect_float(node_id, key, &val)?),
                 "half_life" => node.params.half_life = Some(expect_float(node_id, key, &val)?),
                 "max_rate" => node.params.max_rate = Some(expect_float(node_id, key, &val)?),
+                "round_mode" => {
+                    node.params.round_mode = Some(parse_round_mode(node_id, key, &val)?);
+                }
 
                 // Vectors / numeric lists
                 "sizes" => {

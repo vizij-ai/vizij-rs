@@ -1,0 +1,308 @@
+{
+  "spec": {
+    "nodes": [
+      {
+        "id": "value_in",
+        "type": "input",
+        "params": {
+          "path": "demo/input/value",
+          "value": 0
+        }
+      },
+      {
+        "id": "divisor_in",
+        "type": "input",
+        "params": {
+          "path": "demo/input/divisor",
+          "value": 1
+        }
+      },
+      {
+        "id": "sqrt_source",
+        "type": "constant",
+        "params": {
+          "value": {
+            "vector": [
+              4.0,
+              9.0
+            ]
+          }
+        }
+      },
+      {
+        "id": "neg_four",
+        "type": "constant",
+        "params": {
+          "value": -4.0
+        }
+      },
+      {
+        "id": "three_point_five",
+        "type": "constant",
+        "params": {
+          "value": 3.5
+        }
+      },
+      {
+        "id": "abs_node",
+        "type": "abs"
+      },
+      {
+        "id": "sqrt_node",
+        "type": "sqrt"
+      },
+      {
+        "id": "sign_node",
+        "type": "sign"
+      },
+      {
+        "id": "round_node",
+        "type": "round",
+        "params": {
+          "round_mode": "ceil"
+        }
+      },
+      {
+        "id": "mod_node",
+        "type": "modulo"
+      },
+      {
+        "id": "min_node",
+        "type": "min"
+      },
+      {
+        "id": "max_node",
+        "type": "max"
+      },
+      {
+        "id": "abs_out",
+        "type": "output",
+        "params": {
+          "path": "demo/output/abs"
+        }
+      },
+      {
+        "id": "sqrt_out",
+        "type": "output",
+        "params": {
+          "path": "demo/output/sqrt"
+        }
+      },
+      {
+        "id": "sign_out",
+        "type": "output",
+        "params": {
+          "path": "demo/output/sign"
+        }
+      },
+      {
+        "id": "round_out",
+        "type": "output",
+        "params": {
+          "path": "demo/output/round"
+        }
+      },
+      {
+        "id": "mod_out",
+        "type": "output",
+        "params": {
+          "path": "demo/output/modulo"
+        }
+      },
+      {
+        "id": "min_out",
+        "type": "output",
+        "params": {
+          "path": "demo/output/min"
+        }
+      },
+      {
+        "id": "max_out",
+        "type": "output",
+        "params": {
+          "path": "demo/output/max"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node_id": "value_in"
+        },
+        "to": {
+          "node_id": "abs_node",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "value_in"
+        },
+        "to": {
+          "node_id": "sign_node",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "value_in"
+        },
+        "to": {
+          "node_id": "round_node",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "value_in"
+        },
+        "to": {
+          "node_id": "mod_node",
+          "input": "lhs"
+        }
+      },
+      {
+        "from": {
+          "node_id": "divisor_in"
+        },
+        "to": {
+          "node_id": "mod_node",
+          "input": "rhs"
+        }
+      },
+      {
+        "from": {
+          "node_id": "value_in"
+        },
+        "to": {
+          "node_id": "min_node",
+          "input": "operand_2"
+        }
+      },
+      {
+        "from": {
+          "node_id": "neg_four"
+        },
+        "to": {
+          "node_id": "min_node",
+          "input": "operand_1"
+        }
+      },
+      {
+        "from": {
+          "node_id": "three_point_five"
+        },
+        "to": {
+          "node_id": "min_node",
+          "input": "operand_3"
+        }
+      },
+      {
+        "from": {
+          "node_id": "value_in"
+        },
+        "to": {
+          "node_id": "max_node",
+          "input": "operand_1"
+        }
+      },
+      {
+        "from": {
+          "node_id": "three_point_five"
+        },
+        "to": {
+          "node_id": "max_node",
+          "input": "operand_2"
+        }
+      },
+      {
+        "from": {
+          "node_id": "sqrt_source"
+        },
+        "to": {
+          "node_id": "sqrt_node",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "abs_node"
+        },
+        "to": {
+          "node_id": "abs_out",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "sqrt_node"
+        },
+        "to": {
+          "node_id": "sqrt_out",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "sign_node"
+        },
+        "to": {
+          "node_id": "sign_out",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "round_node"
+        },
+        "to": {
+          "node_id": "round_out",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "mod_node"
+        },
+        "to": {
+          "node_id": "mod_out",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "min_node"
+        },
+        "to": {
+          "node_id": "min_out",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "max_node"
+        },
+        "to": {
+          "node_id": "max_out",
+          "input": "in"
+        }
+      }
+    ]
+  },
+  "subs": {
+    "inputs": [
+      "demo/input/value",
+      "demo/input/divisor"
+    ],
+    "outputs": [
+      "demo/output/abs",
+      "demo/output/sqrt",
+      "demo/output/sign",
+      "demo/output/round",
+      "demo/output/modulo",
+      "demo/output/min",
+      "demo/output/max"
+    ]
+  },
+  "edges": []
+}

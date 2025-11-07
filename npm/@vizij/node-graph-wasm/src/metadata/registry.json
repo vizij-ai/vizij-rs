@@ -245,6 +245,38 @@
       "params": []
     },
     {
+      "type_id": "modulo",
+      "name": "Modulo",
+      "category": "Math",
+      "doc": "Computes the remainder of LHS ÷ RHS; divisor 0 yields NaN.",
+      "inputs": [
+        {
+          "id": "lhs",
+          "ty": "float",
+          "label": "LHS",
+          "doc": "Dividend value.",
+          "optional": false
+        },
+        {
+          "id": "rhs",
+          "ty": "float",
+          "label": "RHS",
+          "doc": "Divisor value; zero produces NaN.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
       "type_id": "power",
       "name": "Power",
       "category": "Math",
@@ -307,6 +339,164 @@
         }
       ],
       "params": []
+    },
+    {
+      "type_id": "abs",
+      "name": "Abs",
+      "category": "Math",
+      "doc": "Outputs the absolute value of In component-wise.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "float",
+          "label": "In",
+          "doc": "Input scalar value.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "sqrt",
+      "name": "Sqrt",
+      "category": "Math",
+      "doc": "Outputs the square root of In; negative inputs yield NaN components.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "float",
+          "label": "In",
+          "doc": "Input scalar value.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "sign",
+      "name": "Sign",
+      "category": "Math",
+      "doc": "Outputs -1 for negative inputs, 0 for zero, and +1 for positive values.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "float",
+          "label": "In",
+          "doc": "Input scalar value.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "min",
+      "name": "Min",
+      "category": "Math",
+      "doc": "Returns the smallest scalar among all operands; missing inputs yield NaN.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "operand",
+        "ty": "float",
+        "label": "Operand",
+        "doc": "Scalar operand to consider.",
+        "min": 2
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "max",
+      "name": "Max",
+      "category": "Math",
+      "doc": "Returns the largest scalar among all operands; missing inputs yield NaN.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "operand",
+        "ty": "float",
+        "label": "Operand",
+        "doc": "Scalar operand to consider.",
+        "min": 2
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "round",
+      "name": "Round",
+      "category": "Math",
+      "doc": "Rounds In according to the selected Mode (floor, ceil, or trunc).",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "float",
+          "label": "In",
+          "doc": "Input scalar value.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "round_mode",
+          "ty": "any",
+          "label": "Mode",
+          "doc": "Rounding mode: \"floor\", \"ceil\", or \"trunc\".",
+          "default_json": {
+            "text": "floor"
+          }
+        }
+      ]
     },
     {
       "type_id": "sin",

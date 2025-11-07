@@ -3,7 +3,7 @@
 use super::*;
 use crate::types::{
     EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, InputDefault, NodeParams, NodeSpec,
-    NodeType, SelectorSegment,
+    NodeType, RoundMode, SelectorSegment,
 };
 use hashbrown::HashMap;
 use vizij_api_core::shape::Field;
@@ -337,6 +337,242 @@ fn it_should_error_when_shape_mismatches() {
     let mut rt = GraphRuntime::default();
     let err = evaluate_all(&mut rt, &spec).expect_err("should fail due to mismatch");
     assert!(err.contains("does not match declared shape"));
+}
+
+#[test]
+fn abs_node_handles_negative_values() {
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("src", Value::Vec3([-1.0, 2.0, -3.0])),
+            NodeSpec {
+                id: "abs".to_string(),
+                kind: NodeType::Abs,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![link("src", "abs", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("abs should evaluate");
+    let outputs = rt.outputs.get("abs").expect("abs outputs present");
+    match outputs.get("out").map(|pv| pv.value.clone()) {
+        Some(Value::Vec3(values)) => assert_eq!(values, [1.0, 2.0, 3.0]),
+        other => panic!("expected vec3, got {:?}", other),
+    }
+}
+
+#[test]
+fn modulo_node_handles_division() {
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("lhs", Value::Float(7.5)),
+            constant_node("rhs", Value::Float(2.0)),
+            NodeSpec {
+                id: "mod".to_string(),
+                kind: NodeType::Modulo,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![link("lhs", "mod", "lhs"), link("rhs", "mod", "rhs")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("modulo should evaluate");
+    let outputs = rt.outputs.get("mod").expect("mod outputs present");
+    match outputs.get("out").map(|pv| pv.value.clone()) {
+        Some(Value::Float(result)) => assert!((result - 1.5).abs() < 1e-6),
+        other => panic!("expected float, got {:?}", other),
+    }
+}
+
+#[test]
+fn sqrt_node_handles_vectors() {
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("src", Value::Vector(vec![4.0, 9.0])),
+            NodeSpec {
+                id: "sqrt".to_string(),
+                kind: NodeType::Sqrt,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![link("src", "sqrt", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("sqrt should evaluate");
+    let outputs = rt.outputs.get("sqrt").expect("sqrt outputs present");
+    match outputs.get("out").map(|pv| pv.value.clone()) {
+        Some(Value::Vector(values)) => assert_eq!(values, vec![2.0, 3.0]),
+        other => panic!("expected vector, got {:?}", other),
+    }
+}
+
+#[test]
+fn sign_node_outputs_signum() {
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("src", Value::Vector(vec![-2.0, 0.0, 5.0])),
+            NodeSpec {
+                id: "sign".to_string(),
+                kind: NodeType::Sign,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![link("src", "sign", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("sign should evaluate");
+    let outputs = rt.outputs.get("sign").expect("sign outputs present");
+    match outputs.get("out").map(|pv| pv.value.clone()) {
+        Some(Value::Vector(values)) => assert_eq!(values, vec![-1.0, 0.0, 1.0]),
+        other => panic!("expected vector, got {:?}", other),
+    }
+}
+
+#[test]
+fn min_max_nodes_select_expected_values() {
+    let mut rt = GraphRuntime::default();
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("a", Value::Float(3.0)),
+            constant_node("b", Value::Float(-1.0)),
+            constant_node("c", Value::Float(5.0)),
+            NodeSpec {
+                id: "minn".to_string(),
+                kind: NodeType::Min,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "maxx".to_string(),
+                kind: NodeType::Max,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![
+            link("a", "minn", "operand_1"),
+            link("b", "minn", "operand_2"),
+            link("c", "minn", "operand_3"),
+            link("a", "maxx", "operand_1"),
+            link("b", "maxx", "operand_2"),
+            link("c", "maxx", "operand_3"),
+        ],
+    };
+
+    evaluate_all(&mut rt, &graph).expect("min/max should evaluate");
+
+    let min_val = match rt
+        .outputs
+        .get("minn")
+        .and_then(|ports| ports.get("out"))
+        .map(|pv| pv.value.clone())
+    {
+        Some(Value::Float(v)) => v,
+        other => panic!("expected float, got {:?}", other),
+    };
+    assert!((min_val + 1.0).abs() < 1e-6);
+
+    let max_val = match rt
+        .outputs
+        .get("maxx")
+        .and_then(|ports| ports.get("out"))
+        .map(|pv| pv.value.clone())
+    {
+        Some(Value::Float(v)) => v,
+        other => panic!("expected float, got {:?}", other),
+    };
+    assert!((max_val - 5.0).abs() < 1e-6);
+}
+
+#[test]
+fn round_node_respects_modes() {
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("src", Value::Vector(vec![-1.2, 0.5, 2.8])),
+            NodeSpec {
+                id: "floor".to_string(),
+                kind: NodeType::Round,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "ceil".to_string(),
+                kind: NodeType::Round,
+                params: NodeParams {
+                    round_mode: Some(RoundMode::Ceil),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "trunc".to_string(),
+                kind: NodeType::Round,
+                params: NodeParams {
+                    round_mode: Some(RoundMode::Trunc),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![
+            link("src", "floor", "in"),
+            link("src", "ceil", "in"),
+            link("src", "trunc", "in"),
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("round nodes should evaluate");
+
+    let floor_vals = match rt
+        .outputs
+        .get("floor")
+        .and_then(|ports| ports.get("out"))
+        .map(|pv| pv.value.clone())
+    {
+        Some(Value::Vector(vals)) => vals,
+        other => panic!("expected vector, got {:?}", other),
+    };
+    assert_eq!(floor_vals, vec![-2.0, 0.0, 2.0]);
+
+    let ceil_vals = match rt
+        .outputs
+        .get("ceil")
+        .and_then(|ports| ports.get("out"))
+        .map(|pv| pv.value.clone())
+    {
+        Some(Value::Vector(vals)) => vals,
+        other => panic!("expected vector, got {:?}", other),
+    };
+    assert_eq!(ceil_vals, vec![-1.0, 1.0, 3.0]);
+
+    let trunc_vals = match rt
+        .outputs
+        .get("trunc")
+        .and_then(|ports| ports.get("out"))
+        .map(|pv| pv.value.clone())
+    {
+        Some(Value::Vector(vals)) => vals,
+        other => panic!("expected vector, got {:?}", other),
+    };
+    assert_eq!(trunc_vals, vec![-1.0, 0.0, 2.0]);
 }
 
 // --- Runtime outputs -----------------------------------------------------

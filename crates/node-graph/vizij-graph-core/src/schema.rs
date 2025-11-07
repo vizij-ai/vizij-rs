@@ -368,6 +368,33 @@ pub fn registry() -> Registry {
     });
 
     nodes.push(NodeSignature {
+        type_id: Modulo,
+        name: "Modulo",
+        category: "Math",
+        doc: "Computes the remainder of LHS ÷ RHS; divisor 0 yields NaN.",
+        inputs: vec![
+            PortSpec {
+                id: "lhs",
+                ty: PortType::Float,
+                label: "LHS",
+                doc: "Dividend value.",
+                optional: false,
+            },
+            PortSpec {
+                id: "rhs",
+                ty: PortType::Float,
+                label: "RHS",
+                doc: "Divisor value; zero produces NaN.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
         type_id: Power,
         name: "Power",
         category: "Math",
@@ -419,6 +446,100 @@ pub fn registry() -> Registry {
         outputs: vec![p_out_float()],
         variadic_outputs: None,
         params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Abs,
+        name: "Abs",
+        category: "Math",
+        doc: "Outputs the absolute value of In component-wise.",
+        inputs: vec![p_in()],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Sqrt,
+        name: "Sqrt",
+        category: "Math",
+        doc: "Outputs the square root of In; negative inputs yield NaN components.",
+        inputs: vec![p_in()],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Sign,
+        name: "Sign",
+        category: "Math",
+        doc: "Outputs -1 for negative inputs, 0 for zero, and +1 for positive values.",
+        inputs: vec![p_in()],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Min,
+        name: "Min",
+        category: "Math",
+        doc: "Returns the smallest scalar among all operands; missing inputs yield NaN.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "operand",
+            ty: PortType::Float,
+            label: "Operand",
+            doc: "Scalar operand to consider.",
+            min: 2,
+            max: None,
+        }),
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Max,
+        name: "Max",
+        category: "Math",
+        doc: "Returns the largest scalar among all operands; missing inputs yield NaN.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "operand",
+            ty: PortType::Float,
+            label: "Operand",
+            doc: "Scalar operand to consider.",
+            min: 2,
+            max: None,
+        }),
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: Round,
+        name: "Round",
+        category: "Math",
+        doc: "Rounds In according to the selected Mode (floor, ceil, or trunc).",
+        inputs: vec![p_in()],
+        variadic_inputs: None,
+        outputs: vec![p_out_float()],
+        variadic_outputs: None,
+        params: vec![ParamSpec {
+            id: "round_mode",
+            ty: ParamType::Any,
+            label: "Mode",
+            doc: "Rounding mode: \"floor\", \"ceil\", or \"trunc\".",
+            default_json: Some(serde_json::json!({ "text": "floor" })),
+            min: None,
+            max: None,
+        }],
     });
 
     for (nt, name, doc) in [
