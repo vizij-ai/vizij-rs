@@ -35,7 +35,7 @@ async function run(command, args, options = {}) {
   });
 }
 
-async function hasRegistryDiff(): Promise<boolean> {
+async function hasRegistryDiff() {
   return await new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(
       "git",

@@ -66,3 +66,25 @@ jobs:
           pnpm --filter @vizij/animation-wasm run test
           pnpm --filter @vizij/node-graph-wasm run test
           pnpm --filter @vizij/orchestrator-wasm run test
+
+  registry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies (alsa/libudev dev for Bevy)
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-registry-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify node registry artifacts are updated
+        run: node scripts/verify-node-registry.mjs
