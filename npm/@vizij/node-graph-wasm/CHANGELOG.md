@@ -1,5 +1,11 @@
 # @vizij/node-graph-wasm
 
+## 0.4.7
+
+### Patch Changes
+
+- Add the math-toolbox expansion: bundle the new abs/sqrt/sign/min/max/round/modulo nodes plus the piecewise remap helper, refresh the baked registry metadata, and extend the wasm tests/fixtures so the new nodes stay covered in CI.
+
 ## 0.4.6
 
 ### Patch Changes
