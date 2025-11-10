@@ -1242,9 +1242,9 @@ const registry: Registry = {
           "id": "clamp",
           "ty": "bool",
           "label": "Clamp",
-          "doc": "Clamp to the first/last segment when true (default); otherwise extrapolate beyond the breakpoint range.",
+          "doc": "Clamp to the first/last segment when enabled; otherwise extrapolate beyond the breakpoint range.",
           "default_json": {
-            "bool": true
+            "bool": false
           }
         }
       ]

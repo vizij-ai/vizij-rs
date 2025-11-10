@@ -648,7 +648,7 @@ fn eval_piecewise_remap(
         .ok_or_else(|| "PiecewiseRemap expects numeric output breakpoints".to_string())?;
 
     let config = prepare_piecewise_breakpoints(input_flat.data, output_flat.data)?;
-    let clamp_enabled = params.clamp.unwrap_or(true);
+    let clamp_enabled = params.clamp.unwrap_or(false);
 
     let remapped = match flatten_numeric(&value_port.value) {
         Some(flat) => {
