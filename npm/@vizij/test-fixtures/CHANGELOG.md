@@ -1,5 +1,11 @@
 # @vizij/test-fixtures
 
+## 0.0.2
+
+### Patch Changes
+
+- 9bd0189: Fix publishing to include dist again
+
 ## 0.0.1
 
 ### Patch Changes

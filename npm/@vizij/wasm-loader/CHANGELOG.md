@@ -1,5 +1,11 @@
 # @vizij/wasm-loader
 
+## 0.1.4
+
+### Patch Changes
+
+- 9bd0189: Fix publishing to include dist again
+
 ## 0.1.3
 
 ### Patch Changes

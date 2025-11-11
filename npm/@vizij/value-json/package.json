@@ -1,6 +1,6 @@
 {
   "name": "@vizij/value-json",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Shared Value JSON helpers and types for Vizij wasm wrappers",
   "license": "MIT",
   "repository": {

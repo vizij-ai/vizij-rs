@@ -1,5 +1,14 @@
 # @vizij/orchestrator-wasm
 
+## 0.2.9
+
+### Patch Changes
+
+- 9bd0189: Fix publishing to include dist again
+- Updated dependencies [9bd0189]
+  - @vizij/wasm-loader@0.1.4
+  - @vizij/value-json@0.1.2
+
 ## 0.2.8
 
 ### Patch Changes
