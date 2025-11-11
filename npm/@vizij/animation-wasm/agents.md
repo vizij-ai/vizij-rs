@@ -6,4 +6,4 @@
 - **Docs**: Update the README when changing bundler guidance, fixture exports, or loader behaviour.
 - **Integration**: Uses `@vizij/value-json`, `@vizij/test-fixtures`, and `@vizij/wasm-loader`; keep versions aligned.
 - **Watch for**: Ensure `abi_version()` checks still match the wasm crate after rebuilds; re-export new fixture helpers as needed.
-- **Release**: After rebuilding, run `pnpm changeset`, `pnpm version:packages`, and `pnpm release` from the repo root.
+- **Release**: Add a changeset (`pnpm changeset`), land it on `main`, then push an `npm-pub-*` tag so CI runs `ci:version`/`ci:publish` and ships the package.

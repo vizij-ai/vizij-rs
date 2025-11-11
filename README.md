@@ -235,13 +235,13 @@ Document skipped steps in PR descriptions so reviewers have the right context.
 
 ## Publishing & Versioning
 
-Each domain stack keeps the Rust crate, WASM crate, and npm wrapper versions in lockstep. Publishing now flows through [Changesets](.changeset/README.md):
+Each domain stack keeps the Rust crate, WASM crate, and npm wrapper versions in lockstep. Publishing now flows through [Changesets](.changeset/README.md) plus the automated `publish-npm` workflow:
 
-1. Bump the Rust crate + WASM crate versions in their `Cargo.toml` files (the npm wrapper will be handled by Changesets).
-2. Run `pnpm changeset` and select the npm packages under `npm/@vizij/*` that changed. Capture a short summary for the changelog entry.
-3. Review the generated markdown under `.changeset/`, adjust as needed, and commit it alongside the code changes.
-4. When you are ready to publish, run `pnpm version:packages` followed by `pnpm release`. The release script reinstalls dependencies and rebuilds the wasm/shared bundles so you can inspect the generated artefacts.
-5. Tag the release (`npm-animation-vX.Y.Z`, `npm-graph-vX.Y.Z`, etc.) on `main` so the GitHub workflows publish the npm packages and upload any additional artefacts.
+1. Bump the Rust + WASM crate versions in their `Cargo.toml` files (npm wrappers stay on autopilot).
+2. Run `pnpm changeset` and select the npm packages under `npm/@vizij/*` that changed. Commit the generated markdown under `.changeset/`.
+3. Once those changes land on `main`, cut a tag named `npm-pub-<something>` (for example `npm-pub-2025-11-11`) that points at the commit you want to release, and push it to origin. You can also trigger the workflow manually with `workflow_dispatch`.
+4. The `publish-npm` workflow uses `changesets/action@v1` to run `pnpm ci:version` (which deletes the processed changesets, bumps package versions, and pushes a `chore(release): version packages` commit + per-package tags) and `pnpm ci:publish` (which rebuilds the wasm/shared packages and executes `changeset publish`). It authenticates with `GITHUB_TOKEN` for the commit + tags and `NPM_TOKEN` for provenance-enabled publishes.
+5. After the workflow finishes, pull `main` so your local branch includes the auto-generated release commit.
 
 Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wasm bundling, npm pack contents) before pushing real releases.
 

@@ -6,4 +6,4 @@
 - **Docs**: Keep the README current on custom wasm URLs, troubleshooting, and schema registry docs.
 - **Dependencies**: Relies on `@vizij/value-json`, `@vizij/test-fixtures`, `@vizij/wasm-loader`.
 - **Follow-ups**: Streaming evaluation ideas and parity tests track in `ROADMAP.md`; update when progress is made.
-- **Release**: Record a changeset (`pnpm changeset`), apply it with `pnpm version:packages`, and publish via `pnpm release` from the repo root.
+- **Release**: Record a changeset (`pnpm changeset`), merge it to `main`, and push an `npm-pub-*` tag to let CI run the automated version/publish job.

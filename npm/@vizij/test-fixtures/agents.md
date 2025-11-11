@@ -6,4 +6,4 @@
 - **Sync**: After editing `fixtures/manifest.json`, update both this package and the Rust crate; keep versions aligned.
 - **Docs**: Update the README when altering dist layout, versioning policy, or partial-bundle guidance.
 - **QA**: Ensure new fixtures round-trip via manifest helpers and add Vitest coverage where needed.
-- **Release**: Capture changes with `pnpm changeset`, bump using `pnpm version:packages`, and publish via `pnpm release`.
+- **Release**: Capture changes with `pnpm changeset`, merge to `main`, then push an `npm-pub-*` tag so CI handles the version bump/publish (package remains private).

@@ -7,18 +7,23 @@ on:
       - 'npm-pub-*'
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
-  publish_workspace:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+
+      - name: Install wasm32 target
+        run: rustup target add wasm32-unknown-unknown
 
       - name: Install wasm-pack
         run: cargo install wasm-pack
@@ -32,8 +37,17 @@ jobs:
       - name: Enable pnpm
         run: corepack enable pnpm
 
-      - name: Publish npm packages via Changesets
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Version, tag, and publish via Changesets
+        uses: changesets/action@v1
+        with:
+          version: pnpm ci:version
+          publish: pnpm ci:publish
+          commit: "chore(release): version packages"
+          title: "chore: release npm packages"
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
-        run: pnpm run publish:npm

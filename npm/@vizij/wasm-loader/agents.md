@@ -6,4 +6,4 @@
 - **Integration**: Consumed by all wasm npm packages—coordinate breaking changes carefully and update their loaders simultaneously.
 - **Docs**: Maintain README coverage for multi-module extensions, error translation, and bundler configuration tips.
 - **Future work**: Loader builder utilities, telemetry, and sync init pathways are tracked in `ROADMAP.md`.
-- **Release**: Log updates with `pnpm changeset`, apply them via `pnpm version:packages`, and publish using `pnpm release`.
+- **Release**: Log updates with `pnpm changeset`, merge to `main`, then push an `npm-pub-*` tag so CI versions + publishes automatically.
