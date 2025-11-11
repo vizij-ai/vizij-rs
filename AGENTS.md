@@ -80,6 +80,8 @@ Install the watcher dependency once with `cargo install cargo-watch`.
 | Link npm packages for vizij-web | Build locally, then use temporary `link:` deps in `vizij-web` (see its README) |
 | Rebuild after ABI bumps | `cargo build -p <wasm-crate> --target wasm32-unknown-unknown && pnpm run build:wasm:<stack>` |
 
+`pnpm ci:publish` temporarily resolves `workspace:` dependency ranges to real versions before publishing, then restores the manifests after the npm upload completes.
+
 Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unknown` before running the rebuild command above. Install `cargo-watch` (`cargo install cargo-watch --locked`) to use the `pnpm run watch:wasm:*` scripts.
 
 `ROADMAP.md` aggregates documentation TODOs and engineering follow-ups pulled from crate READMEs—consult it when prioritising work or updating docs.

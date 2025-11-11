@@ -20,6 +20,8 @@ npm/@vizij/orchestrator-wasm/node_modules/
 npm/@vizij/value-json/node_modules/
 npm/@vizij/wasm-loader/node_modules/
 
+.release-tmp/
+
 # common editor cruft
 .DS_Store
 *.log
