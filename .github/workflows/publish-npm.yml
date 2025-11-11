@@ -11,7 +11,7 @@ permissions:
   id-token: write
 
 env:
-  RELEASE_COMMIT_MESSAGE: chore(release): version packages
+  RELEASE_COMMIT_MESSAGE: 'chore(release): version packages'
 
 jobs:
   release:
