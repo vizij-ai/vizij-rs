@@ -1,5 +1,14 @@
 # @vizij/node-graph-wasm
 
+## 0.4.8
+
+### Patch Changes
+
+- f6cba9e: Release process testing patch bump
+- Updated dependencies [f6cba9e]
+  - @vizij/wasm-loader@0.1.3
+  - @vizij/value-json@0.1.1
+
 ## 0.4.7
 
 ### Patch Changes

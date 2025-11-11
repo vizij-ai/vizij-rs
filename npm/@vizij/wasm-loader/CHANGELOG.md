@@ -1,5 +1,11 @@
 # @vizij/wasm-loader
 
+## 0.1.3
+
+### Patch Changes
+
+- f6cba9e: Release process testing patch bump
+
 ## 0.1.2
 
 ### Patch Changes
