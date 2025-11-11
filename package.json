@@ -42,6 +42,7 @@
     "changeset": "changeset",
     "version:packages": "changeset version",
     "release": "pnpm install --frozen-lockfile && pnpm run build:wasm && pnpm run build:shared",
+    "publish:npm": "pnpm run release && pnpm changeset publish",
     "verify:registry": "node scripts/verify-node-registry.mjs"
   },
   "workspaces": [

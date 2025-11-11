@@ -15,10 +15,10 @@ importers:
   npm/@vizij/animation-wasm:
     dependencies:
       '@vizij/value-json':
-        specifier: ^0.1.0
+        specifier: workspace:*
         version: 0.1.0
       '@vizij/wasm-loader':
-        specifier: ^0.1.2
+        specifier: workspace:*
         version: 0.1.2
     devDependencies:
       '@types/node':
@@ -31,10 +31,10 @@ importers:
   npm/@vizij/node-graph-wasm:
     dependencies:
       '@vizij/value-json':
-        specifier: ^0.1.0
+        specifier: workspace:*
         version: 0.1.0
       '@vizij/wasm-loader':
-        specifier: ^0.1.2
+        specifier: workspace:*
         version: 0.1.2
     devDependencies:
       '@types/node':
@@ -47,10 +47,10 @@ importers:
   npm/@vizij/orchestrator-wasm:
     dependencies:
       '@vizij/value-json':
-        specifier: ^0.1.0
+        specifier: workspace:*
         version: 0.1.0
       '@vizij/wasm-loader':
-        specifier: ^0.1.2
+        specifier: workspace:*
         version: 0.1.2
     devDependencies:
       '@types/node':
