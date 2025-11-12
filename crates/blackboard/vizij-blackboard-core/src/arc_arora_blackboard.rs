@@ -24,7 +24,10 @@ use uuid::Uuid;
 
 use super::arc_abb::{ArcABBNode, ArcABBPathNode};
 use crate::general_bb::{
-    traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, TreeFormattable},
+    traits::{
+        BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, JsonSerializable,
+        TreeFormattable,
+    },
     ABBItemNode,
 };
 
@@ -895,15 +898,6 @@ impl ItemsFormattable for Arc<Mutex<ArcAroraBlackboard>> {
             "Failed to lock blackboard mutex".to_string()
         }
     }
-}
-
-/// Trait for types that can be serialized to JSON.
-pub trait JsonSerializable {
-    /// Converts the implementation to a JSON representation.
-    ///
-    /// # Returns
-    /// A `Result<serde_json::Value, String>` containing the JSON representation.
-    fn to_json(&self) -> Result<serde_json::Value, String>;
 }
 
 /// Implementation of JsonSerializable for `Arc<Mutex<ArcAroraBlackboard>>`.

@@ -204,3 +204,12 @@ pub trait ItemsFormattable {
     /// Format the items list with optional ID display
     fn format_items(&self, show_ids: bool) -> String;
 }
+
+/// Trait for types that can be serialized to JSON.
+pub trait JsonSerializable {
+    /// Converts the implementation to a JSON representation.
+    ///
+    /// # Returns
+    /// A `Result<serde_json::Value, String>` containing the JSON representation.
+    fn to_json(&self) -> Result<serde_json::Value, String>;
+}
