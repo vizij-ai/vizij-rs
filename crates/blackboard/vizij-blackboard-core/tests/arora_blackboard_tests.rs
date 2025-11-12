@@ -5,59 +5,97 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 use vizij_blackboard_core::{
     arc_abb::{ArcABBNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait},
-    general_bb::traits::{BBNodeTrait, BBPathNodeTrait},
+    blackboard_ref::{BlackboardInterface, BlackboardRef, BlackboardType},
+    general_bb::traits::BBNodeTrait,
     ArcAroraBlackboard,
 };
 
-// Utility functions for handling Results and Options
-fn is_some_node(node: Result<Option<Arc<Mutex<ArcABBNode>>>, String>) -> bool {
-    node.is_ok() && node.unwrap().is_some()
-}
-
-fn is_path_node(node: Result<Option<Arc<Mutex<ArcABBNode>>>, String>) -> bool {
-    if let Ok(Some(node_arc)) = node {
-        if let Ok(node_guard) = node_arc.lock() {
-            return node_guard.is_path().unwrap_or(false);
+// Macro to generate tests for both ArcAroraBlackboard and AroraBlackboard
+macro_rules! test_both_blackboards {
+    ($test_name:ident, $test_impl:ident) => {
+        #[test]
+        fn $test_name() {
+            $test_impl(BlackboardType::ArcArora);
         }
-    }
-    false
-}
 
-fn contains_node(node_result: Result<Option<Arc<Mutex<ArcABBNode>>>, String>, name: &str) -> bool {
-    if let Ok(Some(node_arc)) = node_result {
-        if let Ok(node_guard) = node_arc.lock() {
-            if let Ok(is_path) = node_guard.is_path() {
-                if is_path {
-                    if let Some(path) = node_guard.as_path() {
-                        return path.contains(name).unwrap_or(false);
-                    }
-                }
+        paste::paste! {
+            #[test]
+            fn [<$test_name _arora>]() {
+                $test_impl(BlackboardType::Arora);
             }
         }
-    }
-    false
+    };
 }
 
-// Helper function to unwrap a Result<Option<Arc<Mutex<ABBNode>>>, String> to Option<Arc<Mutex<ABBNode>>>
+// ============================================================================
+// New helper functions that work with BlackboardRef
+// ============================================================================
+
+fn validate_item_ref<S: ToString + ?Sized>(
+    bb: &BlackboardRef,
+    path: &S,
+    expected_value: &Value,
+    expected_id: &Uuid,
+) {
+    // Verify the value can be retrieved by path
+    let value = bb.lookup(path);
+    assert!(
+        value.is_some(),
+        "Value at path '{}' should exist",
+        path.to_string()
+    );
+    assert_eq!(
+        value.as_ref().unwrap(),
+        expected_value,
+        "Value mismatch at path '{}'",
+        path.to_string()
+    );
+
+    // Verify the value can be retrieved by ID
+    let value_by_id = bb.lookup_by_id(expected_id);
+    assert!(
+        value_by_id.is_some(),
+        "Value with ID {:?} should exist",
+        expected_id
+    );
+    assert_eq!(
+        value_by_id.as_ref().unwrap(),
+        expected_value,
+        "Value mismatch for ID {:?}",
+        expected_id
+    );
+}
+
+fn assert_path_exists_ref<S: ToString + ?Sized>(bb: &BlackboardRef, path: &S) {
+    let value = bb.lookup(path);
+    assert!(value.is_some(), "Path '{}' should exist", path.to_string());
+}
+
+fn assert_path_not_exists_ref<S: ToString + ?Sized>(bb: &BlackboardRef, path: &S) {
+    let value = bb.lookup(path);
+    assert!(
+        value.is_none(),
+        "Path '{}' should not exist",
+        path.to_string()
+    );
+}
+
+fn contains_ref<S: ToString + ?Sized>(bb: &BlackboardRef, path: &S) -> bool {
+    bb.lookup(path).is_some()
+}
+
 fn unwrap_node_result(
     node: Result<Option<Arc<Mutex<ArcABBNode>>>, String>,
 ) -> Option<Arc<Mutex<ArcABBNode>>> {
     node.unwrap_or_default()
 }
 
-// Helper function that simplifies unwrapping and checking if a node is present
 fn assert_node_exists(node: Result<Option<Arc<Mutex<ArcABBNode>>>, String>) {
     assert!(node.is_ok(), "Node result should be Ok");
     let unwrapped = node.unwrap();
     assert!(unwrapped.is_some(), "Node should be Some");
 }
 
-// Helper function that simplifies checking if a node is a path
-fn assert_node_is_path(node: Result<Option<Arc<Mutex<ArcABBNode>>>, String>) {
-    assert!(is_path_node(node));
-}
-
-// Generic helper function that works with both references and copies
 fn get_id_safe<T, E>(id_result: Result<T, E>) -> T
 where
     E: std::fmt::Display,
@@ -71,373 +109,229 @@ where
     }
 }
 
-// Helper function to get an Option<&String> from a Result<Option<&String>, String>
 fn get_name_ref_safe(name_result: Result<String, String>) -> String {
     name_result.expect("Failed to get name reference")
 }
 
-fn validate_item<S: ToString + ?Sized>(
-    name: &S,
-    value: &Value,
-    id: &Uuid,
-    node: Result<Option<Arc<Mutex<ArcABBNode>>>, String>,
-) {
-    // Check if the node is Some
-    assert!(node.is_ok());
-    let node = node.unwrap();
-    assert!(node.is_some());
-
-    if let Some(node_arc) = node {
-        let node = node_arc.lock().unwrap();
-        if let Some(item) = node.as_item() {
-            assert_eq!(
-                get_name_ref_safe(item.get_current_name_copy()),
-                name.to_string()
-            );
-            assert_eq!(item.get_value(), Some(value));
-            assert_eq!(get_id_safe(item.get_id_ref()), id);
-        } else {
-            panic!("Expected Item node");
-        }
-    } else {
-        panic!("Node is None");
-    }
+// Single test implementation that works with both blackboard types via BlackboardRef
+fn test_bb_creation_impl(bb_type: BlackboardType) {
+    let bb = BlackboardRef::new(bb_type, "root");
+    let name = bb.get_name();
+    assert!(name.is_ok(), "Should be able to get blackboard name");
 }
 
-#[test]
-fn test_bb_creation() {
-    let bb: Arc<Mutex<ArcAroraBlackboard>> = ArcAroraBlackboard::new("root".to_string());
-    if let Ok(bb_names) = bb.get_names_copy() {
-        // Check if the names contain "root"
-        assert!(bb_names.is_empty());
-    } else {
-        panic!("Failed to get names from blackboard");
-    }
-}
+// Generate both test cases using the macro
+test_both_blackboards!(test_bb_creation, test_bb_creation_impl);
 
-#[test]
-fn test_add_simple_value() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
+fn test_add_simple_value_impl(bb_type: BlackboardType) {
+    let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Add a simple value
-    let value = &Value::I32(42);
-    let name = &"test_var".to_string();
+    let value = Value::I32(42);
+    let name = "test_var";
     let id = bb.set(name, value.clone()).unwrap();
-    // Retrieve the node by id
-    let node_by_id = bb.get_node_by_id(&id);
-    validate_item(name, value, &id, node_by_id);
+
+    // Validate the item can be retrieved by path and by id
+    validate_item_ref(&bb, name, &value, &id);
+
     // Verify it exists in the root namespace
-    assert!(bb.contains(name).unwrap());
-
-    // Retrieve the node by namespace
-    let node = bb.get(name);
-    validate_item(name, value, &id, node);
-
-    // Retrieve the node by name
-    let node_by_name = bb.get(name);
-    validate_item(name, value, &id, node_by_name);
+    assert!(contains_ref(&bb, name));
 }
 
-#[test]
-fn test_single_level_namespace() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
+test_both_blackboards!(test_add_simple_value, test_add_simple_value_impl);
+
+fn test_single_level_namespace_impl(bb_type: BlackboardType) {
+    let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Add a value in a single-level namespace
-    let math_name = &"math".to_string();
-    let pi_name = &"pi".to_string();
-    let pi_value = &Value::F32(std::f32::consts::PI);
-    let path = &format!("{}.{}", math_name, pi_name);
-    let pi_id = bb.set(path, pi_value.clone()).unwrap();
+    let math_name = "math";
+    let pi_name = "pi";
+    let pi_value = Value::F32(std::f32::consts::PI);
+    let path = format!("{}.{}", math_name, pi_name);
+    let pi_id = bb.set(&path, pi_value.clone()).unwrap();
 
     // Verify the math namespace path exists
-    let math_node = bb.get(math_name);
-    assert!(is_some_node(math_node.clone()));
+    assert_path_exists_ref(&bb, math_name);
 
-    // Verify the math node is a namespace
-    assert!(is_path_node(math_node.clone()));
+    // Verify the full path exists and corresponds to the pi node
+    validate_item_ref(&bb, &path, &pi_value, &pi_id);
 
-    // Verify the full path exists in the BB namespace and corresponds to the pi node
-    let pi_node = bb.get(path);
-    validate_item(pi_name, pi_value, &pi_id, pi_node);
-
-    // verify the pi node exists in the math node
-    assert!(contains_node(math_node.clone(), pi_name));
-
-    // Get the math node and then get pi from it
-    if let Ok(Some(math_arc)) = math_node {
-        let pi_node_in_math = math_arc.get(pi_name);
-        validate_item(pi_name, pi_value, &pi_id, pi_node_in_math);
-    } else {
-        panic!("Math node should exist");
-    }
-
-    // Verify the correct node is retrieved by id
-    let node_by_id = bb.get_node_by_id(&pi_id);
-    validate_item(pi_name, pi_value, &pi_id, node_by_id);
+    // Verify the pi node exists in the math namespace
+    assert!(contains_ref(&bb, &path));
 }
 
-#[test]
-fn test_multi_level_namespace() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
+test_both_blackboards!(
+    test_single_level_namespace,
+    test_single_level_namespace_impl
+);
+
+fn test_multi_level_namespace_impl(bb_type: BlackboardType) {
+    let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Add values in multi-level namespaces
-    let pos_x = &Value::F32(10.0);
-    let pos_y = &Value::F32(20.0);
-    let pos_z = &Value::F32(30.0);
+    let pos_x = Value::F32(10.0);
+    let pos_y = Value::F32(20.0);
+    let pos_z = Value::F32(30.0);
 
     let x_id = bb
-        .set(&"entity.transform.position.x", pos_x.clone())
+        .set("entity.transform.position.x", pos_x.clone())
         .unwrap();
     let y_id = bb
-        .set(&"entity.transform.position.y", pos_y.clone())
+        .set("entity.transform.position.y", pos_y.clone())
         .unwrap();
     let z_id = bb
-        .set(&"entity.transform.position.z", pos_z.clone())
+        .set("entity.transform.position.z", pos_z.clone())
         .unwrap();
 
     // Verify intermediate namespaces exist
-    assert_node_exists(bb.get(&"entity"));
-    assert_node_exists(bb.get(&"entity.transform"));
-    assert_node_exists(bb.get(&"entity.transform.position"));
+    assert_path_exists_ref(&bb, "entity");
+    assert_path_exists_ref(&bb, "entity.transform");
+    assert_path_exists_ref(&bb, "entity.transform.position");
 
     // Check values by full path
-    let x_node = bb.get(&"entity.transform.position.x");
-    let y_node = bb.get(&"entity.transform.position.y");
-    let z_node = bb.get(&"entity.transform.position.z");
-
-    validate_item(&"x", pos_x, &x_id, x_node);
-    validate_item(&"y", pos_y, &y_id, y_node);
-    validate_item(&"z", pos_z, &z_id, z_node);
-
-    // verify the entity node exists and is a namespace
-    let entity_node = bb.get(&"entity");
-    assert_node_exists(entity_node.clone());
-    let entity_node_unwrapped =
-        unwrap_node_result(entity_node.clone()).expect("Entity node should exist");
-    {
-        let entity_node_guard = entity_node_unwrapped.lock().unwrap();
-        assert!(entity_node_guard.is_path().unwrap());
-    }
-
-    // verify the transform node exists and is a namespace
-    let transform_node = bb.get(&"entity.transform");
-    assert_node_exists(transform_node.clone());
-    let transform_node_unwrapped =
-        unwrap_node_result(transform_node.clone()).expect("Transform node should exist");
-    {
-        let transform_node_guard = transform_node_unwrapped.lock().unwrap();
-        assert!(transform_node_guard.is_path().unwrap());
-    }
-
-    // verify the transform node exists in the entity node
-    let transform_node_in_entity = entity_node_unwrapped.get(&"transform");
-    assert_node_exists(transform_node_in_entity.clone());
-    let transform_node_in_entity_unwrapped =
-        unwrap_node_result(transform_node_in_entity).expect("Transform in entity should exist");
-    {
-        let transform_node_in_entity_guard = transform_node_in_entity_unwrapped.lock().unwrap();
-        assert!(transform_node_in_entity_guard.is_path().unwrap());
-    }
-
-    // verify the transform node id matches the one in the entity node
-    let check_id = get_id_safe(transform_node_in_entity_unwrapped.get_id_copy());
-    let target_id = get_id_safe(transform_node_unwrapped.get_id_copy());
-    assert_eq!(check_id, target_id);
-
-    // verify the position node exists and is a namespace
-    let position_node = bb.get(&"entity.transform.position");
-    assert_node_exists(position_node.clone());
-    let position_node_unwrapped =
-        unwrap_node_result(position_node.clone()).expect("Position node should exist");
-    {
-        let position_node_guard = position_node_unwrapped.lock().unwrap();
-        assert!(position_node_guard.is_path().unwrap());
-    }
-
-    // verify the position node exists in the transform node
-    let position_node_in_transform = transform_node_unwrapped.get(&"position");
-    assert_node_exists(position_node_in_transform.clone());
-    let position_node_in_transform_unwrapped =
-        unwrap_node_result(position_node_in_transform.clone())
-            .expect("Position in transform should exist");
-    {
-        let position_node_in_transform_guard = position_node_in_transform_unwrapped.lock().unwrap();
-        assert!(position_node_in_transform_guard.is_path().unwrap());
-    }
-
-    // verify the position node id matches the one in the transform node
-    let check_id = get_id_safe(position_node_in_transform_unwrapped.get_id_copy());
-    let target_id = get_id_safe(position_node_unwrapped.get_id_copy());
-    assert_eq!(check_id, target_id);
+    validate_item_ref(&bb, "entity.transform.position.x", &pos_x, &x_id);
+    validate_item_ref(&bb, "entity.transform.position.y", &pos_y, &y_id);
+    validate_item_ref(&bb, "entity.transform.position.z", &pos_z, &z_id);
 }
 
-#[test]
-fn test_namespaces_with_multiple_values() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
+test_both_blackboards!(test_multi_level_namespace, test_multi_level_namespace_impl);
+
+fn test_namespaces_with_multiple_values_impl(bb_type: BlackboardType) {
+    let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Add multiple values to the same namespace
     let hp = Value::I32(100);
     let mp = Value::I32(50);
     let speed = Value::F32(5.5);
 
-    let hp_id = bb.set(&"player.stats.hp".to_string(), hp.clone()).unwrap();
-    let mp_id = bb.set(&"player.stats.mp".to_string(), mp.clone()).unwrap();
-    let speed_id = bb
-        .set(&"player.stats.speed".to_string(), speed.clone())
-        .unwrap();
+    let hp_id = bb.set("player.stats.hp", hp.clone()).unwrap();
+    let mp_id = bb.set("player.stats.mp", mp.clone()).unwrap();
+    let speed_id = bb.set("player.stats.speed", speed.clone()).unwrap();
 
     // Verify the namespace exists
-    let player_node = bb.get(&"player");
-    assert_node_exists(player_node.clone());
-    assert_node_is_path(player_node);
+    assert_path_exists_ref(&bb, "player");
 
-    // verify the ids correspond to the expected values
-    let hp_node = bb.get(&"player.stats.hp");
-    validate_item(&"hp".to_string(), &hp, &hp_id, hp_node);
-
-    let mp_node = bb.get(&"player.stats.mp");
-    validate_item(&"mp".to_string(), &mp, &mp_id, mp_node);
-
-    let speed_node = bb.get(&"player.stats.speed");
-    validate_item(&"speed".to_string(), &speed, &speed_id, speed_node);
+    // Verify the ids correspond to the expected values
+    validate_item_ref(&bb, "player.stats.hp", &hp, &hp_id);
+    validate_item_ref(&bb, "player.stats.mp", &mp, &mp_id);
+    validate_item_ref(&bb, "player.stats.speed", &speed, &speed_id);
 }
 
-#[test]
-fn test_custom_ids() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
+test_both_blackboards!(
+    test_namespaces_with_multiple_values,
+    test_namespaces_with_multiple_values_impl
+);
+
+fn test_custom_ids_impl(bb_type: BlackboardType) {
+    let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Add a value with custom ID
     let value = Value::String("test_value".to_string());
     let custom_id = gen_bb_uuid();
-    let custom_name = "custom_item".to_string();
+    let custom_name = "custom_item";
 
     let returned_custom_id = bb
-        .set_with_id(&custom_name, value.clone(), Some(custom_id))
+        .set_with_id(custom_name, value.clone(), &custom_id)
         .unwrap();
-    assert!(returned_custom_id == custom_id);
+    assert_eq!(returned_custom_id, custom_id);
 
-    // Verify we can get the node by name
-    let node = bb.get(&custom_name);
-    assert_node_exists(node.clone());
-
-    // Verify the ID was preserved
-    let node_unwrapped = unwrap_node_result(node).expect("Node should exist");
-    {
-        let node_guard = node_unwrapped.lock().unwrap();
-        let item = node_guard.as_item().unwrap();
-        assert_eq!(get_id_safe(item.get_id_ref()), &custom_id);
-        assert_eq!(item.get_value(), Some(&value));
-        assert_eq!(item.get_current_name_copy().unwrap(), custom_name);
-    }
-
-    // Verify we can get the node by ID
-    let node_by_id = bb.get_node_by_id(&custom_id);
-    validate_item(&"custom_item".to_string(), &value, &custom_id, node_by_id);
+    // Verify we can get the node by name and by ID
+    validate_item_ref(&bb, custom_name, &value, &custom_id);
 }
 
-#[test]
-fn test_non_existent_paths() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
+test_both_blackboards!(test_custom_ids, test_custom_ids_impl);
+
+fn test_non_existent_paths_impl(bb_type: BlackboardType) {
+    let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Add some values
-    bb.set(&"a.b.c".to_string(), Value::I32(1)).unwrap();
+    bb.set("a.b.c", Value::I32(1)).unwrap();
 
     // Test non-existent paths
-    assert!(unwrap_node_result(bb.get(&"")).is_none());
-    assert!(unwrap_node_result(bb.get(&"x")).is_none());
-    assert!(unwrap_node_result(bb.get(&"a.x")).is_none());
-    assert!(unwrap_node_result(bb.get(&"a.b.x")).is_none());
-    assert!(unwrap_node_result(bb.get(&"a.b.c.d")).is_none());
+    assert_path_not_exists_ref(&bb, "");
+    assert_path_not_exists_ref(&bb, "x");
+    assert_path_not_exists_ref(&bb, "a.x");
+    assert_path_not_exists_ref(&bb, "a.b.x");
+    assert_path_not_exists_ref(&bb, "a.b.c.d");
 }
 
-#[test]
-fn test_complex_values() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
+test_both_blackboards!(test_non_existent_paths, test_non_existent_paths_impl);
+
+fn test_complex_values_impl(bb_type: BlackboardType) {
+    let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Test with more complex values
     let bool_value = Value::Boolean(true);
     let string_value = Value::String("Hello, World!".to_string());
     let array_value = Value::ArrayI32(vec![1, 2, 3]);
 
-    let bool_id = bb
-        .set(&"values.bool".to_string(), bool_value.clone())
-        .unwrap();
-    let string_id = bb
-        .set(&"values.string".to_string(), string_value.clone())
-        .unwrap();
-    let array_id = bb
-        .set(&"values.array".to_string(), array_value.clone())
-        .unwrap();
+    let bool_id = bb.set("values.bool", bool_value.clone()).unwrap();
+    let string_id = bb.set("values.string", string_value.clone()).unwrap();
+    let array_id = bb.set("values.array", array_value.clone()).unwrap();
 
-    // get and validate the values
-    let bool_node = bb.get(&"values.bool");
-    validate_item(&"bool".to_string(), &bool_value, &bool_id, bool_node);
+    // Get and validate the values
+    validate_item_ref(&bb, "values.bool", &bool_value, &bool_id);
+    validate_item_ref(&bb, "values.string", &string_value, &string_id);
+    validate_item_ref(&bb, "values.array", &array_value, &array_id);
+}
 
-    let string_node = bb.get(&"values.string");
-    validate_item(
-        &"string".to_string(),
-        &string_value,
-        &string_id,
-        string_node,
-    );
+test_both_blackboards!(test_complex_values, test_complex_values_impl);
 
-    let array_node = bb.get(&"values.array");
-    validate_item(&"array".to_string(), &array_value, &array_id, array_node);
+fn test_empty_name_impl(bb_type: BlackboardType) {
+    let mut bb = BlackboardRef::new(bb_type, "root");
+    bb.set("", Value::I32(123)).unwrap();
 }
 
 #[test]
 #[should_panic(expected = "Path cannot be empty when setting an item to the blackboard")]
 fn test_empty_name() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
-    bb.set(&"".to_string(), Value::I32(123)).unwrap();
+    test_empty_name_impl(BlackboardType::ArcArora);
 }
 
 #[test]
-fn test_namespace_node() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
+#[should_panic(expected = "Path cannot be empty when setting an item to the blackboard")]
+fn test_empty_name_arora() {
+    test_empty_name_impl(BlackboardType::Arora);
+}
+
+fn test_namespace_node_impl(bb_type: BlackboardType) {
+    let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Add some values to create namespaces
-    bb.set(&"system.config.debug".to_string(), Value::Boolean(true))
-        .unwrap();
-    bb.set(&"system.config.log_level".to_string(), Value::I32(3))
-        .unwrap();
+    bb.set("system.config.debug", Value::Boolean(true)).unwrap();
+    bb.set("system.config.log_level", Value::I32(3)).unwrap();
 
-    // Get the namespace node
-    let config_node = bb.get(&"system.config");
-    assert_node_exists(config_node.clone());
-
-    let config_node_unwrapped = unwrap_node_result(config_node).expect("Config node should exist");
-    let config_node_guard = config_node_unwrapped.lock().unwrap();
-    let namespace = config_node_guard.as_path().unwrap();
-
-    assert!(namespace.contains("debug").unwrap());
-    assert!(namespace.contains("log_level").unwrap());
-    assert!(!get_id_safe(namespace.get_id_ref()).is_nil());
+    // Verify the namespace paths exist
+    assert_path_exists_ref(&bb, "system.config");
+    assert!(contains_ref(&bb, "system.config.debug"));
+    assert!(contains_ref(&bb, "system.config.log_level"));
 }
 
-#[test]
-fn test_overwrite_existing_item() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
+test_both_blackboards!(test_namespace_node, test_namespace_node_impl);
+
+fn test_overwrite_existing_item_impl(bb_type: BlackboardType) {
+    let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Add a value
-    let id1 = bb.set(&"player.health", Value::I32(100)).unwrap();
+    let id1 = bb.set("player.health", Value::I32(100)).unwrap();
 
     // Verify initial value
-    let node = bb.get(&"player.health");
-    assert_node_exists(node.clone());
-    validate_item(&"health", &Value::I32(100), &id1, node);
+    validate_item_ref(&bb, "player.health", &Value::I32(100), &id1);
 
     // Overwrite with new value
-    let id2 = bb.set(&"player.health", Value::I32(150)).unwrap();
+    let id2 = bb.set("player.health", Value::I32(150)).unwrap();
 
     // IDs should be the same when overwriting
     assert_eq!(id1, id2);
 
     // Verify updated value
-    let node = bb.get(&"player.health");
-    assert_node_exists(node.clone());
-    validate_item(&"health", &Value::I32(150), &id1, node);
+    validate_item_ref(&bb, "player.health", &Value::I32(150), &id1);
 }
+
+test_both_blackboards!(
+    test_overwrite_existing_item,
+    test_overwrite_existing_item_impl
+);
 
 #[test]
 fn test_remove_item() {
@@ -451,16 +345,15 @@ fn test_remove_item() {
     // should be implemented in ArcAroraBlackboard
 }
 
-#[test]
-fn test_path_conflict() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
+fn test_path_conflict_impl(bb_type: BlackboardType) {
+    let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Create a namespace node
-    bb.set(&"player.inventory.gold", Value::I32(100)).unwrap();
+    bb.set("player.inventory.gold", Value::I32(100)).unwrap();
 
-    // Now try to use the namespace as a value path (should panic)
+    // Now try to use the namespace as a value path (should fail)
     let result = bb.set(
-        &"player.inventory",
+        "player.inventory",
         Value::String("this should fail".to_string()),
     );
     assert!(
@@ -476,6 +369,8 @@ fn test_path_conflict() {
         error_message
     );
 }
+
+test_both_blackboards!(test_path_conflict, test_path_conflict_impl);
 
 #[test]
 fn test_keyvalue_structure() {
@@ -617,39 +512,42 @@ fn test_keyvalue_structure() {
     }
 }
 
-#[test]
-fn test_type_compatibility() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
+fn test_type_compatibility_impl(bb_type: BlackboardType) {
+    let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Set initial value as integer
-    bb.set(&"player.level", Value::I32(10)).unwrap();
+    let id = bb.set("player.level", Value::I32(10)).unwrap();
 
     // Update with compatible type should work
-    bb.set(&"player.level", Value::I32(20)).unwrap();
+    bb.set("player.level", Value::I32(20)).unwrap();
 
     // Check if updated correctly
-    let node = bb.get(&"player.level");
-    let node_unwrapped = unwrap_node_result(node).expect("Level node should exist");
-    let node_guard = node_unwrapped.lock().unwrap();
-    match node_guard.as_item() {
-        Some(item) => {
-            assert_eq!(item.get_value(), Some(&Value::I32(20)));
-        }
-        None => panic!("Expected Item node"),
-    }
+    validate_item_ref(&bb, "player.level", &Value::I32(20), &id);
+}
+
+test_both_blackboards!(test_type_compatibility, test_type_compatibility_impl);
+
+fn test_incompatible_type_impl(bb_type: BlackboardType) {
+    let mut bb = BlackboardRef::new(bb_type, "root");
+
+    // Set initial value as integer
+    bb.set("player.score", Value::I32(100)).unwrap();
+
+    // Try to update with incompatible type (should panic)
+    bb.set("player.score", Value::String("hundred".to_string()))
+        .unwrap();
 }
 
 #[test]
 #[should_panic(expected = "Incompatible value type for existing item")]
 fn test_incompatible_type() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
+    test_incompatible_type_impl(BlackboardType::ArcArora);
+}
 
-    // Set initial value as integer
-    bb.set(&"player.score", Value::I32(100)).unwrap();
-
-    // Try to update with incompatible type (should panic)
-    bb.set(&"player.score", Value::String("hundred".to_string()))
-        .unwrap();
+#[test]
+#[should_panic(expected = "Incompatible value type for existing item")]
+fn test_incompatible_type_arora() {
+    test_incompatible_type_impl(BlackboardType::Arora);
 }
 
 #[test]

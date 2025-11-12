@@ -21,3 +21,6 @@ log = { workspace = true }
 uuid = { workspace = true }
 
 vizij-api-core = { path = "../../api/vizij-api-core" }
+
+[dev-dependencies]
+paste = "1.0"

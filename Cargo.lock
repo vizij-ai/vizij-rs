@@ -3992,6 +3992,7 @@ version = "0.1.0"
 dependencies = [
  "arora-schema",
  "log",
+ "paste",
  "serde",
  "serde_json",
  "uuid",
