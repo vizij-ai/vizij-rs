@@ -11,7 +11,7 @@ use arora_schema::value::Value;
 use uuid::Uuid;
 
 use crate::{
-    arc_abb::{ArcBBPathNode, ArcBBPathNodeTrait, ArcNamespacedSetterTrait},
+    arc_bb::{ArcBBPathNode, ArcBBPathNodeTrait, ArcNamespacedSetterTrait},
     traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, TreeFormattable},
     BBItemNode,
 };

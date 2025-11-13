@@ -34,7 +34,7 @@ use crate::{
 
 use crate::{
     adt,
-    rc_abb::{NamespacedSetterTrait, RcBBPathNodeTrait},
+    rc_bb::{NamespacedSetterTrait, RcBBPathNodeTrait},
 };
 
 /// A struct representing the blackboard, which contains a collection of nodes indexed by their IDs.

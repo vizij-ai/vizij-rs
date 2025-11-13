@@ -1,7 +1,7 @@
 pub mod itemnode;
 pub mod traits;
 
-pub use crate::general_bb::itemnode::BBItemNode;
+pub use crate::common::itemnode::BBItemNode;
 
 // Utility function to split a namespace path into components
 pub fn split_path(path: &str) -> Vec<String> {

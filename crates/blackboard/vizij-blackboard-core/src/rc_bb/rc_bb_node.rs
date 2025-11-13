@@ -4,7 +4,7 @@
 
 use uuid::Uuid;
 
-use crate::{rc_abb::RcBBPathNode, traits::BBNodeTrait, BBItemNode};
+use crate::{rc_bb::RcBBPathNode, traits::BBNodeTrait, BBItemNode};
 
 /// An abstract node in the blackboard structure, which can be either a path or an item.
 ///

@@ -1,4 +1,4 @@
-use crate::{adt, general_bb::traits::BBNodeTrait};
+use crate::{adt, common::traits::BBNodeTrait};
 use arora_schema::{
     gen_bb_uuid,
     value::{Type, Value},

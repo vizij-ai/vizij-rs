@@ -33,7 +33,7 @@ use crate::{
 
 use crate::{
     adt,
-    arc_abb::{ArcBBPathNodeTrait, ArcNamespacedSetterTrait},
+    arc_bb::{ArcBBPathNodeTrait, ArcNamespacedSetterTrait},
 };
 
 /// A struct representing the blackboard, which contains a collection of nodes indexed by their IDs.

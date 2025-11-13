@@ -1,11 +1,11 @@
 pub mod adt;
-pub mod arc_abb;
+pub mod arc_bb;
 pub mod blackboard_ref;
-pub mod general_bb;
-pub mod rc_abb;
+pub mod common;
+pub mod rc_bb;
 
-pub use arc_abb::ArcBlackboard;
+pub use arc_bb::ArcBlackboard;
 pub use blackboard_ref::{BlackboardRef, BlackboardType};
-pub use rc_abb::RcBlackboard;
+pub use rc_bb::RcBlackboard;
 
-pub use general_bb::{split_path, traits, BBItemNode, PATH_SEPARATOR};
+pub use common::{split_path, traits, BBItemNode, PATH_SEPARATOR};

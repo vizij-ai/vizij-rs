@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 use vizij_blackboard_core::PATH_SEPARATOR;
 use vizij_blackboard_core::{
-    arc_abb::{ArcBBNode, ArcBBPathNodeTrait, ArcNamespacedSetterTrait},
+    arc_bb::{ArcBBNode, ArcBBPathNodeTrait, ArcNamespacedSetterTrait},
     blackboard_ref::{BlackboardInterface, BlackboardRef, BlackboardType},
     traits::BBNodeTrait,
     ArcBlackboard,

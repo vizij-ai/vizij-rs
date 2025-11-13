@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use arora_schema::value::Value;
 // Only import traits actually required for method resolution
-use vizij_blackboard_core::arc_abb::{ArcBBPathNodeTrait, ArcNamespacedSetterTrait};
+use vizij_blackboard_core::arc_bb::{ArcBBPathNodeTrait, ArcNamespacedSetterTrait};
 use vizij_blackboard_core::traits::BBNodeTrait;
 use vizij_blackboard_core::ArcBlackboard;
 use wasm_bindgen::prelude::*;

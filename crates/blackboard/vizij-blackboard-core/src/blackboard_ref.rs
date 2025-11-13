@@ -1,7 +1,7 @@
 #![allow(unused_must_use)]
 
-use crate::arc_abb::{ArcBBNode, ArcBBPathNodeTrait, ArcNamespacedSetterTrait};
-use crate::rc_abb::{NamespacedSetterTrait, RcBBNode, RcBBPathNodeTrait};
+use crate::arc_bb::{ArcBBNode, ArcBBPathNodeTrait, ArcNamespacedSetterTrait};
+use crate::rc_bb::{NamespacedSetterTrait, RcBBNode, RcBBPathNodeTrait};
 use crate::traits::{
     BBNodeTrait, BlackboardTrait, ItemsFormattable, JsonSerializable, TreeFormattable,
 };
