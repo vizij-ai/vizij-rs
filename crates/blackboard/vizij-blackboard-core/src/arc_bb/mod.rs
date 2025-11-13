@@ -8,5 +8,5 @@ pub use crate::arc_bb::arc_bb_pathnode::ArcBBPathNode;
 pub use crate::arc_bb::arc_bb_traits::{ArcBBPathNodeTrait, ArcNamespacedSetterTrait};
 pub use crate::arc_bb::arc_blackboard::ArcBlackboard;
 pub use crate::blackboard_ref::{
-    BlackboardInterface, BlackboardNodeAccess, BlackboardRef, BlackboardType,
+    AMSNodeAccess, AroraMemSpace, AroraMemSpaceInterface, AroraMemSpaceType,
 };

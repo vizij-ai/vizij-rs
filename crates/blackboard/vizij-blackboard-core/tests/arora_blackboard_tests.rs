@@ -6,7 +6,7 @@ use uuid::Uuid;
 use vizij_blackboard_core::PATH_SEPARATOR;
 use vizij_blackboard_core::{
     arc_bb::{ArcBBNode, ArcBBPathNodeTrait, ArcNamespacedSetterTrait},
-    blackboard_ref::{BlackboardInterface, BlackboardRef, BlackboardType},
+    blackboard_ref::{AroraMemSpace, AroraMemSpaceInterface, AroraMemSpaceType},
     traits::BBNodeTrait,
     ArcBlackboard,
 };
@@ -28,24 +28,24 @@ macro_rules! test_both_blackboards {
     ($test_name:ident, $test_impl:ident) => {
         #[test]
         fn $test_name() {
-            $test_impl(BlackboardType::Arc);
+            $test_impl(AroraMemSpaceType::Arc);
         }
 
         paste::paste! {
             #[test]
             fn [<$test_name _arora>]() {
-                $test_impl(BlackboardType::Rc);
+                $test_impl(AroraMemSpaceType::Rc);
             }
         }
     };
 }
 
 // ============================================================================
-// New helper functions that work with BlackboardRef
+// New helper functions that work with AroraMemSpaceType
 // ============================================================================
 
 fn validate_item_ref<S: ToString + ?Sized>(
-    bb: &BlackboardRef,
+    bb: &AroraMemSpace,
     path: &S,
     expected_value: &Value,
     expected_id: &Uuid,
@@ -79,12 +79,12 @@ fn validate_item_ref<S: ToString + ?Sized>(
     );
 }
 
-fn assert_path_exists_ref<S: ToString + ?Sized>(bb: &BlackboardRef, path: &S) {
+fn assert_path_exists_ref<S: ToString + ?Sized>(bb: &AroraMemSpace, path: &S) {
     let value = bb.lookup(path);
     assert!(value.is_some(), "Path '{}' should exist", path.to_string());
 }
 
-fn assert_path_not_exists_ref<S: ToString + ?Sized>(bb: &BlackboardRef, path: &S) {
+fn assert_path_not_exists_ref<S: ToString + ?Sized>(bb: &AroraMemSpace, path: &S) {
     let value = bb.lookup(path);
     assert!(
         value.is_none(),
@@ -93,7 +93,7 @@ fn assert_path_not_exists_ref<S: ToString + ?Sized>(bb: &BlackboardRef, path: &S
     );
 }
 
-fn contains_ref<S: ToString + ?Sized>(bb: &BlackboardRef, path: &S) -> bool {
+fn contains_ref<S: ToString + ?Sized>(bb: &AroraMemSpace, path: &S) -> bool {
     bb.lookup(path).is_some()
 }
 
@@ -126,9 +126,9 @@ fn get_name_ref_safe(name_result: Result<String, String>) -> String {
     name_result.expect("Failed to get name reference")
 }
 
-// Single test implementation that works with both blackboard types via BlackboardRef
-fn test_bb_creation_impl(bb_type: BlackboardType) {
-    let bb = BlackboardRef::new(bb_type, "root");
+// Single test implementation that works with both blackboard types via AroraMemSpaceType
+fn test_bb_creation_impl(bb_type: AroraMemSpaceType) {
+    let bb = AroraMemSpace::new(bb_type, "root");
     let name = bb.get_name();
     assert!(name.is_ok(), "Should be able to get blackboard name");
 }
@@ -136,8 +136,8 @@ fn test_bb_creation_impl(bb_type: BlackboardType) {
 // Generate both test cases using the macro
 test_both_blackboards!(test_bb_creation, test_bb_creation_impl);
 
-fn test_add_simple_value_impl(bb_type: BlackboardType) {
-    let mut bb = BlackboardRef::new(bb_type, "root");
+fn test_add_simple_value_impl(bb_type: AroraMemSpaceType) {
+    let mut bb = AroraMemSpace::new(bb_type, "root");
 
     // Add a simple value
     let value = Value::I32(42);
@@ -153,8 +153,8 @@ fn test_add_simple_value_impl(bb_type: BlackboardType) {
 
 test_both_blackboards!(test_add_simple_value, test_add_simple_value_impl);
 
-fn test_single_level_namespace_impl(bb_type: BlackboardType) {
-    let mut bb = BlackboardRef::new(bb_type, "root");
+fn test_single_level_namespace_impl(bb_type: AroraMemSpaceType) {
+    let mut bb = AroraMemSpace::new(bb_type, "root");
 
     // Add a value in a single-level namespace
     let math_name = "math";
@@ -178,8 +178,8 @@ test_both_blackboards!(
     test_single_level_namespace_impl
 );
 
-fn test_multi_level_namespace_impl(bb_type: BlackboardType) {
-    let mut bb = BlackboardRef::new(bb_type, "root");
+fn test_multi_level_namespace_impl(bb_type: AroraMemSpaceType) {
+    let mut bb = AroraMemSpace::new(bb_type, "root");
 
     // Add values in multi-level namespaces
     let pos_x = Value::F32(10.0);
@@ -233,8 +233,8 @@ fn test_multi_level_namespace_impl(bb_type: BlackboardType) {
 
 test_both_blackboards!(test_multi_level_namespace, test_multi_level_namespace_impl);
 
-fn test_namespaces_with_multiple_values_impl(bb_type: BlackboardType) {
-    let mut bb = BlackboardRef::new(bb_type, "root");
+fn test_namespaces_with_multiple_values_impl(bb_type: AroraMemSpaceType) {
+    let mut bb = AroraMemSpace::new(bb_type, "root");
 
     // Add multiple values to the same namespace
     let hp = Value::I32(100);
@@ -265,8 +265,8 @@ test_both_blackboards!(
     test_namespaces_with_multiple_values_impl
 );
 
-fn test_custom_ids_impl(bb_type: BlackboardType) {
-    let mut bb = BlackboardRef::new(bb_type, "root");
+fn test_custom_ids_impl(bb_type: AroraMemSpaceType) {
+    let mut bb = AroraMemSpace::new(bb_type, "root");
 
     // Add a value with custom ID
     let value = Value::String("test_value".to_string());
@@ -284,8 +284,8 @@ fn test_custom_ids_impl(bb_type: BlackboardType) {
 
 test_both_blackboards!(test_custom_ids, test_custom_ids_impl);
 
-fn test_non_existent_paths_impl(bb_type: BlackboardType) {
-    let mut bb = BlackboardRef::new(bb_type, "root");
+fn test_non_existent_paths_impl(bb_type: AroraMemSpaceType) {
+    let mut bb = AroraMemSpace::new(bb_type, "root");
 
     // Add some values
     bb.set(&path(&["a", "b", "c"]), Value::I32(1)).unwrap();
@@ -300,8 +300,8 @@ fn test_non_existent_paths_impl(bb_type: BlackboardType) {
 
 test_both_blackboards!(test_non_existent_paths, test_non_existent_paths_impl);
 
-fn test_complex_values_impl(bb_type: BlackboardType) {
-    let mut bb = BlackboardRef::new(bb_type, "root");
+fn test_complex_values_impl(bb_type: AroraMemSpaceType) {
+    let mut bb = AroraMemSpace::new(bb_type, "root");
 
     // Test with more complex values
     let bool_value = Value::Boolean(true);
@@ -326,25 +326,25 @@ fn test_complex_values_impl(bb_type: BlackboardType) {
 
 test_both_blackboards!(test_complex_values, test_complex_values_impl);
 
-fn test_empty_name_impl(bb_type: BlackboardType) {
-    let mut bb = BlackboardRef::new(bb_type, "root");
+fn test_empty_name_impl(bb_type: AroraMemSpaceType) {
+    let mut bb = AroraMemSpace::new(bb_type, "root");
     bb.set("", Value::I32(123)).unwrap();
 }
 
 #[test]
 #[should_panic(expected = "Path cannot be empty when setting an item to the blackboard")]
 fn test_empty_name() {
-    test_empty_name_impl(BlackboardType::Arc);
+    test_empty_name_impl(AroraMemSpaceType::Arc);
 }
 
 #[test]
 #[should_panic(expected = "Path cannot be empty when setting an item to the blackboard")]
 fn test_empty_name_arora() {
-    test_empty_name_impl(BlackboardType::Rc);
+    test_empty_name_impl(AroraMemSpaceType::Rc);
 }
 
-fn test_namespace_node_impl(bb_type: BlackboardType) {
-    let mut bb = BlackboardRef::new(bb_type, "root");
+fn test_namespace_node_impl(bb_type: AroraMemSpaceType) {
+    let mut bb = AroraMemSpace::new(bb_type, "root");
 
     // Add some values to create namespaces
     bb.set(&path(&["system", "config", "debug"]), Value::Boolean(true))
@@ -360,8 +360,8 @@ fn test_namespace_node_impl(bb_type: BlackboardType) {
 
 test_both_blackboards!(test_namespace_node, test_namespace_node_impl);
 
-fn test_overwrite_existing_item_impl(bb_type: BlackboardType) {
-    let mut bb = BlackboardRef::new(bb_type, "root");
+fn test_overwrite_existing_item_impl(bb_type: AroraMemSpaceType) {
+    let mut bb = AroraMemSpace::new(bb_type, "root");
 
     // Add a value
     let id1 = bb
@@ -400,8 +400,8 @@ fn test_remove_item() {
     // should be implemented in ArcBlackboard
 }
 
-fn test_path_conflict_impl(bb_type: BlackboardType) {
-    let mut bb = BlackboardRef::new(bb_type, "root");
+fn test_path_conflict_impl(bb_type: AroraMemSpaceType) {
+    let mut bb = AroraMemSpace::new(bb_type, "root");
 
     // Create a namespace node
     bb.set(&path(&["player", "inventory", "gold"]), Value::I32(100))
@@ -570,8 +570,8 @@ fn test_keyvalue_structure() {
     }
 }
 
-fn test_type_compatibility_impl(bb_type: BlackboardType) {
-    let mut bb = BlackboardRef::new(bb_type, "root");
+fn test_type_compatibility_impl(bb_type: AroraMemSpaceType) {
+    let mut bb = AroraMemSpace::new(bb_type, "root");
 
     // Set initial value as integer
     let id = bb.set(&path(&["player", "level"]), Value::I32(10)).unwrap();
@@ -585,8 +585,8 @@ fn test_type_compatibility_impl(bb_type: BlackboardType) {
 
 test_both_blackboards!(test_type_compatibility, test_type_compatibility_impl);
 
-fn test_incompatible_type_impl(bb_type: BlackboardType) {
-    let mut bb = BlackboardRef::new(bb_type, "root");
+fn test_incompatible_type_impl(bb_type: AroraMemSpaceType) {
+    let mut bb = AroraMemSpace::new(bb_type, "root");
 
     // Set initial value as integer
     bb.set(&path(&["player", "score"]), Value::I32(100))
@@ -603,13 +603,13 @@ fn test_incompatible_type_impl(bb_type: BlackboardType) {
 #[test]
 #[should_panic(expected = "Incompatible value type for existing item")]
 fn test_incompatible_type() {
-    test_incompatible_type_impl(BlackboardType::Arc);
+    test_incompatible_type_impl(AroraMemSpaceType::Arc);
 }
 
 #[test]
 #[should_panic(expected = "Incompatible value type for existing item")]
 fn test_incompatible_type_arora() {
-    test_incompatible_type_impl(BlackboardType::Rc);
+    test_incompatible_type_impl(AroraMemSpaceType::Rc);
 }
 
 #[test]
