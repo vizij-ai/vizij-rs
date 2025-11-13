@@ -16,13 +16,9 @@ use arora_schema::{
 use uuid::Uuid;
 
 use crate::{
-    adt,
-    general_bb::{
-        split_path,
-        traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, CheckPathResult},
-        ABBItemNode,
-    },
-    ArcAroraBlackboard,
+    adt, split_path,
+    traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, CheckPathResult},
+    ABBItemNode, ArcAroraBlackboard,
 };
 
 use super::{ArcABBNode, ArcABBPathNode};

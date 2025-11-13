@@ -10,3 +10,5 @@ pub mod simple_blackboard;
 pub use arc_arora_blackboard::ArcAroraBlackboard;
 pub use arora_blackboard::AroraBlackboard;
 pub use blackboard_ref::{BlackboardRef, BlackboardType};
+
+pub use general_bb::{split_path, traits, ABBItemNode};

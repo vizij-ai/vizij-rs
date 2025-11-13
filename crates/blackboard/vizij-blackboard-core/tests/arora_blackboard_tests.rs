@@ -6,7 +6,7 @@ use uuid::Uuid;
 use vizij_blackboard_core::{
     arc_abb::{ArcABBNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait},
     blackboard_ref::{BlackboardInterface, BlackboardRef, BlackboardType},
-    general_bb::traits::BBNodeTrait,
+    traits::BBNodeTrait,
     ArcAroraBlackboard,
 };
 

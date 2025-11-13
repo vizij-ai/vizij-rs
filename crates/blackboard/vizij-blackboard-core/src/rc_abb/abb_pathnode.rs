@@ -11,7 +11,7 @@ use std::rc::{Rc, Weak};
 use uuid::Uuid;
 
 use super::{ABBNode, ABBPathNodeTrait, NamespacedSetterTrait};
-use crate::general_bb::traits::{
+use crate::traits::{
     BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, TreeFormattable,
 };
 use crate::AroraBlackboard;

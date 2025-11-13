@@ -23,7 +23,7 @@ use std::{
 use uuid::Uuid;
 
 use super::arc_abb::{ArcABBNode, ArcABBPathNode};
-use crate::general_bb::{
+use crate::{
     traits::{
         BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, JsonSerializable,
         TreeFormattable,

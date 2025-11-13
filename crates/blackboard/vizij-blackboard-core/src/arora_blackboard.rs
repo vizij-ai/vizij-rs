@@ -24,7 +24,7 @@ use std::{
 use uuid::Uuid;
 
 use super::rc_abb::{ABBNode, ABBPathNode};
-use crate::general_bb::{
+use crate::{
     traits::{
         BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, JsonSerializable,
         TreeFormattable,

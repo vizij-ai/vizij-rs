@@ -1,11 +1,11 @@
 #![allow(unused_must_use)]
 
 use crate::arc_abb::{ArcABBNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait};
-use crate::general_bb::traits::{
-    BBNodeTrait, BlackboardTrait, ItemsFormattable, JsonSerializable, TreeFormattable,
-};
 use crate::rc_abb::{ABBNode, ABBPathNodeTrait, NamespacedSetterTrait};
 use crate::simple_blackboard::{ItemHolder, SimpleBlackboard};
+use crate::traits::{
+    BBNodeTrait, BlackboardTrait, ItemsFormattable, JsonSerializable, TreeFormattable,
+};
 use crate::ArcAroraBlackboard;
 use crate::AroraBlackboard;
 

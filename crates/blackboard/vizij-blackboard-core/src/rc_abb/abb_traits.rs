@@ -16,12 +16,9 @@ use uuid::Uuid;
 
 use crate::adt;
 use crate::{
-    general_bb::{
-        split_path,
-        traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, CheckPathResult},
-        ABBItemNode,
-    },
-    AroraBlackboard,
+    split_path,
+    traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, CheckPathResult},
+    ABBItemNode, AroraBlackboard,
 };
 
 use super::{ABBNode, ABBPathNode};
