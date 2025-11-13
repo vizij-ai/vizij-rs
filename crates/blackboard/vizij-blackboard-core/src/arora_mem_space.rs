@@ -58,7 +58,6 @@ pub trait AroraMemSpaceInterface {
     fn set_by_id(&mut self, id: &Uuid, value: Value) -> Result<Uuid, String>;
     fn lookup<S: ToString + ?Sized>(&self, path: &S) -> Option<Value>;
     fn lookup_by_id(&self, id: &Uuid) -> Option<Value>;
-    fn lookup_kv_by_id(&self, id: &Uuid) -> Result<Option<KeyValue>, String>;
     fn to_json(&self) -> Result<JsonValue, String>;
 }
 
@@ -95,6 +94,33 @@ impl AroraMemSpace {
 
     fn debug_message(&self, message: &str) {
         println!("AMS Debug: {}", message);
+    }
+
+    fn _lookup_kv_by_id(&self, id: &Uuid) -> Result<Option<KeyValue>, String> {
+        let res = match self.ams_type {
+            AroraMemSpaceType::Rc => {
+                if let Some(bb) = &self.arora_bb {
+                    bb.borrow().get_keyvalue_by_id(id)
+                } else {
+                    Err("RcBlackboard is not initialized".to_string())
+                }
+            }
+            AroraMemSpaceType::Arc => {
+                if let Some(bb) = &self.arc_arora_bb {
+                    bb.get_keyvalue_by_id(id)
+                } else {
+                    Err("ArcBlackboard is not initialized".to_string())
+                }
+            }
+        };
+        match res {
+            Ok(node) => Ok(node),
+            Err(e) => {
+                let error_msg = format!("Failed to get node by ID from blackboard: {}", e);
+                self.debug_message(&error_msg);
+                Err(error_msg)
+            }
+        }
     }
 }
 
@@ -182,7 +208,7 @@ impl AroraMemSpaceInterface for AroraMemSpace {
                                     // Drop borrows before calling lookup_kv_by_id to avoid double-borrow
                                     drop(some_item);
                                     drop(item);
-                                    match self.lookup_kv_by_id(&path_id) {
+                                    match self._lookup_kv_by_id(&path_id) {
                                         Ok(opt) => Ok(opt.map(Value::KeyValue)),
                                         Err(e) => Err(format!(
                                             "Failed to get KeyValue for path '{}': {}",
@@ -230,7 +256,7 @@ impl AroraMemSpaceInterface for AroraMemSpace {
                                     let path_id =
                                         guard.get_id_copy().expect("Path ID should exist");
                                     drop(guard); // Explicitly unlock the MutexGuard before further operations
-                                    match self.lookup_kv_by_id(&path_id) {
+                                    match self._lookup_kv_by_id(&path_id) {
                                         Ok(opt) => Ok(opt.map(Value::KeyValue)),
                                         Err(e) => Err(format!(
                                             "Failed to get KeyValue for path '{}': {}",
@@ -273,33 +299,6 @@ impl AroraMemSpaceInterface for AroraMemSpace {
                 let error_msg = format!("Failed to lookup from blackboard: {}", e);
                 self.debug_message(&error_msg);
                 None
-            }
-        }
-    }
-
-    fn lookup_kv_by_id(&self, id: &Uuid) -> Result<Option<KeyValue>, String> {
-        let res = match self.ams_type {
-            AroraMemSpaceType::Rc => {
-                if let Some(bb) = &self.arora_bb {
-                    bb.borrow().get_keyvalue_by_id(id)
-                } else {
-                    Err("RcBlackboard is not initialized".to_string())
-                }
-            }
-            AroraMemSpaceType::Arc => {
-                if let Some(bb) = &self.arc_arora_bb {
-                    bb.get_keyvalue_by_id(id)
-                } else {
-                    Err("ArcBlackboard is not initialized".to_string())
-                }
-            }
-        };
-        match res {
-            Ok(node) => Ok(node),
-            Err(e) => {
-                let error_msg = format!("Failed to get node by ID from blackboard: {}", e);
-                self.debug_message(&error_msg);
-                Err(error_msg)
             }
         }
     }
@@ -591,12 +590,6 @@ impl AroraMemSpaceInterface for Arc<Mutex<AroraMemSpace>> {
             .map_err(|_| "Failed to lock the blackboard")
             .ok()
             .and_then(|bb| bb.lookup_by_id(id))
-    }
-
-    fn lookup_kv_by_id(&self, id: &Uuid) -> Result<Option<KeyValue>, String> {
-        self.lock()
-            .map_err(|_| "Failed to lock the blackboard")?
-            .lookup_kv_by_id(id)
     }
 
     fn to_json(&self) -> Result<JsonValue, String> {
