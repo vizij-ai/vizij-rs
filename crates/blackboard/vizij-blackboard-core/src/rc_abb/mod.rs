@@ -2,9 +2,9 @@ pub mod abb_node;
 pub mod abb_pathnode;
 pub mod abb_traits;
 
-pub use crate::abb::abb_node::ABBNode;
-pub use crate::abb::abb_pathnode::ABBPathNode;
-pub use crate::abb::abb_traits::{ABBPathNodeTrait, NamespacedSetterTrait};
+pub use crate::rc_abb::abb_node::ABBNode;
+pub use crate::rc_abb::abb_pathnode::ABBPathNode;
+pub use crate::rc_abb::abb_traits::{ABBPathNodeTrait, NamespacedSetterTrait};
 //pub use crate::arc_bb::blackboard_ref::{
 //    BlackboardInterface, BlackboardNodeAccess, BlackboardRef, BlackboardType,
 //};

@@ -23,7 +23,7 @@ use std::{
 };
 use uuid::Uuid;
 
-use super::abb::{ABBNode, ABBPathNode};
+use super::rc_abb::{ABBNode, ABBPathNode};
 use crate::general_bb::{
     traits::{
         BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, JsonSerializable,
@@ -33,8 +33,8 @@ use crate::general_bb::{
 };
 
 use super::{
-    abb::{ABBPathNodeTrait, NamespacedSetterTrait},
     adt,
+    rc_abb::{ABBPathNodeTrait, NamespacedSetterTrait},
 };
 
 /// A struct representing the blackboard, which contains a collection of nodes indexed by their IDs.
