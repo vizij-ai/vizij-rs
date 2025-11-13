@@ -5,10 +5,10 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 use vizij_blackboard_core::PATH_SEPARATOR;
 use vizij_blackboard_core::{
-    arc_abb::{ArcABBNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait},
+    arc_abb::{ArcBBNode, ArcBBPathNodeTrait, ArcNamespacedSetterTrait},
     blackboard_ref::{BlackboardInterface, BlackboardRef, BlackboardType},
     traits::BBNodeTrait,
-    ArcAroraBlackboard,
+    ArcBlackboard,
 };
 
 /// Helper function to join path segments using PATH_SEPARATOR
@@ -23,18 +23,18 @@ fn path(segments: &[&str]) -> String {
     segments.join(&PATH_SEPARATOR.to_string())
 }
 
-// Macro to generate tests for both ArcAroraBlackboard and AroraBlackboard
+// Macro to generate tests for both ArcBlackboard and RcBlackboard
 macro_rules! test_both_blackboards {
     ($test_name:ident, $test_impl:ident) => {
         #[test]
         fn $test_name() {
-            $test_impl(BlackboardType::ArcArora);
+            $test_impl(BlackboardType::Arc);
         }
 
         paste::paste! {
             #[test]
             fn [<$test_name _arora>]() {
-                $test_impl(BlackboardType::Arora);
+                $test_impl(BlackboardType::Rc);
             }
         }
     };
@@ -98,12 +98,12 @@ fn contains_ref<S: ToString + ?Sized>(bb: &BlackboardRef, path: &S) -> bool {
 }
 
 fn unwrap_node_result(
-    node: Result<Option<Arc<Mutex<ArcABBNode>>>, String>,
-) -> Option<Arc<Mutex<ArcABBNode>>> {
+    node: Result<Option<Arc<Mutex<ArcBBNode>>>, String>,
+) -> Option<Arc<Mutex<ArcBBNode>>> {
     node.unwrap_or_default()
 }
 
-fn assert_node_exists(node: Result<Option<Arc<Mutex<ArcABBNode>>>, String>) {
+fn assert_node_exists(node: Result<Option<Arc<Mutex<ArcBBNode>>>, String>) {
     assert!(node.is_ok(), "Node result should be Ok");
     let unwrapped = node.unwrap();
     assert!(unwrapped.is_some(), "Node should be Some");
@@ -334,13 +334,13 @@ fn test_empty_name_impl(bb_type: BlackboardType) {
 #[test]
 #[should_panic(expected = "Path cannot be empty when setting an item to the blackboard")]
 fn test_empty_name() {
-    test_empty_name_impl(BlackboardType::ArcArora);
+    test_empty_name_impl(BlackboardType::Arc);
 }
 
 #[test]
 #[should_panic(expected = "Path cannot be empty when setting an item to the blackboard")]
 fn test_empty_name_arora() {
-    test_empty_name_impl(BlackboardType::Arora);
+    test_empty_name_impl(BlackboardType::Rc);
 }
 
 fn test_namespace_node_impl(bb_type: BlackboardType) {
@@ -397,7 +397,7 @@ fn test_remove_item() {
     // 3. Attempting to remove a non-existent item
 
     // For now, this is a placeholder to highlight that remove functionality
-    // should be implemented in ArcAroraBlackboard
+    // should be implemented in ArcBlackboard
 }
 
 fn test_path_conflict_impl(bb_type: BlackboardType) {
@@ -432,7 +432,7 @@ test_both_blackboards!(test_path_conflict, test_path_conflict_impl);
 
 #[test]
 fn test_keyvalue_structure() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
+    let mut bb = ArcBlackboard::new("root".to_string());
 
     let player_name = "player".to_string();
     let health_name = "health".to_string();
@@ -603,18 +603,18 @@ fn test_incompatible_type_impl(bb_type: BlackboardType) {
 #[test]
 #[should_panic(expected = "Incompatible value type for existing item")]
 fn test_incompatible_type() {
-    test_incompatible_type_impl(BlackboardType::ArcArora);
+    test_incompatible_type_impl(BlackboardType::Arc);
 }
 
 #[test]
 #[should_panic(expected = "Incompatible value type for existing item")]
 fn test_incompatible_type_arora() {
-    test_incompatible_type_impl(BlackboardType::Arora);
+    test_incompatible_type_impl(BlackboardType::Rc);
 }
 
 #[test]
 fn test_get_using_node_trait() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
+    let mut bb = ArcBlackboard::new("root".to_string());
 
     // Set up a multi-level structure
     bb.set(
@@ -632,7 +632,7 @@ fn test_get_using_node_trait() {
     let world_node = bb.get(&path(&["game", "world"]));
     assert_node_exists(world_node.clone());
 
-    // Use the ABBNodeTrait methods to navigate
+    // Use the BBNodeTrait methods to navigate
     let world_node_unwrapped = unwrap_node_result(world_node).expect("World node should exist");
     let player_node = world_node_unwrapped.get(&"player");
     assert_node_exists(player_node.clone());
@@ -659,7 +659,7 @@ fn test_get_using_node_trait() {
 
 #[test]
 fn test_get_complex_path_using_node_trait() {
-    let mut bb = ArcAroraBlackboard::new("root".to_string());
+    let mut bb = ArcBlackboard::new("root".to_string());
 
     let excalibur = Value::String("Excalibur".to_string());
     // Set up a complex structure
@@ -685,7 +685,7 @@ fn test_get_complex_path_using_node_trait() {
     assert_node_exists(game_node.clone());
     let game_node_unwrapped = unwrap_node_result(game_node).expect("Game node should exist");
 
-    // Use the ABBNodeTrait methods to navigate
+    // Use the BBNodeTrait methods to navigate
     let world_node_from_game = game_node_unwrapped.get(&"world");
     assert_node_exists(world_node_from_game.clone());
     let world_node_from_game_unwrapped =

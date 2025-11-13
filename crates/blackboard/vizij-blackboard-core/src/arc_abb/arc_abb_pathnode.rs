@@ -10,8 +10,8 @@ use arora_schema::gen_bb_uuid;
 use arora_schema::value::Value;
 use uuid::Uuid;
 
-use super::ArcAroraBlackboard;
-use super::{ArcABBNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait};
+use super::ArcBlackboard;
+use super::{ArcBBNode, ArcBBPathNodeTrait, ArcNamespacedSetterTrait};
 use crate::traits::{
     BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, TreeFormattable,
 };
@@ -22,7 +22,7 @@ use crate::traits::{
 /// Each path node maintains a mapping from names to node IDs, allowing for easy navigation
 /// of the hierarchy.
 #[derive(Debug, Clone)]
-pub struct ArcABBPathNode {
+pub struct ArcBBPathNode {
     /// A map of node names to their corresponding node IDs
     names: HashMap<String, Uuid>, // Component name -> Node ID in names
     /// The name of the current path node
@@ -31,7 +31,7 @@ pub struct ArcABBPathNode {
     id: Uuid,
     /// Thread-safe reference to the blackboard to allow for dynamic updates directly through the path node.
     /// This is a weak reference to avoid circular dependencies.
-    bb: Option<Weak<Mutex<ArcAroraBlackboard>>>,
+    bb: Option<Weak<Mutex<ArcBlackboard>>>,
 
     /// Flag indicating whether this is the root path node
     is_root: bool,
@@ -40,8 +40,8 @@ pub struct ArcABBPathNode {
     full_path: String, // Full path for this node
 }
 
-impl ArcABBPathNode {
-    /// Creates a new ABBPathNode with a full path.
+impl ArcBBPathNode {
+    /// Creates a new BBPathNode with a full path.
     ///
     /// This constructor allows for creating a path node with an optional full path.
     /// # Arguments
@@ -50,12 +50,12 @@ impl ArcABBPathNode {
     /// * `bb` - A thread-safe reference to the blackboard
     /// * `full_path` - An optional full path for the node
     /// # Returns
-    /// A new `ABBPathNode` instance with the provided name, ID, and blackboard reference.
+    /// A new `BBPathNode` instance with the provided name, ID, and blackboard reference.
     /// If `full_path` is `None`, it will be set to `None`.
     pub fn new_with_full_path_and_graph_node(
         name: String,
         id: Uuid,
-        bb: Arc<Mutex<ArcAroraBlackboard>>,
+        bb: Arc<Mutex<ArcBlackboard>>,
         full_path: &str,
         graph_node_id: Option<Uuid>,
     ) -> Self {
@@ -73,7 +73,7 @@ impl ArcABBPathNode {
     pub fn new_with_full_path(
         name: String,
         id: Uuid,
-        bb: Arc<Mutex<ArcAroraBlackboard>>,
+        bb: Arc<Mutex<ArcBlackboard>>,
         full_path: &str,
     ) -> Self {
         Self::new_with_full_path_and_graph_node(
@@ -81,11 +81,11 @@ impl ArcABBPathNode {
         )
     }
 
-    /*pub fn new(name: String, id: String, bb: Arc<Mutex<ArcAroraBlackboard>>) -> Self {
+    /*pub fn new(name: String, id: String, bb: Arc<Mutex<ArcBlackboard>>) -> Self {
         Self::new_with_full_path(name, id, bb, &String::new())
     }*/
 
-    /// Creates a new root ABBPathNode.
+    /// Creates a new root BBPathNode.
     ///
     /// A root path node is special because it represents the base of the hierarchy
     /// and initially has no reference to a blackboard.
@@ -94,7 +94,7 @@ impl ArcABBPathNode {
     /// * `name` - The name of the root path node
     ///
     /// # Returns
-    /// A new `ABBPathNode` instance configured as a root node
+    /// A new `BBPathNode` instance configured as a root node
     pub fn create_root(name: &str) -> Self {
         let fullpath = name.to_owned();
         Self {
@@ -117,7 +117,7 @@ impl ArcABBPathNode {
     ///
     /// # Panics
     /// Panics if called on a non-root path node
-    pub fn set_bb(&mut self, bb: Weak<Mutex<ArcAroraBlackboard>>) {
+    pub fn set_bb(&mut self, bb: Weak<Mutex<ArcBlackboard>>) {
         if !self.is_root {
             panic!("Can only set bb for root node");
         }
@@ -133,10 +133,10 @@ impl ArcABBPathNode {
     }
 }
 
-/// Implementation of `ABBNodeTrait` for `ABBPathNode`.
+/// Implementation of `BBNodeTrait` for `BBPathNode`.
 ///
 /// This trait provides methods to access the name and ID of the path node,
-impl BBNodeTrait for ArcABBPathNode {
+impl BBNodeTrait for ArcBBPathNode {
     /// Returns a reference to the ID of this path node.
     ///
     /// # Returns
@@ -148,7 +148,7 @@ impl BBNodeTrait for ArcABBPathNode {
     /// Determines if this node is a path node.
     ///
     /// # Returns
-    /// A `Result` containing `true` for `ABBPathNode`
+    /// A `Result` containing `true` for `BBPathNode`
     fn is_path(&self) -> Result<bool, String> {
         Ok(true)
     }
@@ -178,10 +178,10 @@ impl BBNodeTrait for ArcABBPathNode {
     }
 }
 
-/// Implementation of `ABBPathNodeTrait` for `ABBPathNode`.
+/// Implementation of `BBPathNodeTrait` for `BBPathNode`.
 ///
 /// This trait provides methods to manage name-to-ID mappings and retrieve nodes by ID.
-impl BBPathNodeTrait for ArcABBPathNode {
+impl BBPathNodeTrait for ArcBBPathNode {
     /// Checks if the given name exists in this path node.
     ///
     /// # Arguments
@@ -230,14 +230,14 @@ impl BBPathNodeTrait for ArcABBPathNode {
         show_ids: bool,
         output: &mut String,
     ) {
-        ArcABBPathNodeTrait::_format_tree_recursively(self, name, id, depth, show_ids, output);
+        ArcBBPathNodeTrait::_format_tree_recursively(self, name, id, depth, show_ids, output);
     }
 }
 
-/// Implementation of `ABBPathNodeTrait` for `ABBPathNode`.
+/// Implementation of `BBPathNodeTrait` for `BBPathNode`.
 ///
 /// This trait provides methods to manage name-to-ID mappings and retrieve nodes by ID.
-impl ArcABBPathNodeTrait for ArcABBPathNode {
+impl ArcBBPathNodeTrait for ArcBBPathNode {
     /// Retrieves a node by its ID from the blackboard.
     ///
     /// This method delegates to the blackboard for the actual lookup using the hashed ID.
@@ -247,14 +247,14 @@ impl ArcABBPathNodeTrait for ArcABBPathNode {
     /// * `id` - The ID of the node to retrieve
     ///
     /// # Returns
-    /// A `Result` containing an `Option<Arc<Mutex<ABBNode>>>` with the node if found, or `None` if not found
+    /// A `Result` containing an `Option<Arc<Mutex<BBNode>>>` with the node if found, or `None` if not found
     ///
     /// # Errors
     /// Returns an error if:
     /// - No blackboard reference is available
     /// - The blackboard no longer exists
     /// - Failed to lock the blackboard mutex
-    fn get_node_by_id(&self, id: &Uuid) -> Result<Option<Arc<Mutex<ArcABBNode>>>, String> {
+    fn get_node_by_id(&self, id: &Uuid) -> Result<Option<Arc<Mutex<ArcBBNode>>>, String> {
         if let Some(ref bb) = self.bb {
             if let Some(arc_bb) = bb.upgrade() {
                 let ret_node = if let Ok(guard) = arc_bb.lock() {
@@ -272,10 +272,10 @@ impl ArcABBPathNodeTrait for ArcABBPathNode {
     }
 }
 
-/// Implementation of `AroraBlackboardTrait` for `ABBPathNode`.
+/// Implementation of `RcBlackboardTrait` for `BBPathNode`.
 ///
 /// This trait provides methods to interact with the blackboard, such as printing items and setting values.
-impl BlackboardTrait for ArcABBPathNode {
+impl BlackboardTrait for ArcBBPathNode {
     /// Sets an item into the blackboard with the given value, ID, and optional name.
     ///
     /// This method delegates to the blackboard reference.
@@ -316,20 +316,20 @@ impl BlackboardTrait for ArcABBPathNode {
     }
 }
 
-/// Implementation of `NamespacedSetterTrait` for `ABBPathNode`.
+/// Implementation of `NamespacedSetterTrait` for `BBPathNode`.
 ///
 /// This trait provides methods to access the blackboard reference for setting values.
-impl ArcNamespacedSetterTrait for ArcABBPathNode {
+impl ArcNamespacedSetterTrait for ArcBBPathNode {
     /// Returns a reference to the blackboard.
     ///
     /// # Returns
-    /// A `Result<Arc<Mutex<ArcAroraBlackboard>>, String>` containing the reference to the blackboard or an error
+    /// A `Result<Arc<Mutex<ArcBlackboard>>, String>` containing the reference to the blackboard or an error
     ///
     /// # Errors
     /// Returns an error if:
     /// - No blackboard reference is available
     /// - The blackboard no longer exists
-    fn get_blackboard(&self) -> Result<Arc<Mutex<ArcAroraBlackboard>>, String> {
+    fn get_blackboard(&self) -> Result<Arc<Mutex<ArcBlackboard>>, String> {
         if let Some(ref bb) = self.bb {
             if let Some(arc_bb) = bb.upgrade() {
                 Ok(arc_bb)
@@ -342,10 +342,10 @@ impl ArcNamespacedSetterTrait for ArcABBPathNode {
     }
 }
 
-/// Implementation of `Display` trait for `ArcABBPathNode`.
+/// Implementation of `Display` trait for `ArcBBPathNode`.
 ///
 /// This provides a formatted string representation of the path node and its contents.
-impl Display for ArcABBPathNode {
+impl Display for ArcBBPathNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -355,8 +355,8 @@ impl Display for ArcABBPathNode {
     }
 }
 
-/// Implementation of `TreeFormattable` trait for `ArcABBPathNode`.
-impl TreeFormattable for ArcABBPathNode {
+/// Implementation of `TreeFormattable` trait for `ArcBBPathNode`.
+impl TreeFormattable for ArcBBPathNode {
     fn format_tree(&self, show_ids: bool) -> String {
         let mut output = String::new();
         let name = self.get_current_name_copy();
@@ -369,7 +369,7 @@ impl TreeFormattable for ArcABBPathNode {
             return format!("Error getting names: {}", e);
         }
         for (name, ref_id) in names.unwrap() {
-            ArcABBPathNodeTrait::_format_tree_recursively(
+            ArcBBPathNodeTrait::_format_tree_recursively(
                 self,
                 &name,
                 &ref_id,
@@ -382,8 +382,8 @@ impl TreeFormattable for ArcABBPathNode {
     }
 }
 
-/// Implementation of `ItemsFormattable` trait for `ArcABBPathNode`.
-impl ItemsFormattable for ArcABBPathNode {
+/// Implementation of `ItemsFormattable` trait for `ArcBBPathNode`.
+impl ItemsFormattable for ArcBBPathNode {
     fn format_items(&self, show_ids: bool) -> String {
         if let Some(ref bb) = self.bb {
             if let Some(arc_bb) = bb.upgrade() {

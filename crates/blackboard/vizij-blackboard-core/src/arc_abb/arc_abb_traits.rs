@@ -18,24 +18,24 @@ use uuid::Uuid;
 use crate::{
     adt, split_path,
     traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, CheckPathResult},
-    ABBItemNode, PATH_SEPARATOR,
+    BBItemNode, PATH_SEPARATOR,
 };
 
-use super::{ArcABBNode, ArcABBPathNode, ArcAroraBlackboard};
+use super::{ArcBBNode, ArcBBPathNode, ArcBlackboard};
 
 /// This is the main trait for objects that can be used as paths in the blackboard.
 ///
 /// It provides methods to insert, retrieve, and check items in the path,
 /// as well as utility methods for navigating the hierarchy.
-pub trait ArcABBPathNodeTrait: BBPathNodeTrait {
+pub trait ArcBBPathNodeTrait: BBPathNodeTrait {
     /// Retrieve a node by its ID from the blackboard.
     ///
     /// # Arguments
     /// * `id` - The ID of the node to retrieve
     ///
     /// # Returns
-    /// A `Result<Option<Arc<Mutex<ABBNode>>>, String>` containing the node if found, or an error message
-    fn get_node_by_id(&self, id: &Uuid) -> Result<Option<Arc<Mutex<ArcABBNode>>>, String>;
+    /// A `Result<Option<Arc<Mutex<BBNode>>>, String>` containing the node if found, or an error message
+    fn get_node_by_id(&self, id: &Uuid) -> Result<Option<Arc<Mutex<ArcBBNode>>>, String>;
 
     /// Helper to allow passing a full String namespace path (dot.separated) directly.
     ///
@@ -43,11 +43,8 @@ pub trait ArcABBPathNodeTrait: BBPathNodeTrait {
     /// * `path` - The path as a dot-separated string
     ///
     /// # Returns
-    /// A `Result<Option<Arc<Mutex<ABBNode>>>, String>` containing the node if found, or an error message
-    fn get<S: ToString + ?Sized>(
-        &self,
-        path: &S,
-    ) -> Result<Option<Arc<Mutex<ArcABBNode>>>, String> {
+    /// A `Result<Option<Arc<Mutex<BBNode>>>, String>` containing the node if found, or an error message
+    fn get<S: ToString + ?Sized>(&self, path: &S) -> Result<Option<Arc<Mutex<ArcBBNode>>>, String> {
         let names = split_path(&path.to_string());
         self.get_by_names(names)
     }
@@ -57,11 +54,11 @@ pub trait ArcABBPathNodeTrait: BBPathNodeTrait {
         if let Ok(Some(node_arc)) = self.get(path) {
             if let Ok(node_guard) = node_arc.lock() {
                 match &*node_guard {
-                    ArcABBNode::Path(path_node) => {
+                    ArcBBNode::Path(path_node) => {
                         // Return the ID of the path node
                         return path_node.get_id_copy().map(Some);
                     }
-                    ArcABBNode::Item(item_node) => {
+                    ArcBBNode::Item(item_node) => {
                         // The node is an Item node, return its ID
                         return item_node.get_id_ref().map(|id_ref| Some(*id_ref));
                     }
@@ -77,7 +74,7 @@ pub trait ArcABBPathNodeTrait: BBPathNodeTrait {
     fn get_value<S: ToString + ?Sized>(&self, path: &S) -> Result<Option<Value>, String> {
         if let Ok(Some(node_arc)) = self.get(path) {
             if let Ok(node_guard) = node_arc.lock() {
-                if let ArcABBNode::Item(item_node) = &*node_guard {
+                if let ArcBBNode::Item(item_node) = &*node_guard {
                     // Return the value of the item node
                     return Ok(item_node.get_value().cloned());
                 } else {
@@ -105,7 +102,7 @@ pub trait ArcABBPathNodeTrait: BBPathNodeTrait {
             if let Ok(node_guard) = node_arc.lock() {
                 // Now we can match on the dereferenced guard
                 match &*node_guard {
-                    ArcABBNode::Path(path) => {
+                    ArcBBNode::Path(path) => {
                         match path.get_full_path() {
                             Err(e) => output.push_str(&format!(
                                 "{}Failed to get full path for '{}': {}\n",
@@ -150,7 +147,7 @@ pub trait ArcABBPathNodeTrait: BBPathNodeTrait {
                             )),
                             Ok(child_map) => {
                                 for (child_name, ref_id) in child_map {
-                                    ArcABBPathNodeTrait::_format_tree_recursively(
+                                    ArcBBPathNodeTrait::_format_tree_recursively(
                                         self,
                                         &child_name,
                                         &ref_id,
@@ -162,7 +159,7 @@ pub trait ArcABBPathNodeTrait: BBPathNodeTrait {
                             }
                         }
                     }
-                    ArcABBNode::Item(item) => match item.get_current_name_copy() {
+                    ArcBBNode::Item(item) => match item.get_current_name_copy() {
                         Err(e) => output.push_str(&format!(
                             "{}Failed to get name for item '{}': {}\n",
                             " ".repeat(depth * 2),
@@ -251,7 +248,7 @@ pub trait ArcABBPathNodeTrait: BBPathNodeTrait {
 
     /// Get the node referenced by the given path parts, by traversing the namespace tree
     /// This is the main getter function used to retrieve nodes by path
-    fn get_by_names(&self, names: Vec<String>) -> Result<Option<Arc<Mutex<ArcABBNode>>>, String> {
+    fn get_by_names(&self, names: Vec<String>) -> Result<Option<Arc<Mutex<ArcBBNode>>>, String> {
         if names.len() == 1 {
             // quick path in case we only have one name
             let name = &names[0];
@@ -271,7 +268,7 @@ pub trait ArcABBPathNodeTrait: BBPathNodeTrait {
                 // Check in current node
                 if let Ok(Some(node_arc)) = self.get_node_by_id(path_id) {
                     if let Ok(node_guard) = node_arc.lock() {
-                        if let ArcABBNode::Path(path) = &*node_guard {
+                        if let ArcBBNode::Path(path) = &*node_guard {
                             path.get_name_id(name_part)?
                         } else {
                             // Current node is not a path node, but may be a KeyValue node
@@ -338,7 +335,7 @@ pub trait ArcABBPathNodeTrait: BBPathNodeTrait {
 
     fn get_keyvalue_from_node_arc(
         &self,
-        node_arc: Arc<Mutex<ArcABBNode>>,
+        node_arc: Arc<Mutex<ArcBBNode>>,
     ) -> Result<Option<KeyValue>, String> {
         let id: Uuid = node_arc.get_id_copy()?;
         let is_path = node_arc.is_path()?;
@@ -439,7 +436,7 @@ pub trait ArcABBPathNodeTrait: BBPathNodeTrait {
 ///
 /// This trait is used to set items in the blackboard, either in the root or in a path node.
 /// It provides methods for navigating the namespace hierarchy and setting values at specific paths.
-pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
+pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
     /// Get a reference to the blackboard.
     ///
     /// Because this trait can be implemented by both the blackboard and path nodes,
@@ -447,8 +444,8 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
     /// This will return a pointer to the BB used by the system, whether we're in the root or in a path node.
     ///
     /// # Returns
-    /// A `Result<Arc<Mutex<ArcAroraBlackboard>>, String>` containing a reference to the blackboard, or an error message
-    fn get_blackboard(&self) -> Result<Arc<Mutex<ArcAroraBlackboard>>, String>;
+    /// A `Result<Arc<Mutex<ArcBlackboard>>, String>` containing a reference to the blackboard, or an error message
+    fn get_blackboard(&self) -> Result<Arc<Mutex<ArcBlackboard>>, String>;
 
     /// Check if the given namespace path exists and return its type.
     ///
@@ -480,7 +477,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
                             // Create a separate scope for the lock so it's released immediately after use
                             let name_id = {
                                 if let Ok(node_guard) = node_arc.lock() {
-                                    if let ArcABBNode::Path(path) = &*node_guard {
+                                    if let ArcBBNode::Path(path) = &*node_guard {
                                         path.get_name_id(name_part)?
                                     } else {
                                         None
@@ -510,11 +507,11 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
                             let node_type = {
                                 if let Ok(node_guard) = node_arc.lock() {
                                     match &*node_guard {
-                                        ArcABBNode::Item(item_node) => {
+                                        ArcBBNode::Item(item_node) => {
                                             let item_id = item_node.get_id_copy()?;
                                             Some(CheckPathResult::IsItem(item_id))
                                         }
-                                        ArcABBNode::Path(path_node) => {
+                                        ArcBBNode::Path(path_node) => {
                                             let path_id = path_node.get_id_copy()?;
                                             Some(CheckPathResult::IsPath(path_id))
                                         }
@@ -649,7 +646,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
                 let existing_node = existing_path_arc
                     .lock()
                     .map_err(|_| "Failed to lock existing node mutex")?;
-                if let ArcABBNode::Path(existing_path) = &*existing_node {
+                if let ArcBBNode::Path(existing_path) = &*existing_node {
                     existing_path.get_name_id(field_name)?
                 } else {
                     return Err(format!(
@@ -681,13 +678,13 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
         *ret_id = if kv.id.is_nil() { gen_bb_uuid() } else { kv.id };
 
         let new_node_name = path_parts.last().unwrap().clone();
-        let new_path_node = ArcABBPathNode::new_with_full_path(
+        let new_path_node = ArcBBPathNode::new_with_full_path(
             new_node_name.clone(),
             *ret_id,
             self.get_blackboard()?,
             path,
         );
-        let new_path = ArcABBNode::Path(new_path_node);
+        let new_path = ArcBBNode::Path(new_path_node);
         let new_path_arc = Arc::new(Mutex::new(new_path));
 
         {
@@ -781,12 +778,12 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
                     let proceed =
                         if let Some(existing_node_arc) = self.get_node_by_id(&existing_ref_id)? {
                             if let Ok(existing_node_guard) = existing_node_arc.lock() {
-                                if let ArcABBNode::Path(_) = &*existing_node_guard {
+                                if let ArcBBNode::Path(_) = &*existing_node_guard {
                                     // ok it's a BBPath, we can continue - note we are not checking compatibility again at each level of the recursion
                                     true
                                 } else {
                                     return Err(format!(
-                                        "Existing node is not a ABBPathNode for {}",
+                                        "Existing node is not a BBPathNode for {}",
                                         existing_ref_id
                                     ));
                                 }
@@ -822,21 +819,21 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
                 } else {
                     // Field name does not exist, so create it as a new BBPath node and set the KeyValue structure into it
                     // Generate a unique ID for the new path node
-                    // Create new ABBPathNode
-                    let new_path = ArcABBPathNode::new_with_full_path(
+                    // Create new BBPathNode
+                    let new_path = ArcBBPathNode::new_with_full_path(
                         field_name.clone(),
                         src_field_id,
                         self.get_blackboard()?,
                         &format!("{}.{}", path, field_name),
                     );
-                    let new_node = ArcABBNode::Path(new_path);
+                    let new_node = ArcBBNode::Path(new_path);
 
                     {
                         if let Some(existing_path_arc) = self.get_node_by_id(&current_path_id)? {
                             let mut existing_node = existing_path_arc
                                 .lock()
                                 .map_err(|_| "Failed to lock existing node mutex")?;
-                            if let ArcABBNode::Path(ref mut existing_path_node) = *existing_node {
+                            if let ArcBBNode::Path(ref mut existing_path_node) = *existing_node {
                                 // Add the new path to the blackboard items and as a field in the existing path
                                 {
                                     let bb_ref = self.get_blackboard()?;
@@ -856,7 +853,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
                                 existing_path_node.insert(field_name.clone(), src_field_id)?;
                             } else {
                                 return Err(format!(
-                                    "Existing node is not a ABBPathNode for {}",
+                                    "Existing node is not a BBPathNode for {}",
                                     current_path_id
                                 ));
                             };
@@ -899,9 +896,9 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
                         let mut existing_path_node = existing_path_arc
                             .lock()
                             .map_err(|_| "Failed to lock existing node mutex")?;
-                        if let ArcABBNode::Path(ref mut existing_path) = *existing_path_node {
+                        if let ArcBBNode::Path(ref mut existing_path) = *existing_path_node {
                             // Create new Item node and store it in the blackboard items
-                            let new_item = ABBItemNode::from_value(
+                            let new_item = BBItemNode::from_value(
                                 field_name,
                                 value,
                                 src_field_id,
@@ -911,7 +908,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
                             .ok_or_else(|| {
                                 "Failed to create ABBItemNode: returned None".to_string()
                             })?;
-                            let new_node = ArcABBNode::Item(new_item);
+                            let new_node = ArcBBNode::Item(new_item);
                             {
                                 let bb_ref = self.get_blackboard()?;
                                 let mut bb = match bb_ref.lock() {
@@ -966,7 +963,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
                 if let Some(current_node_arc) = bb_guard.get_node_by_id(&current_node_id)? {
                     // navigating an existing node
                     if let Ok(mut current_node_guard) = current_node_arc.lock() {
-                        if let ArcABBNode::Path(ref mut current_path) = *current_node_guard {
+                        if let ArcBBNode::Path(ref mut current_path) = *current_node_guard {
                             // Get the next path node
                             current_node_id = if current_path.contains(part)? {
                                 // If the path already exists, get its ID
@@ -975,7 +972,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
                                 // Make sure it's a path node
                                 if let Some(node) = bb_guard.get_node_by_id(&node_id)? {
                                     if let Ok(node_guard) = node.lock() {
-                                        if let ArcABBNode::Item(_) = &*node_guard {
+                                        if let ArcBBNode::Item(_) = &*node_guard {
                                             return Err(format!("Path component '{}' in '{}' is an Item, expected a BBPath",
                                                 part, intermediate_path));
                                         }
@@ -988,13 +985,13 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
                                     *target_id
                                 } else {
                                     let new_id = gen_bb_uuid();
-                                    let new_path = ArcABBPathNode::new_with_full_path(
+                                    let new_path = ArcBBPathNode::new_with_full_path(
                                         part.clone(),
                                         new_id,
                                         bb.clone(),
                                         &intermediate_path,
                                     );
-                                    let new_node = ArcABBNode::Path(new_path);
+                                    let new_node = ArcBBNode::Path(new_path);
                                     bb_guard.insert_item_in_hash(
                                         new_id,
                                         Arc::new(Mutex::new(new_node)),
@@ -1038,7 +1035,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
             // Provided path ID exists, so check if it is a BBPath node
 
             if let Ok(node_guard) = node_arc.lock() {
-                if let ArcABBNode::Path(path) = &*node_guard {
+                if let ArcBBNode::Path(path) = &*node_guard {
                     // It's a path, check compatibility of the KeyValue structure with the existing path
                     for (field_name, field) in &kv.fields {
                         // Check if the field name already exists in the existing path
@@ -1058,7 +1055,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
                                         self.get_node_by_id(&existing_ref_id)?
                                     {
                                         if let Ok(existing_node_guard) = existing_node_arc.lock() {
-                                            if let ArcABBNode::Item(existing_item) =
+                                            if let ArcBBNode::Item(existing_item) =
                                                 &*existing_node_guard
                                             {
                                                 // Check if the value types are compatible

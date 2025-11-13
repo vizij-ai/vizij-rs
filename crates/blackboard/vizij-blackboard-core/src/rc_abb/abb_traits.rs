@@ -18,24 +18,24 @@ use crate::{adt, PATH_SEPARATOR};
 use crate::{
     split_path,
     traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, CheckPathResult},
-    ABBItemNode,
+    BBItemNode,
 };
 
-use super::{ABBNode, ABBPathNode, AroraBlackboard};
+use super::{RcBBNode, RcBBPathNode, RcBlackboard};
 
 /// This is the main trait for objects that can be used as paths in the blackboard.
 ///
 /// It provides methods to insert, retrieve, and check items in the path,
 /// as well as utility methods for navigating the hierarchy.
-pub trait ABBPathNodeTrait: BBPathNodeTrait {
+pub trait RcBBPathNodeTrait: BBPathNodeTrait {
     /// Retrieve a node by its ID from the blackboard.
     ///
     /// # Arguments
     /// * `id` - The ID of the node to retrieve
     ///
     /// # Returns
-    /// A `Result<Option<Rc<RefCell<ABBNode>>>, String>` containing the node if found, or an error message
-    fn get_node_by_id(&self, id: &Uuid) -> Result<Option<Rc<RefCell<ABBNode>>>, String>;
+    /// A `Result<Option<Rc<RefCell<BBNode>>>, String>` containing the node if found, or an error message
+    fn get_node_by_id(&self, id: &Uuid) -> Result<Option<Rc<RefCell<RcBBNode>>>, String>;
 
     /// Helper to allow passing a full String namespace path (dot.separated) directly.
     ///
@@ -43,8 +43,8 @@ pub trait ABBPathNodeTrait: BBPathNodeTrait {
     /// * `path` - The path as a dot-separated string
     ///
     /// # Returns
-    /// A `Result<Option<Rc<RefCell<ABBNode>>>, String>` containing the node if found, or an error message
-    fn get<S: ToString + ?Sized>(&self, path: &S) -> Result<Option<Rc<RefCell<ABBNode>>>, String> {
+    /// A `Result<Option<Rc<RefCell<BBNode>>>, String>` containing the node if found, or an error message
+    fn get<S: ToString + ?Sized>(&self, path: &S) -> Result<Option<Rc<RefCell<RcBBNode>>>, String> {
         let names = split_path(&path.to_string());
         self.get_by_names(names)
     }
@@ -53,11 +53,11 @@ pub trait ABBPathNodeTrait: BBPathNodeTrait {
     fn get_path_id<S: ToString + ?Sized>(&self, path: &S) -> Result<Option<Uuid>, String> {
         if let Some(node_ref) = self.get(path)? {
             match &*node_ref.borrow() {
-                ABBNode::Path(path_node) => {
+                RcBBNode::Path(path_node) => {
                     // Return the ID of the path node
                     return path_node.get_id_copy().map(Some);
                 }
-                ABBNode::Item(item_node) => {
+                RcBBNode::Item(item_node) => {
                     // The node is an Item node, return its ID
                     return item_node.get_id_ref().map(|id_ref| Some(*id_ref));
                 }
@@ -69,7 +69,7 @@ pub trait ABBPathNodeTrait: BBPathNodeTrait {
     /// Helper to return the value of an Item node directly by its path
     fn get_value<S: ToString + ?Sized>(&self, path: &S) -> Result<Option<Value>, String> {
         if let Some(node_ref) = self.get(path)? {
-            if let ABBNode::Item(item_node) = &*node_ref.borrow() {
+            if let RcBBNode::Item(item_node) = &*node_ref.borrow() {
                 // Return the value of the item node
                 return Ok(item_node.get_value().cloned());
             } else {
@@ -91,7 +91,7 @@ pub trait ABBPathNodeTrait: BBPathNodeTrait {
     ) {
         if let Some(node_ref) = self.get_node_by_id(id).unwrap() {
             match &*node_ref.borrow() {
-                ABBNode::Path(path) => {
+                RcBBNode::Path(path) => {
                     match path.get_full_path() {
                         Err(e) => output.push_str(&format!(
                             "{}Failed to get full path for '{}': {}\n",
@@ -148,7 +148,7 @@ pub trait ABBPathNodeTrait: BBPathNodeTrait {
                         }
                     }
                 }
-                ABBNode::Item(item) => match item.get_current_name_copy() {
+                RcBBNode::Item(item) => match item.get_current_name_copy() {
                     Err(e) => output.push_str(&format!(
                         "{}Failed to get name for item '{}': {}\n",
                         " ".repeat(depth * 2),
@@ -229,7 +229,7 @@ pub trait ABBPathNodeTrait: BBPathNodeTrait {
 
     /// Get the node referenced by the given path parts, by traversing the namespace tree
     /// This is the main getter function used to retrieve nodes by path
-    fn get_by_names(&self, names: Vec<String>) -> Result<Option<Rc<RefCell<ABBNode>>>, String> {
+    fn get_by_names(&self, names: Vec<String>) -> Result<Option<Rc<RefCell<RcBBNode>>>, String> {
         if names.len() == 1 {
             // quick path in case we only have one name
             let name = &names[0];
@@ -248,7 +248,7 @@ pub trait ABBPathNodeTrait: BBPathNodeTrait {
             } else if let Some(path_id) = &current_node_id {
                 // Check in current node
                 if let Some(node_ref) = self.get_node_by_id(path_id)? {
-                    if let ABBNode::Path(path) = &*node_ref.borrow() {
+                    if let RcBBNode::Path(path) = &*node_ref.borrow() {
                         path.get_name_id(name_part)?
                     } else {
                         // Current node is not a path node, but may be a KeyValue node
@@ -313,7 +313,7 @@ pub trait ABBPathNodeTrait: BBPathNodeTrait {
 
     fn get_keyvalue_from_node_ref(
         &self,
-        node_ref: Rc<RefCell<ABBNode>>,
+        node_ref: Rc<RefCell<RcBBNode>>,
     ) -> Result<Option<KeyValue>, String> {
         let is_path = node_ref.borrow().is_path()?;
         let mut fields = HashMap::new();
@@ -407,7 +407,7 @@ pub trait ABBPathNodeTrait: BBPathNodeTrait {
 ///
 /// This trait is used to set items in the blackboard, either in the root or in a path node.
 /// It provides methods for navigating the namespace hierarchy and setting values at specific paths.
-pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
+pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
     /// Get a reference to the blackboard.
     ///
     /// Because this trait can be implemented by both the blackboard and path nodes,
@@ -415,8 +415,8 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
     /// This will return a pointer to the BB used by the system, whether we're in the root or in a path node.
     ///
     /// # Returns
-    /// A `Result<Rc<RefCell<AroraBlackboard>>, String>` containing the blackboard reference, or an error message
-    fn get_blackboard(&self) -> Result<Weak<RefCell<AroraBlackboard>>, String>;
+    /// A `Result<Rc<RefCell<RcBlackboard>>, String>` containing the blackboard reference, or an error message
+    fn get_blackboard(&self) -> Result<Weak<RefCell<RcBlackboard>>, String>;
 
     /// Insert an entry into the blackboard's item hash.
     /// # Arguments
@@ -425,7 +425,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
     ///     
     /// # Note
     /// This method is intended to be used internally by the blackboard system
-    fn _insert_entry(&mut self, id: Uuid, item: Rc<RefCell<ABBNode>>);
+    fn _insert_entry(&mut self, id: Uuid, item: Rc<RefCell<RcBBNode>>);
 
     /// Check if the given namespace path exists and return its type.
     ///
@@ -454,7 +454,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
                     let next_id = {
                         if let Some(node_ref) = self.get_node_by_id(path_id)? {
                             let name_id = {
-                                if let ABBNode::Path(path) = &*node_ref.borrow() {
+                                if let RcBBNode::Path(path) = &*node_ref.borrow() {
                                     path.get_name_id(name_part)?
                                 } else {
                                     None
@@ -480,11 +480,11 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
                         if let Some(node_ref) = self.get_node_by_id(&id)? {
                             let node_type = {
                                 match &*node_ref.borrow() {
-                                    ABBNode::Item(item_node) => {
+                                    RcBBNode::Item(item_node) => {
                                         let item_id = item_node.get_id_copy()?;
                                         Some(CheckPathResult::IsItem(item_id))
                                     }
-                                    ABBNode::Path(path_node) => {
+                                    RcBBNode::Path(path_node) => {
                                         let path_id = path_node.get_id_copy()?;
                                         Some(CheckPathResult::IsPath(path_id))
                                     }
@@ -613,7 +613,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
 
         for (field_name, field) in &kv.fields {
             let existing_field_id = {
-                if let ABBNode::Path(existing_path) = &*existing_path_ref.borrow() {
+                if let RcBBNode::Path(existing_path) = &*existing_path_ref.borrow() {
                     existing_path.get_name_id(field_name)?
                 } else {
                     return Err(format!(
@@ -645,13 +645,13 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
         *ret_id = if kv.id.is_nil() { gen_bb_uuid() } else { kv.id };
 
         let new_node_name = path_parts.last().unwrap().clone();
-        let new_path_node = ABBPathNode::new_with_full_path(
+        let new_path_node = RcBBPathNode::new_with_full_path(
             new_node_name.clone(),
             *ret_id,
             self.get_blackboard()?,
             path,
         );
-        let new_path = ABBNode::Path(new_path_node);
+        let new_path = RcBBNode::Path(new_path_node);
         let new_path_ref = Rc::new(RefCell::new(new_path));
 
         {
@@ -744,12 +744,12 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
                     // First check if the existing node is a BBPath node
                     let proceed =
                         if let Some(existing_node_ref) = self.get_node_by_id(&existing_ref_id)? {
-                            if let ABBNode::Path(_) = &*existing_node_ref.borrow() {
+                            if let RcBBNode::Path(_) = &*existing_node_ref.borrow() {
                                 // ok it's a BBPath, we can continue - note we are not checking compatibility again at each level of the recursion
                                 true
                             } else {
                                 return Err(format!(
-                                    "Existing node is not a ABBPathNode for {}",
+                                    "Existing node is not a BBPathNode for {}",
                                     existing_ref_id
                                 ));
                             }
@@ -779,18 +779,18 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
                 } else {
                     // Field name does not exist, so create it as a new BBPath node and set the KeyValue structure into it
                     // Generate a unique ID for the new path node
-                    // Create new ABBPathNode
-                    let new_path = ABBPathNode::new_with_full_path(
+                    // Create new BBPathNode
+                    let new_path = RcBBPathNode::new_with_full_path(
                         field_name.clone(),
                         src_field_id,
                         self.get_blackboard()?,
                         &format!("{}.{}", path, field_name),
                     );
-                    let new_node = ABBNode::Path(new_path);
+                    let new_node = RcBBNode::Path(new_path);
 
                     {
                         if let Some(existing_path_ref) = self.get_node_by_id(&current_path_id)? {
-                            if let ABBNode::Path(ref mut existing_path_node) =
+                            if let RcBBNode::Path(ref mut existing_path_node) =
                                 *existing_path_ref.borrow_mut()
                             {
                                 // Add the new path to the blackboard items and as a field in the existing path
@@ -810,7 +810,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
                                 existing_path_node.insert(field_name.clone(), src_field_id)?;
                             } else {
                                 return Err(format!(
-                                    "Existing node is not a ABBPathNode for {}",
+                                    "Existing node is not a BBPathNode for {}",
                                     current_path_id
                                 ));
                             };
@@ -850,11 +850,11 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
                 } else {
                     // Field name does not exist in the path, so create it as a new Item node
                     if let Some(existing_path_ref) = self.get_node_by_id(&current_path_id)? {
-                        if let ABBNode::Path(ref mut existing_path) =
+                        if let RcBBNode::Path(ref mut existing_path) =
                             *existing_path_ref.borrow_mut()
                         {
                             // Create new Item node and store it in the blackboard items
-                            let new_item = ABBItemNode::from_value(
+                            let new_item = BBItemNode::from_value(
                                 field_name,
                                 value,
                                 src_field_id,
@@ -864,7 +864,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
                             .ok_or_else(|| {
                                 "Failed to create ABBItemNode: returned None".to_string()
                             })?;
-                            let new_node = ABBNode::Item(new_item);
+                            let new_node = RcBBNode::Item(new_item);
                             {
                                 let bb_ref = self.get_blackboard()?;
                                 bb_ref
@@ -914,7 +914,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
 
             if let Some(current_node_ref) = current_node_ref_opt {
                 // navigating an existing node
-                if let ABBNode::Path(ref mut current_path) = *current_node_ref.borrow_mut() {
+                if let RcBBNode::Path(ref mut current_path) = *current_node_ref.borrow_mut() {
                     // Get the next path node
                     current_node_id = if current_path.contains(part)? {
                         // If the path already exists, get its ID
@@ -922,7 +922,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
 
                         // Make sure it's a path node
                         if let Some(node_ref) = self.get_node_by_id(&node_id)? {
-                            if let ABBNode::Item(_) = &*node_ref.borrow() {
+                            if let RcBBNode::Item(_) = &*node_ref.borrow() {
                                 return Err(format!(
                                     "Path component '{}' in '{}' is an Item, expected a BBPath",
                                     part, intermediate_path
@@ -936,13 +936,13 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
                             *target_id
                         } else {
                             let new_id = gen_bb_uuid();
-                            let new_path = ABBPathNode::new_with_full_path(
+                            let new_path = RcBBPathNode::new_with_full_path(
                                 part.clone(),
                                 new_id,
                                 self.get_blackboard()?.clone(),
                                 &intermediate_path,
                             );
-                            let new_node = ABBNode::Path(new_path);
+                            let new_node = RcBBNode::Path(new_path);
                             self._insert_entry(new_id, Rc::new(RefCell::new(new_node)));
                             new_id
                         };
@@ -972,7 +972,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
     ) -> Result<Option<Result<String, String>>, String> {
         if let Some(node_ref) = self.get_node_by_id(path_id)? {
             // Provided path ID exists, so check if it is a BBPath node
-            if let ABBNode::Path(path) = &*node_ref.borrow() {
+            if let RcBBNode::Path(path) = &*node_ref.borrow() {
                 // It's a path, check compatibility of the KeyValue structure with the existing path
                 for (field_name, field) in &kv.fields {
                     // Check if the field name already exists in the existing path
@@ -991,7 +991,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
                                 if let Some(existing_node_ref) =
                                     self.get_node_by_id(&existing_ref_id)?
                                 {
-                                    if let ABBNode::Item(existing_item) =
+                                    if let RcBBNode::Item(existing_item) =
                                         &*existing_node_ref.borrow()
                                     {
                                         // Check if the value types are compatible

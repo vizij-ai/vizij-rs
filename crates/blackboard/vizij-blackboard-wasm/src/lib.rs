@@ -2,9 +2,9 @@ use std::sync::{Arc, Mutex};
 
 use arora_schema::value::Value;
 // Only import traits actually required for method resolution
-use vizij_blackboard_core::arc_abb::{ArcABBPathNodeTrait, ArcNamespacedSetterTrait};
+use vizij_blackboard_core::arc_abb::{ArcBBPathNodeTrait, ArcNamespacedSetterTrait};
 use vizij_blackboard_core::traits::BBNodeTrait;
-use vizij_blackboard_core::ArcAroraBlackboard;
+use vizij_blackboard_core::ArcBlackboard;
 use wasm_bindgen::prelude::*;
 
 // console_error_panic_hook is invoked via its fully qualified path when the feature is enabled;
@@ -133,7 +133,7 @@ fn value_to_jsvalue(value: &Value) -> Result<JsValue, JsError> {
 /// WebAssembly interface for the Vizij Blackboard
 #[wasm_bindgen]
 pub struct VizijBlackboard {
-    blackboard: Arc<Mutex<ArcAroraBlackboard>>,
+    blackboard: Arc<Mutex<ArcBlackboard>>,
 }
 
 #[wasm_bindgen]
@@ -154,7 +154,7 @@ impl VizijBlackboard {
 
         let bb_name = name.unwrap_or_else(|| "default".to_string());
         VizijBlackboard {
-            blackboard: ArcAroraBlackboard::new(bb_name),
+            blackboard: ArcBlackboard::new(bb_name),
         }
     }
 
@@ -297,7 +297,7 @@ impl VizijBlackboard {
             .ok()
             .and_then(|g| g.get_current_name_copy().ok())
             .unwrap_or_else(|| "default".to_string());
-        self.blackboard = ArcAroraBlackboard::new(name);
+        self.blackboard = ArcBlackboard::new(name);
     }
 
     /// Get the name of this blackboard

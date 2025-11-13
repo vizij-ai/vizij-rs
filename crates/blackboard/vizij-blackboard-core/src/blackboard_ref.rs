@@ -1,12 +1,12 @@
 #![allow(unused_must_use)]
 
-use crate::arc_abb::{ArcABBNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait};
-use crate::rc_abb::{ABBNode, ABBPathNodeTrait, NamespacedSetterTrait};
+use crate::arc_abb::{ArcBBNode, ArcBBPathNodeTrait, ArcNamespacedSetterTrait};
+use crate::rc_abb::{NamespacedSetterTrait, RcBBNode, RcBBPathNodeTrait};
 use crate::traits::{
     BBNodeTrait, BlackboardTrait, ItemsFormattable, JsonSerializable, TreeFormattable,
 };
-use crate::ArcAroraBlackboard;
-use crate::AroraBlackboard;
+use crate::ArcBlackboard;
+use crate::RcBlackboard;
 
 use arora_schema::keyvalue::KeyValue;
 use arora_schema::value::Value;
@@ -19,8 +19,8 @@ use uuid::Uuid;
 // Define blackboard adapters to provide a consistent interface
 #[derive(Copy, Clone)]
 pub enum BlackboardType {
-    Arora,
-    ArcArora,
+    Rc,
+    Arc,
     // Add more blackboard types here as needed:
     // YourNewBlackboard,
 }
@@ -29,8 +29,8 @@ impl BlackboardType {
     // Returns a list of all available blackboard types
     pub fn all_types() -> Vec<BlackboardType> {
         vec![
-            BlackboardType::Arora,
-            BlackboardType::ArcArora,
+            BlackboardType::Rc,
+            BlackboardType::Arc,
             // Add more blackboard types here as needed
         ]
     }
@@ -38,8 +38,8 @@ impl BlackboardType {
     // Returns the name of this blackboard type for display
     pub fn name(&self) -> &'static str {
         match self {
-            BlackboardType::Arora => "AroraBlackboard",
-            BlackboardType::ArcArora => "ArcAroraBlackboard",
+            BlackboardType::Rc => "RcBlackboard",
+            BlackboardType::Arc => "ArcBlackboard",
             // Add more blackboard types here as needed
         }
     }
@@ -64,31 +64,31 @@ pub trait BlackboardInterface {
 
 /// Thread-safe access helpers that expose raw node handles.
 pub trait BlackboardNodeAccess {
-    fn lookup_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Rc<RefCell<ABBNode>>>;
-    fn lookup_node_by_id(&self, id: &Uuid) -> Option<Rc<RefCell<ABBNode>>>;
-    fn lookup_arc_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Arc<Mutex<ArcABBNode>>>;
-    fn lookup_arc_node_by_id(&self, id: &Uuid) -> Option<Arc<Mutex<ArcABBNode>>>;
+    fn lookup_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Rc<RefCell<RcBBNode>>>;
+    fn lookup_node_by_id(&self, id: &Uuid) -> Option<Rc<RefCell<RcBBNode>>>;
+    fn lookup_arc_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Arc<Mutex<ArcBBNode>>>;
+    fn lookup_arc_node_by_id(&self, id: &Uuid) -> Option<Arc<Mutex<ArcBBNode>>>;
 }
 
 // This struct provides a unified interface to different blackboard implementations
 pub struct BlackboardRef {
     bb_type: BlackboardType,
-    arora_bb: Option<Rc<RefCell<AroraBlackboard>>>,
-    arc_arora_bb: Option<Arc<Mutex<ArcAroraBlackboard>>>,
+    arora_bb: Option<Rc<RefCell<RcBlackboard>>>,
+    arc_arora_bb: Option<Arc<Mutex<ArcBlackboard>>>,
 }
 
 impl BlackboardRef {
     pub fn new<S: ToString + ?Sized>(bb_type: BlackboardType, name: &S) -> Self {
         match bb_type {
-            BlackboardType::Arora => BlackboardRef {
+            BlackboardType::Rc => BlackboardRef {
                 bb_type,
-                arora_bb: Some(AroraBlackboard::new(name.to_string())),
+                arora_bb: Some(RcBlackboard::new(name.to_string())),
                 arc_arora_bb: None,
             },
-            BlackboardType::ArcArora => BlackboardRef {
+            BlackboardType::Arc => BlackboardRef {
                 bb_type,
                 arora_bb: None,
-                arc_arora_bb: Some(ArcAroraBlackboard::new(name.to_string())),
+                arc_arora_bb: Some(ArcBlackboard::new(name.to_string())),
             },
         }
     }
@@ -101,19 +101,19 @@ impl BlackboardRef {
 impl BlackboardInterface for BlackboardRef {
     fn to_json(&self) -> Result<JsonValue, String> {
         match self.bb_type {
-            BlackboardType::Arora => {
+            BlackboardType::Rc => {
                 if let Some(bb) = &self.arora_bb {
                     bb.borrow().to_json()
                 } else {
-                    Err("AroraBlackboard is not initialized".to_string())
+                    Err("RcBlackboard is not initialized".to_string())
                 }
             }
-            BlackboardType::ArcArora => {
+            BlackboardType::Arc => {
                 if let Some(bb) = &self.arc_arora_bb {
                     // Use the JsonSerializable trait
                     bb.to_json()
                 } else {
-                    Err("ArcAroraBlackboard is not initialized".to_string())
+                    Err("ArcBlackboard is not initialized".to_string())
                 }
             }
         }
@@ -121,21 +121,21 @@ impl BlackboardInterface for BlackboardRef {
 
     fn get_name(&self) -> Result<String, String> {
         match self.bb_type {
-            BlackboardType::Arora => {
+            BlackboardType::Rc => {
                 if let Some(bb) = &self.arora_bb {
                     Ok(bb
                         .borrow()
                         .get_current_name_copy()
                         .map_err(|e| e.to_string())?)
                 } else {
-                    Err("AroraBlackboard is not initialized".to_string())
+                    Err("RcBlackboard is not initialized".to_string())
                 }
             }
-            BlackboardType::ArcArora => {
+            BlackboardType::Arc => {
                 if let Some(bb) = &self.arc_arora_bb {
                     Ok(bb.get_current_name_copy().map_err(|e| e.to_string())?)
                 } else {
-                    Err("ArcAroraBlackboard is not initialized".to_string())
+                    Err("ArcBlackboard is not initialized".to_string())
                 }
             }
         }
@@ -143,18 +143,18 @@ impl BlackboardInterface for BlackboardRef {
 
     fn set<S: ToString + ?Sized>(&mut self, path: &S, value: Value) -> Result<Uuid, String> {
         let res = match self.bb_type {
-            BlackboardType::Arora => {
+            BlackboardType::Rc => {
                 if let Some(bb) = &mut self.arora_bb {
                     bb.borrow_mut().set(path, value)
                 } else {
-                    Err("AroraBlackboard is not initialized".to_string())
+                    Err("RcBlackboard is not initialized".to_string())
                 }
             }
-            BlackboardType::ArcArora => {
+            BlackboardType::Arc => {
                 if let Some(bb) = &mut self.arc_arora_bb {
                     bb.set(path, value)
                 } else {
-                    Err("ArcAroraBlackboard is not initialized".to_string())
+                    Err("ArcBlackboard is not initialized".to_string())
                 }
             }
         };
@@ -169,7 +169,7 @@ impl BlackboardInterface for BlackboardRef {
 
     fn lookup<S: ToString + ?Sized>(&self, path: &S) -> Option<Value> {
         let res: Result<Option<Value>, String> = match self.bb_type {
-            BlackboardType::Arora => {
+            BlackboardType::Rc => {
                 if let Some(bb) = &self.arora_bb {
                     let item = bb.borrow().get(&path.to_string());
                     if let Ok(ok_item) = &item {
@@ -203,27 +203,27 @@ impl BlackboardInterface for BlackboardRef {
                             }
                         } else {
                             Err(format!(
-                                "Item '{}' not found in AroraBlackboard",
+                                "Item '{}' not found in RcBlackboard",
                                 path.to_string()
                             ))
                         }
                     } else {
                         Err(format!(
-                            "Failed to get item '{}' from AroraBlackboard: {:?}",
+                            "Failed to get item '{}' from RcBlackboard: {:?}",
                             path.to_string(),
                             item.err().unwrap_or("Unknown error".to_string())
                         ))
                     }
                 } else {
-                    Err("AroraBlackboard is not initialized".to_string())
+                    Err("RcBlackboard is not initialized".to_string())
                 }
             }
-            BlackboardType::ArcArora => {
+            BlackboardType::Arc => {
                 if let Some(bb) = &self.arc_arora_bb {
                     let item = bb.get(&path.to_string());
                     if let Ok(ok_item) = &item {
                         if let Some(some_item) = ok_item {
-                            let guard: std::sync::MutexGuard<'_, ArcABBNode> =
+                            let guard: std::sync::MutexGuard<'_, ArcBBNode> =
                                 some_item.lock().unwrap();
                             if let Ok(is_path) = guard.is_path() {
                                 if is_path {
@@ -251,19 +251,19 @@ impl BlackboardInterface for BlackboardRef {
                             }
                         } else {
                             Err(format!(
-                                "Item '{}' not found in ArcAroraBlackboard",
+                                "Item '{}' not found in ArcBlackboard",
                                 path.to_string()
                             ))
                         }
                     } else {
                         Err(format!(
-                            "Failed to get item '{}' from ArcAroraBlackboard: {:?}",
+                            "Failed to get item '{}' from ArcBlackboard: {:?}",
                             path.to_string(),
                             item.err().unwrap_or("Unknown error".to_string())
                         ))
                     }
                 } else {
-                    Err("ArcAroraBlackboard is not initialized".to_string())
+                    Err("ArcBlackboard is not initialized".to_string())
                 }
             }
         };
@@ -279,18 +279,18 @@ impl BlackboardInterface for BlackboardRef {
 
     fn lookup_kv_by_id(&self, id: &Uuid) -> Result<Option<KeyValue>, String> {
         let res = match self.bb_type {
-            BlackboardType::Arora => {
+            BlackboardType::Rc => {
                 if let Some(bb) = &self.arora_bb {
                     bb.borrow().get_keyvalue_by_id(id)
                 } else {
-                    Err("AroraBlackboard is not initialized".to_string())
+                    Err("RcBlackboard is not initialized".to_string())
                 }
             }
-            BlackboardType::ArcArora => {
+            BlackboardType::Arc => {
                 if let Some(bb) = &self.arc_arora_bb {
                     bb.get_keyvalue_by_id(id)
                 } else {
-                    Err("ArcAroraBlackboard is not initialized".to_string())
+                    Err("ArcBlackboard is not initialized".to_string())
                 }
             }
         };
@@ -311,19 +311,19 @@ impl BlackboardInterface for BlackboardRef {
         id: &Uuid,
     ) -> Result<Uuid, String> {
         let res = match self.bb_type {
-            BlackboardType::Arora => {
+            BlackboardType::Rc => {
                 if let Some(bb) = &mut self.arora_bb {
                     bb.borrow_mut()
                         .set_with_id(&path.to_string(), value, Some(*id))
                 } else {
-                    Err("AroraBlackboard is not initialized".to_string())
+                    Err("RcBlackboard is not initialized".to_string())
                 }
             }
-            BlackboardType::ArcArora => {
+            BlackboardType::Arc => {
                 if let Some(bb) = &mut self.arc_arora_bb {
                     bb.set_with_id(&path.to_string(), value, Some(*id))
                 } else {
-                    Err("ArcAroraBlackboard is not initialized".to_string())
+                    Err("ArcBlackboard is not initialized".to_string())
                 }
             }
         };
@@ -338,18 +338,18 @@ impl BlackboardInterface for BlackboardRef {
 
     fn set_by_id(&mut self, id: &Uuid, value: Value) -> Result<Uuid, String> {
         let res = match self.bb_type {
-            BlackboardType::Arora => {
+            BlackboardType::Rc => {
                 if let Some(bb) = &mut self.arora_bb {
                     bb.borrow_mut().set_existing_bb_item(value, id)
                 } else {
-                    Err("AroraBlackboard is not initialized".to_string())
+                    Err("RcBlackboard is not initialized".to_string())
                 }
             }
-            BlackboardType::ArcArora => {
+            BlackboardType::Arc => {
                 if let Some(bb) = &mut self.arc_arora_bb {
                     bb.set_existing_bb_item(value, id)
                 } else {
-                    Err("ArcAroraBlackboard is not initialized".to_string())
+                    Err("ArcBlackboard is not initialized".to_string())
                 }
             }
         };
@@ -364,7 +364,7 @@ impl BlackboardInterface for BlackboardRef {
 
     fn lookup_by_id(&self, id: &Uuid) -> Option<Value> {
         let res = match self.bb_type {
-            BlackboardType::Arora => {
+            BlackboardType::Rc => {
                 if let Some(bb) = &self.arora_bb {
                     match bb.borrow().get_node_by_id(id) {
                         Ok(Some(node_ref)) => {
@@ -381,10 +381,10 @@ impl BlackboardInterface for BlackboardRef {
                         Err(e) => Err(e),
                     }
                 } else {
-                    Err("AroraBlackboard is not initialized".to_string())
+                    Err("RcBlackboard is not initialized".to_string())
                 }
             }
-            BlackboardType::ArcArora => {
+            BlackboardType::Arc => {
                 if let Some(bb) = &self.arc_arora_bb {
                     match bb.get_node_by_id(id) {
                         Ok(Some(node)) => {
@@ -401,7 +401,7 @@ impl BlackboardInterface for BlackboardRef {
                         Err(e) => Err(e),
                     }
                 } else {
-                    Err("ArcAroraBlackboard is not initialized".to_string())
+                    Err("ArcBlackboard is not initialized".to_string())
                 }
             }
         };
@@ -417,7 +417,7 @@ impl BlackboardInterface for BlackboardRef {
 
     fn print(&self, tree_only: bool) -> Result<(), String> {
         match self.bb_type {
-            BlackboardType::Arora => {
+            BlackboardType::Rc => {
                 if let Some(bb) = &self.arora_bb {
                     let bb_ref = bb.borrow();
                     if !tree_only {
@@ -425,11 +425,11 @@ impl BlackboardInterface for BlackboardRef {
                     }
                     println!("{}", bb_ref.format_tree_with_ids());
                 } else {
-                    println!("AroraBlackboard is not initialized.");
+                    println!("RcBlackboard is not initialized.");
                 }
                 Ok(())
             }
-            BlackboardType::ArcArora => {
+            BlackboardType::Arc => {
                 if let Some(bb) = &self.arc_arora_bb {
                     let bb_lock = bb.lock().unwrap();
                     if !tree_only {
@@ -437,7 +437,7 @@ impl BlackboardInterface for BlackboardRef {
                     }
                     println!("{}", bb_lock.format_tree(true));
                 } else {
-                    println!("ArcAroraBlackboard is not initialized.");
+                    println!("ArcBlackboard is not initialized.");
                 }
                 Ok(())
             }
@@ -446,41 +446,39 @@ impl BlackboardInterface for BlackboardRef {
 }
 
 impl BlackboardNodeAccess for BlackboardRef {
-    fn lookup_arc_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Arc<Mutex<ArcABBNode>>> {
+    fn lookup_arc_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Arc<Mutex<ArcBBNode>>> {
         let res = match self.bb_type {
-            BlackboardType::Arora => {
-                unimplemented!("AroraBlackboard does not support Arc node lookup")
+            BlackboardType::Rc => {
+                unimplemented!("RcBlackboard does not support Arc node lookup")
             }
-            BlackboardType::ArcArora => {
+            BlackboardType::Arc => {
                 if let Some(bb) = &self.arc_arora_bb {
-                    let arc_node = bb
-                        .get(path)
-                        .expect("Failed to get node from ArcAroraBlackboard");
+                    let arc_node = bb.get(path).expect("Failed to get node from ArcBlackboard");
                     match arc_node {
                         Some(node) => Ok(node),
                         None => Err(format!(
-                            "Node '{}' not found in ArcAroraBlackboard",
+                            "Node '{}' not found in ArcBlackboard",
                             path.to_string()
                         )),
                     }
                 } else {
-                    Err("ArcAroraBlackboard is not initialized".to_string())
+                    Err("ArcBlackboard is not initialized".to_string())
                 }
             }
         };
         res.ok()
     }
 
-    fn lookup_arc_node_by_id(&self, id: &Uuid) -> Option<Arc<Mutex<ArcABBNode>>> {
+    fn lookup_arc_node_by_id(&self, id: &Uuid) -> Option<Arc<Mutex<ArcBBNode>>> {
         let res = match self.bb_type {
-            BlackboardType::Arora => {
-                unimplemented!("AroraBlackboard does not support Arc node lookup by ID")
+            BlackboardType::Rc => {
+                unimplemented!("RcBlackboard does not support Arc node lookup by ID")
             }
-            BlackboardType::ArcArora => {
+            BlackboardType::Arc => {
                 if let Some(bb) = &self.arc_arora_bb {
                     bb.get_node_by_id(id).map_err(|e| e.to_string())
                 } else {
-                    Err("ArcAroraBlackboard is not initialized".to_string())
+                    Err("ArcBlackboard is not initialized".to_string())
                 }
             }
         };
@@ -494,42 +492,42 @@ impl BlackboardNodeAccess for BlackboardRef {
         }
     }
 
-    fn lookup_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Rc<RefCell<ABBNode>>> {
+    fn lookup_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Rc<RefCell<RcBBNode>>> {
         let res = match self.bb_type {
-            BlackboardType::ArcArora => {
-                unimplemented!("ArcAroraBlackboard does not support Rc node lookup")
+            BlackboardType::Arc => {
+                unimplemented!("ArcBlackboard does not support Rc node lookup")
             }
-            BlackboardType::Arora => {
+            BlackboardType::Rc => {
                 if let Some(bb) = &self.arora_bb {
                     let node = bb
                         .borrow()
                         .get(path)
-                        .expect("Failed to get node from AroraBlackboard");
+                        .expect("Failed to get node from RcBlackboard");
                     match node {
                         Some(n) => Ok(n),
                         None => Err(format!(
-                            "Node '{}' not found in AroraBlackboard",
+                            "Node '{}' not found in RcBlackboard",
                             path.to_string()
                         )),
                     }
                 } else {
-                    Err("AroraBlackboard is not initialized".to_string())
+                    Err("RcBlackboard is not initialized".to_string())
                 }
             }
         };
         res.ok()
     }
 
-    fn lookup_node_by_id(&self, id: &Uuid) -> Option<Rc<RefCell<ABBNode>>> {
+    fn lookup_node_by_id(&self, id: &Uuid) -> Option<Rc<RefCell<RcBBNode>>> {
         let res = match self.bb_type {
-            BlackboardType::ArcArora => {
-                unimplemented!("ArcAroraBlackboard does not support Rc node lookup by ID")
+            BlackboardType::Arc => {
+                unimplemented!("ArcBlackboard does not support Rc node lookup by ID")
             }
-            BlackboardType::Arora => {
+            BlackboardType::Rc => {
                 if let Some(bb) = &self.arora_bb {
                     bb.borrow().get_node_by_id(id).map_err(|e| e.to_string())
                 } else {
-                    Err("AroraBlackboard is not initialized".to_string())
+                    Err("RcBlackboard is not initialized".to_string())
                 }
             }
         };
@@ -609,28 +607,28 @@ impl BlackboardInterface for Arc<Mutex<BlackboardRef>> {
 }
 
 impl BlackboardNodeAccess for Arc<Mutex<BlackboardRef>> {
-    fn lookup_arc_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Arc<Mutex<ArcABBNode>>> {
+    fn lookup_arc_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Arc<Mutex<ArcBBNode>>> {
         self.lock()
             .map_err(|_| "Failed to lock the blackboard")
             .ok()
             .and_then(|bb| bb.lookup_arc_node(path))
     }
 
-    fn lookup_arc_node_by_id(&self, id: &Uuid) -> Option<Arc<Mutex<ArcABBNode>>> {
+    fn lookup_arc_node_by_id(&self, id: &Uuid) -> Option<Arc<Mutex<ArcBBNode>>> {
         self.lock()
             .map_err(|_| "Failed to lock the blackboard")
             .ok()
             .and_then(|bb| bb.lookup_arc_node_by_id(id))
     }
 
-    fn lookup_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Rc<RefCell<ABBNode>>> {
+    fn lookup_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Rc<RefCell<RcBBNode>>> {
         self.lock()
             .map_err(|_| "Failed to lock the blackboard")
             .ok()
             .and_then(|bb| bb.lookup_node(path))
     }
 
-    fn lookup_node_by_id(&self, id: &Uuid) -> Option<Rc<RefCell<ABBNode>>> {
+    fn lookup_node_by_id(&self, id: &Uuid) -> Option<Rc<RefCell<RcBBNode>>> {
         self.lock()
             .map_err(|_| "Failed to lock the blackboard")
             .ok()

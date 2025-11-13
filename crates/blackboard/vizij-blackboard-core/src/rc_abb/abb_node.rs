@@ -4,66 +4,66 @@
 
 use uuid::Uuid;
 
-use crate::{rc_abb::ABBPathNode, traits::BBNodeTrait, ABBItemNode};
+use crate::{rc_abb::RcBBPathNode, traits::BBNodeTrait, BBItemNode};
 
 /// An abstract node in the blackboard structure, which can be either a path or an item.
 ///
 /// Path nodes act as containers for other nodes, creating a hierarchical structure.
 /// Item nodes contain actual data values that can be accessed and modified.
 #[derive(Debug)]
-pub enum ABBNode {
+pub enum RcBBNode {
     /// A path node that can contain other nodes
-    Path(ABBPathNode),
+    Path(RcBBPathNode),
     /// An item node that contains a data value
-    Item(ABBItemNode),
+    Item(BBItemNode),
 }
 
-impl ABBNode {
-    /// Converts an `ABBNode` to a `PathNode` if it is a path, otherwise returns None.
+impl RcBBNode {
+    /// Converts an `BBNode` to a `PathNode` if it is a path, otherwise returns None.
     ///
     /// # Returns
-    /// An `Option<&ABBPathNode>` containing a reference to the path node if this is a path node,
+    /// An `Option<&RcBBPathNode>` containing a reference to the path node if this is a path node,
     /// or `None` if this is an item node.
-    pub fn as_path(&self) -> Option<&ABBPathNode> {
+    pub fn as_path(&self) -> Option<&RcBBPathNode> {
         match self {
-            ABBNode::Path(ns) => Some(ns),
+            RcBBNode::Path(ns) => Some(ns),
             _ => None,
         }
     }
 
-    pub fn as_path_mut(&mut self) -> Option<&mut ABBPathNode> {
+    pub fn as_path_mut(&mut self) -> Option<&mut RcBBPathNode> {
         match self {
-            ABBNode::Path(ns) => Some(ns),
+            RcBBNode::Path(ns) => Some(ns),
             _ => None,
         }
     }
 
-    /// Converts an `ABBNode` to an `ItemNode` if it is an item, otherwise returns None.
+    /// Converts an `BBNode` to an `ItemNode` if it is an item, otherwise returns None.
     ///
     /// # Returns
     /// An `Option<&ABBItemNode>` containing a reference to the item node if this is an item node,
     /// or `None` if this is a path node.
-    pub fn as_item(&self) -> Option<&ABBItemNode> {
+    pub fn as_item(&self) -> Option<&BBItemNode> {
         match self {
-            ABBNode::Item(item) => Some(item),
+            RcBBNode::Item(item) => Some(item),
             _ => None,
         }
     }
 }
 
-/// Implementation of `ABBNodeTrait` for `ABBNode`.
+/// Implementation of `BBNodeTrait` for `BBNode`.
 ///
-/// This implementation allows `ABBNode` to be used in the blackboard hierarchy,
+/// This implementation allows `BBNode` to be used in the blackboard hierarchy,
 /// delegating to the appropriate variant (Path or Item).
-impl BBNodeTrait for ABBNode {
+impl BBNodeTrait for RcBBNode {
     /// Returns a reference to the ID of this node.
     ///
     /// # Returns
     /// A `Result<&String, String>` containing a reference to the node's ID, or an error message
     fn get_id_ref(&self) -> Result<&Uuid, String> {
         match self {
-            ABBNode::Path(path) => path.get_id_ref(),
-            ABBNode::Item(item) => item.get_id_ref(),
+            RcBBNode::Path(path) => path.get_id_ref(),
+            RcBBNode::Item(item) => item.get_id_ref(),
         }
     }
 
@@ -73,8 +73,8 @@ impl BBNodeTrait for ABBNode {
     /// A `Result<bool, String>` indicating whether this is a path node, or an error message
     fn is_path(&self) -> Result<bool, String> {
         match self {
-            ABBNode::Path(_) => Ok(true),
-            ABBNode::Item(_) => Ok(false),
+            RcBBNode::Path(_) => Ok(true),
+            RcBBNode::Item(_) => Ok(false),
         }
     }
 
@@ -84,8 +84,8 @@ impl BBNodeTrait for ABBNode {
     /// A `Result<Option<String>, String>` containing a copy of the node's name, or an error message
     fn get_current_name_copy(&self) -> Result<String, String> {
         match self {
-            ABBNode::Path(path) => path.get_current_name_copy(),
-            ABBNode::Item(item) => item.get_current_name_copy(),
+            RcBBNode::Path(path) => path.get_current_name_copy(),
+            RcBBNode::Item(item) => item.get_current_name_copy(),
         }
     }
 
@@ -95,8 +95,8 @@ impl BBNodeTrait for ABBNode {
     /// A `Result<String, String>` containing a copy of the node's ID, or an error message
     fn get_id_copy(&self) -> Result<Uuid, String> {
         match self {
-            ABBNode::Path(path) => path.get_id_copy(),
-            ABBNode::Item(item) => item.get_id_copy(),
+            RcBBNode::Path(path) => path.get_id_copy(),
+            RcBBNode::Item(item) => item.get_id_copy(),
         }
     }
 
@@ -106,8 +106,8 @@ impl BBNodeTrait for ABBNode {
     /// A `Result<Option<String>, String>` containing the full path of the node, or an error message
     fn get_full_path(&self) -> Result<String, String> {
         match self {
-            ABBNode::Path(path) => path.get_full_path(),
-            ABBNode::Item(item) => item.get_full_path(),
+            RcBBNode::Path(path) => path.get_full_path(),
+            RcBBNode::Item(item) => item.get_full_path(),
         }
     }
 }

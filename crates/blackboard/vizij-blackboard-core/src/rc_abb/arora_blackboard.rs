@@ -6,13 +6,13 @@
 //!
 //! The code below defines various types identifiable by the prefix ABB which stands for AroraBlackBoard.
 //! In particular, it contains the following main types:
-//! - AroraBlackboard: The main struct representing the blackboard, which contains a collection of nodes indexed by their IDs
-//! - ABBNode: An abstract node in the blackboard structure
-//! - Each BB item is encapsulated in an ABBNode, which can be either a path or an item
+//! - RcBlackboard: The main struct representing the blackboard, which contains a collection of nodes indexed by their IDs
+//! - BBNode: An abstract node in the blackboard structure
+//! - Each BB item is encapsulated in an BBNode, which can be either a path or an item
 //! - If it is a path, it can contain other nodes, allowing for a hierarchical namespaced structure
 //! - If it is an item, it contains a value and its type
-//! - ABBPathNode: A node that represents a path in the blackboard structure
-//! - ABBItemNode: A node that represents a value item in the blackboard structure
+//! - RcBBPathNode: A node that represents a path in the blackboard structure
+//! - BBItemNode: A node that represents a value item in the blackboard structure
 
 use arora_schema::{gen_bb_uuid, value::Value};
 use std::{
@@ -23,18 +23,18 @@ use std::{
 };
 use uuid::Uuid;
 
-use super::{ABBNode, ABBPathNode};
+use super::{RcBBNode, RcBBPathNode};
 use crate::{
     traits::{
         BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, JsonSerializable,
         TreeFormattable,
     },
-    ABBItemNode,
+    BBItemNode,
 };
 
 use crate::{
     adt,
-    rc_abb::{ABBPathNodeTrait, NamespacedSetterTrait},
+    rc_abb::{NamespacedSetterTrait, RcBBPathNodeTrait},
 };
 
 /// A struct representing the blackboard, which contains a collection of nodes indexed by their IDs.
@@ -42,17 +42,17 @@ use crate::{
 /// The blackboard is initialized with a path node with the same ID as the blackboard itself, which serves as the root namespace.
 /// This allows for a hierarchical structure where nodes can be added or removed dynamically.
 #[derive(Debug)]
-pub struct AroraBlackboard {
+pub struct RcBlackboard {
     /// The ID of the blackboard, which is used as the root path node.
     /// Allows to distinguish between multiple BBs in a system.
     id: Uuid,
     /// This HashMap is the owner of all nodes.
-    items: HashMap<Uuid, Rc<RefCell<ABBNode>>>,
+    items: HashMap<Uuid, Rc<RefCell<RcBBNode>>>,
     /// A self-reference that can be passed around without cloning.
-    self_ref: Option<Weak<RefCell<AroraBlackboard>>>,
+    self_ref: Option<Weak<RefCell<RcBlackboard>>>,
 }
 
-impl AroraBlackboard {
+impl RcBlackboard {
     /// Creates a new blackboard with the given ID.
     ///
     /// This function performs the following steps:
@@ -65,14 +65,14 @@ impl AroraBlackboard {
     /// * `id` - A string identifier for the blackboard
     ///
     /// # Returns
-    /// An `Arc<Mutex<AroraBlackboard>>` containing the newly created blackboard
+    /// An `Arc<Mutex<RcBlackboard>>` containing the newly created blackboard
     pub fn new<S: ToString>(name: S) -> Rc<RefCell<Self>> {
         let id = gen_bb_uuid();
         // Step 1: Create a path node with a temporary bb placeholder
-        let path_node = ABBPathNode::create_root(&name.to_string());
+        let path_node = RcBBPathNode::create_root(&name.to_string());
 
         // Step 2: Create a struct with the wrapped path node
-        let mut bb: AroraBlackboard = Self {
+        let mut bb: RcBlackboard = Self {
             id,
             items: HashMap::new(),
             self_ref: None,
@@ -80,7 +80,7 @@ impl AroraBlackboard {
 
         // Initialize the items HashMap with the path node that will act as the root, using the BB id as key
         bb.items
-            .insert(id, Rc::new(RefCell::new(ABBNode::Path(path_node))));
+            .insert(id, Rc::new(RefCell::new(RcBBNode::Path(path_node))));
 
         // Create Rc<RefCell<>> wrapper
         let rc_bb = Rc::new(RefCell::new(bb));
@@ -92,11 +92,11 @@ impl AroraBlackboard {
         {
             let mut bb_mut = rc_bb.borrow_mut();
             if let Some(node_ref) = bb_mut.items.get_mut(&id) {
-                if let ABBNode::Path(ref mut path) = *node_ref.borrow_mut() {
+                if let RcBBNode::Path(ref mut path) = *node_ref.borrow_mut() {
                     // Set the weak reference directly
                     path.set_bb(weak_bb.clone());
                 } else {
-                    panic!("Base node is not a BBPath");
+                    panic!("Base node is not a RcBBPathNode");
                 }
             }
             bb_mut.self_ref = Some(weak_bb);
@@ -108,8 +108,8 @@ impl AroraBlackboard {
     // Additional methods go here
 }
 
-/// Implementation of JsonSerializable for AroraBlackboard.
-impl JsonSerializable for AroraBlackboard {
+/// Implementation of JsonSerializable for RcBlackboard.
+impl JsonSerializable for RcBlackboard {
     fn to_json(&self) -> Result<serde_json::Value, String> {
         // Preallocate collections with capacity hints to avoid reallocations
         let item_count = self.items.len();
@@ -133,7 +133,7 @@ impl JsonSerializable for AroraBlackboard {
 
         for (id, node_ref) in &self.items {
             match &*node_ref.borrow() {
-                ABBNode::Path(path) => {
+                RcBBNode::Path(path) => {
                     // Get name and children in one lock operation
                     let name = path
                         .get_current_name_copy()
@@ -147,7 +147,7 @@ impl JsonSerializable for AroraBlackboard {
                     };
                     node_data.push((id.to_string(), true, name, None, None, names, graph_node_id));
                 }
-                ABBNode::Item(item) => {
+                RcBBNode::Item(item) => {
                     if let Ok(name) = item.get_current_name_copy() {
                         if let Some(value) = item.get_value() {
                             let value_type = item.get_value_type().to_string();
@@ -253,11 +253,11 @@ impl JsonSerializable for AroraBlackboard {
     }
 }
 
-/// Implementation of `BBNodeTrait` for `AroraBlackboard`
+/// Implementation of `BBNodeTrait` for `RcBlackboard`
 ///
 /// This implementation allows the blackboard itself to be treated as a node in the
 /// hierarchy, with the blackboard ID serving as its name and identifier.
-impl BBNodeTrait for AroraBlackboard {
+impl BBNodeTrait for RcBlackboard {
     /// Returns a reference to the ID of the blackboard.
     ///
     /// # Returns
@@ -268,11 +268,11 @@ impl BBNodeTrait for AroraBlackboard {
 
     /// Determines if this node is a path node, otherwise it's an item node.
     ///
-    /// For `AroraBlackboard`, this always returns true since a blackboard
+    /// For `RcBlackboard`, this always returns true since a blackboard
     /// is conceptually a root path node.
     ///
     /// # Returns
-    /// A `Result` containing `true` for `AroraBlackboard`
+    /// A `Result` containing `true` for `RcBlackboard`
     fn is_path(&self) -> Result<bool, String> {
         Ok(true)
     }
@@ -301,10 +301,10 @@ impl BBNodeTrait for AroraBlackboard {
         // For the blackboard, the full path is the name of its base node.
         // To retrieve it, we must first check that the blackboard's id exists in the items HashMap.
         if let Some(base_node) = self.items.get(&self.id) {
-            if let ABBNode::Path(path) = &*base_node.borrow() {
+            if let RcBBNode::Path(path) = &*base_node.borrow() {
                 return path.get_full_path();
             }
-            return Err("Base node is not a BBPath".to_string());
+            return Err("Base node is not a RcBBPathNode".to_string());
         }
         Err(format!(
             "Base node for blackboard {} not found in items",
@@ -313,10 +313,10 @@ impl BBNodeTrait for AroraBlackboard {
     }
 }
 
-/// Implementation of `BBPathNodeTrait` for `AroraBlackboard`
+/// Implementation of `BBPathNodeTrait` for `RcBlackboard`
 ///
 /// This implementation allows the blackboard to be treated as a path node.
-impl BBPathNodeTrait for AroraBlackboard {
+impl BBPathNodeTrait for RcBlackboard {
     /// Checks if the given name exists in the root namespace of the blackboard.
     ///
     /// This delegates to the path node at the root of the blackboard.
@@ -329,11 +329,11 @@ impl BBPathNodeTrait for AroraBlackboard {
     /// A `Result` containing `true` if an entry with the given name exists, `false` otherwise
     fn contains(&self, name: &str) -> Result<bool, String> {
         if let Some(base_node) = self.items.get(&self.id) {
-            if let ABBNode::Path(path) = &*base_node.borrow() {
+            if let RcBBNode::Path(path) = &*base_node.borrow() {
                 return path.contains(name);
             }
         }
-        // Return false if the base node isn't found or isn't a BBPath
+        // Return false if the base node isn't found or isn't a RcBBPathNode
         Ok(false)
     }
 
@@ -350,7 +350,7 @@ impl BBPathNodeTrait for AroraBlackboard {
     /// A `Result<(), String>` indicating success or failure
     fn insert(&mut self, name: String, id: Uuid) -> Result<(), String> {
         if let Some(base_node) = self.items.get_mut(&self.id) {
-            if let ABBNode::Path(path) = &mut *base_node.borrow_mut() {
+            if let RcBBNode::Path(path) = &mut *base_node.borrow_mut() {
                 return path.insert(name, id);
             }
         }
@@ -369,11 +369,11 @@ impl BBPathNodeTrait for AroraBlackboard {
     /// A `Result` containing an `Option<String>` with the ID if found, or `None` if not found
     fn get_name_id(&self, name: &str) -> Result<Option<Uuid>, String> {
         if let Some(base_node) = self.items.get(&self.id) {
-            if let ABBNode::Path(path) = &*base_node.borrow() {
+            if let RcBBNode::Path(path) = &*base_node.borrow() {
                 return path.get_name_id(name);
             }
         }
-        // Return None if the base node isn't found or isn't a BBPath
+        // Return None if the base node isn't found or isn't a RcBBPathNode
         Ok(None)
     }
 
@@ -383,11 +383,11 @@ impl BBPathNodeTrait for AroraBlackboard {
     /// A `Result` containing a `HashMap<String, String>` with name-to-ID mappings
     fn get_names_copy(&self) -> Result<HashMap<String, Uuid>, String> {
         if let Some(base_node) = self.items.get(&self.id) {
-            if let ABBNode::Path(path) = &*base_node.borrow() {
+            if let RcBBNode::Path(path) = &*base_node.borrow() {
                 return path.get_names_copy();
             }
         }
-        // Return empty HashMap if the base node isn't found or isn't a BBPath
+        // Return empty HashMap if the base node isn't found or isn't a RcBBPathNode
         Ok(HashMap::new())
     }
 
@@ -401,8 +401,8 @@ impl BBPathNodeTrait for AroraBlackboard {
     ) {
         // Get the base node and delegate to its implementation
         if let Some(base_node) = self.items.get(&self.id) {
-            if let ABBNode::Path(path) = &*base_node.borrow() {
-                ABBPathNodeTrait::_format_tree_recursively(path, name, id, depth, show_ids, out);
+            if let RcBBNode::Path(path) = &*base_node.borrow() {
+                RcBBPathNodeTrait::_format_tree_recursively(path, name, id, depth, show_ids, out);
                 return;
             }
         }
@@ -410,27 +410,27 @@ impl BBPathNodeTrait for AroraBlackboard {
     }
 }
 
-/// Implementation of `ABBPathNodeTrait` for `AroraBlackboard`.
+/// Implementation of `RcBBPathNodeTrait` for `RcBlackboard`.
 /// This implementation allows the blackboard to be treated as an arc path node.
 /// This is useful for traversing the blackboard structure.
-impl ABBPathNodeTrait for AroraBlackboard {
+impl RcBBPathNodeTrait for RcBlackboard {
     /// Retrieves a node by its ID from the blackboard.
     ///
     /// # Arguments
     /// * `id` - The ID of the node to retrieve
     ///
     /// # Returns
-    /// A `Result` containing an `Option<Arc<Mutex<ABBNode>>>` with the node if found, or `None` if not found
-    fn get_node_by_id(&self, id: &Uuid) -> Result<Option<Rc<RefCell<ABBNode>>>, String> {
+    /// A `Result` containing an `Option<Arc<Mutex<BBNode>>>` with the node if found, or `None` if not found
+    fn get_node_by_id(&self, id: &Uuid) -> Result<Option<Rc<RefCell<RcBBNode>>>, String> {
         Ok(self.items.get(id).cloned())
     }
 }
 
-/// Implementation of `AroraBlackboardTrait` for `AroraBlackboard`.
+/// Implementation of `RcBlackboardTrait` for `RcBlackboard`.
 ///
 /// This implementation provides methods to interact with the blackboard,
 /// such as printing items and setting items with values.
-impl BlackboardTrait for AroraBlackboard {
+impl BlackboardTrait for RcBlackboard {
     /// Sets an item into the blackboard with the given value, ID, and optional name.
     ///
     /// If the item already exists, its value is updated. If it doesn't exist,
@@ -455,7 +455,7 @@ impl BlackboardTrait for AroraBlackboard {
                 // Items exists, so get its existing item and update its value
 
                 // Check that the node is an Item node
-                if let ABBNode::Item(ref mut item) = *node_ref.borrow_mut() {
+                if let RcBBNode::Item(ref mut item) = *node_ref.borrow_mut() {
                     // Confirm item_id matches the existing item
                     if item_id != item.get_id_ref()? {
                         return Err(format!("Item ID does not match existing item ID, existing item: {}, new item: {}",
@@ -497,7 +497,7 @@ impl BlackboardTrait for AroraBlackboard {
                 );
             }
 
-            let item_result = ABBItemNode::from_value(
+            let item_result = BBItemNode::from_value(
                 name.as_ref().unwrap(),
                 value,
                 *item_id,
@@ -507,7 +507,7 @@ impl BlackboardTrait for AroraBlackboard {
             match item_result {
                 Ok(Some(item)) => {
                     // Create the node and insert it into items HashMap (as owner)
-                    let node: ABBNode = ABBNode::Item(item);
+                    let node: RcBBNode = RcBBNode::Item(item);
                     let node_ref = Rc::new(RefCell::new(node));
                     self.items.insert(*item_id, node_ref);
                     Ok(true)
@@ -519,15 +519,15 @@ impl BlackboardTrait for AroraBlackboard {
     }
 }
 
-/// Implementation of `NamespacedSetterTrait` for `AroraBlackboard`.
+/// Implementation of `NamespacedSetterTrait` for `RcBlackboard`.
 ///
 /// This trait allows the blackboard to be used to set items in a namespaced manner.
-impl NamespacedSetterTrait for AroraBlackboard {
+impl NamespacedSetterTrait for RcBlackboard {
     /// Returns a reference to the blackboard itself.
     ///
     /// # Returns
-    /// A `Result<Arc<Mutex<AroraBlackboard>>, String>` containing the reference to the blackboard or an error
-    fn get_blackboard(&self) -> Result<Weak<RefCell<AroraBlackboard>>, String> {
+    /// A `Result<Arc<Mutex<RcBlackboard>>, String>` containing the reference to the blackboard or an error
+    fn get_blackboard(&self) -> Result<Weak<RefCell<RcBlackboard>>, String> {
         if let Some(ref weak_self) = self.self_ref {
             Ok(weak_self.clone())
         } else {
@@ -542,16 +542,16 @@ impl NamespacedSetterTrait for AroraBlackboard {
     ///     
     /// # Note
     /// This method is intended to be used internally by the blackboard system
-    fn _insert_entry(&mut self, id: Uuid, item: Rc<RefCell<ABBNode>>) {
+    fn _insert_entry(&mut self, id: Uuid, item: Rc<RefCell<RcBBNode>>) {
         // Insert the item into the items HashMap
         self.items.insert(id, item);
     }
 }
 
-/// Implementation of `Display` trait for `AroraBlackboard`.
+/// Implementation of `Display` trait for `RcBlackboard`.
 ///
 /// This provides a formatted string representation of the blackboard and its contents.
-impl Display for AroraBlackboard {
+impl Display for RcBlackboard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -561,8 +561,8 @@ impl Display for AroraBlackboard {
     }
 }
 
-/// Implementation of `TreeFormattable` trait for `AroraBlackboard`.
-impl TreeFormattable for AroraBlackboard {
+/// Implementation of `TreeFormattable` trait for `RcBlackboard`.
+impl TreeFormattable for RcBlackboard {
     fn format_tree(&self, show_ids: bool) -> String {
         let mut output = String::new();
         let name = self.get_current_name_copy();
@@ -576,7 +576,7 @@ impl TreeFormattable for AroraBlackboard {
             return format!("Error getting names: {}", names.unwrap_err());
         }
         for (name, ref_id) in names.unwrap() {
-            ABBPathNodeTrait::_format_tree_recursively(
+            RcBBPathNodeTrait::_format_tree_recursively(
                 self,
                 &name,
                 &ref_id,
@@ -589,15 +589,15 @@ impl TreeFormattable for AroraBlackboard {
     }
 }
 
-/// Implementation of `ItemsFormattable` trait for `AroraBlackboard`.
-impl ItemsFormattable for AroraBlackboard {
+/// Implementation of `ItemsFormattable` trait for `RcBlackboard`.
+impl ItemsFormattable for RcBlackboard {
     fn format_items(&self, show_ids: bool) -> String {
         let mut output = String::new();
         output.push_str(&format!("Blackboard Items for {}:\n", self.id));
 
         for node_ref in self.items.values() {
             match &*node_ref.borrow() {
-                ABBNode::Path(path) => {
+                RcBBNode::Path(path) => {
                     if let Ok(name) = path.get_current_name_copy() {
                         let id_ref = path.get_id_ref();
                         if id_ref.is_err() {
@@ -615,7 +615,7 @@ impl ItemsFormattable for AroraBlackboard {
                         }
                     }
                 }
-                ABBNode::Item(item) => {
+                RcBBNode::Item(item) => {
                     if let Ok(name) = item.get_current_name_copy() {
                         let id_ref = item.get_id_ref();
                         if id_ref.is_err() {

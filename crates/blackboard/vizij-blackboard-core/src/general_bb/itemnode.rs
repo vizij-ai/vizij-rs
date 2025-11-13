@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 /// A node that represents a value item in the blackboard structure
 #[derive(Debug, Clone)]
-pub struct ABBItemNode {
+pub struct BBItemNode {
     /// The name of the item
     name: String,
     /// The type of the value
@@ -20,7 +20,7 @@ pub struct ABBItemNode {
     full_path: String,
 }
 
-impl ABBItemNode {
+impl BBItemNode {
     /// Constructor from just a name and type
     pub fn new_with_full_path(
         name: String,
@@ -97,10 +97,10 @@ impl ABBItemNode {
     }
 }
 
-/// Implementation of `ABBNodeTrait` for `ABBItemNode`
+/// Implementation of `BBNodeTrait` for `ABBItemNode`
 ///
 /// This trait provides methods to access the name, ID, and path status of the node.
-impl BBNodeTrait for ABBItemNode {
+impl BBNodeTrait for BBItemNode {
     /// Returns the unique ID of the item
     fn get_id_ref(&self) -> Result<&Uuid, String> {
         Ok(&self.id)
