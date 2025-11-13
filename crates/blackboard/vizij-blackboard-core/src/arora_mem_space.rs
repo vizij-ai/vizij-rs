@@ -2,9 +2,7 @@
 
 use crate::arc_bb::{ArcBBNode, ArcBBPathNodeTrait, ArcNamespacedSetterTrait};
 use crate::rc_bb::{NamespacedSetterTrait, RcBBNode, RcBBPathNodeTrait};
-use crate::traits::{
-    BBNodeTrait, BlackboardTrait, ItemsFormattable, JsonSerializable, TreeFormattable,
-};
+use crate::traits::{BBNodeTrait, BlackboardTrait, JsonSerializable};
 use crate::ArcBlackboard;
 use crate::RcBlackboard;
 
@@ -47,7 +45,6 @@ impl AroraMemSpaceType {
 
 pub trait AroraMemSpaceInterface {
     fn get_name(&self) -> Result<String, String>;
-    fn print(&self, tree_only: bool) -> Result<(), String>;
     fn set<S: ToString + ?Sized>(&mut self, path: &S, value: Value) -> Result<Uuid, String>;
     fn set_with_id<S: ToString + ?Sized>(
         &mut self,
@@ -414,35 +411,6 @@ impl AroraMemSpaceInterface for AroraMemSpace {
             }
         }
     }
-
-    fn print(&self, tree_only: bool) -> Result<(), String> {
-        match self.ams_type {
-            AroraMemSpaceType::Rc => {
-                if let Some(bb) = &self.arora_bb {
-                    let bb_ref = bb.borrow();
-                    if !tree_only {
-                        println!("{}", bb_ref.format_items_with_ids());
-                    }
-                    println!("{}", bb_ref.format_tree_with_ids());
-                } else {
-                    println!("RcBlackboard is not initialized.");
-                }
-                Ok(())
-            }
-            AroraMemSpaceType::Arc => {
-                if let Some(bb) = &self.arc_arora_bb {
-                    let bb_lock = bb.lock().unwrap();
-                    if !tree_only {
-                        println!("{}", bb_lock.format_items(true));
-                    }
-                    println!("{}", bb_lock.format_tree(true));
-                } else {
-                    println!("ArcBlackboard is not initialized.");
-                }
-                Ok(())
-            }
-        }
-    }
 }
 
 impl AMSNodeAccess for AroraMemSpace {
@@ -543,13 +511,6 @@ impl AMSNodeAccess for AroraMemSpace {
 }
 
 impl AroraMemSpaceInterface for Arc<Mutex<AroraMemSpace>> {
-    fn print(&self, tree_only: bool) -> Result<(), String> {
-        self.lock()
-            .map_err(|_| "Failed to lock the blackboard")?
-            .print(tree_only);
-        Ok(())
-    }
-
     fn get_name(&self) -> Result<String, String> {
         self.lock()
             .map_err(|_| "Failed to lock the blackboard")?
