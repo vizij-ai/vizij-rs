@@ -6,7 +6,7 @@ use uuid::Uuid;
 use vizij_blackboard_core::PATH_SEPARATOR;
 use vizij_blackboard_core::{
     arc_bb::{ArcBBNode, ArcBBPathNodeTrait, ArcNamespacedSetterTrait},
-    blackboard_ref::{AroraMemSpace, AroraMemSpaceInterface, AroraMemSpaceType},
+    arora_mem_space::{AroraMemSpace, AroraMemSpaceInterface, AroraMemSpaceType},
     traits::BBNodeTrait,
     ArcBlackboard,
 };
