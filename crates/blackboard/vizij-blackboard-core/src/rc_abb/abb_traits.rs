@@ -14,7 +14,7 @@ use arora_schema::{
 };
 use uuid::Uuid;
 
-use crate::adt;
+use crate::{adt, PATH_SEPARATOR};
 use crate::{
     split_path,
     traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, CheckPathResult},
@@ -906,7 +906,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + ABBPathNodeTrait {
         for (_i, part) in name_parts.iter().enumerate().take(name_parts.len()) {
             // Build the current path for error reporting
             if !intermediate_path.is_empty() {
-                intermediate_path.push('.');
+                intermediate_path.push(PATH_SEPARATOR);
             }
             intermediate_path.push_str(part);
 

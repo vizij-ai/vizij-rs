@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::{
     adt, split_path,
     traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, CheckPathResult},
-    ABBItemNode, ArcAroraBlackboard,
+    ABBItemNode, ArcAroraBlackboard, PATH_SEPARATOR,
 };
 
 use super::{ArcABBNode, ArcABBPathNode};
@@ -958,7 +958,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcABBPathNodeTrait {
         for (_i, part) in name_parts.iter().enumerate().take(name_parts.len()) {
             // Build the current path for error reporting
             if !intermediate_path.is_empty() {
-                intermediate_path.push('.');
+                intermediate_path.push(PATH_SEPARATOR);
             }
             intermediate_path.push_str(part);
 

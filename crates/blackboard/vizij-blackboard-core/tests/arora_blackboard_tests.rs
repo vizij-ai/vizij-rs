@@ -3,12 +3,25 @@ use arora_schema::value::Value;
 use arora_schema::{gen_bb_uuid, gen_uuid_from_str};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
+use vizij_blackboard_core::PATH_SEPARATOR;
 use vizij_blackboard_core::{
     arc_abb::{ArcABBNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait},
     blackboard_ref::{BlackboardInterface, BlackboardRef, BlackboardType},
     traits::BBNodeTrait,
     ArcAroraBlackboard,
 };
+
+/// Helper function to join path segments using PATH_SEPARATOR
+/// Takes an inline list of path segments and returns a properly joined path
+///
+/// # Example
+/// ```
+/// let path = path(&["entity", "transform", "position", "x"]);
+/// // Returns "entity.transform.position.x" (or uses the actual PATH_SEPARATOR)
+/// ```
+fn path(segments: &[&str]) -> String {
+    segments.join(&PATH_SEPARATOR.to_string())
+}
 
 // Macro to generate tests for both ArcAroraBlackboard and AroraBlackboard
 macro_rules! test_both_blackboards {
@@ -147,17 +160,17 @@ fn test_single_level_namespace_impl(bb_type: BlackboardType) {
     let math_name = "math";
     let pi_name = "pi";
     let pi_value = Value::F32(std::f32::consts::PI);
-    let path = format!("{}.{}", math_name, pi_name);
-    let pi_id = bb.set(&path, pi_value.clone()).unwrap();
+    let full_path = path(&[math_name, pi_name]);
+    let pi_id = bb.set(&full_path, pi_value.clone()).unwrap();
 
     // Verify the math namespace path exists
     assert_path_exists_ref(&bb, math_name);
 
     // Verify the full path exists and corresponds to the pi node
-    validate_item_ref(&bb, &path, &pi_value, &pi_id);
+    validate_item_ref(&bb, &full_path, &pi_value, &pi_id);
 
     // Verify the pi node exists in the math namespace
-    assert!(contains_ref(&bb, &path));
+    assert!(contains_ref(&bb, &full_path));
 }
 
 test_both_blackboards!(
@@ -174,24 +187,48 @@ fn test_multi_level_namespace_impl(bb_type: BlackboardType) {
     let pos_z = Value::F32(30.0);
 
     let x_id = bb
-        .set("entity.transform.position.x", pos_x.clone())
+        .set(
+            &path(&["entity", "transform", "position", "x"]),
+            pos_x.clone(),
+        )
         .unwrap();
     let y_id = bb
-        .set("entity.transform.position.y", pos_y.clone())
+        .set(
+            &path(&["entity", "transform", "position", "y"]),
+            pos_y.clone(),
+        )
         .unwrap();
     let z_id = bb
-        .set("entity.transform.position.z", pos_z.clone())
+        .set(
+            &path(&["entity", "transform", "position", "z"]),
+            pos_z.clone(),
+        )
         .unwrap();
 
     // Verify intermediate namespaces exist
     assert_path_exists_ref(&bb, "entity");
-    assert_path_exists_ref(&bb, "entity.transform");
-    assert_path_exists_ref(&bb, "entity.transform.position");
+    assert_path_exists_ref(&bb, &path(&["entity", "transform"]));
+    assert_path_exists_ref(&bb, &path(&["entity", "transform", "position"]));
 
     // Check values by full path
-    validate_item_ref(&bb, "entity.transform.position.x", &pos_x, &x_id);
-    validate_item_ref(&bb, "entity.transform.position.y", &pos_y, &y_id);
-    validate_item_ref(&bb, "entity.transform.position.z", &pos_z, &z_id);
+    validate_item_ref(
+        &bb,
+        &path(&["entity", "transform", "position", "x"]),
+        &pos_x,
+        &x_id,
+    );
+    validate_item_ref(
+        &bb,
+        &path(&["entity", "transform", "position", "y"]),
+        &pos_y,
+        &y_id,
+    );
+    validate_item_ref(
+        &bb,
+        &path(&["entity", "transform", "position", "z"]),
+        &pos_z,
+        &z_id,
+    );
 }
 
 test_both_blackboards!(test_multi_level_namespace, test_multi_level_namespace_impl);
@@ -204,17 +241,23 @@ fn test_namespaces_with_multiple_values_impl(bb_type: BlackboardType) {
     let mp = Value::I32(50);
     let speed = Value::F32(5.5);
 
-    let hp_id = bb.set("player.stats.hp", hp.clone()).unwrap();
-    let mp_id = bb.set("player.stats.mp", mp.clone()).unwrap();
-    let speed_id = bb.set("player.stats.speed", speed.clone()).unwrap();
+    let hp_id = bb
+        .set(&path(&["player", "stats", "hp"]), hp.clone())
+        .unwrap();
+    let mp_id = bb
+        .set(&path(&["player", "stats", "mp"]), mp.clone())
+        .unwrap();
+    let speed_id = bb
+        .set(&path(&["player", "stats", "speed"]), speed.clone())
+        .unwrap();
 
     // Verify the namespace exists
     assert_path_exists_ref(&bb, "player");
 
     // Verify the ids correspond to the expected values
-    validate_item_ref(&bb, "player.stats.hp", &hp, &hp_id);
-    validate_item_ref(&bb, "player.stats.mp", &mp, &mp_id);
-    validate_item_ref(&bb, "player.stats.speed", &speed, &speed_id);
+    validate_item_ref(&bb, &path(&["player", "stats", "hp"]), &hp, &hp_id);
+    validate_item_ref(&bb, &path(&["player", "stats", "mp"]), &mp, &mp_id);
+    validate_item_ref(&bb, &path(&["player", "stats", "speed"]), &speed, &speed_id);
 }
 
 test_both_blackboards!(
@@ -245,14 +288,14 @@ fn test_non_existent_paths_impl(bb_type: BlackboardType) {
     let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Add some values
-    bb.set("a.b.c", Value::I32(1)).unwrap();
+    bb.set(&path(&["a", "b", "c"]), Value::I32(1)).unwrap();
 
     // Test non-existent paths
     assert_path_not_exists_ref(&bb, "");
     assert_path_not_exists_ref(&bb, "x");
-    assert_path_not_exists_ref(&bb, "a.x");
-    assert_path_not_exists_ref(&bb, "a.b.x");
-    assert_path_not_exists_ref(&bb, "a.b.c.d");
+    assert_path_not_exists_ref(&bb, &path(&["a", "x"]));
+    assert_path_not_exists_ref(&bb, &path(&["a", "b", "x"]));
+    assert_path_not_exists_ref(&bb, &path(&["a", "b", "c", "d"]));
 }
 
 test_both_blackboards!(test_non_existent_paths, test_non_existent_paths_impl);
@@ -265,14 +308,20 @@ fn test_complex_values_impl(bb_type: BlackboardType) {
     let string_value = Value::String("Hello, World!".to_string());
     let array_value = Value::ArrayI32(vec![1, 2, 3]);
 
-    let bool_id = bb.set("values.bool", bool_value.clone()).unwrap();
-    let string_id = bb.set("values.string", string_value.clone()).unwrap();
-    let array_id = bb.set("values.array", array_value.clone()).unwrap();
+    let bool_id = bb
+        .set(&path(&["values", "bool"]), bool_value.clone())
+        .unwrap();
+    let string_id = bb
+        .set(&path(&["values", "string"]), string_value.clone())
+        .unwrap();
+    let array_id = bb
+        .set(&path(&["values", "array"]), array_value.clone())
+        .unwrap();
 
     // Get and validate the values
-    validate_item_ref(&bb, "values.bool", &bool_value, &bool_id);
-    validate_item_ref(&bb, "values.string", &string_value, &string_id);
-    validate_item_ref(&bb, "values.array", &array_value, &array_id);
+    validate_item_ref(&bb, &path(&["values", "bool"]), &bool_value, &bool_id);
+    validate_item_ref(&bb, &path(&["values", "string"]), &string_value, &string_id);
+    validate_item_ref(&bb, &path(&["values", "array"]), &array_value, &array_id);
 }
 
 test_both_blackboards!(test_complex_values, test_complex_values_impl);
@@ -298,13 +347,15 @@ fn test_namespace_node_impl(bb_type: BlackboardType) {
     let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Add some values to create namespaces
-    bb.set("system.config.debug", Value::Boolean(true)).unwrap();
-    bb.set("system.config.log_level", Value::I32(3)).unwrap();
+    bb.set(&path(&["system", "config", "debug"]), Value::Boolean(true))
+        .unwrap();
+    bb.set(&path(&["system", "config", "log_level"]), Value::I32(3))
+        .unwrap();
 
     // Verify the namespace paths exist
-    assert_path_exists_ref(&bb, "system.config");
-    assert!(contains_ref(&bb, "system.config.debug"));
-    assert!(contains_ref(&bb, "system.config.log_level"));
+    assert_path_exists_ref(&bb, &path(&["system", "config"]));
+    assert!(contains_ref(&bb, &path(&["system", "config", "debug"])));
+    assert!(contains_ref(&bb, &path(&["system", "config", "log_level"])));
 }
 
 test_both_blackboards!(test_namespace_node, test_namespace_node_impl);
@@ -313,19 +364,23 @@ fn test_overwrite_existing_item_impl(bb_type: BlackboardType) {
     let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Add a value
-    let id1 = bb.set("player.health", Value::I32(100)).unwrap();
+    let id1 = bb
+        .set(&path(&["player", "health"]), Value::I32(100))
+        .unwrap();
 
     // Verify initial value
-    validate_item_ref(&bb, "player.health", &Value::I32(100), &id1);
+    validate_item_ref(&bb, &path(&["player", "health"]), &Value::I32(100), &id1);
 
     // Overwrite with new value
-    let id2 = bb.set("player.health", Value::I32(150)).unwrap();
+    let id2 = bb
+        .set(&path(&["player", "health"]), Value::I32(150))
+        .unwrap();
 
     // IDs should be the same when overwriting
     assert_eq!(id1, id2);
 
     // Verify updated value
-    validate_item_ref(&bb, "player.health", &Value::I32(150), &id1);
+    validate_item_ref(&bb, &path(&["player", "health"]), &Value::I32(150), &id1);
 }
 
 test_both_blackboards!(
@@ -349,11 +404,12 @@ fn test_path_conflict_impl(bb_type: BlackboardType) {
     let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Create a namespace node
-    bb.set("player.inventory.gold", Value::I32(100)).unwrap();
+    bb.set(&path(&["player", "inventory", "gold"]), Value::I32(100))
+        .unwrap();
 
     // Now try to use the namespace as a value path (should fail)
     let result = bb.set(
-        "player.inventory",
+        &path(&["player", "inventory"]),
         Value::String("this should fail".to_string()),
     );
     assert!(
@@ -361,10 +417,12 @@ fn test_path_conflict_impl(bb_type: BlackboardType) {
         "Expected an error when trying to set a value at an existing path node"
     );
     let error_message = result.unwrap_err();
+    let expected_path = path(&["player", "inventory"]);
     assert!(
-        error_message.contains(
-            "Path player.inventory already exists as a BBPath node, cannot set it with a Value"
-        ),
+        error_message.contains(&format!(
+            "Path {} already exists as a BBPath node, cannot set it with a Value",
+            expected_path
+        )),
         "Error message should contain expected text, but got: {}",
         error_message
     );
@@ -409,11 +467,11 @@ fn test_keyvalue_structure() {
     assert!(!result.is_nil());
 
     // Check that values were set correctly
-    let health_node = bb.get(&"player.health");
+    let health_node = bb.get(&path(&["player", "health"]));
     assert_node_exists(health_node.clone());
-    let strength_node = bb.get(&"player.stats.strength");
+    let strength_node = bb.get(&path(&["player", "stats", "strength"]));
     assert_node_exists(strength_node.clone());
-    let agility_node = bb.get(&"player.stats.agility");
+    let agility_node = bb.get(&path(&["player", "stats", "agility"]));
     assert_node_exists(agility_node.clone());
 
     // Verify content
@@ -458,16 +516,16 @@ fn test_keyvalue_structure() {
         .into();
     // Update the stats KeyValue structure
     let result = bb
-        .set(&"player.stats".to_string(), new_stats_kv.clone().into())
+        .set(&path(&["player", "stats"]), new_stats_kv.clone().into())
         .unwrap();
 
     assert!(!result.is_nil());
 
     // Check that values were set correctly
-    let updated_strength_node = bb.get(&"player.stats.strength");
+    let updated_strength_node = bb.get(&path(&["player", "stats", "strength"]));
     assert_node_exists(updated_strength_node.clone());
 
-    let updated_agility_node = bb.get(&"player.stats.agility");
+    let updated_agility_node = bb.get(&path(&["player", "stats", "agility"]));
     assert_node_exists(updated_agility_node.clone());
 
     // Verify content
@@ -516,13 +574,13 @@ fn test_type_compatibility_impl(bb_type: BlackboardType) {
     let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Set initial value as integer
-    let id = bb.set("player.level", Value::I32(10)).unwrap();
+    let id = bb.set(&path(&["player", "level"]), Value::I32(10)).unwrap();
 
     // Update with compatible type should work
-    bb.set("player.level", Value::I32(20)).unwrap();
+    bb.set(&path(&["player", "level"]), Value::I32(20)).unwrap();
 
     // Check if updated correctly
-    validate_item_ref(&bb, "player.level", &Value::I32(20), &id);
+    validate_item_ref(&bb, &path(&["player", "level"]), &Value::I32(20), &id);
 }
 
 test_both_blackboards!(test_type_compatibility, test_type_compatibility_impl);
@@ -531,11 +589,15 @@ fn test_incompatible_type_impl(bb_type: BlackboardType) {
     let mut bb = BlackboardRef::new(bb_type, "root");
 
     // Set initial value as integer
-    bb.set("player.score", Value::I32(100)).unwrap();
+    bb.set(&path(&["player", "score"]), Value::I32(100))
+        .unwrap();
 
     // Try to update with incompatible type (should panic)
-    bb.set("player.score", Value::String("hundred".to_string()))
-        .unwrap();
+    bb.set(
+        &path(&["player", "score"]),
+        Value::String("hundred".to_string()),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -555,13 +617,19 @@ fn test_get_using_node_trait() {
     let mut bb = ArcAroraBlackboard::new("root".to_string());
 
     // Set up a multi-level structure
-    bb.set(&"game.world.player.position.x", Value::F32(10.0))
-        .unwrap();
-    bb.set(&"game.world.player.position.y", Value::F32(20.0))
-        .unwrap();
+    bb.set(
+        &path(&["game", "world", "player", "position", "x"]),
+        Value::F32(10.0),
+    )
+    .unwrap();
+    bb.set(
+        &path(&["game", "world", "player", "position", "y"]),
+        Value::F32(20.0),
+    )
+    .unwrap();
 
     // Get the world node
-    let world_node = bb.get(&"game.world");
+    let world_node = bb.get(&path(&["game", "world"]));
     assert_node_exists(world_node.clone());
 
     // Use the ABBNodeTrait methods to navigate
@@ -595,12 +663,18 @@ fn test_get_complex_path_using_node_trait() {
 
     let excalibur = Value::String("Excalibur".to_string());
     // Set up a complex structure
-    bb.set(&"game.world.player.position.x", Value::F32(10.0))
-        .unwrap();
-    bb.set(&"game.world.player.position.y", Value::F32(20.0))
-        .unwrap();
     bb.set(
-        &"game.world.player.inventory.items.sword",
+        &path(&["game", "world", "player", "position", "x"]),
+        Value::F32(10.0),
+    )
+    .unwrap();
+    bb.set(
+        &path(&["game", "world", "player", "position", "y"]),
+        Value::F32(20.0),
+    )
+    .unwrap();
+    bb.set(
+        &path(&["game", "world", "player", "inventory", "items", "sword"]),
         excalibur.clone(),
     )
     .unwrap();
@@ -627,10 +701,11 @@ fn test_get_complex_path_using_node_trait() {
         );
     }
 
-    let player_node = game_node_unwrapped.get(&"world.player");
+    let player_node = game_node_unwrapped.get(&path(&["world", "player"]));
     assert_node_exists(player_node);
 
-    let inventory_node_from_world = world_node_from_game_unwrapped.get(&"player.inventory");
+    let inventory_node_from_world =
+        world_node_from_game_unwrapped.get(&path(&["player", "inventory"]));
     assert_node_exists(inventory_node_from_world.clone());
 
     let inventory_node_from_world_unwrapped =
@@ -638,7 +713,8 @@ fn test_get_complex_path_using_node_trait() {
     let items_node_from_inventory = inventory_node_from_world_unwrapped.get(&"items");
     assert_node_exists(items_node_from_inventory);
 
-    let sword_node_from_inventory = inventory_node_from_world_unwrapped.get(&"items.sword");
+    let sword_node_from_inventory =
+        inventory_node_from_world_unwrapped.get(&path(&["items", "sword"]));
     assert_node_exists(sword_node_from_inventory.clone());
 
     // Verify final value

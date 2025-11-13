@@ -5,8 +5,10 @@ pub use crate::general_bb::itemnode::ABBItemNode;
 
 // Utility function to split a namespace path into components
 pub fn split_path(path: &str) -> Vec<String> {
-    path.split('.')
+    path.split(PATH_SEPARATOR)
         .filter(|s| !s.is_empty())
         .map(String::from)
         .collect()
 }
+
+pub static PATH_SEPARATOR: char = '.';

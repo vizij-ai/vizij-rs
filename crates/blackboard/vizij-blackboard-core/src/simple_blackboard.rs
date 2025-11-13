@@ -1,6 +1,8 @@
 use arora_schema::value::Value;
 use std::collections::HashMap;
 
+use crate::PATH_SEPARATOR;
+
 /// A leaf node that contains a name and a ChannelValue
 #[derive(Debug)]
 pub struct BBItem {
@@ -171,8 +173,8 @@ impl ItemHolder for KeyValueItem {
     /// * `Err(String)` if there was an error (e.g., path conflict, invalid path)
     fn add_item<S: ToString + ?Sized>(&mut self, path: &S, value: Value) -> Result<(), String> {
         let path = path.to_string();
-        // Split the path by '.'
-        let path_parts: Vec<&str> = path.split('.').collect();
+        // Split the path by PATH_SEPARATOR
+        let path_parts: Vec<&str> = path.split(PATH_SEPARATOR).collect();
 
         if path_parts.is_empty() {
             return Err("Cannot add item with empty path".to_string());
@@ -185,8 +187,8 @@ impl ItemHolder for KeyValueItem {
 
     fn get_item<S: ToString + ?Sized>(&self, path: &S) -> Option<&Value> {
         let path = path.to_string();
-        // Split the path by '.'
-        let path_parts: Vec<&str> = path.split('.').collect();
+        // Split the path by PATH_SEPARATOR
+        let path_parts: Vec<&str> = path.split(PATH_SEPARATOR).collect();
 
         if path_parts.is_empty() {
             return None; // Nothing to get for empty path
@@ -219,8 +221,8 @@ impl ItemHolder for KeyValueItem {
 
     fn remove_item<S: ToString + ?Sized>(&mut self, path: &S) -> Option<Value> {
         let path = path.to_string();
-        // Split the path by '.'
-        let path_parts: Vec<&str> = path.split('.').collect();
+        // Split the path by PATH_SEPARATOR
+        let path_parts: Vec<&str> = path.split(PATH_SEPARATOR).collect();
 
         if path_parts.is_empty() {
             return None; // Nothing to remove for empty path
