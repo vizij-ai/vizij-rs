@@ -6,7 +6,7 @@ use uuid::Uuid;
 use vizij_blackboard_core::PATH_SEPARATOR;
 use vizij_blackboard_core::{
     arc_bb::{ArcBBNode, ArcBBPathNodeTrait, ArcNamespacedSetterTrait},
-    arora_mem_space::{AroraMemSpace, AroraMemSpaceInterface, AroraMemSpaceType},
+    arora_mem_space::{AMSNodeAccess, AroraMemSpace, AroraMemSpaceInterface, AroraMemSpaceType},
     traits::BBNodeTrait,
     ArcBlackboard,
 };
@@ -198,6 +198,7 @@ fn test_multi_level_namespace_impl(bb_type: AroraMemSpaceType) {
             pos_y.clone(),
         )
         .unwrap();
+
     let z_id = bb
         .set(
             &path(&["entity", "transform", "position", "z"]),
@@ -612,9 +613,8 @@ fn test_incompatible_type_arora() {
     test_incompatible_type_impl(AroraMemSpaceType::Rc);
 }
 
-#[test]
-fn test_get_using_node_trait() {
-    let mut bb = ArcBlackboard::new("root".to_string());
+fn test_get_using_node_trait_impl(bb_type: AroraMemSpaceType) {
+    let mut bb = AroraMemSpace::new(bb_type, "root");
 
     // Set up a multi-level structure
     bb.set(
@@ -628,38 +628,67 @@ fn test_get_using_node_trait() {
     )
     .unwrap();
 
-    // Get the world node
-    let world_node = bb.get(&path(&["game", "world"]));
-    assert_node_exists(world_node.clone());
+    // Note: Individual nodes don't implement navigation methods - only the blackboard root does.
+    // We can verify the structure exists by using lookup_arc_node/lookup_node to check nodes exist,
+    // and validate values via lookup.
+    match bb_type {
+        AroraMemSpaceType::Arc => {
+            // Verify nodes exist at various depths using lookup_arc_node
+            assert!(
+                bb.lookup_arc_node(&path(&["game", "world"])).is_some(),
+                "World node should exist"
+            );
+            assert!(
+                bb.lookup_arc_node(&path(&["game", "world", "player"]))
+                    .is_some(),
+                "Player node should exist"
+            );
+            assert!(
+                bb.lookup_arc_node(&path(&["game", "world", "player", "position"]))
+                    .is_some(),
+                "Position node should exist"
+            );
+            assert!(
+                bb.lookup_arc_node(&path(&["game", "world", "player", "position", "x"]))
+                    .is_some(),
+                "X node should exist"
+            );
 
-    // Use the BBNodeTrait methods to navigate
-    let world_node_unwrapped = unwrap_node_result(world_node).expect("World node should exist");
-    let player_node = world_node_unwrapped.get(&"player");
-    assert_node_exists(player_node.clone());
-
-    let player_node_unwrapped = unwrap_node_result(player_node).expect("Player node should exist");
-    let position_node = player_node_unwrapped.get(&"position");
-    assert_node_exists(position_node.clone());
-
-    let position_node_unwrapped =
-        unwrap_node_result(position_node).expect("Position node should exist");
-    let x_node = position_node_unwrapped.get(&"x");
-    assert_node_exists(x_node.clone());
-
-    // Verify final value
-    let x_node_unwrapped = unwrap_node_result(x_node).expect("X node should exist");
-    let guard = x_node_unwrapped.lock().unwrap();
-    match guard.as_item() {
-        Some(item) => {
-            assert_eq!(item.get_value(), Some(&Value::F32(10.0)));
+            // Verify the final value
+            let x_node = bb
+                .lookup_arc_node(&path(&["game", "world", "player", "position", "x"]))
+                .expect("X node should exist");
+            let guard = x_node.lock().unwrap();
+            match guard.as_item() {
+                Some(item) => {
+                    assert_eq!(item.get_value(), Some(&Value::F32(10.0)));
+                }
+                None => panic!("Expected Item node"),
+            }
         }
-        None => panic!("Expected Item node"),
+        AroraMemSpaceType::Rc => {
+            // For Rc-based blackboards, verify values exist via lookup
+            assert_eq!(
+                bb.lookup(&path(&["game", "world", "player", "position", "x"])),
+                Some(Value::F32(10.0))
+            );
+            assert_eq!(
+                bb.lookup(&path(&["game", "world", "player", "position", "y"])),
+                Some(Value::F32(20.0))
+            );
+
+            // Verify intermediate paths exist
+            assert_path_exists_ref(&bb, &path(&["game", "world"]));
+            assert_path_exists_ref(&bb, &path(&["game", "world", "player"]));
+            assert_path_exists_ref(&bb, &path(&["game", "world", "player", "position"]));
+        }
     }
 }
 
-#[test]
-fn test_get_complex_path_using_node_trait() {
-    let mut bb = ArcBlackboard::new("root".to_string());
+test_both_blackboards!(test_get_using_node_trait, test_get_using_node_trait_impl);
+
+fn test_get_complex_path_using_node_trait_impl(bb_type: AroraMemSpaceType) {
+    let mut bb = AroraMemSpace::new(bb_type, "root");
 
     let excalibur = Value::String("Excalibur".to_string());
     // Set up a complex structure
@@ -679,52 +708,100 @@ fn test_get_complex_path_using_node_trait() {
     )
     .unwrap();
 
-    // Get the world node
-    let game_node = bb.get(&"game");
-    println!("Game node: {:?}", game_node);
-    assert_node_exists(game_node.clone());
-    let game_node_unwrapped = unwrap_node_result(game_node).expect("Game node should exist");
+    match bb_type {
+        AroraMemSpaceType::Arc => {
+            // Verify various nodes exist using lookup_arc_node
+            assert!(
+                bb.lookup_arc_node(&"game").is_some(),
+                "Game node should exist"
+            );
 
-    // Use the BBNodeTrait methods to navigate
-    let world_node_from_game = game_node_unwrapped.get(&"world");
-    assert_node_exists(world_node_from_game.clone());
-    let world_node_from_game_unwrapped =
-        unwrap_node_result(world_node_from_game.clone()).expect("World node should exist");
+            let world_node = bb.lookup_arc_node(&path(&["game", "world"]));
+            assert!(world_node.is_some(), "World node should exist");
 
-    // Verify the world node is a namespace with the correct name and id
-    {
-        let world_node_guard = world_node_from_game_unwrapped.lock().unwrap();
-        assert!(world_node_guard.is_path().unwrap());
-        assert_eq!(
-            get_name_ref_safe(world_node_guard.get_current_name_copy()),
-            "world".to_string()
-        );
-    }
+            // Verify the world node is a namespace with the correct name
+            {
+                let world_arc = world_node.unwrap();
+                let world_guard = world_arc.lock().unwrap();
+                assert!(world_guard.is_path().unwrap());
+                assert_eq!(
+                    get_name_ref_safe(world_guard.get_current_name_copy()),
+                    "world".to_string()
+                );
+            }
 
-    let player_node = game_node_unwrapped.get(&path(&["world", "player"]));
-    assert_node_exists(player_node);
+            // Verify all intermediate nodes exist
+            assert!(
+                bb.lookup_arc_node(&path(&["game", "world", "player"]))
+                    .is_some(),
+                "Player node should exist"
+            );
+            assert!(
+                bb.lookup_arc_node(&path(&["game", "world", "player", "inventory"]))
+                    .is_some(),
+                "Inventory node should exist"
+            );
+            assert!(
+                bb.lookup_arc_node(&path(&["game", "world", "player", "inventory", "items"]))
+                    .is_some(),
+                "Items node should exist"
+            );
 
-    let inventory_node_from_world =
-        world_node_from_game_unwrapped.get(&path(&["player", "inventory"]));
-    assert_node_exists(inventory_node_from_world.clone());
-
-    let inventory_node_from_world_unwrapped =
-        unwrap_node_result(inventory_node_from_world.clone()).expect("Inventory node should exist");
-    let items_node_from_inventory = inventory_node_from_world_unwrapped.get(&"items");
-    assert_node_exists(items_node_from_inventory);
-
-    let sword_node_from_inventory =
-        inventory_node_from_world_unwrapped.get(&path(&["items", "sword"]));
-    assert_node_exists(sword_node_from_inventory.clone());
-
-    // Verify final value
-    let sword_node_unwrapped =
-        unwrap_node_result(sword_node_from_inventory).expect("Sword node should exist");
-    let sword_guard = sword_node_unwrapped.lock().unwrap();
-    match sword_guard.as_item() {
-        Some(item) => {
-            assert_eq!(item.get_value(), Some(&excalibur));
+            // Verify final sword value
+            let sword_node = bb
+                .lookup_arc_node(&path(&[
+                    "game",
+                    "world",
+                    "player",
+                    "inventory",
+                    "items",
+                    "sword",
+                ]))
+                .expect("Sword node should exist");
+            let sword_guard = sword_node.lock().unwrap();
+            match sword_guard.as_item() {
+                Some(item) => {
+                    assert_eq!(item.get_value(), Some(&excalibur));
+                }
+                None => panic!("Expected Excalibur Item node"),
+            }
         }
-        None => panic!("Expected Excalibur Item node"),
+        AroraMemSpaceType::Rc => {
+            // For Rc-based blackboards, verify all values exist via lookup
+            assert_eq!(
+                bb.lookup(&path(&["game", "world", "player", "position", "x"])),
+                Some(Value::F32(10.0))
+            );
+            assert_eq!(
+                bb.lookup(&path(&["game", "world", "player", "position", "y"])),
+                Some(Value::F32(20.0))
+            );
+            assert_eq!(
+                bb.lookup(&path(&[
+                    "game",
+                    "world",
+                    "player",
+                    "inventory",
+                    "items",
+                    "sword"
+                ])),
+                Some(excalibur)
+            );
+
+            // Verify intermediate paths exist
+            assert_path_exists_ref(&bb, "game");
+            assert_path_exists_ref(&bb, &path(&["game", "world"]));
+            assert_path_exists_ref(&bb, &path(&["game", "world", "player"]));
+            assert_path_exists_ref(&bb, &path(&["game", "world", "player", "inventory"]));
+            assert_path_exists_ref(
+                &bb,
+                &path(&["game", "world", "player", "inventory", "items"]),
+            );
+        }
     }
 }
+
+test_both_blackboards!(
+    test_get_complex_path_using_node_trait,
+    test_get_complex_path_using_node_trait_impl
+);

@@ -706,7 +706,7 @@ impl ArcBBPathNodeTrait for Arc<Mutex<ArcBlackboard>> {
     /// Retrieves a node by its ID from the blackboard.
     fn get_node_by_id(&self, id: &Uuid) -> Result<Option<Arc<Mutex<ArcBBNode>>>, String> {
         if let Ok(guard) = self.lock() {
-            guard.get_node_by_id(id)
+            ArcBBPathNodeTrait::get_node_by_id(&*guard, id)
         } else {
             Err("Failed to lock mutex".to_string())
         }

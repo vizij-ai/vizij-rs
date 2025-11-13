@@ -337,8 +337,14 @@ pub trait ArcBBPathNodeTrait: BBPathNodeTrait {
         &self,
         node_arc: Arc<Mutex<ArcBBNode>>,
     ) -> Result<Option<KeyValue>, String> {
-        let id: Uuid = node_arc.get_id_copy()?;
-        let is_path = node_arc.is_path()?;
+        let (id, is_path) = {
+            let node_guard = node_arc
+                .lock()
+                .map_err(|_| "Failed to lock node for ID and type access")?;
+            let id = node_guard.get_id_copy()?;
+            let is_path = node_guard.is_path()?;
+            (id, is_path)
+        };
         let mut fields = HashMap::new();
         if is_path {
             // This is a namespace node, we need to recursively build a KeyValue structure
@@ -364,9 +370,17 @@ pub trait ArcBBPathNodeTrait: BBPathNodeTrait {
                     None => continue, // Skip if the child node doesn't exist
                 };
 
-                // Check if this child is an item or path
-                if child_node_arc.is_path()? {
+                // Check if this child is an item or path, then drop the lock before recursing
+                let is_child_path = {
+                    let child_node_guard = child_node_arc
+                        .lock()
+                        .map_err(|_| "Failed to lock child node for item access")?;
+                    child_node_guard.is_path()?
+                };
+
+                if is_child_path {
                     // It's a path, so recursively get its KeyValue
+                    // Lock has been dropped, so we can safely recurse
                     if let Some(child_kv) = self.get_keyvalue_by_id(&child_id)? {
                         // Add this to our fields
                         fields.insert(
@@ -375,23 +389,22 @@ pub trait ArcBBPathNodeTrait: BBPathNodeTrait {
                         );
                     }
                 } else {
-                    let child_node_guard = child_node_arc
-                        .lock()
-                        .map_err(|_| "Failed to lock child node for item access")?;
                     // It's an item, get its value
-                    let item_node = match child_node_guard.as_item() {
-                        Some(item) => item,
-                        None => return Err("Node is not an item".to_string()),
+                    let child_value = {
+                        let child_node_guard = child_node_arc
+                            .lock()
+                            .map_err(|_| "Failed to lock child node for value access")?;
+                        let item_node = match child_node_guard.as_item() {
+                            Some(item) => item,
+                            None => return Err("Node is not an item".to_string()),
+                        };
+                        item_node.get_value().cloned()
                     };
 
                     // Add this item to our fields
                     fields.insert(
                         name.clone(),
-                        KeyValueField::new_with_id_and_option(
-                            name,
-                            child_id,
-                            item_node.get_value().cloned(),
-                        ),
+                        KeyValueField::new_with_id_and_option(name, child_id, child_value),
                     );
                 }
             }

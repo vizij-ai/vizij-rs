@@ -246,7 +246,7 @@ impl AroraMemSpaceInterface for AroraMemSpace {
             }
             AroraMemSpaceType::Arc => {
                 if let Some(bb) = &self.arc_arora_bb {
-                    let item = bb.get(&path.to_string());
+                    let item = { bb.get(&path.to_string()) };
                     if let Ok(ok_item) = &item {
                         if let Some(some_item) = ok_item {
                             let guard: std::sync::MutexGuard<'_, ArcBBNode> =
@@ -385,7 +385,8 @@ impl AroraMemSpaceInterface for AroraMemSpace {
             }
             AroraMemSpaceType::Arc => {
                 if let Some(bb) = &self.arc_arora_bb {
-                    match bb.get_node_by_id(id) {
+                    let node = { bb.get_node_by_id(id) };
+                    match node {
                         Ok(Some(node)) => {
                             let target_node = node.lock().unwrap();
                             match target_node.is_path() {
