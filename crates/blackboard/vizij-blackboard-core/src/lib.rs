@@ -5,7 +5,6 @@ pub mod arora_blackboard;
 pub mod blackboard_ref;
 pub mod general_bb;
 pub mod rc_abb;
-pub mod simple_blackboard;
 
 pub use arc_arora_blackboard::ArcAroraBlackboard;
 pub use arora_blackboard::AroraBlackboard;

@@ -2,14 +2,12 @@
 
 use crate::arc_abb::{ArcABBNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait};
 use crate::rc_abb::{ABBNode, ABBPathNodeTrait, NamespacedSetterTrait};
-use crate::simple_blackboard::{ItemHolder, SimpleBlackboard};
 use crate::traits::{
     BBNodeTrait, BlackboardTrait, ItemsFormattable, JsonSerializable, TreeFormattable,
 };
 use crate::ArcAroraBlackboard;
 use crate::AroraBlackboard;
 
-use arora_schema::gen_bb_uuid;
 use arora_schema::keyvalue::KeyValue;
 use arora_schema::value::Value;
 use serde_json::Value as JsonValue;
@@ -21,7 +19,6 @@ use uuid::Uuid;
 // Define blackboard adapters to provide a consistent interface
 #[derive(Copy, Clone)]
 pub enum BlackboardType {
-    Simple,
     Arora,
     ArcArora,
     // Add more blackboard types here as needed:
@@ -32,7 +29,6 @@ impl BlackboardType {
     // Returns a list of all available blackboard types
     pub fn all_types() -> Vec<BlackboardType> {
         vec![
-            BlackboardType::Simple,
             BlackboardType::Arora,
             BlackboardType::ArcArora,
             // Add more blackboard types here as needed
@@ -42,7 +38,6 @@ impl BlackboardType {
     // Returns the name of this blackboard type for display
     pub fn name(&self) -> &'static str {
         match self {
-            BlackboardType::Simple => "SimpleBlackboard",
             BlackboardType::Arora => "AroraBlackboard",
             BlackboardType::ArcArora => "ArcAroraBlackboard",
             // Add more blackboard types here as needed
@@ -78,7 +73,6 @@ pub trait BlackboardNodeAccess {
 // This struct provides a unified interface to different blackboard implementations
 pub struct BlackboardRef {
     bb_type: BlackboardType,
-    simple_bb: Option<SimpleBlackboard>,
     arora_bb: Option<Rc<RefCell<AroraBlackboard>>>,
     arc_arora_bb: Option<Arc<Mutex<ArcAroraBlackboard>>>,
 }
@@ -86,21 +80,13 @@ pub struct BlackboardRef {
 impl BlackboardRef {
     pub fn new<S: ToString + ?Sized>(bb_type: BlackboardType, name: &S) -> Self {
         match bb_type {
-            BlackboardType::Simple => BlackboardRef {
-                bb_type,
-                simple_bb: Some(SimpleBlackboard::new(name.to_string())),
-                arora_bb: None,
-                arc_arora_bb: None,
-            },
             BlackboardType::Arora => BlackboardRef {
                 bb_type,
-                simple_bb: None,
                 arora_bb: Some(AroraBlackboard::new(name.to_string())),
                 arc_arora_bb: None,
             },
             BlackboardType::ArcArora => BlackboardRef {
                 bb_type,
-                simple_bb: None,
                 arora_bb: None,
                 arc_arora_bb: Some(ArcAroraBlackboard::new(name.to_string())),
             },
@@ -115,9 +101,6 @@ impl BlackboardRef {
 impl BlackboardInterface for BlackboardRef {
     fn to_json(&self) -> Result<JsonValue, String> {
         match self.bb_type {
-            BlackboardType::Simple => {
-                unimplemented!("to_json not implemented for SimpleBlackboard")
-            }
             BlackboardType::Arora => {
                 if let Some(bb) = &self.arora_bb {
                     bb.borrow().to_json()
@@ -138,13 +121,6 @@ impl BlackboardInterface for BlackboardRef {
 
     fn get_name(&self) -> Result<String, String> {
         match self.bb_type {
-            BlackboardType::Simple => {
-                if let Some(bb) = &self.simple_bb {
-                    Ok(bb.name().to_string())
-                } else {
-                    Err("SimpleBlackboard is not initialized".to_string())
-                }
-            }
             BlackboardType::Arora => {
                 if let Some(bb) = &self.arora_bb {
                     Ok(bb
@@ -167,14 +143,6 @@ impl BlackboardInterface for BlackboardRef {
 
     fn set<S: ToString + ?Sized>(&mut self, path: &S, value: Value) -> Result<Uuid, String> {
         let res = match self.bb_type {
-            BlackboardType::Simple => {
-                if let Some(bb) = &mut self.simple_bb {
-                    bb.add_item(path, value);
-                    Ok(gen_bb_uuid())
-                } else {
-                    Err("SimpleBlackboard is not initialized".to_string())
-                }
-            }
             BlackboardType::Arora => {
                 if let Some(bb) = &mut self.arora_bb {
                     bb.borrow_mut().set(path, value)
@@ -201,13 +169,6 @@ impl BlackboardInterface for BlackboardRef {
 
     fn lookup<S: ToString + ?Sized>(&self, path: &S) -> Option<Value> {
         let res: Result<Option<Value>, String> = match self.bb_type {
-            BlackboardType::Simple => {
-                if let Some(bb) = &self.simple_bb {
-                    Ok(bb.get_item(path).cloned())
-                } else {
-                    Err("SimpleBlackboard is not initialized".to_string())
-                }
-            }
             BlackboardType::Arora => {
                 if let Some(bb) = &self.arora_bb {
                     let item = bb.borrow().get(&path.to_string());
@@ -318,9 +279,6 @@ impl BlackboardInterface for BlackboardRef {
 
     fn lookup_kv_by_id(&self, id: &Uuid) -> Result<Option<KeyValue>, String> {
         let res = match self.bb_type {
-            BlackboardType::Simple => {
-                unimplemented!("get_keyvalue_by_id not implemented for SimpleBlackboard")
-            }
             BlackboardType::Arora => {
                 if let Some(bb) = &self.arora_bb {
                     bb.borrow().get_keyvalue_by_id(id)
@@ -353,14 +311,6 @@ impl BlackboardInterface for BlackboardRef {
         id: &Uuid,
     ) -> Result<Uuid, String> {
         let res = match self.bb_type {
-            BlackboardType::Simple => {
-                if let Some(bb) = &mut self.simple_bb {
-                    bb.add_item(path, value);
-                    Ok(gen_bb_uuid())
-                } else {
-                    Err("SimpleBlackboard is not initialized".to_string())
-                }
-            }
             BlackboardType::Arora => {
                 if let Some(bb) = &mut self.arora_bb {
                     bb.borrow_mut()
@@ -388,9 +338,6 @@ impl BlackboardInterface for BlackboardRef {
 
     fn set_by_id(&mut self, id: &Uuid, value: Value) -> Result<Uuid, String> {
         let res = match self.bb_type {
-            BlackboardType::Simple => {
-                unimplemented!("set_by_id not implemented for SimpleBlackboard")
-            }
             BlackboardType::Arora => {
                 if let Some(bb) = &mut self.arora_bb {
                     bb.borrow_mut().set_existing_bb_item(value, id)
@@ -417,13 +364,6 @@ impl BlackboardInterface for BlackboardRef {
 
     fn lookup_by_id(&self, id: &Uuid) -> Option<Value> {
         let res = match self.bb_type {
-            BlackboardType::Simple => {
-                if let Some(bb) = &self.simple_bb {
-                    Ok(bb.get_item(id).cloned())
-                } else {
-                    Err("SimpleBlackboard is not initialized".to_string())
-                }
-            }
             BlackboardType::Arora => {
                 if let Some(bb) = &self.arora_bb {
                     match bb.borrow().get_node_by_id(id) {
@@ -477,7 +417,6 @@ impl BlackboardInterface for BlackboardRef {
 
     fn print(&self, tree_only: bool) -> Result<(), String> {
         match self.bb_type {
-            BlackboardType::Simple => unimplemented!("Print not implemented for SimpleBlackboard"),
             BlackboardType::Arora => {
                 if let Some(bb) = &self.arora_bb {
                     let bb_ref = bb.borrow();
@@ -509,9 +448,6 @@ impl BlackboardInterface for BlackboardRef {
 impl BlackboardNodeAccess for BlackboardRef {
     fn lookup_arc_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Arc<Mutex<ArcABBNode>>> {
         let res = match self.bb_type {
-            BlackboardType::Simple => {
-                unimplemented!("SimpleBlackboard does not support node lookup")
-            }
             BlackboardType::Arora => {
                 unimplemented!("AroraBlackboard does not support Arc node lookup")
             }
@@ -537,9 +473,6 @@ impl BlackboardNodeAccess for BlackboardRef {
 
     fn lookup_arc_node_by_id(&self, id: &Uuid) -> Option<Arc<Mutex<ArcABBNode>>> {
         let res = match self.bb_type {
-            BlackboardType::Simple => {
-                unimplemented!("SimpleBlackboard does not support node lookup by ID")
-            }
             BlackboardType::Arora => {
                 unimplemented!("AroraBlackboard does not support Arc node lookup by ID")
             }
@@ -563,9 +496,6 @@ impl BlackboardNodeAccess for BlackboardRef {
 
     fn lookup_node<S: ToString + ?Sized>(&self, path: &S) -> Option<Rc<RefCell<ABBNode>>> {
         let res = match self.bb_type {
-            BlackboardType::Simple => {
-                unimplemented!("SimpleBlackboard does not support node lookup")
-            }
             BlackboardType::ArcArora => {
                 unimplemented!("ArcAroraBlackboard does not support Rc node lookup")
             }
@@ -592,9 +522,6 @@ impl BlackboardNodeAccess for BlackboardRef {
 
     fn lookup_node_by_id(&self, id: &Uuid) -> Option<Rc<RefCell<ABBNode>>> {
         let res = match self.bb_type {
-            BlackboardType::Simple => {
-                unimplemented!("SimpleBlackboard does not support node lookup by ID")
-            }
             BlackboardType::ArcArora => {
                 unimplemented!("ArcAroraBlackboard does not support Rc node lookup by ID")
             }
