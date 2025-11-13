@@ -10,11 +10,10 @@ use std::fmt::{self, Display};
 use std::rc::{Rc, Weak};
 use uuid::Uuid;
 
-use super::{ABBNode, ABBPathNodeTrait, NamespacedSetterTrait};
+use super::{ABBNode, ABBPathNodeTrait, AroraBlackboard, NamespacedSetterTrait};
 use crate::traits::{
     BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, TreeFormattable,
 };
-use crate::AroraBlackboard;
 
 /// A node that represents a path in the blackboard structure.
 ///

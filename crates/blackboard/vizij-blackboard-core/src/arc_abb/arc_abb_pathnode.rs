@@ -10,11 +10,11 @@ use arora_schema::gen_bb_uuid;
 use arora_schema::value::Value;
 use uuid::Uuid;
 
+use super::ArcAroraBlackboard;
 use super::{ArcABBNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait};
 use crate::traits::{
     BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, TreeFormattable,
 };
-use crate::ArcAroraBlackboard;
 
 /// A node that represents a path in the blackboard structure.
 ///

@@ -18,10 +18,10 @@ use uuid::Uuid;
 use crate::{
     adt, split_path,
     traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, CheckPathResult},
-    ABBItemNode, ArcAroraBlackboard, PATH_SEPARATOR,
+    ABBItemNode, PATH_SEPARATOR,
 };
 
-use super::{ArcABBNode, ArcABBPathNode};
+use super::{ArcABBNode, ArcABBPathNode, ArcAroraBlackboard};
 
 /// This is the main trait for objects that can be used as paths in the blackboard.
 ///

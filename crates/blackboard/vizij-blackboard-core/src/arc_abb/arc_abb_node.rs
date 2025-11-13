@@ -13,8 +13,10 @@ use uuid::Uuid;
 use crate::{
     arc_abb::{ArcABBPathNode, ArcABBPathNodeTrait, ArcNamespacedSetterTrait},
     traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, TreeFormattable},
-    ABBItemNode, ArcAroraBlackboard,
+    ABBItemNode,
 };
+
+use super::ArcAroraBlackboard;
 
 /// An abstract node in the blackboard structure, which can be either a path or an item.
 ///

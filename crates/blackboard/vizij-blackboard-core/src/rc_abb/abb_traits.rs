@@ -18,10 +18,10 @@ use crate::{adt, PATH_SEPARATOR};
 use crate::{
     split_path,
     traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, CheckPathResult},
-    ABBItemNode, AroraBlackboard,
+    ABBItemNode,
 };
 
-use super::{ABBNode, ABBPathNode};
+use super::{ABBNode, ABBPathNode, AroraBlackboard};
 
 /// This is the main trait for objects that can be used as paths in the blackboard.
 ///

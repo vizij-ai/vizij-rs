@@ -23,7 +23,7 @@ use std::{
 };
 use uuid::Uuid;
 
-use super::rc_abb::{ABBNode, ABBPathNode};
+use super::{ABBNode, ABBPathNode};
 use crate::{
     traits::{
         BBNodeTrait, BBPathNodeTrait, BlackboardTrait, ItemsFormattable, JsonSerializable,
@@ -32,7 +32,7 @@ use crate::{
     ABBItemNode,
 };
 
-use super::{
+use crate::{
     adt,
     rc_abb::{ABBPathNodeTrait, NamespacedSetterTrait},
 };
