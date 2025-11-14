@@ -119,7 +119,103 @@ impl ArcBlackboard {
         self.items.insert(id, item);
     }
 
-    // Additional methods go here
+    /// Removes an item from the blackboard by its path.
+    ///
+    /// This method removes the item from both the parent path node's name mapping
+    /// and from the blackboard's items HashMap.
+    ///
+    /// # Arguments
+    /// * `path` - The path to the item to remove
+    ///
+    /// # Returns
+    /// A `Result<(), String>` indicating success or an error message
+    pub fn remove_item<S: ToString + ?Sized>(&mut self, path: &S) -> Result<(), String> {
+        // First, get the node to find its ID
+        let node_opt = self.get(path)?;
+        if let Some(node_ref) = node_opt {
+            let id = node_ref.lock().unwrap().get_id_copy()?;
+            self.remove_item_by_id(&id)
+        } else {
+            Err(format!("Item '{}' not found", path.to_string()))
+        }
+    }
+
+    /// Removes an item from the blackboard by its ID.
+    ///
+    /// This method removes the item from both the parent path node's name mapping
+    /// and from the blackboard's items HashMap. If the item is a path node,
+    /// it recursively removes all children.
+    ///
+    /// # Arguments
+    /// * `id` - The ID of the item to remove
+    ///
+    /// # Returns
+    /// A `Result<(), String>` indicating success or an error message
+    pub fn remove_item_by_id(&mut self, id: &Uuid) -> Result<(), String> {
+        // Check if the node exists
+        if !self.items.contains_key(id) {
+            return Err(format!("Item with ID '{}' not found", id));
+        }
+
+        // Get the node to find its name, parent path, and children (if it's a path node)
+        let (full_path, name, child_ids) = {
+            let node_ref = self.items.get(id).cloned();
+            if let Some(node) = node_ref {
+                let guard = node.lock().unwrap();
+                let full_path = guard.get_full_path()?;
+                let name = guard.get_current_name_copy()?;
+                let is_path = guard.is_path()?;
+
+                // If this is a path node, collect all child IDs
+                let child_ids = if is_path {
+                    if let ArcBBNode::Path(ref path_node) = *guard {
+                        path_node.get_names_copy()?.values().cloned().collect()
+                    } else {
+                        Vec::new()
+                    }
+                } else {
+                    Vec::new()
+                };
+
+                (full_path, name, child_ids)
+            } else {
+                return Err(format!("Failed to get node with ID '{}'", id));
+            }
+        };
+
+        // Now recursively remove all children (lock has been dropped)
+        for child_id in child_ids {
+            self.remove_item_by_id(&child_id)?;
+        }
+
+        // If this is not the root node, remove it from its parent's names mapping
+        if *id != self.id {
+            // Parse the path to find the parent
+            let path_parts: Vec<&str> = full_path.split('.').collect();
+            if path_parts.len() > 1 {
+                // Get parent path
+                let parent_path = path_parts[..path_parts.len() - 1].join(".");
+                if let Some(parent_node_ref) = self.get(&parent_path)? {
+                    let mut parent_guard = parent_node_ref.lock().unwrap();
+                    if let ArcBBNode::Path(ref mut parent_path_node) = *parent_guard {
+                        parent_path_node.remove_name(&name)?;
+                    }
+                }
+            } else {
+                // This is a direct child of root
+                if let Some(root_node_ref) = self.items.get(&self.id) {
+                    let mut root_guard = root_node_ref.lock().unwrap();
+                    if let ArcBBNode::Path(ref mut root_path_node) = *root_guard {
+                        root_path_node.remove_name(&name)?;
+                    }
+                }
+            }
+        }
+
+        // Remove the item from the items HashMap
+        self.items.remove(id);
+        Ok(())
+    }
 }
 
 /// Implementation of JsonSerializable for ArcBlackboard.

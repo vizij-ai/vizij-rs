@@ -131,6 +131,21 @@ impl ArcBBPathNode {
     pub fn set_is_graph_node(&mut self, graph_node_id: Option<Uuid>) {
         self.graph_node_id = graph_node_id;
     }
+
+    /// Removes a name from this path node's name mapping.
+    ///
+    /// # Arguments
+    /// * `name` - The name to remove
+    ///
+    /// # Returns
+    /// A `Result<(), String>` indicating success or an error message
+    pub fn remove_name(&mut self, name: &str) -> Result<(), String> {
+        if self.names.remove(name).is_some() {
+            Ok(())
+        } else {
+            Err(format!("Name '{}' not found in path node", name))
+        }
+    }
 }
 
 /// Implementation of `BBNodeTrait` for `BBPathNode`.

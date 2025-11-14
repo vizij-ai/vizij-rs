@@ -391,14 +391,92 @@ test_both_blackboards!(
 
 #[test]
 fn test_remove_item() {
-    // Test pending - would need to implement remove functionality
-    // This test should verify:
-    // 1. Removing a root level item
-    // 2. Removing a nested item
-    // 3. Attempting to remove a non-existent item
+    fn test_remove_impl(bb_type: AroraMemSpaceType) {
+        let mut bb = AroraMemSpace::new(bb_type, "root");
 
-    // For now, this is a placeholder to highlight that remove functionality
-    // should be implemented in ArcBlackboard
+        // 1. Test removing a root level item
+        bb.set(&path(&["name"]), Value::String("Alice".to_string()))
+            .unwrap();
+        assert!(bb.lookup(&path(&["name"])).is_some());
+
+        bb.remove(&path(&["name"])).unwrap();
+        assert!(
+            bb.lookup(&path(&["name"])).is_none(),
+            "Item should be removed from blackboard"
+        );
+
+        // 2. Test removing a nested item
+        bb.set(&path(&["player", "health"]), Value::I32(100))
+            .unwrap();
+        bb.set(&path(&["player", "mana"]), Value::I32(50)).unwrap();
+
+        assert!(bb.lookup(&path(&["player", "health"])).is_some());
+        assert!(bb.lookup(&path(&["player", "mana"])).is_some());
+
+        bb.remove(&path(&["player", "health"])).unwrap();
+        assert!(
+            bb.lookup(&path(&["player", "health"])).is_none(),
+            "Nested item should be removed"
+        );
+        assert!(
+            bb.lookup(&path(&["player", "mana"])).is_some(),
+            "Other items in same path should remain"
+        );
+
+        // 3. Test removing by ID
+        let id = bb.set(&path(&["score"]), Value::I32(999)).unwrap();
+        assert!(bb.lookup_by_id(&id).is_some());
+
+        bb.remove_by_id(&id).unwrap();
+        assert!(
+            bb.lookup_by_id(&id).is_none(),
+            "Item should be removed by ID"
+        );
+
+        // 4. Test attempting to remove a non-existent item
+        let result = bb.remove(&path(&["nonexistent"]));
+        assert!(
+            result.is_err(),
+            "Removing non-existent item should return error"
+        );
+
+        // 5. Test removing a property tree
+        let sav_id = bb
+            .set(&path(&["settings", "audio", "volume"]), Value::I32(75))
+            .unwrap();
+        let svr_id = bb
+            .set(
+                &path(&["settings", "video", "resolution"]),
+                Value::String("1920x1080".to_string()),
+            )
+            .unwrap();
+        assert!(bb.lookup(&path(&["settings", "audio", "volume"])).is_some());
+        assert!(bb
+            .lookup(&path(&["settings", "video", "resolution"]))
+            .is_some());
+        bb.remove(&path(&["settings"])).unwrap();
+        assert!(
+            bb.lookup(&path(&["settings", "audio", "volume"])).is_none(),
+            "Audio settings should be removed with parent"
+        );
+        assert!(
+            bb.lookup(&path(&["settings", "video", "resolution"]))
+                .is_none(),
+            "Video settings should be removed with parent"
+        );
+        assert!(
+            bb.lookup_by_id(&sav_id).is_none(),
+            "Audio volume item should be removed by ID"
+        );
+        assert!(
+            bb.lookup_by_id(&svr_id).is_none(),
+            "Video resolution item should be removed by ID"
+        );
+    }
+
+    // Test both Rc and Arc implementations
+    test_remove_impl(AroraMemSpaceType::Rc);
+    test_remove_impl(AroraMemSpaceType::Arc);
 }
 
 fn test_path_conflict_impl(bb_type: AroraMemSpaceType) {

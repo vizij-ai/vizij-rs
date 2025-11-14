@@ -56,6 +56,8 @@ pub trait AroraMemSpaceInterface {
     fn lookup<S: ToString + ?Sized>(&self, path: &S) -> Option<Value>;
     fn lookup_by_id(&self, id: &Uuid) -> Option<Value>;
     fn to_json(&self) -> Result<JsonValue, String>;
+    fn remove<S: ToString + ?Sized>(&mut self, path: &S) -> Result<(), String>;
+    fn remove_by_id(&mut self, id: &Uuid) -> Result<(), String>;
 }
 
 /// Thread-safe access helpers that expose raw node handles.
@@ -411,6 +413,62 @@ impl AroraMemSpaceInterface for AroraMemSpace {
             }
         }
     }
+
+    fn remove<S: ToString + ?Sized>(&mut self, path: &S) -> Result<(), String> {
+        let res = match self.ams_type {
+            AroraMemSpaceType::Rc => {
+                if let Some(bb) = &mut self.arora_bb {
+                    bb.borrow_mut().remove_item(path)
+                } else {
+                    Err("RcBlackboard is not initialized".to_string())
+                }
+            }
+            AroraMemSpaceType::Arc => {
+                if let Some(bb) = &mut self.arc_arora_bb {
+                    bb.lock()
+                        .map_err(|_| "Failed to lock ArcBlackboard".to_string())?
+                        .remove_item(path)
+                } else {
+                    Err("ArcBlackboard is not initialized".to_string())
+                }
+            }
+        };
+        if let Err(e) = res {
+            let error_msg = format!("Failed to remove item from blackboard: {}", e);
+            self.debug_message(&error_msg);
+            Err(error_msg)
+        } else {
+            res
+        }
+    }
+
+    fn remove_by_id(&mut self, id: &Uuid) -> Result<(), String> {
+        let res = match self.ams_type {
+            AroraMemSpaceType::Rc => {
+                if let Some(bb) = &mut self.arora_bb {
+                    bb.borrow_mut().remove_item_by_id(id)
+                } else {
+                    Err("RcBlackboard is not initialized".to_string())
+                }
+            }
+            AroraMemSpaceType::Arc => {
+                if let Some(bb) = &mut self.arc_arora_bb {
+                    bb.lock()
+                        .map_err(|_| "Failed to lock ArcBlackboard".to_string())?
+                        .remove_item_by_id(id)
+                } else {
+                    Err("ArcBlackboard is not initialized".to_string())
+                }
+            }
+        };
+        if let Err(e) = res {
+            let error_msg = format!("Failed to remove item by ID from blackboard: {}", e);
+            self.debug_message(&error_msg);
+            Err(error_msg)
+        } else {
+            res
+        }
+    }
 }
 
 impl AMSNodeAccess for AroraMemSpace {
@@ -558,6 +616,18 @@ impl AroraMemSpaceInterface for Arc<Mutex<AroraMemSpace>> {
         self.lock()
             .map_err(|_| "Failed to lock the blackboard")?
             .to_json()
+    }
+
+    fn remove<S: ToString + ?Sized>(&mut self, path: &S) -> Result<(), String> {
+        self.lock()
+            .map_err(|_| "Failed to lock the blackboard")?
+            .remove(path)
+    }
+
+    fn remove_by_id(&mut self, id: &Uuid) -> Result<(), String> {
+        self.lock()
+            .map_err(|_| "Failed to lock the blackboard")?
+            .remove_by_id(id)
     }
 }
 
