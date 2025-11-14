@@ -1,10 +1,6 @@
-use std::sync::{Arc, Mutex};
-
 use arora_schema::value::Value;
-// Only import traits actually required for method resolution
-use vizij_blackboard_core::arc_bb::{ArcBBPathNodeTrait, ArcNamespacedSetterTrait};
-use vizij_blackboard_core::traits::BBNodeTrait;
-use vizij_blackboard_core::ArcBlackboard;
+use vizij_blackboard_core::arc_bb::AroraMemSpaceInterface;
+use vizij_blackboard_core::{AroraMemSpace, AroraMemSpaceType};
 use wasm_bindgen::prelude::*;
 
 // console_error_panic_hook is invoked via its fully qualified path when the feature is enabled;
@@ -133,7 +129,7 @@ fn value_to_jsvalue(value: &Value) -> Result<JsValue, JsError> {
 /// WebAssembly interface for the Vizij Blackboard
 #[wasm_bindgen]
 pub struct VizijBlackboard {
-    blackboard: Arc<Mutex<ArcBlackboard>>,
+    blackboard: AroraMemSpace,
 }
 
 #[wasm_bindgen]
@@ -154,7 +150,7 @@ impl VizijBlackboard {
 
         let bb_name = name.unwrap_or_else(|| "default".to_string());
         VizijBlackboard {
-            blackboard: ArcBlackboard::new(bb_name),
+            blackboard: AroraMemSpace::new(AroraMemSpaceType::Rc, &bb_name),
         }
     }
 
@@ -184,8 +180,8 @@ impl VizijBlackboard {
 
         match jsvalue_to_value(value)? {
             Some(arora_value) => {
-                let mut guard = self.blackboard.lock().unwrap();
-                let uuid = guard
+                let uuid = self
+                    .blackboard
                     .set(path, arora_value)
                     .map_err(|e| JsError::new(&format!("Failed to set value: {}", e)))?;
                 Ok(uuid.to_string())
@@ -216,11 +212,9 @@ impl VizijBlackboard {
         if path.trim().is_empty() {
             return Ok(JsValue::UNDEFINED);
         }
-        let guard = self.blackboard.lock().unwrap();
-        match guard.get_value(path) {
-            Ok(Some(v)) => value_to_jsvalue(&v),
-            Ok(None) => Ok(JsValue::UNDEFINED),
-            Err(e) => Err(JsError::new(&format!("Failed to get value: {}", e))),
+        match self.blackboard.lookup(path) {
+            Some(v) => value_to_jsvalue(&v),
+            None => Ok(JsValue::UNDEFINED),
         }
     }
 
@@ -234,14 +228,25 @@ impl VizijBlackboard {
     ///
     /// # Example (JavaScript)
     /// ```js
-    /// const removed = bb.remove("robot.arm.angle"); // Returns the removed value
-    /// const missing = bb.remove("not.found");       // Returns undefined
+    /// const removedIds = bb.remove("robot.arm.angle"); // Returns array of removed UUIDs
+    /// const missing = bb.remove("not.found");          // Returns empty array or throws error
     /// ```
     #[wasm_bindgen]
     pub fn remove(&mut self, path: &str) -> Result<JsValue, JsError> {
-        // TODO: implement proper removal in core; currently returns undefined
-        let _ = path; // suppress unused warning
-        Ok(JsValue::UNDEFINED)
+        if path.trim().is_empty() {
+            return Err(JsError::new("Path cannot be empty"));
+        }
+        match self.blackboard.remove(path) {
+            Ok(ids) => {
+                // Convert Vec<Uuid> to JavaScript array of strings
+                let js_array = js_sys::Array::new();
+                for id in ids {
+                    js_array.push(&JsValue::from_str(&id.to_string()));
+                }
+                Ok(js_array.into())
+            }
+            Err(e) => Err(JsError::new(&e)),
+        }
     }
 
     /// Check if a path exists in the blackboard
@@ -261,8 +266,7 @@ impl VizijBlackboard {
         if path.trim().is_empty() {
             return false;
         }
-        let guard = self.blackboard.lock().unwrap();
-        guard.get_value(path).map(|v| v.is_some()).unwrap_or(false)
+        self.blackboard.lookup(path).is_some()
     }
 
     /// List all paths currently stored in the blackboard
@@ -293,11 +297,9 @@ impl VizijBlackboard {
         // Re-create a new blackboard with same root identifier (best-effort)
         let name = self
             .blackboard
-            .lock()
-            .ok()
-            .and_then(|g| g.get_current_name_copy().ok())
-            .unwrap_or_else(|| "default".to_string());
-        self.blackboard = ArcBlackboard::new(name);
+            .get_name()
+            .unwrap_or_else(|_| "default".to_string());
+        self.blackboard = AroraMemSpace::new(AroraMemSpaceType::Arc, &name);
     }
 
     /// Get the name of this blackboard
@@ -312,10 +314,8 @@ impl VizijBlackboard {
     #[wasm_bindgen]
     pub fn name(&self) -> String {
         self.blackboard
-            .lock()
-            .ok()
-            .and_then(|g| g.get_current_name_copy().ok())
-            .unwrap_or_else(|| "(unknown)".to_string())
+            .get_name()
+            .unwrap_or_else(|_| "(unknown)".to_string())
     }
 
     /// Get the number of items (leaf nodes) in the blackboard
