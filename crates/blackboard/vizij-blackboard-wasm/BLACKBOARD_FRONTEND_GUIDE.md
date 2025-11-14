@@ -19,7 +19,8 @@ This document provides complete implementation instructions for building a React
 
 The Vizij Blackboard is a hierarchical key-value storage system compiled to WebAssembly that provides:
 
-- Dot-separated path notation for nested data (e.g., `robot.arm.joint1.angle`)
+- Configurable path separator (default: `.` for dot-separated paths like `robot.arm.joint1.angle`)
+- Support for custom separators (e.g., `/` for `robot/arm/joint1/angle`)
 - Type-safe storage for JavaScript primitives (number, string, boolean) and homogeneous arrays
 - UUID tracking for every node (both path nodes and item nodes)
 - Efficient single-threaded implementation optimized for WASM/JavaScript environments
@@ -39,7 +40,13 @@ The Vizij Blackboard is a hierarchical key-value storage system compiled to WebA
 ### 1. Path Structure
 
 ```
-robot.arm.joint1.angle
+robot.arm.joint1.angle          (with default '.' separator)
+^---- path node (robot)
+      ^-- path node (arm)
+           ^----- path node (joint1)
+                  ^---- item node (angle=45.0)
+
+robot/arm/joint1/angle          (with '/' separator)
 ^---- path node (robot)
       ^-- path node (arm)
            ^----- path node (joint1)
@@ -52,6 +59,8 @@ When you call `bb.set("robot.arm.joint1.angle", 45.0)`, the system:
 3. Creates or finds path node "joint1" under "arm"
 4. Creates or updates item node "angle" under "joint1" with value 45.0 (leaf)
 5. Returns array of UUIDs: [robot_id, arm_id, joint1_id, angle_id] where angle_id (last) is the leaf
+
+**Note:** The path separator is configured when creating the blackboard instance. All operations on that instance must use the configured separator.
 
 ### 2. Node Types
 
@@ -115,8 +124,11 @@ import { init, VizijBlackboard } from "@vizij/blackboard-wasm";
 // Call once at application startup
 await init();
 
-// Create instance
+// Create instance with default '.' separator
 const bb = new VizijBlackboard("app-name");
+
+// Or create instance with custom separator (e.g., '/')
+const bbCustom = VizijBlackboard.with_separator("app-name", "/");
 ```
 
 ### Class: VizijBlackboard
@@ -124,10 +136,45 @@ const bb = new VizijBlackboard("app-name");
 #### Constructor
 
 ```typescript
-new VizijBlackboard(name: string): VizijBlackboard
+new VizijBlackboard(name?: string): VizijBlackboard
 ```
 
-Creates a blackboard instance.
+Creates a blackboard instance with the default path separator (`.`).
+
+**Parameters:**
+- `name` (optional) - Name for the blackboard (defaults to "default")
+
+**Example:**
+```typescript
+const bb = new VizijBlackboard("my-app");
+// Use dot-separated paths: "robot.arm.angle"
+```
+
+#### Static Method: with_separator
+
+```typescript
+VizijBlackboard.with_separator(name?: string, separator: string): VizijBlackboard
+```
+
+Creates a blackboard instance with a custom path separator.
+
+**Parameters:**
+- `name` (optional) - Name for the blackboard (defaults to "default")
+- `separator` - Single character to use as path separator (e.g., ".", "/", "|", "-")
+
+**Returns:**
+- New VizijBlackboard instance
+
+**Example:**
+```typescript
+const bb = VizijBlackboard.with_separator("my-app", "/");
+// Use slash-separated paths: "robot/arm/angle"
+
+const bbPipe = VizijBlackboard.with_separator("my-app", "|");
+// Use pipe-separated paths: "robot|arm|angle"
+```
+
+**Note:** The separator must be a single character. Multi-character separators will throw an error.
 
 #### Methods
 

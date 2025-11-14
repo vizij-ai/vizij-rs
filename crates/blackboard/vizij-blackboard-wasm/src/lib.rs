@@ -154,10 +154,45 @@ impl VizijBlackboard {
         }
     }
 
-    /// Set a value at the given dot-separated path and return an array of all UUIDs created or updated.
+    /// Create a new blackboard instance with a custom path separator
     ///
     /// # Arguments
-    /// * `path` - Dot-separated path (e.g., "robot.arm.joint1.angle")
+    /// * `name` - Optional name for the blackboard (defaults to "default")
+    /// * `separator` - The character to use as path separator (e.g., ".", "/", "|")
+    ///
+    /// # Example (JavaScript)
+    /// ```js
+    /// const bb = VizijBlackboard.with_separator("my-blackboard", "/");
+    /// // Now you can use paths like "robot/arm/angle" instead of "robot.arm.angle"
+    /// ```
+    #[wasm_bindgen(js_name = "with_separator")]
+    pub fn with_separator(
+        name: Option<String>,
+        separator: &str,
+    ) -> Result<VizijBlackboard, JsError> {
+        #[cfg(feature = "console_error_panic_hook")]
+        console_error_panic_hook::set_once();
+
+        if separator.len() != 1 {
+            return Err(JsError::new("Separator must be a single character"));
+        }
+
+        let sep_char = separator.chars().next().unwrap();
+        let bb_name = name.unwrap_or_else(|| "default".to_string());
+
+        Ok(VizijBlackboard {
+            blackboard: AroraMemSpace::new_with_path_separator(
+                AroraMemSpaceType::Rc,
+                &bb_name,
+                sep_char,
+            ),
+        })
+    }
+
+    /// Set a value at the given path and return an array of all UUIDs created or updated.
+    ///
+    /// # Arguments
+    /// * `path` - Path separated by the configured separator (default: ".", e.g., "robot.arm.joint1.angle")
     /// * `value` - Any JavaScript value (number, string, boolean, array, object)
     ///
     /// # Returns
@@ -200,10 +235,10 @@ impl VizijBlackboard {
         }
     }
 
-    /// Get a value from the given dot-separated path
+    /// Get a value from the given path
     ///
     /// # Arguments
-    /// * `path` - Dot-separated path (e.g., "robot.arm.joint1.angle")
+    /// * `path` - Path separated by the configured separator (default: ".", e.g., "robot.arm.joint1.angle")
     ///
     /// # Returns
     /// The value at the path, or undefined if not found
@@ -225,10 +260,10 @@ impl VizijBlackboard {
         }
     }
 
-    /// Remove a value at the given dot-separated path
+    /// Remove a value at the given path
     ///
     /// # Arguments
-    /// * `path` - Dot-separated path (e.g., "robot.arm.joint1.angle")
+    /// * `path` - Path separated by the configured separator (default: ".", e.g., "robot.arm.joint1.angle")
     ///
     /// # Returns
     /// The removed value, or undefined if path didn't exist
@@ -259,7 +294,7 @@ impl VizijBlackboard {
     /// Check if a path exists in the blackboard
     ///
     /// # Arguments
-    /// * `path` - Dot-separated path (e.g., "robot.arm.joint1.angle")
+    /// * `path` - Path separated by the configured separator (default: ".", e.g., "robot.arm.joint1.angle")
     ///
     /// # Returns
     /// true if the path exists, false otherwise
