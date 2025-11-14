@@ -8,4 +8,4 @@ pub use arc_bb::ArcBlackboard;
 pub use arora_mem_space::{AroraMemSpace, AroraMemSpaceType};
 pub use rc_bb::RcBlackboard;
 
-pub use common::{split_path, traits, BBItemNode, PATH_SEPARATOR};
+pub use common::{split_path, traits, BBItemNode, DEFAULT_PATH_SEPARATOR};

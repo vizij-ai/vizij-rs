@@ -56,6 +56,12 @@ pub trait BBNodeTrait {
 }
 
 pub trait BBPathNodeTrait: BBNodeTrait + TreeFormattable {
+    /// Get the path separator character for this instance.
+    ///
+    /// # Returns
+    /// The path separator character
+    fn get_path_separator(&self) -> char;
+
     /// Check if the given name exists in this path.
     ///
     /// # Arguments

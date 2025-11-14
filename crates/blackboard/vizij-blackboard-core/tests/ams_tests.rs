@@ -3,7 +3,7 @@ use arora_schema::value::Value;
 use arora_schema::{gen_bb_uuid, gen_uuid_from_str};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
-use vizij_blackboard_core::PATH_SEPARATOR;
+use vizij_blackboard_core::DEFAULT_PATH_SEPARATOR;
 use vizij_blackboard_core::{
     arc_bb::{ArcBBNode, ArcBBPathNodeTrait, ArcNamespacedSetterTrait},
     arora_mem_space::{AMSNodeAccess, AroraMemSpace, AroraMemSpaceInterface, AroraMemSpaceType},
@@ -20,7 +20,7 @@ use vizij_blackboard_core::{
 /// // Returns "entity.transform.position.x" (or uses the actual PATH_SEPARATOR)
 /// ```
 fn path(segments: &[&str]) -> String {
-    segments.join(&PATH_SEPARATOR.to_string())
+    segments.join(&DEFAULT_PATH_SEPARATOR.to_string())
 }
 
 // Macro to generate tests for both ArcBlackboard and RcBlackboard
@@ -937,4 +937,65 @@ fn test_get_complex_path_using_node_trait_impl(bb_type: AroraMemSpaceType) {
 test_both_blackboards!(
     test_get_complex_path_using_node_trait,
     test_get_complex_path_using_node_trait_impl
+);
+
+fn test_custom_path_separator_impl(bb_type: AroraMemSpaceType) {
+    // Create blackboard with custom separator '/'
+    let mut bb = AroraMemSpace::new_with_path_separator(bb_type, "test_bb", '/');
+
+    // Set values using the custom separator
+    bb.set("player/stats/health", Value::I32(100)).unwrap();
+    bb.set("player/stats/mana", Value::I32(50)).unwrap();
+    bb.set("player/inventory/gold", Value::I32(250)).unwrap();
+
+    // Verify we can retrieve the values using the custom separator
+    let health = bb.lookup("player/stats/health");
+    assert_eq!(health, Some(Value::I32(100)));
+
+    let mana = bb.lookup("player/stats/mana");
+    assert_eq!(mana, Some(Value::I32(50)));
+
+    let gold = bb.lookup("player/inventory/gold");
+    assert_eq!(gold, Some(Value::I32(250)));
+
+    // Verify that using the default separator doesn't work
+    let wrong_path = bb.lookup("player.stats.health");
+    assert_eq!(
+        wrong_path, None,
+        "Path with wrong separator should not exist"
+    );
+}
+
+test_both_blackboards!(test_custom_path_separator, test_custom_path_separator_impl);
+
+fn test_default_path_separator_impl(bb_type: AroraMemSpaceType) {
+    // Create blackboard using default constructor (should use '.' separator)
+    let mut bb = AroraMemSpace::new(bb_type, "test_bb");
+
+    // Set values using the default separator '.'
+    bb.set("player.stats.health", Value::I32(100)).unwrap();
+    bb.set("player.stats.mana", Value::I32(50)).unwrap();
+    bb.set("player.inventory.gold", Value::I32(250)).unwrap();
+
+    // Verify we can retrieve the values using the default separator
+    let health = bb.lookup("player.stats.health");
+    assert_eq!(health, Some(Value::I32(100)));
+
+    let mana = bb.lookup("player.stats.mana");
+    assert_eq!(mana, Some(Value::I32(50)));
+
+    let gold = bb.lookup("player.inventory.gold");
+    assert_eq!(gold, Some(Value::I32(250)));
+
+    // Verify that using a different separator doesn't work
+    let wrong_path = bb.lookup("player/stats/health");
+    assert_eq!(
+        wrong_path, None,
+        "Path with wrong separator should not exist"
+    );
+}
+
+test_both_blackboards!(
+    test_default_path_separator,
+    test_default_path_separator_impl
 );

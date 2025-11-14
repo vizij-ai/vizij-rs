@@ -197,6 +197,21 @@ impl BBNodeTrait for ArcBBPathNode {
 ///
 /// This trait provides methods to manage name-to-ID mappings and retrieve nodes by ID.
 impl BBPathNodeTrait for ArcBBPathNode {
+    /// Get the path separator character for this instance.
+    /// Path nodes delegate to the blackboard for the separator, but to avoid
+    /// potential deadlocks, they use try_lock. If the blackboard is locked,
+    /// they return the default separator.
+    fn get_path_separator(&self) -> char {
+        if let Some(ref bb_weak) = self.bb {
+            if let Some(bb_arc) = bb_weak.upgrade() {
+                if let Ok(bb_guard) = bb_arc.try_lock() {
+                    return bb_guard.get_path_separator();
+                }
+            }
+        }
+        crate::DEFAULT_PATH_SEPARATOR // fallback to default
+    }
+
     /// Checks if the given name exists in this path node.
     ///
     /// # Arguments

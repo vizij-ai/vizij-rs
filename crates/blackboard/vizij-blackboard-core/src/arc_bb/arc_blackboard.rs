@@ -49,10 +49,12 @@ pub struct ArcBlackboard {
     items: HashMap<Uuid, Arc<Mutex<ArcBBNode>>>,
     /// A self-reference that can be passed around without cloning.
     self_ref: Option<Weak<Mutex<ArcBlackboard>>>,
+    /// The path separator character used for this blackboard instance.
+    path_separator: char,
 }
 
 impl ArcBlackboard {
-    /// Creates a new blackboard with the given ID.
+    /// Creates a new blackboard with the given ID using the default path separator.
     ///
     /// This function performs the following steps:
     /// 1. Creates a root path node with the given ID
@@ -61,11 +63,29 @@ impl ArcBlackboard {
     /// 4. Sets up the self-reference for the blackboard
     ///
     /// # Arguments
-    /// * `id` - A string identifier for the blackboard
+    /// * `name` - A string identifier for the blackboard
     ///
     /// # Returns
     /// An `Arc<Mutex<ArcBlackboard>>` containing the newly created blackboard
     pub fn new<S: ToString>(name: S) -> Arc<Mutex<Self>> {
+        Self::new_with_path_separator(name, crate::DEFAULT_PATH_SEPARATOR)
+    }
+
+    /// Creates a new blackboard with the given ID and custom path separator.
+    ///
+    /// This function performs the following steps:
+    /// 1. Creates a root path node with the given ID
+    /// 2. Creates the blackboard structure
+    /// 3. Links the root path node to the blackboard
+    /// 4. Sets up the self-reference for the blackboard
+    ///
+    /// # Arguments
+    /// * `name` - A string identifier for the blackboard
+    /// * `path_separator` - The character to use as path separator
+    ///
+    /// # Returns
+    /// An `Arc<Mutex<ArcBlackboard>>` containing the newly created blackboard
+    pub fn new_with_path_separator<S: ToString>(name: S, path_separator: char) -> Arc<Mutex<Self>> {
         let id = gen_bb_uuid();
         // Step 1: Create a path node with a temporary bb placeholder
         let path_node = ArcBBPathNode::create_root(&name.to_string());
@@ -75,6 +95,7 @@ impl ArcBlackboard {
             id,
             items: HashMap::new(),
             self_ref: None,
+            path_separator,
         };
 
         // Initialize the items HashMap with the path node that will act as the root, using the BB id as key
@@ -450,6 +471,11 @@ impl BBNodeTrait for ArcBlackboard {
 ///
 /// This implementation allows the blackboard to be treated as a path node.
 impl BBPathNodeTrait for ArcBlackboard {
+    /// Get the path separator character for this blackboard instance.
+    fn get_path_separator(&self) -> char {
+        self.path_separator
+    }
+
     /// Checks if the given name exists in the root namespace of the blackboard.
     ///
     /// This delegates to the path node at the root of the blackboard.
@@ -750,6 +776,15 @@ impl BBNodeTrait for Arc<Mutex<ArcBlackboard>> {
 /// This implementation allows the Arc blackboard to be treated as a path node,
 /// which is necessary for the namespaced structure of the blackboard.
 impl BBPathNodeTrait for Arc<Mutex<ArcBlackboard>> {
+    /// Get the path separator character for this blackboard instance.
+    fn get_path_separator(&self) -> char {
+        if let Ok(guard) = self.lock() {
+            guard.get_path_separator()
+        } else {
+            crate::DEFAULT_PATH_SEPARATOR // fallback to default
+        }
+    }
+
     /// Checks if the given name exists in the root namespace of the blackboard.
     fn contains(&self, name: &str) -> Result<bool, String> {
         if let Ok(guard) = self.lock() {

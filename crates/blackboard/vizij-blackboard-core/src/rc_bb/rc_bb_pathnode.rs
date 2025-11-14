@@ -196,6 +196,18 @@ impl BBNodeTrait for RcBBPathNode {
 ///
 /// This trait provides methods to manage name-to-ID mappings and retrieve nodes by ID.
 impl BBPathNodeTrait for RcBBPathNode {
+    /// Get the path separator character for this instance.
+    fn get_path_separator(&self) -> char {
+        if let Some(ref bb_weak) = self.bb {
+            if let Some(bb_rc) = bb_weak.upgrade() {
+                if let Ok(bb_ref) = bb_rc.try_borrow() {
+                    return bb_ref.get_path_separator();
+                }
+            }
+        }
+        crate::DEFAULT_PATH_SEPARATOR // fallback to default
+    }
+
     /// Checks if the given name exists in this path node.
     ///
     /// # Arguments

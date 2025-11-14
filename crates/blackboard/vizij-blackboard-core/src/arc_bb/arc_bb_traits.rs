@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::{
     adt, split_path,
     traits::{BBNodeTrait, BBPathNodeTrait, BlackboardTrait, CheckPathResult},
-    BBItemNode, PATH_SEPARATOR,
+    BBItemNode,
 };
 
 use super::{ArcBBNode, ArcBBPathNode, ArcBlackboard};
@@ -45,7 +45,7 @@ pub trait ArcBBPathNodeTrait: BBPathNodeTrait {
     /// # Returns
     /// A `Result<Option<Arc<Mutex<BBNode>>>, String>` containing the node if found, or an error message
     fn get<S: ToString + ?Sized>(&self, path: &S) -> Result<Option<Arc<Mutex<ArcBBNode>>>, String> {
-        let names = split_path(&path.to_string());
+        let names = split_path(&path.to_string(), self.get_path_separator());
         self.get_by_names(names)
     }
 
@@ -471,7 +471,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
     /// # Returns
     /// A `Result<CheckPathResult, String>` indicating whether the path exists and what type it is, or an error message
     fn check_path(&self, path: &str) -> Result<CheckPathResult, String> {
-        let name_parts = split_path(path);
+        let name_parts = split_path(path, self.get_path_separator());
         if name_parts.is_empty() {
             return Ok(CheckPathResult::None());
         }
@@ -580,7 +580,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
         item_id: Option<Uuid>,
         check_compatibility: bool,
     ) -> Result<Vec<Uuid>, String> {
-        let path_parts: Vec<String> = split_path(path);
+        let path_parts: Vec<String> = split_path(path, self.get_path_separator());
         if path_parts.is_empty() {
             return Err("Path cannot be empty when setting an item to the blackboard".to_string());
         }
@@ -973,7 +973,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
 
     /// Create all intermediate path nodes and point the last component to the provided ID
     fn create_path_to(&mut self, path: &str, target_id: &Uuid) -> Result<(), String> {
-        let name_parts = split_path(path);
+        let name_parts = split_path(path, self.get_path_separator());
         if name_parts.is_empty() {
             return Err("Path cannot be empty when adding an item to the blackboard".to_string());
         }
@@ -990,7 +990,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
         for (_i, part) in name_parts.iter().enumerate().take(name_parts.len()) {
             // Build the current path for error reporting
             if !intermediate_path.is_empty() {
-                intermediate_path.push(PATH_SEPARATOR);
+                intermediate_path.push(self.get_path_separator());
             }
             intermediate_path.push_str(part);
 

@@ -77,16 +77,30 @@ pub struct AroraMemSpace {
 
 impl AroraMemSpace {
     pub fn new<S: ToString + ?Sized>(bb_type: AroraMemSpaceType, name: &S) -> Self {
+        Self::new_with_path_separator(bb_type, name, crate::DEFAULT_PATH_SEPARATOR)
+    }
+
+    pub fn new_with_path_separator<S: ToString + ?Sized>(
+        bb_type: AroraMemSpaceType,
+        name: &S,
+        path_separator: char,
+    ) -> Self {
         match bb_type {
             AroraMemSpaceType::Rc => AroraMemSpace {
                 ams_type: bb_type,
-                arora_bb: Some(RcBlackboard::new(name.to_string())),
+                arora_bb: Some(RcBlackboard::new_with_path_separator(
+                    name.to_string(),
+                    path_separator,
+                )),
                 arc_arora_bb: None,
             },
             AroraMemSpaceType::Arc => AroraMemSpace {
                 ams_type: bb_type,
                 arora_bb: None,
-                arc_arora_bb: Some(ArcBlackboard::new(name.to_string())),
+                arc_arora_bb: Some(ArcBlackboard::new_with_path_separator(
+                    name.to_string(),
+                    path_separator,
+                )),
             },
         }
     }
