@@ -45,14 +45,14 @@ impl AroraMemSpaceType {
 
 pub trait AroraMemSpaceInterface {
     fn get_name(&self) -> Result<String, String>;
-    fn set<S: ToString + ?Sized>(&mut self, path: &S, value: Value) -> Result<Uuid, String>;
+    fn set<S: ToString + ?Sized>(&mut self, path: &S, value: Value) -> Result<Vec<Uuid>, String>;
     fn set_with_id<S: ToString + ?Sized>(
         &mut self,
         path: &S,
         value: Value,
         id: &Uuid,
-    ) -> Result<Uuid, String>;
-    fn set_by_id(&mut self, id: &Uuid, value: Value) -> Result<Uuid, String>;
+    ) -> Result<Vec<Uuid>, String>;
+    fn set_by_id(&mut self, id: &Uuid, value: Value) -> Result<Vec<Uuid>, String>;
     fn lookup<S: ToString + ?Sized>(&self, path: &S) -> Option<Value>;
     fn lookup_by_id(&self, id: &Uuid) -> Option<Value>;
     fn to_json(&self) -> Result<JsonValue, String>;

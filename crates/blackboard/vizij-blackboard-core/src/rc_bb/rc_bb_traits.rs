@@ -516,7 +516,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
     /// Set an item in the blackboard at the specified path with a Value or KeyValue block.
     /// If it does not exist, it will create the necessary path nodes.
     /// If it exists, it will update the existing item.
-    fn set<S: ToString + ?Sized>(&mut self, path: &S, value: Value) -> Result<Uuid, String> {
+    fn set<S: ToString + ?Sized>(&mut self, path: &S, value: Value) -> Result<Vec<Uuid>, String> {
         self.set_with_id(path, value, None)
     }
 
@@ -526,7 +526,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
         path: &S,
         value: Value,
         item_id: Option<Uuid>,
-    ) -> Result<Uuid, String> {
+    ) -> Result<Vec<Uuid>, String> {
         self.set_value_with_compatibility_check(&path.to_string(), value, item_id, true)
     }
 
@@ -536,7 +536,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
         value: Value,
         item_id: Option<Uuid>,
         check_compatibility: bool,
-    ) -> Result<Uuid, String> {
+    ) -> Result<Vec<Uuid>, String> {
         let path_parts: Vec<String> = split_path(path);
         if path_parts.is_empty() {
             return Err("Path cannot be empty when setting an item to the blackboard".to_string());
@@ -544,6 +544,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
 
         let res = self.check_path(path)?;
         let mut ret_id: Uuid;
+        let mut all_ids: Vec<Uuid> = Vec::new();
 
         if let Value::KeyValue(kv) = value {
             ret_id = if kv.id.is_nil() { gen_bb_uuid() } else { kv.id };
@@ -564,9 +565,17 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
                     &mut ret_id,
                     current_path_id,
                     &kv,
+                    &mut all_ids,
                 )?;
             } else {
-                self._set_keyvalue_into_new_field(path, item_id, &path_parts, &mut ret_id, kv)?;
+                self._set_keyvalue_into_new_field(
+                    path,
+                    item_id,
+                    &path_parts,
+                    &mut ret_id,
+                    kv,
+                    &mut all_ids,
+                )?;
             }
         } else {
             // not keyvalue
@@ -580,7 +589,8 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
                 ret_id = self._set_item(path, value, item_id, path_parts, res)?;
             }
         }
-        Ok(ret_id)
+        all_ids.push(ret_id);
+        Ok(all_ids)
     }
 
     fn _set_keyvalue_into_existing_field(
