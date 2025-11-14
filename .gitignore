@@ -4,6 +4,9 @@
 # Ignore all node_modules everywhere (pnpm workspaces still symlink as needed)
 **/node_modules/
 
+# Ignore all npm build outputs
+**/dist/
+
 # common editor cruft
 .DS_Store
 *.log
