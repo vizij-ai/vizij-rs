@@ -79,6 +79,28 @@ fn validate_item_ref<S: ToString + ?Sized>(
     );
 }
 
+/// Validates a set operation that returns a Vec<Uuid>
+/// Returns the root item ID (last ID in the vector) and validates it
+fn validate_set_result<S: ToString + ?Sized>(
+    bb: &AroraMemSpace,
+    path: &S,
+    expected_value: &Value,
+    result: Vec<Uuid>,
+) -> Uuid {
+    assert!(
+        !result.is_empty(),
+        "Set operation should return at least one ID"
+    );
+
+    // The last ID in the vector is the root item/path ID
+    let root_id = *result.last().unwrap();
+
+    // Validate using the existing validate_item_ref function
+    validate_item_ref(bb, path, expected_value, &root_id);
+
+    root_id
+}
+
 fn assert_path_exists_ref<S: ToString + ?Sized>(bb: &AroraMemSpace, path: &S) {
     let value = bb.lookup(path);
     assert!(value.is_some(), "Path '{}' should exist", path.to_string());
@@ -142,10 +164,10 @@ fn test_add_simple_value_impl(bb_type: AroraMemSpaceType) {
     // Add a simple value
     let value = Value::I32(42);
     let name = "test_var";
-    let id = bb.set(name, value.clone()).unwrap();
+    let result = bb.set(name, value.clone()).unwrap();
 
     // Validate the item can be retrieved by path and by id
-    validate_item_ref(&bb, name, &value, &id);
+    validate_set_result(&bb, name, &value, result);
 
     // Verify it exists in the root namespace
     assert!(contains_ref(&bb, name));
@@ -161,13 +183,13 @@ fn test_single_level_namespace_impl(bb_type: AroraMemSpaceType) {
     let pi_name = "pi";
     let pi_value = Value::F32(std::f32::consts::PI);
     let full_path = path(&[math_name, pi_name]);
-    let pi_id = bb.set(&full_path, pi_value.clone()).unwrap();
+    let result = bb.set(&full_path, pi_value.clone()).unwrap();
 
     // Verify the math namespace path exists
     assert_path_exists_ref(&bb, math_name);
 
     // Verify the full path exists and corresponds to the pi node
-    validate_item_ref(&bb, &full_path, &pi_value, &pi_id);
+    validate_set_result(&bb, &full_path, &pi_value, result);
 
     // Verify the pi node exists in the math namespace
     assert!(contains_ref(&bb, &full_path));
@@ -186,20 +208,20 @@ fn test_multi_level_namespace_impl(bb_type: AroraMemSpaceType) {
     let pos_y = Value::F32(20.0);
     let pos_z = Value::F32(30.0);
 
-    let x_id = bb
+    let x_result = bb
         .set(
             &path(&["entity", "transform", "position", "x"]),
             pos_x.clone(),
         )
         .unwrap();
-    let y_id = bb
+    let y_result = bb
         .set(
             &path(&["entity", "transform", "position", "y"]),
             pos_y.clone(),
         )
         .unwrap();
 
-    let z_id = bb
+    let z_result = bb
         .set(
             &path(&["entity", "transform", "position", "z"]),
             pos_z.clone(),
@@ -212,23 +234,23 @@ fn test_multi_level_namespace_impl(bb_type: AroraMemSpaceType) {
     assert_path_exists_ref(&bb, &path(&["entity", "transform", "position"]));
 
     // Check values by full path
-    validate_item_ref(
+    validate_set_result(
         &bb,
         &path(&["entity", "transform", "position", "x"]),
         &pos_x,
-        &x_id,
+        x_result,
     );
-    validate_item_ref(
+    validate_set_result(
         &bb,
         &path(&["entity", "transform", "position", "y"]),
         &pos_y,
-        &y_id,
+        y_result,
     );
-    validate_item_ref(
+    validate_set_result(
         &bb,
         &path(&["entity", "transform", "position", "z"]),
         &pos_z,
-        &z_id,
+        z_result,
     );
 }
 
@@ -242,13 +264,13 @@ fn test_namespaces_with_multiple_values_impl(bb_type: AroraMemSpaceType) {
     let mp = Value::I32(50);
     let speed = Value::F32(5.5);
 
-    let hp_id = bb
+    let hp_result = bb
         .set(&path(&["player", "stats", "hp"]), hp.clone())
         .unwrap();
-    let mp_id = bb
+    let mp_result = bb
         .set(&path(&["player", "stats", "mp"]), mp.clone())
         .unwrap();
-    let speed_id = bb
+    let speed_result = bb
         .set(&path(&["player", "stats", "speed"]), speed.clone())
         .unwrap();
 
@@ -256,9 +278,14 @@ fn test_namespaces_with_multiple_values_impl(bb_type: AroraMemSpaceType) {
     assert_path_exists_ref(&bb, "player");
 
     // Verify the ids correspond to the expected values
-    validate_item_ref(&bb, &path(&["player", "stats", "hp"]), &hp, &hp_id);
-    validate_item_ref(&bb, &path(&["player", "stats", "mp"]), &mp, &mp_id);
-    validate_item_ref(&bb, &path(&["player", "stats", "speed"]), &speed, &speed_id);
+    validate_set_result(&bb, &path(&["player", "stats", "hp"]), &hp, hp_result);
+    validate_set_result(&bb, &path(&["player", "stats", "mp"]), &mp, mp_result);
+    validate_set_result(
+        &bb,
+        &path(&["player", "stats", "speed"]),
+        &speed,
+        speed_result,
+    );
 }
 
 test_both_blackboards!(
@@ -274,9 +301,10 @@ fn test_custom_ids_impl(bb_type: AroraMemSpaceType) {
     let custom_id = gen_bb_uuid();
     let custom_name = "custom_item";
 
-    let returned_custom_id = bb
+    let result = bb
         .set_with_id(custom_name, value.clone(), &custom_id)
         .unwrap();
+    let returned_custom_id = *result.last().unwrap();
     assert_eq!(returned_custom_id, custom_id);
 
     // Verify we can get the node by name and by ID
@@ -309,20 +337,25 @@ fn test_complex_values_impl(bb_type: AroraMemSpaceType) {
     let string_value = Value::String("Hello, World!".to_string());
     let array_value = Value::ArrayI32(vec![1, 2, 3]);
 
-    let bool_id = bb
+    let bool_result = bb
         .set(&path(&["values", "bool"]), bool_value.clone())
         .unwrap();
-    let string_id = bb
+    let string_result = bb
         .set(&path(&["values", "string"]), string_value.clone())
         .unwrap();
-    let array_id = bb
+    let array_result = bb
         .set(&path(&["values", "array"]), array_value.clone())
         .unwrap();
 
     // Get and validate the values
-    validate_item_ref(&bb, &path(&["values", "bool"]), &bool_value, &bool_id);
-    validate_item_ref(&bb, &path(&["values", "string"]), &string_value, &string_id);
-    validate_item_ref(&bb, &path(&["values", "array"]), &array_value, &array_id);
+    validate_set_result(&bb, &path(&["values", "bool"]), &bool_value, bool_result);
+    validate_set_result(
+        &bb,
+        &path(&["values", "string"]),
+        &string_value,
+        string_result,
+    );
+    validate_set_result(&bb, &path(&["values", "array"]), &array_value, array_result);
 }
 
 test_both_blackboards!(test_complex_values, test_complex_values_impl);
@@ -365,17 +398,19 @@ fn test_overwrite_existing_item_impl(bb_type: AroraMemSpaceType) {
     let mut bb = AroraMemSpace::new(bb_type, "root");
 
     // Add a value
-    let id1 = bb
+    let result1 = bb
         .set(&path(&["player", "health"]), Value::I32(100))
         .unwrap();
+    let id1 = *result1.last().unwrap();
 
     // Verify initial value
     validate_item_ref(&bb, &path(&["player", "health"]), &Value::I32(100), &id1);
 
     // Overwrite with new value
-    let id2 = bb
+    let result2 = bb
         .set(&path(&["player", "health"]), Value::I32(150))
         .unwrap();
+    let id2 = *result2.last().unwrap();
 
     // IDs should be the same when overwriting
     assert_eq!(id1, id2);
@@ -424,7 +459,8 @@ fn test_remove_item() {
         );
 
         // 3. Test removing by ID
-        let id = bb.set(&path(&["score"]), Value::I32(999)).unwrap();
+        let result = bb.set(&path(&["score"]), Value::I32(999)).unwrap();
+        let id = *result.last().unwrap();
         assert!(bb.lookup_by_id(&id).is_some());
 
         bb.remove_by_id(&id).unwrap();
@@ -441,15 +477,17 @@ fn test_remove_item() {
         );
 
         // 5. Test removing a property tree and verify returned IDs
-        let sav_id = bb
+        let sav_result = bb
             .set(&path(&["settings", "audio", "volume"]), Value::I32(75))
             .unwrap();
-        let svr_id = bb
+        let sav_id = *sav_result.last().unwrap();
+        let svr_result = bb
             .set(
                 &path(&["settings", "video", "resolution"]),
                 Value::String("1920x1080".to_string()),
             )
             .unwrap();
+        let svr_id = *svr_result.last().unwrap();
         assert!(bb.lookup(&path(&["settings", "audio", "volume"])).is_some());
         assert!(bb
             .lookup(&path(&["settings", "video", "resolution"]))
@@ -559,7 +597,7 @@ fn test_keyvalue_structure() {
     // ## TEST 1 ##
     // Set the KeyValue structure
     let result = bb.set(&"player".to_string(), player_kv.into()).unwrap();
-    assert!(!result.is_nil());
+    assert!(!result.is_empty(), "Set should return at least one ID");
 
     // Check that values were set correctly
     let health_node = bb.get(&path(&["player", "health"]));
@@ -614,7 +652,7 @@ fn test_keyvalue_structure() {
         .set(&path(&["player", "stats"]), new_stats_kv.clone().into())
         .unwrap();
 
-    assert!(!result.is_nil());
+    assert!(!result.is_empty(), "Set should return at least one ID");
 
     // Check that values were set correctly
     let updated_strength_node = bb.get(&path(&["player", "stats", "strength"]));
@@ -669,7 +707,8 @@ fn test_type_compatibility_impl(bb_type: AroraMemSpaceType) {
     let mut bb = AroraMemSpace::new(bb_type, "root");
 
     // Set initial value as integer
-    let id = bb.set(&path(&["player", "level"]), Value::I32(10)).unwrap();
+    let result = bb.set(&path(&["player", "level"]), Value::I32(10)).unwrap();
+    let id = *result.last().unwrap();
 
     // Update with compatible type should work
     bb.set(&path(&["player", "level"]), Value::I32(20)).unwrap();

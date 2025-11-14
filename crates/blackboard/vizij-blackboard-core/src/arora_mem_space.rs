@@ -166,7 +166,7 @@ impl AroraMemSpaceInterface for AroraMemSpace {
         }
     }
 
-    fn set<S: ToString + ?Sized>(&mut self, path: &S, value: Value) -> Result<Uuid, String> {
+    fn set<S: ToString + ?Sized>(&mut self, path: &S, value: Value) -> Result<Vec<Uuid>, String> {
         let res = match self.ams_type {
             AroraMemSpaceType::Rc => {
                 if let Some(bb) = &mut self.arora_bb {
@@ -307,7 +307,7 @@ impl AroraMemSpaceInterface for AroraMemSpace {
         path: &S,
         value: Value,
         id: &Uuid,
-    ) -> Result<Uuid, String> {
+    ) -> Result<Vec<Uuid>, String> {
         let res = match self.ams_type {
             AroraMemSpaceType::Rc => {
                 if let Some(bb) = &mut self.arora_bb {
@@ -334,30 +334,30 @@ impl AroraMemSpaceInterface for AroraMemSpace {
         }
     }
 
-    fn set_by_id(&mut self, id: &Uuid, value: Value) -> Result<Uuid, String> {
+    fn set_by_id(&mut self, id: &Uuid, value: Value) -> Result<Vec<Uuid>, String> {
         let res = match self.ams_type {
             AroraMemSpaceType::Rc => {
                 if let Some(bb) = &mut self.arora_bb {
-                    bb.borrow_mut().set_existing_bb_item(value, id)
+                    bb.borrow_mut()
+                        .set_existing_bb_item(value, id)
+                        .map(|_| vec![*id])
                 } else {
                     Err("RcBlackboard is not initialized".to_string())
                 }
             }
             AroraMemSpaceType::Arc => {
                 if let Some(bb) = &mut self.arc_arora_bb {
-                    bb.set_existing_bb_item(value, id)
+                    bb.set_existing_bb_item(value, id).map(|_| vec![*id])
                 } else {
                     Err("ArcBlackboard is not initialized".to_string())
                 }
             }
         };
-        if let Err(e) = res {
+        if let Err(e) = &res {
             let error_msg = format!("Failed to set_by_id in blackboard: {}", e);
             self.debug_message(&error_msg);
-            Err(error_msg)
-        } else {
-            Ok(*id)
         }
+        res
     }
 
     fn lookup_by_id(&self, id: &Uuid) -> Option<Value> {
@@ -575,7 +575,7 @@ impl AroraMemSpaceInterface for Arc<Mutex<AroraMemSpace>> {
             .get_name()
     }
 
-    fn set<S: ToString + ?Sized>(&mut self, path: &S, value: Value) -> Result<Uuid, String> {
+    fn set<S: ToString + ?Sized>(&mut self, path: &S, value: Value) -> Result<Vec<Uuid>, String> {
         self.lock()
             .map_err(|_| "Failed to lock the blackboard")?
             .set(path, value)
@@ -586,13 +586,13 @@ impl AroraMemSpaceInterface for Arc<Mutex<AroraMemSpace>> {
         path: &S,
         value: Value,
         id: &Uuid,
-    ) -> Result<Uuid, String> {
+    ) -> Result<Vec<Uuid>, String> {
         self.lock()
             .map_err(|_| "Failed to lock the blackboard")?
             .set_with_id(path, value, id)
     }
 
-    fn set_by_id(&mut self, id: &Uuid, value: Value) -> Result<Uuid, String> {
+    fn set_by_id(&mut self, id: &Uuid, value: Value) -> Result<Vec<Uuid>, String> {
         self.lock()
             .map_err(|_| "Failed to lock the blackboard")?
             .set_by_id(id, value)

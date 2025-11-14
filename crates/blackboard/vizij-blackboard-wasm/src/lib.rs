@@ -154,41 +154,48 @@ impl VizijBlackboard {
         }
     }
 
-    /// Set a value at the given dot-separated path and return the UUID of the stored item.
+    /// Set a value at the given dot-separated path and return an array of all UUIDs created or updated.
     ///
     /// # Arguments
     /// * `path` - Dot-separated path (e.g., "robot.arm.joint1.angle")
-    /// * `value` - Any JavaScript value (number, string, boolean, array)
+    /// * `value` - Any JavaScript value (number, string, boolean, array, object)
     ///
     /// # Returns
-    /// * `String` – The UUID (as a hyphenated string) of the item that was created or updated.
-    ///             If the value was `null` / `undefined` (causing a removal) an empty string is returned.
+    /// * `Array<String>` – Array of UUIDs (as hyphenated strings) of all items/paths created or updated.
+    ///                     For simple values, returns an array with a single UUID.
+    ///                     For KeyValue structures, returns UUIDs of all nested paths and items.
+    ///                     The last element is the root item/path ID.
+    ///                     If the value was `null` / `undefined`, returns an empty array.
     ///
     /// # Example (JavaScript)
     /// ```js
-    /// const id1 = bb.set("robot.arm.angle", 45.0);     // => "550e8400-e29b-41d4-a716-446655440000"
-    /// const id2 = bb.set("robot.name", "R2D2");       // => another UUID
-    /// const removed = bb.set("robot.arm.angle", undefined); // => "" (empty string)
+    /// const ids1 = bb.set("robot.arm.angle", 45.0);        // => ["550e8400-e29b-41d4-a716-446655440000"]
+    /// const ids2 = bb.set("robot.name", "R2D2");           // => ["another-uuid"]
+    /// const ids3 = bb.set("player.stats", {hp: 100, mp: 50}); // => ["path-id-1", "item-id-1", "item-id-2", "root-id"]
+    /// const removed = bb.set("robot.arm.angle", undefined); // => []
     /// ```
-    ///
-    /// This is a breaking change vs earlier versions where `set` returned nothing.
     #[wasm_bindgen]
-    pub fn set(&mut self, path: &str, value: JsValue) -> Result<String, JsError> {
+    pub fn set(&mut self, path: &str, value: JsValue) -> Result<JsValue, JsError> {
         if path.trim().is_empty() {
             return Err(JsError::new("Path cannot be empty"));
         }
 
         match jsvalue_to_value(value)? {
             Some(arora_value) => {
-                let uuid = self
+                let ids = self
                     .blackboard
                     .set(path, arora_value)
                     .map_err(|e| JsError::new(&format!("Failed to set value: {}", e)))?;
-                Ok(uuid.to_string())
+                // Convert Vec<Uuid> to JavaScript array of strings
+                let js_array = js_sys::Array::new();
+                for id in ids {
+                    js_array.push(&JsValue::from_str(&id.to_string()));
+                }
+                Ok(js_array.into())
             }
             None => {
-                // Treat null / undefined as a removal request; return empty string.
-                Ok(String::new())
+                // Treat null / undefined as a removal request; return empty array
+                Ok(js_sys::Array::new().into())
             }
         }
     }

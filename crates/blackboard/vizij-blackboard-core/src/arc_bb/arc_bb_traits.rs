@@ -559,7 +559,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
     /// Set an item in the blackboard at the specified path with a Value or KeyValue block.
     /// If it does not exist, it will create the necessary path nodes.
     /// If it exists, it will update the existing item.
-    fn set<S: ToString + ?Sized>(&mut self, path: &S, value: Value) -> Result<Uuid, String> {
+    fn set<S: ToString + ?Sized>(&mut self, path: &S, value: Value) -> Result<Vec<Uuid>, String> {
         self.set_with_id(path, value, None)
     }
 
@@ -569,7 +569,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
         path: &S,
         value: Value,
         item_id: Option<Uuid>,
-    ) -> Result<Uuid, String> {
+    ) -> Result<Vec<Uuid>, String> {
         self.set_value_with_compatibility_check(&path.to_string(), value, item_id, true)
     }
 
@@ -579,7 +579,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
         value: Value,
         item_id: Option<Uuid>,
         check_compatibility: bool,
-    ) -> Result<Uuid, String> {
+    ) -> Result<Vec<Uuid>, String> {
         let path_parts: Vec<String> = split_path(path);
         if path_parts.is_empty() {
             return Err("Path cannot be empty when setting an item to the blackboard".to_string());
@@ -587,6 +587,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
 
         let res = self.check_path(path)?;
         let mut ret_id: Uuid;
+        let mut all_ids: Vec<Uuid> = Vec::new();
 
         if let Value::KeyValue(kv) = value {
             ret_id = if kv.id.is_nil() { gen_bb_uuid() } else { kv.id };
@@ -607,9 +608,17 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
                     &mut ret_id,
                     current_path_id,
                     &kv,
+                    &mut all_ids,
                 )?;
             } else {
-                self._set_keyvalue_into_new_field(path, item_id, &path_parts, &mut ret_id, kv)?;
+                self._set_keyvalue_into_new_field(
+                    path,
+                    item_id,
+                    &path_parts,
+                    &mut ret_id,
+                    kv,
+                    &mut all_ids,
+                )?;
             }
         } else {
             // not keyvalue
@@ -623,9 +632,11 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
                 ret_id = self._set_item(path, value, item_id, path_parts, res)?;
             }
         }
-        Ok(ret_id)
+        all_ids.push(ret_id);
+        Ok(all_ids)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn _set_keyvalue_into_existing_field(
         &mut self,
         path: &str,
@@ -634,6 +645,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
         ret_id: &mut Uuid,
         current_path_id: Uuid,
         kv: &KeyValue,
+        all_ids: &mut Vec<Uuid>,
     ) -> Result<(), String> {
         let existing_path_arc = self.get_node_by_id(&current_path_id)?.ok_or_else(|| {
             format!(
@@ -675,6 +687,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
                 field,
                 existing_field_id,
                 current_path_id,
+                all_ids,
             )?;
         }
         Ok(())
@@ -687,6 +700,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
         path_parts: &[String],
         ret_id: &mut Uuid,
         kv: KeyValue,
+        all_ids: &mut Vec<Uuid>,
     ) -> Result<(), String> {
         *ret_id = if kv.id.is_nil() { gen_bb_uuid() } else { kv.id };
 
@@ -716,7 +730,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
             Err(e) => return Err(e),
         }
 
-        self._set_keyvalue_into_existing_field(path, item_id, false, ret_id, *ret_id, &kv)
+        self._set_keyvalue_into_existing_field(path, item_id, false, ret_id, *ret_id, &kv, all_ids)
     }
 
     fn _set_item(
@@ -765,6 +779,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn assign_kv_field(
         &mut self,
         path: &str,
@@ -773,6 +788,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
         field: &KeyValueField,
         existing_field_id: Option<Uuid>,
         current_path_id: Uuid,
+        all_ids: &mut Vec<Uuid>,
     ) -> Result<(), String> {
         let src_field_id = if field.id.is_nil() {
             gen_bb_uuid()
@@ -813,6 +829,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
                             ));
                         };
                     if proceed {
+                        all_ids.push(existing_ref_id);
                         for (sub_field_name, sub_field) in &sub_kv.fields {
                             if let Err(e) = self.assign_kv_field(
                                 path,
@@ -821,6 +838,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
                                 sub_field,
                                 None,
                                 existing_ref_id,
+                                all_ids,
                             ) {
                                 return Err(format!(
                                     "Failed to set KeyValue structure into existing path {}: {}",
@@ -878,6 +896,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
                         }
                     }
 
+                    all_ids.push(src_field_id);
                     if let Err(e) = self.assign_kv_field(
                         &format!("{}.{}", path, field_name),
                         _item_id,
@@ -889,6 +908,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
                         ),
                         Some(src_field_id),
                         current_path_id,
+                        all_ids,
                     ) {
                         return Err(format!(
                             "Failed to set KeyValue structure into new path {}: {}",
@@ -903,6 +923,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
                 if let Some(existing_ref_id) = existing_field_id {
                     // Set the value of the existing Item node directly given we already checked for compatibility
                     self.set_existing_bb_item(value, &existing_ref_id)?;
+                    all_ids.push(existing_ref_id);
                 } else {
                     // Field name does not exist in the path, so create it as a new Item node
                     if let Some(existing_path_arc) = self.get_node_by_id(&current_path_id)? {
@@ -936,6 +957,7 @@ pub trait ArcNamespacedSetterTrait: BlackboardTrait + ArcBBPathNodeTrait {
                                 );
                             }
                             existing_path.insert(field_name.clone(), src_field_id)?;
+                            all_ids.push(src_field_id);
                         } else {
                             return Err(format!(
                                 "Existing node is not a BBPath node for {}",

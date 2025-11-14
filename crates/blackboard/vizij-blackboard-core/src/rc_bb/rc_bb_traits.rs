@@ -593,6 +593,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
         Ok(all_ids)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn _set_keyvalue_into_existing_field(
         &mut self,
         path: &str,
@@ -601,6 +602,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
         ret_id: &mut Uuid,
         current_path_id: Uuid,
         kv: &KeyValue,
+        all_ids: &mut Vec<Uuid>,
     ) -> Result<(), String> {
         let existing_path_ref = self.get_node_by_id(&current_path_id)?.ok_or_else(|| {
             format!(
@@ -639,6 +641,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
                 field,
                 existing_field_id,
                 current_path_id,
+                all_ids,
             )?;
         }
         Ok(())
@@ -651,6 +654,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
         path_parts: &[String],
         ret_id: &mut Uuid,
         kv: KeyValue,
+        all_ids: &mut Vec<Uuid>,
     ) -> Result<(), String> {
         *ret_id = if kv.id.is_nil() { gen_bb_uuid() } else { kv.id };
 
@@ -680,7 +684,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
             Err(e) => return Err(e),
         }
 
-        self._set_keyvalue_into_existing_field(path, item_id, false, ret_id, *ret_id, &kv)
+        self._set_keyvalue_into_existing_field(path, item_id, false, ret_id, *ret_id, &kv, all_ids)
     }
 
     fn _set_item(
@@ -729,6 +733,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn assign_kv_field(
         &mut self,
         path: &str,
@@ -737,6 +742,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
         field: &KeyValueField,
         existing_field_id: Option<Uuid>,
         current_path_id: Uuid,
+        all_ids: &mut Vec<Uuid>,
     ) -> Result<(), String> {
         let src_field_id = if field.id.is_nil() {
             gen_bb_uuid()
@@ -770,6 +776,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
                             ));
                         };
                     if proceed {
+                        all_ids.push(existing_ref_id); // Add the path node ID
                         for (sub_field_name, sub_field) in &sub_kv.fields {
                             if let Err(e) = self.assign_kv_field(
                                 path,
@@ -778,6 +785,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
                                 sub_field,
                                 None,
                                 existing_ref_id,
+                                all_ids,
                             ) {
                                 return Err(format!(
                                     "Failed to set KeyValue structure into existing path {}: {}",
@@ -818,6 +826,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
                                         );
                                 }
                                 existing_path_node.insert(field_name.clone(), src_field_id)?;
+                                all_ids.push(src_field_id); // Add the new path node ID
                             } else {
                                 return Err(format!(
                                     "Existing node is not a BBPathNode for {}",
@@ -843,6 +852,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
                         ),
                         Some(src_field_id),
                         current_path_id,
+                        all_ids,
                     ) {
                         return Err(format!(
                             "Failed to set KeyValue structure into new path {}: {}",
@@ -857,6 +867,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
                 if let Some(existing_ref_id) = existing_field_id {
                     // Set the value of the existing Item node directly given we already checked for compatibility
                     self.set_existing_bb_item(value, &existing_ref_id)?;
+                    all_ids.push(existing_ref_id); // Add the existing item ID
                 } else {
                     // Field name does not exist in the path, so create it as a new Item node
                     if let Some(existing_path_ref) = self.get_node_by_id(&current_path_id)? {
@@ -886,6 +897,7 @@ pub trait NamespacedSetterTrait: BlackboardTrait + RcBBPathNodeTrait {
                                     ._insert_entry(src_field_id, Rc::new(RefCell::new(new_node)));
                             }
                             existing_path.insert(field_name.clone(), src_field_id)?;
+                            all_ids.push(src_field_id); // Add the new item ID
                         } else {
                             return Err(format!(
                                 "Existing node is not a BBPath node for {}",
