@@ -56,8 +56,8 @@ pub trait AroraMemSpaceInterface {
     fn lookup<S: ToString + ?Sized>(&self, path: &S) -> Option<Value>;
     fn lookup_by_id(&self, id: &Uuid) -> Option<Value>;
     fn to_json(&self) -> Result<JsonValue, String>;
-    fn remove<S: ToString + ?Sized>(&mut self, path: &S) -> Result<(), String>;
-    fn remove_by_id(&mut self, id: &Uuid) -> Result<(), String>;
+    fn remove<S: ToString + ?Sized>(&mut self, path: &S) -> Result<Vec<Uuid>, String>;
+    fn remove_by_id(&mut self, id: &Uuid) -> Result<Vec<Uuid>, String>;
 }
 
 /// Thread-safe access helpers that expose raw node handles.
@@ -414,7 +414,7 @@ impl AroraMemSpaceInterface for AroraMemSpace {
         }
     }
 
-    fn remove<S: ToString + ?Sized>(&mut self, path: &S) -> Result<(), String> {
+    fn remove<S: ToString + ?Sized>(&mut self, path: &S) -> Result<Vec<Uuid>, String> {
         let res = match self.ams_type {
             AroraMemSpaceType::Rc => {
                 if let Some(bb) = &mut self.arora_bb {
@@ -442,7 +442,7 @@ impl AroraMemSpaceInterface for AroraMemSpace {
         }
     }
 
-    fn remove_by_id(&mut self, id: &Uuid) -> Result<(), String> {
+    fn remove_by_id(&mut self, id: &Uuid) -> Result<Vec<Uuid>, String> {
         let res = match self.ams_type {
             AroraMemSpaceType::Rc => {
                 if let Some(bb) = &mut self.arora_bb {
@@ -618,13 +618,13 @@ impl AroraMemSpaceInterface for Arc<Mutex<AroraMemSpace>> {
             .to_json()
     }
 
-    fn remove<S: ToString + ?Sized>(&mut self, path: &S) -> Result<(), String> {
+    fn remove<S: ToString + ?Sized>(&mut self, path: &S) -> Result<Vec<Uuid>, String> {
         self.lock()
             .map_err(|_| "Failed to lock the blackboard")?
             .remove(path)
     }
 
-    fn remove_by_id(&mut self, id: &Uuid) -> Result<(), String> {
+    fn remove_by_id(&mut self, id: &Uuid) -> Result<Vec<Uuid>, String> {
         self.lock()
             .map_err(|_| "Failed to lock the blackboard")?
             .remove_by_id(id)

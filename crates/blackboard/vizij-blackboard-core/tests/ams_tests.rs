@@ -440,7 +440,7 @@ fn test_remove_item() {
             "Removing non-existent item should return error"
         );
 
-        // 5. Test removing a property tree
+        // 5. Test removing a property tree and verify returned IDs
         let sav_id = bb
             .set(&path(&["settings", "audio", "volume"]), Value::I32(75))
             .unwrap();
@@ -454,7 +454,11 @@ fn test_remove_item() {
         assert!(bb
             .lookup(&path(&["settings", "video", "resolution"]))
             .is_some());
-        bb.remove(&path(&["settings"])).unwrap();
+
+        // Remove the settings tree and capture all removed IDs
+        let removed_ids = bb.remove(&path(&["settings"])).unwrap();
+
+        // Verify the tree was removed
         assert!(
             bb.lookup(&path(&["settings", "audio", "volume"])).is_none(),
             "Audio settings should be removed with parent"
@@ -471,6 +475,18 @@ fn test_remove_item() {
         assert!(
             bb.lookup_by_id(&svr_id).is_none(),
             "Video resolution item should be removed by ID"
+        );
+
+        // Verify all removed IDs are returned
+        // Should include: settings, audio, video, volume, resolution (5 nodes total)
+        assert_eq!(removed_ids.len(), 5, "Should have removed 5 nodes");
+        assert!(
+            removed_ids.contains(&sav_id),
+            "Removed IDs should contain audio volume ID"
+        );
+        assert!(
+            removed_ids.contains(&svr_id),
+            "Removed IDs should contain video resolution ID"
         );
     }
 

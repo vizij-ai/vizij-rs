@@ -108,14 +108,14 @@ impl RcBlackboard {
     /// Removes an item from the blackboard by its path.
     ///
     /// This method removes the item from both the parent path node's name mapping
-    /// and from the blackboard's items HashMap.
+    /// and from the blackboard's items HashMap. Returns a vector of all removed IDs.
     ///
     /// # Arguments
     /// * `path` - The path to the item to remove
     ///
     /// # Returns
-    /// A `Result<(), String>` indicating success or an error message
-    pub fn remove_item<S: ToString + ?Sized>(&mut self, path: &S) -> Result<(), String> {
+    /// A `Result<Vec<Uuid>, String>` containing all removed IDs or an error message
+    pub fn remove_item<S: ToString + ?Sized>(&mut self, path: &S) -> Result<Vec<Uuid>, String> {
         // First, get the node to find its ID
         let node_opt = self.get(path)?;
         if let Some(node_ref) = node_opt {
@@ -130,18 +130,21 @@ impl RcBlackboard {
     ///
     /// This method removes the item from both the parent path node's name mapping
     /// and from the blackboard's items HashMap. If the item is a path node,
-    /// it recursively removes all children.
+    /// it recursively removes all children and returns all removed IDs.
     ///
     /// # Arguments
     /// * `id` - The ID of the item to remove
     ///
     /// # Returns
-    /// A `Result<(), String>` indicating success or an error message
-    pub fn remove_item_by_id(&mut self, id: &Uuid) -> Result<(), String> {
+    /// A `Result<Vec<Uuid>, String>` containing all removed IDs or an error message
+    pub fn remove_item_by_id(&mut self, id: &Uuid) -> Result<Vec<Uuid>, String> {
         // Check if the node exists
         if !self.items.contains_key(id) {
             return Err(format!("Item with ID '{}' not found", id));
         }
+
+        // Vector to accumulate all removed IDs
+        let mut removed_ids = Vec::new();
 
         // Get the node to find its name, parent path, and children (if it's a path node)
         let (full_path, name, child_ids) = {
@@ -171,7 +174,8 @@ impl RcBlackboard {
 
         // Now recursively remove all children (borrow has been dropped)
         for child_id in child_ids {
-            self.remove_item_by_id(&child_id)?;
+            let child_removed_ids = self.remove_item_by_id(&child_id)?;
+            removed_ids.extend(child_removed_ids);
         }
 
         // If this is not the root node, remove it from its parent's names mapping
@@ -197,9 +201,11 @@ impl RcBlackboard {
             }
         }
 
-        // Remove the item from the items HashMap
+        // Remove the item from the items HashMap and add to removed list
         self.items.remove(id);
-        Ok(())
+        removed_ids.push(*id);
+
+        Ok(removed_ids)
     }
 }
 
