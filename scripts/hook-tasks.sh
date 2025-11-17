@@ -5,6 +5,44 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Resolve a usable cargo command across platforms (Git Bash on Windows, WSL, Unix)
+get_cargo() {
+  # Allow override via env
+  if [ -n "${CARGO_BIN:-}" ] && [ -x "${CARGO_BIN}" ]; then
+    echo "${CARGO_BIN}"
+    return 0
+  fi
+
+  # Inherit from PATH if available
+  if command -v cargo >/dev/null 2>&1; then
+    echo cargo
+    return 0
+  fi
+  if command -v cargo.exe >/dev/null 2>&1; then
+    echo cargo.exe
+    return 0
+  fi
+
+  # Common rustup locations
+  if [ -x "$HOME/.cargo/bin/cargo" ]; then
+    echo "$HOME/.cargo/bin/cargo"
+    return 0
+  fi
+  if [ -n "${USERPROFILE:-}" ] && [ -x "$USERPROFILE/.cargo/bin/cargo.exe" ]; then
+    echo "$USERPROFILE/.cargo/bin/cargo.exe"
+    return 0
+  fi
+  if [ -n "${USERNAME:-}" ] && [ -x "/c/Users/${USERNAME}/.cargo/bin/cargo.exe" ]; then
+    echo "/c/Users/${USERNAME}/.cargo/bin/cargo.exe"
+    return 0
+  fi
+
+  echo "[hook-tasks] Error: cargo not found in PATH or common install locations. Set CARGO_BIN to override." >&2
+  exit 127
+}
+
+CARGO="$(get_cargo)"
+
 TASK_LABEL="tasks"
 
 set_label() {
@@ -23,27 +61,27 @@ run_cmd() {
 }
 
 rust_fmt() {
-  run_cmd "cargo fmt --all" cargo fmt --all
+  run_cmd "cargo fmt --all" "$CARGO" fmt --all
 }
 
 rust_fmt_check() {
-  run_cmd "cargo fmt --all -- --check" cargo fmt --all -- --check
+  run_cmd "cargo fmt --all -- --check" "$CARGO" fmt --all -- --check
 }
 
 rust_clippy() {
-  run_cmd "cargo clippy --all-targets -- -D warnings" cargo clippy --all-targets -- -D warnings
+  run_cmd "cargo clippy --all-targets -- -D warnings" "$CARGO" clippy --all-targets -- -D warnings
 }
 
 rust_build() {
-  run_cmd "cargo build --all-features --all-targets" cargo build --all-features --all-targets
+  run_cmd "cargo build --all-features --all-targets" "$CARGO" build --all-features --all-targets
 }
 
 rust_test() {
-  run_cmd "cargo test --all-features --all-targets" cargo test --all-features --all-targets
+  run_cmd "cargo test --all-features --all-targets" "$CARGO" test --all-features --all-targets
 }
 
 rust_clean() {
-  run_cmd "cargo clean" cargo clean
+  run_cmd "cargo clean" "$CARGO" clean
 }
 
 npm_lint() {

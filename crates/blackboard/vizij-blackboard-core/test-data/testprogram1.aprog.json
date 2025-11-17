@@ -1,0 +1,379 @@
+{
+    "engine": {
+        "engine_version": "1.0.0",
+        "program_name": "TestProgram1",
+        "ticks_per_second": 500
+    },
+    "embodiment": {
+        "name": "TestRobot",
+        "description": "A test robot for demonstration purposes.",
+        "channels": {
+            "Channel1": {
+                "type": "linear",
+                "zero_value": 0.0,
+                "min_value": -50.0,
+                "max_value": 50.0
+            },
+            "Channel2": {
+                "type": "linear",
+                "zero_value": 30.0,
+                "min_value": 0.0,
+                "max_value": 100.0
+            },
+            "LED1": {
+                "type": "linear",
+                "zero_value": 0.0,
+                "min_value": 0.0,
+                "max_value": 1.0
+            }
+        }
+    },
+    "program": {
+        "states": [
+            {
+                "name": "Engaged"
+            },
+            {
+                "name": "Waving"
+            },
+            {
+                "name": "BlendOut"
+            }
+        ],
+        "events": [
+            {
+                "name": "Reset"
+            },
+            {
+                "name": "Control",
+                "args": [
+                    {
+                        "name": "param0",
+                        "type": "f32"
+                    }
+                ]
+            },
+            {
+                "name": "Hello"
+            },
+            {
+                "name": "WaveTimeout"
+            },
+            {
+                "name": "BloutTimeout"
+            },
+            {
+                "name": "Conv.PUTI"
+            },
+            {
+                "name": "Conv.FUTI"
+            },
+            {
+                "name": "Conv.RSS"
+            },
+            {
+                "name": "Conv.RFS"
+            }
+        ],
+        "nodegraph": {
+            "type": "HardLimitsSolver",
+            "name": "HardLimits",
+            "args": [],
+            "child": {
+                "type": "NodeBlender",
+                "name": "BlendTree",
+                "args": [],
+                "children": [
+                    {
+                        "type": "Layer",
+                        "name": "PositionControl",
+                        "args": [],
+                        "in_plugs": {
+                            "Channel2": {
+                                "node_ref": "store_ctrl"
+                            }
+                        },
+                        "children": [
+                            {
+                                "type": "StoreResetController",
+                                "name": "store_ctrl",
+                                "in_plugs": {
+                                    "reset": {
+                                        "node_ref": "reset_or"
+                                    },
+                                    "store": {
+                                        "bb_var": "Event.Control.Triggered"
+                                    },
+                                    "value": {
+                                        "bb_var": "Event.Control.Param0"
+                                    }
+                                },
+                                "children": [
+                                    {
+                                        "type": "OrNode",
+                                        "name": "reset_or",
+                                        "in_plugs": {
+                                            "0": {
+                                                "bb_var": "State.Engaged.Entered"
+                                            },
+                                            "1": {
+                                                "bb_var": "State.BlendOut.Entered"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "type": "Layer",
+                        "name": "WaveGenerator",
+                        "in_plugs": {
+                            "Channel1": {
+                                "node_ref": "sine_ctrl"
+                            },
+                            "Channel2": {
+                                "node_ref": "sine_ctrl"
+                            }
+                        },
+                        "children": [
+                            {
+                                "type": "SineWaveController",
+                                "name": "sine_ctrl",
+                                "args": [
+                                    {
+                                        "name": "wave_shape",
+                                        "type": "str",
+                                        "value": "sine"
+                                    },
+                                    {
+                                        "name": "frequency",
+                                        "type": "f32",
+                                        "value": "2.5"
+                                    }
+                                ],
+                                "in_plugs": {
+                                    "x": {
+                                        "node_ref": "tmr_sinewave"
+                                    }
+                                },
+                                "children": [
+                                    {
+                                        "type": "TimerController",
+                                        "name": "tmr_sinewave",
+                                        "in_plugs": {
+                                            "duration": {
+                                                "value_type": "f32",
+                                                "value": 2.0
+                                            },
+                                            "trigger": {
+                                                "bb_var": "State.Waving.Entered"
+                                            }
+                                        },
+                                        "out_plugs": {
+                                            "timeout": {
+                                                "bb_var": "Event.WavTimeout.Triggered"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "type": "Layer",
+                        "name": "BlendOut",
+                        "args": [],
+                        "in_plugs": {
+                            "Channel1": {
+                                "node_ref": "out1"
+                            },
+                            "Channel2": {
+                                "node_ref": "out2"
+                            }
+                        },
+                        "children": [
+                            {
+                                "type": "ArrayIndexer",
+                                "name": "out1",
+                                "in_plugs": {
+                                    "array": {
+                                        "node_ref": "outcached"
+                                    },
+                                    "i": {
+                                        "value_type": "i32",
+                                        "value": 0
+                                    }
+                                }
+                            },
+                            {
+                                "type": "ArrayIndexer",
+                                "name": "out2",
+                                "in_plugs": {
+                                    "array": {
+                                        "node_ref": "outcached"
+                                    },
+                                    "i": {
+                                        "value_type": "i32",
+                                        "value": 1
+                                    }
+                                },
+                                "children": [
+                                    {
+                                        "type": "ValueCache",
+                                        "name": "outcached",
+                                        "in_plugs": {
+                                            "set": {
+                                                "node_ref": "fadeout"
+                                            }
+                                        },
+                                        "children": [
+                                            {
+                                                "type": "CachedFadeOutMulti",
+                                                "name": "fadeout",
+                                                "in_plugs": {
+                                                    "start": {
+                                                        "bb_var": "State.BlendOut.Entered"
+                                                    },
+                                                    "ctrl": {
+                                                        "node_ref": "tmr_fadeout"
+                                                    },
+                                                    "channels": {
+                                                        "node_ref": "outcached",
+                                                        "var_name": "cache"
+                                                    }
+                                                },
+                                                "children": [
+                                                    {
+                                                        "type": "TimerController",
+                                                        "name": "tmr_fadeout",
+                                                        "in_plugs": {
+                                                            "duration": {
+                                                                "value_type": "f32",
+                                                                "value": 2.0
+                                                            },
+                                                            "trigger": {
+                                                                "bb_var": "State.BlendOut.Entered"
+                                                            }
+                                                        },
+                                                        "out_plugs": {
+                                                            "timeout": {
+                                                                "bb_var": "Event.BloutTimeout.Triggered"
+                                                            }
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "type": "Layer",
+                        "name": "Lights",
+                        "args": [],
+                        "in_plugs": {
+                            "LED1": {
+                                "node_ref": "outcached"
+                            }
+                        },
+                        "children": [
+                            {
+                                "type": "ValueCache",
+                                "name": "outcached",
+                                "in_plugs": {
+                                    "set": {
+                                        "node_ref": "state_selector"
+                                    }
+                                },
+                                "children": [
+                                    {
+                                        "type": "IfChain",
+                                        "name": "state_selector",
+                                        "args": [
+                                            {
+                                                "name": "multiplier",
+                                                "type": "f32[]",
+                                                "value": [
+                                                    1.0,
+                                                    1.0,
+                                                    1.0
+                                                ]
+                                            }
+                                        ],
+                                        "in_plugs": {
+                                            "else": {
+                                                "node_ref": "outcached",
+                                                "var_name": "cache"
+                                            },
+                                            "bool1": {
+                                                "node_ref": "start_or_finish"
+                                            },
+                                            "in1": {
+                                                "value_type": "i32[]",
+                                                "value": [
+                                                    0,
+                                                    0,
+                                                    255
+                                                ]
+                                            },
+                                            "bool2": {
+                                                "bb_var": "Event.Conv.PartialUserTextInput.Triggered"
+                                            },
+                                            "in2": {
+                                                "value_type": "i32[]",
+                                                "value": [
+                                                    0,
+                                                    255,
+                                                    0
+                                                ]
+                                            },
+                                            "bool3": {
+                                                "bb_var": "Event.Conv.FinalUserTextInput.Triggered"
+                                            },
+                                            "in3": {
+                                                "value_type": "i32[]",
+                                                "value": [
+                                                    255,
+                                                    255,
+                                                    0
+                                                ]
+                                            },
+                                            "bool4": {
+                                                "bb_var": "Event.Conv.RobotStartedSpeaking.Triggered"
+                                            },
+                                            "in4": {
+                                                "value_type": "i32[]",
+                                                "value": [
+                                                    255,
+                                                    255,
+                                                    255
+                                                ]
+                                            }
+                                        },
+                                        "children": [
+                                            {
+                                                "type": "OrNode",
+                                                "name": "start_or_finish",
+                                                "in_plugs": {
+                                                    "0": {
+                                                        "bb_var": "Engine.Event.Start"
+                                                    },
+                                                    "1": {
+                                                        "bb_var": "Event.Conv.RobotFinishedSpeaking.Triggered"
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    }
+}
