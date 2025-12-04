@@ -233,9 +233,26 @@ Document skipped steps in PR descriptions so reviewers have the right context.
 
 ---
 
-## Publishing & Versioning
+### Verifying Hooks
 
-Each domain stack keeps the Rust crate, WASM crate, and npm wrapper versions in lockstep. Publishing now flows through [Changesets](.changeset/README.md) plus the automated `publish-npm` workflow:
+To ensure your git hooks are correctly installed, run:
+
+```bash
+./scripts/doctor.sh
+```
+
+If the check fails, run `./scripts/install-git-hooks.sh` to fix it.
+
+### Publishing & Versioning
+
+Each domain stack keeps the Rust crate, WASM crate, and npm wrapper versions in lockstep. Publishing now flows through [Changesets](.changeset/README.md) plus the automated `publish-npm` workflow.
+
+### Prerequisites
+
+- `NPM_TOKEN` in repo secrets with publish rights for the `@vizij/*` scope.
+- Each publishable package has `"private": false` and a `publishConfig.access` entry.
+
+### How a release flows
 
 1. Bump the Rust + WASM crate versions in their `Cargo.toml` files (npm wrappers stay on autopilot).
 2. Run `pnpm changeset` and select the npm packages under `npm/@vizij/*` that changed. Commit the generated markdown under `.changeset/`.
