@@ -8,10 +8,13 @@ file summarises, it does not replace, those sources.
 ## Agent Workflow Checklist
 - Scan `README.md` + any touched crate README before editing so you understand
   current stack boundaries and scripts.
+- Skim `ROADMAP.md` for in-flight initiatives that might influence the work.
 - Decide early whether the task needs the planning tool; when you use it,
   produce multi-step plans and keep them updated as work progresses.
 - Prefer fast discovery commands: `rg`/`rg --files` for search and list, `cargo
   metadata --no-deps` for crate info, `just`-style helpers are not configured.
+- Queue npm releases with Changesets: run `pnpm changeset` for publishable
+  changes and commit the generated entry with your code.
 - Always pass `workdir` to shell calls (the harness requires it) and watch for
   unexpected filesystem changes -- ask the user if something looks off.
 - Install the local git hooks (`bash scripts/install-git-hooks.sh`) to wire the
@@ -30,6 +33,11 @@ file summarises, it does not replace, those sources.
   `vizij-graph-wasm`, and npm `@vizij/node-graph-wasm`.
 - **Orchestrator stack**: `vizij-orchestrator-core` runtime coordinating
   graphs/animations, `vizij-orchestrator-wasm`, and npm `@vizij/orchestrator-wasm`.
+- **Test fixtures**: `vizij-test-fixtures` crate that exposes the shared JSON
+  manifest, mirrored to npm `@vizij/test-fixtures` for browsers.
+- **Support packages**: npm `@vizij/value-json`, `@vizij/wasm-loader`, and
+  `@vizij/test-fixtures` build quickly via `pnpm run build:shared`; rebuild
+  them whenever API contracts or fixtures change.
 - **Scripts**: Build/link helpers in `scripts/` (see README "Setup" and
   "Usage"), git hooks installer, dry-run release script.
 - **npm workspace**: Wrapper packages under `npm/@vizij` re-export wasm `pkg`
@@ -44,16 +52,18 @@ file summarises, it does not replace, those sources.
 | Test full workspace | `cargo test --workspace` |
 | Test a single crate | `cargo test -p vizij-orchestrator-core` (replace crate name) |
 | Build orchestrator examples | `cargo build --manifest-path crates/orchestrator/vizij-orchestrator-core/Cargo.toml --examples` |
+| Build support crates | `pnpm run build:shared` |
+| Run wasm/npm tests | `pnpm run test` |
 
 ### WASM builds and watchers
 | Task | Command |
 |------|---------|
-| Build animation WASM pkg | `npm run build:wasm:animation` |
-| Build node-graph WASM pkg | `npm run build:wasm:graph` |
-| Build orchestrator WASM pkg | `npm run build:wasm:orchestrator` |
-| Watch animation WASM | `npm run watch:wasm:animation` *(needs `cargo-watch`)* |
-| Watch node-graph WASM | `npm run watch:wasm:graph` *(needs `cargo-watch`)* |
-| Watch orchestrator WASM | `npm run watch:wasm:orchestrator` *(needs `cargo-watch`)* |
+| Build animation WASM pkg | `pnpm run build:wasm:animation` |
+| Build node-graph WASM pkg | `pnpm run build:wasm:graph` |
+| Build orchestrator WASM pkg | `pnpm run build:wasm:orchestrator` |
+| Watch animation WASM | `pnpm run watch:wasm:animation` *(needs `cargo-watch`)* |
+| Watch node-graph WASM | `pnpm run watch:wasm:graph` *(needs `cargo-watch`)* |
+| Watch orchestrator WASM | `pnpm run watch:wasm:orchestrator` *(needs `cargo-watch`)* |
 
 Install the watcher dependency once with `cargo install cargo-watch`.
 
@@ -63,10 +73,18 @@ Install the watcher dependency once with `cargo install cargo-watch`.
 | Install git hooks (fmt/clippy/test) | `bash scripts/install-git-hooks.sh` |
 | Run hook jobs manually | `./.githooks/pre-commit` / `./.githooks/pre-push` |
 | Dry-run crates + npm release | `bash scripts/dry-run-release.sh` |
-| Link npm packages for vizij-web | `npm run link:wasm` (then run the companion script in `vizij-web`) |
-| Rebuild after ABI bumps | `cargo build -p <wasm-crate> --target wasm32-unknown-unknown && npm run build:wasm:<stack>` |
+| Create a Changeset entry | `pnpm changeset` |
+| CI version bump (Changesets action) | `pnpm ci:version` |
+| Validate wasm/shared builds before tagging | `pnpm release` |
+| CI publish (build wasm + `changeset publish`) | `pnpm ci:publish` |
+| Link npm packages for vizij-web | Build locally, then use temporary `link:` deps in `vizij-web` (see its README) |
+| Rebuild after ABI bumps | `cargo build -p <wasm-crate> --target wasm32-unknown-unknown && pnpm run build:wasm:<stack>` |
 
-Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unknown` before running the rebuild command above.
+`pnpm ci:publish` temporarily resolves `workspace:` dependency ranges to real versions before publishing, then restores the manifests after the npm upload completes.
+
+Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unknown` before running the rebuild command above. Install `cargo-watch` (`cargo install cargo-watch --locked`) to use the `pnpm run watch:wasm:*` scripts.
+
+`ROADMAP.md` aggregates documentation TODOs and engineering follow-ups pulled from crate READMEs—consult it when prioritising work or updating docs.
 
 ## Stack Briefs
 - **API**: Hub for `TypedPath`, `ValueJSON`, and WriteBatch tooling. Read
@@ -82,6 +100,9 @@ Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unkno
   coordinates animation engines and graph controllers. Check the crate README
   for scheduler semantics, blackboard conventions, and example entry points.
   The wasm crate mirrors the Rust API and serialises frames for JS consumers.
+- **Test fixtures**: `vizij-test-fixtures` maps names from `fixtures/manifest.json`
+  to on-disk JSON assets and offers helpers to load them in tests. The npm
+  package ships pre-bundled fixture JSON for browser scenarios.
 
 ## Coding & Testing Expectations
 - Keep solutions simple and aligned with existing patterns; prefer incremental
@@ -97,9 +118,11 @@ Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unkno
   steps you skipped.
 
 ## Cross-Repo Workflow Notes
-- During local development, link the wasm npm packages into `vizij-web` using
-  `npm run link:wasm` here followed by the matching script in the web repo. The
-  Vite dev server reloads automatically when the linked `pkg/` outputs change.
+- Build the WASM stacks you need (`pnpm run build:wasm:<stack>`) before testing
+  them in `vizij-web`.
+- In the web repo, temporarily depend on those builds with
+  `pnpm add @vizij/<pkg>@link:../vizij-rs/npm/@vizij/<pkg>`; revert the `link:`
+  dependencies before committing so published packages remain the default.
 - When introducing breaking changes to JSON schemas or ABI versions, update the
   corresponding npm wrapper README and ensure `vizij-web` has compatible code
   before publishing.

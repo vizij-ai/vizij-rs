@@ -1,7 +1,11 @@
 // Stable ESM entry for @vizij/node-graph-wasm
 // Wraps the wasm-pack output in ../../pkg (built with `--target web`).
 // Adjust the import path if your pkg name differs.
-import { loadBindings as loadWasmBindings, type InitInput as LoaderInitInput } from "@vizij/wasm-loader";
+import {
+  loadBindings as loadWasmBindings,
+  type InitInput as LoaderInitInput,
+} from "@vizij/wasm-loader";
+import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 import { toValueJSON, type ValueJSON, type ValueInput } from "@vizij/value-json";
 import type {
   NodeId,
@@ -15,6 +19,8 @@ import type {
   ShapeJSON,
   WriteOpJSON,
   ParamSpec,
+  PortSpec,
+  VariadicSpec,
   Registry,
 } from "./types";
 
@@ -61,21 +67,54 @@ interface WasmBindings {
 }
 
 const bindingCache: { current: WasmBindings | null } = { current: null };
+let wasmModulePromise: Promise<WasmBindings | unknown> | null = null;
+let wasmUrlCache: string | null = null;
 
 function pkgWasmJsUrl(): URL {
   // Resolve package-local pkg/ for both src/ and dist/src/ callers
   return new URL("../../pkg/vizij_graph_wasm.js", import.meta.url);
 }
 
-function defaultWasmUrl(): URL {
-  return new URL("../../pkg/vizij_graph_wasm_bg.wasm", import.meta.url);
+function importStaticWasmModule(): Promise<unknown> {
+  return import("../../pkg/vizij_graph_wasm.js");
 }
 
+function importDynamicWasmModule(): Promise<unknown> {
+  return import(/* @vite-ignore */ pkgWasmJsUrl().toString());
+}
+
+async function importWasmModule(): Promise<unknown> {
+  if (!wasmModulePromise) {
+    wasmModulePromise = importStaticWasmModule().catch((err) => {
+      if (typeof console !== "undefined" && typeof console.warn === "function") {
+        console.warn(
+          "@vizij/node-graph-wasm: static wasm import failed, falling back to runtime URL import.",
+          err
+        );
+      }
+      return importDynamicWasmModule();
+    });
+  }
+  return wasmModulePromise;
+}
+
+function defaultWasmUrl(): string {
+  if (!wasmUrlCache) {
+    wasmUrlCache = new URL("../../pkg/vizij_graph_wasm_bg.wasm", import.meta.url).toString();
+  }
+  return wasmUrlCache;
+}
+
+const loadBindingsImpl =
+  typeof window === "undefined"
+    ? loadWasmBindings
+    : (loadWasmBindingsBrowser as typeof loadWasmBindings);
+
 async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
-  await loadWasmBindings<WasmBindings>(
+  await loadBindingsImpl<WasmBindings>(
     {
       cache: bindingCache,
-      importModule: () => import(/* @vite-ignore */ pkgWasmJsUrl().toString()),
+      importModule: () => importWasmModule(),
       defaultWasmUrl,
       init: async (module: unknown, initArg: unknown) => {
         const typed = module as WasmBindings;
@@ -242,6 +281,105 @@ export async function getNodeSchemas(): Promise<Registry> {
   return JSON.parse(raw) as Registry;
 }
 
+function describePort(port: PortSpec): string {
+  const status = port.optional ? "optional" : "required";
+  const doc = port.doc && port.doc.trim().length > 0 ? ` — ${port.doc}` : "";
+  return `    • ${port.label} [${port.id}:${port.ty}] (${status})${doc}`;
+}
+
+function describeParam(param: ParamSpec): string {
+  const bounds: string[] = [];
+  if (typeof param.min === "number") bounds.push(`min ${param.min}`);
+  if (typeof param.max === "number") bounds.push(`max ${param.max}`);
+  const defaultVal =
+    param.default_json !== undefined
+      ? `default ${JSON.stringify(param.default_json)}`
+      : undefined;
+  if (defaultVal) bounds.push(defaultVal);
+  const extra = bounds.length ? ` (${bounds.join(", ")})` : "";
+  const doc = param.doc && param.doc.trim().length > 0 ? ` — ${param.doc}` : "";
+  return `    • ${param.label} [${param.id}:${param.ty}]${extra}${doc}`;
+}
+
+/**
+ * Pretty-print schema documentation for all nodes or a specific node type.
+ *
+ * @example
+ * await logNodeSchemaDocs();                   // logs every node
+ * await logNodeSchemaDocs("spring");           // logs only the Spring node (NodeType)
+ */
+export async function logNodeSchemaDocs(node?: NodeType | string): Promise<void> {
+  const registry = await getNodeSchemas();
+  const target = node?.toString().toLowerCase();
+  const nodes = target
+    ? registry.nodes.filter((entry) => entry.type_id === target)
+    : registry.nodes.slice();
+
+  if (!nodes.length) {
+    console.warn(
+      target
+        ? `No node schema found for '${target}'.`
+        : "Node schema registry is empty."
+    );
+    return;
+  }
+
+  nodes.sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const entry of nodes) {
+    const lines: string[] = [];
+    const headerDoc =
+      entry.doc && entry.doc.trim().length > 0 ? entry.doc : "(no description)";
+    lines.push(`\n${entry.name} (${entry.type_id}) — ${headerDoc}`);
+    lines.push(`  Category: ${entry.category}`);
+
+    if (entry.inputs.length || entry.variadic_inputs) {
+      lines.push("  Inputs:");
+      for (const port of entry.inputs) {
+        lines.push(describePort(port));
+      }
+      if (entry.variadic_inputs) {
+        const variadic: VariadicSpec = entry.variadic_inputs;
+        const doc =
+          variadic.doc && variadic.doc.trim().length > 0
+            ? ` — ${variadic.doc}`
+            : "";
+        const max = variadic.max != null ? variadic.max : "∞";
+        lines.push(
+          `    • ${variadic.label} [${variadic.id}:${variadic.ty}] (variadic ${variadic.min}-${max})${doc}`
+        );
+      }
+    }
+
+    if (entry.outputs.length || entry.variadic_outputs) {
+      lines.push("  Outputs:");
+      for (const port of entry.outputs) {
+        lines.push(describePort(port));
+      }
+      if (entry.variadic_outputs) {
+        const variadic: VariadicSpec = entry.variadic_outputs;
+        const doc =
+          variadic.doc && variadic.doc.trim().length > 0
+            ? ` — ${variadic.doc}`
+            : "";
+        const max = variadic.max != null ? variadic.max : "∞";
+        lines.push(
+          `    • ${variadic.label} [${variadic.id}:${variadic.ty}] (variadic ${variadic.min}-${max})${doc}`
+        );
+      }
+    }
+
+    if (entry.params.length) {
+      lines.push("  Params:");
+      for (const param of entry.params) {
+        lines.push(describeParam(param));
+      }
+    }
+
+    console.log(lines.join("\n"));
+  }
+}
+
 // Samples re-exports
 import {
   graphSamples as baseGraphSamples,
@@ -276,3 +414,12 @@ export {
   layeredRigBlend,
   urdfIkPosition,
 };
+
+export {
+  getNodeRegistry,
+  findNodeSignature,
+  requireNodeSignature,
+  listNodeTypeIds,
+  groupNodeSignaturesByCategory,
+  nodeRegistryVersion,
+} from "./metadata/index.js";

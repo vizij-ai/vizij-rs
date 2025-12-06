@@ -1,6 +1,6 @@
 {
   "name": "@vizij/orchestrator-wasm",
-  "version": "0.1.0",
+  "version": "0.2.9",
   "description": "WASM bindings for Vizij orchestrator core (JS wrapper)",
   "license": "MIT",
   "repository": {
@@ -8,9 +8,9 @@
     "url": "https://github.com/vizij-ai/vizij-rs"
   },
   "type": "module",
-  "main": "dist/src/index.js",
-  "module": "dist/src/index.js",
-  "types": "dist/src/index.d.ts",
+  "main": "dist/orchestrator-wasm/src/index.js",
+  "module": "dist/orchestrator-wasm/src/index.js",
+  "types": "dist/orchestrator-wasm/src/index.d.ts",
   "files": [
     "dist/",
     "pkg/",
@@ -18,19 +18,20 @@
   ],
   "exports": {
     ".": {
-      "import": "./dist/src/index.js",
-      "types": "./dist/src/index.d.ts"
+      "import": "./dist/orchestrator-wasm/src/index.js",
+      "types": "./dist/orchestrator-wasm/src/index.d.ts"
     }
   },
   "sideEffects": false,
   "scripts": {
-    "build": "node ../../../scripts/embed-fixtures.mjs orchestrator-wasm && tsc -p tsconfig.json",
-    "test": "pnpm run build && node dist/tests/all.test.js",
+    "build": "node ../../../scripts/embed-fixtures.mjs orchestrator-wasm && tsc -p tsconfig.json && node ../../../scripts/copy-wasm-pkg.mjs orchestrator-wasm",
+    "test": "pnpm run build && node dist/orchestrator-wasm/tests/all.test.js",
+    "prepack": "pnpm run build",
     "prepublishOnly": "node -e \"const fs=require('fs');if(!fs.existsSync('pkg')){console.error('Missing pkg/. Run wasm-pack build.');process.exit(1);}\""
   },
   "dependencies": {
-    "@vizij/value-json": "^0.1.0",
-    "@vizij/wasm-loader": "^0.1.0"
+    "@vizij/value-json": "workspace:*",
+    "@vizij/wasm-loader": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

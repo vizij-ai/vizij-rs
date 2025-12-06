@@ -45,6 +45,7 @@ cargo add vizij-api-core
 ```
 
 No feature flags are required; the crate is always built with the full surface enabled.
+`serde` support is always compiled in so `Value`, `Shape`, and `TypedPath` can be serialised/deserialised across Rust and wasm hosts. Disabling `serde` or targeting `no_std` is currently unsupported; downstream engines rely on these derives.
 
 ---
 
@@ -55,6 +56,23 @@ No feature flags are required; the crate is always built with the full surface e
 - `Value` is a tagged enum serialised with `{ "type": "...", "data": ... }`. Helper constructors (`Value::vec3`, `Value::quat`, etc.) simplify native code.
 - `ShapeId` mirrors the possible structural forms (`Scalar`, `Vec3`, `Transform`, `Record`, …). `Shape` wraps the ID plus optional metadata (`HashMap<String, String>`).
 - Consuming crates rely on shape metadata to catch schema drift early and to build “null-of-shape” placeholders (e.g., NaN vectors).
+
+| Variant | Canonical JSON | Legacy shorthand input |
+|---------|----------------|------------------------|
+| `Value::Float(1.0)` | `{"type":"float","data":1.0}` | `{"float":1}` |
+| `Value::Bool(true)` | `{"type":"bool","data":true}` | `{"bool":true}` |
+| `Value::Vec3([0,1,0])` | `{"type":"vec3","data":[0,1,0]}` | `{"vec3":[0,1,0]}` |
+| `Value::Quat([0,0,0,1])` | `{"type":"quat","data":[0,0,0,1]}` | `{"quat":[0,0,0,1]}` |
+| `Value::ColorRgba([1,0,0,1])` | `{"type":"colorrgba","data":[1,0,0,1]}` | `{"color":[1,0,0,1]}` |
+| `Value::Transform { .. }` | `{"type":"transform","data":{"translation":[0,0,0],"rotation":[0,0,0,1],"scale":[1,1,1]}}` | `{"transform":{"translation":[0,0,0],"rotation":[0,0,0,1],"scale":[1,1,1]}}` |
+| `Value::Enum("State", box Value::Bool(true))` | `{"type":"enum","data":["State",{"type":"bool","data":true}]}` | `{"enum":{"tag":"State","value":{"bool":true}}}` |
+| `Value::Record({ "joint": Value::Float(2.0) })` | `{"type":"record","data":{"joint":{"type":"float","data":2.0}}}` | `{"record":{"joint":{"float":2}}}` |
+| `Value::Array([Value::Float(0.0)])` | `{"type":"array","data":[{"type":"float","data":0.0}]}` | `{"array":[{"float":0}]}` |
+| `Value::List([Value::Vec3([1,1,1])])` | `{"type":"list","data":[{"type":"vec3","data":[1,1,1]}]}` | `{"list":[{"vec3":[1,1,1]}]}` |
+| `Value::Tuple([Value::Float(1.0), Value::Bool(false)])` | `{"type":"tuple","data":[{"type":"float","data":1.0},{"type":"bool","data":false}]}` | `{"tuple":[{"float":1},{"bool":false}]}` |
+| `Value::Text("hello")` | `{"type":"text","data":"hello"}` | `{"text":"hello"}` |
+
+Use the canonical JSON form when serialising fixtures or interoperating with other runtimes; the legacy column remains accepted on input for backwards compatibility.
 
 ### TypedPath
 
@@ -73,6 +91,71 @@ No feature flags are required; the crate is always built with the full surface e
 - The `json` module converts shorthand objects (`{ float: 1 }`, `{ vec3: [0,1,0] }`) into canonical `Value` envelopes.
 - Shared by WASM bindings (`vizij-*-wasm`), fixtures, and hosted tools to ensure identical parsing across environments.
 - Legacy helpers (`value_to_legacy_json`, `writebatch_to_legacy_json`) keep older tools functioning during transitions.
+- Graph specs are normalised so node shorthands stay ergonomic while the runtime always sees the canonical schema:
+  - Node `type` strings are lowercased and legacy `kind` aliases are rewritten.
+  - Inline `inputs` maps are expanded into the top-level `edges` array so wiring is explicit.
+  - Scalar/boolean/vector literals placed on an input (for example `"rhs": 2`) are lifted into `node.input_defaults` and survive the `inputs → edges` rewrite.
+  - Connection objects can provide both wiring and fallbacks (`{ "node_id": "config", "default": 0.5 }`), which normalise into a link plus an `input_defaults` entry.
+  - Optional `default_shape` or `shape` keys are accepted (string IDs become `{ "id": "Scalar" }`) so downstream coercion can infer the intended layout.
+
+  ```jsonc
+  // authoring shorthand
+  {
+    "id": "scale",
+    "type": "multiply",
+    "inputs": {
+      "lhs": "sensor_gain",
+      "rhs": 2
+    }
+  }
+
+  // normalised representation consumed by vizij-graph-core
+  {
+    "id": "scale",
+    "type": "multiply",
+    "input_defaults": {
+      "rhs": { "value": { "type": "float", "data": 2.0 } }
+    }
+  }
+  ```
+
+  This means authors can skip boilerplate constant nodes, but hosts still receive a deterministic graph definition with explicit edges and defaults.
+
+  ```jsonc
+  // enum/record defaults survive normalisation
+  {
+    "id": "mode-selector",
+    "type": "switch",
+    "inputs": {
+      "mode": { "enum": { "tag": "On", "value": { "bool": true } } }
+    },
+    "input_defaults": {
+      "payload": { "record": { "intensity": { "float": 0.75 } } }
+    }
+  }
+
+  // becomes
+  {
+    "id": "mode-selector",
+    "type": "switch",
+    "input_defaults": {
+      "mode": {
+        "value": {
+          "type": "enum",
+          "data": ["On", { "type": "bool", "data": true }]
+        }
+      },
+      "payload": {
+        "value": {
+          "type": "record",
+          "data": {
+            "intensity": { "type": "float", "data": 0.75 }
+          }
+        }
+      }
+    }
+  }
+  ```
 
 ---
 

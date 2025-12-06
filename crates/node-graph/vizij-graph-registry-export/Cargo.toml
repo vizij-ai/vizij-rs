@@ -1,0 +1,8 @@
+[package]
+name = "vizij-graph-registry-export"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vizij-graph-core = { path = "../vizij-graph-core" }
+serde_json = "1"

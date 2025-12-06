@@ -5,9 +5,12 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsError;
 
 use vizij_api_core::{json, TypedPath};
+use vizij_graph_core::types::GraphSpec;
 use vizij_orchestrator::{
-    controllers::animation::AnimationControllerConfig, controllers::graph::GraphControllerConfig,
-    scheduler::Schedule, Orchestrator,
+    controllers::animation::AnimationControllerConfig,
+    controllers::graph::{GraphControllerConfig, GraphMergeOptions, OutputConflictStrategy},
+    scheduler::Schedule,
+    Orchestrator,
 };
 mod normalize;
 
@@ -15,6 +18,14 @@ mod normalize;
 #[derive(Default, Deserialize)]
 struct OrchestratorOptions {
     pub schedule: Option<String>,
+}
+
+impl VizijOrchestrator {
+    fn next_graph_id(&mut self) -> String {
+        let id = format!("graph:{}", self.graph_counter);
+        self.graph_counter = self.graph_counter.wrapping_add(1);
+        id
+    }
 }
 
 /// Simple JS resolver wrapper that calls a JS Function resolver(path) -> string|number|null
@@ -57,6 +68,15 @@ struct JsGraphConfig {
     subs: Option<JsGraphSubscriptions>,
 }
 
+#[derive(Deserialize)]
+struct JsMergedGraphConfig {
+    #[serde(default)]
+    id: Option<String>,
+    graphs: Vec<JsGraphConfig>,
+    #[serde(default)]
+    strategy: Option<JsMergeStrategy>,
+}
+
 #[derive(Default, Deserialize)]
 struct JsGraphSubscriptions {
     #[serde(default)]
@@ -66,6 +86,14 @@ struct JsGraphSubscriptions {
     #[serde(default)]
     #[serde(rename = "mirrorWrites", alias = "mirror_writes")]
     mirror_writes: Option<bool>,
+}
+
+#[derive(Default, Deserialize)]
+struct JsMergeStrategy {
+    #[serde(default)]
+    outputs: Option<String>,
+    #[serde(default)]
+    intermediate: Option<String>,
 }
 
 fn map_graph_subscriptions(
@@ -94,6 +122,58 @@ fn map_graph_subscriptions(
         }
     }
     Ok(subs)
+}
+
+fn parse_conflict_strategy(value: &str) -> Result<OutputConflictStrategy, String> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "error" => Ok(OutputConflictStrategy::Error),
+        "namespace" => Ok(OutputConflictStrategy::Namespace),
+        "blend" | "blend_equal" | "blend_equal_weights" => {
+            Ok(OutputConflictStrategy::BlendEqualWeights)
+        }
+        "add" | "sum" | "blend_sum" | "blend-sum" | "additive" => {
+            Ok(OutputConflictStrategy::Add)
+        }
+        "default_blend"
+        | "default-blend"
+        | "blend-default"
+        | "blend_weights"
+        | "blend-weights"
+        | "weights" => Ok(OutputConflictStrategy::DefaultBlend),
+        other => Err(format!(
+            "unknown merge conflict strategy '{}'; expected 'error', 'namespace', 'blend', 'add', or 'default-blend'",
+            other
+        )),
+    }
+}
+
+fn map_merge_options(cfg: Option<JsMergeStrategy>) -> Result<GraphMergeOptions, String> {
+    let mut options = GraphMergeOptions::default();
+    if let Some(strategy) = cfg {
+        if let Some(outputs) = strategy.outputs {
+            options.output_conflicts = parse_conflict_strategy(&outputs)?;
+        }
+        if let Some(intermediate) = strategy.intermediate {
+            options.intermediate_conflicts = parse_conflict_strategy(&intermediate)?;
+        }
+    }
+    Ok(options)
+}
+
+fn build_graph_controller_config(
+    mut graph: JsGraphConfig,
+    fallback_id: String,
+) -> Result<GraphControllerConfig, String> {
+    json::normalize_graph_spec_value(&mut graph.spec)
+        .map_err(|e| format!("normalize graph spec error: {}", e))?;
+    let spec: GraphSpec = serde_json::from_value(graph.spec)
+        .map_err(|e| format!("graph spec deserialize error: {}", e))?;
+    let subs = map_graph_subscriptions(graph.subs)?;
+    Ok(GraphControllerConfig {
+        id: graph.id.unwrap_or(fallback_id),
+        spec,
+        subs,
+    })
 }
 
 #[wasm_bindgen]
@@ -161,7 +241,8 @@ impl VizijOrchestrator {
             (obj.id, obj.spec, obj.subs)
         };
 
-        json::normalize_graph_spec_value(&mut spec_val);
+        json::normalize_graph_spec_value(&mut spec_val)
+            .map_err(|e| JsError::new(&format!("normalize graph spec error: {}", e)))?;
 
         // Deserialize GraphSpec
         let spec: vizij_graph_core::types::GraphSpec = serde_json::from_value(spec_val)
@@ -171,14 +252,7 @@ impl VizijOrchestrator {
             .map_err(|e| JsError::new(&format!("graph subscriptions error: {e}")))?;
 
         // Generate id if needed
-        let id = match id {
-            Some(s) => s,
-            None => {
-                let gid = format!("graph:{}", self.graph_counter);
-                self.graph_counter = self.graph_counter.wrapping_add(1);
-                gid
-            }
-        };
+        let id = id.unwrap_or_else(|| self.next_graph_id());
 
         // Build controller config and insert into orchestrator
         let cfg = GraphControllerConfig {
@@ -190,6 +264,54 @@ impl VizijOrchestrator {
         self.core.graphs.insert(id.clone(), controller);
 
         Ok(id)
+    }
+
+    /// Export a graph spec as a JS object for inspection.
+    #[wasm_bindgen(js_name = export_graph)]
+    pub fn export_graph(&self, id: &str) -> Result<JsValue, JsError> {
+        let value = self
+            .core
+            .export_graph_json(id)
+            .map_err(|e| JsError::new(&format!("export_graph error: {e}")))?;
+        swb::to_value(&value).map_err(|e| JsError::new(&format!("serialize graph spec error: {e}")))
+    }
+
+    /// Register multiple graph specs as a single merged controller.
+    ///
+    /// Accepts an object { id?: string, graphs: GraphRegistrationConfig[] } mirroring the single
+    /// controller shape. Each entry supports the same `spec` and optional `subs` fields.
+    #[wasm_bindgen(js_name = register_merged_graph)]
+    pub fn register_merged_graph(&mut self, cfg: JsValue) -> Result<String, JsError> {
+        if cfg.is_undefined() || cfg.is_null() {
+            return Err(JsError::new("register_merged_graph: cfg required"));
+        }
+        let obj: JsMergedGraphConfig = swb::from_value(cfg)
+            .map_err(|e| JsError::new(&format!("merged graph cfg parse error: {e}")))?;
+        if obj.graphs.is_empty() {
+            return Err(JsError::new(
+                "register_merged_graph: expected at least one graph",
+            ));
+        }
+
+        let options = map_merge_options(obj.strategy)
+            .map_err(|e| JsError::new(&format!("merge strategy error: {e}")))?;
+
+        let merged_id = obj.id.unwrap_or_else(|| self.next_graph_id());
+        let mut configs = Vec::with_capacity(obj.graphs.len());
+        for (idx, graph_cfg) in obj.graphs.into_iter().enumerate() {
+            let fallback_id = format!("{}::{}", merged_id, idx);
+            let cfg = build_graph_controller_config(graph_cfg, fallback_id)
+                .map_err(|e| JsError::new(&format!("graph cfg error: {}", e)))?;
+            configs.push(cfg);
+        }
+
+        let merged_cfg =
+            GraphControllerConfig::merged_with_options(merged_id.clone(), configs, options)
+                .map_err(|e| JsError::new(&format!("graph merge error: {}", e)))?;
+        let controller = vizij_orchestrator::controllers::graph::GraphController::new(merged_cfg);
+        self.core.graphs.insert(merged_id.clone(), controller);
+
+        Ok(merged_id)
     }
 
     /// Register an animation controller.

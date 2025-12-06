@@ -31,7 +31,7 @@
 
 | Export | Description |
 |--------|-------------|
-| `class VizijOrchestrator` | Methods: constructor, `register_graph`, `register_animation`, `prebind`, `set_input`, `remove_input`, `step`, `list_controllers`, `remove_graph`, `remove_animation`. |
+| `class VizijOrchestrator` | Methods: constructor, `register_graph`, `register_merged_graph`, `register_animation`, `prebind`, `set_input`, `remove_input`, `step`, `list_controllers`, `remove_graph`, `remove_animation`. |
 | `normalize_graph_spec_json(json: &str) -> String` | Normalises GraphSpec JSON (used internally and exposed for tooling). |
 | `abi_version() -> u32` | Returns `2`; npm wrapper enforces this at init time. |
 | `utils::value_to_legacy_json` et al. | Convert `Value`/`WriteBatch` into legacy `{ vec3: [...] }` style JSON (handy for older tooling). |
@@ -70,6 +70,22 @@ console.log("ABI version", abi_version());
 const orchestrator = new VizijOrchestrator({ schedule: "SinglePass" });
 
 const graphId = orchestrator.register_graph({ spec: { nodes: [] } });
+const mergedGraphId = orchestrator.register_merged_graph({
+  graphs: [
+    { spec: { nodes: [{ id: "source", type: "constant", params: { value: 1 } }] } },
+    {
+      spec: {
+        nodes: [
+          { id: "input", type: "input", params: { path: "shared/value" } },
+          { id: "out", type: "output", params: { path: "shared/result" } }
+        ],
+        edges: [
+          { from: { node_id: "input" }, to: { node_id: "out", input: "in" } }
+        ]
+      }
+    }
+  ]
+});
 const animId = orchestrator.register_animation({ setup: {} });
 
 // Optional: resolve animation targets
@@ -78,6 +94,34 @@ orchestrator.prebind((path) => path.toUpperCase());
 orchestrator.set_input("demo/input/value", { float: 1.23 }, null);
 const frame = orchestrator.step(1 / 60);
 console.log(frame.merged_writes);
+```
+
+### Registration payloads
+
+- `register_graph({ id?, spec, subs? })`
+  - `spec` must be a canonical `GraphSpec` object (use `normalize_graph_spec_json` or the npm wrapper’s helper first).
+  - `subs.inputs` / `subs.outputs` accept arrays of canonical `TypedPath` strings; invalid paths throw a `JsError`.
+  - `subs.mirrorWrites` (boolean) mirrors every write from the controller back into the blackboard even when `outputs` filters public results.
+- `register_merged_graph({ id?, graphs: GraphConfig[], strategy? })`
+  - Each entry in `graphs` mirrors `register_graph`.
+  - `strategy.outputs|intermediate` accept `"error"` (default), `"namespace"`, or `"blend"` to control how conflicting paths are handled during the merge.
+- `register_animation({ id?, setup? })`
+  - `setup` is forwarded to `AnimationControllerConfig::setup` and commonly contains `{ animation, player, instance }` blobs (see core README).
+
+All registration helpers auto-generate an id when omitted (`graph:0`, `anim:0`, etc.).
+
+### Custom `.wasm` location
+
+```ts
+import init from "@vizij/orchestrator-wasm";
+import { readFile } from "node:fs/promises";
+
+// CDN
+await init(new URL("https://cdn.example.com/vizij/orchestrator_wasm_bg.wasm"));
+
+// Desktop (Electron/Tauri)
+const bytes = await readFile("dist/orchestrator_wasm_bg.wasm");
+await init(bytes);
 ```
 
 ---
@@ -100,6 +144,27 @@ console.log(frame.merged_writes);
 ```
 
 Values use the same `{ type, data }` envelope as `vizij-api-core`. Shapes are included when available so the consumer can reason about numeric layouts.
+
+### Error handling
+
+- All registration and staging methods throw `JsError` on failure. Wrap calls in `try/catch` to surface actionable messages:
+  ```ts
+  try {
+    orchestrator.register_graph({ spec: badSpec });
+  } catch (err) {
+    console.error("Graph registration failed:", err instanceof Error ? err.message : err);
+  }
+  ```
+- ABI mismatches surface via `abi_version()`—if the returned value differs from the npm wrapper’s expected version, rebuild the wasm crate and retry initialisation.
+
+---
+
+## Troubleshooting
+
+- **ABI mismatch**: Ensure both the `.wasm` binary and JS glue were rebuilt together (`pnpm run build:wasm:orchestrator`). The wrapper throws `ABI mismatch` with the expected/current values.
+- **`graph cfg parse error`**: Indicates the registration payload lacked a `spec` or contained invalid JSON. Run it through `normalize_graph_spec_json` to canonicalise selectors and path strings.
+- **`merge strategy error`**: Occurs when `strategy.outputs` / `strategy.intermediate` are not `"error"`, `"namespace"`, or `"blend"`.
+- **Empty `merged_writes`**: Confirm at least one controller published to an output path (graphs without `Output` nodes only affect internal state).
 
 ---
 

@@ -1,5 +1,6 @@
 use hashbrown::HashMap;
 use vizij_api_core::{coercion, json, Shape, TypedPath, Value};
+use vizij_graph_core::types::RoundMode;
 use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, PortValue};
 use wasm_bindgen::prelude::*;
 
@@ -122,7 +123,10 @@ impl WasmGraph {
         #[cfg(feature = "console_error_panic_hook")]
         console_error_panic_hook::set_once();
         WasmGraph {
-            spec: GraphSpec { nodes: vec![] },
+            spec: GraphSpec {
+                nodes: vec![],
+                ..Default::default()
+            },
             t: 0.0,
             runtime: GraphRuntime::default(),
         }
@@ -257,6 +261,16 @@ impl WasmGraph {
                 )))
             }
         }
+        fn expect_bool(node_id: &str, key: &str, v: &Value) -> Result<bool, JsValue> {
+            if let Value::Bool(b) = v {
+                Ok(*b)
+            } else {
+                Err(JsValue::from_str(&format!(
+                    "set_param: node '{}' key '{}' expects Bool",
+                    node_id, key
+                )))
+            }
+        }
         fn expect_text<'a>(node_id: &str, key: &str, v: &'a Value) -> Result<&'a str, JsValue> {
             if let Value::Text(s) = v {
                 Ok(s.as_str())
@@ -347,6 +361,19 @@ impl WasmGraph {
                 ))),
             }
         }
+        fn parse_round_mode(node_id: &str, key: &str, v: &Value) -> Result<RoundMode, JsValue> {
+            let raw = expect_text(node_id, key, v)?;
+            let normalized = raw.trim().to_ascii_lowercase();
+            match normalized.as_str() {
+                "floor" => Ok(RoundMode::Floor),
+                "ceil" => Ok(RoundMode::Ceil),
+                "trunc" => Ok(RoundMode::Trunc),
+                other => Err(JsValue::from_str(&format!(
+                    "set_param: node '{}' key '{}' expects \"floor\", \"ceil\", or \"trunc\" (got '{}')",
+                    node_id, key, other
+                ))),
+            }
+        }
 
         if let Some(node) = self.spec.nodes.iter_mut().find(|n| n.id == node_id) {
             match key {
@@ -363,6 +390,7 @@ impl WasmGraph {
                 "in_max" => node.params.in_max = Some(expect_float(node_id, key, &val)?),
                 "out_min" => node.params.out_min = Some(expect_float(node_id, key, &val)?),
                 "out_max" => node.params.out_max = Some(expect_float(node_id, key, &val)?),
+                "clamp" => node.params.clamp = Some(expect_bool(node_id, key, &val)?),
                 "x" => node.params.x = Some(expect_float(node_id, key, &val)?),
                 "y" => node.params.y = Some(expect_float(node_id, key, &val)?),
                 "z" => node.params.z = Some(expect_float(node_id, key, &val)?),
@@ -375,6 +403,9 @@ impl WasmGraph {
                 "mass" => node.params.mass = Some(expect_float(node_id, key, &val)?),
                 "half_life" => node.params.half_life = Some(expect_float(node_id, key, &val)?),
                 "max_rate" => node.params.max_rate = Some(expect_float(node_id, key, &val)?),
+                "round_mode" => {
+                    node.params.round_mode = Some(parse_round_mode(node_id, key, &val)?);
+                }
 
                 // Vectors / numeric lists
                 "sizes" => {

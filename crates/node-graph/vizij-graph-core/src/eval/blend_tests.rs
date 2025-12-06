@@ -1,7 +1,9 @@
 // Blend node unit tests (broadcasting, mismatch, and basic semantics)
 
 use super::*;
-use crate::types::{GraphSpec, InputConnection, NodeParams, NodeSpec, NodeType};
+use crate::types::{
+    EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
+};
 use hashbrown::HashMap;
 use vizij_api_core::Value;
 
@@ -14,15 +16,25 @@ fn constant_node(id: &str, value: Value) -> NodeSpec {
             value: Some(value),
             ..Default::default()
         },
-        inputs: HashMap::new(),
         output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
     }
 }
 
-fn connection(node_id: &str, output_key: &str) -> InputConnection {
-    InputConnection {
-        node_id: node_id.to_string(),
-        output_key: output_key.to_string(),
+fn link(from: &str, to: &str, input: &str) -> EdgeSpec {
+    link_with_output(from, "out", to, input)
+}
+
+fn link_with_output(from: &str, output_key: &str, to: &str, input: &str) -> EdgeSpec {
+    EdgeSpec {
+        from: EdgeOutputEndpoint {
+            node_id: from.to_string(),
+            output: output_key.to_string(),
+        },
+        to: EdgeInputEndpoint {
+            node_id: to.to_string(),
+            input: input.to_string(),
+        },
         selector: None,
     }
 }
@@ -30,10 +42,6 @@ fn connection(node_id: &str, output_key: &str) -> InputConnection {
 #[test]
 fn weighted_sum_vector_scalar_weight_broadcasts_and_outputs_descriptive_ports() {
     // values = [1,2,3], weight = 0.5 (scalar broadcast)
-    let mut inputs = HashMap::new();
-    inputs.insert("values".to_string(), connection("vals", "out"));
-    inputs.insert("weights".to_string(), connection("w", "out"));
-
     let graph = GraphSpec {
         nodes: vec![
             constant_node("vals", Value::Vector(vec![1.0, 2.0, 3.0])),
@@ -42,10 +50,11 @@ fn weighted_sum_vector_scalar_weight_broadcasts_and_outputs_descriptive_ports() 
                 id: "ws".to_string(),
                 kind: NodeType::WeightedSumVector,
                 params: NodeParams::default(),
-                inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
+        edges: vec![link("vals", "ws", "values"), link("w", "ws", "weights")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -88,10 +97,6 @@ fn weighted_sum_vector_scalar_weight_broadcasts_and_outputs_descriptive_ports() 
 #[test]
 fn weighted_sum_vector_length_mismatch_returns_nans() {
     // values length 3, weights length 2 -> mismatch after broadcasting
-    let mut inputs = HashMap::new();
-    inputs.insert("values".to_string(), connection("vals", "out"));
-    inputs.insert("weights".to_string(), connection("w", "out"));
-
     let graph = GraphSpec {
         nodes: vec![
             constant_node("vals", Value::Vector(vec![1.0, 2.0, 3.0])),
@@ -100,10 +105,11 @@ fn weighted_sum_vector_length_mismatch_returns_nans() {
                 id: "ws".to_string(),
                 kind: NodeType::WeightedSumVector,
                 params: NodeParams::default(),
-                inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
+        edges: vec![link("vals", "ws", "values"), link("w", "ws", "weights")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -130,22 +136,6 @@ fn blend_weighted_average_computes_normalized_average() {
     // Compose WeightedSumVector -> BlendWeightedAverage
     // values [1,2,3], weight scalar 0.5 -> sum=3.0, total_weight=1.5, max=0.5
     // normalized average computed as sum / (total_weight / max) = 3 / (1.5/0.5) = 1.0
-    let mut ws_inputs = HashMap::new();
-    ws_inputs.insert("values".to_string(), connection("vals", "out"));
-    ws_inputs.insert("weights".to_string(), connection("w", "out"));
-
-    // Blend node inputs map to weighted-sum outputs
-    let mut b_inputs = HashMap::new();
-    b_inputs.insert(
-        "total_weighted_sum".to_string(),
-        connection("ws", "total_weighted_sum"),
-    );
-    b_inputs.insert("total_weight".to_string(), connection("ws", "total_weight"));
-    b_inputs.insert(
-        "max_effective_weight".to_string(),
-        connection("ws", "max_effective_weight"),
-    );
-
     let graph = GraphSpec {
         nodes: vec![
             constant_node("vals", Value::Vector(vec![1.0, 2.0, 3.0])),
@@ -154,16 +144,23 @@ fn blend_weighted_average_computes_normalized_average() {
                 id: "ws".to_string(),
                 kind: NodeType::WeightedSumVector,
                 params: NodeParams::default(),
-                inputs: ws_inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
             NodeSpec {
                 id: "bavg".to_string(),
                 kind: NodeType::BlendWeightedAverage,
                 params: NodeParams::default(),
-                inputs: b_inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
+        ],
+        edges: vec![
+            link("vals", "ws", "values"),
+            link("w", "ws", "weights"),
+            link_with_output("ws", "total_weighted_sum", "bavg", "total_weighted_sum"),
+            link_with_output("ws", "total_weight", "bavg", "total_weight"),
+            link_with_output("ws", "max_effective_weight", "bavg", "max_effective_weight"),
         ],
     };
 
@@ -180,10 +177,6 @@ fn blend_weighted_average_computes_normalized_average() {
 #[test]
 fn blend_multiply_computes_product_of_terms() {
     // values [0.2,0.5], weight scalar 0.5 -> terms = (1-0.5)+v*0.5 -> 0.6 and 0.75 -> product 0.45
-    let mut inputs = HashMap::new();
-    inputs.insert("values".to_string(), connection("vals", "out"));
-    inputs.insert("weights".to_string(), connection("w", "out"));
-
     let graph = GraphSpec {
         nodes: vec![
             constant_node("vals", Value::Vector(vec![0.2, 0.5])),
@@ -192,10 +185,11 @@ fn blend_multiply_computes_product_of_terms() {
                 id: "mult".to_string(),
                 kind: NodeType::BlendMultiply,
                 params: NodeParams::default(),
-                inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
+        edges: vec![link("vals", "mult", "values"), link("w", "mult", "weights")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -211,10 +205,6 @@ fn blend_multiply_computes_product_of_terms() {
 #[test]
 fn blend_max_selects_value_of_highest_effective_weight() {
     // values [1,2,3], weights [0.1,0.9,0.2] -> best idx 1 => selected = 2.0 * 0.9 = 1.8
-    let mut inputs = HashMap::new();
-    inputs.insert("values".to_string(), connection("vals", "out"));
-    inputs.insert("weights".to_string(), connection("w", "out"));
-
     let graph = GraphSpec {
         nodes: vec![
             constant_node("vals", Value::Vector(vec![1.0, 2.0, 3.0])),
@@ -223,10 +213,11 @@ fn blend_max_selects_value_of_highest_effective_weight() {
                 id: "max".to_string(),
                 kind: NodeType::BlendMax,
                 params: NodeParams::default(),
-                inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
+        edges: vec![link("vals", "max", "values"), link("w", "max", "weights")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -248,17 +239,6 @@ fn default_blend_matches_expected_vec3_output() {
     let w1 = 0.6f32;
     let w2 = 0.3f32;
 
-    let mut join_inputs = HashMap::new();
-    join_inputs.insert("operands_1".to_string(), connection("w1", "out"));
-    join_inputs.insert("operands_2".to_string(), connection("w2", "out"));
-
-    let mut blend_inputs = HashMap::new();
-    blend_inputs.insert("baseline".to_string(), connection("baseline", "out"));
-    blend_inputs.insert("offset".to_string(), connection("offset", "out"));
-    blend_inputs.insert("weights".to_string(), connection("weights", "out"));
-    blend_inputs.insert("target_1".to_string(), connection("t1", "out"));
-    blend_inputs.insert("target_2".to_string(), connection("t2", "out"));
-
     let graph = GraphSpec {
         nodes: vec![
             constant_node("baseline", baseline.clone()),
@@ -271,16 +251,25 @@ fn default_blend_matches_expected_vec3_output() {
                 id: "weights".to_string(),
                 kind: NodeType::Join,
                 params: NodeParams::default(),
-                inputs: join_inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
             NodeSpec {
                 id: "blend".to_string(),
                 kind: NodeType::DefaultBlend,
                 params: NodeParams::default(),
-                inputs: blend_inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
+        ],
+        edges: vec![
+            link("w1", "weights", "operand_1"),
+            link("w2", "weights", "operand_2"),
+            link("baseline", "blend", "baseline"),
+            link("offset", "blend", "offset"),
+            link("weights", "blend", "weights"),
+            link("t1", "blend", "operand_1"),
+            link("t2", "blend", "operand_2"),
         ],
     };
 
@@ -328,12 +317,6 @@ fn default_blend_matches_expected_vec3_output() {
 
 #[test]
 fn default_blend_emits_nan_value_when_weight_length_mismatch() {
-    let mut blend_inputs = HashMap::new();
-    blend_inputs.insert("baseline".to_string(), connection("baseline", "out"));
-    blend_inputs.insert("target_1".to_string(), connection("t1", "out"));
-    blend_inputs.insert("target_2".to_string(), connection("t2", "out"));
-    blend_inputs.insert("weights".to_string(), connection("weights", "out"));
-
     let graph = GraphSpec {
         nodes: vec![
             constant_node("baseline", Value::Vec3([0.0, 0.0, 0.0])),
@@ -344,9 +327,15 @@ fn default_blend_emits_nan_value_when_weight_length_mismatch() {
                 id: "blend".to_string(),
                 kind: NodeType::DefaultBlend,
                 params: NodeParams::default(),
-                inputs: blend_inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
+        ],
+        edges: vec![
+            link("baseline", "blend", "baseline"),
+            link("t1", "blend", "operand_1"),
+            link("t2", "blend", "operand_2"),
+            link("weights", "blend", "weights"),
         ],
     };
 
@@ -363,12 +352,6 @@ fn default_blend_emits_nan_value_when_weight_length_mismatch() {
 #[test]
 fn case_node_routes_based_on_case_labels_param() {
     // Case with labels ["a","b"] and two variadic case inputs: cases_1 -> "first", cases_2 -> "second"
-    let mut inputs = HashMap::new();
-    inputs.insert("selector".to_string(), connection("sel", "out"));
-    inputs.insert("cases_1".to_string(), connection("c1", "out"));
-    inputs.insert("cases_2".to_string(), connection("c2", "out"));
-    inputs.insert("default".to_string(), connection("d", "out"));
-
     let params = NodeParams {
         case_labels: Some(vec!["a".to_string(), "b".to_string()]),
         ..Default::default()
@@ -384,9 +367,15 @@ fn case_node_routes_based_on_case_labels_param() {
                 id: "case".to_string(),
                 kind: NodeType::Case,
                 params,
-                inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
+        ],
+        edges: vec![
+            link("sel", "case", "selector"),
+            link("c1", "case", "operand_1"),
+            link("c2", "case", "operand_2"),
+            link("d", "case", "default"),
         ],
     };
 

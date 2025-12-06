@@ -1,7 +1,22 @@
 {
   "description": "Blend pipeline combining pose/quaternion animation with weighted profile graph",
-  "animation": "pose-quat-transform",
-  "graph": "weighted-profile-blend",
+  "schedule": "TwoPass",
+  "animations": [
+    {
+      "fixture": "pose-quat-transform",
+      "id": "pose-animation",
+      "player": {
+        "name": "pose-player",
+        "loop_mode": "loop"
+      }
+    }
+  ],
+  "graphs": [
+    {
+      "fixture": "weighted-profile-blend",
+      "id": "profile-blend"
+    }
+  ],
   "initial_inputs": [],
   "steps": [
     {

@@ -1,6 +1,10 @@
 // Stable ESM entry for @vizij/animation-wasm
 // Wraps the wasm-pack output in ../pkg (built with `--target web`).
-import { loadBindings as loadWasmBindings, type InitInput as LoaderInitInput } from "@vizij/wasm-loader";
+import {
+  loadBindings as loadWasmBindings,
+  type InitInput as LoaderInitInput,
+} from "@vizij/wasm-loader";
+import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 import type {
   InitInput,
   Config,
@@ -85,20 +89,53 @@ type WasmBindings = {
 };
 
 const bindingCache: { current: WasmBindings | null } = { current: null };
+let wasmModulePromise: Promise<WasmBindings | unknown> | null = null;
+let wasmUrlCache: string | null = null;
 
 function pkgWasmJsUrl(): URL {
   return new URL("../../pkg/vizij_animation_wasm.js", import.meta.url);
 }
 
-function defaultWasmUrl(): URL {
-  return new URL("../../pkg/vizij_animation_wasm_bg.wasm", import.meta.url);
+function importStaticWasmModule(): Promise<unknown> {
+  return import("../../pkg/vizij_animation_wasm.js");
 }
 
+function importDynamicWasmModule(): Promise<unknown> {
+  return import(/* @vite-ignore */ pkgWasmJsUrl().toString());
+}
+
+async function importWasmModule(): Promise<unknown> {
+  if (!wasmModulePromise) {
+    wasmModulePromise = importStaticWasmModule().catch((err) => {
+      if (typeof console !== "undefined" && typeof console.warn === "function") {
+        console.warn(
+          "@vizij/animation-wasm: static wasm import failed, falling back to runtime URL import.",
+          err
+        );
+      }
+      return importDynamicWasmModule();
+    });
+  }
+  return wasmModulePromise;
+}
+
+function defaultWasmUrl(): string {
+  if (!wasmUrlCache) {
+    wasmUrlCache = new URL("../../pkg/vizij_animation_wasm_bg.wasm", import.meta.url).toString();
+  }
+  return wasmUrlCache;
+}
+
+const loadBindingsImpl =
+  typeof window === "undefined"
+    ? loadWasmBindings
+    : (loadWasmBindingsBrowser as typeof loadWasmBindings);
+
 async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
-  await loadWasmBindings<WasmBindings>(
+  await loadBindingsImpl<WasmBindings>(
     {
       cache: bindingCache,
-      importModule: () => import(/* @vite-ignore */ pkgWasmJsUrl().toString()),
+      importModule: () => importWasmModule(),
       defaultWasmUrl,
       init: async (module: unknown, initArg: unknown) => {
         const typed = module as WasmBindings;

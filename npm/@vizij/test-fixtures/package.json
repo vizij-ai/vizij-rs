@@ -1,6 +1,6 @@
 {
   "name": "@vizij/test-fixtures",
-  "version": "0.0.0",
+  "version": "0.0.2",
   "private": true,
   "description": "Shared test fixtures for Vizij Rust + npm packages.",
   "type": "module",
@@ -24,7 +24,8 @@
   "sideEffects": false,
   "scripts": {
     "build": "node scripts/generate-browser-fixtures.mjs && tsc -p tsconfig.json",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepack": "pnpm run build"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

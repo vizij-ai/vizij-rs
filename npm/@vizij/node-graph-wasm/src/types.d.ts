@@ -5,6 +5,13 @@ import type { ValueJSON as BaseValueJSON, NormalizedValue } from "@vizij/value-j
 export type ValueJSON = BaseValueJSON;
 export type { NormalizedValue };
 
+export type ValueLike =
+  | ValueJSON
+  | number
+  | boolean
+  | [number, number, number]
+  | number[];
+
 export type NodeId = string;
 
 /**
@@ -20,6 +27,13 @@ export type NodeType =
   | "divide"
   | "power"
   | "log"
+  | "abs"
+  | "modulo"
+  | "sqrt"
+  | "sign"
+  | "min"
+  | "max"
+  | "round"
   | "sin"
   | "cos"
   | "tan"
@@ -37,8 +51,11 @@ export type NodeType =
   | "equal"
   | "notequal"
   | "if"
+  | "case"
   | "clamp"
   | "remap"
+  | "centered_remap"
+  | "piecewise_remap"
   | "vec3cross"
   | "vectorconstant"
   | "vectoradd"
@@ -56,6 +73,14 @@ export type NodeType =
   | "vectormean"
   | "vectormedian"
   | "vectormode"
+  | "weightedsumvector"
+  | "default-blend"
+  | "blendweightedaverage"
+  | "blendadditive"
+  | "blendmultiply"
+  | "blendweightedoverlay"
+  | "blendweightedaverageoverlay"
+  | "blendmax"
   | "inversekinematics"
   | "urdfikposition"
   | "urdfikpose"
@@ -110,6 +135,7 @@ export interface NodeParams {
   tol_pos?: number;
   tol_rot?: number;
   joint_defaults?: [string, number][];
+  case_labels?: string[];
 }
 
 export type SelectorSegmentJSON =
@@ -121,17 +147,36 @@ export interface NodeSpec {
   /** Rust field name is `type`, but `type` is a TS keyword; JSON still uses `"type"`. */
   type: NodeType;
   params?: NodeParams;
-  /**
-   * Map of input name to a connection specifying the source node, which output key to read,
-   * and optional selector segments for projecting structured values.
-   * Matches Rust: HashMap<String, InputConnection> where `selector` is an Option<Vec<SelectorSeg>>.
-   */
-  inputs?: Record<string, { node_id: string; output_key?: string; selector?: SelectorSegmentJSON[] }>;
   output_shapes?: Record<string, ShapeJSON>;
+  /**
+   * Optional map of input names to inline default values. Each entry mirrors the effect of wiring a
+   * Constant node but can be overridden by an explicit link targeting the same input.
+   */
+  input_defaults?: Record<
+    string,
+    ValueLike | { value: ValueLike; shape?: ShapeJSON }
+  >;
+}
+
+export interface EdgeOutputEndpoint {
+  node_id: NodeId;
+  output?: string;
+}
+
+export interface EdgeInputEndpoint {
+  node_id: NodeId;
+  input: string;
+}
+
+export interface EdgeSpec {
+  from: EdgeOutputEndpoint;
+  to: EdgeInputEndpoint;
+  selector?: SelectorSegmentJSON[];
 }
 
 export interface GraphSpec {
   nodes: NodeSpec[];
+  edges?: EdgeSpec[];
 }
 
 export interface PortSnapshot {
@@ -199,7 +244,11 @@ export interface ParamSpec {
   ty: ParamType;
   label: string;
   doc?: string;
-  default_json?: ValueJSON;  // default value encoded as ValueJSON when applicable
+  /**
+   * Raw JSON default value as emitted by the Rust registry.
+   * Usually encoded as ValueJSON but may also be primitive types or arrays.
+   */
+  default_json?: unknown;
   min?: number;
   max?: number;
 }
@@ -208,6 +257,7 @@ export interface NodeSignature {
   type_id: NodeType;
   name: string;
   category: string;
+  doc?: string;
   inputs: PortSpec[];
   variadic_inputs?: VariadicSpec;
   outputs: PortSpec[];

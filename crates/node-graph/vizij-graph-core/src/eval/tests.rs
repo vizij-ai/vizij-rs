@@ -1,7 +1,10 @@
 //! Behavioural coverage for the evaluation pipeline.
 
 use super::*;
-use crate::types::{GraphSpec, InputConnection, NodeParams, NodeSpec, NodeType, SelectorSegment};
+use crate::types::{
+    EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, InputDefault, NodeParams, NodeSpec,
+    NodeType, RoundMode, SelectorSegment,
+};
 use hashbrown::HashMap;
 use vizij_api_core::shape::Field;
 use vizij_api_core::{Shape, ShapeId, TypedPath, Value};
@@ -14,16 +17,291 @@ fn constant_node(id: &str, value: Value) -> NodeSpec {
             value: Some(value),
             ..Default::default()
         },
-        inputs: HashMap::new(),
         output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
     }
 }
 
-fn connection(node_id: &str, output_key: &str) -> InputConnection {
-    InputConnection {
-        node_id: node_id.to_string(),
-        output_key: output_key.to_string(),
+#[test]
+fn piecewise_remap_matches_linear_case() {
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "input_breakpoints".to_string(),
+        InputDefault {
+            value: Value::Vector(vec![0.0, 1.0]),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "output_breakpoints".to_string(),
+        InputDefault {
+            value: Value::Vector(vec![10.0, 20.0]),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            NodeSpec {
+                id: "input".to_string(),
+                kind: NodeType::Input,
+                params: NodeParams {
+                    path: Some(TypedPath::parse("demo/value").expect("typed path")),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "remap".to_string(),
+                kind: NodeType::PiecewiseRemap,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        edges: vec![link("input", "remap", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    let path = TypedPath::parse("demo/value").expect("typed path");
+
+    let cases = [(0.0, 10.0), (0.5, 15.0), (1.0, 20.0)];
+
+    for (input_value, expected) in cases {
+        rt.set_input(path.clone(), Value::Float(input_value), None);
+        evaluate_all(&mut rt, &graph).expect("piecewise remap should evaluate");
+        let outputs = rt.outputs.get("remap").expect("remap outputs present");
+        let out_port = outputs.get("out").expect("out port present");
+        match &out_port.value {
+            Value::Float(actual) => assert!(
+                (actual - expected).abs() < 1e-6,
+                "expected {expected}, got {actual}"
+            ),
+            other => panic!("expected float, got {:?}", other),
+        }
+    }
+}
+
+#[test]
+fn piecewise_remap_handles_segments_and_extrapolation() {
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "input_breakpoints".to_string(),
+        InputDefault {
+            value: Value::Vector(vec![0.0, 1.0, 2.0, 3.0]),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "output_breakpoints".to_string(),
+        InputDefault {
+            value: Value::Vector(vec![0.0, 10.0, 15.0, 30.0]),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            NodeSpec {
+                id: "input".to_string(),
+                kind: NodeType::Input,
+                params: NodeParams {
+                    path: Some(TypedPath::parse("demo/value").expect("typed path")),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "remap".to_string(),
+                kind: NodeType::PiecewiseRemap,
+                params: NodeParams {
+                    clamp: Some(false),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        edges: vec![link("input", "remap", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    let path = TypedPath::parse("demo/value").expect("typed path");
+
+    let cases = [
+        (0.5, 5.0),
+        (1.5, 12.5),
+        (2.5, 22.5),
+        (-0.5, -5.0),
+        (4.0, 45.0),
+    ];
+
+    for (input_value, expected) in cases {
+        rt.set_input(path.clone(), Value::Float(input_value), None);
+        evaluate_all(&mut rt, &graph).expect("piecewise remap should evaluate");
+        let outputs = rt.outputs.get("remap").expect("remap outputs present");
+        let out_port = outputs.get("out").expect("out port present");
+        match &out_port.value {
+            Value::Float(actual) => assert!(
+                (actual - expected).abs() < 1e-5,
+                "expected {expected}, got {actual}"
+            ),
+            other => panic!("expected float, got {:?}", other),
+        }
+    }
+}
+
+#[test]
+fn piecewise_remap_validates_duplicate_breakpoints() {
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "input_breakpoints".to_string(),
+        InputDefault {
+            value: Value::Vector(vec![0.0, 0.5, 0.5, 1.0]),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "output_breakpoints".to_string(),
+        InputDefault {
+            value: Value::Vector(vec![0.0, 0.5, 0.5, 2.0]),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            NodeSpec {
+                id: "input".to_string(),
+                kind: NodeType::Input,
+                params: NodeParams {
+                    path: Some(TypedPath::parse("demo/value").expect("typed path")),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "remap".to_string(),
+                kind: NodeType::PiecewiseRemap,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        edges: vec![link("input", "remap", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    let path = TypedPath::parse("demo/value").expect("typed path");
+
+    rt.set_input(path.clone(), Value::Float(0.5), None);
+    evaluate_all(&mut rt, &graph).expect("duplicate plateau should evaluate");
+    let outputs = rt.outputs.get("remap").expect("outputs present");
+    let out_port = outputs.get("out").expect("out port present");
+    match &out_port.value {
+        Value::Float(actual) => assert!(
+            (actual - 0.5).abs() < 1e-6,
+            "expected plateau value 0.5, got {actual}"
+        ),
+        other => panic!("expected float, got {:?}", other),
+    }
+
+    rt.set_input(path, Value::Float(0.75), None);
+    evaluate_all(&mut rt, &graph).expect("piecewise remap should evaluate");
+    let outputs = rt.outputs.get("remap").expect("outputs present");
+    let out_port = outputs.get("out").expect("out port present");
+    match &out_port.value {
+        Value::Float(actual) => assert!(
+            (actual - 1.25).abs() < 1e-6,
+            "expected interpolated value 1.25, got {actual}"
+        ),
+        other => panic!("expected float, got {:?}", other),
+    }
+}
+
+#[test]
+fn piecewise_remap_errors_when_duplicates_diverge() {
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "input_breakpoints".to_string(),
+        InputDefault {
+            value: Value::Vector(vec![0.0, 0.5, 0.5, 1.0]),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "output_breakpoints".to_string(),
+        InputDefault {
+            value: Value::Vector(vec![0.0, 0.5, 0.75, 2.0]),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            NodeSpec {
+                id: "input".to_string(),
+                kind: NodeType::Input,
+                params: NodeParams {
+                    path: Some(TypedPath::parse("demo/value").expect("typed path")),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "remap".to_string(),
+                kind: NodeType::PiecewiseRemap,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        edges: vec![link("input", "remap", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    let path = TypedPath::parse("demo/value").expect("typed path");
+    rt.set_input(path, Value::Float(0.5), None);
+
+    let err = evaluate_all(&mut rt, &graph).expect_err("duplicate mismatch should fail");
+    assert!(
+        err.contains("duplicate input breakpoints"),
+        "error message should mention duplicate breakpoints, got {err}"
+    );
+}
+
+fn link(from: &str, to: &str, input: &str) -> EdgeSpec {
+    link_with_output(from, "out", to, input)
+}
+
+fn link_with_output(from: &str, output_key: &str, to: &str, input: &str) -> EdgeSpec {
+    EdgeSpec {
+        from: EdgeOutputEndpoint {
+            node_id: from.to_string(),
+            output: output_key.to_string(),
+        },
+        to: EdgeInputEndpoint {
+            node_id: to.to_string(),
+            input: input.to_string(),
+        },
         selector: None,
+    }
+}
+
+fn link_with_selector(
+    from: &str,
+    output_key: &str,
+    to: &str,
+    input: &str,
+    selector: Vec<SelectorSegment>,
+) -> EdgeSpec {
+    EdgeSpec {
+        selector: Some(selector),
+        ..link_with_output(from, output_key, to, input)
     }
 }
 
@@ -35,7 +313,10 @@ fn it_should_respect_declared_shape() {
     node.output_shapes
         .insert("out".to_string(), Shape::new(ShapeId::Scalar));
 
-    let spec = GraphSpec { nodes: vec![node] };
+    let spec = GraphSpec {
+        nodes: vec![node],
+        ..Default::default()
+    };
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &spec).expect("shape should match");
     let outputs = rt.outputs.get("a").expect("outputs present");
@@ -49,19 +330,255 @@ fn it_should_error_when_shape_mismatches() {
     node.output_shapes
         .insert("out".to_string(), Shape::new(ShapeId::Vec3));
 
-    let spec = GraphSpec { nodes: vec![node] };
+    let spec = GraphSpec {
+        nodes: vec![node],
+        ..Default::default()
+    };
     let mut rt = GraphRuntime::default();
     let err = evaluate_all(&mut rt, &spec).expect_err("should fail due to mismatch");
     assert!(err.contains("does not match declared shape"));
+}
+
+#[test]
+fn abs_node_handles_negative_values() {
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("src", Value::Vec3([-1.0, 2.0, -3.0])),
+            NodeSpec {
+                id: "abs".to_string(),
+                kind: NodeType::Abs,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![link("src", "abs", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("abs should evaluate");
+    let outputs = rt.outputs.get("abs").expect("abs outputs present");
+    match outputs.get("out").map(|pv| pv.value.clone()) {
+        Some(Value::Vec3(values)) => assert_eq!(values, [1.0, 2.0, 3.0]),
+        other => panic!("expected vec3, got {:?}", other),
+    }
+}
+
+#[test]
+fn modulo_node_handles_division() {
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("lhs", Value::Float(7.5)),
+            constant_node("rhs", Value::Float(2.0)),
+            NodeSpec {
+                id: "mod".to_string(),
+                kind: NodeType::Modulo,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![link("lhs", "mod", "lhs"), link("rhs", "mod", "rhs")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("modulo should evaluate");
+    let outputs = rt.outputs.get("mod").expect("mod outputs present");
+    match outputs.get("out").map(|pv| pv.value.clone()) {
+        Some(Value::Float(result)) => assert!((result - 1.5).abs() < 1e-6),
+        other => panic!("expected float, got {:?}", other),
+    }
+}
+
+#[test]
+fn sqrt_node_handles_vectors() {
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("src", Value::Vector(vec![4.0, 9.0])),
+            NodeSpec {
+                id: "sqrt".to_string(),
+                kind: NodeType::Sqrt,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![link("src", "sqrt", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("sqrt should evaluate");
+    let outputs = rt.outputs.get("sqrt").expect("sqrt outputs present");
+    match outputs.get("out").map(|pv| pv.value.clone()) {
+        Some(Value::Vector(values)) => assert_eq!(values, vec![2.0, 3.0]),
+        other => panic!("expected vector, got {:?}", other),
+    }
+}
+
+#[test]
+fn sign_node_outputs_signum() {
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("src", Value::Vector(vec![-2.0, 0.0, 5.0])),
+            NodeSpec {
+                id: "sign".to_string(),
+                kind: NodeType::Sign,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![link("src", "sign", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("sign should evaluate");
+    let outputs = rt.outputs.get("sign").expect("sign outputs present");
+    match outputs.get("out").map(|pv| pv.value.clone()) {
+        Some(Value::Vector(values)) => assert_eq!(values, vec![-1.0, 0.0, 1.0]),
+        other => panic!("expected vector, got {:?}", other),
+    }
+}
+
+#[test]
+fn min_max_nodes_select_expected_values() {
+    let mut rt = GraphRuntime::default();
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("a", Value::Float(3.0)),
+            constant_node("b", Value::Float(-1.0)),
+            constant_node("c", Value::Float(5.0)),
+            NodeSpec {
+                id: "minn".to_string(),
+                kind: NodeType::Min,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "maxx".to_string(),
+                kind: NodeType::Max,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![
+            link("a", "minn", "operand_1"),
+            link("b", "minn", "operand_2"),
+            link("c", "minn", "operand_3"),
+            link("a", "maxx", "operand_1"),
+            link("b", "maxx", "operand_2"),
+            link("c", "maxx", "operand_3"),
+        ],
+    };
+
+    evaluate_all(&mut rt, &graph).expect("min/max should evaluate");
+
+    let min_val = match rt
+        .outputs
+        .get("minn")
+        .and_then(|ports| ports.get("out"))
+        .map(|pv| pv.value.clone())
+    {
+        Some(Value::Float(v)) => v,
+        other => panic!("expected float, got {:?}", other),
+    };
+    assert!((min_val + 1.0).abs() < 1e-6);
+
+    let max_val = match rt
+        .outputs
+        .get("maxx")
+        .and_then(|ports| ports.get("out"))
+        .map(|pv| pv.value.clone())
+    {
+        Some(Value::Float(v)) => v,
+        other => panic!("expected float, got {:?}", other),
+    };
+    assert!((max_val - 5.0).abs() < 1e-6);
+}
+
+#[test]
+fn round_node_respects_modes() {
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("src", Value::Vector(vec![-1.2, 0.5, 2.8])),
+            NodeSpec {
+                id: "floor".to_string(),
+                kind: NodeType::Round,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "ceil".to_string(),
+                kind: NodeType::Round,
+                params: NodeParams {
+                    round_mode: Some(RoundMode::Ceil),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "trunc".to_string(),
+                kind: NodeType::Round,
+                params: NodeParams {
+                    round_mode: Some(RoundMode::Trunc),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![
+            link("src", "floor", "in"),
+            link("src", "ceil", "in"),
+            link("src", "trunc", "in"),
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("round nodes should evaluate");
+
+    let floor_vals = match rt
+        .outputs
+        .get("floor")
+        .and_then(|ports| ports.get("out"))
+        .map(|pv| pv.value.clone())
+    {
+        Some(Value::Vector(vals)) => vals,
+        other => panic!("expected vector, got {:?}", other),
+    };
+    assert_eq!(floor_vals, vec![-2.0, 0.0, 2.0]);
+
+    let ceil_vals = match rt
+        .outputs
+        .get("ceil")
+        .and_then(|ports| ports.get("out"))
+        .map(|pv| pv.value.clone())
+    {
+        Some(Value::Vector(vals)) => vals,
+        other => panic!("expected vector, got {:?}", other),
+    };
+    assert_eq!(ceil_vals, vec![-1.0, 1.0, 3.0]);
+
+    let trunc_vals = match rt
+        .outputs
+        .get("trunc")
+        .and_then(|ports| ports.get("out"))
+        .map(|pv| pv.value.clone())
+    {
+        Some(Value::Vector(vals)) => vals,
+        other => panic!("expected vector, got {:?}", other),
+    };
+    assert_eq!(trunc_vals, vec![-1.0, 0.0, 2.0]);
 }
 
 // --- Runtime outputs -----------------------------------------------------
 
 #[test]
 fn it_should_emit_write_for_output_nodes() {
-    let mut output_inputs = HashMap::new();
-    output_inputs.insert("in".to_string(), connection("src", "out"));
-
     let graph = GraphSpec {
         nodes: vec![
             constant_node("src", Value::Float(2.0)),
@@ -72,10 +589,11 @@ fn it_should_emit_write_for_output_nodes() {
                     path: Some(TypedPath::parse("robot1/Arm/Joint.angle").expect("valid path")),
                     ..Default::default()
                 },
-                inputs: output_inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
+        edges: vec![link("src", "out", "in")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -96,9 +614,6 @@ fn it_should_emit_write_for_output_nodes() {
 #[test]
 fn writes_batch_json_roundtrip_from_graph() {
     // Build a trivial graph that emits a write.
-    let mut output_inputs = HashMap::new();
-    output_inputs.insert("in".to_string(), connection("src", "out"));
-
     let graph = GraphSpec {
         nodes: vec![
             constant_node("src", Value::Vec3([1.0, 2.0, 3.0])),
@@ -109,10 +624,11 @@ fn writes_batch_json_roundtrip_from_graph() {
                     path: Some(TypedPath::parse("robot/pose.translation").expect("valid path")),
                     ..Default::default()
                 },
-                inputs: output_inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
+        edges: vec![link("src", "out", "in")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -124,15 +640,121 @@ fn writes_batch_json_roundtrip_from_graph() {
     assert_eq!(original, parsed, "writes batch should roundtrip via JSON");
 }
 
+#[test]
+fn input_defaults_supply_missing_connections() {
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "rhs".to_string(),
+        InputDefault {
+            value: Value::Float(2.0),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("numerator", Value::Float(10.0)),
+            NodeSpec {
+                id: "div".to_string(),
+                kind: NodeType::Divide,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        edges: vec![link("numerator", "div", "lhs")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("defaults should evaluate");
+    let outputs = rt.outputs.get("div").expect("divide outputs present");
+    let value = outputs.get("out").expect("out port").value.clone();
+    match value {
+        Value::Float(f) => assert_eq!(f, 5.0),
+        other => panic!("expected float result, got {:?}", other),
+    }
+}
+
+#[test]
+fn linked_inputs_override_defaults() {
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "rhs".to_string(),
+        InputDefault {
+            value: Value::Float(2.0),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("numerator", Value::Float(10.0)),
+            constant_node("denominator", Value::Float(5.0)),
+            NodeSpec {
+                id: "div".to_string(),
+                kind: NodeType::Divide,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        edges: vec![
+            link("numerator", "div", "lhs"),
+            link("denominator", "div", "rhs"),
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("graph should evaluate");
+    let outputs = rt.outputs.get("div").expect("divide outputs present");
+    match outputs.get("out").map(|port| &port.value) {
+        Some(Value::Float(f)) => assert_eq!(*f, 2.0),
+        other => panic!("expected float output, got {:?}", other),
+    }
+}
+
+#[test]
+fn defaults_apply_when_output_key_missing() {
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "rhs".to_string(),
+        InputDefault {
+            value: Value::Float(0.25),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("numerator", Value::Float(1.0)),
+            constant_node("config", Value::Float(10.0)),
+            NodeSpec {
+                id: "div".to_string(),
+                kind: NodeType::Divide,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        edges: vec![
+            link("numerator", "div", "lhs"),
+            link_with_output("config", "missing", "div", "rhs"),
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("graph should evaluate");
+    let outputs = rt.outputs.get("div").expect("divide outputs present");
+    match outputs.get("out").map(|port| &port.value) {
+        Some(Value::Float(f)) => assert_eq!(*f, 4.0),
+        other => panic!("expected float output using default, got {:?}", other),
+    }
+}
+
 // --- Variadic & oscillator behaviour ------------------------------------
 
 #[test]
 fn join_respects_operand_order() {
-    let mut inputs = HashMap::new();
-    inputs.insert("operands_1".to_string(), connection("a", "out"));
-    inputs.insert("operands_2".to_string(), connection("b", "out"));
-    inputs.insert("operands_3".to_string(), connection("c", "out"));
-
     let graph = GraphSpec {
         nodes: vec![
             constant_node("a", Value::Vector(vec![1.0, 2.0])),
@@ -142,9 +764,14 @@ fn join_respects_operand_order() {
                 id: "join".to_string(),
                 kind: NodeType::Join,
                 params: NodeParams::default(),
-                inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
+        ],
+        edges: vec![
+            link("a", "join", "operand_1"),
+            link("b", "join", "operand_2"),
+            link("c", "join", "operand_3"),
         ],
     };
 
@@ -160,10 +787,6 @@ fn join_respects_operand_order() {
 
 #[test]
 fn oscillator_broadcasts_vector_inputs() {
-    let mut inputs = HashMap::new();
-    inputs.insert("frequency".to_string(), connection("freq", "out"));
-    inputs.insert("phase".to_string(), connection("phase", "out"));
-
     let graph = GraphSpec {
         nodes: vec![
             constant_node("freq", Value::Vector(vec![1.0, 2.0, 3.0])),
@@ -172,9 +795,13 @@ fn oscillator_broadcasts_vector_inputs() {
                 id: "osc".to_string(),
                 kind: NodeType::Oscillator,
                 params: NodeParams::default(),
-                inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
+        ],
+        edges: vec![
+            link("freq", "osc", "frequency"),
+            link("phase", "osc", "phase"),
         ],
     };
 
@@ -210,7 +837,10 @@ fn oscillator_broadcasts_vector_inputs() {
 #[test]
 fn it_should_infer_vector_length_hints() {
     let node = constant_node("vec", Value::Vector(vec![1.0, 2.0, 3.0]));
-    let spec = GraphSpec { nodes: vec![node] };
+    let spec = GraphSpec {
+        nodes: vec![node],
+        ..Default::default()
+    };
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &spec).expect("graph should evaluate");
     let outputs = rt.outputs.get("vec").expect("outputs present");
@@ -229,7 +859,10 @@ fn it_should_error_when_declared_output_missing() {
     node.output_shapes
         .insert("secondary".to_string(), Shape::new(ShapeId::Scalar));
 
-    let spec = GraphSpec { nodes: vec![node] };
+    let spec = GraphSpec {
+        nodes: vec![node],
+        ..Default::default()
+    };
     let mut rt = GraphRuntime::default();
     let err = evaluate_all(&mut rt, &spec).expect_err("missing declared output should error");
     assert!(err.contains("missing declared output"));
@@ -243,7 +876,10 @@ fn it_should_validate_vector_length_against_declared_shape() {
         Shape::new(ShapeId::Vector { len: Some(4) }),
     );
 
-    let spec = GraphSpec { nodes: vec![node] };
+    let spec = GraphSpec {
+        nodes: vec![node],
+        ..Default::default()
+    };
     let mut rt = GraphRuntime::default();
     let err = evaluate_all(&mut rt, &spec).expect_err("vector length mismatch should error");
     assert!(err.contains("does not match declared shape"));
@@ -255,7 +891,6 @@ fn it_should_reject_invalid_paths_during_deserialization() {
         "id": "node",
         "type": "output",
         "params": { "path": "robot/invalid/" },
-        "inputs": {},
         "output_shapes": {}
     }"#;
 
@@ -282,12 +917,13 @@ fn input_node_emits_staged_value_with_declared_shape() {
         id: "input".to_string(),
         kind: NodeType::Input,
         params,
-        inputs: HashMap::new(),
         output_shapes,
+        input_defaults: HashMap::new(),
     };
 
     let graph = GraphSpec {
         nodes: vec![input_node],
+        ..Default::default()
     };
 
     let mut rt = GraphRuntime::default();
@@ -331,9 +967,10 @@ fn input_node_coerces_vector_to_declared_vec3() {
             id: "input".to_string(),
             kind: NodeType::Input,
             params,
-            inputs: HashMap::new(),
             output_shapes,
+            input_defaults: HashMap::new(),
         }],
+        ..Default::default()
     };
 
     let mut rt = GraphRuntime::default();
@@ -376,9 +1013,10 @@ fn input_node_missing_numeric_returns_null() {
             id: "input".to_string(),
             kind: NodeType::Input,
             params,
-            inputs: HashMap::new(),
             output_shapes,
+            input_defaults: HashMap::new(),
         }],
+        ..Default::default()
     };
 
     let mut rt = GraphRuntime::default();
@@ -414,9 +1052,10 @@ fn input_node_missing_non_numeric_errors() {
             id: "input".to_string(),
             kind: NodeType::Input,
             params,
-            inputs: HashMap::new(),
             output_shapes,
+            input_defaults: HashMap::new(),
         }],
+        ..Default::default()
     };
 
     let mut rt = GraphRuntime::default();
@@ -441,9 +1080,10 @@ fn input_node_requires_restaging_each_epoch() {
             id: "input".to_string(),
             kind: NodeType::Input,
             params,
-            inputs: HashMap::new(),
             output_shapes,
+            input_defaults: HashMap::new(),
         }],
+        ..Default::default()
     };
 
     let mut rt = GraphRuntime::default();
@@ -482,11 +1122,6 @@ fn selector_projects_record_field() {
     record.insert("translation".to_string(), Value::Vec3([3.0, 4.0, 0.0]));
     record.insert("label".to_string(), Value::Text("ignored".to_string()));
 
-    let mut inputs = HashMap::new();
-    let mut conn = connection("src", "out");
-    conn.selector = Some(vec![SelectorSegment::Field("translation".to_string())]);
-    inputs.insert("in".to_string(), conn);
-
     let graph = GraphSpec {
         nodes: vec![
             constant_node("src", Value::Record(record)),
@@ -494,10 +1129,17 @@ fn selector_projects_record_field() {
                 id: "out".to_string(),
                 kind: NodeType::Output,
                 params: NodeParams::default(),
-                inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
+        edges: vec![link_with_selector(
+            "src",
+            "out",
+            "out",
+            "in",
+            vec![SelectorSegment::Field("translation".to_string())],
+        )],
     };
 
     let mut rt = GraphRuntime::default();
@@ -518,14 +1160,6 @@ fn selector_projects_record_field() {
 #[test]
 fn selector_projects_transform_field_and_nested_index() {
     // Source provides a Transform; downstream selects .translation then [1] (y component).
-    let mut inputs = HashMap::new();
-    let mut conn = connection("src", "out");
-    conn.selector = Some(vec![
-        SelectorSegment::Field("translation".to_string()),
-        SelectorSegment::Index(1),
-    ]);
-    inputs.insert("in".to_string(), conn);
-
     let graph = GraphSpec {
         nodes: vec![
             constant_node(
@@ -540,10 +1174,20 @@ fn selector_projects_transform_field_and_nested_index() {
                 id: "out".to_string(),
                 kind: NodeType::Output,
                 params: NodeParams::default(),
-                inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
+        edges: vec![link_with_selector(
+            "src",
+            "out",
+            "out",
+            "in",
+            vec![
+                SelectorSegment::Field("translation".to_string()),
+                SelectorSegment::Index(1),
+            ],
+        )],
     };
 
     let mut rt = GraphRuntime::default();
@@ -565,11 +1209,6 @@ fn selector_projects_transform_field_and_nested_index() {
 #[test]
 fn selector_index_out_of_bounds_errors() {
     // Select index 5 from a vec3; should error.
-    let mut inputs = HashMap::new();
-    let mut conn = connection("src", "out");
-    conn.selector = Some(vec![SelectorSegment::Index(5)]);
-    inputs.insert("in".to_string(), conn);
-
     let graph = GraphSpec {
         nodes: vec![
             constant_node("src", Value::Vec3([1.0, 2.0, 3.0])),
@@ -577,10 +1216,17 @@ fn selector_index_out_of_bounds_errors() {
                 id: "out".to_string(),
                 kind: NodeType::Output,
                 params: NodeParams::default(),
-                inputs,
                 output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
             },
         ],
+        edges: vec![link_with_selector(
+            "src",
+            "out",
+            "out",
+            "in",
+            vec![SelectorSegment::Index(5)],
+        )],
     };
 
     let mut rt = GraphRuntime::default();
@@ -595,9 +1241,6 @@ fn selector_index_out_of_bounds_errors() {
 
 #[test]
 fn spring_node_transitions_toward_new_target() {
-    let mut spring_inputs = HashMap::new();
-    spring_inputs.insert("in".to_string(), connection("target", "out"));
-
     let spring = NodeSpec {
         id: "spring".to_string(),
         kind: NodeType::Spring,
@@ -607,12 +1250,13 @@ fn spring_node_transitions_toward_new_target() {
             mass: Some(1.0),
             ..Default::default()
         },
-        inputs: spring_inputs,
         output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
     };
 
     let mut spec = GraphSpec {
         nodes: vec![constant_node("target", Value::Float(0.0)), spring],
+        edges: vec![link("target", "spring", "in")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -662,9 +1306,6 @@ fn spring_node_transitions_toward_new_target() {
 
 #[test]
 fn damp_node_smooths_toward_target() {
-    let mut damp_inputs = HashMap::new();
-    damp_inputs.insert("in".to_string(), connection("target", "out"));
-
     let damp = NodeSpec {
         id: "damp".to_string(),
         kind: NodeType::Damp,
@@ -672,12 +1313,13 @@ fn damp_node_smooths_toward_target() {
             half_life: Some(0.2),
             ..Default::default()
         },
-        inputs: damp_inputs,
         output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
     };
 
     let mut spec = GraphSpec {
         nodes: vec![constant_node("target", Value::Float(0.0)), damp],
+        edges: vec![link("target", "damp", "in")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -724,9 +1366,6 @@ fn damp_node_smooths_toward_target() {
 
 #[test]
 fn slew_node_limits_rate_of_change() {
-    let mut slew_inputs = HashMap::new();
-    slew_inputs.insert("in".to_string(), connection("target", "out"));
-
     let slew = NodeSpec {
         id: "slew".to_string(),
         kind: NodeType::Slew,
@@ -734,12 +1373,13 @@ fn slew_node_limits_rate_of_change() {
             max_rate: Some(2.0),
             ..Default::default()
         },
-        inputs: slew_inputs,
         output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
     };
 
     let mut spec = GraphSpec {
         nodes: vec![constant_node("target", Value::Float(0.0)), slew],
+        edges: vec![link("target", "slew", "in")],
     };
 
     let mut rt = GraphRuntime::default();
@@ -819,32 +1459,17 @@ fn end_to_end_input_selector_scalar_math_output() {
         id: "in".to_string(),
         kind: NodeType::Input,
         params: input_params,
-        inputs: HashMap::new(),
         output_shapes: input_output_shapes,
+        input_defaults: HashMap::new(),
     };
-
-    // Add node: Add(lhs, rhs) where lhs is selector ["translation", 1] (y) and rhs is constant 2.0
-    let mut add_inputs = HashMap::new();
-    // Connection from Input.out with selector ["translation", 1]
-    let mut lhs_conn = connection("in", "out");
-    lhs_conn.selector = Some(vec![
-        SelectorSegment::Field("translation".to_string()),
-        SelectorSegment::Index(1),
-    ]);
-    add_inputs.insert("lhs".to_string(), lhs_conn);
-    add_inputs.insert("rhs".to_string(), connection("two", "out"));
 
     let add_node = NodeSpec {
         id: "sum".to_string(),
         kind: NodeType::Add,
         params: NodeParams::default(),
-        inputs: add_inputs,
         output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
     };
-
-    // Output sink
-    let mut out_inputs = HashMap::new();
-    out_inputs.insert("in".to_string(), connection("sum", "out"));
 
     let output_node = NodeSpec {
         id: "out".to_string(),
@@ -853,8 +1478,8 @@ fn end_to_end_input_selector_scalar_math_output() {
             path: Some(TypedPath::parse("robot/calc.y2").expect("valid path")),
             ..Default::default()
         },
-        inputs: out_inputs,
         output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
     };
 
     let graph = GraphSpec {
@@ -863,6 +1488,20 @@ fn end_to_end_input_selector_scalar_math_output() {
             constant_node("two", Value::Float(2.0)),
             add_node,
             output_node,
+        ],
+        edges: vec![
+            link_with_selector(
+                "in",
+                "out",
+                "sum",
+                "operand_1",
+                vec![
+                    SelectorSegment::Field("translation".to_string()),
+                    SelectorSegment::Index(1),
+                ],
+            ),
+            link("two", "sum", "operand_2"),
+            link("sum", "out", "in"),
         ],
     };
 
@@ -895,5 +1534,220 @@ fn end_to_end_input_selector_scalar_math_output() {
     match op.value {
         Value::Float(f) => assert!((f - 5.0).abs() < 1e-6),
         ref other => panic!("expected scalar value, got {:?}", other),
+    }
+}
+
+#[test]
+fn centered_remap_handles_anchor_segments() {
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "in_low".to_string(),
+        InputDefault {
+            value: Value::Float(-1.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "in_anchor".to_string(),
+        InputDefault {
+            value: Value::Float(0.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "in_high".to_string(),
+        InputDefault {
+            value: Value::Float(1.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "out_low".to_string(),
+        InputDefault {
+            value: Value::Float(0.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "out_anchor".to_string(),
+        InputDefault {
+            value: Value::Float(9.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "out_high".to_string(),
+        InputDefault {
+            value: Value::Float(10.0),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            NodeSpec {
+                id: "input".to_string(),
+                kind: NodeType::Input,
+                params: NodeParams {
+                    path: Some(TypedPath::parse("demo/value").expect("typed path")),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "remap".to_string(),
+                kind: NodeType::CenteredRemap,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        edges: vec![link("input", "remap", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+
+    let cases = [
+        (-1.0, 0.0),
+        (0.0, 9.0),
+        (1.0, 10.0),
+        (2.0, 11.0),
+        (-2.0, -9.0),
+        (0.5, 9.5),
+        (-0.5, 4.5),
+    ];
+
+    for (input_value, expected) in cases {
+        rt.set_input(
+            TypedPath::parse("demo/value").expect("typed path"),
+            Value::Float(input_value),
+            None,
+        );
+        evaluate_all(&mut rt, &graph).expect("centered remap should evaluate");
+        let outputs = rt.outputs.get("remap").expect("remap outputs present");
+        let out_port = outputs.get("out").expect("out port present");
+        match &out_port.value {
+            Value::Float(actual) => {
+                assert!(
+                    (actual - expected).abs() < 1e-6,
+                    "expected {expected}, got {actual}"
+                );
+            }
+            other => panic!("expected float, got {:?}", other),
+        }
+    }
+}
+
+#[test]
+fn centered_remap_supports_asymmetric_ranges_and_vectors() {
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "in_low".to_string(),
+        InputDefault {
+            value: Value::Float(0.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "in_anchor".to_string(),
+        InputDefault {
+            value: Value::Float(0.5),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "in_high".to_string(),
+        InputDefault {
+            value: Value::Float(1.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "out_low".to_string(),
+        InputDefault {
+            value: Value::Float(1.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "out_anchor".to_string(),
+        InputDefault {
+            value: Value::Float(3.0),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "out_high".to_string(),
+        InputDefault {
+            value: Value::Float(6.0),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            NodeSpec {
+                id: "input".to_string(),
+                kind: NodeType::Input,
+                params: NodeParams {
+                    path: Some(TypedPath::parse("demo/value").expect("typed path")),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "remap".to_string(),
+                kind: NodeType::CenteredRemap,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        edges: vec![link("input", "remap", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    let path = TypedPath::parse("demo/value").expect("typed path");
+
+    let cases = [(0.25, 2.0), (2.0, 12.0), (-1.0, -3.0)];
+
+    for (input_value, expected) in cases {
+        rt.set_input(path.clone(), Value::Float(input_value), None);
+        evaluate_all(&mut rt, &graph).expect("centered remap should evaluate");
+        let outputs = rt.outputs.get("remap").expect("remap outputs present");
+        let out_port = outputs.get("out").expect("out port present");
+        match &out_port.value {
+            Value::Float(actual) => {
+                assert!(
+                    (actual - expected).abs() < 1e-6,
+                    "expected {expected}, got {actual}"
+                );
+            }
+            other => panic!("expected float, got {:?}", other),
+        }
+    }
+
+    // Vector input is remapped component-wise.
+    rt.set_input(
+        path,
+        Value::Vec3([0.25, 0.5, 1.25]),
+        Some(Shape::new(ShapeId::Vec3)),
+    );
+    evaluate_all(&mut rt, &graph).expect("centered remap should evaluate");
+    let outputs = rt.outputs.get("remap").expect("remap outputs present");
+    let out_port = outputs.get("out").expect("out port present");
+    match &out_port.value {
+        Value::Vec3(values) => {
+            let expected = [2.0, 3.0, 7.5];
+            for (actual, expected) in values.iter().zip(expected.iter()) {
+                assert!(
+                    (actual - expected).abs() < 1e-6,
+                    "expected {expected}, got {actual}"
+                );
+            }
+        }
+        other => panic!("expected vec3, got {:?}", other),
     }
 }

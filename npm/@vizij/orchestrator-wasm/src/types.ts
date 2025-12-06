@@ -84,6 +84,7 @@ export interface OrchestratorFrame {
 /* High-level typed interface for the wrapper (for consumers who prefer TS types) */
 export interface OrchestratorAPI {
   registerGraph(cfg: GraphRegistrationInput): string;
+  registerMergedGraph(cfg: MergedGraphRegistrationConfig): string;
   registerAnimation(cfg: AnimationRegistrationConfig): string;
   prebind(resolver: (path: string) => string | number | null | undefined): void;
   setInput(path: string, value: ValueJSON, shape?: ShapeJSON): void;
@@ -108,6 +109,12 @@ export interface GraphRegistrationConfig {
   subs?: GraphSubscriptions;
 }
 
+export interface MergedGraphRegistrationConfig {
+  id?: string;
+  graphs: GraphRegistrationConfig[];
+  strategy?: MergeStrategyOptions;
+}
+
 export interface GraphSubscriptions {
   inputs?: string[];
   outputs?: string[];
@@ -115,6 +122,29 @@ export interface GraphSubscriptions {
 }
 
 export type GraphRegistrationInput = string | GraphRegistrationConfig;
+
+export type MergeConflictStrategy =
+  | "error"
+  | "namespace"
+  | "blend"
+  | "blend_equal"
+  | "blend_equal_weights"
+  | "add"
+  | "sum"
+  | "blend_sum"
+  | "blend-sum"
+  | "additive"
+  | "default_blend"
+  | "default-blend"
+  | "blend-default"
+  | "blend_weights"
+  | "blend-weights"
+  | "weights";
+
+export interface MergeStrategyOptions {
+  outputs?: MergeConflictStrategy;
+  intermediate?: MergeConflictStrategy;
+}
 
 export interface AnimationRegistrationConfig {
   id?: string;

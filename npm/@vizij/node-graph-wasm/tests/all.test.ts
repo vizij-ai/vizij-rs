@@ -16,6 +16,12 @@ import {
   urdfIkPosition,
   loadNodeGraphSpec,
   loadNodeGraphSpecJson,
+  getNodeRegistry,
+  findNodeSignature,
+  requireNodeSignature,
+  listNodeTypeIds,
+  groupNodeSignaturesByCategory,
+  nodeRegistryVersion,
   type EvalResult,
   type ValueJSON,
   type GraphSpec,
@@ -28,7 +34,7 @@ type EvalSpec = Parameters<Graph["loadGraph"]>[0];
 const here = dirname(fileURLToPath(import.meta.url));
 
 function pkgWasmUrl(): URL {
-  const wasmPath = resolve(here, "../../pkg/vizij_graph_wasm_bg.wasm");
+  const wasmPath = resolve(here, "../../../pkg/vizij_graph_wasm_bg.wasm");
   if (!existsSync(wasmPath)) {
     throw new Error(
       "Missing pkg/vizij_graph_wasm_bg.wasm. Run:\n  wasm-pack build crates/node-graph/vizij-graph-wasm --target web --out-dir npm/@vizij/node-graph-wasm/pkg --release (from repo root vizij-rs/)"
@@ -479,6 +485,27 @@ function assertText(write: WriteOpJSON, expected: string): void {
   try {
     await init(pkgWasmUrl());
 
+    const registry = getNodeRegistry();
+    assert.ok(Array.isArray(registry.nodes) && registry.nodes.length > 0, "registry should contain nodes");
+    assert.ok(typeof nodeRegistryVersion === "string" && nodeRegistryVersion.length > 0, "registry exposes version");
+    const typeIds = listNodeTypeIds();
+    assert.ok(typeIds.includes("constant"), "node type list includes constant");
+    const constantSignature = requireNodeSignature("constant");
+    assert.equal(constantSignature.type_id, "constant", "constant signature should match type id");
+    assert.equal(
+      findNodeSignature("Constant"),
+      constantSignature,
+      "lookup should be case-insensitive",
+    );
+    assert.equal(
+      findNodeSignature("does-not-exist"),
+      undefined,
+      "lookup should return undefined for missing nodes",
+    );
+    const groupedByCategory = groupNodeSignaturesByCategory();
+    assert.ok(groupedByCategory instanceof Map, "grouping should return a Map");
+    assert.ok(groupedByCategory.size > 0, "category grouping should not be empty");
+
     const urdfSample = graphSamples["urdf-ik-position"];
     assert.ok(urdfSample, "graphSamples exposes urdf-ik-position");
     assert.equal(
@@ -591,6 +618,24 @@ function assertText(write: WriteOpJSON, expected: string): void {
           { path: "samples/ws.avg", expectFloat: 1.0 },
         ],
       });
+    }
+
+    // math-toolbox fixture ensures scalar math nodes survive bundling and JSON normalization
+    {
+      const mathSpecJson = await loadJsonFixture("math-toolbox");
+      const mathGraph = new Graph();
+      mathGraph.loadGraph(mathSpecJson);
+      mathGraph.stageInput("demo/input/value", -2.75);
+      mathGraph.stageInput("demo/input/divisor", 2.0);
+      const mathResult = mathGraph.evalAll();
+      const mathWrites = writesToMap(mathResult.writes);
+      assertNearlyEqual(valueToFloat(mathWrites.get("demo/output/abs")), 2.75, "math.abs");
+      assertNearlyEqual(valueToFloat(mathWrites.get("demo/output/sign")), -1.0, "math.sign");
+      assertNearlyEqual(valueToFloat(mathWrites.get("demo/output/round")), -2.0, "math.round");
+      assertNearlyEqual(valueToFloat(mathWrites.get("demo/output/modulo")), -0.75, "math.modulo");
+      assertNearlyEqual(valueToFloat(mathWrites.get("demo/output/min")), -4.0, "math.min");
+      assertNearlyEqual(valueToFloat(mathWrites.get("demo/output/max")), 3.5, "math.max");
+      approxVector(valueToVector(mathWrites.get("demo/output/sqrt")), [2.0, 3.0], 1e-6);
     }
 
     // nested telemetry checks

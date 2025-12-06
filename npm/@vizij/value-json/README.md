@@ -35,6 +35,20 @@
 - **Shape Metadata** – Optional `ShapeJSON` structures travel alongside values so tooling understands numeric layout (`Vec3`, `Transform`, etc.).
 - **Coercion Helpers** – Utilities (`toValueJSON`, `valueAsNumericArray`, `valueAsTransform`, etc.) convert between loose JavaScript data and the strict Vizij schema.
 
+### Legacy conversion matrix
+
+| Input form | `toValueJSON` output | Notes |
+|------------|---------------------|-------|
+| `42` | `{ type: "float", data: 42 }` | Scalars normalise to floats. |
+| `true` | `{ type: "bool", data: true }` | Boolean primitives become tagged bools. |
+| `[0, 1, 2]` | `{ type: "vec3", data: [0, 1, 2] }` | Arrays of length 2/3/4 map to `vec2`/`vec3`/`vec4`; longer arrays become `vector`. |
+| `{ vec3: [0, 1, 0] }` | `{ type: "vec3", data: [0, 1, 0] }` | Legacy objects are translated to canonical discriminants. |
+| `{ transform: { translation: [0,0,0] } }` | `{ type: "transform", data: { translation: [0,0,0], rotation: [0,0,0,1], scale: [1,1,1] } }` | Missing axes are filled with defaults. |
+| `{ enum: { tag: "State", value: { bool: true } } }` | `{ type: "enum", data: ["State", { type: "bool", data: true }] }` | Enum payloads normalise to `[tag, value]`. |
+| `{ record: { a: { float: 1 }, b: { bool: false } } }` | `{ type: "record", data: { a: { type: "float", data: 1 }, b: { type: "bool", data: false } } }` | Nested structures recurse automatically. |
+
+Anything that cannot be coerced throws, signalling that upstream JSON needs to be corrected.
+
 ---
 
 ## Installation
@@ -45,6 +59,14 @@ pnpm add @vizij/value-json
 ```
 
 Within the monorepo the package is built from `vizij-rs/npm/@vizij/value-json`.
+
+---
+
+## Bundler Notes
+
+- The published package ships both ESM (`dist/index.js`) and CJS (`dist/index.cjs`) builds—Node and modern bundlers resolve the correct entry automatically via `package.json` exports.
+- Helpers are tree-shakeable; prefer `import { toValueJSON } from "@vizij/value-json"` so unused utilities drop out of production builds.
+- Type definitions (`dist/index.d.ts`) mirror the ESM entry and surface literal union types for discriminants, keeping TypeScript narrowing aligned with the Rust schema.
 
 ---
 
@@ -68,6 +90,12 @@ type ValueJSON = NormalizedValue | { float: number } | { vec3: number[] } | numb
 - `ValueJSON` – accepts both normalized values and legacy aliases/primitives for input convenience.
 - `ValueInput` – alias for `ValueJSON | number[]`, used by staging helpers in other packages.
 - `NormalizedTransform` – `{ translation: [x,y,z], rotation: [x,y,z,w], scale: [x,y,z] }`.
+
+### Working with `ShapeJSON`
+
+- Shapes are optional metadata that mirror `vizij-api-core::Shape`. When targeting Vizij runtimes, supply shapes for numeric types that benefit from validation (e.g., `Transform`, `Vector` of fixed length).
+- Helper `normalizeShape` (exported alongside value helpers) converts `{ id: "Vec3" }` or legacy strings (`"Vec3"`) into the canonical object.
+- When consuming data, rely on `value.shape ?? inferShape(value)`—the helper returns `ShapeJSON` if provided; otherwise it infers from the value union.
 
 ---
 

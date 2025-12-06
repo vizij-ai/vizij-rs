@@ -1,38 +1,122 @@
 {
   "spec": {
     "nodes": [
-      { "id": "time", "type": "time" },
-      { "id": "sin", "type": "sin", "inputs": { "in": { "node_id": "time" } } },
-      { "id": "threshold", "type": "constant", "params": { "value": 0 } },
       {
-        "id": "greater",
-        "type": "greaterthan",
-        "inputs": {
-          "lhs": { "node_id": "sin" },
-          "rhs": { "node_id": "threshold" }
+        "id": "time",
+        "type": "time"
+      },
+      {
+        "id": "sin",
+        "type": "sin"
+      },
+      {
+        "id": "threshold",
+        "type": "constant",
+        "params": {
+          "value": 0
         }
       },
-      { "id": "then", "type": "constant", "params": { "value": 1 } },
-      { "id": "else", "type": "constant", "params": { "value": -1 } },
+      {
+        "id": "greater",
+        "type": "greaterthan"
+      },
+      {
+        "id": "then",
+        "type": "constant",
+        "params": {
+          "value": 1
+        }
+      },
+      {
+        "id": "else",
+        "type": "constant",
+        "params": {
+          "value": -1
+        }
+      },
       {
         "id": "gate",
-        "type": "if",
-        "inputs": {
-          "cond": { "node_id": "greater" },
-          "then": { "node_id": "then" },
-          "else": { "node_id": "else" }
-        }
+        "type": "if"
       },
       {
         "id": "out",
         "type": "output",
-        "params": { "path": "samples/logic.gated" },
-        "inputs": { "in": { "node_id": "gate" } }
+        "params": {
+          "path": "samples/logic.gated"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node_id": "time"
+        },
+        "to": {
+          "node_id": "sin",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "sin"
+        },
+        "to": {
+          "node_id": "greater",
+          "input": "lhs"
+        }
+      },
+      {
+        "from": {
+          "node_id": "threshold"
+        },
+        "to": {
+          "node_id": "greater",
+          "input": "rhs"
+        }
+      },
+      {
+        "from": {
+          "node_id": "greater"
+        },
+        "to": {
+          "node_id": "gate",
+          "input": "cond"
+        }
+      },
+      {
+        "from": {
+          "node_id": "then"
+        },
+        "to": {
+          "node_id": "gate",
+          "input": "then"
+        }
+      },
+      {
+        "from": {
+          "node_id": "else"
+        },
+        "to": {
+          "node_id": "gate",
+          "input": "else"
+        }
+      },
+      {
+        "from": {
+          "node_id": "gate"
+        },
+        "to": {
+          "node_id": "out",
+          "input": "in"
+        }
       }
     ]
   },
   "subs": {
     "inputs": [],
-    "outputs": ["samples/logic.gated"]
-  }
+    "outputs": [
+      "samples/logic.gated"
+    ]
+  },
+  "edges": []
 }

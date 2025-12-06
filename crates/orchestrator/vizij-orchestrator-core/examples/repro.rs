@@ -35,25 +35,38 @@ fn main() {
             },
             {
                 "id": "scaled",
-                "type": "multiply",
-                "inputs": {
-                    "lhs": { "node_id": "anim_input" },
-                    "rhs": { "node_id": "gain_input" }
-                }
+                "type": "multiply"
             },
             {
                 "id": "output_sum",
-                "type": "add",
-                "inputs": {
-                    "lhs": { "node_id": "scaled" },
-                    "rhs": { "node_id": "offset_input" }
-                }
+                "type": "add"
             },
             {
                 "id": "out",
                 "type": "output",
-                "params": { "path": "demo/output/value" },
-                "inputs": { "in": { "node_id": "output_sum" } }
+                "params": { "path": "demo/output/value" }
+            }
+        ],
+        "edges": [
+            {
+                "from": { "node_id": "anim_input" },
+                "to": { "node_id": "scaled", "input": "lhs" }
+            },
+            {
+                "from": { "node_id": "gain_input" },
+                "to": { "node_id": "scaled", "input": "rhs" }
+            },
+            {
+                "from": { "node_id": "scaled" },
+                "to": { "node_id": "output_sum", "input": "lhs" }
+            },
+            {
+                "from": { "node_id": "offset_input" },
+                "to": { "node_id": "output_sum", "input": "rhs" }
+            },
+            {
+                "from": { "node_id": "output_sum" },
+                "to": { "node_id": "out", "input": "in" }
             }
         ]
     });

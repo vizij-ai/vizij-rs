@@ -1,0 +1,165 @@
+{
+  "spec": {
+    "nodes": [
+      {
+        "id": "in_a",
+        "type": "input",
+        "params": {
+          "path": "shared/a"
+        }
+      },
+      {
+        "id": "in_b",
+        "type": "input",
+        "params": {
+          "path": "shared/b"
+        }
+      },
+      {
+        "id": "in_c",
+        "type": "input",
+        "params": {
+          "path": "shared/c"
+        }
+      },
+      {
+        "id": "in_d",
+        "type": "input",
+        "params": {
+          "path": "shared/d"
+        }
+      },
+      {
+        "id": "in_e",
+        "type": "input",
+        "params": {
+          "path": "shared/e"
+        }
+      },
+      {
+        "id": "in_f",
+        "type": "input",
+        "params": {
+          "path": "shared/f"
+        }
+      },
+      {
+        "id": "out_a_final",
+        "type": "output",
+        "params": {
+          "path": "final/a"
+        }
+      },
+      {
+        "id": "out_b_final",
+        "type": "output",
+        "params": {
+          "path": "final/b"
+        }
+      },
+      {
+        "id": "out_c_final",
+        "type": "output",
+        "params": {
+          "path": "final/c"
+        }
+      },
+      {
+        "id": "out_d_final",
+        "type": "output",
+        "params": {
+          "path": "final/d"
+        }
+      },
+      {
+        "id": "out_e_final",
+        "type": "output",
+        "params": {
+          "path": "final/e"
+        }
+      },
+      {
+        "id": "out_f_final",
+        "type": "output",
+        "params": {
+          "path": "final/f"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node_id": "in_a"
+        },
+        "to": {
+          "node_id": "out_a_final",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "in_b"
+        },
+        "to": {
+          "node_id": "out_b_final",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "in_c"
+        },
+        "to": {
+          "node_id": "out_c_final",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "in_d"
+        },
+        "to": {
+          "node_id": "out_d_final",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "in_e"
+        },
+        "to": {
+          "node_id": "out_e_final",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "in_f"
+        },
+        "to": {
+          "node_id": "out_f_final",
+          "input": "in"
+        }
+      }
+    ]
+  },
+  "subs": {
+    "inputs": [
+      "shared/a",
+      "shared/b",
+      "shared/c",
+      "shared/d",
+      "shared/e",
+      "shared/f"
+    ],
+    "outputs": [
+      "final/a",
+      "final/b",
+      "final/c",
+      "final/d",
+      "final/e",
+      "final/f"
+    ]
+  },
+  "edges": []
+}

@@ -1,5 +1,6 @@
 use serde::de::Error as _;
 use serde_json::{json, Map, Value as JsonValue};
+use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::{TypedPath, Value, WriteBatch, WriteOp};
@@ -25,6 +26,8 @@ pub enum JsonError {
     GraphParse(String),
     #[error("serialize normalized graph: {0}")]
     GraphSerialize(String),
+    #[error("graph spec uses deprecated 'links' field; rename to 'edges'")]
+    LegacyLinksField,
 }
 
 /// Normalize shorthand `Value` JSON into the canonical `{ "type": ..., "data": ... }`
@@ -166,6 +169,63 @@ fn normalize_value_json_with_policy(value: JsonValue, policy: NumericArrayPolicy
     }
 }
 
+fn normalize_shape_json(shape: JsonValue) -> JsonValue {
+    match shape {
+        JsonValue::String(id) => json!({ "id": id }),
+        JsonValue::Object(obj) => JsonValue::Object(obj),
+        other => other,
+    }
+}
+
+fn normalize_input_default_entry(value: JsonValue) -> JsonValue {
+    match value {
+        JsonValue::Object(mut map) => {
+            let payload = if let Some(val) = map.remove("value") {
+                normalize_value_json(val)
+            } else if let Some(val) = map.remove("default") {
+                normalize_value_json(val)
+            } else {
+                normalize_value_json(JsonValue::Object(map.clone()))
+            };
+
+            let mut normalized = Map::new();
+            normalized.insert("value".to_string(), payload);
+
+            if let Some(shape_val) = map.remove("shape").or_else(|| map.remove("default_shape")) {
+                normalized.insert("shape".to_string(), normalize_shape_json(shape_val));
+            }
+
+            JsonValue::Object(normalized)
+        }
+        other => {
+            let mut normalized = Map::new();
+            normalized.insert("value".to_string(), normalize_value_json(other));
+            JsonValue::Object(normalized)
+        }
+    }
+}
+
+fn normalize_operand_key(
+    original: &str,
+    aliases: &mut HashMap<String, String>,
+    next_index: &mut usize,
+) -> String {
+    if let Some(existing) = aliases.get(original) {
+        return existing.clone();
+    }
+
+    if original.starts_with("operand_") {
+        let key = original.to_string();
+        aliases.insert(original.to_string(), key.clone());
+        return key;
+    }
+
+    let key = format!("operand_{}", *next_index);
+    *next_index += 1;
+    aliases.insert(original.to_string(), key.clone());
+    key
+}
+
 /// Convenience helper that normalizes Value JSON then deserializes it into the
 /// strongly typed [`Value`] enum. This keeps JSON shorthands consistent across
 /// call-sites (blackboard, wasm wrappers, tests).
@@ -184,7 +244,15 @@ pub fn parse_value_staging(value: JsonValue) -> Result<Value, serde_json::Error>
 
 /// Normalize a graph specification JSON value in-place. This mirrors the wasm
 /// helpers previously implemented in individual crates.
-pub fn normalize_graph_spec_value(root: &mut JsonValue) {
+pub fn normalize_graph_spec_value(root: &mut JsonValue) -> Result<(), JsonError> {
+    if root.get("links").is_some() {
+        return Err(JsonError::LegacyLinksField);
+    }
+
+    let mut converted_edges: Vec<JsonValue> = Vec::new();
+    let mut node_variadic_aliases: HashMap<String, HashMap<String, String>> = HashMap::new();
+    let mut node_operand_counters: HashMap<String, usize> = HashMap::new();
+
     if let Some(nodes) = root.get_mut("nodes").and_then(|n| n.as_array_mut()) {
         for node in nodes.iter_mut() {
             if let Some(kind) = node.get("kind") {
@@ -253,8 +321,214 @@ pub fn normalize_graph_spec_value(root: &mut JsonValue) {
                     }
                 }
             }
+
+            if let Some(node_map) = node.as_object_mut() {
+                let node_id = node_map
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let node_type = node_map
+                    .get("type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let needs_operand = matches!(
+                    node_type.as_str(),
+                    "add" | "multiply" | "join" | "case" | "default_blend"
+                );
+                let mut operand_aliases: HashMap<String, String> = HashMap::new();
+                let mut next_operand_index: usize = 1;
+
+                let mut input_defaults_map =
+                    if let Some(existing_defaults) = node_map.remove("input_defaults") {
+                        if let Some(obj) = existing_defaults.as_object() {
+                            let mut normalized = Map::new();
+                            for (input, default_value) in obj {
+                                normalized.insert(
+                                    input.clone(),
+                                    normalize_input_default_entry(default_value.clone()),
+                                );
+                            }
+                            normalized
+                        } else {
+                            Map::new()
+                        }
+                    } else {
+                        Map::new()
+                    };
+
+                if let Some(inputs_value) = node_map.remove("inputs") {
+                    if let Some(inputs_obj) = inputs_value.as_object() {
+                        for (input_key, conn_value) in inputs_obj.iter() {
+                            let normalized_input_key = if needs_operand {
+                                normalize_operand_key(
+                                    input_key,
+                                    &mut operand_aliases,
+                                    &mut next_operand_index,
+                                )
+                            } else {
+                                input_key.clone()
+                            };
+
+                            let mut from_node: Option<String> = None;
+                            let mut output_key: Option<String> = None;
+                            let mut selector: Option<JsonValue> = None;
+                            let mut default_payload: Option<JsonValue> = None;
+                            let mut default_shape_payload: Option<JsonValue> = None;
+
+                            match conn_value {
+                                JsonValue::String(node_id) => {
+                                    from_node = Some(node_id.clone());
+                                }
+                                JsonValue::Object(map) => {
+                                    if let Some(id_val) = map
+                                        .get("node_id")
+                                        .or_else(|| map.get("node"))
+                                        .and_then(|v| v.as_str())
+                                    {
+                                        from_node = Some(id_val.to_string());
+                                    }
+                                    output_key = map
+                                        .get("output_key")
+                                        .or_else(|| map.get("output"))
+                                        .and_then(|v| v.as_str())
+                                        .map(|s| s.to_string());
+                                    if let Some(sel_val) = map.get("selector") {
+                                        selector = Some(sel_val.clone());
+                                    }
+                                    if let Some(default_val) =
+                                        map.get("default").or_else(|| map.get("value"))
+                                    {
+                                        default_payload = Some(default_val.clone());
+                                    }
+                                    if let Some(shape_val) =
+                                        map.get("default_shape").or_else(|| map.get("shape"))
+                                    {
+                                        default_shape_payload = Some(shape_val.clone());
+                                    }
+                                    if from_node.is_none() && default_payload.is_none() {
+                                        default_payload = Some(JsonValue::Object(map.clone()));
+                                    }
+                                }
+                                other => {
+                                    default_payload = Some(other.clone());
+                                }
+                            }
+
+                            if let Some(payload) = default_payload {
+                                let default_entry = if let Some(shape_payload) =
+                                    default_shape_payload
+                                {
+                                    let mut default_obj = Map::new();
+                                    default_obj.insert("value".to_string(), payload);
+                                    default_obj.insert("shape".to_string(), shape_payload);
+                                    normalize_input_default_entry(JsonValue::Object(default_obj))
+                                } else {
+                                    normalize_input_default_entry(payload)
+                                };
+                                input_defaults_map
+                                    .insert(normalized_input_key.clone(), default_entry);
+                            }
+
+                            if let Some(source_id) = from_node {
+                                let mut edge = serde_json::Map::new();
+                                let mut from_obj = serde_json::Map::new();
+                                from_obj
+                                    .insert("node_id".to_string(), JsonValue::String(source_id));
+                                if let Some(output) = output_key.clone() {
+                                    from_obj
+                                        .insert("output".to_string(), JsonValue::String(output));
+                                }
+                                let mut to_obj = serde_json::Map::new();
+                                to_obj.insert(
+                                    "node_id".to_string(),
+                                    JsonValue::String(node_id.clone()),
+                                );
+                                to_obj.insert(
+                                    "input".to_string(),
+                                    JsonValue::String(normalized_input_key.clone()),
+                                );
+                                edge.insert("from".to_string(), JsonValue::Object(from_obj));
+                                edge.insert("to".to_string(), JsonValue::Object(to_obj));
+                                if let Some(sel) = selector.clone() {
+                                    edge.insert("selector".to_string(), sel);
+                                }
+                                converted_edges.push(JsonValue::Object(edge));
+                            }
+                        }
+                    }
+                }
+
+                if needs_operand && !input_defaults_map.is_empty() {
+                    let mut remapped = Map::new();
+                    for (key, value) in input_defaults_map.into_iter() {
+                        let normalized = normalize_operand_key(
+                            &key,
+                            &mut operand_aliases,
+                            &mut next_operand_index,
+                        );
+                        remapped.insert(normalized, value);
+                    }
+                    input_defaults_map = remapped;
+                }
+
+                if !input_defaults_map.is_empty() {
+                    node_map.insert(
+                        "input_defaults".to_string(),
+                        JsonValue::Object(input_defaults_map),
+                    );
+                }
+
+                if needs_operand {
+                    node_variadic_aliases.insert(node_id.clone(), operand_aliases);
+                    node_operand_counters.insert(node_id, next_operand_index);
+                }
+            }
         }
     }
+
+    if let Some(edges_value) = root.get_mut("edges").and_then(|v| v.as_array_mut()) {
+        for edge in edges_value.iter_mut() {
+            if let Some(to_obj) = edge.get_mut("to").and_then(|v| v.as_object_mut()) {
+                let node_id = to_obj
+                    .get("node_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                if let (Some(alias_map), Some(counter)) = (
+                    node_variadic_aliases.get_mut(&node_id),
+                    node_operand_counters.get_mut(&node_id),
+                ) {
+                    if let Some(input_value) = to_obj.get_mut("input") {
+                        if let Some(current) = input_value.as_str() {
+                            let normalized = normalize_operand_key(current, alias_map, counter);
+                            *input_value = JsonValue::String(normalized);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if !converted_edges.is_empty() {
+        match root.get_mut("edges") {
+            Some(existing) => {
+                if let Some(array) = existing.as_array_mut() {
+                    array.extend(converted_edges);
+                } else {
+                    *existing = JsonValue::Array(converted_edges);
+                }
+            }
+            None => {
+                root["edges"] = JsonValue::Array(converted_edges);
+            }
+        }
+    } else if root.get("edges").is_none() {
+        root["edges"] = JsonValue::Array(Vec::new());
+    }
+
+    Ok(())
 }
 
 /// Convenience wrapper that parses a JSON string, normalizes it, and returns
@@ -262,7 +536,7 @@ pub fn normalize_graph_spec_value(root: &mut JsonValue) {
 pub fn normalize_graph_spec_json(json_str: &str) -> Result<JsonValue, JsonError> {
     let mut root: JsonValue =
         serde_json::from_str(json_str).map_err(|e| JsonError::GraphParse(e.to_string()))?;
-    normalize_graph_spec_value(&mut root);
+    normalize_graph_spec_value(&mut root)?;
     Ok(root)
 }
 
@@ -451,9 +725,159 @@ mod tests {
                 }
             ]
         });
-        normalize_graph_spec_value(&mut root);
+        normalize_graph_spec_value(&mut root).expect("normalize graph spec");
         assert_eq!(root["nodes"][0]["type"], "node");
         assert_eq!(root["nodes"][0]["params"]["value"]["type"], "float");
         assert_eq!(root["nodes"][0]["output_shapes"]["value"]["id"], "vec3");
+    }
+
+    #[test]
+    fn graph_spec_normalization_converts_inputs_to_edges() {
+        let mut root = json!({
+            "nodes": [
+                { "id": "constant", "type": "constant" },
+                {
+                    "id": "adder",
+                    "type": "add",
+                    "inputs": {
+                        "lhs": { "node_id": "constant", "output_key": "value" },
+                        "rhs": { "node_id": "constant" }
+                    }
+                }
+            ]
+        });
+
+        normalize_graph_spec_value(&mut root).expect("normalize graph spec");
+
+        assert!(
+            root["nodes"][1].get("inputs").is_none(),
+            "inputs should be removed"
+        );
+
+        let edges = root["edges"].as_array().expect("edges array");
+        assert_eq!(edges.len(), 2, "expected two generated edges");
+
+        let lhs = &edges[0];
+        assert_eq!(lhs["from"]["node_id"], "constant");
+        assert_eq!(lhs["from"]["output"], "value");
+        assert_eq!(lhs["to"]["node_id"], "adder");
+        assert_eq!(lhs["to"]["input"], "operand_1");
+
+        let rhs = &edges[1];
+        assert_eq!(rhs["from"]["node_id"], "constant");
+        assert!(
+            rhs["from"].get("output").is_none(),
+            "default output key omitted"
+        );
+        assert_eq!(rhs["to"]["node_id"], "adder");
+        assert_eq!(rhs["to"]["input"], "operand_2");
+    }
+
+    #[test]
+    fn graph_spec_normalization_injects_empty_edges_array() {
+        let mut root = json!({
+            "nodes": [
+                { "id": "constant", "type": "constant" }
+            ]
+        });
+
+        normalize_graph_spec_value(&mut root).expect("normalize graph spec");
+
+        assert_eq!(
+            root["edges"].as_array().map(|a| a.len()),
+            Some(0),
+            "normalizer should emit an empty edges array"
+        );
+    }
+
+    #[test]
+    fn graph_spec_normalization_preserves_default_only_inputs() {
+        let mut root = json!({
+            "nodes": [
+                { "id": "num", "type": "constant" },
+                {
+                    "id": "div",
+                    "type": "divide",
+                    "inputs": {
+                        "lhs": "num",
+                        "rhs": 2.0
+                    }
+                }
+            ]
+        });
+
+        normalize_graph_spec_value(&mut root).expect("normalize graph spec");
+
+        let div = &root["nodes"][1];
+        assert!(div.get("inputs").is_none(), "inputs should be stripped");
+
+        let defaults = div["input_defaults"]
+            .as_object()
+            .expect("defaults map present");
+        let rhs_default = defaults.get("rhs").expect("rhs default retained");
+        assert_eq!(rhs_default["value"]["type"], "float");
+        assert_eq!(rhs_default["value"]["data"], 2.0);
+
+        let edges = root["edges"].as_array().expect("edges array");
+        assert_eq!(edges.len(), 1, "only the lhs connection becomes an edge");
+        let lhs_link = &edges[0];
+        assert_eq!(lhs_link["to"]["node_id"], "div");
+        assert_eq!(lhs_link["to"]["input"], "lhs");
+    }
+
+    #[test]
+    fn graph_spec_normalization_extracts_defaults_from_connections() {
+        let mut root = json!({
+            "nodes": [
+                { "id": "config", "type": "constant" },
+                {
+                    "id": "div",
+                    "type": "divide",
+                    "inputs": {
+                        "rhs": {
+                            "node_id": "config",
+                            "output_key": "gain",
+                            "selector": [ { "index": 0 } ],
+                            "default": { "float": 0.5 },
+                            "default_shape": "Scalar"
+                        }
+                    }
+                }
+            ]
+        });
+
+        normalize_graph_spec_value(&mut root).expect("normalize graph spec");
+
+        let div = &root["nodes"][1];
+        let defaults = div["input_defaults"]
+            .as_object()
+            .expect("defaults map present");
+        let rhs_default = defaults.get("rhs").expect("rhs default retained");
+        assert_eq!(rhs_default["value"]["type"], "float");
+        assert_eq!(rhs_default["value"]["data"], 0.5);
+        assert_eq!(rhs_default["shape"]["id"], "Scalar");
+
+        let edges = root["edges"].as_array().expect("edges array");
+        assert_eq!(edges.len(), 1, "single edge retained");
+        let edge = &edges[0];
+        assert_eq!(edge["from"]["node_id"], "config");
+        assert_eq!(edge["from"]["output"], "gain");
+        let selector = edge["selector"]
+            .as_array()
+            .expect("selector preserved for edge");
+        assert_eq!(selector.len(), 1);
+        assert_eq!(selector[0]["index"], 0);
+    }
+
+    #[test]
+    fn graph_spec_normalization_rejects_legacy_links_field() {
+        let mut root = json!({
+            "nodes": [],
+            "links": []
+        });
+
+        let err = normalize_graph_spec_value(&mut root)
+            .expect_err("legacy links field should be rejected");
+        assert!(matches!(err, JsonError::LegacyLinksField));
     }
 }

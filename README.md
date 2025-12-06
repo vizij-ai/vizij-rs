@@ -43,16 +43,19 @@ vizij-rs/
 │  │  ├─ vizij-graph-core          # Data-flow node graph evaluator
 │  │  ├─ bevy_vizij_graph          # Bevy plugin
 │  │  └─ vizij-graph-wasm          # wasm-bindgen binding
-│  └─ orchestrator/
-│     ├─ vizij-orchestrator-core   # Blackboard + pass scheduling runtime
-│     └─ vizij-orchestrator-wasm   # wasm-bindgen binding
+│  ├─ orchestrator/
+│  │  ├─ vizij-orchestrator-core   # Blackboard + pass scheduling runtime
+│  │  └─ vizij-orchestrator-wasm   # wasm-bindgen binding
+│  └─ test-fixtures/
+│     └─ vizij-test-fixtures       # Loads JSON fixtures referenced across stacks
 ├─ npm/
 │  ├─ @vizij/animation-wasm        # Stable ESM wrapper around `vizij-animation-wasm`
 │  ├─ @vizij/node-graph-wasm       # Wrapper around `vizij-graph-wasm`
 │  ├─ @vizij/orchestrator-wasm     # Wrapper around `vizij-orchestrator-wasm`
+│  ├─ @vizij/test-fixtures         # Browser bundle of shared JSON fixtures
 │  ├─ @vizij/value-json            # Shared JSON coercion helpers
 │  └─ @vizij/wasm-loader           # Loader that enforces ABI compatibility
-├─ fixtures/                       # Sample graphs, animations, orchestrations
+├─ fixtures/                       # Sample graphs, animations, orchestrations (+ manifest)
 └─ scripts/                        # Build, watch, and release helpers
 ```
 
@@ -67,10 +70,22 @@ Every crate includes a dedicated README with domain-specific guidance; the top-l
 | Animation      | `vizij-animation-core`   | `bevy_vizij_animation`    | `vizij-animation-wasm`     | `@vizij/animation-wasm`      |
 | Node graph     | `vizij-graph-core`       | `bevy_vizij_graph`        | `vizij-graph-wasm`         | `@vizij/node-graph-wasm`     |
 | Orchestrator   | `vizij-orchestrator-core`| (planned)                 | `vizij-orchestrator-wasm`  | `@vizij/orchestrator-wasm`   |
+| Test fixtures  | `vizij-test-fixtures`    | —                         | —                          | `@vizij/test-fixtures`       |
 
 Shared API crates (`vizij-api-core`, `vizij-api-wasm`, `bevy_vizij_api`) provide the Value/Shape/TyperPath contract that keeps the stacks interoperable.
+`vizij-test-fixtures` exposes the JSON assets defined under `fixtures/` and powers the `@vizij/test-fixtures` bundle for browser consumers.
 
 Each WASM crate exposes a stable `abi_version()` (currently `2`); the npm wrappers verify this at runtime and instruct you to rebuild if versions drift.
+
+### Support Packages
+
+| Package | Purpose |
+|---------|---------|
+| `@vizij/value-json` | TypeScript helpers that normalise Value/Shape payloads to match `vizij-api-core`. |
+| `@vizij/test-fixtures` | Ships the shared fixture manifest + JSON for browsers and Node tooling. |
+| `@vizij/wasm-loader` | Shared loader that caches wasm-bindgen modules, resolves `file://` URLs, and enforces ABI checks. |
+
+These packages build quickly (`pnpm run build:shared`) and should be rebuilt whenever fixtures or API contracts change.
 
 ---
 
@@ -80,7 +95,7 @@ Each WASM crate exposes a stable `abi_version()` (currently `2`); the npm wrappe
 - **Node.js**: v18 or newer (v20 recommended) with Corepack enabled (`corepack enable`).
 - **pnpm**: v9.x (locked at `pnpm-lock.yaml`).
 - **wasm-pack** & **wasm-bindgen-cli**: `cargo install wasm-pack wasm-bindgen-cli`
-- Optional: `cargo-watch`, `just`, or other workflow helpers.
+- Optional: `cargo-watch` (required for `pnpm run watch:wasm:*` scripts), `just`, or other workflow helpers.
 
 Ensure Git LFS is configured if you pull large fixture assets.
 
@@ -98,6 +113,8 @@ corepack enable
 pnpm install               # install npm workspace deps (wasm wrappers, scripts)
 cargo fetch                # prefetch Rust dependencies (optional but speeds CI)
 rustup target add wasm32-unknown-unknown
+cargo install cargo-watch --locked   # optional: required for pnpm run watch:wasm:*
+pnpm run build:shared               # build support packages (@vizij/value-json, @vizij/test-fixtures, @vizij/wasm-loader)
 ```
 
 Install the shared git hooks (formatting, clippy, tests):
@@ -119,7 +136,7 @@ Hooks can be bypassed with `SKIP_GIT_HOOKS=1` or extended using the `HOOK_RUN_*`
 pnpm run build
 ```
 
-This command runs the Rust checks followed by each npm wrapper build. The Rust build uses the fast `cargo check --workspace` path; WASM bundles land in `crates/*/*/pkg/` and are copied into `npm/@vizij/*/pkg/`.
+This command runs the Rust checks, each WASM wrapper build, and the shared npm packages (`@vizij/value-json`, `@vizij/wasm-loader`, `@vizij/test-fixtures`). The Rust build uses the fast `cargo check --workspace` path; WASM bundles land in `crates/*/*/pkg/` and are copied into `npm/@vizij/*/pkg/`.
 
 ### Build a specific WASM stack
 
@@ -141,17 +158,34 @@ pnpm run watch:wasm:animation
 pnpm run watch:wasm:orchestrator
 ```
 
-These scripts rebuild the WASM artefacts whenever source files change. Combine them with `pnpm run link:wasm` in the `vizij-web` repo to live-reload web apps.
+These scripts rebuild the WASM artefacts whenever source files change. For short-lived experiments you can still publish a global link via the `link:wasm:*` scripts, but the recommended flow is:
 
-### Link WASM packages locally
+1. Build the desired stack(s) here (`pnpm run build:wasm:graph` etc.).
+2. In `vizij-web`, temporarily depend on those builds using `pnpm add @vizij/<pkg>@link:../vizij-rs/npm/@vizij/<pkg>`.
+3. Revert those `link:` dependencies before committing to return to the published packages.
 
-1. Build & link from this repo:
-   ```bash
-   pnpm run link:wasm
-   ```
-2. Inside `vizij-web` run the same command to consume the symlinks.
+This keeps the published versions as the default source of truth while still allowing synchronous iteration when necessary.
 
-To revert to published versions: `pnpm install` (in both repos) or `pnpm unlink --global @vizij/*-wasm`.
+### Shared npm packages
+
+The support packages (`@vizij/value-json`, `@vizij/test-fixtures`, `@vizij/wasm-loader`) share common scripts:
+
+```bash
+pnpm run build:shared   # rebuild support packages after API/fixture changes
+pnpm run test:shared    # runs package-level Vitest suites
+pnpm run link:value-json
+```
+
+Use `pnpm run link:value-json` (or the aggregate `pnpm run link:wasm`) when you need to exercise local builds inside `vizij-web`.
+
+---
+
+## Fixture Catalog
+
+- `fixtures/manifest.json` is the single source of truth for animation, node-graph, and orchestration fixture names.
+- The Rust crate [`vizij-test-fixtures`](crates/test-fixtures/vizij-test-fixtures/README.md) exposes helpers to load fixtures by name (JSON strings, strongly typed values, filesystem paths).
+- The npm package [`@vizij/test-fixtures`](npm/@vizij/test-fixtures/README.md) mirrors the same manifest for browser/Node consumers; rebuild it with `pnpm run build:shared`.
+- Adding fixtures? Update the manifest, include representative tests, and bump both the Rust crate and npm package versions together.
 
 ---
 
@@ -162,6 +196,8 @@ Rust tests are colocated with their crates. To run the full test suite:
 ```bash
 pnpm run test:rust        # cargo fmt --check, clippy, test
 pnpm run check:rust       # adds workspace build to the test suite
+pnpm run test             # runs wasm + shared package test suites
+pnpm run test:wasm        # convenience alias for wasm wrapper vitest suites
 ```
 
 Per-crate runs are equally useful:
@@ -182,14 +218,49 @@ Fixtures live in `fixtures/` for repeatable scenario testing. Use them in integr
 
 ---
 
-## Publishing & Versioning
+## Quality Gates
 
-Each domain stack keeps crate, WASM crate, and npm wrapper versions in lockstep. When you publish:
+Before landing changes, run the same checks that CI enforces:
 
-1. Bump the version in all three manifests (`Cargo.toml`, `package.json`).
-2. Use the appropriate tags on the main branch to trigger the workflow. Use `git push && git push --tags` after tagging them appropriately.
+- `./.githooks/pre-commit` – fmt, clippy, rust tests.
+- `pnpm run build` – workspace build, wasm bundles, shared packages.
+- `pnpm run test` – wasm + shared package tests (Vitest).
+- `pnpm run test:rust` – ensures Rust format/lint/test stay green (redundant with hook but useful in CI).
+- `pnpm run build:wasm:<stack>` – rebuild specific stacks touched by your changes.
+- `bash scripts/dry-run-release.sh` – preflight before publishing crates/npm packages.
 
-`scripts/dry-run-release.sh` runs through the entire sequence without pushing artefacts; use it to confirm that crates build, WASM bundling succeeds, and npm tarballs contain the correct files.
+Document skipped steps in PR descriptions so reviewers have the right context.
+
+---
+
+### Verifying Hooks
+
+To ensure your git hooks are correctly installed, run:
+
+```bash
+./scripts/doctor.sh
+```
+
+If the check fails, run `./scripts/install-git-hooks.sh` to fix it.
+
+### Publishing & Versioning
+
+Each domain stack keeps the Rust crate, WASM crate, and npm wrapper versions in lockstep. Publishing now flows through [Changesets](.changeset/README.md) plus the automated `publish-npm` workflow.
+
+### Prerequisites
+
+- `NPM_TOKEN` in repo secrets with publish rights for the `@vizij/*` scope.
+- Each publishable package has `"private": false` and a `publishConfig.access` entry.
+
+### How a release flows
+
+1. Bump the Rust + WASM crate versions in their `Cargo.toml` files (npm wrappers stay on autopilot).
+2. Run `pnpm changeset` and select the npm packages under `npm/@vizij/*` that changed. Commit the generated markdown under `.changeset/`.
+3. Once those changes land on the branch you want to ship (e.g., `graph-refactor`), cut a tag named `npm-pub-<something>` (for example `npm-pub-graph-refactor-2025-11-11`) that points at that branch head, and push both the tag and branch to origin. You can also trigger the workflow manually with `workflow_dispatch`.
+4. The `publish-npm` workflow finds the remote branch that contains the tagged commit, checks it out, runs `pnpm ci:version` (which deletes the processed changesets, bumps package versions, and commits `chore(release): version packages` onto that same branch), then runs `pnpm ci:publish`. That script temporarily rewrites any `workspace:` dependency ranges to real semver versions, rebuilds the wasm/shared packages, executes `changeset publish`, and restores the workspace protocol before the job pushes anything back. The workflow pushes the release commit and the generated package tags back to the branch, using `NPM_TOKEN` for provenance-enabled publishes.
+5. After the workflow finishes, pull your feature branch so you have the auto-generated release commit locally.
+
+Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wasm bundling, npm pack contents) before pushing real releases.
 
 ---
 
@@ -203,13 +274,32 @@ Each domain stack keeps crate, WASM crate, and npm wrapper versions in lockstep.
 
 ---
 
+## Documentation Maintenance
+
+- Keep `ROADMAP.md` aligned with the state of the codebase—move completed work out as soon as it lands.
+- When adding new stacks or support packages, update this README, `AGENTS.md`, and the relevant per-crate `agents.md` files so coding agents stay in sync.
+- Treat README updates as part of your definition of done: if behaviour changes, explain it where future contributors expect to find it.
+
+---
+
 ## Reference Documentation
 
 - [vizij-animation-core/README](crates/animation/vizij-animation-core/README.md)
 - [vizij-graph-core/README](crates/node-graph/vizij-graph-core/README.md)
 - [vizij-orchestrator-core/README](crates/orchestrator/vizij-orchestrator-core/README.md)
 - [vizij-api-core/README](crates/api/vizij-api-core/README.md)
+- [vizij-test-fixtures/README](crates/test-fixtures/vizij-test-fixtures/README.md)
 - [@vizij/node-graph-wasm/README](npm/@vizij/node-graph-wasm/README.md)
 - [@vizij/orchestrator-wasm/README](npm/@vizij/orchestrator-wasm/README.md)
+- [@vizij/animation-wasm/README](npm/@vizij/animation-wasm/README.md)
+- [@vizij/value-json/README](npm/@vizij/value-json/README.md)
+- [@vizij/test-fixtures/README](npm/@vizij/test-fixtures/README.md)
+- [@vizij/wasm-loader/README](npm/@vizij/wasm-loader/README.md)
 
 If you notice gaps or outdated instructions, please open an issue or ping the Vizij runtime team. High-quality documentation is as critical as the code it describes.
+
+---
+
+## Planning & Roadmap
+
+High-level initiatives, open questions, and cross-stack follow-ups live in [ROADMAP.md](ROADMAP.md). Update it alongside feature work so contributors have an accurate view of what is in flight and what still needs owners.

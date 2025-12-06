@@ -1,8 +1,8 @@
 //! Per-node evaluation logic for the Vizij graph runtime.
 
 use crate::eval::graph_runtime::{GraphRuntime, StagedInput};
-use crate::eval::variadic::{compare_variadic_keys, parse_variadic_key};
-use crate::types::{InputConnection, NodeParams, NodeSpec, NodeType};
+use crate::eval::variadic::collect_operand_ports;
+use crate::types::{InputConnection, NodeParams, NodeSpec, NodeType, RoundMode};
 use hashbrown::HashMap;
 use vizij_api_core::{coercion, Shape, Value, WriteOp};
 
@@ -19,6 +19,9 @@ use super::value_layout::{align_flattened, flatten_numeric, FlatValue, PortValue
 use super::variadic::fold_numeric_variadic;
 
 type OutputMap = HashMap<String, PortValue>;
+
+const PIECEWISE_BREAKPOINT_EPS: f32 = 1e-6;
+const PIECEWISE_OUTPUT_EPS: f32 = 1e-5;
 
 /// Build an output map containing a single port.
 fn keyed_output(key: &str, value: Value) -> OutputMap {
@@ -40,8 +43,12 @@ fn single_output(value: Value) -> OutputMap {
 }
 
 /// Evaluate a single node, updating `rt` with new outputs and queued writes.
-pub fn eval_node(rt: &mut GraphRuntime, spec: &NodeSpec) -> Result<(), String> {
-    let inputs = read_inputs(rt, &spec.inputs)?;
+pub fn eval_node(
+    rt: &mut GraphRuntime,
+    spec: &NodeSpec,
+    connections: &HashMap<String, InputConnection>,
+) -> Result<(), String> {
+    let inputs = read_inputs(rt, connections)?;
     let mut outputs = evaluate_kind(rt, spec, &inputs)?;
     let pending_path = spec.params.path.clone();
 
@@ -77,10 +84,16 @@ fn evaluate_kind(
         | NodeType::Multiply
         | NodeType::Divide
         | NodeType::Power
-        | NodeType::Log) => Ok(eval_arithmetic(node_type, inputs)),
+        | NodeType::Log
+        | NodeType::Modulo) => Ok(eval_arithmetic(node_type, inputs)),
         node_type @ (NodeType::Sin | NodeType::Cos | NodeType::Tan) => {
             Ok(eval_trig(node_type, inputs))
         }
+        node_type @ (NodeType::Abs | NodeType::Sqrt | NodeType::Sign) => {
+            Ok(eval_unary_scalar(node_type, inputs))
+        }
+        node_type @ (NodeType::Min | NodeType::Max) => Ok(eval_min_max(node_type, inputs)),
+        NodeType::Round => Ok(eval_round(params, inputs)),
         NodeType::Time => Ok(eval_time(rt)),
         NodeType::Oscillator => Ok(eval_oscillator(rt, inputs)),
         node_type @ (NodeType::Spring | NodeType::Damp | NodeType::Slew) => {
@@ -96,6 +109,8 @@ fn evaluate_kind(
         NodeType::If => Ok(eval_if(inputs)),
         NodeType::Clamp => eval_clamp(inputs),
         NodeType::Remap => eval_remap(inputs),
+        NodeType::CenteredRemap => eval_centered_remap(inputs),
+        NodeType::PiecewiseRemap => eval_piecewise_remap(params, inputs),
         NodeType::Vec3Cross => Ok(eval_vec3_cross(inputs)),
         NodeType::VectorConstant => Ok(eval_vector_constant(params)),
         node_type @ (NodeType::VectorAdd
@@ -179,12 +194,18 @@ fn eval_multi_slider(params: &NodeParams) -> OutputMap {
 fn eval_arithmetic(kind: &NodeType, inputs: &HashMap<String, PortValue>) -> OutputMap {
     match kind {
         NodeType::Add => {
-            let values: Vec<Value> = inputs.values().map(|pv| pv.value.clone()).collect();
+            let values: Vec<Value> = collect_operand_ports(inputs)
+                .into_iter()
+                .map(|pv| pv.value.clone())
+                .collect();
             let result = fold_numeric_variadic(&values, |x, y| x + y, Value::Float(0.0));
             single_output(result)
         }
         NodeType::Multiply => {
-            let values: Vec<Value> = inputs.values().map(|pv| pv.value.clone()).collect();
+            let values: Vec<Value> = collect_operand_ports(inputs)
+                .into_iter()
+                .map(|pv| pv.value.clone())
+                .collect();
             let result = fold_numeric_variadic(&values, |x, y| x * y, Value::Float(1.0));
             single_output(result)
         }
@@ -204,6 +225,17 @@ fn eval_arithmetic(kind: &NodeType, inputs: &HashMap<String, PortValue>) -> Outp
                 }
             }))
         }
+        NodeType::Modulo => {
+            let lhs = input_or_default(inputs, "lhs");
+            let rhs = input_or_default(inputs, "rhs");
+            single_output(binary_numeric(&lhs.value, &rhs.value, |x, y| {
+                if y != 0.0 {
+                    x % y
+                } else {
+                    f32::NAN
+                }
+            }))
+        }
         NodeType::Power => {
             let base = input_or_default(inputs, "base");
             let exp = input_or_default(inputs, "exp");
@@ -216,6 +248,50 @@ fn eval_arithmetic(kind: &NodeType, inputs: &HashMap<String, PortValue>) -> Outp
         }
         _ => unreachable!(),
     }
+}
+
+fn eval_unary_scalar(kind: &NodeType, inputs: &HashMap<String, PortValue>) -> OutputMap {
+    let input = input_or_default(inputs, "in");
+    match kind {
+        NodeType::Abs => single_output(unary_numeric(&input.value, |x| x.abs())),
+        NodeType::Sqrt => single_output(unary_numeric(&input.value, |x| x.sqrt())),
+        NodeType::Sign => single_output(unary_numeric(&input.value, |x| {
+            if x > 0.0 {
+                1.0
+            } else if x < 0.0 {
+                -1.0
+            } else {
+                0.0
+            }
+        })),
+        _ => unreachable!(),
+    }
+}
+
+fn eval_min_max(kind: &NodeType, inputs: &HashMap<String, PortValue>) -> OutputMap {
+    let values: Vec<Value> = collect_operand_ports(inputs)
+        .into_iter()
+        .map(|pv| pv.value.clone())
+        .collect();
+    let empty = Value::Float(f32::NAN);
+    let op = match kind {
+        NodeType::Min => f32::min,
+        NodeType::Max => f32::max,
+        _ => unreachable!(),
+    };
+    let result = fold_numeric_variadic(&values, op, empty);
+    single_output(result)
+}
+
+fn eval_round(params: &NodeParams, inputs: &HashMap<String, PortValue>) -> OutputMap {
+    let input = input_or_default(inputs, "in");
+    let mode = params.round_mode.clone().unwrap_or_default();
+    let op: fn(f32) -> f32 = match mode {
+        RoundMode::Floor => f32::floor,
+        RoundMode::Ceil => f32::ceil,
+        RoundMode::Trunc => f32::trunc,
+    };
+    single_output(unary_numeric(&input.value, op))
 }
 
 fn eval_trig(kind: &NodeType, inputs: &HashMap<String, PortValue>) -> OutputMap {
@@ -499,6 +575,254 @@ fn eval_remap(inputs: &HashMap<String, PortValue>) -> Result<OutputMap, String> 
     )))
 }
 
+fn eval_centered_remap(inputs: &HashMap<String, PortValue>) -> Result<OutputMap, String> {
+    let value = inputs
+        .get("in")
+        .ok_or_else(|| "CenteredRemap requires 'in' input".to_string())?;
+    let in_low = inputs
+        .get("in_low")
+        .ok_or_else(|| "CenteredRemap requires 'in_low' input".to_string())?;
+    let in_anchor = inputs
+        .get("in_anchor")
+        .ok_or_else(|| "CenteredRemap requires 'in_anchor' input".to_string())?;
+    let in_high = inputs
+        .get("in_high")
+        .ok_or_else(|| "CenteredRemap requires 'in_high' input".to_string())?;
+    let out_low = inputs
+        .get("out_low")
+        .ok_or_else(|| "CenteredRemap requires 'out_low' input".to_string())?;
+    let out_anchor = inputs
+        .get("out_anchor")
+        .ok_or_else(|| "CenteredRemap requires 'out_anchor' input".to_string())?;
+    let out_high = inputs
+        .get("out_high")
+        .ok_or_else(|| "CenteredRemap requires 'out_high' input".to_string())?;
+
+    let in_low = as_float(&in_low.value);
+    let in_anchor = as_float(&in_anchor.value);
+    let in_high = as_float(&in_high.value);
+    let out_low = as_float(&out_low.value);
+    let out_anchor = as_float(&out_anchor.value);
+    let out_high = as_float(&out_high.value);
+
+    let below_span = in_anchor - in_low;
+    let above_span = in_high - in_anchor;
+    let below_slope = if below_span.abs() > f32::EPSILON {
+        (out_anchor - out_low) / below_span
+    } else {
+        0.0
+    };
+    let above_slope = if above_span.abs() > f32::EPSILON {
+        (out_high - out_anchor) / above_span
+    } else {
+        0.0
+    };
+
+    let remapped = unary_numeric(&value.value, |x| {
+        if x <= in_anchor {
+            out_anchor + below_slope * (x - in_anchor)
+        } else {
+            out_anchor + above_slope * (x - in_anchor)
+        }
+    });
+    Ok(single_output(remapped))
+}
+
+fn eval_piecewise_remap(
+    params: &NodeParams,
+    inputs: &HashMap<String, PortValue>,
+) -> Result<OutputMap, String> {
+    let value_port = inputs
+        .get("in")
+        .ok_or_else(|| "PiecewiseRemap requires 'in' input".to_string())?;
+    let input_breakpoints_port = inputs
+        .get("input_breakpoints")
+        .ok_or_else(|| "PiecewiseRemap requires 'input_breakpoints' input".to_string())?;
+    let output_breakpoints_port = inputs
+        .get("output_breakpoints")
+        .ok_or_else(|| "PiecewiseRemap requires 'output_breakpoints' input".to_string())?;
+
+    let input_flat = flatten_numeric(&input_breakpoints_port.value)
+        .ok_or_else(|| "PiecewiseRemap expects numeric input breakpoints".to_string())?;
+    let output_flat = flatten_numeric(&output_breakpoints_port.value)
+        .ok_or_else(|| "PiecewiseRemap expects numeric output breakpoints".to_string())?;
+
+    let config = prepare_piecewise_breakpoints(input_flat.data, output_flat.data)?;
+    let clamp_enabled = params.clamp.unwrap_or(false);
+
+    let remapped = match flatten_numeric(&value_port.value) {
+        Some(flat) => {
+            let data: Vec<f32> = flat
+                .data
+                .iter()
+                .map(|component| {
+                    remap_piecewise_scalar(
+                        *component,
+                        &config.inputs,
+                        &config.outputs,
+                        clamp_enabled,
+                        config.constant,
+                    )
+                })
+                .collect();
+            flat.layout.reconstruct(&data)
+        }
+        None => Value::Float(f32::NAN),
+    };
+
+    Ok(single_output(remapped))
+}
+
+struct PiecewiseConfig {
+    inputs: Vec<f32>,
+    outputs: Vec<f32>,
+    constant: Option<f32>,
+}
+
+fn prepare_piecewise_breakpoints(
+    inputs: Vec<f32>,
+    outputs: Vec<f32>,
+) -> Result<PiecewiseConfig, String> {
+    if inputs.len() != outputs.len() {
+        return Err(
+            "PiecewiseRemap requires equal numbers of input and output breakpoints".to_string(),
+        );
+    }
+    if inputs.len() < 2 {
+        return Err("PiecewiseRemap requires at least two breakpoints".to_string());
+    }
+
+    for (idx, value) in inputs.iter().enumerate() {
+        if !value.is_finite() {
+            return Err(format!(
+                "PiecewiseRemap input_breakpoints[{idx}] must be finite"
+            ));
+        }
+    }
+    for (idx, value) in outputs.iter().enumerate() {
+        if !value.is_finite() {
+            return Err(format!(
+                "PiecewiseRemap output_breakpoints[{idx}] must be finite"
+            ));
+        }
+    }
+
+    let mut unique_inputs = Vec::with_capacity(inputs.len());
+    let mut unique_outputs = Vec::with_capacity(outputs.len());
+
+    for (idx, (input, output)) in inputs.into_iter().zip(outputs.into_iter()).enumerate() {
+        if let Some(&prev_input) = unique_inputs.last() {
+            let delta: f32 = input - prev_input;
+            if delta < -PIECEWISE_BREAKPOINT_EPS {
+                return Err(format!(
+                    "PiecewiseRemap requires non-decreasing input breakpoints; index {idx} violates ordering"
+                ));
+            }
+            if delta.abs() <= PIECEWISE_BREAKPOINT_EPS {
+                if let Some(&prev_output) = unique_outputs.last() {
+                    let output_delta: f32 = output - prev_output;
+                    if output_delta.abs() > PIECEWISE_OUTPUT_EPS {
+                        return Err(format!(
+                            "PiecewiseRemap requires equal outputs for duplicate input breakpoints (index {idx})"
+                        ));
+                    }
+                } else {
+                    return Err(format!(
+                        "PiecewiseRemap could not resolve duplicate breakpoints at index {idx}"
+                    ));
+                }
+                continue;
+            }
+        }
+        unique_inputs.push(input);
+        unique_outputs.push(output);
+    }
+
+    if unique_inputs.len() == 1 {
+        let constant = unique_outputs.first().copied();
+        return Ok(PiecewiseConfig {
+            inputs: unique_inputs,
+            outputs: unique_outputs,
+            constant,
+        });
+    }
+
+    Ok(PiecewiseConfig {
+        inputs: unique_inputs,
+        outputs: unique_outputs,
+        constant: None,
+    })
+}
+
+fn remap_piecewise_scalar(
+    value: f32,
+    inputs: &[f32],
+    outputs: &[f32],
+    clamp: bool,
+    constant: Option<f32>,
+) -> f32 {
+    if !value.is_finite() {
+        return f32::NAN;
+    }
+    if let Some(constant_value) = constant {
+        return constant_value;
+    }
+
+    debug_assert!(
+        inputs.len() >= 2 && inputs.len() == outputs.len(),
+        "prepare_piecewise_breakpoints should ensure at least two segments"
+    );
+
+    if approx_equal(value, inputs[0]) {
+        return outputs[0];
+    }
+    if approx_equal(value, *inputs.last().unwrap()) {
+        return *outputs.last().unwrap();
+    }
+
+    if value < inputs[0] {
+        if clamp {
+            return outputs[0];
+        }
+        let slope = (outputs[1] - outputs[0]) / (inputs[1] - inputs[0]);
+        return outputs[0] + (value - inputs[0]) * slope;
+    }
+
+    let last_idx = inputs.len() - 1;
+    if value > inputs[last_idx] {
+        if clamp {
+            return outputs[last_idx];
+        }
+        let slope =
+            (outputs[last_idx] - outputs[last_idx - 1]) / (inputs[last_idx] - inputs[last_idx - 1]);
+        return outputs[last_idx] + (value - inputs[last_idx]) * slope;
+    }
+
+    for idx in 1..inputs.len() {
+        if approx_equal(value, inputs[idx]) {
+            return outputs[idx];
+        }
+        if value < inputs[idx] {
+            let x0 = inputs[idx - 1];
+            let x1 = inputs[idx];
+            let y0 = outputs[idx - 1];
+            let y1 = outputs[idx];
+            let span = x1 - x0;
+            if span.abs() <= PIECEWISE_BREAKPOINT_EPS {
+                return y1;
+            }
+            let t = (value - x0) / span;
+            return y0 + t * (y1 - y0);
+        }
+    }
+
+    outputs[last_idx]
+}
+
+fn approx_equal(a: f32, b: f32) -> bool {
+    (a - b).abs() <= PIECEWISE_BREAKPOINT_EPS
+}
+
 fn eval_vec3_cross(inputs: &HashMap<String, PortValue>) -> OutputMap {
     let a = input_or_default(inputs, "a");
     let b = input_or_default(inputs, "b");
@@ -615,11 +939,8 @@ fn eval_vector_index(inputs: &HashMap<String, PortValue>) -> OutputMap {
 }
 
 fn eval_join(inputs: &HashMap<String, PortValue>) -> OutputMap {
-    let mut entries: Vec<_> = inputs.iter().collect();
-    entries.sort_by(|(a, _), (b, _)| compare_variadic_keys(a, b));
-
     let mut out: Vec<f32> = Vec::new();
-    for (_, port) in entries {
+    for port in collect_operand_ports(inputs) {
         if let Some(flat) = flatten_numeric(&port.value) {
             out.extend(flat.data);
         }
@@ -755,21 +1076,7 @@ fn eval_default_blend(inputs: &HashMap<String, PortValue>) -> OutputMap {
     let baseline_port = input_or_default(inputs, "baseline");
     let offset_port = input_or_default(inputs, "offset");
 
-    let mut target_entries: Vec<(&str, &PortValue)> = inputs
-        .iter()
-        .filter_map(|(key, port)| {
-            let (prefix, _) = parse_variadic_key(key);
-            if prefix == "target" {
-                Some((key.as_str(), port))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    target_entries.sort_by(|(a, _), (b, _)| compare_variadic_keys(a, b));
-    let target_ports: Vec<&PortValue> = target_entries.into_iter().map(|(_, port)| port).collect();
-
+    let target_ports = collect_operand_ports(inputs);
     let mut weights = vec_port_to_vec(inputs, "weights");
     if !target_ports.is_empty() {
         if weights.is_empty() {
@@ -1094,19 +1401,14 @@ fn eval_case(params: &NodeParams, inputs: &HashMap<String, PortValue>) -> Output
     let selector = inputs.get("selector").map(|p| p.value.clone());
     let default = inputs.get("default").map(|p| p.value.clone());
 
-    // Gather variadic case inputs in order (keys like "cases_1", "cases_2", etc.)
-    let mut entries: Vec<_> = inputs
-        .iter()
-        .filter(|(k, _)| k.starts_with("cases"))
-        .collect();
-    entries.sort_by(|(a, _), (b, _)| compare_variadic_keys(a, b));
-
+    // Gather variadic case inputs in order (`operand_*`).
+    let case_ports = collect_operand_ports(inputs);
     let labels = params.case_labels.clone().unwrap_or_default();
 
     // Compare selector (prefer Text comparison) against labels.
     if let Some(sel_val) = selector {
         if let Value::Text(sel_s) = sel_val {
-            for (i, (_k, port)) in entries.iter().enumerate() {
+            for (i, port) in case_ports.iter().enumerate() {
                 if let Some(label) = labels.get(i) {
                     if sel_s == *label {
                         return single_output(port.value.clone());
@@ -1115,7 +1417,7 @@ fn eval_case(params: &NodeParams, inputs: &HashMap<String, PortValue>) -> Output
             }
         } else {
             // Fallback: try direct equality against case values (shallow)
-            for (i, (_k, port)) in entries.iter().enumerate() {
+            for (i, port) in case_ports.iter().enumerate() {
                 if params.case_labels.is_some() {
                     // labels provided — compare selector to label string if possible
                     if let Some(label) = labels.get(i) {
@@ -1503,6 +1805,16 @@ fn align_input_to_declared(
     ))
 }
 
+fn default_port(conn: &InputConnection) -> Option<PortValue> {
+    conn.default_value.as_ref().map(|value| {
+        if let Some(shape) = &conn.default_shape {
+            PortValue::with_shape(value.clone(), shape.clone())
+        } else {
+            PortValue::new(value.clone())
+        }
+    })
+}
+
 /// Gather the most recent outputs for each of the node's input connections, applying selectors.
 fn read_inputs(
     rt: &GraphRuntime,
@@ -1511,20 +1823,25 @@ fn read_inputs(
     let mut resolved = HashMap::with_capacity(inputs.len());
 
     for (input_key, conn) in inputs.iter() {
-        let mut port = rt
-            .outputs
-            .get(&conn.node_id)
-            .and_then(|outputs| outputs.get(&conn.output_key))
-            .cloned()
-            .unwrap_or_else(|| PortValue::new(Value::Float(0.0)));
+        let mut port = match conn.node_id.as_ref() {
+            Some(node_id) => rt
+                .outputs
+                .get(node_id)
+                .and_then(|outputs| outputs.get(&conn.output_key))
+                .cloned()
+                .or_else(|| default_port(conn))
+                .unwrap_or_else(|| PortValue::new(Value::Float(0.0))),
+            None => default_port(conn).unwrap_or_else(|| PortValue::new(Value::Float(0.0))),
+        };
 
         if let Some(selector) = &conn.selector {
+            let source_label = conn.node_id.as_deref().unwrap_or("<default>");
             let (value, shape_id) =
                 project_by_selector(&port.value, Some(&port.shape.id), selector).map_err(
                     |err| {
                         format!(
                             "selector {:?} on edge {}:{} -> {} failed: {}",
-                            selector, conn.node_id, conn.output_key, input_key, err
+                            selector, source_label, conn.output_key, input_key, err
                         )
                     },
                 )?;

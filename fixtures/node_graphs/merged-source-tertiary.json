@@ -1,0 +1,117 @@
+{
+  "spec": {
+    "nodes": [
+      {
+        "id": "const_c",
+        "type": "constant",
+        "params": {
+          "value": {
+            "float": 3000.0
+          }
+        }
+      },
+      {
+        "id": "const_d",
+        "type": "constant",
+        "params": {
+          "value": {
+            "float": 4000.0
+          }
+        }
+      },
+      {
+        "id": "const_e",
+        "type": "constant",
+        "params": {
+          "value": {
+            "float": 5000.0
+          }
+        }
+      },
+      {
+        "id": "const_f",
+        "type": "constant",
+        "params": {
+          "value": {
+            "float": 6000.0
+          }
+        }
+      },
+      {
+        "id": "out_c",
+        "type": "output",
+        "params": {
+          "path": "shared/c"
+        }
+      },
+      {
+        "id": "out_d",
+        "type": "output",
+        "params": {
+          "path": "shared/d"
+        }
+      },
+      {
+        "id": "out_e",
+        "type": "output",
+        "params": {
+          "path": "shared/e"
+        }
+      },
+      {
+        "id": "out_f",
+        "type": "output",
+        "params": {
+          "path": "shared/f"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": {
+          "node_id": "const_c"
+        },
+        "to": {
+          "node_id": "out_c",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "const_d"
+        },
+        "to": {
+          "node_id": "out_d",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "const_e"
+        },
+        "to": {
+          "node_id": "out_e",
+          "input": "in"
+        }
+      },
+      {
+        "from": {
+          "node_id": "const_f"
+        },
+        "to": {
+          "node_id": "out_f",
+          "input": "in"
+        }
+      }
+    ]
+  },
+  "subs": {
+    "outputs": [
+      "shared/c",
+      "shared/d",
+      "shared/e",
+      "shared/f"
+    ]
+  },
+  "edges": []
+}

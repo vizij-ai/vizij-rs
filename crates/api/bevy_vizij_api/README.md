@@ -84,6 +84,7 @@ fn drive_transforms(mut world: World) {
 - Internally stores setters in an `Arc<Mutex<Vec<(TypedPath, Setter)>>`.
 - Setters have the signature `Fn(&mut World, &TypedPath, &Value) + Send + Sync + 'static`.
 - Cloneable, allowing registration during setup and use during update systems without borrowing conflicts.
+- Cloning the registry is cheap: each clone references the same `Arc`, so it is safe to share across threads or async tasks. The internal lock is held only while resolving a setter, so keep setter bodies fast and avoid long-lived world borrows.
 
 ### Applying Batches
 
@@ -93,8 +94,17 @@ fn drive_transforms(mut world: World) {
 
 ### Helpers
 
-- `register_transform_setters_for_entity(registry, base_path, entity)` registers translation/rotation/scale setters for `Transform`.
-- Additional helpers can be added by downstream crates—`bevy_vizij_animation` registers animation-specific bindings using this API.
+| Helper | Registers | Notes |
+|--------|-----------|-------|
+| `register_transform_setters_for_entity(registry, base_path, entity)` | `{base_path}.Transform.translation`, `.rotation`, `.scale` (plus legacy aliases without `Transform.`) | Uses canonical Vizij paths; capture the entity at registration time. |
+
+Add additional helpers by calling `WriterRegistry::register_setter` directly. Higher-level plugins (`bevy_vizij_animation`, `bevy_vizij_graph`) use this API to expose animation/graph-specific bindings.
+
+### Error handling
+
+- Setters run inside `apply_write_batch` without automatic error bubbling. If application fails (missing component, type mismatch), log via `tracing::warn!` or your preferred logger and return early.
+- Use the `Value` helpers (`Value::vec3`, pattern matching) to coerce data; fall back gracefully when encountering unexpected shapes to keep the runtime robust.
+- Reserve panics for truly exceptional situations—unexpected writes should be observable through logs rather than crashing the ECS schedule.
 
 ---
 

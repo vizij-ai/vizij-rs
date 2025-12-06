@@ -1,4 +1,4 @@
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use vizij_api_core::{Shape, TypedPath, Value};
 
@@ -26,6 +26,13 @@ pub enum NodeType {
     Divide,
     Power,
     Log,
+    Abs,
+    Modulo,
+    Sqrt,
+    Sign,
+    Min,
+    Max,
+    Round,
     Sin,
     Cos,
     Tan,
@@ -57,6 +64,10 @@ pub enum NodeType {
     // Ranges
     Clamp,
     Remap,
+    #[serde(rename = "centered_remap")]
+    CenteredRemap,
+    #[serde(rename = "piecewise_remap")]
+    PiecewiseRemap,
 
     // 3D-specific utilities
     Vec3Cross,
@@ -120,6 +131,18 @@ pub struct NodeParams {
     pub in_max: Option<f32>,
     pub out_min: Option<f32>,
     pub out_max: Option<f32>,
+    #[serde(default)]
+    pub round_mode: Option<RoundMode>,
+    // For Piecewise Remap
+    #[serde(default)]
+    pub clamp: Option<bool>,
+    // For Centered Remap
+    pub in_low: Option<f32>,
+    pub in_anchor: Option<f32>,
+    pub in_high: Option<f32>,
+    pub out_low: Option<f32>,
+    pub out_anchor: Option<f32>,
+    pub out_high: Option<f32>,
     // For IK
     pub bone1: Option<f32>,
     pub bone2: Option<f32>,
@@ -156,17 +179,13 @@ pub struct NodeParams {
     pub path: Option<TypedPath>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InputConnection {
-    pub node_id: NodeId,
-    #[serde(default = "default_output_key")]
-    pub output_key: String,
-    #[serde(default)]
-    pub selector: Option<Selector>,
-}
-
-fn default_output_key() -> String {
-    "out".to_string()
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum RoundMode {
+    #[default]
+    Floor,
+    Ceil,
+    Trunc,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,12 +197,134 @@ pub struct NodeSpec {
     #[serde(default)]
     pub params: NodeParams,
     #[serde(default)]
-    pub inputs: HashMap<String, InputConnection>,
-    #[serde(default)]
     pub output_shapes: HashMap<String, Shape>,
+    #[serde(default)]
+    pub input_defaults: HashMap<String, InputDefault>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GraphSpec {
     pub nodes: Vec<NodeSpec>,
+    #[serde(default)]
+    pub edges: Vec<EdgeSpec>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputConnection {
+    #[serde(default)]
+    pub node_id: Option<NodeId>,
+    #[serde(default = "default_output_key")]
+    pub output_key: String,
+    #[serde(default)]
+    pub selector: Option<Selector>,
+    #[serde(rename = "default", default)]
+    pub default_value: Option<Value>,
+    #[serde(default)]
+    pub default_shape: Option<Shape>,
+}
+
+fn default_output_key() -> String {
+    "out".to_string()
+}
+
+impl Default for InputConnection {
+    fn default() -> Self {
+        Self {
+            node_id: None,
+            output_key: default_output_key(),
+            selector: None,
+            default_value: None,
+            default_shape: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputDefault {
+    #[serde(rename = "value")]
+    pub value: Value,
+    #[serde(default)]
+    pub shape: Option<Shape>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EdgeOutputEndpoint {
+    pub node_id: NodeId,
+    #[serde(default = "default_output_key")]
+    pub output: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EdgeInputEndpoint {
+    pub node_id: NodeId,
+    pub input: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EdgeSpec {
+    pub from: EdgeOutputEndpoint,
+    pub to: EdgeInputEndpoint,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub selector: Option<Selector>,
+}
+
+impl GraphSpec {
+    pub fn input_connections(
+        &self,
+    ) -> Result<HashMap<NodeId, HashMap<String, InputConnection>>, String> {
+        let mut map: HashMap<NodeId, HashMap<String, InputConnection>> = HashMap::new();
+        let known: HashSet<&NodeId> = self.nodes.iter().map(|n| &n.id).collect();
+
+        for node in &self.nodes {
+            if node.input_defaults.is_empty() {
+                continue;
+            }
+
+            let entry = map.entry(node.id.clone()).or_default();
+            for (input, default_spec) in &node.input_defaults {
+                entry.insert(
+                    input.clone(),
+                    InputConnection {
+                        default_value: Some(default_spec.value.clone()),
+                        default_shape: default_spec.shape.clone(),
+                        ..InputConnection::default()
+                    },
+                );
+            }
+        }
+
+        let mut seen_inputs: HashSet<(NodeId, String)> = HashSet::new();
+
+        for edge in &self.edges {
+            if !known.contains(&edge.from.node_id) {
+                return Err(format!(
+                    "edge references missing source node '{}'",
+                    edge.from.node_id
+                ));
+            }
+            if !known.contains(&edge.to.node_id) {
+                return Err(format!(
+                    "edge references missing target node '{}'",
+                    edge.to.node_id
+                ));
+            }
+
+            let key = (edge.to.node_id.clone(), edge.to.input.clone());
+            if !seen_inputs.insert(key.clone()) {
+                return Err(format!("duplicate edge for input '{}:{}'", key.0, key.1));
+            }
+
+            let entry = map.entry(edge.to.node_id.clone()).or_default();
+            let connection_entry = entry
+                .entry(edge.to.input.clone())
+                .or_insert_with(InputConnection::default);
+
+            connection_entry.node_id = Some(edge.from.node_id.clone());
+            connection_entry.output_key = edge.from.output.clone();
+            connection_entry.selector = edge.selector.clone();
+        }
+
+        Ok(map)
+    }
 }

@@ -22,9 +22,15 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 hashbrown = { workspace = true }
 indexmap = "2"
+thiserror = { workspace = true }
 
 [features]
 default = []
 
 [dev-dependencies]
 vizij-test-fixtures = { path = "../../test-fixtures/vizij-test-fixtures" }
+criterion = "0.5"
+
+[[bench]]
+name = "orchestrator_tick"
+harness = false

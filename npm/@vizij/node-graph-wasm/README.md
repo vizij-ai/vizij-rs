@@ -25,12 +25,13 @@ This package ships the WebAssembly build of `vizij-graph-core` together with a T
 - Provides a high-level `Graph` class, low-level bindings, TypeScript definitions, and ready-to-use fixtures.
 - Supports both browser and Node environments—`init()` chooses the right loader and validates the ABI (`abi_version() === 2`).
 - Ships GraphSpec normalisers and schema inspection helpers so editors and tooling can speak the same language as Vizij runtimes.
+- Bakes the node registry (`metadata/registry.json`) straight from the Rust core so build-time tooling and authoring UIs stay in sync with the runtime.
 
 ---
 
 ## Key Concepts
 
-- **GraphSpec** – Declarative JSON describing nodes, parameters, and their `inputs` maps (selectors, output keys). The package normalises shorthand specs automatically.
+- **GraphSpec** – Declarative JSON describing nodes, parameters, and the explicit `edges` array that connects node outputs to inputs (selectors, output keys). The package normalises shorthand specs automatically.
 - **Graph Runtime** – The `Graph` class owns a `GraphRuntime`, handling `loadGraph`, `stageInput`, `setParam`, `step`, and `evalAll`.
 - **Staged Inputs** – Host-provided values keyed by `TypedPath`. They are latched until you replace or remove them.
 - **Evaluation Result** – `evalAll()` returns per-node port snapshots plus a `WriteBatch` of sink writes (each with Value + Shape metadata).
@@ -64,6 +65,34 @@ Link into `vizij-web` while iterating:
 
 ---
 
+## Bundler Configuration
+
+Like the other Vizij wasm packages, this module now exports an ESM wrapper that first attempts a static import of the wasm-bindgen JS glue. Bundlers that support async WebAssembly (Webpack 5, Vite, etc.) should treat `pkg/vizij_graph_wasm_bg.wasm` as an emitted asset. For Next.js configure:
+
+```js
+// next.config.js
+module.exports = {
+  webpack: (config) => {
+    config.experiments = { ...(config.experiments ?? {}), asyncWebAssembly: true };
+    config.module.rules.push({
+      test: /\.wasm$/,
+      type: "asset/resource",
+    });
+    return config;
+  },
+};
+```
+
+If you host the wasm binary elsewhere, pass a string URL to `init()`:
+
+```ts
+await init("https://cdn.example.com/vizij/node_graph_wasm_bg.wasm");
+```
+
+Passing a string avoids Webpack’s `RelativeURL` helper, which previously attempted to call `.replace()` on a `URL` object.
+
+---
+
 ## API
 
 ```ts
@@ -71,6 +100,13 @@ async function init(input?: InitInput): Promise<void>;
 function abi_version(): number;
 async function normalizeGraphSpec(spec: GraphSpec | string): Promise<GraphSpec>;
 async function getNodeSchemas(): Promise<Registry>;
+function getNodeRegistry(): Registry;
+function findNodeSignature(typeId: NodeType | string): NodeSignature | undefined;
+function requireNodeSignature(typeId: NodeType | string): NodeSignature;
+function listNodeTypeIds(): NodeType[];
+function groupNodeSignaturesByCategory(): Map<string, NodeSignature[]>;
+const nodeRegistryVersion: string;
+async function logNodeSchemaDocs(nodeType?: NodeType | string): Promise<void>;
 const graphSamples: Record<string, GraphSpec>;
 
 class Graph {
@@ -89,6 +125,24 @@ class Graph {
   waitForGraphReady?(): Promise<void>; // only populated when used through React provider
 }
 ```
+
+### Normalization, Schema & Docs Helpers
+
+- `normalizeGraphSpec(spec)` – round-trips any GraphSpec (object or JSON string) through the Rust normaliser so shorthand inputs/legacy `inputs` maps come back with explicit `edges`, typed paths, and canonical casing.
+- `getNodeSchemas()` / `getNodeRegistry()` – runtime and baked access to the node registry (including ports and params) for palette/editor usage.
+- `findNodeSignature(typeId)` / `requireNodeSignature(typeId)` – quick lookups into the baked registry.
+- `listNodeTypeIds()` / `groupNodeSignaturesByCategory()` – helpers for palettes or UI grouping.
+- `logNodeSchemaDocs(nodeType?)` – pretty-prints the schema docs for every node or a specific `NodeType` right to the console (handy while prototyping editors).
+- `graphSamples` – curated ready-to-load specs that already reflect the canonical `edges` form and typed `path` parameters.
+
+Each registry entry exposes:
+
+| Field | Description |
+|-------|-------------|
+| `doc` / `short_doc` | Human-readable description for node palettes and tooltips. |
+| `inputs` / `outputs` | Port metadata (`label`, `doc`, `shape` hints) useful for editors. |
+| `params` | Parameter schema with expected value types and default values. |
+| `categories` | Optional grouping tags for UI organisation. |
 
 Types (`GraphSpec`, `EvalResult`, `ValueJSON`, `ShapeJSON`, etc.) are exported from `src/types`.
 
@@ -111,7 +165,7 @@ const graph = new Graph();
 const spec = await normalizeGraphSpec(graphSamples.vectorPlayground);
 graph.loadGraph(spec);
 
-graph.stageInput("nodes.inputA.inputs.in", { float: 1 }, undefined, true);
+graph.stageInput("demo/path", { float: 1 }, undefined, true);
 const result = graph.evalAll();
 
 const nodeValue =
@@ -139,6 +193,24 @@ graph.applyStagedInputs();
 graph.evalAll();
 ```
 
+### Custom loader options
+
+`init(input?: InitInput)` accepts any input supported by `@vizij/wasm-loader`:
+
+```ts
+import { init } from "@vizij/node-graph-wasm";
+import { readFile } from "node:fs/promises";
+
+// Host wasm from your CDN
+await init(new URL("https://cdn.example.com/vizij/node_graph_wasm_bg.wasm"));
+
+// Node / Electron / tests
+const bytes = await readFile("dist/node_graph_wasm_bg.wasm");
+await init(bytes);
+```
+
+This is useful for service workers, Electron, or any environment that needs explicit control over fetch behaviour.
+
 ---
 
 ## Samples & Fixtures
@@ -164,6 +236,15 @@ Fixtures originate from `@vizij/test-fixtures` so tests and demos share the same
 
 ---
 
+## Troubleshooting
+
+- **Selector mismatch** – Errors such as `selector index 5 out of bounds` mean the GraphSpec referenced an array element that does not exist. Normalise the spec and confirm upstream nodes emit the expected shape.
+- **`set_param` validation** – Parameters enforce specific value types (`float`, `text`, tuple pairs). Coerce values with `normalizeValueJSON` before calling `setParam` to avoid runtime throws.
+- **ABI mismatch** – Re-run `pnpm run build:wasm:graph` if `abi_version()` differs from the expected version logged by the package.
+- **Missing fixtures** – `loadNodeGraphBundle` resolves names from `@vizij/test-fixtures`. Ensure `pnpm run build:shared` has been executed in local development.
+
+---
+
 ## Development & Testing
 
 ```bash
@@ -184,3 +265,29 @@ The Vitest suite runs sample graphs through the wasm bridge, checking evaluation
 - [`@vizij/value-json`](../value-json/README.md) – shared value helpers used during staging.
 
 Need assistance or spot a bug? Open an issue—robust bindings keep Vizij graphs portable. 🧠
+### Inspecting Schema Documentation
+
+Each `NodeSignature` in the schema registry now ships with human-friendly descriptions for the node itself, its ports, and parameters.
+
+```ts
+import { getNodeSchemas, logNodeSchemaDocs } from "@vizij/node-graph-wasm";
+
+await init();
+
+// Fetch the registry and inspect docs programmatically.
+const registry = await getNodeSchemas();
+for (const node of registry.nodes) {
+  console.log(node.name, node.doc);        // node.doc is a plain string
+  for (const port of node.inputs) {
+    console.log("  input:", port.label, port.doc);
+  }
+}
+
+// Or print a nicely formatted summary for all nodes…
+await logNodeSchemaDocs();
+
+// …or just a single node type.
+await logNodeSchemaDocs("remap");
+```
+
+The same documentation is embedded in the wasm JSON (`get_node_schemas_json`) so downstream tools can consume it without relying on these helpers.

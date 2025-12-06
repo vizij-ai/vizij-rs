@@ -31,10 +31,12 @@ This package publishes the WebAssembly build of `vizij-orchestrator-core` togeth
 ## Key Concepts
 
 - **Controllers** – Graph and animation controllers registered with IDs; each has its own configuration (`spec`, `subscriptions`, `setup`).
+- **Graph merging** – `registerMergedGraph` rewires compatible graph specs into a single controller so shared paths become direct edges. Conflict strategies (`error`, `namespace`, `blend`, `add`, `default-blend`) are available through `MergeStrategyOptions`, letting you average, sum, or weight competing outputs.
 - **Blackboard** – Shared typed key-value store (`TypedPath`, `ValueJSON`, `ShapeJSON`) where controllers read/write.
 - **Schedule** – `SinglePass`, `TwoPass`, or future `RateDecoupled` determine evaluation order.
 - **Merged Writes** – Deterministic ordered batch of writes produced during a frame, suitable for UI or downstream consumers.
 - **Conflicts** – Diagnostics when multiple controllers write to the same path; useful for debugging data races.
+- **Subscriptions** – Graph controllers accept `subs.inputs`, `subs.outputs`, and `subs.mirrorWrites` to control which writes feed the blackboard vs. the merged frame.
 - **ABI Guard** – `abi_version()` ensures the JS glue matches the `.wasm` binary. Rebuild when versions change.
 
 ---
@@ -64,6 +66,34 @@ Link into `vizij-web` while iterating:
 
 ---
 
+## Bundler Configuration
+
+This package now ships an ESM-friendly wrapper that prefers static imports so bundlers like Next.js/Webpack can emit plain asset URLs. Make sure your host enables async WebAssembly and treats the `.wasm` file as an emitted asset. For example, in Next.js:
+
+```js
+// next.config.js
+module.exports = {
+  webpack: (config) => {
+    config.experiments = { ...(config.experiments ?? {}), asyncWebAssembly: true };
+    config.module.rules.push({
+      test: /\.wasm$/,
+      type: "asset/resource",
+    });
+    return config;
+  },
+};
+```
+
+When overriding the default wasm location (CDN or custom asset pipeline), pass a string URL to `init()`:
+
+```ts
+await init("https://cdn.example.com/vizij/vizij_orchestrator_wasm_bg.wasm");
+```
+
+The loader still accepts `URL`, `Response`, `ArrayBuffer`, or `WebAssembly.Module`, but providing a string keeps Webpack from wrapping the input in `RelativeURL`.
+
+---
+
 ## API
 
 ```ts
@@ -77,7 +107,9 @@ async function loadOrchestrationBundle(key: string): Promise<OrchestrationBundle
 
 ```ts
 registerGraph(cfg: GraphRegistrationInput | string): string;
+registerMergedGraph(cfg: MergedGraphRegistrationConfig): string; // merge multiple specs w/ conflict strategies
 registerAnimation(cfg: AnimationRegistrationConfig): string;
+exportGraph(id: string): GraphSpec; // inspect merged controller specs
 prebind(resolver: (path: string) => string | number | null | undefined): void;
 setInput(path: string, value: ValueJSON, shape?: ShapeJSON): void;
 removeInput(path: string): boolean;
@@ -90,6 +122,18 @@ normalizeGraphSpec(spec: GraphSpec | string): Promise<GraphSpec>; // convenience
 
 All types (`GraphSpec`, `ValueJSON`, `OrchestratorFrame`, etc.) are exported from `src/types`.
 
+### Registration payloads
+
+- `registerGraph({ id?, spec, subs? })` expects a canonical `GraphSpec` object. Optional `subs.inputs`/`subs.outputs` arrays accept canonical TypedPath strings; invalid paths throw descriptive errors.
+- `registerMergedGraph({ id?, graphs: GraphConfig[], strategy? })` mirrors the single-graph shape. `strategy.outputs`/`strategy.intermediate` accept:
+  - `"error"` – fail merges when conflicts occur.
+  - `"namespace"` – rename colliding final outputs to `graphId/original/path`.
+  - `"blend"`, `"blend_equal"`, `"blend_equal_weights"`, or `"blend-equal-weights"` – average conflicts with equal weights.
+  - `"add"`, `"sum"`, `"blend_sum"`, `"blend-sum"`, or `"additive"` – route conflicts through a variadic `add` node so consumers see the sum.
+  - `"default-blend"`, `"default_blend"`, `"blend-default"`, `"blend_weights"`, `"blend-weights"`, or `"weights"` – inject a `default-blend` node where each contributor gets a dedicated weight input at `blend_weights/<path>/<graph>` (defaults to `1.0`).
+- `registerAnimation({ id?, setup? })` forwards the payload to the Rust controller. Supply the animation JSON and optional player/instance overrides.
+- All registration helpers auto-generate ids (`graph:0`, `anim:0`) when omitted.
+
 ---
 
 ## Usage
@@ -100,7 +144,7 @@ import { init, createOrchestrator } from "@vizij/orchestrator-wasm";
 await init();
 const orchestrator = await createOrchestrator({ schedule: "SinglePass" });
 
-const graphId = orchestrator.registerGraph({ spec: { nodes: [] } });
+const graphId = orchestrator.registerGraph({ spec: { nodes: [], edges: [] } });
 const animId = orchestrator.registerAnimation({ setup: {} });
 
 orchestrator.prebind((path) => path.toUpperCase());
@@ -108,6 +152,48 @@ orchestrator.setInput("demo/input/value", { float: 1.0 });
 
 const frame = orchestrator.step(1 / 60);
 console.log(frame.merged_writes, frame.timings_ms);
+
+// Merge two graph specs into a single controller (auto-link shared output/input paths)
+const mergedGraphId = orchestrator.registerMergedGraph({
+  graphs: [
+    {
+      spec: {
+        nodes: [
+          { id: "source", type: "constant", params: { value: 1 } },
+          { id: "publish", type: "output", params: { path: "shared/value" } },
+        ],
+        edges: [
+          { from: { node_id: "source" }, to: { node_id: "publish", input: "in" } },
+        ],
+      },
+    },
+    {
+      spec: {
+        nodes: [
+          { id: "input", type: "input", params: { path: "shared/value" } },
+          {
+            id: "double",
+            type: "multiply",
+            input_defaults: { rhs: { value: 2 } },
+          },
+          { id: "publish", type: "output", params: { path: "shared/doubled" } },
+        ],
+        edges: [
+          { from: { node_id: "input" }, to: { node_id: "double", input: "lhs" } },
+          { from: { node_id: "double" }, to: { node_id: "publish", input: "in" } },
+        ],
+      },
+    },
+  ],
+  strategy: {
+    outputs: "add",
+    intermediate: "default-blend",
+  },
+});
+
+// Inspect the merged spec (useful for tooling/debug)
+const mergedSpec = orchestrator.exportGraph(mergedGraphId);
+console.log(mergedSpec.nodes.length, "nodes in merged graph");
 ```
 
 Removing controllers:
@@ -118,30 +204,74 @@ graphs.forEach((id) => orchestrator.removeGraph(id));
 anims.forEach((id) => orchestrator.removeAnimation(id));
 ```
 
+### Custom loader options
+
+`init(input?: InitInput)` accepts any loader supported by `@vizij/wasm-loader` (`URL`, `Response`, `ArrayBuffer`, `Uint8Array`, or `WebAssembly.Module`). Use this when hosting the wasm binary on a CDN or inside desktop bundles.
+
 ---
 
 ## Fixtures
 
 ```ts
-import { loadOrchestrationBundle } from "@vizij/orchestrator-wasm";
+import {
+  createOrchestrator,
+  loadOrchestrationBundle,
+} from "@vizij/orchestrator-wasm";
+import { toValueJSON, type ValueInput } from "@vizij/value-json";
 
-const bundle = await loadOrchestrationBundle("scalar-ramp-pipeline");
-const orchestrator = await createOrchestrator();
+const bundle = await loadOrchestrationBundle("chain-sign-slew-pipeline");
+const schedule = bundle.descriptor.schedule ?? "SinglePass";
+const orchestrator = await createOrchestrator({ schedule });
 
-if (bundle.graphSpec) {
-  orchestrator.registerGraph({ id: "graph", spec: bundle.graphSpec });
+for (const binding of bundle.graphs) {
+  const config = { ...binding.config };
+  if (binding.id) config.id = binding.id;
+  orchestrator.registerGraph(config);
 }
-if (bundle.animation) {
-  orchestrator.registerAnimation({ id: "anim", setup: { animation: bundle.animation } });
+
+for (const merged of bundle.mergedGraphs) {
+  const configs = merged.graphs.map((binding) => {
+    const config = { ...binding.config };
+    if (binding.id) config.id = binding.id;
+    return config;
+  });
+  orchestrator.registerMergedGraph({ id: merged.id, graphs: configs, strategy: merged.strategy });
 }
-if (bundle.graphStage) {
-  for (const [path, payload] of Object.entries(bundle.graphStage)) {
-    orchestrator.setInput(path, payload.value, payload.shape);
-  }
+
+const primaryAnimation = bundle.animations[0];
+if (primaryAnimation) {
+  orchestrator.registerAnimation({
+    id: primaryAnimation.id,
+    setup: primaryAnimation.setup,
+  });
+}
+
+for (const input of bundle.initialInputs) {
+  orchestrator.setInput(
+    input.path,
+    toValueJSON(input.value as ValueInput),
+    input.shape ? structuredClone(input.shape) : undefined,
+  );
 }
 ```
 
+Available fixture keys today:
+
+- `scalar-ramp-pipeline` – single graph + animation demonstrating gain/offset staging.
+- `blend-pose-pipeline` – TwoPass orchestration mirroring the weighted pose blend demo.
+- `chain-sign-slew-pipeline` – multi-graph example (sign → slew) showcasing chained controllers.
+- `merged-blend-pipeline` – merged controller example that rewires shared outputs and applies blend strategies.
+
 Fixtures are sourced from `@vizij/test-fixtures` so demos/tests align with the Rust workspace.
+
+---
+
+## Troubleshooting
+
+- **ABI mismatch** – Re-run `pnpm run build:wasm:orchestrator` if `abi_version()` differs from the value expected by the wrapper.
+- **Graph registration errors** – `registerGraph` and `registerMergedGraph` throw `JsError` when the payload is missing `spec` or contains invalid TypedPaths. Normalise specs first with `normalizeGraphSpec`.
+- **Merge strategy failures** – The `strategy` object accepts the strings listed above (including aliases such as `"sum"` or `"weights"`). Any other string results in `merge strategy error`.
+- **Empty writes** – Controllers must emit `Output` nodes with `params.path`; otherwise the orchestrator returns an empty `merged_writes` array.
 
 ---
 

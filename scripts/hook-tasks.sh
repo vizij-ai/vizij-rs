@@ -31,7 +31,9 @@ rust_fmt_check() {
 }
 
 rust_clippy() {
-  run_cmd "cargo clippy --all-targets -- -D warnings" cargo clippy --all-targets -- -D warnings
+  # Skip benches in automated flows; still cover libs/bins/examples/tests
+  run_cmd "cargo clippy --workspace --all-features --bins --examples --tests -- -D warnings" \
+    cargo clippy --workspace --all-features --bins --examples --tests -- -D warnings
 }
 
 rust_build() {
@@ -39,7 +41,8 @@ rust_build() {
 }
 
 rust_test() {
-  run_cmd "cargo test --all-features --all-targets" cargo test --all-features --all-targets
+  # Avoid compiling/running benches to keep hook/CI fast
+  run_cmd "cargo test --workspace --all-features" cargo test --workspace --all-features
 }
 
 rust_clean() {
@@ -194,6 +197,7 @@ cmd_pre_push() {
   rust_fmt_check
   rust_clippy
   rust_test
+  run_cmd "verify node registry" pnpm --filter vizij-rs verify:registry
 
   if [[ "${HOOK_RUN_WASM:-0}" == "1" ]]; then
     run_wasm_checks

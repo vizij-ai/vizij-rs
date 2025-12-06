@@ -67,7 +67,7 @@ import type { StoredAnimation, Inputs } from "../src/types";
 const here = dirname(fileURLToPath(import.meta.url));
 
 function pkgWasmUrl(): URL {
-  const wasmPath = resolve(here, "../../pkg/vizij_animation_wasm_bg.wasm");
+  const wasmPath = resolve(here, "../../../pkg/vizij_animation_wasm_bg.wasm");
   if (!existsSync(wasmPath)) {
     throw new Error(
       "Missing pkg/vizij_animation_wasm_bg.wasm. Run:\n  pnpm run build:wasm:animation (from repo root)"

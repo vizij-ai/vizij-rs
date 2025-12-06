@@ -5,6 +5,9 @@ import type {
   AnimationSetup,
   GraphRegistrationInput,
   GraphSubscriptions,
+  MergedGraphRegistrationConfig,
+  MergeStrategyOptions,
+  MergeConflictStrategy,
   OrchestratorFrame,
   ValueJSON,
   ShapeJSON,
@@ -13,11 +16,16 @@ import type {
   GraphRegistrationConfig,
 } from "./types";
 import { toValueJSON, type ValueInput } from "@vizij/value-json";
-import { loadBindings as loadWasmBindings, type InitInput as LoaderInitInput } from "@vizij/wasm-loader";
+import {
+  loadBindings as loadWasmBindings,
+  type InitInput as LoaderInitInput,
+} from "@vizij/wasm-loader";
+import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 type WasmResolver = (path: string) => string | number | null | undefined;
 
 interface WasmOrchestratorInstance {
   register_graph(cfg: GraphRegistrationConfig | string): string;
+  register_merged_graph(cfg: MergedGraphRegistrationConfig): string;
   register_animation(cfg: AnimationRegistrationConfig): string;
   prebind(resolver: WasmResolver): void;
   set_input(path: string, value: ValueJSON, shape?: ShapeJSON): void;
@@ -40,20 +48,51 @@ interface WasmBindings {
 }
 
 const bindingCache: { current: WasmBindings | null } = { current: null };
+let wasmModulePromise: Promise<WasmBindings | unknown> | null = null;
+let wasmUrlCache: string | null = null;
 
 function pkgWasmJsUrl(): URL {
   return new URL("../../pkg/vizij_orchestrator_wasm.js", import.meta.url);
 }
 
-function defaultWasmUrl(): URL {
-  return new URL("../../pkg/vizij_orchestrator_wasm_bg.wasm", import.meta.url);
+function importStaticWasmModule(): Promise<unknown> {
+  return import("../../pkg/vizij_orchestrator_wasm.js");
 }
 
+function importDynamicWasmModule(): Promise<unknown> {
+  return import(/* @vite-ignore */ pkgWasmJsUrl().toString());
+}
+
+async function importWasmModule(): Promise<unknown> {
+  if (!wasmModulePromise) {
+    wasmModulePromise = importStaticWasmModule().catch((err) => {
+      if (typeof console !== "undefined" && typeof console.warn === "function") {
+        console.warn(
+          "@vizij/orchestrator-wasm: static wasm import failed, falling back to runtime URL import.",
+          err
+        );
+      }
+      return importDynamicWasmModule();
+    });
+  }
+  return wasmModulePromise;
+}
+
+function defaultWasmUrl(): string {
+  if (!wasmUrlCache) {
+    wasmUrlCache = new URL("../../pkg/vizij_orchestrator_wasm_bg.wasm", import.meta.url).toString();
+  }
+  return wasmUrlCache;
+}
+
+const loadBindingsImpl: typeof loadWasmBindings =
+  typeof window === "undefined" ? loadWasmBindings : loadWasmBindingsBrowser;
+
 async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
-  await loadWasmBindings<WasmBindings>(
+  await loadBindingsImpl<WasmBindings>(
     {
       cache: bindingCache,
-      importModule: () => import(/* @vite-ignore */ pkgWasmJsUrl().toString()),
+      importModule: () => importWasmModule(),
       defaultWasmUrl,
       init: async (module, initArg) => {
         await module.default(initArg);
@@ -101,7 +140,10 @@ export type {
   OrchestratorFrame,
   ConflictLog,
   GraphRegistrationConfig,
+  MergeStrategyOptions,
+  MergeConflictStrategy,
   GraphRegistrationInput,
+  MergedGraphRegistrationConfig,
   GraphSubscriptions,
   AnimationRegistrationConfig,
   AnimationSetup,
@@ -151,6 +193,10 @@ export class Orchestrator {
    */
   registerGraph(cfg: GraphRegistrationInput): string {
     return this.inner.register_graph(cfg);
+  }
+
+  registerMergedGraph(cfg: MergedGraphRegistrationConfig): string {
+    return this.inner.register_merged_graph(cfg);
   }
 
   /**

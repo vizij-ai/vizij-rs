@@ -1,0 +1,61 @@
+{
+  "description": "Chain ramp animation drives a sign graph feeding a slew graph",
+  "schedule": "SinglePass",
+  "animations": [
+    {
+      "fixture": "chain-ramp",
+      "id": "chain-animation",
+      "player": {
+        "name": "chain-player",
+        "loop_mode": "once"
+      }
+    }
+  ],
+  "graphs": [
+    {
+      "fixture": "sign-graph",
+      "id": "sign",
+      "stage": [
+        {
+          "path": "chain/ramp.value",
+          "value": -1.0
+        }
+      ]
+    },
+    {
+      "fixture": "slew-graph",
+      "id": "slew"
+    }
+  ],
+  "initial_inputs": [],
+  "steps": [
+    {
+      "delta": 0.0,
+      "expect": {
+        "chain/sign.value": -1,
+        "chain/slewed.value": -1
+      }
+    },
+    {
+      "delta": 1.0,
+      "expect": {
+        "chain/sign.value": 0,
+        "chain/slewed.value": 0
+      }
+    },
+    {
+      "delta": 1.0,
+      "expect": {
+        "chain/sign.value": 1,
+        "chain/slewed.value": 1
+      }
+    },
+    {
+      "delta": 1.0,
+      "expect": {
+        "chain/sign.value": 1,
+        "chain/slewed.value": 1
+      }
+    }
+  ]
+}
