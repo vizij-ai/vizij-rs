@@ -26,8 +26,8 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - run: cargo fmt --all -- --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test --all-features --all-targets
+      - run: cargo clippy --workspace --all-features --bins --examples --tests -- -D warnings
+      - run: cargo test --workspace --all-features
 
   wasm:
     runs-on: ubuntu-latest
