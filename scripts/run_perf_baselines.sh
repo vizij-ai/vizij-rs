@@ -50,15 +50,28 @@ def shorten(name: str) -> str:
         return '/'.join(parts[-2:])
     return name
 
+def to_micros(val: float, unit: str) -> float:
+    u = unit.replace("µ", "u")  # normalize micro symbol
+    if u == "ns":
+        return val / 1_000.0
+    if u == "us":
+        return val
+    if u == "ms":
+        return val * 1_000.0
+    if u == "s":
+        return val * 1_000_000.0
+    return val
+
 for line in lines:
     stripped = line.strip()
     if stripped and "time:" not in stripped and not stripped.startswith("Found"):
         scenario = stripped
     m = time_re.search(stripped)
     if m and scenario:
-        est = m.group(3)
+        est = float(m.group(3))
         unit = m.group(2)
-        rows.append((shorten(scenario), est, unit))
+        micros = to_micros(est, unit)
+        rows.append((shorten(scenario), micros))
         scenario = None
 
 if not rows:
@@ -67,8 +80,8 @@ if not rows:
 dt = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 out = pathlib.Path(out_path)
 with out.open("a") as f:
-    for scenario, est, unit in rows:
-        f.write(f"| {dt} | {crate} | {bench} | {scenario} | {est} | {unit} |\n")
+    for scenario, micros in rows:
+        f.write(f"| {dt} | {crate} | {bench} | {scenario} | {micros:,.3f} | µs |\n")
 PY
 }
 
