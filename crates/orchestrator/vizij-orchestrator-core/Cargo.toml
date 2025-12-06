@@ -29,3 +29,8 @@ default = []
 
 [dev-dependencies]
 vizij-test-fixtures = { path = "../../test-fixtures/vizij-test-fixtures" }
+criterion = "0.5"
+
+[[bench]]
+name = "orchestrator_tick"
+harness = false

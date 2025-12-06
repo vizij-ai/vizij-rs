@@ -21,6 +21,14 @@ vizij-api-core = { version = "0.2.0", path = "../../api/vizij-api-core" }
 k = { version = "0.32", optional = true, default-features = false }
 urdf-rs = { version = "0.9", optional = true }
 
+[dev-dependencies]
+criterion = "0.5"
+vizij-test-fixtures = { path = "../../test-fixtures/vizij-test-fixtures" }
+
+[[bench]]
+name = "graph_eval"
+harness = false
+
 [features]
 default = ["urdf_ik"]
 urdf_ik = ["k", "urdf-rs"]
