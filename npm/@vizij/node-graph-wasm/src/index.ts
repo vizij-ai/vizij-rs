@@ -211,10 +211,14 @@ export class Graph {
    * Values staged before evalAll will be visible in that evaluation (epoch semantics).
    */
   stageInput(path: string, value: Value, declaredShape?: ShapeJSON): void {
-    const payload = JSON.stringify(toValueJSON(value));
-    const shapeStr = declaredShape ? JSON.stringify(declaredShape) : undefined;
-    // wasm-bindgen maps Option<String> to string | undefined
-    (this.inner as any).stage_input(path, payload, shapeStr);
+    const payload = toValueJSON(value);
+    const target = this.inner as any;
+    if (typeof target.stage_input_value === "function") {
+      target.stage_input_value(path, payload, declaredShape);
+    } else {
+      const shapeStr = declaredShape ? JSON.stringify(declaredShape) : undefined;
+      target.stage_input(path, JSON.stringify(payload), shapeStr);
+    }
   }
 
   /**
@@ -222,9 +226,15 @@ export class Graph {
    * (One batched wasm call.)
    */
   evalAll(): EvalResult {
-    const raw = this.inner.eval_all(); // JSON string
-    const parsed = JSON.parse(raw) as EvalResult;
-    return parsed;
+    const target = this.inner as any;
+    const result =
+      typeof target.eval_all_js === "function"
+        ? target.eval_all_js()
+        : target.eval_all();
+    if (typeof result === "string") {
+      return JSON.parse(result) as EvalResult;
+    }
+    return result as EvalResult;
   }
 
   /**
@@ -233,8 +243,13 @@ export class Graph {
    * Value may be number | boolean | vec3 or a pre-encoded ValueJSON.
    */
   setParam(nodeId: string, key: string, value: Value): void {
-    const payload = JSON.stringify(toValueJSON(value));
-    this.inner.set_param(nodeId, key, payload);
+    const payload = toValueJSON(value);
+    const target = this.inner as any;
+    if (typeof target.set_param_value === "function") {
+      target.set_param_value(nodeId, key, payload);
+    } else {
+      target.set_param(nodeId, key, JSON.stringify(payload));
+    }
   }
 }
 

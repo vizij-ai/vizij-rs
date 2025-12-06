@@ -1,4 +1,6 @@
 use hashbrown::HashMap;
+use js_sys::JSON;
+use serde_wasm_bindgen as swb;
 use vizij_api_core::{coercion, json, Shape, TypedPath, Value};
 use vizij_graph_core::types::RoundMode;
 use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, PortValue};
@@ -110,6 +112,43 @@ pub struct WasmGraph {
     runtime: GraphRuntime,
 }
 
+fn parse_shape_json(declared_shape_json: Option<String>) -> Result<Option<Shape>, JsValue> {
+    match declared_shape_json {
+        Some(s) => {
+            if s.trim().is_empty() {
+                Ok(None)
+            } else {
+                serde_json::from_str(&s)
+                    .map(Some)
+                    .map_err(|e| JsValue::from_str(&e.to_string()))
+            }
+        }
+        None => Ok(None),
+    }
+}
+
+fn parse_shape_js(declared: &JsValue) -> Result<Option<Shape>, JsValue> {
+    if declared.is_undefined() || declared.is_null() {
+        Ok(None)
+    } else {
+        swb::from_value(declared.clone())
+            .map(Some)
+            .map_err(|e| JsValue::from_str(&format!("invalid declared shape: {}", e)))
+    }
+}
+
+fn parse_value_js(
+    value: JsValue,
+    normalize: fn(serde_json::Value) -> serde_json::Value,
+    ctx: &str,
+) -> Result<Value, JsValue> {
+    let raw: serde_json::Value = swb::from_value(value)
+        .map_err(|e| JsValue::from_str(&format!("{ctx} parse error: {e}")))?;
+    let normalized = normalize(raw);
+    serde_json::from_value(normalized)
+        .map_err(|e| JsValue::from_str(&format!("{ctx} convert error: {e}")))
+}
+
 impl Default for WasmGraph {
     fn default() -> Self {
         Self::new()
@@ -159,16 +198,22 @@ impl WasmGraph {
         let normalized = json::normalize_value_json_staging(raw);
         let value: Value =
             serde_json::from_value(normalized).map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let declared: Option<Shape> = match declared_shape_json {
-            Some(s) => {
-                if s.trim().is_empty() {
-                    None
-                } else {
-                    Some(serde_json::from_str(&s).map_err(|e| JsValue::from_str(&e.to_string()))?)
-                }
-            }
-            None => None,
-        };
+        let declared = parse_shape_json(declared_shape_json)?;
+        self.runtime.set_input(typed_path, value, declared);
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = "stage_input_value")]
+    pub fn stage_input_value(
+        &mut self,
+        path: &str,
+        value: JsValue,
+        declared_shape: JsValue,
+    ) -> Result<(), JsValue> {
+        let typed_path = TypedPath::parse(path)
+            .map_err(|e| JsValue::from_str(&format!("invalid path: {}", e)))?;
+        let value = parse_value_js(value, json::normalize_value_json_staging, "stage_input")?;
+        let declared = parse_shape_js(&declared_shape)?;
         self.runtime.set_input(typed_path, value, declared);
         Ok(())
     }
@@ -183,14 +228,7 @@ impl WasmGraph {
         self.t += dt;
     }
 
-    /// Evaluate the entire graph and return all outputs as JSON.
-    /// Returned JSON shape:
-    /// {
-    ///   "nodes": { [nodeId]: { [outputKey]: { "value": ValueJSON, "shape": ShapeJSON } } },
-    ///   "writes": [ { "path": string, "value": ValueJSON, "shape": ShapeJSON }, ... ]
-    /// }
-    #[wasm_bindgen]
-    pub fn eval_all(&mut self) -> Result<String, JsValue> {
+    fn eval_all_json(&mut self) -> Result<serde_json::Value, JsValue> {
         let new_time = self.t as f32;
         let mut dt = new_time - self.runtime.t;
         if !dt.is_finite() || dt < 0.0 {
@@ -239,7 +277,27 @@ impl WasmGraph {
             "writes": writes,
         });
 
-        Ok(serde_json::to_string(&out_obj).unwrap())
+        Ok(out_obj)
+    }
+
+    /// Evaluate the entire graph and return a JS object (avoids JSON stringify/parse).
+    #[wasm_bindgen(js_name = "eval_all_js")]
+    pub fn eval_all_js(&mut self) -> Result<JsValue, JsValue> {
+        let out_obj = self.eval_all_json()?;
+        let s = serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        JSON::parse(&s)
+    }
+
+    /// Evaluate the entire graph and return all outputs as JSON.
+    /// Returned JSON shape:
+    /// {
+    ///   "nodes": { [nodeId]: { [outputKey]: { "value": ValueJSON, "shape": ShapeJSON } } },
+    ///   "writes": [ { "path": string, "value": ValueJSON, "shape": ShapeJSON }, ... ]
+    /// }
+    #[wasm_bindgen]
+    pub fn eval_all(&mut self) -> Result<String, JsValue> {
+        let out_obj = self.eval_all_json()?;
+        serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
     /// Set a param on a node (e.g., key="value" with float/bool/vec3 JSON)
@@ -250,7 +308,21 @@ impl WasmGraph {
         let normalized = json::normalize_value_json(raw);
         let val: Value =
             serde_json::from_value(normalized).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        self.set_param_inner(node_id, key, val)
+    }
 
+    #[wasm_bindgen(js_name = "set_param_value")]
+    pub fn set_param_value(
+        &mut self,
+        node_id: &str,
+        key: &str,
+        value: JsValue,
+    ) -> Result<(), JsValue> {
+        let val = parse_value_js(value, json::normalize_value_json, "set_param")?;
+        self.set_param_inner(node_id, key, val)
+    }
+
+    fn set_param_inner(&mut self, node_id: &str, key: &str, val: Value) -> Result<(), JsValue> {
         fn expect_float(node_id: &str, key: &str, v: &Value) -> Result<f32, JsValue> {
             if let Value::Float(f) = v {
                 Ok(*f)

@@ -7,7 +7,7 @@ use crate::types::{
 };
 use hashbrown::HashMap;
 use vizij_api_core::shape::Field;
-use vizij_api_core::{Shape, ShapeId, TypedPath, Value};
+use vizij_api_core::{Shape, ShapeId, TypedPath, Value, WriteBatch};
 
 fn constant_node(id: &str, value: Value) -> NodeSpec {
     NodeSpec {

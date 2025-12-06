@@ -15,11 +15,12 @@
 
 use crate::types::{GraphSpec, InputConnection};
 use hashbrown::HashMap;
-use vizij_api_core::WriteBatch;
+use std::mem;
 
 pub mod eval_node;
 mod graph_runtime;
 mod numeric;
+mod plan;
 mod shape_helpers;
 mod urdfik;
 mod value_layout;
@@ -27,6 +28,7 @@ mod variadic;
 
 pub use eval_node::eval_node;
 pub use graph_runtime::{GraphRuntime, StagedInput};
+pub use plan::PlanCache;
 pub use value_layout::PortValue;
 
 #[cfg(test)]
@@ -39,20 +41,27 @@ mod tests;
 /// The runtime is cleared before evaluation and is repopulated as nodes are visited in topological
 /// order. Any error propagated from an individual node halts evaluation.
 pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), String> {
+    rt.plan.ensure(spec)?;
     rt.advance_epoch();
     rt.outputs.clear();
-    rt.writes = WriteBatch::new();
+    rt.outputs.reserve(spec.nodes.len());
+    rt.writes.0.clear();
     rt.node_states
         .retain(|id, _| spec.nodes.iter().any(|node| node.id == *id));
 
-    let inputs_map = spec.input_connections()?;
-    let order = crate::topo::topo_order(&spec.nodes, &spec.edges)?;
-    let empty_inputs: HashMap<String, InputConnection> = HashMap::new();
-    for id in order {
-        if let Some(node) = spec.nodes.iter().find(|n| n.id == id) {
-            let connections = inputs_map.get(&id).unwrap_or(&empty_inputs);
+    let plan = mem::take(&mut rt.plan);
+    let result = (|| {
+        let empty_inputs: HashMap<String, InputConnection> = HashMap::new();
+        for &idx in plan.order.iter() {
+            let node = spec
+                .nodes
+                .get(idx)
+                .ok_or_else(|| format!("plan referenced missing node at index {}", idx))?;
+            let connections = plan.inputs.get(idx).unwrap_or(&empty_inputs);
             eval_node::eval_node(rt, node, connections)?;
         }
-    }
-    Ok(())
+        Ok(())
+    })();
+    rt.plan = plan;
+    result
 }

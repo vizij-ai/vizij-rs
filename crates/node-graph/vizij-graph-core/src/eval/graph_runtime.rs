@@ -4,6 +4,7 @@ use crate::types::NodeId;
 use hashbrown::{hash_map::Entry, HashMap};
 use vizij_api_core::{Shape, TypedPath, Value, WriteBatch};
 
+use super::plan::PlanCache;
 use super::urdfik::{build_chain_from_urdf, IkKey, UrdfKinematicsState};
 use super::value_layout::{FlatValue, PortValue, ValueLayout};
 
@@ -112,6 +113,7 @@ pub struct GraphRuntime {
     pub node_states: HashMap<NodeId, NodeRuntimeState>,
     pub staged_inputs: HashMap<TypedPath, StagedInput>,
     pub input_epoch: u64,
+    pub plan: PlanCache,
 }
 
 impl GraphRuntime {
