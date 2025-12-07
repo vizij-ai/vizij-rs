@@ -78,6 +78,11 @@ const DEFAULT_KITCHEN_SIZES = [1, 50, 500];
 const DEFAULT_AMORT_STEPS = [500, 100, 100];
 const DEFAULT_AMORT_SAMPLES = [100, 50, 10]; // kept for parity; we still use median of SAMPLES for Node harness
 
+const STAGED_KITCHEN_SIZE = 500;
+const STAGED_STEPS = 50;
+const STAGED_SAMPLES = 5;
+const RUN_ONLY_STAGED = process.env.RUN_STAGED_ONLY === "1";
+
 const now = () => performance.now();
 
 function median(values) {
@@ -97,11 +102,21 @@ function fmt(us) {
 }
 
 async function timeSamples(samples, fn) {
+  // Measures the wall time of fn() for each sample (fn includes setup).
   const out = [];
   for (let i = 0; i < samples; i++) {
     const start = now();
     await fn();
     out.push((now() - start) * 1000); // microseconds
+  }
+  return median(out);
+}
+
+async function medianOf(samples, fn) {
+  // Uses fn's returned microseconds; fn itself is not timed by this helper.
+  const out = [];
+  for (let i = 0; i < samples; i++) {
+    out.push(await fn());
   }
   return median(out);
 }
@@ -119,18 +134,21 @@ async function benchGraph() {
     g.evalAll();
   });
 
-  const amort = await timeSamples(SAMPLES, async () => {
+  const amort = await medianOf(SAMPLES, async () => {
     const g = new Graph();
     g.loadGraph(spec);
     g.setTime(0);
-    let t0 = now();
+    // Warm once so plan/layout construction is outside the timed region.
+    g.step(DT);
+    g.evalAll();
+
+    const t0 = now();
     for (let i = 0; i < GRAPH_STEPS; i++) {
       g.setTime(i * DT);
       g.step(DT);
       g.evalAll();
     }
-    const elapsedUs = (now() - t0) * 1000;
-    return elapsedUs / GRAPH_STEPS;
+    return ((now() - t0) * 1000) / GRAPH_STEPS;
   });
 
   return [
@@ -360,18 +378,20 @@ async function benchGraphKitchen() {
       g.evalAll();
     });
 
-    const amort = await timeSamples(SAMPLES, async () => {
+    const amort = await medianOf(SAMPLES, async () => {
       const g = new Graph();
       g.loadGraph(spec);
       g.setTime(0);
+      // Warm once so plan build is excluded.
+      g.step(DT);
+      g.evalAll();
       const start = now();
       for (let s = 0; s < steps; s++) {
         g.setTime(s * DT);
         g.step(DT);
         g.evalAll();
       }
-      const elapsedUs = (now() - start) * 1000;
-      return elapsedUs / steps;
+      return ((now() - start) * 1000) / steps;
     });
 
     rows.push([
@@ -389,6 +409,120 @@ async function benchGraphKitchen() {
   }
 
   return rows;
+}
+
+async function benchGraphKitchenStaged() {
+  const { init: initGraph, Graph } = await loadGraphWasm();
+  await initGraph();
+  const size = STAGED_KITCHEN_SIZE;
+  const steps = STAGED_STEPS;
+  const spec = kitchenChain(size);
+  const paths = [];
+  for (let i = 0; i < size; i += 1) {
+    paths.push(`kitchen/${i}/a`, `kitchen/${i}/b`);
+  }
+  const nodeIds = spec.nodes.map((n) => n.id);
+
+  const runVariant = async (label, useF32) => {
+    const samples = Math.min(SAMPLES, STAGED_SAMPLES);
+    const med = await medianOf(samples, async () => {
+      const g = new Graph();
+      g.loadGraph(spec);
+      g.setTime(0);
+      // Warm once to build plan/cache outside timed loop.
+      g.step(DT);
+      g.evalAll();
+      const buf = new Float32Array(1);
+      const start = now();
+      for (let s = 0; s < steps; s += 1) {
+        const val = s;
+        if (useF32) {
+          if (typeof g.inner?.stage_input_f32 !== "function") {
+            throw new Error("stage_input_f32 not available on wasm binding");
+          }
+          buf[0] = val;
+          for (const path of paths) {
+            g.inner.stage_input_f32(path, buf);
+          }
+        } else {
+          for (const path of paths) {
+            g.stageInput(path, val);
+          }
+        }
+        g.setTime(s * DT);
+        g.step(DT);
+        g.evalAll();
+        // Touch outputs in batch to include outbound marshalling cost.
+        if (typeof g.inner?.get_outputs_batch === "function") {
+          g.inner.get_outputs_batch(nodeIds);
+        }
+      }
+      return (now() - start) * 1000 / steps;
+    });
+
+    return [
+      "vizij-graph-core-wasm",
+      "graph_eval",
+      `amortized_per_step/kitchen-500-staged-${label}`,
+      med,
+    ];
+  };
+
+  const rows = [];
+  rows.push(await runVariant("json", false));
+  try {
+    const { Graph } = await loadGraphWasm();
+    if (Graph && typeof Graph.prototype.stageInputsByIndex === "function") {
+      const samples = Math.min(SAMPLES, STAGED_SAMPLES);
+      const med = await medianOf(samples, async () => {
+        const g = new Graph();
+        g.loadGraph(spec);
+        g.setTime(0);
+        const indices = g.registerInputPaths(paths);
+        if (typeof g.prepareInputSlots === "function") {
+          g.prepareInputSlots(indices);
+        }
+        const vals = new Float32Array(paths.length);
+        // Warm once to build plan/cache outside timed loop.
+        vals.fill(0);
+        if (typeof g.stageInputsBySlot === "function") {
+          g.stageInputsBySlot(indices, vals);
+        } else {
+          g.stageInputsByIndex(indices, vals);
+        }
+        g.step(DT);
+        g.evalAll();
+
+        const start = now();
+        for (let s = 0; s < steps; s += 1) {
+          vals.fill(s);
+          if (typeof g.stageInputsBySlot === "function") {
+            g.stageInputsBySlot(indices, vals);
+          } else {
+            g.stageInputsByIndex(indices, vals);
+          }
+          g.setTime(s * DT);
+          g.step(DT);
+          g.evalAll();
+          if (typeof g.inner?.get_outputs_batch === "function") {
+            g.inner.get_outputs_batch(nodeIds);
+          }
+        }
+        return ((now() - start) * 1000) / steps;
+      });
+      rows.push([
+        "vizij-graph-core-wasm",
+        "graph_eval",
+        `amortized_per_step/kitchen-500-staged-f32-batch`,
+        med,
+      ]);
+    } else {
+      console.warn("[staged-kitchen] stageInputs not available on wrapper; batch variant skipped.");
+    }
+  } catch (err) {
+    console.warn("[staged-kitchen] f32 batch variant skipped:", err?.message ?? err);
+  }
+  return rows.filter(Boolean);
 }
 
 async function benchAnimation() {
@@ -452,7 +586,7 @@ async function benchAnimation() {
       engine.updateValues(DT);
     });
 
-    const amort = await timeSamples(SAMPLES, async () => {
+    const amort = await medianOf(SAMPLES, async () => {
       const engine = new Engine();
       engine.loadAnimation(anim, { format: "stored" });
       const player = engine.createPlayer("bench");
@@ -462,12 +596,13 @@ async function benchAnimation() {
         enabled: true,
         start_offset: 0,
       });
+      // Warm once to build any internal tables.
+      engine.updateValues(DT);
       const start = now();
       for (let i = 0; i < ANIM_STEPS; i++) {
         engine.updateValues(DT);
       }
-      const elapsedUs = (now() - start) * 1000;
-      return elapsedUs / ANIM_STEPS;
+      return ((now() - start) * 1000) / ANIM_STEPS;
     });
 
     results.push([
@@ -591,14 +726,15 @@ async function benchOrchestrator() {
       orch.step(DT);
     });
 
-    const amort = await timeSamples(SAMPLES, async () => {
+    const amort = await medianOf(SAMPLES, async () => {
       const orch = makeOrch();
+      // Warm once to build plans before timing.
+      orch.step(DT);
       const start = now();
       for (let i = 0; i < ORCH_STEPS; i++) {
         orch.step(DT);
       }
-      const elapsedUs = (now() - start) * 1000;
-      return elapsedUs / ORCH_STEPS;
+      return ((now() - start) * 1000) / ORCH_STEPS;
     });
 
     results.push([
@@ -631,12 +767,14 @@ function appendRows(rows) {
 }
 
 async function main() {
-  const results = [
-    ...(await benchGraph()),
-    ...(await benchGraphKitchen()),
-    ...(await benchAnimation()),
-    ...(await benchOrchestrator()),
-  ];
+  const results = [];
+  if (!RUN_ONLY_STAGED) {
+    results.push(...(await benchGraph()));
+    results.push(...(await benchGraphKitchen()));
+    results.push(...(await benchAnimation()));
+    results.push(...(await benchOrchestrator()));
+  }
+  results.push(...(await benchGraphKitchenStaged()));
   const lines = appendRows(results);
   console.log("WASM perf results (appended to perf_baselines.md):");
   console.log(lines);

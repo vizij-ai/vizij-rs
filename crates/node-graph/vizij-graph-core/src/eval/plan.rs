@@ -1,7 +1,66 @@
-use crate::types::{GraphSpec, InputConnection, SelectorSegment};
-use hashbrown::HashMap;
+use crate::schema::{registry, NodeSignature};
+use crate::types::{GraphSpec, InputConnection, NodeSpec, NodeType, Selector, SelectorSegment};
+use hashbrown::{HashMap, HashSet};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
+
+use super::value_layout::PortValue;
+use super::variadic::{compare_variadic_keys, parse_variadic_key};
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct VariadicRange {
+    pub start: usize,
+    pub len: usize,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct PortLayout {
+    pub slots: Vec<String>,
+    name_to_slot: HashMap<String, usize>,
+    variadics: HashMap<String, VariadicRange>,
+}
+
+impl PortLayout {
+    pub fn slot(&self, name: &str) -> Option<usize> {
+        self.name_to_slot.get(name).copied()
+    }
+
+    pub fn slot_name(&self, slot: usize) -> Option<&str> {
+        self.slots.get(slot).map(String::as_str)
+    }
+
+    pub fn variadic_range(&self, group: &str) -> Option<VariadicRange> {
+        self.variadics.get(group).copied()
+    }
+
+    fn insert_slot(&mut self, name: String) {
+        if !self.name_to_slot.contains_key(&name) {
+            let slot = self.slots.len();
+            self.slots.push(name.clone());
+            self.name_to_slot.insert(name, slot);
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct NodeLayout {
+    pub inputs: PortLayout,
+    pub outputs: PortLayout,
+}
+
+#[derive(Clone, Debug)]
+pub struct ResolvedInputSource {
+    pub node_idx: usize,
+    pub slot: usize,
+    pub output_name: String,
+    pub selector: Option<Selector>,
+}
+
+#[derive(Clone, Debug)]
+pub struct InputBinding {
+    pub source: Option<ResolvedInputSource>,
+    pub default: Option<PortValue>,
+}
 
 /// Cached, topology-ready view of a [`GraphSpec`] for reuse across frames.
 #[derive(Debug, Default)]
@@ -9,15 +68,19 @@ pub struct PlanCache {
     fingerprint: u64,
     /// Node indices in topological order.
     pub order: Vec<usize>,
-    /// Per-node input bindings keyed by declared input name.
-    pub inputs: Vec<HashMap<String, InputConnection>>,
+    /// Per-node input bindings keyed by slot index.
+    pub input_bindings: Vec<Vec<InputBinding>>,
+    /// Precomputed input/output layouts for each node.
+    pub layouts: Vec<NodeLayout>,
+    /// Map from node id -> stable index into spec.nodes / outputs_vec.
+    pub node_index: HashMap<String, usize>,
 }
 
 impl PlanCache {
     /// Ensure the cache matches the provided spec; rebuild on structural change.
     pub fn ensure(&mut self, spec: &GraphSpec) -> Result<(), String> {
         let fp = fingerprint(spec);
-        if fp == self.fingerprint && self.inputs.len() == spec.nodes.len() {
+        if fp == self.fingerprint && self.layouts.len() == spec.nodes.len() {
             return Ok(());
         }
         self.rebuild(spec, fp)
@@ -38,22 +101,220 @@ impl PlanCache {
             let idx = node_index
                 .get(id.as_str())
                 .copied()
-                .ok_or_else(|| format!("topo order referenced missing node '{}'", id))?;
+                .ok_or_else(|| format!("plan referenced missing node '{}'", id))?;
             order.push(idx);
         }
 
-        let mut inputs = vec![HashMap::new(); spec.nodes.len()];
-        for (node_id, conns) in inputs_map {
-            if let Some(&idx) = node_index.get(node_id.as_str()) {
-                inputs[idx] = conns;
-            }
+        let signatures = signature_map();
+        let referenced_outputs = gather_referenced_outputs(spec, &node_index);
+        let empty_connections: HashMap<String, InputConnection> = HashMap::new();
+
+        let mut layouts = Vec::with_capacity(spec.nodes.len());
+        for (idx, node) in spec.nodes.iter().enumerate() {
+            let signature = signatures.get(&node.kind);
+            let connections = inputs_map.get(&node.id).unwrap_or(&empty_connections);
+            let inputs_layout = build_input_layout(node, signature, connections);
+            let outputs_layout = build_output_layout(
+                node,
+                signature,
+                referenced_outputs.get(idx).unwrap_or(&HashSet::new()),
+            );
+            layouts.push(NodeLayout {
+                inputs: inputs_layout,
+                outputs: outputs_layout,
+            });
+        }
+
+        let mut input_bindings = Vec::with_capacity(spec.nodes.len());
+        for (idx, node) in spec.nodes.iter().enumerate() {
+            let bindings = build_input_bindings(
+                idx,
+                inputs_map.get(&node.id).unwrap_or(&empty_connections),
+                &node_index,
+                &layouts,
+            );
+            input_bindings.push(bindings);
         }
 
         self.order = order;
-        self.inputs = inputs;
+        self.layouts = layouts;
+        self.input_bindings = input_bindings;
         self.fingerprint = fingerprint;
+        self.node_index = node_index
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect();
         Ok(())
     }
+}
+
+fn build_input_layout(
+    _node: &NodeSpec,
+    signature: Option<&NodeSignature>,
+    connections: &HashMap<String, InputConnection>,
+) -> PortLayout {
+    let mut layout = PortLayout::default();
+
+    // Fixed inputs from the signature come first to keep indices stable.
+    if let Some(sig) = signature {
+        for port in &sig.inputs {
+            layout.insert_slot(port.id.to_string());
+        }
+    }
+
+    let variadic_id = signature.and_then(|sig| sig.variadic_inputs.as_ref().map(|v| v.id));
+    let mut variadic_keys: Vec<(String, Option<usize>)> = Vec::new();
+
+    for key in connections.keys() {
+        if let Some(var_name) = variadic_id {
+            let (prefix, _) = parse_variadic_key(key);
+            if prefix == var_name {
+                let (_, idx) = parse_variadic_key(key);
+                variadic_keys.push((key.clone(), idx));
+                continue;
+            }
+        }
+
+        layout.insert_slot(key.clone());
+    }
+
+    if let Some(var_name) = variadic_id {
+        variadic_keys.sort_by(|(a, _), (b, _)| compare_variadic_keys(a, b));
+        let start = layout.slots.len();
+        for (key, _) in &variadic_keys {
+            layout.insert_slot(key.clone());
+        }
+        layout.variadics.insert(
+            var_name.to_string(),
+            VariadicRange {
+                start,
+                len: variadic_keys.len(),
+            },
+        );
+    }
+
+    layout
+}
+
+fn build_output_layout(
+    node: &NodeSpec,
+    signature: Option<&NodeSignature>,
+    referenced: &HashSet<String>,
+) -> PortLayout {
+    let mut layout = PortLayout::default();
+
+    if let Some(sig) = signature {
+        for port in &sig.outputs {
+            layout.insert_slot(port.id.to_string());
+        }
+    }
+
+    // Respect any explicit output_shapes hints.
+    for key in node.output_shapes.keys() {
+        layout.insert_slot(key.clone());
+    }
+
+    if let Some(sig) = signature {
+        if let Some(var_out) = &sig.variadic_outputs {
+            // Currently Split is the only variadic-output node.
+            if matches!(node.kind, NodeType::Split) {
+                let sizes_len = node.params.sizes.as_ref().map(|v| v.len()).unwrap_or(0);
+                let mut max_ref = 0usize;
+                for name in referenced.iter() {
+                    if let Some(stripped) = name.strip_prefix("part") {
+                        if let Ok(idx) = stripped.parse::<usize>() {
+                            max_ref = max_ref.max(idx);
+                        }
+                    }
+                }
+                let count = std::cmp::max(1, std::cmp::max(sizes_len, max_ref));
+                let start = layout.slots.len();
+                for i in 0..count {
+                    layout.insert_slot(format!("part{}", i + 1));
+                }
+                let range = VariadicRange { start, len: count };
+                layout.variadics.insert("part".to_string(), range);
+                layout.variadics.insert(var_out.id.to_string(), range);
+            }
+        }
+    }
+
+    // Add any referenced outputs we haven't seen yet to keep slot lookups stable.
+    for name in referenced {
+        layout.insert_slot(name.clone());
+    }
+
+    layout
+}
+
+fn build_input_bindings(
+    node_idx: usize,
+    connections: &HashMap<String, InputConnection>,
+    node_index: &HashMap<&str, usize>,
+    layouts: &[NodeLayout],
+) -> Vec<InputBinding> {
+    let mut bindings = Vec::with_capacity(layouts[node_idx].inputs.slots.len());
+    let input_layout = &layouts[node_idx].inputs;
+
+    for name in input_layout.slots.iter() {
+        if let Some(conn) = connections.get(name) {
+            let default = connection_default_port(conn);
+            let source = if let Some(src_id) = conn.node_id.as_ref() {
+                if let Some(&idx) = node_index.get(src_id.as_str()) {
+                    let slot = layouts[idx].outputs.slot(&conn.output_key);
+                    slot.map(|slot| ResolvedInputSource {
+                        node_idx: idx,
+                        slot,
+                        output_name: conn.output_key.clone(),
+                        selector: conn.selector.clone(),
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            bindings.push(InputBinding { source, default });
+        } else {
+            bindings.push(InputBinding {
+                source: None,
+                default: None,
+            });
+        }
+    }
+
+    bindings
+}
+
+fn connection_default_port(conn: &InputConnection) -> Option<PortValue> {
+    conn.default_value.as_ref().map(|value| {
+        if let Some(shape) = &conn.default_shape {
+            PortValue::with_shape(value.clone(), shape.clone())
+        } else {
+            PortValue::new(value.clone())
+        }
+    })
+}
+
+fn gather_referenced_outputs(
+    spec: &GraphSpec,
+    node_index: &HashMap<&str, usize>,
+) -> Vec<HashSet<String>> {
+    let mut referenced = vec![HashSet::new(); spec.nodes.len()];
+    for edge in &spec.edges {
+        if let Some(&idx) = node_index.get(edge.from.node_id.as_str()) {
+            referenced[idx].insert(edge.from.output.clone());
+        }
+    }
+    referenced
+}
+
+fn signature_map() -> HashMap<NodeType, NodeSignature> {
+    registry()
+        .nodes
+        .into_iter()
+        .map(|sig| (sig.type_id.clone(), sig))
+        .collect()
 }
 
 fn fingerprint(spec: &GraphSpec) -> u64 {

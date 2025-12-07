@@ -79,6 +79,7 @@ pub fn infer_shape_id(value: &Value) -> ShapeId {
 }
 
 /// Ensure outputs match their declared shapes, updating cached shapes in-place.
+#[allow(dead_code)]
 pub fn enforce_output_shapes(
     spec: &NodeSpec,
     outputs: &mut HashMap<String, PortValue>,

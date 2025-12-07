@@ -180,6 +180,11 @@ export type Value = ValueInput;
  */
 export class Graph {
   private inner: any;
+  private lastEvalResult: EvalResult | null = null;
+
+  private invalidateCachedOutputs(): void {
+    this.lastEvalResult = null;
+  }
 
   constructor() {
     ensureInited();
@@ -192,17 +197,20 @@ export class Graph {
    * Load a graph spec (object or JSON string).
    */
   loadGraph(spec: GraphSpec | string): void {
+    this.invalidateCachedOutputs();
     const json = typeof spec === "string" ? spec : JSON.stringify(spec);
     this.inner.load_graph(json);
   }
 
   /** Set absolute time (seconds). */
   setTime(t: number): void {
+    this.invalidateCachedOutputs();
     this.inner.set_time(t);
   }
 
   /** Increment time (seconds). */
   step(dt: number): void {
+    this.invalidateCachedOutputs();
     this.inner.step(dt);
   }
 
@@ -211,6 +219,7 @@ export class Graph {
    * Values staged before evalAll will be visible in that evaluation (epoch semantics).
    */
   stageInput(path: string, value: Value, declaredShape?: ShapeJSON): void {
+    this.invalidateCachedOutputs();
     const payload = toValueJSON(value);
     const target = this.inner as any;
     if (typeof target.stage_input_value === "function") {
@@ -231,10 +240,129 @@ export class Graph {
       typeof target.eval_all_js === "function"
         ? target.eval_all_js()
         : target.eval_all();
-    if (typeof result === "string") {
-      return JSON.parse(result) as EvalResult;
+    const parsed =
+      typeof result === "string"
+        ? (JSON.parse(result) as EvalResult)
+        : (result as EvalResult);
+    this.lastEvalResult = parsed;
+    return parsed;
+  }
+
+  /**
+   * Batch-stage numeric inputs (paths[i] -> values[i]) in one wasm call.
+   * Paths length must match values length.
+   */
+  stageInputs(paths: string[], values: Float32Array): void {
+    this.invalidateCachedOutputs();
+    const target = this.inner as any;
+    if (typeof target.stage_inputs_batch === "function") {
+      target.stage_inputs_batch(paths, values);
+    } else {
+      // Fallback: per-input staging if older wasm is loaded
+      for (let i = 0; i < paths.length; i += 1) {
+        this.stageInput(paths[i], values[i]);
+      }
     }
-    return result as EvalResult;
+  }
+
+  /**
+   * Register paths once and reuse their indices for faster staging.
+   */
+  registerInputPaths(paths: string[]): Uint32Array {
+    const target = this.inner as any;
+    if (typeof target.register_input_paths !== "function") {
+      throw new Error("register_input_paths not available on wasm binding");
+    }
+    return target.register_input_paths(paths);
+  }
+
+  prepareInputSlots(indices: Uint32Array, declaredShapes?: Array<ShapeJSON | null>): void {
+    const target = this.inner as any;
+    if (typeof target.prepare_input_slots !== "function") {
+      throw new Error("prepare_input_slots not available on wasm binding");
+    }
+    // declaredShapes may be undefined => treat as nulls
+    const payload =
+      declaredShapes ?? new Array(indices.length).fill(null);
+    target.prepare_input_slots(indices, payload);
+  }
+
+  /**
+   * Stage inputs using indices returned by registerInputPaths.
+   * Length of indices must match values length.
+   */
+  stageInputsByIndex(indices: Uint32Array, values: Float32Array): void {
+    this.invalidateCachedOutputs();
+    const target = this.inner as any;
+    if (typeof target.stage_inputs_indices === "function") {
+      target.stage_inputs_indices(indices, values);
+    } else {
+      throw new Error("stage_inputs_indices not available on wasm binding");
+    }
+  }
+
+  /**
+   * Stage inputs using pre-prepared slots (no path parse, reuse declared shapes).
+   */
+  stageInputsBySlot(indices: Uint32Array, values: Float32Array): void {
+    this.invalidateCachedOutputs();
+    const target = this.inner as any;
+    if (typeof target.stage_inputs_slots === "function") {
+      target.stage_inputs_slots(indices, values);
+    } else {
+      throw new Error("stage_inputs_slots not available on wasm binding");
+    }
+  }
+
+  /**
+   * Fetch the default 'out' port for many nodes as a Float32Array.
+   * Non-scalar outputs return NaN for that entry.
+   */
+  getOutputsBatch(nodeIds: string[]): Float32Array {
+    const target = this.inner as any;
+    if (typeof target.get_outputs_batch === "function") {
+      return target.get_outputs_batch(nodeIds);
+    }
+    // Fallback: map over last eval result without re-running the graph
+    const res = this.lastEvalResult ?? this.evalAll();
+    const out = new Float32Array(nodeIds.length);
+    for (let i = 0; i < nodeIds.length; i += 1) {
+      const nid = nodeIds[i];
+      const port = (res.nodes as any)?.[nid]?.out?.value;
+      const val =
+        typeof port?.data === "number"
+          ? port.data
+          : Array.isArray(port?.data) && port.data.length > 0
+            ? port.data[0]
+            : Number.NaN;
+      out[i] = val;
+    }
+    return out;
+  }
+
+  /**
+   * Run N steps of fixed dt inside WASM, returning the final frame.
+   * This amortizes JS/WASM crossings for tight loops.
+   */
+  evalSteps(steps: number, dt: number): EvalResult {
+    const target = this.inner as any;
+    const result =
+      typeof target.eval_steps_js === "function"
+        ? target.eval_steps_js(steps, dt)
+        : (() => {
+            let last: EvalResult | undefined;
+            for (let i = 0; i < Math.max(1, steps); i += 1) {
+              this.step(dt);
+              last = this.evalAll();
+            }
+            return last!;
+          })();
+    const parsed =
+      typeof result === "string"
+        ? (JSON.parse(result) as EvalResult)
+        : (result as EvalResult);
+    this.lastEvalResult = parsed;
+    return parsed;
   }
 
   /**
@@ -243,6 +371,7 @@ export class Graph {
    * Value may be number | boolean | vec3 or a pre-encoded ValueJSON.
    */
   setParam(nodeId: string, key: string, value: Value): void {
+    this.invalidateCachedOutputs();
     const payload = toValueJSON(value);
     const target = this.inner as any;
     if (typeof target.set_param_value === "function") {

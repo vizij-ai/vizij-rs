@@ -111,6 +111,7 @@ for write in &result.writes {
 - Holds `t`/`dt`, per-node persistent state, staged inputs (`HashMap<TypedPath, StagedInput>`), and cached outputs.
 - `advance_epoch` bumps the staging epoch and evicts inputs not refreshed for the current frame.
 - Evaluation now updates `t`/`dt` when used via `vizij-orchestrator-core`; if you embed the runtime directly, set them yourself before calling `evaluate_all` if time-based nodes are involved.
+- **Plan cache note:** the internal plan cache is keyed for typical load-and-run usage and assumes the `GraphSpec` is not mutated in place after the first evaluation. If you edit node kinds or params (e.g., change a `Split`’s sizes) without constructing a new `GraphRuntime`, the cached slot layouts can become stale. Recreate the runtime or rebuild the spec before re-evaluating when doing in-process graph edits.
 
 ### Selectors
 

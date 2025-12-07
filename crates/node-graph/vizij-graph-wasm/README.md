@@ -109,6 +109,12 @@ const evalJson = raw.eval_all();
 console.log(JSON.parse(evalJson));
 ```
 
+### Performance notes
+
+- **Batch steady frames:** When host inputs don’t change for several ticks, call `eval_steps(steps, dt)` (or `eval_steps_js` via the wasm exports) to advance time inside WASM and return only the final outputs/writes. Avoid this when you must inject new inputs every frame.
+- **Typed-array staging for numeric streams:** Use `stage_input_f32(path, Float32Array)` to bypass JSON encode/decode for hot numeric inputs. Read numeric outputs with `get_output_f32(node_id, output_key)` to obtain a `Float32Array`. Keep the JSON path for mixed or non-numeric data.
+- **Minimise boundary crossings:** Batch all staging calls, then invoke a single `eval_all`/`eval_steps` per frame. This keeps JS↔WASM overhead low and aligns with the perf baselines.
+
 ---
 
 ## Key Details

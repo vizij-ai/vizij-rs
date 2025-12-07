@@ -1,6 +1,7 @@
 use hashbrown::HashMap;
-use js_sys::JSON;
+use js_sys::{Float32Array, Uint32Array, JSON};
 use serde_wasm_bindgen as swb;
+use vizij_api_core::shape::ShapeId;
 use vizij_api_core::{coercion, json, Shape, TypedPath, Value};
 use vizij_graph_core::types::RoundMode;
 use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, PortValue};
@@ -110,6 +111,14 @@ pub struct WasmGraph {
     spec: GraphSpec,
     t: f64,
     runtime: GraphRuntime,
+    input_paths: Vec<TypedPath>,
+    input_slots: Vec<Option<SlotStaging>>,
+}
+
+#[derive(Clone)]
+struct SlotStaging {
+    path_idx: u32,
+    declared: Option<Shape>,
 }
 
 fn parse_shape_json(declared_shape_json: Option<String>) -> Result<Option<Shape>, JsValue> {
@@ -168,6 +177,8 @@ impl WasmGraph {
             },
             t: 0.0,
             runtime: GraphRuntime::default(),
+            input_paths: Vec::new(),
+            input_slots: Vec::new(),
         }
     }
 
@@ -181,6 +192,8 @@ impl WasmGraph {
         self.runtime = GraphRuntime::default();
         self.runtime.t = self.t as f32;
         self.runtime.dt = 0.0;
+        self.input_paths.clear();
+        self.input_slots.clear();
         Ok(())
     }
 
@@ -226,6 +239,218 @@ impl WasmGraph {
     #[wasm_bindgen]
     pub fn step(&mut self, dt: f64) {
         self.t += dt;
+    }
+
+    /// Stage a float32 vector without JSON, using a shared buffer view.
+    #[wasm_bindgen(js_name = "stage_input_f32")]
+    pub fn stage_input_f32(&mut self, path: &str, data: &Float32Array) -> Result<(), JsValue> {
+        let typed_path = TypedPath::parse(path)
+            .map_err(|e| JsValue::from_str(&format!("invalid path: {}", e)))?;
+        let mut buf = vec![0.0f32; data.length() as usize];
+        data.copy_to(&mut buf);
+        let value = Value::Vector(buf);
+        let declared = Some(Shape::new(ShapeId::Vector { len: None }));
+        self.runtime.set_input(typed_path, value, declared);
+        Ok(())
+    }
+
+    /// Batch-stage many scalar/vector inputs in one call (paths[i] -> values[i]).
+    #[wasm_bindgen(js_name = "stage_inputs_batch")]
+    pub fn stage_inputs_batch(
+        &mut self,
+        paths: JsValue,
+        values: &Float32Array,
+    ) -> Result<(), JsValue> {
+        let paths: Vec<String> = swb::from_value(paths)
+            .map_err(|e| JsValue::from_str(&format!("stage_inputs_batch paths: {}", e)))?;
+        if paths.len() != values.length() as usize {
+            return Err(JsValue::from_str(
+                "stage_inputs_batch: paths and values length mismatch",
+            ));
+        }
+        for (i, path) in paths.iter().enumerate() {
+            let tp = TypedPath::parse(path)
+                .map_err(|e| JsValue::from_str(&format!("invalid path '{}': {}", path, e)))?;
+            let val = values.get_index(i as u32);
+            let value = Value::Float(val);
+            let declared = Some(Shape::new(ShapeId::Scalar));
+            self.runtime.set_input(tp, value, declared);
+        }
+        Ok(())
+    }
+
+    /// Register paths once and reuse their indices for faster staging.
+    #[wasm_bindgen(js_name = "register_input_paths")]
+    pub fn register_input_paths(&mut self, paths: JsValue) -> Result<Uint32Array, JsValue> {
+        let new_paths: Vec<String> = swb::from_value(paths)
+            .map_err(|e| JsValue::from_str(&format!("register_input_paths: {}", e)))?;
+        let mut indices = Vec::with_capacity(new_paths.len());
+        for p in new_paths {
+            let tp = TypedPath::parse(&p)
+                .map_err(|e| JsValue::from_str(&format!("invalid path '{}': {}", p, e)))?;
+            let idx = self.input_paths.len() as u32;
+            self.input_paths.push(tp);
+            self.input_slots.push(None);
+            indices.push(idx);
+        }
+        Ok(Uint32Array::from(indices.as_slice()))
+    }
+
+    /// Stage inputs by index using previously registered paths.
+    #[wasm_bindgen(js_name = "stage_inputs_indices")]
+    pub fn stage_inputs_indices(
+        &mut self,
+        indices: &Uint32Array,
+        values: &Float32Array,
+    ) -> Result<(), JsValue> {
+        let len = indices.length();
+        if len != values.length() {
+            return Err(JsValue::from_str(
+                "stage_inputs_indices: indices and values length mismatch",
+            ));
+        }
+        let mut idx_buf = vec![0u32; len as usize];
+        indices.copy_to(&mut idx_buf);
+        for (i, idx) in idx_buf.iter().enumerate() {
+            let tp = self
+                .input_paths
+                .get(*idx as usize)
+                .ok_or_else(|| JsValue::from_str("stage_inputs_indices: index out of bounds"))?;
+            let val = values.get_index(i as u32);
+            let value = Value::Float(val);
+            let declared = Some(Shape::new(ShapeId::Scalar));
+            self.runtime.set_input(tp.clone(), value, declared);
+        }
+        Ok(())
+    }
+
+    /// Pre-allocate slots with declared shapes to enable slot staging.
+    #[wasm_bindgen(js_name = "prepare_input_slots")]
+    pub fn prepare_input_slots(
+        &mut self,
+        indices: &Uint32Array,
+        declared: JsValue,
+    ) -> Result<(), JsValue> {
+        let decls: Vec<Option<Shape>> = swb::from_value(declared)
+            .map_err(|e| JsValue::from_str(&format!("prepare_input_slots declared: {}", e)))?;
+        if indices.length() as usize != decls.len() {
+            return Err(JsValue::from_str(
+                "prepare_input_slots: indices and declared length mismatch",
+            ));
+        }
+        let mut idx_buf = vec![0u32; indices.length() as usize];
+        indices.copy_to(&mut idx_buf);
+        for (i, idx) in idx_buf.iter().enumerate() {
+            let slot = self
+                .input_slots
+                .get_mut(*idx as usize)
+                .ok_or_else(|| JsValue::from_str("prepare_input_slots: index out of bounds"))?;
+            *slot = Some(SlotStaging {
+                path_idx: *idx,
+                declared: decls[i].clone(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Stage inputs by pre-prepared slots (no path parse, reuse declared).
+    #[wasm_bindgen(js_name = "stage_inputs_slots")]
+    pub fn stage_inputs_slots(
+        &mut self,
+        indices: &Uint32Array,
+        values: &Float32Array,
+    ) -> Result<(), JsValue> {
+        let len = indices.length();
+        if len != values.length() {
+            return Err(JsValue::from_str(
+                "stage_inputs_slots: indices and values length mismatch",
+            ));
+        }
+        let mut idx_buf = vec![0u32; len as usize];
+        indices.copy_to(&mut idx_buf);
+        for (i, idx) in idx_buf.iter().enumerate() {
+            let slot = self
+                .input_slots
+                .get(*idx as usize)
+                .and_then(|s| s.as_ref())
+                .ok_or_else(|| JsValue::from_str("stage_inputs_slots: slot not prepared"))?;
+            let tp = self
+                .input_paths
+                .get(slot.path_idx as usize)
+                .ok_or_else(|| JsValue::from_str("stage_inputs_slots: path index out of bounds"))?;
+            let val = values.get_index(i as u32);
+            let value = Value::Float(val);
+            self.runtime
+                .set_input(tp.clone(), value, slot.declared.clone());
+        }
+        Ok(())
+    }
+
+    /// Fetch a float/vec/array output directly as Float32Array (if numeric).
+    #[wasm_bindgen(js_name = "get_output_f32")]
+    pub fn get_output_f32(&self, node_id: &str, output_key: &str) -> Option<Float32Array> {
+        let port = self.runtime.outputs.get(node_id)?.get(output_key)?;
+        match &port.value {
+            Value::Float(f) => Some(Float32Array::from(&[*f][..])),
+            Value::Vector(v) => Some(Float32Array::from(v.as_slice())),
+            Value::Vec2(arr) => Some(Float32Array::from(arr.as_slice())),
+            Value::Vec3(arr) => Some(Float32Array::from(arr.as_slice())),
+            Value::Vec4(arr) => Some(Float32Array::from(arr.as_slice())),
+            Value::Quat(arr) => Some(Float32Array::from(arr.as_slice())),
+            Value::Transform {
+                translation,
+                rotation,
+                scale,
+            } => {
+                let mut tmp = Vec::with_capacity(10);
+                tmp.extend_from_slice(translation);
+                tmp.extend_from_slice(rotation);
+                tmp.extend_from_slice(scale);
+                Some(Float32Array::from(tmp.as_slice()))
+            }
+            _ => None,
+        }
+    }
+
+    /// Batch fetch the default "out" port for many nodes as a Float32Array (scalars only; non-scalars -> NaN).
+    #[wasm_bindgen(js_name = "get_outputs_batch")]
+    pub fn get_outputs_batch(&self, nodes: JsValue) -> Result<Float32Array, JsValue> {
+        let ids: Vec<String> = swb::from_value(nodes)
+            .map_err(|e| JsValue::from_str(&format!("get_outputs_batch nodes: {}", e)))?;
+        let mut out = Vec::with_capacity(ids.len());
+        for id in ids {
+            if let Some(port) = self.runtime.outputs.get(&id).and_then(|m| m.get("out")) {
+                match &port.value {
+                    Value::Float(f) => out.push(*f),
+                    Value::Vector(v) if !v.is_empty() => out.push(v[0]),
+                    Value::Vec2(v) => out.push(v[0]),
+                    Value::Vec3(v) => out.push(v[0]),
+                    Value::Vec4(v) => out.push(v[0]),
+                    Value::Quat(v) => out.push(v[0]),
+                    Value::Transform { translation, .. } => out.push(translation[0]),
+                    _ => out.push(f32::NAN),
+                }
+            } else {
+                out.push(f32::NAN);
+            }
+        }
+        Ok(Float32Array::from(out.as_slice()))
+    }
+
+    /// Internal helper: run multiple steps and return the final frame outputs.
+    fn eval_steps_json(&mut self, steps: u32, dt: f64) -> Result<serde_json::Value, JsValue> {
+        if !dt.is_finite() || dt < 0.0 {
+            return Err(JsValue::from_str(
+                "eval_steps: dt must be finite and non-negative",
+            ));
+        }
+        let iterations = steps.max(1);
+        let mut last = None;
+        for _ in 0..iterations {
+            self.step(dt);
+            last = Some(self.eval_all_json()?);
+        }
+        last.ok_or_else(|| JsValue::from_str("eval_steps: no steps executed"))
     }
 
     fn eval_all_json(&mut self) -> Result<serde_json::Value, JsValue> {
@@ -297,6 +522,21 @@ impl WasmGraph {
     #[wasm_bindgen]
     pub fn eval_all(&mut self) -> Result<String, JsValue> {
         let out_obj = self.eval_all_json()?;
+        serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    /// Step forward multiple times and return only the final outputs/writes.
+    /// Useful for amortizing JS/WASM boundary cost when ticking many frames.
+    #[wasm_bindgen(js_name = "eval_steps_js")]
+    pub fn eval_steps_js(&mut self, steps: u32, dt: f64) -> Result<JsValue, JsValue> {
+        let out_obj = self.eval_steps_json(steps, dt)?;
+        let s = serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        JSON::parse(&s)
+    }
+
+    #[wasm_bindgen(js_name = "eval_steps")]
+    pub fn eval_steps(&mut self, steps: u32, dt: f64) -> Result<String, JsValue> {
+        let out_obj = self.eval_steps_json(steps, dt)?;
         serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 

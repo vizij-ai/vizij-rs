@@ -193,6 +193,12 @@ graph.applyStagedInputs();
 graph.evalAll();
 ```
 
+### Performance tips
+
+- **Batch steady frames:** If inputs remain constant for N ticks, prefer `graph.evalSteps(N, dt)` to advance time and return only the final outputs/writes. This collapses N JS↔WASM calls into one. Don’t use it when you need to inject new inputs every frame.
+- **Avoid JSON for numeric streams:** For hot numeric inputs, call the underlying wasm export `graph.inner.stage_input_f32(path, float32Array)` to skip JSON encode/decode. To read numeric outputs without JSON, use `graph.inner.get_output_f32(nodeId, outputKey)` to receive a `Float32Array`. Keep the JSON/ValueJSON path for mixed or non-numeric data.
+- **One call per frame:** Even with per-frame inputs, batch all staging calls, then a single `evalAll` (or `evalSteps` when valid) per frame to minimize boundary crossings.
+
 ### Custom loader options
 
 `init(input?: InitInput)` accepts any input supported by `@vizij/wasm-loader`:

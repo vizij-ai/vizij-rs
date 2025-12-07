@@ -231,6 +231,30 @@ fn blend_max_selects_value_of_highest_effective_weight() {
 }
 
 #[test]
+fn blend_max_without_values_or_base_returns_nan() {
+    // No inputs connected; optional base should be treated as absent, yielding NaN.
+    let graph = GraphSpec {
+        nodes: vec![NodeSpec {
+            id: "max".to_string(),
+            kind: NodeType::BlendMax,
+            params: NodeParams::default(),
+            output_shapes: HashMap::new(),
+            input_defaults: HashMap::new(),
+        }],
+        edges: vec![],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("blend max should evaluate");
+    let outputs = rt.outputs.get("max").expect("max outputs present");
+
+    match &outputs.get("out").expect("out present").value {
+        Value::Float(f) => assert!(f.is_nan()),
+        other => panic!("expected float out NaN, got {:?}", other),
+    }
+}
+
+#[test]
 fn default_blend_matches_expected_vec3_output() {
     let baseline = Value::Vec3([0.1, -0.05, 0.2]);
     let offset = Value::Vec3([0.01, 0.02, -0.03]);
@@ -386,5 +410,42 @@ fn case_node_routes_based_on_case_labels_param() {
     match &outputs.get("out").expect("out present").value {
         Value::Text(s) => assert_eq!(s.as_str(), "second"),
         other => panic!("expected text out, got {:?}", other),
+    }
+}
+
+#[test]
+fn case_node_without_default_emits_nan_when_no_match() {
+    let params = NodeParams {
+        case_labels: Some(vec!["a".to_string(), "b".to_string()]),
+        ..Default::default()
+    };
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("sel", Value::Text("z".to_string())),
+            constant_node("c1", Value::Float(1.0)),
+            constant_node("c2", Value::Float(2.0)),
+            NodeSpec {
+                id: "case".to_string(),
+                kind: NodeType::Case,
+                params,
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![
+            link("sel", "case", "selector"),
+            link("c1", "case", "operand_1"),
+            link("c2", "case", "operand_2"),
+        ],
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("case should evaluate");
+    let outputs = rt.outputs.get("case").expect("case outputs present");
+
+    match &outputs.get("out").expect("out present").value {
+        Value::Float(f) => assert!(f.is_nan()),
+        other => panic!("expected float NaN out, got {:?}", other),
     }
 }

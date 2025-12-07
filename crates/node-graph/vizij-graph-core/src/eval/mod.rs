@@ -13,8 +13,7 @@
 //!
 //! Integration code should primarily interact with [`GraphRuntime`] and [`evaluate_all`].
 
-use crate::types::{GraphSpec, InputConnection};
-use hashbrown::HashMap;
+use crate::types::GraphSpec;
 use std::mem;
 
 pub mod eval_node;
@@ -51,17 +50,42 @@ pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), Strin
 
     let plan = mem::take(&mut rt.plan);
     let result = (|| {
-        let empty_inputs: HashMap<String, InputConnection> = HashMap::new();
+        // Ensure output storage is sized/reset for the upcoming frame.
+        if rt.outputs_vec.len() != spec.nodes.len() {
+            rt.outputs_vec.resize_with(spec.nodes.len(), Vec::new);
+        }
+        for idx in 0..plan.layouts.len() {
+            let bucket = rt.outputs_vec.get_mut(idx).expect("outputs vec present");
+            bucket.clear();
+        }
+
         for &idx in plan.order.iter() {
             let node = spec
                 .nodes
                 .get(idx)
                 .ok_or_else(|| format!("plan referenced missing node at index {}", idx))?;
-            let connections = plan.inputs.get(idx).unwrap_or(&empty_inputs);
-            eval_node::eval_node(rt, node, connections)?;
+            let (inputs_vec, present_vec) = eval_node::read_inputs(rt, idx, &plan)?;
+            let inputs =
+                eval_node::InputSlots::new(&inputs_vec, &present_vec, &plan.layouts[idx].inputs);
+            let mut vec_out = mem::take(rt.outputs_vec.get_mut(idx).expect("outputs vec present"));
+            resize_and_clear(&mut vec_out);
+            {
+                let mut outputs =
+                    eval_node::OutputSlots::new(&mut vec_out, &plan.layouts[idx].outputs);
+                outputs.clear();
+                eval_node::eval_node(rt, node, &inputs, &mut outputs)?;
+            }
+
+            let compat = eval_node::materialize_outputs(&plan.layouts[idx].outputs, &vec_out);
+            rt.outputs_vec[idx] = vec_out;
+            rt.outputs.insert(node.id.clone(), compat);
         }
         Ok(())
     })();
     rt.plan = plan;
     result
+}
+
+fn resize_and_clear(bucket: &mut Vec<PortValue>) {
+    bucket.clear();
 }

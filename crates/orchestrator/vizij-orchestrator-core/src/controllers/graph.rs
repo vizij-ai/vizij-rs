@@ -796,7 +796,7 @@ impl GraphController {
 
         // Stage only subscribed blackboard entries into the graph runtime.
         for tp in &self.subs.inputs {
-            if let Some(entry) = bb.get(&tp.to_string()) {
+            if let Some(entry) = bb.get_tp(tp) {
                 let path = tp.clone();
                 let value = entry.value.clone();
                 let shape = entry.shape.clone();

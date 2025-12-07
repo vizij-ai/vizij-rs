@@ -108,7 +108,10 @@ pub struct StagedInput {
 pub struct GraphRuntime {
     pub t: f32,
     pub dt: f32,
+    /// Legacy map for external consumers/tests keyed by node id.
     pub outputs: HashMap<NodeId, HashMap<String, PortValue>>,
+    /// Fast per-index storage aligned to spec.nodes order (mirrors `plan.node_index`).
+    pub outputs_vec: Vec<Vec<PortValue>>,
     pub writes: WriteBatch,
     pub node_states: HashMap<NodeId, NodeRuntimeState>,
     pub staged_inputs: HashMap<TypedPath, StagedInput>,
