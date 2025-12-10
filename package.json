@@ -44,7 +44,10 @@
     "release": "pnpm install --frozen-lockfile && pnpm run build:wasm && pnpm run build:shared",
     "ci:version": "pnpm version:packages",
     "ci:publish": "node scripts/ci-publish.mjs",
-    "verify:registry": "node scripts/verify-node-registry.mjs"
+    "verify:registry": "node scripts/verify-node-registry.mjs",
+    "perf:wasm": "node scripts/run_perf_baselines_wasm.mjs",
+    "perf:wasm:verify": "VERIFY_ONLY=1 node scripts/run_perf_baselines_wasm.mjs",
+    "perf:smoke": "SMOKE=1 VERIFY_ONLY=1 node scripts/run_perf_baselines_wasm.mjs"
   },
   "workspaces": [
     "npm/@vizij/*"

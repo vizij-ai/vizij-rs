@@ -1,0 +1,37 @@
+{
+  "graph-smoke": {
+    "signature": "5f1f016cd1b00cf0fafea9e18ff40768fa280b3059ae3a05986e12e1aef875b6",
+    "median_us": 94.68688333333333,
+    "tolerance_pct": 0.35
+  },
+  "graph-defaults-only": {
+    "signature": "2f7c70a6ce0724296af8b016e62601f1f65cddd3ebdb7f764fbf0116e84541e3",
+    "median_us": 38.94322500000034,
+    "tolerance_pct": 0.35
+  },
+  "graph-kitchen-025": {
+    "signature": "082b16e880688315acf8253740485434f104c099737a823e54f005f969fc7c4b",
+    "median_us": 9053.852079166663,
+    "tolerance_pct": 0.35
+  },
+  "graph-kitchen-500": {
+    "signature": "101b56db7333034b5660719c3b783d2685c7ea32143d3e2e55df57454f31ca2f",
+    "median_us": 333976.1945666665,
+    "tolerance_pct": 0.35
+  },
+  "animation-mixed-small": {
+    "signature": "8a80ad7bc5acbbe37c78c261daa7a9d1b8b1afad8a5b8cf1179412a4edc8f9f9",
+    "median_us": 36.10097083331614,
+    "tolerance_pct": 0.35
+  },
+  "animation-mixed-medium": {
+    "signature": "2a54fe9753b90058d1617f50cb623af1b7c5282710d3368f38bf347f40fbb035",
+    "median_us": 124.37557916664446,
+    "tolerance_pct": 0.35
+  },
+  "orchestrator-merged-blend": {
+    "signature": "4358fc446d0b260f6d5bfdf1fc791c66e297e01af0e32c0f8b7b5fa834f8acd8",
+    "median_us": 9389.031458333375,
+    "tolerance_pct": 0.35
+  }
+}
