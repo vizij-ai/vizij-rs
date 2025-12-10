@@ -79,6 +79,9 @@ Install the watcher dependency once with `cargo install cargo-watch`.
 | CI publish (build wasm + `changeset publish`) | `pnpm ci:publish` |
 | Link npm packages for vizij-web | Build locally, then use temporary `link:` deps in `vizij-web` (see its README) |
 | Rebuild after ABI bumps | `cargo build -p <wasm-crate> --target wasm32-unknown-unknown && pnpm run build:wasm:<stack>` |
+| WASM perf harness (full) | `pnpm run perf:wasm` |
+| WASM perf verify-only | `pnpm run perf:wasm:verify` |
+| WASM perf smoke (CI) | `pnpm run perf:smoke` |
 
 `pnpm ci:publish` temporarily resolves `workspace:` dependency ranges to real versions before publishing, then restores the manifests after the npm upload completes.
 

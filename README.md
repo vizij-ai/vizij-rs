@@ -161,8 +161,8 @@ pnpm run watch:wasm:orchestrator
 These scripts rebuild the WASM artefacts whenever source files change. For short-lived experiments you can still publish a global link via the `link:wasm:*` scripts, but the recommended flow is:
 
 1. Build the desired stack(s) here (`pnpm run build:wasm:graph` etc.).
-2. In `vizij-web`, temporarily depend on those builds using `pnpm add @vizij/<pkg>@link:../vizij-rs/npm/@vizij/<pkg>`.
-3. Revert those `link:` dependencies before committing to return to the published packages.
+2. In `vizij-web`, run `pnpm run wasm:link` (or `WASM_PKGS="node-graph-wasm orchestrator-wasm" pnpm run wasm:link`) to point the workspace at these builds.
+3. Use `pnpm run wasm:status` in `vizij-web` to confirm the resolution, and `pnpm run wasm:unlink` when you want to return to the published packages.
 
 This keeps the published versions as the default source of truth while still allowing synchronous iteration when necessary.
 
@@ -215,6 +215,19 @@ pnpm --filter "@vizij/node-graph-wasm" test
 ```
 
 Fixtures live in `fixtures/` for repeatable scenario testing. Use them in integration tests or in downstream applications via `npm/@vizij/test-fixtures`.
+
+---
+
+### Performance baselines (Node/WASM)
+
+- Canonical scenarios live in `fixtures/perf_scenarios` (hashes tracked in `fixtures/perf_scenarios/index.json`).
+- Build wasm once: `pnpm run build:wasm`
+- Full run (appends table rows in `vizij_docs/current_documentation/perf_baselines.md`): `pnpm run perf:wasm`
+- Verify-only (no append, warns on signature/variance drift): `pnpm run perf:wasm:verify`
+- CI smoke uses: `SMOKE=1 VERIFY_ONLY=1 pnpm run perf:smoke`
+- Update goldens intentionally: `UPDATE_GOLDEN=1 pnpm run perf:wasm`
+
+Scenarios cover: tiny smoke, defaults-only, kitchen mid (25 blocks), kitchen heavy (500 blocks), mixed animation (small/medium), and merged orchestrator blend. Each run records samples, warmup, steps, dt, ABI, build type, commit, and signatures.
 
 ---
 
