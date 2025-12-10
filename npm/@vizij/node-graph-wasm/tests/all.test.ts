@@ -527,6 +527,32 @@ function assertText(write: WriteOpJSON, expected: string): void {
       expectNumericVector(vecWrites.get("samples/vector.sum"), [1, 3, 3], "samples/vector.sum");
       expectNumericVector(vecWrites.get("samples/vector.sub"), [1, 1, 3], "samples/vector.sub");
     }
+
+    // stageInputs should route shaped payloads through path staging instead of scalar batch
+    {
+      const graph = new Graph();
+      const staged: Array<{ path: string; value: number; shape: ShapeJSON | null }> = [];
+      const batched: Array<{ paths: string[]; values: number[] }> = [];
+      (graph as any).stageInput = (path: string, value: number, shape?: ShapeJSON | null) => {
+        staged.push({ path, value, shape: shape ?? null });
+      };
+      (graph as any).inner = {
+        stage_inputs_batch: (paths: string[], values: Float32Array) => {
+          batched.push({ paths: [...paths], values: Array.from(values) });
+        },
+      };
+
+      graph.stageInputs(
+        ["samples/a", "samples/b"],
+        new Float32Array([1.5, 2.5]),
+        [null, { id: "Vec3" }]
+      );
+
+      assert.deepEqual(batched, [{ paths: ["samples/a"], values: [1.5] }]);
+      assert.deepEqual(staged, [
+        { path: "samples/b", value: 2.5, shape: { id: "Vec3" } },
+      ]);
+    }
     // layered-rig-blend checks
     {
       const layeredResult = await runSample("layered-rig-blend", layeredRigBlend);

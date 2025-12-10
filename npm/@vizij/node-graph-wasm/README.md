@@ -32,7 +32,7 @@ This package ships the WebAssembly build of `vizij-graph-core` together with a T
 ## Key Concepts
 
 - **GraphSpec** – Declarative JSON describing nodes, parameters, and the explicit `edges` array that connects node outputs to inputs (selectors, output keys). The package normalises shorthand specs automatically.
-- **Graph Runtime** – The `Graph` class owns a `GraphRuntime`, handling `loadGraph`, `stageInput`, `setParam`, `step`, and `evalAll`.
+- **Graph Runtime** – The `Graph` class owns a `GraphRuntime`, handling `loadGraph`, `stageInput`, `setParam`, `step`, and `evalAll`. Structural parameter changes (e.g., `Split` sizes) invalidate the wasm plan cache and the JS wrapper now resets its baseline automatically so the next eval consumes a fresh full snapshot.
 - **Staged Inputs** – Host-provided values keyed by `TypedPath`. They are latched until you replace or remove them.
 - **Evaluation Result** – `evalAll()` returns per-node port snapshots plus a `WriteBatch` of sink writes (each with Value + Shape metadata).
 - **Node Schema Registry** – `getNodeSchemas()` exposes the runtime-supported nodes, ideal for palettes/editors.
@@ -111,12 +111,22 @@ const graphSamples: Record<string, GraphSpec>;
 
 class Graph {
   constructor();
-  loadGraph(specOrJson: GraphSpec | string): void;
+  loadGraph(
+    specOrJson: GraphSpec | string,
+    opts?: { hotPaths?: string[]; epsilon?: number; autoClearDroppedHotPaths?: boolean }
+  ): void;
   unloadGraph(): void;
   stageInput(path: string, value: ValueInput, shape?: ShapeJSON, immediateEval?: boolean): void;
+  setHotPaths(paths: string[], opts?: { epsilon?: number; autoClearDroppedHotPaths?: boolean }): void;
+  stageInputs(paths: string[], values: Float32Array, shapes?: (ShapeJSON | null)[]): void; // routes through smart staging
+  stageInputsBySlotDiff(indices: Uint32Array, values: Float32Array, epsilon?: number): void;
+  clearSlot(idx: number): Promise<void>;
+  clearInput(path: string): Promise<void>;
   clearStagedInputs(): void;
   applyStagedInputs(): void;
   evalAll(): EvalResult;
+  evalAllFull(): EvalResult; // resets the delta baseline
+  getOutputsDelta(sinceVersion?: number): EvalResult & { version: number };
   setParam(nodeId: string, key: string, value: ValueInput): void;
   setTime(t: number): void;
   step(dt: number): void;
@@ -145,6 +155,10 @@ Each registry entry exposes:
 | `categories` | Optional grouping tags for UI organisation. |
 
 Types (`GraphSpec`, `EvalResult`, `ValueJSON`, `ShapeJSON`, etc.) are exported from `src/types`.
+
+> Performance guardrails:
+> - Structural param edits that change port layouts (e.g., `Split.sizes`) rebuild the plan; the wrapper drops its cached baseline and will emit a full snapshot on the next eval before returning to deltas.
+> - The `Graph` wrapper automatically picks the optimized slots + delta path; calling `inner.eval_all_js` / other legacy exports bypasses these optimizations and is slower.
 
 ---
 
@@ -177,12 +191,52 @@ for (const write of result.writes) {
 }
 ```
 
-Manual time control:
+### Hot-path fast staging (unified)
+
+```ts
+const graph = new Graph();
+graph.loadGraph(spec, { hotPaths: ["demo/a", "demo/b"], epsilon: 0, autoClearDroppedHotPaths: true });
+// setHotPaths is still available; loadGraph can now register the hot list for you.
+
+const paths = ["demo/a", "demo/b", "demo/rare"];
+const values = new Float32Array([1, 2, 3]);
+
+// Routes hot paths through slots (diffed after first call), others through path batch.
+graph.stageInputs(paths, values);
+const frame = graph.evalAll(); // first call returns full snapshot; subsequent calls use delta internally
+
+// Debug visibility
+graph.setDebugLogging(true);
+console.log(graph.inspectStaging());
+```
+
+> Note: The hot-path fast lane currently targets numeric scalars. Non-scalar or explicitly shaped inputs in the hot list will fall back to path staging for that call (log in debug mode). Use `clearSlot` / `clearInput` to stop replaying cached values.
+
+### Fast-path loop with deltas (slots-only eval)
+
+```ts
+let version = 0n;
+const inputs = new Float32Array(paths.length);
+const indices = graph.registerInputPaths(paths);
+graph.prepareInputSlots(indices);
+
+function tick(frame) {
+  inputs.fill(frame);
+  graph.stageInputsBySlotDiff(indices, inputs); // only sends changed slots
+  graph.setTime(frame / 60);
+  graph.step(1 / 60);
+  const delta = graph.getOutputsDelta(version);
+  version = BigInt(delta.version);
+  // delta.nodes contains only changed ports; call evalAll() if you need a full snapshot
+}
+```
+
+Manual time control (force a full baseline refresh when needed):
 
 ```ts
 graph.setTime(0);
 graph.step(1 / 60);
-graph.evalAll();
+graph.evalAllFull(); // resets delta baseline
 ```
 
 Staging inputs lazily:

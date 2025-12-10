@@ -89,3 +89,56 @@ pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), Strin
 fn resize_and_clear(bucket: &mut Vec<PortValue>) {
     bucket.clear();
 }
+
+/// Evaluate using the existing plan cache without rebuilding it. This assumes the provided
+/// `spec` matches the cached plan; it returns an error if the layouts are missing or mis-sized.
+/// Intended for callers that manage plan invalidation themselves (e.g., WASM wrapper with
+/// immutable specs).
+pub fn evaluate_all_cached(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), String> {
+    if rt.plan.layouts.len() != spec.nodes.len() {
+        return Err("plan cache not initialised for this spec".to_string());
+    }
+
+    rt.advance_epoch();
+    rt.outputs.clear();
+    rt.outputs.reserve(spec.nodes.len());
+    rt.writes.0.clear();
+    rt.node_states
+        .retain(|id, _| spec.nodes.iter().any(|node| node.id == *id));
+
+    let plan = mem::take(&mut rt.plan);
+    let result = (|| {
+        if rt.outputs_vec.len() != spec.nodes.len() {
+            rt.outputs_vec.resize_with(spec.nodes.len(), Vec::new);
+        }
+        for idx in 0..plan.layouts.len() {
+            let bucket = rt.outputs_vec.get_mut(idx).expect("outputs vec present");
+            bucket.clear();
+        }
+
+        for &idx in plan.order.iter() {
+            let node = spec
+                .nodes
+                .get(idx)
+                .ok_or_else(|| format!("plan referenced missing node at index {}", idx))?;
+            let (inputs_vec, present_vec) = eval_node::read_inputs(rt, idx, &plan)?;
+            let inputs =
+                eval_node::InputSlots::new(&inputs_vec, &present_vec, &plan.layouts[idx].inputs);
+            let mut vec_out = mem::take(rt.outputs_vec.get_mut(idx).expect("outputs vec present"));
+            resize_and_clear(&mut vec_out);
+            {
+                let mut outputs =
+                    eval_node::OutputSlots::new(&mut vec_out, &plan.layouts[idx].outputs);
+                outputs.clear();
+                eval_node::eval_node(rt, node, &inputs, &mut outputs)?;
+            }
+
+            let compat = eval_node::materialize_outputs(&plan.layouts[idx].outputs, &vec_out);
+            rt.outputs_vec[idx] = vec_out;
+            rt.outputs.insert(node.id.clone(), compat);
+        }
+        Ok(())
+    })();
+    rt.plan = plan;
+    result
+}
