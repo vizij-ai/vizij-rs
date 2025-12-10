@@ -112,13 +112,19 @@ registerAnimation(cfg: AnimationRegistrationConfig): string;
 exportGraph(id: string): GraphSpec; // inspect merged controller specs
 prebind(resolver: (path: string) => string | number | null | undefined): void;
 setInput(path: string, value: ValueJSON, shape?: ShapeJSON): void;
+setHotInputs(paths: string[], opts?: { epsilon?: number }): void;
+setInputsSmart(paths: string[], values: Float32Array, shapes?: (ShapeJSON | null)[]): void;
 removeInput(path: string): boolean;
+stepDelta(dtSeconds: number, sinceVersion?: number): OrchestratorFrame & { version: bigint };
 step(dtSeconds: number): OrchestratorFrame;
 listControllers(): { graphs: string[]; anims: string[] };
 removeGraph(id: string): boolean;
 removeAnimation(id: string): boolean;
 normalizeGraphSpec(spec: GraphSpec | string): Promise<GraphSpec>; // convenience passthrough
+setDebugLogging(enabled: boolean): void;
 ```
+
+> Performance note: stay on the wrapper APIs (`stepDelta`, `setInputsSmart`, `setHotInputs`). Calling `inner.step` / legacy exports skips the diffed staging + delta path and will be slower.
 
 All types (`GraphSpec`, `ValueJSON`, `OrchestratorFrame`, etc.) are exported from `src/types`.
 
@@ -152,6 +158,19 @@ orchestrator.setInput("demo/input/value", { float: 1.0 });
 
 const frame = orchestrator.step(1 / 60);
 console.log(frame.merged_writes, frame.timings_ms);
+
+// Delta snapshot (first call with 0 returns full payload)
+let version = 0n;
+const deltaFrame = orchestrator.stepDelta(1 / 60, version);
+version = deltaFrame.version;
+console.log(deltaFrame.merged_writes);
+
+// Hot-path inputs with diffed staging
+orchestrator.setHotInputs(["rig/in_a", "rig/in_b"], { epsilon: 0 });
+const paths = ["rig/in_a", "rig/in_b"];
+const vals = new Float32Array([0, 0]);
+orchestrator.setInputsSmart(paths, vals); // seeds; later frames only send changed values
+orchestrator.step(1 / 60);
 
 // Merge two graph specs into a single controller (auto-link shared output/input paths)
 const mergedGraphId = orchestrator.registerMergedGraph({

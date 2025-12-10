@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
 use vizij_api_core::{TypedPath, Value, WriteBatch};
-use vizij_graph_core::eval::{evaluate_all, GraphRuntime};
+use vizij_graph_core::eval::{evaluate_all, evaluate_all_cached, GraphRuntime};
 use vizij_graph_core::types::{GraphSpec, NodeType, Selector};
 
 use crate::blackboard::Blackboard;
@@ -764,6 +764,7 @@ pub struct GraphController {
     pub spec: GraphSpec,
     pub rt: GraphRuntime,
     pub subs: Subscriptions,
+    plan_ready: bool,
 }
 
 impl GraphController {
@@ -773,6 +774,7 @@ impl GraphController {
             spec: cfg.spec,
             rt: GraphRuntime::default(),
             subs: cfg.subs,
+            plan_ready: false,
         }
     }
 
@@ -809,7 +811,18 @@ impl GraphController {
         combined.append(std::mem::take(&mut self.rt.writes));
 
         // Call into graph evaluation
-        evaluate_all(&mut self.rt, &self.spec).map_err(|e| anyhow!("evaluate_all error: {}", e))?;
+        let res = if self.plan_ready {
+            evaluate_all_cached(&mut self.rt, &self.spec)
+        } else {
+            evaluate_all(&mut self.rt, &self.spec)
+        };
+        match res {
+            Ok(_) => self.plan_ready = true,
+            Err(e) => {
+                self.plan_ready = false;
+                return Err(anyhow!("evaluate_all error: {}", e));
+            }
+        }
 
         // Collect new writes produced during evaluation and append to combined batch.
         let new_writes: WriteBatch = std::mem::take(&mut self.rt.writes);
