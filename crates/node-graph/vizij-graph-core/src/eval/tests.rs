@@ -154,6 +154,129 @@ fn piecewise_remap_handles_segments_and_extrapolation() {
 }
 
 #[test]
+fn piecewise_remap_preserves_plateaus_with_duplicate_inputs() {
+    // Duplicate inputs with differing outputs should create a plateau segment, not collapse.
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "input_breakpoints".to_string(),
+        InputDefault {
+            value: Value::Vector(vec![0.0, 0.5, 0.5, 1.0]),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "output_breakpoints".to_string(),
+        InputDefault {
+            value: Value::Vector(vec![0.0, 0.5, 1.0, 2.0]),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            NodeSpec {
+                id: "input".to_string(),
+                kind: NodeType::Input,
+                params: NodeParams {
+                    path: Some(TypedPath::parse("demo/value").expect("typed path")),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "remap".to_string(),
+                kind: NodeType::PiecewiseRemap,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        edges: vec![link("input", "remap", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    let path = TypedPath::parse("demo/value").expect("typed path");
+
+    let cases = [(0.25, 0.25), (0.5, 0.5), (0.75, 1.5)];
+
+    for (input_value, expected) in cases {
+        rt.set_input(path.clone(), Value::Float(input_value), None);
+        evaluate_all(&mut rt, &graph).expect("piecewise remap should evaluate");
+        let outputs = rt.outputs.get("remap").expect("remap outputs present");
+        let out_port = outputs.get("out").expect("out port present");
+        match &out_port.value {
+            Value::Float(actual) => assert!(
+                (actual - expected).abs() < 1e-6,
+                "expected {expected}, got {actual}"
+            ),
+            other => panic!("expected float, got {:?}", other),
+        }
+    }
+}
+
+#[test]
+fn piecewise_remap_allows_duplicate_inputs_with_different_outputs() {
+    let mut defaults = HashMap::new();
+    defaults.insert(
+        "input_breakpoints".to_string(),
+        InputDefault {
+            value: Value::Vector(vec![0.0, 0.5, 0.5, 1.0]),
+            shape: None,
+        },
+    );
+    defaults.insert(
+        "output_breakpoints".to_string(),
+        InputDefault {
+            value: Value::Vector(vec![0.0, 0.5, 0.75, 2.0]),
+            shape: None,
+        },
+    );
+
+    let graph = GraphSpec {
+        nodes: vec![
+            NodeSpec {
+                id: "input".to_string(),
+                kind: NodeType::Input,
+                params: NodeParams {
+                    path: Some(TypedPath::parse("demo/value").expect("typed path")),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "remap".to_string(),
+                kind: NodeType::PiecewiseRemap,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: defaults,
+            },
+        ],
+        edges: vec![link("input", "remap", "in")],
+    };
+
+    let mut rt = GraphRuntime::default();
+    let path = TypedPath::parse("demo/value").expect("typed path");
+
+    let cases = [(0.5, 0.5), (0.75, 1.375)];
+
+    for (input_value, expected) in cases {
+        rt.set_input(path.clone(), Value::Float(input_value), None);
+        evaluate_all(&mut rt, &graph).expect("duplicate breakpoints should evaluate");
+        let outputs = rt.outputs.get("remap").expect("outputs present");
+        let out_port = outputs.get("out").expect("out port present");
+        match &out_port.value {
+            Value::Float(actual) => assert!(
+                (actual - expected).abs() < 1e-6,
+                "expected {expected}, got {actual}"
+            ),
+            other => panic!("expected float, got {:?}", other),
+        }
+    }
+}
+
+#[test]
 fn piecewise_remap_validates_duplicate_breakpoints() {
     let mut defaults = HashMap::new();
     defaults.insert(
@@ -223,12 +346,12 @@ fn piecewise_remap_validates_duplicate_breakpoints() {
 }
 
 #[test]
-fn piecewise_remap_errors_when_duplicates_diverge() {
+fn piecewise_remap_errors_when_inputs_decrease() {
     let mut defaults = HashMap::new();
     defaults.insert(
         "input_breakpoints".to_string(),
         InputDefault {
-            value: Value::Vector(vec![0.0, 0.5, 0.5, 1.0]),
+            value: Value::Vector(vec![0.0, 0.6, 0.5, 1.0]),
             shape: None,
         },
     );
@@ -267,10 +390,10 @@ fn piecewise_remap_errors_when_duplicates_diverge() {
     let path = TypedPath::parse("demo/value").expect("typed path");
     rt.set_input(path, Value::Float(0.5), None);
 
-    let err = evaluate_all(&mut rt, &graph).expect_err("duplicate mismatch should fail");
+    let err = evaluate_all(&mut rt, &graph).expect_err("ordering mismatch should fail");
     assert!(
-        err.contains("duplicate input breakpoints"),
-        "error message should mention duplicate breakpoints, got {err}"
+        err.contains("non-decreasing input breakpoints"),
+        "error message should mention ordering, got {err}"
     );
 }
 

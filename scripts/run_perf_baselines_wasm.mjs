@@ -173,6 +173,7 @@ async function loadOrchWasm() {
 
 function applyGraphInputs(graph, entry, dt, stepIdx, hotPaths) {
   if (!hotPaths.length) return;
+  if (entry.mode === "defaults-only") return; // keep defaults untouched for this scenario
   const vals = new Float32Array(hotPaths.length);
   const base = stepIdx;
   if (entry.mode === "ramp-hotpaths") {

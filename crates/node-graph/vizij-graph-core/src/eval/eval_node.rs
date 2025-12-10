@@ -893,19 +893,13 @@ fn prepare_piecewise_breakpoints(
                 ));
             }
             if delta.abs() <= PIECEWISE_BREAKPOINT_EPS {
+                // Only coalesce duplicates when both input and output are effectively identical.
                 if let Some(&prev_output) = unique_outputs.last() {
                     let output_delta: f32 = output - prev_output;
-                    if output_delta.abs() > PIECEWISE_OUTPUT_EPS {
-                        return Err(format!(
-                            "PiecewiseRemap requires equal outputs for duplicate input breakpoints (index {idx})"
-                        ));
+                    if output_delta.abs() <= PIECEWISE_OUTPUT_EPS {
+                        continue;
                     }
-                } else {
-                    return Err(format!(
-                        "PiecewiseRemap could not resolve duplicate breakpoints at index {idx}"
-                    ));
                 }
-                continue;
             }
         }
         unique_inputs.push(input);
