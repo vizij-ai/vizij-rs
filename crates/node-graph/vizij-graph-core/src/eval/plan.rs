@@ -1,5 +1,7 @@
 use crate::schema::{registry, NodeSignature};
-use crate::types::{GraphSpec, InputConnection, NodeSpec, NodeType, Selector, SelectorSegment};
+use crate::types::{
+    GraphSpec, InputConnection, InputDefault, NodeSpec, NodeType, Selector, SelectorSegment,
+};
 use hashbrown::{HashMap, HashSet};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
@@ -323,8 +325,20 @@ fn fingerprint(spec: &GraphSpec) -> u64 {
     for node in &spec.nodes {
         hasher.write(node.id.as_bytes());
         hasher.write_usize(node.input_defaults.len());
-        for (k, _) in &node.input_defaults {
+        // Sort defaults to ensure deterministic hashing.
+        let mut defaults: Vec<(&String, &InputDefault)> = node.input_defaults.iter().collect();
+        defaults.sort_by(|a, b| a.0.cmp(b.0));
+        for (k, default) in defaults {
             hasher.write(k.as_bytes());
+            // Include default value and shape so plan cache updates when defaults change.
+            if let Ok(json) = serde_json::to_string(&default.value) {
+                hasher.write(json.as_bytes());
+            }
+            if let Some(shape) = &default.shape {
+                if let Ok(json) = serde_json::to_string(shape) {
+                    hasher.write(json.as_bytes());
+                }
+            }
         }
         hasher.write_usize(node.output_shapes.len());
         for (k, _) in &node.output_shapes {
@@ -354,6 +368,29 @@ fn fingerprint(spec: &GraphSpec) -> u64 {
             }
         } else {
             hasher.write_u8(0);
+        }
+    }
+
+    // Include connection default values/shapes so plan cache rebuilds when they change.
+    if let Ok(connections) = spec.input_connections() {
+        let mut entries: Vec<(String, String, InputConnection)> = Vec::new();
+        for (node_id, inputs) in connections {
+            for (input_key, conn) in inputs {
+                entries.push((node_id.clone(), input_key.clone(), conn));
+            }
+        }
+        entries.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+        for (_, _, conn) in entries {
+            if let Some(value) = &conn.default_value {
+                if let Ok(json) = serde_json::to_string(value) {
+                    hasher.write(json.as_bytes());
+                }
+            }
+            if let Some(shape) = &conn.default_shape {
+                if let Ok(json) = serde_json::to_string(shape) {
+                    hasher.write(json.as_bytes());
+                }
+            }
         }
     }
 
