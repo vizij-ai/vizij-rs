@@ -9,6 +9,17 @@ use hashbrown::HashMap;
 use vizij_api_core::shape::Field;
 use vizij_api_core::{Shape, ShapeId, TypedPath, Value, WriteBatch};
 
+macro_rules! graph_spec {
+    ({ $($body:tt)* }) => {{
+        GraphSpec {
+            $($body)*
+            version: 0,
+            fingerprint: 0,
+        }
+        .with_cache()
+    }};
+}
+
 fn constant_node(id: &str, value: Value) -> NodeSpec {
     NodeSpec {
         id: id.to_string(),
@@ -20,6 +31,76 @@ fn constant_node(id: &str, value: Value) -> NodeSpec {
         output_shapes: HashMap::new(),
         input_defaults: HashMap::new(),
     }
+}
+
+#[test]
+fn plan_cache_reuses_layouts_when_spec_version_matches() {
+    let spec = graph_spec!({
+        nodes: vec![constant_node("a", Value::Float(1.0))],
+        edges: vec![],
+    });
+
+    let mut plan = PlanCache::default();
+    plan.ensure_versioned(&spec).expect("initial plan build");
+
+    // Capture stable pointers to prove layouts/order are reused, not rebuilt.
+    let order_ptr = plan.order.as_ptr();
+    let layouts_ptr = plan.layouts.as_ptr();
+    let bindings_ptr = plan.input_bindings.as_ptr();
+    let node_index_len = plan.node_index.len();
+
+    // Second ensure with the same version should be a no-op.
+    plan.ensure_versioned(&spec)
+        .expect("plan should be reused for same version");
+
+    assert_eq!(plan.order.as_ptr(), order_ptr, "order should be reused");
+    assert_eq!(
+        plan.layouts.as_ptr(),
+        layouts_ptr,
+        "layouts should be reused"
+    );
+    assert_eq!(
+        plan.input_bindings.as_ptr(),
+        bindings_ptr,
+        "bindings should be reused"
+    );
+    assert_eq!(
+        plan.node_index.len(),
+        node_index_len,
+        "node index should remain stable"
+    );
+}
+
+#[test]
+fn plan_cache_rebuilds_when_spec_version_changes() {
+    let base = graph_spec!({
+        nodes: vec![constant_node("a", Value::Float(1.0))],
+        edges: vec![],
+    });
+
+    let mut plan = PlanCache::default();
+    plan.ensure_versioned(&base).expect("initial plan build");
+
+    let initial_version = base.version;
+    let order_ptr = plan.order.as_ptr();
+    let layouts_ptr = plan.layouts.as_ptr();
+
+    // Bump the spec generation. This should force a rebuild even if the structure is otherwise
+    // identical (the cache key changed).
+    let bumped = base.with_cache();
+    assert!(
+        bumped.version > initial_version,
+        "with_cache should bump version"
+    );
+
+    plan.ensure_versioned(&bumped)
+        .expect("plan should rebuild for bumped version");
+
+    // We expect at least one of these pointers to change because rebuild assigns new vectors.
+    assert!(
+        plan.order.as_ptr() != order_ptr || plan.layouts.as_ptr() != layouts_ptr,
+        "plan rebuild should replace cached buffers"
+    );
 }
 
 #[test]
@@ -61,7 +142,9 @@ fn piecewise_remap_matches_linear_case() {
             },
         ],
         edges: vec![link("input", "remap", "in")],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");
@@ -101,7 +184,7 @@ fn piecewise_remap_handles_segments_and_extrapolation() {
         },
     );
 
-    let graph = GraphSpec {
+    let graph = graph_spec!({
         nodes: vec![
             NodeSpec {
                 id: "input".to_string(),
@@ -125,7 +208,7 @@ fn piecewise_remap_handles_segments_and_extrapolation() {
             },
         ],
         edges: vec![link("input", "remap", "in")],
-    };
+    });
 
     let mut rt = GraphRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");
@@ -172,7 +255,7 @@ fn piecewise_remap_preserves_plateaus_with_duplicate_inputs() {
         },
     );
 
-    let graph = GraphSpec {
+    let graph = graph_spec!({
         nodes: vec![
             NodeSpec {
                 id: "input".to_string(),
@@ -193,7 +276,7 @@ fn piecewise_remap_preserves_plateaus_with_duplicate_inputs() {
             },
         ],
         edges: vec![link("input", "remap", "in")],
-    };
+    });
 
     let mut rt = GraphRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");
@@ -233,7 +316,7 @@ fn piecewise_remap_allows_duplicate_inputs_with_different_outputs() {
         },
     );
 
-    let graph = GraphSpec {
+    let graph = graph_spec!({
         nodes: vec![
             NodeSpec {
                 id: "input".to_string(),
@@ -254,7 +337,7 @@ fn piecewise_remap_allows_duplicate_inputs_with_different_outputs() {
             },
         ],
         edges: vec![link("input", "remap", "in")],
-    };
+    });
 
     let mut rt = GraphRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");
@@ -294,7 +377,7 @@ fn piecewise_remap_validates_duplicate_breakpoints() {
         },
     );
 
-    let graph = GraphSpec {
+    let graph = graph_spec!({
         nodes: vec![
             NodeSpec {
                 id: "input".to_string(),
@@ -315,7 +398,7 @@ fn piecewise_remap_validates_duplicate_breakpoints() {
             },
         ],
         edges: vec![link("input", "remap", "in")],
-    };
+    });
 
     let mut rt = GraphRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");
@@ -384,7 +467,9 @@ fn piecewise_remap_errors_when_inputs_decrease() {
             },
         ],
         edges: vec![link("input", "remap", "in")],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");
@@ -439,7 +524,8 @@ fn it_should_respect_declared_shape() {
     let spec = GraphSpec {
         nodes: vec![node],
         ..Default::default()
-    };
+    }
+    .with_cache();
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &spec).expect("shape should match");
     let outputs = rt.outputs.get("a").expect("outputs present");
@@ -456,7 +542,8 @@ fn it_should_error_when_shape_mismatches() {
     let spec = GraphSpec {
         nodes: vec![node],
         ..Default::default()
-    };
+    }
+    .with_cache();
     let mut rt = GraphRuntime::default();
     let err = evaluate_all(&mut rt, &spec).expect_err("should fail due to mismatch");
     assert!(err.contains("does not match declared shape"));
@@ -476,7 +563,9 @@ fn abs_node_handles_negative_values() {
             },
         ],
         edges: vec![link("src", "abs", "in")],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("abs should evaluate");
@@ -502,7 +591,9 @@ fn modulo_node_handles_division() {
             },
         ],
         edges: vec![link("lhs", "mod", "lhs"), link("rhs", "mod", "rhs")],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("modulo should evaluate");
@@ -527,7 +618,9 @@ fn sqrt_node_handles_vectors() {
             },
         ],
         edges: vec![link("src", "sqrt", "in")],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("sqrt should evaluate");
@@ -552,7 +645,9 @@ fn sign_node_outputs_signum() {
             },
         ],
         edges: vec![link("src", "sign", "in")],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("sign should evaluate");
@@ -594,7 +689,9 @@ fn min_max_nodes_select_expected_values() {
             link("b", "maxx", "operand_2"),
             link("c", "maxx", "operand_3"),
         ],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     evaluate_all(&mut rt, &graph).expect("min/max should evaluate");
 
@@ -659,7 +756,9 @@ fn round_node_respects_modes() {
             link("src", "ceil", "in"),
             link("src", "trunc", "in"),
         ],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("round nodes should evaluate");
@@ -717,7 +816,9 @@ fn it_should_emit_write_for_output_nodes() {
             },
         ],
         edges: vec![link("src", "out", "in")],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("graph should evaluate");
@@ -752,7 +853,9 @@ fn writes_batch_json_roundtrip_from_graph() {
             },
         ],
         edges: vec![link("src", "out", "in")],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("graph should evaluate");
@@ -786,7 +889,9 @@ fn input_defaults_supply_missing_connections() {
             },
         ],
         edges: vec![link("numerator", "div", "lhs")],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("defaults should evaluate");
@@ -825,7 +930,9 @@ fn linked_inputs_override_defaults() {
             link("numerator", "div", "lhs"),
             link("denominator", "div", "rhs"),
         ],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("graph should evaluate");
@@ -863,7 +970,9 @@ fn defaults_apply_when_output_key_missing() {
             link("numerator", "div", "lhs"),
             link_with_output("config", "missing", "div", "rhs"),
         ],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("graph should evaluate");
@@ -896,7 +1005,9 @@ fn join_respects_operand_order() {
             link("b", "join", "operand_2"),
             link("c", "join", "operand_3"),
         ],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("join should evaluate");
@@ -926,7 +1037,9 @@ fn oscillator_broadcasts_vector_inputs() {
             link("freq", "osc", "frequency"),
             link("phase", "osc", "phase"),
         ],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime {
         t: 0.5,
@@ -963,7 +1076,8 @@ fn it_should_infer_vector_length_hints() {
     let spec = GraphSpec {
         nodes: vec![node],
         ..Default::default()
-    };
+    }
+    .with_cache();
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &spec).expect("graph should evaluate");
     let outputs = rt.outputs.get("vec").expect("outputs present");
@@ -985,7 +1099,8 @@ fn it_should_error_when_declared_output_missing() {
     let spec = GraphSpec {
         nodes: vec![node],
         ..Default::default()
-    };
+    }
+    .with_cache();
     let mut rt = GraphRuntime::default();
     let err = evaluate_all(&mut rt, &spec).expect_err("missing declared output should error");
     assert!(err.contains("missing declared output"));
@@ -1047,7 +1162,8 @@ fn input_node_emits_staged_value_with_declared_shape() {
     let graph = GraphSpec {
         nodes: vec![input_node],
         ..Default::default()
-    };
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     rt.set_input(
@@ -1094,7 +1210,8 @@ fn input_node_coerces_vector_to_declared_vec3() {
             input_defaults: HashMap::new(),
         }],
         ..Default::default()
-    };
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     // Staged value is a generic vector of the right length to coerce to Vec3.
@@ -1140,7 +1257,8 @@ fn input_node_missing_numeric_returns_null() {
             input_defaults: HashMap::new(),
         }],
         ..Default::default()
-    };
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("numeric shape should fall back to NaNs");
@@ -1263,7 +1381,9 @@ fn selector_projects_record_field() {
             "in",
             vec![SelectorSegment::Field("translation".to_string())],
         )],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("selector projection should succeed");
@@ -1311,7 +1431,9 @@ fn selector_projects_transform_field_and_nested_index() {
                 SelectorSegment::Index(1),
             ],
         )],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("selector projection should succeed");
@@ -1350,7 +1472,9 @@ fn selector_index_out_of_bounds_errors() {
             "in",
             vec![SelectorSegment::Index(5)],
         )],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     let err = evaluate_all(&mut rt, &graph).expect_err("oob selector should error");
@@ -1380,7 +1504,9 @@ fn spring_node_transitions_toward_new_target() {
     let mut spec = GraphSpec {
         nodes: vec![constant_node("target", Value::Float(0.0)), spring],
         edges: vec![link("target", "spring", "in")],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &spec).expect("initial evaluate");
@@ -1443,7 +1569,9 @@ fn damp_node_smooths_toward_target() {
     let mut spec = GraphSpec {
         nodes: vec![constant_node("target", Value::Float(0.0)), damp],
         edges: vec![link("target", "damp", "in")],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &spec).expect("initial evaluate");
@@ -1503,7 +1631,9 @@ fn slew_node_limits_rate_of_change() {
     let mut spec = GraphSpec {
         nodes: vec![constant_node("target", Value::Float(0.0)), slew],
         edges: vec![link("target", "slew", "in")],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &spec).expect("initial evaluate");
@@ -1626,7 +1756,9 @@ fn end_to_end_input_selector_scalar_math_output() {
             link("two", "sum", "operand_2"),
             link("sum", "out", "in"),
         ],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     // Stage record { translation: [1, 3, 5], label: "ok" } for the Input node.
     let mut record = HashMap::new();
@@ -1727,7 +1859,10 @@ fn centered_remap_handles_anchor_segments() {
             },
         ],
         edges: vec![link("input", "remap", "in")],
-    };
+        version: 1,
+        fingerprint: 0,
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
 
@@ -1829,7 +1964,10 @@ fn centered_remap_supports_asymmetric_ranges_and_vectors() {
             },
         ],
         edges: vec![link("input", "remap", "in")],
-    };
+        version: 1,
+        fingerprint: 0,
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");

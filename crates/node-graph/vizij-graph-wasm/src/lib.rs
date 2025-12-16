@@ -4,7 +4,9 @@ use serde_wasm_bindgen as swb;
 use vizij_api_core::shape::ShapeId;
 use vizij_api_core::{coercion, json, Shape, TypedPath, Value};
 use vizij_graph_core::types::RoundMode;
-use vizij_graph_core::{evaluate_all, evaluate_all_cached, GraphRuntime, GraphSpec, PortValue};
+use vizij_graph_core::{
+    evaluate_all, evaluate_all_cached, GraphRuntime, GraphSpec, NodeType, PortValue,
+};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -157,6 +159,54 @@ mod tests {
             "plan rebuild should reflect new Split arity"
         );
     }
+
+    #[test]
+    fn set_param_does_not_invalidate_plan_cache_for_non_structural_changes() {
+        let mut graph = WasmGraph::new();
+        let spec = r#"{
+            "nodes": [
+                { "id": "c", "type": "constant", "params": { "value": 1.0 }, "inputs": {}, "output_shapes": {} },
+                { "id": "out", "type": "output", "params": { "path": "demo/out" }, "inputs": {}, "output_shapes": {} }
+            ],
+            "edges": [
+                { "from": { "node_id": "c", "output": "out" }, "to": { "node_id": "out", "input": "in" } }
+            ]
+        }"#;
+
+        graph.load_graph(spec).expect("graph loads");
+        graph.eval_all().expect("initial eval");
+        assert!(graph.plan_ready, "plan should be ready after first eval");
+
+        // We can't directly read `PlanCache.fingerprint` from this crate (private field), so we
+        // use the public shape of the plan as our proxy for "cache remained intact".
+        let initial_slots = graph.runtime.plan.layouts.len();
+        assert!(initial_slots > 0, "plan layouts should be populated");
+
+        // Change a non-structural param. Constant.value affects runtime outputs but not port layout.
+        graph
+            .set_param("c", "value", "2.0")
+            .expect("set_param succeeds");
+
+        assert!(
+            graph.plan_ready,
+            "non-structural param change should not invalidate plan cache"
+        );
+        assert!(
+            !graph.runtime.plan.layouts.is_empty(),
+            "plan cache should remain populated"
+        );
+        assert_eq!(
+            graph.runtime.plan.layouts.len(),
+            initial_slots,
+            "plan layouts should remain the same for non-structural edits"
+        );
+
+        // A follow-up eval should succeed and keep the plan ready.
+        graph
+            .eval_all()
+            .expect("eval succeeds after non-structural edit");
+        assert!(graph.plan_ready);
+    }
 }
 
 /// Holds a persistent runtime so transition nodes can accumulate state across
@@ -256,8 +306,9 @@ impl WasmGraph {
         let normalized = json::normalize_graph_spec_json(json_str)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         // Now deserialize into the typed GraphSpec
-        self.spec =
-            serde_json::from_value(normalized).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        self.spec = serde_json::from_value::<GraphSpec>(normalized)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?
+            .with_cache();
         self.runtime = GraphRuntime::default();
         self.runtime.t = self.t as f32;
         self.runtime.dt = 0.0;
@@ -335,6 +386,10 @@ impl WasmGraph {
         self.runtime.plan = Default::default();
         self.last_outputs.clear();
         self.last_outputs_version = 0;
+        // Bump the plan-validity key (structural generation) and refresh the fingerprint.
+        // This ensures `PlanCache::ensure_versioned` will rebuild when needed without doing
+        // per-frame hashing in the steady state.
+        self.spec = std::mem::take(&mut self.spec).with_cache();
     }
 
     fn eval_internal(&mut self) -> Result<(), JsValue> {
@@ -1054,6 +1109,12 @@ impl WasmGraph {
         }
 
         if let Some(node) = self.spec.nodes.iter_mut().find(|n| n.id == node_id) {
+            // Structural params are those that can change the cached plan's port layouts or
+            // bindings. Today, the only known structural mutation via `set_param` is changing
+            // `Split.sizes`, which affects the number of variadic outputs and therefore slot
+            // indices.
+            let structural_change = matches!((&node.kind, key), (NodeType::Split, "sizes"));
+
             match key {
                 "value" => {
                     node.params.value = Some(val);
@@ -1142,7 +1203,19 @@ impl WasmGraph {
                     )))
                 }
             }
-            self.invalidate_plan_cache();
+            if structural_change {
+                // Structural edits can change port layouts and bindings (e.g. Split.sizes affects
+                // how many variadic outputs exist), so we must drop the cached plan.
+                self.invalidate_plan_cache();
+            } else {
+                // Non-structural params only affect runtime evaluation, not the cached layouts or
+                // input bindings. Keep the plan cache valid so we can continue using
+                // `evaluate_all_cached` for the steady-state fast path.
+                //
+                // NOTE: We intentionally do *not* bump `GraphSpec.version` here, because in this
+                // stack `version` acts as a plan-validity key. Bumping it on non-structural edits
+                // would force unnecessary plan rebuilds.
+            }
             Ok(())
         } else {
             Err(JsValue::from_str("unknown node"))

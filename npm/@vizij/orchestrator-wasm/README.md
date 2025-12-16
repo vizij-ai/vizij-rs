@@ -32,6 +32,10 @@ This package publishes the WebAssembly build of `vizij-orchestrator-core` togeth
 
 - **Controllers** – Graph and animation controllers registered with IDs; each has its own configuration (`spec`, `subscriptions`, `setup`).
 - **Graph merging** – `registerMergedGraph` rewires compatible graph specs into a single controller so shared paths become direct edges. Conflict strategies (`error`, `namespace`, `blend`, `add`, `default-blend`) are available through `MergeStrategyOptions`, letting you average, sum, or weight competing outputs.
+- **Plan caching & invalidation** – Graph controllers internally use the same node-graph engine as `@vizij/node-graph-wasm`, including a cached execution plan (topological order + port layouts + input bindings).
+  - The orchestrator normalizes and seeds cache keys when registering graphs.
+  - Only *structural* edits (those that can affect port layouts or bindings, e.g. `Split.sizes`) require invalidating the cached plan; ordinary param/value tweaks should not force a plan rebuild.
+  - `GraphSpec.specVersion`/`fingerprint` are treated as *plan-validity keys* and are managed by the wasm/Rust layer; most consumers should omit them and let the runtime handle it.
 - **Blackboard** – Shared typed key-value store (`TypedPath`, `ValueJSON`, `ShapeJSON`) where controllers read/write.
 - **Schedule** – `SinglePass`, `TwoPass`, or future `RateDecoupled` determine evaluation order.
 - **Merged Writes** – Deterministic ordered batch of writes produced during a frame, suitable for UI or downstream consumers.

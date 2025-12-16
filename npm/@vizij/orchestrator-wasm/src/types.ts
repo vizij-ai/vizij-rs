@@ -102,10 +102,34 @@ export type { ValueJSON as Value };
 export type { ShapeJSON as Shape };
 export type { OrchestratorFrame as Frame };
 
+/**
+ * GraphSpec is the node-graph JSON consumed by graph controllers.
+ *
+ * This package stays permissive for legacy/forward-compatible shapes, but we still surface the
+ * cache-related fields so consumers can understand the performance model.
+ */
+export interface GraphSpec {
+  nodes: any[];
+  edges?: any[];
+  /**
+   * Optional plan-validity key used by the node-graph runtime to reuse cached layouts/bindings.
+   *
+   * - This is auto-filled/managed by the wasm layer.
+   * - It should bump only for *structural* edits (those that can affect port layouts or bindings),
+   *   not for ordinary param/value changes.
+   */
+  specVersion?: number;
+  /**
+   * Optional structural fingerprint used alongside `specVersion` for validation/debugging.
+   * Auto-filled/managed by the wasm layer.
+   */
+  fingerprint?: number;
+}
+
 /* Helper config types used by the JS wrapper */
 export interface GraphRegistrationConfig {
   id?: string;
-  spec: any;
+  spec: GraphSpec | any;
   subs?: GraphSubscriptions;
 }
 

@@ -120,6 +120,17 @@ pub struct GraphRuntime {
 }
 
 impl GraphRuntime {
+    /// Reset runtime state for a new spec, clearing plan and per-node caches.
+    pub fn reset_for_spec(&mut self) {
+        self.plan = PlanCache::default();
+        self.outputs.clear();
+        self.outputs_vec.clear();
+        self.writes.0.clear();
+        self.node_states.clear();
+        self.staged_inputs.clear();
+        self.input_epoch = 0;
+    }
+
     /// Advance the staging epoch. Values staged for `epoch + 1` become visible for the
     /// upcoming frame; older entries are dropped so stale data cannot leak through.
     pub fn advance_epoch(&mut self) {

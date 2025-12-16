@@ -27,7 +27,7 @@ mod variadic;
 
 pub use eval_node::eval_node;
 pub use graph_runtime::{GraphRuntime, StagedInput};
-pub use plan::PlanCache;
+pub use plan::{fingerprint_spec, PlanCache};
 pub use value_layout::PortValue;
 
 #[cfg(test)]
@@ -40,7 +40,11 @@ mod tests;
 /// The runtime is cleared before evaluation and is repopulated as nodes are visited in topological
 /// order. Any error propagated from an individual node halts evaluation.
 pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), String> {
-    rt.plan.ensure(spec)?;
+    if spec.version > 0 {
+        rt.plan.ensure_versioned(spec)?;
+    } else {
+        rt.plan.ensure(spec)?;
+    }
     rt.advance_epoch();
     rt.outputs.clear();
     rt.outputs.reserve(spec.nodes.len());

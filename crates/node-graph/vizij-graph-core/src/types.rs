@@ -207,6 +207,17 @@ pub struct GraphSpec {
     pub nodes: Vec<NodeSpec>,
     #[serde(default)]
     pub edges: Vec<EdgeSpec>,
+    /// Optional caller-managed cache key for plan reuse. When zero, the runtime falls back to
+    /// hashing to detect structural changes.
+    #[serde(default, skip_serializing_if = "crate::types::is_zero")]
+    pub version: u64,
+    /// Fingerprint of the structural layout (nodes/edges/params) used alongside `version`.
+    #[serde(default, skip_serializing_if = "crate::types::is_zero")]
+    pub fingerprint: u64,
+}
+
+pub(crate) fn is_zero(v: &u64) -> bool {
+    *v == 0
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -270,6 +281,25 @@ pub struct EdgeSpec {
 }
 
 impl GraphSpec {
+    /// Recompute the structural fingerprint for this spec without mutating the version counter.
+    pub fn recompute_fingerprint(&self) -> u64 {
+        crate::eval::fingerprint_spec(self)
+    }
+
+    /// Seed or bump the spec version and refresh the fingerprint for plan-cache reuse.
+    ///
+    /// - If `version` is zero, it is set to 1.
+    /// - Otherwise, the version is saturated by `saturating_add(1)` to avoid wrap.
+    pub fn with_cache(mut self) -> Self {
+        self.version = if self.version == 0 {
+            1
+        } else {
+            self.version.saturating_add(1)
+        };
+        self.fingerprint = self.recompute_fingerprint();
+        self
+    }
+
     pub fn input_connections(
         &self,
     ) -> Result<HashMap<NodeId, HashMap<String, InputConnection>>, String> {

@@ -20,7 +20,7 @@ fn single_pass_applies_graph_writes_and_merges() {
     // Register a graph controller with default subscriptions
     let cfg = GraphControllerConfig {
         id: "g".into(),
-        spec: GraphSpec::default(),
+        spec: GraphSpec::default().with_cache(),
         subs: Subscriptions::default(),
     };
     orch = orch.with_graph(cfg);
@@ -60,7 +60,7 @@ fn two_pass_applies_graph_then_anim_then_graph_writes_and_merges() {
     // Register a graph controller that will produce a write in pass1
     let cfg = GraphControllerConfig {
         id: "g1".into(),
-        spec: GraphSpec::default(),
+        spec: GraphSpec::default().with_cache(),
         subs: Subscriptions::default(),
     };
     orch = orch.with_graph(cfg);
@@ -68,7 +68,7 @@ fn two_pass_applies_graph_then_anim_then_graph_writes_and_merges() {
     // Register another graph controller that will produce a write in pass2
     let cfg2 = GraphControllerConfig {
         id: "g2".into(),
-        spec: GraphSpec::default(),
+        spec: GraphSpec::default().with_cache(),
         subs: Subscriptions::default(),
     };
     orch = orch.with_graph(cfg2);

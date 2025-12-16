@@ -131,7 +131,12 @@ fn chain_graph(length: usize) -> GraphSpec {
         prev = add_id;
     }
 
-    GraphSpec { nodes, edges }
+    GraphSpec {
+        nodes,
+        edges,
+        ..Default::default()
+    }
+    .with_cache()
 }
 
 /// Construct a “kitchen sink” block that hits many node types (excluding robotics/blend).
@@ -446,7 +451,12 @@ fn kitchen_chain(blocks: usize) -> GraphSpec {
         prev_out = Some(exit_id);
     }
 
-    GraphSpec { nodes, edges }
+    GraphSpec {
+        nodes,
+        edges,
+        ..Default::default()
+    }
+    .with_cache()
 }
 
 fn load_fixture_spec(name: &str) -> GraphSpec {

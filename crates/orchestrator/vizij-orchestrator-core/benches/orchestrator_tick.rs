@@ -200,7 +200,12 @@ fn generated_graph(blocks: usize, base_path: &str) -> GraphSpec {
         edges.append(&mut e);
         prev = Some(exit);
     }
-    GraphSpec { nodes, edges }
+    GraphSpec {
+        nodes,
+        edges,
+        ..Default::default()
+    }
+    .with_cache()
 }
 
 fn synthetic_animation(track_count: usize, keyframes: usize, base_path: &str) -> AnimationData {

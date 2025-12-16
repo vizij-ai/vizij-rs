@@ -62,7 +62,7 @@ fn load_graph(mut spec: ResMut<GraphSpecRes>) {
     let graph: GraphSpec =
         serde_json::from_str(include_str!("../../../fixtures/node_graphs/simple-gain-offset.json"))
             .expect("valid graph");
-    *spec = GraphSpecRes::new(graph);
+    *spec = GraphSpecRes::new(graph.with_cache());
 }
 
 fn inspect_outputs(result: Res<EvalResultRes>) {

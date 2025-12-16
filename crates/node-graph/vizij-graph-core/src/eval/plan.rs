@@ -68,6 +68,7 @@ pub struct InputBinding {
 #[derive(Debug, Default)]
 pub struct PlanCache {
     fingerprint: u64,
+    version: u64,
     /// Node indices in topological order.
     pub order: Vec<usize>,
     /// Per-node input bindings keyed by slot index.
@@ -81,14 +82,36 @@ pub struct PlanCache {
 impl PlanCache {
     /// Ensure the cache matches the provided spec; rebuild on structural change.
     pub fn ensure(&mut self, spec: &GraphSpec) -> Result<(), String> {
-        let fp = fingerprint(spec);
-        if fp == self.fingerprint && self.layouts.len() == spec.nodes.len() {
-            return Ok(());
+        if spec.version > 0 {
+            self.ensure_versioned(spec)
+        } else {
+            let fp = fingerprint_spec(spec);
+            if fp == self.fingerprint && self.layouts.len() == spec.nodes.len() {
+                return Ok(());
+            }
+            self.rebuild(spec, fp, 0)
         }
-        self.rebuild(spec, fp)
     }
 
-    fn rebuild(&mut self, spec: &GraphSpec, fingerprint: u64) -> Result<(), String> {
+    /// Version-aware fast path: compare caller-managed version for O(1) steady-state checks.
+    pub fn ensure_versioned(&mut self, spec: &GraphSpec) -> Result<(), String> {
+        debug_assert!(
+            spec.version == 0 || spec.fingerprint == 0 || spec.fingerprint == fingerprint_spec(spec),
+            "spec fingerprint does not match contents; caller likely forgot to bump version/fingerprint"
+        );
+
+        if self.version == spec.version && self.layouts.len() == spec.nodes.len() {
+            return Ok(());
+        }
+        let fp = if spec.fingerprint != 0 {
+            spec.fingerprint
+        } else {
+            fingerprint_spec(spec)
+        };
+        self.rebuild(spec, fp, spec.version)
+    }
+
+    fn rebuild(&mut self, spec: &GraphSpec, fingerprint: u64, version: u64) -> Result<(), String> {
         let inputs_map = spec.input_connections()?;
         let order_ids = crate::topo::topo_order(&spec.nodes, &spec.edges)?;
         let node_index: HashMap<&str, usize> = spec
@@ -142,6 +165,7 @@ impl PlanCache {
         self.layouts = layouts;
         self.input_bindings = input_bindings;
         self.fingerprint = fingerprint;
+        self.version = version;
         self.node_index = node_index
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
@@ -319,7 +343,7 @@ fn signature_map() -> HashMap<NodeType, NodeSignature> {
         .collect()
 }
 
-fn fingerprint(spec: &GraphSpec) -> u64 {
+pub fn fingerprint_spec(spec: &GraphSpec) -> u64 {
     let mut hasher = DefaultHasher::new();
     hasher.write_usize(spec.nodes.len());
     for node in &spec.nodes {
@@ -340,6 +364,22 @@ fn fingerprint(spec: &GraphSpec) -> u64 {
                 }
             }
         }
+        // Node kind impacts layout; include serialized enum to stay forward-compatible with tags.
+        if let Ok(kind_json) = serde_json::to_string(&node.kind) {
+            hasher.write(kind_json.as_bytes());
+        }
+
+        // Include params that alter layout (currently Split sizes / index can adjust output slots).
+        if let Some(index) = node.params.index {
+            hasher.write_u64(index.to_bits() as u64);
+        }
+        if let Some(sizes) = &node.params.sizes {
+            hasher.write_usize(sizes.len());
+            for size in sizes {
+                hasher.write_u64(size.to_bits() as u64);
+            }
+        }
+
         hasher.write_usize(node.output_shapes.len());
         for (k, _) in &node.output_shapes {
             hasher.write(k.as_bytes());

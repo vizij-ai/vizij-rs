@@ -95,7 +95,9 @@ mod tests {
                 },
                 selector: None,
             }],
-        };
+            ..Default::default()
+        }
+        .with_cache();
         let order = topo_order(&g.nodes, &g.edges).unwrap();
         assert_eq!(order.len(), 2);
     }

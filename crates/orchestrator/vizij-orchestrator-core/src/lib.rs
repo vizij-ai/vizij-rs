@@ -197,7 +197,9 @@ mod tests {
                 },
                 selector: None,
             }],
-        };
+            ..Default::default()
+        }
+        .with_cache();
 
         GraphControllerConfig {
             id: id.to_string(),

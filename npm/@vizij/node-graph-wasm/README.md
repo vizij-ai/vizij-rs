@@ -33,6 +33,10 @@ This package ships the WebAssembly build of `vizij-graph-core` together with a T
 
 - **GraphSpec** – Declarative JSON describing nodes, parameters, and the explicit `edges` array that connects node outputs to inputs (selectors, output keys). The package normalises shorthand specs automatically.
 - **Graph Runtime** – The `Graph` class owns a `GraphRuntime`, handling `loadGraph`, `stageInput`, `setParam`, `step`, and `evalAll`. Structural parameter changes (e.g., `Split` sizes) invalidate the wasm plan cache and the JS wrapper now resets its baseline automatically so the next eval consumes a fresh full snapshot.
+- **Plan caching & invalidation** – The wasm engine caches a compiled execution plan (topological order + port layouts + input bindings) for performance.
+  - The cache is reused across frames when the graph layout is unchanged.
+  - Only *structural* edits (changes that can affect port layouts or bindings) invalidate the plan. In practice today this includes `Split.sizes`; most other param changes are non-structural and do not force a plan rebuild.
+  - `GraphSpec.specVersion` (and `fingerprint`) are treated as *plan-validity keys*. The wrapper auto-fills them and bumps them only for structural changes, so ordinary value tweaks do not degrade steady-state performance.
 - **Staged Inputs** – Host-provided values keyed by `TypedPath`. They are latched until you replace or remove them.
 - **Evaluation Result** – `evalAll()` returns per-node port snapshots plus a `WriteBatch` of sink writes (each with Value + Shape metadata).
 - **Node Schema Registry** – `getNodeSchemas()` exposes the runtime-supported nodes, ideal for palettes/editors.

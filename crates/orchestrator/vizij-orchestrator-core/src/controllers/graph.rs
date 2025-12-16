@@ -132,6 +132,7 @@ impl GraphControllerConfig {
 
         for (index, cfg) in graphs.into_iter().enumerate() {
             let GraphControllerConfig { id, spec, subs } = cfg;
+            let spec = spec.with_cache();
             mirror_writes |= subs.mirror_writes;
             for tp in subs.inputs {
                 merged_input_paths.insert(tp);
@@ -743,7 +744,9 @@ impl GraphControllerConfig {
         let merged_spec = GraphSpec {
             nodes: merged_nodes,
             edges: merged_edges,
-        };
+            ..Default::default()
+        }
+        .with_cache();
 
         Ok(GraphControllerConfig {
             id: merged_id,
