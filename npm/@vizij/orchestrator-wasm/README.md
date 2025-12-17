@@ -111,6 +111,7 @@ async function loadOrchestrationBundle(key: string): Promise<OrchestrationBundle
 
 ```ts
 registerGraph(cfg: GraphRegistrationInput | string): string;
+replaceGraph(cfg: { id: string; spec: GraphSpec; subs?: GraphSubscriptions }): void; // structural edits
 registerMergedGraph(cfg: MergedGraphRegistrationConfig): string; // merge multiple specs w/ conflict strategies
 registerAnimation(cfg: AnimationRegistrationConfig): string;
 exportGraph(id: string): GraphSpec; // inspect merged controller specs
@@ -135,6 +136,7 @@ All types (`GraphSpec`, `ValueJSON`, `OrchestratorFrame`, etc.) are exported fro
 ### Registration payloads
 
 - `registerGraph({ id?, spec, subs? })` expects a canonical `GraphSpec` object. Optional `subs.inputs`/`subs.outputs` arrays accept canonical TypedPath strings; invalid paths throw descriptive errors.
+- **Structural edits**: if you change graph topology/port layouts (nodes, edges, rewires, `Split.sizes`, etc.), call `replaceGraph({ id, spec, subs? })` so the runtime can invalidate its cached execution plan. Mutating a previously-registered spec object in-place does not update the running controller until you call `replaceGraph`.
 - `registerMergedGraph({ id?, graphs: GraphConfig[], strategy? })` mirrors the single-graph shape. `strategy.outputs`/`strategy.intermediate` accept:
   - `"error"` – fail merges when conflicts occur.
   - `"namespace"` – rename colliding final outputs to `graphId/original/path`.

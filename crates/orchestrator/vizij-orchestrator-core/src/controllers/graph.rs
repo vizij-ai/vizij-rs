@@ -781,6 +781,14 @@ impl GraphController {
         }
     }
 
+    pub fn replace_config(&mut self, cfg: GraphControllerConfig) {
+        // Structural edits require invalidating the cached plan. Always re-apply `with_cache()`
+        // at the boundary so versioned plan caching cannot reuse stale layouts.
+        self.spec = cfg.spec.with_cache();
+        self.subs = cfg.subs;
+        self.plan_ready = false;
+    }
+
     /// Evaluate the graph given the current blackboard state and epoch.
     ///
     /// Behavior:

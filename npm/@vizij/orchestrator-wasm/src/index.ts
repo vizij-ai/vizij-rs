@@ -14,6 +14,7 @@ import type {
   WriteOpJSON,
   ConflictLog,
   GraphRegistrationConfig,
+  GraphReplaceConfig,
 } from "./types";
 import { toValueJSON, type ValueInput } from "@vizij/value-json";
 import {
@@ -25,6 +26,7 @@ type WasmResolver = (path: string) => string | number | null | undefined;
 
 interface WasmOrchestratorInstance {
   register_graph(cfg: GraphRegistrationConfig | string): string;
+  replace_graph(cfg: GraphReplaceConfig): void;
   register_merged_graph(cfg: MergedGraphRegistrationConfig): string;
   register_animation(cfg: AnimationRegistrationConfig): string;
   prebind(resolver: WasmResolver): void;
@@ -198,6 +200,18 @@ export class Orchestrator {
    */
   registerGraph(cfg: GraphRegistrationInput): string {
     return this.inner.register_graph(cfg);
+  }
+
+  /**
+   * Replace an existing graph controller's spec/subscriptions.
+   * This is the supported way to apply structural edits at runtime.
+   *
+   * Requires { id, spec, subs? } (string form is not supported here).
+   */
+  replaceGraph(cfg: GraphReplaceConfig): void {
+    this.inner.replace_graph(cfg);
+    // Structural edits invalidate delta baselines; force next stepDelta() call to establish a new baseline.
+    this._lastFrameVersion = 0n;
   }
 
   registerMergedGraph(cfg: MergedGraphRegistrationConfig): string {

@@ -271,13 +271,60 @@ impl VizijOrchestrator {
         // Build controller config and insert into orchestrator
         let cfg = GraphControllerConfig {
             id: id.clone(),
-            spec,
+            spec: spec.with_cache(),
             subs,
         };
         let controller = vizij_orchestrator::controllers::graph::GraphController::new(cfg);
         self.core.graphs.insert(id.clone(), controller);
 
         Ok(id)
+    }
+
+    /// Replace an existing graph controller's spec/subscriptions.
+    ///
+    /// Accepts an object { id: string, spec: object, subs?: ... }.
+    /// (String JSON is intentionally not supported; the id is required.)
+    ///
+    /// This is the supported way to apply structural edits at runtime. The spec is normalized and
+    /// `.with_cache()` is applied so the versioned plan cache cannot reuse stale layouts.
+    #[wasm_bindgen(js_name = replace_graph)]
+    pub fn replace_graph(&mut self, cfg: JsValue) -> Result<(), JsError> {
+        if cfg.is_undefined() || cfg.is_null() {
+            return Err(JsError::new("replace_graph: cfg required"));
+        }
+        if cfg.is_string() {
+            return Err(JsError::new(
+                "replace_graph: expected object { id, spec, subs? } (string form is only supported for register_graph)",
+            ));
+        }
+
+        let obj: JsGraphConfig = swb::from_value(cfg)
+            .map_err(|e| JsError::new(&format!("graph cfg parse error: {e}")))?;
+
+        let id = obj
+            .id
+            .ok_or_else(|| JsError::new("replace_graph: id required"))?;
+
+        let mut spec_val = obj.spec;
+        json::normalize_graph_spec_value(&mut spec_val)
+            .map_err(|e| JsError::new(&format!("normalize graph spec error: {e}")))?;
+        let spec: vizij_graph_core::types::GraphSpec = serde_json::from_value(spec_val)
+            .map_err(|e| JsError::new(&format!("graph spec deserialize error: {e}")))?;
+
+        let subs = map_graph_subscriptions(obj.subs)
+            .map_err(|e| JsError::new(&format!("graph subscriptions error: {e}")))?;
+
+        let controller = self.core.graphs.get_mut(&id).ok_or_else(|| {
+            JsError::new(&format!("replace_graph: graph '{id}' is not registered"))
+        })?;
+
+        controller.replace_config(GraphControllerConfig {
+            id,
+            spec: spec.with_cache(),
+            subs,
+        });
+
+        Ok(())
     }
 
     /// Export a graph spec as a JS object for inspection.

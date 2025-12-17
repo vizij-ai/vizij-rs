@@ -133,6 +133,10 @@ export interface GraphRegistrationConfig {
   subs?: GraphSubscriptions;
 }
 
+export interface GraphReplaceConfig extends GraphRegistrationConfig {
+  id: string;
+}
+
 export interface MergedGraphRegistrationConfig {
   id?: string;
   graphs: GraphRegistrationConfig[];
