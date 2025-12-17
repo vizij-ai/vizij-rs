@@ -1,12 +1,12 @@
 {
   "graph-smoke": {
     "signature": "5f1f016cd1b00cf0fafea9e18ff40768fa280b3059ae3a05986e12e1aef875b6",
-    "median_us": 94.68688333333333,
+    "median_us": 91.53749166666667,
     "tolerance_pct": 0.35
   },
   "graph-defaults-only": {
-    "signature": "2f7c70a6ce0724296af8b016e62601f1f65cddd3ebdb7f764fbf0116e84541e3",
-    "median_us": 38.94322500000034,
+    "signature": "0685341ddbe995dcedb2e6943c19684c7dbd26f3e259482bbfdf61f9f677839b",
+    "median_us": 37.51413333333341,
     "tolerance_pct": 0.35
   },
   "graph-kitchen-025": {
@@ -21,7 +21,7 @@
   },
   "animation-mixed-small": {
     "signature": "8a80ad7bc5acbbe37c78c261daa7a9d1b8b1afad8a5b8cf1179412a4edc8f9f9",
-    "median_us": 36.10097083331614,
+    "median_us": 34.015466666666796,
     "tolerance_pct": 0.35
   },
   "animation-mixed-medium": {
@@ -31,7 +31,7 @@
   },
   "orchestrator-merged-blend": {
     "signature": "4358fc446d0b260f6d5bfdf1fc791c66e297e01af0e32c0f8b7b5fa834f8acd8",
-    "median_us": 9389.031458333375,
+    "median_us": 10063.007524999997,
     "tolerance_pct": 0.35
   }
 }
