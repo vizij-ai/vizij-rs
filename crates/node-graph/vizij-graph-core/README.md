@@ -111,7 +111,9 @@ for write in &result.writes {
 - Holds `t`/`dt`, per-node persistent state, staged inputs (`HashMap<TypedPath, StagedInput>`), and cached outputs.
 - `advance_epoch` bumps the staging epoch and evicts inputs not refreshed for the current frame.
 - Evaluation now updates `t`/`dt` when used via `vizij-orchestrator-core`; if you embed the runtime directly, set them yourself before calling `evaluate_all` if time-based nodes are involved.
-- **Plan cache note:** the internal plan cache is keyed for typical load-and-run usage and assumes the `GraphSpec` is not mutated in place after the first evaluation. Parameter edits that change port layouts (e.g., updating a `Split` node’s `sizes`) do **not** invalidate the cache, so `evaluate_all`/`evaluate_all_cached` will keep using the old slot plan until you rebuild it. Recreate the `GraphRuntime` or rebuild/reload the spec after structural param changes to avoid stale layouts.
+- **Plan cache note:** the internal plan cache is keyed for typical load-and-run usage and assumes the `GraphSpec` is not mutated in place after the first evaluation.
+  - For best steady-state performance, use `GraphSpec::with_cache()` to seed/bump `spec.version` and refresh `spec.fingerprint`. This enables O(1) cache validation in `PlanCache::ensure_versioned()`.
+  - Structural edits that change port layouts (e.g., updating a `Split` node’s `sizes`) must invalidate/rebuild the plan cache. If you mutate a `GraphSpec` in place, either bump the cache key (`with_cache()` after structural edits) or rebuild the runtime/spec to avoid stale layouts.
 
 ### Selectors
 

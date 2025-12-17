@@ -2101,16 +2101,19 @@ pub fn read_inputs(
                     .get(src.node_idx)
                     .and_then(|l| l.outputs.slot_name(src.slot))
                     .unwrap_or("<slot>");
+                let source_port_id = src.output_name.as_str();
                 let input_label = layout.inputs.slot_name(slot_idx).unwrap_or("<slot>");
-                let (value, shape_id) =
-                    project_by_selector(&port.value, Some(&port.shape.id), selector).map_err(
-                        |err| {
-                            format!(
-                                "selector {:?} on edge {}:{} -> {} failed: {}",
-                                selector, source_label, src.output_name, input_label, err
-                            )
-                        },
-                    )?;
+                let (value, shape_id) = project_by_selector(
+                    &port.value,
+                    Some(&port.shape.id),
+                    selector,
+                )
+                .map_err(|err| {
+                    format!(
+                        "selector {:?} on edge [node_idx {}] {}:{} -> {} failed: {}",
+                        selector, src.node_idx, source_label, source_port_id, input_label, err
+                    )
+                })?;
                 port = match shape_id {
                     Some(id) => PortValue::with_shape(value, Shape::new(id)),
                     None => PortValue::new(value),

@@ -102,6 +102,21 @@ pub fn evaluate_all_cached(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<()
     if rt.plan.layouts.len() != spec.nodes.len() {
         return Err("plan cache not initialised for this spec".to_string());
     }
+    if rt.plan.input_bindings.len() != spec.nodes.len() {
+        return Err("plan cache not initialised for this spec".to_string());
+    }
+
+    // Defensive validation: callers of evaluate_all_cached() promise the plan cache matches `spec`.
+    // If that promise is broken, avoid panics from indexing plan/order and return a clear error.
+    for &idx in rt.plan.order.iter() {
+        if idx >= spec.nodes.len() {
+            return Err(format!(
+                "plan cache is inconsistent with spec: order referenced node index {} (nodes len {})",
+                idx,
+                spec.nodes.len()
+            ));
+        }
+    }
 
     rt.advance_epoch();
     rt.outputs.clear();
