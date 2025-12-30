@@ -32,11 +32,11 @@ This package ships the WebAssembly build of `vizij-graph-core` together with a T
 ## Key Concepts
 
 - **GraphSpec** – Declarative JSON describing nodes, parameters, and the explicit `edges` array that connects node outputs to inputs (selectors, output keys). The package normalises shorthand specs automatically.
-- **Graph Runtime** – The `Graph` class owns a `GraphRuntime`, handling `loadGraph`, `stageInput`, `setParam`, `step`, and `evalAll`. Structural parameter changes (e.g., `Split` sizes) invalidate the wasm plan cache and the JS wrapper now resets its baseline automatically so the next eval consumes a fresh full snapshot.
+- **Graph Runtime** – The `Graph` class owns a `GraphRuntime`, handling `loadGraph`, `stageInput`, `setParam`, `step`, and `evalAll`. Structural parameter changes (e.g., `Split.sizes`) invalidate the wasm plan cache and the JS wrapper resets its delta baseline automatically so the next eval re-establishes a full snapshot before returning to deltas.
 - **Plan caching & invalidation** – The wasm engine caches a compiled execution plan (topological order + port layouts + input bindings) for performance.
   - The cache is reused across frames when the graph layout is unchanged.
   - Only *structural* edits (changes that can affect port layouts or bindings) invalidate the plan. In practice today this includes `Split.sizes`; most other param changes are non-structural and do not force a plan rebuild.
-  - `GraphSpec.specVersion` (and `fingerprint`) are treated as *plan-validity keys*. The wrapper auto-fills them and bumps them only for structural changes, so ordinary value tweaks do not degrade steady-state performance.
+  - `GraphSpec.specVersion` (and `fingerprint`) are treated as *plan-validity keys* (not a generic "state version"). The wrapper auto-fills them and bumps them only for structural changes, so ordinary value tweaks do not degrade steady-state performance.
 - **Staged Inputs** – Host-provided values keyed by `TypedPath`. They are latched until you replace or remove them.
 - **Evaluation Result** – `evalAll()` returns per-node port snapshots plus a `WriteBatch` of sink writes (each with Value + Shape metadata).
 - **Node Schema Registry** – `getNodeSchemas()` exposes the runtime-supported nodes, ideal for palettes/editors.
@@ -164,6 +164,16 @@ Types (`GraphSpec`, `EvalResult`, `ValueJSON`, `ShapeJSON`, etc.) are exported f
 > - Structural param edits that change port layouts (e.g., `Split.sizes`) rebuild the plan; the wrapper drops its cached baseline and will emit a full snapshot on the next eval before returning to deltas.
 > - The `Graph` wrapper automatically picks the optimized slots + delta path; calling `inner.eval_all_js` / other legacy exports bypasses these optimizations and is slower.
 
+### Delta semantics (baseline resync)
+
+`getOutputsDelta(sinceVersion?)` is designed for long-running loops where you want to transfer only the ports that changed since a version token.
+
+- Pass `0` (or omit the argument) for the first call to establish a baseline snapshot.
+- If the caller's `sinceVersion` does not match the runtime's cached baseline (including when the wasm runtime resets versions after `loadGraph`, `clear`, or a structural edit), the runtime returns a **full snapshot** flagged with `full: true`.
+- When `full: true`, treat the payload as a replacement baseline (do not merge it with an older snapshot).
+
+The `Graph` wrapper handles baseline management automatically for the common case; this section is mainly relevant if you call low-level bindings directly.
+
 ---
 
 ## Usage
@@ -229,9 +239,11 @@ function tick(frame) {
   graph.stageInputsBySlotDiff(indices, inputs); // only sends changed slots
   graph.setTime(frame / 60);
   graph.step(1 / 60);
-  const delta = graph.getOutputsDelta(version);
+  const delta = graph.getOutputsDelta(Number(version));
   version = BigInt(delta.version);
-  // delta.nodes contains only changed ports; call evalAll() if you need a full snapshot
+  // delta.nodes contains only changed ports when the baseline matches.
+  // When the baseline does NOT match (first call, after loadGraph, after structural edits),
+  // the runtime will return a full snapshot and the wrapper will replace its cached baseline.
 }
 ```
 

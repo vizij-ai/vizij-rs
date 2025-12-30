@@ -112,6 +112,7 @@ console.log(JSON.parse(evalJson));
 ### Performance notes
 
 - **Slots + delta outputs (new hot path):** For steady-state frames, call `eval_all_slots()` to reuse the cached plan and avoid JSON materialisation, then fetch `get_outputs_delta(version)` (start with `0`) to receive only changed ports plus a monotonic `version`. Use `get_outputs_full()` if you need a full snapshot without re-evaluating.
+  - Delta calls may return `{ full: true, ... }` when the caller's baseline token does not match the runtime's cached baseline (including after `load_graph`, `clear`, or other cache resets). Treat `full: true` as "replace your baseline" rather than merging.
 - **Batch steady frames:** When host inputs don’t change for several ticks, call `eval_steps(steps, dt)` (or `eval_steps_js` via the wasm exports) to advance time inside WASM and return only the final outputs/writes. Avoid this when you must inject new inputs every frame.
 - **Typed-array staging for numeric streams:** Use `stage_input_f32(path, Float32Array)` to bypass JSON encode/decode for hot numeric inputs. Read numeric outputs with `get_output_f32(node_id, output_key)` to obtain a `Float32Array`. Keep the JSON path for mixed or non-numeric data.
 - **Minimise boundary crossings:** Batch all staging calls, then invoke a single `eval_all`/`eval_steps` per frame. This keeps JS↔WASM overhead low and aligns with the perf baselines.
@@ -142,8 +143,10 @@ console.log(JSON.parse(evalJson));
     ]
   }
   ```
-- **Plan cache & structural params** – After the first evaluation, `eval_all`/`eval_all_slots` reuse a cached execution plan. Calling `set_param` now invalidates the cached plan so structural edits (e.g., changing `Split` sizes) trigger a rebuild on the next `eval_*` call.
-- **Parameter updates** – `set_param` validates types strictly (no silent coercion) and automatically drops the cached plan, so port-layout changes are safe without reloading the graph. All core node parameters plus robotics settings are supported.
+- **Plan cache & structural params** – After the first evaluation, `eval_all`/`eval_all_slots` reuse a cached execution plan (topological order + port layouts + resolved input bindings).
+  - Only **structural** edits invalidate the plan (today: `Split.sizes`, plus any future params that affect port layouts/bindings). Structural edits trigger a rebuild on the next `eval_*` call.
+  - Most `set_param` calls are **non-structural** (e.g., `Constant.value`) and keep the plan cache valid so steady-state evaluation can keep using the fast path.
+- **Parameter updates** – `set_param` validates types strictly (no silent coercion). Structural parameter edits invalidate the cached plan so port-layout changes are safe without reloading the graph. All core node parameters plus robotics settings are supported.
 - **Time management** – Call `set_time`/`step` as needed. `eval_all` computes `dt` based on internal time values when both are invoked.
 
 ---

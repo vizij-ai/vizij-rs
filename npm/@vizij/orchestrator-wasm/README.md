@@ -221,6 +221,15 @@ const mergedSpec = orchestrator.exportGraph(mergedGraphId);
 console.log(mergedSpec.nodes.length, "nodes in merged graph");
 ```
 
+### Delta semantics (baseline resync)
+
+`stepDelta(dt, sinceVersion?)` is intended for long-running render loops where you want to transfer only the *changed* merged writes since a version token.
+
+- Pass `0` (or omit) for the first call to establish a baseline.
+- If `sinceVersion` does not match the orchestrator's cached baseline (including after controller registration/removal, `replaceGraph`, or other internal resets), the runtime will return a **full** delta payload to resynchronize the host. Treat that response as a replacement baseline.
+
+The wrapper tracks the latest version internally for `stepDelta()` when you omit `sinceVersion`, so most callers can just call `stepDelta(dt)` and store the returned `version` if they want manual control.
+
 Removing controllers:
 
 ```ts

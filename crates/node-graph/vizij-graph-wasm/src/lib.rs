@@ -207,6 +207,42 @@ mod tests {
             .expect("eval succeeds after non-structural edit");
         assert!(graph.plan_ready);
     }
+
+    #[test]
+    fn delta_since_greater_than_output_version_forces_full_resync() {
+        let mut graph = WasmGraph::new();
+        let spec = r#"{
+            "nodes": [
+                { "id": "c", "type": "constant", "params": { "value": 1.0 }, "inputs": {}, "output_shapes": {} },
+                { "id": "out", "type": "output", "params": { "path": "demo/out" }, "inputs": {}, "output_shapes": {} }
+            ],
+            "edges": [
+                { "from": { "node_id": "c", "output": "out" }, "to": { "node_id": "out", "input": "in" } }
+            ]
+        }"#;
+
+        graph.load_graph(spec).expect("graph loads");
+        graph.eval_all().expect("initial eval bumps version");
+
+        let version_before_reset = graph.output_version;
+        assert!(
+            version_before_reset > 0,
+            "version should advance after eval"
+        );
+
+        // Reset the runtime (and output_version) but keep an old version token.
+        graph.load_graph(spec).expect("graph reloads");
+        assert_eq!(graph.output_version, 0, "load_graph resets output_version");
+
+        // A "future" token must force a full snapshot so hosts can resync immediately.
+        let delta = graph.serialize_delta(version_before_reset);
+        assert_eq!(delta["full"], serde_json::json!(true));
+        assert_eq!(delta["version"], serde_json::json!(0));
+        assert!(
+            delta["nodes"].as_object().is_some(),
+            "full snapshot should include nodes map"
+        );
+    }
 }
 
 /// Holds a persistent runtime so transition nodes can accumulate state across
@@ -525,7 +561,8 @@ impl WasmGraph {
     }
 
     fn serialize_delta(&mut self, since: u64) -> serde_json::Value {
-        if since >= self.output_version {
+        // Fast path: caller is exactly up-to-date.
+        if since == self.output_version {
             let snapshot = self.snapshot_outputs();
             self.last_outputs = snapshot;
             self.last_outputs_version = self.output_version;
@@ -535,6 +572,24 @@ impl WasmGraph {
                 "writes": [],
                 "full": false,
             });
+        }
+
+        // If the caller's token is "from the future" relative to our current version, treat it
+        // as a baseline mismatch and force a full resync snapshot.
+        //
+        // This can happen when the runtime resets `output_version` (e.g., after `load_graph`) but
+        // a host still holds a previous version token. Returning an empty delta would keep the
+        // host out-of-sync until the version catches back up.
+        if since > self.output_version {
+            let snapshot = self.snapshot_outputs();
+            let full = self.serialize_full_from_snapshot(&snapshot);
+            self.last_outputs = snapshot;
+            self.last_outputs_version = self.output_version;
+            let mut obj = full;
+            obj.as_object_mut()
+                .expect("full snapshot is an object")
+                .insert("full".to_string(), serde_json::json!(true));
+            return obj;
         }
 
         // If the caller's baseline does not match our cached snapshot, resync by returning
