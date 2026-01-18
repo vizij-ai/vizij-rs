@@ -10,7 +10,7 @@
 7. R-007 — Add doc tests or validate examples against current APIs
 8. R-008 — Ensure docstrings mention JSON/ABI versioning contracts
 9. R-009 — Document performance considerations and allocation hot spots
-10. R-010 — Add usage snippets for frequently used types and helpers
+10. R-012 — Add rustdoc examples for `WriteBatch` construction patterns
 
 ---
 
@@ -36,9 +36,9 @@
 - Type: Docs
 - Impact: High
 - Effort: L
-- Evidence: Autogen docs are less useful without concrete usage examples
-- Next action: Add minimal doc examples for core API entry points
-- Status: Planned
+- Evidence: Autogen docs are less useful without concrete usage examples; added examples in blend/coercion/json helpers this iteration.
+- Next action: Continue adding minimal doc examples for remaining public APIs in core crates (vizij-api-core json + typed path helpers next)
+- Status: In progress
 
 ### R-004 — Standardize module-level docs and `//!` overviews
 - Type: Docs
@@ -70,7 +70,7 @@
 - Effort: M
 - Evidence: Examples can drift without doc tests
 - Next action: Convert key examples into `rustdoc` tests or verify manually
-- Status: Planned
+- Status: In progress
 
 ### R-008 — Ensure docstrings mention JSON/ABI versioning contracts
 - Type: Docs
@@ -93,7 +93,7 @@
 - Impact: Med
 - Effort: M
 - Evidence: Users need examples beyond the top-level API; Value helpers, ValueKind links, and JSON tag notes need concise coverage (merged R-011/R-012/R-013).
-- Next action: Add short doc examples for common helpers (e.g., Value constructors), link ValueKind to ShapeId docs, and mention JSON tag layout.
+- Next action: Add short doc examples for remaining helpers (e.g., parse/normalize entry points) and link ValueKind to ShapeId docs where still missing.
 - Status: In progress
 
 ### R-011 — Add docstrings for `Value` enum variants needing clarity
@@ -102,15 +102,15 @@
 - Effort: S
 - Evidence: Several `Value` variants use brief comments (e.g., List vs Array) that could be clearer for docs
 - Next action: Expand variant docs with concise distinctions where needed
-- Status: Planned
+- Status: Completed
 
 ### R-012 — Add rustdoc examples for `WriteBatch` construction patterns
 - Type: Docs
 - Impact: Med
 - Effort: S
 - Evidence: `WriteBatch` is common in orchestrator/animation outputs but has no examples
-- Next action: Add a minimal example to `WriteBatch::new` or module docs
-- Status: Planned
+- Next action: Add follow-up examples if additional patterns emerge
+- Status: Completed
 
 ### R-013 — Document `ShapeId` and `Shape` JSON expectations
 - Type: Docs
@@ -118,4 +118,4 @@
 - Effort: S
 - Evidence: Shape structs serialize across crates but docstrings omit JSON shape expectations
 - Next action: Add brief notes in `shape.rs` about JSON fields and intended use
-- Status: Planned
+- Status: Completed

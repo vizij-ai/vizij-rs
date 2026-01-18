@@ -1,4 +1,5 @@
-//! Blending utilities for Value types.
+//! Blending utilities for [`Value`](crate::Value) types.
+//!
 //! Minimal implementations required for animation/node-graph blending semantics.
 //! - f32 linear interpolation for floats and vector components
 //! - quaternion slerp (shortest-arc)
@@ -10,13 +11,13 @@ use crate::coercion;
 use crate::Value;
 use hashbrown::HashMap;
 
-/// Linear interpolation for f32
+/// Linear interpolation for f32.
 #[inline]
 fn lerp_f(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
-/// Lerp for fixed-size arrays
+/// Lerp for fixed-size arrays.
 fn lerp_array<const N: usize>(a: &[f32; N], b: &[f32; N], t: f32) -> [f32; N] {
     let mut out = [0.0f32; N];
     for i in 0..N {
@@ -25,7 +26,7 @@ fn lerp_array<const N: usize>(a: &[f32; N], b: &[f32; N], t: f32) -> [f32; N] {
     out
 }
 
-/// Normalize a quaternion represented as [x,y,z,w]
+/// Normalize a quaternion represented as `[x, y, z, w]`.
 fn normalize_quat(q: [f32; 4]) -> [f32; 4] {
     let mag = (q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]).sqrt();
     if mag == 0.0 {
@@ -35,7 +36,7 @@ fn normalize_quat(q: [f32; 4]) -> [f32; 4] {
     }
 }
 
-/// Slerp between two unit quaternions q1, q2
+/// Slerp between two unit quaternions `q1`, `q2`.
 fn slerp(q1: [f32; 4], q2: [f32; 4], t: f32) -> [f32; 4] {
     // Ensure inputs are normalized
     let qa = normalize_quat(q1);
@@ -80,7 +81,9 @@ fn slerp(q1: [f32; 4], q2: [f32; 4], t: f32) -> [f32; 4] {
     ]
 }
 
-/// Blend two generic vectors elementwise. If lengths differ, treat missing elements as 0.0.
+/// Blend two generic vectors elementwise.
+///
+/// If lengths differ, treat missing elements as `0.0`.
 fn blend_vector(a: &[f32], b: &[f32], t: f32) -> Vec<f32> {
     let n = std::cmp::max(a.len(), b.len());
     let mut out = Vec::with_capacity(n);
@@ -92,11 +95,30 @@ fn blend_vector(a: &[f32], b: &[f32], t: f32) -> Vec<f32> {
     out
 }
 
-/// Blend two Values according to their kinds and shape semantics.
+/// Blend two values according to their kinds and shape semantics.
+///
 /// For mismatched kinds we attempt reasonable coercions:
 /// - Float <-> Vector/VecN: broadcast scalar to vector
 /// - VecN <-> Vector: convert VecN to Vector and blend elementwise
-///   Step types (Bool/Text/Enum) are chosen based on t < 0.5 -> a else b.
+/// - Step types (Bool/Text/Enum) are chosen based on `t < 0.5` -> `a` else `b`.
+///
+/// # Notes
+///
+/// This helper normalizes quaternions before slerp and defaults to scalar
+/// blending when no other match is found. The blend factor is not clamped, so
+/// values outside `0.0..=1.0` extrapolate.
+///
+/// # Examples
+///
+/// ```rust
+/// use vizij_api_core::blend::blend_values;
+/// use vizij_api_core::Value;
+///
+/// let a = Value::Vec3([0.0, 0.0, 0.0]);
+/// let b = Value::Vec3([2.0, 0.0, 0.0]);
+/// let blended = blend_values(&a, &b, 0.25);
+/// assert_eq!(blended, Value::Vec3([0.5, 0.0, 0.0]));
+/// ```
 pub fn blend_values(a: &Value, b: &Value, t: f32) -> Value {
     match (a, b) {
         (Value::Float(af), Value::Float(bf)) => Value::Float(lerp_f(*af, *bf, t)),
@@ -227,7 +249,19 @@ fn blend_list_like(a: &[Value], b: &[Value], t: f32) -> Vec<Value> {
     out
 }
 
-/// Step blending for step-only types: choose a for t < 0.5, else b.
+/// Step blending for step-only types: choose `a` for `t < 0.5`, else `b`.
+///
+/// # Examples
+///
+/// ```rust
+/// use vizij_api_core::blend::step_blend;
+/// use vizij_api_core::Value;
+///
+/// let a = Value::Bool(false);
+/// let b = Value::Bool(true);
+/// assert_eq!(step_blend(&a, &b, 0.25), a);
+/// assert_eq!(step_blend(&a, &b, 0.75), b);
+/// ```
 pub fn step_blend(a: &Value, b: &Value, t: f32) -> Value {
     if t < 0.5 {
         a.clone()

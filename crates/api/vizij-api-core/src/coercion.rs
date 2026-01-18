@@ -1,15 +1,31 @@
-//! Coercion helpers between Value shapes.
+//! Coercion helpers between [`Value`](crate::Value) shapes.
+//!
 //! Minimal implementation to support migration: scalar<->vector broadcasting,
 //! bool->float, vecN <-> Vector conversions.
 
 use crate::Value;
 
-/// Attempt to coerce a Value into a scalar f32.
-/// Rules:
+/// Attempt to coerce a value into a scalar `f32`.
+///
+/// # Coercion rules
 /// - Float -> its value
-/// - Bool -> 1.0 / 0.0
+/// - Bool -> `1.0` / `0.0`
 /// - Vec2/3/4 -> first component
-/// - Vector -> first element or 0.0 if empty
+/// - Vector -> first element or `0.0` if empty
+///
+/// # Notes
+///
+/// Composite values fall back to their first element (if any); step-only values
+/// return `0.0`.
+///
+/// # Examples
+///
+/// ```rust
+/// use vizij_api_core::{Value, coercion};
+///
+/// let v = Value::Vec3([2.0, 4.0, 8.0]);
+/// assert_eq!(coercion::to_float(&v), 2.0);
+/// ```
 pub fn to_float(v: &Value) -> f32 {
     match v {
         Value::Float(f) => *f,
@@ -36,13 +52,28 @@ pub fn to_float(v: &Value) -> f32 {
     }
 }
 
-/// Convert a Value into a Vec<f32> (generic vector).
+/// Convert a value into a `Vec<f32>` (generic vector).
+///
+/// # Coercion rules
 /// - VecN -> vector of components
 /// - Float -> single-element vec
 /// - Bool -> single 0/1
 /// - Vector -> clone
 /// - Transform -> translation components
 /// - Enum -> recurse into payload
+///
+/// # Notes
+///
+/// Non-numeric payloads become empty vectors. Composite containers are flattened.
+///
+/// # Examples
+///
+/// ```rust
+/// use vizij_api_core::{Value, coercion};
+///
+/// let v = Value::Bool(true);
+/// assert_eq!(coercion::to_vector(&v), vec![1.0]);
+/// ```
 pub fn to_vector(v: &Value) -> Vec<f32> {
     match v {
         Value::Float(f) => vec![*f],
@@ -65,8 +96,20 @@ pub fn to_vector(v: &Value) -> Vec<f32> {
     }
 }
 
-/// Try to coerce a Value into a Vec3. If impossible, returns a default [0,0,0].
-/// Uses broadcasting/coercion rules: scalar -> [s,0,0]? Here we choose scalar -> [s,s,s].
+/// Try to coerce a value into a Vec3.
+///
+/// Returns a default `[0.0, 0.0, 0.0]` when coercion fails. Scalars are
+/// broadcast to `[s, s, s]`. Composite values use their first three elements
+/// in iteration order.
+///
+/// # Examples
+///
+/// ```rust
+/// use vizij_api_core::{Value, coercion};
+///
+/// let v = Value::Float(0.5);
+/// assert_eq!(coercion::to_vec3(&v), [0.5, 0.5, 0.5]);
+/// ```
 pub fn to_vec3(v: &Value) -> [f32; 3] {
     match v {
         Value::Vec3(a) => *a,

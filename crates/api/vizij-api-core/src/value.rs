@@ -1,5 +1,7 @@
-//! Value: runtime instances that conform to Shapes.
-//! All numeric types use f32 as requested.
+//! Runtime values that conform to [`ShapeId`](crate::ShapeId).
+//!
+//! All numeric components are stored as `f32` to keep serialization stable
+//! across Rust and wasm bindings.
 
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
@@ -28,60 +30,60 @@ pub enum ValueKind {
     Text,
 }
 
-/// Runtime value that conforms to a [`ShapeId`].
+/// Runtime value that conforms to a [`ShapeId`](crate::ShapeId).
 ///
 /// This enum is serialized with `serde` using a `{ "type": "...", "data": ... }`
 /// tag layout and lowercase variant names to preserve stable JSON payloads.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "data", rename_all = "lowercase")]
 pub enum Value {
-    /// Scalar float
+    /// Scalar float.
     Float(f32),
 
-    /// Boolean (step)
+    /// Boolean (step-only).
     Bool(bool),
 
-    /// 2D vector
+    /// 2D vector.
     Vec2([f32; 2]),
 
-    /// 3D vector
+    /// 3D vector.
     Vec3([f32; 3]),
 
-    /// 4D vector
+    /// 4D vector.
     Vec4([f32; 4]),
 
-    /// Quaternion (x, y, z, w)
+    /// Quaternion stored as `[x, y, z, w]`.
     Quat([f32; 4]),
 
-    /// RGBA color (linear by convention)
+    /// RGBA color in linear space by convention.
     ColorRgba([f32; 4]),
 
-    /// Transform with translation, rotation (quat), scale
+    /// Transform with translation, rotation (quat), and scale.
     Transform {
         translation: [f32; 3],
         rotation: [f32; 4], // quat (x,y,z,w)
         scale: [f32; 3],
     },
 
-    /// Generic, variable-length numeric vector
+    /// Generic, variable-length numeric vector.
     Vector(Vec<f32>),
 
-    /// Enum with tag and nested value (value is optional depending on variant)
+    /// Tagged enum with `tag` and nested value payload.
     Enum(String, Box<Value>),
 
-    /// Text / string; step-only for interpolation
+    /// Text/string; step-only for interpolation.
     Text(String),
 
-    /// Record of named fields (order is not guaranteed)
+    /// Record of named fields (order is not guaranteed).
     Record(HashMap<String, Value>),
 
-    /// Fixed-size homogeneous array
+    /// Fixed-size homogeneous array.
     Array(Vec<Value>),
 
-    /// Variable-length list (alias of Vec but distinct ShapeId)
+    /// Variable-length list (distinct from `Array` in the schema).
     List(Vec<Value>),
 
-    /// Heterogeneous tuple (ordered elements)
+    /// Heterogeneous tuple (ordered elements).
     Tuple(Vec<Value>),
 }
 

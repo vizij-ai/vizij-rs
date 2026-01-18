@@ -16,6 +16,21 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::str::FromStr;
 
+/// Canonical identifier for a value target.
+///
+/// The string form uses `/` to separate namespaces and `.` to address fields
+/// within the target (for example `"robot/Arm/Joint.angle"`). Serialization
+/// uses this string form so paths round-trip across Rust and wasm.
+///
+/// # Examples
+///
+/// ```rust
+/// use vizij_api_core::TypedPath;
+///
+/// let path = TypedPath::parse("robot/Arm/Joint.angle")?;
+/// assert_eq!(path.target_name(), "Joint");
+/// # Ok::<(), String>(())
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypedPath {
     /// Namespace segments preceding the target (may be empty)
@@ -27,7 +42,20 @@ pub struct TypedPath {
 }
 
 impl TypedPath {
-    /// Construct a TypedPath from components.
+    /// Construct a typed path from components.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::TypedPath;
+    ///
+    /// let path = TypedPath::new(
+    ///     vec!["robot".to_string(), "Arm".to_string()],
+    ///     "Joint3",
+    ///     vec!["angle".to_string()],
+    /// );
+    /// assert_eq!(path.to_string(), "robot/Arm/Joint3.angle");
+    /// ```
     pub fn new(namespaces: Vec<String>, target: impl Into<String>, fields: Vec<String>) -> Self {
         Self {
             namespaces,
@@ -37,6 +65,11 @@ impl TypedPath {
     }
 
     /// Parse a path string according to the grammar described above.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error string when the path is empty, has empty segments, or
+    /// contains whitespace in any segment.
     pub fn parse(s: &str) -> Result<Self, String> {
         if s.is_empty() {
             return Err("empty path".to_string());
@@ -90,21 +123,64 @@ impl TypedPath {
     }
 
     /// Return a namespace segment by index, or `None` if out of bounds.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::TypedPath;
+    ///
+    /// let path = TypedPath::parse("robot/Arm/Joint.angle")?;
+    /// assert_eq!(path.namespace_segment(0), Some("robot"));
+    /// assert_eq!(path.namespace_segment(2), None);
+    /// # Ok::<(), String>(())
+    /// ```
     pub fn namespace_segment(&self, index: usize) -> Option<&str> {
         self.namespaces.get(index).map(|s| s.as_str())
     }
 
     /// Iterate over all namespace segments.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::TypedPath;
+    ///
+    /// let path = TypedPath::parse("robot/Arm/Joint.angle")?;
+    /// let parts: Vec<&str> = path.namespaces().collect();
+    /// assert_eq!(parts, vec!["robot", "Arm"]);
+    /// # Ok::<(), String>(())
+    /// ```
     pub fn namespaces(&self) -> impl Iterator<Item = &str> {
         self.namespaces.iter().map(|s| s.as_str())
     }
 
     /// Return the target component of the path.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::TypedPath;
+    ///
+    /// let path = TypedPath::parse("robot/Arm/Joint.angle")?;
+    /// assert_eq!(path.target_name(), "Joint");
+    /// # Ok::<(), String>(())
+    /// ```
     pub fn target_name(&self) -> &str {
         &self.target
     }
 
     /// Iterate over field selectors on the target.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::TypedPath;
+    ///
+    /// let path = TypedPath::parse("robot/Arm/Joint.angle")?;
+    /// let fields: Vec<&str> = path.fields().collect();
+    /// assert_eq!(fields, vec!["angle"]);
+    /// # Ok::<(), String>(())
+    /// ```
     pub fn fields(&self) -> impl Iterator<Item = &str> {
         self.fields.iter().map(|s| s.as_str())
     }

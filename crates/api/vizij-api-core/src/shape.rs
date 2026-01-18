@@ -1,18 +1,25 @@
 //! Shape definitions (schema/type) for vizij-api-core.
+//!
+//! Shapes describe the structural layout of values (including nested
+//! composites) and serialize with a stable `{ "id": ..., "data": ... }`
+//! envelope for interchange with wasm bindings and tooling.
 
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 
-/// A field in a Record shape.
+/// A field in a record-shaped value.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Field {
+    /// Field name as it appears in serialized JSON.
     pub name: String,
+    /// Shape identifier for the field payload.
     pub shape: ShapeId,
 }
 
-/// The ShapeId expresses the structural type of a value.
-/// This mirrors the design in the API report but keeps the initial
-/// surface area focused on the requested set.
+/// Structural identifier for a [`Value`](crate::Value).
+///
+/// This mirrors the public API contract and is serialized using `{ "id": "...",
+/// "data": ... }` so tooling can inspect shapes without additional context.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "id", content = "data")]
 pub enum ShapeId {
@@ -35,19 +42,30 @@ pub enum ShapeId {
 
     // Composite
     Record(Vec<Field>),
-    /// Fixed-size array of a nested shape
+    /// Fixed-size array of a nested shape.
     Array(Box<ShapeId>, usize),
-    /// Variable-length list
+    /// Variable-length list.
     List(Box<ShapeId>),
-    /// Heterogeneous ordered tuple
+    /// Heterogeneous ordered tuple.
     Tuple(Vec<ShapeId>),
 
-    /// Tagged enum: list of (tag, shape) pairs. The shape describes associated payload.
+    /// Tagged enum: list of (tag, shape) pairs. The shape describes the payload.
     Enum(Vec<(String, ShapeId)>),
 }
 
 impl ShapeId {
-    /// Convenience: create a Record from a list of (name, shape) pairs
+    /// Convenience: create a record from a list of `(name, shape)` pairs.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::ShapeId;
+    ///
+    /// let record = ShapeId::record_from_pairs([
+    ///     ("gain", ShapeId::Scalar),
+    ///     ("enabled", ShapeId::Bool),
+    /// ]);
+    /// ```
     pub fn record_from_pairs(
         pairs: impl IntoIterator<Item = (impl Into<String>, ShapeId)>,
     ) -> Self {
@@ -62,16 +80,20 @@ impl ShapeId {
     }
 }
 
-/// A Shape pairs an identity (ShapeId) with optional metadata.
-/// Metadata can include units, space, ranges, color model, etc.
+/// A shape definition with optional metadata.
+///
+/// Metadata can include units, coordinate space, ranges, color model, etc.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Shape {
+    /// Structural identifier for the value.
     pub id: ShapeId,
+    /// Optional metadata describing units, ranges, or other hints.
     #[serde(default)]
     pub meta: HashMap<String, String>,
 }
 
 impl Shape {
+    /// Create a shape with an empty metadata map.
     pub fn new(id: ShapeId) -> Self {
         Shape {
             id,
@@ -79,6 +101,7 @@ impl Shape {
         }
     }
 
+    /// Add a metadata entry (for example `"units" -> "meters"`).
     pub fn with_meta(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.meta.insert(key.into(), value.into());
         self

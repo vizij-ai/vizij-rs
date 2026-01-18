@@ -1,27 +1,44 @@
 //! Write operations produced by engines (node graph, animation) to describe
-//! writes into a blackboard / external world using typed paths.
+//! writes into a blackboard or external world using typed paths.
 //!
-//! WriteOp serializes to JSON as:
-//!   { "path": "robot1/Arm/Joint3.angle", "value": { "vec3": [1,2,3] } }
+//! `WriteOp` serializes to JSON as:
+//! `{ "path": "robot1/Arm/Joint3.angle", "value": { "type": "vec3", "data": [1,2,3] } }`.
+//! The optional `shape` field is only included when present.
 //!
-//! WriteBatch is a simple Vec<WriteOp> with helpers.
+//! `WriteBatch` is a thin `Vec<WriteOp>` wrapper with convenience helpers.
 
 use crate::{typed_path::TypedPath, Shape, Value};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 
+/// A single write into a target path.
+///
+/// # Examples
+///
+/// ```rust
+/// use vizij_api_core::{TypedPath, Value, WriteOp};
+///
+/// let path = TypedPath::parse("robot/Arm/Joint3.angle")?;
+/// let op = WriteOp::new(path, Value::vec3(1.0, 2.0, 3.0));
+/// # Ok::<(), String>(())
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct WriteOp {
+    /// Canonical target path.
     pub path: TypedPath,
+    /// Value payload for the target.
     pub value: Value,
+    /// Optional shape metadata for the value.
     pub shape: Option<Shape>,
 }
 
 impl WriteOp {
+    /// Create a write op without shape metadata.
     pub fn new(path: TypedPath, value: Value) -> Self {
         Self::new_with_shape(path, value, None)
     }
 
+    /// Create a write op with an explicit shape.
     pub fn new_with_shape(path: TypedPath, value: Value, shape: Option<Shape>) -> Self {
         Self { path, value, shape }
     }
@@ -87,36 +104,139 @@ impl<'de> Deserialize<'de> for WriteOp {
     }
 }
 
-/// A batch of write operations. Engines can emit a WriteBatch each tick.
+/// A batch of write operations.
+///
+/// Engines typically emit a `WriteBatch` each tick to describe side effects.
+///
+/// # Examples
+///
+/// ```rust
+/// use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
+///
+/// let mut batch = WriteBatch::new();
+/// batch.push(WriteOp::new(
+///     TypedPath::parse("robot/Arm/Joint3.angle")?,
+///     Value::vec3(0.0, 0.0, 1.0),
+/// ));
+/// # Ok::<(), String>(())
+/// ```
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct WriteBatch(pub Vec<WriteOp>);
 
 impl WriteBatch {
+    /// Create an empty batch.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::WriteBatch;
+    ///
+    /// let batch = WriteBatch::new();
+    /// assert!(batch.is_empty());
+    /// ```
     pub fn new() -> Self {
         WriteBatch(Vec::new())
     }
 
+    /// Append a single write operation.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
+    ///
+    /// let mut batch = WriteBatch::new();
+    /// batch.push(WriteOp::new(
+    ///     TypedPath::parse("robot/Arm/Joint.angle")?,
+    ///     Value::Float(1.0),
+    /// ));
+    /// assert_eq!(batch.iter().count(), 1);
+    /// # Ok::<(), String>(())
+    /// ```
     pub fn push(&mut self, op: WriteOp) {
         self.0.push(op);
     }
 
+    /// Extend the batch with another iterator of operations.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
+    ///
+    /// let mut batch = WriteBatch::new();
+    /// let ops = vec![
+    ///     WriteOp::new(TypedPath::parse("robot/Arm/Joint.angle")?, Value::Float(1.0)),
+    ///     WriteOp::new(TypedPath::parse("robot/Arm/Joint.enabled")?, Value::Bool(true)),
+    /// ];
+    /// batch.extend(ops);
+    /// assert_eq!(batch.iter().count(), 2);
+    /// # Ok::<(), String>(())
+    /// ```
     pub fn extend(&mut self, other: impl IntoIterator<Item = WriteOp>) {
         self.0.extend(other);
     }
 
+    /// Consume the batch and return the inner vector.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
+    ///
+    /// let mut batch = WriteBatch::new();
+    /// batch.push(WriteOp::new(TypedPath::parse("robot/Arm/Joint.angle")?, Value::Float(1.0)));
+    /// let ops = batch.into_vec();
+    /// assert_eq!(ops.len(), 1);
+    /// # Ok::<(), String>(())
+    /// ```
     pub fn into_vec(self) -> Vec<WriteOp> {
         self.0
     }
 
+    /// Iterate over operations in the batch.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::WriteBatch;
+    ///
+    /// let batch = WriteBatch::new();
+    /// assert_eq!(batch.iter().count(), 0);
+    /// ```
     pub fn iter(&self) -> impl Iterator<Item = &WriteOp> {
         self.0.iter()
     }
 
+    /// Return true when no operations are present.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::WriteBatch;
+    ///
+    /// let batch = WriteBatch::new();
+    /// assert!(batch.is_empty());
+    /// ```
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
     /// Merge another batch in-place (append). Dedup/merge semantics can be added later.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
+    ///
+    /// let mut a = WriteBatch::new();
+    /// let mut b = WriteBatch::new();
+    /// a.push(WriteOp::new(TypedPath::parse("robot/Arm/Joint.angle")?, Value::Float(1.0)));
+    /// b.push(WriteOp::new(TypedPath::parse("robot/Arm/Joint.enabled")?, Value::Bool(true)));
+    /// a.append(b);
+    /// assert_eq!(a.iter().count(), 2);
+    /// # Ok::<(), String>(())
+    /// ```
     pub fn append(&mut self, mut other: WriteBatch) {
         self.0.append(&mut other.0)
     }

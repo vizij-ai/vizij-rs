@@ -21,6 +21,7 @@ fi
 
 for i in $(seq 1 "$ITERS"); do
   ITER=$(printf "%02d" "$i")
+  START_HEAD="$(git rev-parse HEAD)"
   PROMPT="$(cat "$PROMPT_FILE")
 
 ACTIVE GOAL:
@@ -53,4 +54,14 @@ iter-$ITER
 "
 
   codex exec --json "$PROMPT" | tee ".ralph/logs/${TASK}-iter-${ITER}.jsonl"
+
+  END_HEAD="$(git rev-parse HEAD)"
+  if [ "$START_HEAD" = "$END_HEAD" ]; then
+    if git diff --quiet && git diff --cached --quiet; then
+      git commit --allow-empty -m "ralph($TASK iter-$ITER): empty (no changes)"
+    else
+      git add -A
+      git commit -m "ralph($TASK iter-$ITER): auto-commit"
+    fi
+  fi
 done

@@ -1,4 +1,9 @@
-//! vizij-api-core: unified Shape & Value API (core, engine-agnostic)
+//! Core contracts shared by all Vizij runtimes and tooling.
+//!
+//! This crate defines the canonical [`Value`], [`Shape`], and [`TypedPath`] data
+//! types plus write-batch helpers used by animation, graph, and orchestrator
+//! stacks. JSON serialization uses a stable `{ "type": "...", "data": ... }`
+//! envelope so Rust, wasm, and host tooling can exchange payloads safely.
 
 pub mod blend;
 pub mod coercion;

@@ -16,7 +16,7 @@ BROAD-SCOPE ITERATION MODE
 - This loop may cover multiple files or modules in one iteration when the goal is large.
 - If the goal is broad or nebulous, choose a focused sub-scope (one crate or module group) and proceed without asking for clarification.
 - Record your chosen scope and any assumptions in the decision log.
-- If blocked, skip that area and continue on another aligned target; do not ask questions unless absolutely blocked.
+- If blocked, skip that area and continue on another aligned target; do not ask questions.
 
 PROGRESS BUDGET (DEFAULT)
 - Aim for a meaningful batch: ~5–15 files or a coherent module slice.
@@ -57,6 +57,8 @@ PROTOCOL
    - Observation backlog (append only)
    - Decision log (short entry including scope + assumptions)
 6) Commit: ralph(<task> iter-XX): <scope> docs
+   - You MUST create a commit every iteration.
+   - If you make no code changes, create an empty commit and note why in the decision log.
 
 OUTPUT
 - Scope chosen

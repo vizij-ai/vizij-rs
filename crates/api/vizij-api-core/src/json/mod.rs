@@ -1,3 +1,8 @@
+//! JSON normalization helpers shared by core and wasm crates.
+//!
+//! Most helpers convert shorthand inputs (numbers, `{ "vec3": [...] }`, etc.)
+//! into the canonical `{ "type": "...", "data": ... }` format used by [`Value`].
+
 use serde::de::Error as _;
 use serde_json::{json, Map, Value as JsonValue};
 use std::collections::HashMap;
@@ -7,7 +12,7 @@ use crate::{TypedPath, Value, WriteBatch, WriteOp};
 
 /// Policy describing how purely numeric arrays should be normalized when
 /// converting shorthand JSON into the canonical `{ "type": ..., "data": ... }`
-/// representation used by `vizij_api_core::Value`.
+/// representation used by [`Value`](crate::Value).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericArrayPolicy {
     /// Match the historical behaviour used in production builds where arrays of
@@ -19,21 +24,36 @@ pub enum NumericArrayPolicy {
     AlwaysVector,
 }
 
-/// Errors produced while normalizing orchestrator graph JSON blobs.
+/// Errors produced while normalizing graph JSON blobs.
 #[derive(Debug, Error)]
 pub enum JsonError {
+    /// The graph JSON string could not be parsed.
     #[error("graph json parse error: {0}")]
     GraphParse(String),
+    /// The normalized graph JSON could not be serialized.
     #[error("serialize normalized graph: {0}")]
     GraphSerialize(String),
+    /// A deprecated `links` field is present; use `edges` instead.
     #[error("graph spec uses deprecated 'links' field; rename to 'edges'")]
     LegacyLinksField,
 }
 
 /// Normalize shorthand `Value` JSON into the canonical `{ "type": ..., "data": ... }`
-/// representation understood by the serde derives on [`Value`]. This helper accepts
-/// both shorthand objects such as `{ "vec3": [1, 2, 3] }` and primitive aliases
-/// like `1.0` or `[0, 1, 0]`.
+/// representation understood by the serde derives on [`Value`].
+///
+/// This helper accepts shorthand objects such as `{ "vec3": [1, 2, 3] }` and
+/// primitive aliases like `1.0` or `[0, 1, 0]`.
+///
+/// # Examples
+///
+/// ```rust
+/// use serde_json::json;
+/// use vizij_api_core::json::normalize_value_json;
+///
+/// let raw = json!({ "vec3": [0.0, 1.0, 0.0] });
+/// let normalized = normalize_value_json(raw);
+/// assert_eq!(normalized["type"], "vec3");
+/// ```
 pub fn normalize_value_json(value: JsonValue) -> JsonValue {
     normalize_value_json_with_policy(value, NumericArrayPolicy::AutoVectorKinds)
 }
@@ -41,6 +61,17 @@ pub fn normalize_value_json(value: JsonValue) -> JsonValue {
 /// Variant of [`normalize_value_json`] that mirrors the staging normalizer used by
 /// the graph wasm crate. Numeric arrays are always treated as `Vector` unless they
 /// are explicitly tagged with a `vec*` alias.
+///
+/// # Examples
+///
+/// ```rust
+/// use serde_json::json;
+/// use vizij_api_core::json::normalize_value_json_staging;
+///
+/// let raw = json!([1, 2, 3]);
+/// let normalized = normalize_value_json_staging(raw);
+/// assert_eq!(normalized["type"], "vector");
+/// ```
 pub fn normalize_value_json_staging(value: JsonValue) -> JsonValue {
     normalize_value_json_with_policy(value, NumericArrayPolicy::AlwaysVector)
 }
@@ -226,24 +257,67 @@ fn normalize_operand_key(
     key
 }
 
-/// Convenience helper that normalizes Value JSON then deserializes it into the
-/// strongly typed [`Value`] enum. This keeps JSON shorthands consistent across
-/// call-sites (blackboard, wasm wrappers, tests).
+/// Normalize `Value` JSON then deserialize it into the strongly typed [`Value`] enum.
+///
+/// This keeps JSON shorthands consistent across call-sites (blackboard, wasm
+/// wrappers, tests).
+///
+/// # Errors
+///
+/// Returns a [`serde_json::Error`] if the normalized payload does not match the
+/// [`Value`](crate::Value) schema.
+///
+/// # Examples
+///
+/// ```rust
+/// use serde_json::json;
+/// use vizij_api_core::json::parse_value;
+/// use vizij_api_core::Value;
+///
+/// let value = parse_value(json!({ "float": 2.0 }))?;
+/// assert_eq!(value, Value::Float(2.0));
+/// # Ok::<(), serde_json::Error>(())
+/// ```
 pub fn parse_value(value: JsonValue) -> Result<Value, serde_json::Error> {
     let normalized = normalize_value_json(value);
     serde_json::from_value(normalized)
 }
 
-/// Convert the legacy shorthand `Value` JSON into a strongly typed [`Value`]
-/// while using the staging numeric policy. This mirrors the staging graph wasm
-/// normalizer behaviour.
+/// Convert legacy shorthand `Value` JSON into a strongly typed [`Value`]
+/// while using the staging numeric policy.
+///
+/// This mirrors the staging graph wasm normalizer behaviour.
+///
+/// # Errors
+///
+/// Returns a [`serde_json::Error`] if the normalized payload does not match the
+/// [`Value`](crate::Value) schema.
+///
+/// # Examples
+///
+/// ```rust
+/// use serde_json::json;
+/// use vizij_api_core::json::parse_value_staging;
+///
+/// let value = parse_value_staging(json!([1, 2, 3]))?;
+/// assert_eq!(value.kind(), vizij_api_core::ValueKind::Vector);
+/// # Ok::<(), serde_json::Error>(())
+/// ```
 pub fn parse_value_staging(value: JsonValue) -> Result<Value, serde_json::Error> {
     let normalized = normalize_value_json_staging(value);
     serde_json::from_value(normalized)
 }
 
-/// Normalize a graph specification JSON value in-place. This mirrors the wasm
-/// helpers previously implemented in individual crates.
+/// Normalize a graph specification JSON value in-place.
+///
+/// This mirrors the wasm helpers previously implemented in individual crates.
+/// It lowercases node types, rewrites legacy `kind` fields, expands `inputs`
+/// into `edges`, and normalizes inline defaults into `input_defaults`.
+///
+/// # Errors
+///
+/// Returns [`JsonError::LegacyLinksField`] when the deprecated `links` field
+/// is present.
 pub fn normalize_graph_spec_value(root: &mut JsonValue) -> Result<(), JsonError> {
     if root.get("links").is_some() {
         return Err(JsonError::LegacyLinksField);
@@ -531,8 +605,24 @@ pub fn normalize_graph_spec_value(root: &mut JsonValue) -> Result<(), JsonError>
     Ok(())
 }
 
-/// Convenience wrapper that parses a JSON string, normalizes it, and returns
-/// the normalized [`serde_json::Value`].
+/// Parse a JSON string, normalize it, and return the normalized
+/// [`serde_json::Value`].
+///
+/// # Errors
+///
+/// Returns [`JsonError::GraphParse`] when the input is not valid JSON and
+/// [`JsonError::LegacyLinksField`] when the deprecated `links` field appears.
+///
+/// # Examples
+///
+/// ```rust
+/// use vizij_api_core::json::normalize_graph_spec_json;
+///
+/// let raw = r#"{"nodes":[{"id":"a","type":"constant"}]}"#;
+/// let normalized = normalize_graph_spec_json(raw)?;
+/// assert!(normalized.get("edges").is_some());
+/// # Ok::<(), vizij_api_core::json::JsonError>(())
+/// ```
 pub fn normalize_graph_spec_json(json_str: &str) -> Result<JsonValue, JsonError> {
     let mut root: JsonValue =
         serde_json::from_str(json_str).map_err(|e| JsonError::GraphParse(e.to_string()))?;
@@ -540,7 +630,24 @@ pub fn normalize_graph_spec_json(json_str: &str) -> Result<JsonValue, JsonError>
     Ok(root)
 }
 
-/// Convenience wrapper that returns a JSON string with all shorthand normalized.
+/// Return a JSON string with all shorthand normalized.
+///
+/// # Errors
+///
+/// Returns [`JsonError::GraphParse`] when the input is not valid JSON,
+/// [`JsonError::LegacyLinksField`] when the deprecated `links` field appears,
+/// and [`JsonError::GraphSerialize`] when the normalized JSON cannot be stringified.
+///
+/// # Examples
+///
+/// ```rust
+/// use vizij_api_core::json::normalize_graph_spec_json_string;
+///
+/// let raw = r#"{"nodes":[{"id":"a","type":"constant"}]}"#;
+/// let normalized = normalize_graph_spec_json_string(raw)?;
+/// assert!(normalized.contains("\"edges\""));
+/// # Ok::<(), vizij_api_core::json::JsonError>(())
+/// ```
 pub fn normalize_graph_spec_json_string(json_str: &str) -> Result<String, JsonError> {
     let value = normalize_graph_spec_json(json_str)?;
     serde_json::to_string(&value).map_err(|e| JsonError::GraphSerialize(e.to_string()))
@@ -548,6 +655,16 @@ pub fn normalize_graph_spec_json_string(json_str: &str) -> Result<String, JsonEr
 
 /// Convert a core [`Value`] into the legacy JSON structure used by existing wasm
 /// consumers (objects like `{ "vec3": [...] }`).
+///
+/// # Examples
+///
+/// ```rust
+/// use vizij_api_core::{Value, json::value_to_legacy_json};
+///
+/// let value = Value::Vec3([1.0, 2.0, 3.0]);
+/// let legacy = value_to_legacy_json(&value);
+/// assert_eq!(legacy["vec3"], serde_json::json!([1.0, 2.0, 3.0]));
+/// ```
 pub fn value_to_legacy_json(value: &Value) -> JsonValue {
     match value {
         Value::Float(f) => json!({ "float": *f }),
@@ -598,6 +715,19 @@ pub fn value_to_legacy_json(value: &Value) -> JsonValue {
 }
 
 /// Convert a single [`WriteOp`] into the legacy JSON representation used by wasm wrappers.
+///
+/// # Examples
+///
+/// ```rust
+/// use serde_json::json;
+/// use vizij_api_core::{TypedPath, Value, WriteOp};
+/// use vizij_api_core::json::writeop_to_legacy_json;
+///
+/// let op = WriteOp::new(TypedPath::parse("robot/Arm/Joint.angle")?, Value::Float(1.0));
+/// let legacy = writeop_to_legacy_json(&op);
+/// assert_eq!(legacy["path"], json!("robot/Arm/Joint.angle"));
+/// # Ok::<(), String>(())
+/// ```
 pub fn writeop_to_legacy_json(op: &WriteOp) -> JsonValue {
     let mut map = Map::new();
     map.insert("path".to_string(), JsonValue::String(op.path.to_string()));
@@ -612,19 +742,66 @@ pub fn writeop_to_legacy_json(op: &WriteOp) -> JsonValue {
 }
 
 /// Convert a [`WriteBatch`] into the legacy JSON array structure used by wasm wrappers.
+///
+/// # Examples
+///
+/// ```rust
+/// use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
+/// use vizij_api_core::json::writebatch_to_legacy_json;
+///
+/// let mut batch = WriteBatch::new();
+/// batch.push(WriteOp::new(
+///     TypedPath::parse("robot/Arm/Joint.angle")?,
+///     Value::Float(1.0),
+/// ));
+/// let legacy = writebatch_to_legacy_json(&batch);
+/// assert!(legacy.as_array().is_some());
+/// # Ok::<(), String>(())
+/// ```
 pub fn writebatch_to_legacy_json(batch: &WriteBatch) -> JsonValue {
     let arr: Vec<JsonValue> = batch.iter().map(writeop_to_legacy_json).collect();
     JsonValue::Array(arr)
 }
 
 /// Deserialize a legacy JSON value (e.g. `{ "vec3": [...] }`) into a [`Value`].
-/// This helper is primarily intended for wasm consumers that still emit the legacy
-/// structure; it normalizes and then deserializes just like [`parse_value`].
+///
+/// This helper is primarily intended for wasm consumers that still emit the
+/// legacy structure; it normalizes and then deserializes just like [`parse_value`].
+///
+/// # Examples
+///
+/// ```rust
+/// use serde_json::json;
+/// use vizij_api_core::json::value_from_legacy_json;
+/// use vizij_api_core::Value;
+///
+/// let legacy = json!({ "vec2": [0.0, 1.0] });
+/// let value = value_from_legacy_json(legacy)?;
+/// assert_eq!(value, Value::Vec2([0.0, 1.0]));
+/// # Ok::<(), serde_json::Error>(())
+/// ```
 pub fn value_from_legacy_json(value: JsonValue) -> Result<Value, serde_json::Error> {
     parse_value(value)
 }
 
 /// Deserialize a legacy JSON write batch array back into a strongly typed [`WriteBatch`].
+///
+/// If the input is not an array, this returns an empty batch.
+///
+/// # Examples
+///
+/// ```rust
+/// use serde_json::json;
+/// use vizij_api_core::json::writebatch_from_legacy_json;
+///
+/// let legacy = json!([{
+///     "path": "robot/Arm/Joint.angle",
+///     "value": { "float": 1.0 }
+/// }]);
+/// let batch = writebatch_from_legacy_json(legacy)?;
+/// assert_eq!(batch.iter().count(), 1);
+/// # Ok::<(), serde_json::Error>(())
+/// ```
 pub fn writebatch_from_legacy_json(value: JsonValue) -> Result<WriteBatch, serde_json::Error> {
     let Some(items) = value.as_array() else {
         return Ok(WriteBatch::new());
@@ -655,8 +832,23 @@ pub fn writebatch_from_legacy_json(value: JsonValue) -> Result<WriteBatch, serde
     Ok(batch)
 }
 
-/// Helper to create a [`WriteBatch`] from a list of changes expressed as `(TypedPath, Value)`
-/// pairs. This is primarily used in tests where ergonomic builders are desirable.
+/// Create a [`WriteBatch`] from a list of changes expressed as `(TypedPath, Value)` pairs.
+///
+/// This is primarily used in tests where ergonomic builders are desirable.
+///
+/// # Examples
+///
+/// ```rust
+/// use vizij_api_core::{TypedPath, Value};
+/// use vizij_api_core::json::writebatch_from_pairs;
+///
+/// let batch = writebatch_from_pairs(vec![
+///     (TypedPath::parse("robot/Arm/Joint.angle")?, Value::f(1.0)),
+///     (TypedPath::parse("robot/Arm/Joint.enabled")?, Value::Bool(true)),
+/// ]);
+/// assert_eq!(batch.iter().count(), 2);
+/// # Ok::<(), String>(())
+/// ```
 pub fn writebatch_from_pairs(pairs: impl IntoIterator<Item = (TypedPath, Value)>) -> WriteBatch {
     let mut batch = WriteBatch::new();
     for (path, value) in pairs {
