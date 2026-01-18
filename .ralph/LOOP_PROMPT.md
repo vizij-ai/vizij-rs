@@ -12,13 +12,25 @@ DOCSTRING TARGET (RUSTDOC AUTO-GEN)
 - Use consistent conventions: brief summary line, details, examples, panics/errors/safety where relevant.
 - Keep examples runnable where possible; note placeholders explicitly if unavoidable.
 
-TWO BACKLOGS (MANDATORY)
+BROAD-SCOPE ITERATION MODE
+- This loop may cover multiple files or modules in one iteration when the goal is large.
+- If the goal is broad or nebulous, choose a focused sub-scope (one crate or module group) and proceed without asking for clarification.
+- Record your chosen scope and any assumptions in the decision log.
+- If blocked, skip that area and continue on another aligned target; do not ask questions unless absolutely blocked.
 
-1) PRIMARY TASK BACKLOG (actionable)
+PROGRESS BUDGET (DEFAULT)
+- Aim for a meaningful batch: ~5–15 files or a coherent module slice.
+- Prefer depth and correctness over breadth; stop when changes start to get shallow or risky.
+- Keep each iteration independently reviewable and commit-worthy.
+
+BACKLOGS (GUIDANCE + TRACKING)
+
+1) PRIMARY TASK BACKLOG (guidance)
 - File: .ralph/<task>-backlog.md
-- This is the ONLY place you may select work from.
-- Add up to 5 new items per iteration.
-- You MUST synthesize/merge 3 existing items per iteration.
+- Use this to prioritize work, but you may work beyond a single item when aligned to the goal.
+- Keep the Top 10 current.
+- Add up to 3 new items per iteration if needed.
+- Merge or prune duplicates when you notice them, but no forced quota.
 
 2) OBSERVATION BACKLOG (write-only)
 - File: .ralph/observations.md
@@ -37,17 +49,17 @@ BACKLOG ITEM FORMAT
 
 PROTOCOL
 1) Orient: read repo, backlogs, recent commits.
-2) Select ONE item from the primary backlog.
-3) Implement minimal in-scope improvement.
-4) Verify using cheapest relevant check.
+2) Select a scope (crate/module set) and one or more aligned backlog items.
+3) Implement docstring improvements across the chosen scope.
+4) Verify using the cheapest relevant check.
 5) Update:
-   - Primary backlog (add ≤5, merge 3, update Top 10)
+   - Primary backlog (status updates, Top 10, add ≤3 items if needed)
    - Observation backlog (append only)
-   - Decision log (short entry)
-6) Commit: ralph(<task> iter-XX): summary
+   - Decision log (short entry including scope + assumptions)
+6) Commit: ralph(<task> iter-XX): <scope> docs
 
 OUTPUT
-- Chosen item
+- Scope chosen
 - Files changed
 - Verification result
 - Backlog updates

@@ -92,6 +92,30 @@
 - Type: Docs
 - Impact: Med
 - Effort: M
-- Evidence: Users need examples beyond the top-level API
-- Next action: Add snippets for common value types and helpers
+- Evidence: Users need examples beyond the top-level API; Value helpers, ValueKind links, and JSON tag notes need concise coverage (merged R-011/R-012/R-013).
+- Next action: Add short doc examples for common helpers (e.g., Value constructors), link ValueKind to ShapeId docs, and mention JSON tag layout.
+- Status: In progress
+
+### R-011 — Add docstrings for `Value` enum variants needing clarity
+- Type: Docs
+- Impact: Med
+- Effort: S
+- Evidence: Several `Value` variants use brief comments (e.g., List vs Array) that could be clearer for docs
+- Next action: Expand variant docs with concise distinctions where needed
+- Status: Planned
+
+### R-012 — Add rustdoc examples for `WriteBatch` construction patterns
+- Type: Docs
+- Impact: Med
+- Effort: S
+- Evidence: `WriteBatch` is common in orchestrator/animation outputs but has no examples
+- Next action: Add a minimal example to `WriteBatch::new` or module docs
+- Status: Planned
+
+### R-013 — Document `ShapeId` and `Shape` JSON expectations
+- Type: Docs
+- Impact: Low
+- Effort: S
+- Evidence: Shape structs serialize across crates but docstrings omit JSON shape expectations
+- Next action: Add brief notes in `shape.rs` about JSON fields and intended use
 - Status: Planned

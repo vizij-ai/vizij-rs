@@ -4,10 +4,11 @@
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 
-/// Lightweight kind enum for convenience. This is intentionally local to
-/// `value.rs` for now; the Shape/ShapeId types live in `shape.rs` and will
-/// be used to perform richer checks. This helper is useful for pattern-matching
-/// and quick dispatch during migration.
+/// Coarse kind tag for [`Value`] variants.
+///
+/// This stays local to `value.rs`; shape-based checks live in `shape.rs`.
+/// Use it for lightweight pattern matching and dispatch where a full [`ShapeId`]
+/// is unnecessary.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ValueKind {
     Float,
@@ -27,6 +28,10 @@ pub enum ValueKind {
     Text,
 }
 
+/// Runtime value that conforms to a [`ShapeId`].
+///
+/// This enum is serialized with `serde` using a `{ "type": "...", "data": ... }`
+/// tag layout and lowercase variant names to preserve stable JSON payloads.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "data", rename_all = "lowercase")]
 pub enum Value {
@@ -103,19 +108,31 @@ impl Value {
         }
     }
 
-    /// Convenience constructors
+    /// Creates a scalar float value.
     pub fn f(v: f32) -> Self {
         Value::Float(v)
     }
 
+    /// Creates a 3D vector value from components.
     pub fn vec3(x: f32, y: f32, z: f32) -> Self {
         Value::Vec3([x, y, z])
     }
 
+    /// Creates a quaternion value from (x, y, z, w) components.
     pub fn quat(x: f32, y: f32, z: f32, w: f32) -> Self {
         Value::Quat([x, y, z, w])
     }
 
+    /// Creates a transform value from translation, rotation (quat), and scale.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::Value;
+    ///
+    /// let v = Value::transform([0.0, 1.0, 2.0], [0.0, 0.0, 0.0, 1.0], [1.0, 1.0, 1.0]);
+    /// assert_eq!(v.kind(), vizij_api_core::ValueKind::Transform);
+    /// ```
     pub fn transform(translation: [f32; 3], rotation: [f32; 4], scale: [f32; 3]) -> Self {
         Value::Transform {
             translation,

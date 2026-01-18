@@ -5,6 +5,8 @@ TASK="${TASK:-docs}"
 BRANCH="${BRANCH:-ralph/docs}"
 ITERS="${ITERS:-1}"
 GOAL="${GOAL:-Improve documentation quality.}"
+SCOPE="${SCOPE:-}"
+BUDGET_FILES="${BUDGET_FILES:-}"
 
 PROMPT_FILE=".ralph/LOOP_PROMPT.md"
 PRIMARY_BACKLOG_FILE=".ralph/${TASK}-backlog.md"
@@ -29,7 +31,23 @@ $TASK
 
 PRIMARY BACKLOG:
 $PRIMARY_BACKLOG_FILE
+"
 
+  if [ -n "$SCOPE" ]; then
+    PROMPT="$PROMPT
+SCOPE HINT:
+$SCOPE
+"
+  fi
+
+  if [ -n "$BUDGET_FILES" ]; then
+    PROMPT="$PROMPT
+BUDGET FILES:
+$BUDGET_FILES
+"
+  fi
+
+  PROMPT="$PROMPT
 ITERATION:
 iter-$ITER
 "
