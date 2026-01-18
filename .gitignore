@@ -27,3 +27,6 @@ npm/@vizij/wasm-loader/node_modules/
 *.log
 .idea/
 .vscode/
+
+# ralph loop logs (local)
+.ralph/logs/

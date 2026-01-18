@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -13,7 +12,10 @@ PRIMARY_BACKLOG_FILE=".ralph/${TASK}-backlog.md"
 mkdir -p .ralph/logs
 touch .ralph/observations.md .ralph/decision-log.md
 
-git checkout -B "$BRANCH" >/dev/null 2>&1 || git checkout "$BRANCH"
+current_branch="$(git branch --show-current 2>/dev/null || true)"
+if [ -n "$BRANCH" ] && [ "$current_branch" != "$BRANCH" ]; then
+  git checkout -B "$BRANCH" >/dev/null 2>&1 || git checkout "$BRANCH"
+fi
 
 for i in $(seq 1 "$ITERS"); do
   ITER=$(printf "%02d" "$i")

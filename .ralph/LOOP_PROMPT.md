@@ -1,4 +1,3 @@
-
 You are running ONE iteration of a “fresh-agent” improvement loop on this repository.
 
 FRESH START RULES
@@ -6,6 +5,12 @@ FRESH START RULES
 - Your only memory is the repository contents and the Ralph artifacts.
 - Prefer repo-grounded truth over generic best practices.
 - Avoid cosmetic-only edits unless they materially improve accuracy or usability.
+
+DOCSTRING TARGET (RUSTDOC AUTO-GEN)
+- Treat all public Rust docstrings as source for auto-generated docs.
+- Prefer precise, minimal, correct docs over verbose prose.
+- Use consistent conventions: brief summary line, details, examples, panics/errors/safety where relevant.
+- Keep examples runnable where possible; note placeholders explicitly if unavoidable.
 
 TWO BACKLOGS (MANDATORY)
 
