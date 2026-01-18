@@ -1,0 +1,97 @@
+# Ralph Primary Backlog — Docs (Rust docstrings -> autogen docs)
+
+## Top 10 next
+1. R-001 — Audit public Rust APIs for missing or placeholder docstrings
+2. R-002 — Establish docstring conventions for examples, panics, safety, and errors
+3. R-003 — Add runnable code examples for key public APIs
+4. R-004 — Standardize module-level docs and `//!` overviews
+5. R-005 — Document feature flags and conditional compilation behavior
+6. R-006 — Add cross-links between core crates and wasm wrappers
+7. R-007 — Add doc tests or validate examples against current APIs
+8. R-008 — Ensure docstrings mention JSON/ABI versioning contracts
+9. R-009 — Document performance considerations and allocation hot spots
+10. R-010 — Add usage snippets for frequently used types and helpers
+
+---
+
+## Backlog items
+
+### R-001 — Audit public Rust APIs for missing or placeholder docstrings
+- Type: Docs
+- Impact: High
+- Effort: L
+- Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
+- Next action: Inventory `pub` items in each crate and tag missing/weak docs
+- Status: Planned
+
+### R-002 — Establish docstring conventions for examples, panics, safety, and errors
+- Type: Docs
+- Impact: High
+- Effort: M
+- Evidence: Consistency needed for `cargo doc` output and downstream JS consumers
+- Next action: Draft a short conventions section in a shared doc (or top-level crate docs)
+- Status: Planned
+
+### R-003 — Add runnable code examples for key public APIs
+- Type: Docs
+- Impact: High
+- Effort: L
+- Evidence: Autogen docs are less useful without concrete usage examples
+- Next action: Add minimal doc examples for core API entry points
+- Status: Planned
+
+### R-004 — Standardize module-level docs and `//!` overviews
+- Type: Docs
+- Impact: Med
+- Effort: M
+- Evidence: Some modules lack context or usage overview
+- Next action: Add/refresh `//!` blocks for core modules across crates
+- Status: Planned
+
+### R-005 — Document feature flags and conditional compilation behavior
+- Type: Docs
+- Impact: Med
+- Effort: M
+- Evidence: Feature-gated behavior affects API surface in docs
+- Next action: Add doc notes for feature flags in relevant crates
+- Status: Planned
+
+### R-006 — Add cross-links between core crates and wasm wrappers
+- Type: Docs
+- Impact: Med
+- Effort: S
+- Evidence: Consumers need to understand Rust vs wasm API mapping
+- Next action: Add `See also` links between core and wasm types
+- Status: Planned
+
+### R-007 — Add doc tests or validate examples against current APIs
+- Type: Docs
+- Impact: Med
+- Effort: M
+- Evidence: Examples can drift without doc tests
+- Next action: Convert key examples into `rustdoc` tests or verify manually
+- Status: Planned
+
+### R-008 — Ensure docstrings mention JSON/ABI versioning contracts
+- Type: Docs
+- Impact: Med
+- Effort: S
+- Evidence: ABI changes must be visible in generated docs
+- Next action: Add versioning notes to public APIs that serialize/deserialize JSON
+- Status: Planned
+
+### R-009 — Document performance considerations and allocation hot spots
+- Type: Docs
+- Impact: Low
+- Effort: M
+- Evidence: Generated docs should note hot paths for integrators
+- Next action: Add perf notes where relevant in engine loops and graph eval
+- Status: Planned
+
+### R-010 — Add usage snippets for frequently used types and helpers
+- Type: Docs
+- Impact: Med
+- Effort: M
+- Evidence: Users need examples beyond the top-level API
+- Next action: Add snippets for common value types and helpers
+- Status: Planned
