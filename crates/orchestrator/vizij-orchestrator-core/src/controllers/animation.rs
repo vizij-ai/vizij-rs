@@ -22,6 +22,8 @@ use crate::blackboard::Blackboard;
 /// - `instance`: instance overrides (`weight`, `time_scale`, `start_offset`, `enabled`)
 ///
 /// Unknown keys are ignored. Use `serde_json::Value::Null` to skip setup entirely.
+///
+/// Prefer [`AnimationController::try_new`] if you need to surface setup errors.
 #[derive(Debug, Clone)]
 pub struct AnimationControllerConfig {
     /// Controller identifier (used in conflict logs and diagnostics).
@@ -217,6 +219,7 @@ impl AnimationController {
     ///   TypedPath: "anim/player/<player_id>/instance/<inst_id>/enabled"
     ///
     /// These conventions are intentionally conservative and documented for now.
+    /// Unrecognized paths are ignored.
     fn map_blackboard_to_inputs(bb: &Blackboard) -> Inputs {
         let mut inputs = Inputs::default();
 

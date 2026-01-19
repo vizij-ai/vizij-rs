@@ -29,6 +29,8 @@ pub enum Schedule {
 /// Graph writes respect subscription filters for merged writes, while the blackboard
 /// receives full writes when `mirror_writes` is enabled.
 ///
+/// This runner increments no state; callers must advance the epoch themselves.
+///
 /// # Errors
 /// Returns an error if any controller evaluation fails.
 pub fn run_single_pass(
@@ -116,6 +118,8 @@ pub fn run_single_pass(
 /// Returned timings are synthetic (derived from `dt`) and not wall-clock durations.
 ///
 /// The second graph pass observes any animation writes applied during the animation pass.
+///
+/// This runner increments no state; callers must advance the epoch themselves.
 ///
 /// # Errors
 /// Returns an error if any controller evaluation fails.

@@ -70,10 +70,16 @@ pub enum OutputConflictStrategy {
     /// Reject conflicting output paths.
     Error,
     /// Namespace conflicting outputs under their graph id.
+    ///
+    /// This strategy is only valid for final outputs; intermediate conflicts return an error.
     Namespace,
     /// Blend conflicting outputs with equal weights.
+    ///
+    /// The blend uses a constant weight vector with equal contribution per producer.
     BlendEqualWeights,
     /// Sum conflicting outputs with a variadic add node.
+    ///
+    /// This inserts a variadic add node and rewires downstream consumers.
     Add,
     /// Blend conflicting outputs with per-producer weight inputs.
     ///

@@ -23,6 +23,8 @@ pub struct BlackboardEntry {
     /// Provenance label (controller id or host name).
     pub source: String,
     /// Priority hint for downstream arbitration (higher wins if used externally).
+    ///
+    /// The orchestrator core does not read this value; it is preserved for host logic.
     pub priority: u8,
 }
 
@@ -98,6 +100,8 @@ impl Blackboard {
     /// Stored entries use priority `0`; pass a prebuilt [`BlackboardEntry`] if you
     /// need a different priority value.
     ///
+    /// This overwrites any existing entry without returning a conflict log.
+    ///
     /// # Errors
     /// Returns an error if the path is invalid or the JSON payload cannot be parsed.
     pub fn set(
@@ -131,6 +135,9 @@ impl Blackboard {
     /// Directly set a value using typed API types.
     ///
     /// Returns the previous entry if one existed at the same path.
+    ///
+    /// This does not emit conflict logs; callers can compare the returned entry
+    /// with the new one if they need to track overwrites.
     pub fn set_entry(
         &mut self,
         path: TypedPath,
@@ -169,6 +176,8 @@ impl Blackboard {
     }
 
     /// Iterate over all entries keyed by `TypedPath`.
+    ///
+    /// The iteration order is arbitrary.
     pub fn iter(&self) -> impl Iterator<Item = (&TypedPath, &BlackboardEntry)> {
         self.inner.iter()
     }
@@ -177,6 +186,8 @@ impl Blackboard {
     ///
     /// Each write is attributed to `source` and `epoch`. Returns conflict records
     /// for any overwritten entries.
+    ///
+    /// Entries inserted by this method always use priority `0`.
     pub fn apply_writebatch(
         &mut self,
         batch: WriteBatch,

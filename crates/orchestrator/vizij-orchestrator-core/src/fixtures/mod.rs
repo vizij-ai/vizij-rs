@@ -17,6 +17,9 @@ use vizij_test_fixtures::{animations, node_graphs, orchestrations};
 ///
 /// Fixtures are primarily sourced from `vizij-test-fixtures` and normalized
 /// before they are converted into `GraphControllerConfig` values.
+///
+/// Many helper functions in this module panic on invalid fixture data. Treat
+/// these fixtures as test-only inputs.
 #[derive(Debug, Deserialize, Clone)]
 pub struct GraphFixture {
     /// Fixture key used to resolve the graph spec from `vizij-test-fixtures`.
@@ -43,6 +46,7 @@ pub struct GraphFixture {
 /// Animation fixture descriptor used by orchestrator demos/tests.
 ///
 /// The `setup` payload mirrors the JSON structure expected by the wasm wrapper.
+/// Invalid fixture data will trigger panics in the loading helpers.
 #[derive(Debug, Clone)]
 pub struct AnimationFixture {
     /// Fixture key used to resolve animation JSON from `vizij-test-fixtures`.
@@ -56,6 +60,7 @@ pub struct AnimationFixture {
 /// Input fixture staged onto the blackboard before stepping.
 ///
 /// Values and shapes are serialized using `vizij-api-core` JSON conventions.
+/// Invalid values are surfaced as panics when fixtures are materialized.
 #[derive(Debug, Clone)]
 pub struct InputFixture {
     /// Typed path string for the blackboard entry.
@@ -69,6 +74,7 @@ pub struct InputFixture {
 /// Fixture describing a merged graph configuration.
 ///
 /// Use this to exercise graph merge strategies in fixture-driven tests.
+/// Fixture loading panics on invalid graph configs.
 #[derive(Debug, Clone)]
 pub struct MergedGraphFixture {
     /// Controller id for the merged graph.
@@ -153,6 +159,8 @@ impl MergedGraphFixture {
 }
 
 /// Expected state after one orchestrator step in fixture-driven tests.
+///
+/// Steps store JSON values to match `vizij-api-core` serialization formats.
 #[derive(Debug, Clone)]
 pub struct StepFixture {
     /// Delta time in seconds for the step.
@@ -174,6 +182,7 @@ impl StepFixture {
 ///
 /// These fixtures provide a high-level view of orchestrator pipelines for
 /// demos and integration tests.
+/// Fixture loading will panic if any referenced JSON assets are invalid.
 #[derive(Debug, Clone)]
 pub struct DemoFixture {
     /// Optional description pulled from the orchestration descriptor.
