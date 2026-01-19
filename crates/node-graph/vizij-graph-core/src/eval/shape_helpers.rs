@@ -82,6 +82,8 @@ pub fn infer_shape_id(value: &Value) -> ShapeId {
 
 /// Ensure outputs match their declared shapes, updating cached shapes in-place.
 ///
+/// # Errors
+///
 /// Returns an error when a declared output is missing or the value does not match.
 #[allow(dead_code)]
 pub fn enforce_output_shapes(

@@ -21,6 +21,8 @@ pub fn parse_variadic_key(key: &str) -> (&str, Option<usize>) {
 }
 
 /// Sort variadic keys lexicographically by prefix then index.
+///
+/// This keeps `operand_0`, `operand_1`, ... stable for evaluation.
 pub fn compare_variadic_keys(a: &str, b: &str) -> Ordering {
     let (prefix_a, idx_a) = parse_variadic_key(a);
     let (prefix_b, idx_b) = parse_variadic_key(b);

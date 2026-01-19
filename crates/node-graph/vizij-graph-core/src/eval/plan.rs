@@ -10,6 +10,8 @@ use super::value_layout::PortValue;
 use super::variadic::{compare_variadic_keys, parse_variadic_key};
 
 /// Continuous span inside a variadic group.
+///
+/// `start` is the first slot index and `len` is the number of slots in the group.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct VariadicRange {
     /// Starting slot index for the group.
@@ -19,6 +21,8 @@ pub struct VariadicRange {
 }
 
 /// Input/output slot layout for a node.
+///
+/// Slot order is stable across evaluations to keep port indices deterministic.
 #[derive(Clone, Debug, Default)]
 pub struct PortLayout {
     /// Slot names in stable order.
@@ -53,6 +57,8 @@ impl PortLayout {
 }
 
 /// Input/output layouts for a node.
+///
+/// Each layout mirrors the resolved ports for a single `NodeSpec`.
 #[derive(Clone, Debug, Default)]
 pub struct NodeLayout {
     /// Input layout for the node.
@@ -62,6 +68,8 @@ pub struct NodeLayout {
 }
 
 /// Resolved input source for a bound port.
+///
+/// The `node_idx` points into `GraphSpec.nodes`.
 #[derive(Clone, Debug)]
 pub struct ResolvedInputSource {
     /// Index of the source node in the spec.
@@ -103,6 +111,8 @@ pub struct PlanCache {
 
 impl PlanCache {
     /// Ensure the cache matches the provided spec; rebuild on structural change.
+    ///
+    /// When `spec.version` is non-zero, prefer [`ensure_versioned`] for O(1) checks.
     pub fn ensure(&mut self, spec: &GraphSpec) -> Result<(), String> {
         if spec.version > 0 {
             self.ensure_versioned(spec)
@@ -116,6 +126,10 @@ impl PlanCache {
     }
 
     /// Version-aware fast path: compare caller-managed version for O(1) steady-state checks.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `spec.fingerprint` disagrees with the computed value.
     pub fn ensure_versioned(&mut self, spec: &GraphSpec) -> Result<(), String> {
         debug_assert!(
             spec.version == 0 || spec.fingerprint == 0 || spec.fingerprint == fingerprint_spec(spec),

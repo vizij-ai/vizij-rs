@@ -42,6 +42,8 @@ where
 }
 
 /// Coerce a [`Value`] to a single `f32`.
+///
+/// This uses the same coercion logic as `vizij_api_core::coercion::to_float`.
 pub fn as_float(v: &Value) -> f32 {
     coercion::to_float(v)
 }

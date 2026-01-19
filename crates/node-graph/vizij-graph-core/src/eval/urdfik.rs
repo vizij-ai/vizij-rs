@@ -79,6 +79,10 @@ pub fn hash_urdf_config(urdf_xml: &str, root_link: &str, tip_link: &str) -> u64 
 
 #[cfg(feature = "urdf_ik")]
 /// Build a serial chain between `root` and `tip` from the provided URDF XML.
+///
+/// # Errors
+///
+/// Returns an error when the URDF cannot be parsed or the requested chain is invalid.
 pub fn build_chain_from_urdf(
     urdf_xml: &str,
     root: &str,
@@ -174,6 +178,10 @@ fn apply_weights(
 
 #[cfg(feature = "urdf_ik")]
 /// Solve for joint positions that reach `target_pos` while respecting `weights`.
+///
+/// # Errors
+///
+/// Returns an error when the solver fails to converge or the seed cannot be applied.
 pub fn solve_position(
     state: &mut UrdfKinematicsState,
     solver: &mut k::JacobianIkSolver<f32>,
@@ -319,6 +327,10 @@ pub fn fetch_joint_vector(
 
 #[cfg(feature = "urdf_ik")]
 /// Apply joint values to the cached serial chain.
+///
+/// # Errors
+///
+/// Returns an error when the joint count mismatches or the chain rejects the update.
 pub fn apply_joint_positions(
     state: &mut UrdfKinematicsState,
     joints: &[f32],
@@ -349,6 +361,10 @@ pub fn tip_pose(state: &UrdfKinematicsState) -> ([f32; 3], [f32; 4]) {
 #[allow(clippy::too_many_arguments)]
 #[cfg(feature = "urdf_ik")]
 /// Solve for joint positions that reach both `target_pos` and `target_rot`.
+///
+/// # Errors
+///
+/// Returns an error when the solver fails to converge or the seed cannot be applied.
 pub fn solve_pose(
     state: &mut UrdfKinematicsState,
     solver: &mut k::JacobianIkSolver<f32>,

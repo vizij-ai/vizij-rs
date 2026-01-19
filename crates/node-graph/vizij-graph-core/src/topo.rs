@@ -1,9 +1,11 @@
 use crate::types::{EdgeSpec, NodeId, NodeSpec};
 use std::collections::{HashMap, VecDeque};
 
-/// Return node ids in topological order or an error if a cycle is detected.
+/// Return node ids in topological order.
 ///
-/// Errors when an edge references a missing node or when the graph contains cycles.
+/// # Errors
+///
+/// Returns an error when an edge references a missing node or when the graph contains cycles.
 pub fn topo_order(nodes: &[NodeSpec], edges: &[EdgeSpec]) -> Result<Vec<NodeId>, String> {
     let mut indeg: HashMap<NodeId, usize> = HashMap::new();
     let mut adj: HashMap<NodeId, Vec<NodeId>> = HashMap::new();

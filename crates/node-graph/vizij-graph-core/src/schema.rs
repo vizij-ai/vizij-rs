@@ -2,6 +2,9 @@ use crate::types::NodeType;
 use serde::{Deserialize, Serialize};
 
 /// Supported port value categories for the node registry.
+///
+/// These categories are a UI/schema abstraction; runtime evaluation still uses
+/// `vizij_api_core::Value`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PortType {
@@ -22,6 +25,8 @@ pub enum PortType {
 }
 
 /// Supported parameter value categories for the node registry.
+///
+/// Parameter categories are used for tooling and JSON schema generation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ParamType {
@@ -38,6 +43,8 @@ pub enum ParamType {
 }
 
 /// Static port metadata used by the schema registry.
+///
+/// This metadata is consumed by editor tooling and wasm bindings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PortSpec {
     /// Stable port identifier used in JSON and bindings.
@@ -55,6 +62,8 @@ pub struct PortSpec {
 }
 
 /// Definition for variadic input or output groups.
+///
+/// Variadic groups describe slots such as `operand_0`, `operand_1`, etc.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VariadicSpec {
     /// Variadic group identifier (prefix for ports).
@@ -74,6 +83,8 @@ pub struct VariadicSpec {
 }
 
 /// Static parameter metadata used by the schema registry.
+///
+/// Use `default_json` to match the Value JSON encoding used in wasm bindings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParamSpec {
     /// Stable parameter identifier used in JSON and bindings.
@@ -97,6 +108,8 @@ pub struct ParamSpec {
 }
 
 /// Signature describing a node's ports, parameters, and documentation.
+///
+/// Signatures form the node registry that UI tooling consumes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeSignature {
     /// Unique node type id for the signature.
@@ -198,8 +211,8 @@ fn p_out_vector() -> PortSpec {
 
 /// Return the built-in node registry for tooling and validation.
 ///
-/// The registry mirrors the built-in node types and is consumed by UI tooling
-/// and schema-aware validators.
+/// The registry mirrors the built-in node types and is consumed by UI tooling,
+/// wasm bindings, and schema-aware validators.
 pub fn registry() -> Registry {
     use NodeType::*;
     let mut nodes: Vec<NodeSignature> = Vec::new();

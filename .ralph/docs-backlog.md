@@ -45,8 +45,8 @@
 - Impact: Med
 - Effort: M
 - Evidence: Some modules lack context or usage overview
-- Next action: Add/refresh `//!` blocks for core modules across crates
-- Status: Planned
+- Next action: Continue refreshing `//!` blocks for graph eval helpers and remaining stacks
+- Status: In progress
 
 ### R-005 — Document feature flags and conditional compilation behavior
 - Type: Docs

@@ -19,6 +19,8 @@ pub enum SelectorSegment {
 pub type Selector = Vec<SelectorSegment>;
 
 /// Supported node kinds in a [`GraphSpec`].
+///
+/// These values map to node registry entries and JSON `type` strings.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeType {
@@ -263,6 +265,8 @@ pub struct NodeSpec {
 }
 
 /// Top-level graph document consumed by the evaluator.
+///
+/// Use [`GraphSpec::with_cache`] to seed the plan cache fingerprint/version.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GraphSpec {
     /// Nodes in the graph.
@@ -383,6 +387,8 @@ impl GraphSpec {
     }
 
     /// Build a map of node inputs to their resolved connections or defaults.
+    ///
+    /// # Errors
     ///
     /// Returns errors for missing nodes or duplicate input edges.
     pub fn input_connections(

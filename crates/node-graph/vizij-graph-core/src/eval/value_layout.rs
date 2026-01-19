@@ -39,6 +39,8 @@ impl Default for PortValue {
 }
 
 /// Describes how a [`Value`] is laid out when flattened.
+///
+/// Layouts are used to broadcast scalars and reconstruct structured outputs.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ValueLayout {
     /// Single scalar.
@@ -102,6 +104,8 @@ impl ValueLayout {
     }
 
     /// Reconstruct a structured [`Value`] from flattened scalar data.
+    ///
+    /// When the slice is too short, missing entries are filled with `NaN`.
     pub fn reconstruct(&self, data: &[f32]) -> Value {
         match self {
             ValueLayout::Scalar => Value::Float(data.first().copied().unwrap_or(f32::NAN)),
