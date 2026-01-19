@@ -2,9 +2,12 @@
 
 import type { ValueJSON as BaseValueJSON, NormalizedValue } from "@vizij/value-json";
 
+/** Value JSON union accepted by the node-graph runtime. */
 export type ValueJSON = BaseValueJSON;
+/** Normalized Value payloads returned by the runtime. */
 export type { NormalizedValue };
 
+/** Convenient value input union for constants and defaults. */
 export type ValueLike =
   | ValueJSON
   | number
@@ -12,6 +15,7 @@ export type ValueLike =
   | [number, number, number]
   | number[];
 
+/** Node identifier used in GraphSpec definitions. */
 export type NodeId = string;
 
 /**
@@ -88,6 +92,7 @@ export type NodeType =
   | "input"
   | "output";
 
+/** Shape JSON metadata describing a port's expected shape. */
 export type ShapeJSON =
   | { id: "Scalar"; meta?: Record<string, string> }
   | { id: "Bool"; meta?: Record<string, string> }
@@ -105,6 +110,7 @@ export type ShapeJSON =
   | { id: "Tuple"; data: ShapeJSON[]; meta?: Record<string, string> }
   | { id: "Enum"; data: [string, ShapeJSON][]; meta?: Record<string, string> };
 
+/** Parameter bag for node types that support configuration. */
 export interface NodeParams {
   value?: ValueJSON | number | boolean | [number, number, number] | number[];
   sizes?: number[]; // for Split
@@ -138,10 +144,12 @@ export interface NodeParams {
   case_labels?: string[];
 }
 
+/** Selector segments for accessing nested values. */
 export type SelectorSegmentJSON =
   | { field: string }
   | { index: number };
 
+/** Node spec payload used in GraphSpec. */
 export interface NodeSpec {
   id: NodeId;
   /** Rust field name is `type`, but `type` is a TS keyword; JSON still uses `"type"`. */
@@ -158,22 +166,26 @@ export interface NodeSpec {
   >;
 }
 
+/** Output endpoint for an edge. */
 export interface EdgeOutputEndpoint {
   node_id: NodeId;
   output?: string;
 }
 
+/** Input endpoint for an edge. */
 export interface EdgeInputEndpoint {
   node_id: NodeId;
   input: string;
 }
 
+/** Edge linking node outputs to node inputs. */
 export interface EdgeSpec {
   from: EdgeOutputEndpoint;
   to: EdgeInputEndpoint;
   selector?: SelectorSegmentJSON[];
 }
 
+/** Full graph spec JSON accepted by the wasm runtime. */
 export interface GraphSpec {
   nodes: NodeSpec[];
   edges?: EdgeSpec[];
@@ -192,19 +204,23 @@ export interface GraphSpec {
   fingerprint?: number;
 }
 
+/** Output snapshot for a single port. */
 export interface PortSnapshot {
   value: ValueJSON;
   shape: ShapeJSON;
 }
 
+/** Output map keyed by node id, then port name. */
 export type GraphOutputs = Record<NodeId, Record<string, PortSnapshot>>;
 
+/** Write operation emitted by output nodes. */
 export interface WriteOpJSON {
   path: string;
   value: ValueJSON;
   shape: ShapeJSON;
 }
 
+/** Result payload returned by Graph.evaluate* helpers. */
 export interface EvalResult {
   nodes: Record<NodeId, Record<string, PortSnapshot>>;
   writes: WriteOpJSON[];
@@ -225,6 +241,7 @@ export type InitInput =
    Node Schema Registry (exported from wasm via get_node_schemas_json)
 -------------------------------------------------------------------- */
 
+/** Port type category used in the schema registry. */
 export type PortType =
   | "float"
   | "bool"
@@ -233,8 +250,10 @@ export type PortType =
   | "transform"
   | "vector"
   | "any";
+/** Param type category used in the schema registry. */
 export type ParamType = "float" | "bool" | "vec3" | "vector" | "any";
 
+/** Port spec metadata for a node signature. */
 export interface PortSpec {
   id: string;            // canonical port id (e.g., "out", "in", "lhs", "rhs", "x", "y", "z")
   ty: PortType;
@@ -243,6 +262,7 @@ export interface PortSpec {
   optional?: boolean;    // missing by default
 }
 
+/** Variadic input/output spec for a node signature. */
 export interface VariadicSpec {
   id: string;            // group id for variadic inputs (e.g., "operands")
   ty: PortType;
@@ -252,6 +272,7 @@ export interface VariadicSpec {
   max?: number;
 }
 
+/** Param spec metadata for a node signature. */
 export interface ParamSpec {
   id: string;
   ty: ParamType;
@@ -266,6 +287,7 @@ export interface ParamSpec {
   max?: number;
 }
 
+/** Registry entry describing a node type. */
 export interface NodeSignature {
   type_id: NodeType;
   name: string;
@@ -278,6 +300,7 @@ export interface NodeSignature {
   params: ParamSpec[];
 }
 
+/** Node schema registry containing all known node signatures. */
 export interface Registry {
   version: string;
   nodes: NodeSignature[];
@@ -286,12 +309,19 @@ export interface Registry {
 /* --------------------------------------------------------------------
    Samples (exported from wasm via src/index.ts)
 -------------------------------------------------------------------- */
+/** Basic oscillator demo graph spec. */
 export const oscillatorBasics: GraphSpec;
+/** Vector math playground graph spec. */
 export const vectorPlayground: GraphSpec;
+/** Boolean logic gate demo graph spec. */
 export const logicGate: GraphSpec;
+/** Tuple + spring/damp/slew demo graph spec. */
 export const tupleSpringDampSlew: GraphSpec;
+/** Nested rig blend demo graph spec. */
 export const nestedRigWeightedPose: GraphSpec;
+/** Selector cascade demo graph spec. */
 export const selectorCascade: GraphSpec;
+/** Map of built-in graph samples keyed by name. */
 export const graphSamples: Record<string, GraphSpec>;
 
 /**

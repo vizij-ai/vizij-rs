@@ -50,6 +50,7 @@ export type {
  *
  * Includes a few common helpers while staying permissive for legacy/forward-compatible shapes.
  */
+/** Shape primitive payload accepted by the orchestrator. */
 export type ShapePrimitive = { id: string } | { id: string; sizes?: number[] } | { id: string; params?: any };
 /** Nested field map for record-shaped values. */
 export type ShapeField = { [k: string]: ShapeJSON };
@@ -57,12 +58,14 @@ export type ShapeField = { [k: string]: ShapeJSON };
 export type ShapeJSON = ShapePrimitive | { record?: ShapeField } | { array?: ShapeJSON } | any;
 
 /** Write operation emitted by controllers during a step. */
+/** Write operation emitted by controllers during a step. */
 export interface WriteOpJSON {
   path: string;
   value: ValueJSON;
   shape?: ShapeJSON;
 }
 
+/** Conflict log emitted when a write overwrote an existing entry. */
 /** Conflict log emitted when a write overwrote an existing entry. */
 export interface ConflictLog {
   path: string;
@@ -77,6 +80,7 @@ export interface ConflictLog {
 }
 
 /** The orchestrator frame returned after each step. */
+/** The orchestrator frame returned after each step. */
 export interface OrchestratorFrame {
   epoch: number;
   dt: number;
@@ -86,6 +90,7 @@ export interface OrchestratorFrame {
   events: any[]; // controller-specific event payloads
 }
 
+/** High-level typed interface for the JS wrapper (for consumers who prefer TS types). */
 /** High-level typed interface for the JS wrapper (for consumers who prefer TS types). */
 export interface OrchestratorAPI {
   registerGraph(cfg: GraphRegistrationInput): string;
@@ -165,8 +170,10 @@ export interface GraphSubscriptions {
 }
 
 /** Graph registration inputs accepted by the JS wrapper. */
+/** Graph registration inputs accepted by the JS wrapper. */
 export type GraphRegistrationInput = string | GraphRegistrationConfig;
 
+/** Conflict strategies supported by graph merge options. */
 /** Conflict strategies supported by graph merge options. */
 export type MergeConflictStrategy =
   | "error"
@@ -186,6 +193,7 @@ export type MergeConflictStrategy =
   | "blend-weights"
   | "weights";
 
+/** Merge strategy options for graph registration. */
 /** Merge strategy options for graph registration. */
 export interface MergeStrategyOptions {
   outputs?: MergeConflictStrategy;

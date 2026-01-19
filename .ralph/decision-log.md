@@ -85,3 +85,4 @@
 
 - 2026-01-19: Added JSDoc summaries for node-graph-wasm metadata helpers and sample exports to improve JS autogen docs coverage.
 - 2026-01-19: Iter-03 scope: npm docs pass for JS autogen. Cleaned up duplicate JSDoc in value-json, added error/behavior notes for test-fixtures helpers, and expanded node-graph metadata helper docs. Assumed doc-only edits; skipped tests. Commit failed: git index lock under `/home/chris/Code/Semio/vizij_ws/vizij-rs_workspace/.bare/worktrees/docs-update` is not writable in sandbox.
+- 2026-01-19: Iter-06 scope: npm type declaration JSDoc polish for animation-wasm, node-graph-wasm, orchestrator-wasm. Added concise summaries for exported TS types (IDs, inputs/outputs, graph schema metadata, baked data) to improve JS autogen docs. Assumed type-only doc updates; skipped tests. Commit blocked: git index lock lives under `/home/chris/Code/Semio/vizij_ws/vizij-rs_workspace/.bare/worktrees/docs-update` outside writable roots.

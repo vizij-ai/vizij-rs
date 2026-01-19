@@ -18,8 +18,11 @@ export type InitInput =
 /* -----------------------------------------------------------
    Basic IDs
 ----------------------------------------------------------- */
+/** Engine-managed animation identifier. */
 export type AnimId = number;
+/** Engine-managed player identifier. */
 export type PlayerId = number;
+/** Engine-managed instance identifier. */
 export type InstId = number;
 
 /* -----------------------------------------------------------
@@ -58,11 +61,13 @@ export interface BakingConfig {
   derivative_epsilon?: number;
 }
 
+/** Baked values for a single target path. */
 export interface BakedTrack {
   target_path: string;
   values: Value[];
 }
 
+/** Baked clip values at a uniform sampling rate. */
 export interface BakedAnimationData {
   anim: AnimId;
   frame_rate: number;
@@ -75,8 +80,10 @@ export interface BakedAnimationData {
    Inputs (vizij-animation-core/src/inputs.rs)
    serde default represents enums as { "Variant": { ... } }
 ----------------------------------------------------------- */
+/** Playback looping mode for a player. */
 export type LoopMode = "Once" | "Loop" | "PingPong";
 
+/** Command applied to a player before stepping. */
 export type PlayerCommand =
   | { Play: { player: PlayerId } }
   | { Pause: { player: PlayerId } }
@@ -86,6 +93,7 @@ export type PlayerCommand =
   | { SetLoopMode: { player: PlayerId; mode: LoopMode } }
   | { SetWindow: { player: PlayerId; start_time: number; end_time?: number | null } };
 
+/** Per-instance configuration updates applied before stepping. */
 export interface InstanceUpdate {
   player: PlayerId;
   inst: InstId;
@@ -95,6 +103,7 @@ export interface InstanceUpdate {
   enabled?: boolean;
 }
 
+/** Inputs batch applied on the next engine tick. */
 export interface Inputs {
   /** Player-level commands applied before stepping */
   player_cmds?: PlayerCommand[];
@@ -106,12 +115,15 @@ export interface Inputs {
    Values (vizij-animation-core/src/value.rs)
    Tagged union: { type: "...", data: ... }
 ----------------------------------------------------------- */
+/** Value JSON union accepted by the engine wrapper. */
 export type ValueJSON = SharedValueJSON;
+/** Normalized Value payloads returned by the engine. */
 export type Value = NormalizedValue;
 
 /* -----------------------------------------------------------
    Outputs (vizij-animation-core/src/outputs.rs)
 ----------------------------------------------------------- */
+/** A resolved output change emitted by the engine. */
 export interface Change {
   player: PlayerId;
   /** Opaque key (resolved via prebind or canonical path when unresolved) */
@@ -119,10 +131,12 @@ export interface Change {
   value: Value;
 }
 
+/** Change record including optional finite-difference derivative. */
 export interface ChangeWithDerivative extends Change {
   derivative?: Value | null;
 }
 
+/** Playback and diagnostic events emitted by the core engine. */
 export type CoreEvent =
   | { PlaybackStarted: { player: PlayerId; animation?: string | null } }
   | { PlaybackPaused: { player: PlayerId } }
@@ -149,11 +163,13 @@ export type CoreEvent =
   | { Error: { message: string } }
   | { Custom: { kind: string; data: unknown } };
 
+/** Output payload returned by updateValues(). */
 export interface Outputs {
   changes: Change[];
   events: CoreEvent[];
 }
 
+/** Output payload returned by updateValuesAndDerivatives(). */
 export interface OutputsWithDerivatives {
   changes: ChangeWithDerivative[];
   events: CoreEvent[];
@@ -163,12 +179,18 @@ export interface OutputsWithDerivatives {
    StoredAnimation (new JSON format) — minimal typing
    See vizij-spec/Animation.md and fixtures/animations/vector-pose-combo.json
 ----------------------------------------------------------- */
+/** Stored animation vector value. */
 export type StoredScalarVec2 = { x: number; y: number };
+/** Stored animation vector value. */
 export type StoredScalarVec3 = { x: number; y: number; z: number };
+/** Stored animation Euler rotation (roll/pitch/yaw). */
 export type StoredEulerRPY = { r: number; p: number; y: number };
+/** Stored animation color in RGB. */
 export type StoredColorRGB = { r: number; g: number; b: number };
+/** Stored animation color in HSL. */
 export type StoredColorHSL = { h: number; s: number; l: number };
 
+/** Union of stored value payloads accepted by StoredAnimation. */
 export type StoredValue =
   | number
   | StoredScalarVec2
@@ -179,11 +201,13 @@ export type StoredValue =
   | boolean
   | string;
 
+/** Cubic-bezier control point (0..1 range). */
 export interface BezierCP {
   x: number;
   y: number;
 }
 
+/** Keypoint sample within a track. */
 export interface Keypoint {
   id: string;
   /** Normalized stamp [0..1] within the track */
@@ -195,6 +219,7 @@ export interface Keypoint {
   };
 }
 
+/** Animation track targeting a canonical path. */
 export interface Track {
   id: string;
   name?: string;
@@ -204,6 +229,7 @@ export interface Track {
   settings?: { color?: string };
 }
 
+/** Stored animation clip data. */
 export interface StoredAnimation {
   id?: string;
   name?: string;
@@ -218,21 +244,25 @@ export interface StoredAnimation {
    AnimationData (engine-internal JSON format)
    Left intentionally broad; use when supplying core-format clips.
 ----------------------------------------------------------- */
+/** Core-format animation payload; leave as `unknown` for loose typing. */
 export type AnimationData = unknown;
 
 /* -----------------------------------------------------------
    Baked animation data
 ----------------------------------------------------------- */
+/** Baked values for a single target path. */
 export interface BakedTrack {
   target_path: string;
   values: Value[];
 }
 
+/** Baked derivatives for a single target path. */
 export interface BakedDerivativeTrack {
   target_path: string;
   values: Array<Value | null>;
 }
 
+/** Baked clip values at a uniform sampling rate. */
 export interface BakedAnimationData {
   anim: AnimId;
   frame_rate: number;
@@ -241,6 +271,7 @@ export interface BakedAnimationData {
   tracks: BakedTrack[];
 }
 
+/** Baked clip derivatives at a uniform sampling rate. */
 export interface BakedDerivativeAnimationData {
   anim: AnimId;
   frame_rate: number;
@@ -249,6 +280,7 @@ export interface BakedDerivativeAnimationData {
   tracks: BakedDerivativeTrack[];
 }
 
+/** Pair of baked values and derivatives produced by the engine. */
 export interface BakedAnimationBundle {
   values: BakedAnimationData;
   derivatives: BakedDerivativeAnimationData;
@@ -258,6 +290,7 @@ export interface BakedAnimationBundle {
    Engine inspection (authoritative state from core)
 ----------------------------------------------------------- */
 
+/** Metadata describing a loaded animation. */
 export interface AnimationInfo {
   id: number;
   name?: string;
@@ -265,8 +298,10 @@ export interface AnimationInfo {
   track_count: number;
 }
 
+/** Current playback state for a player. */
 export type PlaybackState = "Playing" | "Paused" | "Stopped";
 
+/** Default instance configuration used when attaching animations. */
 export interface InstanceCfg {
   weight: number;
   time_scale: number;
@@ -274,12 +309,14 @@ export interface InstanceCfg {
   enabled: boolean;
 }
 
+/** Snapshot of a live animation instance. */
 export interface InstanceInfo {
   id: number;
   animation: number;
   cfg: InstanceCfg;
 }
 
+/** Snapshot of a player, including current timing. */
 export interface PlayerInfo {
   id: number;
   name: string;
