@@ -88,9 +88,10 @@ fn numeric_collection_from_value(value: &Value) -> Option<(CollectionKind, Vec<f
 }
 
 /// Accumulator entry storing weighted sums per `Value` kind.
-/// For vectors/colors: store component-wise sum and total weight.
-/// For quaternions: store weighted sum vector of (x,y,z,w) then normalize at finalize.
-/// For transforms: separate TRS accumulators.
+///
+/// - For vectors/colors: store component-wise sum and total weight.
+/// - For quaternions: store weighted sum (x, y, z, w) then normalize at finalize.
+/// - For transforms: accumulate TRS components separately.
 #[derive(Clone, Debug)]
 enum AccumEntry {
     Scalar {

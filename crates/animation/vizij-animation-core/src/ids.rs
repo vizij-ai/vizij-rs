@@ -16,7 +16,9 @@ pub struct PlayerId(pub u32);
 pub struct InstId(pub u32);
 
 /// Monotonic allocator for `AnimId`, `PlayerId`, and `InstId`.
-/// Dense indices improve cache locality; IDs are opaque externally.
+///
+/// Dense indices improve cache locality; IDs are opaque externally. Counters
+/// wrap on `u32` overflow, so extremely long-lived sessions can see reuse.
 #[derive(Default, Debug)]
 pub struct IdAllocator {
     next_anim: u32,
@@ -32,6 +34,8 @@ impl IdAllocator {
 
     #[inline]
     /// Allocate the next animation id.
+    ///
+    /// IDs wrap after `u32::MAX` allocations.
     pub fn alloc_anim(&mut self) -> AnimId {
         let id = AnimId(self.next_anim);
         self.next_anim = self.next_anim.wrapping_add(1);
@@ -40,6 +44,8 @@ impl IdAllocator {
 
     #[inline]
     /// Allocate the next player id.
+    ///
+    /// IDs wrap after `u32::MAX` allocations.
     pub fn alloc_player(&mut self) -> PlayerId {
         let id = PlayerId(self.next_player);
         self.next_player = self.next_player.wrapping_add(1);
@@ -48,6 +54,8 @@ impl IdAllocator {
 
     #[inline]
     /// Allocate the next instance id.
+    ///
+    /// IDs wrap after `u32::MAX` allocations.
     pub fn alloc_inst(&mut self) -> InstId {
         let id = InstId(self.next_inst);
         self.next_inst = self.next_inst.wrapping_add(1);

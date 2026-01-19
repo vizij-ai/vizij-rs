@@ -95,6 +95,8 @@ pub struct BakedDerivativeAnimationData {
 
 /// Bake a single `AnimationData` using the provided config.
 ///
+/// Sampling is clamped to `[start_time, min(end_time, duration)]` in seconds.
+///
 /// # Examples
 /// ```rust
 /// use vizij_animation_core::{bake_animation_data, AnimId, AnimationData, BakingConfig};
@@ -118,6 +120,8 @@ pub fn bake_animation_data(
 }
 
 /// Bake animation values and derivatives simultaneously.
+///
+/// Sampling is clamped to `[start_time, min(end_time, duration)]` in seconds.
 ///
 /// # Examples
 /// ```rust
@@ -209,12 +213,15 @@ pub fn bake_animation_data_with_derivatives(
 
 /// Export baked data as `serde_json::Value` (stable schema for FFI/serialization).
 ///
-/// This is a convenience wrapper around `serde_json::to_value`.
+/// This is a convenience wrapper around `serde_json::to_value` that returns
+/// `Value::Null` on serialization failure.
 pub fn export_baked_json(baked: &BakedAnimationData) -> serde_json::Value {
     serde_json::to_value(baked).unwrap_or(serde_json::Value::Null)
 }
 
 /// Export baked values and derivatives as `serde_json::Value`.
+///
+/// The returned object has `{ values, derivatives }` keys for tooling parity.
 pub fn export_baked_with_derivatives_json(
     baked: &BakedAnimationData,
     derivatives: &BakedDerivativeAnimationData,

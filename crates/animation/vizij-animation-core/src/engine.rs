@@ -272,10 +272,11 @@ pub struct InstanceInfo {
 
 impl Engine {
     /// Map player's internal time to a display/playhead time according to loop mode.
+    ///
     /// Semantics:
-    /// - Once: apply window clamp [start_time, end_time?], otherwise [start_time, start_time+total_duration]
-    /// - Loop: ignore window, wrap over full clip [0, total_duration)
-    /// - PingPong: ignore window, reflect over full clip [0, total_duration]
+    /// - Once: apply window clamp `[start_time, end_time?]`, otherwise `[start_time, start_time+total_duration]`
+    /// - Loop: ignore window, wrap over full clip `[0, total_duration)`
+    /// - PingPong: ignore window, reflect over full clip `[0, total_duration]`
     fn map_player_time_for_display(&self, p: &Player) -> f32 {
         match p.mode {
             LoopMode::Once => {
@@ -574,7 +575,8 @@ impl Engine {
     }
 
     /// Recalculate a player's full length (seconds) from its instances.
-    /// length = max over instances of: start_offset + (anim_duration * |time_scale|)
+    ///
+    /// length = max over instances of: `start_offset + (anim_duration * |time_scale|)`
     fn recalc_player_duration(&mut self, player: PlayerId) {
         if let Some(p) = self.players.iter_mut().find(|pp| pp.id == player) {
             let mut max_end = 0.0f32;
@@ -702,6 +704,9 @@ impl Engine {
     }
 
     /// Compute instance-local time given a player and animation duration under the player's loop mode.
+    ///
+    /// The returned time is in clip seconds (0..duration) and is already adjusted for
+    /// start offset, time scale, and the player's loop mode.
     fn local_time_for_instance(&self, player: &Player, inst: &Instance, anim_duration: f32) -> f32 {
         // Interpret start_offset as a player-time shift (when the instance starts).
         // Interpret time_scale as a duration multiplier (|ts| > 1 => longer, |ts| < 1 => shorter).
@@ -905,6 +910,7 @@ impl Engine {
     /// Remove an instance from a player. Returns true if removed.
     ///
     /// This is a no-op if the player id is unknown or the instance is not attached.
+    /// Removing the instance also deletes its cached binding set.
     pub fn remove_instance(&mut self, player: PlayerId, inst: InstId) -> bool {
         // Detach from player
         if let Some(p) = self.players.iter_mut().find(|pp| pp.id == player) {
@@ -925,6 +931,7 @@ impl Engine {
     /// Remove a player and all its instances. Returns true if removed.
     ///
     /// Returns false when the player id is unknown.
+    /// Removing the player also deletes all of its cached instance bindings.
     pub fn remove_player(&mut self, player: PlayerId) -> bool {
         if let Some(idx) = self.players.iter().position(|p| p.id == player) {
             let inst_ids: Vec<InstId> = self.players[idx].instances.clone();
@@ -945,6 +952,7 @@ impl Engine {
     /// Returns true if the animation existed; returns false when the id was not present.
     ///
     /// This also drops any bindings for the removed animation; players are left intact.
+    /// Any players referencing the animation have their durations recomputed.
     pub fn unload_animation(&mut self, anim: AnimId) -> bool {
         if !self.anims.contains(anim) {
             return false;

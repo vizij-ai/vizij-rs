@@ -261,6 +261,7 @@ impl VizijAnimation {
     /// Step the simulation by `dt` (seconds) with inputs JSON. Returns Outputs JSON.
     ///
     /// The returned object matches the Rust `Outputs` schema serialized to JSON.
+    /// If `inputs_json` is `undefined` or `null`, defaults are used.
     ///
     /// # Errors
     /// Returns an error if inputs fail to deserialize or outputs fail to serialize.
@@ -274,6 +275,7 @@ impl VizijAnimation {
     /// Step the simulation by `dt` returning both values and derivatives.
     ///
     /// The returned object matches the Rust `OutputsWithDerivatives` schema serialized to JSON.
+    /// If `inputs_json` is `undefined` or `null`, defaults are used.
     ///
     /// # Errors
     /// Returns an error if inputs fail to deserialize or outputs fail to serialize.
@@ -317,6 +319,7 @@ impl VizijAnimation {
     /// the node-graph WASM output shape.
     ///
     /// This is a convenience path for hosts that expect a `WriteBatch`-style payload.
+    /// If `inputs_json` is `undefined` or `null`, defaults are used.
     ///
     /// Returns an object with shape:
     /// `{ nodes: Record<string, Record<string, ValueJSON>>, writes: Array<{ path: string, value: ValueJSON }> }`.

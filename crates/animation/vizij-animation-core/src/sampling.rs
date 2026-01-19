@@ -258,6 +258,8 @@ pub fn sample_track(track: &Track, u: f32) -> Value {
 /// If you need to tune accuracy, use [`sample_track_with_derivative_epsilon`] to provide an
 /// explicit epsilon until a higher-level config surface lands.
 ///
+/// Note that `duration_s` is the full clip duration (seconds), not the playback window.
+///
 /// # Examples
 /// ```rust
 /// use vizij_animation_core::data::{Keypoint, Track};
