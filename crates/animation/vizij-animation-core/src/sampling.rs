@@ -255,8 +255,8 @@ pub fn sample_track(track: &Track, u: f32) -> Value {
 /// reasonable first approximation for small deltas but does not map to angular velocity; replace
 /// with a proper log/exp-based interpolation when higher fidelity is required.
 ///
-/// TODO: expose derivative configuration (epsilon, strategy) via `BakingConfig` or a sampling
-/// struct so hosts can balance accuracy and performance.
+/// If you need to tune accuracy, use [`sample_track_with_derivative_epsilon`] to provide an
+/// explicit epsilon until a higher-level config surface lands.
 ///
 /// # Examples
 /// ```rust
