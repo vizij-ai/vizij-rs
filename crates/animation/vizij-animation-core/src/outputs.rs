@@ -124,8 +124,9 @@ impl Outputs {
     }
 
     /// Convert the current set of changes into a [`WriteBatch`], parsing each
-    /// change key as a [`TypedPath`]. Entries whose keys do not parse are
-    /// skipped.
+    /// change key as a [`TypedPath`].
+    ///
+    /// Entries whose keys do not parse are skipped.
     pub fn to_writebatch(&self) -> WriteBatch {
         let mut batch = WriteBatch::new();
         for change in &self.changes {

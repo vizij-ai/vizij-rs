@@ -143,7 +143,10 @@ impl AnimLib {
     }
 }
 
-/// Engine (core) with engine-agnostic handle type fixed to String for v1.
+/// Deterministic animation engine that owns clips, players, and outputs.
+///
+/// Canonical output keys default to track `animatable_id` values. Call [`Engine::prebind`]
+/// to resolve them into host-specific handles when integrating with Bevy or other hosts.
 #[derive(Debug)]
 pub struct Engine {
     // Owned data
@@ -205,7 +208,7 @@ pub enum PlaybackState {
     Stopped,
 }
 
-/// Lightweight animation metadata for diagnostics.
+/// Lightweight animation metadata for diagnostics and UI.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct AnimationInfo {
     pub id: u32,
@@ -290,6 +293,8 @@ impl Engine {
         }
     }
     /// Public accessor for a player's computed total duration (in player time).
+    ///
+    /// Returns `None` if the player id is unknown.
     pub fn player_total_duration(&self, player: PlayerId) -> Option<f32> {
         self.players
             .iter()
@@ -314,6 +319,8 @@ impl Engine {
     }
 
     /// Load animation data into the engine, returning an `AnimId`.
+    ///
+    /// The `AnimationData` is stored by value; update your handle if you clone the data first.
     pub fn load_animation(&mut self, mut data: AnimationData) -> AnimId {
         let id = self.ids.alloc_anim();
         data.id = Some(id);
@@ -322,6 +329,7 @@ impl Engine {
     }
 
     /// Bake a loaded animation into per-frame samples using the provided config.
+    ///
     /// Returns `None` if the animation id is unknown.
     pub fn bake_animation(&self, anim: AnimId, cfg: &BakingConfig) -> Option<BakedAnimationData> {
         self.anims
@@ -330,6 +338,7 @@ impl Engine {
     }
 
     /// Bake animation values and derivatives in one pass.
+    ///
     /// Returns `None` if the animation id is unknown.
     pub fn bake_animation_with_derivatives(
         &self,
@@ -342,6 +351,8 @@ impl Engine {
     }
 
     /// Create a new player with a display name.
+    ///
+    /// The returned `PlayerId` is stable for the lifetime of the engine.
     pub fn create_player(&mut self, name: &str) -> PlayerId {
         let pid = self.ids.alloc_player();
         self.players.push(Player::new(pid, name.to_string()));
@@ -349,6 +360,9 @@ impl Engine {
     }
 
     /// Add an animation instance to a player, returning its `InstId`.
+    ///
+    /// If the animation id is unknown, the instance is still created but will not emit outputs
+    /// until a matching animation is loaded.
     pub fn add_instance(&mut self, player: PlayerId, anim: AnimId, cfg: InstanceCfg) -> InstId {
         let iid = self.ids.alloc_inst();
 
@@ -384,6 +398,7 @@ impl Engine {
     }
 
     /// One-time binding against a provided resolver.
+    ///
     /// Iterates all animations/tracks and resolves canonical target paths into handles.
     /// Returns a report indicating how many bindings were resolved.
     pub fn prebind_with_report(&mut self, resolver: &mut dyn TargetResolver) -> PrebindReport {
@@ -675,12 +690,16 @@ impl Engine {
     }
 
     /// Step the simulation by `dt` seconds, returning only values.
+    ///
+    /// Call this once per tick after preparing `Inputs`.
     pub fn update_values(&mut self, dt: f32, inputs: Inputs) -> &Outputs {
         self.step(dt, inputs, false);
         &self.outputs
     }
 
     /// Step the simulation by `dt` seconds, returning values and derivatives.
+    ///
+    /// Derivatives are approximated in the sampling layer; non-numeric tracks use `None`.
     pub fn update_values_and_derivatives(
         &mut self,
         dt: f32,
@@ -696,9 +715,10 @@ impl Engine {
     }
 
     /// Update and also return a typed `WriteBatch` (collection of `WriteOp`) where each
-    /// WriteOp.path is parsed as a `TypedPath`. If a change's key does not parse as a
-    /// TypedPath it will be skipped in the returned batch. The engine still maintains
-    /// its normal Outputs in `self.outputs`.
+    /// `WriteOp.path` is parsed as a `TypedPath`.
+    ///
+    /// If a change's key does not parse as a `TypedPath` it will be skipped in the returned
+    /// batch. The engine still maintains its normal `Outputs` in `self.outputs`.
     pub fn update_writebatch(&mut self, dt: f32, inputs: Inputs) -> WriteBatch {
         // Populate self.outputs as usual.
         let _ = self.update_values(dt, inputs);
@@ -741,6 +761,7 @@ impl Engine {
     }
 
     /// Unload an animation and remove all instances referencing it across all players.
+    ///
     /// Returns true if the animation existed.
     pub fn unload_animation(&mut self, anim: AnimId) -> bool {
         if !self.anims.contains(anim) {
@@ -846,6 +867,7 @@ impl Engine {
     }
 
     /// List the set of resolved output keys currently associated with the player's instances.
+    ///
     /// Keys match those produced in `Outputs` (bound handle if available, else canonical track path).
     pub fn list_player_keys(&self, player: PlayerId) -> Vec<String> {
         let mut set: HashSet<String> = HashSet::new();

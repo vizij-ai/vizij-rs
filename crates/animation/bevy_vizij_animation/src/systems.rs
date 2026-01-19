@@ -1,3 +1,5 @@
+//! ECS systems for binding, stepping, and applying Vizij animation outputs.
+
 use bevy::prelude::*;
 use std::collections::HashMap;
 
@@ -17,6 +19,9 @@ fn make_handle(name: &str, prop: TargetProp) -> String {
 
 /// Walks descendants under each `VizijTargetRoot` and populates the `BindingIndex` resource
 /// mapping canonical handles to (Entity, TargetProp).
+///
+/// Runs in `Update` to keep bindings fresh; you can add change detection in the host app
+/// if you need to reduce per-frame work.
 pub fn build_binding_index_system(
     roots: Query<Entity, With<VizijTargetRoot>>,
     children: Query<&Children>,
@@ -65,7 +70,10 @@ pub fn build_binding_index_system(
 }
 
 /// Bridges the core prebind call into the ECS: resolves canonical track target paths
-/// to string handles recorded in BindingIndex. We use the same string as the handle.
+/// to string handles recorded in `BindingIndex`.
+///
+/// The handles are the canonical strings themselves, which keeps the Bevy adapter
+/// aligned with core output keys.
 pub fn prebind_core_system(
     mut eng: ResMut<VizijEngine>,
     index: Res<BindingIndex>,
@@ -117,7 +125,8 @@ pub fn prebind_core_system(
 }
 
 /// Fixed timestep compute: call core update with fixed dt and stash `Change`s into `PendingOutputs`.
-/// Inputs are left empty for v1; production apps will derive Inputs from gameplay state.
+///
+/// Inputs are left empty for v1; production apps should derive `Inputs` from gameplay state.
 pub fn fixed_update_core_system(
     mut eng: ResMut<VizijEngine>,
     dt: Res<FixedDt>,
@@ -130,9 +139,10 @@ pub fn fixed_update_core_system(
 }
 
 /// Apply staged outputs by converting them to a typed `WriteBatch` and invoking
-/// the bevy_vizij_api writer registry when available. Falls back to direct
-/// transform application for writes that don't parse as TypedPath or when no
-/// registry is present.
+/// the bevy_vizij_api writer registry when available.
+///
+/// Falls back to direct transform application for writes that don't parse as `TypedPath`
+/// or when no registry is present.
 pub fn apply_outputs_system(world: &mut World) {
     // Access required resources into locals to avoid borrow conflicts
     let index_map = if let Some(idx) = world.get_resource::<BindingIndex>() {

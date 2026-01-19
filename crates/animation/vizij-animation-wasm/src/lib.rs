@@ -1,3 +1,8 @@
+//! wasm-bindgen bridge for the Vizij animation engine.
+//!
+//! Exposes a JS-friendly wrapper around `vizij-animation-core::Engine`,
+//! mirroring the Rust API while handling JSON (de)serialization and ABI checks.
+
 use js_sys::{Function, JSON};
 use serde_wasm_bindgen as swb;
 use wasm_bindgen::prelude::*;
@@ -145,7 +150,9 @@ fn parse_baking_config(cfg: JsValue) -> Result<BakingConfig, JsError> {
 
 #[wasm_bindgen]
 impl VizijAnimation {
-    /// Create a new engine instance. Pass a JSON config object or undefined/null for defaults.
+    /// Create a new engine instance.
+    ///
+    /// Pass a JSON config object or undefined/null for defaults.
     /// Example: `new VizijAnimation({ scratch_samples: 2048 })`
     #[wasm_bindgen(constructor)]
     pub fn new(config: JsValue) -> Result<VizijAnimation, JsError> {
@@ -162,7 +169,9 @@ impl VizijAnimation {
         })
     }
 
-    /// Load an `AnimationData` JSON object into the engine. Returns an AnimId (u32).
+    /// Load an `AnimationData` JSON object into the engine.
+    ///
+    /// Returns an AnimId (u32). Errors if the JSON shape does not match `AnimationData`.
     #[wasm_bindgen(js_name = load_animation)]
     pub fn load_animation(&mut self, data_json: JsValue) -> Result<u32, JsError> {
         let data: AnimationData = swb::from_value(data_json)
@@ -172,6 +181,7 @@ impl VizijAnimation {
     }
 
     /// Load a StoredAnimation JSON object into the engine.
+    ///
     /// Accepts any compatible JS object (for example fixture JSON). Returns an AnimId (u32).
     #[wasm_bindgen(js_name = load_stored_animation)]
     pub fn load_stored_animation(&mut self, data_json: JsValue) -> Result<u32, JsError> {
@@ -199,6 +209,7 @@ impl VizijAnimation {
     }
 
     /// Add an animation instance to a player. `cfg` is optional JSON matching `InstanceCfg`.
+    ///
     /// Returns an InstId (u32).
     #[wasm_bindgen(js_name = add_instance)]
     pub fn add_instance(
@@ -219,6 +230,7 @@ impl VizijAnimation {
     }
 
     /// Resolve canonical target paths to opaque keys using a JS resolver callback.
+    ///
     /// The resolver is called as `resolver(path: string) -> string | number | null/undefined`.
     /// Resolved values are stored as strings.
     #[wasm_bindgen]
@@ -267,8 +279,9 @@ impl VizijAnimation {
 
     /// Step the simulation and return a nodes+writes JSON object compatible with
     /// the node-graph WASM output shape.
+    ///
     /// Returns an object with shape:
-    /// { nodes: Record<string, Record<string, ValueJSON>>, writes: Array<{ path: string, value: ValueJSON }> }.
+    /// `{ nodes: Record<string, Record<string, ValueJSON>>, writes: Array<{ path: string, value: ValueJSON }> }`.
     #[wasm_bindgen(js_name = update_nodes_writes)]
     pub fn update_nodes_writes(
         &mut self,

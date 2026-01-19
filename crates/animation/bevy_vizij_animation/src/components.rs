@@ -1,3 +1,5 @@
+//! ECS marker components for the Vizij animation Bevy plugin.
+
 use bevy::prelude::*;
 
 /// Marker component designating the root of a subtree to bind animation targets under.
@@ -6,8 +8,11 @@ use bevy::prelude::*;
 pub struct VizijTargetRoot;
 
 /// Optional per-entity hint for canonical path override.
-/// When present, this path prefix will be used instead of the entity's Name.
+///
+/// When present, this path prefix is used instead of the entity `Name` when
+/// building the `BindingIndex`.
 #[derive(Component, Debug, Clone)]
 pub struct VizijBindingHint {
+    /// Canonical path prefix to use for this entity.
     pub path: String,
 }

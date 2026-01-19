@@ -1,3 +1,5 @@
+//! ECS resources used by the Vizij animation Bevy plugin.
+
 use bevy::prelude::*;
 use std::collections::HashMap;
 use vizij_animation_core::outputs::Change;
@@ -5,8 +7,11 @@ use vizij_animation_core::outputs::Change;
 /// Which `Transform` property a handle maps to.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TargetProp {
+    /// Apply to `Transform::translation`.
     Translation,
+    /// Apply to `Transform::rotation`.
     Rotation,
+    /// Apply to `Transform::scale`.
     Scale,
 }
 
@@ -15,13 +20,16 @@ pub enum TargetProp {
 /// under `VizijTargetRoot`.
 #[derive(Resource, Default)]
 pub struct BindingIndex {
+    /// Map of canonical handle -> (entity, target property).
     pub map: HashMap<String, (Entity, TargetProp)>,
 }
 
-/// Outputs staged from `Engine::update_values` to be applied in a separate system
-/// (keeps ordering explicit: Compute -> Apply).
+/// Outputs staged from `Engine::update_values` to be applied in a separate system.
+///
+/// Keeping this resource separate makes the compute/apply ordering explicit.
 #[derive(Resource, Default)]
 pub struct PendingOutputs {
+    /// Changes captured in the last fixed update tick.
     pub changes: Vec<Change>,
 }
 

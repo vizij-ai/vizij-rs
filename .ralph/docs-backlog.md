@@ -45,7 +45,7 @@
 - Impact: Med
 - Effort: M
 - Evidence: Some modules lack context or usage overview
-- Next action: Refresh `//!` blocks for remaining stacks (animation core/Bevy/wasm) and any module stubs.
+- Next action: Refresh `//!` blocks for remaining stacks (animation core/Bevy/wasm) and any module stubs; Bevy animation submodules now documented.
 - Status: In progress
 
 ### R-005 — Document feature flags and conditional compilation behavior
