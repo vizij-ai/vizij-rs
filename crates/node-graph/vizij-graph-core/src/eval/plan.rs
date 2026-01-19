@@ -9,12 +9,14 @@ use std::hash::Hasher;
 use super::value_layout::PortValue;
 use super::variadic::{compare_variadic_keys, parse_variadic_key};
 
+/// Continuous span inside a variadic group.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct VariadicRange {
     pub start: usize,
     pub len: usize,
 }
 
+/// Input/output slot layout for a node.
 #[derive(Clone, Debug, Default)]
 pub struct PortLayout {
     pub slots: Vec<String>,
@@ -23,14 +25,17 @@ pub struct PortLayout {
 }
 
 impl PortLayout {
+    /// Lookup a slot index by name.
     pub fn slot(&self, name: &str) -> Option<usize> {
         self.name_to_slot.get(name).copied()
     }
 
+    /// Lookup a slot name by index.
     pub fn slot_name(&self, slot: usize) -> Option<&str> {
         self.slots.get(slot).map(String::as_str)
     }
 
+    /// Lookup a variadic group range.
     pub fn variadic_range(&self, group: &str) -> Option<VariadicRange> {
         self.variadics.get(group).copied()
     }
@@ -44,12 +49,14 @@ impl PortLayout {
     }
 }
 
+/// Input/output layouts for a node.
 #[derive(Clone, Debug, Default)]
 pub struct NodeLayout {
     pub inputs: PortLayout,
     pub outputs: PortLayout,
 }
 
+/// Resolved input source for a bound port.
 #[derive(Clone, Debug)]
 pub struct ResolvedInputSource {
     pub node_idx: usize,
@@ -58,6 +65,7 @@ pub struct ResolvedInputSource {
     pub selector: Option<Selector>,
 }
 
+/// Resolved input binding with optional defaults.
 #[derive(Clone, Debug)]
 pub struct InputBinding {
     pub source: Option<ResolvedInputSource>,
@@ -343,6 +351,7 @@ fn signature_map() -> HashMap<NodeType, NodeSignature> {
         .collect()
 }
 
+/// Compute a structural fingerprint for plan cache invalidation.
 pub fn fingerprint_spec(spec: &GraphSpec) -> u64 {
     let mut hasher = DefaultHasher::new();
     hasher.write_usize(spec.nodes.len());

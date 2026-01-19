@@ -39,24 +39,38 @@ impl Default for PortValue {
 /// Describes how a [`Value`] is laid out when flattened.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ValueLayout {
+    /// Single scalar.
     Scalar,
+    /// 2D vector.
     Vec2,
+    /// 3D vector.
     Vec3,
+    /// 4D vector.
     Vec4,
+    /// Quaternion in `[x, y, z, w]` order.
     Quat,
+    /// RGBA color in `[r, g, b, a]` order.
     ColorRgba,
+    /// Translation + rotation + scale (10 scalars total).
     Transform,
+    /// Dynamically-sized numeric vector.
     Vector(usize),
+    /// Record of named fields stored in sorted order.
     Record(Vec<(String, ValueLayout)>),
+    /// Fixed-size array.
     Array(Vec<ValueLayout>),
+    /// List of items.
     List(Vec<ValueLayout>),
+    /// Tuple of heterogeneous entries.
     Tuple(Vec<ValueLayout>),
 }
 
 /// Numeric data flattened into row-major storage with an associated layout description.
 #[derive(Clone, Debug)]
 pub struct FlatValue {
+    /// The layout describing how to rebuild the structured value.
     pub layout: ValueLayout,
+    /// Flattened numeric data matching `layout`.
     pub data: Vec<f32>,
 }
 

@@ -1,3 +1,9 @@
+//! Deterministic node-graph evaluation for Vizij.
+//!
+//! The crate turns [`types::GraphSpec`] documents into evaluated outputs and write batches using
+//! a cached plan and a reusable [`eval::GraphRuntime`]. Most consumers only need the re-exported
+//! helpers in this module.
+
 pub mod eval;
 pub mod schema;
 pub mod topo;

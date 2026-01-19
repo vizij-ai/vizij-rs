@@ -2,17 +2,23 @@ use hashbrown::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use vizij_api_core::{Shape, TypedPath, Value};
 
+/// Node identifier used for edges and runtime lookups.
 pub type NodeId = String;
 
+/// Selector segment for projecting structured values.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum SelectorSegment {
+    /// Record/struct field access.
     Field(String),
+    /// Array/list/vector index access.
     Index(usize),
 }
 
+/// Selector path used to project a node output.
 pub type Selector = Vec<SelectorSegment>;
 
+/// Supported node kinds in a [`GraphSpec`].
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeType {
@@ -113,6 +119,7 @@ pub enum NodeType {
     Output,
 }
 
+/// Parameter payload for node configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NodeParams {
     pub value: Option<Value>,
@@ -179,6 +186,7 @@ pub struct NodeParams {
     pub path: Option<TypedPath>,
 }
 
+/// Round behavior for the `Round` node.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum RoundMode {
@@ -188,6 +196,7 @@ pub enum RoundMode {
     Trunc,
 }
 
+/// Node entry inside a [`GraphSpec`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeSpec {
     pub id: NodeId,
@@ -202,6 +211,7 @@ pub struct NodeSpec {
     pub input_defaults: HashMap<String, InputDefault>,
 }
 
+/// Top-level graph document consumed by the evaluator.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GraphSpec {
     pub nodes: Vec<NodeSpec>,
@@ -220,6 +230,7 @@ pub(crate) fn is_zero(v: &u64) -> bool {
     *v == 0
 }
 
+/// Connection description used when building input bindings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputConnection {
     #[serde(default)]
@@ -250,6 +261,7 @@ impl Default for InputConnection {
     }
 }
 
+/// Default value and optional shape for a named input.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputDefault {
     #[serde(rename = "value")]
@@ -258,6 +270,7 @@ pub struct InputDefault {
     pub shape: Option<Shape>,
 }
 
+/// Output endpoint referenced by an [`EdgeSpec`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EdgeOutputEndpoint {
     pub node_id: NodeId,
@@ -265,12 +278,14 @@ pub struct EdgeOutputEndpoint {
     pub output: String,
 }
 
+/// Input endpoint referenced by an [`EdgeSpec`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EdgeInputEndpoint {
     pub node_id: NodeId,
     pub input: String,
 }
 
+/// Directed edge between two nodes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EdgeSpec {
     pub from: EdgeOutputEndpoint,
@@ -300,6 +315,9 @@ impl GraphSpec {
         self
     }
 
+    /// Build a map of node inputs to their resolved connections or defaults.
+    ///
+    /// Returns errors for missing nodes or duplicate input edges.
     pub fn input_connections(
         &self,
     ) -> Result<HashMap<NodeId, HashMap<String, InputConnection>>, String> {

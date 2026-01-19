@@ -98,24 +98,34 @@ pub enum NodeRuntimeState {
 /// Data staged by the host for consumption by [`NodeType::Input`](crate::types::NodeType::Input).
 #[derive(Debug, Clone)]
 pub struct StagedInput {
+    /// Staged value for the input path.
     pub value: Value,
+    /// Optional declared shape to guide coercion.
     pub declared: Option<Shape>,
+    /// Epoch in which the value is valid.
     pub epoch: u64,
 }
 
 /// Runtime data shared by all node evaluations.
 #[derive(Debug, Default)]
 pub struct GraphRuntime {
+    /// Simulation time in seconds.
     pub t: f32,
+    /// Time delta since the last evaluation in seconds.
     pub dt: f32,
     /// Legacy map for external consumers/tests keyed by node id.
     pub outputs: HashMap<NodeId, HashMap<String, PortValue>>,
     /// Fast per-index storage aligned to spec.nodes order (mirrors `plan.node_index`).
     pub outputs_vec: Vec<Vec<PortValue>>,
+    /// Writes emitted by `Output` nodes during evaluation.
     pub writes: WriteBatch,
+    /// Per-node persistent state for time-dependent nodes.
     pub node_states: HashMap<NodeId, NodeRuntimeState>,
+    /// Inputs staged by typed path for the next evaluation epoch.
     pub staged_inputs: HashMap<TypedPath, StagedInput>,
+    /// Current staging epoch counter.
     pub input_epoch: u64,
+    /// Cached plan and layouts for the active spec.
     pub plan: PlanCache,
 }
 

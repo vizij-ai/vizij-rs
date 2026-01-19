@@ -234,6 +234,9 @@ pub fn null_of_shape_numeric(shape: &ShapeId) -> Value {
 }
 
 /// Apply selector segments to a value and optional shape metadata, returning the projected value.
+///
+/// Returns a projected value and the most specific shape information available after applying the
+/// selector, falling back to inference when no declared shapes are provided.
 pub fn project_by_selector(
     value: &Value,
     shape: Option<&ShapeId>,
@@ -386,6 +389,9 @@ pub fn project_by_selector(
 }
 
 /// Attempt to coerce a numeric value into a declared numeric-like shape.
+///
+/// Returns `None` when the value is non-numeric or when the target shape cannot be rebuilt from
+/// the flattened scalar data.
 pub fn coerce_numeric_to_shape(target: &ShapeId, value: &Value) -> Option<Value> {
     let flat = flatten_numeric(value)?;
 

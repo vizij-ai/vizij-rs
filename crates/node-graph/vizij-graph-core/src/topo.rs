@@ -1,6 +1,7 @@
 use crate::types::{EdgeSpec, NodeId, NodeSpec};
 use std::collections::{HashMap, VecDeque};
 
+/// Return node ids in topological order or an error if a cycle is detected.
 pub fn topo_order(nodes: &[NodeSpec], edges: &[EdgeSpec]) -> Result<Vec<NodeId>, String> {
     let mut indeg: HashMap<NodeId, usize> = HashMap::new();
     let mut adj: HashMap<NodeId, Vec<NodeId>> = HashMap::new();

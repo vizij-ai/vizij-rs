@@ -27,6 +27,7 @@ pub struct InputSlots<'a> {
 }
 
 impl<'a> InputSlots<'a> {
+    /// Build a view over the evaluated input slots for a node.
     pub fn new(slots: &'a [PortValue], present: &'a [bool], layout: &'a PortLayout) -> Self {
         InputSlots {
             slots,
@@ -97,14 +98,17 @@ pub struct OutputSlots<'a> {
 }
 
 impl<'a> OutputSlots<'a> {
+    /// Build a mutable view over the output slots for a node.
     pub fn new(slots: &'a mut Vec<PortValue>, layout: &'a PortLayout) -> Self {
         OutputSlots { slots, layout }
     }
 
+    /// Return a read-only view of all output slots.
     pub fn as_slice(&self) -> &[PortValue] {
         self.slots.as_slice()
     }
 
+    /// Return a mutable view of all output slots.
     pub fn as_mut_slice(&mut self) -> &mut [PortValue] {
         self.slots.as_mut_slice()
     }
@@ -127,10 +131,12 @@ impl<'a> OutputSlots<'a> {
         Ok(())
     }
 
+    /// Write a value to a named slot, inferring its shape.
     pub fn set_value(&mut self, name: &str, value: Value) -> Result<(), String> {
         self.set(name, PortValue::new(value))
     }
 
+    /// Write a pre-shaped port to a named slot.
     pub fn set_port(&mut self, name: &str, port: PortValue) -> Result<(), String> {
         self.set(name, port)
     }
@@ -201,6 +207,7 @@ pub fn eval_node(
     Ok(())
 }
 
+/// Select the evaluation path for the node kind and run it.
 fn evaluate_kind(
     rt: &mut GraphRuntime,
     spec: &NodeSpec,

@@ -1,6 +1,7 @@
 use crate::types::NodeType;
 use serde::{Deserialize, Serialize};
 
+/// Supported port value categories for the node registry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PortType {
@@ -13,6 +14,7 @@ pub enum PortType {
     Any,
 }
 
+/// Supported parameter value categories for the node registry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ParamType {
@@ -23,6 +25,7 @@ pub enum ParamType {
     Any, // union (Value)
 }
 
+/// Static port metadata used by the schema registry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PortSpec {
     pub id: &'static str,
@@ -34,6 +37,7 @@ pub struct PortSpec {
     pub optional: bool,
 }
 
+/// Definition for variadic input or output groups.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VariadicSpec {
     pub id: &'static str,
@@ -46,6 +50,7 @@ pub struct VariadicSpec {
     pub max: Option<usize>,
 }
 
+/// Static parameter metadata used by the schema registry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParamSpec {
     pub id: &'static str,
@@ -61,6 +66,7 @@ pub struct ParamSpec {
     pub max: Option<f64>,
 }
 
+/// Signature describing a node's ports, parameters, and documentation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeSignature {
     pub type_id: NodeType,
@@ -77,6 +83,7 @@ pub struct NodeSignature {
     pub params: Vec<ParamSpec>,
 }
 
+/// Registry of known node signatures for tooling and validation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Registry {
     pub version: &'static str,
@@ -148,6 +155,7 @@ fn p_out_vector() -> PortSpec {
     }
 }
 
+/// Return the built-in node registry for tooling and validation.
 pub fn registry() -> Registry {
     use NodeType::*;
     let mut nodes: Vec<NodeSignature> = Vec::new();

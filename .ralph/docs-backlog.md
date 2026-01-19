@@ -10,7 +10,7 @@
 7. R-007 — Add doc tests or validate examples against current APIs
 8. R-008 — Ensure docstrings mention JSON/ABI versioning contracts
 9. R-009 — Document performance considerations and allocation hot spots
-10. R-012 — Add rustdoc examples for `WriteBatch` construction patterns
+10. R-010 — Add usage snippets for frequently used types and helpers
 
 ---
 
@@ -93,7 +93,7 @@
 - Impact: Med
 - Effort: M
 - Evidence: Users need examples beyond the top-level API; Value helpers, ValueKind links, and JSON tag notes need concise coverage (merged R-011/R-012/R-013).
-- Next action: Add short doc examples for remaining helpers (e.g., parse/normalize entry points) and link ValueKind to ShapeId docs where still missing.
+- Next action: Add short doc examples for remaining helpers (e.g., graph runtime inputs, plan cache usage) and link core graph types where needed.
 - Status: In progress
 
 ### R-011 — Add docstrings for `Value` enum variants needing clarity
