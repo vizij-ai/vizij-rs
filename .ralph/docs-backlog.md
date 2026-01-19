@@ -22,7 +22,7 @@
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
 - Next action: Audit remaining wasm/helper crates and any non-core crates for missing rustdoc (bevy_vizij_orchestrator once added).
-- Status: In progress (iter-04 refreshed wasm doc examples and clarified eval flow notes)
+- Status: In progress (iter-06 updated Bevy adapters: corrected TypedPath examples, clarified Transform alias registration, added small resource snippets)
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
 - Type: Docs
@@ -38,7 +38,7 @@
 - Effort: L
 - Evidence: Autogen docs are less useful without concrete usage examples; added examples across animation core engine, baking helpers, and interpolation utilities.
 - Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures; revisit node-graph eval helpers if public re-exports are added (current examples are `ignore`); add JS examples for wasm graph slot staging helpers.
-- Status: In progress (iter-02 added JS examples for wasm graph staging helpers)
+- Status: In progress (iter-06 added Bevy adapter resource examples; continue with orchestrator + wasm JS usage)
 
 ### R-004 — Standardize module-level docs and `//!` overviews
 - Type: Docs
@@ -94,7 +94,7 @@
 - Effort: M
 - Evidence: Users need examples beyond the top-level API; Value helpers, ValueKind links, and JSON tag notes need concise coverage (merged R-011/R-012/R-013). Eval/runtime docs now mention errors but still lack examples.
 - Next action: Add short doc examples for any remaining public APIs that lack runnable snippets (likely outside animation stack). Avoid brittle doctests for fixture-heavy APIs.
-- Status: In progress (iter-18 added GraphSpec/input helpers and eval helper examples)
+- Status: In progress (iter-06 added Bevy adapter resource examples; continue with remaining public helpers)
 
 ### R-011 — Add docstrings for `Value` enum variants needing clarity
 - Type: Docs

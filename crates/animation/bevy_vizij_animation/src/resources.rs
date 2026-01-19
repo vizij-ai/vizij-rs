@@ -45,6 +45,16 @@ pub struct PendingOutputs {
 ///
 /// The plugin uses this in `FixedUpdate` to advance the core engine. Update the
 /// resource to tune playback speed without touching the underlying engine config.
+///
+/// # Examples
+/// ```no_run
+/// use bevy::prelude::*;
+/// use bevy_vizij_animation::FixedDt;
+///
+/// fn slow_motion(mut fixed_dt: ResMut<FixedDt>) {
+///     fixed_dt.0 = 1.0 / 120.0;
+/// }
+/// ```
 #[derive(Resource)]
 pub struct FixedDt(pub f32);
 

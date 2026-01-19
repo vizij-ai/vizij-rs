@@ -21,6 +21,18 @@ use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, NodeId, PortValue}
 ///
 /// When swapping graphs, reset the runtime state in [`GraphRuntimeResource`]
 /// to avoid leaking cached node state across specs.
+///
+/// # Examples
+/// ```no_run
+/// use bevy::prelude::*;
+/// use bevy_vizij_graph::{GraphResource, GraphRuntimeResource};
+/// use vizij_graph_core::GraphSpec;
+///
+/// fn swap_graph(mut spec: ResMut<GraphResource>, mut runtime: ResMut<GraphRuntimeResource>) {
+///     *spec = GraphResource(GraphSpec::default().with_cache());
+///     runtime.0.reset_for_spec();
+/// }
+/// ```
 #[derive(Resource, Default, Clone)]
 pub struct GraphResource(pub GraphSpec);
 
@@ -87,7 +99,8 @@ fn value_to_f32(v: &Value) -> f32 {
 /// Event for updating a node parameter by key.
 ///
 /// Known keys map onto [`vizij_graph_core::types::NodeParams`] fields. Most
-/// numeric fields are coerced to `f32` using [`value_to_f32`].
+/// numeric fields are coerced to `f32` using [`value_to_f32`]. Examples of
+/// recognized keys include `"value"`, `"frequency"`, `"min"`, and `"max"`.
 ///
 /// Unknown keys are ignored.
 ///

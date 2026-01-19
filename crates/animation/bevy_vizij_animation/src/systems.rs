@@ -82,6 +82,18 @@ pub fn build_binding_index_system(
 /// If a `WriterRegistry` resource is present, this registers transform setters for each
 /// bound handle so `apply_outputs_system` can drive `Transform` updates through the
 /// typed write path.
+///
+/// # Examples
+/// ```no_run
+/// use bevy::prelude::*;
+/// use bevy_vizij_animation::{systems, VizijAnimationPlugin};
+///
+/// App::new()
+///     .add_plugins(DefaultPlugins)
+///     .add_plugins(VizijAnimationPlugin)
+///     .add_systems(Update, systems::prebind_core_system)
+///     .run();
+/// ```
 pub fn prebind_core_system(
     mut eng: ResMut<VizijEngine>,
     index: Res<BindingIndex>,

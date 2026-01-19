@@ -94,8 +94,9 @@ impl WriterRegistry {
 
 /// Apply a `WriteBatch` to the provided Bevy `World` using the given registry.
 ///
-/// For every `WriteOp`, the registry is queried using `WriteOp.path.to_string()` and
-/// any matching setter is invoked. Missing setters are ignored.
+/// For every `WriteOp`, the registry is queried using `WriteOp.path.to_string()`
+/// and any matching setter is invoked. Missing setters are ignored so callers can
+/// register only the paths they care about.
 ///
 /// # Examples
 /// ```no_run
@@ -111,7 +112,7 @@ impl WriterRegistry {
 ///
 /// let mut batch = WriteBatch::new();
 /// batch.push(vizij_api_core::WriteOp::new(
-///     TypedPath::parse("robot/arm/joint3.translation")
+///     TypedPath::parse("robot/arm/joint3/Transform.translation")
 ///         .expect("valid typed path"),
 ///     Value::Vec3([1.0, 2.0, 3.0]),
 /// ));
@@ -127,21 +128,24 @@ pub fn apply_write_batch(registry: &WriterRegistry, world: &mut World, batch: &W
     }
 }
 
-/// Convenience: register simple `Transform` setters for a specific entity and base path.
+/// Register simple `Transform` setters for a specific entity and base path.
 ///
 /// This helper demonstrates how an application might bind a `TypedPath` to an entity's
 /// `Transform` components. It registers three setters:
-///   "{base_path}.translation"
-///   "{base_path}.rotation"
-///   "{base_path}.scale"
+///   "{base_path}/Transform.translation"
+///   "{base_path}/Transform.rotation"
+///   "{base_path}/Transform.scale"
 ///
 /// The `base_path` should be the canonical prefix, e.g., "robot1/Arm/Joint3".
 /// The caller is responsible for ensuring the entity exists and remains valid.
+/// For backward compatibility, this helper also registers the legacy aliases
+/// "{base_path}.translation", "{base_path}.rotation", and "{base_path}.scale".
 ///
 /// This helper resolves the entity by the provided Entity value at registration time
 /// by capturing the `Entity`. The closure will attempt to get the component mutably
 /// on each invocation and apply the Value. The Value coercion rules are intentionally
-/// simple: translation/scale accept Vec3 or Vector, rotation accepts Quat or Vector.
+/// simple: translation/scale accept Vec3, Vector, or Float, rotation accepts Quat
+/// or Vector.
 ///
 /// This helper ignores missing entities or `Transform` components instead of panicking.
 ///
@@ -159,7 +163,7 @@ pub fn apply_write_batch(registry: &WriterRegistry, world: &mut World, batch: &W
 ///
 /// let mut batch = WriteBatch::new();
 /// batch.push(vizij_api_core::WriteOp::new(
-///     TypedPath::parse("robot/arm/joint3.rotation")
+///     TypedPath::parse("robot/arm/joint3/Transform.rotation")
 ///         .expect("valid typed path"),
 ///     Value::Quat([0.0, 0.0, 0.0, 1.0]),
 /// ));
