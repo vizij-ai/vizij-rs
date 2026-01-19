@@ -37,7 +37,7 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs are less useful without concrete usage examples; added examples across animation core engine, baking helpers, and interpolation utilities.
-- Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures; add a short Bevy graph plugin example if missing elsewhere.
+- Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures; add remaining node-graph eval/runtime examples for public helpers (InputSlots/OutputSlots/materialize_outputs) if needed.
 - Status: In progress
 
 ### R-004 — Standardize module-level docs and `//!` overviews
@@ -94,7 +94,7 @@
 - Effort: M
 - Evidence: Users need examples beyond the top-level API; Value helpers, ValueKind links, and JSON tag notes need concise coverage (merged R-011/R-012/R-013). Eval/runtime docs now mention errors but still lack examples.
 - Next action: Add short doc examples for any remaining public APIs that lack runnable snippets (likely outside animation stack). Avoid brittle doctests for fixture-heavy APIs.
-- Status: In progress (iter-02 added clarifying notes for eval helpers; examples still pending)
+- Status: In progress (iter-07 added eval runtime + input staging examples)
 
 ### R-011 — Add docstrings for `Value` enum variants needing clarity
 - Type: Docs

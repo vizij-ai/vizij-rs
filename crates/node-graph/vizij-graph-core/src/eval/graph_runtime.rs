@@ -179,6 +179,22 @@ impl GraphRuntime {
     ///
     /// Returns the previous staged value, if one existed for the same path. The input becomes
     /// visible after calling [`advance_epoch`](Self::advance_epoch).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use vizij_api_core::{TypedPath, Value};
+    /// use vizij_graph_core::eval::GraphRuntime;
+    ///
+    /// let mut rt = GraphRuntime::default();
+    /// let path = TypedPath::parse("robot/arm/pos").unwrap();
+    ///
+    /// rt.set_input(path.clone(), Value::Float(1.0), None);
+    /// assert!(rt.get_input(&path).is_none());
+    ///
+    /// rt.advance_epoch();
+    /// assert!(rt.get_input(&path).is_some());
+    /// ```
     pub fn set_input(
         &mut self,
         path: TypedPath,

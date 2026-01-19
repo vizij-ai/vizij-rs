@@ -41,6 +41,33 @@ mod tests;
 /// The runtime is cleared before evaluation and is repopulated as nodes are visited in topological
 /// order. Any error propagated from an individual node halts evaluation.
 ///
+/// # Examples
+///
+/// ```no_run
+/// use vizij_graph_core::eval::{evaluate_all, GraphRuntime};
+/// use vizij_graph_core::types::{GraphSpec, NodeParams, NodeSpec, NodeType};
+/// use vizij_api_core::Value;
+///
+/// let spec = GraphSpec {
+///     nodes: vec![NodeSpec {
+///         id: "const".into(),
+///         kind: NodeType::Constant,
+///         params: NodeParams {
+///             value: Some(Value::Float(0.5)),
+///             ..Default::default()
+///         },
+///         output_shapes: Default::default(),
+///         input_defaults: Default::default(),
+///     }],
+///     edges: Vec::new(),
+///     ..Default::default()
+/// }
+/// .with_cache();
+///
+/// let mut rt = GraphRuntime::default();
+/// evaluate_all(&mut rt, &spec).unwrap();
+/// ```
+///
 /// # Errors
 ///
 /// Returns an error if the graph is ill-formed, selector projection fails, or a node evaluation
@@ -105,6 +132,28 @@ fn resize_and_clear(bucket: &mut Vec<PortValue>) {
 /// This assumes the provided `spec` matches the cached plan; it returns an error if the layouts
 /// are missing or mis-sized. Intended for callers that manage plan invalidation themselves
 /// (e.g., WASM wrappers with immutable specs).
+///
+/// # Examples
+///
+/// ```no_run
+/// use vizij_graph_core::eval::{evaluate_all, evaluate_all_cached, GraphRuntime};
+/// use vizij_graph_core::types::{GraphSpec, NodeSpec, NodeType};
+///
+/// let spec = GraphSpec {
+///     nodes: vec![NodeSpec {
+///         id: "time".into(),
+///         kind: NodeType::Time,
+///         ..Default::default()
+///     }],
+///     edges: Vec::new(),
+///     ..Default::default()
+/// }
+/// .with_cache();
+///
+/// let mut rt = GraphRuntime::default();
+/// evaluate_all(&mut rt, &spec).unwrap();
+/// evaluate_all_cached(&mut rt, &spec).unwrap();
+/// ```
 ///
 /// # Errors
 ///
