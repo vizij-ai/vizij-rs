@@ -215,6 +215,8 @@ impl VizijAnimation {
     }
 
     /// Create a new player by display name. Returns a PlayerId (u32).
+    ///
+    /// Names are used for diagnostics only; they do not affect playback.
     #[wasm_bindgen(js_name = create_player)]
     pub fn create_player(&mut self, name: String) -> u32 {
         let pid: PlayerId = self.core.create_player(&name);
@@ -249,6 +251,7 @@ impl VizijAnimation {
     ///
     /// The resolver is called as `resolver(path: string) -> string | number | null/undefined`.
     /// Resolved values are stored as strings.
+    /// Any resolver error is treated as an unresolved path and will keep canonical keys.
     #[wasm_bindgen]
     pub fn prebind(&mut self, resolver: Function) {
         let mut js_resolver = JsResolver { f: resolver };
@@ -256,6 +259,8 @@ impl VizijAnimation {
     }
 
     /// Step the simulation by dt (seconds) with inputs JSON. Returns Outputs JSON.
+    ///
+    /// The returned object matches the Rust `Outputs` schema serialized to JSON.
     ///
     /// # Errors
     /// Returns an error if inputs fail to deserialize or outputs fail to serialize.
@@ -267,6 +272,8 @@ impl VizijAnimation {
     }
 
     /// Step the simulation by dt returning both values and derivatives.
+    ///
+    /// The returned object matches the Rust `OutputsWithDerivatives` schema serialized to JSON.
     ///
     /// # Errors
     /// Returns an error if inputs fail to deserialize or outputs fail to serialize.
@@ -308,6 +315,8 @@ impl VizijAnimation {
 
     /// Step the simulation and return a nodes+writes JSON object compatible with
     /// the node-graph WASM output shape.
+    ///
+    /// This is a convenience path for hosts that expect a `WriteBatch`-style payload.
     ///
     /// Returns an object with shape:
     /// `{ nodes: Record<string, Record<string, ValueJSON>>, writes: Array<{ path: string, value: ValueJSON }> }`.
@@ -382,6 +391,8 @@ impl VizijAnimation {
     }
 
     /// List all instances for a given player id.
+    ///
+    /// Returns an empty array if the player id is unknown.
     ///
     /// # Errors
     /// Returns an error if serialization fails.

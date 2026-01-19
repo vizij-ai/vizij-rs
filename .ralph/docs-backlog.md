@@ -22,7 +22,7 @@
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
 - Next action: Confirm remaining animation stack public APIs are documented (including output event variants); shift focus to other stacks or add conventions doc.
-- Status: In progress (iter-13 added CoreEvent field notes)
+- Status: In progress (iter-14 tightened engine/outputs/bevy/wasm doc notes)
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
 - Type: Docs
@@ -69,7 +69,7 @@
 - Impact: Med
 - Effort: M
 - Evidence: Examples can drift without doc tests
-- Next action: Convert key examples into `rustdoc` tests or verify manually; iter-06 ran `cargo test -p vizij-animation-core --doc`.
+- Next action: Convert key examples into `rustdoc` tests or verify manually; iter-14 ran `cargo test -p vizij-animation-core --doc`.
 - Status: In progress
 
 ### R-008 — Ensure docstrings mention JSON/ABI versioning contracts

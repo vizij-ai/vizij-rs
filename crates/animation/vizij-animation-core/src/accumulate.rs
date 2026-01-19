@@ -416,6 +416,7 @@ impl AccumulatorWithDerivatives {
     ///
     /// Non-positive weights are ignored. Value kinds must match the accumulator's kind
     /// to participate in blending; mismatches are ignored to keep fail-soft behaviour.
+    /// Derivatives are only accumulated when provided.
     pub fn add(&mut self, handle: &str, value: &Value, derivative: Option<&Value>, weight: f32) {
         if weight <= 0.0 {
             return;

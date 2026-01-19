@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 //! Scratch buffers and frame lifecycle.
 //!
-//! v1 skeleton keeps capacity hints and a begin_frame() no-op. Concrete
-//! sampling/blending buffers will be added in later steps.
+//! The v1 skeleton stores capacity hints and exposes a `begin_frame()` no-op so
+//! future buffer reuse can be wired in without changing the public API.
 
 use crate::config::Config;
 
@@ -32,6 +32,9 @@ impl Scratch {
 
     #[inline]
     /// Reset per-frame state (currently a no-op placeholder).
+    ///
+    /// This exists so call sites can centralize per-tick lifecycle even before
+    /// scratch buffers are fully implemented.
     pub fn begin_frame(&mut self) {
         // Later: clear transient vectors, reset cursors; currently a no-op.
     }

@@ -519,6 +519,8 @@ impl Engine {
     /// Iterates all animations/tracks and resolves canonical target paths into handles.
     /// Returns a report indicating how many bindings were resolved.
     ///
+    /// Repeated calls overwrite any previously resolved handles for the same channel key.
+    ///
     /// # Examples
     /// ```rust
     /// use vizij_animation_core::{AnimationData, Config, Engine, TargetResolver};
@@ -565,6 +567,8 @@ impl Engine {
     }
 
     /// Backwards compatible wrapper accepting resolvers that ignore the report.
+    ///
+    /// Equivalent to calling [`Engine::prebind_with_report`] and discarding the report.
     pub fn prebind(&mut self, resolver: &mut dyn TargetResolver) {
         let _ = self.prebind_with_report(resolver);
     }
@@ -833,6 +837,8 @@ impl Engine {
     /// Step the simulation by `dt` seconds, returning only values.
     ///
     /// Call this once per tick after preparing `Inputs`.
+    /// The returned reference points at internal storage and is overwritten on the next update.
+    /// Non-finite `dt` values are not validated and will propagate through playback state.
     ///
     /// # Examples
     /// ```rust
@@ -850,6 +856,8 @@ impl Engine {
     /// Step the simulation by `dt` seconds, returning values and derivatives.
     ///
     /// Derivatives are approximated in the sampling layer; non-numeric tracks use `None`.
+    /// The returned reference points at internal storage and is overwritten on the next update.
+    /// Non-finite `dt` values are not validated and will propagate through playback state.
     ///
     /// # Examples
     /// ```rust
@@ -935,6 +943,8 @@ impl Engine {
     /// Unload an animation and remove all instances referencing it across all players.
     ///
     /// Returns true if the animation existed; returns false when the id was not present.
+    ///
+    /// This also drops any bindings for the removed animation; players are left intact.
     pub fn unload_animation(&mut self, anim: AnimId) -> bool {
         if !self.anims.contains(anim) {
             return false;
@@ -1043,6 +1053,7 @@ impl Engine {
     /// List the set of resolved output keys currently associated with the player's instances.
     ///
     /// Keys match those produced in `Outputs` (bound handle if available, else canonical track path).
+    /// The returned order is not stable; treat it as an unordered set.
     pub fn list_player_keys(&self, player: PlayerId) -> Vec<String> {
         let mut set: HashSet<String> = HashSet::new();
         let Some(p) = self.players.iter().find(|pp| pp.id == player) else {
@@ -1075,6 +1086,8 @@ impl Engine {
 
 impl Engine {
     /// Public helper to inspect an instance's bound channel keys (useful for tests and tooling).
+    ///
+    /// Returns `None` if the instance id is unknown.
     pub fn get_instance_channels(&self, inst: InstId) -> Option<Vec<ChannelKey>> {
         self.instances
             .iter()

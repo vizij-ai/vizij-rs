@@ -141,27 +141,27 @@ pub struct OutputsWithDerivatives {
 }
 
 impl Outputs {
-    #[inline]
     /// Clear all accumulated changes and events.
+    #[inline]
     pub fn clear(&mut self) {
         self.changes.clear();
         self.events.clear();
     }
 
-    #[inline]
     /// Append a sampled change.
+    #[inline]
     pub fn push_change(&mut self, change: Change) {
         self.changes.push(change);
     }
 
-    #[inline]
     /// Append a semantic event.
+    #[inline]
     pub fn push_event(&mut self, event: CoreEvent) {
         self.events.push(event);
     }
 
-    #[inline]
     /// Return true when both changes and events are empty.
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.changes.is_empty() && self.events.is_empty()
     }
@@ -172,6 +172,7 @@ impl Outputs {
     /// Entries whose keys do not parse are skipped.
     ///
     /// This is useful when piping animation outputs into systems that expect typed paths.
+    /// Order matches the order of `changes`, skipping entries that fail to parse.
     ///
     /// # Examples
     /// ```rust
@@ -200,27 +201,27 @@ impl Outputs {
 }
 
 impl OutputsWithDerivatives {
-    #[inline]
     /// Clear all accumulated changes and events.
+    #[inline]
     pub fn clear(&mut self) {
         self.changes.clear();
         self.events.clear();
     }
 
-    #[inline]
     /// Append a sampled change with derivative.
+    #[inline]
     pub fn push_change(&mut self, change: ChangeWithDerivative) {
         self.changes.push(change);
     }
 
-    #[inline]
     /// Append a semantic event.
+    #[inline]
     pub fn push_event(&mut self, event: CoreEvent) {
         self.events.push(event);
     }
 
-    #[inline]
     /// Return true when both changes and events are empty.
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.changes.is_empty() && self.events.is_empty()
     }

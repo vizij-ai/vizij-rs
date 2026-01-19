@@ -4,7 +4,8 @@ use bevy::prelude::*;
 
 /// Marker component designating the root of a subtree to bind animation targets under.
 ///
-/// The binding system walks descendants of any entity with this marker.
+/// The binding system walks descendants of any entity with this marker and emits
+/// canonical `Transform` handles based on entity `Name` or `VizijBindingHint`.
 #[derive(Component)]
 pub struct VizijTargetRoot;
 

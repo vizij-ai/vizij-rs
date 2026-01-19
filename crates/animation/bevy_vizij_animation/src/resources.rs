@@ -21,6 +21,9 @@ pub enum TargetProp {
 /// Index from canonical string handle (e.g., "Head/Transform.translation")
 /// to `(Entity, TargetProp)`.
 ///
+/// This map is rebuilt each frame by `build_binding_index_system`; store handles,
+/// not indices, if you need stable references across rebuilds.
+///
 /// Populated by the binding system by walking under `VizijTargetRoot`.
 #[derive(Resource, Default)]
 pub struct BindingIndex {
@@ -31,6 +34,7 @@ pub struct BindingIndex {
 /// Outputs staged from `Engine::update_values` to be applied in a separate system.
 ///
 /// Keeping this resource separate makes the compute/apply ordering explicit.
+/// The `apply_outputs_system` consumes and clears the stored changes each tick.
 #[derive(Resource, Default)]
 pub struct PendingOutputs {
     /// Changes captured in the last fixed update tick.

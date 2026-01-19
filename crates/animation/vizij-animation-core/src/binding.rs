@@ -71,6 +71,8 @@ impl BindingTable {
 }
 
 /// Per-instance view over a set of bound channels.
+///
+/// This is populated when instances are created and updated when bindings change.
 #[derive(Clone, Debug, Default)]
 pub struct BindingSet {
     /// Channels bound for this instance.
