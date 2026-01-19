@@ -57,6 +57,9 @@ pub enum GraphMergeError {
 }
 
 /// Strategy for resolving conflicting output paths when merging graphs.
+///
+/// Strategies affect both direct output nodes and intermediate outputs when
+/// multiple graphs feed the same downstream path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputConflictStrategy {
     /// Reject conflicting output paths.
@@ -68,6 +71,9 @@ pub enum OutputConflictStrategy {
     /// Sum conflicting outputs with a variadic add node.
     Add,
     /// Blend conflicting outputs with per-producer weight inputs.
+    ///
+    /// The merged graph inserts a default-blend node and exposes weight inputs at
+    /// `blend_weights/<path>/<graph>` for host tuning.
     DefaultBlend,
 }
 

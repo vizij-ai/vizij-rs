@@ -37,8 +37,8 @@ pub struct OrchestratorFrame {
     pub merged_writes: WriteBatch,
     /// Conflict logs emitted while applying controller write batches.
     pub conflicts: Vec<ConflictLog>,
-    /// Per-pass timings in milliseconds. Currently populated with synthetic values derived
-    /// from the configured `dt`; may change if scheduler wires in real wall-clock measurements.
+    /// Per-pass timings in milliseconds. Currently derived from the supplied `dt`
+    /// rather than wall-clock measurements.
     pub timings_ms: HashMap<String, f32>,
     /// Serialized engine events emitted by animation controllers.
     pub events: Vec<serde_json::Value>,

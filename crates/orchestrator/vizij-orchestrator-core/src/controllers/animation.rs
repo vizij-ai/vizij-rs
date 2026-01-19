@@ -14,6 +14,14 @@ use vizij_api_core::{TypedPath, Value as ApiValue, WriteBatch};
 use crate::blackboard::Blackboard;
 
 /// Configuration for registering an animation controller with the orchestrator.
+///
+/// The `setup` payload accepts an optional JSON object with the same shape used by
+/// `vizij-orchestrator-wasm`:
+/// - `animation`: stored animation JSON blob
+/// - `player`: player config (`name`, `loop_mode`, `speed`)
+/// - `instance`: instance overrides (`weight`, `time_scale`, `start_offset`, `enabled`)
+///
+/// Unknown keys are ignored. Use `serde_json::Value::Null` to skip setup entirely.
 #[derive(Debug, Clone)]
 pub struct AnimationControllerConfig {
     /// Controller identifier (used in conflict logs and diagnostics).

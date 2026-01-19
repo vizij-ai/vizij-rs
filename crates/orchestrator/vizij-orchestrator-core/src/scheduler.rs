@@ -19,6 +19,8 @@ pub enum Schedule {
 /// Run a single-pass schedule:
 /// `Animations -> merge -> Graphs -> merge -> frame`.
 ///
+/// Returned timings are synthetic (derived from `dt`) and not wall-clock durations.
+///
 /// # Errors
 /// Returns an error if any controller evaluation fails.
 pub fn run_single_pass(
@@ -102,6 +104,8 @@ pub fn run_single_pass(
 
 /// Run a two-pass schedule:
 /// `Graphs -> merge -> Animations -> merge -> Graphs -> merge -> frame`.
+///
+/// Returned timings are synthetic (derived from `dt`) and not wall-clock durations.
 ///
 /// # Errors
 /// Returns an error if any controller evaluation fails.

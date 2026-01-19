@@ -37,7 +37,7 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs are less useful without concrete usage examples; added examples in blend/coercion/json helpers this iteration.
-- Next action: Continue adding minimal doc examples for remaining public APIs in core crates (vizij-graph-core runtime helpers next)
+- Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests).
 - Status: In progress
 
 ### R-004 — Standardize module-level docs and `//!` overviews

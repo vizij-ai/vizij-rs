@@ -166,7 +166,8 @@ impl Blackboard {
 
     /// Apply a `WriteBatch` using last-writer-wins semantics.
     ///
-    /// Returns conflict records for any overwritten entries.
+    /// Each write is attributed to `source` and `epoch`. Returns conflict records
+    /// for any overwritten entries.
     pub fn apply_writebatch(
         &mut self,
         batch: WriteBatch,
