@@ -110,9 +110,13 @@ pub enum NodeType {
     BlendMax,
 
     // Robotics
+    /// Analytic IK solver for 3-bone chains.
     InverseKinematics,
+    /// URDF IK solver that targets position only (requires the `urdf_ik` feature).
     UrdfIkPosition,
+    /// URDF IK solver that targets position + rotation (requires the `urdf_ik` feature).
     UrdfIkPose,
+    /// URDF forward-kinematics solver (requires the `urdf_ik` feature).
     UrdfFk,
 
     // IO
@@ -183,22 +187,40 @@ pub struct NodeParams {
     /// Third bone length for analytic IK.
     pub bone3: Option<f32>,
     /// URDF payload for IK nodes.
+    ///
+    /// This is only read when the `urdf_ik` feature is enabled.
     pub urdf_xml: Option<String>,
     /// Root link name for URDF chains.
+    ///
+    /// This is only read when the `urdf_ik` feature is enabled.
     pub root_link: Option<String>,
     /// Tip link name for URDF chains.
+    ///
+    /// This is only read when the `urdf_ik` feature is enabled.
     pub tip_link: Option<String>,
     /// Optional joint seed for URDF IK solvers.
+    ///
+    /// This is only read when the `urdf_ik` feature is enabled.
     pub seed: Option<Vec<f32>>,
     /// Optional joint-space weights for URDF IK.
+    ///
+    /// This is only read when the `urdf_ik` feature is enabled.
     pub weights: Option<Vec<f32>>,
     /// Maximum IK solver iterations.
+    ///
+    /// This is only read when the `urdf_ik` feature is enabled.
     pub max_iters: Option<u32>,
     /// Positional tolerance for IK solvers.
+    ///
+    /// This is only read when the `urdf_ik` feature is enabled.
     pub tol_pos: Option<f32>,
     /// Rotational tolerance for IK solvers.
+    ///
+    /// This is only read when the `urdf_ik` feature is enabled.
     pub tol_rot: Option<f32>,
     /// Default joint values keyed by joint name.
+    ///
+    /// This is only read when the `urdf_ik` feature is enabled.
     #[serde(default)]
     pub joint_defaults: Option<Vec<(String, f32)>>,
     // For Splitter

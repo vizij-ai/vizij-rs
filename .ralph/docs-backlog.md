@@ -54,7 +54,7 @@
 - Effort: M
 - Evidence: Feature-gated behavior affects API surface in docs
 - Next action: Add doc notes for feature flags in relevant crates
-- Status: Planned
+- Status: In progress (iter-12 added urdf_ik notes in vizij-graph-core)
 
 ### R-006 — Add cross-links between core crates and wasm wrappers
 - Type: Docs

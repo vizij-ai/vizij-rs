@@ -48,3 +48,4 @@ Do NOT implement these in the current loop.
 - Next action: Add JS examples to remaining wasm helpers if any new APIs are added
 - Status
 
+- 2026-01-18: `vizij-graph-core` URDF IK helpers (`eval/urdfik.rs`) still lack any rustdoc examples; consider adding minimal no_run snippets once a stable URDF fixture exists.

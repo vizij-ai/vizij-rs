@@ -53,6 +53,8 @@ impl UrdfKinematicsState {
     }
 
     /// Produce a record value mapping joint names to solved angles.
+    ///
+    /// The output order follows the chain joint order stored in this state.
     pub fn solution_record(&self, joints: &[f32]) -> Value {
         let mut map = HashMap::with_capacity(self.joint_names.len());
         for (name, angle) in self.joint_names.iter().zip(joints.iter()) {
@@ -77,6 +79,8 @@ pub struct IkKey<'a> {
 
 #[cfg(feature = "urdf_ik")]
 /// Compute a stable hash for a URDF IK configuration.
+///
+/// This hash is used to decide when cached serial chains can be reused.
 pub fn hash_urdf_config(urdf_xml: &str, root_link: &str, tip_link: &str) -> u64 {
     let mut hasher = DefaultHasher::new();
     urdf_xml.hash(&mut hasher);
@@ -168,6 +172,8 @@ pub fn build_chain_from_urdf(
 
 #[cfg(feature = "urdf_ik")]
 /// Apply optional joint-space weights to the solver.
+///
+/// When no weights are supplied, any existing nullspace function is cleared.
 fn apply_weights(
     solver: &mut k::JacobianIkSolver<f32>,
     reference: &[f32],
@@ -230,6 +236,9 @@ pub fn solve_position(
 }
 
 #[cfg(feature = "urdf_ik")]
+/// Coerce a supported [`Value`] into a scalar joint value.
+///
+/// Vectors and arrays are accepted only when they can be reduced to a single element.
 fn scalar_from_value(value: &Value) -> Result<f32, String> {
     match value {
         Value::Float(f) => Ok(*f),
@@ -261,6 +270,7 @@ fn scalar_from_value(value: &Value) -> Result<f32, String> {
 }
 
 #[cfg(feature = "urdf_ik")]
+/// Pad a partial joint sequence using defaults and zeros.
 fn align_sequence_with_defaults(
     values: &[f32],
     expected: usize,
@@ -282,6 +292,8 @@ fn align_sequence_with_defaults(
 
 #[cfg(feature = "urdf_ik")]
 /// Coerce input joint data into a vector matching the chain joint order.
+///
+/// Records map joint names to scalars, while sequences are padded with defaults or zeros.
 pub fn fetch_joint_vector(
     value: &Value,
     expected: usize,
@@ -359,6 +371,8 @@ pub fn apply_joint_positions(
 
 #[cfg(feature = "urdf_ik")]
 /// Extract the current tip pose (position + quaternion) from the chain.
+///
+/// The quaternion is returned as `[x, y, z, w]`.
 pub fn tip_pose(state: &UrdfKinematicsState) -> ([f32; 3], [f32; 4]) {
     let end = state.chain.end_transform();
     let pos = end.translation.vector;
@@ -415,6 +429,8 @@ pub fn solve_pose(
 
 #[cfg(feature = "urdf_ik")]
 /// Extract the numeric components from a supported value type.
+///
+/// This rejects record/tuple values that cannot be interpreted as numeric vectors.
 pub fn vector_from_value(value: &Value, label: &str) -> Result<Vec<f32>, String> {
     match value {
         Value::Vector(vec) => Ok(vec.clone()),
@@ -431,6 +447,8 @@ pub fn vector_from_value(value: &Value, label: &str) -> Result<Vec<f32>, String>
 
 #[cfg(feature = "urdf_ik")]
 /// Interpret a [`Value`] as a quaternion `[x, y, z, w]`.
+///
+/// Accepts `Value::Quat`, `Value::Vec4`, or a 4-element `Value::Vector`.
 pub fn quat_from_value(value: &Value, label: &str) -> Result<[f32; 4], String> {
     match value {
         Value::Quat(arr) => Ok(*arr),
