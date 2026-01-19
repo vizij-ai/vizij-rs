@@ -37,7 +37,7 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs are less useful without concrete usage examples; added examples across animation core engine, baking helpers, and interpolation utilities.
-- Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures. Animation sampling now has a runnable sample_track example; add remaining interpolation helper examples once numeric expectations are stable.
+- Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures. Interpolation helpers now have runnable doctests; confirm remaining animation APIs still lack examples.
 - Status: In progress
 
 ### R-004 — Standardize module-level docs and `//!` overviews

@@ -30,6 +30,14 @@ pub fn lerp_f32(a: f32, b: f32, t: f32) -> f32 {
 /// Linear interpolation of 2D vectors.
 ///
 /// `t` is not clamped; callers typically supply values in `[0, 1]`.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::interp::functions::lerp_vec2;
+///
+/// let v = lerp_vec2([0.0, 0.0], [4.0, 2.0], 0.25);
+/// assert_eq!(v, [1.0, 0.5]);
+/// ```
 #[inline]
 pub fn lerp_vec2(a: [f32; 2], b: [f32; 2], t: f32) -> [f32; 2] {
     [lerp_f32(a[0], b[0], t), lerp_f32(a[1], b[1], t)]
@@ -38,6 +46,14 @@ pub fn lerp_vec2(a: [f32; 2], b: [f32; 2], t: f32) -> [f32; 2] {
 /// Linear interpolation of 3D vectors.
 ///
 /// `t` is not clamped; callers typically supply values in `[0, 1]`.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::interp::functions::lerp_vec3;
+///
+/// let v = lerp_vec3([0.0, 2.0, 4.0], [2.0, 4.0, 6.0], 0.5);
+/// assert_eq!(v, [1.0, 3.0, 5.0]);
+/// ```
 #[inline]
 pub fn lerp_vec3(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
     [
@@ -50,6 +66,14 @@ pub fn lerp_vec3(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
 /// Linear interpolation of 4D vectors.
 ///
 /// `t` is not clamped; callers typically supply values in `[0, 1]`.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::interp::functions::lerp_vec4;
+///
+/// let v = lerp_vec4([0.0, 1.0, 2.0, 3.0], [4.0, 5.0, 6.0, 7.0], 0.5);
+/// assert_eq!(v, [2.0, 3.0, 4.0, 5.0]);
+/// ```
 #[inline]
 pub fn lerp_vec4(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     [
@@ -82,6 +106,14 @@ fn normalize4(mut q: [f32; 4]) -> [f32; 4] {
 ///
 /// If the dot product is negative, the second quaternion is negated to ensure the
 /// shortest rotation path. The result is normalized and returned as `(x, y, z, w)`.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::interp::functions::nlerp_quat;
+///
+/// let q = nlerp_quat([0.0, 0.0, 0.0, 1.0], [0.0, 0.0, 0.0, 1.0], 0.5);
+/// assert_eq!(q, [0.0, 0.0, 0.0, 1.0]);
+/// ```
 #[inline]
 pub fn nlerp_quat(a: [f32; 4], mut b: [f32; 4], t: f32) -> [f32; 4] {
     let d = dot4(a, b);
@@ -149,6 +181,16 @@ fn normalize4_derivative(raw: [f32; 4], raw_dt: [f32; 4]) -> [f32; 4] {
 }
 
 /// Step interpolation: choose the left value with no blending.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::interp::functions::step_value;
+/// use vizij_api_core::Value;
+///
+/// let left = Value::Text("hold".into());
+/// let out = step_value(&left);
+/// assert_eq!(out, left);
+/// ```
 #[inline]
 pub fn step_value(a: &Value) -> Value {
     a.clone()
@@ -158,6 +200,15 @@ pub fn step_value(a: &Value) -> Value {
 ///
 /// Transform values interpolate translation/scale linearly and rotation via NLERP.
 /// If the input kinds differ, the left value is returned (fail-soft).
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::interp::functions::linear_value;
+/// use vizij_api_core::Value;
+///
+/// let out = linear_value(&Value::Float(0.0), &Value::Float(10.0), 0.25);
+/// assert!(matches!(out, Value::Float(v) if (v - 2.5).abs() < 1e-6));
+/// ```
 pub fn linear_value(a: &Value, b: &Value, t: f32) -> Value {
     match (a, b) {
         (Value::Float(va), Value::Float(vb)) => Value::Float(lerp_f32(*va, *vb, t)),
@@ -192,6 +243,15 @@ pub fn linear_value(a: &Value, b: &Value, t: f32) -> Value {
 /// `dt_du` is the scale from normalized parameter to seconds. For example,
 /// if `u` is in `[0, 1]` over a clip of duration `duration_s`, then
 /// `dt_du = duration_s`.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::interp::functions::linear_derivative;
+/// use vizij_api_core::Value;
+///
+/// let out = linear_derivative(&Value::Float(1.0), &Value::Float(3.0), 0.5, 2.0);
+/// assert!(matches!(out, Value::Float(v) if (v - 4.0).abs() < 1e-6));
+/// ```
 pub fn linear_derivative(a: &Value, b: &Value, t: f32, dt_du: f32) -> Value {
     match (a, b) {
         (Value::Float(va), Value::Float(vb)) => Value::Float((*vb - *va) * dt_du),
@@ -292,6 +352,15 @@ fn bezier_ease_t(t: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
 ///
 /// Control points are `(x1, y1, x2, y2)` in the normalized `[0, 1]` domain. The input
 /// `t` is clamped to `[0, 1]` before evaluation.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::interp::functions::bezier_value;
+/// use vizij_api_core::Value;
+///
+/// let out = bezier_value(&Value::Float(0.0), &Value::Float(8.0), 0.25, [0.0, 0.0, 1.0, 1.0]);
+/// assert!(matches!(out, Value::Float(v) if (v - 2.0).abs() < 1e-6));
+/// ```
 #[inline]
 pub fn bezier_value(a: &Value, b: &Value, t: f32, ctrl: [f32; 4]) -> Value {
     let eased = bezier_ease_t(t, ctrl[0], ctrl[1], ctrl[2], ctrl[3]);
@@ -341,6 +410,18 @@ fn bezier_ease_with_derivative(t: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> (f
 /// Returns `(value, eased_t, derivative)` where `derivative` is the slope
 /// `dy/dx` of the timing curve at `t`. Use it to scale value derivatives in
 /// the caller.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::interp::functions::bezier_value_with_derivative;
+/// use vizij_api_core::Value;
+///
+/// let (value, eased_t, deriv) =
+///     bezier_value_with_derivative(&Value::Float(0.0), &Value::Float(10.0), 0.5, [0.0, 0.0, 1.0, 1.0]);
+/// assert!(matches!(value, Value::Float(v) if (v - 5.0).abs() < 1e-6));
+/// assert!((eased_t - 0.5).abs() < 1e-6);
+/// assert!((deriv - 1.0).abs() < 1e-6);
+/// ```
 pub fn bezier_value_with_derivative(
     a: &Value,
     b: &Value,
