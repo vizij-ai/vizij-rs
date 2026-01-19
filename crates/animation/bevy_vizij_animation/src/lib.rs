@@ -1,3 +1,9 @@
+//! Bevy plugin for the Vizij animation runtime.
+//!
+//! Adds the core engine as a resource, builds canonical bindings from the scene
+//! hierarchy, advances the engine on a fixed timestep, and applies sampled
+//! outputs to Bevy `Transform` components.
+
 use bevy::prelude::*;
 use vizij_animation_core::{Config, Engine};
 
@@ -8,9 +14,11 @@ pub mod systems;
 pub use components::{VizijBindingHint, VizijTargetRoot};
 pub use resources::{BindingIndex, FixedDt, PendingOutputs};
 
+/// Bevy resource wrapper around the core animation engine.
 #[derive(Resource)]
 pub struct VizijEngine(pub Engine);
 
+/// Plugin wiring Vizij animation systems into Bevy schedules.
 pub struct VizijAnimationPlugin;
 
 impl Plugin for VizijAnimationPlugin {

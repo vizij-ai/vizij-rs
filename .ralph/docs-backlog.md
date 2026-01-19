@@ -21,7 +21,7 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
-- Next action: Continue orchestrator rustdoc audit for fixtures/scheduler and any remaining public fields; add minimal examples where feasible (examples added for blackboard, scheduler, fixtures in iter-10).
+- Next action: Continue animation stack rustdoc audit for remaining public APIs (core/Bevy/wasm) and add minimal examples where fixtures are stable.
 - Status: In progress
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
@@ -45,7 +45,7 @@
 - Impact: Med
 - Effort: M
 - Evidence: Some modules lack context or usage overview
-- Next action: Continue refreshing `//!` blocks for remaining stacks and orchestrator modules (scheduler, fixtures)
+- Next action: Refresh `//!` blocks for remaining stacks (animation core/Bevy/wasm) and any module stubs.
 - Status: In progress
 
 ### R-005 — Document feature flags and conditional compilation behavior
@@ -93,7 +93,7 @@
 - Impact: Med
 - Effort: M
 - Evidence: Users need examples beyond the top-level API; Value helpers, ValueKind links, and JSON tag notes need concise coverage (merged R-011/R-012/R-013). Eval/runtime docs now mention errors but still lack examples.
-- Next action: Add short doc examples for orchestrator fixtures/schedule helpers where practical; include wasm surface notes if they differ (added scheduler examples + fixture helper stub in iter-10).
+- Next action: Add short doc examples for animation engine outputs/baking helpers where fixtures are stable; avoid brittle doctests.
 - Status: In progress
 
 ### R-011 — Add docstrings for `Value` enum variants needing clarity

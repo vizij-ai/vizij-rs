@@ -1,10 +1,10 @@
 #![allow(dead_code)]
-//! Vizij Animation Core (engine-agnostic)
+//! Vizij animation core runtime.
 //!
-//! Step 1: scaffolding of core types and Engine skeleton per IMPLEMENTATION_PLAN.md.
-//! This crate defines data models, IDs, inputs/outputs contracts, binding types,
-//! scratch buffers, an interpolation registry placeholder, baking stubs, and an
-//! Engine skeleton (no sampling/blending yet).
+//! This crate provides the engine-agnostic animation data model plus the runtime
+//! `Engine` that loads animations, manages players/instances, and emits sampled
+//! outputs each tick. Use it directly in native hosts or via the Bevy and WASM
+//! adapters.
 
 pub mod accumulate;
 pub mod baking;

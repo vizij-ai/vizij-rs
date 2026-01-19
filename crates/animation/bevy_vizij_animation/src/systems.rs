@@ -15,7 +15,7 @@ fn make_handle(name: &str, prop: TargetProp) -> String {
     }
 }
 
-/// Walks descendants under each VizijTargetRoot and populates the BindingIndex resource
+/// Walks descendants under each `VizijTargetRoot` and populates the `BindingIndex` resource
 /// mapping canonical handles to (Entity, TargetProp).
 pub fn build_binding_index_system(
     roots: Query<Entity, With<VizijTargetRoot>>,
@@ -116,7 +116,7 @@ pub fn prebind_core_system(
     }
 }
 
-/// Fixed timestep compute: call core update with fixed dt and stash Changes into PendingOutputs.
+/// Fixed timestep compute: call core update with fixed dt and stash `Change`s into `PendingOutputs`.
 /// Inputs are left empty for v1; production apps will derive Inputs from gameplay state.
 pub fn fixed_update_core_system(
     mut eng: ResMut<VizijEngine>,
@@ -129,7 +129,7 @@ pub fn fixed_update_core_system(
     pending.changes.extend(out.changes.iter().cloned());
 }
 
-/// Apply staged outputs by converting them to a typed WriteBatch and invoking
+/// Apply staged outputs by converting them to a typed `WriteBatch` and invoking
 /// the bevy_vizij_api writer registry when available. Falls back to direct
 /// transform application for writes that don't parse as TypedPath or when no
 /// registry is present.

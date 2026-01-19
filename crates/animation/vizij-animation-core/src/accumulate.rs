@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-//! Accumulation of per-target contributions and blending into final Values.
+//! Accumulation of per-target contributions and blending into final `Value`s.
 
 use std::collections::HashMap;
 
@@ -87,7 +87,7 @@ fn numeric_collection_from_value(value: &Value) -> Option<(CollectionKind, Vec<f
     }
 }
 
-/// Accumulator entry storing weighted sums per Value kind.
+/// Accumulator entry storing weighted sums per `Value` kind.
 /// For vectors/colors: store component-wise sum and total weight.
 /// For quaternions: store weighted sum vector of (x,y,z,w) then normalize at finalize.
 /// For transforms: separate TRS accumulators.

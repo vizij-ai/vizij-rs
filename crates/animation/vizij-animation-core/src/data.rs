@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 //! Canonical animation data model (StoredAnimation).
-//! ValueKind/Value are defined in value.rs.
+//! ValueKind/Value are defined in `value.rs`.
 
 use serde::{Deserialize, Serialize};
 

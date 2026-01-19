@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-//! Baking API: produce baked samples for an AnimationData clip over a time window.
+//! Baking API: produce baked samples for an `AnimationData` clip over a time window.
 
 use serde::{Deserialize, Serialize};
 
@@ -8,6 +8,7 @@ use crate::ids::AnimId;
 use crate::sampling::{sample_track_with_derivative_epsilon, DEFAULT_DERIVATIVE_EPSILON};
 use vizij_api_core::Value;
 
+/// Configuration for baking sampled animation data.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakingConfig {
     /// Target frame rate (Hz) for baked samples.
@@ -31,6 +32,7 @@ impl Default for BakingConfig {
     }
 }
 
+/// Baked values for a single track.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakedTrack {
     /// Canonical target path (animatable id)
@@ -39,12 +41,14 @@ pub struct BakedTrack {
     pub values: Vec<Value>,
 }
 
+/// Baked derivatives for a single track.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakedDerivativeTrack {
     pub target_path: String,
     pub values: Vec<Option<Value>>,
 }
 
+/// Baked animation values across all tracks.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakedAnimationData {
     pub anim: AnimId,
@@ -54,6 +58,7 @@ pub struct BakedAnimationData {
     pub tracks: Vec<BakedTrack>,
 }
 
+/// Baked animation derivatives across all tracks.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakedDerivativeAnimationData {
     pub anim: AnimId,
@@ -63,7 +68,7 @@ pub struct BakedDerivativeAnimationData {
     pub tracks: Vec<BakedDerivativeTrack>,
 }
 
-/// Bake a single AnimationData using the provided config.
+/// Bake a single `AnimationData` using the provided config.
 pub fn bake_animation_data(
     anim_id: AnimId,
     data: &AnimationData,
@@ -146,12 +151,12 @@ pub fn bake_animation_data_with_derivatives(
     )
 }
 
-/// Export baked data as serde_json::Value (stable schema for FFI/serialization).
+/// Export baked data as `serde_json::Value` (stable schema for FFI/serialization).
 pub fn export_baked_json(baked: &BakedAnimationData) -> serde_json::Value {
     serde_json::to_value(baked).unwrap_or(serde_json::Value::Null)
 }
 
-/// Export baked values and derivatives as serde_json::Value.
+/// Export baked values and derivatives as `serde_json::Value`.
 pub fn export_baked_with_derivatives_json(
     baked: &BakedAnimationData,
     derivatives: &BakedDerivativeAnimationData,

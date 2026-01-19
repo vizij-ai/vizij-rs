@@ -1,8 +1,8 @@
 #![allow(dead_code)]
-//! Engine: data ownership and public API with time math + sampling/accumulate/blend (v1).
+//! Engine runtime: owns animation data, players, instances, and sampling output.
 //!
-//! Methods:
-//! - new, load_animation, create_player, add_instance, prebind (resolver), update (accumulate → blend)
+//! The engine applies per-tick inputs, advances playback, samples tracks, blends
+//! instances by weight, and emits `Outputs` or `OutputsWithDerivatives`.
 
 use crate::accumulate::AccumulatorWithDerivatives;
 use crate::baking::{
@@ -22,23 +22,35 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use vizij_api_core::WriteBatch;
 
+/// Summary of a `prebind_with_report` pass.
 #[derive(Clone, Debug, Default)]
 pub struct PrebindReport {
+    /// Total number of track channels visited.
     pub total: usize,
+    /// Count of channels resolved by the resolver.
     pub resolved: usize,
+    /// Canonical target paths that failed to resolve.
     pub unresolved: Vec<String>,
 }
 
 /// Per-player controller and instance list.
 #[derive(Debug)]
 pub struct Player {
+    /// Stable player identifier.
     pub id: PlayerId,
+    /// Display name for diagnostics/UI.
     pub name: String,
+    /// Playback speed multiplier (0.0 pauses).
     pub speed: f32,
+    /// Current player time in seconds (pre-window/loop mapping).
     pub time: f32,
+    /// Looping mode applied during sampling.
     pub mode: LoopMode,
+    /// Start of the playback window in seconds.
     pub start_time: f32,
+    /// Optional end of the playback window in seconds.
     pub end_time: Option<f32>,
+    /// Instance IDs attached to this player.
     pub instances: Vec<InstId>,
     /// Effective total duration in player time, computed from instances (offsets/scales) and window.
     pub total_duration: f32,
@@ -63,21 +75,32 @@ impl Player {
 /// An animation instance attached to a player.
 #[derive(Debug)]
 pub struct Instance {
+    /// Stable instance identifier.
     pub id: InstId,
+    /// Animation clip reference.
     pub anim: AnimId,
+    /// Blend weight applied during accumulation.
     pub weight: f32,
+    /// Local time scaling (negative reverses playback).
     pub time_scale: f32,
+    /// Player-time offset before the instance starts.
     pub start_offset: f32,
+    /// Whether this instance participates in sampling.
     pub enabled: bool,
+    /// Bound channels for this instance.
     pub binding_set: BindingSet,
 }
 
 /// Configuration for adding an instance.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct InstanceCfg {
+    /// Blend weight applied during accumulation.
     pub weight: f32,
+    /// Local time scaling (negative reverses playback).
     pub time_scale: f32,
+    /// Player-time offset before the instance starts.
     pub start_offset: f32,
+    /// Whether the instance is active immediately.
     pub enabled: bool,
 }
 
@@ -174,6 +197,7 @@ fn ping_pong(t: f32, span: f32) -> f32 {
     }
 }
 
+/// Player playback state derived from speed/time.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub enum PlaybackState {
     Playing,
@@ -181,6 +205,7 @@ pub enum PlaybackState {
     Stopped,
 }
 
+/// Lightweight animation metadata for diagnostics.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct AnimationInfo {
     pub id: u32,
@@ -189,6 +214,7 @@ pub struct AnimationInfo {
     pub track_count: usize,
 }
 
+/// Public player metadata including computed length.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct PlayerInfo {
     pub id: u32,
@@ -203,6 +229,7 @@ pub struct PlayerInfo {
     pub length: f32,
 }
 
+/// Public instance metadata for a given player.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct InstanceInfo {
     pub id: u32,
@@ -286,7 +313,7 @@ impl Engine {
         }
     }
 
-    /// Load animation data into the engine, returning an AnimId.
+    /// Load animation data into the engine, returning an `AnimId`.
     pub fn load_animation(&mut self, mut data: AnimationData) -> AnimId {
         let id = self.ids.alloc_anim();
         data.id = Some(id);
@@ -294,7 +321,8 @@ impl Engine {
         id
     }
 
-    /// Bake a stored animation into per-frame samples using the provided config.
+    /// Bake a loaded animation into per-frame samples using the provided config.
+    /// Returns `None` if the animation id is unknown.
     pub fn bake_animation(&self, anim: AnimId, cfg: &BakingConfig) -> Option<BakedAnimationData> {
         self.anims
             .get(anim)
@@ -302,6 +330,7 @@ impl Engine {
     }
 
     /// Bake animation values and derivatives in one pass.
+    /// Returns `None` if the animation id is unknown.
     pub fn bake_animation_with_derivatives(
         &self,
         anim: AnimId,
@@ -319,7 +348,7 @@ impl Engine {
         pid
     }
 
-    /// Add an animation instance to a player.
+    /// Add an animation instance to a player, returning its `InstId`.
     pub fn add_instance(&mut self, player: PlayerId, anim: AnimId, cfg: InstanceCfg) -> InstId {
         let iid = self.ids.alloc_inst();
 
@@ -645,13 +674,13 @@ impl Engine {
         }
     }
 
-    /// Step the simulation by dt with given inputs, returning only values.
+    /// Step the simulation by `dt` seconds, returning only values.
     pub fn update_values(&mut self, dt: f32, inputs: Inputs) -> &Outputs {
         self.step(dt, inputs, false);
         &self.outputs
     }
 
-    /// Step the simulation by dt returning values and derivatives.
+    /// Step the simulation by `dt` seconds, returning values and derivatives.
     pub fn update_values_and_derivatives(
         &mut self,
         dt: f32,
@@ -661,12 +690,12 @@ impl Engine {
         &self.outputs_with_derivatives
     }
 
-    /// Backwards-compatible alias for `update_values`.
+    /// Backwards-compatible alias for [`Engine::update_values`].
     pub fn update(&mut self, dt: f32, inputs: Inputs) -> &Outputs {
         self.update_values(dt, inputs)
     }
 
-    /// Update and also return a typed WriteBatch (collection of WriteOp) where each
+    /// Update and also return a typed `WriteBatch` (collection of `WriteOp`) where each
     /// WriteOp.path is parsed as a `TypedPath`. If a change's key does not parse as a
     /// TypedPath it will be skipped in the returned batch. The engine still maintains
     /// its normal Outputs in `self.outputs`.
@@ -711,7 +740,8 @@ impl Engine {
         }
     }
 
-    /// Unload an animation and remove all instances referencing it across all players. Returns true if animation existed.
+    /// Unload an animation and remove all instances referencing it across all players.
+    /// Returns true if the animation existed.
     pub fn unload_animation(&mut self, anim: AnimId) -> bool {
         if !self.anims.contains(anim) {
             return false;
@@ -816,7 +846,7 @@ impl Engine {
     }
 
     /// List the set of resolved output keys currently associated with the player's instances.
-    /// Keys match those produced in Outputs (bound handle if available, else canonical track path).
+    /// Keys match those produced in `Outputs` (bound handle if available, else canonical track path).
     pub fn list_player_keys(&self, player: PlayerId) -> Vec<String> {
         let mut set: HashSet<String> = HashSet::new();
         let Some(p) = self.players.iter().find(|pp| pp.id == player) else {
@@ -848,7 +878,7 @@ impl Engine {
 }
 
 impl Engine {
-    /// Public helper to inspect an instance's bound channel keys (useful for tests and tooling)
+    /// Public helper to inspect an instance's bound channel keys (useful for tests and tooling).
     pub fn get_instance_channels(&self, inst: InstId) -> Option<Vec<ChannelKey>> {
         self.instances
             .iter()

@@ -3,16 +3,19 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Stable identifier for a loaded animation.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct AnimId(pub u32);
 
+/// Stable identifier for a player.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PlayerId(pub u32);
 
+/// Stable identifier for an instance.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct InstId(pub u32);
 
-/// Monotonic allocator for AnimId, PlayerId, and InstId.
+/// Monotonic allocator for `AnimId`, `PlayerId`, and `InstId`.
 /// Dense indices improve cache locality; IDs are opaque externally.
 #[derive(Default, Debug)]
 pub struct IdAllocator {

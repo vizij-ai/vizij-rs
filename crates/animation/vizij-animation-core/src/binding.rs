@@ -1,9 +1,10 @@
 #![allow(dead_code)]
 //! Binding table and resolver traits.
 //!
-//! v1 uses small string keys as TargetHandle. The table maps animation channel
+//! v1 uses small string keys as `TargetHandle`. The table maps animation channel
 //! identifiers (per-animation track) to resolved target handles, and each instance holds
-//! a BindingSet referencing rows in the global table. Population happens in prebind().
+//! a `BindingSet` referencing channels in the global table. Population happens in
+//! `Engine::prebind`.
 
 /// Opaque target handle for v1 (small string key).
 pub type TargetHandle = String;
@@ -19,7 +20,7 @@ pub struct ChannelKey {
 }
 
 /// Trait for resolving canonical target paths to opaque handles.
-/// Adapters (Bevy/WASM) implement this and pass into Engine::prebind().
+/// Adapters (Bevy/WASM) implement this and pass into `Engine::prebind`.
 pub trait TargetResolver {
     fn resolve(&mut self, path: &str) -> Option<TargetHandle>;
 }
@@ -38,6 +39,7 @@ pub struct BindingTable {
 }
 
 impl BindingTable {
+    /// Create an empty binding table.
     pub fn new() -> Self {
         Self { rows: Vec::new() }
     }
@@ -57,13 +59,14 @@ impl BindingTable {
     }
 }
 
-/// Per-instance view over a set of bound channels (indices into BindingTable.rows).
+/// Per-instance view over a set of bound channels.
 #[derive(Clone, Debug, Default)]
 pub struct BindingSet {
     pub channels: Vec<ChannelKey>,
 }
 
 impl BindingSet {
+    /// Returns true when no channels are bound.
     pub fn is_empty(&self) -> bool {
         self.channels.is_empty()
     }

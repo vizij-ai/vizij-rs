@@ -141,6 +141,7 @@ fn find_segment(points: &[Keypoint], u: f32) -> (usize, usize, f32) {
     (n - 1, n - 1, 0.0)
 }
 
+/// Sampled value plus derivative (when requested) for a single track.
 #[derive(Clone, Debug)]
 pub struct SampledValue {
     pub value: Value,

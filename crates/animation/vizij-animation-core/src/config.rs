@@ -1,10 +1,10 @@
 #![allow(dead_code)]
-//! Core configuration for vizij-animation-core.
+//! Core configuration for `vizij-animation-core`.
 
 use serde::{Deserialize, Serialize};
 
 /// Configuration for engine sizing and feature flags.
-/// Keep this minimal in v1; expand as needed without breaking API.
+/// Keep this minimal; extend compatibly when new tuning knobs land.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
     /// Initial capacity hints for scratch/sample buffers.
@@ -20,6 +20,7 @@ pub struct Config {
     pub features: Features,
 }
 
+/// Feature toggles for experimental runtime behavior.
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub struct Features {
     /// Reserved for future toggles (SIMD, parallel passes, etc.).

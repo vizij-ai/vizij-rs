@@ -1,33 +1,36 @@
 #![allow(dead_code)]
 //! Output contracts from the core engine.
 //!
-//! Outputs carry only the numeric/value changes for this tick, keyed by
-//! stable string TargetHandle, and a separate list of semantic events.
-//! Adapters (Bevy/WASM) apply changes to the host and transport events.
+//! Outputs carry per-tick value changes keyed by stable target handles, plus
+//! semantic events emitted during playback. Adapters (Bevy/WASM) apply changes
+//! to their hosts and forward events.
 
 use serde::{Deserialize, Serialize};
 
 use crate::ids::PlayerId;
 use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
 
-fn default_zero_derivative() -> Value {
-    Value::Float(0.0)
-}
-
 /// One changed target value for a given player this tick.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Change {
+    /// Player that produced the change.
     pub player: PlayerId,
-    pub key: String, // TargetHandle (small string key)
+    /// Target handle (resolved binding key or canonical path).
+    pub key: String,
+    /// Sampled value for this tick.
     pub value: Value,
 }
 
-/// Change paired with a derivative value.
+/// Change paired with an optional derivative value.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ChangeWithDerivative {
+    /// Player that produced the change.
     pub player: PlayerId,
+    /// Target handle (resolved binding key or canonical path).
     pub key: String,
+    /// Sampled value for this tick.
     pub value: Value,
+    /// Optional derivative value (only for numeric kinds).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub derivative: Option<Value>,
 }
@@ -80,7 +83,7 @@ pub enum CoreEvent {
     },
 }
 
-/// Outputs returned by Engine::update().
+/// Outputs returned by [`Engine::update_values`](crate::engine::Engine::update_values).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Outputs {
     #[serde(default)]

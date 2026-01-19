@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 use vizij_animation_core::outputs::Change;
 
-/// What property on a Bevy component a handle maps to.
+/// Which `Transform` property a handle maps to.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TargetProp {
     Translation,
@@ -12,13 +12,13 @@ pub enum TargetProp {
 
 /// Index from canonical string handle (e.g., "Head/Transform.translation")
 /// to (Entity, TargetProp). Populated by the binding system by walking
-/// under VizijTargetRoot.
+/// under `VizijTargetRoot`.
 #[derive(Resource, Default)]
 pub struct BindingIndex {
     pub map: HashMap<String, (Entity, TargetProp)>,
 }
 
-/// Outputs staged from Engine::update to be applied in a separate system
+/// Outputs staged from `Engine::update_values` to be applied in a separate system
 /// (keeps ordering explicit: Compute -> Apply).
 #[derive(Resource, Default)]
 pub struct PendingOutputs {

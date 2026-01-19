@@ -10,6 +10,7 @@ use vizij_animation_core::{
     Outputs, OutputsWithDerivatives, PlayerId, TargetResolver,
 };
 
+/// wasm-bindgen wrapper around the core animation engine.
 #[wasm_bindgen]
 pub struct VizijAnimation {
     core: Engine,
@@ -145,8 +146,7 @@ fn parse_baking_config(cfg: JsValue) -> Result<BakingConfig, JsError> {
 #[wasm_bindgen]
 impl VizijAnimation {
     /// Create a new engine instance. Pass a JSON config object or undefined/null for defaults.
-    /// Example:
-    ///   new VizijAnimation({ scratch_samples: 2048 })
+    /// Example: `new VizijAnimation({ scratch_samples: 2048 })`
     #[wasm_bindgen(constructor)]
     pub fn new(config: JsValue) -> Result<VizijAnimation, JsError> {
         console_error_panic_hook::set_once();
@@ -162,7 +162,7 @@ impl VizijAnimation {
         })
     }
 
-    /// Load an AnimationData (JSON) into the engine. Returns an AnimId (u32).
+    /// Load an `AnimationData` JSON object into the engine. Returns an AnimId (u32).
     #[wasm_bindgen(js_name = load_animation)]
     pub fn load_animation(&mut self, data_json: JsValue) -> Result<u32, JsError> {
         let data: AnimationData = swb::from_value(data_json)
@@ -171,8 +171,8 @@ impl VizijAnimation {
         Ok(id.0)
     }
 
-    /// Load a StoredAnimation JSON (new format: tracks with keypoints and transitions.in/out) into the engine.
-    /// Accepts any compatible JS object, e.g. fixtures/animations/vector-pose-combo.json. Returns an AnimId (u32).
+    /// Load a StoredAnimation JSON object into the engine.
+    /// Accepts any compatible JS object (for example fixture JSON). Returns an AnimId (u32).
     #[wasm_bindgen(js_name = load_stored_animation)]
     pub fn load_stored_animation(&mut self, data_json: JsValue) -> Result<u32, JsError> {
         if jsvalue_is_undefined_or_null(&data_json) {
@@ -198,7 +198,7 @@ impl VizijAnimation {
         pid.0
     }
 
-    /// Add an animation instance to a player. `cfg` is optional JSON matching InstanceCfg.
+    /// Add an animation instance to a player. `cfg` is optional JSON matching `InstanceCfg`.
     /// Returns an InstId (u32).
     #[wasm_bindgen(js_name = add_instance)]
     pub fn add_instance(
