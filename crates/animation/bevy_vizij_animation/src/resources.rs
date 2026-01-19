@@ -4,7 +4,9 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 use vizij_animation_core::outputs::Change;
 
-/// Which `Transform` property a handle maps to.
+/// Which `Transform` property a handle maps to for a canonical binding.
+///
+/// Used by the output-application systems to map changes to `Transform` fields.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TargetProp {
     /// Apply to `Transform::translation`.
@@ -16,8 +18,9 @@ pub enum TargetProp {
 }
 
 /// Index from canonical string handle (e.g., "Head/Transform.translation")
-/// to (Entity, TargetProp). Populated by the binding system by walking
-/// under `VizijTargetRoot`.
+/// to `(Entity, TargetProp)`.
+///
+/// Populated by the binding system by walking under `VizijTargetRoot`.
 #[derive(Resource, Default)]
 pub struct BindingIndex {
     /// Map of canonical handle -> (entity, target property).
@@ -34,6 +37,8 @@ pub struct PendingOutputs {
 }
 
 /// Fixed timestep configuration (seconds per tick).
+///
+/// The plugin uses this in `FixedUpdate` to advance the core engine.
 #[derive(Resource)]
 pub struct FixedDt(pub f32);
 

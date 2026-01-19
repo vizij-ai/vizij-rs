@@ -23,6 +23,8 @@ use std::collections::HashSet;
 use vizij_api_core::WriteBatch;
 
 /// Summary of a `prebind_with_report` pass.
+///
+/// Use `resolved / total` to gauge how many channels were successfully bound.
 #[derive(Clone, Debug, Default)]
 pub struct PrebindReport {
     /// Total number of track channels visited.
@@ -225,6 +227,8 @@ pub struct AnimationInfo {
 }
 
 /// Public player metadata including computed length.
+///
+/// The `length` field is derived from the player's current instances and window.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct PlayerInfo {
     /// Player identifier.
@@ -311,6 +315,9 @@ impl Engine {
         }
     }
     /// Public accessor for a player's computed total duration (in player time seconds).
+    ///
+    /// The duration accounts for per-instance start offsets, time scaling, and any playback
+    /// window applied to the player.
     ///
     /// Returns `None` if the player id is unknown.
     pub fn player_total_duration(&self, player: PlayerId) -> Option<f32> {

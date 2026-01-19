@@ -54,6 +54,8 @@ pub enum PlayerCommand {
 }
 
 /// Looping behavior applied when mapping player time to clip time.
+///
+/// This affects both display time in diagnostics and how instances sample tracks.
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum LoopMode {
     /// Clamp playback to the window `[start_time, end_time?]`.

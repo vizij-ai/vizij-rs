@@ -154,6 +154,9 @@ impl VizijAnimation {
     ///
     /// Pass a JSON config object or undefined/null for defaults.
     /// Example: `new VizijAnimation({ scratch_samples: 2048 })`
+    ///
+    /// # Errors
+    /// Returns an error if the config JSON cannot be deserialized into `Config`.
     #[wasm_bindgen(constructor)]
     pub fn new(config: JsValue) -> Result<VizijAnimation, JsError> {
         console_error_panic_hook::set_once();
@@ -172,6 +175,9 @@ impl VizijAnimation {
     /// Load an `AnimationData` JSON object into the engine.
     ///
     /// Returns an AnimId (u32). Errors if the JSON shape does not match `AnimationData`.
+    ///
+    /// # Errors
+    /// Returns an error if the JSON does not deserialize into `AnimationData`.
     #[wasm_bindgen(js_name = load_animation)]
     pub fn load_animation(&mut self, data_json: JsValue) -> Result<u32, JsError> {
         let data: AnimationData = swb::from_value(data_json)
@@ -183,6 +189,10 @@ impl VizijAnimation {
     /// Load a StoredAnimation JSON object into the engine.
     ///
     /// Accepts any compatible JS object (for example fixture JSON). Returns an AnimId (u32).
+    ///
+    /// # Errors
+    /// Returns an error if `data_json` is null/undefined, JSON stringification fails,
+    /// or the parsed data does not match the StoredAnimation schema.
     #[wasm_bindgen(js_name = load_stored_animation)]
     pub fn load_stored_animation(&mut self, data_json: JsValue) -> Result<u32, JsError> {
         if jsvalue_is_undefined_or_null(&data_json) {
@@ -211,6 +221,9 @@ impl VizijAnimation {
     /// Add an animation instance to a player. `cfg` is optional JSON matching `InstanceCfg`.
     ///
     /// Returns an InstId (u32).
+    ///
+    /// # Errors
+    /// Returns an error if `cfg` is provided but cannot be deserialized.
     #[wasm_bindgen(js_name = add_instance)]
     pub fn add_instance(
         &mut self,
@@ -240,6 +253,9 @@ impl VizijAnimation {
     }
 
     /// Step the simulation by dt (seconds) with inputs JSON. Returns Outputs JSON.
+    ///
+    /// # Errors
+    /// Returns an error if inputs fail to deserialize or outputs fail to serialize.
     #[wasm_bindgen(js_name = update_values)]
     pub fn update_values(&mut self, dt: f32, inputs_json: JsValue) -> Result<JsValue, JsError> {
         let inputs = parse_inputs_js(inputs_json)?;
@@ -248,6 +264,9 @@ impl VizijAnimation {
     }
 
     /// Step the simulation by dt returning both values and derivatives.
+    ///
+    /// # Errors
+    /// Returns an error if inputs fail to deserialize or outputs fail to serialize.
     #[wasm_bindgen(js_name = update_values_and_derivatives)]
     pub fn update_values_and_derivatives(
         &mut self,
@@ -260,12 +279,19 @@ impl VizijAnimation {
     }
 
     /// Backwards-compatible alias for `update_values`.
+    ///
+    /// # Errors
+    /// Returns an error if inputs fail to deserialize or outputs fail to serialize.
     #[wasm_bindgen]
     pub fn update(&mut self, dt: f32, inputs_json: JsValue) -> Result<JsValue, JsError> {
         self.update_values(dt, inputs_json)
     }
 
     /// Bake an animation clip into pre-sampled tracks using the engine's loaded data.
+    ///
+    /// # Errors
+    /// Returns an error if the animation id is unknown, the config is invalid, or the
+    /// baked data fails to serialize.
     #[wasm_bindgen(js_name = bake_animation)]
     pub fn bake_animation(&self, anim_id: u32, cfg: JsValue) -> Result<JsValue, JsError> {
         let cfg_rs = parse_baking_config(cfg)?;
@@ -282,6 +308,9 @@ impl VizijAnimation {
     ///
     /// Returns an object with shape:
     /// `{ nodes: Record<string, Record<string, ValueJSON>>, writes: Array<{ path: string, value: ValueJSON }> }`.
+    ///
+    /// # Errors
+    /// Returns an error if inputs fail to deserialize or outputs fail to serialize.
     #[wasm_bindgen(js_name = update_nodes_writes)]
     pub fn update_nodes_writes(
         &mut self,
@@ -330,6 +359,9 @@ impl VizijAnimation {
     }
 
     /// List all animations (id, name, duration_ms, track_count).
+    ///
+    /// # Errors
+    /// Returns an error if serialization fails.
     #[wasm_bindgen(js_name = list_animations)]
     pub fn list_animations(&self) -> Result<JsValue, JsError> {
         let v = self.core.list_animations();
@@ -337,6 +369,9 @@ impl VizijAnimation {
     }
 
     /// List all players with playback info and computed length.
+    ///
+    /// # Errors
+    /// Returns an error if serialization fails.
     #[wasm_bindgen(js_name = list_players)]
     pub fn list_players(&self) -> Result<JsValue, JsError> {
         let v = self.core.list_players();
@@ -344,6 +379,9 @@ impl VizijAnimation {
     }
 
     /// List all instances for a given player id.
+    ///
+    /// # Errors
+    /// Returns an error if serialization fails.
     #[wasm_bindgen(js_name = list_instances)]
     pub fn list_instances(&self, player_id: u32) -> Result<JsValue, JsError> {
         let v = self.core.list_instances(PlayerId(player_id));
@@ -351,6 +389,9 @@ impl VizijAnimation {
     }
 
     /// List the set of resolved output keys currently associated with the player's instances.
+    ///
+    /// # Errors
+    /// Returns an error if serialization fails.
     #[wasm_bindgen(js_name = list_player_keys)]
     pub fn list_player_keys(&self, player_id: u32) -> Result<JsValue, JsError> {
         let v = self.core.list_player_keys(PlayerId(player_id));
@@ -358,6 +399,10 @@ impl VizijAnimation {
     }
 
     /// Bake animation samples and derivatives for the specified animation id.
+    ///
+    /// # Errors
+    /// Returns an error if the animation id is unknown, the config is invalid, or
+    /// the baked data fails to serialize.
     #[wasm_bindgen(js_name = bake_animation_with_derivatives)]
     pub fn bake_animation_with_derivatives(
         &self,

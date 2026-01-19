@@ -24,3 +24,4 @@ Do NOT implement these in the current loop.
 - 2026-01-19: Animation core interpolation helpers (`interp/functions.rs`) still lack rustdoc examples; consider adding minimal doctests if numeric expectations can be stabilized without fixtures.
 
 - 2026-01-19: Animation core interpolation helpers still lack doc examples beyond lerp_f32; consider adding doctests for bezier/linear helpers once stable numeric expectations are set.
+- 2026-01-19: Bevy animation system fallbacks apply non-typed writes only to Transform properties; consider documenting or extending this for other component types if needed.

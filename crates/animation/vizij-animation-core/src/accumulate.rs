@@ -411,6 +411,9 @@ impl AccumulatorWithDerivatives {
     }
 
     /// Add a weighted contribution to the accumulator.
+    ///
+    /// Non-positive weights are ignored. Value kinds must match the accumulator's kind
+    /// to participate in blending; mismatches are ignored to keep fail-soft behaviour.
     pub fn add(&mut self, handle: &str, value: &Value, derivative: Option<&Value>, weight: f32) {
         if weight <= 0.0 {
             return;
@@ -430,6 +433,9 @@ impl AccumulatorWithDerivatives {
     }
 
     /// Finalize accumulated values into canonical `(value, derivative)` pairs keyed by handle.
+    ///
+    /// Derivatives are `None` when no derivative contributions were provided or when the
+    /// accumulator could not blend the derivative kind.
     pub fn finalize(self) -> HashMap<String, (Value, Option<Value>)> {
         let Self {
             values,

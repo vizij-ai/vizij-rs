@@ -3,7 +3,8 @@
 use bevy::prelude::*;
 
 /// Marker component designating the root of a subtree to bind animation targets under.
-/// The binding system will walk descendants of any entity with this marker.
+///
+/// The binding system walks descendants of any entity with this marker.
 #[derive(Component)]
 pub struct VizijTargetRoot;
 

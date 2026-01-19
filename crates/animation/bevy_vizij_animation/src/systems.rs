@@ -17,8 +17,10 @@ fn make_handle(name: &str, prop: TargetProp) -> String {
     }
 }
 
-/// Walk descendants under each `VizijTargetRoot` and populate the `BindingIndex` resource
-/// mapping canonical handles to (Entity, TargetProp).
+/// Walk descendants under each `VizijTargetRoot` and populate `BindingIndex`.
+///
+/// Entities without a `Name` component are skipped. When a `VizijBindingHint` is present,
+/// its `path` replaces the `Name` for the canonical handle prefix.
 ///
 /// Runs in `Update` to keep bindings fresh; you can add change detection in the host app
 /// if you need to reduce per-frame work.
@@ -69,8 +71,9 @@ pub fn build_binding_index_system(
     index.map = map;
 }
 
-/// Bridge the core prebind call into the ECS: resolve canonical track target paths
-/// to string handles recorded in `BindingIndex`.
+/// Bridge the core prebind call into the ECS.
+///
+/// Resolves canonical track target paths to string handles recorded in `BindingIndex`.
 ///
 /// The handles are the canonical strings themselves, which keeps the Bevy adapter
 /// aligned with core output keys.
@@ -124,7 +127,7 @@ pub fn prebind_core_system(
     }
 }
 
-/// Fixed timestep compute: call core update with fixed dt and stash `Change`s into `PendingOutputs`.
+/// Fixed timestep compute: call core update with fixed dt and stash changes in `PendingOutputs`.
 ///
 /// Inputs are left empty for v1; production apps should derive `Inputs` from gameplay state.
 pub fn fixed_update_core_system(
@@ -141,8 +144,8 @@ pub fn fixed_update_core_system(
 /// Apply staged outputs by converting them to a typed `WriteBatch` and invoking
 /// the bevy_vizij_api writer registry when available.
 ///
-/// Falls back to direct transform application for writes that don't parse as `TypedPath`
-/// or when no registry is present.
+/// Writes whose keys do not parse as `TypedPath` are applied via the `BindingIndex`
+/// fallback (Transform-only). When no registry is present, typed writes also fall back.
 pub fn apply_outputs_system(world: &mut World) {
     // Access required resources into locals to avoid borrow conflicts
     let index_map = if let Some(idx) = world.get_resource::<BindingIndex>() {

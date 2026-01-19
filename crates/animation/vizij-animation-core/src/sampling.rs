@@ -142,6 +142,10 @@ fn find_segment(points: &[Keypoint], u: f32) -> (usize, usize, f32) {
 }
 
 /// Sampled value plus derivative (when requested) for a single track.
+///
+/// This is a convenience container used by tooling; the engine returns tuple pairs instead.
+///
+/// The derivative is expressed in units per second (normalized by clip duration).
 #[derive(Clone, Debug)]
 pub struct SampledValue {
     /// Sampled value at the requested time.
