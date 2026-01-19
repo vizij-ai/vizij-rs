@@ -38,6 +38,7 @@ Do NOT implement these in the current loop.
 - 2026-01-19: `vizij-graph-core` eval helpers still lack runnable examples for `InputSlots`/`OutputSlots` and `materialize_outputs`; consider adding minimal doctests once a stable micro-spec is defined.
 - 2026-01-19: Doc tests for `bevy_vizij_api` require avoiding `anyhow` in examples; prefer `expect`-based fallbacks since the crate has no `anyhow` dependency.
 - 2026-01-19: `vizij-graph-wasm` staging helpers (`stage_inputs_batch`, slot staging) only accept scalar floats, despite docs and API name suggesting vector support; consider adding vector batch APIs or clarifying naming for scalar-only staging.
+- 2026-01-19: `bevy_vizij_graph` README referenced stale resource/event names (`GraphSpecRes`, `EvalResultRes`, `PendingInputs`); keep README aligned with actual exports when APIs shift.
 
 - R-015
 - Title: wasm binding docs missing JS examples for api/graph/orchestrator helpers
@@ -53,4 +54,3 @@ Do NOT implement these in the current loop.
 - 2026-01-19: Public eval helpers still need to be referenced via internal modules; examples were marked `ignore` to avoid referencing private `plan`/`value_layout` paths. Consider re-exporting minimal types or adding public constructors if you want runnable doctests.
 - 2026-01-19: `vizij-test-fixtures` doctest examples now depend on fixture keys like `pose-quat-transform` and `simple-gain-offset`; if fixtures rename, update doctests to avoid brittle failures.
 - 2026-01-19: `vizij-api-core` `ValueKind` and `ShapeId` enums now have variant-level docs; consider adding concise variant docs to any remaining public enums in other core crates.
-

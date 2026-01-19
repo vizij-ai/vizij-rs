@@ -21,8 +21,8 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
-- Next action: Audit remaining wasm/helper crates and any non-core crates for missing rustdoc (bevy_vizij_api, bevy_vizij_graph, bevy_vizij_orchestrator once added).
-- Status: In progress (iter-16 added Value/Shape enum variant docs and bevy_vizij_api registry examples)
+- Next action: Audit remaining wasm/helper crates and any non-core crates for missing rustdoc (bevy_vizij_orchestrator once added).
+- Status: In progress (iter-19 refreshed bevy_vizij_graph docs and examples)
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
 - Type: Docs

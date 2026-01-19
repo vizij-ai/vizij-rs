@@ -22,9 +22,10 @@
 
 - Provides `VizijGraphPlugin` which inserts the resources and systems needed to evaluate graphs.
 - Persists `GraphRuntime` state between frames while allowing the `GraphSpec` resource to be hot-swapped.
-- Offers `PendingInputs` and parameter update events for staging host data.
-- Stores the latest outputs and writes in `EvalResultRes` for downstream systems.
+- Offers parameter update events for staging host data.
+- Stores the latest outputs in `GraphOutputs` for downstream systems.
 - Optional `urdf_ik` feature (enabled by default) brings in robotics helpers from the core crate.
+- `WriteBatch` outputs are applied automatically when a `bevy_vizij_api::WriterRegistry` resource exists.
 
 ---
 
@@ -46,8 +47,8 @@ cargo add bevy_vizij_graph --no-default-features
 
 ```rust
 use bevy::prelude::*;
-use bevy_vizij_graph::{VizijGraphPlugin, GraphSpecRes, EvalResultRes};
-use vizij_graph_core::types::GraphSpec;
+use bevy_vizij_graph::{GraphOutputs, GraphResource, VizijGraphPlugin};
+use vizij_graph_core::GraphSpec;
 
 fn main() {
     App::new()
@@ -58,19 +59,16 @@ fn main() {
         .run();
 }
 
-fn load_graph(mut spec: ResMut<GraphSpecRes>) {
+fn load_graph(mut spec: ResMut<GraphResource>) {
     let graph: GraphSpec =
         serde_json::from_str(include_str!("../../../fixtures/node_graphs/simple-gain-offset.json"))
             .expect("valid graph");
-    *spec = GraphSpecRes::new(graph.with_cache());
+    *spec = GraphResource(graph.with_cache());
 }
 
-fn inspect_outputs(result: Res<EvalResultRes>) {
-    for (node, ports) in &result.nodes {
+fn inspect_outputs(outputs: Res<GraphOutputs>) {
+    for (node, ports) in &outputs.0 {
         info!(?node, ?ports, "graph output");
-    }
-    for write in &result.writes {
-        info!("write {:?} => {:?}", write.path, write.value);
     }
 }
 ```
@@ -78,15 +76,13 @@ fn inspect_outputs(result: Res<EvalResultRes>) {
 Staging inputs via the provided resource:
 
 ```rust
-use bevy_vizij_graph::{PendingInput, PendingInputs};
-use vizij_api_core::{Shape, TypedPath, Value};
+use bevy_vizij_graph::GraphResource;
+use vizij_api_core::Value;
 
-fn stage_inputs(mut pending: ResMut<PendingInputs>) {
-    pending.push(PendingInput {
-        path: TypedPath::parse("demo/input/value").unwrap(),
-        value: Value::vec3([0.1, 0.2, 0.3]),
-        declared: Some(Shape::vec3()),
-    });
+fn set_param(mut spec: ResMut<GraphResource>) {
+    if let Some(node) = spec.0.nodes.iter_mut().find(|node| node.id == "gain") {
+        node.params.value = Some(Value::Float(2.0));
+    }
 }
 ```
 
@@ -96,16 +92,15 @@ fn stage_inputs(mut pending: ResMut<PendingInputs>) {
 
 | Resource / System | Purpose |
 |-------------------|---------|
-| `GraphSpecRes` | Stores the loaded `GraphSpec`. Replace it to hot-swap graphs. |
-| `GraphRuntimeRes` | Persistent runtime (node state, staged inputs, cached outputs). |
-| `PendingInputs` | Queue of staged inputs to apply before the next evaluation. |
-| `EvalResultRes` | Stores the latest node outputs and `WriteBatch`. |
-| `stage_inputs_system` | Applies pending inputs to the runtime. |
-| `evaluate_graph_system` | Runs `evaluate_all` each frame or fixed timestep. |
+| `GraphResource` | Stores the loaded `GraphSpec`. Replace it to hot-swap graphs. |
+| `GraphRuntimeResource` | Persistent runtime (node state, staged inputs, cached outputs). |
+| `GraphOutputs` | Stores the latest node outputs. |
+| `SetNodeParam` | Event to update node params by key. |
+| `system_eval` | Runs `evaluate_all` each frame (and applies `WriteBatch` when possible). |
 
 - When the spec changes, the runtime is reset to ensure deterministic results.
-- Writes are stored in `EvalResultRes`; you can also consume them immediately by adding your own system after evaluation.
-- Parameter updates are exposed via events/resources (see crate docs) mirroring the staging path.
+- Writes are applied via `bevy_vizij_api::WriterRegistry` when present; otherwise collect them by extending `system_eval`.
+- Parameter updates are exposed via [`SetNodeParam`] events or by mutating [`GraphResource`] directly.
 
 ---
 
@@ -151,12 +146,12 @@ This approach gives you full control over cadence while reusing the same resourc
 
 ### Integrating with the orchestrator
 
-- `EvalResultRes.writes` contains the `WriteBatch` produced by graph `Output` nodes. Forward it to `vizij-orchestrator-core` by calling `orchestrator.apply_writebatch(...)` or staging inputs on the orchestrator’s blackboard.
-- When using merged controllers, allow the orchestrator to own graph evaluation and treat `bevy_vizij_graph` as a visualiser: read `EvalResultRes.nodes` to render inspector panels while letting the orchestrator apply writes.
+- `bevy_vizij_api::WriterRegistry` can apply writes directly to the Bevy world. If you need to pass writes to the orchestrator, extend `system_eval` to capture the runtime `WriteBatch`.
+- When using merged controllers, allow the orchestrator to own graph evaluation and treat `bevy_vizij_graph` as a visualiser: read `GraphOutputs` to render inspector panels while letting the orchestrator apply writes.
 
 ### Logging & telemetry
 
-- Evaluation errors are logged via `bevy::log::error!` inside the plugin. Hook your own diagnostics by adding a system after evaluation that inspects `EvalResultRes` and records metrics (`events.spawn(GraphEvalDiagnostics { frame, writes: result.writes.len() })`).
+- Evaluation errors are logged via `bevy::log::error!` inside the plugin. Hook your own diagnostics by adding a system after evaluation that inspects `GraphOutputs` and records metrics.
 - `GraphTime` tracks the accumulated simulation time (`t`) and last delta (`dt`). Emit these values through your telemetry stack to correlate graph load with frame timing.
 
 ---

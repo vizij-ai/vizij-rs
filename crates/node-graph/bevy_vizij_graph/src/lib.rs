@@ -18,19 +18,34 @@ use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, NodeId, PortValue}
 /// Update this resource with a new [`GraphSpec`] when you want to switch the
 /// graph being evaluated. For best runtime performance, ensure the spec is
 /// preprocessed with [`GraphSpec::with_cache`].
+///
+/// When swapping graphs, reset the runtime state in [`GraphRuntimeResource`]
+/// to avoid leaking cached node state across specs.
 #[derive(Resource, Default, Clone)]
 pub struct GraphResource(pub GraphSpec);
 
 /// Snapshot of per-node output ports after evaluation.
 ///
-/// This resource is refreshed every frame by [`system_eval`] and can be read
-/// by gameplay systems or debugging tools.
+/// This resource is refreshed every frame by [`system_eval`] and can be read by
+/// gameplay systems or debugging tools. The outer key is the node id, and the
+/// inner map is keyed by output port name.
 #[derive(Resource, Default, Clone)]
 pub struct GraphOutputs(pub HashMap<NodeId, HashMap<String, PortValue>>);
 
 /// Persistent runtime so stateful nodes (springs, dampers, etc.) can integrate across frames.
 ///
-/// Reset or replace this resource if you need to clear accumulated state.
+/// Reset or replace this resource if you need to clear accumulated state or after
+/// swapping [`GraphResource`] to a different spec.
+///
+/// # Examples
+/// ```no_run
+/// use bevy::prelude::*;
+/// use bevy_vizij_graph::GraphRuntimeResource;
+///
+/// fn reset_runtime(mut runtime: ResMut<GraphRuntimeResource>) {
+///     runtime.0.reset_for_spec();
+/// }
+/// ```
 #[derive(Resource, Default)]
 pub struct GraphRuntimeResource(pub GraphRuntime);
 
@@ -73,6 +88,23 @@ fn value_to_f32(v: &Value) -> f32 {
 ///
 /// Known keys map onto [`vizij_graph_core::types::NodeParams`] fields. Most
 /// numeric fields are coerced to `f32` using [`value_to_f32`].
+///
+/// Unknown keys are ignored.
+///
+/// # Examples
+/// ```no_run
+/// use bevy::prelude::*;
+/// use bevy_vizij_graph::SetNodeParam;
+/// use vizij_api_core::Value;
+///
+/// fn nudge_param(mut writer: EventWriter<SetNodeParam>) {
+///     writer.send(SetNodeParam {
+///         node: "gain".to_string(),
+///         key: "value".into(),
+///         value: Value::Float(1.25),
+///     });
+/// }
+/// ```
 #[derive(Event)]
 pub struct SetNodeParam {
     /// Node identifier to update.
@@ -86,6 +118,7 @@ pub struct SetNodeParam {
 /// Monotonic time state forwarded into the runtime.
 ///
 /// The `dt` value is clamped to `>= 0.0` and forced to `0.0` if non-finite.
+/// Override this resource before evaluation if you need fixed-step timing.
 #[derive(Resource, Default, Clone)]
 pub struct GraphTime {
     /// Accumulated time in seconds.
@@ -95,6 +128,9 @@ pub struct GraphTime {
 }
 
 /// Registers graph evaluation systems and resources.
+///
+/// When a `bevy_vizij_api::WriterRegistry` resource is present, the plugin will apply
+/// `WriteBatch` outputs to the Bevy world. Otherwise it only updates [`GraphOutputs`].
 ///
 /// # Examples
 /// ```no_run
