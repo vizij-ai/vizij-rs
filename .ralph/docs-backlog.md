@@ -21,7 +21,7 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
-- Next action: Continue animation stack rustdoc audit for remaining public APIs (core/Bevy/wasm); add minimal examples where fixtures are stable and cover remaining helpers in Bevy/wasm wrappers. Iter-05 added more Bevy/wasm/core notes; keep scanning for remaining gaps.
+- Next action: Continue animation stack rustdoc audit for remaining public APIs (core/Bevy/wasm); add minimal examples where fixtures are stable and cover remaining helpers in Bevy/wasm wrappers. Iter-06 added outputs/inputs/sampling examples and Bevy system panic notes; keep scanning for remaining gaps.
 - Status: In progress
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
@@ -37,7 +37,7 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs are less useful without concrete usage examples; added examples across animation core engine, baking helpers, and interpolation utilities.
-- Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures.
+- Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures. Animation sampling now has a runnable derivative example; add remaining interpolation helper examples once numeric expectations are stable.
 - Status: In progress
 
 ### R-004 — Standardize module-level docs and `//!` overviews
@@ -69,7 +69,7 @@
 - Impact: Med
 - Effort: M
 - Evidence: Examples can drift without doc tests
-- Next action: Convert key examples into `rustdoc` tests or verify manually
+- Next action: Convert key examples into `rustdoc` tests or verify manually; iter-06 ran `cargo test -p vizij-animation-core --doc`.
 - Status: In progress
 
 ### R-008 — Ensure docstrings mention JSON/ABI versioning contracts

@@ -1007,6 +1007,8 @@ impl Engine {
     }
 
     /// List all instances for a given player.
+    ///
+    /// Returns an empty vector when the player id is unknown.
     pub fn list_instances(&self, player: PlayerId) -> Vec<InstanceInfo> {
         if let Some(p) = self.players.iter().find(|pp| pp.id == player) {
             p.instances

@@ -25,3 +25,4 @@ Do NOT implement these in the current loop.
 
 - 2026-01-19: Animation core interpolation helpers still lack doc examples beyond lerp_f32; consider adding doctests for bezier/linear helpers once stable numeric expectations are set.
 - 2026-01-19: Bevy animation system fallbacks apply non-typed writes only to Transform properties; consider documenting or extending this for other component types if needed.
+- 2026-01-19: `vizij-animation-core` sampling uses a fixed derivative epsilon outside of `BakingConfig` for runtime sampling; consider exposing this in runtime config if host apps need tuning.

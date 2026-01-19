@@ -31,6 +31,18 @@ pub struct Inputs {
 /// Player-scoped commands for playback control.
 ///
 /// Commands are applied in order before stepping the engine.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::{Inputs, LoopMode, PlayerCommand, PlayerId};
+///
+/// let mut inputs = Inputs::default();
+/// inputs.player_cmds.push(PlayerCommand::SetLoopMode {
+///     player: PlayerId(7),
+///     mode: LoopMode::PingPong,
+/// });
+/// assert_eq!(inputs.player_cmds.len(), 1);
+/// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PlayerCommand {
     /// Resume playback (sets speed to 1.0 if currently paused).

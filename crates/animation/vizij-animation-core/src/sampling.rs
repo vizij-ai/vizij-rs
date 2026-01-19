@@ -227,6 +227,26 @@ pub fn sample_track(track: &Track, u: f32) -> Value {
 ///
 /// TODO: expose derivative configuration (epsilon, strategy) via `BakingConfig` or a sampling
 /// struct so hosts can balance accuracy and performance.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::data::{Keypoint, Track};
+/// use vizij_animation_core::sampling::sample_track_with_derivative;
+/// use vizij_api_core::Value;
+///
+/// let track = Track {
+///     id: "t".into(),
+///     name: "tx".into(),
+///     animatable_id: "Root/Transform.translation".into(),
+///     points: vec![
+///         Keypoint { id: "a".into(), stamp: 0.0, value: Value::Vec3([0.0, 0.0, 0.0]), transitions: None },
+///         Keypoint { id: "b".into(), stamp: 1.0, value: Value::Vec3([1.0, 0.0, 0.0]), transitions: None },
+///     ],
+///     settings: None,
+/// };
+/// let (_value, derivative) = sample_track_with_derivative(&track, 0.5, 1.0);
+/// assert!(derivative.is_some());
+/// ```
 pub fn sample_track_with_derivative(
     track: &Track,
     u: f32,

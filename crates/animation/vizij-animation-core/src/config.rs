@@ -5,6 +5,15 @@ use serde::{Deserialize, Serialize};
 
 /// Configuration for engine sizing and feature flags.
 /// Keep this minimal; extend compatibly when new tuning knobs land.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::Config;
+///
+/// let mut cfg = Config::default();
+/// cfg.max_events_per_tick = 256;
+/// assert_eq!(cfg.max_events_per_tick, 256);
+/// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
     /// Initial capacity hints for scratch/sample buffers.

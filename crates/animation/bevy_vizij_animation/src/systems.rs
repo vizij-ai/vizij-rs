@@ -130,6 +130,9 @@ pub fn prebind_core_system(
 /// Fixed timestep compute: call core update with fixed dt and stash changes in `PendingOutputs`.
 ///
 /// Inputs are left empty for v1; production apps should derive `Inputs` from gameplay state.
+///
+/// # Panics
+/// Panics if the `VizijEngine`, `FixedDt`, or `PendingOutputs` resources are missing.
 pub fn fixed_update_core_system(
     mut eng: ResMut<VizijEngine>,
     dt: Res<FixedDt>,
@@ -146,6 +149,9 @@ pub fn fixed_update_core_system(
 ///
 /// Writes whose keys do not parse as `TypedPath` are applied via the `BindingIndex`
 /// fallback (Transform-only). When no registry is present, typed writes also fall back.
+///
+/// # Panics
+/// Panics if the `BindingIndex` resource is missing. Other resources are optional.
 pub fn apply_outputs_system(world: &mut World) {
     // Access required resources into locals to avoid borrow conflicts
     let index_map = if let Some(idx) = world.get_resource::<BindingIndex>() {

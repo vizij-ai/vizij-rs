@@ -87,8 +87,10 @@ pub enum CoreEvent {
 /// Outputs returned by [`Engine::update_values`](crate::engine::Engine::update_values).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Outputs {
+    /// Sampled changes for this tick, keyed by resolved handle or canonical path.
     #[serde(default)]
     pub changes: Vec<Change>,
+    /// Semantic events emitted during this tick.
     #[serde(default)]
     pub events: Vec<CoreEvent>,
 }
@@ -96,8 +98,10 @@ pub struct Outputs {
 /// Outputs returned when derivatives are requested.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct OutputsWithDerivatives {
+    /// Sampled changes with derivative metadata for this tick.
     #[serde(default)]
     pub changes: Vec<ChangeWithDerivative>,
+    /// Semantic events emitted during this tick.
     #[serde(default)]
     pub events: Vec<CoreEvent>,
 }
