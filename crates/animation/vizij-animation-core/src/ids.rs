@@ -25,11 +25,13 @@ pub struct IdAllocator {
 }
 
 impl IdAllocator {
+    /// Create a new allocator with counters reset to zero.
     pub fn new() -> Self {
         Self::default()
     }
 
     #[inline]
+    /// Allocate the next animation id.
     pub fn alloc_anim(&mut self) -> AnimId {
         let id = AnimId(self.next_anim);
         self.next_anim = self.next_anim.wrapping_add(1);
@@ -37,6 +39,7 @@ impl IdAllocator {
     }
 
     #[inline]
+    /// Allocate the next player id.
     pub fn alloc_player(&mut self) -> PlayerId {
         let id = PlayerId(self.next_player);
         self.next_player = self.next_player.wrapping_add(1);
@@ -44,6 +47,7 @@ impl IdAllocator {
     }
 
     #[inline]
+    /// Allocate the next instance id.
     pub fn alloc_inst(&mut self) -> InstId {
         let id = InstId(self.next_inst);
         self.next_inst = self.next_inst.wrapping_add(1);
@@ -51,6 +55,7 @@ impl IdAllocator {
     }
 
     #[inline]
+    /// Reset all counters back to zero.
     pub fn reset(&mut self) {
         *self = Self::default();
     }

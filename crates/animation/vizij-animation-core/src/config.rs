@@ -28,6 +28,7 @@ pub struct Features {
 }
 
 impl Default for Config {
+    /// Default configuration tuned for typical real-time playback.
     fn default() -> Self {
         Self {
             scratch_samples: 1024,

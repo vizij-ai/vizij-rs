@@ -11,30 +11,37 @@ pub type TargetHandle = String;
 
 use crate::ids::AnimId;
 
-/// Channel key: (Animation, Track Index).
+/// Channel key: `(animation, track_index)`.
+///
 /// This uniquely identifies a channel within the entire engine.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct ChannelKey {
+    /// Animation identifier for the track owner.
     pub anim: AnimId,
+    /// Track index within the owning animation.
     pub track_idx: u32,
 }
 
 /// Trait for resolving canonical target paths to opaque handles.
 /// Adapters (Bevy/WASM) implement this and pass into `Engine::prebind`.
 pub trait TargetResolver {
+    /// Resolve a canonical target path into an opaque handle for host application use.
     fn resolve(&mut self, path: &str) -> Option<TargetHandle>;
 }
 
 /// One row in the global binding table.
 #[derive(Clone, Debug)]
 pub struct BindingRow {
+    /// Channel identifier (animation + track index).
     pub channel: ChannelKey,
+    /// Resolved host handle for the channel.
     pub handle: TargetHandle,
 }
 
 /// Global binding table shared across players/instances.
 #[derive(Default, Debug)]
 pub struct BindingTable {
+    /// All bound channel rows in insertion order.
     pub rows: Vec<BindingRow>,
 }
 
@@ -62,6 +69,7 @@ impl BindingTable {
 /// Per-instance view over a set of bound channels.
 #[derive(Clone, Debug, Default)]
 pub struct BindingSet {
+    /// Channels bound for this instance.
     pub channels: Vec<ChannelKey>,
 }
 

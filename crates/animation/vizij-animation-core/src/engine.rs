@@ -203,30 +203,45 @@ fn ping_pong(t: f32, span: f32) -> f32 {
 /// Player playback state derived from speed/time.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub enum PlaybackState {
+    /// Playback speed is non-zero and time is advancing.
     Playing,
+    /// Playback speed is zero while the player time is not at the window start.
     Paused,
+    /// Playback speed is zero and time equals the window start.
     Stopped,
 }
 
 /// Lightweight animation metadata for diagnostics and UI.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct AnimationInfo {
+    /// Animation identifier.
     pub id: u32,
+    /// Optional authoring name.
     pub name: Option<String>,
+    /// Duration in milliseconds.
     pub duration_ms: u32,
+    /// Number of tracks in the clip.
     pub track_count: usize,
 }
 
 /// Public player metadata including computed length.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct PlayerInfo {
+    /// Player identifier.
     pub id: u32,
+    /// Display name.
     pub name: String,
+    /// Current playback state.
     pub state: PlaybackState,
+    /// Current display/playhead time in seconds.
     pub time: f32,
+    /// Playback speed multiplier.
     pub speed: f32,
+    /// Looping behavior used for display.
     pub loop_mode: LoopMode,
+    /// Start of the playback window in seconds.
     pub start_time: f32,
+    /// Optional end of the playback window in seconds.
     pub end_time: Option<f32>,
     /// Full player length (seconds): max over instances of start_offset + (anim_duration * |time_scale|)
     pub length: f32,
@@ -235,8 +250,11 @@ pub struct PlayerInfo {
 /// Public instance metadata for a given player.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct InstanceInfo {
+    /// Instance identifier.
     pub id: u32,
+    /// Animation identifier.
     pub animation: u32,
+    /// Configuration snapshot applied to the instance.
     pub cfg: InstanceCfg,
 }
 
@@ -911,7 +929,7 @@ impl Engine {
 
 #[cfg(test)]
 impl Engine {
-    /// it should expose instance channel keys to tests to validate BindingSet construction
+    /// Test helper to inspect instance channel keys.
     pub fn __test_get_instance_channels(&self, inst: InstId) -> Option<Vec<ChannelKey>> {
         self.instances
             .iter()

@@ -405,6 +405,7 @@ pub struct AccumulatorWithDerivatives {
 }
 
 impl AccumulatorWithDerivatives {
+    /// Create a new empty accumulator.
     pub fn new() -> Self {
         Self::default()
     }

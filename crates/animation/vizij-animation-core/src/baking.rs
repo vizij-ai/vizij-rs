@@ -35,7 +35,7 @@ impl Default for BakingConfig {
 /// Baked values for a single track.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakedTrack {
-    /// Canonical target path (animatable id)
+    /// Canonical target path (animatable id).
     pub target_path: String,
     /// Sampled values at each frame.
     pub values: Vec<Value>,
@@ -44,27 +44,39 @@ pub struct BakedTrack {
 /// Baked derivatives for a single track.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakedDerivativeTrack {
+    /// Canonical target path (animatable id).
     pub target_path: String,
+    /// Sampled derivative values at each frame (None for non-numeric tracks).
     pub values: Vec<Option<Value>>,
 }
 
 /// Baked animation values across all tracks.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakedAnimationData {
+    /// Animation identifier for the source clip.
     pub anim: AnimId,
+    /// Sampling rate used for baking (Hz).
     pub frame_rate: f32,
+    /// Start time in seconds.
     pub start_time: f32,
+    /// End time in seconds.
     pub end_time: f32,
+    /// Baked per-track samples.
     pub tracks: Vec<BakedTrack>,
 }
 
 /// Baked animation derivatives across all tracks.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakedDerivativeAnimationData {
+    /// Animation identifier for the source clip.
     pub anim: AnimId,
+    /// Sampling rate used for baking (Hz).
     pub frame_rate: f32,
+    /// Start time in seconds.
     pub start_time: f32,
+    /// End time in seconds.
     pub end_time: f32,
+    /// Baked per-track derivative samples.
     pub tracks: Vec<BakedDerivativeTrack>,
 }
 

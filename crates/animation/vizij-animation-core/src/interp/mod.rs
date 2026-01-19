@@ -10,6 +10,7 @@ pub mod functions;
 pub struct InterpRegistry;
 
 impl InterpRegistry {
+    /// Construct a new interpolation registry.
     pub fn new() -> Self {
         Self
     }

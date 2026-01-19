@@ -6,15 +6,21 @@
 
 use crate::config::Config;
 
+/// Scratch buffer sizing hints used by the engine during sampling.
 #[derive(Debug, Default)]
 pub struct Scratch {
+    /// Sample scratch capacity hint.
     pub cap_samples: usize,
+    /// Scalar value scratch capacity hint.
     pub cap_values_scalar: usize,
+    /// Vector/array value scratch capacity hint.
     pub cap_values_vec: usize,
+    /// Quaternion value scratch capacity hint.
     pub cap_values_quat: usize,
 }
 
 impl Scratch {
+    /// Create scratch buffers sized from the engine config.
     pub fn new(cfg: &Config) -> Self {
         Self {
             cap_samples: cfg.scratch_samples,
@@ -25,6 +31,7 @@ impl Scratch {
     }
 
     #[inline]
+    /// Reset per-frame state (currently a no-op placeholder).
     pub fn begin_frame(&mut self) {
         // Later: clear transient vectors, reset cursors; currently a no-op.
     }

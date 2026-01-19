@@ -1,17 +1,25 @@
+//! Stored-animation JSON parsing helpers.
+//!
+//! This module defines the serde-only schema that matches the on-disk JSON assets and
+//! converts them into the canonical [`AnimationData`](crate::data::AnimationData).
+
 use serde::Deserialize;
 
 use crate::data::{AnimationData, Keypoint, Track, TrackSettings, Transitions};
 use crate::ids::AnimId;
 use vizij_api_core::Value;
 
-/// Public API: parse StoredAnimation-style JSON (see types/animation.ts and fixtures/animations/vector-pose-combo.json)
-/// into vizij-animation-core's canonical AnimationData (data.rs).
+/// Parse StoredAnimation-style JSON into the canonical [`AnimationData`].
 ///
 /// Notes:
-/// - Duration is provided in milliseconds in the JSON and kept as milliseconds (duration_ms).
-/// - Keypoint stamps are normalized [0,1] and kept normalized.
-/// - Per-keypoint transitions { in?, out? } are preserved; defaults are applied at sampling time.
-/// - Values are converted from untagged RawValue shapes into core Value enum.
+/// - Duration is provided in milliseconds and kept as milliseconds (`duration_ms`).
+/// - Keypoint stamps remain normalized in the `[0,1]` range.
+/// - Per-keypoint `in/out` transitions are preserved; defaults are applied at sampling time.
+/// - Untagged JSON value shapes are mapped into the core [`Value`] enum.
+///
+/// # Errors
+/// Returns an error if the JSON fails to deserialize or if basic invariants (duration > 0,
+/// monotonic stamps in `[0,1]`) are violated.
 pub fn parse_stored_animation_json(s: &str) -> Result<AnimationData, String> {
     let sa: StoredAnimation = serde_json::from_str(s).map_err(|e| format!("parse error: {e}"))?;
 

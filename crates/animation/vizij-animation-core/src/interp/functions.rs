@@ -18,11 +18,13 @@ pub fn lerp_f32(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
+/// Linear interpolation of 2D vectors.
 #[inline]
 pub fn lerp_vec2(a: [f32; 2], b: [f32; 2], t: f32) -> [f32; 2] {
     [lerp_f32(a[0], b[0], t), lerp_f32(a[1], b[1], t)]
 }
 
+/// Linear interpolation of 3D vectors.
 #[inline]
 pub fn lerp_vec3(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
     [
@@ -32,6 +34,7 @@ pub fn lerp_vec3(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
     ]
 }
 
+/// Linear interpolation of 4D vectors.
 #[inline]
 pub fn lerp_vec4(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     [
@@ -226,7 +229,7 @@ pub fn linear_derivative(a: &Value, b: &Value, t: f32, dt_du: f32) -> Value {
     }
 }
 
-/// Cubic Bezier basis function
+/// Cubic Bezier basis function.
 #[inline]
 fn cubic_bezier(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
     let u = 1.0 - t;

@@ -45,8 +45,11 @@ pub enum PlayerCommand {
 /// Looping behavior applied when mapping player time to clip time.
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum LoopMode {
+    /// Clamp playback to the window `[start_time, end_time?]`.
     Once,
+    /// Wrap player time across the full clip duration.
     Loop,
+    /// Reflect player time across the full clip duration.
     PingPong,
 }
 
@@ -58,11 +61,15 @@ pub struct InstanceUpdate {
     /// Instance id to update.
     pub inst: InstId,
     #[serde(default)]
+    /// Optional weight override.
     pub weight: Option<f32>,
     #[serde(default)]
+    /// Optional time scale override (negative reverses playback).
     pub time_scale: Option<f32>,
     #[serde(default)]
+    /// Optional start offset override (seconds in player time).
     pub start_offset: Option<f32>,
     #[serde(default)]
+    /// Optional enabled flag override.
     pub enabled: Option<bool>,
 }

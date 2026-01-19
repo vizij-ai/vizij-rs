@@ -1,6 +1,8 @@
 #![allow(dead_code)]
-//! Canonical animation data model (StoredAnimation).
-//! ValueKind/Value are defined in `value.rs`.
+//! Canonical animation data model for StoredAnimation assets.
+//!
+//! `Value` and `ValueKind` live in `vizij_api_core` and are re-exported by
+//! `crate::value` for convenience.
 
 use serde::{Deserialize, Serialize};
 
@@ -10,7 +12,9 @@ use vizij_api_core::Value;
 /// 2D vector used for transition control points (normalized 0..1 domain).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Vec2 {
+    /// Normalized x coordinate (0..1).
     pub x: f32,
+    /// Normalized y coordinate (0..1).
     pub y: f32,
 }
 
@@ -20,39 +24,49 @@ pub struct Vec2 {
 pub struct Transitions {
     #[serde(default)]
     #[serde(rename = "in")]
+    /// Optional incoming (arrival) control point.
     pub r#in: Option<Vec2>,
     #[serde(default)]
     #[serde(rename = "out")]
+    /// Optional outgoing (departure) control point.
     pub r#out: Option<Vec2>,
 }
 
 /// A single keypoint in normalized time [0..1].
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Keypoint {
+    /// Stable keypoint identifier from the authoring tool.
     pub id: String,
     /// Normalized time in [0,1] within the clip duration.
     pub stamp: f32,
+    /// Canonical sampled value at this stamp.
     pub value: Value,
     #[serde(default)]
+    /// Optional per-key transitions for cubic-bezier timing.
     pub transitions: Option<Transitions>,
 }
 
 /// Track settings (optional color).
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct TrackSettings {
+    /// Optional UI hint for track color.
     pub color: Option<String>,
 }
 
 /// A track targeting a canonical output path with a series of keypoints.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Track {
+    /// Stable track identifier from the authoring tool.
     pub id: String,
+    /// Display name (may be duplicated across tracks).
     pub name: String,
     /// Canonical target path (e.g., "node/Transform.translation")
     #[serde(rename = "animatableId")]
     pub animatable_id: String,
+    /// Ordered keypoints for this track.
     pub points: Vec<Keypoint>,
     #[serde(default)]
+    /// Optional per-track settings (UI hints).
     pub settings: Option<TrackSettings>,
 }
 
@@ -62,7 +76,9 @@ pub struct AnimationData {
     /// Optional internal id assigned when loaded into the engine.
     #[serde(skip)]
     pub id: Option<AnimId>,
+    /// Display name of the animation clip.
     pub name: String,
+    /// Track list targeting canonical output paths.
     pub tracks: Vec<Track>,
     /// Arbitrary groupings (unused by core logic but preserved).
     #[serde(default)]
@@ -73,7 +89,11 @@ pub struct AnimationData {
 }
 
 impl AnimationData {
-    /// Validate basic invariants (monotonic stamps in [0,1], non-zero duration).
+    /// Validate basic invariants (monotonic stamps in `[0,1]`, non-zero duration).
+    ///
+    /// # Errors
+    /// Returns an error string when any track contains non-finite or out-of-range stamps,
+    /// when stamps are not non-decreasing, or when duration is zero.
     pub fn validate_basic(&self) -> Result<(), String> {
         if self.duration_ms == 0 {
             return Err("AnimationData.duration must be > 0 ms".into());

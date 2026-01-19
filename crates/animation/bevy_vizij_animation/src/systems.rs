@@ -8,7 +8,7 @@ use crate::resources::{BindingIndex, FixedDt, PendingOutputs, TargetProp};
 use crate::VizijEngine;
 use vizij_animation_core::{inputs::Inputs, outputs::Change, TargetResolver};
 
-/// Internal: build a canonical path for an entity from its Name and the requested transform prop.
+/// Build a canonical handle for an entity name + transform property.
 fn make_handle(name: &str, prop: TargetProp) -> String {
     match prop {
         TargetProp::Translation => format!("{name}/Transform.translation"),
@@ -17,7 +17,7 @@ fn make_handle(name: &str, prop: TargetProp) -> String {
     }
 }
 
-/// Walks descendants under each `VizijTargetRoot` and populates the `BindingIndex` resource
+/// Walk descendants under each `VizijTargetRoot` and populate the `BindingIndex` resource
 /// mapping canonical handles to (Entity, TargetProp).
 ///
 /// Runs in `Update` to keep bindings fresh; you can add change detection in the host app
@@ -69,7 +69,7 @@ pub fn build_binding_index_system(
     index.map = map;
 }
 
-/// Bridges the core prebind call into the ECS: resolves canonical track target paths
+/// Bridge the core prebind call into the ECS: resolve canonical track target paths
 /// to string handles recorded in `BindingIndex`.
 ///
 /// The handles are the canonical strings themselves, which keeps the Bevy adapter

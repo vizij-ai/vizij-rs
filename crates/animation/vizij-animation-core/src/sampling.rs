@@ -144,7 +144,9 @@ fn find_segment(points: &[Keypoint], u: f32) -> (usize, usize, f32) {
 /// Sampled value plus derivative (when requested) for a single track.
 #[derive(Clone, Debug)]
 pub struct SampledValue {
+    /// Sampled value at the requested time.
     pub value: Value,
+    /// Estimated derivative at the requested time.
     pub derivative: Value,
 }
 
@@ -166,7 +168,7 @@ fn zero_like(value: &Value) -> Value {
     }
 }
 
-/// Sample a single track at normalized time u ∈ [0,1].
+/// Sample a single track at normalized time `u` in `[0,1]`.
 pub fn sample_track(track: &Track, u: f32) -> Value {
     let points = &track.points;
     let n = points.len();

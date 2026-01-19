@@ -39,28 +39,29 @@ pub struct ChangeWithDerivative {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum CoreEvent {
+    /// Player entered a playing state.
     PlaybackStarted {
         player: PlayerId,
         animation: Option<String>,
     },
-    PlaybackPaused {
-        player: PlayerId,
-    },
-    PlaybackStopped {
-        player: PlayerId,
-    },
-    PlaybackResumed {
-        player: PlayerId,
-    },
+    /// Player entered a paused state.
+    PlaybackPaused { player: PlayerId },
+    /// Player entered a stopped state and rewound.
+    PlaybackStopped { player: PlayerId },
+    /// Player resumed after being paused.
+    PlaybackResumed { player: PlayerId },
+    /// Player reached the end of its window or clip.
     PlaybackEnded {
         player: PlayerId,
         animation_time: f32,
     },
+    /// Player time changed via explicit seek.
     TimeChanged {
         player: PlayerId,
         old_time: f32,
         new_time: f32,
     },
+    /// A keypoint was crossed while sampling.
     KeypointReached {
         player: PlayerId,
         track_path: String,
@@ -68,14 +69,14 @@ pub enum CoreEvent {
         value: Value,
         animation_time: f32,
     },
+    /// Runtime instrumentation emitted a warning (e.g., sample budget).
     PerformanceWarning {
         metric: String,
         value: f32,
         threshold: f32,
     },
-    Error {
-        message: String,
-    },
+    /// Non-fatal runtime error or warning surfaced as an event.
+    Error { message: String },
     /// Catch-all for forward-compatible payloads.
     Custom {
         kind: String,
@@ -103,22 +104,26 @@ pub struct OutputsWithDerivatives {
 
 impl Outputs {
     #[inline]
+    /// Clear all accumulated changes and events.
     pub fn clear(&mut self) {
         self.changes.clear();
         self.events.clear();
     }
 
     #[inline]
+    /// Append a sampled change.
     pub fn push_change(&mut self, change: Change) {
         self.changes.push(change);
     }
 
     #[inline]
+    /// Append a semantic event.
     pub fn push_event(&mut self, event: CoreEvent) {
         self.events.push(event);
     }
 
     #[inline]
+    /// Return true when both changes and events are empty.
     pub fn is_empty(&self) -> bool {
         self.changes.is_empty() && self.events.is_empty()
     }
@@ -140,22 +145,26 @@ impl Outputs {
 
 impl OutputsWithDerivatives {
     #[inline]
+    /// Clear all accumulated changes and events.
     pub fn clear(&mut self) {
         self.changes.clear();
         self.events.clear();
     }
 
     #[inline]
+    /// Append a sampled change with derivative.
     pub fn push_change(&mut self, change: ChangeWithDerivative) {
         self.changes.push(change);
     }
 
     #[inline]
+    /// Append a semantic event.
     pub fn push_event(&mut self, event: CoreEvent) {
         self.events.push(event);
     }
 
     #[inline]
+    /// Return true when both changes and events are empty.
     pub fn is_empty(&self) -> bool {
         self.changes.is_empty() && self.events.is_empty()
     }
