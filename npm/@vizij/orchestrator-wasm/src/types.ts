@@ -48,7 +48,7 @@ export type {
 /**
  * Typed metadata describing a Value's shape.
  *
- * Includes a few common helpers while staying permissive for legacy/forward-compatible shapes.
+ * Includes common helpers while staying permissive for legacy/forward-compatible shapes.
  */
 /** Shape primitive payload accepted by the orchestrator. */
 export type ShapePrimitive = { id: string } | { id: string; sizes?: number[] } | { id: string; params?: any };
@@ -58,14 +58,12 @@ export type ShapeField = { [k: string]: ShapeJSON };
 export type ShapeJSON = ShapePrimitive | { record?: ShapeField } | { array?: ShapeJSON } | any;
 
 /** Write operation emitted by controllers during a step. */
-/** Write operation emitted by controllers during a step. */
 export interface WriteOpJSON {
   path: string;
   value: ValueJSON;
   shape?: ShapeJSON;
 }
 
-/** Conflict log emitted when a write overwrote an existing entry. */
 /** Conflict log emitted when a write overwrote an existing entry. */
 export interface ConflictLog {
   path: string;
@@ -80,17 +78,21 @@ export interface ConflictLog {
 }
 
 /** The orchestrator frame returned after each step. */
-/** The orchestrator frame returned after each step. */
 export interface OrchestratorFrame {
+  /** Monotonic step counter (epoch). */
   epoch: number;
+  /** Delta time in seconds passed to the step call. */
   dt: number;
+  /** Merged writes from all controllers this step. */
   merged_writes: WriteOpJSON[];
+  /** Conflicts captured while merging controller writes. */
   conflicts: ConflictLog[];
+  /** Per-controller timings in milliseconds. */
   timings_ms: { [k: string]: number };
-  events: any[]; // controller-specific event payloads
+  /** Controller-specific event payloads (opaque). */
+  events: any[];
 }
 
-/** High-level typed interface for the JS wrapper (for consumers who prefer TS types). */
 /** High-level typed interface for the JS wrapper (for consumers who prefer TS types). */
 export interface OrchestratorAPI {
   registerGraph(cfg: GraphRegistrationInput): string;
@@ -141,20 +143,27 @@ export interface GraphSpec {
 
 /** Config used to register a node-graph controller. */
 export interface GraphRegistrationConfig {
+  /** Optional controller id (auto-generated when omitted). */
   id?: string;
+  /** Graph spec JSON (object form). */
   spec: GraphSpec | any;
+  /** Optional input/output subscription hints. */
   subs?: GraphSubscriptions;
 }
 
 /** Graph replacement config; requires an id. */
 export interface GraphReplaceConfig extends GraphRegistrationConfig {
+  /** Existing controller id to replace. */
   id: string;
 }
 
 /** Config used to register multiple graphs as a merged controller. */
 export interface MergedGraphRegistrationConfig {
+  /** Optional controller id (auto-generated when omitted). */
   id?: string;
+  /** Graphs to merge into a single controller. */
   graphs: GraphRegistrationConfig[];
+  /** Optional conflict resolution strategy. */
   strategy?: MergeStrategyOptions;
 }
 
@@ -164,16 +173,17 @@ export interface MergedGraphRegistrationConfig {
  * These mirror the fields on the Rust GraphSubscriptions type.
  */
 export interface GraphSubscriptions {
+  /** Inputs to read from the blackboard each step. */
   inputs?: string[];
+  /** Outputs to write back to the blackboard each step. */
   outputs?: string[];
+  /** Echo graph writes back to the blackboard even if not subscribed. */
   mirrorWrites?: boolean;
 }
 
 /** Graph registration inputs accepted by the JS wrapper. */
-/** Graph registration inputs accepted by the JS wrapper. */
 export type GraphRegistrationInput = string | GraphRegistrationConfig;
 
-/** Conflict strategies supported by graph merge options. */
 /** Conflict strategies supported by graph merge options. */
 export type MergeConflictStrategy =
   | "error"
@@ -194,9 +204,10 @@ export type MergeConflictStrategy =
   | "weights";
 
 /** Merge strategy options for graph registration. */
-/** Merge strategy options for graph registration. */
 export interface MergeStrategyOptions {
+  /** How to resolve output name conflicts. */
   outputs?: MergeConflictStrategy;
+  /** How to resolve conflicts within intermediate write paths. */
   intermediate?: MergeConflictStrategy;
 }
 
@@ -206,22 +217,32 @@ export interface MergeStrategyOptions {
  * Provide `setup` to seed the animation, player, and instance defaults.
  */
 export interface AnimationRegistrationConfig {
+  /** Optional controller id (auto-generated when omitted). */
   id?: string;
+  /** Optional animation setup data used at registration. */
   setup?: AnimationSetup;
 }
 
 /** Animation setup data passed to a controller at registration. */
 export interface AnimationSetup {
+  /** Animation payload consumed by the animation controller. */
   animation?: any;
   player?: {
+    /** Friendly label for the player. */
     name?: string;
+    /** Loop mode for the player (default set by Rust). */
     loop_mode?: "once" | "loop" | "pingpong";
+    /** Playback speed multiplier. */
     speed?: number;
   };
   instance?: {
+    /** Blend weight for the instance. */
     weight?: number;
+    /** Time scale multiplier for the instance. */
     time_scale?: number;
+    /** Offset into the animation timeline, in seconds. */
     start_offset?: number;
+    /** Whether the instance starts enabled. */
     enabled?: boolean;
   };
 }
