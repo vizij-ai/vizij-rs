@@ -62,3 +62,5 @@ Do NOT implement these in the current loop.
 
 - 2026-01-19: Animation config docs still mention feature flags; consider adding actual flags or removing when features land.
 - 2026-01-19: JS/TS docs in npm packages are uneven; consider adding doc examples (JSDoc @example) for wrapper entry points once API stabilizes.
+
+- 2026-01-19: node-graph-wasm npm tests fail without local node_modules; pnpm test reports "tsc: Permission denied" in this sandbox environment.

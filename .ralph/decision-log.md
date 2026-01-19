@@ -79,3 +79,5 @@
 
 - 2026-01-19: Iter-07 scope: docstring examples for remaining public enums in vizij-api-core, vizij-animation-core, vizij-graph-core, plus clarified animation config feature flags. Assumed doc-only edits; ran cargo fmt --all and cargo test -p vizij-api-core --doc. Commit failed: git index lock under /home/chris/Code/Semio/vizij_ws/vizij-rs_workspace/.bare/worktrees/docs-update not writable in sandbox.
 - 2026-01-19: Unable to create commit in repo due to sandboxed git dir outside writable roots (permission denied on index.lock). Created a local commit artifact in /tmp/ralph-git-docs-update instead.
+
+- 2026-01-19: Added JSDoc summaries for node-graph-wasm metadata helpers and sample exports to improve JS autogen docs coverage.

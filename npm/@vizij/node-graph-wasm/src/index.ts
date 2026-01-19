@@ -138,11 +138,10 @@ async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
   return bindingCache.current!;
 }
 
+/** wasm-loader init options for @vizij/node-graph-wasm. */
 export type InitInput = LoaderInitInput;
 
-/**
- * Read the wasm ABI version after init() has completed.
- */
+/** Read the wasm ABI version after init() has completed. */
 export function abi_version(): number {
   if (!bindingCache.current) {
     throw new Error("Call init() from @vizij/node-graph-wasm before reading abi_version().");
@@ -154,9 +153,7 @@ export function abi_version(): number {
 
 let _initPromise: Promise<void> | null = null;
 
-/**
- * Initialize the wasm module once. Must be awaited before constructing Graph.
- */
+/** Initialize the wasm module once. Must be awaited before constructing Graph. */
 export function init(input?: InitInput): Promise<void> {
   if (_initPromise) return _initPromise;
 
@@ -181,6 +178,7 @@ function ensureInited(): void {
 
 // --- Value helpers ---
 
+/** Value payload accepted by Graph input/param helpers. */
 export type Value = ValueInput;
 
 function parseVersion(v: unknown, fallback: bigint = 0n): bigint {
@@ -225,8 +223,9 @@ function mergeDelta(base: EvalResult, delta: EvalResult & { version?: unknown })
 // --- Public API class ---
 
 /**
- * Ergonomic wrapper around wasm WasmGraph.
- * Always await init() once before constructing.
+ * High-level wrapper around the wasm Graph runtime.
+ *
+ * Always call {@link init} once before constructing Graph.
  */
 export class Graph {
   private inner: any;
@@ -545,6 +544,9 @@ export class Graph {
     return target.register_input_paths(paths);
   }
 
+  /**
+   * Allocate slots for registered input indices and (optionally) declare shapes.
+   */
   prepareInputSlots(indices: Uint32Array, declaredShapes?: Array<ShapeJSON | null>): void {
     const target = this.inner as any;
     if (typeof target.prepare_input_slots !== "function") {
@@ -885,9 +887,10 @@ export {
 /**
  * Convenience helper to init() and return a ready Graph instance.
  */
-export async function createGraph(
-  spec?: GraphSpec | string
-): Promise<Graph> {
+/**
+ * Initialize wasm (if needed) and return a ready Graph instance.
+ */
+export async function createGraph(spec?: GraphSpec | string): Promise<Graph> {
   await init();
   const g = new Graph();
   if (spec) g.loadGraph(spec);
@@ -898,9 +901,7 @@ export async function createGraph(
  * Normalize a graph specification (object or JSON string) using the shared
  * Rust-side normalization logic. Helpful for persisting specs or diffing.
  */
-export async function normalizeGraphSpec(
-  spec: GraphSpec | string
-): Promise<GraphSpec> {
+export async function normalizeGraphSpec(spec: GraphSpec | string): Promise<GraphSpec> {
   await init();
   const json = typeof spec === "string" ? spec : JSON.stringify(spec);
   const mod = await loadBindings();
@@ -943,8 +944,8 @@ function describeParam(param: ParamSpec): string {
  * Pretty-print schema documentation for all nodes or a specific node type.
  *
  * @example
- * await logNodeSchemaDocs();                   // logs every node
- * await logNodeSchemaDocs("spring");           // logs only the Spring node (NodeType)
+ * await logNodeSchemaDocs(); // logs every node
+ * await logNodeSchemaDocs("spring"); // logs only the Spring node (NodeType)
  */
 export async function logNodeSchemaDocs(node?: NodeType | string): Promise<void> {
   const registry = await getNodeSchemas();
@@ -1034,11 +1035,13 @@ import {
 } from "./samples.js";
 import { urdfGraphSamples, urdfIkPosition } from "./samples_extra.js";
 
+/** Bundled graph samples (base + URDF extras) keyed by short name. */
 export const graphSamples: Record<string, GraphSpec> = {
   ...baseGraphSamples,
   ...urdfGraphSamples,
 };
 
+/** Individual GraphSpec samples for demos/tests. */
 export {
   oscillatorBasics,
   vectorPlayground,
