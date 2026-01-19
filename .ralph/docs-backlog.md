@@ -21,7 +21,7 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
-- Next action: Continue animation stack rustdoc audit for remaining public APIs (core/Bevy/wasm); add minimal examples where fixtures are stable and cover remaining helpers in Bevy/wasm wrappers. Iter-06 added outputs/inputs/sampling examples and Bevy system panic notes; keep scanning for remaining gaps.
+- Next action: Confirm remaining animation stack public APIs are documented; shift focus to other stacks or add conventions doc.
 - Status: In progress
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
