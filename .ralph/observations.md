@@ -59,3 +59,5 @@ Do NOT implement these in the current loop.
 - 2026-01-19: Orchestrator wasm `set_input` rustdoc previously showed non-canonical `{ kind, value }` JSON; updated example to match Value shorthand to avoid confusion in JS docs.
 - 2026-01-19: Node-graph wasm docs could benefit from a brief note about `eval_all_slots`/`get_outputs_*` flow; consider adding a small JS usage snippet if docs still feel abstract.
 - 2026-01-19: Bevy adapters now have corrected canonical TypedPath examples; ensure future changes keep `/Transform.*` suffixes consistent with TypedPath canonicalization to avoid drift in docs.
+
+- 2026-01-19: Animation config docs still mention feature flags; consider adding actual flags or removing when features land.

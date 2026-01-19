@@ -20,6 +20,15 @@ pub struct Field {
 ///
 /// This mirrors the public API contract and is serialized using `{ "id": "...",
 /// "data": ... }` so tooling can inspect shapes without additional context.
+///
+/// # Examples
+/// ```rust
+/// use vizij_api_core::ShapeId;
+///
+/// let shape = ShapeId::Transform;
+/// let json = serde_json::to_string(&shape).unwrap();
+/// assert!(json.contains(r#""id":"Transform""#));
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "id", content = "data")]
 pub enum ShapeId {

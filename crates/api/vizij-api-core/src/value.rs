@@ -49,6 +49,14 @@ pub enum ValueKind {
 ///
 /// This enum is serialized with `serde` using a `{ "type": "...", "data": ... }`
 /// tag layout and lowercase variant names to preserve stable JSON payloads.
+///
+/// # Examples
+/// ```rust
+/// use vizij_api_core::{Value, ValueKind};
+///
+/// let value = Value::Vec3([0.0, 1.0, 2.0]);
+/// assert_eq!(value.kind(), ValueKind::Vec3);
+/// ```
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "data", rename_all = "lowercase")]
 pub enum Value {

@@ -39,6 +39,18 @@ pub struct ChangeWithDerivative {
 ///
 /// Events are best-effort diagnostics intended for UI or tooling; core playback
 /// does not require them for correctness.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::outputs::CoreEvent;
+/// use vizij_animation_core::PlayerId;
+///
+/// let event = CoreEvent::PlaybackStarted {
+///     player: PlayerId(1),
+///     animation: None,
+/// };
+/// assert!(matches!(event, CoreEvent::PlaybackStarted { .. }));
+/// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum CoreEvent {

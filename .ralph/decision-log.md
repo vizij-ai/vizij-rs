@@ -73,3 +73,7 @@
 
 - 2026-01-19: Iter-05 scope: `crates/api/vizij-api-wasm` and `crates/api/bevy_vizij_api` doc polish. Added wasm init notes to JS examples and tightened WriterRegistry wording. Assumed doc-only edits; ran `cargo fmt --all`. Commit expected to fail due to git index lock outside writable roots.
 - 2026-01-19: Iter-06 scope: Bevy adapters (`bevy_vizij_api`, `bevy_vizij_graph`, `bevy_vizij_animation`) doc polish. Updated canonical TypedPath examples, clarified Transform alias registration, and added small resource examples. Assumed doc-only edits; ran `cargo fmt --all` plus doc tests for `bevy_vizij_api` and `bevy_vizij_graph`. Commit expected to fail due to git index lock outside writable roots.
+
+# Ralph Decision Log
+
+- 2026-01-19: Iter-07 scope: docstring examples for remaining public enums in vizij-api-core, vizij-animation-core, vizij-graph-core, plus clarified animation config feature flags. Assumed doc-only edits; ran cargo fmt --all and cargo test -p vizij-api-core --doc. Commit failed: git index lock under /home/chris/Code/Semio/vizij_ws/vizij-rs_workspace/.bare/worktrees/docs-update not writable in sandbox.

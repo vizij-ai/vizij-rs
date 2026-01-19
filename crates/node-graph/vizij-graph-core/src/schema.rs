@@ -5,6 +5,14 @@ use serde::{Deserialize, Serialize};
 ///
 /// These categories are a UI/schema abstraction; runtime evaluation still uses
 /// `vizij_api_core::Value`.
+///
+/// # Examples
+/// ```rust
+/// use vizij_graph_core::schema::PortType;
+///
+/// let ty = PortType::Vec3;
+/// assert_eq!(serde_json::to_string(&ty).unwrap(), "\"vec3\"");
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PortType {
@@ -27,6 +35,14 @@ pub enum PortType {
 /// Supported parameter value categories for the node registry.
 ///
 /// Parameter categories are used for tooling and JSON schema generation.
+///
+/// # Examples
+/// ```rust
+/// use vizij_graph_core::schema::ParamType;
+///
+/// let ty = ParamType::Float;
+/// assert_eq!(serde_json::to_string(&ty).unwrap(), "\"float\"");
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ParamType {

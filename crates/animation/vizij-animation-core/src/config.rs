@@ -28,11 +28,15 @@ pub struct Config {
     /// Maximum events to retain per tick before backpressure policy applies.
     pub max_events_per_tick: usize,
 
-    /// Feature flags (placeholder; future: simd, parallel).
+    /// Reserved feature flags (currently unused).
+    ///
+    /// Keep this at the default to preserve deterministic behavior until flags land.
     pub features: Features,
 }
 
 /// Feature toggles for experimental runtime behavior.
+///
+/// All flags are currently ignored by the engine.
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub struct Features {
     /// Reserved for future toggles (SIMD, parallel passes, etc.).

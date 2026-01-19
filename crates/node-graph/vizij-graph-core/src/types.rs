@@ -6,6 +6,14 @@ use vizij_api_core::{Shape, TypedPath, Value};
 pub type NodeId = String;
 
 /// Selector segment for projecting structured values.
+///
+/// # Examples
+/// ```rust
+/// use vizij_graph_core::SelectorSegment;
+///
+/// let segment = SelectorSegment::Field("translation".to_string());
+/// assert!(matches!(segment, SelectorSegment::Field(_)));
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum SelectorSegment {
@@ -22,6 +30,14 @@ pub type Selector = Vec<SelectorSegment>;
 ///
 /// These values map to node registry entries and JSON `type` strings. See
 /// [`crate::schema::registry`] for port, parameter, and doc metadata.
+///
+/// # Examples
+/// ```rust
+/// use vizij_graph_core::NodeType;
+///
+/// let kind = NodeType::Add;
+/// assert_eq!(serde_json::to_string(&kind).unwrap(), "\"add\"");
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeType {
@@ -256,6 +272,14 @@ pub struct NodeParams {
 }
 
 /// Round behavior for the `Round` node.
+///
+/// # Examples
+/// ```rust
+/// use vizij_graph_core::RoundMode;
+///
+/// let mode = RoundMode::Ceil;
+/// assert_eq!(serde_json::to_string(&mode).unwrap(), "\"ceil\"");
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum RoundMode {
