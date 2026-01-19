@@ -36,50 +36,82 @@ pub struct ChangeWithDerivative {
 }
 
 /// Discrete semantic signals emitted during stepping.
+///
+/// Events are best-effort diagnostics intended for UI or tooling; core playback
+/// does not require them for correctness.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum CoreEvent {
     /// Player entered a playing state.
     PlaybackStarted {
+        /// Player that started playback.
         player: PlayerId,
+        /// Optional animation display name if known.
         animation: Option<String>,
     },
     /// Player entered a paused state.
-    PlaybackPaused { player: PlayerId },
+    PlaybackPaused {
+        /// Player that paused.
+        player: PlayerId,
+    },
     /// Player entered a stopped state and rewound.
-    PlaybackStopped { player: PlayerId },
+    PlaybackStopped {
+        /// Player that stopped.
+        player: PlayerId,
+    },
     /// Player resumed after being paused.
-    PlaybackResumed { player: PlayerId },
+    PlaybackResumed {
+        /// Player that resumed.
+        player: PlayerId,
+    },
     /// Player reached the end of its window or clip.
     PlaybackEnded {
+        /// Player that ended.
         player: PlayerId,
+        /// Playback time (seconds) when the end was reached.
         animation_time: f32,
     },
     /// Player time changed via explicit seek.
     TimeChanged {
+        /// Player whose time changed.
         player: PlayerId,
+        /// Previous time in seconds.
         old_time: f32,
+        /// New time in seconds.
         new_time: f32,
     },
     /// A keypoint was crossed while sampling.
     KeypointReached {
+        /// Player that crossed the keypoint.
         player: PlayerId,
+        /// Canonical track path for the keypoint.
         track_path: String,
+        /// Index of the keypoint in the track.
         key_index: usize,
+        /// Sampled value at the keypoint.
         value: Value,
+        /// Playback time (seconds) when the keypoint was reached.
         animation_time: f32,
     },
     /// Runtime instrumentation emitted a warning (e.g., sample budget).
     PerformanceWarning {
+        /// Warning metric identifier.
         metric: String,
+        /// Observed value for the metric.
         value: f32,
+        /// Threshold that was exceeded.
         threshold: f32,
     },
     /// Non-fatal runtime error or warning surfaced as an event.
-    Error { message: String },
+    Error {
+        /// Human-readable error message.
+        message: String,
+    },
     /// Catch-all for forward-compatible payloads.
     Custom {
+        /// Event kind identifier.
         kind: String,
+        /// Opaque payload for downstream consumers.
         data: serde_json::Value,
     },
 }
