@@ -22,7 +22,7 @@
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
 - Next action: Audit remaining wasm/helper crates and any non-core crates for missing rustdoc (bevy_vizij_orchestrator once added).
-- Status: In progress (iter-19 refreshed bevy_vizij_graph docs and examples)
+- Status: In progress (iter-20 removed placeholder wording in orchestrator diagnostics and node-graph schema comment)
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
 - Type: Docs
@@ -38,7 +38,7 @@
 - Effort: L
 - Evidence: Autogen docs are less useful without concrete usage examples; added examples across animation core engine, baking helpers, and interpolation utilities.
 - Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures; revisit node-graph eval helpers if public re-exports are added (current examples are `ignore`).
-- Status: In progress (iter-18 added numeric/shape/variadic/value-layout examples in vizij-graph-core)
+- Status: In progress (iter-20 added orchestrator registration/export examples)
 
 ### R-004 — Standardize module-level docs and `//!` overviews
 - Type: Docs

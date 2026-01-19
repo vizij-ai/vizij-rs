@@ -71,6 +71,15 @@ pub struct Orchestrator {
 
 impl Orchestrator {
     /// Create a new orchestrator with an initial schedule.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vizij_orchestrator_core::{Orchestrator, Schedule};
+    ///
+    /// let orchestrator = Orchestrator::new(Schedule::SinglePass);
+    /// assert_eq!(orchestrator.epoch, 0);
+    /// ```
     pub fn new(schedule: Schedule) -> Self {
         Self {
             blackboard: Blackboard::new(),
@@ -85,6 +94,22 @@ impl Orchestrator {
     ///
     /// The graph is owned by the orchestrator and will be evaluated in schedule order.
     /// If another graph with the same id exists, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vizij_graph_core::types::GraphSpec;
+    /// use vizij_orchestrator_core::{GraphControllerConfig, Orchestrator, Schedule};
+    ///
+    /// let cfg = GraphControllerConfig {
+    ///     id: "graph".to_string(),
+    ///     spec: GraphSpec::default(),
+    ///     subs: Default::default(),
+    /// };
+    ///
+    /// let orchestrator = Orchestrator::new(Schedule::SinglePass).with_graph(cfg);
+    /// assert!(orchestrator.graphs.contains_key("graph"));
+    /// ```
     pub fn with_graph(mut self, cfg: GraphControllerConfig) -> Self {
         let g = crate::controllers::graph::GraphController::new(cfg);
         self.graphs.insert(g.id.clone(), g);
@@ -124,6 +149,23 @@ impl Orchestrator {
     /// # Errors
     /// Returns an error when the graph id is not registered or the spec cannot be
     /// serialized to JSON.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vizij_graph_core::types::GraphSpec;
+    /// use vizij_orchestrator_core::{GraphControllerConfig, Orchestrator, Schedule};
+    ///
+    /// let cfg = GraphControllerConfig {
+    ///     id: "graph".to_string(),
+    ///     spec: GraphSpec::default(),
+    ///     subs: Default::default(),
+    /// };
+    /// let orchestrator = Orchestrator::new(Schedule::SinglePass).with_graph(cfg);
+    ///
+    /// let json = orchestrator.export_graph_json("graph").expect("export graph");
+    /// assert!(json.is_object());
+    /// ```
     pub fn export_graph_json(&self, id: &str) -> Result<serde_json::Value> {
         let controller = self
             .graphs
@@ -136,6 +178,25 @@ impl Orchestrator {
     ///
     /// # Errors
     /// Returns an error when the graph id is not registered or serialization fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vizij_graph_core::types::GraphSpec;
+    /// use vizij_orchestrator_core::{GraphControllerConfig, Orchestrator, Schedule};
+    ///
+    /// let cfg = GraphControllerConfig {
+    ///     id: "graph".to_string(),
+    ///     spec: GraphSpec::default(),
+    ///     subs: Default::default(),
+    /// };
+    /// let orchestrator = Orchestrator::new(Schedule::SinglePass).with_graph(cfg);
+    ///
+    /// let json = orchestrator
+    ///     .export_graph_json_pretty("graph")
+    ///     .expect("export graph");
+    /// assert!(json.contains("\"nodes\""));
+    /// ```
     pub fn export_graph_json_pretty(&self, id: &str) -> Result<String> {
         let controller = self
             .graphs
@@ -147,6 +208,21 @@ impl Orchestrator {
     /// Register an animation controller and return the updated orchestrator.
     ///
     /// If another animation controller with the same id exists, it is replaced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use serde_json::Value as JsonValue;
+    /// use vizij_orchestrator_core::{AnimationControllerConfig, Orchestrator, Schedule};
+    ///
+    /// let cfg = AnimationControllerConfig {
+    ///     id: "anim".to_string(),
+    ///     setup: JsonValue::Null,
+    /// };
+    ///
+    /// let orchestrator = Orchestrator::new(Schedule::SinglePass).with_animation(cfg);
+    /// assert!(orchestrator.anims.contains_key("anim"));
+    /// ```
     pub fn with_animation(mut self, cfg: AnimationControllerConfig) -> Self {
         let a = crate::controllers::animation::AnimationController::new(cfg);
         self.anims.insert(a.id.clone(), a);

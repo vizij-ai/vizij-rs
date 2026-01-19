@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Minimal diagnostics configuration placeholder.
+/// Minimal diagnostics configuration shim for future diagnostics hooks.
 ///
 /// Expanded later with logging, sampling, and export hooks. The struct remains
 /// here so serialized configs have a stable place to land.

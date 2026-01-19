@@ -991,7 +991,7 @@ pub fn registry() -> Registry {
         params: vec![],
     });
 
-    // If (union in core; schema uses Vector as generic placeholder)
+    // If: schema uses Vector as a generic stand-in for the core union value type.
     nodes.push(NodeSignature {
         type_id: If,
         name: "If",
