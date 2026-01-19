@@ -3,6 +3,7 @@
 //! These bindings wrap `vizij-api-core` so JS/TS tools can validate payloads, normalize
 //! shorthand JSON, and receive canonical `{ type, data }` objects without pulling the
 //! heavier engine runtimes. The exposed API is stateless and safe to call repeatedly.
+//! Call the generated wasm `init` before invoking any of the functions from JS.
 //!
 //! See also: the higher-level wasm crates (`vizij-animation-wasm`, `vizij-graph-wasm`,
 //! `vizij-orchestrator-wasm`) reuse these helpers to normalize their inputs.
@@ -19,7 +20,9 @@ use wasm_bindgen::prelude::*;
 ///
 /// # Examples (JS)
 /// ```javascript
-/// import { validate_writebatch_json } from "vizij-api-wasm";
+/// import init, { validate_writebatch_json } from "vizij-api-wasm";
+///
+/// await init();
 ///
 /// validate_writebatch_json('{"writes":[{"path":"rig/hip.x","value":{"float":1.0}}]}');
 /// ```
@@ -41,7 +44,9 @@ pub fn validate_writebatch_json(batch_json: &str) -> Result<(), JsValue> {
 ///
 /// # Examples (JS)
 /// ```javascript
-/// import { writebatch_to_js } from "vizij-api-wasm";
+/// import init, { writebatch_to_js } from "vizij-api-wasm";
+///
+/// await init();
 ///
 /// const batch = writebatch_to_js('{"writes":[{"path":"demo/x","value":{"float":1}}]}');
 /// console.log(batch.writes.length);
@@ -62,7 +67,9 @@ pub fn writebatch_to_js(batch_json: &str) -> Result<JsValue, JsValue> {
 ///
 /// # Examples (JS)
 /// ```javascript
-/// import { validate_value_json } from "vizij-api-wasm";
+/// import init, { validate_value_json } from "vizij-api-wasm";
+///
+/// await init();
 ///
 /// validate_value_json('{"vec3":[0,1,2]}');
 /// ```
@@ -84,7 +91,9 @@ pub fn validate_value_json(value_json: &str) -> Result<(), JsValue> {
 ///
 /// # Examples (JS)
 /// ```javascript
-/// import { value_to_js } from "vizij-api-wasm";
+/// import init, { value_to_js } from "vizij-api-wasm";
+///
+/// await init();
 ///
 /// const value = value_to_js('{"vec3":[0,1,2]}');
 /// console.log(value.type);

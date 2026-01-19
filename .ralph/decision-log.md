@@ -70,3 +70,5 @@
 - 2026-01-19: Iter-03 scope: `vizij-animation-core` scratch/interp docs. Removed placeholder phrasing from `Scratch::begin_frame` and `InterpRegistry` rustdoc. Assumed doc-only edits; ran `cargo fmt --all`. Commit failed: git index lock under `/home/chris/Code/Semio/vizij_ws/vizij-rs_workspace/.bare/worktrees/docs-update` is not writable in sandbox.
 
 - 2026-01-19: Iter-04 scope: wasm binding doc polish for orchestrator/node-graph. Updated orchestrator wasm set_input example to match Value shorthand and added flow hints for graph wasm eval/outputs methods. Assumed doc-only edits; ran cargo fmt --all. Commit expected to fail due to git index lock outside writable roots.
+
+- 2026-01-19: Iter-05 scope: `crates/api/vizij-api-wasm` and `crates/api/bevy_vizij_api` doc polish. Added wasm init notes to JS examples and tightened WriterRegistry wording. Assumed doc-only edits; ran `cargo fmt --all`. Commit expected to fail due to git index lock outside writable roots.

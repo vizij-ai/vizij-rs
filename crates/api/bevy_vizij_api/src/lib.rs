@@ -20,8 +20,9 @@ use vizij_api_core::{TypedPath, Value, WriteBatch};
 pub type SetterFn = dyn Fn(&mut World, &TypedPath, &Value) + Send + Sync + 'static;
 
 /// Registry of typed setters keyed by canonical TypedPath string.
-/// This implementation uses an Arc<Mutex<...>> so callers can register setters
-/// and lookup them at runtime without requiring the boxed setter to be Clone.
+///
+/// This implementation uses an `Arc<Mutex<...>>` so callers can register setters
+/// and look them up at runtime without requiring the boxed setter to be `Clone`.
 #[derive(Resource, Clone, Default)]
 pub struct WriterRegistry {
     inner: Arc<Mutex<hashbrown::HashMap<String, Arc<SetterFn>>>>,

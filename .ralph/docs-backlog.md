@@ -62,7 +62,7 @@
 - Effort: S
 - Evidence: Consumers need to understand Rust vs wasm API mapping
 - Next action: Add `See also` links between core and wasm types
-- Status: In progress (iter-15 corrected api-wasm JS import path in rustdoc examples)
+- Status: In progress (iter-05 clarified api-wasm rustdoc examples with wasm init usage)
 
 ### R-007 — Add doc tests or validate examples against current APIs
 - Type: Docs
