@@ -17,6 +17,13 @@ use wasm_bindgen::prelude::*;
 /// Returns `Ok(())` when the payload parses successfully; otherwise returns a JS error
 /// containing the Rust parse message.
 ///
+/// # Examples (JS)
+/// ```javascript
+/// import { validate_writebatch_json } from "@vizij/api-wasm";
+///
+/// validate_writebatch_json('{"writes":[{"path":"rig/hip.x","value":{"float":1.0}}]}');
+/// ```
+///
 /// # Errors
 /// Returns a JS error string if the JSON does not match the `WriteBatch` schema.
 pub fn validate_writebatch_json(batch_json: &str) -> Result<(), JsValue> {
@@ -32,6 +39,14 @@ pub fn validate_writebatch_json(batch_json: &str) -> Result<(), JsValue> {
 /// This accepts the same shorthand JSON as the Rust parser and returns an object with
 /// a canonical `{ writes: [...] }` layout.
 ///
+/// # Examples (JS)
+/// ```javascript
+/// import { writebatch_to_js } from "@vizij/api-wasm";
+///
+/// const batch = writebatch_to_js('{"writes":[{"path":"demo/x","value":{"float":1}}]}');
+/// console.log(batch.writes.length);
+/// ```
+///
 /// # Errors
 /// Returns a JS error string if parsing or serialization fails.
 pub fn writebatch_to_js(batch_json: &str) -> Result<JsValue, JsValue> {
@@ -44,6 +59,13 @@ pub fn writebatch_to_js(batch_json: &str) -> Result<JsValue, JsValue> {
 
 #[wasm_bindgen]
 /// Validates a `Value` JSON string.
+///
+/// # Examples (JS)
+/// ```javascript
+/// import { validate_value_json } from "@vizij/api-wasm";
+///
+/// validate_value_json('{"vec3":[0,1,2]}');
+/// ```
 ///
 /// # Errors
 /// Returns a JS error string if the JSON does not match the `Value` schema.
@@ -59,6 +81,14 @@ pub fn validate_value_json(value_json: &str) -> Result<(), JsValue> {
 ///
 /// The returned object uses the canonical `{ type, data }` shape, even if the input
 /// uses shorthand syntax like `{"vec3":[0,1,2]}`.
+///
+/// # Examples (JS)
+/// ```javascript
+/// import { value_to_js } from "@vizij/api-wasm";
+///
+/// const value = value_to_js('{"vec3":[0,1,2]}');
+/// console.log(value.type);
+/// ```
 ///
 /// # Errors
 /// Returns a JS error string if parsing or serialization fails.

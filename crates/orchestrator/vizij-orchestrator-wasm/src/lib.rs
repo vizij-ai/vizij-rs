@@ -2,7 +2,8 @@
 //!
 //! The exported `VizijOrchestrator` mirrors the Rust API but exchanges data via
 //! JSON-friendly values. Graph specs and write batches are normalized to match
-//! `vizij-api-core` conventions.
+//! `vizij-api-core` conventions, and callers should verify `abi_version()` in
+//! their JS glue to catch mismatched binaries.
 
 use js_sys::Function;
 use serde::Deserialize;
@@ -185,6 +186,9 @@ fn build_graph_controller_config(
 }
 
 /// Orchestrator wrapper for JS/wasm hosts.
+///
+/// The wrapper owns the core scheduler plus cached outputs used by `step_delta`.
+/// All JSON payloads follow the `vizij-api-core` Value/Shape conventions.
 #[wasm_bindgen]
 pub struct VizijOrchestrator {
     core: Orchestrator,
@@ -205,6 +209,13 @@ impl VizijOrchestrator {
     ///
     /// Accepts an optional options object with `{ schedule }`, where schedule is
     /// `"SinglePass"`, `"TwoPass"`, or `"RateDecoupled"`.
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// import { VizijOrchestrator } from "@vizij/orchestrator-wasm";
+    ///
+    /// const orch = new VizijOrchestrator({ schedule: "TwoPass" });
+    /// ```
     ///
     /// # Errors
     /// Returns an error if the options payload cannot be decoded or if the
@@ -249,6 +260,9 @@ impl VizijOrchestrator {
     ///  - an object { id?: string, spec: object } where spec is a GraphSpec-compatible object.
     ///
     /// Returns the controller id.
+    ///
+    /// The graph spec is normalized before deserialization, so shorthand forms are expanded
+    /// to match the `vizij-api-core` JSON schema.
     ///
     /// # Errors
     /// Returns an error if the graph spec cannot be decoded or normalized.
@@ -365,6 +379,9 @@ impl VizijOrchestrator {
     /// Accepts an object { id?: string, graphs: GraphRegistrationConfig[] } mirroring the single
     /// controller shape. Each entry supports the same `spec` and optional `subs` fields.
     ///
+    /// Merge strategies can be provided via `{ strategy: { outputs, intermediate } }` using the
+    /// same string values as the Rust `OutputConflictStrategy`.
+    ///
     /// # Errors
     /// Returns an error if any graph spec is invalid or the merge fails.
     #[wasm_bindgen(js_name = register_merged_graph)]
@@ -406,6 +423,11 @@ impl VizijOrchestrator {
     /// Accepts an object { id?: string, setup?: any } where setup is forwarded to the
     /// AnimationControllerConfig.setup field.
     /// Returns the controller id.
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// const id = orch.register_animation({ id: "anim:walk", setup: { clip: "walk" } });
+    /// ```
     ///
     /// # Errors
     /// Returns an error if the setup payload is invalid or the animation cannot be initialized.
@@ -459,6 +481,12 @@ impl VizijOrchestrator {
     /// Set a blackboard input value (convenience).
     ///
     /// `value_json` and `shape_json` should be JS objects compatible with the core Value/Shape JSON shapes.
+    /// Pass `null` or `undefined` for `shape_json` to keep the value unshaped.
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// orch.set_input("rig/hip.x", { kind: "Number", value: 0.5 }, null);
+    /// ```
     ///
     /// # Errors
     /// Returns an error if the path is invalid or JSON payloads cannot be decoded.
@@ -503,6 +531,9 @@ impl VizijOrchestrator {
 
     /// Step the orchestrator by `dt` seconds and return an OrchestratorFrame as a JS value.
     ///
+    /// The returned object matches the Rust `OrchestratorFrame` JSON shape, including
+    /// merged writes, conflicts, events, and timing metadata.
+    ///
     /// # Errors
     /// Returns an error if evaluation fails or the frame cannot be serialized.
     #[wasm_bindgen]
@@ -524,6 +555,9 @@ impl VizijOrchestrator {
     ///
     /// If `since_version` does not match the last snapshot, a full frame payload
     /// is returned instead.
+    ///
+    /// The returned payload includes `version`, `epoch`, `dt`, `merged_writes`,
+    /// `conflicts`, `events`, and `timings_ms`.
     ///
     /// # Errors
     /// Returns an error if evaluation fails or the payload cannot be serialized.
@@ -616,6 +650,11 @@ impl VizijOrchestrator {
 ///
 /// The return value is a JSON string with shorthand expanded.
 ///
+/// # Examples (JS)
+/// ```javascript
+/// const normalized = normalize_graph_spec_json(rawSpecJson);
+/// ```
+///
 /// # Errors
 /// Returns an error if the JSON cannot be parsed or normalized.
 #[wasm_bindgen(js_name = normalize_graph_spec_json)]
@@ -630,6 +669,9 @@ pub fn normalize_graph_spec_json(json: &str) -> Result<JsValue, JsError> {
 }
 
 /// ABI version for compatibility checks.
+///
+/// JS loaders compare this with their expected ABI to guard against mismatched
+/// wasm and JS glue. Rebuild the wasm bundle if this value changes.
 #[wasm_bindgen]
 pub fn abi_version() -> u32 {
     2

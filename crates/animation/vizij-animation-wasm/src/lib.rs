@@ -2,6 +2,7 @@
 //!
 //! Exposes a JS-friendly wrapper around `vizij-animation-core::Engine`,
 //! mirroring the Rust API while handling JSON (de)serialization and ABI checks.
+//! Use `abi_version()` to confirm compatibility between JS glue and wasm.
 
 use js_sys::{Function, JSON};
 use serde_wasm_bindgen as swb;
@@ -19,6 +20,7 @@ use vizij_animation_core::{
 ///
 /// Most methods accept plain JS objects that mirror the Rust structs from
 /// `vizij-animation-core`, returning JSON-friendly payloads.
+/// Use `abi_version()` with the npm wrapper to guard against mismatched bundles.
 #[wasm_bindgen]
 pub struct VizijAnimation {
     core: Engine,
@@ -156,7 +158,13 @@ impl VizijAnimation {
     /// Create a new engine instance.
     ///
     /// Pass a JSON config object or undefined/null for defaults.
-    /// Example: `new VizijAnimation({ scratch_samples: 2048 })`
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// import { VizijAnimation } from "@vizij/animation-wasm";
+    ///
+    /// const engine = new VizijAnimation({ scratch_samples: 2048 });
+    /// ```
     ///
     /// # Errors
     /// Returns an error if the config JSON cannot be deserialized into `Config`.
@@ -217,6 +225,11 @@ impl VizijAnimation {
     /// Create a new player by display name. Returns a PlayerId (u32).
     ///
     /// Names are used for diagnostics only; they do not affect playback.
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// const player = engine.create_player("walk-cycle");
+    /// ```
     #[wasm_bindgen(js_name = create_player)]
     pub fn create_player(&mut self, name: String) -> u32 {
         let pid: PlayerId = self.core.create_player(&name);
@@ -442,6 +455,9 @@ impl VizijAnimation {
 }
 
 /// Numeric ABI version for compatibility checks at init.
+///
+/// JS loaders compare this value against their expected ABI. Rebuild the wasm
+/// bundle if it changes.
 #[wasm_bindgen]
 pub fn abi_version() -> u32 {
     2

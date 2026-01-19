@@ -2,7 +2,8 @@
 //!
 //! The `WasmGraph` wrapper owns a `GraphRuntime` and exposes JSON-friendly entry
 //! points for loading specs, staging inputs, evaluating graphs, and streaming
-//! outputs across the wasm boundary.
+//! outputs across the wasm boundary. Use `abi_version()` to confirm JS/wasm
+//! compatibility with the npm wrapper.
 
 use hashbrown::HashMap;
 use js_sys::{Float32Array, Uint32Array, JSON};
@@ -29,6 +30,9 @@ pub fn normalize_graph_spec_json(json: &str) -> Result<String, JsValue> {
 }
 
 /// ABI version for compatibility checks with npm wrappers.
+///
+/// JS loaders compare this value against their expected ABI. Rebuild the wasm
+/// bundle if it changes.
 #[wasm_bindgen]
 pub fn abi_version() -> u32 {
     2
@@ -330,6 +334,13 @@ impl Default for WasmGraph {
 impl WasmGraph {
     #[wasm_bindgen(constructor)]
     /// Create a new graph runtime with no loaded spec.
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// import { WasmGraph } from "@vizij/node-graph-wasm";
+    ///
+    /// const graph = new WasmGraph();
+    /// ```
     pub fn new() -> WasmGraph {
         #[cfg(feature = "console_error_panic_hook")]
         console_error_panic_hook::set_once();
@@ -353,6 +364,9 @@ impl WasmGraph {
     }
 
     /// Load and normalize a graph spec from JSON, resetting runtime state.
+    ///
+    /// The JSON is normalized to the canonical `GraphSpec` shape before it is
+    /// deserialized and cached.
     ///
     /// # Errors
     /// Returns a `JsValue` error if the JSON is invalid or cannot be parsed as a
@@ -382,6 +396,8 @@ impl WasmGraph {
 
     /// Stage a single input by path using JSON strings.
     ///
+    /// The `value_json` string may use shorthand Value forms (ex: `{"vec3":[0,1,2]}`).
+    ///
     /// # Errors
     /// Returns a `JsValue` error if the path or JSON payloads are invalid.
     #[wasm_bindgen]
@@ -406,6 +422,8 @@ impl WasmGraph {
 
     /// Stage a single input by path using JS values (no JSON stringify).
     ///
+    /// Pass `null` or `undefined` for `declared_shape` to leave the shape inferred.
+    ///
     /// # Errors
     /// Returns a `JsValue` error if the path or value payload is invalid.
     #[wasm_bindgen(js_name = "stage_input_value")]
@@ -425,6 +443,9 @@ impl WasmGraph {
     }
 
     /// Clear a staged input by path, removing it from caches and staged inputs.
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if the path is invalid.
     #[wasm_bindgen(js_name = "clear_input_path")]
     pub fn clear_input_path(&mut self, path: &str) -> Result<(), JsValue> {
         let typed_path = TypedPath::parse(path)
@@ -701,6 +722,8 @@ impl WasmGraph {
     }
 
     /// Set the runtime clock time (seconds). Used to compute `dt` on eval.
+    ///
+    /// Typically you set time once per frame and call `eval_all*` to evaluate.
     #[wasm_bindgen]
     pub fn set_time(&mut self, t: f64) {
         self.t = t;
@@ -713,6 +736,8 @@ impl WasmGraph {
     }
 
     /// Stage a float32 vector without JSON, using a shared buffer view.
+    ///
+    /// The value is staged as a `Vector` with a vector shape.
     #[wasm_bindgen(js_name = "stage_input_f32")]
     pub fn stage_input_f32(&mut self, path: &str, data: &Float32Array) -> Result<(), JsValue> {
         let typed_path = TypedPath::parse(path)
@@ -729,6 +754,7 @@ impl WasmGraph {
     /// Batch-stage many scalar inputs in one call (paths[i] -> values[i]).
     ///
     /// Each value is interpreted as a scalar `Float` and staged with a `Scalar` shape.
+    /// This path-based variant bypasses slot caching and only accepts scalars.
     ///
     /// # Errors
     /// Returns a `JsValue` error if the path list cannot be decoded or the list length
@@ -760,6 +786,8 @@ impl WasmGraph {
 
     /// Register paths once and reuse their indices for faster staging.
     ///
+    /// Use the returned indices with `stage_inputs_indices` or slot staging APIs.
+    ///
     /// Returns a `Uint32Array` of slot indices, aligned with the input list.
     ///
     /// # Errors
@@ -783,6 +811,7 @@ impl WasmGraph {
     /// Stage inputs by index using previously registered paths.
     ///
     /// Each staged value is interpreted as a scalar float with `Scalar` shape.
+    /// This index-based API enables caching and avoids reparsing the paths.
     ///
     /// # Errors
     /// Returns a `JsValue` error if indices/values lengths mismatch or a slot index
@@ -1002,6 +1031,8 @@ impl WasmGraph {
 
     /// Evaluate the entire graph and return a JS object (avoids JSON stringify/parse).
     ///
+    /// The returned object matches the `eval_all` JSON shape.
+    ///
     /// # Errors
     /// Returns a `JsValue` error if evaluation fails or serialization fails.
     #[wasm_bindgen(js_name = "eval_all_js")]
@@ -1116,6 +1147,8 @@ impl WasmGraph {
     }
 
     /// Set a param on a node (e.g., key="value" with float/bool/vec3 JSON).
+    ///
+    /// Unknown keys or wrong value types return a `JsValue` error.
     ///
     /// Structural parameter edits (e.g., adjusting Split sizes) invalidate the
     /// cached execution plan so the next evaluation rebuilds layouts safely.
@@ -1385,6 +1418,8 @@ impl WasmGraph {
 }
 
 /// Expose the node schema registry as JSON for tooling/UI.
+///
+/// The payload includes the full node schema registry used by graph tooling.
 #[wasm_bindgen]
 pub fn get_node_schemas_json() -> String {
     let reg = vizij_graph_core::registry();

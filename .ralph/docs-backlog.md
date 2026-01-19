@@ -10,7 +10,7 @@
 7. R-007 — Add doc tests or validate examples against current APIs
 8. R-008 — Ensure docstrings mention JSON/ABI versioning contracts
 9. R-005 — Document feature flags and conditional compilation behavior
-10. R-014 — Clarify wasm batch staging semantics for scalar-only inputs
+10. R-009 — Document performance considerations and allocation hot spots
 
 ---
 
@@ -38,7 +38,7 @@
 - Effort: L
 - Evidence: Autogen docs are less useful without concrete usage examples; added examples across animation core engine, baking helpers, and interpolation utilities.
 - Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures; add remaining node-graph eval/runtime examples for public helpers (InputSlots/OutputSlots/materialize_outputs) if needed.
-- Status: In progress
+- Status: In progress (iter-10 added JS usage snippets for wasm bindings)
 
 ### R-004 — Standardize module-level docs and `//!` overviews
 - Type: Docs
@@ -78,7 +78,7 @@
 - Effort: S
 - Evidence: ABI changes must be visible in generated docs
 - Next action: Add versioning notes to public APIs that serialize/deserialize JSON
-- Status: Planned
+- Status: In progress (iter-10 added ABI notes to wasm bindings)
 
 ### R-009 — Document performance considerations and allocation hot spots
 - Type: Docs
@@ -126,4 +126,4 @@
 - Effort: S
 - Evidence: `vizij-graph-wasm` batch staging helpers only accept scalars but docs implied vectors.
 - Next action: Ensure rustdoc and README describe scalar-only staging, or add vector batch API if intended.
-- Status: Planned
+- Status: Completed (iter-10 clarified scalar-only staging in graph wasm docs)
