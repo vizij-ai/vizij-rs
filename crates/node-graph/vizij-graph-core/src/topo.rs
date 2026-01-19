@@ -3,6 +3,53 @@ use std::collections::{HashMap, VecDeque};
 
 /// Return node ids in topological order.
 ///
+/// # Examples
+///
+/// ```
+/// use vizij_graph_core::topo::topo_order;
+/// use vizij_graph_core::types::{
+///     EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
+/// };
+/// use vizij_api_core::Value;
+///
+/// let spec = GraphSpec {
+///     nodes: vec![
+///         NodeSpec {
+///             id: "a".into(),
+///             kind: NodeType::Constant,
+///             params: NodeParams {
+///                 value: Some(Value::Float(1.0)),
+///                 ..Default::default()
+///             },
+///             output_shapes: Default::default(),
+///             input_defaults: Default::default(),
+///         },
+///         NodeSpec {
+///             id: "b".into(),
+///             kind: NodeType::Add,
+///             params: Default::default(),
+///             output_shapes: Default::default(),
+///             input_defaults: Default::default(),
+///         },
+///     ],
+///     edges: vec![EdgeSpec {
+///         from: EdgeOutputEndpoint {
+///             node_id: "a".into(),
+///             output: "out".into(),
+///         },
+///         to: EdgeInputEndpoint {
+///             node_id: "b".into(),
+///             input: "lhs".into(),
+///         },
+///         selector: None,
+///     }],
+///     ..Default::default()
+/// };
+///
+/// let order = topo_order(&spec.nodes, &spec.edges).unwrap();
+/// assert_eq!(order.len(), 2);
+/// ```
+///
 /// # Errors
 ///
 /// Returns an error when an edge references a missing node or when the graph contains cycles.

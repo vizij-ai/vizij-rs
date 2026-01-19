@@ -1,3 +1,8 @@
+//! Export the node registry to JSON for tooling.
+//!
+//! Run with no arguments to print a compact JSON registry to stdout.
+//! Use `--pretty` for pretty JSON or `--output <path>` to write to a file.
+
 use std::env;
 use std::fs;
 use std::io::{self, Write};
@@ -9,6 +14,12 @@ fn print_usage() {
     eprintln!("Usage: vizij-graph-registry-export [--output <path>] [--pretty]");
 }
 
+/// CLI entry point for exporting the node registry JSON.
+///
+/// # Errors
+///
+/// Returns an error when argument parsing fails, registry serialization fails,
+/// or writing the output fails.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = env::args().skip(1);
     let mut output_path: Option<PathBuf> = None;

@@ -38,7 +38,7 @@
 - Effort: L
 - Evidence: Autogen docs are less useful without concrete usage examples; added examples across animation core engine, baking helpers, and interpolation utilities.
 - Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures; add remaining node-graph eval/runtime examples for public helpers (InputSlots/OutputSlots/materialize_outputs) if needed.
-- Status: In progress (iter-10 added JS usage snippets for wasm bindings)
+- Status: In progress (iter-11 added runnable topo_order example)
 
 ### R-004 — Standardize module-level docs and `//!` overviews
 - Type: Docs
@@ -46,7 +46,7 @@
 - Effort: M
 - Evidence: Some modules lack context or usage overview
 - Next action: Refresh `//!` blocks for remaining stacks (animation core/Bevy/wasm) and any module stubs; add module-level docs to remaining wasm and helper crates.
-- Status: In progress (iter-06 added module docs for core crates and controller modules)
+- Status: In progress (iter-11 added module docs for registry export CLI)
 
 ### R-005 — Document feature flags and conditional compilation behavior
 - Type: Docs

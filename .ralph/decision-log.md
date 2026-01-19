@@ -55,3 +55,4 @@
 - 2026-01-19: Iter-09 scope: `crates/node-graph/vizij-graph-wasm/src/lib.rs` doc polish. Added module-level docs and expanded rustdoc error/behavior notes for staging, output snapshots, and eval helpers. Assumed doc-only edits; ran `cargo fmt --all`. Commit failed: git index lock under `/home/chris/Code/Semio/vizij_ws/vizij-rs_workspace/.bare/worktrees/docs-update` is not writable in sandbox.
 
 - 2026-01-19: Iter-10 scope: wasm binding doc polish for api/graph/orchestrator/animation. Added JS usage snippets, ABI/version notes, and clarified scalar-only batch staging. Assumed doc-only edits; skipped tests to keep this lightweight. Commit expected to fail due to git index lock outside writable roots.
+- 2026-01-19: Iter-11 scope: node-graph topo + registry export docs. Added a runnable topo_order example and module docs for the registry export CLI. Assumed doc-only edits; ran `cargo fmt --all`. Commit expected to fail due to git index lock outside writable roots.
