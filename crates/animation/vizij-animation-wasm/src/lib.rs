@@ -258,7 +258,7 @@ impl VizijAnimation {
         let _ = self.core.prebind_with_report(&mut js_resolver);
     }
 
-    /// Step the simulation by dt (seconds) with inputs JSON. Returns Outputs JSON.
+    /// Step the simulation by `dt` (seconds) with inputs JSON. Returns Outputs JSON.
     ///
     /// The returned object matches the Rust `Outputs` schema serialized to JSON.
     ///
@@ -271,7 +271,7 @@ impl VizijAnimation {
         swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
     }
 
-    /// Step the simulation by dt returning both values and derivatives.
+    /// Step the simulation by `dt` returning both values and derivatives.
     ///
     /// The returned object matches the Rust `OutputsWithDerivatives` schema serialized to JSON.
     ///

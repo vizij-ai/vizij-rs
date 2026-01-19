@@ -22,7 +22,7 @@
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
 - Next action: Confirm remaining animation stack public APIs are documented (including output event variants); shift focus to other stacks or add conventions doc.
-- Status: In progress (iter-14 tightened engine/outputs/bevy/wasm doc notes)
+- Status: In progress (iter-16 tightened animation core/bevy/wasm doc notes)
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
 - Type: Docs

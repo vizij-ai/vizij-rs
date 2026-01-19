@@ -144,8 +144,8 @@ fn find_segment(points: &[Keypoint], u: f32) -> (usize, usize, f32) {
 /// Sampled value plus derivative (when requested) for a single track.
 ///
 /// This is a convenience container used by tooling; the engine returns tuple pairs instead.
-///
-/// The derivative is expressed in units per second (normalized by clip duration).
+/// Derivatives are expressed in units per second (normalized by clip duration).
+/// For non-numeric value kinds, the engine returns `None` rather than a `SampledValue`.
 #[derive(Clone, Debug)]
 pub struct SampledValue {
     /// Sampled value at the requested time.
@@ -248,12 +248,12 @@ pub fn sample_track(track: &Track, u: f32) -> Value {
 
 /// Sample a track and approximate its time derivative (seconds).
 ///
-/// Derivatives are estimated with a symmetric finite difference of width `DEFAULT_DERIVATIVE_EPSILON`
-/// normalized domain, scaled by the clip duration. This captures velocity-like behaviour for
-/// numeric tracks but intentionally returns `None` for non-numeric kinds such as Bool/Text to avoid
-/// misleading data. Quaternion derivatives are currently computed component-wise which is a
-/// reasonable first approximation for small deltas but does not map to angular velocity; replace
-/// with a proper log/exp-based interpolation when higher fidelity is required.
+/// Derivatives are estimated with a symmetric finite difference of width
+/// `DEFAULT_DERIVATIVE_EPSILON` in the normalized domain, scaled by the clip duration.
+/// This captures velocity-like behavior for numeric tracks but intentionally returns `None`
+/// for non-numeric kinds such as Bool/Text to avoid misleading data. Quaternion derivatives
+/// are computed component-wise as a first approximation and do not map to angular velocity;
+/// prefer a log/exp-based interpolation when higher fidelity is required.
 ///
 /// If you need to tune accuracy, use [`sample_track_with_derivative_epsilon`] to provide an
 /// explicit epsilon until a higher-level config surface lands.

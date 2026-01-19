@@ -61,6 +61,8 @@ impl BindingTable {
     }
 
     /// Insert or update a binding row for a channel.
+    ///
+    /// If the channel already exists, its handle is replaced in-place.
     pub fn upsert(&mut self, channel: ChannelKey, handle: TargetHandle) {
         if let Some(row) = self.rows.iter_mut().find(|r| r.channel == channel) {
             row.handle = handle;

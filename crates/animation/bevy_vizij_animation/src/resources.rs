@@ -43,7 +43,8 @@ pub struct PendingOutputs {
 
 /// Fixed timestep configuration (seconds per tick).
 ///
-/// The plugin uses this in `FixedUpdate` to advance the core engine.
+/// The plugin uses this in `FixedUpdate` to advance the core engine. Update the
+/// resource to tune playback speed without touching the underlying engine config.
 #[derive(Resource)]
 pub struct FixedDt(pub f32);
 

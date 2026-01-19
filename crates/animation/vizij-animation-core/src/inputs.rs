@@ -61,6 +61,7 @@ pub enum PlayerCommand {
     SetWindow {
         player: PlayerId,
         start_time: f32,
+        /// Optional end time; `None` clears the upper bound.
         end_time: Option<f32>,
     },
 }
@@ -68,6 +69,7 @@ pub enum PlayerCommand {
 /// Looping behavior applied when mapping player time to clip time.
 ///
 /// This affects both display time in diagnostics and how instances sample tracks.
+/// For `Loop` and `PingPong`, the window is ignored and playback wraps the full clip span.
 ///
 /// # Examples
 /// ```rust

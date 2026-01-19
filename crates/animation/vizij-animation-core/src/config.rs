@@ -18,8 +18,11 @@ use serde::{Deserialize, Serialize};
 pub struct Config {
     /// Initial capacity hints for scratch/sample buffers.
     pub scratch_samples: usize,
+    /// Initial capacity hint for scalar-valued scratch buffers.
     pub scratch_values_scalar: usize,
+    /// Initial capacity hint for vector/array-valued scratch buffers.
     pub scratch_values_vec: usize,
+    /// Initial capacity hint for quaternion-valued scratch buffers.
     pub scratch_values_quat: usize,
 
     /// Maximum events to retain per tick before backpressure policy applies.
