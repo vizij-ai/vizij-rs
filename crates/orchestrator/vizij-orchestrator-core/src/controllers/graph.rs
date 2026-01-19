@@ -31,7 +31,9 @@ pub struct Subscriptions {
 /// Configuration for registering a graph with the orchestrator.
 #[derive(Debug, Clone)]
 pub struct GraphControllerConfig {
+    /// Controller identifier (used in conflict logs and diagnostics).
     pub id: String,
+    /// Graph definition to evaluate each step.
     pub spec: GraphSpec,
     /// Optional subscriptions to restrict staging/publishing.
     pub subs: Subscriptions,
@@ -57,17 +59,24 @@ pub enum GraphMergeError {
 /// Strategy for resolving conflicting output paths when merging graphs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputConflictStrategy {
+    /// Reject conflicting output paths.
     Error,
+    /// Namespace conflicting outputs under their graph id.
     Namespace,
+    /// Blend conflicting outputs with equal weights.
     BlendEqualWeights,
+    /// Sum conflicting outputs with a variadic add node.
     Add,
+    /// Blend conflicting outputs with per-producer weight inputs.
     DefaultBlend,
 }
 
 /// Conflict resolution options used during graph merges.
 #[derive(Debug, Clone, Copy)]
 pub struct GraphMergeOptions {
+    /// Strategy for conflicting final outputs.
     pub output_conflicts: OutputConflictStrategy,
+    /// Strategy for conflicting intermediate outputs consumed by another graph.
     pub intermediate_conflicts: OutputConflictStrategy,
 }
 
@@ -774,9 +783,13 @@ impl GraphControllerConfig {
 /// Controller owning a persistent `GraphRuntime` for evaluations.
 #[derive(Debug)]
 pub struct GraphController {
+    /// Controller identifier.
     pub id: String,
+    /// Cached graph spec (includes layout cache).
     pub spec: GraphSpec,
+    /// Persistent runtime state (inputs, outputs, cached plan).
     pub rt: GraphRuntime,
+    /// Subscription filter applied during evaluation.
     pub subs: Subscriptions,
     plan_ready: bool,
 }

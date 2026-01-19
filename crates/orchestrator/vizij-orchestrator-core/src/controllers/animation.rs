@@ -16,6 +16,7 @@ use crate::blackboard::Blackboard;
 /// Configuration for registering an animation controller with the orchestrator.
 #[derive(Debug, Clone)]
 pub struct AnimationControllerConfig {
+    /// Controller identifier (used in conflict logs and diagnostics).
     pub id: String,
     /// Arbitrary setup blob for future wiring (e.g., animation JSON, prebind config).
     pub setup: JsonValue,
@@ -24,7 +25,9 @@ pub struct AnimationControllerConfig {
 /// Wrapper around `vizij_animation_core::Engine` with blackboard integration.
 #[derive(Debug)]
 pub struct AnimationController {
+    /// Controller identifier.
     pub id: String,
+    /// Live animation engine state.
     pub engine: Engine,
 }
 

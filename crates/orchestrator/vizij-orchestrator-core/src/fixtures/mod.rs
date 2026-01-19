@@ -9,15 +9,21 @@ use vizij_test_fixtures::{animations, node_graphs, orchestrations};
 /// Graph fixture descriptor used by orchestrator demos/tests.
 #[derive(Debug, Deserialize, Clone)]
 pub struct GraphFixture {
+    /// Fixture key used to resolve the graph spec from `vizij-test-fixtures`.
     #[serde(skip_deserializing, default)]
     pub key: Option<String>,
+    /// Explicit controller id override.
     #[serde(default)]
     pub id: Option<String>,
+    /// Raw graph spec JSON (normalized before use).
     pub spec: serde_json::Value,
+    /// Subscription JSON (expects `inputs`/`outputs` arrays plus optional mirror flag).
     #[serde(default)]
     pub subs: serde_json::Value,
+    /// Whether to mirror writes into the blackboard even when outputs are filtered.
     #[serde(default)]
     pub mirror_writes: bool,
+    /// Input fixtures staged before the first step.
     #[serde(skip)]
     pub stage: Vec<InputFixture>,
 }
@@ -25,24 +31,33 @@ pub struct GraphFixture {
 /// Animation fixture descriptor used by orchestrator demos/tests.
 #[derive(Debug, Clone)]
 pub struct AnimationFixture {
+    /// Fixture key used to resolve animation JSON from `vizij-test-fixtures`.
     pub key: Option<String>,
+    /// Explicit controller id override.
     pub id: Option<String>,
+    /// Setup payload passed into `AnimationControllerConfig`.
     pub setup: serde_json::Value,
 }
 
 /// Input fixture staged onto the blackboard before stepping.
 #[derive(Debug, Clone)]
 pub struct InputFixture {
+    /// Typed path string for the blackboard entry.
     pub path: String,
+    /// Value payload encoded as `vizij-api-core` JSON.
     pub value: serde_json::Value,
+    /// Optional shape payload encoded as `vizij-api-core` JSON.
     pub shape: Option<serde_json::Value>,
 }
 
 /// Fixture describing a merged graph configuration.
 #[derive(Debug, Clone)]
 pub struct MergedGraphFixture {
+    /// Controller id for the merged graph.
     pub id: String,
+    /// Graph fixtures to merge.
     pub graphs: Vec<GraphFixture>,
+    /// Merge options controlling conflict resolution.
     pub options: crate::controllers::graph::GraphMergeOptions,
 }
 
@@ -114,7 +129,9 @@ impl MergedGraphFixture {
 /// Expected state after one orchestrator step in fixture-driven tests.
 #[derive(Debug, Clone)]
 pub struct StepFixture {
+    /// Delta time in seconds for the step.
     pub delta: f64,
+    /// Expected `path -> value` pairs after the step completes.
     pub expect: Vec<(String, serde_json::Value)>,
 }
 
@@ -130,14 +147,23 @@ impl StepFixture {
 /// Orchestrator fixture aggregating graphs, animations, and expected outputs.
 #[derive(Debug, Clone)]
 pub struct DemoFixture {
+    /// Optional description pulled from the orchestration descriptor.
     pub description: Option<String>,
+    /// Optional schedule label (e.g., "single" or "two-pass").
     pub schedule: Option<String>,
+    /// Primary graph fixture (legacy single-graph convenience).
     pub graph: GraphFixture,
+    /// Graph fixtures in the orchestration (unmerged).
     pub graphs: Vec<GraphFixture>,
+    /// Merged graph fixtures in the orchestration.
     pub merged_graphs: Vec<MergedGraphFixture>,
+    /// Primary animation fixture (legacy single-animation convenience).
     pub animation: AnimationFixture,
+    /// Animation fixtures in the orchestration.
     pub animations: Vec<AnimationFixture>,
+    /// Input fixtures staged before the first step.
     pub initial_inputs: Vec<InputFixture>,
+    /// Expected outputs per step.
     pub steps: Vec<StepFixture>,
 }
 

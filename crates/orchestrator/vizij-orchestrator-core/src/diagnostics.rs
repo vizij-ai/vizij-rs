@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Expanded later with logging, sampling, and export hooks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiagnosticsCfg {
+    /// Toggle diagnostics collection for orchestrator runs.
     pub enabled: bool,
 }
 

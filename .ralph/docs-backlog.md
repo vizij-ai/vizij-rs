@@ -21,7 +21,7 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
-- Next action: Inventory `pub` items in orchestrator core for missing/weak docs (fixtures, scheduler, controllers)
+- Next action: Continue orchestrator rustdoc audit for remaining public API fields and examples.
 - Status: In progress
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors

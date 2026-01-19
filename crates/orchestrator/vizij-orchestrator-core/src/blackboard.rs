@@ -8,10 +8,15 @@ use vizij_api_core::{json, Shape, TypedPath, Value, WriteBatch};
 /// Single blackboard entry with provenance metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlackboardEntry {
+    /// Latest value stored for the path.
     pub value: Value,
+    /// Optional shape metadata for the stored value.
     pub shape: Option<Shape>,
+    /// Frame epoch in which the value was written.
     pub epoch: u64,
+    /// Provenance label (controller id or host name).
     pub source: String,
+    /// Priority hint for downstream arbitration (higher wins if used externally).
     pub priority: u8,
 }
 
@@ -39,15 +44,24 @@ impl BlackboardEntry {
 /// Both prior and new values are recorded so hosts can diagnose contention.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConflictLog {
+    /// Path that was overwritten.
     pub path: TypedPath,
+    /// Previous value stored at the path, if any.
     pub previous_value: Option<Value>,
+    /// Previous shape stored at the path, if any.
     pub previous_shape: Option<Shape>,
+    /// Previous epoch stored at the path, if any.
     pub previous_epoch: Option<u64>,
+    /// Previous writer id stored at the path, if any.
     pub previous_source: Option<String>,
 
+    /// Incoming value that overwrote the previous entry.
     pub new_value: Value,
+    /// Incoming shape that overwrote the previous entry.
     pub new_shape: Option<Shape>,
+    /// Epoch for the new entry.
     pub new_epoch: u64,
+    /// Writer id for the new entry.
     pub new_source: String,
 }
 

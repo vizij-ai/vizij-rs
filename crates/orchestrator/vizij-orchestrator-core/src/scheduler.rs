@@ -13,7 +13,7 @@ pub enum Schedule {
     /// Graphs, then animations, then graphs again.
     TwoPass,
     /// Reserved for future work (currently behaves like `SinglePass`).
-    RateDecoupled, // reserved for future work
+    RateDecoupled,
 }
 
 /// Run a single-pass schedule:
