@@ -1,23 +1,19 @@
-// Minimal Bevy adapter: a writer registry and apply sink.
-//
-// This crate intentionally does not force any automatic binding strategy.
-// Instead it provides:
-//  - WriterRegistry: a thread-safe map of string path -> setter closure
-//  - apply_write_batch: apply a WriteBatch by invoking registered setters
-//
-// Adapters (the application code or higher-level plugins) can register
-// typed setters for specific TypedPath strings (for example, "robot1/Arm/Joint3.translation")
-// and provide closures that know how to locate & mutate the appropriate component(s)
-// in the Bevy `World` given the TypedPath and Value.
-//
-// This keeps vizij-api-core engine-agnostic while providing a small, well-scoped
-// Bevy integration surface.
+//! Minimal Bevy adapter for applying `WriteBatch` operations.
+//!
+//! This crate intentionally avoids enforcing a binding strategy. It exposes:
+//! - [`WriterRegistry`]: a thread-safe map of canonical path -> setter closure.
+//! - [`apply_write_batch`]: applies a batch by invoking any registered setters.
+//!
+//! Higher-level adapters register closures that know how to locate and mutate
+//! the appropriate Bevy components for a given [`TypedPath`] + [`Value`]. This
+//! keeps `vizij-api-core` engine-agnostic while offering a small Bevy surface.
 
 use bevy::prelude::*;
 use std::sync::{Arc, Mutex};
 
 use vizij_api_core::{TypedPath, Value, WriteBatch};
 
+/// Function signature for write setters stored in a [`WriterRegistry`].
 pub type SetterFn = dyn Fn(&mut World, &TypedPath, &Value) + Send + Sync + 'static;
 
 /// Registry of typed setters keyed by canonical TypedPath string.
@@ -38,6 +34,9 @@ impl WriterRegistry {
 
     /// Register a setter for a specific canonical path string. If a setter already
     /// exists for that path it will be overwritten.
+    ///
+    /// # Panics
+    /// Panics if the registry mutex is poisoned.
     pub fn register_setter<F>(&self, path: impl Into<String>, f: F)
     where
         F: Fn(&mut World, &TypedPath, &Value) + Send + Sync + 'static,
@@ -48,6 +47,9 @@ impl WriterRegistry {
 
     /// Try to get a setter for a canonical path string. Returns a cloned Arc pointer
     /// to the setter if present.
+    ///
+    /// # Panics
+    /// Panics if the registry mutex is poisoned.
     pub fn get_setter(&self, path: &str) -> Option<Arc<SetterFn>> {
         let guard = self.inner.lock().unwrap();
         guard.get(path).cloned()
@@ -80,6 +82,8 @@ pub fn apply_write_batch(registry: &WriterRegistry, world: &mut World, batch: &W
 /// by capturing the `Entity`. The closure will attempt to get the component mutably
 /// on each invocation and apply the Value. The Value coercion rules are intentionally
 /// simple: translation/scale accept Vec3 or Vector, rotation accepts Quat or Vector.
+///
+/// This helper ignores missing entities or `Transform` components instead of panicking.
 pub fn register_transform_setters_for_entity(
     registry: &mut WriterRegistry,
     base_path: &str,

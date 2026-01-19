@@ -30,3 +30,4 @@ Do NOT implement these in the current loop.
 - 2026-01-19: Running `./.githooks/pre-commit` fails until doctests avoid `fn main`; keep Bevy plugin examples as `no_run` blocks without a `main` to satisfy clippy.
 - 2026-01-19: `CoreEvent` variant fields now have rustdoc notes; remaining animation docs appear covered, but consider adding a single example of event handling if a stable fixture or minimal path exists.
 - 2026-01-19: `vizij-animation-core::Config` scratch buffer fields are only capacity hints; consider adding perf guidance once scratch buffers are wired into runtime reuse.
+- 2026-01-19: `bevy_vizij_graph` lacks usage examples in rustdoc; consider adding a short `no_run` snippet once Bevy plugin setup conventions are settled.

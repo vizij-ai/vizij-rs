@@ -1,11 +1,23 @@
+//! Bevy integration for evaluating Vizij node graphs.
+//!
+//! This plugin owns a [`GraphRuntime`] resource, stages time via [`GraphTime`],
+//! evaluates the current [`GraphSpec`], and applies resulting
+//! [`vizij_api_core::WriteBatch`] writes when a `bevy_vizij_api::WriterRegistry`
+//! is present.
+//!
+//! The API is intentionally lightweight: applications can mutate [`GraphResource`]
+//! and send [`SetNodeParam`] events to drive graph parameters.
+
 use bevy::prelude::*;
 use hashbrown::HashMap;
 use vizij_api_core::Value;
 use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, NodeId, PortValue};
 
+/// Graph specification to evaluate each frame.
 #[derive(Resource, Default, Clone)]
 pub struct GraphResource(pub GraphSpec);
 
+/// Snapshot of per-node output ports after evaluation.
 #[derive(Resource, Default, Clone)]
 pub struct GraphOutputs(pub HashMap<NodeId, HashMap<String, PortValue>>);
 
@@ -14,6 +26,7 @@ pub struct GraphOutputs(pub HashMap<NodeId, HashMap<String, PortValue>>);
 pub struct GraphRuntimeResource(pub GraphRuntime);
 
 /// Convert a Value into a coarse f32 scalar for node parameter assignment.
+///
 /// Rules:
 /// - Float -> value
 /// - Bool -> 1.0 / 0.0
@@ -47,19 +60,27 @@ fn value_to_f32(v: &Value) -> f32 {
     }
 }
 
+/// Event for updating a node parameter by key.
 #[derive(Event)]
 pub struct SetNodeParam {
+    /// Node identifier to update.
     pub node: NodeId,
+    /// Parameter key, matching [`vizij_graph_core::types::NodeParams`] fields.
     pub key: String,
+    /// New parameter value.
     pub value: Value,
 }
 
+/// Monotonic time state forwarded into the runtime.
 #[derive(Resource, Default, Clone)]
 pub struct GraphTime {
+    /// Accumulated time in seconds.
     pub t: f32,
+    /// Step delta in seconds.
     pub dt: f32,
 }
 
+/// Registers graph evaluation systems and resources.
 pub struct VizijGraphPlugin;
 
 impl Plugin for VizijGraphPlugin {
@@ -75,6 +96,7 @@ impl Plugin for VizijGraphPlugin {
     }
 }
 
+/// Update [`GraphTime`] based on Bevy's [`Time`] resource.
 fn system_time(time: Res<Time>, mut gt: ResMut<GraphTime>) {
     gt.dt = time.delta_seconds();
     if !gt.dt.is_finite() {
@@ -83,6 +105,7 @@ fn system_time(time: Res<Time>, mut gt: ResMut<GraphTime>) {
     gt.t += gt.dt;
 }
 
+/// Apply [`SetNodeParam`] events to the current [`GraphSpec`].
 fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResource>) {
     for e in ev.read() {
         if let Some(node) = g.0.nodes.iter_mut().find(|n| n.id == e.node) {
@@ -154,6 +177,7 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
     }
 }
 
+/// Evaluate the graph and apply any writes to the Bevy world.
 fn system_eval(world: &mut World) {
     // Pull resources from the World (exclusive system).
     let Some(g) = world.get_resource::<GraphResource>().cloned() else {

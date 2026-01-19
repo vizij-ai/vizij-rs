@@ -21,8 +21,8 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
-- Next action: Confirm remaining animation stack public APIs are documented (including output event variants); shift focus to other stacks or add conventions doc.
-- Status: In progress (iter-17 added clarity on animation ids, baking, sampling, and wasm input defaults)
+- Next action: Audit remaining Bevy adapters and any non-core crates for missing rustdoc (bevy_vizij_graph/api, bevy_vizij_orchestrator once added).
+- Status: In progress (iter-01 improved bevy_vizij_api and bevy_vizij_graph docs)
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
 - Type: Docs
