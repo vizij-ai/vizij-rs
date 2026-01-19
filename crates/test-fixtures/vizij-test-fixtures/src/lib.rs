@@ -105,6 +105,15 @@ pub mod animations {
     /// # Errors
     /// Returns an error if the fixture name is unknown, the file cannot be read,
     /// or the JSON cannot be deserialized.
+    ///
+    /// # Examples
+    /// ```
+    /// use vizij_test_fixtures::animations;
+    ///
+    /// let anim: serde_json::Value = animations::load("pose-quat-transform")?;
+    /// assert!(anim.get("tracks").is_some());
+    /// # Ok::<(), anyhow::Error>(())
+    /// ```
     pub fn load<T: DeserializeOwned>(name: &str) -> Result<T> {
         let rel = lookup(&MANIFEST.animations, "animation", name)?;
         super::load_json(rel)
@@ -143,6 +152,15 @@ pub mod node_graphs {
     /// # Errors
     /// Returns an error if the fixture name is unknown, the file cannot be read,
     /// or the JSON cannot be deserialized.
+    ///
+    /// # Examples
+    /// ```
+    /// use vizij_test_fixtures::node_graphs;
+    ///
+    /// let spec: serde_json::Value = node_graphs::spec("simple-gain-offset")?;
+    /// assert!(spec.get("spec").is_some());
+    /// # Ok::<(), anyhow::Error>(())
+    /// ```
     pub fn spec<T: DeserializeOwned>(name: &str) -> Result<T> {
         let entry = lookup(&MANIFEST.node_graphs, "node graph", name)?;
         super::load_json(&entry.spec)
@@ -215,6 +233,15 @@ pub mod orchestrations {
     /// # Errors
     /// Returns an error if the fixture name is unknown, the file cannot be read,
     /// or the JSON cannot be deserialized.
+    ///
+    /// # Examples
+    /// ```
+    /// use vizij_test_fixtures::orchestrations;
+    ///
+    /// let orchestration: serde_json::Value = orchestrations::load("scalar-ramp-pipeline")?;
+    /// assert!(orchestration.get("graphs").is_some());
+    /// # Ok::<(), anyhow::Error>(())
+    /// ```
     pub fn load<T: DeserializeOwned>(name: &str) -> Result<T> {
         let entry = lookup(&MANIFEST.orchestrations, "orchestration", name)?;
         super::load_json(entry.as_path())

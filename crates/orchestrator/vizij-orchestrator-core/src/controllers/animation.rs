@@ -309,9 +309,27 @@ impl AnimationController {
     ///  - Serialize engine events into `serde_json::Value` and return them alongside the batch.
     ///
     /// # Errors
-    /// This method currently only returns errors if setup parsing or future
-    /// event serialization becomes fallible. Engine update failures are handled
+    /// This method currently only returns errors if setup parsing or future event
+    /// serialization becomes fallible. Engine update failures are handled
     /// internally by the animation engine and do not bubble up here.
+    ///
+    /// # Examples
+    /// ```
+    /// use vizij_orchestrator_core::controllers::AnimationControllerConfig;
+    /// use vizij_orchestrator_core::{Blackboard, controllers::AnimationController};
+    ///
+    /// let mut controller = AnimationController::try_new(AnimationControllerConfig {
+    ///     id: "anim:demo".into(),
+    ///     setup: serde_json::Value::Null,
+    /// }).expect("controller");
+    /// let mut blackboard = Blackboard::new();
+    ///
+    /// let (writes, events) = controller
+    ///     .update(1.0 / 60.0, &mut blackboard)
+    ///     .expect("update ok");
+    /// assert!(events.is_empty());
+    /// assert!(writes.is_empty());
+    /// ```
     ///
     /// This method ignores malformed/unknown blackboard paths and only honors the
     /// documented animation path conventions.
