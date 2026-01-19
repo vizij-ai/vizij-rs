@@ -19,7 +19,7 @@ use wasm_bindgen::prelude::*;
 ///
 /// # Examples (JS)
 /// ```javascript
-/// import { validate_writebatch_json } from "@vizij/api-wasm";
+/// import { validate_writebatch_json } from "vizij-api-wasm";
 ///
 /// validate_writebatch_json('{"writes":[{"path":"rig/hip.x","value":{"float":1.0}}]}');
 /// ```
@@ -41,7 +41,7 @@ pub fn validate_writebatch_json(batch_json: &str) -> Result<(), JsValue> {
 ///
 /// # Examples (JS)
 /// ```javascript
-/// import { writebatch_to_js } from "@vizij/api-wasm";
+/// import { writebatch_to_js } from "vizij-api-wasm";
 ///
 /// const batch = writebatch_to_js('{"writes":[{"path":"demo/x","value":{"float":1}}]}');
 /// console.log(batch.writes.length);
@@ -62,7 +62,7 @@ pub fn writebatch_to_js(batch_json: &str) -> Result<JsValue, JsValue> {
 ///
 /// # Examples (JS)
 /// ```javascript
-/// import { validate_value_json } from "@vizij/api-wasm";
+/// import { validate_value_json } from "vizij-api-wasm";
 ///
 /// validate_value_json('{"vec3":[0,1,2]}');
 /// ```
@@ -84,7 +84,7 @@ pub fn validate_value_json(value_json: &str) -> Result<(), JsValue> {
 ///
 /// # Examples (JS)
 /// ```javascript
-/// import { value_to_js } from "@vizij/api-wasm";
+/// import { value_to_js } from "vizij-api-wasm";
 ///
 /// const value = value_to_js('{"vec3":[0,1,2]}');
 /// console.log(value.type);
