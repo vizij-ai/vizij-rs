@@ -94,7 +94,7 @@
 - Effort: M
 - Evidence: JS/TS exports in `npm/@vizij/*` lack JSDoc summaries, hurting JS doc autogen.
 - Next action: Add concise JSDoc for public exports in wasm wrappers, value-json, test-fixtures, and wasm-loader.
-- Status: In progress (iter-01 added JSDoc for wasm-loader, value-json, test-fixtures, and wasm wrapper entry points)
+- Status: In progress (iter-01 added JSDoc for wasm-loader/value-json/test-fixtures and wasm wrapper entry points; iter-03 tightened fixtures and node-graph metadata helper docs)
 
 ### R-010 — Add usage snippets for frequently used types and helpers
 - Type: Docs

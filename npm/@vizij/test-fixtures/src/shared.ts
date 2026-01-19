@@ -43,12 +43,21 @@ function locateFixturesRoot(): string {
   throw new Error("Unable to locate fixtures/manifest.json relative to @vizij/test-fixtures");
 }
 
-/** Absolute path to the fixtures directory. */
+/**
+ * Absolute path to the fixtures directory.
+ *
+ * Throws if the package cannot locate `fixtures/manifest.json` relative to
+ * the installed module location.
+ */
 export function fixturesRoot(): string {
   return locateFixturesRoot();
 }
 
-/** Parsed fixtures manifest (cached after first load). */
+/**
+ * Parsed fixtures manifest (cached after first load).
+ *
+ * Throws when the manifest cannot be read or parsed.
+ */
 export function manifest(): FixturesManifest {
   if (!manifestCache) {
     const raw = readFileSync(resolve(locateFixturesRoot(), "manifest.json"), "utf8");
@@ -57,17 +66,29 @@ export function manifest(): FixturesManifest {
   return manifestCache;
 }
 
-/** Resolve a fixtures-relative path to an absolute path. */
+/**
+ * Resolve a fixtures-relative path to an absolute path.
+ *
+ * This does not validate that the path exists on disk.
+ */
 export function resolveFixturePath(relPath: string): string {
   return resolve(locateFixturesRoot(), relPath);
 }
 
-/** Read fixture JSON from disk as a string. */
+/**
+ * Read fixture JSON from disk as a string.
+ *
+ * Throws when the fixture file is missing.
+ */
 export function readFixture(relPath: string): string {
   return readFileSync(resolveFixturePath(relPath), "utf8");
 }
 
-/** Load fixture JSON from disk and parse it. */
+/**
+ * Load fixture JSON from disk and parse it.
+ *
+ * Throws when the fixture file is missing or contains invalid JSON.
+ */
 export function loadFixture<T>(relPath: string): T {
   return JSON.parse(readFixture(relPath)) as T;
 }

@@ -8,19 +8,27 @@ const nodesByType: NodeIndex = new Map(
   registry.nodes.map((node) => [node.type_id.toLowerCase(), node]),
 );
 
-/** Return the baked node registry (read-only). */
+/** Return the baked node registry payload (read-only). */
 export function getNodeRegistry(): Registry {
   return registry;
 }
 
-/** Lookup a node signature by type id. */
+/**
+ * Look up a node signature by type id.
+ *
+ * The lookup is case-insensitive and returns `undefined` when the id is unknown.
+ */
 export function findNodeSignature(
   typeId: NodeType | string,
 ): NodeSignature | undefined {
   return nodesByType.get(typeId.toString().toLowerCase());
 }
 
-/** Get a node signature or throw if it is missing. */
+/**
+ * Get a node signature or throw if it is missing.
+ *
+ * @throws If the node type does not exist in the embedded registry.
+ */
 export function requireNodeSignature(
   typeId: NodeType | string,
 ): NodeSignature {
@@ -36,7 +44,11 @@ export function listNodeTypeIds(): NodeType[] {
   return registry.nodes.map((node) => node.type_id as NodeType);
 }
 
-/** List the node signatures grouped by category. */
+/**
+ * List the node signatures grouped by category.
+ *
+ * Categories are lowercased and default to `"uncategorized"` if missing.
+ */
 export function groupNodeSignaturesByCategory(): Map<
   string,
   NodeSignature[]

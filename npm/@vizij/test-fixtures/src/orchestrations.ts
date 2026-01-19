@@ -116,7 +116,11 @@ export function orchestrationNames(): string[] {
   return Object.keys(manifest().orchestrations);
 }
 
-/** Load an orchestration descriptor fixture as raw JSON. */
+/**
+ * Load an orchestration descriptor fixture as raw JSON.
+ *
+ * Throws if the name is not present in the manifest or the file is missing.
+ */
 export function orchestrationJson(name: string): string {
   const entry = orchestrationEntry(name);
   if (typeof entry === "string") {
@@ -125,14 +129,22 @@ export function orchestrationJson(name: string): string {
   return readFixture(entry.path);
 }
 
-/** Load and parse an orchestration descriptor fixture. */
+/**
+ * Load and parse an orchestration descriptor fixture.
+ *
+ * Throws if the name is not present in the manifest or the JSON is invalid.
+ */
 export function orchestrationDescriptor<T = unknown>(name: string): T {
   const entry = orchestrationEntry(name);
   const rel = typeof entry === "string" ? entry : entry.path;
   return loadFixture<T>(rel);
 }
 
-/** Resolve an orchestration descriptor path to an absolute path. */
+/**
+ * Resolve an orchestration descriptor path to an absolute path.
+ *
+ * Throws if the name is not present in the manifest.
+ */
 export function orchestrationDescriptorPath(name: string): string {
   return orchestrationPath(orchestrationEntry(name));
 }

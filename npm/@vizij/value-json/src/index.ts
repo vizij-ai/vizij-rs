@@ -879,11 +879,9 @@ function legacyValueAsText(value: ValueJSON | undefined | null): string | undefi
 }
 
 /**
- * Normalize primitive JS values/primitives into the ValueJSON surface.
- * Arrays are encoded as generic vectors to avoid implicit vec2/vec3 coercions.
- */
-/**
  * Normalize primitive JS values into the ValueJSON surface.
+ *
+ * Arrays are encoded as generic vectors to avoid implicit vec2/vec3 coercions.
  *
  * @example
  * toValueJSON(2); // { float: 2 }

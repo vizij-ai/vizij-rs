@@ -149,6 +149,11 @@ function orchestrationRelPath(name: string): string {
   throw new Error(`Orchestration entry '${name}' did not provide a descriptor path`);
 }
 
+/**
+ * Load an animation fixture payload from the embedded bundle.
+ *
+ * @throws If the fixture key is missing from the manifest.
+ */
 export async function loadAnimationFixture(name: string): Promise<AnimationSetup["animation"]> {
   return loadFixture<AnimationSetup["animation"]>(animationEntry(name));
 }
@@ -239,6 +244,11 @@ function asGraphSubscriptions(value: unknown): GraphSubscriptions | undefined {
   };
 }
 
+/**
+ * Load a node-graph fixture and normalize it into a graph registration config.
+ *
+ * @throws If the fixture is missing or does not contain a GraphSpec-compatible payload.
+ */
 export async function loadNodeGraphConfig(name: string): Promise<GraphRegistrationConfig> {
   const raw = loadFixture<unknown>(nodeGraphEntry(name).spec);
   if (raw && typeof raw === "object") {
@@ -267,6 +277,11 @@ export async function loadNodeGraphConfig(name: string): Promise<GraphRegistrati
   throw new Error(`Node-graph fixture '${name}' did not contain a GraphSpec-compatible payload`);
 }
 
+/**
+ * Load a node-graph fixture and return its registration config.
+ *
+ * Alias for {@link loadNodeGraphConfig}.
+ */
 export async function loadNodeGraphSpec(name: string): Promise<GraphRegistrationConfig> {
   return loadNodeGraphConfig(name);
 }
@@ -276,12 +291,20 @@ export async function listOrchestrationFixtures(): Promise<string[]> {
   return Object.keys(orchestrationMap());
 }
 
-/** Load the raw descriptor JSON value for the given orchestration fixture key. */
+/**
+ * Load the parsed descriptor JSON value for the given orchestration fixture key.
+ *
+ * @throws If the fixture key is missing or the JSON cannot be parsed.
+ */
 export async function loadOrchestrationDescriptor<T = unknown>(name: string): Promise<T> {
   return loadFixture<T>(orchestrationRelPath(name));
 }
 
-/** Load the orchestration descriptor as a JSON string. */
+/**
+ * Load the orchestration descriptor as a JSON string.
+ *
+ * @throws If the fixture key is missing from the manifest.
+ */
 export async function loadOrchestrationJson(name: string): Promise<string> {
   return readFixture(orchestrationRelPath(name));
 }
@@ -384,6 +407,16 @@ async function loadAnimationBinding(
   };
 }
 
+/**
+ * Load an orchestration fixture and resolve all animation/graph dependencies.
+ *
+ * @throws If the orchestration fixture is missing required animation or graph references.
+ */
+/**
+ * Load an orchestration fixture and resolve all animation/graph dependencies.
+ *
+ * @throws If the orchestration fixture is missing required animation or graph references.
+ */
 export async function loadOrchestrationBundle(
   name: string,
 ): Promise<{

@@ -81,3 +81,4 @@
 - 2026-01-19: Unable to create commit in repo due to sandboxed git dir outside writable roots (permission denied on index.lock). Created a local commit artifact in /tmp/ralph-git-docs-update instead.
 
 - 2026-01-19: Added JSDoc summaries for node-graph-wasm metadata helpers and sample exports to improve JS autogen docs coverage.
+- 2026-01-19: Iter-03 scope: npm docs pass for JS autogen. Cleaned up duplicate JSDoc in value-json, added error/behavior notes for test-fixtures helpers, and expanded node-graph metadata helper docs. Assumed doc-only edits; skipped tests. Commit failed: git index lock under `/home/chris/Code/Semio/vizij_ws/vizij-rs_workspace/.bare/worktrees/docs-update` is not writable in sandbox.
