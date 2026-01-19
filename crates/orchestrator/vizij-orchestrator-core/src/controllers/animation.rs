@@ -32,8 +32,8 @@ pub struct AnimationControllerConfig {
 
 /// Wrapper around `vizij_animation_core::Engine` with blackboard integration.
 ///
-/// Use [`update`] to advance the engine and emit a `WriteBatch` derived from
-/// blackboard-driven inputs.
+/// Use [`AnimationController::update`] to advance the engine and emit a
+/// `WriteBatch` derived from blackboard-driven inputs.
 #[derive(Debug)]
 pub struct AnimationController {
     /// Controller identifier.
@@ -293,7 +293,7 @@ impl AnimationController {
     }
 
     /// Update the animation controller for `dt` seconds, reading inputs from the
-    /// blackboard and returning a WriteBatch plus a list of high-level event values.
+    /// blackboard and returning a `WriteBatch` plus a list of event values.
     ///
     /// Behavior:
     ///  - Build `Inputs` from the blackboard using a path convention
@@ -303,7 +303,8 @@ impl AnimationController {
     ///  - Serialize engine events into `serde_json::Value` and return them alongside the batch.
     ///
     /// # Errors
-    /// Returns an error if event serialization fails.
+    /// This method currently only returns errors if a future implementation makes
+    /// event serialization fallible; serialization failures are skipped today.
     ///
     /// Engine update failures are handled internally by the animation engine and do
     /// not bubble up here.

@@ -57,11 +57,13 @@ iter-$ITER
 
   END_HEAD="$(git rev-parse HEAD)"
   if [ "$START_HEAD" = "$END_HEAD" ]; then
+    SCOPE_TAG="${SCOPE:-auto}"
+    COMMIT_MSG="ralph($TASK iter-$ITER): ${SCOPE_TAG} docs"
     if git diff --quiet && git diff --cached --quiet; then
-      git commit --allow-empty -m "ralph($TASK iter-$ITER): empty (no changes)"
+      git commit --allow-empty -m "$COMMIT_MSG"
     else
       git add -A
-      git commit -m "ralph($TASK iter-$ITER): auto-commit"
+      git commit -m "$COMMIT_MSG"
     fi
   fi
 done

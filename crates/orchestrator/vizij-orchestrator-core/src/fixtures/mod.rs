@@ -14,6 +14,9 @@ use vizij_graph_core::types::GraphSpec;
 use vizij_test_fixtures::{animations, node_graphs, orchestrations};
 
 /// Graph fixture descriptor used by orchestrator demos/tests.
+///
+/// Fixtures are primarily sourced from `vizij-test-fixtures` and normalized
+/// before they are converted into `GraphControllerConfig` values.
 #[derive(Debug, Deserialize, Clone)]
 pub struct GraphFixture {
     /// Fixture key used to resolve the graph spec from `vizij-test-fixtures`.
@@ -38,6 +41,8 @@ pub struct GraphFixture {
 }
 
 /// Animation fixture descriptor used by orchestrator demos/tests.
+///
+/// The `setup` payload mirrors the JSON structure expected by the wasm wrapper.
 #[derive(Debug, Clone)]
 pub struct AnimationFixture {
     /// Fixture key used to resolve animation JSON from `vizij-test-fixtures`.
@@ -49,6 +54,8 @@ pub struct AnimationFixture {
 }
 
 /// Input fixture staged onto the blackboard before stepping.
+///
+/// Values and shapes are serialized using `vizij-api-core` JSON conventions.
 #[derive(Debug, Clone)]
 pub struct InputFixture {
     /// Typed path string for the blackboard entry.
@@ -60,6 +67,8 @@ pub struct InputFixture {
 }
 
 /// Fixture describing a merged graph configuration.
+///
+/// Use this to exercise graph merge strategies in fixture-driven tests.
 #[derive(Debug, Clone)]
 pub struct MergedGraphFixture {
     /// Controller id for the merged graph.
@@ -162,6 +171,9 @@ impl StepFixture {
 }
 
 /// Orchestrator fixture aggregating graphs, animations, and expected outputs.
+///
+/// These fixtures provide a high-level view of orchestrator pipelines for
+/// demos and integration tests.
 #[derive(Debug, Clone)]
 pub struct DemoFixture {
     /// Optional description pulled from the orchestration descriptor.
@@ -186,16 +198,22 @@ pub struct DemoFixture {
 
 impl DemoFixture {
     /// Return the graph spec JSON from the primary graph fixture.
+    ///
+    /// This is a convenience for legacy callers that still rely on `graph`.
     pub fn graph_spec_json(&self) -> &serde_json::Value {
         &self.graph.spec
     }
 
     /// Return graph subscription JSON from the primary graph fixture.
+    ///
+    /// This is a convenience for legacy callers that still rely on `graph`.
     pub fn graph_subscriptions(&self) -> &serde_json::Value {
         &self.graph.subs
     }
 
     /// Return all graph fixtures (unmerged).
+    ///
+    /// Prefer this over `graph` when multiple graphs are listed.
     pub fn graphs(&self) -> &[GraphFixture] {
         &self.graphs
     }
@@ -206,16 +224,22 @@ impl DemoFixture {
     }
 
     /// Return animation setup JSON from the primary animation fixture.
+    ///
+    /// This is a convenience for legacy callers that still rely on `animation`.
     pub fn animation_setup(&self) -> &serde_json::Value {
         &self.animation.setup
     }
 
     /// Return all animation fixtures.
+    ///
+    /// Prefer this over `animation` when multiple animations are listed.
     pub fn animations(&self) -> &[AnimationFixture] {
         &self.animations
     }
 
     /// Return the configured schedule string, if present.
+    ///
+    /// This matches the raw fixture payload (for example `"single"` or `"two-pass"`).
     pub fn schedule(&self) -> Option<&str> {
         self.schedule.as_deref()
     }

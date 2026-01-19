@@ -1,3 +1,8 @@
+//! Orchestrator scheduling runners.
+//!
+//! The scheduler drives graph and animation controllers in deterministic passes.
+//! Timings are derived from the supplied `dt` rather than wall-clock duration.
+
 use anyhow::Result;
 use serde_json::Value as JsonValue;
 

@@ -837,10 +837,10 @@ impl GraphController {
     /// Evaluate the graph using the current blackboard state.
     ///
     /// Behavior:
-    ///  - Advance `GraphRuntime.t`/`dt` so time-based nodes observe the new step.
-    ///  - Stage subscribed blackboard inputs into the runtime (only inputs listed in `Subscriptions`).
-    ///  - Call `evaluate_all` (or `evaluate_all_cached` when a plan is ready).
-    ///  - Collect runtime writes and return them as a `WriteBatch`.
+    /// - Advance `GraphRuntime.t`/`dt` so time-based nodes observe the new step.
+    /// - Stage subscribed blackboard inputs into the runtime (only inputs listed in `Subscriptions`).
+    /// - Call `evaluate_all` (or `evaluate_all_cached` when a plan is ready).
+    /// - Collect runtime writes and return them as a `WriteBatch`.
     ///
     /// # Errors
     /// Returns an error if the graph evaluation fails.

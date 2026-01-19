@@ -1,3 +1,9 @@
+//! Blackboard storage for orchestrator controller state.
+//!
+//! The blackboard keeps the latest `vizij_api_core::Value` per `TypedPath` along
+//! with provenance metadata. Writes use last-writer-wins semantics and emit
+//! conflict logs when entries are overwritten.
+
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 
