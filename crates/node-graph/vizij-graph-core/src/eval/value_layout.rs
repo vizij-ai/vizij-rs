@@ -107,6 +107,12 @@ impl ValueLayout {
     /// Reconstruct a structured [`Value`] from flattened scalar data.
     ///
     /// When the slice is too short, missing entries are filled with `NaN`.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Internal type; used by the evaluator when flattening numeric values.
+    /// ```
     pub fn reconstruct(&self, data: &[f32]) -> Value {
         match self {
             ValueLayout::Scalar => Value::Float(data.first().copied().unwrap_or(f32::NAN)),
@@ -228,6 +234,12 @@ impl ValueLayout {
 ///
 /// Record fields are sorted by name before flattening so layouts are deterministic. Returns
 /// `None` when the value contains non-numeric payloads.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Internal helper; use `evaluate_all` for runtime evaluation.
+/// ```
 pub fn flatten_numeric(value: &Value) -> Option<FlatValue> {
     match value {
         Value::Float(f) => Some(FlatValue {
@@ -334,6 +346,12 @@ pub fn flatten_numeric(value: &Value) -> Option<FlatValue> {
 ///
 /// When layouts are incompatible, the larger layout is returned in the error so callers can
 /// emit a correctly shaped NaN-filled value.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Internal helper for numeric alignment in the evaluator.
+/// ```
 pub fn align_flattened(
     a: &FlatValue,
     b: &FlatValue,

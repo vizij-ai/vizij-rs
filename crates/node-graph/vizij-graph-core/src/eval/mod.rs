@@ -137,13 +137,15 @@ fn resize_and_clear(bucket: &mut Vec<PortValue>) {
 ///
 /// ```no_run
 /// use vizij_graph_core::eval::{evaluate_all, evaluate_all_cached, GraphRuntime};
-/// use vizij_graph_core::types::{GraphSpec, NodeSpec, NodeType};
+/// use vizij_graph_core::types::{GraphSpec, NodeParams, NodeSpec, NodeType};
 ///
 /// let spec = GraphSpec {
 ///     nodes: vec![NodeSpec {
 ///         id: "time".into(),
 ///         kind: NodeType::Time,
-///         ..Default::default()
+///         params: NodeParams::default(),
+///         output_shapes: Default::default(),
+///         input_defaults: Default::default(),
 ///     }],
 ///     edges: Vec::new(),
 ///     ..Default::default()

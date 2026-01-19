@@ -49,3 +49,5 @@ Do NOT implement these in the current loop.
 - Status
 
 - 2026-01-18: `vizij-graph-core` URDF IK helpers (`eval/urdfik.rs`) still lack any rustdoc examples; consider adding minimal no_run snippets once a stable URDF fixture exists.
+
+- 2026-01-19: Public eval helpers still need to be referenced via internal modules; examples were marked `ignore` to avoid referencing private `plan`/`value_layout` paths. Consider re-exporting minimal types or adding public constructors if you want runnable doctests.

@@ -37,8 +37,8 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs are less useful without concrete usage examples; added examples across animation core engine, baking helpers, and interpolation utilities.
-- Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures; add remaining node-graph eval/runtime examples for public helpers (InputSlots/OutputSlots/materialize_outputs) if needed.
-- Status: In progress (iter-11 added runnable topo_order example)
+- Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures; revisit node-graph eval helpers if public re-exports are added (current examples are `ignore`).
+- Status: In progress (iter-13 added doc notes + ignored examples for eval helpers)
 
 ### R-004 — Standardize module-level docs and `//!` overviews
 - Type: Docs
