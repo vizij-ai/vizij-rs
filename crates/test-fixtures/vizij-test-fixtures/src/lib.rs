@@ -1,3 +1,18 @@
+//! Shared JSON fixtures for Vizij engines, graphs, and orchestrations.
+//!
+//! The helpers in this crate map logical fixture names to JSON files declared in
+//! `fixtures/manifest.json`, returning either raw strings, parsed values, or
+//! filesystem paths for tooling that needs to read directly from disk.
+//!
+//! # Examples
+//! ```no_run
+//! use vizij_test_fixtures::{animations, node_graphs};
+//!
+//! let stored: serde_json::Value = animations::load("pose-quat-transform")?;
+//! let spec: serde_json::Value = node_graphs::spec("simple-gain-offset")?;
+//! # Ok::<(), anyhow::Error>(())
+//! ```
+
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -67,46 +82,76 @@ fn lookup<'a, T>(map: &'a HashMap<String, T>, kind: &str, name: &str) -> Result<
         .ok_or_else(|| anyhow!("unknown {kind} fixture '{name}'"))
 }
 
+/// Helpers for animation fixtures listed in `fixtures/manifest.json`.
 pub mod animations {
     use super::*;
 
+    /// Returns the available animation fixture keys (unordered).
     pub fn keys() -> Vec<String> {
         MANIFEST.animations.keys().cloned().collect()
     }
 
+    /// Returns the raw JSON text for an animation fixture.
+    ///
+    /// # Errors
+    /// Returns an error if the fixture name is unknown or the JSON file cannot be read.
     pub fn json(name: &str) -> Result<String> {
         let rel = lookup(&MANIFEST.animations, "animation", name)?;
         read_to_string(rel)
     }
 
+    /// Loads an animation fixture into the requested JSON type.
+    ///
+    /// # Errors
+    /// Returns an error if the fixture name is unknown, the file cannot be read,
+    /// or the JSON cannot be deserialized.
     pub fn load<T: DeserializeOwned>(name: &str) -> Result<T> {
         let rel = lookup(&MANIFEST.animations, "animation", name)?;
         super::load_json(rel)
     }
 
+    /// Resolves the filesystem path for an animation fixture.
+    ///
+    /// # Errors
+    /// Returns an error if the fixture name is unknown.
     pub fn path(name: &str) -> Result<PathBuf> {
         let rel = lookup(&MANIFEST.animations, "animation", name)?;
         Ok(resolve_path(rel))
     }
 }
 
+/// Helpers for node graph fixtures listed in `fixtures/manifest.json`.
 pub mod node_graphs {
     use super::*;
 
+    /// Returns the available node-graph fixture keys (unordered).
     pub fn keys() -> Vec<String> {
         MANIFEST.node_graphs.keys().cloned().collect()
     }
 
+    /// Returns the raw JSON for a node-graph spec fixture.
+    ///
+    /// # Errors
+    /// Returns an error if the fixture name is unknown or the JSON file cannot be read.
     pub fn spec_json(name: &str) -> Result<String> {
         let entry = lookup(&MANIFEST.node_graphs, "node graph", name)?;
         read_to_string(&entry.spec)
     }
 
+    /// Loads a node-graph spec fixture into the requested JSON type.
+    ///
+    /// # Errors
+    /// Returns an error if the fixture name is unknown, the file cannot be read,
+    /// or the JSON cannot be deserialized.
     pub fn spec<T: DeserializeOwned>(name: &str) -> Result<T> {
         let entry = lookup(&MANIFEST.node_graphs, "node graph", name)?;
         super::load_json(&entry.spec)
     }
 
+    /// Returns the raw JSON for a staged node-graph payload, if present.
+    ///
+    /// # Errors
+    /// Returns an error if the fixture name is unknown or the stage JSON cannot be read.
     pub fn stage_json(name: &str) -> Result<Option<String>> {
         let entry = lookup(&MANIFEST.node_graphs, "node graph", name)?;
         match &entry.stage {
@@ -115,6 +160,11 @@ pub mod node_graphs {
         }
     }
 
+    /// Loads a staged node-graph payload into the requested JSON type, if present.
+    ///
+    /// # Errors
+    /// Returns an error if the fixture name is unknown, the stage file cannot be read,
+    /// or the JSON cannot be deserialized.
     pub fn stage<T: DeserializeOwned>(name: &str) -> Result<Option<T>> {
         let entry = lookup(&MANIFEST.node_graphs, "node graph", name)?;
         match &entry.stage {
@@ -123,34 +173,57 @@ pub mod node_graphs {
         }
     }
 
+    /// Resolves the filesystem path for a node-graph spec fixture.
+    ///
+    /// # Errors
+    /// Returns an error if the fixture name is unknown.
     pub fn spec_path(name: &str) -> Result<PathBuf> {
         let entry = lookup(&MANIFEST.node_graphs, "node graph", name)?;
         Ok(resolve_path(&entry.spec))
     }
 
+    /// Resolves the filesystem path for a staged node-graph payload, if present.
+    ///
+    /// # Errors
+    /// Returns an error if the fixture name is unknown.
     pub fn stage_path(name: &str) -> Result<Option<PathBuf>> {
         let entry = lookup(&MANIFEST.node_graphs, "node graph", name)?;
         Ok(entry.stage.as_deref().map(resolve_path))
     }
 }
 
+/// Helpers for orchestration fixtures listed in `fixtures/manifest.json`.
 pub mod orchestrations {
     use super::*;
 
+    /// Returns the available orchestration fixture keys (unordered).
     pub fn keys() -> Vec<String> {
         MANIFEST.orchestrations.keys().cloned().collect()
     }
 
+    /// Returns the raw JSON text for an orchestration fixture.
+    ///
+    /// # Errors
+    /// Returns an error if the fixture name is unknown or the JSON file cannot be read.
     pub fn json(name: &str) -> Result<String> {
         let entry = lookup(&MANIFEST.orchestrations, "orchestration", name)?;
         read_to_string(entry.as_path())
     }
 
+    /// Loads an orchestration fixture into the requested JSON type.
+    ///
+    /// # Errors
+    /// Returns an error if the fixture name is unknown, the file cannot be read,
+    /// or the JSON cannot be deserialized.
     pub fn load<T: DeserializeOwned>(name: &str) -> Result<T> {
         let entry = lookup(&MANIFEST.orchestrations, "orchestration", name)?;
         super::load_json(entry.as_path())
     }
 
+    /// Resolves the filesystem path for an orchestration fixture.
+    ///
+    /// # Errors
+    /// Returns an error if the fixture name is unknown.
     pub fn path(name: &str) -> Result<PathBuf> {
         let entry = lookup(&MANIFEST.orchestrations, "orchestration", name)?;
         Ok(resolve_path(entry.as_path()))
