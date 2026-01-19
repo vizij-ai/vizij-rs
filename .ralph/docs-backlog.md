@@ -22,7 +22,7 @@
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
 - Next action: Inventory `pub` items in each crate and tag missing/weak docs
-- Status: Planned
+- Status: In progress
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
 - Type: Docs

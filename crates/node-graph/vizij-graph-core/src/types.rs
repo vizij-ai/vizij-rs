@@ -120,68 +120,112 @@ pub enum NodeType {
 }
 
 /// Parameter payload for node configuration.
+///
+/// The fields here are optional because the node registry declares which inputs are relevant
+/// for a given [`NodeType`]. Unused fields are ignored during evaluation.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NodeParams {
+    /// Constant payload used by `Constant`, `VectorConstant`, and related nodes.
     pub value: Option<Value>,
+    /// Oscillator frequency in Hz.
     pub frequency: Option<f32>,
+    /// Oscillator phase offset in radians.
     pub phase: Option<f32>,
+    /// Lower bound for slider, clamp, and remap helpers.
     #[serde(default)]
     pub min: f32,
+    /// Upper bound for slider, clamp, and remap helpers.
     #[serde(default)]
     pub max: f32,
     // Optional defaults for Vec3 constructor
+    /// Default x component for vec3 constructors.
     pub x: Option<f32>,
+    /// Default y component for vec3 constructors.
     pub y: Option<f32>,
+    /// Default z component for vec3 constructors.
     pub z: Option<f32>,
     // For Remap
+    /// Remap input minimum.
     pub in_min: Option<f32>,
+    /// Remap input maximum.
     pub in_max: Option<f32>,
+    /// Remap output minimum.
     pub out_min: Option<f32>,
+    /// Remap output maximum.
     pub out_max: Option<f32>,
+    /// Rounding mode for `Round` nodes.
     #[serde(default)]
     pub round_mode: Option<RoundMode>,
     // For Piecewise Remap
+    /// Whether piecewise remap clamps outside the provided range.
     #[serde(default)]
     pub clamp: Option<bool>,
     // For Centered Remap
+    /// Centered remap input low value.
     pub in_low: Option<f32>,
+    /// Centered remap input anchor value.
     pub in_anchor: Option<f32>,
+    /// Centered remap input high value.
     pub in_high: Option<f32>,
+    /// Centered remap output low value.
     pub out_low: Option<f32>,
+    /// Centered remap output anchor value.
     pub out_anchor: Option<f32>,
+    /// Centered remap output high value.
     pub out_high: Option<f32>,
     // For IK
+    /// First bone length for analytic IK.
     pub bone1: Option<f32>,
+    /// Second bone length for analytic IK.
     pub bone2: Option<f32>,
+    /// Third bone length for analytic IK.
     pub bone3: Option<f32>,
+    /// URDF payload for IK nodes.
     pub urdf_xml: Option<String>,
+    /// Root link name for URDF chains.
     pub root_link: Option<String>,
+    /// Tip link name for URDF chains.
     pub tip_link: Option<String>,
+    /// Optional joint seed for URDF IK solvers.
     pub seed: Option<Vec<f32>>,
+    /// Optional joint-space weights for URDF IK.
     pub weights: Option<Vec<f32>>,
+    /// Maximum IK solver iterations.
     pub max_iters: Option<u32>,
+    /// Positional tolerance for IK solvers.
     pub tol_pos: Option<f32>,
+    /// Rotational tolerance for IK solvers.
     pub tol_rot: Option<f32>,
+    /// Default joint values keyed by joint name.
     #[serde(default)]
     pub joint_defaults: Option<Vec<(String, f32)>>,
     // For Splitter
+    /// Index for `VectorIndex` and similar nodes.
     pub index: Option<f32>,
     // For Split sizes (vector of sizes, floored to usize)
+    /// Sizes for `Split` outputs (floored to integers).
     pub sizes: Option<Vec<f32>>,
 
     // Transition parameters
+    /// Spring stiffness constant.
     pub stiffness: Option<f32>,
+    /// Spring damping value.
     pub damping: Option<f32>,
+    /// Spring mass value.
     pub mass: Option<f32>,
+    /// Damp half-life in seconds.
     pub half_life: Option<f32>,
+    /// Slew max rate per second.
     pub max_rate: Option<f32>,
 
     // For Case routing nodes
+    /// Explicit label list for `Case` routing.
     #[serde(default)]
     pub case_labels: Option<Vec<String>>,
 
     // Optional target typed path for Output nodes and sinks.
     // Example: "robot1/Arm/Joint3.translation"
+    /// Target path for `Output` nodes.
     #[serde(default)]
     pub path: Option<TypedPath>,
 }
@@ -190,23 +234,30 @@ pub struct NodeParams {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum RoundMode {
+    /// Round toward negative infinity.
     #[default]
     Floor,
+    /// Round toward positive infinity.
     Ceil,
+    /// Round toward zero.
     Trunc,
 }
 
 /// Node entry inside a [`GraphSpec`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeSpec {
+    /// Unique node identifier.
     pub id: NodeId,
     /// Accept either `"type"` (preferred) or legacy `"kind"` in incoming JSON.
     #[serde(rename = "type", alias = "kind")]
     pub kind: NodeType,
+    /// Parameter values for this node.
     #[serde(default)]
     pub params: NodeParams,
+    /// Optional declared output shapes keyed by output port name.
     #[serde(default)]
     pub output_shapes: HashMap<String, Shape>,
+    /// Default values for named inputs.
     #[serde(default)]
     pub input_defaults: HashMap<String, InputDefault>,
 }
@@ -214,7 +265,9 @@ pub struct NodeSpec {
 /// Top-level graph document consumed by the evaluator.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GraphSpec {
+    /// Nodes in the graph.
     pub nodes: Vec<NodeSpec>,
+    /// Directed edges connecting node outputs to inputs.
     #[serde(default)]
     pub edges: Vec<EdgeSpec>,
     /// Optional caller-managed cache key for plan reuse. When zero, the runtime falls back to
@@ -233,14 +286,19 @@ pub(crate) fn is_zero(v: &u64) -> bool {
 /// Connection description used when building input bindings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputConnection {
+    /// Source node id, or `None` when only defaults are supplied.
     #[serde(default)]
     pub node_id: Option<NodeId>,
+    /// Output port key on the source node.
     #[serde(default = "default_output_key")]
     pub output_key: String,
+    /// Optional selector path applied to the source value.
     #[serde(default)]
     pub selector: Option<Selector>,
+    /// Default value used when no edge provides an input.
     #[serde(rename = "default", default)]
     pub default_value: Option<Value>,
+    /// Default shape hint applied to the default value.
     #[serde(default)]
     pub default_shape: Option<Shape>,
 }
@@ -264,8 +322,10 @@ impl Default for InputConnection {
 /// Default value and optional shape for a named input.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputDefault {
+    /// Default value for the input.
     #[serde(rename = "value")]
     pub value: Value,
+    /// Optional shape hint for the input.
     #[serde(default)]
     pub shape: Option<Shape>,
 }
@@ -273,7 +333,9 @@ pub struct InputDefault {
 /// Output endpoint referenced by an [`EdgeSpec`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EdgeOutputEndpoint {
+    /// Source node identifier.
     pub node_id: NodeId,
+    /// Output port key on the source node.
     #[serde(default = "default_output_key")]
     pub output: String,
 }
@@ -281,15 +343,20 @@ pub struct EdgeOutputEndpoint {
 /// Input endpoint referenced by an [`EdgeSpec`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EdgeInputEndpoint {
+    /// Target node identifier.
     pub node_id: NodeId,
+    /// Input port key on the target node.
     pub input: String,
 }
 
 /// Directed edge between two nodes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EdgeSpec {
+    /// Source endpoint.
     pub from: EdgeOutputEndpoint,
+    /// Destination endpoint.
     pub to: EdgeInputEndpoint,
+    /// Optional selector path applied to the source value.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub selector: Option<Selector>,

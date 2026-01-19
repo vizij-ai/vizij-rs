@@ -5,12 +5,19 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PortType {
+    /// Scalar float inputs/outputs.
     Float,
+    /// Boolean inputs/outputs.
     Bool,
+    /// 3D vector inputs/outputs.
     Vec3,
+    /// Quaternion inputs/outputs.
     Quat,
+    /// Transform inputs/outputs.
     Transform,
+    /// Numeric vector inputs/outputs.
     Vector,
+    /// Arbitrary value inputs/outputs.
     Any,
 }
 
@@ -18,21 +25,31 @@ pub enum PortType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ParamType {
+    /// Scalar float parameters.
     Float,
+    /// Boolean parameters.
     Bool,
+    /// Vec3 parameters.
     Vec3,
+    /// Numeric vector parameters.
     Vector,
+    /// Arbitrary value parameters.
     Any, // union (Value)
 }
 
 /// Static port metadata used by the schema registry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PortSpec {
+    /// Stable port identifier used in JSON and bindings.
     pub id: &'static str,
+    /// Expected port value category.
     pub ty: PortType,
+    /// Human-readable label for UI surfaces.
     pub label: &'static str,
+    /// Short documentation string displayed in tooling.
     #[serde(default)]
     pub doc: &'static str,
+    /// Whether the port can be left unconnected.
     #[serde(default)]
     pub optional: bool,
 }
@@ -40,12 +57,18 @@ pub struct PortSpec {
 /// Definition for variadic input or output groups.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VariadicSpec {
+    /// Variadic group identifier (prefix for ports).
     pub id: &'static str,
+    /// Expected value category for ports in the group.
     pub ty: PortType,
+    /// Human-readable label for UI surfaces.
     pub label: &'static str,
+    /// Short documentation string displayed in tooling.
     #[serde(default)]
     pub doc: &'static str,
+    /// Minimum number of ports required.
     pub min: usize,
+    /// Optional maximum number of ports allowed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max: Option<usize>,
 }
@@ -53,15 +76,22 @@ pub struct VariadicSpec {
 /// Static parameter metadata used by the schema registry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParamSpec {
+    /// Stable parameter identifier used in JSON and bindings.
     pub id: &'static str,
+    /// Expected parameter value category.
     pub ty: ParamType,
+    /// Human-readable label for UI surfaces.
     pub label: &'static str,
+    /// Short documentation string displayed in tooling.
     #[serde(default)]
     pub doc: &'static str,
+    /// Default JSON value (Value JSON encoding).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_json: Option<serde_json::Value>,
+    /// Optional minimum (for numeric params).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min: Option<f64>,
+    /// Optional maximum (for numeric params).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max: Option<f64>,
 }
@@ -69,24 +99,35 @@ pub struct ParamSpec {
 /// Signature describing a node's ports, parameters, and documentation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeSignature {
+    /// Unique node type id for the signature.
     pub type_id: NodeType,
+    /// Display name for the node.
     pub name: &'static str,
+    /// Category used by UI tooling.
     pub category: &'static str,
+    /// Short documentation string displayed in tooling.
     #[serde(default)]
     pub doc: &'static str,
+    /// Fixed input port definitions.
     pub inputs: Vec<PortSpec>,
+    /// Optional variadic input group.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub variadic_inputs: Option<VariadicSpec>,
+    /// Fixed output port definitions.
     pub outputs: Vec<PortSpec>,
+    /// Optional variadic output group.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub variadic_outputs: Option<VariadicSpec>,
+    /// Parameter definitions for this node.
     pub params: Vec<ParamSpec>,
 }
 
 /// Registry of known node signatures for tooling and validation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Registry {
+    /// Registry schema version.
     pub version: &'static str,
+    /// Registered node signatures.
     pub nodes: Vec<NodeSignature>,
 }
 
@@ -156,6 +197,9 @@ fn p_out_vector() -> PortSpec {
 }
 
 /// Return the built-in node registry for tooling and validation.
+///
+/// The registry mirrors the built-in node types and is consumed by UI tooling
+/// and schema-aware validators.
 pub fn registry() -> Registry {
     use NodeType::*;
     let mut nodes: Vec<NodeSignature> = Vec::new();

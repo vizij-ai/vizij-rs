@@ -8,6 +8,8 @@ use vizij_api_core::{Shape, ShapeId, Value};
 use super::value_layout::{flatten_numeric, PortValue};
 
 /// Infer the [`Shape`] for a [`Value`].
+///
+/// This uses value structure only (not declared shapes on nodes).
 pub fn infer_shape(value: &Value) -> Shape {
     Shape::new(infer_shape_id(value))
 }
@@ -79,6 +81,8 @@ pub fn infer_shape_id(value: &Value) -> ShapeId {
 }
 
 /// Ensure outputs match their declared shapes, updating cached shapes in-place.
+///
+/// Returns an error when a declared output is missing or the value does not match.
 #[allow(dead_code)]
 pub fn enforce_output_shapes(
     spec: &NodeSpec,

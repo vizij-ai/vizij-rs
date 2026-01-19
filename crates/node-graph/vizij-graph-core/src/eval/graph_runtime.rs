@@ -151,6 +151,8 @@ impl GraphRuntime {
     }
 
     /// Stage an input value for the next evaluation epoch using a [`TypedPath`] key.
+    ///
+    /// Returns the previous staged value, if one existed for the same path.
     pub fn set_input(
         &mut self,
         path: TypedPath,
@@ -173,6 +175,8 @@ impl GraphRuntime {
     }
 
     /// Consume a staged input for the current epoch, removing it from the cache.
+    ///
+    /// Returns `None` if the value is from a different epoch.
     pub fn take_input(&mut self, path: &TypedPath) -> Option<StagedInput> {
         let matches_epoch = self
             .staged_inputs

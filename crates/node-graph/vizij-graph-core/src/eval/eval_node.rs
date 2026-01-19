@@ -71,6 +71,9 @@ impl<'a> InputSlots<'a> {
     }
 
     /// Iterate over inputs in slot order.
+    ///
+    /// This yields all inputs, even if they are not present; use [`is_present`] if you need to
+    /// check whether an input was explicitly supplied.
     pub fn iter(&self) -> impl Iterator<Item = (&str, &PortValue)> {
         self.layout
             .slots
@@ -181,6 +184,8 @@ fn single_output(outputs: &mut OutputSlots, value: Value) -> Result<(), String> 
 }
 
 /// Evaluate a single node, updating `rt` with new outputs and queued writes.
+///
+/// This function performs shape enforcement and appends `WriteOp`s for `Output` nodes.
 pub fn eval_node(
     rt: &mut GraphRuntime,
     spec: &NodeSpec,

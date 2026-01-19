@@ -8,7 +8,9 @@ use super::shape_helpers::infer_shape;
 /// Evaluated output captured alongside its inferred shape.
 #[derive(Clone, Debug)]
 pub struct PortValue {
+    /// Evaluated value.
     pub value: Value,
+    /// Inferred or declared shape for the value.
     pub shape: Shape,
 }
 
@@ -209,6 +211,7 @@ impl ValueLayout {
         }
     }
 
+    /// Rebuild a value filled with the provided scalar across all slots.
     pub fn fill_with(&self, value: f32) -> Value {
         let len = self.scalar_len();
         let data = vec![value; len];
@@ -217,6 +220,8 @@ impl ValueLayout {
 }
 
 /// Attempt to flatten a [`Value`] that contains only numeric content.
+///
+/// Returns `None` when the value contains non-numeric payloads.
 pub fn flatten_numeric(value: &Value) -> Option<FlatValue> {
     match value {
         Value::Float(f) => Some(FlatValue {
@@ -320,6 +325,9 @@ pub fn flatten_numeric(value: &Value) -> Option<FlatValue> {
 }
 
 /// Align two flattened values for point-wise operations, broadcasting scalars when possible.
+///
+/// When layouts are incompatible, the larger layout is returned in the error so callers can
+/// emit a correctly shaped NaN-filled value.
 pub fn align_flattened(
     a: &FlatValue,
     b: &FlatValue,

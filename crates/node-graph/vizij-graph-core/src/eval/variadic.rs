@@ -9,6 +9,8 @@ use super::numeric::binary_numeric;
 use super::PortValue;
 
 /// Split a variadic input key into its prefix and optional positional suffix.
+///
+/// Keys like `operand_3` return `("operand", Some(3))`.
 pub fn parse_variadic_key(key: &str) -> (&str, Option<usize>) {
     if let Some((prefix, tail)) = key.rsplit_once('_') {
         if let Ok(idx) = tail.parse::<usize>() {
@@ -40,6 +42,8 @@ pub fn collect_operand_ports<'a>(inputs: &'a InputSlots<'a>) -> Vec<&'a PortValu
 }
 
 /// Fold a variadic collection of values with the provided numeric operator.
+///
+/// Returns `empty_fallback` when the slice is empty.
 pub fn fold_numeric_variadic<F>(values: &[Value], op: F, empty_fallback: Value) -> Value
 where
     F: Fn(f32, f32) -> f32 + Copy,

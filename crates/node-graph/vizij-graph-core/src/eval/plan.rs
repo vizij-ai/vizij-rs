@@ -12,13 +12,16 @@ use super::variadic::{compare_variadic_keys, parse_variadic_key};
 /// Continuous span inside a variadic group.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct VariadicRange {
+    /// Starting slot index for the group.
     pub start: usize,
+    /// Number of slots in the group.
     pub len: usize,
 }
 
 /// Input/output slot layout for a node.
 #[derive(Clone, Debug, Default)]
 pub struct PortLayout {
+    /// Slot names in stable order.
     pub slots: Vec<String>,
     name_to_slot: HashMap<String, usize>,
     variadics: HashMap<String, VariadicRange>,
@@ -52,27 +55,38 @@ impl PortLayout {
 /// Input/output layouts for a node.
 #[derive(Clone, Debug, Default)]
 pub struct NodeLayout {
+    /// Input layout for the node.
     pub inputs: PortLayout,
+    /// Output layout for the node.
     pub outputs: PortLayout,
 }
 
 /// Resolved input source for a bound port.
 #[derive(Clone, Debug)]
 pub struct ResolvedInputSource {
+    /// Index of the source node in the spec.
     pub node_idx: usize,
+    /// Slot index within the source node's outputs.
     pub slot: usize,
+    /// Output port name on the source node.
     pub output_name: String,
+    /// Optional selector applied to the source output.
     pub selector: Option<Selector>,
 }
 
 /// Resolved input binding with optional defaults.
 #[derive(Clone, Debug)]
 pub struct InputBinding {
+    /// Optional resolved source input.
     pub source: Option<ResolvedInputSource>,
+    /// Optional default value when no source is connected.
     pub default: Option<PortValue>,
 }
 
 /// Cached, topology-ready view of a [`GraphSpec`] for reuse across frames.
+///
+/// The cache stores stable port layouts and input bindings so graph evaluation can avoid
+/// rebuilding topology on every frame.
 #[derive(Debug, Default)]
 pub struct PlanCache {
     fingerprint: u64,
