@@ -96,6 +96,8 @@ pub struct Outputs {
 }
 
 /// Outputs returned when derivatives are requested.
+///
+/// Derivative values are provided only for numeric kinds; non-numeric tracks produce `None`.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct OutputsWithDerivatives {
     /// Sampled changes with derivative metadata for this tick.
@@ -136,6 +138,8 @@ impl Outputs {
     /// change key as a [`TypedPath`].
     ///
     /// Entries whose keys do not parse are skipped.
+    ///
+    /// This is useful when piping animation outputs into systems that expect typed paths.
     ///
     /// # Examples
     /// ```rust

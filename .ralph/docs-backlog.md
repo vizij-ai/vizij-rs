@@ -21,7 +21,7 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
-- Next action: Confirm remaining animation stack public APIs are documented; shift focus to other stacks or add conventions doc.
+- Next action: Confirm remaining animation stack public APIs are documented (including Bevy systems); shift focus to other stacks or add conventions doc.
 - Status: In progress
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors

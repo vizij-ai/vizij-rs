@@ -25,3 +25,5 @@ Do NOT implement these in the current loop.
 - 2026-01-19: Bevy animation system fallbacks apply non-typed writes only to Transform properties; consider documenting or extending this for other component types if needed.
 - 2026-01-19: `vizij-animation-core` sampling uses a fixed derivative epsilon outside of `BakingConfig` for runtime sampling; consider exposing this in runtime config if host apps need tuning.
 - 2026-01-19: Git commits in this worktree fail because the git dir lives under `/home/chris/Code/Semio/vizij_ws/vizij-rs_workspace/.bare`, which is outside the writable roots in this environment.
+
+- 2026-01-19: `bevy_vizij_animation::apply_outputs_system` returns early when `BindingIndex` or `PendingOutputs` are missing, despite docstring previously stating it panics; keep docs aligned with early-return behavior.

@@ -24,6 +24,8 @@ pub struct ChannelKey {
 
 /// Trait for resolving canonical target paths to opaque handles.
 /// Adapters (Bevy/WASM) implement this and pass into `Engine::prebind`.
+///
+/// Return `None` to keep the canonical path as the output key.
 pub trait TargetResolver {
     /// Resolve a canonical target path into an opaque handle for host application use.
     ///

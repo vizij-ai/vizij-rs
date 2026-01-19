@@ -71,6 +71,10 @@ pub struct Track {
 }
 
 /// Canonical StoredAnimation format (standard, single supported schema).
+///
+/// This is the normalized in-memory form used by the engine. Use
+/// [`parse_stored_animation_json`](crate::stored_animation::parse_stored_animation_json)
+/// to convert fixture JSON into this struct.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct AnimationData {
     /// Optional internal id assigned when loaded into the engine.

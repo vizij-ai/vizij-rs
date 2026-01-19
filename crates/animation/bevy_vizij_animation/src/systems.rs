@@ -17,13 +17,13 @@ fn make_handle(name: &str, prop: TargetProp) -> String {
     }
 }
 
-/// Walk descendants under each `VizijTargetRoot` and populate `BindingIndex`.
+/// Walk descendants under each `VizijTargetRoot` and rebuild the `BindingIndex`.
 ///
 /// Entities without a `Name` component are skipped. When a `VizijBindingHint` is present,
 /// its `path` replaces the `Name` for the canonical handle prefix.
 ///
-/// Runs in `Update` to keep bindings fresh; you can add change detection in the host app
-/// if you need to reduce per-frame work.
+/// This system replaces the entire index each run rather than incrementally updating it.
+/// Run it in `Update` (default) or add change detection if you need to reduce per-frame work.
 pub fn build_binding_index_system(
     roots: Query<Entity, With<VizijTargetRoot>>,
     children: Query<&Children>,
@@ -74,9 +74,12 @@ pub fn build_binding_index_system(
 /// Bridge the core prebind call into the ECS.
 ///
 /// Resolves canonical track target paths to string handles recorded in `BindingIndex`.
+/// The handles are the canonical strings themselves, keeping the Bevy adapter aligned
+/// with core output keys.
 ///
-/// The handles are the canonical strings themselves, which keeps the Bevy adapter
-/// aligned with core output keys.
+/// If a `WriterRegistry` resource is present, this registers transform setters for each
+/// bound handle so `apply_outputs_system` can drive `Transform` updates through the
+/// typed write path.
 pub fn prebind_core_system(
     mut eng: ResMut<VizijEngine>,
     index: Res<BindingIndex>,
@@ -150,8 +153,7 @@ pub fn fixed_update_core_system(
 /// Writes whose keys do not parse as `TypedPath` are applied via the `BindingIndex`
 /// fallback (Transform-only). When no registry is present, typed writes also fall back.
 ///
-/// # Panics
-/// Panics if the `BindingIndex` resource is missing. Other resources are optional.
+/// Returns early if the `BindingIndex` or `PendingOutputs` resources are missing.
 pub fn apply_outputs_system(world: &mut World) {
     // Access required resources into locals to avoid borrow conflicts
     let index_map = if let Some(idx) = world.get_resource::<BindingIndex>() {

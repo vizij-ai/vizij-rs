@@ -398,6 +398,8 @@ impl AccumEntry {
 
 /// Accumulates per-handle contributions across instances, tracking both values and optional
 /// derivatives so the engine can emit aligned `(Value, Option<Value>)` pairs.
+///
+/// This struct is public for tooling and tests; the engine owns a fresh accumulator per tick.
 #[derive(Default)]
 pub struct AccumulatorWithDerivatives {
     values: HashMap<String, AccumEntry>,

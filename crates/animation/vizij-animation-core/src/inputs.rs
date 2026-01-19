@@ -51,9 +51,9 @@ pub enum PlayerCommand {
     Pause { player: PlayerId },
     /// Stop and rewind to the window start.
     Stop { player: PlayerId },
-    /// Set absolute playback speed multiplier.
+    /// Set absolute playback speed multiplier (negative reverses playback).
     SetSpeed { player: PlayerId, speed: f32 },
-    /// Seek the player's time to a specific value (seconds).
+    /// Seek the player's time to a specific value (seconds, in player time).
     Seek { player: PlayerId, time: f32 },
     /// Update the loop mode used for sampling.
     SetLoopMode { player: PlayerId, mode: LoopMode },

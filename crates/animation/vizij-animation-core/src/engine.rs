@@ -36,6 +36,9 @@ pub struct PrebindReport {
 }
 
 /// Per-player controller and instance list.
+///
+/// This struct is public for inspection but is owned by the engine; update playback
+/// via [`Inputs`](crate::inputs::Inputs) rather than mutating fields directly.
 #[derive(Debug)]
 pub struct Player {
     /// Stable player identifier.
@@ -75,6 +78,9 @@ impl Player {
 }
 
 /// An animation instance attached to a player.
+///
+/// Instances are owned by the engine; update them through [`InstanceUpdate`](crate::inputs::InstanceUpdate)
+/// or recreate them when changing animation clips.
 #[derive(Debug)]
 pub struct Instance {
     /// Stable instance identifier.
@@ -94,6 +100,8 @@ pub struct Instance {
 }
 
 /// Configuration for adding an instance.
+///
+/// Use this when calling [`Engine::add_instance`] to set initial weight, timing, and enable state.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct InstanceCfg {
     /// Blend weight applied during accumulation.
@@ -888,7 +896,7 @@ impl Engine {
 
     /// Remove an instance from a player. Returns true if removed.
     ///
-    /// This is a no-op if the player id is unknown.
+    /// This is a no-op if the player id is unknown or the instance is not attached.
     pub fn remove_instance(&mut self, player: PlayerId, inst: InstId) -> bool {
         // Detach from player
         if let Some(p) = self.players.iter_mut().find(|pp| pp.id == player) {
@@ -907,6 +915,8 @@ impl Engine {
     }
 
     /// Remove a player and all its instances. Returns true if removed.
+    ///
+    /// Returns false when the player id is unknown.
     pub fn remove_player(&mut self, player: PlayerId) -> bool {
         if let Some(idx) = self.players.iter().position(|p| p.id == player) {
             let inst_ids: Vec<InstId> = self.players[idx].instances.clone();
@@ -924,7 +934,7 @@ impl Engine {
 
     /// Unload an animation and remove all instances referencing it across all players.
     ///
-    /// Returns true if the animation existed.
+    /// Returns true if the animation existed; returns false when the id was not present.
     pub fn unload_animation(&mut self, anim: AnimId) -> bool {
         if !self.anims.contains(anim) {
             return false;
