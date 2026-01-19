@@ -161,6 +161,9 @@ impl Orchestrator {
 
     /// Advance the orchestrator by `dt` seconds and return an [`OrchestratorFrame`].
     ///
+    /// `step` increments the internal epoch before evaluating controllers, so the
+    /// returned frame always reflects the new epoch value.
+    ///
     /// # Errors
     /// Returns an error if any controller fails to evaluate or if the schedule runner
     /// encounters an unexpected failure.

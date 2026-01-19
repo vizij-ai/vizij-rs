@@ -293,6 +293,9 @@ impl AnimationController {
     ///
     /// # Errors
     /// Returns an error if event serialization fails.
+    ///
+    /// This method ignores malformed/unknown blackboard paths and only honors the
+    /// documented animation path conventions.
     pub fn update(&mut self, dt: f32, bb: &mut Blackboard) -> Result<(WriteBatch, Vec<JsonValue>)> {
         // Build Inputs from Blackboard
         let inputs = Self::map_blackboard_to_inputs(bb);

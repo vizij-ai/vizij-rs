@@ -86,6 +86,9 @@ impl Blackboard {
     /// into the workspace `vizij_api_core::Value` and `Shape` types. The `path` is
     /// provided as a String and parsed into a `TypedPath`.
     ///
+    /// `shape_json` is optional and only needed when you want to preserve explicit
+    /// shape metadata alongside the value.
+    ///
     /// # Errors
     /// Returns an error if the path is invalid or the JSON payload cannot be parsed.
     pub fn set(

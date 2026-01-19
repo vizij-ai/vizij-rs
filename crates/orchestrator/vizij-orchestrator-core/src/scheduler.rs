@@ -17,7 +17,7 @@ pub enum Schedule {
 }
 
 /// Run a single-pass schedule:
-///   Animations -> merge -> Graphs -> merge -> frame
+/// `Animations -> merge -> Graphs -> merge -> frame`.
 ///
 /// # Errors
 /// Returns an error if any controller evaluation fails.
@@ -101,7 +101,7 @@ pub fn run_single_pass(
 }
 
 /// Run a two-pass schedule:
-///   Graphs -> merge -> Animations -> merge -> Graphs -> merge -> frame
+/// `Graphs -> merge -> Animations -> merge -> Graphs -> merge -> frame`.
 ///
 /// # Errors
 /// Returns an error if any controller evaluation fails.

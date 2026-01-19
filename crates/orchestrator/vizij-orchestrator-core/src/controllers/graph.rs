@@ -96,6 +96,9 @@ impl GraphControllerConfig {
     /// the merge returns [`GraphMergeError::ConflictingOutputs`]. Inputs that previously sourced
     /// their values from another graph via the blackboard are rewired to the upstream node so the
     /// combined graph can execute in a single pass.
+    ///
+    /// # Errors
+    /// Returns [`GraphMergeError`] when the merge cannot be completed.
     pub fn merged(
         id: impl Into<String>,
         graphs: Vec<GraphControllerConfig>,

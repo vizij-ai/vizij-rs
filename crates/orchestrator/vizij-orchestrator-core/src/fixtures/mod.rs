@@ -1,3 +1,10 @@
+//! Test and demo fixtures for orchestrator pipelines.
+//!
+//! These helpers load fixture JSON via `vizij-test-fixtures` and adapt it into
+//! orchestrator controller configs and expectations. They are intended for
+//! demos, tests, and docs; most helpers panic if fixture data is missing or
+//! malformed.
+
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
@@ -63,6 +70,10 @@ pub struct MergedGraphFixture {
 
 impl GraphFixture {
     /// Build a `GraphControllerConfig` from this fixture.
+    ///
+    /// # Panics
+    /// Panics if the graph spec cannot be normalized/decoded, or if subscription
+    /// paths are invalid.
     pub fn controller_config(&self) -> GraphControllerConfig {
         let mut spec_value = self.spec.clone();
         normalize_graph_spec_value(&mut spec_value).expect("normalize graph spec");
@@ -115,6 +126,10 @@ impl GraphFixture {
 
 impl MergedGraphFixture {
     /// Build a merged `GraphControllerConfig` from fixture graphs.
+    ///
+    /// # Panics
+    /// Panics if the merge fails (missing outputs, conflicts, or invalid
+    /// namespace generation).
     pub fn controller_config(&self) -> GraphControllerConfig {
         let configs: Vec<GraphControllerConfig> = self
             .graphs
@@ -487,21 +502,33 @@ fn pipeline_fixture(name: &str) -> DemoFixture {
 }
 
 /// Load the default single-pass demo fixture.
+///
+/// # Panics
+/// Panics if the fixture is missing or invalid.
 pub fn demo_single_pass() -> DemoFixture {
     pipeline_fixture("scalar-ramp-pipeline")
 }
 
 /// Load the blend pose pipeline fixture.
+///
+/// # Panics
+/// Panics if the fixture is missing or invalid.
 pub fn blend_pose_pipeline() -> DemoFixture {
     pipeline_fixture("blend-pose-pipeline")
 }
 
 /// Load an orchestration fixture by name.
+///
+/// # Panics
+/// Panics if the fixture is missing or invalid.
 pub fn load_pipeline(name: &str) -> DemoFixture {
     pipeline_fixture(name)
 }
 
 /// Build a graph controller config from a graph fixture name.
+///
+/// # Panics
+/// Panics if the graph fixture is missing or invalid.
 pub fn graph_controller_config_from_fixture(name: &str) -> GraphControllerConfig {
     let mut graph: GraphFixture =
         node_graphs::spec(name).unwrap_or_else(|_| panic!("load graph fixture {name}"));
