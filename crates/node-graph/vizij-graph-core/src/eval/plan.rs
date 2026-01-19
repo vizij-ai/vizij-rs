@@ -113,6 +113,10 @@ impl PlanCache {
     /// Ensure the cache matches the provided spec; rebuild on structural change.
     ///
     /// When `spec.version` is non-zero, prefer [`ensure_versioned`] for O(1) checks.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the graph is invalid or contains cycles.
     pub fn ensure(&mut self, spec: &GraphSpec) -> Result<(), String> {
         if spec.version > 0 {
             self.ensure_versioned(spec)
@@ -126,6 +130,10 @@ impl PlanCache {
     }
 
     /// Version-aware fast path: compare caller-managed version for O(1) steady-state checks.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the graph is invalid or contains cycles.
     ///
     /// # Panics
     ///

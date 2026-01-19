@@ -45,7 +45,7 @@
 - Impact: Med
 - Effort: M
 - Evidence: Some modules lack context or usage overview
-- Next action: Continue refreshing `//!` blocks for graph eval helpers and remaining stacks
+- Next action: Continue refreshing `//!` blocks for remaining stacks and graph helpers
 - Status: In progress
 
 ### R-005 — Document feature flags and conditional compilation behavior
@@ -92,7 +92,7 @@
 - Type: Docs
 - Impact: Med
 - Effort: M
-- Evidence: Users need examples beyond the top-level API; Value helpers, ValueKind links, and JSON tag notes need concise coverage (merged R-011/R-012/R-013).
+- Evidence: Users need examples beyond the top-level API; Value helpers, ValueKind links, and JSON tag notes need concise coverage (merged R-011/R-012/R-013). Eval/runtime docs now mention errors but still lack examples.
 - Next action: Add short doc examples for remaining helpers (e.g., graph runtime inputs, plan cache usage) and link core graph types where needed.
 - Status: In progress
 

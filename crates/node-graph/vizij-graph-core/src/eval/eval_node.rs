@@ -126,6 +126,10 @@ impl<'a> OutputSlots<'a> {
     }
 
     /// Write a port to a named slot.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the slot name is unknown.
     pub fn set(&mut self, name: &str, port: PortValue) -> Result<(), String> {
         let slot = self
             .layout
@@ -139,16 +143,28 @@ impl<'a> OutputSlots<'a> {
     }
 
     /// Write a value to a named slot, inferring its shape.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the slot name is unknown.
     pub fn set_value(&mut self, name: &str, value: Value) -> Result<(), String> {
         self.set(name, PortValue::new(value))
     }
 
     /// Write a pre-shaped port to a named slot.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the slot name is unknown.
     pub fn set_port(&mut self, name: &str, port: PortValue) -> Result<(), String> {
         self.set(name, port)
     }
 
     /// Write into a variadic group by index (0-based inside the group).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the group name is unknown or the index is out of range.
     pub fn set_variadic(&mut self, group: &str, idx: usize, port: PortValue) -> Result<(), String> {
         let range = self
             .layout
@@ -190,6 +206,10 @@ fn single_output(outputs: &mut OutputSlots, value: Value) -> Result<(), String> 
 /// Evaluate a single node, updating `rt` with new outputs and queued writes.
 ///
 /// This function performs shape enforcement and appends `WriteOp`s for `Output` nodes.
+///
+/// # Errors
+///
+/// Returns an error if evaluation or shape enforcement fails.
 pub fn eval_node(
     rt: &mut GraphRuntime,
     spec: &NodeSpec,
@@ -217,6 +237,10 @@ pub fn eval_node(
 }
 
 /// Select the evaluation path for the node kind and run it.
+///
+/// # Errors
+///
+/// Returns an error if the node cannot be evaluated with the provided inputs.
 fn evaluate_kind(
     rt: &mut GraphRuntime,
     spec: &NodeSpec,
@@ -1371,6 +1395,10 @@ fn build_float_outputs(
 /// - "total_weight": Σ(weight_i * mask_i)
 /// - "max_effective_weight": max(weight_i * mask_i) or 0.0 when no inputs
 /// - "input_count": number of values considered (as Float)
+///
+/// # Errors
+///
+/// Returns an error if output slots cannot be written.
 fn eval_weighted_sum_vector(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let values = vec_port_to_vec(inputs, "values");
     // Broadcast single scalar weight to values length if provided.
@@ -1445,6 +1473,10 @@ fn eval_weighted_sum_vector(inputs: &InputSlots, outputs: &mut OutputSlots) -> R
 /// - "total_weight"
 /// - "max_effective_weight"
 /// - optional "fallback"
+///
+/// # Errors
+///
+/// Returns an error if output slots cannot be written.
 fn eval_blend_weighted_average(
     inputs: &InputSlots,
     outputs: &mut OutputSlots,
@@ -1469,6 +1501,10 @@ fn eval_blend_weighted_average(
 /// - "total_weighted_sum"
 /// - "total_weight"
 /// - optional "fallback"
+///
+/// # Errors
+///
+/// Returns an error if output slots cannot be written.
 fn eval_blend_additive(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let sum = as_float(&input_or_default(inputs, "total_weighted_sum").value);
     let total_weight = as_float(&input_or_default(inputs, "total_weight").value);
@@ -1485,6 +1521,10 @@ fn eval_blend_additive(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result
 
 /// Blend: multiplicative blending across values using weights and masks.
 /// Formula per-term: (1 - weight) + value * weight * mask
+///
+/// # Errors
+///
+/// Returns an error if output slots cannot be written.
 fn eval_blend_multiply(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let values = vec_port_to_vec(inputs, "values");
     let mut weights = vec_port_to_vec(inputs, "weights");
@@ -1516,6 +1556,10 @@ fn eval_blend_multiply(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result
 }
 
 /// Blend: weighted overlay between base and weighted sum using max_effective_weight as factor.
+///
+/// # Errors
+///
+/// Returns an error if output slots cannot be written.
 fn eval_blend_weighted_overlay(
     inputs: &InputSlots,
     outputs: &mut OutputSlots,
@@ -1533,6 +1577,10 @@ fn eval_blend_weighted_overlay(
 }
 
 /// Blend: weighted average overlay (applies averaged offset to base)
+///
+/// # Errors
+///
+/// Returns an error if output slots cannot be written.
 fn eval_blend_weighted_average_overlay(
     inputs: &InputSlots,
     outputs: &mut OutputSlots,
@@ -1553,6 +1601,10 @@ fn eval_blend_weighted_average_overlay(
 
 /// Blend: choose the value corresponding to the maximum effective weight (weight * mask).
 /// Returns selected_value * selected_effective_weight, or base/fallback when none valid.
+///
+/// # Errors
+///
+/// Returns an error if output slots cannot be written.
 fn eval_blend_max(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let values = vec_port_to_vec(inputs, "values");
     let mut weights = vec_port_to_vec(inputs, "weights");
@@ -2079,6 +2131,10 @@ pub fn materialize_outputs(layout: &PortLayout, slots: &[PortValue]) -> HashMap<
 /// Gather the most recent outputs for each of the node's input connections, applying selectors.
 ///
 /// The returned `present` flags indicate which inputs were explicitly connected or defaulted.
+///
+/// # Errors
+///
+/// Returns an error if the plan cache is missing bindings/layouts or selector projection fails.
 pub fn read_inputs(
     rt: &GraphRuntime,
     node_idx: usize,

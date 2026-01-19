@@ -8,7 +8,9 @@ use super::plan::PlanCache;
 use super::urdfik::{build_chain_from_urdf, IkKey, UrdfKinematicsState};
 use super::value_layout::{FlatValue, PortValue, ValueLayout};
 
-/// Internal integration state for a spring node. Values remain flattened for efficiency.
+/// Internal integration state for a spring node.
+///
+/// Values remain flattened so the integrator can operate on tight `f32` buffers.
 #[derive(Clone, Debug)]
 pub struct SpringState {
     pub layout: ValueLayout,
@@ -86,6 +88,8 @@ impl SlewState {
 }
 
 /// State stored for each node that requires persistence across frames.
+///
+/// Use this as a cache for time-dependent node evaluations.
 #[derive(Debug)]
 pub enum NodeRuntimeState {
     Spring(SpringState),
@@ -96,6 +100,8 @@ pub enum NodeRuntimeState {
 }
 
 /// Data staged by the host for consumption by [`NodeType::Input`](crate::types::NodeType::Input).
+///
+/// Staged values are visible only for the epoch in which they were staged.
 #[derive(Debug, Clone)]
 pub struct StagedInput {
     /// Staged value for the input path.
@@ -107,6 +113,9 @@ pub struct StagedInput {
 }
 
 /// Runtime data shared by all node evaluations.
+///
+/// This structure is intended to be reused across frames. It stores staged
+/// inputs, cached outputs, and node-local state to keep evaluations deterministic.
 #[derive(Debug, Default)]
 pub struct GraphRuntime {
     /// Simulation time in seconds.
@@ -131,6 +140,8 @@ pub struct GraphRuntime {
 
 impl GraphRuntime {
     /// Reset runtime state for a new spec, clearing plan and per-node caches.
+    ///
+    /// This also clears any staged inputs and pending writes.
     pub fn reset_for_spec(&mut self) {
         self.plan = PlanCache::default();
         self.outputs.clear();
@@ -141,8 +152,10 @@ impl GraphRuntime {
         self.input_epoch = 0;
     }
 
-    /// Advance the staging epoch. Values staged for `epoch + 1` become visible for the
-    /// upcoming frame; older entries are dropped so stale data cannot leak through.
+    /// Advance the staging epoch.
+    ///
+    /// Values staged for `epoch + 1` become visible for the upcoming frame; older
+    /// entries are dropped so stale data cannot leak through.
     pub fn advance_epoch(&mut self) {
         self.input_epoch = self.input_epoch.saturating_add(1);
         let current = self.input_epoch;
@@ -153,6 +166,7 @@ impl GraphRuntime {
     /// Stage an input value for the next evaluation epoch using a [`TypedPath`] key.
     ///
     /// Returns the previous staged value, if one existed for the same path.
+    /// The input becomes visible after calling [`advance_epoch`](Self::advance_epoch).
     pub fn set_input(
         &mut self,
         path: TypedPath,
@@ -295,9 +309,13 @@ impl GraphRuntime {
         }
     }
 
-    #[cfg(feature = "urdf_ik")]
     /// Fetch the cached URDF chain for `node_id`, rebuilding it if the configuration hash
     /// changes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the URDF cannot be parsed or the chain cannot be built.
+    #[cfg(feature = "urdf_ik")]
     pub fn kinematics_state_mut<'a>(
         &'a mut self,
         node_id: &NodeId,

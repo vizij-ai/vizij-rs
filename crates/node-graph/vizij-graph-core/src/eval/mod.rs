@@ -39,6 +39,11 @@ mod tests;
 ///
 /// The runtime is cleared before evaluation and is repopulated as nodes are visited in topological
 /// order. Any error propagated from an individual node halts evaluation.
+///
+/// # Errors
+///
+/// Returns an error if the graph is ill-formed, selector projection fails, or a node evaluation
+/// reports an error.
 pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), String> {
     if spec.version > 0 {
         rt.plan.ensure_versioned(spec)?;
@@ -94,10 +99,15 @@ fn resize_and_clear(bucket: &mut Vec<PortValue>) {
     bucket.clear();
 }
 
-/// Evaluate using the existing plan cache without rebuilding it. This assumes the provided
-/// `spec` matches the cached plan; it returns an error if the layouts are missing or mis-sized.
-/// Intended for callers that manage plan invalidation themselves (e.g., WASM wrapper with
-/// immutable specs).
+/// Evaluate using the existing plan cache without rebuilding it.
+///
+/// This assumes the provided `spec` matches the cached plan; it returns an error if the layouts
+/// are missing or mis-sized. Intended for callers that manage plan invalidation themselves
+/// (e.g., WASM wrappers with immutable specs).
+///
+/// # Errors
+///
+/// Returns an error if the cached plan does not match the spec or if node evaluation fails.
 pub fn evaluate_all_cached(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), String> {
     if rt.plan.layouts.len() != spec.nodes.len() {
         return Err("plan cache not initialised for this spec".to_string());
