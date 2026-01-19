@@ -1,3 +1,9 @@
+//! wasm-bindgen bindings for the Vizij node-graph runtime.
+//!
+//! The `WasmGraph` wrapper owns a `GraphRuntime` and exposes JSON-friendly entry
+//! points for loading specs, staging inputs, evaluating graphs, and streaming
+//! outputs across the wasm boundary.
+
 use hashbrown::HashMap;
 use js_sys::{Float32Array, Uint32Array, JSON};
 use serde_wasm_bindgen as swb;
@@ -720,7 +726,13 @@ impl WasmGraph {
         Ok(())
     }
 
-    /// Batch-stage many scalar/vector inputs in one call (paths[i] -> values[i]).
+    /// Batch-stage many scalar inputs in one call (paths[i] -> values[i]).
+    ///
+    /// Each value is interpreted as a scalar `Float` and staged with a `Scalar` shape.
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if the path list cannot be decoded or the list length
+    /// does not match the `values` array.
     #[wasm_bindgen(js_name = "stage_inputs_batch")]
     pub fn stage_inputs_batch(
         &mut self,
@@ -747,6 +759,11 @@ impl WasmGraph {
     }
 
     /// Register paths once and reuse their indices for faster staging.
+    ///
+    /// Returns a `Uint32Array` of slot indices, aligned with the input list.
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if any path fails to parse.
     #[wasm_bindgen(js_name = "register_input_paths")]
     pub fn register_input_paths(&mut self, paths: JsValue) -> Result<Uint32Array, JsValue> {
         let new_paths: Vec<String> = swb::from_value(paths)
@@ -764,6 +781,12 @@ impl WasmGraph {
     }
 
     /// Stage inputs by index using previously registered paths.
+    ///
+    /// Each staged value is interpreted as a scalar float with `Scalar` shape.
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if indices/values lengths mismatch or a slot index
+    /// is out of bounds.
     #[wasm_bindgen(js_name = "stage_inputs_indices")]
     pub fn stage_inputs_indices(
         &mut self,
@@ -793,6 +816,12 @@ impl WasmGraph {
     }
 
     /// Pre-allocate slots with declared shapes to enable slot staging.
+    ///
+    /// Each entry in `declared` corresponds to the same position in `indices`.
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if indices/declared lengths mismatch or a slot index
+    /// is out of bounds.
     #[wasm_bindgen(js_name = "prepare_input_slots")]
     pub fn prepare_input_slots(
         &mut self,
@@ -822,6 +851,12 @@ impl WasmGraph {
     }
 
     /// Stage inputs by pre-prepared slots (no path parse, reuse declared).
+    ///
+    /// This uses the declared shapes prepared via `prepare_input_slots`.
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if indices/values lengths mismatch, a slot is missing,
+    /// or a slot index is out of bounds.
     #[wasm_bindgen(js_name = "stage_inputs_slots")]
     pub fn stage_inputs_slots(
         &mut self,
@@ -859,6 +894,9 @@ impl WasmGraph {
     }
 
     /// Clear a staged input by slot index (registered path).
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if the slot index is out of bounds.
     #[wasm_bindgen(js_name = "clear_input_slot")]
     pub fn clear_input_slot(&mut self, slot_idx: u32) -> Result<(), JsValue> {
         let idx = slot_idx as usize;
@@ -874,7 +912,9 @@ impl WasmGraph {
         Ok(())
     }
 
-    /// Fetch a float/vec/array output directly as Float32Array (if numeric).
+    /// Fetch a float/vec/array output directly as `Float32Array` (if numeric).
+    ///
+    /// Returns `None` if the output is missing or not numeric.
     #[wasm_bindgen(js_name = "get_output_f32")]
     pub fn get_output_f32(&self, node_id: &str, output_key: &str) -> Option<Float32Array> {
         let port = self.runtime.outputs.get(node_id)?.get(output_key)?;
@@ -900,7 +940,13 @@ impl WasmGraph {
         }
     }
 
-    /// Batch fetch the default "out" port for many nodes as a Float32Array (scalars only; non-scalars -> NaN).
+    /// Batch fetch the default "out" port for many nodes as a `Float32Array`.
+    ///
+    /// Non-scalar outputs are coerced to a single component when possible; missing or
+    /// unsupported outputs yield `NaN`.
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if the input list cannot be decoded.
     #[wasm_bindgen(js_name = "get_outputs_batch")]
     pub fn get_outputs_batch(&self, nodes: JsValue) -> Result<Float32Array, JsValue> {
         let ids: Vec<String> = swb::from_value(nodes)
@@ -955,6 +1001,9 @@ impl WasmGraph {
     }
 
     /// Evaluate the entire graph and return a JS object (avoids JSON stringify/parse).
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if evaluation fails or serialization fails.
     #[wasm_bindgen(js_name = "eval_all_js")]
     pub fn eval_all_js(&mut self) -> Result<JsValue, JsValue> {
         let out_obj = self.eval_all_json()?;
@@ -968,6 +1017,9 @@ impl WasmGraph {
     ///   "nodes": { [nodeId]: { [outputKey]: { "value": ValueJSON, "shape": ShapeJSON } } },
     ///   "writes": [ { "path": string, "value": ValueJSON, "shape": ShapeJSON }, ... ]
     /// }
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if evaluation fails or serialization fails.
     #[wasm_bindgen]
     pub fn eval_all(&mut self) -> Result<String, JsValue> {
         let out_obj = self.eval_all_json()?;
@@ -975,6 +1027,11 @@ impl WasmGraph {
     }
 
     /// Evaluate without serializing to JSON; returns a monotonic output version.
+    ///
+    /// Use `get_outputs_full` or `get_outputs_delta` to fetch the outputs.
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if evaluation fails.
     #[wasm_bindgen(js_name = "eval_all_slots")]
     pub fn eval_all_slots(&mut self) -> Result<u64, JsValue> {
         let new_time = self.t as f32;
@@ -990,6 +1047,9 @@ impl WasmGraph {
     }
 
     /// Return a full snapshot of outputs/writes (JSON) without re-evaluating.
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if serialization fails.
     #[wasm_bindgen(js_name = "get_outputs_full")]
     pub fn get_outputs_full(&mut self) -> Result<JsValue, JsValue> {
         let out_obj = self.serialize_full();
@@ -998,6 +1058,11 @@ impl WasmGraph {
     }
 
     /// Return only outputs that changed since the provided version token.
+    ///
+    /// The returned object includes `{ full: true }` when a full resync is required.
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if serialization fails.
     #[wasm_bindgen(js_name = "get_outputs_delta")]
     pub fn get_outputs_delta(&mut self, since_version: u64) -> Result<JsValue, JsValue> {
         let out_obj = self.serialize_delta(since_version);
@@ -1006,6 +1071,11 @@ impl WasmGraph {
     }
 
     /// Evaluate and return only outputs that changed since the provided version token in a single crossing.
+    ///
+    /// The returned object includes `{ full: true }` when a full resync is required.
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if evaluation or serialization fails.
     #[wasm_bindgen(js_name = "eval_all_slots_delta")]
     pub fn eval_all_slots_delta(&mut self, since_version: u64) -> Result<JsValue, JsValue> {
         let new_time = self.t as f32;
@@ -1023,7 +1093,11 @@ impl WasmGraph {
     }
 
     /// Step forward multiple times and return only the final outputs/writes.
+    ///
     /// Useful for amortizing JS/WASM boundary cost when ticking many frames.
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if `dt` is invalid or evaluation fails.
     #[wasm_bindgen(js_name = "eval_steps_js")]
     pub fn eval_steps_js(&mut self, steps: u32, dt: f64) -> Result<JsValue, JsValue> {
         let out_obj = self.eval_steps_json(steps, dt)?;

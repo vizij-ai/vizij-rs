@@ -10,7 +10,7 @@
 7. R-007 — Add doc tests or validate examples against current APIs
 8. R-008 — Ensure docstrings mention JSON/ABI versioning contracts
 9. R-005 — Document feature flags and conditional compilation behavior
-10. R-009 — Document performance considerations and allocation hot spots
+10. R-014 — Clarify wasm batch staging semantics for scalar-only inputs
 
 ---
 
@@ -119,3 +119,11 @@
 - Evidence: Shape structs serialize across crates but docstrings omit JSON shape expectations
 - Next action: Add brief notes in `shape.rs` about JSON fields and intended use
 - Status: Completed
+
+### R-014 — Clarify wasm batch staging semantics for scalar-only inputs
+- Type: Docs
+- Impact: Low
+- Effort: S
+- Evidence: `vizij-graph-wasm` batch staging helpers only accept scalars but docs implied vectors.
+- Next action: Ensure rustdoc and README describe scalar-only staging, or add vector batch API if intended.
+- Status: Planned

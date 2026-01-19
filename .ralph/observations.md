@@ -37,3 +37,4 @@ Do NOT implement these in the current loop.
 - 2026-01-19: `vizij-graph-wasm` public wasm bindings still lacked rustdoc on several methods; added summaries but consider adding minimal JS usage examples if autogen docs need them.
 - 2026-01-19: `vizij-graph-core` eval helpers still lack runnable examples for `InputSlots`/`OutputSlots` and `materialize_outputs`; consider adding minimal doctests once a stable micro-spec is defined.
 - 2026-01-19: Doc tests for `bevy_vizij_api` require avoiding `anyhow` in examples; prefer `expect`-based fallbacks since the crate has no `anyhow` dependency.
+- 2026-01-19: `vizij-graph-wasm` staging helpers (`stage_inputs_batch`, slot staging) only accept scalar floats, despite docs and API name suggesting vector support; consider adding vector batch APIs or clarifying naming for scalar-only staging.
