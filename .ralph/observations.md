@@ -27,3 +27,4 @@ Do NOT implement these in the current loop.
 - 2026-01-19: Git commits in this worktree fail because the git dir lives under `/home/chris/Code/Semio/vizij_ws/vizij-rs_workspace/.bare`, which is outside the writable roots in this environment.
 
 - 2026-01-19: `bevy_vizij_animation::apply_outputs_system` returns early when `BindingIndex` or `PendingOutputs` are missing, despite docstring previously stating it panics; keep docs aligned with early-return behavior.
+- 2026-01-19: Running `./.githooks/pre-commit` fails until doctests avoid `fn main`; keep Bevy plugin examples as `no_run` blocks without a `main` to satisfy clippy.

@@ -21,8 +21,8 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
-- Next action: Confirm remaining animation stack public APIs are documented (including Bevy systems); shift focus to other stacks or add conventions doc.
-- Status: In progress
+- Next action: Confirm remaining animation stack public APIs are documented (including Bevy systems and wasm bindings); shift focus to other stacks or add conventions doc.
+- Status: In progress (iter-12 added Bevy/wasm doc examples + clarifications)
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
 - Type: Docs
@@ -37,7 +37,7 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs are less useful without concrete usage examples; added examples across animation core engine, baking helpers, and interpolation utilities.
-- Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures. Interpolation helpers now have runnable doctests; confirm remaining animation APIs still lack examples.
+- Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures. Interpolation helpers now have runnable doctests; confirm remaining animation APIs still lack examples. Bevy plugin now uses `no_run` example to avoid clippy doctest main.
 - Status: In progress
 
 ### R-004 — Standardize module-level docs and `//!` overviews

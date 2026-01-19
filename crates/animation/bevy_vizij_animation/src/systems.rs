@@ -9,6 +9,8 @@ use crate::VizijEngine;
 use vizij_animation_core::{inputs::Inputs, outputs::Change, TargetResolver};
 
 /// Build a canonical handle for an entity name + transform property.
+///
+/// Handles follow the shape `{base}/Transform.<prop>`.
 fn make_handle(name: &str, prop: TargetProp) -> String {
     match prop {
         TargetProp::Translation => format!("{name}/Transform.translation"),
@@ -133,9 +135,6 @@ pub fn prebind_core_system(
 /// Fixed timestep compute: call core update with fixed dt and stash changes in `PendingOutputs`.
 ///
 /// Inputs are left empty for v1; production apps should derive `Inputs` from gameplay state.
-///
-/// # Panics
-/// Panics if the `VizijEngine`, `FixedDt`, or `PendingOutputs` resources are missing.
 pub fn fixed_update_core_system(
     mut eng: ResMut<VizijEngine>,
     dt: Res<FixedDt>,

@@ -16,6 +16,9 @@ use vizij_animation_core::{
 };
 
 /// wasm-bindgen wrapper around the core animation engine.
+///
+/// Most methods accept plain JS objects that mirror the Rust structs from
+/// `vizij-animation-core`, returning JSON-friendly payloads.
 #[wasm_bindgen]
 pub struct VizijAnimation {
     core: Engine,

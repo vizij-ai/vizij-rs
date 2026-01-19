@@ -6,7 +6,8 @@ use vizij_animation_core::outputs::Change;
 
 /// Which `Transform` property a handle maps to for a canonical binding.
 ///
-/// Used by the output-application systems to map changes to `Transform` fields.
+/// Used by output-application systems to route `Value` payloads into the correct
+/// `Transform` field (translation/rotation/scale).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TargetProp {
     /// Apply to `Transform::translation`.

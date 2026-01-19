@@ -15,10 +15,24 @@ pub use components::{VizijBindingHint, VizijTargetRoot};
 pub use resources::{BindingIndex, FixedDt, PendingOutputs};
 
 /// Bevy resource wrapper around the core animation engine.
+///
+/// Access this resource to load animations, create players, and drive updates
+/// from custom systems.
 #[derive(Resource)]
 pub struct VizijEngine(pub Engine);
 
 /// Plugin wiring Vizij animation systems into Bevy schedules.
+///
+/// # Examples
+/// ```no_run
+/// use bevy::prelude::*;
+/// use bevy_vizij_animation::VizijAnimationPlugin;
+///
+/// App::new()
+///     .add_plugins(DefaultPlugins)
+///     .add_plugins(VizijAnimationPlugin)
+///     .run();
+/// ```
 pub struct VizijAnimationPlugin;
 
 impl Plugin for VizijAnimationPlugin {
