@@ -6,19 +6,33 @@
 //! outputs each tick. Use it directly in native hosts or via the Bevy and WASM
 //! adapters.
 
+/// Accumulators and helpers for merging sampled outputs.
 pub mod accumulate;
+/// Baking utilities for compressing animation data.
 pub mod baking;
+/// Binding tables that map animation channels to runtime targets.
 pub mod binding;
+/// Runtime configuration types for the animation engine.
 pub mod config;
+/// Animation data structures (tracks, keypoints, transitions).
 pub mod data;
+/// Core engine runtime, players, and instances.
 pub mod engine;
+/// Strongly-typed identifiers for animation assets.
 pub mod ids;
+/// Input payloads and command enums for updating players.
 pub mod inputs;
+/// Interpolation registry and math helpers.
 pub mod interp;
+/// Output containers and change events produced per tick.
 pub mod outputs;
+/// Sampling helpers for track evaluation.
 pub mod sampling;
+/// Reusable scratch buffers for runtime evaluation.
 pub mod scratch;
+/// JSON-backed stored animation parsing helpers.
 pub mod stored_animation;
+/// Value wrappers and convenience conversions.
 pub mod value;
 
 // Re-exports for consumers (adapters)

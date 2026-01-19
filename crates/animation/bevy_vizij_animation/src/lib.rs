@@ -7,8 +7,11 @@
 use bevy::prelude::*;
 use vizij_animation_core::{Config, Engine};
 
+/// ECS components for driving animation playback.
 pub mod components;
+/// Resources storing shared animation state.
 pub mod resources;
+/// Bevy systems that advance animation playback.
 pub mod systems;
 
 pub use components::{VizijBindingHint, VizijTargetRoot};

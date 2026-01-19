@@ -4,6 +4,7 @@
 //! v1 registers linear/cubic/step interpolators and a quaternion NLERP
 //! with shortest-arc sign correction.
 
+/// Standalone interpolation helpers used by the registry.
 pub mod functions;
 
 /// Registry marker for interpolation functions.

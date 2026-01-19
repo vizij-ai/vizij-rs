@@ -16,6 +16,7 @@
 use crate::types::GraphSpec;
 use std::mem;
 
+/// Node-level evaluation helpers and dispatch routines.
 pub mod eval_node;
 mod graph_runtime;
 mod numeric;

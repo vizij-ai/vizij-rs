@@ -4,9 +4,13 @@
 //! a cached plan and a reusable [`eval::GraphRuntime`]. Most consumers only need the re-exported
 //! helpers in this module.
 
+/// Evaluation runtime and helpers.
 pub mod eval;
+/// Schema types and registry helpers for node graphs.
 pub mod schema;
+/// Topological sorting helpers for graph specs.
 pub mod topo;
+/// Core graph types and JSON-friendly data structures.
 pub mod types;
 
 pub use eval::{

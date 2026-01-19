@@ -6,10 +6,15 @@
 //!
 //! This crate is the Rust host counterpart to `vizij-orchestrator-wasm`.
 
+/// Blackboard storage and input/output helpers.
 pub mod blackboard;
+/// Runtime controllers for graphs and animations.
 pub mod controllers;
+/// Diagnostics helpers and evaluation metadata.
 pub mod diagnostics;
+/// Fixture loading and manifest helpers for tests and demos.
 pub mod fixtures;
+/// Scheduler and pass orchestration runtime.
 pub mod scheduler;
 
 use anyhow::{anyhow, Result};
