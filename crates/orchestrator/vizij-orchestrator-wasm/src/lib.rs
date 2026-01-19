@@ -189,6 +189,16 @@ fn build_graph_controller_config(
 ///
 /// The wrapper owns the core scheduler plus cached outputs used by `step_delta`.
 /// All JSON payloads follow the `vizij-api-core` Value/Shape conventions.
+///
+/// # Examples (JS)
+/// ```javascript
+/// import { VizijOrchestrator } from "@vizij/orchestrator-wasm";
+///
+/// const orch = new VizijOrchestrator({ schedule: "SinglePass" });
+/// orch.register_graph(rawGraphSpecJson);
+/// const frame = orch.step(1 / 60);
+/// console.log(frame.merged_writes);
+/// ```
 #[wasm_bindgen]
 pub struct VizijOrchestrator {
     core: Orchestrator,
@@ -264,6 +274,23 @@ impl VizijOrchestrator {
     /// The graph spec is normalized before deserialization, so shorthand forms are expanded
     /// to match the `vizij-api-core` JSON schema.
     ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// // JSON string form.
+    /// const id = orch.register_graph(rawGraphSpecJson);
+    ///
+    /// // Object form with subscriptions.
+    /// const id2 = orch.register_graph({
+    ///   id: "graph:rig",
+    ///   spec: graphSpecObj,
+    ///   subs: {
+    ///     inputs: ["rig/hip.x"],
+    ///     outputs: ["rig/hip.x"],
+    ///     mirrorWrites: true,
+    ///   },
+    /// });
+    /// ```
+    ///
     /// # Errors
     /// Returns an error if the graph spec cannot be decoded or normalized.
     #[wasm_bindgen(js_name = register_graph)]
@@ -319,6 +346,15 @@ impl VizijOrchestrator {
     /// This is the supported way to apply structural edits at runtime. The spec is normalized and
     /// `.with_cache()` is applied so the versioned plan cache cannot reuse stale layouts.
     ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// orch.replace_graph({
+    ///   id: "graph:rig",
+    ///   spec: nextGraphSpec,
+    ///   subs: { inputs: ["rig/hip.x"], outputs: ["rig/hip.x"] },
+    /// });
+    /// ```
+    ///
     /// # Errors
     /// Returns an error if the config payload is invalid or if the graph id is not registered.
     #[wasm_bindgen(js_name = replace_graph)]
@@ -363,6 +399,11 @@ impl VizijOrchestrator {
 
     /// Export a graph spec as a JS object for inspection.
     ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// const spec = orch.export_graph("graph:rig");
+    /// ```
+    ///
     /// # Errors
     /// Returns an error if the graph id is unknown or serialization fails.
     #[wasm_bindgen(js_name = export_graph)]
@@ -381,6 +422,15 @@ impl VizijOrchestrator {
     ///
     /// Merge strategies can be provided via `{ strategy: { outputs, intermediate } }` using the
     /// same string values as the Rust `OutputConflictStrategy`.
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// const id = orch.register_merged_graph({
+    ///   id: "graph:blend",
+    ///   graphs: [{ spec: leftSpec }, { spec: rightSpec }],
+    ///   strategy: { outputs: "blend", intermediate: "namespace" },
+    /// });
+    /// ```
     ///
     /// # Errors
     /// Returns an error if any graph spec is invalid or the merge fails.
@@ -468,6 +518,17 @@ impl VizijOrchestrator {
     ///
     /// The resolver should be `function(path: string): string|number|null|undefined`.
     /// For each registered animation controller we call engine.prebind(&mut JsResolver).
+    ///
+    /// The resolver can return a string path to remap bindings, a number (coerced
+    /// to string), or `null`/`undefined` to leave a binding unresolved.
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// orch.prebind((path) => {
+    ///   if (path === "rig/hip.x") return "rig/hip.x";
+    ///   return null;
+    /// });
+    /// ```
     #[wasm_bindgen]
     pub fn prebind(&mut self, resolver: Function) {
         let mut js_resolver = JsResolver { f: resolver };
@@ -534,6 +595,12 @@ impl VizijOrchestrator {
     /// The returned object matches the Rust `OrchestratorFrame` JSON shape, including
     /// merged writes, conflicts, events, and timing metadata.
     ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// const frame = orch.step(1 / 60);
+    /// console.log(frame.merged_writes);
+    /// ```
+    ///
     /// # Errors
     /// Returns an error if evaluation fails or the frame cannot be serialized.
     #[wasm_bindgen]
@@ -558,6 +625,13 @@ impl VizijOrchestrator {
     ///
     /// The returned payload includes `version`, `epoch`, `dt`, `merged_writes`,
     /// `conflicts`, `events`, and `timings_ms`.
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// let version = 0;
+    /// const payload = orch.step_delta(1 / 60, version);
+    /// version = payload.version;
+    /// ```
     ///
     /// # Errors
     /// Returns an error if evaluation fails or the payload cannot be serialized.
@@ -610,6 +684,11 @@ impl VizijOrchestrator {
 
     /// List registered controller ids.
     ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// const { graphs, anims } = orch.list_controllers();
+    /// ```
+    ///
     /// # Errors
     /// Returns an error if the response cannot be serialized.
     #[wasm_bindgen(js_name = list_controllers)]
@@ -632,6 +711,11 @@ impl VizijOrchestrator {
     /// Remove a registered graph controller by id.
     ///
     /// Returns `true` if a controller was removed.
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// const removed = orch.remove_graph("graph:rig");
+    /// ```
     #[wasm_bindgen(js_name = remove_graph)]
     pub fn remove_graph(&mut self, id: &str) -> bool {
         self.core.graphs.shift_remove(id).is_some()
@@ -640,6 +724,11 @@ impl VizijOrchestrator {
     /// Remove a registered animation controller by id.
     ///
     /// Returns `true` if a controller was removed.
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// const removed = orch.remove_animation("anim:walk");
+    /// ```
     #[wasm_bindgen(js_name = remove_animation)]
     pub fn remove_animation(&mut self, id: &str) -> bool {
         self.core.anims.shift_remove(id).is_some()
