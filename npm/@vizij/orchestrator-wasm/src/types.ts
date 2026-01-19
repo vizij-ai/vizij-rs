@@ -134,7 +134,7 @@ export interface GraphSpec {
   fingerprint?: number;
 }
 
-/** Helper config type used by the JS wrapper for graph registration. */
+/** Config used to register a node-graph controller. */
 export interface GraphRegistrationConfig {
   id?: string;
   spec: GraphSpec | any;
@@ -153,7 +153,11 @@ export interface MergedGraphRegistrationConfig {
   strategy?: MergeStrategyOptions;
 }
 
-/** Subscription hints for graph inputs/outputs. */
+/**
+ * Subscription hints for graph inputs/outputs.
+ *
+ * These mirror the fields on the Rust GraphSubscriptions type.
+ */
 export interface GraphSubscriptions {
   inputs?: string[];
   outputs?: string[];
@@ -188,7 +192,11 @@ export interface MergeStrategyOptions {
   intermediate?: MergeConflictStrategy;
 }
 
-/** Registration config for an animation controller. */
+/**
+ * Registration config for an animation controller.
+ *
+ * Provide `setup` to seed the animation, player, and instance defaults.
+ */
 export interface AnimationRegistrationConfig {
   id?: string;
   setup?: AnimationSetup;

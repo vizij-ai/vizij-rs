@@ -14,6 +14,7 @@ export interface StageEntry {
   shape?: unknown;
 }
 
+/** Descriptor seed that references a node-graph fixture or inline config. */
 export type GraphSeed =
   | string
   | {
@@ -24,6 +25,7 @@ export type GraphSeed =
       stage?: StageEntry[];
     };
 
+/** Descriptor seed that references an animation fixture or inline config. */
 export type AnimationSeed =
   | string
   | {
@@ -34,17 +36,20 @@ export type AnimationSeed =
       instance?: Record<string, unknown>;
     };
 
+/** Merge strategy overrides read from descriptor JSON. */
 export interface MergeStrategySeed {
   outputs?: string;
   intermediate?: string;
 }
 
+/** Descriptor entry that groups graphs under a merge strategy. */
 export interface MergedGraphSeed {
   id: string;
   graphs: GraphSeed[];
   strategy?: MergeStrategySeed;
 }
 
+/** JSON descriptor schema used by orchestration fixtures. */
 export interface PipelineDescriptor {
   description?: string;
   schedule?: string;
@@ -56,6 +61,7 @@ export interface PipelineDescriptor {
   [key: string]: unknown;
 }
 
+/** Normalized graph binding returned from loadOrchestrationBundle. */
 export interface OrchestrationGraphBinding<TConfig = Record<string, unknown>> {
   key: string;
   id?: string;
@@ -64,19 +70,23 @@ export interface OrchestrationGraphBinding<TConfig = Record<string, unknown>> {
   stage: StageEntry[];
 }
 
+/** Merge strategy labels accepted by fixtures. */
 export type MergeStrategy = "error" | "namespace" | "blend";
 
+/** Normalized merge strategy returned from loadOrchestrationBundle. */
 export interface OrchestrationMergedGraphStrategy {
   outputs: MergeStrategy;
   intermediate: MergeStrategy;
 }
 
+/** Normalized merged-graph binding returned from loadOrchestrationBundle. */
 export interface OrchestrationMergedGraphBinding<TConfig = Record<string, unknown>> {
   id: string;
   graphs: Array<OrchestrationGraphBinding<TConfig>>;
   strategy: OrchestrationMergedGraphStrategy;
 }
 
+/** Normalized animation binding returned from loadOrchestrationBundle. */
 export interface OrchestrationAnimationBinding<
   TAnimation = Record<string, unknown>,
   TSetup = Record<string, unknown>,
@@ -87,6 +97,7 @@ export interface OrchestrationAnimationBinding<
   setup: TSetup;
 }
 
+/** Fully resolved orchestration fixture bundle with parsed assets. */
 export interface OrchestrationBundle<
   TDescriptor extends PipelineDescriptor = PipelineDescriptor,
   TAnimation = Record<string, unknown>,
@@ -99,10 +110,16 @@ export interface OrchestrationBundle<
   initialInputs: StageEntry[];
 }
 
+/** List all orchestration fixture names in the bundled manifest. */
 export function orchestrationNames(): string[] {
   return Object.keys(manifest().orchestrations);
 }
 
+/**
+ * Load an orchestration descriptor as raw JSON text from the bundle.
+ *
+ * @throws If the fixture key is missing from the manifest.
+ */
 export function orchestrationJson(name: string): string {
   const entry = orchestrationEntry(name);
   if (typeof entry === "string") {
@@ -111,12 +128,22 @@ export function orchestrationJson(name: string): string {
   return readFixture(entry.path);
 }
 
+/**
+ * Load an orchestration descriptor and parse it as JSON.
+ *
+ * @throws If the fixture key is missing or the JSON is invalid.
+ */
 export function orchestrationDescriptor<T = unknown>(name: string): T {
   const entry = orchestrationEntry(name);
   const rel = typeof entry === "string" ? entry : entry.path;
   return loadFixture<T>(rel);
 }
 
+/**
+ * Resolve an orchestration descriptor name to a bundled "fixtures/..." path.
+ *
+ * @throws If the fixture key is missing from the manifest.
+ */
 export function orchestrationDescriptorPath(name: string): string {
   return orchestrationPath(orchestrationEntry(name));
 }
@@ -261,6 +288,11 @@ function loadAnimationBinding(
   };
 }
 
+/**
+ * Load an orchestration fixture and resolve all animation/graph dependencies.
+ *
+ * @throws If the orchestration fixture is missing required animation or graph references.
+ */
 export function loadOrchestrationBundle(
   name: string,
 ): OrchestrationBundle<PipelineDescriptor> {

@@ -76,6 +76,7 @@
 
 - 2026-01-19: Iter-05 scope: `crates/api/vizij-api-wasm` and `crates/api/bevy_vizij_api` doc polish. Added wasm init notes to JS examples and tightened WriterRegistry wording. Assumed doc-only edits; ran `cargo fmt --all`. Commit expected to fail due to git index lock outside writable roots.
 - 2026-01-19: Iter-06 scope: Bevy adapters (`bevy_vizij_api`, `bevy_vizij_graph`, `bevy_vizij_animation`) doc polish. Updated canonical TypedPath examples, clarified Transform alias registration, and added small resource examples. Assumed doc-only edits; ran `cargo fmt --all` plus doc tests for `bevy_vizij_api` and `bevy_vizij_graph`. Commit expected to fail due to git index lock outside writable roots.
+- 2026-01-19: Iter-05 scope: npm/@vizij/test-fixtures browser entrypoints + orchestrator-wasm types JSDoc polish. Added missing JSDoc summaries and error notes for browser fixtures and type exports. Assumed doc-only edits; pnpm test skipped (no script).
 
 # Ralph Decision Log
 
