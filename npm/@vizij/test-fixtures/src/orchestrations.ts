@@ -8,12 +8,14 @@ import {
 import { animationFixture } from "./animations.js";
 import { nodeGraphSpec } from "./nodeGraphs.js";
 
+/** Stage entry for preloading values into an orchestration run. */
 export interface StageEntry {
   path: string;
   value: unknown;
   shape?: unknown;
 }
 
+/** Input seed for graph bindings within an orchestration. */
 export type GraphSeed =
   | string
   | {
@@ -24,6 +26,7 @@ export type GraphSeed =
       stage?: StageEntry[];
     };
 
+/** Input seed for animation bindings within an orchestration. */
 export type AnimationSeed =
   | string
   | {
@@ -34,17 +37,20 @@ export type AnimationSeed =
       instance?: Record<string, unknown>;
     };
 
+/** Merge strategy overrides per merged-graph seed. */
 export interface MergeStrategySeed {
   outputs?: string;
   intermediate?: string;
 }
 
+/** Descriptor for a merged-graph entry in an orchestration. */
 export interface MergedGraphSeed {
   id: string;
   graphs: GraphSeed[];
   strategy?: MergeStrategySeed;
 }
 
+/** Minimal shape for orchestration descriptor JSON. */
 export interface PipelineDescriptor {
   description?: string;
   schedule?: string;
@@ -56,6 +62,7 @@ export interface PipelineDescriptor {
   [key: string]: unknown;
 }
 
+/** Loaded graph binding with resolved config and staging data. */
 export interface OrchestrationGraphBinding<TConfig = Record<string, unknown>> {
   key: string;
   id?: string;
@@ -64,19 +71,23 @@ export interface OrchestrationGraphBinding<TConfig = Record<string, unknown>> {
   stage: StageEntry[];
 }
 
+/** Merge strategy options for merged graphs. */
 export type MergeStrategy = "error" | "namespace" | "blend";
 
+/** Resolved merge strategies for a merged-graph binding. */
 export interface OrchestrationMergedGraphStrategy {
   outputs: MergeStrategy;
   intermediate: MergeStrategy;
 }
 
+/** Loaded merged-graph binding with resolved graph configs. */
 export interface OrchestrationMergedGraphBinding<TConfig = Record<string, unknown>> {
   id: string;
   graphs: Array<OrchestrationGraphBinding<TConfig>>;
   strategy: OrchestrationMergedGraphStrategy;
 }
 
+/** Loaded animation binding with resolved fixture payloads. */
 export interface OrchestrationAnimationBinding<
   TAnimation = Record<string, unknown>,
   TSetup = Record<string, unknown>,
@@ -87,6 +98,7 @@ export interface OrchestrationAnimationBinding<
   setup: TSetup;
 }
 
+/** Fully loaded orchestration bundle with resolved fixture payloads. */
 export interface OrchestrationBundle<
   TDescriptor extends PipelineDescriptor = PipelineDescriptor,
   TAnimation = Record<string, unknown>,
@@ -99,10 +111,12 @@ export interface OrchestrationBundle<
   initialInputs: StageEntry[];
 }
 
+/** List all orchestration fixture names in the manifest. */
 export function orchestrationNames(): string[] {
   return Object.keys(manifest().orchestrations);
 }
 
+/** Load an orchestration descriptor fixture as raw JSON. */
 export function orchestrationJson(name: string): string {
   const entry = orchestrationEntry(name);
   if (typeof entry === "string") {
@@ -111,12 +125,14 @@ export function orchestrationJson(name: string): string {
   return readFixture(entry.path);
 }
 
+/** Load and parse an orchestration descriptor fixture. */
 export function orchestrationDescriptor<T = unknown>(name: string): T {
   const entry = orchestrationEntry(name);
   const rel = typeof entry === "string" ? entry : entry.path;
   return loadFixture<T>(rel);
 }
 
+/** Resolve an orchestration descriptor path to an absolute path. */
 export function orchestrationDescriptorPath(name: string): string {
   return orchestrationPath(orchestrationEntry(name));
 }
@@ -261,6 +277,11 @@ function loadAnimationBinding(
   };
 }
 
+/**
+ * Load an orchestration fixture and resolve all animation/graph dependencies.
+ *
+ * Throws when the fixture is missing required animation or graph references.
+ */
 export function loadOrchestrationBundle(
   name: string,
 ): OrchestrationBundle<PipelineDescriptor> {

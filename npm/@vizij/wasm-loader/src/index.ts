@@ -45,6 +45,9 @@ async function maybeReadFileBytes(initArg: unknown): Promise<unknown> {
   }
 }
 
+/**
+ * Load wasm bindings with Node/browser-aware defaults and ABI validation.
+ */
 export async function loadBindings<TBindings>(
   options: LoadBindingsOptions<TBindings>,
   initInput?: InitInput

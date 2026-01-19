@@ -2,13 +2,16 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+/** Manifest entry for a node-graph fixture. */
 export interface NodeGraphManifestEntry {
   spec: string;
   stage?: string;
 }
 
+/** Manifest entry for orchestration fixtures. */
 export type OrchestrationManifestEntry = string | { path: string };
 
+/** Contents of fixtures/manifest.json. */
 export interface FixturesManifest {
   animations: Record<string, string>;
   "node-graphs": Record<string, NodeGraphManifestEntry>;
@@ -40,10 +43,12 @@ function locateFixturesRoot(): string {
   throw new Error("Unable to locate fixtures/manifest.json relative to @vizij/test-fixtures");
 }
 
+/** Absolute path to the fixtures directory. */
 export function fixturesRoot(): string {
   return locateFixturesRoot();
 }
 
+/** Parsed fixtures manifest (cached after first load). */
 export function manifest(): FixturesManifest {
   if (!manifestCache) {
     const raw = readFileSync(resolve(locateFixturesRoot(), "manifest.json"), "utf8");
@@ -52,18 +57,22 @@ export function manifest(): FixturesManifest {
   return manifestCache;
 }
 
+/** Resolve a fixtures-relative path to an absolute path. */
 export function resolveFixturePath(relPath: string): string {
   return resolve(locateFixturesRoot(), relPath);
 }
 
+/** Read fixture JSON from disk as a string. */
 export function readFixture(relPath: string): string {
   return readFileSync(resolveFixturePath(relPath), "utf8");
 }
 
+/** Load fixture JSON from disk and parse it. */
 export function loadFixture<T>(relPath: string): T {
   return JSON.parse(readFixture(relPath)) as T;
 }
 
+/** Resolve a named animation fixture to its manifest path. */
 export function animationEntry(name: string): string {
   const entry = manifest().animations[name];
   if (!entry) {
@@ -72,6 +81,7 @@ export function animationEntry(name: string): string {
   return entry;
 }
 
+/** Resolve a named node-graph fixture to its manifest entry. */
 export function nodeGraphEntry(name: string): NodeGraphManifestEntry {
   const entry = manifest()["node-graphs"][name];
   if (!entry) {
@@ -80,6 +90,7 @@ export function nodeGraphEntry(name: string): NodeGraphManifestEntry {
   return entry;
 }
 
+/** Resolve a named orchestration fixture to its manifest entry. */
 export function orchestrationEntry(name: string): OrchestrationManifestEntry {
   const entry = manifest().orchestrations[name];
   if (!entry) {
@@ -88,6 +99,7 @@ export function orchestrationEntry(name: string): OrchestrationManifestEntry {
   return entry;
 }
 
+/** Resolve an orchestration manifest entry into an absolute path. */
 export function orchestrationPath(entry: OrchestrationManifestEntry): string {
   if (typeof entry === "string") {
     return resolveFixturePath(entry);

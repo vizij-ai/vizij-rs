@@ -1,5 +1,6 @@
 # Ralph Decision Log
 
+- 2026-01-19: Iter-01 scope: npm/ docs pass for JS autogen. Added JSDoc to wasm-loader, value-json, test-fixtures helpers, and wasm wrapper entry points in animation/node-graph/orchestrator packages. Assumed doc-only edits and skipped tests.
 - 2026-01-18: Picked R-010 (usage snippets) and added rustdoc improvements in `vizij-api-core` Value docs plus a runnable example for `Value::transform`.
 - 2026-01-18: Scope `vizij-api-core` docs pass for iter-01; expanded module-level summaries and docstrings for shapes, typed paths, write ops, coercion, blend, and JSON normalization. Assumed ASCII-only edits for doc output.
 - 2026-01-18: Scope `vizij-api-core` docs pass for iter-02; added rustdoc examples for `WriteOp`/`WriteBatch`, normalized write op JSON example, and added focused notes to coercion, json normalization, blend, and typed path docs. Assumed no new feature flags or ABI changes.
@@ -77,3 +78,4 @@
 # Ralph Decision Log
 
 - 2026-01-19: Iter-07 scope: docstring examples for remaining public enums in vizij-api-core, vizij-animation-core, vizij-graph-core, plus clarified animation config feature flags. Assumed doc-only edits; ran cargo fmt --all and cargo test -p vizij-api-core --doc. Commit failed: git index lock under /home/chris/Code/Semio/vizij_ws/vizij-rs_workspace/.bare/worktrees/docs-update not writable in sandbox.
+- 2026-01-19: Unable to create commit in repo due to sandboxed git dir outside writable roots (permission denied on index.lock). Created a local commit artifact in /tmp/ralph-git-docs-update instead.

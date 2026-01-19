@@ -140,6 +140,9 @@ async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
 
 export type InitInput = LoaderInitInput;
 
+/**
+ * Read the wasm ABI version after init() has completed.
+ */
 export function abi_version(): number {
   if (!bindingCache.current) {
     throw new Error("Call init() from @vizij/node-graph-wasm before reading abi_version().");
@@ -152,7 +155,7 @@ export function abi_version(): number {
 let _initPromise: Promise<void> | null = null;
 
 /**
- * Initialize the wasm module once.
+ * Initialize the wasm module once. Must be awaited before constructing Graph.
  */
 export function init(input?: InitInput): Promise<void> {
   if (_initPromise) return _initPromise;
@@ -734,8 +737,7 @@ export class Graph {
   }
 
   /**
-   * Update a node parameter by key (e.g., "value", "frequency", "phase", "min", "max",
-   * "stiffness", "damping", "half_life", "max_rate").
+   * Update a node parameter by key (e.g., "value", "frequency", "phase", "min", "max").
    * Value may be number | boolean | vec3 or a pre-encoded ValueJSON.
    *
    * Structural edits (e.g., Split sizes) cause the wasm runtime to drop its plan and
@@ -880,6 +882,9 @@ export {
 } from "./fixtures.js";
 
 // Convenience re-exports for consumers who prefer a function-style API
+/**
+ * Convenience helper to init() and return a ready Graph instance.
+ */
 export async function createGraph(
   spec?: GraphSpec | string
 ): Promise<Graph> {

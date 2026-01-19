@@ -114,6 +114,9 @@ export type InitInput = LoaderInitInput;
  * Initialize the wasm module once.
  */
 let _initPromise: Promise<void> | null = null;
+/**
+ * Initialize the wasm module once. Must be awaited before constructing Orchestrator.
+ */
 export function init(input?: InitInput): Promise<void> {
   if (_initPromise) return _initPromise;
   _initPromise = (async () => {
@@ -122,6 +125,9 @@ export function init(input?: InitInput): Promise<void> {
   return _initPromise;
 }
 
+/**
+ * Read the wasm ABI version after init() has completed.
+ */
 export function abi_version(): number {
   if (!bindingCache.current) {
     throw new Error("Call init() from @vizij/orchestrator-wasm before reading abi_version().");
@@ -177,6 +183,10 @@ export {
  * Ergonomic wrapper around the wasm VizijOrchestrator.
  * Always await init() once before constructing.
  */
+/**
+ * Ergonomic wrapper around the wasm VizijOrchestrator.
+ * Always await init() once before constructing.
+ */
 export class Orchestrator {
   private inner: WasmOrchestratorInstance;
   private _hotInputs?: Set<string>;
@@ -214,6 +224,7 @@ export class Orchestrator {
     this._lastFrameVersion = 0n;
   }
 
+  /** Register a merged graph controller. */
   registerMergedGraph(cfg: MergedGraphRegistrationConfig): string {
     return this.inner.register_merged_graph(cfg);
   }
@@ -245,6 +256,7 @@ export class Orchestrator {
     this.inner.set_input(path, v, s);
   }
 
+  /** Remove a blackboard input by path. */
   removeInput(path: string): boolean {
     return this.inner.remove_input(path);
   }
@@ -326,6 +338,7 @@ export class Orchestrator {
     return frame as OrchestratorFrame;
   }
 
+  /** List registered graph and animation controller ids. */
   listControllers(): { graphs: string[]; anims: string[] } {
     const result = this.inner.list_controllers();
     const graphs = Array.isArray(result?.graphs) ? (result!.graphs as string[]) : [];
@@ -333,14 +346,17 @@ export class Orchestrator {
     return { graphs, anims };
   }
 
+  /** Remove a graph controller by id. */
   removeGraph(id: string): boolean {
     return this.inner.remove_graph(id);
   }
 
+  /** Remove an animation controller by id. */
   removeAnimation(id: string): boolean {
     return this.inner.remove_animation(id);
   }
 
+  /** Enable or disable debug logging in the JS wrapper. */
   setDebugLogging(enabled: boolean): void {
     this._debugLogging = enabled;
   }
@@ -357,6 +373,9 @@ export class Orchestrator {
   }
 }
 
+/**
+ * Convenience helper to init() and return a ready Orchestrator instance.
+ */
 export async function createOrchestrator(opts?: any): Promise<Orchestrator> {
   await init();
   return new Orchestrator(opts);

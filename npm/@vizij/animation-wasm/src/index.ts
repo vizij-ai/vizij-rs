@@ -69,6 +69,9 @@ export {
   valueAsText,
 } from "@vizij/value-json";
 
+/**
+ * Read the wasm ABI version after init() has completed.
+ */
 export function abi_version(): number {
   if (!bindingCache.current) {
     throw new Error("Call init() from @vizij/animation-wasm before reading abi_version().");
@@ -157,6 +160,9 @@ async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
 
 let _initPromise: Promise<void> | null = null;
 
+/**
+ * Initialize the wasm module once. Must be awaited before constructing Engine.
+ */
 export function init(input?: InitInput): Promise<void> {
   if (_initPromise) return _initPromise;
 
@@ -182,6 +188,9 @@ function ensureInited(): void {
    Ergonomic wrapper — Engine (parity with node-graph Graph)
 ----------------------------------------------------------- */
 
+/**
+ * Ergonomic wrapper around the wasm VizijAnimation engine.
+ */
 export class Engine {
   private inner: any;
 
@@ -193,8 +202,8 @@ export class Engine {
   }
 
   /**
-   * Load an animation clip into the engine. If `opts.format` is omitted,
-   * this will auto-detect "stored" when `tracks` is present on the object.
+   * Load an animation clip into the engine.
+   * If `opts.format` is omitted, this auto-detects "stored" when `tracks` is present.
    */
   loadAnimation(
     data: AnimationData | StoredAnimation,
@@ -222,7 +231,7 @@ export class Engine {
     }
   }
 
-  /** Create a new player by display name */
+  /** Create a new player by display name. */
   createPlayer(name: string): PlayerId {
     const inner: any = this.inner;
     if (typeof inner.create_player !== "function") {
@@ -233,7 +242,7 @@ export class Engine {
     return inner.create_player(name) as PlayerId;
   }
 
-  /** Add an instance to a player with optional InstanceCfg */
+  /** Add an instance to a player with optional InstanceCfg. */
   addInstance(player: PlayerId, anim: AnimId, cfg?: unknown): InstId {
     const inner: any = this.inner;
     if (typeof inner.add_instance !== "function") {
@@ -258,7 +267,7 @@ export class Engine {
     inner.prebind(resolver as any);
   }
 
-  /** Step the simulation by dt (seconds) with optional Inputs; returns Outputs */
+  /** Step the simulation by dt (seconds) with optional Inputs; returns Outputs. */
   updateValues(dt: number, inputs?: Inputs): Outputs {
     const inner: any = this.inner;
     if (typeof inner.update_values !== "function") {
@@ -269,7 +278,7 @@ export class Engine {
     return inner.update_values(dt, (inputs ?? undefined) as any) as Outputs;
   }
 
-  /** Step the simulation by dt (seconds) returning Outputs and derivatives */
+  /** Step the simulation by dt (seconds) returning Outputs and derivatives. */
   updateValuesAndDerivatives(dt: number, inputs?: Inputs): OutputsWithDerivatives {
     const inner: any = this.inner;
     if (typeof inner.update_values_and_derivatives !== "function") {
@@ -280,14 +289,14 @@ export class Engine {
     return inner.update_values_and_derivatives(dt, (inputs ?? undefined) as any) as OutputsWithDerivatives;
   }
 
-  /** Backwards-compatible alias for updateValues */
+  /** Backwards-compatible alias for updateValues. */
   update(dt: number, inputs?: Inputs): Outputs {
     return this.updateValues(dt, inputs);
   }
 
   /**
-   * Bake a loaded animation clip into pre-sampled tracks. The returned object
-   * mirrors vizij-animation-core's `BakedAnimationData` schema.
+   * Bake a loaded animation clip into pre-sampled tracks.
+   * The returned object mirrors vizij-animation-core's `BakedAnimationData` schema.
    */
   bakeAnimation(anim: AnimId, cfg?: BakingConfig): BakedAnimationData {
     const inner: any = this.inner;
@@ -299,7 +308,7 @@ export class Engine {
     return inner.bake_animation(anim as number, (cfg ?? undefined) as any) as BakedAnimationData;
   }
 
-  /** Bake animation samples plus derivatives */
+  /** Bake animation samples plus derivatives. */
   bakeAnimationWithDerivatives(anim: AnimId, cfg?: BakingConfig): BakedAnimationBundle {
     const inner: any = this.inner;
     if (typeof inner.bake_animation_with_derivatives !== "function") {
@@ -313,7 +322,7 @@ export class Engine {
     ) as BakedAnimationBundle;
   }
 
-  /** Remove a player and all its instances */
+  /** Remove a player and all its instances. */
   removePlayer(player: PlayerId): boolean {
     const inner: any = this.inner;
     if (typeof inner.remove_player !== "function") {
@@ -322,7 +331,7 @@ export class Engine {
     return !!inner.remove_player(player as number);
   }
 
-  /** Remove a specific instance from a player */
+  /** Remove a specific instance from a player. */
   removeInstance(player: PlayerId, inst: InstId): boolean {
     const inner: any = this.inner;
     if (typeof inner.remove_instance !== "function") {
@@ -331,7 +340,7 @@ export class Engine {
     return !!inner.remove_instance(player as number, inst as number);
   }
 
-  /** Unload an animation; auto-detach referencing instances */
+  /** Unload an animation; auto-detach referencing instances. */
   unloadAnimation(anim: AnimId): boolean {
     const inner: any = this.inner;
     if (typeof inner.unload_animation !== "function") {
@@ -340,7 +349,7 @@ export class Engine {
     return !!inner.unload_animation(anim as number);
   }
 
-  /** Enumerate animations in the engine */
+  /** Enumerate animations in the engine. */
   listAnimations(): AnimationInfo[] {
     const inner: any = this.inner;
     if (typeof inner.list_animations !== "function") {
@@ -349,7 +358,7 @@ export class Engine {
     return (inner.list_animations() as unknown) as AnimationInfo[];
   }
 
-  /** Enumerate players and playback info */
+  /** Enumerate players and playback info. */
   listPlayers(): PlayerInfo[] {
     const inner: any = this.inner;
     if (typeof inner.list_players !== "function") {
@@ -358,7 +367,7 @@ export class Engine {
     return (inner.list_players() as unknown) as PlayerInfo[];
   }
 
-  /** Enumerate instances for a given player */
+  /** Enumerate instances for a given player. */
   listInstances(player: PlayerId): InstanceInfo[] {
     const inner: any = this.inner;
     if (typeof inner.list_instances !== "function") {
@@ -367,7 +376,7 @@ export class Engine {
     return (inner.list_instances(player as number) as unknown) as InstanceInfo[];
   }
 
-  /** Enumerate resolved output keys currently associated with a player's instances */
+  /** Enumerate resolved output keys currently associated with a player's instances. */
   listPlayerKeys(player: PlayerId): string[] {
     const inner: any = this.inner;
     if (typeof inner.list_player_keys !== "function") {
@@ -381,6 +390,9 @@ export class Engine {
    Convenience factory
 ----------------------------------------------------------- */
 
+/**
+ * Convenience helper to init() and return a ready Engine instance.
+ */
 export async function createEngine(config?: Config): Promise<Engine> {
   await init();
   return new Engine(config);

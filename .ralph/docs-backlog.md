@@ -8,9 +8,9 @@
 5. R-002 — Establish docstring conventions for examples, panics, safety, and errors
 6. R-006 — Add cross-links between core crates and wasm wrappers
 7. R-007 — Add doc tests or validate examples against current APIs
-8. R-008 — Ensure docstrings mention JSON/ABI versioning contracts
-9. R-005 — Document feature flags and conditional compilation behavior
-10. R-009 — Document performance considerations and allocation hot spots
+8. R-016 — Add JSDoc coverage for npm packages used in JS autogen docs
+9. R-008 — Ensure docstrings mention JSON/ABI versioning contracts
+10. R-005 — Document feature flags and conditional compilation behavior
 
 ---
 
@@ -87,6 +87,14 @@
 - Evidence: Generated docs should note hot paths for integrators
 - Next action: Add perf notes where relevant in engine loops and graph eval
 - Status: Planned
+
+### R-016 — Add JSDoc coverage for npm packages used in JS autogen docs
+- Type: Docs
+- Impact: Med
+- Effort: M
+- Evidence: JS/TS exports in `npm/@vizij/*` lack JSDoc summaries, hurting JS doc autogen.
+- Next action: Add concise JSDoc for public exports in wasm wrappers, value-json, test-fixtures, and wasm-loader.
+- Status: In progress (iter-01 added JSDoc for wasm-loader, value-json, test-fixtures, and wasm wrapper entry points)
 
 ### R-010 — Add usage snippets for frequently used types and helpers
 - Type: Docs

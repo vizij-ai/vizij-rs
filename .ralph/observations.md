@@ -61,3 +61,4 @@ Do NOT implement these in the current loop.
 - 2026-01-19: Bevy adapters now have corrected canonical TypedPath examples; ensure future changes keep `/Transform.*` suffixes consistent with TypedPath canonicalization to avoid drift in docs.
 
 - 2026-01-19: Animation config docs still mention feature flags; consider adding actual flags or removing when features land.
+- 2026-01-19: JS/TS docs in npm packages are uneven; consider adding doc examples (JSDoc @example) for wrapper entry points once API stabilizes.

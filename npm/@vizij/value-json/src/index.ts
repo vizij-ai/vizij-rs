@@ -1,27 +1,46 @@
 /**
  * Shared Value JSON helpers and type definitions used across Vizij wasm wrappers.
+ *
+ * Values accept either the legacy "tagged" JSON (e.g., `{ vec3: [1, 2, 3] }`)
+ * or the normalized `{ type, data }` representation produced by Rust helpers.
  */
 
+/** Legacy tagged float representation. */
 export type Float = { float: number };
+/** Legacy tagged bool representation. */
 export type Bool = { bool: boolean };
+/** Legacy tagged text representation. */
 export type Text = { text: string };
+/** Legacy tagged vec2 representation. */
 export type Vec2 = { vec2: [number, number] };
+/** Legacy tagged vec3 representation. */
 export type Vec3 = { vec3: [number, number, number] };
+/** Legacy tagged vec4 representation. */
 export type Vec4 = { vec4: [number, number, number, number] };
+/** Legacy tagged quaternion representation. */
 export type Quat = { quat: [number, number, number, number] };
+/** Legacy tagged RGBA color representation (0-1 floats). */
 export type ColorRgba = { color: [number, number, number, number] };
+/** Legacy tagged vector representation (variable length). */
 export type Vector = { vector: number[] };
+/** Legacy tagged enum representation. */
 export type EnumVal = { enum: { tag: string; value: ValueJSON } };
+/** Legacy tagged record representation. */
 export type RecordVal = { record: { [key: string]: ValueJSON } };
+/** Legacy tagged fixed array representation. */
 export type ArrayVal = { array: ValueJSON[] };
+/** Legacy tagged list representation. */
 export type ListVal = { list: ValueJSON[] };
+/** Legacy tagged tuple representation. */
 export type TupleVal = { tuple: ValueJSON[] };
+/** Normalized transform payload (used inside NormalizedValue). */
 export type NormalizedTransform = {
   translation: [number, number, number];
   rotation: [number, number, number, number];
   scale: [number, number, number];
 };
 
+/** Legacy tagged transform representation. */
 export type Transform = {
   transform: {
     translation: [number, number, number];
@@ -30,6 +49,7 @@ export type Transform = {
   };
 };
 
+/** Normalized `{ type, data }` representation used by Rust helpers. */
 export type NormalizedValue =
   | { type: "float"; data: number }
   | { type: "bool"; data: boolean }
@@ -47,6 +67,10 @@ export type NormalizedValue =
   | { type: "tuple"; data: NormalizedValue[] }
   | { type: "transform"; data: NormalizedTransform };
 
+/**
+ * Union covering all accepted Value JSON shapes.
+ * Includes legacy tagged payloads, normalized payloads, and primitive shorthands.
+ */
 export type ValueJSON =
   | Float
   | Bool
@@ -68,6 +92,7 @@ export type ValueJSON =
   | string
   | boolean;
 
+/** Accepts ValueJSON plus raw arrays (treated as generic vectors). */
 export type ValueInput = ValueJSON | number[];
 
 const DEFAULT_VEC2: [number, number] = [0, 0];
@@ -857,6 +882,13 @@ function legacyValueAsText(value: ValueJSON | undefined | null): string | undefi
  * Normalize primitive JS values/primitives into the ValueJSON surface.
  * Arrays are encoded as generic vectors to avoid implicit vec2/vec3 coercions.
  */
+/**
+ * Normalize primitive JS values into the ValueJSON surface.
+ *
+ * @example
+ * toValueJSON(2); // { float: 2 }
+ * toValueJSON([1, 2, 3]); // { vector: [1, 2, 3] }
+ */
 export function toValueJSON(value: ValueInput): ValueJSON {
   if (typeof value === "number") {
     return { float: value };
@@ -873,10 +905,14 @@ export function toValueJSON(value: ValueInput): ValueJSON {
   return value;
 }
 
+/**
+ * Returns true when a ValueJSON payload is already normalized.
+ */
 export function isNormalizedValue(value: ValueJSON): value is NormalizedValue {
   return typeof value === "object" && value !== null && "type" in (value as any) && "data" in (value as any);
 }
 
+/** Coerce a ValueJSON payload into a scalar number when possible. */
 export function valueAsNumber(value: ValueJSON | undefined | null): number | undefined {
   if (value == null) return undefined;
   if (isNormalizedValue(value)) {
@@ -885,6 +921,10 @@ export function valueAsNumber(value: ValueJSON | undefined | null): number | und
   return legacyValueAsNumber(value);
 }
 
+/**
+ * Coerce a ValueJSON payload into a numeric array.
+ * When values are not finite, use the provided fallback.
+ */
 export function valueAsNumericArray(
   value: ValueJSON | undefined | null,
   fallback = 0,
@@ -896,6 +936,7 @@ export function valueAsNumericArray(
   return legacyValueAsNumericArray(value, fallback);
 }
 
+/** Coerce a ValueJSON payload into a transform if possible. */
 export function valueAsTransform(
   value: ValueJSON | undefined | null,
 ): NormalizedTransform | undefined {
@@ -906,6 +947,7 @@ export function valueAsTransform(
   return legacyValueAsTransform(value);
 }
 
+/** Coerce a ValueJSON payload into a vec3 if possible. */
 export function valueAsVec3(
   value: ValueJSON | undefined | null,
 ): [number, number, number] | undefined {
@@ -916,6 +958,7 @@ export function valueAsVec3(
   return legacyValueAsVec3(value);
 }
 
+/** Coerce a ValueJSON payload into a numeric vector if possible. */
 export function valueAsVector(value: ValueJSON | undefined | null): number[] | undefined {
   if (value == null) return undefined;
   if (isNormalizedValue(value)) {
@@ -924,6 +967,7 @@ export function valueAsVector(value: ValueJSON | undefined | null): number[] | u
   return legacyValueAsVector(value);
 }
 
+/** Coerce a ValueJSON payload into a boolean if possible. */
 export function valueAsBool(value: ValueJSON | undefined | null): boolean | undefined {
   if (value == null) return undefined;
   if (isNormalizedValue(value)) {
@@ -932,6 +976,7 @@ export function valueAsBool(value: ValueJSON | undefined | null): boolean | unde
   return legacyValueAsBool(value);
 }
 
+/** Coerce a ValueJSON payload into a quaternion if possible. */
 export function valueAsQuat(
   value: ValueJSON | undefined | null,
 ): [number, number, number, number] | undefined {
@@ -942,6 +987,7 @@ export function valueAsQuat(
   return legacyValueAsQuat(value);
 }
 
+/** Coerce a ValueJSON payload into RGBA color if possible. */
 export function valueAsColorRgba(
   value: ValueJSON | undefined | null,
 ): [number, number, number, number] | undefined {
@@ -952,6 +998,7 @@ export function valueAsColorRgba(
   return legacyValueAsColorRgba(value);
 }
 
+/** Coerce a ValueJSON payload into a string if possible. */
 export function valueAsText(value: ValueJSON | undefined | null): string | undefined {
   if (value == null) return undefined;
   if (isNormalizedValue(value)) {

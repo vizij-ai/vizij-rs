@@ -1,3 +1,4 @@
+/** Accepted wasm init inputs passed to wasm-bindgen's init. */
 export type InitInput =
   | string
   | URL
@@ -6,6 +7,7 @@ export type InitInput =
   | WebAssembly.Module
   | Response;
 
+/** Configure how @vizij/wasm-loader imports and initializes a wasm module. */
 export interface LoadBindingsOptions<TBindings> {
   cache: { current: TBindings | null };
   importModule: () => Promise<any>;
@@ -16,6 +18,9 @@ export interface LoadBindingsOptions<TBindings> {
   getAbiVersion?: (bindings: TBindings) => number;
 }
 
+/**
+ * Load, initialize, and cache wasm bindings with optional ABI validation.
+ */
 export async function loadBindingsInternal<TBindings>(
   options: LoadBindingsOptions<TBindings>,
   initInput: InitInput | undefined,
