@@ -21,6 +21,9 @@ pub enum Schedule {
 ///
 /// Returned timings are synthetic (derived from `dt`) and not wall-clock durations.
 ///
+/// Graph writes respect subscription filters for merged writes, while the blackboard
+/// receives full writes when `mirror_writes` is enabled.
+///
 /// # Errors
 /// Returns an error if any controller evaluation fails.
 pub fn run_single_pass(
@@ -106,6 +109,8 @@ pub fn run_single_pass(
 /// `Graphs -> merge -> Animations -> merge -> Graphs -> merge -> frame`.
 ///
 /// Returned timings are synthetic (derived from `dt`) and not wall-clock durations.
+///
+/// The second graph pass observes any animation writes applied during the animation pass.
 ///
 /// # Errors
 /// Returns an error if any controller evaluation fails.

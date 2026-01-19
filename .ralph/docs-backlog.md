@@ -21,7 +21,7 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
-- Next action: Continue orchestrator rustdoc audit for wasm bindings and core fixtures/scheduler; add minimal examples where feasible.
+- Next action: Continue orchestrator rustdoc audit for fixtures/scheduler and any remaining public fields; add minimal examples where feasible.
 - Status: In progress
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors

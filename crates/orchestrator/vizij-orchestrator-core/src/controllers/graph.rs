@@ -29,6 +29,9 @@ pub struct Subscriptions {
 }
 
 /// Configuration for registering a graph with the orchestrator.
+///
+/// Use [`GraphControllerConfig::merged`] or [`GraphControllerConfig::merged_with_options`]
+/// to collapse multiple graph specs into one controller.
 #[derive(Debug, Clone)]
 pub struct GraphControllerConfig {
     /// Controller identifier (used in conflict logs and diagnostics).
@@ -40,6 +43,8 @@ pub struct GraphControllerConfig {
 }
 
 /// Errors emitted while merging multiple graphs into a single spec.
+///
+/// Most merge errors indicate conflicting output paths or invalid node wiring.
 #[derive(Debug, Error)]
 pub enum GraphMergeError {
     #[error("no graphs provided for merge")]
@@ -103,6 +108,9 @@ impl GraphControllerConfig {
     /// their values from another graph via the blackboard are rewired to the upstream node so the
     /// combined graph can execute in a single pass.
     ///
+    /// The merged config inherits the union of subscription paths and sets `mirror_writes` if any
+    /// input graph had it enabled.
+    ///
     /// # Errors
     /// Returns [`GraphMergeError`] when the merge cannot be completed.
     pub fn merged(
@@ -113,6 +121,8 @@ impl GraphControllerConfig {
     }
 
     /// Merge multiple graph configs using explicit conflict resolution options.
+    ///
+    /// The merge uses graph ids to namespace node identifiers, avoiding collisions across specs.
     ///
     /// # Errors
     /// Returns [`GraphMergeError`] when inputs are missing, outputs conflict, or namespace

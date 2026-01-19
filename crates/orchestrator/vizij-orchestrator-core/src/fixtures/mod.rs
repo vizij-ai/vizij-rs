@@ -25,6 +25,8 @@ pub struct GraphFixture {
     /// Raw graph spec JSON (normalized before use).
     pub spec: serde_json::Value,
     /// Subscription JSON (expects `inputs`/`outputs` arrays plus optional mirror flag).
+    ///
+    /// Supports `mirrorWrites` or `mirror_writes` for compatibility.
     #[serde(default)]
     pub subs: serde_json::Value,
     /// Whether to mirror writes into the blackboard even when outputs are filtered.

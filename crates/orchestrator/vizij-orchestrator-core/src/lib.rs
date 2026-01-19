@@ -33,12 +33,17 @@ pub struct OrchestratorFrame {
     pub epoch: u64,
     /// Delta time passed to `step`, in seconds.
     pub dt: f32,
-    /// Merged writes produced during the frame (append order is deterministic: pass order then controller order).
+    /// Merged writes produced during the frame (pass order then controller order).
+    ///
+    /// Graph writes respect subscription filters, so this batch reflects published
+    /// outputs rather than internal graph state when `outputs` is non-empty.
     pub merged_writes: WriteBatch,
     /// Conflict logs emitted while applying controller write batches.
     pub conflicts: Vec<ConflictLog>,
-    /// Per-pass timings in milliseconds. Currently derived from the supplied `dt`
-    /// rather than wall-clock measurements.
+    /// Per-pass timings in milliseconds, derived from the supplied `dt`.
+    ///
+    /// These are synthetic (not wall-clock) to keep host timing deterministic,
+    /// especially for wasm runtimes.
     pub timings_ms: HashMap<String, f32>,
     /// Serialized engine events emitted by animation controllers.
     pub events: Vec<serde_json::Value>,
@@ -74,6 +79,7 @@ impl Orchestrator {
     /// Register a graph controller and return the updated orchestrator.
     ///
     /// The graph is owned by the orchestrator and will be evaluated in schedule order.
+    /// If another graph with the same id exists, it is replaced.
     pub fn with_graph(mut self, cfg: GraphControllerConfig) -> Self {
         let g = crate::controllers::graph::GraphController::new(cfg);
         self.graphs.insert(g.id.clone(), g);
@@ -134,6 +140,8 @@ impl Orchestrator {
     }
 
     /// Register an animation controller and return the updated orchestrator.
+    ///
+    /// If another animation controller with the same id exists, it is replaced.
     pub fn with_animation(mut self, cfg: AnimationControllerConfig) -> Self {
         let a = crate::controllers::animation::AnimationController::new(cfg);
         self.anims.insert(a.id.clone(), a);
@@ -144,6 +152,8 @@ impl Orchestrator {
     ///
     /// This is a convenience for tests and host integrations that operate with JSON
     /// payloads instead of `vizij-api-core` values.
+    ///
+    /// The entry is attributed to `"host"` with priority `0`.
     ///
     /// # Errors
     /// Returns an error when the path is invalid or the JSON payload cannot be parsed

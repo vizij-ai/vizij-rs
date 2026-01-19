@@ -89,6 +89,9 @@ impl Blackboard {
     /// `shape_json` is optional and only needed when you want to preserve explicit
     /// shape metadata alongside the value.
     ///
+    /// Stored entries use priority `0`; pass a prebuilt [`BlackboardEntry`] if you
+    /// need a different priority value.
+    ///
     /// # Errors
     /// Returns an error if the path is invalid or the JSON payload cannot be parsed.
     pub fn set(

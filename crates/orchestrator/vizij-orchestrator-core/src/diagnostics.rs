@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiagnosticsCfg {
     /// Toggle diagnostics collection for orchestrator runs.
+    ///
+    /// The current runtime does not consume this flag directly.
     pub enabled: bool,
 }
 

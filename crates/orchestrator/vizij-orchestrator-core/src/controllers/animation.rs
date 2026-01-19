@@ -31,6 +31,9 @@ pub struct AnimationControllerConfig {
 }
 
 /// Wrapper around `vizij_animation_core::Engine` with blackboard integration.
+///
+/// Use [`update`] to advance the engine and emit a `WriteBatch` derived from
+/// blackboard-driven inputs.
 #[derive(Debug)]
 pub struct AnimationController {
     /// Controller identifier.
@@ -301,6 +304,9 @@ impl AnimationController {
     ///
     /// # Errors
     /// Returns an error if event serialization fails.
+    ///
+    /// Engine update failures are handled internally by the animation engine and do
+    /// not bubble up here.
     ///
     /// This method ignores malformed/unknown blackboard paths and only honors the
     /// documented animation path conventions.
