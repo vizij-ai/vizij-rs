@@ -54,3 +54,4 @@ Do NOT implement these in the current loop.
 - 2026-01-19: Public eval helpers still need to be referenced via internal modules; examples were marked `ignore` to avoid referencing private `plan`/`value_layout` paths. Consider re-exporting minimal types or adding public constructors if you want runnable doctests.
 - 2026-01-19: `vizij-test-fixtures` doctest examples now depend on fixture keys like `pose-quat-transform` and `simple-gain-offset`; if fixtures rename, update doctests to avoid brittle failures.
 - 2026-01-19: `vizij-api-core` `ValueKind` and `ShapeId` enums now have variant-level docs; consider adding concise variant docs to any remaining public enums in other core crates.
+- 2026-01-19: Placeholder wording in `vizij-animation-core` scratch/interp rustdoc replaced; remaining placeholder-like docs appear resolved for these modules.

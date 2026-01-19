@@ -30,11 +30,12 @@ impl Scratch {
         }
     }
 
-    #[inline]
-    /// Reset per-frame state (currently a no-op placeholder).
+    /// Reset per-frame state for scratch buffers.
     ///
-    /// This exists so call sites can centralize per-tick lifecycle even before
-    /// scratch buffers are fully implemented.
+    /// In the current implementation this is a no-op, but callers should invoke
+    /// it once per tick so future buffer reuse hooks can be added without API
+    /// changes.
+    #[inline]
     pub fn begin_frame(&mut self) {
         // Later: clear transient vectors, reset cursors; currently a no-op.
     }

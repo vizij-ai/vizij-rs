@@ -9,8 +9,8 @@ pub mod functions;
 
 /// Registry marker for interpolation functions.
 ///
-/// v1 exposes a placeholder registry type that can grow into a real lookup
-/// table when multiple interpolation families are configurable.
+/// This currently has no state, but provides a stable type for APIs that will
+/// eventually accept configurable interpolation registries.
 #[derive(Debug, Default)]
 pub struct InterpRegistry;
 
