@@ -9,6 +9,14 @@ use vizij_graph_core::{
 };
 use wasm_bindgen::prelude::*;
 
+/// Normalize a graph spec JSON string into the canonical `GraphSpec` envelope.
+///
+/// This accepts ergonomic shorthands (e.g. numeric values, short `type` names)
+/// and returns a JSON string suitable for `load_graph`.
+///
+/// # Errors
+/// Returns a `JsValue` error when the input is not valid JSON or fails
+/// normalization.
 #[wasm_bindgen]
 pub fn normalize_graph_spec_json(json: &str) -> Result<String, JsValue> {
     json::normalize_graph_spec_json_string(json).map_err(|e| JsValue::from_str(&e.to_string()))
@@ -315,6 +323,7 @@ impl Default for WasmGraph {
 #[wasm_bindgen]
 impl WasmGraph {
     #[wasm_bindgen(constructor)]
+    /// Create a new graph runtime with no loaded spec.
     pub fn new() -> WasmGraph {
         #[cfg(feature = "console_error_panic_hook")]
         console_error_panic_hook::set_once();
@@ -337,6 +346,11 @@ impl WasmGraph {
         }
     }
 
+    /// Load and normalize a graph spec from JSON, resetting runtime state.
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if the JSON is invalid or cannot be parsed as a
+    /// graph spec.
     #[wasm_bindgen]
     pub fn load_graph(&mut self, json_str: &str) -> Result<(), JsValue> {
         let normalized = json::normalize_graph_spec_json(json_str)
@@ -360,6 +374,10 @@ impl WasmGraph {
         Ok(())
     }
 
+    /// Stage a single input by path using JSON strings.
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if the path or JSON payloads are invalid.
     #[wasm_bindgen]
     pub fn stage_input(
         &mut self,
@@ -380,6 +398,10 @@ impl WasmGraph {
         Ok(())
     }
 
+    /// Stage a single input by path using JS values (no JSON stringify).
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if the path or value payload is invalid.
     #[wasm_bindgen(js_name = "stage_input_value")]
     pub fn stage_input_value(
         &mut self,
@@ -672,11 +694,13 @@ impl WasmGraph {
         })
     }
 
+    /// Set the runtime clock time (seconds). Used to compute `dt` on eval.
     #[wasm_bindgen]
     pub fn set_time(&mut self, t: f64) {
         self.t = t;
     }
 
+    /// Advance the runtime clock by `dt` seconds (no evaluation).
     #[wasm_bindgen]
     pub fn step(&mut self, dt: f64) {
         self.t += dt;
@@ -1007,6 +1031,10 @@ impl WasmGraph {
         JSON::parse(&s)
     }
 
+    /// Step forward multiple times and return the final outputs/writes as JSON.
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if `dt` is negative/non-finite or evaluation fails.
     #[wasm_bindgen(js_name = "eval_steps")]
     pub fn eval_steps(&mut self, steps: u32, dt: f64) -> Result<String, JsValue> {
         let out_obj = self.eval_steps_json(steps, dt)?;
@@ -1027,6 +1055,10 @@ impl WasmGraph {
         self.set_param_inner(node_id, key, val)
     }
 
+    /// Set a param on a node using a JS value (no JSON stringify).
+    ///
+    /// # Errors
+    /// Returns a `JsValue` error if the node/key/value is invalid.
     #[wasm_bindgen(js_name = "set_param_value")]
     pub fn set_param_value(
         &mut self,
