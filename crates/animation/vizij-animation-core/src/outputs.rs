@@ -132,6 +132,22 @@ impl Outputs {
     /// change key as a [`TypedPath`].
     ///
     /// Entries whose keys do not parse are skipped.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::outputs::{Change, Outputs};
+    /// use vizij_animation_core::PlayerId;
+    /// use vizij_api_core::Value;
+    ///
+    /// let mut outputs = Outputs::default();
+    /// outputs.push_change(Change {
+    ///     player: PlayerId(1),
+    ///     key: "anim/player/1/cmd/play".into(),
+    ///     value: Value::Bool(true),
+    /// });
+    /// let batch = outputs.to_writebatch();
+    /// assert_eq!(batch.iter().count(), 1);
+    /// ```
     pub fn to_writebatch(&self) -> WriteBatch {
         let mut batch = WriteBatch::new();
         for change in &self.changes {

@@ -9,6 +9,15 @@ use serde::{Deserialize, Serialize};
 use crate::ids::{InstId, PlayerId};
 
 /// Input bundle applied before stepping the engine.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::{Inputs, PlayerCommand, PlayerId};
+///
+/// let mut inputs = Inputs::default();
+/// inputs.player_cmds.push(PlayerCommand::Play { player: PlayerId(1) });
+/// assert_eq!(inputs.player_cmds.len(), 1);
+/// ```
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct Inputs {
     /// Player-level commands applied before stepping.
@@ -20,6 +29,8 @@ pub struct Inputs {
 }
 
 /// Player-scoped commands for playback control.
+///
+/// Commands are applied in order before stepping the engine.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PlayerCommand {
     /// Resume playback (sets speed to 1.0 if currently paused).
@@ -54,6 +65,8 @@ pub enum LoopMode {
 }
 
 /// Per-instance updates applied before stepping.
+///
+/// Any field set to `None` leaves the current instance state unchanged.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InstanceUpdate {
     /// Owning player id (used to recompute duration).

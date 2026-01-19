@@ -13,18 +13,31 @@ fn sub_vec4(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
 }
 
 /// Linear interpolation of scalars.
+///
+/// `t` is not clamped; callers typically supply values in `[0, 1]`.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::interp::functions::lerp_f32;
+/// let v = lerp_f32(0.0, 10.0, 0.25);
+/// assert!((v - 2.5).abs() < 1e-6);
+/// ```
 #[inline]
 pub fn lerp_f32(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
 /// Linear interpolation of 2D vectors.
+///
+/// `t` is not clamped; callers typically supply values in `[0, 1]`.
 #[inline]
 pub fn lerp_vec2(a: [f32; 2], b: [f32; 2], t: f32) -> [f32; 2] {
     [lerp_f32(a[0], b[0], t), lerp_f32(a[1], b[1], t)]
 }
 
 /// Linear interpolation of 3D vectors.
+///
+/// `t` is not clamped; callers typically supply values in `[0, 1]`.
 #[inline]
 pub fn lerp_vec3(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
     [
@@ -35,6 +48,8 @@ pub fn lerp_vec3(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
 }
 
 /// Linear interpolation of 4D vectors.
+///
+/// `t` is not clamped; callers typically supply values in `[0, 1]`.
 #[inline]
 pub fn lerp_vec4(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     [
@@ -64,8 +79,9 @@ fn normalize4(mut q: [f32; 4]) -> [f32; 4] {
 }
 
 /// Quaternion NLERP with shortest-arc correction.
-/// If dot < 0, negate the second quaternion to ensure the shortest path.
-/// Returns a normalized quaternion (x,y,z,w).
+///
+/// If the dot product is negative, the second quaternion is negated to ensure the
+/// shortest rotation path. The result is normalized and returned as `(x, y, z, w)`.
 #[inline]
 pub fn nlerp_quat(a: [f32; 4], mut b: [f32; 4], t: f32) -> [f32; 4] {
     let d = dot4(a, b);
@@ -132,13 +148,16 @@ fn normalize4_derivative(raw: [f32; 4], raw_dt: [f32; 4]) -> [f32; 4] {
     ]
 }
 
-/// Step interpolation: choose left value.
+/// Step interpolation: choose the left value with no blending.
 #[inline]
 pub fn step_value(a: &Value) -> Value {
     a.clone()
 }
 
-/// Linear interpolation across Value kinds (Transform uses TRS with quat NLERP).
+/// Linear interpolation across Value kinds.
+///
+/// Transform values interpolate translation/scale linearly and rotation via NLERP.
+/// If the input kinds differ, the left value is returned (fail-soft).
 pub fn linear_value(a: &Value, b: &Value, t: f32) -> Value {
     match (a, b) {
         (Value::Float(va), Value::Float(vb)) => Value::Float(lerp_f32(*va, *vb, t)),
@@ -169,6 +188,10 @@ pub fn linear_value(a: &Value, b: &Value, t: f32) -> Value {
 }
 
 /// Linear interpolation derivative across Value kinds.
+///
+/// `dt_du` is the scale from normalized parameter to seconds. For example,
+/// if `u` is in `[0, 1]` over a clip of duration `duration_s`, then
+/// `dt_du = duration_s`.
 pub fn linear_derivative(a: &Value, b: &Value, t: f32, dt_du: f32) -> Value {
     match (a, b) {
         (Value::Float(va), Value::Float(vb)) => Value::Float((*vb - *va) * dt_du),
@@ -265,8 +288,10 @@ fn bezier_ease_t(t: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
     cubic_bezier(0.0, y1, y2, 1.0, mid)
 }
 
-/// Bezier easing across Value kinds: compute eased t, then use linear blend.
-/// Control points are (x1, y1, x2, y2).
+/// Bezier easing across Value kinds: compute eased `t`, then use linear blend.
+///
+/// Control points are `(x1, y1, x2, y2)` in the normalized `[0, 1]` domain. The input
+/// `t` is clamped to `[0, 1]` before evaluation.
 #[inline]
 pub fn bezier_value(a: &Value, b: &Value, t: f32, ctrl: [f32; 4]) -> Value {
     let eased = bezier_ease_t(t, ctrl[0], ctrl[1], ctrl[2], ctrl[3]);
@@ -311,6 +336,11 @@ fn bezier_ease_with_derivative(t: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> (f
     (eased, deriv)
 }
 
+/// Bezier easing with derivative metadata.
+///
+/// Returns `(value, eased_t, derivative)` where `derivative` is the slope
+/// `dy/dx` of the timing curve at `t`. Use it to scale value derivatives in
+/// the caller.
 pub fn bezier_value_with_derivative(
     a: &Value,
     b: &Value,

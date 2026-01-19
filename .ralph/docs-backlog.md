@@ -36,7 +36,7 @@
 - Type: Docs
 - Impact: High
 - Effort: L
-- Evidence: Autogen docs are less useful without concrete usage examples; added examples in blend/coercion/json helpers this iteration.
+- Evidence: Autogen docs are less useful without concrete usage examples; added examples across animation core engine, baking helpers, and interpolation utilities.
 - Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures.
 - Status: In progress
 

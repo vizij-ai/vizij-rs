@@ -310,7 +310,7 @@ impl Engine {
             }
         }
     }
-    /// Public accessor for a player's computed total duration (in player time).
+    /// Public accessor for a player's computed total duration (in player time seconds).
     ///
     /// Returns `None` if the player id is unknown.
     pub fn player_total_duration(&self, player: PlayerId) -> Option<f32> {
@@ -321,6 +321,14 @@ impl Engine {
     }
 
     /// Create a new engine with the given config.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::{Config, Engine};
+    ///
+    /// let engine = Engine::new(Config::default());
+    /// assert!(engine.list_players().is_empty());
+    /// ```
     pub fn new(cfg: Config) -> Self {
         Self {
             scratch: Scratch::new(&cfg),
@@ -339,6 +347,21 @@ impl Engine {
     /// Load animation data into the engine, returning an `AnimId`.
     ///
     /// The `AnimationData` is stored by value; update your handle if you clone the data first.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::{AnimationData, Config, Engine};
+    ///
+    /// let mut engine = Engine::new(Config::default());
+    /// let anim = engine.load_animation(AnimationData {
+    ///     id: None,
+    ///     name: "clip".into(),
+    ///     tracks: Vec::new(),
+    ///     groups: serde_json::Value::Null,
+    ///     duration_ms: 1000,
+    /// });
+    /// assert_eq!(engine.list_animations()[0].id, anim.0);
+    /// ```
     pub fn load_animation(&mut self, mut data: AnimationData) -> AnimId {
         let id = self.ids.alloc_anim();
         data.id = Some(id);
@@ -349,6 +372,22 @@ impl Engine {
     /// Bake a loaded animation into per-frame samples using the provided config.
     ///
     /// Returns `None` if the animation id is unknown.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::{AnimationData, BakingConfig, Config, Engine};
+    ///
+    /// let mut engine = Engine::new(Config::default());
+    /// let anim = engine.load_animation(AnimationData {
+    ///     id: None,
+    ///     name: "clip".into(),
+    ///     tracks: Vec::new(),
+    ///     groups: serde_json::Value::Null,
+    ///     duration_ms: 500,
+    /// });
+    /// let baked = engine.bake_animation(anim, &BakingConfig::default()).unwrap();
+    /// assert_eq!(baked.anim, anim);
+    /// ```
     pub fn bake_animation(&self, anim: AnimId, cfg: &BakingConfig) -> Option<BakedAnimationData> {
         self.anims
             .get(anim)
@@ -358,6 +397,25 @@ impl Engine {
     /// Bake animation values and derivatives in one pass.
     ///
     /// Returns `None` if the animation id is unknown.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::{AnimationData, BakingConfig, Config, Engine};
+    ///
+    /// let mut engine = Engine::new(Config::default());
+    /// let anim = engine.load_animation(AnimationData {
+    ///     id: None,
+    ///     name: "clip".into(),
+    ///     tracks: Vec::new(),
+    ///     groups: serde_json::Value::Null,
+    ///     duration_ms: 250,
+    /// });
+    /// let (values, derivatives) = engine
+    ///     .bake_animation_with_derivatives(anim, &BakingConfig::default())
+    ///     .unwrap();
+    /// assert_eq!(values.anim, anim);
+    /// assert_eq!(derivatives.anim, anim);
+    /// ```
     pub fn bake_animation_with_derivatives(
         &self,
         anim: AnimId,
@@ -371,6 +429,15 @@ impl Engine {
     /// Create a new player with a display name.
     ///
     /// The returned `PlayerId` is stable for the lifetime of the engine.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::{Config, Engine};
+    ///
+    /// let mut engine = Engine::new(Config::default());
+    /// let player = engine.create_player("demo");
+    /// assert_eq!(engine.list_players()[0].id, player.0);
+    /// ```
     pub fn create_player(&mut self, name: &str) -> PlayerId {
         let pid = self.ids.alloc_player();
         self.players.push(Player::new(pid, name.to_string()));
@@ -381,6 +448,23 @@ impl Engine {
     ///
     /// If the animation id is unknown, the instance is still created but will not emit outputs
     /// until a matching animation is loaded.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::{AnimationData, Config, Engine, InstanceCfg};
+    ///
+    /// let mut engine = Engine::new(Config::default());
+    /// let anim = engine.load_animation(AnimationData {
+    ///     id: None,
+    ///     name: "clip".into(),
+    ///     tracks: Vec::new(),
+    ///     groups: serde_json::Value::Null,
+    ///     duration_ms: 1000,
+    /// });
+    /// let player = engine.create_player("demo");
+    /// let inst = engine.add_instance(player, anim, InstanceCfg::default());
+    /// assert_eq!(engine.list_instances(player)[0].id, inst.0);
+    /// ```
     pub fn add_instance(&mut self, player: PlayerId, anim: AnimId, cfg: InstanceCfg) -> InstId {
         let iid = self.ids.alloc_inst();
 
@@ -419,6 +503,30 @@ impl Engine {
     ///
     /// Iterates all animations/tracks and resolves canonical target paths into handles.
     /// Returns a report indicating how many bindings were resolved.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::{AnimationData, Config, Engine, TargetResolver};
+    ///
+    /// struct Passthrough;
+    /// impl TargetResolver for Passthrough {
+    ///     fn resolve(&mut self, path: &str) -> Option<String> {
+    ///         Some(path.to_string())
+    ///     }
+    /// }
+    ///
+    /// let mut engine = Engine::new(Config::default());
+    /// let _anim = engine.load_animation(AnimationData {
+    ///     id: None,
+    ///     name: "clip".into(),
+    ///     tracks: Vec::new(),
+    ///     groups: serde_json::Value::Null,
+    ///     duration_ms: 1000,
+    /// });
+    /// let mut resolver = Passthrough;
+    /// let report = engine.prebind_with_report(&mut resolver);
+    /// assert_eq!(report.resolved, report.total);
+    /// ```
     pub fn prebind_with_report(&mut self, resolver: &mut dyn TargetResolver) -> PrebindReport {
         let mut report = PrebindReport::default();
         for (anim_id, data) in self.anims.iter() {
@@ -710,6 +818,15 @@ impl Engine {
     /// Step the simulation by `dt` seconds, returning only values.
     ///
     /// Call this once per tick after preparing `Inputs`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::{Config, Engine, Inputs};
+    ///
+    /// let mut engine = Engine::new(Config::default());
+    /// let outputs = engine.update_values(1.0 / 60.0, Inputs::default());
+    /// assert!(outputs.events.is_empty());
+    /// ```
     pub fn update_values(&mut self, dt: f32, inputs: Inputs) -> &Outputs {
         self.step(dt, inputs, false);
         &self.outputs
@@ -718,6 +835,15 @@ impl Engine {
     /// Step the simulation by `dt` seconds, returning values and derivatives.
     ///
     /// Derivatives are approximated in the sampling layer; non-numeric tracks use `None`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::{Config, Engine, Inputs};
+    ///
+    /// let mut engine = Engine::new(Config::default());
+    /// let outputs = engine.update_values_and_derivatives(1.0 / 60.0, Inputs::default());
+    /// assert!(outputs.changes.is_empty());
+    /// ```
     pub fn update_values_and_derivatives(
         &mut self,
         dt: f32,
@@ -737,6 +863,15 @@ impl Engine {
     ///
     /// If a change's key does not parse as a `TypedPath` it will be skipped in the returned
     /// batch. The engine still maintains its normal `Outputs` in `self.outputs`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::{Config, Engine, Inputs};
+    ///
+    /// let mut engine = Engine::new(Config::default());
+    /// let batch = engine.update_writebatch(1.0 / 60.0, Inputs::default());
+    /// assert_eq!(batch.iter().count(), 0);
+    /// ```
     pub fn update_writebatch(&mut self, dt: f32, inputs: Inputs) -> WriteBatch {
         // Populate self.outputs as usual.
         let _ = self.update_values(dt, inputs);
@@ -745,6 +880,8 @@ impl Engine {
     }
 
     /// Remove an instance from a player. Returns true if removed.
+    ///
+    /// This is a no-op if the player id is unknown.
     pub fn remove_instance(&mut self, player: PlayerId, inst: InstId) -> bool {
         // Detach from player
         if let Some(p) = self.players.iter_mut().find(|pp| pp.id == player) {

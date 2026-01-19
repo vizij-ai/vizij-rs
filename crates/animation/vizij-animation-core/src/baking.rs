@@ -9,6 +9,19 @@ use crate::sampling::{sample_track_with_derivative_epsilon, DEFAULT_DERIVATIVE_E
 use vizij_api_core::Value;
 
 /// Configuration for baking sampled animation data.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::BakingConfig;
+///
+/// let cfg = BakingConfig {
+///     frame_rate: 30.0,
+///     start_time: 0.0,
+///     end_time: Some(1.0),
+///     derivative_epsilon: None,
+/// };
+/// assert_eq!(cfg.frame_rate, 30.0);
+/// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakingConfig {
     /// Target frame rate (Hz) for baked samples.
@@ -81,6 +94,21 @@ pub struct BakedDerivativeAnimationData {
 }
 
 /// Bake a single `AnimationData` using the provided config.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::{bake_animation_data, AnimId, AnimationData, BakingConfig};
+///
+/// let data = AnimationData {
+///     id: None,
+///     name: "clip".into(),
+///     tracks: Vec::new(),
+///     groups: serde_json::Value::Null,
+///     duration_ms: 1000,
+/// };
+/// let baked = bake_animation_data(AnimId(1), &data, &BakingConfig::default());
+/// assert_eq!(baked.tracks.len(), 0);
+/// ```
 pub fn bake_animation_data(
     anim_id: AnimId,
     data: &AnimationData,
@@ -90,6 +118,22 @@ pub fn bake_animation_data(
 }
 
 /// Bake animation values and derivatives simultaneously.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::{bake_animation_data_with_derivatives, AnimId, AnimationData, BakingConfig};
+///
+/// let data = AnimationData {
+///     id: None,
+///     name: "clip".into(),
+///     tracks: Vec::new(),
+///     groups: serde_json::Value::Null,
+///     duration_ms: 1000,
+/// };
+/// let (values, derivatives) =
+///     bake_animation_data_with_derivatives(AnimId(1), &data, &BakingConfig::default());
+/// assert_eq!(values.tracks.len(), derivatives.tracks.len());
+/// ```
 pub fn bake_animation_data_with_derivatives(
     anim_id: AnimId,
     data: &AnimationData,
@@ -164,6 +208,8 @@ pub fn bake_animation_data_with_derivatives(
 }
 
 /// Export baked data as `serde_json::Value` (stable schema for FFI/serialization).
+///
+/// This is a convenience wrapper around `serde_json::to_value`.
 pub fn export_baked_json(baked: &BakedAnimationData) -> serde_json::Value {
     serde_json::to_value(baked).unwrap_or(serde_json::Value::Null)
 }
