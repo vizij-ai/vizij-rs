@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use vizij_api_core::{json, Shape, TypedPath, Value, WriteBatch};
 
-/// Single blackboard entry with provenance information.
+/// Single blackboard entry with provenance metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlackboardEntry {
     pub value: Value,
@@ -16,6 +16,7 @@ pub struct BlackboardEntry {
 }
 
 impl BlackboardEntry {
+    /// Construct an entry with the provided metadata.
     pub fn new(
         value: Value,
         shape: Option<Shape>,
@@ -33,8 +34,9 @@ impl BlackboardEntry {
     }
 }
 
-/// A conflict record produced when a write overwrote an existing entry.
-/// Provides prior metadata for diagnostics.
+/// A conflict record produced when a write overwrites an existing entry.
+///
+/// Both prior and new values are recorded so hosts can diagnose contention.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConflictLog {
     pub path: TypedPath,
@@ -49,6 +51,7 @@ pub struct ConflictLog {
     pub new_source: String,
 }
 
+/// In-memory blackboard storing the latest value per `TypedPath`.
 #[derive(Debug, Default)]
 pub struct Blackboard {
     // Map from canonical TypedPath -> entry
@@ -68,6 +71,9 @@ impl Blackboard {
     /// This convenience accepts JSON values (serde_json::Value) which are converted
     /// into the workspace `vizij_api_core::Value` and `Shape` types. The `path` is
     /// provided as a String and parsed into a `TypedPath`.
+    ///
+    /// # Errors
+    /// Returns an error if the path is invalid or the JSON payload cannot be parsed.
     pub fn set(
         &mut self,
         path: String,
@@ -97,6 +103,8 @@ impl Blackboard {
     }
 
     /// Directly set a value using typed API types.
+    ///
+    /// Returns the previous entry if one existed at the same path.
     pub fn set_entry(
         &mut self,
         path: TypedPath,
@@ -105,7 +113,9 @@ impl Blackboard {
         self.inner.insert(path, entry)
     }
 
-    /// Get an entry by path string. Returns None if absent or parse fails.
+    /// Get an entry by path string.
+    ///
+    /// Returns `None` if the path cannot be parsed or no entry exists.
     pub fn get(&self, path: &str) -> Option<&BlackboardEntry> {
         if let Ok(tp) = TypedPath::parse(path) {
             self.inner.get(&tp)
@@ -114,12 +124,16 @@ impl Blackboard {
         }
     }
 
-    /// Fetch an entry using a pre-parsed TypedPath (avoids re-parse per tick).
+    /// Fetch an entry using a pre-parsed `TypedPath`.
+    ///
+    /// Prefer this when reusing the same path across ticks to avoid re-parsing.
     pub fn get_tp(&self, path: &TypedPath) -> Option<&BlackboardEntry> {
         self.inner.get(path)
     }
 
-    /// Remove an entry by path string. Returns the removed entry if present.
+    /// Remove an entry by path string.
+    ///
+    /// Returns the removed entry if present. Invalid paths return `None`.
     pub fn remove(&mut self, path: &str) -> Option<BlackboardEntry> {
         if let Ok(tp) = TypedPath::parse(path) {
             self.inner.remove(&tp)
@@ -128,13 +142,14 @@ impl Blackboard {
         }
     }
 
-    /// Iterate over all entries.
+    /// Iterate over all entries keyed by `TypedPath`.
     pub fn iter(&self) -> impl Iterator<Item = (&TypedPath, &BlackboardEntry)> {
         self.inner.iter()
     }
 
-    /// Apply a WriteBatch onto the blackboard using last-writer-wins semantics.
-    /// Returns a Vec<ConflictLog> describing any overwrites that occurred.
+    /// Apply a `WriteBatch` using last-writer-wins semantics.
+    ///
+    /// Returns conflict records for any overwritten entries.
     pub fn apply_writebatch(
         &mut self,
         batch: WriteBatch,

@@ -8,13 +8,19 @@ use crate::blackboard::ConflictLog;
 /// Scheduling strategies supported by the orchestrator.
 #[derive(Debug, Clone, Copy)]
 pub enum Schedule {
+    /// Animations then graphs in a single pass.
     SinglePass,
+    /// Graphs, then animations, then graphs again.
     TwoPass,
+    /// Reserved for future work (currently behaves like `SinglePass`).
     RateDecoupled, // reserved for future work
 }
 
 /// Run a single-pass schedule:
 ///   Animations -> merge -> Graphs -> merge -> frame
+///
+/// # Errors
+/// Returns an error if any controller evaluation fails.
 pub fn run_single_pass(
     orchestrator: &mut crate::Orchestrator,
     dt: f32,
@@ -96,6 +102,9 @@ pub fn run_single_pass(
 
 /// Run a two-pass schedule:
 ///   Graphs -> merge -> Animations -> merge -> Graphs -> merge -> frame
+///
+/// # Errors
+/// Returns an error if any controller evaluation fails.
 pub fn run_two_pass(
     orchestrator: &mut crate::Orchestrator,
     dt: f32,

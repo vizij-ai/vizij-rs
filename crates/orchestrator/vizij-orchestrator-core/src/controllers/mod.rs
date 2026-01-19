@@ -1,3 +1,5 @@
+//! Controller implementations wired into the orchestrator scheduler.
+
 pub mod animation;
 pub mod graph;
 

@@ -13,7 +13,7 @@ use vizij_api_core::{TypedPath, Value as ApiValue, WriteBatch};
 
 use crate::blackboard::Blackboard;
 
-/// Lightweight config for registering an animation controller with the orchestrator.
+/// Configuration for registering an animation controller with the orchestrator.
 #[derive(Debug, Clone)]
 pub struct AnimationControllerConfig {
     pub id: String,
@@ -21,6 +21,7 @@ pub struct AnimationControllerConfig {
     pub setup: JsonValue,
 }
 
+/// Wrapper around `vizij_animation_core::Engine` with blackboard integration.
 #[derive(Debug)]
 pub struct AnimationController {
     pub id: String,
@@ -40,6 +41,11 @@ enum AnimationPathKind<'a> {
 }
 
 impl AnimationController {
+    /// Create an animation controller, returning an error if setup is invalid.
+    ///
+    /// # Errors
+    /// Returns an error if the setup payload cannot be decoded or the animation JSON
+    /// cannot be parsed.
     pub fn try_new(cfg: AnimationControllerConfig) -> Result<Self> {
         // Create engine with a default config, then apply any optional setup payload.
         let mut controller = Self {
@@ -50,6 +56,12 @@ impl AnimationController {
         Ok(controller)
     }
 
+    /// Create an animation controller, panicking if setup is invalid.
+    ///
+    /// Prefer [`try_new`] in fallible code paths.
+    ///
+    /// # Panics
+    /// Panics if the setup payload is invalid or the animation JSON cannot be parsed.
     pub fn new(cfg: AnimationControllerConfig) -> Self {
         Self::try_new(cfg).expect("AnimationController setup is invalid")
     }
@@ -135,7 +147,7 @@ impl AnimationController {
         }
     }
 
-    /// Minimal helper to parse u32 from a path segment.
+    /// Parse `u32` from a path segment.
     fn parse_u32_segment(s: &str) -> Option<u32> {
         s.parse::<u32>().ok()
     }
@@ -174,7 +186,7 @@ impl AnimationController {
         }
     }
 
-    /// Map Blackboard entries into Engine Inputs using a small convention:
+    /// Map blackboard entries into engine inputs using a strict path convention.
     ///
     /// - Player-level commands:
     ///   TypedPath: "anim/player/<player_id>/cmd/<action>"
@@ -266,15 +278,18 @@ impl AnimationController {
         inputs
     }
 
-    /// Update the animation controller for dt seconds, reading relevant inputs from the
+    /// Update the animation controller for `dt` seconds, reading inputs from the
     /// blackboard and returning a WriteBatch plus a list of high-level event values.
     ///
     /// Behavior:
-    ///  - Build `Inputs` from the Blackboard using a small path convention
-    ///  - Call `engine.update_values(dt, inputs)` to advance the engine and collect Outputs
-    ///  - Translate `Outputs.changes` into a WriteBatch using the shared helper on
+    ///  - Build `Inputs` from the blackboard using a path convention
+    ///  - Call `engine.update_values(dt, inputs)` to advance the engine and collect outputs
+    ///  - Translate `outputs.changes` into a `WriteBatch` using the shared helper on
     ///    `vizij_animation_core::Outputs`, which handles the TypedPath parsing.
     ///  - Serialize engine events into `serde_json::Value` and return them alongside the batch.
+    ///
+    /// # Errors
+    /// Returns an error if event serialization fails.
     pub fn update(&mut self, dt: f32, bb: &mut Blackboard) -> Result<(WriteBatch, Vec<JsonValue>)> {
         // Build Inputs from Blackboard
         let inputs = Self::map_blackboard_to_inputs(bb);

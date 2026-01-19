@@ -11,3 +11,5 @@
 - 2026-01-19: Scope `vizij-graph-core` eval runtime/plan docs pass for iter-04; added error notes to runtime, plan cache, and eval entry points. Assumed doc-only edits and no behavior changes.
 - 2026-01-19: Scope `vizij-graph-core` eval helper docs pass for iter-05; tightened rustdoc for numeric, variadic, value layout, runtime state, and URDF helpers. Assumed doc-only edits within node-graph core.
 - 2026-01-19: Commit step blocked: git dir lives under `/home/chris/Code/Semio/vizij_ws/vizij-rs_workspace/.bare` which is outside the writable roots, so `git add/commit` fails with read-only filesystem. Changes left uncommitted.
+- 2026-01-19: Scope `vizij-orchestrator-core` rustdoc pass for iter-01; updated module-level docs and public API summaries/errors across blackboard, controllers, scheduler, fixtures, and core orchestrator. Assumed doc-only edits, avoided adding doctests to keep fixtures stable.
+- 2026-01-19: Commit blocked again: git dir under `/home/chris/Code/Semio/vizij_ws/vizij-rs_workspace/.bare` is outside writable roots, so `git add/commit` failed with permission denied on `index.lock`.

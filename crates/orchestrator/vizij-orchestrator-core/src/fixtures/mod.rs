@@ -6,6 +6,7 @@ use vizij_api_core::{json::normalize_graph_spec_value, TypedPath};
 use vizij_graph_core::types::GraphSpec;
 use vizij_test_fixtures::{animations, node_graphs, orchestrations};
 
+/// Graph fixture descriptor used by orchestrator demos/tests.
 #[derive(Debug, Deserialize, Clone)]
 pub struct GraphFixture {
     #[serde(skip_deserializing, default)]
@@ -21,6 +22,7 @@ pub struct GraphFixture {
     pub stage: Vec<InputFixture>,
 }
 
+/// Animation fixture descriptor used by orchestrator demos/tests.
 #[derive(Debug, Clone)]
 pub struct AnimationFixture {
     pub key: Option<String>,
@@ -28,6 +30,7 @@ pub struct AnimationFixture {
     pub setup: serde_json::Value,
 }
 
+/// Input fixture staged onto the blackboard before stepping.
 #[derive(Debug, Clone)]
 pub struct InputFixture {
     pub path: String,
@@ -35,6 +38,7 @@ pub struct InputFixture {
     pub shape: Option<serde_json::Value>,
 }
 
+/// Fixture describing a merged graph configuration.
 #[derive(Debug, Clone)]
 pub struct MergedGraphFixture {
     pub id: String,
@@ -43,6 +47,7 @@ pub struct MergedGraphFixture {
 }
 
 impl GraphFixture {
+    /// Build a `GraphControllerConfig` from this fixture.
     pub fn controller_config(&self) -> GraphControllerConfig {
         let mut spec_value = self.spec.clone();
         normalize_graph_spec_value(&mut spec_value).expect("normalize graph spec");
@@ -94,6 +99,7 @@ impl GraphFixture {
 }
 
 impl MergedGraphFixture {
+    /// Build a merged `GraphControllerConfig` from fixture graphs.
     pub fn controller_config(&self) -> GraphControllerConfig {
         let configs: Vec<GraphControllerConfig> = self
             .graphs
@@ -105,6 +111,7 @@ impl MergedGraphFixture {
     }
 }
 
+/// Expected state after one orchestrator step in fixture-driven tests.
 #[derive(Debug, Clone)]
 pub struct StepFixture {
     pub delta: f64,
@@ -112,6 +119,7 @@ pub struct StepFixture {
 }
 
 impl StepFixture {
+    /// Find an expected value for the given path, if any.
     pub fn expected(&self, path: &str) -> Option<&serde_json::Value> {
         self.expect
             .iter()
@@ -119,6 +127,7 @@ impl StepFixture {
     }
 }
 
+/// Orchestrator fixture aggregating graphs, animations, and expected outputs.
 #[derive(Debug, Clone)]
 pub struct DemoFixture {
     pub description: Option<String>,
@@ -133,38 +142,47 @@ pub struct DemoFixture {
 }
 
 impl DemoFixture {
+    /// Return the graph spec JSON from the primary graph fixture.
     pub fn graph_spec_json(&self) -> &serde_json::Value {
         &self.graph.spec
     }
 
+    /// Return graph subscription JSON from the primary graph fixture.
     pub fn graph_subscriptions(&self) -> &serde_json::Value {
         &self.graph.subs
     }
 
+    /// Return all graph fixtures (unmerged).
     pub fn graphs(&self) -> &[GraphFixture] {
         &self.graphs
     }
 
+    /// Return merged graph fixtures.
     pub fn merged_graphs(&self) -> &[MergedGraphFixture] {
         &self.merged_graphs
     }
 
+    /// Return animation setup JSON from the primary animation fixture.
     pub fn animation_setup(&self) -> &serde_json::Value {
         &self.animation.setup
     }
 
+    /// Return all animation fixtures.
     pub fn animations(&self) -> &[AnimationFixture] {
         &self.animations
     }
 
+    /// Return the configured schedule string, if present.
     pub fn schedule(&self) -> Option<&str> {
         self.schedule.as_deref()
     }
 
+    /// Return initial input fixtures staged before the first step.
     pub fn initial_inputs(&self) -> &[InputFixture] {
         &self.initial_inputs
     }
 
+    /// Return step-by-step expectations for this fixture.
     pub fn steps(&self) -> &[StepFixture] {
         &self.steps
     }
@@ -442,18 +460,22 @@ fn pipeline_fixture(name: &str) -> DemoFixture {
     }
 }
 
+/// Load the default single-pass demo fixture.
 pub fn demo_single_pass() -> DemoFixture {
     pipeline_fixture("scalar-ramp-pipeline")
 }
 
+/// Load the blend pose pipeline fixture.
 pub fn blend_pose_pipeline() -> DemoFixture {
     pipeline_fixture("blend-pose-pipeline")
 }
 
+/// Load an orchestration fixture by name.
 pub fn load_pipeline(name: &str) -> DemoFixture {
     pipeline_fixture(name)
 }
 
+/// Build a graph controller config from a graph fixture name.
 pub fn graph_controller_config_from_fixture(name: &str) -> GraphControllerConfig {
     let mut graph: GraphFixture =
         node_graphs::spec(name).unwrap_or_else(|_| panic!("load graph fixture {name}"));

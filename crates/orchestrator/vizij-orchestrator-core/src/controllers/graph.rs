@@ -9,12 +9,15 @@ use vizij_graph_core::types::{GraphSpec, NodeType, Selector};
 
 use crate::blackboard::Blackboard;
 
-/// Subscriptions specify which blackboard paths a graph consumes/produces.
-/// Only subscribed input paths will be staged into the GraphRuntime to reduce
+/// Subscriptions specify which blackboard paths a graph consumes and produces.
+///
+/// Only subscribed input paths are staged into the `GraphRuntime` to reduce
 /// unnecessary work and keep evaluation deterministic.
 #[derive(Debug, Clone, Default)]
 pub struct Subscriptions {
+    /// Blackboard paths staged into the runtime before evaluation.
     pub inputs: Vec<TypedPath>,
+    /// Blackboard paths published to consumers (empty means publish all).
     pub outputs: Vec<TypedPath>,
     /// Mirror the full controller write batch into the blackboard even when `outputs`
     /// restrict which paths are surfaced to consumers.
@@ -25,7 +28,7 @@ pub struct Subscriptions {
     pub mirror_writes: bool,
 }
 
-/// Lightweight config for registering a graph with the orchestrator.
+/// Configuration for registering a graph with the orchestrator.
 #[derive(Debug, Clone)]
 pub struct GraphControllerConfig {
     pub id: String,
@@ -34,6 +37,7 @@ pub struct GraphControllerConfig {
     pub subs: Subscriptions,
 }
 
+/// Errors emitted while merging multiple graphs into a single spec.
 #[derive(Debug, Error)]
 pub enum GraphMergeError {
     #[error("no graphs provided for merge")]
@@ -50,6 +54,7 @@ pub enum GraphMergeError {
     InvalidNamespacedPath { path: String, reason: String },
 }
 
+/// Strategy for resolving conflicting output paths when merging graphs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputConflictStrategy {
     Error,
@@ -59,6 +64,7 @@ pub enum OutputConflictStrategy {
     DefaultBlend,
 }
 
+/// Conflict resolution options used during graph merges.
 #[derive(Debug, Clone, Copy)]
 pub struct GraphMergeOptions {
     pub output_conflicts: OutputConflictStrategy,
@@ -88,6 +94,11 @@ impl GraphControllerConfig {
         Self::merged_with_options(id, graphs, GraphMergeOptions::default())
     }
 
+    /// Merge multiple graph configs using explicit conflict resolution options.
+    ///
+    /// # Errors
+    /// Returns [`GraphMergeError`] when inputs are missing, outputs conflict, or namespace
+    /// generation fails.
     pub fn merged_with_options(
         id: impl Into<String>,
         graphs: Vec<GraphControllerConfig>,
@@ -760,7 +771,7 @@ impl GraphControllerConfig {
     }
 }
 
-/// Controller owning a persistent GraphRuntime for evaluations.
+/// Controller owning a persistent `GraphRuntime` for evaluations.
 #[derive(Debug)]
 pub struct GraphController {
     pub id: String,
@@ -771,6 +782,7 @@ pub struct GraphController {
 }
 
 impl GraphController {
+    /// Create a graph controller from a configuration.
     pub fn new(cfg: GraphControllerConfig) -> Self {
         Self {
             id: cfg.id,
@@ -781,6 +793,7 @@ impl GraphController {
         }
     }
 
+    /// Replace the graph configuration and invalidate the cached plan.
     pub fn replace_config(&mut self, cfg: GraphControllerConfig) {
         // Structural edits require invalidating the cached plan. Always re-apply `with_cache()`
         // at the boundary so versioned plan caching cannot reuse stale layouts.
@@ -789,13 +802,16 @@ impl GraphController {
         self.plan_ready = false;
     }
 
-    /// Evaluate the graph given the current blackboard state and epoch.
+    /// Evaluate the graph using the current blackboard state.
     ///
     /// Behavior:
-    ///  - Advance the GraphRuntime epoch so newly staged inputs become visible.
-    ///  - Stage subscribed Blackboard inputs into the runtime (only inputs listed in Subscriptions).
-    ///  - Call evaluate_all(runtime, &spec)
-    ///  - Collect runtime.writes and return as WriteBatch.
+    ///  - Advance `GraphRuntime.t`/`dt` so time-based nodes observe the new step.
+    ///  - Stage subscribed blackboard inputs into the runtime (only inputs listed in `Subscriptions`).
+    ///  - Call `evaluate_all` (or `evaluate_all_cached` when a plan is ready).
+    ///  - Collect runtime writes and return them as a `WriteBatch`.
+    ///
+    /// # Errors
+    /// Returns an error if the graph evaluation fails.
     pub fn evaluate(&mut self, bb: &mut Blackboard, _epoch: u64, dt: f32) -> Result<WriteBatch> {
         // Update runtime timekeeping so transition/time nodes observe advancing time.
         let delta = if dt.is_finite() { dt.max(0.0) } else { 0.0 };
