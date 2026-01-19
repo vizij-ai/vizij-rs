@@ -33,3 +33,4 @@ Do NOT implement these in the current loop.
 - 2026-01-19: `bevy_vizij_graph` lacks usage examples in rustdoc; consider adding a short `no_run` snippet once Bevy plugin setup conventions are settled.
 - 2026-01-19: `vizij-graph-core` eval helpers (`InputSlots`/`OutputSlots`/`read_inputs`) still have no runnable examples; consider adding minimal no_run doctests once a stable minimal spec exists.
 - 2026-01-19: `pnpm changeset` failed with `Permission denied` due to missing/blocked `node_modules`; doc-only changes may still need a changeset once dependencies are installed.
+- 2026-01-19: `bevy_vizij_graph` now has a minimal `VizijGraphPlugin` `no_run` example, but other Bevy adapters may still lack runnable snippets; consider aligning examples across Bevy crates.

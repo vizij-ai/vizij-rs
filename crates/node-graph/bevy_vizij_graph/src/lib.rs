@@ -14,14 +14,23 @@ use vizij_api_core::Value;
 use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, NodeId, PortValue};
 
 /// Graph specification to evaluate each frame.
+///
+/// Update this resource with a new [`GraphSpec`] when you want to switch the
+/// graph being evaluated. For best runtime performance, ensure the spec is
+/// preprocessed with [`GraphSpec::with_cache`].
 #[derive(Resource, Default, Clone)]
 pub struct GraphResource(pub GraphSpec);
 
 /// Snapshot of per-node output ports after evaluation.
+///
+/// This resource is refreshed every frame by [`system_eval`] and can be read
+/// by gameplay systems or debugging tools.
 #[derive(Resource, Default, Clone)]
 pub struct GraphOutputs(pub HashMap<NodeId, HashMap<String, PortValue>>);
 
 /// Persistent runtime so stateful nodes (springs, dampers, etc.) can integrate across frames.
+///
+/// Reset or replace this resource if you need to clear accumulated state.
 #[derive(Resource, Default)]
 pub struct GraphRuntimeResource(pub GraphRuntime);
 
@@ -61,6 +70,9 @@ fn value_to_f32(v: &Value) -> f32 {
 }
 
 /// Event for updating a node parameter by key.
+///
+/// Known keys map onto [`vizij_graph_core::types::NodeParams`] fields. Most
+/// numeric fields are coerced to `f32` using [`value_to_f32`].
 #[derive(Event)]
 pub struct SetNodeParam {
     /// Node identifier to update.
@@ -72,6 +84,8 @@ pub struct SetNodeParam {
 }
 
 /// Monotonic time state forwarded into the runtime.
+///
+/// The `dt` value is clamped to `>= 0.0` and forced to `0.0` if non-finite.
 #[derive(Resource, Default, Clone)]
 pub struct GraphTime {
     /// Accumulated time in seconds.
@@ -81,6 +95,19 @@ pub struct GraphTime {
 }
 
 /// Registers graph evaluation systems and resources.
+///
+/// # Examples
+/// ```no_run
+/// use bevy::prelude::*;
+/// use vizij_graph_core::GraphSpec;
+/// use bevy_vizij_graph::{GraphResource, VizijGraphPlugin};
+///
+/// App::new()
+///     .add_plugins(DefaultPlugins)
+///     .add_plugins(VizijGraphPlugin)
+///     .insert_resource(GraphResource(GraphSpec::default().with_cache()))
+///     .run();
+/// ```
 pub struct VizijGraphPlugin;
 
 impl Plugin for VizijGraphPlugin {
