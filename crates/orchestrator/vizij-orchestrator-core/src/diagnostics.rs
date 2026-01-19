@@ -1,3 +1,5 @@
+//! Diagnostics configuration for orchestrator runs.
+
 use serde::{Deserialize, Serialize};
 
 /// Minimal diagnostics configuration placeholder.
@@ -14,6 +16,6 @@ pub struct DiagnosticsCfg {
 
 impl Default for DiagnosticsCfg {
     fn default() -> Self {
-        DiagnosticsCfg { enabled: true }
+        Self { enabled: true }
     }
 }

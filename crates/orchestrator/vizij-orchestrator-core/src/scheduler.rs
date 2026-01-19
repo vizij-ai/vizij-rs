@@ -29,6 +29,9 @@ pub enum Schedule {
 /// Graph writes respect subscription filters for merged writes, while the blackboard
 /// receives full writes when `mirror_writes` is enabled.
 ///
+/// This is the schedule used by [`Schedule::SinglePass`] and the fallback for
+/// [`Schedule::RateDecoupled`].
+///
 /// This runner increments no state; callers must advance the epoch themselves.
 ///
 /// # Errors

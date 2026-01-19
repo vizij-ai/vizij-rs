@@ -1,3 +1,9 @@
+//! Animation controller wrapper for orchestrator scheduling.
+//!
+//! This module adapts `vizij-animation-core` engines to the orchestrator
+//! blackboard. It encodes a conservative path convention for player commands
+//! and instance inputs, then emits `WriteBatch` outputs for the scheduler.
+
 use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
@@ -20,6 +26,8 @@ use crate::blackboard::Blackboard;
 /// - `animation`: stored animation JSON blob
 /// - `player`: player config (`name`, `loop_mode`, `speed`)
 /// - `instance`: instance overrides (`weight`, `time_scale`, `start_offset`, `enabled`)
+///
+/// If `animation` is omitted, no player or instance is created.
 ///
 /// Unknown keys are ignored. Use `serde_json::Value::Null` to skip setup entirely.
 ///
@@ -204,22 +212,17 @@ impl AnimationController {
 
     /// Map blackboard entries into engine inputs using a strict path convention.
     ///
-    /// - Player-level commands:
-    ///   TypedPath: "anim/player/<player_id>/cmd/<action>"
-    ///   where <action> is one of:
-    ///     - "play", "pause", "stop"
-    ///     - "set_speed" (value must be Float)
-    ///     - "seek" (value must be Float)
-    ///     - "set_loop" (value: "once" | "loop" | "pingpong") -- not implemented here
+    /// Player-level commands use:
+    /// `anim/player/<player_id>/cmd/<action>`
+    /// where `<action>` is one of `play`, `pause`, `stop`, `set_speed`, or `seek`.
     ///
-    /// - Instance updates:
-    ///   TypedPath: "anim/player/<player_id>/instance/<inst_id>/weight"
-    ///   TypedPath: "anim/player/<player_id>/instance/<inst_id>/time_scale"
-    ///   TypedPath: "anim/player/<player_id>/instance/<inst_id>/start_offset"
-    ///   TypedPath: "anim/player/<player_id>/instance/<inst_id>/enabled"
+    /// Instance updates use:
+    /// `anim/player/<player_id>/instance/<inst_id>/<field>`
+    /// where `<field>` is `weight`, `time_scale`, `start_offset`, or `enabled`.
     ///
-    /// These conventions are intentionally conservative and documented for now.
-    /// Unrecognized paths are ignored.
+    /// Commands and updates require the right `vizij-api-core` value types
+    /// (Float for `set_speed`, `seek`, `weight`, `time_scale`, `start_offset`;
+    /// Bool for `enabled`). Unknown paths or mismatched types are ignored.
     fn map_blackboard_to_inputs(bb: &Blackboard) -> Inputs {
         let mut inputs = Inputs::default();
 
@@ -306,11 +309,9 @@ impl AnimationController {
     ///  - Serialize engine events into `serde_json::Value` and return them alongside the batch.
     ///
     /// # Errors
-    /// This method currently only returns errors if a future implementation makes
-    /// event serialization fallible; serialization failures are skipped today.
-    ///
-    /// Engine update failures are handled internally by the animation engine and do
-    /// not bubble up here.
+    /// This method currently only returns errors if setup parsing or future
+    /// event serialization becomes fallible. Engine update failures are handled
+    /// internally by the animation engine and do not bubble up here.
     ///
     /// This method ignores malformed/unknown blackboard paths and only honors the
     /// documented animation path conventions.

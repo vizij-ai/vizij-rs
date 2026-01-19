@@ -2,15 +2,15 @@
 
 ## Top 10 next
 1. R-001 — Audit public Rust APIs for missing or placeholder docstrings
-2. R-002 — Establish docstring conventions for examples, panics, safety, and errors
-3. R-003 — Add runnable code examples for key public APIs
+2. R-003 — Add runnable code examples for key public APIs
+3. R-010 — Add usage snippets for frequently used types and helpers
 4. R-004 — Standardize module-level docs and `//!` overviews
-5. R-005 — Document feature flags and conditional compilation behavior
+5. R-002 — Establish docstring conventions for examples, panics, safety, and errors
 6. R-006 — Add cross-links between core crates and wasm wrappers
 7. R-007 — Add doc tests or validate examples against current APIs
 8. R-008 — Ensure docstrings mention JSON/ABI versioning contracts
-9. R-009 — Document performance considerations and allocation hot spots
-10. R-010 — Add usage snippets for frequently used types and helpers
+9. R-005 — Document feature flags and conditional compilation behavior
+10. R-009 — Document performance considerations and allocation hot spots
 
 ---
 

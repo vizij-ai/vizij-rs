@@ -94,6 +94,9 @@ pub struct GraphMergeOptions {
     /// Strategy for conflicting final outputs.
     pub output_conflicts: OutputConflictStrategy,
     /// Strategy for conflicting intermediate outputs consumed by another graph.
+    ///
+    /// `Namespace` is only supported for final outputs; intermediate conflicts
+    /// return [`GraphMergeError::NamespaceIntermediateUnsupported`].
     pub intermediate_conflicts: OutputConflictStrategy,
 }
 
@@ -116,6 +119,9 @@ impl GraphControllerConfig {
     ///
     /// The merged config inherits the union of subscription paths and sets `mirror_writes` if any
     /// input graph had it enabled.
+    ///
+    /// Node ids are namespaced using a deterministic `g{index}_{graph_id}` prefix; collisions
+    /// append `__{n}`.
     ///
     /// # Errors
     /// Returns [`GraphMergeError`] when the merge cannot be completed.

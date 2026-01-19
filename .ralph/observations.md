@@ -19,3 +19,4 @@ Do NOT implement these in the current loop.
 - 2026-01-19: `vizij-graph-core` eval helpers now have improved rustdoc, but public API examples for `InputSlots`/`OutputSlots` remain absent; consider adding minimal doctests once a stable fixture or test harness is available.
 - 2026-01-19: Orchestrator fixtures and scheduler APIs still lack runnable rustdoc examples; consider adding minimal doctests once fixture JSON stability is confirmed.
 - 2026-01-19: Orchestrator fixtures still panic on invalid fixture data; consider adding fallible constructors for host-facing use if external consumers need them.
+- 2026-01-19: Orchestrator animation controller docs mention path conventions but still lack runnable doctests; consider adding a minimal example once blackboard JSON setup is stable enough for doctest use.
