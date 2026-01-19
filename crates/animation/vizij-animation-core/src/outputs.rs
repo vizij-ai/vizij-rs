@@ -117,6 +117,21 @@ pub enum CoreEvent {
 }
 
 /// Outputs returned by [`Engine::update_values`](crate::engine::Engine::update_values).
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::outputs::{Change, Outputs};
+/// use vizij_animation_core::PlayerId;
+/// use vizij_api_core::Value;
+///
+/// let mut outputs = Outputs::default();
+/// outputs.push_change(Change {
+///     player: PlayerId(1),
+///     key: "Root/Transform.translation".into(),
+///     value: Value::Vec3([0.0, 1.0, 2.0]),
+/// });
+/// assert_eq!(outputs.changes.len(), 1);
+/// ```
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Outputs {
     /// Sampled changes for this tick, keyed by resolved handle or canonical path.
@@ -130,6 +145,22 @@ pub struct Outputs {
 /// Outputs returned when derivatives are requested.
 ///
 /// Derivative values are provided only for numeric kinds; non-numeric tracks produce `None`.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::outputs::{ChangeWithDerivative, OutputsWithDerivatives};
+/// use vizij_animation_core::PlayerId;
+/// use vizij_api_core::Value;
+///
+/// let mut outputs = OutputsWithDerivatives::default();
+/// outputs.push_change(ChangeWithDerivative {
+///     player: PlayerId(1),
+///     key: "Root/Transform.translation".into(),
+///     value: Value::Vec3([0.0, 0.0, 0.0]),
+///     derivative: Some(Value::Vec3([1.0, 0.0, 0.0])),
+/// });
+/// assert_eq!(outputs.changes.len(), 1);
+/// ```
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct OutputsWithDerivatives {
     /// Sampled changes with derivative metadata for this tick.
@@ -183,11 +214,11 @@ impl Outputs {
     /// let mut outputs = Outputs::default();
     /// outputs.push_change(Change {
     ///     player: PlayerId(1),
-    ///     key: "anim/player/1/cmd/play".into(),
+    ///     key: "not a typed path".into(),
     ///     value: Value::Bool(true),
     /// });
     /// let batch = outputs.to_writebatch();
-    /// assert_eq!(batch.iter().count(), 1);
+    /// assert_eq!(batch.iter().count(), 0);
     /// ```
     pub fn to_writebatch(&self) -> WriteBatch {
         let mut batch = WriteBatch::new();

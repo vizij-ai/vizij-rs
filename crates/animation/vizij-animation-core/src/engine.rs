@@ -980,6 +980,25 @@ impl Engine {
     }
 
     /// List all animations in the engine.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::{AnimationData, Config, Engine};
+    ///
+    /// let mut engine = Engine::new(Config::default());
+    /// assert!(engine.list_animations().is_empty());
+    ///
+    /// let anim = engine.load_animation(AnimationData {
+    ///     id: None,
+    ///     name: "clip".into(),
+    ///     tracks: Vec::new(),
+    ///     groups: serde_json::Value::Null,
+    ///     duration_ms: 1000,
+    /// });
+    /// let list = engine.list_animations();
+    /// assert_eq!(list.len(), 1);
+    /// assert_eq!(list[0].id, anim.0);
+    /// ```
     pub fn list_animations(&self) -> Vec<AnimationInfo> {
         self.anims
             .iter()
@@ -1009,6 +1028,17 @@ impl Engine {
     }
 
     /// List all players with playback info and computed length.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::{Config, Engine};
+    ///
+    /// let mut engine = Engine::new(Config::default());
+    /// let player = engine.create_player("demo");
+    /// let list = engine.list_players();
+    /// assert_eq!(list.len(), 1);
+    /// assert_eq!(list[0].id, player.0);
+    /// ```
     pub fn list_players(&self) -> Vec<PlayerInfo> {
         self.players
             .iter()
@@ -1029,6 +1059,25 @@ impl Engine {
     /// List all instances for a given player.
     ///
     /// Returns an empty vector when the player id is unknown.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::{AnimationData, Config, Engine, InstanceCfg};
+    ///
+    /// let mut engine = Engine::new(Config::default());
+    /// let anim = engine.load_animation(AnimationData {
+    ///     id: None,
+    ///     name: "clip".into(),
+    ///     tracks: Vec::new(),
+    ///     groups: serde_json::Value::Null,
+    ///     duration_ms: 250,
+    /// });
+    /// let player = engine.create_player("demo");
+    /// let inst = engine.add_instance(player, anim, InstanceCfg::default());
+    /// let list = engine.list_instances(player);
+    /// assert_eq!(list.len(), 1);
+    /// assert_eq!(list[0].id, inst.0);
+    /// ```
     pub fn list_instances(&self, player: PlayerId) -> Vec<InstanceInfo> {
         if let Some(p) = self.players.iter().find(|pp| pp.id == player) {
             p.instances
@@ -1054,6 +1103,37 @@ impl Engine {
     ///
     /// Keys match those produced in `Outputs` (bound handle if available, else canonical track path).
     /// The returned order is not stable; treat it as an unordered set.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::data::{Keypoint, Track};
+    /// use vizij_animation_core::{AnimationData, Config, Engine, InstanceCfg, Value};
+    ///
+    /// let mut engine = Engine::new(Config::default());
+    /// let anim = engine.load_animation(AnimationData {
+    ///     id: None,
+    ///     name: "clip".into(),
+    ///     tracks: vec![Track {
+    ///         id: "t0".into(),
+    ///         name: "x".into(),
+    ///         animatable_id: "Root/Transform.translation".into(),
+    ///         points: vec![Keypoint {
+    ///             id: "k0".into(),
+    ///             stamp: 0.0,
+    ///             value: Value::Vec3([0.0, 0.0, 0.0]),
+    ///             transitions: None,
+    ///         }],
+    ///         settings: None,
+    ///     }],
+    ///     groups: serde_json::Value::Null,
+    ///     duration_ms: 1000,
+    /// });
+    /// let player = engine.create_player("demo");
+    /// let _inst = engine.add_instance(player, anim, InstanceCfg::default());
+    ///
+    /// let keys = engine.list_player_keys(player);
+    /// assert!(keys.contains(&"Root/Transform.translation".to_string()));
+    /// ```
     pub fn list_player_keys(&self, player: PlayerId) -> Vec<String> {
         let mut set: HashSet<String> = HashSet::new();
         let Some(p) = self.players.iter().find(|pp| pp.id == player) else {
@@ -1088,6 +1168,36 @@ impl Engine {
     /// Public helper to inspect an instance's bound channel keys (useful for tests and tooling).
     ///
     /// Returns `None` if the instance id is unknown.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use vizij_animation_core::data::{Keypoint, Track};
+    /// use vizij_animation_core::{AnimationData, Config, Engine, InstanceCfg, Value};
+    ///
+    /// let mut engine = Engine::new(Config::default());
+    /// let anim = engine.load_animation(AnimationData {
+    ///     id: None,
+    ///     name: "clip".into(),
+    ///     tracks: vec![Track {
+    ///         id: "t0".into(),
+    ///         name: "x".into(),
+    ///         animatable_id: "Root/Transform.translation".into(),
+    ///         points: vec![Keypoint {
+    ///             id: "k0".into(),
+    ///             stamp: 0.0,
+    ///             value: Value::Vec3([0.0, 0.0, 0.0]),
+    ///             transitions: None,
+    ///         }],
+    ///         settings: None,
+    ///     }],
+    ///     groups: serde_json::Value::Null,
+    ///     duration_ms: 1000,
+    /// });
+    /// let player = engine.create_player("demo");
+    /// let inst = engine.add_instance(player, anim, InstanceCfg::default());
+    /// let channels = engine.get_instance_channels(inst).unwrap();
+    /// assert_eq!(channels.len(), 1);
+    /// ```
     pub fn get_instance_channels(&self, inst: InstId) -> Option<Vec<ChannelKey>> {
         self.instances
             .iter()

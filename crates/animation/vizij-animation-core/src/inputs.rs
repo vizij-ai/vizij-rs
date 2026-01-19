@@ -68,6 +68,14 @@ pub enum PlayerCommand {
 /// Looping behavior applied when mapping player time to clip time.
 ///
 /// This affects both display time in diagnostics and how instances sample tracks.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::LoopMode;
+///
+/// let mode = LoopMode::Loop;
+/// assert_eq!(mode, LoopMode::Loop);
+/// ```
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum LoopMode {
     /// Clamp playback to the window `[start_time, end_time?]`.
@@ -81,6 +89,21 @@ pub enum LoopMode {
 /// Per-instance updates applied before stepping.
 ///
 /// Any field set to `None` leaves the current instance state unchanged.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::{InstanceUpdate, PlayerId, InstId};
+///
+/// let update = InstanceUpdate {
+///     player: PlayerId(1),
+///     inst: InstId(2),
+///     weight: Some(0.5),
+///     time_scale: None,
+///     start_offset: Some(0.25),
+///     enabled: Some(true),
+/// };
+/// assert_eq!(update.inst, InstId(2));
+/// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InstanceUpdate {
     /// Owning player id (used to recompute duration).
