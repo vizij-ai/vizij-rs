@@ -173,6 +173,36 @@ fn zero_like(value: &Value) -> Value {
 }
 
 /// Sample a single track at normalized time `u` in `[0,1]`.
+///
+/// # Examples
+/// ```rust
+/// use vizij_animation_core::data::{Keypoint, Track};
+/// use vizij_animation_core::sampling::sample_track;
+/// use vizij_api_core::Value;
+///
+/// let track = Track {
+///     id: "t".into(),
+///     name: "x".into(),
+///     animatable_id: "Root/Transform.translation.x".into(),
+///     points: vec![
+///         Keypoint {
+///             id: "a".into(),
+///             stamp: 0.0,
+///             value: Value::Float(0.0),
+///             transitions: None,
+///         },
+///         Keypoint {
+///             id: "b".into(),
+///             stamp: 1.0,
+///             value: Value::Float(10.0),
+///             transitions: None,
+///         },
+///     ],
+///     settings: None,
+/// };
+/// let value = sample_track(&track, 0.5);
+/// assert!(matches!(value, Value::Float(v) if (0.0..=10.0).contains(&v)));
+/// ```
 pub fn sample_track(track: &Track, u: f32) -> Value {
     let points = &track.points;
     let n = points.len();
@@ -257,6 +287,8 @@ pub fn sample_track_with_derivative(
 
 /// Variant of [`sample_track_with_derivative`] that allows callers to specify the finite
 /// difference epsilon used during derivative estimation.
+///
+/// Non-finite or non-positive `epsilon` values fall back to `DEFAULT_DERIVATIVE_EPSILON`.
 pub fn sample_track_with_derivative_epsilon(
     track: &Track,
     u: f32,
