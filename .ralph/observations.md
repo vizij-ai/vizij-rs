@@ -55,3 +55,6 @@ Do NOT implement these in the current loop.
 - 2026-01-19: `vizij-test-fixtures` doctest examples now depend on fixture keys like `pose-quat-transform` and `simple-gain-offset`; if fixtures rename, update doctests to avoid brittle failures.
 - 2026-01-19: `vizij-api-core` `ValueKind` and `ShapeId` enums now have variant-level docs; consider adding concise variant docs to any remaining public enums in other core crates.
 - 2026-01-19: Placeholder wording in `vizij-animation-core` scratch/interp rustdoc replaced; remaining placeholder-like docs appear resolved for these modules.
+
+- 2026-01-19: Orchestrator wasm `set_input` rustdoc previously showed non-canonical `{ kind, value }` JSON; updated example to match Value shorthand to avoid confusion in JS docs.
+- 2026-01-19: Node-graph wasm docs could benefit from a brief note about `eval_all_slots`/`get_outputs_*` flow; consider adding a small JS usage snippet if docs still feel abstract.

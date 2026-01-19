@@ -541,12 +541,13 @@ impl VizijOrchestrator {
 
     /// Set a blackboard input value (convenience).
     ///
-    /// `value_json` and `shape_json` should be JS objects compatible with the core Value/Shape JSON shapes.
+    /// `value_json` and `shape_json` should be JS objects compatible with the core
+    /// Value/Shape JSON shapes. Shorthand forms (like `{ float: 0.5 }`) are accepted.
     /// Pass `null` or `undefined` for `shape_json` to keep the value unshaped.
     ///
     /// # Examples (JS)
     /// ```javascript
-    /// orch.set_input("rig/hip.x", { kind: "Number", value: 0.5 }, null);
+    /// orch.set_input("rig/hip.x", { float: 0.5 }, null);
     /// ```
     ///
     /// # Errors

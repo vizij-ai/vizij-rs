@@ -368,6 +368,8 @@ impl WasmGraph {
     /// The JSON is normalized to the canonical `GraphSpec` shape before it is
     /// deserialized and cached.
     ///
+    /// This resets staged inputs, cached plans, and output snapshots.
+    ///
     /// # Errors
     /// Returns a `JsValue` error if the JSON is invalid or cannot be parsed as a
     /// graph spec.
@@ -730,6 +732,8 @@ impl WasmGraph {
     }
 
     /// Advance the runtime clock by `dt` seconds (no evaluation).
+    ///
+    /// Call `eval_all*` afterward to run the graph with the updated time.
     #[wasm_bindgen]
     pub fn step(&mut self, dt: f64) {
         self.t += dt;
@@ -738,6 +742,7 @@ impl WasmGraph {
     /// Stage a float32 vector without JSON, using a shared buffer view.
     ///
     /// The value is staged as a `Vector` with a vector shape.
+    /// Prefer this for high-throughput numeric inputs to avoid JSON stringify/parse.
     #[wasm_bindgen(js_name = "stage_input_f32")]
     pub fn stage_input_f32(&mut self, path: &str, data: &Float32Array) -> Result<(), JsValue> {
         let typed_path = TypedPath::parse(path)
@@ -1083,6 +1088,7 @@ impl WasmGraph {
     /// Evaluate the entire graph and return a JS object (avoids JSON stringify/parse).
     ///
     /// The returned object matches the `eval_all` JSON shape.
+    /// Prefer this when you can consume a JS object directly.
     ///
     /// # Errors
     /// Returns a `JsValue` error if evaluation fails or serialization fails.
@@ -1094,6 +1100,8 @@ impl WasmGraph {
     }
 
     /// Evaluate the entire graph and return all outputs as JSON.
+    ///
+    /// Use `eval_all_js` if you do not need a JSON string.
     /// Returned JSON shape:
     /// {
     ///   "version": number,
@@ -1113,6 +1121,7 @@ impl WasmGraph {
     ///
     /// Use `get_outputs_full` or `get_outputs_delta` to fetch the outputs.
     /// The returned version token increments on each successful evaluation.
+    /// This is the lowest-overhead path when you can batch fetch outputs.
     ///
     /// # Errors
     /// Returns a `JsValue` error if evaluation fails.
@@ -1134,6 +1143,7 @@ impl WasmGraph {
     ///
     /// The returned object includes a `version` field that matches the most recent
     /// evaluation result.
+    /// Call `eval_all_slots` first to update the runtime before fetching.
     ///
     /// # Errors
     /// Returns a `JsValue` error if serialization fails.
@@ -1148,6 +1158,7 @@ impl WasmGraph {
     ///
     /// The returned object includes `{ full: true }` when a full resync is required.
     /// Use the `version` field from the response as the next baseline.
+    /// Call `eval_all_slots` first to refresh the outputs before diffing.
     ///
     /// # Errors
     /// Returns a `JsValue` error if serialization fails.
@@ -1162,6 +1173,7 @@ impl WasmGraph {
     ///
     /// The returned object includes `{ full: true }` when a full resync is required.
     /// Use the `version` field from the response as the next baseline.
+    /// This is the recommended path for incremental JS consumers.
     ///
     /// # Errors
     /// Returns a `JsValue` error if evaluation or serialization fails.
