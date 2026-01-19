@@ -22,7 +22,7 @@
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
 - Next action: Audit remaining wasm/helper crates and any non-core crates for missing rustdoc (bevy_vizij_orchestrator once added).
-- Status: In progress (iter-20 removed placeholder wording in orchestrator diagnostics and node-graph schema comment)
+- Status: In progress (iter-01 clarified fixture key ordering in vizij-test-fixtures)
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
 - Type: Docs

@@ -87,6 +87,9 @@ pub mod animations {
     use super::*;
 
     /// Returns the available animation fixture keys (unordered).
+    ///
+    /// Keys are taken directly from `fixtures/manifest.json` and do not
+    /// guarantee any stable ordering.
     pub fn keys() -> Vec<String> {
         MANIFEST.animations.keys().cloned().collect()
     }
@@ -134,6 +137,9 @@ pub mod node_graphs {
     use super::*;
 
     /// Returns the available node-graph fixture keys (unordered).
+    ///
+    /// Keys are taken directly from `fixtures/manifest.json` and do not
+    /// guarantee any stable ordering.
     pub fn keys() -> Vec<String> {
         MANIFEST.node_graphs.keys().cloned().collect()
     }
@@ -215,6 +221,9 @@ pub mod orchestrations {
     use super::*;
 
     /// Returns the available orchestration fixture keys (unordered).
+    ///
+    /// Keys are taken directly from `fixtures/manifest.json` and do not
+    /// guarantee any stable ordering.
     pub fn keys() -> Vec<String> {
         MANIFEST.orchestrations.keys().cloned().collect()
     }
