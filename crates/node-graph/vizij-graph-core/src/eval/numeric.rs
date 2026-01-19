@@ -6,7 +6,8 @@ use super::value_layout::{align_flattened, flatten_numeric};
 
 /// Apply `op` pairwise to two numeric values, broadcasting scalars when possible.
 ///
-/// Non-numeric inputs yield a NaN-filled result of the closest compatible layout.
+/// Non-numeric inputs or incompatible layouts yield a NaN-filled result using the closest
+/// compatible layout.
 pub fn binary_numeric<F>(lhs: &Value, rhs: &Value, op: F) -> Value
 where
     F: Fn(f32, f32) -> f32 + Copy,
@@ -25,7 +26,7 @@ where
     }
 }
 
-/// Apply `op` to every component of `input`.
+/// Apply `op` to every component of `input`, preserving the input layout.
 ///
 /// Non-numeric inputs yield a scalar NaN.
 pub fn unary_numeric<F>(input: &Value, op: F) -> Value
@@ -43,12 +44,15 @@ where
 
 /// Coerce a [`Value`] to a single `f32`.
 ///
-/// This uses the same coercion logic as `vizij_api_core::coercion::to_float`.
+/// This uses the same coercion logic as [`vizij_api_core::coercion::to_float`].
 pub fn as_float(v: &Value) -> f32 {
     coercion::to_float(v)
 }
 
-/// Coerce a [`Value`] to a boolean, treating non-zero numeric entries as `true`.
+/// Coerce a [`Value`] to a boolean.
+///
+/// Text values are `true` when non-empty and numeric values are `true` when any component is
+/// non-zero.
 pub fn as_bool(v: &Value) -> bool {
     match v {
         Value::Bool(b) => *b,

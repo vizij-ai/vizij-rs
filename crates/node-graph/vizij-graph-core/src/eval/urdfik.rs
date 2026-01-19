@@ -14,9 +14,13 @@ use vizij_api_core::{coercion, Value};
 #[cfg(feature = "urdf_ik")]
 /// Cached state for URDF chains shared by IK and FK nodes.
 pub struct UrdfKinematicsState {
+    /// Hash of the URDF configuration used to validate cache reuse.
     pub hash: u64,
+    /// Degrees of freedom in the chain.
     pub dofs: usize,
+    /// Joint names in chain order.
     pub joint_names: Vec<String>,
+    /// Cached serial chain for IK/FK queries.
     pub chain: k::SerialChain<f32>,
 }
 
@@ -61,9 +65,13 @@ impl UrdfKinematicsState {
 #[cfg(feature = "urdf_ik")]
 /// Key that uniquely identifies a URDF chain configuration for caching.
 pub struct IkKey<'a> {
+    /// Precomputed hash for the configuration.
     pub hash: u64,
+    /// URDF XML string.
     pub urdf_xml: &'a str,
+    /// Root link name.
     pub root_link: &'a str,
+    /// Tip link name.
     pub tip_link: &'a str,
 }
 
@@ -422,7 +430,7 @@ pub fn vector_from_value(value: &Value, label: &str) -> Result<Vec<f32>, String>
 }
 
 #[cfg(feature = "urdf_ik")]
-/// Interpet a [`Value`] as a quaternion `[x, y, z, w]`.
+/// Interpret a [`Value`] as a quaternion `[x, y, z, w]`.
 pub fn quat_from_value(value: &Value, label: &str) -> Result<[f32; 4], String> {
     match value {
         Value::Quat(arr) => Ok(*arr),

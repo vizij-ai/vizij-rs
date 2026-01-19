@@ -16,3 +16,4 @@ Do NOT implement these in the current loop.
 - 2026-01-19: `vizij-graph-core` eval helpers like `read_inputs`/`materialize_outputs` remain undocumented in rustdoc; consider adding brief API notes or making them private if not intended for public use.
 - 2026-01-19: `vizij-graph-core` eval helpers (`InputSlots`, `OutputSlots`, `read_inputs`) are public but still lack runnable examples; consider adding doctests or making them `pub(crate)` if external use is not intended.
 - 2026-01-19: `vizij-graph-core` eval helpers still lack runnable doctests; consider adding minimal examples for `GraphRuntime::set_input` and `evaluate_all` once fixtures are stable.
+- 2026-01-19: `vizij-graph-core` eval helpers now have improved rustdoc, but public API examples for `InputSlots`/`OutputSlots` remain absent; consider adding minimal doctests once a stable fixture or test harness is available.

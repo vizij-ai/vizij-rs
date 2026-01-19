@@ -37,7 +37,7 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs are less useful without concrete usage examples; added examples in blend/coercion/json helpers this iteration.
-- Next action: Continue adding minimal doc examples for remaining public APIs in core crates (vizij-api-core json + typed path helpers next)
+- Next action: Continue adding minimal doc examples for remaining public APIs in core crates (vizij-graph-core runtime helpers next)
 - Status: In progress
 
 ### R-004 — Standardize module-level docs and `//!` overviews
@@ -45,7 +45,7 @@
 - Impact: Med
 - Effort: M
 - Evidence: Some modules lack context or usage overview
-- Next action: Continue refreshing `//!` blocks for remaining stacks and graph helpers
+- Next action: Continue refreshing `//!` blocks for remaining stacks and graph helpers (node-graph eval helpers still need examples)
 - Status: In progress
 
 ### R-005 — Document feature flags and conditional compilation behavior
@@ -93,7 +93,7 @@
 - Impact: Med
 - Effort: M
 - Evidence: Users need examples beyond the top-level API; Value helpers, ValueKind links, and JSON tag notes need concise coverage (merged R-011/R-012/R-013). Eval/runtime docs now mention errors but still lack examples.
-- Next action: Add short doc examples for remaining helpers (e.g., graph runtime inputs, plan cache usage) and link core graph types where needed.
+- Next action: Add short doc examples for remaining helpers (graph runtime inputs, plan cache usage) and link core graph types where needed.
 - Status: In progress
 
 ### R-011 — Add docstrings for `Value` enum variants needing clarity

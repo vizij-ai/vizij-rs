@@ -38,7 +38,7 @@ pub fn compare_variadic_keys(a: &str, b: &str) -> Ordering {
     }
 }
 
-/// Collect operand_* ports in stable slot order.
+/// Collect `operand_*` ports in stable slot order.
 pub fn collect_operand_ports<'a>(inputs: &'a InputSlots<'a>) -> Vec<&'a PortValue> {
     inputs.variadic("operand").iter().collect()
 }

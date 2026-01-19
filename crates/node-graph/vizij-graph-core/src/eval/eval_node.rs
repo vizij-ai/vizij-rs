@@ -2117,7 +2117,7 @@ fn enforce_output_shapes_slots(
 
 /// Materialise legacy output map for external consumers/tests.
 ///
-/// The map keys match the stable output port names.
+/// The map keys match the stable output port names from the layout.
 pub fn materialize_outputs(layout: &PortLayout, slots: &[PortValue]) -> HashMap<String, PortValue> {
     let mut map = HashMap::with_capacity(layout.slots.len());
     for (idx, name) in layout.slots.iter().enumerate() {

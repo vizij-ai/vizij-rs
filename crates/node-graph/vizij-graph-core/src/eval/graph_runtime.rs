@@ -13,9 +13,13 @@ use super::value_layout::{FlatValue, PortValue, ValueLayout};
 /// Values remain flattened so the integrator can operate on tight `f32` buffers.
 #[derive(Clone, Debug)]
 pub struct SpringState {
+    /// Layout of the flattened numeric state.
     pub layout: ValueLayout,
+    /// Current position in flattened space.
     pub position: Vec<f32>,
+    /// Current velocity in flattened space.
     pub velocity: Vec<f32>,
+    /// Target position in flattened space.
     pub target: Vec<f32>,
 }
 
@@ -44,7 +48,9 @@ impl SpringState {
 /// Integration state for a damp node.
 #[derive(Clone, Debug)]
 pub struct DampState {
+    /// Layout of the flattened numeric state.
     pub layout: ValueLayout,
+    /// Current value in flattened space.
     pub value: Vec<f32>,
 }
 
@@ -67,7 +73,9 @@ impl DampState {
 /// Integration state for a slew node.
 #[derive(Clone, Debug)]
 pub struct SlewState {
+    /// Layout of the flattened numeric state.
     pub layout: ValueLayout,
+    /// Current value in flattened space.
     pub value: Vec<f32>,
 }
 
@@ -92,10 +100,14 @@ impl SlewState {
 /// Use this as a cache for time-dependent node evaluations.
 #[derive(Debug)]
 pub enum NodeRuntimeState {
+    /// State for spring integration nodes.
     Spring(SpringState),
+    /// State for damp integration nodes.
     Damp(DampState),
+    /// State for slew integration nodes.
     Slew(SlewState),
     #[cfg(feature = "urdf_ik")]
+    /// State for URDF kinematics nodes.
     UrdfKinematics(UrdfKinematicsState),
 }
 
@@ -165,8 +177,8 @@ impl GraphRuntime {
 
     /// Stage an input value for the next evaluation epoch using a [`TypedPath`] key.
     ///
-    /// Returns the previous staged value, if one existed for the same path.
-    /// The input becomes visible after calling [`advance_epoch`](Self::advance_epoch).
+    /// Returns the previous staged value, if one existed for the same path. The input becomes
+    /// visible after calling [`advance_epoch`](Self::advance_epoch).
     pub fn set_input(
         &mut self,
         path: TypedPath,
@@ -182,6 +194,9 @@ impl GraphRuntime {
     }
 
     /// Fetch a staged input for the current evaluation epoch, if present.
+    ///
+    /// Inputs staged for a future epoch are ignored until [`advance_epoch`](Self::advance_epoch)
+    /// is called.
     pub fn get_input(&self, path: &TypedPath) -> Option<&StagedInput> {
         self.staged_inputs
             .get(path)

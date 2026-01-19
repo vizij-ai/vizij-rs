@@ -9,3 +9,5 @@
 - 2026-01-19: Scope `vizij-graph-core` eval/types/schema docs pass for iter-02; added field-level rustdoc for node graph schema/types plus clarifying notes in eval helpers and runtime staging. Assumed doc-only edits, no feature flag changes.
 - 2026-01-19: Scope `vizij-graph-core` eval/topo/plan/value_layout/urdfik docs pass for iter-03; added concise rustdoc clarifications and error notes without altering behavior. Assumed doc-only edits; focused on node-graph core public helpers.
 - 2026-01-19: Scope `vizij-graph-core` eval runtime/plan docs pass for iter-04; added error notes to runtime, plan cache, and eval entry points. Assumed doc-only edits and no behavior changes.
+- 2026-01-19: Scope `vizij-graph-core` eval helper docs pass for iter-05; tightened rustdoc for numeric, variadic, value layout, runtime state, and URDF helpers. Assumed doc-only edits within node-graph core.
+- 2026-01-19: Commit step blocked: git dir lives under `/home/chris/Code/Semio/vizij_ws/vizij-rs_workspace/.bare` which is outside the writable roots, so `git add/commit` fails with read-only filesystem. Changes left uncommitted.

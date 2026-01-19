@@ -40,7 +40,8 @@ impl Default for PortValue {
 
 /// Describes how a [`Value`] is laid out when flattened.
 ///
-/// Layouts are used to broadcast scalars and reconstruct structured outputs.
+/// Layouts are used to broadcast scalars, align numeric buffers, and reconstruct structured
+/// outputs.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ValueLayout {
     /// Single scalar.
@@ -225,7 +226,8 @@ impl ValueLayout {
 
 /// Attempt to flatten a [`Value`] that contains only numeric content.
 ///
-/// Returns `None` when the value contains non-numeric payloads.
+/// Record fields are sorted by name before flattening so layouts are deterministic. Returns
+/// `None` when the value contains non-numeric payloads.
 pub fn flatten_numeric(value: &Value) -> Option<FlatValue> {
     match value {
         Value::Float(f) => Some(FlatValue {

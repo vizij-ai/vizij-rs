@@ -9,7 +9,7 @@ use super::value_layout::{flatten_numeric, PortValue};
 
 /// Infer the [`Shape`] for a [`Value`].
 ///
-/// This uses value structure only (not declared shapes on nodes).
+/// This uses value structure only (not declared shapes on nodes or defaults).
 pub fn infer_shape(value: &Value) -> Shape {
     Shape::new(infer_shape_id(value))
 }
