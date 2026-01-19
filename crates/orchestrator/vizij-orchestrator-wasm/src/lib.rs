@@ -1,3 +1,9 @@
+//! WebAssembly bindings for `vizij-orchestrator-core`.
+//!
+//! The exported `VizijOrchestrator` mirrors the Rust API but exchanges data via
+//! JSON-friendly values. Graph specs and write batches are normalized to match
+//! `vizij-api-core` conventions.
+
 use js_sys::Function;
 use serde::Deserialize;
 use serde_wasm_bindgen as swb;
@@ -178,6 +184,7 @@ fn build_graph_controller_config(
     })
 }
 
+/// Orchestrator wrapper for JS/wasm hosts.
 #[wasm_bindgen]
 pub struct VizijOrchestrator {
     core: Orchestrator,
@@ -194,7 +201,14 @@ pub struct VizijOrchestrator {
 
 #[wasm_bindgen]
 impl VizijOrchestrator {
-    /// Create new orchestrator. Accepts optional { schedule: "SinglePass"|"TwoPass"|"RateDecoupled" }.
+    /// Create a new orchestrator.
+    ///
+    /// Accepts an optional options object with `{ schedule }`, where schedule is
+    /// `"SinglePass"`, `"TwoPass"`, or `"RateDecoupled"`.
+    ///
+    /// # Errors
+    /// Returns an error if the options payload cannot be decoded or if the
+    /// schedule string is invalid.
     #[wasm_bindgen(constructor)]
     pub fn new(opts: JsValue) -> Result<VizijOrchestrator, JsError> {
         #[cfg(feature = "console_error")]
@@ -235,6 +249,9 @@ impl VizijOrchestrator {
     ///  - an object { id?: string, spec: object } where spec is a GraphSpec-compatible object.
     ///
     /// Returns the controller id.
+    ///
+    /// # Errors
+    /// Returns an error if the graph spec cannot be decoded or normalized.
     #[wasm_bindgen(js_name = register_graph)]
     pub fn register_graph(&mut self, cfg: JsValue) -> Result<String, JsError> {
         if cfg.is_undefined() || cfg.is_null() {
@@ -287,6 +304,9 @@ impl VizijOrchestrator {
     ///
     /// This is the supported way to apply structural edits at runtime. The spec is normalized and
     /// `.with_cache()` is applied so the versioned plan cache cannot reuse stale layouts.
+    ///
+    /// # Errors
+    /// Returns an error if the config payload is invalid or if the graph id is not registered.
     #[wasm_bindgen(js_name = replace_graph)]
     pub fn replace_graph(&mut self, cfg: JsValue) -> Result<(), JsError> {
         if cfg.is_undefined() || cfg.is_null() {
@@ -328,6 +348,9 @@ impl VizijOrchestrator {
     }
 
     /// Export a graph spec as a JS object for inspection.
+    ///
+    /// # Errors
+    /// Returns an error if the graph id is unknown or serialization fails.
     #[wasm_bindgen(js_name = export_graph)]
     pub fn export_graph(&self, id: &str) -> Result<JsValue, JsError> {
         let value = self
@@ -341,6 +364,9 @@ impl VizijOrchestrator {
     ///
     /// Accepts an object { id?: string, graphs: GraphRegistrationConfig[] } mirroring the single
     /// controller shape. Each entry supports the same `spec` and optional `subs` fields.
+    ///
+    /// # Errors
+    /// Returns an error if any graph spec is invalid or the merge fails.
     #[wasm_bindgen(js_name = register_merged_graph)]
     pub fn register_merged_graph(&mut self, cfg: JsValue) -> Result<String, JsError> {
         if cfg.is_undefined() || cfg.is_null() {
@@ -380,6 +406,9 @@ impl VizijOrchestrator {
     /// Accepts an object { id?: string, setup?: any } where setup is forwarded to the
     /// AnimationControllerConfig.setup field.
     /// Returns the controller id.
+    ///
+    /// # Errors
+    /// Returns an error if the setup payload is invalid or the animation cannot be initialized.
     #[wasm_bindgen(js_name = register_animation)]
     pub fn register_animation(&mut self, cfg: JsValue) -> Result<String, JsError> {
         if cfg.is_undefined() || cfg.is_null() {
@@ -430,6 +459,9 @@ impl VizijOrchestrator {
     /// Set a blackboard input value (convenience).
     ///
     /// `value_json` and `shape_json` should be JS objects compatible with the core Value/Shape JSON shapes.
+    ///
+    /// # Errors
+    /// Returns an error if the path is invalid or JSON payloads cannot be decoded.
     #[wasm_bindgen(js_name = set_input)]
     pub fn set_input(
         &mut self,
@@ -461,13 +493,18 @@ impl VizijOrchestrator {
         Ok(())
     }
 
-    /// Remove an input key from the blackboard. Returns true if removed.
+    /// Remove an input key from the blackboard.
+    ///
+    /// Returns `true` if a value was removed.
     #[wasm_bindgen(js_name = remove_input)]
     pub fn remove_input(&mut self, path: &str) -> bool {
         self.core.blackboard.remove(path).is_some()
     }
 
-    /// Step the orchestrator by dt seconds and return an OrchestratorFrame as a JS value.
+    /// Step the orchestrator by `dt` seconds and return an OrchestratorFrame as a JS value.
+    ///
+    /// # Errors
+    /// Returns an error if evaluation fails or the frame cannot be serialized.
     #[wasm_bindgen]
     pub fn step(&mut self, dt: f32) -> Result<JsValue, JsError> {
         let frame = self
@@ -483,8 +520,13 @@ impl VizijOrchestrator {
         swb::to_value(&frame).map_err(|e| JsError::new(&format!("serialize frame error: {}", e)))
     }
 
-    /// Step and return only changes since the caller's version. If the caller's
-    /// version does not match the last snapshot, a full frame is returned.
+    /// Step and return only changes since the caller's version.
+    ///
+    /// If `since_version` does not match the last snapshot, a full frame payload
+    /// is returned instead.
+    ///
+    /// # Errors
+    /// Returns an error if evaluation fails or the payload cannot be serialized.
     #[wasm_bindgen(js_name = step_delta)]
     pub fn step_delta(&mut self, dt: f32, since_version: Option<u64>) -> Result<JsValue, JsError> {
         let frame = self
@@ -532,7 +574,10 @@ impl VizijOrchestrator {
         swb::to_value(&payload).map_err(|e| JsError::new(&format!("serialize delta error: {}", e)))
     }
 
-    /// List registered controllers (ids).
+    /// List registered controller ids.
+    ///
+    /// # Errors
+    /// Returns an error if the response cannot be serialized.
     #[wasm_bindgen(js_name = list_controllers)]
     pub fn list_controllers(&self) -> Result<JsValue, JsError> {
         let graphs: Vec<String> = self.core.graphs.keys().cloned().collect();
@@ -551,18 +596,28 @@ impl VizijOrchestrator {
     }
 
     /// Remove a registered graph controller by id.
+    ///
+    /// Returns `true` if a controller was removed.
     #[wasm_bindgen(js_name = remove_graph)]
     pub fn remove_graph(&mut self, id: &str) -> bool {
         self.core.graphs.shift_remove(id).is_some()
     }
 
     /// Remove a registered animation controller by id.
+    ///
+    /// Returns `true` if a controller was removed.
     #[wasm_bindgen(js_name = remove_animation)]
     pub fn remove_animation(&mut self, id: &str) -> bool {
         self.core.anims.shift_remove(id).is_some()
     }
 }
 
+/// Normalize a graph spec JSON string into canonical form.
+///
+/// The return value is a JSON string with shorthand expanded.
+///
+/// # Errors
+/// Returns an error if the JSON cannot be parsed or normalized.
 #[wasm_bindgen(js_name = normalize_graph_spec_json)]
 pub fn normalize_graph_spec_json(json: &str) -> Result<JsValue, JsError> {
     match crate::normalize::normalize_graph_spec_json(json) {

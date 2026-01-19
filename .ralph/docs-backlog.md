@@ -21,7 +21,7 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
-- Next action: Continue orchestrator rustdoc audit for fixtures/scheduler/blackboard; add minimal examples where feasible.
+- Next action: Continue orchestrator rustdoc audit for wasm bindings and core fixtures/scheduler; add minimal examples where feasible.
 - Status: In progress
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
@@ -93,7 +93,7 @@
 - Impact: Med
 - Effort: M
 - Evidence: Users need examples beyond the top-level API; Value helpers, ValueKind links, and JSON tag notes need concise coverage (merged R-011/R-012/R-013). Eval/runtime docs now mention errors but still lack examples.
-- Next action: Add short doc examples for orchestrator fixtures/schedule helpers where practical.
+- Next action: Add short doc examples for orchestrator fixtures/schedule helpers where practical; include wasm surface notes if they differ.
 - Status: In progress
 
 ### R-011 — Add docstrings for `Value` enum variants needing clarity
