@@ -1128,6 +1128,11 @@ export const weightedAverage: GraphSpec = {
 };
 
 
+/**
+ * All bundled graph samples keyed by short name.
+ *
+ * Use this map to enumerate available sample graphs or fetch a spec by name.
+ */
 export const graphSamples: Record<string, GraphSpec> = {
   "oscillator-basics": oscillatorBasics,
   "vector-playground": vectorPlayground,

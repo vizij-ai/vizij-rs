@@ -29,21 +29,21 @@ export type InstId = number;
    Engine Config (vizij-animation-core/src/config.rs)
 ----------------------------------------------------------- */
 export interface Features {
-  /** Reserved for future toggles (SIMD, parallel, etc.) */
+  /** Reserved for future toggles (SIMD, parallel, etc.). */
   reserved0?: boolean;
 }
 
 export interface Config {
-  /** Initial capacity hints for scratch/sample buffers */
+  /** Initial capacity hints for scratch/sample buffers. */
   scratch_samples?: number;
   scratch_values_scalar?: number;
   scratch_values_vec?: number;
   scratch_values_quat?: number;
 
-  /** Maximum events to retain per tick before backpressure policy applies */
+  /** Maximum events to retain per tick before backpressure policy applies. */
   max_events_per_tick?: number;
 
-  /** Feature flags */
+  /** Feature flags. */
   features?: Features;
 }
 
@@ -51,28 +51,35 @@ export interface Config {
    Baking (vizij-animation-core/src/baking.rs)
 ----------------------------------------------------------- */
 export interface BakingConfig {
-  /** Target frame rate (Hz) for baked samples */
+  /** Target frame rate (Hz) for baked samples. */
   frame_rate?: number;
-  /** Start time (seconds) in clip space */
+  /** Start time (seconds) in clip space. */
   start_time?: number;
-  /** End time (seconds) in clip space; omit or null to use full duration */
+  /** End time (seconds) in clip space; omit or null to use full duration. */
   end_time?: number | null;
-  /** Optional finite-difference epsilon override for derivative estimation */
+  /** Optional finite-difference epsilon override for derivative estimation. */
   derivative_epsilon?: number;
 }
 
 /** Baked values for a single target path. */
 export interface BakedTrack {
+  /** Typed path for the track being sampled. */
   target_path: string;
+  /** Sampled values in time order. */
   values: Value[];
 }
 
 /** Baked clip values at a uniform sampling rate. */
 export interface BakedAnimationData {
+  /** Animation id that was baked. */
   anim: AnimId;
+  /** Frame rate used for baking (Hz). */
   frame_rate: number;
+  /** Clip start time. */
   start_time: number;
+  /** Clip end time. */
   end_time: number;
+  /** Tracks emitted for each target path. */
   tracks: BakedTrack[];
 }
 
@@ -95,19 +102,25 @@ export type PlayerCommand =
 
 /** Per-instance configuration updates applied before stepping. */
 export interface InstanceUpdate {
+  /** Target player id. */
   player: PlayerId;
+  /** Target instance id. */
   inst: InstId;
+  /** Blend weight for the instance (0..1). */
   weight?: number;
+  /** Playback time scaling factor. */
   time_scale?: number;
+  /** Clip start offset applied to instance time. */
   start_offset?: number;
+  /** Enable/disable the instance. */
   enabled?: boolean;
 }
 
 /** Inputs batch applied on the next engine tick. */
 export interface Inputs {
-  /** Player-level commands applied before stepping */
+  /** Player-level commands applied before stepping. */
   player_cmds?: PlayerCommand[];
-  /** Instance-level updates applied before stepping */
+  /** Instance-level updates applied before stepping. */
   instance_updates?: InstanceUpdate[];
 }
 
@@ -125,9 +138,11 @@ export type Value = NormalizedValue;
 ----------------------------------------------------------- */
 /** A resolved output change emitted by the engine. */
 export interface Change {
+  /** Player that emitted the change. */
   player: PlayerId;
-  /** Opaque key (resolved via prebind or canonical path when unresolved) */
+  /** Opaque key (resolved via prebind or canonical path when unresolved). */
   key: string;
+  /** Value payload after sampling. */
   value: Value;
 }
 
@@ -165,13 +180,17 @@ export type CoreEvent =
 
 /** Output payload returned by updateValues(). */
 export interface Outputs {
+  /** All resolved output changes for this tick. */
   changes: Change[];
+  /** Playback and diagnostic events emitted by the engine. */
   events: CoreEvent[];
 }
 
 /** Output payload returned by updateValuesAndDerivatives(). */
 export interface OutputsWithDerivatives {
+  /** Output changes with derivative estimates (if enabled). */
   changes: ChangeWithDerivative[];
+  /** Playback and diagnostic events emitted by the engine. */
   events: CoreEvent[];
 }
 
@@ -203,16 +222,20 @@ export type StoredValue =
 
 /** Cubic-bezier control point (0..1 range). */
 export interface BezierCP {
+  /** Normalized time coordinate (0..1) for the control point. */
   x: number;
+  /** Normalized value coordinate (0..1) for the control point. */
   y: number;
 }
 
 /** Keypoint sample within a track. */
 export interface Keypoint {
   id: string;
-  /** Normalized stamp [0..1] within the track */
+  /** Normalized stamp [0..1] within the track. */
   stamp: number;
+  /** Stored value at this keyframe. */
   value: StoredValue;
+  /** Optional per-keyframe transition handles. */
   transitions?: {
     in?: BezierCP;
     out?: BezierCP;
@@ -223,9 +246,11 @@ export interface Keypoint {
 export interface Track {
   id: string;
   name?: string;
-  /** Canonical target path (e.g., "node/Transform.translation") */
+  /** Canonical target path (e.g., "node/Transform.translation"). */
   animatableId: string;
+  /** Keyframes for this track. */
   points: Keypoint[];
+  /** Optional UI hints for editors. */
   settings?: { color?: string };
 }
 
@@ -233,10 +258,11 @@ export interface Track {
 export interface StoredAnimation {
   id?: string;
   name?: string;
-  /** Duration in milliseconds */
+  /** Duration in milliseconds. */
   duration: number;
+  /** Track list with paths, interpolation modes, and values. */
   tracks: Track[];
-  /** Optional grouping metadata */
+  /** Optional grouping metadata. */
   groups?: Record<string, unknown>;
 }
 
@@ -252,37 +278,53 @@ export type AnimationData = unknown;
 ----------------------------------------------------------- */
 /** Baked values for a single target path. */
 export interface BakedTrack {
+  /** Typed path for the baked output track. */
   target_path: string;
+  /** Sampled values in time order. */
   values: Value[];
 }
 
 /** Baked derivatives for a single target path. */
 export interface BakedDerivativeTrack {
+  /** Typed path for the baked output track. */
   target_path: string;
+  /** Sampled values in time order. */
   values: Array<Value | null>;
 }
 
 /** Baked clip values at a uniform sampling rate. */
 export interface BakedAnimationData {
+  /** Animation id that was baked. */
   anim: AnimId;
+  /** Frame rate used for baking (Hz). */
   frame_rate: number;
+  /** Clip start time. */
   start_time: number;
+  /** Clip end time. */
   end_time: number;
+  /** Tracks emitted for each target path. */
   tracks: BakedTrack[];
 }
 
 /** Baked clip derivatives at a uniform sampling rate. */
 export interface BakedDerivativeAnimationData {
+  /** Animation id that was baked. */
   anim: AnimId;
+  /** Frame rate used for baking (Hz). */
   frame_rate: number;
+  /** Clip start time. */
   start_time: number;
+  /** Clip end time. */
   end_time: number;
+  /** Tracks emitted for each target path. */
   tracks: BakedDerivativeTrack[];
 }
 
 /** Pair of baked values and derivatives produced by the engine. */
 export interface BakedAnimationBundle {
+  /** Baked values without derivatives. */
   values: BakedAnimationData;
+  /** Baked values and derivatives. */
   derivatives: BakedDerivativeAnimationData;
 }
 
@@ -292,9 +334,13 @@ export interface BakedAnimationBundle {
 
 /** Metadata describing a loaded animation. */
 export interface AnimationInfo {
+  /** Animation id. */
   id: number;
+  /** Optional display name. */
   name?: string;
+  /** Duration in milliseconds. */
   duration_ms: number;
+  /** Number of tracks in the animation. */
   track_count: number;
 }
 
@@ -303,29 +349,44 @@ export type PlaybackState = "Playing" | "Paused" | "Stopped";
 
 /** Default instance configuration used when attaching animations. */
 export interface InstanceCfg {
+  /** Blend weight for the instance (0..1). */
   weight: number;
+  /** Playback time scaling factor. */
   time_scale: number;
+  /** Clip start offset applied to instance time. */
   start_offset: number;
+  /** Enable/disable the instance. */
   enabled: boolean;
 }
 
 /** Snapshot of a live animation instance. */
 export interface InstanceInfo {
+  /** Instance id. */
   id: number;
+  /** Animation id assigned to the instance. */
   animation: number;
+  /** Current instance configuration. */
   cfg: InstanceCfg;
 }
 
 /** Snapshot of a player, including current timing. */
 export interface PlayerInfo {
+  /** Player id. */
   id: number;
+  /** Human-readable name. */
   name: string;
+  /** Current playback state. */
   state: PlaybackState;
+  /** Current playback time in seconds. */
   time: number; // seconds
+  /** Playback speed multiplier. */
   speed: number;
+  /** Current looping mode. */
   loop_mode: LoopMode;
+  /** Playback window start in seconds. */
   start_time: number; // seconds
+  /** Playback window end in seconds (optional). */
   end_time?: number | null; // seconds or null/undefined
+  /** Total playback window length in seconds. */
   length: number; // seconds (computed: max over instances of start_offset + anim_duration/|time_scale|)
 }
-import type { NormalizedValue, ValueJSON as SharedValueJSON } from "@vizij/value-json";

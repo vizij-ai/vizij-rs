@@ -61,6 +61,11 @@ export const urdfIkPosition: GraphSpec = {
   ],
 };
 
+/**
+ * URDF-only sample graphs keyed by short name.
+ *
+ * These require the URDF feature nodes to be available in the wasm build.
+ */
 export const urdfGraphSamples: Record<string, GraphSpec> = {
   "urdf-ik-position": urdfIkPosition,
 };
