@@ -22,7 +22,7 @@
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
 - Next action: Audit remaining Bevy adapters and any non-core crates for missing rustdoc (bevy_vizij_graph/api, bevy_vizij_orchestrator once added).
-- Status: In progress (iter-01 improved bevy_vizij_api and bevy_vizij_graph docs)
+- Status: In progress (iter-02 clarified eval helper rustdoc in vizij-graph-core)
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
 - Type: Docs
@@ -94,7 +94,7 @@
 - Effort: M
 - Evidence: Users need examples beyond the top-level API; Value helpers, ValueKind links, and JSON tag notes need concise coverage (merged R-011/R-012/R-013). Eval/runtime docs now mention errors but still lack examples.
 - Next action: Add short doc examples for any remaining public APIs that lack runnable snippets (likely outside animation stack). Avoid brittle doctests for fixture-heavy APIs.
-- Status: In progress
+- Status: In progress (iter-02 added clarifying notes for eval helpers; examples still pending)
 
 ### R-011 — Add docstrings for `Value` enum variants needing clarity
 - Type: Docs

@@ -31,3 +31,4 @@ Do NOT implement these in the current loop.
 - 2026-01-19: `CoreEvent` variant fields now have rustdoc notes; remaining animation docs appear covered, but consider adding a single example of event handling if a stable fixture or minimal path exists.
 - 2026-01-19: `vizij-animation-core::Config` scratch buffer fields are only capacity hints; consider adding perf guidance once scratch buffers are wired into runtime reuse.
 - 2026-01-19: `bevy_vizij_graph` lacks usage examples in rustdoc; consider adding a short `no_run` snippet once Bevy plugin setup conventions are settled.
+- 2026-01-19: `vizij-graph-core` eval helpers (`InputSlots`/`OutputSlots`/`read_inputs`) still have no runnable examples; consider adding minimal no_run doctests once a stable minimal spec exists.
