@@ -153,6 +153,11 @@ function orchestrationRelPath(name: string): string {
  * Load an animation fixture payload from the embedded bundle.
  *
  * @throws If the fixture key is missing from the manifest.
+ *
+ * @example
+ * ```ts
+ * const anim = await loadAnimationFixture("simple-walk");
+ * ```
  */
 export async function loadAnimationFixture(name: string): Promise<AnimationSetup["animation"]> {
   return loadFixture<AnimationSetup["animation"]>(animationEntry(name));
@@ -248,6 +253,11 @@ function asGraphSubscriptions(value: unknown): GraphSubscriptions | undefined {
  * Load a node-graph fixture and normalize it into a graph registration config.
  *
  * @throws If the fixture is missing or does not contain a GraphSpec-compatible payload.
+ *
+ * @example
+ * ```ts
+ * const graph = await loadNodeGraphConfig("basic");
+ * ```
  */
 export async function loadNodeGraphConfig(name: string): Promise<GraphRegistrationConfig> {
   const raw = loadFixture<unknown>(nodeGraphEntry(name).spec);
@@ -281,12 +291,24 @@ export async function loadNodeGraphConfig(name: string): Promise<GraphRegistrati
  * Load a node-graph fixture and return its registration config.
  *
  * Alias for {@link loadNodeGraphConfig}.
+ *
+ * @example
+ * ```ts
+ * const graph = await loadNodeGraphSpec("basic");
+ * ```
  */
 export async function loadNodeGraphSpec(name: string): Promise<GraphRegistrationConfig> {
   return loadNodeGraphConfig(name);
 }
 
-/** List orchestration fixture keys available via the embedded manifest. */
+/**
+ * List orchestration fixture keys available via the embedded manifest.
+ *
+ * @example
+ * ```ts
+ * const keys = await listOrchestrationFixtures();
+ * ```
+ */
 export async function listOrchestrationFixtures(): Promise<string[]> {
   return Object.keys(orchestrationMap());
 }
@@ -295,6 +317,11 @@ export async function listOrchestrationFixtures(): Promise<string[]> {
  * Load the parsed descriptor JSON value for the given orchestration fixture key.
  *
  * @throws If the fixture key is missing or the JSON cannot be parsed.
+ *
+ * @example
+ * ```ts
+ * const desc = await loadOrchestrationDescriptor("basic");
+ * ```
  */
 export async function loadOrchestrationDescriptor<T = unknown>(name: string): Promise<T> {
   return loadFixture<T>(orchestrationRelPath(name));
@@ -304,6 +331,11 @@ export async function loadOrchestrationDescriptor<T = unknown>(name: string): Pr
  * Load the orchestration descriptor as a JSON string.
  *
  * @throws If the fixture key is missing from the manifest.
+ *
+ * @example
+ * ```ts
+ * const json = await loadOrchestrationJson("basic");
+ * ```
  */
 export async function loadOrchestrationJson(name: string): Promise<string> {
   return readFixture(orchestrationRelPath(name));
@@ -411,11 +443,11 @@ async function loadAnimationBinding(
  * Load an orchestration fixture and resolve all animation/graph dependencies.
  *
  * @throws If the orchestration fixture is missing required animation or graph references.
- */
-/**
- * Load an orchestration fixture and resolve all animation/graph dependencies.
  *
- * @throws If the orchestration fixture is missing required animation or graph references.
+ * @example
+ * ```ts
+ * const bundle = await loadOrchestrationBundle("basic");
+ * ```
  */
 export async function loadOrchestrationBundle(
   name: string,

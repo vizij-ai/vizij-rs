@@ -141,7 +141,11 @@ async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
 /** wasm-loader init options for @vizij/node-graph-wasm. */
 export type InitInput = LoaderInitInput;
 
-/** Read the wasm ABI version after init() has completed. */
+/**
+ * Read the wasm ABI version after init() has completed.
+ *
+ * @throws Error if init() has not completed yet.
+ */
 export function abi_version(): number {
   if (!bindingCache.current) {
     throw new Error("Call init() from @vizij/node-graph-wasm before reading abi_version().");
@@ -153,7 +157,16 @@ export function abi_version(): number {
 
 let _initPromise: Promise<void> | null = null;
 
-/** Initialize the wasm module once. Must be awaited before constructing Graph. */
+/**
+ * Initialize the wasm module once. Must be awaited before constructing Graph.
+ *
+ * @example
+ * ```ts
+ * import { init } from "@vizij/node-graph-wasm";
+ *
+ * await init();
+ * ```
+ */
 export function init(input?: InitInput): Promise<void> {
   if (_initPromise) return _initPromise;
 
@@ -226,6 +239,14 @@ function mergeDelta(base: EvalResult, delta: EvalResult & { version?: unknown })
  * High-level wrapper around the wasm Graph runtime.
  *
  * Always call {@link init} once before constructing Graph.
+ *
+ * @example
+ * ```ts
+ * import { init, Graph } from "@vizij/node-graph-wasm";
+ *
+ * await init();
+ * const graph = new Graph();
+ * ```
  */
 export class Graph {
   private inner: any;
@@ -266,6 +287,11 @@ export class Graph {
   /**
    * Load a graph spec (object or JSON string).
    * Optional opts allow hot-path registration in one call.
+   *
+   * @example
+   * ```ts
+   * graph.loadGraph({ nodes: [], edges: [] });
+   * ```
    */
   loadGraph(
     spec: GraphSpec | string,
@@ -303,13 +329,27 @@ export class Graph {
     }
   }
 
-  /** Set absolute time (seconds). */
+  /**
+   * Set absolute time (seconds).
+   *
+   * @example
+   * ```ts
+   * graph.setTime(1.5);
+   * ```
+   */
   setTime(t: number): void {
     this.invalidateCachedOutputs();
     this.inner.set_time(t);
   }
 
-  /** Increment time (seconds). */
+  /**
+   * Increment time (seconds).
+   *
+   * @example
+   * ```ts
+   * graph.step(1 / 60);
+   * ```
+   */
   step(dt: number): void {
     this.invalidateCachedOutputs();
     this.inner.step(dt);
@@ -318,6 +358,11 @@ export class Graph {
   /**
    * Stage a host-provided input for the next evalAll() tick.
    * Values staged before evalAll will be visible in that evaluation (epoch semantics).
+   *
+   * @example
+   * ```ts
+   * graph.stageInput("inputs.speed", 1.0);
+   * ```
    */
   stageInput(path: string, value: Value, declaredShape?: ShapeJSON): void {
     this.invalidateCachedOutputs();
@@ -334,6 +379,11 @@ export class Graph {
   /**
    * Evaluate the whole graph and return a map of nodeId -> outputKey -> ValueJSON.
    * (One batched wasm call.)
+   *
+   * @example
+   * ```ts
+   * const frame = graph.evalAll();
+   * ```
    */
   evalAll(): EvalResult {
     const target = this.inner as any;
@@ -400,6 +450,11 @@ export class Graph {
 
   /**
    * Force a full snapshot and reset the delta baseline (e.g., after structural edits).
+   *
+   * @example
+   * ```ts
+   * const full = graph.evalAllFull();
+   * ```
    */
   evalAllFull(): EvalResult {
     const target = this.inner as any;
@@ -440,6 +495,11 @@ export class Graph {
   /**
    * Unified staging entry: automatically routes hot paths through slots (with diff) and others via path batch.
    * Accepts numeric values; non-hot or unsupported types go through path staging.
+   *
+   * @example
+   * ```ts
+   * graph.stageInputs(["inputs.speed"], new Float32Array([1.2]));
+   * ```
    */
   stageInputs(
     paths: string[],
@@ -535,6 +595,11 @@ export class Graph {
 
   /**
    * Register paths once and reuse their indices for faster staging.
+   *
+   * @example
+   * ```ts
+   * const indices = graph.registerInputPaths(["inputs.speed"]);
+   * ```
    */
   registerInputPaths(paths: string[]): Uint32Array {
     const target = this.inner as any;
@@ -546,6 +611,12 @@ export class Graph {
 
   /**
    * Allocate slots for registered input indices and (optionally) declare shapes.
+   *
+   * @example
+   * ```ts
+   * const indices = graph.registerInputPaths(["inputs.speed"]);
+   * graph.prepareInputSlots(indices);
+   * ```
    */
   prepareInputSlots(indices: Uint32Array, declaredShapes?: Array<ShapeJSON | null>): void {
     const target = this.inner as any;
@@ -561,6 +632,12 @@ export class Graph {
   /**
    * Stage inputs using indices returned by registerInputPaths.
    * Length of indices must match values length.
+   *
+   * @example
+   * ```ts
+   * const indices = graph.registerInputPaths(["inputs.speed"]);
+   * graph.stageInputsByIndex(indices, new Float32Array([1.0]));
+   * ```
    */
   stageInputsByIndex(indices: Uint32Array, values: Float32Array): void {
     this.invalidateCachedOutputs();
@@ -574,6 +651,13 @@ export class Graph {
 
   /**
    * Stage inputs using pre-prepared slots (no path parse, reuse declared shapes).
+   *
+   * @example
+   * ```ts
+   * const indices = graph.registerInputPaths(["inputs.speed"]);
+   * graph.prepareInputSlots(indices);
+   * graph.stageInputsBySlot(indices, new Float32Array([1.0]));
+   * ```
    */
   stageInputsBySlot(indices: Uint32Array, values: Float32Array): void {
     this.invalidateCachedOutputs();
@@ -588,6 +672,13 @@ export class Graph {
   /**
    * Stage inputs by slot but only send indices whose values differ from the last call.
    * Optionally supply an epsilon for float comparisons (default exact).
+   *
+   * @example
+   * ```ts
+   * const indices = graph.registerInputPaths(["inputs.speed"]);
+   * graph.prepareInputSlots(indices);
+   * graph.stageInputsBySlotDiff(indices, new Float32Array([1.0]), 0.01);
+   * ```
    */
   stageInputsBySlotDiff(
     indices: Uint32Array,
@@ -634,6 +725,11 @@ export class Graph {
   /**
    * Fetch the default 'out' port for many nodes as a Float32Array.
    * Non-scalar outputs return NaN for that entry.
+   *
+   * @example
+   * ```ts
+   * const values = graph.getOutputsBatch(["node-a", "node-b"]);
+   * ```
    */
   getOutputsBatch(nodeIds: string[]): Float32Array {
     const target = this.inner as any;
@@ -661,6 +757,11 @@ export class Graph {
   /**
    * Fetch only the outputs that changed since a version token. Returns { version, nodes, writes }.
    * Pass version 0 (or undefined) to force a full snapshot on first call.
+   *
+   * @example
+   * ```ts
+   * const delta = graph.getOutputsDelta(0);
+   * ```
    */
   getOutputsDelta(sinceVersion?: number): EvalResult & { version: number } {
     const target = this.inner as any;
@@ -716,6 +817,11 @@ export class Graph {
   /**
    * Run N steps of fixed dt inside WASM, returning the final frame.
    * This amortizes JS/WASM crossings for tight loops.
+   *
+   * @example
+   * ```ts
+   * const frame = graph.evalSteps(120, 1 / 60);
+   * ```
    */
   evalSteps(steps: number, dt: number): EvalResult {
     const target = this.inner as any;
@@ -744,6 +850,11 @@ export class Graph {
    *
    * Structural edits (e.g., Split sizes) cause the wasm runtime to drop its plan and
    * delta caches; reset the JS baseline so the next eval consumes the fresh snapshot.
+   *
+   * @example
+   * ```ts
+   * graph.setParam("osc", "frequency", 2.0);
+   * ```
    */
   setParam(nodeId: string, key: string, value: Value): void {
     // Plan cache is invalidated in wasm for structural params; drop the JS baseline too
@@ -762,6 +873,11 @@ export class Graph {
 
   /**
    * Declare hot paths for slot-based staging. Can be called after loadGraph; re-registers slots.
+   *
+   * @example
+   * ```ts
+   * graph.setHotPaths(["inputs.speed"], { epsilon: 0.01 });
+   * ```
    */
   setHotPaths(paths: string[], opts?: { epsilon?: number; autoClearDroppedHotPaths?: boolean }): void {
     const target = this.inner as any;
@@ -810,6 +926,11 @@ export class Graph {
 
   /**
    * Clear a cached/staged slot value (allows node defaults to apply on next eval).
+   *
+   * @example
+   * ```ts
+   * await graph.clearSlot(0);
+   * ```
    */
   async clearSlot(slotIdx: number): Promise<void> {
     const target = this.inner as any;
@@ -829,6 +950,11 @@ export class Graph {
 
   /**
    * Clear a staged input by path.
+   *
+   * @example
+   * ```ts
+   * await graph.clearInput("inputs.speed");
+   * ```
    */
   async clearInput(path: string): Promise<void> {
     const target = this.inner as any;
@@ -850,12 +976,26 @@ export class Graph {
     }
   }
 
-  /** Enable or disable verbose staging/eval logs for debugging. */
+  /**
+   * Enable or disable verbose staging/eval logs for debugging.
+   *
+   * @example
+   * ```ts
+   * graph.setDebugLogging(true);
+   * ```
+   */
   setDebugLogging(enabled: boolean): void {
     this._debugLogging = enabled;
   }
 
-  /** Inspect current staging state (hot paths, versions, flags). */
+  /**
+   * Inspect current staging state (hot paths, versions, flags).
+   *
+   * @example
+   * ```ts
+   * const state = graph.inspectStaging();
+   * ```
+   */
   inspectStaging(): {
     hotPaths: string[];
     epsilon: number;
@@ -885,10 +1025,12 @@ export {
 
 // Convenience re-exports for consumers who prefer a function-style API
 /**
- * Convenience helper to init() and return a ready Graph instance.
- */
-/**
  * Initialize wasm (if needed) and return a ready Graph instance.
+ *
+ * @example
+ * ```ts
+ * const graph = await createGraph({ nodes: [], edges: [] });
+ * ```
  */
 export async function createGraph(spec?: GraphSpec | string): Promise<Graph> {
   await init();
@@ -900,6 +1042,11 @@ export async function createGraph(spec?: GraphSpec | string): Promise<Graph> {
 /**
  * Normalize a graph specification (object or JSON string) using the shared
  * Rust-side normalization logic. Helpful for persisting specs or diffing.
+ *
+ * @example
+ * ```ts
+ * const normalized = await normalizeGraphSpec({ nodes: [] });
+ * ```
  */
 export async function normalizeGraphSpec(spec: GraphSpec | string): Promise<GraphSpec> {
   await init();
@@ -912,6 +1059,11 @@ export async function normalizeGraphSpec(spec: GraphSpec | string): Promise<Grap
 /**
  * Fetch the node schema registry from the wasm module as a parsed object.
  * Ensures the wasm module is initialized before calling.
+ *
+ * @example
+ * ```ts
+ * const registry = await getNodeSchemas();
+ * ```
  */
 export async function getNodeSchemas(): Promise<Registry> {
   await init();
@@ -1041,7 +1193,16 @@ export const graphSamples: Record<string, GraphSpec> = {
   ...urdfGraphSamples,
 };
 
-/** Individual GraphSpec samples for demos/tests. */
+/**
+ * Individual GraphSpec samples for demos/tests.
+ *
+ * @example
+ * ```ts
+ * import { oscillatorBasics } from "@vizij/node-graph-wasm";
+ *
+ * const graph = await createGraph(oscillatorBasics);
+ * ```
+ */
 export {
   oscillatorBasics,
   vectorPlayground,

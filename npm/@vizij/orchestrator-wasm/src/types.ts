@@ -45,20 +45,25 @@ export type {
   NormalizedValue,
 };
 
-/* ShapeJSON: typed metadata describing a Value's shape.
-   We provide a couple of common helpers while remaining permissive. */
+/**
+ * Typed metadata describing a Value's shape.
+ *
+ * Includes a few common helpers while staying permissive for legacy/forward-compatible shapes.
+ */
 export type ShapePrimitive = { id: string } | { id: string; sizes?: number[] } | { id: string; params?: any };
+/** Nested field map for record-shaped values. */
 export type ShapeField = { [k: string]: ShapeJSON };
+/** Union of supported shape representations accepted by the orchestrator. */
 export type ShapeJSON = ShapePrimitive | { record?: ShapeField } | { array?: ShapeJSON } | any;
 
-/* Write operation emitted by controllers */
+/** Write operation emitted by controllers during a step. */
 export interface WriteOpJSON {
   path: string;
   value: ValueJSON;
   shape?: ShapeJSON;
 }
 
-/* Conflict log emitted when a write overwrote an existing entry */
+/** Conflict log emitted when a write overwrote an existing entry. */
 export interface ConflictLog {
   path: string;
   previous_value?: ValueJSON;
@@ -71,7 +76,7 @@ export interface ConflictLog {
   new_source: string;
 }
 
-/* The orchestrator frame returned after each step */
+/** The orchestrator frame returned after each step. */
 export interface OrchestratorFrame {
   epoch: number;
   dt: number;
@@ -81,7 +86,7 @@ export interface OrchestratorFrame {
   events: any[]; // controller-specific event payloads
 }
 
-/* High-level typed interface for the wrapper (for consumers who prefer TS types) */
+/** High-level typed interface for the JS wrapper (for consumers who prefer TS types). */
 export interface OrchestratorAPI {
   registerGraph(cfg: GraphRegistrationInput): string;
   registerMergedGraph(cfg: MergedGraphRegistrationConfig): string;
@@ -96,10 +101,13 @@ export interface OrchestratorAPI {
   normalizeGraphSpec(spec: object | string): Promise<object>;
 }
 
-/* exported helper types for consumers */
+/** Re-exported helper types for consumers. */
 export type { NormalizedValue as ValueNormalized };
+/** Alias for the ValueJSON union from @vizij/value-json. */
 export type { ValueJSON as Value };
+/** Alias for the ShapeJSON type. */
 export type { ShapeJSON as Shape };
+/** Alias for OrchestratorFrame. */
 export type { OrchestratorFrame as Frame };
 
 /**
@@ -126,31 +134,36 @@ export interface GraphSpec {
   fingerprint?: number;
 }
 
-/* Helper config types used by the JS wrapper */
+/** Helper config type used by the JS wrapper for graph registration. */
 export interface GraphRegistrationConfig {
   id?: string;
   spec: GraphSpec | any;
   subs?: GraphSubscriptions;
 }
 
+/** Graph replacement config; requires an id. */
 export interface GraphReplaceConfig extends GraphRegistrationConfig {
   id: string;
 }
 
+/** Config used to register multiple graphs as a merged controller. */
 export interface MergedGraphRegistrationConfig {
   id?: string;
   graphs: GraphRegistrationConfig[];
   strategy?: MergeStrategyOptions;
 }
 
+/** Subscription hints for graph inputs/outputs. */
 export interface GraphSubscriptions {
   inputs?: string[];
   outputs?: string[];
   mirrorWrites?: boolean;
 }
 
+/** Graph registration inputs accepted by the JS wrapper. */
 export type GraphRegistrationInput = string | GraphRegistrationConfig;
 
+/** Conflict strategies supported by graph merge options. */
 export type MergeConflictStrategy =
   | "error"
   | "namespace"
@@ -169,16 +182,19 @@ export type MergeConflictStrategy =
   | "blend-weights"
   | "weights";
 
+/** Merge strategy options for graph registration. */
 export interface MergeStrategyOptions {
   outputs?: MergeConflictStrategy;
   intermediate?: MergeConflictStrategy;
 }
 
+/** Registration config for an animation controller. */
 export interface AnimationRegistrationConfig {
   id?: string;
   setup?: AnimationSetup;
 }
 
+/** Animation setup data passed to a controller at registration. */
 export interface AnimationSetup {
   animation?: any;
   player?: {

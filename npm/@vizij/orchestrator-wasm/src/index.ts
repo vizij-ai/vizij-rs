@@ -108,14 +108,19 @@ async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
   return bindingCache.current!;
 }
 
+/** Init input forwarded to @vizij/wasm-loader. */
 export type InitInput = LoaderInitInput;
 
-/**
- * Initialize the wasm module once.
- */
 let _initPromise: Promise<void> | null = null;
 /**
  * Initialize the wasm module once. Must be awaited before constructing Orchestrator.
+ *
+ * @example
+ * ```ts
+ * import { init } from "@vizij/orchestrator-wasm";
+ *
+ * await init();
+ * ```
  */
 export function init(input?: InitInput): Promise<void> {
   if (_initPromise) return _initPromise;
@@ -127,6 +132,8 @@ export function init(input?: InitInput): Promise<void> {
 
 /**
  * Read the wasm ABI version after init() has completed.
+ *
+ * @throws Error if init() has not completed yet.
  */
 export function abi_version(): number {
   if (!bindingCache.current) {
@@ -182,10 +189,14 @@ export {
 /**
  * Ergonomic wrapper around the wasm VizijOrchestrator.
  * Always await init() once before constructing.
- */
-/**
- * Ergonomic wrapper around the wasm VizijOrchestrator.
- * Always await init() once before constructing.
+ *
+ * @example
+ * ```ts
+ * import { init, Orchestrator } from "@vizij/orchestrator-wasm";
+ *
+ * await init();
+ * const orch = new Orchestrator();
+ * ```
  */
 export class Orchestrator {
   private inner: WasmOrchestratorInstance;
@@ -207,6 +218,14 @@ export class Orchestrator {
   /**
    * Register a graph controller.
    * Accepts a GraphSpec object or a JSON string or { id?, spec }.
+   *
+   * @example
+   * ```ts
+   * const id = orch.registerGraph({
+   *   spec: { nodes: [], edges: [] },
+   *   subs: { inputs: ["inputs.foo"], outputs: ["outputs.bar"] },
+   * });
+   * ```
    */
   registerGraph(cfg: GraphRegistrationInput): string {
     return this.inner.register_graph(cfg);
@@ -217,6 +236,11 @@ export class Orchestrator {
    * This is the supported way to apply structural edits at runtime.
    *
    * Requires { id, spec, subs? } (string form is not supported here).
+   *
+   * @example
+   * ```ts
+   * orch.replaceGraph({ id: "graph-1", spec: { nodes: [], edges: [] } });
+   * ```
    */
   replaceGraph(cfg: GraphReplaceConfig): void {
     this.inner.replace_graph(cfg);
@@ -224,7 +248,17 @@ export class Orchestrator {
     this._lastFrameVersion = 0n;
   }
 
-  /** Register a merged graph controller. */
+  /**
+   * Register a merged graph controller.
+   *
+   * @example
+   * ```ts
+   * const mergedId = orch.registerMergedGraph({
+   *   graphs: [{ id: "a", spec: { nodes: [] } }, { id: "b", spec: { nodes: [] } }],
+   *   strategy: { outputs: "namespace" },
+   * });
+   * ```
+   */
   registerMergedGraph(cfg: MergedGraphRegistrationConfig): string {
     return this.inner.register_merged_graph(cfg);
   }
@@ -232,6 +266,11 @@ export class Orchestrator {
   /**
    * Register an animation controller.
    * Accepts { id?: string, setup?: any }.
+   *
+   * @example
+   * ```ts
+   * const animId = orch.registerAnimation({ setup: { player: { loop_mode: "loop" } } });
+   * ```
    */
   registerAnimation(cfg: AnimationRegistrationConfig): string {
     return this.inner.register_animation(cfg);
@@ -240,6 +279,11 @@ export class Orchestrator {
   /**
    * Prebind resolver used by animation controllers.
    * resolver(path: string) => string|number|null|undefined
+   *
+   * @example
+   * ```ts
+   * orch.prebind((path) => (path.startsWith("arm.") ? 0 : null));
+   * ```
    */
   prebind(resolver: WasmResolver): void {
     const f = (path: string) => resolver(path);
@@ -249,6 +293,11 @@ export class Orchestrator {
   /**
    * Set a blackboard input. value may be a ValueJSON or legacy shape.
    * shape is optional.
+   *
+   * @example
+   * ```ts
+   * orch.setInput("inputs.speed", 1.0);
+   * ```
    */
   setInput(path: string, value: Value, shape?: ShapeJSON): void {
     const v = toValueJSON(value);
@@ -256,13 +305,25 @@ export class Orchestrator {
     this.inner.set_input(path, v, s);
   }
 
-  /** Remove a blackboard input by path. */
+  /**
+   * Remove a blackboard input by path.
+   *
+   * @example
+   * ```ts
+   * orch.removeInput("inputs.speed");
+   * ```
+   */
   removeInput(path: string): boolean {
     return this.inner.remove_input(path);
   }
 
   /**
    * Declare hot inputs to enable diffed staging for scalars.
+   *
+   * @example
+   * ```ts
+   * orch.setHotInputs(["inputs.speed"], { epsilon: 0.01 });
+   * ```
    */
   setHotInputs(paths: string[], opts?: { epsilon?: number }): void {
     this._hotInputs = new Set(paths);
@@ -276,6 +337,11 @@ export class Orchestrator {
   /**
    * Smart staging: routes hot scalar inputs through a diff and only calls setInput when changed.
    * Non-hot or non-numeric values always call setInput.
+   *
+   * @example
+   * ```ts
+   * orch.setInputsSmart(["inputs.speed"], new Float32Array([1.2]));
+   * ```
    */
   setInputsSmart(paths: string[], values: Float32Array, shapes?: (ShapeJSON | null)[]): void {
     const hot = this._hotInputs;
@@ -314,6 +380,11 @@ export class Orchestrator {
   /**
    * Step the orchestrator and return only changes since a version token.
    * Pass 0 (or omit) to force a full frame and establish the baseline.
+   *
+   * @example
+   * ```ts
+   * const frame = orch.stepDelta(1 / 60);
+   * ```
    */
   stepDelta(dt: number, sinceVersion?: number | bigint): OrchestratorFrame & { version: bigint } {
     const token =
@@ -332,13 +403,25 @@ export class Orchestrator {
 
   /**
    * Step the orchestrator by dt seconds. Returns the OrchestratorFrame (JS object).
+   *
+   * @example
+   * ```ts
+   * const frame = orch.step(1 / 60);
+   * ```
    */
   step(dt: number): OrchestratorFrame {
     const frame = this.inner.step(dt);
     return frame as OrchestratorFrame;
   }
 
-  /** List registered graph and animation controller ids. */
+  /**
+   * List registered graph and animation controller ids.
+   *
+   * @example
+   * ```ts
+   * const { graphs, anims } = orch.listControllers();
+   * ```
+   */
   listControllers(): { graphs: string[]; anims: string[] } {
     const result = this.inner.list_controllers();
     const graphs = Array.isArray(result?.graphs) ? (result!.graphs as string[]) : [];
@@ -346,23 +429,49 @@ export class Orchestrator {
     return { graphs, anims };
   }
 
-  /** Remove a graph controller by id. */
+  /**
+   * Remove a graph controller by id.
+   *
+   * @example
+   * ```ts
+   * orch.removeGraph("graph-1");
+   * ```
+   */
   removeGraph(id: string): boolean {
     return this.inner.remove_graph(id);
   }
 
-  /** Remove an animation controller by id. */
+  /**
+   * Remove an animation controller by id.
+   *
+   * @example
+   * ```ts
+   * orch.removeAnimation("anim-1");
+   * ```
+   */
   removeAnimation(id: string): boolean {
     return this.inner.remove_animation(id);
   }
 
-  /** Enable or disable debug logging in the JS wrapper. */
+  /**
+   * Enable or disable debug logging in the JS wrapper.
+   *
+   * @example
+   * ```ts
+   * orch.setDebugLogging(true);
+   * ```
+   */
   setDebugLogging(enabled: boolean): void {
     this._debugLogging = enabled;
   }
 
   /**
    * Normalize a GraphSpec (object or JSON string) using the Rust normalizer.
+   *
+   * @example
+   * ```ts
+   * const normalized = await orch.normalizeGraphSpec({ nodes: [] });
+   * ```
    */
   async normalizeGraphSpec(spec: object | string): Promise<object> {
     await init();
@@ -375,6 +484,13 @@ export class Orchestrator {
 
 /**
  * Convenience helper to init() and return a ready Orchestrator instance.
+ *
+ * @example
+ * ```ts
+ * import { createOrchestrator } from "@vizij/orchestrator-wasm";
+ *
+ * const orch = await createOrchestrator();
+ * ```
  */
 export async function createOrchestrator(opts?: any): Promise<Orchestrator> {
   await init();
