@@ -37,8 +37,8 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs are less useful without concrete usage examples; added examples across animation core engine, baking helpers, and interpolation utilities.
-- Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures; revisit node-graph eval helpers if public re-exports are added (current examples are `ignore`).
-- Status: In progress (iter-20 added orchestrator registration/export examples)
+- Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures; revisit node-graph eval helpers if public re-exports are added (current examples are `ignore`); add JS examples for wasm graph slot staging helpers.
+- Status: In progress (iter-02 added JS examples for wasm graph staging helpers)
 
 ### R-004 — Standardize module-level docs and `//!` overviews
 - Type: Docs

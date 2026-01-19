@@ -787,11 +787,21 @@ impl WasmGraph {
     /// Register paths once and reuse their indices for faster staging.
     ///
     /// Use the returned indices with `stage_inputs_indices` or slot staging APIs.
+    /// Indices are cleared when you call [`WasmGraph::load_graph`].
     ///
     /// Returns a `Uint32Array` of slot indices, aligned with the input list.
     ///
     /// # Errors
     /// Returns a `JsValue` error if any path fails to parse.
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// import { WasmGraph } from "@vizij/node-graph-wasm";
+    ///
+    /// const graph = new WasmGraph();
+    /// const slots = graph.register_input_paths(["robot/arm/angle"]);
+    /// graph.stage_inputs_indices(slots, new Float32Array([1.0]));
+    /// ```
     #[wasm_bindgen(js_name = "register_input_paths")]
     pub fn register_input_paths(&mut self, paths: JsValue) -> Result<Uint32Array, JsValue> {
         let new_paths: Vec<String> = swb::from_value(paths)
@@ -816,6 +826,15 @@ impl WasmGraph {
     /// # Errors
     /// Returns a `JsValue` error if indices/values lengths mismatch or a slot index
     /// is out of bounds.
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// import { WasmGraph } from "@vizij/node-graph-wasm";
+    ///
+    /// const graph = new WasmGraph();
+    /// const slots = graph.register_input_paths(["gain/value", "offset/value"]);
+    /// graph.stage_inputs_indices(slots, new Float32Array([1.5, 0.25]));
+    /// ```
     #[wasm_bindgen(js_name = "stage_inputs_indices")]
     pub fn stage_inputs_indices(
         &mut self,
@@ -847,10 +866,21 @@ impl WasmGraph {
     /// Pre-allocate slots with declared shapes to enable slot staging.
     ///
     /// Each entry in `declared` corresponds to the same position in `indices`.
+    /// Declared shapes guide coercion for scalar inputs during staging.
     ///
     /// # Errors
     /// Returns a `JsValue` error if indices/declared lengths mismatch or a slot index
     /// is out of bounds.
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// import { WasmGraph } from "@vizij/node-graph-wasm";
+    ///
+    /// const graph = new WasmGraph();
+    /// const slots = graph.register_input_paths(["robot/arm/scale"]);
+    /// graph.prepare_input_slots(slots, [{ type: "vector", len: 3 }]);
+    /// graph.stage_inputs_slots(slots, new Float32Array([1.0]));
+    /// ```
     #[wasm_bindgen(js_name = "prepare_input_slots")]
     pub fn prepare_input_slots(
         &mut self,
@@ -882,10 +912,21 @@ impl WasmGraph {
     /// Stage inputs by pre-prepared slots (no path parse, reuse declared).
     ///
     /// This uses the declared shapes prepared via `prepare_input_slots`.
+    /// Values are treated as scalar floats and coerced using the declared shape.
     ///
     /// # Errors
     /// Returns a `JsValue` error if indices/values lengths mismatch, a slot is missing,
     /// or a slot index is out of bounds.
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// import { WasmGraph } from "@vizij/node-graph-wasm";
+    ///
+    /// const graph = new WasmGraph();
+    /// const slots = graph.register_input_paths(["joint/angle"]);
+    /// graph.prepare_input_slots(slots, [null]);
+    /// graph.stage_inputs_slots(slots, new Float32Array([0.5]));
+    /// ```
     #[wasm_bindgen(js_name = "stage_inputs_slots")]
     pub fn stage_inputs_slots(
         &mut self,
@@ -926,6 +967,15 @@ impl WasmGraph {
     ///
     /// # Errors
     /// Returns a `JsValue` error if the slot index is out of bounds.
+    ///
+    /// # Examples (JS)
+    /// ```javascript
+    /// import { WasmGraph } from "@vizij/node-graph-wasm";
+    ///
+    /// const graph = new WasmGraph();
+    /// const slots = graph.register_input_paths(["gain/value"]);
+    /// graph.clear_input_slot(slots[0]);
+    /// ```
     #[wasm_bindgen(js_name = "clear_input_slot")]
     pub fn clear_input_slot(&mut self, slot_idx: u32) -> Result<(), JsValue> {
         let idx = slot_idx as usize;
@@ -944,6 +994,7 @@ impl WasmGraph {
     /// Fetch a float/vec/array output directly as `Float32Array` (if numeric).
     ///
     /// Returns `None` if the output is missing or not numeric.
+    /// `Transform` values are flattened as translation (xyz), rotation (xyzw), scale (xyz).
     #[wasm_bindgen(js_name = "get_output_f32")]
     pub fn get_output_f32(&self, node_id: &str, output_key: &str) -> Option<Float32Array> {
         let port = self.runtime.outputs.get(node_id)?.get(output_key)?;
@@ -1045,6 +1096,7 @@ impl WasmGraph {
     /// Evaluate the entire graph and return all outputs as JSON.
     /// Returned JSON shape:
     /// {
+    ///   "version": number,
     ///   "nodes": { [nodeId]: { [outputKey]: { "value": ValueJSON, "shape": ShapeJSON } } },
     ///   "writes": [ { "path": string, "value": ValueJSON, "shape": ShapeJSON }, ... ]
     /// }
@@ -1060,6 +1112,7 @@ impl WasmGraph {
     /// Evaluate without serializing to JSON; returns a monotonic output version.
     ///
     /// Use `get_outputs_full` or `get_outputs_delta` to fetch the outputs.
+    /// The returned version token increments on each successful evaluation.
     ///
     /// # Errors
     /// Returns a `JsValue` error if evaluation fails.
@@ -1079,6 +1132,9 @@ impl WasmGraph {
 
     /// Return a full snapshot of outputs/writes (JSON) without re-evaluating.
     ///
+    /// The returned object includes a `version` field that matches the most recent
+    /// evaluation result.
+    ///
     /// # Errors
     /// Returns a `JsValue` error if serialization fails.
     #[wasm_bindgen(js_name = "get_outputs_full")]
@@ -1091,6 +1147,7 @@ impl WasmGraph {
     /// Return only outputs that changed since the provided version token.
     ///
     /// The returned object includes `{ full: true }` when a full resync is required.
+    /// Use the `version` field from the response as the next baseline.
     ///
     /// # Errors
     /// Returns a `JsValue` error if serialization fails.
@@ -1104,6 +1161,7 @@ impl WasmGraph {
     /// Evaluate and return only outputs that changed since the provided version token in a single crossing.
     ///
     /// The returned object includes `{ full: true }` when a full resync is required.
+    /// Use the `version` field from the response as the next baseline.
     ///
     /// # Errors
     /// Returns a `JsValue` error if evaluation or serialization fails.
