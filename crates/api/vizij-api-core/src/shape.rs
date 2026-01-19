@@ -24,14 +24,23 @@ pub struct Field {
 #[serde(tag = "id", content = "data")]
 pub enum ShapeId {
     // Primitives
+    /// Scalar `f32` value.
     Scalar,
+    /// Boolean value (step-only).
     Bool,
+    /// Two-component float vector.
     Vec2,
+    /// Three-component float vector.
     Vec3,
+    /// Four-component float vector.
     Vec4,
+    /// Quaternion stored as `[x, y, z, w]`.
     Quat,
+    /// RGBA color stored as four floats.
     ColorRgba,
+    /// Transform stored as translation, rotation, and scale.
     Transform, // TRS: { pos: vec3, rot: quat, scale: vec3 }
+    /// UTF-8 text value.
     Text,
     /// Homogeneous numeric vector (float). Optional length hint enables UIs to
     /// pre-size controls but evaluation remains dynamic.
@@ -41,6 +50,7 @@ pub enum ShapeId {
     },
 
     // Composite
+    /// Record of named fields with shape metadata.
     Record(Vec<Field>),
     /// Fixed-size array of a nested shape.
     Array(Box<ShapeId>, usize),

@@ -13,20 +13,35 @@ use serde::{Deserialize, Serialize};
 /// is unnecessary.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ValueKind {
+    /// Scalar floating-point value.
     Float,
+    /// Boolean value.
     Bool,
+    /// Two-component float vector.
     Vec2,
+    /// Three-component float vector.
     Vec3,
+    /// Four-component float vector.
     Vec4,
+    /// Quaternion stored as `[x, y, z, w]`.
     Quat,
+    /// RGBA color stored as four floats.
     ColorRgba,
+    /// Transform (translation, rotation, scale).
     Transform,
+    /// Variable-length numeric vector.
     Vector,
+    /// Record of named fields.
     Record,
+    /// Fixed-size homogeneous array.
     Array,
+    /// Variable-length list.
     List,
+    /// Ordered tuple of heterogeneous elements.
     Tuple,
+    /// Tagged enum with payload.
     Enum,
+    /// UTF-8 text.
     Text,
 }
 
@@ -111,16 +126,43 @@ impl Value {
     }
 
     /// Creates a scalar float value.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::Value;
+    ///
+    /// let v = Value::f(1.5);
+    /// assert!(matches!(v, Value::Float(_)));
+    /// ```
     pub fn f(v: f32) -> Self {
         Value::Float(v)
     }
 
     /// Creates a 3D vector value from components.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::Value;
+    ///
+    /// let v = Value::vec3(1.0, 2.0, 3.0);
+    /// assert_eq!(v.kind(), vizij_api_core::ValueKind::Vec3);
+    /// ```
     pub fn vec3(x: f32, y: f32, z: f32) -> Self {
         Value::Vec3([x, y, z])
     }
 
     /// Creates a quaternion value from (x, y, z, w) components.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vizij_api_core::Value;
+    ///
+    /// let v = Value::quat(0.0, 0.0, 0.0, 1.0);
+    /// assert_eq!(v.kind(), vizij_api_core::ValueKind::Quat);
+    /// ```
     pub fn quat(x: f32, y: f32, z: f32, w: f32) -> Self {
         Value::Quat([x, y, z, w])
     }

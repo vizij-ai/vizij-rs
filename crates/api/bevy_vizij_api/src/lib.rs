@@ -42,6 +42,20 @@ impl WriterRegistry {
     ///
     /// # Panics
     /// Panics if the registry mutex is poisoned.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use bevy::prelude::World;
+    /// use bevy_vizij_api::WriterRegistry;
+    /// use vizij_api_core::{TypedPath, Value};
+    ///
+    /// let registry = WriterRegistry::new();
+    /// let path = TypedPath::parse("robot/Arm/Joint.angle").expect("path");
+    /// registry.register_setter(path.to_string(), |_world: &mut World, _path, _value| {
+    ///     // apply the write to your Bevy world
+    /// });
+    /// ```
     pub fn register_setter<F>(&self, path: impl Into<String>, f: F)
     where
         F: Fn(&mut World, &TypedPath, &Value) + Send + Sync + 'static,
@@ -56,6 +70,21 @@ impl WriterRegistry {
     ///
     /// # Panics
     /// Panics if the registry mutex is poisoned.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use bevy::prelude::World;
+    /// use bevy_vizij_api::WriterRegistry;
+    /// use vizij_api_core::{TypedPath, Value};
+    ///
+    /// let registry = WriterRegistry::new();
+    /// let path = TypedPath::parse("robot/Arm/Joint.angle").expect("path");
+    /// registry.register_setter(path.to_string(), |_world: &mut World, _path, _value| {});
+    ///
+    /// let setter = registry.get_setter(&path.to_string());
+    /// assert!(setter.is_some());
+    /// ```
     pub fn get_setter(&self, path: &str) -> Option<Arc<SetterFn>> {
         let guard = self.inner.lock().unwrap();
         guard.get(path).cloned()

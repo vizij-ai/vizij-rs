@@ -22,7 +22,7 @@
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
 - Next action: Audit remaining wasm/helper crates and any non-core crates for missing rustdoc (bevy_vizij_api, bevy_vizij_graph, bevy_vizij_orchestrator once added).
-- Status: In progress (iter-04 refreshed bevy_vizij_graph docs)
+- Status: In progress (iter-16 added Value/Shape enum variant docs and bevy_vizij_api registry examples)
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
 - Type: Docs
@@ -38,7 +38,7 @@
 - Effort: L
 - Evidence: Autogen docs are less useful without concrete usage examples; added examples across animation core engine, baking helpers, and interpolation utilities.
 - Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures; revisit node-graph eval helpers if public re-exports are added (current examples are `ignore`).
-- Status: In progress (iter-14 added doc examples for `vizij-test-fixtures` loaders and animation controller update)
+- Status: In progress (iter-16 added Value helper and registry examples in api crates)
 
 ### R-004 — Standardize module-level docs and `//!` overviews
 - Type: Docs
@@ -94,7 +94,7 @@
 - Effort: M
 - Evidence: Users need examples beyond the top-level API; Value helpers, ValueKind links, and JSON tag notes need concise coverage (merged R-011/R-012/R-013). Eval/runtime docs now mention errors but still lack examples.
 - Next action: Add short doc examples for any remaining public APIs that lack runnable snippets (likely outside animation stack). Avoid brittle doctests for fixture-heavy APIs.
-- Status: In progress (iter-08 added bevy_vizij_api doctests)
+- Status: In progress (iter-16 added Value helper and WriterRegistry examples)
 
 ### R-011 — Add docstrings for `Value` enum variants needing clarity
 - Type: Docs
