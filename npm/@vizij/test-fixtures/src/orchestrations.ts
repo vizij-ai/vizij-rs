@@ -8,14 +8,24 @@ import {
 import { animationFixture } from "./animations.js";
 import { nodeGraphSpec } from "./nodeGraphs.js";
 
-/** Stage entry for preloading values into an orchestration run. */
+/**
+ * Stage entry for preloading values into an orchestration run.
+ *
+ * @example
+ * const entry: StageEntry = { path: "rig/pose", value: { float: 1 } };
+ */
 export interface StageEntry {
   path: string;
   value: unknown;
   shape?: unknown;
 }
 
-/** Input seed for graph bindings within an orchestration. */
+/**
+ * Input seed for graph bindings within an orchestration.
+ *
+ * @example
+ * const seed: GraphSeed = "oscillator-basics";
+ */
 export type GraphSeed =
   | string
   | {
@@ -26,7 +36,12 @@ export type GraphSeed =
       stage?: StageEntry[];
     };
 
-/** Input seed for animation bindings within an orchestration. */
+/**
+ * Input seed for animation bindings within an orchestration.
+ *
+ * @example
+ * const seed: AnimationSeed = { fixture: "simple-walk", player: { loop_mode: "loop" } };
+ */
 export type AnimationSeed =
   | string
   | {
@@ -37,20 +52,35 @@ export type AnimationSeed =
       instance?: Record<string, unknown>;
     };
 
-/** Merge strategy overrides per merged-graph seed. */
+/**
+ * Merge strategy overrides per merged-graph seed.
+ *
+ * @example
+ * const strategy: MergeStrategySeed = { outputs: "namespace" };
+ */
 export interface MergeStrategySeed {
   outputs?: string;
   intermediate?: string;
 }
 
-/** Descriptor for a merged-graph entry in an orchestration. */
+/**
+ * Descriptor for a merged-graph entry in an orchestration.
+ *
+ * @example
+ * const merged: MergedGraphSeed = { id: "rig", graphs: ["rig-core", "rig-face"] };
+ */
 export interface MergedGraphSeed {
   id: string;
   graphs: GraphSeed[];
   strategy?: MergeStrategySeed;
 }
 
-/** Minimal shape for orchestration descriptor JSON. */
+/**
+ * Minimal shape for orchestration descriptor JSON.
+ *
+ * @example
+ * const descriptor: PipelineDescriptor = { animations: ["simple-walk"], graphs: ["oscillator-basics"] };
+ */
 export interface PipelineDescriptor {
   description?: string;
   schedule?: string;
@@ -62,7 +92,17 @@ export interface PipelineDescriptor {
   [key: string]: unknown;
 }
 
-/** Loaded graph binding with resolved config and staging data. */
+/**
+ * Loaded graph binding with resolved config and staging data.
+ *
+ * @example
+ * const binding: OrchestrationGraphBinding = {
+ *   key: "oscillator-basics",
+ *   config: { nodes: [], edges: [] },
+ *   mirrorWrites: false,
+ *   stage: [],
+ * };
+ */
 export interface OrchestrationGraphBinding<TConfig = Record<string, unknown>> {
   key: string;
   id?: string;
@@ -71,23 +111,51 @@ export interface OrchestrationGraphBinding<TConfig = Record<string, unknown>> {
   stage: StageEntry[];
 }
 
-/** Merge strategy options for merged graphs. */
+/**
+ * Merge strategy options for merged graphs.
+ *
+ * @example
+ * const mode: MergeStrategy = "namespace";
+ */
 export type MergeStrategy = "error" | "namespace" | "blend";
 
-/** Resolved merge strategies for a merged-graph binding. */
+/**
+ * Resolved merge strategies for a merged-graph binding.
+ *
+ * @example
+ * const strategy: OrchestrationMergedGraphStrategy = { outputs: "blend", intermediate: "error" };
+ */
 export interface OrchestrationMergedGraphStrategy {
   outputs: MergeStrategy;
   intermediate: MergeStrategy;
 }
 
-/** Loaded merged-graph binding with resolved graph configs. */
+/**
+ * Loaded merged-graph binding with resolved graph configs.
+ *
+ * @example
+ * const merged: OrchestrationMergedGraphBinding = {
+ *   id: "rig",
+ *   graphs: [],
+ *   strategy: { outputs: "error", intermediate: "error" },
+ * };
+ */
 export interface OrchestrationMergedGraphBinding<TConfig = Record<string, unknown>> {
   id: string;
   graphs: Array<OrchestrationGraphBinding<TConfig>>;
   strategy: OrchestrationMergedGraphStrategy;
 }
 
-/** Loaded animation binding with resolved fixture payloads. */
+/**
+ * Loaded animation binding with resolved fixture payloads.
+ *
+ * @example
+ * const binding: OrchestrationAnimationBinding = {
+ *   key: "simple-walk",
+ *   animation: {},
+ *   setup: {},
+ * };
+ */
 export interface OrchestrationAnimationBinding<
   TAnimation = Record<string, unknown>,
   TSetup = Record<string, unknown>,
@@ -98,7 +166,12 @@ export interface OrchestrationAnimationBinding<
   setup: TSetup;
 }
 
-/** Fully loaded orchestration bundle with resolved fixture payloads. */
+/**
+ * Fully loaded orchestration bundle with resolved fixture payloads.
+ *
+ * @example
+ * const bundle = loadOrchestrationBundle("simple-orchestration");
+ */
 export interface OrchestrationBundle<
   TDescriptor extends PipelineDescriptor = PipelineDescriptor,
   TAnimation = Record<string, unknown>,
@@ -111,7 +184,12 @@ export interface OrchestrationBundle<
   initialInputs: StageEntry[];
 }
 
-/** List all orchestration fixture names in the manifest. */
+/**
+ * List all orchestration fixture names in the manifest.
+ *
+ * @example
+ * orchestrationNames(); // ["simple-orchestration", ...]
+ */
 export function orchestrationNames(): string[] {
   return Object.keys(manifest().orchestrations);
 }
@@ -119,7 +197,9 @@ export function orchestrationNames(): string[] {
 /**
  * Load an orchestration descriptor fixture as raw JSON.
  *
- * Throws if the name is not present in the manifest or the file is missing.
+ * @throws If the name is not present in the manifest or the file is missing.
+ * @example
+ * const json = orchestrationJson("simple-orchestration");
  */
 export function orchestrationJson(name: string): string {
   const entry = orchestrationEntry(name);
@@ -132,7 +212,9 @@ export function orchestrationJson(name: string): string {
 /**
  * Load and parse an orchestration descriptor fixture.
  *
- * Throws if the name is not present in the manifest or the JSON is invalid.
+ * @throws If the name is not present in the manifest or the JSON is invalid.
+ * @example
+ * const descriptor = orchestrationDescriptor("simple-orchestration");
  */
 export function orchestrationDescriptor<T = unknown>(name: string): T {
   const entry = orchestrationEntry(name);
@@ -143,7 +225,9 @@ export function orchestrationDescriptor<T = unknown>(name: string): T {
 /**
  * Resolve an orchestration descriptor path to an absolute path.
  *
- * Throws if the name is not present in the manifest.
+ * @throws If the name is not present in the manifest.
+ * @example
+ * const path = orchestrationDescriptorPath("simple-orchestration");
  */
 export function orchestrationDescriptorPath(name: string): string {
   return orchestrationPath(orchestrationEntry(name));
@@ -292,7 +376,9 @@ function loadAnimationBinding(
 /**
  * Load an orchestration fixture and resolve all animation/graph dependencies.
  *
- * Throws when the fixture is missing required animation or graph references.
+ * @throws When the fixture is missing required animation or graph references.
+ * @example
+ * const bundle = loadOrchestrationBundle("simple-orchestration");
  */
 export function loadOrchestrationBundle(
   name: string,

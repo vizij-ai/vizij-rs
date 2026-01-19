@@ -28,17 +28,32 @@ function bundledFixture(relPath: string): string {
 
 export type { FixturesManifest, NodeGraphManifestEntry, OrchestrationManifestEntry };
 
-/** Bundled root used for browser fixture paths. */
+/**
+ * Bundled root used for browser fixture paths.
+ *
+ * @example
+ * const root = fixturesRoot(); // "fixtures"
+ */
 export function fixturesRoot(): string {
   return "fixtures";
 }
 
-/** Cached fixture manifest from the embedded bundle. */
+/**
+ * Cached fixture manifest from the embedded bundle.
+ *
+ * @example
+ * const data = manifest();
+ */
 export function manifest(): FixturesManifest {
   return manifestCache;
 }
 
-/** Resolve a fixtures-relative path to a bundled "fixtures/..." path. */
+/**
+ * Resolve a fixtures-relative path to a bundled "fixtures/..." path.
+ *
+ * @example
+ * const path = resolveFixturePath("animations/simple-walk.json");
+ */
 export function resolveFixturePath(relPath: string): string {
   const normalized = normalizeRelPath(relPath);
   return `fixtures/${normalized}`;
@@ -48,6 +63,8 @@ export function resolveFixturePath(relPath: string): string {
  * Read a fixture JSON file from the embedded bundle.
  *
  * @throws If the fixture path was not bundled.
+ * @example
+ * const raw = readFixture("animations/simple-walk.json");
  */
 export function readFixture(relPath: string): string {
   return bundledFixture(relPath);
@@ -57,6 +74,8 @@ export function readFixture(relPath: string): string {
  * Load a fixture JSON file from the embedded bundle and parse it.
  *
  * @throws If the fixture path was not bundled or JSON parsing fails.
+ * @example
+ * const payload = loadFixture("animations/simple-walk.json");
  */
 export function loadFixture<T>(relPath: string): T {
   return JSON.parse(bundledFixture(relPath)) as T;
@@ -66,6 +85,8 @@ export function loadFixture<T>(relPath: string): T {
  * Resolve a named animation fixture to its manifest path.
  *
  * @throws If the animation fixture key is missing.
+ * @example
+ * const relPath = animationEntry("simple-walk");
  */
 export function animationEntry(name: string): string {
   const entry = manifestCache.animations[name];
@@ -79,6 +100,8 @@ export function animationEntry(name: string): string {
  * Resolve a named node-graph fixture to its manifest entry.
  *
  * @throws If the node-graph fixture key is missing.
+ * @example
+ * const entry = nodeGraphEntry("oscillator-basics");
  */
 export function nodeGraphEntry(name: string): NodeGraphManifestEntry {
   const entry = manifestCache["node-graphs"][name];
@@ -92,6 +115,8 @@ export function nodeGraphEntry(name: string): NodeGraphManifestEntry {
  * Resolve a named orchestration fixture to its manifest entry.
  *
  * @throws If the orchestration fixture key is missing.
+ * @example
+ * const entry = orchestrationEntry("simple-orchestration");
  */
 export function orchestrationEntry(name: string): OrchestrationManifestEntry {
   const entry = manifestCache.orchestrations[name];
@@ -101,7 +126,12 @@ export function orchestrationEntry(name: string): OrchestrationManifestEntry {
   return entry;
 }
 
-/** Resolve an orchestration manifest entry into a bundled "fixtures/..." path. */
+/**
+ * Resolve an orchestration manifest entry into a bundled "fixtures/..." path.
+ *
+ * @example
+ * const path = orchestrationPath(orchestrationEntry("simple-orchestration"));
+ */
 export function orchestrationPath(entry: OrchestrationManifestEntry): string {
   if (typeof entry === "string") {
     return resolveFixturePath(entry);

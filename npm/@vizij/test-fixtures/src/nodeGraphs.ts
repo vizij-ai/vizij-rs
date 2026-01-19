@@ -17,7 +17,12 @@ function entry(name: string): NodeGraphManifestEntry {
   return nodeGraphEntry(name);
 }
 
-/** List all node-graph fixture names in the manifest. */
+/**
+ * List all node-graph fixture names in the manifest.
+ *
+ * @example
+ * nodeGraphNames(); // ["oscillator-basics", "vector-playground", ...]
+ */
 export function nodeGraphNames(): string[] {
   return Object.keys(manifest()["node-graphs"]);
 }
@@ -25,7 +30,9 @@ export function nodeGraphNames(): string[] {
 /**
  * Load a node-graph spec fixture as raw JSON text.
  *
- * Throws if the name is not present in the manifest or the file is missing.
+ * @throws If the name is not present in the manifest or the file is missing.
+ * @example
+ * const json = nodeGraphSpecJson("oscillator-basics");
  */
 export function nodeGraphSpecJson(name: string): string {
   return readFixture(entry(name).spec);
@@ -34,7 +41,9 @@ export function nodeGraphSpecJson(name: string): string {
 /**
  * Load a node-graph spec fixture and parse it.
  *
- * Throws if the name is not present in the manifest or the JSON is invalid.
+ * @throws If the name is not present in the manifest or the JSON is invalid.
+ * @example
+ * const spec = nodeGraphSpec("oscillator-basics");
  */
 export function nodeGraphSpec<T = unknown>(name: string): T {
   return loadFixture<T>(entry(name).spec);
@@ -43,7 +52,9 @@ export function nodeGraphSpec<T = unknown>(name: string): T {
 /**
  * Resolve a node-graph spec fixture path.
  *
- * Throws if the name is not present in the manifest.
+ * @throws If the name is not present in the manifest.
+ * @example
+ * const path = nodeGraphSpecPath("oscillator-basics");
  */
 export function nodeGraphSpecPath(name: string): string {
   return resolveFixturePath(entry(name).spec);
@@ -53,6 +64,8 @@ export function nodeGraphSpecPath(name: string): string {
  * Load an optional node-graph stage fixture as raw JSON text.
  *
  * Returns null when the fixture does not define a stage entry.
+ * @example
+ * const json = nodeGraphStageJson("oscillator-basics");
  */
 export function nodeGraphStageJson(name: string): string | null {
   const stage = entry(name).stage;
@@ -63,6 +76,8 @@ export function nodeGraphStageJson(name: string): string | null {
  * Load an optional node-graph stage fixture and parse it.
  *
  * Returns null when the fixture does not define a stage entry.
+ * @example
+ * const stage = nodeGraphStage("oscillator-basics");
  */
 export function nodeGraphStage<T = unknown>(name: string): T | null {
   const stage = entry(name).stage;
@@ -73,6 +88,8 @@ export function nodeGraphStage<T = unknown>(name: string): T | null {
  * Resolve an optional node-graph stage fixture path.
  *
  * Returns null when the fixture does not define a stage entry.
+ * @example
+ * const path = nodeGraphStagePath("oscillator-basics");
  */
 export function nodeGraphStagePath(name: string): string | null {
   const stage = entry(name).stage;

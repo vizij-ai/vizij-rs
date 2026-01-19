@@ -65,3 +65,11 @@ Do NOT implement these in the current loop.
 
 - 2026-01-19: node-graph-wasm npm tests fail without local node_modules; pnpm test reports "tsc: Permission denied" in this sandbox environment.
 - 2026-01-19: @vizij/test-fixtures has no test script; skipped verification for browser JSDoc-only edits.
+- ID: R-021
+- Title: Align fixture example names in JSDoc with manifest entries
+- Type: Docs
+- Impact: Low
+- Effort: S
+- Evidence: JS helper docs use placeholder names like "simple-walk" and "simple-orchestration"; may not match manifest.
+- Next action: Verify fixture names in fixtures/manifest.json and update examples.
+- Status: Open
