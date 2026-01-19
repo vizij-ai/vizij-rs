@@ -36,3 +36,4 @@ Do NOT implement these in the current loop.
 - 2026-01-19: `bevy_vizij_graph` now has a minimal `VizijGraphPlugin` `no_run` example, but other Bevy adapters may still lack runnable snippets; consider aligning examples across Bevy crates.
 - 2026-01-19: `vizij-graph-wasm` public wasm bindings still lacked rustdoc on several methods; added summaries but consider adding minimal JS usage examples if autogen docs need them.
 - 2026-01-19: `vizij-graph-core` eval helpers still lack runnable examples for `InputSlots`/`OutputSlots` and `materialize_outputs`; consider adding minimal doctests once a stable micro-spec is defined.
+- 2026-01-19: Doc tests for `bevy_vizij_api` require avoiding `anyhow` in examples; prefer `expect`-based fallbacks since the crate has no `anyhow` dependency.

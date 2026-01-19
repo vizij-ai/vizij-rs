@@ -94,7 +94,7 @@
 - Effort: M
 - Evidence: Users need examples beyond the top-level API; Value helpers, ValueKind links, and JSON tag notes need concise coverage (merged R-011/R-012/R-013). Eval/runtime docs now mention errors but still lack examples.
 - Next action: Add short doc examples for any remaining public APIs that lack runnable snippets (likely outside animation stack). Avoid brittle doctests for fixture-heavy APIs.
-- Status: In progress (iter-07 added eval runtime + input staging examples)
+- Status: In progress (iter-08 added bevy_vizij_api doctests)
 
 ### R-011 — Add docstrings for `Value` enum variants needing clarity
 - Type: Docs

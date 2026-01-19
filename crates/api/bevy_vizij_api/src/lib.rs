@@ -14,6 +14,9 @@ use std::sync::{Arc, Mutex};
 use vizij_api_core::{TypedPath, Value, WriteBatch};
 
 /// Function signature for write setters stored in a [`WriterRegistry`].
+///
+/// Setters are invoked with the current [`World`], the canonical [`TypedPath`],
+/// and the incoming [`Value`].
 pub type SetterFn = dyn Fn(&mut World, &TypedPath, &Value) + Send + Sync + 'static;
 
 /// Registry of typed setters keyed by canonical TypedPath string.
@@ -32,8 +35,10 @@ impl WriterRegistry {
         }
     }
 
-    /// Register a setter for a specific canonical path string. If a setter already
-    /// exists for that path it will be overwritten.
+    /// Register a setter for a specific canonical path string.
+    ///
+    /// If a setter already exists for that path it will be overwritten.
+    /// Use [`TypedPath::to_string`] to obtain the canonical path.
     ///
     /// # Panics
     /// Panics if the registry mutex is poisoned.
@@ -45,8 +50,9 @@ impl WriterRegistry {
         guard.insert(path.into(), Arc::new(f));
     }
 
-    /// Try to get a setter for a canonical path string. Returns a cloned Arc pointer
-    /// to the setter if present.
+    /// Try to get a setter for a canonical path string.
+    ///
+    /// Returns a cloned `Arc` pointer to the setter if present.
     ///
     /// # Panics
     /// Panics if the registry mutex is poisoned.
@@ -56,9 +62,32 @@ impl WriterRegistry {
     }
 }
 
-/// Apply a WriteBatch to the provided Bevy `World` using the given `WriterRegistry`.
-/// For every WriteOp, we look up a setter using the WriteOp.path.to_string() key and
-/// call it. If no setter is found, the write is ignored.
+/// Apply a `WriteBatch` to the provided Bevy `World` using the given registry.
+///
+/// For every `WriteOp`, the registry is queried using `WriteOp.path.to_string()` and
+/// any matching setter is invoked. Missing setters are ignored.
+///
+/// # Examples
+/// ```no_run
+/// use bevy::prelude::{Transform, World};
+/// use bevy_vizij_api::{apply_write_batch, register_transform_setters_for_entity, WriterRegistry};
+/// use vizij_api_core::{TypedPath, Value, WriteBatch};
+///
+/// let mut world = World::new();
+/// let entity = world.spawn(Transform::default()).id();
+///
+/// let mut registry = WriterRegistry::new();
+/// register_transform_setters_for_entity(&mut registry, "robot/arm/joint3", entity);
+///
+/// let mut batch = WriteBatch::new();
+/// batch.push(vizij_api_core::WriteOp::new(
+///     TypedPath::parse("robot/arm/joint3.translation")
+///         .expect("valid typed path"),
+///     Value::Vec3([1.0, 2.0, 3.0]),
+/// ));
+///
+/// apply_write_batch(&registry, &mut world, &batch);
+/// ```
 pub fn apply_write_batch(registry: &WriterRegistry, world: &mut World, batch: &WriteBatch) {
     for op in batch.iter() {
         let key = op.path.to_string();
@@ -68,9 +97,10 @@ pub fn apply_write_batch(registry: &WriterRegistry, world: &mut World, batch: &W
     }
 }
 
-/// Convenience: register simple Transform setters for a specific entity and base path.
-/// This helper demonstrates how an application might bind a TypedPath to an entity's
-/// Transform components. It registers three setters:
+/// Convenience: register simple `Transform` setters for a specific entity and base path.
+///
+/// This helper demonstrates how an application might bind a `TypedPath` to an entity's
+/// `Transform` components. It registers three setters:
 ///   "{base_path}.translation"
 ///   "{base_path}.rotation"
 ///   "{base_path}.scale"
@@ -84,6 +114,26 @@ pub fn apply_write_batch(registry: &WriterRegistry, world: &mut World, batch: &W
 /// simple: translation/scale accept Vec3 or Vector, rotation accepts Quat or Vector.
 ///
 /// This helper ignores missing entities or `Transform` components instead of panicking.
+///
+/// # Examples
+/// ```no_run
+/// use bevy::prelude::{Transform, World};
+/// use bevy_vizij_api::{register_transform_setters_for_entity, WriterRegistry};
+/// use vizij_api_core::{TypedPath, Value, WriteBatch};
+///
+/// let mut world = World::new();
+/// let entity = world.spawn(Transform::default()).id();
+///
+/// let mut registry = WriterRegistry::new();
+/// register_transform_setters_for_entity(&mut registry, "robot/arm/joint3", entity);
+///
+/// let mut batch = WriteBatch::new();
+/// batch.push(vizij_api_core::WriteOp::new(
+///     TypedPath::parse("robot/arm/joint3.rotation")
+///         .expect("valid typed path"),
+///     Value::Quat([0.0, 0.0, 0.0, 1.0]),
+/// ));
+/// ```
 pub fn register_transform_setters_for_entity(
     registry: &mut WriterRegistry,
     base_path: &str,
