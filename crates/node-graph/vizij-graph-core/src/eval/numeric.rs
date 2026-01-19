@@ -8,6 +8,18 @@ use super::value_layout::{align_flattened, flatten_numeric};
 ///
 /// Non-numeric inputs or incompatible layouts yield a NaN-filled result using the closest
 /// compatible layout.
+///
+/// # Examples
+///
+/// ```
+/// use vizij_api_core::Value;
+/// use vizij_graph_core::eval::numeric::binary_numeric;
+///
+/// let lhs = Value::Vec3([1.0, 2.0, 3.0]);
+/// let rhs = Value::Float(1.0);
+/// let out = binary_numeric(&lhs, &rhs, |a, b| a + b);
+/// assert_eq!(out, Value::Vec3([2.0, 3.0, 4.0]));
+/// ```
 pub fn binary_numeric<F>(lhs: &Value, rhs: &Value, op: F) -> Value
 where
     F: Fn(f32, f32) -> f32 + Copy,
@@ -29,6 +41,17 @@ where
 /// Apply `op` to every component of `input`, preserving the input layout.
 ///
 /// Non-numeric inputs yield a scalar NaN.
+///
+/// # Examples
+///
+/// ```
+/// use vizij_api_core::Value;
+/// use vizij_graph_core::eval::numeric::unary_numeric;
+///
+/// let input = Value::Vec2([3.0, 4.0]);
+/// let out = unary_numeric(&input, |x| x * 2.0);
+/// assert_eq!(out, Value::Vec2([6.0, 8.0]));
+/// ```
 pub fn unary_numeric<F>(input: &Value, op: F) -> Value
 where
     F: Fn(f32) -> f32 + Copy,
@@ -45,6 +68,16 @@ where
 /// Coerce a [`Value`] to a single `f32`.
 ///
 /// This uses the same coercion logic as [`vizij_api_core::coercion::to_float`].
+///
+/// # Examples
+///
+/// ```
+/// use vizij_api_core::Value;
+/// use vizij_graph_core::eval::numeric::as_float;
+///
+/// let value = Value::Vec3([2.0, 0.0, 0.0]);
+/// assert_eq!(as_float(&value), 2.0);
+/// ```
 pub fn as_float(v: &Value) -> f32 {
     coercion::to_float(v)
 }
@@ -53,6 +86,16 @@ pub fn as_float(v: &Value) -> f32 {
 ///
 /// Text values are `true` when non-empty and numeric values are `true` when any component is
 /// non-zero.
+///
+/// # Examples
+///
+/// ```
+/// use vizij_api_core::Value;
+/// use vizij_graph_core::eval::numeric::as_bool;
+///
+/// assert!(as_bool(&Value::Text("ok".into())));
+/// assert!(!as_bool(&Value::Float(0.0)));
+/// ```
 pub fn as_bool(v: &Value) -> bool {
     match v {
         Value::Bool(b) => *b,

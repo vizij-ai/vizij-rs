@@ -39,6 +39,8 @@ pub fn compare_variadic_keys(a: &str, b: &str) -> Ordering {
 }
 
 /// Collect `operand_*` ports in stable slot order.
+///
+/// The order matches the variadic ordering in the plan cache.
 pub fn collect_operand_ports<'a>(inputs: &'a InputSlots<'a>) -> Vec<&'a PortValue> {
     inputs.variadic("operand").iter().collect()
 }
@@ -46,6 +48,17 @@ pub fn collect_operand_ports<'a>(inputs: &'a InputSlots<'a>) -> Vec<&'a PortValu
 /// Fold a variadic collection of values with the provided numeric operator.
 ///
 /// Returns `empty_fallback` when the slice is empty.
+///
+/// # Examples
+///
+/// ```
+/// use vizij_api_core::Value;
+/// use vizij_graph_core::eval::variadic::fold_numeric_variadic;
+///
+/// let values = vec![Value::Float(1.0), Value::Float(2.0), Value::Float(3.0)];
+/// let sum = fold_numeric_variadic(&values, |a, b| a + b, Value::Float(0.0));
+/// assert_eq!(sum, Value::Float(6.0));
+/// ```
 pub fn fold_numeric_variadic<F>(values: &[Value], op: F, empty_fallback: Value) -> Value
 where
     F: Fn(f32, f32) -> f32 + Copy,

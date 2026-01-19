@@ -38,7 +38,7 @@
 - Effort: L
 - Evidence: Autogen docs are less useful without concrete usage examples; added examples across animation core engine, baking helpers, and interpolation utilities.
 - Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures; revisit node-graph eval helpers if public re-exports are added (current examples are `ignore`).
-- Status: In progress (iter-17 added JS usage examples for orchestrator-wasm bindings)
+- Status: In progress (iter-18 added numeric/shape/variadic/value-layout examples in vizij-graph-core)
 
 ### R-004 — Standardize module-level docs and `//!` overviews
 - Type: Docs
@@ -94,7 +94,7 @@
 - Effort: M
 - Evidence: Users need examples beyond the top-level API; Value helpers, ValueKind links, and JSON tag notes need concise coverage (merged R-011/R-012/R-013). Eval/runtime docs now mention errors but still lack examples.
 - Next action: Add short doc examples for any remaining public APIs that lack runnable snippets (likely outside animation stack). Avoid brittle doctests for fixture-heavy APIs.
-- Status: In progress (iter-16 added Value helper and WriterRegistry examples)
+- Status: In progress (iter-18 added GraphSpec/input helpers and eval helper examples)
 
 ### R-011 — Add docstrings for `Value` enum variants needing clarity
 - Type: Docs

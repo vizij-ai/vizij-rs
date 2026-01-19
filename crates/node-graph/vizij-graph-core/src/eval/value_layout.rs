@@ -16,17 +16,49 @@ pub struct PortValue {
 
 impl PortValue {
     /// Construct a `PortValue`, inferring the [`Shape`] from the [`Value`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vizij_api_core::Value;
+    /// use vizij_graph_core::eval::PortValue;
+    ///
+    /// let port = PortValue::new(Value::Float(1.0));
+    /// assert_eq!(port.value, Value::Float(1.0));
+    /// ```
     pub fn new(value: Value) -> Self {
         let shape = infer_shape(&value);
         PortValue { value, shape }
     }
 
     /// Construct a `PortValue` with an explicit [`Shape`], bypassing inference.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vizij_api_core::{Shape, ShapeId, Value};
+    /// use vizij_graph_core::eval::PortValue;
+    ///
+    /// let shape = Shape::new(ShapeId::Vec2);
+    /// let port = PortValue::with_shape(Value::Vec2([0.0, 1.0]), shape.clone());
+    /// assert_eq!(port.shape, shape);
+    /// ```
     pub fn with_shape(value: Value, shape: Shape) -> Self {
         PortValue { value, shape }
     }
 
     /// Overwrite the cached [`Shape`] while leaving the [`Value`] untouched.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vizij_api_core::{Shape, ShapeId, Value};
+    /// use vizij_graph_core::eval::PortValue;
+    ///
+    /// let mut port = PortValue::new(Value::Float(1.0));
+    /// port.set_shape(Shape::new(ShapeId::Scalar));
+    /// assert_eq!(port.shape.id, ShapeId::Scalar);
+    /// ```
     pub fn set_shape(&mut self, shape: Shape) {
         self.shape = shape;
     }
@@ -81,6 +113,14 @@ pub struct FlatValue {
 
 impl ValueLayout {
     /// Number of scalar slots required to store this layout.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vizij_graph_core::eval::value_layout::ValueLayout;
+    ///
+    /// assert_eq!(ValueLayout::Vec3.scalar_len(), 3);
+    /// ```
     pub fn scalar_len(&self) -> usize {
         match self {
             ValueLayout::Scalar => 1,
@@ -223,6 +263,16 @@ impl ValueLayout {
     }
 
     /// Rebuild a value filled with the provided scalar across all slots.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vizij_api_core::Value;
+    /// use vizij_graph_core::eval::value_layout::ValueLayout;
+    ///
+    /// let value = ValueLayout::Vec2.fill_with(0.5);
+    /// assert_eq!(value, Value::Vec2([0.5, 0.5]));
+    /// ```
     pub fn fill_with(&self, value: f32) -> Value {
         let len = self.scalar_len();
         let data = vec![value; len];

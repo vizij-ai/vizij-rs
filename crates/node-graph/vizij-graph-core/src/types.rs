@@ -20,7 +20,8 @@ pub type Selector = Vec<SelectorSegment>;
 
 /// Supported node kinds in a [`GraphSpec`].
 ///
-/// These values map to node registry entries and JSON `type` strings.
+/// These values map to node registry entries and JSON `type` strings. See
+/// [`crate::schema::registry`] for port, parameter, and doc metadata.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeType {
@@ -398,6 +399,15 @@ impl GraphSpec {
     ///
     /// - If `version` is zero, it is set to 1.
     /// - Otherwise, the version is saturated by `saturating_add(1)` to avoid wrap.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vizij_graph_core::types::GraphSpec;
+    ///
+    /// let spec = GraphSpec::default().with_cache();
+    /// assert!(spec.version >= 1);
+    /// ```
     pub fn with_cache(mut self) -> Self {
         self.version = if self.version == 0 {
             1
@@ -413,6 +423,44 @@ impl GraphSpec {
     /// # Errors
     ///
     /// Returns errors for missing nodes or duplicate input edges.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::collections::HashMap;
+    /// use vizij_api_core::Value;
+    /// use vizij_graph_core::types::{GraphSpec, InputDefault, NodeSpec, NodeType};
+    ///
+    /// let mut input_defaults = HashMap::new();
+    /// input_defaults.insert(
+    ///     "in".to_string(),
+    ///     InputDefault {
+    ///         value: Value::Float(2.0),
+    ///         shape: None,
+    ///     },
+    /// );
+    ///
+    /// let spec = GraphSpec {
+    ///     nodes: vec![NodeSpec {
+    ///         id: "node".into(),
+    ///         kind: NodeType::Add,
+    ///         params: Default::default(),
+    ///         output_shapes: Default::default(),
+    ///         input_defaults,
+    ///     }],
+    ///     edges: Vec::new(),
+    ///     ..Default::default()
+    /// };
+    ///
+    /// let connections = spec.input_connections()?;
+    /// let conn = connections
+    ///     .get("node")
+    ///     .and_then(|inputs| inputs.get("in"))
+    ///     .and_then(|input| input.default_value.as_ref())
+    ///     .expect("default present");
+    /// assert_eq!(conn, &Value::Float(2.0));
+    /// # Ok::<(), String>(())
+    /// ```
     pub fn input_connections(
         &self,
     ) -> Result<HashMap<NodeId, HashMap<String, InputConnection>>, String> {
