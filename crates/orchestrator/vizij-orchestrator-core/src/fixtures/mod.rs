@@ -3,7 +3,7 @@
 //! These helpers load fixture JSON via `vizij-test-fixtures` and adapt it into
 //! orchestrator controller configs and expectations. They are intended for
 //! demos, tests, and docs; most helpers panic if fixture data is missing or
-//! malformed.
+//! malformed, so prefer them in tests instead of host code.
 
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -32,7 +32,8 @@ pub struct GraphFixture {
     pub spec: serde_json::Value,
     /// Subscription JSON (expects `inputs`/`outputs` arrays plus optional mirror flag).
     ///
-    /// Supports `mirrorWrites` or `mirror_writes` for compatibility.
+    /// Supports `mirrorWrites` or `mirror_writes` for compatibility with older
+    /// fixture shapes.
     #[serde(default)]
     pub subs: serde_json::Value,
     /// Whether to mirror writes into the blackboard even when outputs are filtered.
@@ -91,6 +92,14 @@ impl GraphFixture {
     /// # Panics
     /// Panics if the graph spec cannot be normalized/decoded, or if subscription
     /// paths are invalid.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use vizij_orchestrator_core::fixtures::graph_controller_config_from_fixture;
+    ///
+    /// let cfg = graph_controller_config_from_fixture("simple-gain-offset");
+    /// assert!(!cfg.id.is_empty());
+    /// ```
     pub fn controller_config(&self) -> GraphControllerConfig {
         let mut spec_value = self.spec.clone();
         normalize_graph_spec_value(&mut spec_value).expect("normalize graph spec");

@@ -36,6 +36,17 @@ pub enum Schedule {
 ///
 /// # Errors
 /// Returns an error if any controller evaluation fails.
+///
+/// # Examples
+/// ```
+/// use vizij_orchestrator_core::{Orchestrator, Schedule};
+/// use vizij_orchestrator_core::scheduler::run_single_pass;
+///
+/// let mut orchestrator = Orchestrator::new(Schedule::SinglePass);
+/// // Normally you would register controllers before running the scheduler.
+/// let frame = run_single_pass(&mut orchestrator, 1.0 / 60.0).expect("run schedule");
+/// assert!(frame.timings_ms.contains_key("total_ms"));
+/// ```
 pub fn run_single_pass(
     orchestrator: &mut crate::Orchestrator,
     dt: f32,
@@ -126,6 +137,16 @@ pub fn run_single_pass(
 ///
 /// # Errors
 /// Returns an error if any controller evaluation fails.
+///
+/// # Examples
+/// ```
+/// use vizij_orchestrator_core::{Orchestrator, Schedule};
+/// use vizij_orchestrator_core::scheduler::run_two_pass;
+///
+/// let mut orchestrator = Orchestrator::new(Schedule::TwoPass);
+/// let frame = run_two_pass(&mut orchestrator, 1.0 / 60.0).expect("run schedule");
+/// assert!(frame.timings_ms.contains_key("total_ms"));
+/// ```
 pub fn run_two_pass(
     orchestrator: &mut crate::Orchestrator,
     dt: f32,

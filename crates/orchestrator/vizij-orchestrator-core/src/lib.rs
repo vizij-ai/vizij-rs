@@ -158,6 +158,19 @@ impl Orchestrator {
     /// # Errors
     /// Returns an error when the path is invalid or the JSON payload cannot be parsed
     /// into a `vizij-api-core` value or shape.
+    ///
+    /// # Examples
+    /// ```
+    /// use serde_json::json;
+    /// use vizij_orchestrator_core::{Orchestrator, Schedule};
+    ///
+    /// let mut orchestrator = Orchestrator::new(Schedule::SinglePass);
+    /// orchestrator.set_input(
+    ///     "inputs/drive",
+    ///     json!({ "type": "float", "data": 0.5 }),
+    ///     None,
+    /// ).expect("set input");
+    /// ```
     pub fn set_input(
         &mut self,
         path: &str,

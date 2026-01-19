@@ -21,7 +21,7 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs will expose public APIs that currently lack narrative or examples
-- Next action: Continue orchestrator rustdoc audit for fixtures/scheduler and any remaining public fields; add minimal examples where feasible.
+- Next action: Continue orchestrator rustdoc audit for fixtures/scheduler and any remaining public fields; add minimal examples where feasible (examples added for blackboard, scheduler, fixtures in iter-10).
 - Status: In progress
 
 ### R-002 — Establish docstring conventions for examples, panics, safety, and errors
@@ -37,7 +37,7 @@
 - Impact: High
 - Effort: L
 - Evidence: Autogen docs are less useful without concrete usage examples; added examples in blend/coercion/json helpers this iteration.
-- Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests).
+- Next action: Add minimal orchestrator examples once fixture JSON stability is confirmed (avoid brittle doctests); keep examples to light `no_run` for fixtures.
 - Status: In progress
 
 ### R-004 — Standardize module-level docs and `//!` overviews
@@ -93,7 +93,7 @@
 - Impact: Med
 - Effort: M
 - Evidence: Users need examples beyond the top-level API; Value helpers, ValueKind links, and JSON tag notes need concise coverage (merged R-011/R-012/R-013). Eval/runtime docs now mention errors but still lack examples.
-- Next action: Add short doc examples for orchestrator fixtures/schedule helpers where practical; include wasm surface notes if they differ.
+- Next action: Add short doc examples for orchestrator fixtures/schedule helpers where practical; include wasm surface notes if they differ (added scheduler examples + fixture helper stub in iter-10).
 - Status: In progress
 
 ### R-011 — Add docstrings for `Value` enum variants needing clarity

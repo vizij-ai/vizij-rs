@@ -102,8 +102,25 @@ impl Blackboard {
     ///
     /// This overwrites any existing entry without returning a conflict log.
     ///
+    /// This is the same conversion used by `vizij-orchestrator-wasm` inputs.
+    ///
     /// # Errors
     /// Returns an error if the path is invalid or the JSON payload cannot be parsed.
+    ///
+    /// # Examples
+    /// ```
+    /// use serde_json::json;
+    /// use vizij_orchestrator_core::Blackboard;
+    ///
+    /// let mut bb = Blackboard::new();
+    /// bb.set(
+    ///     "inputs/drive".to_string(),
+    ///     json!({ "type": "float", "data": 1.0 }),
+    ///     None,
+    ///     1,
+    ///     "host".to_string(),
+    /// ).expect("set blackboard entry");
+    /// ```
     pub fn set(
         &mut self,
         path: String,
