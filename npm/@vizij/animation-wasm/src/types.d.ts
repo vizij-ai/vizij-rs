@@ -148,6 +148,7 @@ export interface Change {
 
 /** Change record including optional finite-difference derivative. */
 export interface ChangeWithDerivative extends Change {
+  /** Optional finite-difference derivative estimate. */
   derivative?: Value | null;
 }
 

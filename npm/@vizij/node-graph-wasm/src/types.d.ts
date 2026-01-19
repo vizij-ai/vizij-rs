@@ -255,28 +255,43 @@ export type ParamType = "float" | "bool" | "vec3" | "vector" | "any";
 
 /** Port spec metadata for a node signature. */
 export interface PortSpec {
-  id: string;            // canonical port id (e.g., "out", "in", "lhs", "rhs", "x", "y", "z")
+  /** Canonical port id (e.g., "out", "in", "lhs", "rhs", "x", "y", "z"). */
+  id: string;
+  /** Port type category used by the registry. */
   ty: PortType;
-  label: string;         // human-friendly label for UI
-  doc?: string;          // optional help text
-  optional?: boolean;    // missing by default
+  /** Human-friendly label suitable for UI display. */
+  label: string;
+  /** Optional help text surfaced in tooling. */
+  doc?: string;
+  /** True when the port can be omitted without errors. */
+  optional?: boolean;
 }
 
 /** Variadic input/output spec for a node signature. */
 export interface VariadicSpec {
-  id: string;            // group id for variadic inputs (e.g., "operands")
+  /** Group id for variadic inputs/outputs (e.g., "operands"). */
+  id: string;
+  /** Port type category used by the registry. */
   ty: PortType;
+  /** Human-friendly label suitable for UI display. */
   label: string;
+  /** Optional help text surfaced in tooling. */
   doc?: string;
+  /** Minimum number of ports in the variadic group. */
   min: number;
+  /** Optional maximum number of ports in the variadic group. */
   max?: number;
 }
 
 /** Param spec metadata for a node signature. */
 export interface ParamSpec {
+  /** Parameter id used in GraphSpec params. */
   id: string;
+  /** Parameter type category used by the registry. */
   ty: ParamType;
+  /** Human-friendly label suitable for UI display. */
   label: string;
+  /** Optional help text surfaced in tooling. */
   doc?: string;
   /**
    * Raw JSON default value as emitted by the Rust registry.

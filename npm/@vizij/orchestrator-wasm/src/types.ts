@@ -95,16 +95,27 @@ export interface OrchestratorFrame {
 
 /** High-level typed interface for the JS wrapper (for consumers who prefer TS types). */
 export interface OrchestratorAPI {
+  /** Register a new graph controller and return its id. */
   registerGraph(cfg: GraphRegistrationInput): string;
+  /** Register a merged graph controller and return its id. */
   registerMergedGraph(cfg: MergedGraphRegistrationConfig): string;
+  /** Register an animation controller and return its id. */
   registerAnimation(cfg: AnimationRegistrationConfig): string;
+  /** Provide a resolver that maps typed paths to host-specific keys. */
   prebind(resolver: (path: string) => string | number | null | undefined): void;
+  /** Set or update a blackboard input value. */
   setInput(path: string, value: ValueJSON, shape?: ShapeJSON): void;
+  /** Remove an input value from the blackboard. */
   removeInput(path: string): boolean;
+  /** Step all controllers and return the merged frame output. */
   step(dt: number): OrchestratorFrame;
+  /** List controller ids grouped by type. */
   listControllers(): { graphs: string[]; anims: string[] };
+  /** Remove a graph controller by id. */
   removeGraph(id: string): boolean;
+  /** Remove an animation controller by id. */
   removeAnimation(id: string): boolean;
+  /** Normalize a GraphSpec to match wasm expectations. */
   normalizeGraphSpec(spec: object | string): Promise<object>;
 }
 

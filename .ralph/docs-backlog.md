@@ -94,7 +94,7 @@
 - Effort: M
 - Evidence: JS/TS exports in `npm/@vizij/*` lack JSDoc summaries, hurting JS doc autogen.
 - Next action: Add concise JSDoc for remaining public exports in wasm wrappers and any TS declaration files that still lack summaries/examples.
-- Status: In progress (iter-01 added JSDoc for wasm-loader/value-json/test-fixtures and wasm wrapper entry points; iter-03 tightened fixtures and node-graph metadata helper docs; iter-04 added JSDoc examples for node-graph/orchestrator wasm wrappers and fixtures; iter-05 filled browser test-fixtures and orchestrator-wasm types JSDoc gaps; iter-06 added JSDoc summaries to animation-wasm + node-graph-wasm type exports; iter-07 added field-level JSDoc for orchestrator-wasm types; iter-08 added usage examples to test-fixtures JS helpers; iter-09 added field-level JSDoc for animation-wasm types and documented node-graph sample maps)
+- Status: In progress (iter-01 added JSDoc for wasm-loader/value-json/test-fixtures and wasm wrapper entry points; iter-03 tightened fixtures and node-graph metadata helper docs; iter-04 added JSDoc examples for node-graph/orchestrator wasm wrappers and fixtures; iter-05 filled browser test-fixtures and orchestrator-wasm types JSDoc gaps; iter-06 added JSDoc summaries to animation-wasm + node-graph-wasm type exports; iter-07 added field-level JSDoc for orchestrator-wasm types; iter-08 added usage examples to test-fixtures JS helpers; iter-09 added field-level JSDoc for animation-wasm types and documented node-graph sample maps; iter-10 added TS doc comments for node-graph registry specs, wasm-loader index.d.ts, orchestrator API interface, and aligned fixture example names with the manifest)
 
 ### R-010 — Add usage snippets for frequently used types and helpers
 - Type: Docs

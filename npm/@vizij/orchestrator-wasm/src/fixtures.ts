@@ -156,7 +156,7 @@ function orchestrationRelPath(name: string): string {
  *
  * @example
  * ```ts
- * const anim = await loadAnimationFixture("simple-walk");
+ * const anim = await loadAnimationFixture("pose-quat-transform");
  * ```
  */
 export async function loadAnimationFixture(name: string): Promise<AnimationSetup["animation"]> {
@@ -256,7 +256,7 @@ function asGraphSubscriptions(value: unknown): GraphSubscriptions | undefined {
  *
  * @example
  * ```ts
- * const graph = await loadNodeGraphConfig("basic");
+ * const graph = await loadNodeGraphConfig("simple-gain-offset");
  * ```
  */
 export async function loadNodeGraphConfig(name: string): Promise<GraphRegistrationConfig> {
@@ -294,7 +294,7 @@ export async function loadNodeGraphConfig(name: string): Promise<GraphRegistrati
  *
  * @example
  * ```ts
- * const graph = await loadNodeGraphSpec("basic");
+ * const graph = await loadNodeGraphSpec("simple-gain-offset");
  * ```
  */
 export async function loadNodeGraphSpec(name: string): Promise<GraphRegistrationConfig> {
@@ -320,7 +320,7 @@ export async function listOrchestrationFixtures(): Promise<string[]> {
  *
  * @example
  * ```ts
- * const desc = await loadOrchestrationDescriptor("basic");
+ * const desc = await loadOrchestrationDescriptor("scalar-ramp-pipeline");
  * ```
  */
 export async function loadOrchestrationDescriptor<T = unknown>(name: string): Promise<T> {
@@ -334,7 +334,7 @@ export async function loadOrchestrationDescriptor<T = unknown>(name: string): Pr
  *
  * @example
  * ```ts
- * const json = await loadOrchestrationJson("basic");
+ * const json = await loadOrchestrationJson("scalar-ramp-pipeline");
  * ```
  */
 export async function loadOrchestrationJson(name: string): Promise<string> {
@@ -446,7 +446,7 @@ async function loadAnimationBinding(
  *
  * @example
  * ```ts
- * const bundle = await loadOrchestrationBundle("basic");
+ * const bundle = await loadOrchestrationBundle("scalar-ramp-pipeline");
  * ```
  */
 export async function loadOrchestrationBundle(
