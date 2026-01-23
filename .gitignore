@@ -27,3 +27,5 @@ npm/@vizij/wasm-loader/node_modules/
 *.log
 .idea/
 .vscode/
+.codex/pr_13_feedback.md
+.codex/pr_13_summary.md

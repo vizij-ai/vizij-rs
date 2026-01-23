@@ -225,6 +225,7 @@ function mergeDelta(base: EvalResult, delta: EvalResult & { version?: unknown })
  * Ergonomic wrapper around wasm WasmGraph.
  * Always await init() once before constructing.
  */
+// JS wrapper around WasmGraph that handles delta merging, hot-path staging, and cache invalidation.
 export class Graph {
   private inner: any;
   private lastEvalResult: EvalResult | null = null;
@@ -246,6 +247,7 @@ export class Graph {
    * Use resetBaseline=true only when the graph structure changes.
    */
   private invalidateCachedOutputs(resetBaseline: boolean = false): void {
+    // Centralized cache invalidation so callers don't forget to reset the delta baseline.
     if (resetBaseline) {
       this.lastEvalResult = null;
       this._lastOutputVersion = 0n;

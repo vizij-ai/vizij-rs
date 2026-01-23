@@ -7,6 +7,7 @@ use vizij_orchestrator::{
 use vizij_test_fixtures::animations;
 
 fn main() -> anyhow::Result<()> {
+    // Animation example using the current stored animation fixture format.
     // Create orchestrator with single-pass schedule
     let mut orch = Orchestrator::new(Schedule::SinglePass);
 

@@ -2047,7 +2047,7 @@ fn enforce_output_shapes_slots(
     Ok(())
 }
 
-/// Materialise legacy output map for external consumers/tests.
+/// Materialize output map for external consumers/tests.
 pub fn materialize_outputs(layout: &PortLayout, slots: &[PortValue]) -> HashMap<String, PortValue> {
     let mut map = HashMap::with_capacity(layout.slots.len());
     for (idx, name) in layout.slots.iter().enumerate() {

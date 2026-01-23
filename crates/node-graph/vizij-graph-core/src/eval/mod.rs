@@ -91,6 +91,7 @@ pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), Strin
 }
 
 fn resize_and_clear(bucket: &mut Vec<PortValue>) {
+    // OutputSlots::set() grows the vector on demand, so clearing is sufficient here.
     bucket.clear();
 }
 

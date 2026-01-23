@@ -245,8 +245,11 @@ mod tests {
     }
 }
 
-/// Holds a persistent runtime so transition nodes can accumulate state across
-/// evaluations without copying it through the wasm boundary each frame.
+/// WASM-facing graph runtime with staging and output delta caches.
+///
+/// Node-local runtime state lives inside `GraphRuntime` (including per-node state),
+/// while this wrapper tracks input staging and output snapshots to avoid crossing
+/// the wasm boundary when values are unchanged.
 #[wasm_bindgen]
 pub struct WasmGraph {
     spec: GraphSpec,
@@ -517,6 +520,24 @@ impl WasmGraph {
         self.serialize_full_from_snapshot(&snapshot)
     }
 
+    fn serialize_full_with_flag(
+        &mut self,
+        snapshot: &HashMap<String, HashMap<String, PortValue>>,
+    ) -> serde_json::Value {
+        let mut obj = self.serialize_full_from_snapshot(snapshot);
+        obj.as_object_mut()
+            .expect("full snapshot is an object")
+            .insert("full".to_string(), serde_json::json!(true));
+        obj
+    }
+
+    fn refresh_snapshot_and_full(&mut self) -> serde_json::Value {
+        let snapshot = self.snapshot_outputs();
+        self.last_outputs = snapshot;
+        self.last_outputs_version = self.output_version;
+        self.serialize_full_with_flag(&self.last_outputs)
+    }
+
     fn serialize_full_from_snapshot(
         &self,
         snapshot: &HashMap<String, HashMap<String, PortValue>>,
@@ -581,29 +602,13 @@ impl WasmGraph {
         // a host still holds a previous version token. Returning an empty delta would keep the
         // host out-of-sync until the version catches back up.
         if since > self.output_version {
-            let snapshot = self.snapshot_outputs();
-            let full = self.serialize_full_from_snapshot(&snapshot);
-            self.last_outputs = snapshot;
-            self.last_outputs_version = self.output_version;
-            let mut obj = full;
-            obj.as_object_mut()
-                .expect("full snapshot is an object")
-                .insert("full".to_string(), serde_json::json!(true));
-            return obj;
+            return self.refresh_snapshot_and_full();
         }
 
         // If the caller's baseline does not match our cached snapshot, resync by returning
         // a full snapshot for the current version.
         if since != self.last_outputs_version {
-            let snapshot = self.snapshot_outputs();
-            let full = self.serialize_full_from_snapshot(&snapshot);
-            self.last_outputs = snapshot;
-            self.last_outputs_version = self.output_version;
-            let mut obj = full;
-            obj.as_object_mut()
-                .expect("full snapshot is an object")
-                .insert("full".to_string(), serde_json::json!(true));
-            return obj;
+            return self.refresh_snapshot_and_full();
         }
 
         let mut delta_nodes: HashMap<String, serde_json::Value> = HashMap::new();
@@ -670,6 +675,12 @@ impl WasmGraph {
             "writes": writes,
             "full": false,
         })
+    }
+
+    fn serialize_delta_js(&mut self, since_version: u64) -> Result<JsValue, JsValue> {
+        let out_obj = self.serialize_delta(since_version);
+        let s = serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        JSON::parse(&s)
     }
 
     #[wasm_bindgen]
@@ -976,9 +987,7 @@ impl WasmGraph {
     /// Return only outputs that changed since the provided version token.
     #[wasm_bindgen(js_name = "get_outputs_delta")]
     pub fn get_outputs_delta(&mut self, since_version: u64) -> Result<JsValue, JsValue> {
-        let out_obj = self.serialize_delta(since_version);
-        let s = serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))?;
-        JSON::parse(&s)
+        self.serialize_delta_js(since_version)
     }
 
     /// Evaluate and return only outputs that changed since the provided version token in a single crossing.
@@ -993,9 +1002,7 @@ impl WasmGraph {
         self.runtime.t = new_time;
         self.restage_cached_inputs()?;
         self.eval_internal()?;
-        let out_obj = self.serialize_delta(since_version);
-        let s = serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))?;
-        JSON::parse(&s)
+        self.serialize_delta_js(since_version)
     }
 
     /// Step forward multiple times and return only the final outputs/writes.
