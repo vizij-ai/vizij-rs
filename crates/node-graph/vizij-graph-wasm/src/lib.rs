@@ -533,9 +533,10 @@ impl WasmGraph {
 
     fn refresh_snapshot_and_full(&mut self) -> serde_json::Value {
         let snapshot = self.snapshot_outputs();
+        let full = self.serialize_full_with_flag(&snapshot);
         self.last_outputs = snapshot;
         self.last_outputs_version = self.output_version;
-        self.serialize_full_with_flag(&self.last_outputs)
+        full
     }
 
     fn serialize_full_from_snapshot(
