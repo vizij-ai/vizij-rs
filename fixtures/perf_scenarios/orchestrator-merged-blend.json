@@ -1,0 +1,31 @@
+{
+  "id": "orchestrator-merged-blend",
+  "schedule": "SinglePass",
+  "graphs": [
+    {
+      "id": "orch-g1",
+      "spec": "fixtures/perf_scenarios/graph-kitchen-025.json"
+    },
+    {
+      "id": "orch-g2",
+      "spec": "fixtures/perf_scenarios/graph-kitchen-025.json"
+    }
+  ],
+  "animations": [
+    {
+      "id": "anim-small",
+      "spec": "fixtures/perf_scenarios/animation-mixed-small.json",
+      "bind": "orch-g1"
+    },
+    {
+      "id": "anim-medium",
+      "spec": "fixtures/perf_scenarios/animation-mixed-medium.json",
+      "bind": "orch-g2"
+    }
+  ],
+  "mergeStrategy": {
+    "outputs": "namespace",
+    "intermediate": "blend"
+  },
+  "hotInputs": "all-input-nodes"
+}

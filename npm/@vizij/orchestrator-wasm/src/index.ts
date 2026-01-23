@@ -14,6 +14,7 @@ import type {
   WriteOpJSON,
   ConflictLog,
   GraphRegistrationConfig,
+  GraphReplaceConfig,
 } from "./types";
 import { toValueJSON, type ValueInput } from "@vizij/value-json";
 import {
@@ -25,6 +26,7 @@ type WasmResolver = (path: string) => string | number | null | undefined;
 
 interface WasmOrchestratorInstance {
   register_graph(cfg: GraphRegistrationConfig | string): string;
+  replace_graph(cfg: GraphReplaceConfig): void;
   register_merged_graph(cfg: MergedGraphRegistrationConfig): string;
   register_animation(cfg: AnimationRegistrationConfig): string;
   prebind(resolver: WasmResolver): void;
@@ -177,6 +179,11 @@ export {
  */
 export class Orchestrator {
   private inner: WasmOrchestratorInstance;
+  private _hotInputs?: Set<string>;
+  private _hotLastValues?: Map<string, number>;
+  private _hotEpsilon: number = 0;
+  private _debugLogging = false;
+  private _lastFrameVersion: bigint = 0n;
 
   constructor(opts?: any) {
     ensureInited();
@@ -193,6 +200,18 @@ export class Orchestrator {
    */
   registerGraph(cfg: GraphRegistrationInput): string {
     return this.inner.register_graph(cfg);
+  }
+
+  /**
+   * Replace an existing graph controller's spec/subscriptions.
+   * This is the supported way to apply structural edits at runtime.
+   *
+   * Requires { id, spec, subs? } (string form is not supported here).
+   */
+  replaceGraph(cfg: GraphReplaceConfig): void {
+    this.inner.replace_graph(cfg);
+    // Structural edits invalidate delta baselines; force next stepDelta() call to establish a new baseline.
+    this._lastFrameVersion = 0n;
   }
 
   registerMergedGraph(cfg: MergedGraphRegistrationConfig): string {
@@ -231,6 +250,75 @@ export class Orchestrator {
   }
 
   /**
+   * Declare hot inputs to enable diffed staging for scalars.
+   */
+  setHotInputs(paths: string[], opts?: { epsilon?: number }): void {
+    this._hotInputs = new Set(paths);
+    this._hotLastValues = new Map();
+    this._hotEpsilon = opts?.epsilon ?? 0;
+    if (this._debugLogging) {
+      console.debug("[orch] hot inputs registered", { count: paths.length, epsilon: this._hotEpsilon });
+    }
+  }
+
+  /**
+   * Smart staging: routes hot scalar inputs through a diff and only calls setInput when changed.
+   * Non-hot or non-numeric values always call setInput.
+   */
+  setInputsSmart(paths: string[], values: Float32Array, shapes?: (ShapeJSON | null)[]): void {
+    const hot = this._hotInputs;
+    const cache = this._hotLastValues ?? (this._hotLastValues = new Map());
+    const eps = this._hotEpsilon;
+    let hotSent = 0;
+    let coldSent = 0;
+    for (let i = 0; i < paths.length; i += 1) {
+      const p = paths[i];
+      const v = values[i];
+      const shape = shapes ? shapes[i] ?? undefined : undefined;
+      const numeric = Number.isFinite(v);
+      if (hot?.has(p) && numeric) {
+        const prev = cache.get(p);
+        const differs =
+          prev === undefined
+            ? true
+            : eps === 0
+              ? v !== prev
+              : Math.abs(v - prev) > eps;
+        if (differs) {
+          this.setInput(p, v, shape);
+          cache.set(p, v);
+          hotSent += 1;
+        }
+      } else {
+        this.setInput(p, v, shape);
+        coldSent += 1;
+      }
+    }
+    if (this._debugLogging) {
+      console.debug("[orch] setInputsSmart", { hotSent, coldSent, eps });
+    }
+  }
+
+  /**
+   * Step the orchestrator and return only changes since a version token.
+   * Pass 0 (or omit) to force a full frame and establish the baseline.
+   */
+  stepDelta(dt: number, sinceVersion?: number | bigint): OrchestratorFrame & { version: bigint } {
+    const token =
+      typeof sinceVersion === "undefined" ? this._lastFrameVersion : BigInt(sinceVersion);
+    if (typeof (this.inner as any).step_delta === "function") {
+      const res = (this.inner as any).step_delta(dt, token);
+      const parsed = typeof res === "string" ? (JSON.parse(res) as any) : res;
+      const version = BigInt(parsed?.version ?? 0);
+      this._lastFrameVersion = version;
+      return { ...parsed, version };
+    }
+    const full = this.step(dt);
+    this._lastFrameVersion = this._lastFrameVersion + 1n;
+    return { ...(full as any), version: this._lastFrameVersion };
+  }
+
+  /**
    * Step the orchestrator by dt seconds. Returns the OrchestratorFrame (JS object).
    */
   step(dt: number): OrchestratorFrame {
@@ -251,6 +339,10 @@ export class Orchestrator {
 
   removeAnimation(id: string): boolean {
     return this.inner.remove_animation(id);
+  }
+
+  setDebugLogging(enabled: boolean): void {
+    this._debugLogging = enabled;
   }
 
   /**

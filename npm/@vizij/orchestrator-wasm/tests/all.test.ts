@@ -408,6 +408,49 @@ async function testMergedGraphRegistration(): Promise<void> {
   expectNearlyEqual(doubled, 2, "merged graph doubled output");
 }
 
+async function testReplaceGraphStructuralEditResetsPlan(): Promise<void> {
+  const orch = await createOrchestrator({ schedule: "SinglePass" });
+
+  const id = orch.registerGraph({
+    id: "replace-test",
+    spec: {
+      nodes: [
+        { id: "const_one", type: "constant", params: { value: 1 } },
+        { id: "publish", type: "output", params: { path: "shared/value" } },
+      ],
+      edges: [{ from: { node_id: "const_one" }, to: { node_id: "publish", input: "in" } }],
+    },
+    subs: { outputs: ["shared/value"] },
+  });
+  assert.equal(id, "replace-test");
+
+  const frame1 = orch.step(1 / 60) as any;
+  const writes1: Array<{ path: string; value: unknown }> = frame1.merged_writes ?? [];
+  expectNearlyEqual(readScalar(writes1, "shared/value"), 1, "pre-replace value");
+
+  // Structural edit: insert multiply node constant->multiply(rhs=2)->output
+  // This must rebuild the cached plan/layout; otherwise the old layout could be reused.
+  orch.replaceGraph({
+    id: "replace-test",
+    spec: {
+      nodes: [
+        { id: "const_one", type: "constant", params: { value: 1 } },
+        { id: "mul", type: "multiply", input_defaults: { rhs: { value: 2 } } },
+        { id: "publish", type: "output", params: { path: "shared/value" } },
+      ],
+      edges: [
+        { from: { node_id: "const_one" }, to: { node_id: "mul", input: "lhs" } },
+        { from: { node_id: "mul" }, to: { node_id: "publish", input: "in" } },
+      ],
+    },
+    subs: { outputs: ["shared/value"] },
+  });
+
+  const frame2 = orch.step(1 / 60) as any;
+  const writes2: Array<{ path: string; value: unknown }> = frame2.merged_writes ?? [];
+  expectNearlyEqual(readScalar(writes2, "shared/value"), 2, "post-replace value");
+}
+
 async function testBlendPosePipeline(): Promise<void> {
   const bundle = await loadOrchestrationBundle("blend-pose-pipeline");
   const schedule =
@@ -585,6 +628,7 @@ process.env.RUST_BACKTRACE = "1";
     await testChainedSlewPipeline();
     await testChainSignSlewFixture();
     await testMergedGraphRegistration();
+    await testReplaceGraphStructuralEditResetsPlan();
     await testBlendPosePipeline();
     await testMergedFixtureBundle();
     // await testGraphDrivenAnimation();

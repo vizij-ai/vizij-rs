@@ -55,7 +55,9 @@ fn weighted_sum_vector_scalar_weight_broadcasts_and_outputs_descriptive_ports() 
             },
         ],
         edges: vec![link("vals", "ws", "values"), link("w", "ws", "weights")],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("weighted sum should evaluate");
@@ -110,7 +112,9 @@ fn weighted_sum_vector_length_mismatch_returns_nans() {
             },
         ],
         edges: vec![link("vals", "ws", "values"), link("w", "ws", "weights")],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("weighted sum should evaluate");
@@ -162,7 +166,9 @@ fn blend_weighted_average_computes_normalized_average() {
             link_with_output("ws", "total_weight", "bavg", "total_weight"),
             link_with_output("ws", "max_effective_weight", "bavg", "max_effective_weight"),
         ],
-    };
+        ..Default::default()
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("graph should evaluate");
@@ -190,7 +196,10 @@ fn blend_multiply_computes_product_of_terms() {
             },
         ],
         edges: vec![link("vals", "mult", "values"), link("w", "mult", "weights")],
-    };
+        version: 1,
+        fingerprint: 0,
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("blend multiply should evaluate");
@@ -218,7 +227,10 @@ fn blend_max_selects_value_of_highest_effective_weight() {
             },
         ],
         edges: vec![link("vals", "max", "values"), link("w", "max", "weights")],
-    };
+        version: 1,
+        fingerprint: 0,
+    }
+    .with_cache();
 
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("blend max should evaluate");
@@ -227,6 +239,33 @@ fn blend_max_selects_value_of_highest_effective_weight() {
     match &outputs.get("out").expect("out present").value {
         Value::Float(f) => assert!((*f - 1.8).abs() < 1e-6),
         other => panic!("expected float out, got {:?}", other),
+    }
+}
+
+#[test]
+fn blend_max_without_values_or_base_returns_nan() {
+    // No inputs connected; optional base should be treated as absent, yielding NaN.
+    let graph = GraphSpec {
+        nodes: vec![NodeSpec {
+            id: "max".to_string(),
+            kind: NodeType::BlendMax,
+            params: NodeParams::default(),
+            output_shapes: HashMap::new(),
+            input_defaults: HashMap::new(),
+        }],
+        edges: vec![],
+        version: 1,
+        fingerprint: 0,
+    }
+    .with_cache();
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("blend max should evaluate");
+    let outputs = rt.outputs.get("max").expect("max outputs present");
+
+    match &outputs.get("out").expect("out present").value {
+        Value::Float(f) => assert!(f.is_nan()),
+        other => panic!("expected float out NaN, got {:?}", other),
     }
 }
 
@@ -271,6 +310,7 @@ fn default_blend_matches_expected_vec3_output() {
             link("t1", "blend", "operand_1"),
             link("t2", "blend", "operand_2"),
         ],
+        ..Default::default()
     };
 
     let mut rt = GraphRuntime::default();
@@ -337,6 +377,7 @@ fn default_blend_emits_nan_value_when_weight_length_mismatch() {
             link("t2", "blend", "operand_2"),
             link("weights", "blend", "weights"),
         ],
+        ..Default::default()
     };
 
     let mut rt = GraphRuntime::default();
@@ -377,6 +418,8 @@ fn case_node_routes_based_on_case_labels_param() {
             link("c2", "case", "operand_2"),
             link("d", "case", "default"),
         ],
+        version: 1,
+        fingerprint: 0,
     };
 
     let mut rt = GraphRuntime::default();
@@ -386,5 +429,44 @@ fn case_node_routes_based_on_case_labels_param() {
     match &outputs.get("out").expect("out present").value {
         Value::Text(s) => assert_eq!(s.as_str(), "second"),
         other => panic!("expected text out, got {:?}", other),
+    }
+}
+
+#[test]
+fn case_node_without_default_emits_nan_when_no_match() {
+    let params = NodeParams {
+        case_labels: Some(vec!["a".to_string(), "b".to_string()]),
+        ..Default::default()
+    };
+
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("sel", Value::Text("z".to_string())),
+            constant_node("c1", Value::Float(1.0)),
+            constant_node("c2", Value::Float(2.0)),
+            NodeSpec {
+                id: "case".to_string(),
+                kind: NodeType::Case,
+                params,
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![
+            link("sel", "case", "selector"),
+            link("c1", "case", "operand_1"),
+            link("c2", "case", "operand_2"),
+        ],
+        version: 1,
+        fingerprint: 0,
+    };
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("case should evaluate");
+    let outputs = rt.outputs.get("case").expect("case outputs present");
+
+    match &outputs.get("out").expect("out present").value {
+        Value::Float(f) => assert!(f.is_nan()),
+        other => panic!("expected float NaN out, got {:?}", other),
     }
 }

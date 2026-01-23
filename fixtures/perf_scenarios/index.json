@@ -1,0 +1,78 @@
+{
+  "graph": [
+    {
+      "id": "graph-smoke",
+      "spec": "fixtures/node_graphs/simple-gain-offset.json",
+      "sha256": "63b8a46e709a19e1f2e2143b2ef8dbd3318b3e2503450273f53b50b95091c092",
+      "dt": 0.0166667,
+      "steps": 120,
+      "warmup": 5,
+      "samples": 15,
+      "mode": "ramp-hotpaths",
+      "paths": ["node.t", "demo/graph/gain", "demo/graph/offset"]
+    },
+    {
+      "id": "graph-defaults-only",
+      "spec": "fixtures/node_graphs/simple-gain-offset.json",
+      "sha256": "63b8a46e709a19e1f2e2143b2ef8dbd3318b3e2503450273f53b50b95091c092",
+      "dt": 0.0166667,
+      "steps": 60,
+      "warmup": 5,
+      "samples": 10,
+      "mode": "defaults-only"
+    },
+    {
+      "id": "graph-kitchen-025",
+      "spec": "fixtures/perf_scenarios/graph-kitchen-025.json",
+      "sha256": "1097201135d1647acde90c8617f6440309343f8e499074980eb026d45ff777b8",
+      "dt": 0.0166667,
+      "steps": 120,
+      "warmup": 10,
+      "samples": 12,
+      "mode": "kitchen",
+      "pathsPerBlock": ["bench/kitchen/{i}/a", "bench/kitchen/{i}/b"]
+    },
+    {
+      "id": "graph-kitchen-500",
+      "spec": "fixtures/perf_scenarios/graph-kitchen-500.json",
+      "sha256": "2d3a6213d49593bdcf8f103329133b50024cf6efdb32c2aed5f6eeba6691d753",
+      "dt": 0.0166667,
+      "steps": 30,
+      "warmup": 10,
+      "samples": 3,
+      "mode": "kitchen",
+      "pathsPerBlock": ["bench/kitchen/{i}/a", "bench/kitchen/{i}/b"]
+    }
+  ],
+  "animation": [
+    {
+      "id": "animation-mixed-small",
+      "spec": "fixtures/perf_scenarios/animation-mixed-small.json",
+      "sha256": "e83f47c09727f01b046ee485d20dae35ff6a5921a5af5fca226394dc91060d2e",
+      "dt": 0.0166667,
+      "steps": 120,
+      "warmup": 2,
+      "samples": 12
+    },
+    {
+      "id": "animation-mixed-medium",
+      "spec": "fixtures/perf_scenarios/animation-mixed-medium.json",
+      "sha256": "00564001c8fdc569c9945bbcb9b5b7d909680cb261e857c71aa4b61ad1a991cb",
+      "dt": 0.0166667,
+      "steps": 120,
+      "warmup": 2,
+      "samples": 10
+    }
+  ],
+  "orchestrator": [
+    {
+      "id": "orchestrator-merged-blend",
+      "spec": "fixtures/perf_scenarios/orchestrator-merged-blend.json",
+      "sha256": "399e43c006bf8d4e86024eb3082bd94f678bdba77369b363b235d5f0e0bd8509",
+      "dt": 0.0166667,
+      "steps": 60,
+      "warmup": 5,
+      "samples": 8
+    }
+  ]
+}

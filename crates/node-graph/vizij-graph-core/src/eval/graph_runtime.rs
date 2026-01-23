@@ -4,6 +4,7 @@ use crate::types::NodeId;
 use hashbrown::{hash_map::Entry, HashMap};
 use vizij_api_core::{Shape, TypedPath, Value, WriteBatch};
 
+use super::plan::PlanCache;
 use super::urdfik::{build_chain_from_urdf, IkKey, UrdfKinematicsState};
 use super::value_layout::{FlatValue, PortValue, ValueLayout};
 
@@ -107,14 +108,29 @@ pub struct StagedInput {
 pub struct GraphRuntime {
     pub t: f32,
     pub dt: f32,
+    /// Output map for external consumers/tests keyed by node id.
     pub outputs: HashMap<NodeId, HashMap<String, PortValue>>,
+    /// Fast per-index storage aligned to spec.nodes order (mirrors `plan.node_index`).
+    pub outputs_vec: Vec<Vec<PortValue>>,
     pub writes: WriteBatch,
     pub node_states: HashMap<NodeId, NodeRuntimeState>,
     pub staged_inputs: HashMap<TypedPath, StagedInput>,
     pub input_epoch: u64,
+    pub plan: PlanCache,
 }
 
 impl GraphRuntime {
+    /// Reset runtime state for a new spec, clearing plan and per-node caches.
+    pub fn reset_for_spec(&mut self) {
+        self.plan = PlanCache::default();
+        self.outputs.clear();
+        self.outputs_vec.clear();
+        self.writes.0.clear();
+        self.node_states.clear();
+        self.staged_inputs.clear();
+        self.input_epoch = 0;
+    }
+
     /// Advance the staging epoch. Values staged for `epoch + 1` become visible for the
     /// upcoming frame; older entries are dropped so stale data cannot leak through.
     pub fn advance_epoch(&mut self) {

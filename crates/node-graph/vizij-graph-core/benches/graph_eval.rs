@@ -131,7 +131,12 @@ fn chain_graph(length: usize) -> GraphSpec {
         prev = add_id;
     }
 
-    GraphSpec { nodes, edges }
+    GraphSpec {
+        nodes,
+        edges,
+        ..Default::default()
+    }
+    .with_cache()
 }
 
 /// Construct a “kitchen sink” block that hits many node types (excluding robotics/blend).
@@ -446,7 +451,12 @@ fn kitchen_chain(blocks: usize) -> GraphSpec {
         prev_out = Some(exit_id);
     }
 
-    GraphSpec { nodes, edges }
+    GraphSpec {
+        nodes,
+        edges,
+        ..Default::default()
+    }
+    .with_cache()
 }
 
 fn load_fixture_spec(name: &str) -> GraphSpec {
@@ -469,6 +479,36 @@ const DEFAULT_KITCHEN_SIZES: &[usize] = &[1, 50, 500];
 const DEFAULT_COLD_SAMPLES: &[usize] = &[100, 10, 10];
 const DEFAULT_AMORT_STEPS: &[u32] = &[500, 100, 100];
 const DEFAULT_AMORT_SAMPLES: &[usize] = &[100, 10, 10];
+
+fn warm_runtime(rt: &mut GraphRuntime, spec: &GraphSpec) {
+    rt.advance_epoch();
+    // First eval builds the plan cache; exclude it from timed loops.
+    evaluate_all(rt, spec).expect("graph evaluation");
+}
+
+fn bench_amortized_per_step(b: &mut criterion::Bencher, spec: &GraphSpec, steps: u32) {
+    b.iter_custom(|iters| {
+        let mut total = Duration::ZERO;
+        // Reuse a single runtime per iteration to avoid counting plan rebuilds.
+        for _ in 0..iters {
+            let mut rt = GraphRuntime {
+                dt: 1.0 / 60.0,
+                t: 0.0,
+                ..Default::default()
+            };
+            warm_runtime(&mut rt, spec);
+
+            let start = std::time::Instant::now();
+            for step in 0..steps {
+                rt.t = step as f32 * rt.dt;
+                rt.advance_epoch();
+                evaluate_all(&mut rt, spec).expect("graph evaluation");
+            }
+            total += start.elapsed() / steps;
+        }
+        total
+    });
+}
 
 fn bench_graphs(c: &mut Criterion) {
     let kitchen_sizes = parse_list("GRAPH_KITCHEN_SIZES", DEFAULT_KITCHEN_SIZES);
@@ -506,27 +546,7 @@ fn bench_graphs(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("amortized_per_step", "tiny-smoke-8"),
             &spec,
-            |b, spec| {
-                b.iter_custom(|iters| {
-                    let mut total = Duration::ZERO;
-                    for _ in 0..iters {
-                        let mut rt = GraphRuntime {
-                            dt: 1.0 / 60.0,
-                            t: 0.0,
-                            ..Default::default()
-                        };
-                        let steps = 100u32;
-                        let start = std::time::Instant::now();
-                        for step in 0..steps {
-                            rt.t = step as f32 * rt.dt;
-                            rt.advance_epoch();
-                            evaluate_all(&mut rt, black_box(spec)).expect("graph evaluation");
-                        }
-                        total += start.elapsed() / steps;
-                    }
-                    total
-                });
-            },
+            |b, spec| bench_amortized_per_step(b, black_box(spec), 100),
         );
     }
 
@@ -553,27 +573,7 @@ fn bench_graphs(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("amortized_per_step", "fixture/simple-gain-offset"),
             &spec,
-            |b, spec| {
-                b.iter_custom(|iters| {
-                    let mut total = Duration::ZERO;
-                    for _ in 0..iters {
-                        let mut rt = GraphRuntime {
-                            dt: 1.0 / 60.0,
-                            t: 0.0,
-                            ..Default::default()
-                        };
-                        let steps = 100u32;
-                        let start = std::time::Instant::now();
-                        for step in 0..steps {
-                            rt.t = step as f32 * rt.dt;
-                            rt.advance_epoch();
-                            evaluate_all(&mut rt, black_box(spec)).expect("graph evaluation");
-                        }
-                        total += start.elapsed() / steps;
-                    }
-                    total
-                });
-            },
+            |b, spec| bench_amortized_per_step(b, black_box(spec), 100),
         );
     }
 
@@ -603,26 +603,7 @@ fn bench_graphs(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("amortized_per_step", &name),
             &spec,
-            |b, spec| {
-                b.iter_custom(|iters| {
-                    let mut total = Duration::ZERO;
-                    for _ in 0..iters {
-                        let mut rt = GraphRuntime {
-                            dt: 1.0 / 60.0,
-                            t: 0.0,
-                            ..Default::default()
-                        };
-                        let start = std::time::Instant::now();
-                        for step in 0..steps {
-                            rt.t = step as f32 * rt.dt;
-                            rt.advance_epoch();
-                            evaluate_all(&mut rt, black_box(spec)).expect("graph evaluation");
-                        }
-                        total += start.elapsed() / steps;
-                    }
-                    total
-                });
-            },
+            |b, spec| bench_amortized_per_step(b, black_box(spec), steps),
         );
     }
 

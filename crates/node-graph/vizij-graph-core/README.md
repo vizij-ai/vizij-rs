@@ -111,6 +111,16 @@ for write in &result.writes {
 - Holds `t`/`dt`, per-node persistent state, staged inputs (`HashMap<TypedPath, StagedInput>`), and cached outputs.
 - `advance_epoch` bumps the staging epoch and evicts inputs not refreshed for the current frame.
 - Evaluation now updates `t`/`dt` when used via `vizij-orchestrator-core`; if you embed the runtime directly, set them yourself before calling `evaluate_all` if time-based nodes are involved.
+- **Plan cache note:** `vizij-graph-core` caches a compiled execution plan (topological order + port layouts + resolved input bindings) inside `GraphRuntime`.
+  - The plan cache is a *structural* cache. It exists to avoid repeating "planning" work when the graph layout is unchanged frame-to-frame.
+  - For best steady-state performance, call `GraphSpec::with_cache()` on load and after any *structural* edit. This seeds/bumps `spec.version` and refreshes `spec.fingerprint`, enabling O(1) cache validation in `PlanCache::ensure_versioned()`.
+  - **What counts as structural?** Anything that can change topology, port layouts, or bindings (nodes/edges, selector wiring, input defaults, and variadic port counts like `Split.sizes`).
+  - **What is not structural?** Most numeric `NodeParams` changes (e.g., `Constant.value`, `Oscillator.frequency`) affect evaluation outputs but do not change port layouts/bindings, so the cached plan remains valid.
+  - If you do mutate a `GraphSpec` in-place, you are responsible for keeping the cache key consistent: call `with_cache()` after structural edits or rebuild the runtime/spec to avoid stale layouts.
+
+#### Fingerprints and output shape hints
+
+`GraphSpec::fingerprint` is intended to track *structural* plan validity. In particular, `fingerprint_spec()` includes `NodeSpec.output_shapes` **keys** (because the presence of declared outputs affects the output port layout), but does not currently include the declared `Shape` values because they do not affect plan layout.
 
 ### Selectors
 

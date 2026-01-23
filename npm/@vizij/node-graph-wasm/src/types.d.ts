@@ -177,6 +177,19 @@ export interface EdgeSpec {
 export interface GraphSpec {
   nodes: NodeSpec[];
   edges?: EdgeSpec[];
+  /**
+   * Optional caller-managed cache version used as a *plan-validity key*.
+   *
+   * - The wasm loader auto-fills this when omitted.
+   * - It should only bump when the graph's *layout/bindings* change (structural edits), not for
+   *   ordinary param/value tweaks.
+   */
+  specVersion?: number;
+  /**
+   * Optional structural fingerprint used alongside `specVersion` as a debug/validation aid.
+   * Auto-filled alongside `specVersion` when omitted.
+   */
+  fingerprint?: number;
 }
 
 export interface PortSnapshot {

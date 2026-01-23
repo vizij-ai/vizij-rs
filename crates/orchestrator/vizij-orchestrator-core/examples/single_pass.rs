@@ -11,7 +11,7 @@ fn main() -> anyhow::Result<()> {
     // Graph controller
     let gcfg = GraphControllerConfig {
         id: "g".into(),
-        spec: GraphSpec::default(),
+        spec: GraphSpec::default().with_cache(),
         subs: Subscriptions::default(),
     };
     orch = orch.with_graph(gcfg);

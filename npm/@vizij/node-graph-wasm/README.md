@@ -32,7 +32,11 @@ This package ships the WebAssembly build of `vizij-graph-core` together with a T
 ## Key Concepts
 
 - **GraphSpec** – Declarative JSON describing nodes, parameters, and the explicit `edges` array that connects node outputs to inputs (selectors, output keys). The package normalises shorthand specs automatically.
-- **Graph Runtime** – The `Graph` class owns a `GraphRuntime`, handling `loadGraph`, `stageInput`, `setParam`, `step`, and `evalAll`.
+- **Graph Runtime** – The `Graph` class owns a `GraphRuntime`, handling `loadGraph`, `stageInput`, `setParam`, `step`, and `evalAll`. Structural parameter changes (e.g., `Split.sizes`) invalidate the wasm plan cache and the JS wrapper resets its delta baseline automatically so the next eval re-establishes a full snapshot before returning to deltas.
+- **Plan caching & invalidation** – The wasm engine caches a compiled execution plan (topological order + port layouts + input bindings) for performance.
+  - The cache is reused across frames when the graph layout is unchanged.
+  - Only *structural* edits (changes that can affect port layouts or bindings) invalidate the plan. In practice today this includes `Split.sizes`; most other param changes are non-structural and do not force a plan rebuild.
+  - `GraphSpec.specVersion` (and `fingerprint`) are treated as *plan-validity keys* (not a generic "state version"). The wrapper auto-fills them and bumps them only for structural changes, so ordinary value tweaks do not degrade steady-state performance.
 - **Staged Inputs** – Host-provided values keyed by `TypedPath`. They are latched until you replace or remove them.
 - **Evaluation Result** – `evalAll()` returns per-node port snapshots plus a `WriteBatch` of sink writes (each with Value + Shape metadata).
 - **Node Schema Registry** – `getNodeSchemas()` exposes the runtime-supported nodes, ideal for palettes/editors.
@@ -111,12 +115,22 @@ const graphSamples: Record<string, GraphSpec>;
 
 class Graph {
   constructor();
-  loadGraph(specOrJson: GraphSpec | string): void;
+  loadGraph(
+    specOrJson: GraphSpec | string,
+    opts?: { hotPaths?: string[]; epsilon?: number; autoClearDroppedHotPaths?: boolean }
+  ): void;
   unloadGraph(): void;
   stageInput(path: string, value: ValueInput, shape?: ShapeJSON, immediateEval?: boolean): void;
+  setHotPaths(paths: string[], opts?: { epsilon?: number; autoClearDroppedHotPaths?: boolean }): void;
+  stageInputs(paths: string[], values: Float32Array, shapes?: (ShapeJSON | null)[]): void; // routes through smart staging
+  stageInputsBySlotDiff(indices: Uint32Array, values: Float32Array, epsilon?: number): void;
+  clearSlot(idx: number): Promise<void>;
+  clearInput(path: string): Promise<void>;
   clearStagedInputs(): void;
   applyStagedInputs(): void;
   evalAll(): EvalResult;
+  evalAllFull(): EvalResult; // resets the delta baseline
+  getOutputsDelta(sinceVersion?: number): EvalResult & { version: number };
   setParam(nodeId: string, key: string, value: ValueInput): void;
   setTime(t: number): void;
   step(dt: number): void;
@@ -145,6 +159,20 @@ Each registry entry exposes:
 | `categories` | Optional grouping tags for UI organisation. |
 
 Types (`GraphSpec`, `EvalResult`, `ValueJSON`, `ShapeJSON`, etc.) are exported from `src/types`.
+
+> Performance guardrails:
+> - Structural param edits that change port layouts (e.g., `Split.sizes`) rebuild the plan; the wrapper drops its cached baseline and will emit a full snapshot on the next eval before returning to deltas.
+> - The `Graph` wrapper automatically picks the optimized slots + delta path; calling `inner.eval_all_js` / other legacy exports bypasses these optimizations and is slower.
+
+### Delta semantics (baseline resync)
+
+`getOutputsDelta(sinceVersion?)` is designed for long-running loops where you want to transfer only the ports that changed since a version token.
+
+- Pass `0` (or omit the argument) for the first call to establish a baseline snapshot.
+- If the caller's `sinceVersion` does not match the runtime's cached baseline (including when the wasm runtime resets versions after `loadGraph`, `clear`, or a structural edit), the runtime returns a **full snapshot** flagged with `full: true`.
+- When `full: true`, treat the payload as a replacement baseline (do not merge it with an older snapshot).
+
+The `Graph` wrapper handles baseline management automatically for the common case; this section is mainly relevant if you call low-level bindings directly.
 
 ---
 
@@ -177,12 +205,54 @@ for (const write of result.writes) {
 }
 ```
 
-Manual time control:
+### Hot-path fast staging (unified)
+
+```ts
+const graph = new Graph();
+graph.loadGraph(spec, { hotPaths: ["demo/a", "demo/b"], epsilon: 0, autoClearDroppedHotPaths: true });
+// setHotPaths is still available; loadGraph can now register the hot list for you.
+
+const paths = ["demo/a", "demo/b", "demo/rare"];
+const values = new Float32Array([1, 2, 3]);
+
+// Routes hot paths through slots (diffed after first call), others through path batch.
+graph.stageInputs(paths, values);
+const frame = graph.evalAll(); // first call returns full snapshot; subsequent calls use delta internally
+
+// Debug visibility
+graph.setDebugLogging(true);
+console.log(graph.inspectStaging());
+```
+
+> Note: The hot-path fast lane currently targets numeric scalars. Non-scalar or explicitly shaped inputs in the hot list will fall back to path staging for that call (log in debug mode). Use `clearSlot` / `clearInput` to stop replaying cached values.
+
+### Fast-path loop with deltas (slots-only eval)
+
+```ts
+let version = 0n;
+const inputs = new Float32Array(paths.length);
+const indices = graph.registerInputPaths(paths);
+graph.prepareInputSlots(indices);
+
+function tick(frame) {
+  inputs.fill(frame);
+  graph.stageInputsBySlotDiff(indices, inputs); // only sends changed slots
+  graph.setTime(frame / 60);
+  graph.step(1 / 60);
+  const delta = graph.getOutputsDelta(Number(version));
+  version = BigInt(delta.version);
+  // delta.nodes contains only changed ports when the baseline matches.
+  // When the baseline does NOT match (first call, after loadGraph, after structural edits),
+  // the runtime will return a full snapshot and the wrapper will replace its cached baseline.
+}
+```
+
+Manual time control (force a full baseline refresh when needed):
 
 ```ts
 graph.setTime(0);
 graph.step(1 / 60);
-graph.evalAll();
+graph.evalAllFull(); // resets delta baseline
 ```
 
 Staging inputs lazily:
@@ -192,6 +262,12 @@ graph.stageInput("demo/path", { vec3: [0, 1, 0] });
 graph.applyStagedInputs();
 graph.evalAll();
 ```
+
+### Performance tips
+
+- **Batch steady frames:** If inputs remain constant for N ticks, prefer `graph.evalSteps(N, dt)` to advance time and return only the final outputs/writes. This collapses N JS↔WASM calls into one. Don’t use it when you need to inject new inputs every frame.
+- **Avoid JSON for numeric streams:** For hot numeric inputs, call the underlying wasm export `graph.inner.stage_input_f32(path, float32Array)` to skip JSON encode/decode. To read numeric outputs without JSON, use `graph.inner.get_output_f32(nodeId, outputKey)` to receive a `Float32Array`. Keep the JSON/ValueJSON path for mixed or non-numeric data.
+- **One call per frame:** Even with per-frame inputs, batch all staging calls, then a single `evalAll` (or `evalSteps` when valid) per frame to minimize boundary crossings.
 
 ### Custom loader options
 

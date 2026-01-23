@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
 use vizij_api_core::{TypedPath, Value, WriteBatch};
-use vizij_graph_core::eval::{evaluate_all, GraphRuntime};
+use vizij_graph_core::eval::{evaluate_all, evaluate_all_cached, GraphRuntime};
 use vizij_graph_core::types::{GraphSpec, NodeType, Selector};
 
 use crate::blackboard::Blackboard;
@@ -132,6 +132,7 @@ impl GraphControllerConfig {
 
         for (index, cfg) in graphs.into_iter().enumerate() {
             let GraphControllerConfig { id, spec, subs } = cfg;
+            let spec = spec.with_cache();
             mirror_writes |= subs.mirror_writes;
             for tp in subs.inputs {
                 merged_input_paths.insert(tp);
@@ -743,7 +744,9 @@ impl GraphControllerConfig {
         let merged_spec = GraphSpec {
             nodes: merged_nodes,
             edges: merged_edges,
-        };
+            ..Default::default()
+        }
+        .with_cache();
 
         Ok(GraphControllerConfig {
             id: merged_id,
@@ -764,6 +767,7 @@ pub struct GraphController {
     pub spec: GraphSpec,
     pub rt: GraphRuntime,
     pub subs: Subscriptions,
+    plan_ready: bool,
 }
 
 impl GraphController {
@@ -773,7 +777,16 @@ impl GraphController {
             spec: cfg.spec,
             rt: GraphRuntime::default(),
             subs: cfg.subs,
+            plan_ready: false,
         }
+    }
+
+    pub fn replace_config(&mut self, cfg: GraphControllerConfig) {
+        // Structural edits require invalidating the cached plan. Always re-apply `with_cache()`
+        // at the boundary so versioned plan caching cannot reuse stale layouts.
+        self.spec = cfg.spec.with_cache();
+        self.subs = cfg.subs;
+        self.plan_ready = false;
     }
 
     /// Evaluate the graph given the current blackboard state and epoch.
@@ -796,7 +809,7 @@ impl GraphController {
 
         // Stage only subscribed blackboard entries into the graph runtime.
         for tp in &self.subs.inputs {
-            if let Some(entry) = bb.get(&tp.to_string()) {
+            if let Some(entry) = bb.get_tp(tp) {
                 let path = tp.clone();
                 let value = entry.value.clone();
                 let shape = entry.shape.clone();
@@ -809,7 +822,18 @@ impl GraphController {
         combined.append(std::mem::take(&mut self.rt.writes));
 
         // Call into graph evaluation
-        evaluate_all(&mut self.rt, &self.spec).map_err(|e| anyhow!("evaluate_all error: {}", e))?;
+        let res = if self.plan_ready {
+            evaluate_all_cached(&mut self.rt, &self.spec)
+        } else {
+            evaluate_all(&mut self.rt, &self.spec)
+        };
+        match res {
+            Ok(_) => self.plan_ready = true,
+            Err(e) => {
+                self.plan_ready = false;
+                return Err(anyhow!("evaluate_all error: {}", e));
+            }
+        }
 
         // Collect new writes produced during evaluation and append to combined batch.
         let new_writes: WriteBatch = std::mem::take(&mut self.rt.writes);

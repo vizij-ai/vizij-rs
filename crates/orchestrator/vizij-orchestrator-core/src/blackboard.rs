@@ -114,6 +114,11 @@ impl Blackboard {
         }
     }
 
+    /// Fetch an entry using a pre-parsed TypedPath (avoids re-parse per tick).
+    pub fn get_tp(&self, path: &TypedPath) -> Option<&BlackboardEntry> {
+        self.inner.get(path)
+    }
+
     /// Remove an entry by path string. Returns the removed entry if present.
     pub fn remove(&mut self, path: &str) -> Option<BlackboardEntry> {
         if let Ok(tp) = TypedPath::parse(path) {

@@ -32,6 +32,10 @@ This package publishes the WebAssembly build of `vizij-orchestrator-core` togeth
 
 - **Controllers** – Graph and animation controllers registered with IDs; each has its own configuration (`spec`, `subscriptions`, `setup`).
 - **Graph merging** – `registerMergedGraph` rewires compatible graph specs into a single controller so shared paths become direct edges. Conflict strategies (`error`, `namespace`, `blend`, `add`, `default-blend`) are available through `MergeStrategyOptions`, letting you average, sum, or weight competing outputs.
+- **Plan caching & invalidation** – Graph controllers internally use the same node-graph engine as `@vizij/node-graph-wasm`, including a cached execution plan (topological order + port layouts + input bindings).
+  - The orchestrator normalizes and seeds cache keys when registering graphs.
+  - Only *structural* edits (those that can affect port layouts or bindings, e.g. `Split.sizes`) require invalidating the cached plan; ordinary param/value tweaks should not force a plan rebuild.
+  - `GraphSpec.specVersion`/`fingerprint` are treated as *plan-validity keys* and are managed by the wasm/Rust layer; most consumers should omit them and let the runtime handle it.
 - **Blackboard** – Shared typed key-value store (`TypedPath`, `ValueJSON`, `ShapeJSON`) where controllers read/write.
 - **Schedule** – `SinglePass`, `TwoPass`, or future `RateDecoupled` determine evaluation order.
 - **Merged Writes** – Deterministic ordered batch of writes produced during a frame, suitable for UI or downstream consumers.
@@ -107,24 +111,32 @@ async function loadOrchestrationBundle(key: string): Promise<OrchestrationBundle
 
 ```ts
 registerGraph(cfg: GraphRegistrationInput | string): string;
+replaceGraph(cfg: { id: string; spec: GraphSpec; subs?: GraphSubscriptions }): void; // structural edits
 registerMergedGraph(cfg: MergedGraphRegistrationConfig): string; // merge multiple specs w/ conflict strategies
 registerAnimation(cfg: AnimationRegistrationConfig): string;
 exportGraph(id: string): GraphSpec; // inspect merged controller specs
 prebind(resolver: (path: string) => string | number | null | undefined): void;
 setInput(path: string, value: ValueJSON, shape?: ShapeJSON): void;
+setHotInputs(paths: string[], opts?: { epsilon?: number }): void;
+setInputsSmart(paths: string[], values: Float32Array, shapes?: (ShapeJSON | null)[]): void;
 removeInput(path: string): boolean;
+stepDelta(dtSeconds: number, sinceVersion?: number): OrchestratorFrame & { version: bigint };
 step(dtSeconds: number): OrchestratorFrame;
 listControllers(): { graphs: string[]; anims: string[] };
 removeGraph(id: string): boolean;
 removeAnimation(id: string): boolean;
 normalizeGraphSpec(spec: GraphSpec | string): Promise<GraphSpec>; // convenience passthrough
+setDebugLogging(enabled: boolean): void;
 ```
+
+> Performance note: stay on the wrapper APIs (`stepDelta`, `setInputsSmart`, `setHotInputs`). Calling `inner.step` / legacy exports skips the diffed staging + delta path and will be slower.
 
 All types (`GraphSpec`, `ValueJSON`, `OrchestratorFrame`, etc.) are exported from `src/types`.
 
 ### Registration payloads
 
 - `registerGraph({ id?, spec, subs? })` expects a canonical `GraphSpec` object. Optional `subs.inputs`/`subs.outputs` arrays accept canonical TypedPath strings; invalid paths throw descriptive errors.
+- **Structural edits**: if you change graph topology/port layouts (nodes, edges, rewires, `Split.sizes`, etc.), call `replaceGraph({ id, spec, subs? })` so the runtime can invalidate its cached execution plan. Mutating a previously-registered spec object in-place does not update the running controller until you call `replaceGraph`.
 - `registerMergedGraph({ id?, graphs: GraphConfig[], strategy? })` mirrors the single-graph shape. `strategy.outputs`/`strategy.intermediate` accept:
   - `"error"` – fail merges when conflicts occur.
   - `"namespace"` – rename colliding final outputs to `graphId/original/path`.
@@ -152,6 +164,19 @@ orchestrator.setInput("demo/input/value", { float: 1.0 });
 
 const frame = orchestrator.step(1 / 60);
 console.log(frame.merged_writes, frame.timings_ms);
+
+// Delta snapshot (first call with 0 returns full payload)
+let version = 0n;
+const deltaFrame = orchestrator.stepDelta(1 / 60, version);
+version = deltaFrame.version;
+console.log(deltaFrame.merged_writes);
+
+// Hot-path inputs with diffed staging
+orchestrator.setHotInputs(["rig/in_a", "rig/in_b"], { epsilon: 0 });
+const paths = ["rig/in_a", "rig/in_b"];
+const vals = new Float32Array([0, 0]);
+orchestrator.setInputsSmart(paths, vals); // seeds; later frames only send changed values
+orchestrator.step(1 / 60);
 
 // Merge two graph specs into a single controller (auto-link shared output/input paths)
 const mergedGraphId = orchestrator.registerMergedGraph({
@@ -195,6 +220,15 @@ const mergedGraphId = orchestrator.registerMergedGraph({
 const mergedSpec = orchestrator.exportGraph(mergedGraphId);
 console.log(mergedSpec.nodes.length, "nodes in merged graph");
 ```
+
+### Delta semantics (baseline resync)
+
+`stepDelta(dt, sinceVersion?)` is intended for long-running render loops where you want to transfer only the *changed* merged writes since a version token.
+
+- Pass `0` (or omit) for the first call to establish a baseline.
+- If `sinceVersion` does not match the orchestrator's cached baseline (including after controller registration/removal, `replaceGraph`, or other internal resets), the runtime will return a **full** delta payload to resynchronize the host. Treat that response as a replacement baseline.
+
+The wrapper tracks the latest version internally for `stepDelta()` when you omit `sinceVersion`, so most callers can just call `stepDelta(dt)` and store the returned `version` if they want manual control.
 
 Removing controllers:
 

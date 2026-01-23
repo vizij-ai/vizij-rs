@@ -55,7 +55,7 @@ fn main() -> anyhow::Result<()> {
 
     let producer_cfg = GraphControllerConfig {
         id: "producer".into(),
-        spec: producer_spec,
+        spec: producer_spec.with_cache(),
         subs: Subscriptions {
             inputs: Vec::new(),
             outputs: vec![shared_value_path.clone()],
@@ -65,7 +65,7 @@ fn main() -> anyhow::Result<()> {
 
     let consumer_cfg = GraphControllerConfig {
         id: "consumer".into(),
-        spec: consumer_spec,
+        spec: consumer_spec.with_cache(),
         subs: Subscriptions {
             inputs: vec![shared_value_path.clone()],
             outputs: vec![shared_doubled_path.clone()],

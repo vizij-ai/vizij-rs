@@ -64,7 +64,7 @@ pub struct VizijGraphPlugin;
 
 impl Plugin for VizijGraphPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(GraphResource::default())
+        app.insert_resource(GraphResource(GraphSpec::default().with_cache()))
             .insert_resource(GraphOutputs::default())
             .insert_resource(GraphTime { t: 0.0, dt: 0.0 })
             .insert_resource(GraphRuntimeResource::default())

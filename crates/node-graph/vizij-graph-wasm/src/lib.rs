@@ -1,7 +1,12 @@
 use hashbrown::HashMap;
+use js_sys::{Float32Array, Uint32Array, JSON};
+use serde_wasm_bindgen as swb;
+use vizij_api_core::shape::ShapeId;
 use vizij_api_core::{coercion, json, Shape, TypedPath, Value};
 use vizij_graph_core::types::RoundMode;
-use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, PortValue};
+use vizij_graph_core::{
+    evaluate_all, evaluate_all_cached, GraphRuntime, GraphSpec, NodeType, PortValue,
+};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -99,15 +104,209 @@ mod tests {
     fn abi_version_matches_expected() {
         assert_eq!(super::abi_version(), 2);
     }
+
+    #[test]
+    fn set_param_invalidates_plan_cache_for_structural_changes() {
+        let mut graph = WasmGraph::new();
+        let spec = r#"{
+            "nodes": [
+                { "id": "vec", "type": "constant", "params": { "value": [1, 2, 3, 4] }, "inputs": {}, "output_shapes": {} },
+                { "id": "split", "type": "split", "params": { "sizes": [2, 2] }, "inputs": {}, "output_shapes": {} }
+            ],
+            "edges": [
+                { "from": { "node_id": "vec", "output": "out" }, "to": { "node_id": "split", "input": "in" } }
+            ]
+        }"#;
+
+        graph.load_graph(spec).expect("graph loads");
+        graph.eval_all().expect("initial eval");
+
+        assert!(graph.plan_ready);
+        let split_idx = *graph
+            .runtime
+            .plan
+            .node_index
+            .get("split")
+            .expect("split present");
+        let initial_slots = graph.runtime.plan.layouts[split_idx].outputs.slots.len();
+
+        graph
+            .set_param("split", "sizes", "[1, 1, 1, 1]")
+            .expect("set_param succeeds");
+
+        assert!(
+            !graph.plan_ready,
+            "plan cache should be invalidated after structural param change"
+        );
+        assert!(
+            graph.runtime.plan.layouts.is_empty(),
+            "plan cache should be cleared"
+        );
+
+        graph.eval_all().expect("re-eval rebuilds plan");
+        assert!(graph.plan_ready);
+
+        let rebuilt_idx = *graph
+            .runtime
+            .plan
+            .node_index
+            .get("split")
+            .expect("split present");
+        let rebuilt_slots = graph.runtime.plan.layouts[rebuilt_idx].outputs.slots.len();
+
+        assert!(
+            rebuilt_slots > initial_slots,
+            "plan rebuild should reflect new Split arity"
+        );
+    }
+
+    #[test]
+    fn set_param_does_not_invalidate_plan_cache_for_non_structural_changes() {
+        let mut graph = WasmGraph::new();
+        let spec = r#"{
+            "nodes": [
+                { "id": "c", "type": "constant", "params": { "value": 1.0 }, "inputs": {}, "output_shapes": {} },
+                { "id": "out", "type": "output", "params": { "path": "demo/out" }, "inputs": {}, "output_shapes": {} }
+            ],
+            "edges": [
+                { "from": { "node_id": "c", "output": "out" }, "to": { "node_id": "out", "input": "in" } }
+            ]
+        }"#;
+
+        graph.load_graph(spec).expect("graph loads");
+        graph.eval_all().expect("initial eval");
+        assert!(graph.plan_ready, "plan should be ready after first eval");
+
+        // We can't directly read `PlanCache.fingerprint` from this crate (private field), so we
+        // use the public shape of the plan as our proxy for "cache remained intact".
+        let initial_slots = graph.runtime.plan.layouts.len();
+        assert!(initial_slots > 0, "plan layouts should be populated");
+
+        // Change a non-structural param. Constant.value affects runtime outputs but not port layout.
+        graph
+            .set_param("c", "value", "2.0")
+            .expect("set_param succeeds");
+
+        assert!(
+            graph.plan_ready,
+            "non-structural param change should not invalidate plan cache"
+        );
+        assert!(
+            !graph.runtime.plan.layouts.is_empty(),
+            "plan cache should remain populated"
+        );
+        assert_eq!(
+            graph.runtime.plan.layouts.len(),
+            initial_slots,
+            "plan layouts should remain the same for non-structural edits"
+        );
+
+        // A follow-up eval should succeed and keep the plan ready.
+        graph
+            .eval_all()
+            .expect("eval succeeds after non-structural edit");
+        assert!(graph.plan_ready);
+    }
+
+    #[test]
+    fn delta_since_greater_than_output_version_forces_full_resync() {
+        let mut graph = WasmGraph::new();
+        let spec = r#"{
+            "nodes": [
+                { "id": "c", "type": "constant", "params": { "value": 1.0 }, "inputs": {}, "output_shapes": {} },
+                { "id": "out", "type": "output", "params": { "path": "demo/out" }, "inputs": {}, "output_shapes": {} }
+            ],
+            "edges": [
+                { "from": { "node_id": "c", "output": "out" }, "to": { "node_id": "out", "input": "in" } }
+            ]
+        }"#;
+
+        graph.load_graph(spec).expect("graph loads");
+        graph.eval_all().expect("initial eval bumps version");
+
+        let version_before_reset = graph.output_version;
+        assert!(
+            version_before_reset > 0,
+            "version should advance after eval"
+        );
+
+        // Reset the runtime (and output_version) but keep an old version token.
+        graph.load_graph(spec).expect("graph reloads");
+        assert_eq!(graph.output_version, 0, "load_graph resets output_version");
+
+        // A "future" token must force a full snapshot so hosts can resync immediately.
+        let delta = graph.serialize_delta(version_before_reset);
+        assert_eq!(delta["full"], serde_json::json!(true));
+        assert_eq!(delta["version"], serde_json::json!(0));
+        assert!(
+            delta["nodes"].as_object().is_some(),
+            "full snapshot should include nodes map"
+        );
+    }
 }
 
-/// Holds a persistent runtime so transition nodes can accumulate state across
-/// evaluations without copying it through the wasm boundary each frame.
+/// WASM-facing graph runtime with staging and output delta caches.
+///
+/// Node-local runtime state lives inside `GraphRuntime` (including per-node state),
+/// while this wrapper tracks input staging and output snapshots to avoid crossing
+/// the wasm boundary when values are unchanged.
 #[wasm_bindgen]
 pub struct WasmGraph {
     spec: GraphSpec,
     t: f64,
     runtime: GraphRuntime,
+    input_paths: Vec<TypedPath>,
+    input_slots: Vec<Option<SlotStaging>>,
+    plan_ready: bool,
+    output_version: u64,
+    last_outputs: HashMap<String, HashMap<String, PortValue>>,
+    last_outputs_version: u64,
+    input_last_values: HashMap<usize, Value>,
+    input_last_shapes: HashMap<usize, Option<Shape>>,
+    input_touched: HashMap<usize, u64>,
+}
+
+#[derive(Clone)]
+struct SlotStaging {
+    path_idx: u32,
+    declared: Option<Shape>,
+}
+
+fn parse_shape_json(declared_shape_json: Option<String>) -> Result<Option<Shape>, JsValue> {
+    match declared_shape_json {
+        Some(s) => {
+            if s.trim().is_empty() {
+                Ok(None)
+            } else {
+                serde_json::from_str(&s)
+                    .map(Some)
+                    .map_err(|e| JsValue::from_str(&e.to_string()))
+            }
+        }
+        None => Ok(None),
+    }
+}
+
+fn parse_shape_js(declared: &JsValue) -> Result<Option<Shape>, JsValue> {
+    if declared.is_undefined() || declared.is_null() {
+        Ok(None)
+    } else {
+        swb::from_value(declared.clone())
+            .map(Some)
+            .map_err(|e| JsValue::from_str(&format!("invalid declared shape: {}", e)))
+    }
+}
+
+fn parse_value_js(
+    value: JsValue,
+    normalize: fn(serde_json::Value) -> serde_json::Value,
+    ctx: &str,
+) -> Result<Value, JsValue> {
+    let raw: serde_json::Value = swb::from_value(value)
+        .map_err(|e| JsValue::from_str(&format!("{ctx} parse error: {e}")))?;
+    let normalized = normalize(raw);
+    serde_json::from_value(normalized)
+        .map_err(|e| JsValue::from_str(&format!("{ctx} convert error: {e}")))
 }
 
 impl Default for WasmGraph {
@@ -129,6 +328,15 @@ impl WasmGraph {
             },
             t: 0.0,
             runtime: GraphRuntime::default(),
+            input_paths: Vec::new(),
+            input_slots: Vec::new(),
+            plan_ready: false,
+            output_version: 0,
+            last_outputs: HashMap::new(),
+            last_outputs_version: 0,
+            input_last_values: HashMap::new(),
+            input_last_shapes: HashMap::new(),
+            input_touched: HashMap::new(),
         }
     }
 
@@ -137,11 +345,21 @@ impl WasmGraph {
         let normalized = json::normalize_graph_spec_json(json_str)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         // Now deserialize into the typed GraphSpec
-        self.spec =
-            serde_json::from_value(normalized).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        self.spec = serde_json::from_value::<GraphSpec>(normalized)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?
+            .with_cache();
         self.runtime = GraphRuntime::default();
         self.runtime.t = self.t as f32;
         self.runtime.dt = 0.0;
+        self.input_paths.clear();
+        self.input_slots.clear();
+        self.plan_ready = false;
+        self.output_version = 0;
+        self.last_outputs.clear();
+        self.last_outputs_version = 0;
+        self.input_last_values.clear();
+        self.input_last_shapes.clear();
+        self.input_touched.clear();
         Ok(())
     }
 
@@ -159,52 +377,174 @@ impl WasmGraph {
         let normalized = json::normalize_value_json_staging(raw);
         let value: Value =
             serde_json::from_value(normalized).map_err(|e| JsValue::from_str(&e.to_string()))?;
-        let declared: Option<Shape> = match declared_shape_json {
-            Some(s) => {
-                if s.trim().is_empty() {
-                    None
-                } else {
-                    Some(serde_json::from_str(&s).map_err(|e| JsValue::from_str(&e.to_string()))?)
-                }
-            }
-            None => None,
-        };
+        let declared = parse_shape_json(declared_shape_json)?;
+        // Path-based staging bypasses slot cache; no diffing here.
         self.runtime.set_input(typed_path, value, declared);
         Ok(())
     }
 
-    #[wasm_bindgen]
-    pub fn set_time(&mut self, t: f64) {
-        self.t = t;
+    #[wasm_bindgen(js_name = "stage_input_value")]
+    pub fn stage_input_value(
+        &mut self,
+        path: &str,
+        value: JsValue,
+        declared_shape: JsValue,
+    ) -> Result<(), JsValue> {
+        let typed_path = TypedPath::parse(path)
+            .map_err(|e| JsValue::from_str(&format!("invalid path: {}", e)))?;
+        let value = parse_value_js(value, json::normalize_value_json_staging, "stage_input")?;
+        let declared = parse_shape_js(&declared_shape)?;
+        // Path-based staging bypasses slot cache; no diffing here.
+        self.runtime.set_input(typed_path, value, declared);
+        Ok(())
     }
 
-    #[wasm_bindgen]
-    pub fn step(&mut self, dt: f64) {
-        self.t += dt;
-    }
-
-    /// Evaluate the entire graph and return all outputs as JSON.
-    /// Returned JSON shape:
-    /// {
-    ///   "nodes": { [nodeId]: { [outputKey]: { "value": ValueJSON, "shape": ShapeJSON } } },
-    ///   "writes": [ { "path": string, "value": ValueJSON, "shape": ShapeJSON }, ... ]
-    /// }
-    #[wasm_bindgen]
-    pub fn eval_all(&mut self) -> Result<String, JsValue> {
-        let new_time = self.t as f32;
-        let mut dt = new_time - self.runtime.t;
-        if !dt.is_finite() || dt < 0.0 {
-            dt = 0.0;
+    /// Clear a staged input by path, removing it from caches and staged inputs.
+    #[wasm_bindgen(js_name = "clear_input_path")]
+    pub fn clear_input_path(&mut self, path: &str) -> Result<(), JsValue> {
+        let typed_path = TypedPath::parse(path)
+            .map_err(|e| JsValue::from_str(&format!("invalid path: {}", e)))?;
+        self.runtime.staged_inputs.remove(&typed_path);
+        // Drop slot caches if this path was registered.
+        if let Some((slot_idx, _)) = self
+            .input_paths
+            .iter()
+            .enumerate()
+            .find(|(_, p)| **p == typed_path)
+        {
+            self.input_last_values.remove(&slot_idx);
+            self.input_last_shapes.remove(&slot_idx);
+            self.input_touched.remove(&slot_idx);
         }
-        self.runtime.dt = dt;
-        self.runtime.t = new_time;
-        evaluate_all(&mut self.runtime, &self.spec).map_err(|e| JsValue::from_str(&e))?;
+        Ok(())
+    }
 
-        // Build per-node outputs JSON (for tooling) and collect WriteOps for Output nodes that have a path.
+    /// Drop the cached execution plan and delta snapshot so the next eval rebuilds layouts.
+    fn invalidate_plan_cache(&mut self) {
+        self.plan_ready = false;
+        self.runtime.plan = Default::default();
+        self.last_outputs.clear();
+        self.last_outputs_version = 0;
+        // Bump the plan-validity key (structural generation) and refresh the fingerprint.
+        // This ensures `PlanCache::ensure_versioned` will rebuild when needed without doing
+        // per-frame hashing in the steady state.
+        self.spec = std::mem::take(&mut self.spec).with_cache();
+    }
+
+    fn eval_internal(&mut self) -> Result<(), JsValue> {
+        let res = if self.plan_ready {
+            evaluate_all_cached(&mut self.runtime, &self.spec)
+        } else {
+            evaluate_all(&mut self.runtime, &self.spec)
+        };
+        match res {
+            Ok(_) => {
+                self.plan_ready = true;
+                self.output_version = self.output_version.saturating_add(1);
+                Ok(())
+            }
+            Err(e) => {
+                self.plan_ready = false;
+                Err(JsValue::from_str(&e))
+            }
+        }
+    }
+
+    /// Restage cached slots so the core sees fresh inputs each frame while JS can skip resending.
+    fn restage_cached_inputs(&mut self) -> Result<(), JsValue> {
+        let next_epoch = self.runtime.input_epoch.saturating_add(1);
+        for (slot_idx, value) in self.input_last_values.iter() {
+            let tp = self
+                .input_paths
+                .get(*slot_idx)
+                .ok_or_else(|| {
+                    JsValue::from_str("restage_cached_inputs: path index out of bounds")
+                })?
+                .clone();
+            let declared = self
+                .input_last_shapes
+                .get(slot_idx)
+                .cloned()
+                .unwrap_or(None);
+            self.runtime.set_input(tp, value.clone(), declared);
+            self.input_touched.insert(*slot_idx, next_epoch);
+        }
+        Ok(())
+    }
+
+    fn stage_cached(
+        &mut self,
+        slot_idx: usize,
+        tp: TypedPath,
+        value: Value,
+        declared: Option<Shape>,
+    ) -> Result<(), JsValue> {
+        let next_epoch = self.runtime.input_epoch.saturating_add(1);
+        if let Some(prev) = self.input_last_values.get(&slot_idx) {
+            let same_value = *prev == value;
+            let same_shape = self
+                .input_last_shapes
+                .get(&slot_idx)
+                .map(|s| s == &declared)
+                .unwrap_or(false);
+            if same_value && same_shape {
+                self.input_touched.insert(slot_idx, next_epoch);
+                return Ok(());
+            }
+        }
+        self.runtime.set_input(tp, value.clone(), declared.clone());
+        self.input_last_values.insert(slot_idx, value);
+        self.input_last_shapes.insert(slot_idx, declared);
+        self.input_touched.insert(slot_idx, next_epoch);
+        Ok(())
+    }
+
+    fn snapshot_outputs(&self) -> HashMap<String, HashMap<String, PortValue>> {
+        self.runtime
+            .outputs
+            .iter()
+            .map(|(id, ports)| {
+                let cloned = ports
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect::<HashMap<_, _>>();
+                (id.clone(), cloned)
+            })
+            .collect()
+    }
+
+    fn serialize_full(&mut self) -> serde_json::Value {
+        let snapshot = self.snapshot_outputs();
+        self.last_outputs = snapshot.clone();
+        self.last_outputs_version = self.output_version;
+        self.serialize_full_from_snapshot(&snapshot)
+    }
+
+    fn serialize_full_with_flag(
+        &mut self,
+        snapshot: &HashMap<String, HashMap<String, PortValue>>,
+    ) -> serde_json::Value {
+        let mut obj = self.serialize_full_from_snapshot(snapshot);
+        obj.as_object_mut()
+            .expect("full snapshot is an object")
+            .insert("full".to_string(), serde_json::json!(true));
+        obj
+    }
+
+    fn refresh_snapshot_and_full(&mut self) -> serde_json::Value {
+        let snapshot = self.snapshot_outputs();
+        let full = self.serialize_full_with_flag(&snapshot);
+        self.last_outputs = snapshot;
+        self.last_outputs_version = self.output_version;
+        full
+    }
+
+    fn serialize_full_from_snapshot(
+        &self,
+        snapshot: &HashMap<String, HashMap<String, PortValue>>,
+    ) -> serde_json::Value {
         let mut nodes_map: HashMap<String, serde_json::Value> = HashMap::new();
-        let mut writes: Vec<serde_json::Value> = Vec::new();
-
-        for (node_id, outputs) in self.runtime.outputs.iter() {
+        for (node_id, outputs) in snapshot.iter() {
             let outputs_json: HashMap<String, serde_json::Value> = outputs
                 .iter()
                 .map(|(key, port)| {
@@ -219,6 +559,7 @@ impl WasmGraph {
             nodes_map.insert(node_id.clone(), serde_json::to_value(outputs_json).unwrap());
         }
 
+        let mut writes: Vec<serde_json::Value> = Vec::new();
         for op in self.runtime.writes.iter() {
             let jv = json::value_to_legacy_json(&op.value);
             let shape_json = if let Some(shape) = &op.shape {
@@ -234,15 +575,456 @@ impl WasmGraph {
             }));
         }
 
-        let out_obj = serde_json::json!({
+        serde_json::json!({
+            "version": self.output_version,
             "nodes": nodes_map,
             "writes": writes,
-        });
-
-        Ok(serde_json::to_string(&out_obj).unwrap())
+        })
     }
 
-    /// Set a param on a node (e.g., key="value" with float/bool/vec3 JSON)
+    fn serialize_delta(&mut self, since: u64) -> serde_json::Value {
+        // Fast path: caller is exactly up-to-date.
+        if since == self.output_version {
+            let snapshot = self.snapshot_outputs();
+            self.last_outputs = snapshot;
+            self.last_outputs_version = self.output_version;
+            return serde_json::json!({
+                "version": self.output_version,
+                "nodes": {},
+                "writes": [],
+                "full": false,
+            });
+        }
+
+        // If the caller's token is "from the future" relative to our current version, treat it
+        // as a baseline mismatch and force a full resync snapshot.
+        //
+        // This can happen when the runtime resets `output_version` (e.g., after `load_graph`) but
+        // a host still holds a previous version token. Returning an empty delta would keep the
+        // host out-of-sync until the version catches back up.
+        if since > self.output_version {
+            return self.refresh_snapshot_and_full();
+        }
+
+        // If the caller's baseline does not match our cached snapshot, resync by returning
+        // a full snapshot for the current version.
+        if since != self.last_outputs_version {
+            return self.refresh_snapshot_and_full();
+        }
+
+        let mut delta_nodes: HashMap<String, serde_json::Value> = HashMap::new();
+
+        for (node_id, outputs) in self.runtime.outputs.iter() {
+            let mut changed_ports: HashMap<String, serde_json::Value> = HashMap::new();
+            let prev_node = self.last_outputs.get(node_id);
+            for (key, port) in outputs {
+                let changed = match prev_node.and_then(|m| m.get(key)) {
+                    Some(prev) => prev.value != port.value || prev.shape != port.shape,
+                    None => true,
+                };
+                if changed {
+                    let value_json = json::value_to_legacy_json(&port.value);
+                    let shape_json = serde_json::to_value(&port.shape).unwrap();
+                    changed_ports.insert(
+                        key.clone(),
+                        serde_json::json!({ "value": value_json, "shape": shape_json }),
+                    );
+                }
+            }
+
+            if let Some(prev) = prev_node {
+                for key in prev.keys() {
+                    if !outputs.contains_key(key) {
+                        changed_ports.insert(
+                            key.clone(),
+                            serde_json::json!({ "value": serde_json::Value::Null, "shape": serde_json::Value::Null }),
+                        );
+                    }
+                }
+            }
+
+            if !changed_ports.is_empty() {
+                delta_nodes.insert(
+                    node_id.clone(),
+                    serde_json::to_value(changed_ports).unwrap(),
+                );
+            }
+        }
+
+        let mut writes: Vec<serde_json::Value> = Vec::new();
+        for op in self.runtime.writes.iter() {
+            let jv = json::value_to_legacy_json(&op.value);
+            let shape_json = if let Some(shape) = &op.shape {
+                serde_json::to_value(shape).unwrap()
+            } else {
+                let inferred_shape = PortValue::new(op.value.clone()).shape;
+                serde_json::to_value(&inferred_shape).unwrap()
+            };
+            writes.push(serde_json::json!({
+                "path": op.path.to_string(),
+                "value": jv,
+                "shape": shape_json
+            }));
+        }
+
+        self.last_outputs = self.snapshot_outputs();
+        self.last_outputs_version = self.output_version;
+
+        serde_json::json!({
+            "version": self.output_version,
+            "nodes": delta_nodes,
+            "writes": writes,
+            "full": false,
+        })
+    }
+
+    fn serialize_delta_js(&mut self, since_version: u64) -> Result<JsValue, JsValue> {
+        let out_obj = self.serialize_delta(since_version);
+        let s = serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        JSON::parse(&s)
+    }
+
+    #[wasm_bindgen]
+    pub fn set_time(&mut self, t: f64) {
+        self.t = t;
+    }
+
+    #[wasm_bindgen]
+    pub fn step(&mut self, dt: f64) {
+        self.t += dt;
+    }
+
+    /// Stage a float32 vector without JSON, using a shared buffer view.
+    #[wasm_bindgen(js_name = "stage_input_f32")]
+    pub fn stage_input_f32(&mut self, path: &str, data: &Float32Array) -> Result<(), JsValue> {
+        let typed_path = TypedPath::parse(path)
+            .map_err(|e| JsValue::from_str(&format!("invalid path: {}", e)))?;
+        let mut buf = vec![0.0f32; data.length() as usize];
+        data.copy_to(&mut buf);
+        let value = Value::Vector(buf);
+        let declared = Some(Shape::new(ShapeId::Vector { len: None }));
+        // Path-based staging bypasses slot cache; no diffing here.
+        self.runtime.set_input(typed_path, value, declared);
+        Ok(())
+    }
+
+    /// Batch-stage many scalar/vector inputs in one call (paths[i] -> values[i]).
+    #[wasm_bindgen(js_name = "stage_inputs_batch")]
+    pub fn stage_inputs_batch(
+        &mut self,
+        paths: JsValue,
+        values: &Float32Array,
+    ) -> Result<(), JsValue> {
+        let paths: Vec<String> = swb::from_value(paths)
+            .map_err(|e| JsValue::from_str(&format!("stage_inputs_batch paths: {}", e)))?;
+        if paths.len() != values.length() as usize {
+            return Err(JsValue::from_str(
+                "stage_inputs_batch: paths and values length mismatch",
+            ));
+        }
+        for (i, path) in paths.iter().enumerate() {
+            let tp = TypedPath::parse(path)
+                .map_err(|e| JsValue::from_str(&format!("invalid path '{}': {}", path, e)))?;
+            let val = values.get_index(i as u32);
+            let value = Value::Float(val);
+            let declared = Some(Shape::new(ShapeId::Scalar));
+            // Batch by path bypasses slot cache; no diffing here.
+            self.runtime.set_input(tp, value, declared);
+        }
+        Ok(())
+    }
+
+    /// Register paths once and reuse their indices for faster staging.
+    #[wasm_bindgen(js_name = "register_input_paths")]
+    pub fn register_input_paths(&mut self, paths: JsValue) -> Result<Uint32Array, JsValue> {
+        let new_paths: Vec<String> = swb::from_value(paths)
+            .map_err(|e| JsValue::from_str(&format!("register_input_paths: {}", e)))?;
+        let mut indices = Vec::with_capacity(new_paths.len());
+        for p in new_paths {
+            let tp = TypedPath::parse(&p)
+                .map_err(|e| JsValue::from_str(&format!("invalid path '{}': {}", p, e)))?;
+            let idx = self.input_paths.len() as u32;
+            self.input_paths.push(tp);
+            self.input_slots.push(None);
+            indices.push(idx);
+        }
+        Ok(Uint32Array::from(indices.as_slice()))
+    }
+
+    /// Stage inputs by index using previously registered paths.
+    #[wasm_bindgen(js_name = "stage_inputs_indices")]
+    pub fn stage_inputs_indices(
+        &mut self,
+        indices: &Uint32Array,
+        values: &Float32Array,
+    ) -> Result<(), JsValue> {
+        let len = indices.length();
+        if len != values.length() {
+            return Err(JsValue::from_str(
+                "stage_inputs_indices: indices and values length mismatch",
+            ));
+        }
+        let mut idx_buf = vec![0u32; len as usize];
+        indices.copy_to(&mut idx_buf);
+        for (i, idx) in idx_buf.iter().enumerate() {
+            let tp = self
+                .input_paths
+                .get(*idx as usize)
+                .ok_or_else(|| JsValue::from_str("stage_inputs_indices: index out of bounds"))?;
+            let val = values.get_index(i as u32);
+            let value = Value::Float(val);
+            let declared = Some(Shape::new(ShapeId::Scalar));
+            // Use path index as slot key for caching.
+            self.stage_cached(*idx as usize, tp.clone(), value, declared)?;
+        }
+        Ok(())
+    }
+
+    /// Pre-allocate slots with declared shapes to enable slot staging.
+    #[wasm_bindgen(js_name = "prepare_input_slots")]
+    pub fn prepare_input_slots(
+        &mut self,
+        indices: &Uint32Array,
+        declared: JsValue,
+    ) -> Result<(), JsValue> {
+        let decls: Vec<Option<Shape>> = swb::from_value(declared)
+            .map_err(|e| JsValue::from_str(&format!("prepare_input_slots declared: {}", e)))?;
+        if indices.length() as usize != decls.len() {
+            return Err(JsValue::from_str(
+                "prepare_input_slots: indices and declared length mismatch",
+            ));
+        }
+        let mut idx_buf = vec![0u32; indices.length() as usize];
+        indices.copy_to(&mut idx_buf);
+        for (i, idx) in idx_buf.iter().enumerate() {
+            let slot = self
+                .input_slots
+                .get_mut(*idx as usize)
+                .ok_or_else(|| JsValue::from_str("prepare_input_slots: index out of bounds"))?;
+            *slot = Some(SlotStaging {
+                path_idx: *idx,
+                declared: decls[i].clone(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Stage inputs by pre-prepared slots (no path parse, reuse declared).
+    #[wasm_bindgen(js_name = "stage_inputs_slots")]
+    pub fn stage_inputs_slots(
+        &mut self,
+        indices: &Uint32Array,
+        values: &Float32Array,
+    ) -> Result<(), JsValue> {
+        let len = indices.length();
+        if len != values.length() {
+            return Err(JsValue::from_str(
+                "stage_inputs_slots: indices and values length mismatch",
+            ));
+        }
+        let mut idx_buf = vec![0u32; len as usize];
+        indices.copy_to(&mut idx_buf);
+        for (i, idx) in idx_buf.iter().enumerate() {
+            let slot = self
+                .input_slots
+                .get(*idx as usize)
+                .and_then(|s| s.as_ref())
+                .ok_or_else(|| JsValue::from_str("stage_inputs_slots: slot not prepared"))?;
+            let tp = self
+                .input_paths
+                .get(slot.path_idx as usize)
+                .ok_or_else(|| JsValue::from_str("stage_inputs_slots: path index out of bounds"))?;
+            let val = values.get_index(i as u32);
+            let value = Value::Float(val);
+            self.stage_cached(
+                slot.path_idx as usize,
+                tp.clone(),
+                value,
+                slot.declared.clone(),
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Clear a staged input by slot index (registered path).
+    #[wasm_bindgen(js_name = "clear_input_slot")]
+    pub fn clear_input_slot(&mut self, slot_idx: u32) -> Result<(), JsValue> {
+        let idx = slot_idx as usize;
+        let tp = self
+            .input_paths
+            .get(idx)
+            .ok_or_else(|| JsValue::from_str("clear_input_slot: slot index out of bounds"))?
+            .clone();
+        self.runtime.staged_inputs.remove(&tp);
+        self.input_last_values.remove(&idx);
+        self.input_last_shapes.remove(&idx);
+        self.input_touched.remove(&idx);
+        Ok(())
+    }
+
+    /// Fetch a float/vec/array output directly as Float32Array (if numeric).
+    #[wasm_bindgen(js_name = "get_output_f32")]
+    pub fn get_output_f32(&self, node_id: &str, output_key: &str) -> Option<Float32Array> {
+        let port = self.runtime.outputs.get(node_id)?.get(output_key)?;
+        match &port.value {
+            Value::Float(f) => Some(Float32Array::from(&[*f][..])),
+            Value::Vector(v) => Some(Float32Array::from(v.as_slice())),
+            Value::Vec2(arr) => Some(Float32Array::from(arr.as_slice())),
+            Value::Vec3(arr) => Some(Float32Array::from(arr.as_slice())),
+            Value::Vec4(arr) => Some(Float32Array::from(arr.as_slice())),
+            Value::Quat(arr) => Some(Float32Array::from(arr.as_slice())),
+            Value::Transform {
+                translation,
+                rotation,
+                scale,
+            } => {
+                let mut tmp = Vec::with_capacity(10);
+                tmp.extend_from_slice(translation);
+                tmp.extend_from_slice(rotation);
+                tmp.extend_from_slice(scale);
+                Some(Float32Array::from(tmp.as_slice()))
+            }
+            _ => None,
+        }
+    }
+
+    /// Batch fetch the default "out" port for many nodes as a Float32Array (scalars only; non-scalars -> NaN).
+    #[wasm_bindgen(js_name = "get_outputs_batch")]
+    pub fn get_outputs_batch(&self, nodes: JsValue) -> Result<Float32Array, JsValue> {
+        let ids: Vec<String> = swb::from_value(nodes)
+            .map_err(|e| JsValue::from_str(&format!("get_outputs_batch nodes: {}", e)))?;
+        let mut out = Vec::with_capacity(ids.len());
+        for id in ids {
+            if let Some(port) = self.runtime.outputs.get(&id).and_then(|m| m.get("out")) {
+                match &port.value {
+                    Value::Float(f) => out.push(*f),
+                    Value::Vector(v) if !v.is_empty() => out.push(v[0]),
+                    Value::Vec2(v) => out.push(v[0]),
+                    Value::Vec3(v) => out.push(v[0]),
+                    Value::Vec4(v) => out.push(v[0]),
+                    Value::Quat(v) => out.push(v[0]),
+                    Value::Transform { translation, .. } => out.push(translation[0]),
+                    _ => out.push(f32::NAN),
+                }
+            } else {
+                out.push(f32::NAN);
+            }
+        }
+        Ok(Float32Array::from(out.as_slice()))
+    }
+
+    /// Internal helper: run multiple steps and return the final frame outputs.
+    fn eval_steps_json(&mut self, steps: u32, dt: f64) -> Result<serde_json::Value, JsValue> {
+        if !dt.is_finite() || dt < 0.0 {
+            return Err(JsValue::from_str(
+                "eval_steps: dt must be finite and non-negative",
+            ));
+        }
+        let iterations = steps.max(1);
+        let mut last = None;
+        for _ in 0..iterations {
+            self.step(dt);
+            last = Some(self.eval_all_json()?);
+        }
+        last.ok_or_else(|| JsValue::from_str("eval_steps: no steps executed"))
+    }
+
+    fn eval_all_json(&mut self) -> Result<serde_json::Value, JsValue> {
+        let new_time = self.t as f32;
+        let mut dt = new_time - self.runtime.t;
+        if !dt.is_finite() || dt < 0.0 {
+            dt = 0.0;
+        }
+        self.runtime.dt = dt;
+        self.runtime.t = new_time;
+        self.restage_cached_inputs()?;
+        self.eval_internal()?;
+        Ok(self.serialize_full())
+    }
+
+    /// Evaluate the entire graph and return a JS object (avoids JSON stringify/parse).
+    #[wasm_bindgen(js_name = "eval_all_js")]
+    pub fn eval_all_js(&mut self) -> Result<JsValue, JsValue> {
+        let out_obj = self.eval_all_json()?;
+        let s = serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        JSON::parse(&s)
+    }
+
+    /// Evaluate the entire graph and return all outputs as JSON.
+    /// Returned JSON shape:
+    /// {
+    ///   "nodes": { [nodeId]: { [outputKey]: { "value": ValueJSON, "shape": ShapeJSON } } },
+    ///   "writes": [ { "path": string, "value": ValueJSON, "shape": ShapeJSON }, ... ]
+    /// }
+    #[wasm_bindgen]
+    pub fn eval_all(&mut self) -> Result<String, JsValue> {
+        let out_obj = self.eval_all_json()?;
+        serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    /// Evaluate without serializing to JSON; returns a monotonic output version.
+    #[wasm_bindgen(js_name = "eval_all_slots")]
+    pub fn eval_all_slots(&mut self) -> Result<u64, JsValue> {
+        let new_time = self.t as f32;
+        let mut dt = new_time - self.runtime.t;
+        if !dt.is_finite() || dt < 0.0 {
+            dt = 0.0;
+        }
+        self.runtime.dt = dt;
+        self.runtime.t = new_time;
+        self.restage_cached_inputs()?;
+        self.eval_internal()?;
+        Ok(self.output_version)
+    }
+
+    /// Return a full snapshot of outputs/writes (JSON) without re-evaluating.
+    #[wasm_bindgen(js_name = "get_outputs_full")]
+    pub fn get_outputs_full(&mut self) -> Result<JsValue, JsValue> {
+        let out_obj = self.serialize_full();
+        let s = serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        JSON::parse(&s)
+    }
+
+    /// Return only outputs that changed since the provided version token.
+    #[wasm_bindgen(js_name = "get_outputs_delta")]
+    pub fn get_outputs_delta(&mut self, since_version: u64) -> Result<JsValue, JsValue> {
+        self.serialize_delta_js(since_version)
+    }
+
+    /// Evaluate and return only outputs that changed since the provided version token in a single crossing.
+    #[wasm_bindgen(js_name = "eval_all_slots_delta")]
+    pub fn eval_all_slots_delta(&mut self, since_version: u64) -> Result<JsValue, JsValue> {
+        let new_time = self.t as f32;
+        let mut dt = new_time - self.runtime.t;
+        if !dt.is_finite() || dt < 0.0 {
+            dt = 0.0;
+        }
+        self.runtime.dt = dt;
+        self.runtime.t = new_time;
+        self.restage_cached_inputs()?;
+        self.eval_internal()?;
+        self.serialize_delta_js(since_version)
+    }
+
+    /// Step forward multiple times and return only the final outputs/writes.
+    /// Useful for amortizing JS/WASM boundary cost when ticking many frames.
+    #[wasm_bindgen(js_name = "eval_steps_js")]
+    pub fn eval_steps_js(&mut self, steps: u32, dt: f64) -> Result<JsValue, JsValue> {
+        let out_obj = self.eval_steps_json(steps, dt)?;
+        let s = serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        JSON::parse(&s)
+    }
+
+    #[wasm_bindgen(js_name = "eval_steps")]
+    pub fn eval_steps(&mut self, steps: u32, dt: f64) -> Result<String, JsValue> {
+        let out_obj = self.eval_steps_json(steps, dt)?;
+        serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    /// Set a param on a node (e.g., key="value" with float/bool/vec3 JSON).
+    ///
+    /// Structural parameter edits (e.g., adjusting Split sizes) invalidate the
+    /// cached execution plan so the next evaluation rebuilds layouts safely.
     #[wasm_bindgen]
     pub fn set_param(&mut self, node_id: &str, key: &str, json_value: &str) -> Result<(), JsValue> {
         let raw: serde_json::Value =
@@ -250,7 +1032,21 @@ impl WasmGraph {
         let normalized = json::normalize_value_json(raw);
         let val: Value =
             serde_json::from_value(normalized).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        self.set_param_inner(node_id, key, val)
+    }
 
+    #[wasm_bindgen(js_name = "set_param_value")]
+    pub fn set_param_value(
+        &mut self,
+        node_id: &str,
+        key: &str,
+        value: JsValue,
+    ) -> Result<(), JsValue> {
+        let val = parse_value_js(value, json::normalize_value_json, "set_param")?;
+        self.set_param_inner(node_id, key, val)
+    }
+
+    fn set_param_inner(&mut self, node_id: &str, key: &str, val: Value) -> Result<(), JsValue> {
         fn expect_float(node_id: &str, key: &str, v: &Value) -> Result<f32, JsValue> {
             if let Value::Float(f) = v {
                 Ok(*f)
@@ -376,6 +1172,12 @@ impl WasmGraph {
         }
 
         if let Some(node) = self.spec.nodes.iter_mut().find(|n| n.id == node_id) {
+            // Structural params are those that can change the cached plan's port layouts or
+            // bindings. Today, the only known structural mutation via `set_param` is changing
+            // `Split.sizes`, which affects the number of variadic outputs and therefore slot
+            // indices.
+            let structural_change = matches!((&node.kind, key), (NodeType::Split, "sizes"));
+
             match key {
                 "value" => {
                     node.params.value = Some(val);
@@ -463,6 +1265,19 @@ impl WasmGraph {
                         node_id, key
                     )))
                 }
+            }
+            if structural_change {
+                // Structural edits can change port layouts and bindings (e.g. Split.sizes affects
+                // how many variadic outputs exist), so we must drop the cached plan.
+                self.invalidate_plan_cache();
+            } else {
+                // Non-structural params only affect runtime evaluation, not the cached layouts or
+                // input bindings. Keep the plan cache valid so we can continue using
+                // `evaluate_all_cached` for the steady-state fast path.
+                //
+                // NOTE: We intentionally do *not* bump `GraphSpec.version` here, because in this
+                // stack `version` acts as a plan-validity key. Bumping it on non-structural edits
+                // would force unnecessary plan rebuilds.
             }
             Ok(())
         } else {
