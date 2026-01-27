@@ -15,6 +15,7 @@ pub struct DiagnosticsCfg {
 }
 
 impl Default for DiagnosticsCfg {
+    /// Creates a new instance.
     fn default() -> Self {
         Self { enabled: true }
     }

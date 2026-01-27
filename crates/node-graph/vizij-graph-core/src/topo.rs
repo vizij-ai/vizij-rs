@@ -115,6 +115,7 @@ mod tests {
     };
     use vizij_api_core::Value;
     #[test]
+    /// Internal helper for `simple_topo`.
     fn simple_topo() {
         let g = GraphSpec {
             nodes: vec![

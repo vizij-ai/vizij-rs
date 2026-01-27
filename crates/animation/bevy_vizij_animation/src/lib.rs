@@ -39,6 +39,7 @@ pub struct VizijEngine(pub Engine);
 pub struct VizijAnimationPlugin;
 
 impl Plugin for VizijAnimationPlugin {
+    /// Builds internal state.
     fn build(&self, app: &mut App) {
         app
             // Core engine resource

@@ -330,6 +330,7 @@ pub struct GraphSpec {
     pub fingerprint: u64,
 }
 
+/// Checks zero.
 pub(crate) fn is_zero(v: &u64) -> bool {
     *v == 0
 }
@@ -354,11 +355,13 @@ pub struct InputConnection {
     pub default_shape: Option<Shape>,
 }
 
+/// Creates a new instance.
 fn default_output_key() -> String {
     "out".to_string()
 }
 
 impl Default for InputConnection {
+    /// Creates a new instance.
     fn default() -> Self {
         Self {
             node_id: None,

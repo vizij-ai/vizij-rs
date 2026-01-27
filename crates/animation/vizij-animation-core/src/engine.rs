@@ -62,6 +62,7 @@ pub struct Player {
 }
 
 impl Player {
+    /// Creates a new instance.
     fn new(id: PlayerId, name: String) -> Self {
         Self {
             id,
@@ -115,6 +116,7 @@ pub struct InstanceCfg {
 }
 
 impl Default for InstanceCfg {
+    /// Creates a new instance.
     fn default() -> Self {
         Self {
             weight: 1.0,
@@ -132,22 +134,27 @@ struct AnimLib {
 }
 
 impl AnimLib {
+    /// Internal helper for `insert`.
     fn insert(&mut self, id: AnimId, data: AnimationData) {
         self.items.push((id, data));
     }
+    /// Returns the requested value.
     fn get(&self, id: AnimId) -> Option<&AnimationData> {
         self.items
             .iter()
             .find_map(|(a, d)| if *a == id { Some(d) } else { None })
     }
+    /// Iterates internal state.
     fn iter(&self) -> impl Iterator<Item = &(AnimId, AnimationData)> {
         self.items.iter()
     }
+    /// Removes internal state.
     fn remove(&mut self, id: AnimId) -> bool {
         let before = self.items.len();
         self.items.retain(|(a, _)| *a != id);
         before != self.items.len()
     }
+    /// Internal helper for `contains`.
     fn contains(&self, id: AnimId) -> bool {
         self.items.iter().any(|(a, _)| *a == id)
     }
@@ -176,6 +183,7 @@ pub struct Engine {
     outputs_with_derivatives: OutputsWithDerivatives,
 }
 
+/// Internal helper for `fmod`.
 fn fmod(a: f32, b: f32) -> f32 {
     if b == 0.0 {
         return 0.0;
@@ -751,6 +759,7 @@ impl Engine {
         }
     }
 
+    /// Updates internal state.
     fn step(&mut self, dt: f32, inputs: Inputs, with_derivatives: bool) {
         self.scratch.begin_frame();
         self.outputs.clear();
@@ -1023,6 +1032,7 @@ impl Engine {
             .collect()
     }
 
+    /// Internal helper for `derive_playback_state`.
     fn derive_playback_state(p: &Player) -> PlaybackState {
         if p.speed == 0.0 {
             if (p.time - p.start_time).abs() < 1e-6 {

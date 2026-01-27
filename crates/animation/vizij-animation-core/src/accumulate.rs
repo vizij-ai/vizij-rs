@@ -15,6 +15,7 @@ enum CollectionKind {
 }
 
 impl CollectionKind {
+    /// Internal helper for `len`.
     fn len(&self) -> usize {
         match *self {
             CollectionKind::Vector(len)
@@ -24,10 +25,12 @@ impl CollectionKind {
         }
     }
 
+    /// Internal helper for `matches`.
     fn matches(&self, other: &CollectionKind) -> bool {
         std::mem::discriminant(self) == std::mem::discriminant(other) && self.len() == other.len()
     }
 
+    /// Builds value.
     fn build_value(&self, data: Vec<f32>) -> Value {
         match *self {
             CollectionKind::Vector(_) => Value::Vector(data),
@@ -47,6 +50,7 @@ impl CollectionKind {
     }
 }
 
+/// Internal helper for `numeric_collection_from_value`.
 fn numeric_collection_from_value(value: &Value) -> Option<(CollectionKind, Vec<f32>)> {
     match value {
         Value::Vector(values) => Some((CollectionKind::Vector(values.len()), values.clone())),
@@ -134,6 +138,7 @@ enum AccumEntry {
 }
 
 impl AccumEntry {
+    /// Adds value.
     fn add_value(&mut self, v: &Value, w: f32) {
         match (self, v) {
             (AccumEntry::Scalar { sum, w: ww }, Value::Float(x)) => {
@@ -244,6 +249,7 @@ impl AccumEntry {
         }
     }
 
+    /// Creates value.
     fn from_value(v: &Value, w: f32) -> Self {
         match v {
             Value::Float(x) => AccumEntry::Scalar { sum: *x * w, w },
@@ -307,6 +313,7 @@ impl AccumEntry {
         }
     }
 
+    /// Internal helper for `finalize`.
     fn finalize(self) -> Option<Value> {
         match self {
             AccumEntry::Scalar { sum, w } => {

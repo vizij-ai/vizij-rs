@@ -4,6 +4,7 @@ use vizij_orchestrator::{
     controllers::graph::Subscriptions, Orchestrator, Schedule,
 };
 
+/// Internal helper for `main`.
 fn main() {
     let mut orchestrator = Orchestrator::new(Schedule::SinglePass);
 

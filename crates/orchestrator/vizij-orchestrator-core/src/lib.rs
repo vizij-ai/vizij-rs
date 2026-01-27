@@ -288,6 +288,7 @@ impl Orchestrator {
 }
 
 impl Default for Orchestrator {
+    /// Creates a new instance.
     fn default() -> Self {
         Self::new(Schedule::SinglePass)
     }
@@ -300,6 +301,7 @@ mod tests {
         EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
     };
 
+    /// Samples graph.
     fn sample_graph(id: &str, value: f32) -> GraphControllerConfig {
         let spec = GraphSpec {
             nodes: vec![
@@ -349,6 +351,7 @@ mod tests {
     }
 
     #[test]
+    /// Exports graph produces JSON value.
     fn export_graph_produces_json_value() {
         let cfg = sample_graph("graph:sample", 1.5);
         let orch = Orchestrator::new(Schedule::SinglePass).with_graph(cfg);
@@ -362,6 +365,7 @@ mod tests {
     }
 
     #[test]
+    /// Exports graph pretty string round trips.
     fn export_graph_pretty_string_round_trips() {
         let cfg = sample_graph("graph:pretty", 2.0);
         let orch = Orchestrator::new(Schedule::SinglePass).with_graph(cfg);
@@ -377,6 +381,7 @@ mod tests {
     }
 
     #[test]
+    /// Exports graph missing id errors.
     fn export_graph_missing_id_errors() {
         let orch = Orchestrator::new(Schedule::SinglePass);
         let err = orch

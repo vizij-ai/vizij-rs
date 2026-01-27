@@ -160,6 +160,7 @@ pub struct GraphTime {
 pub struct VizijGraphPlugin;
 
 impl Plugin for VizijGraphPlugin {
+    /// Builds internal state.
     fn build(&self, app: &mut App) {
         app.insert_resource(GraphResource(GraphSpec::default().with_cache()))
             .insert_resource(GraphOutputs::default())

@@ -21,10 +21,12 @@ fn constant_node(id: &str, value: Value) -> NodeSpec {
     }
 }
 
+/// Internal helper for `link`.
 fn link(from: &str, to: &str, input: &str) -> EdgeSpec {
     link_with_output(from, "out", to, input)
 }
 
+/// Internal helper for `link_with_output`.
 fn link_with_output(from: &str, output_key: &str, to: &str, input: &str) -> EdgeSpec {
     EdgeSpec {
         from: EdgeOutputEndpoint {
@@ -40,6 +42,7 @@ fn link_with_output(from: &str, output_key: &str, to: &str, input: &str) -> Edge
 }
 
 #[test]
+/// Internal helper for `weighted_sum_vector_scalar_weight_broadcasts_and_outputs_descriptive_ports`.
 fn weighted_sum_vector_scalar_weight_broadcasts_and_outputs_descriptive_ports() {
     // values = [1,2,3], weight = 0.5 (scalar broadcast)
     let graph = GraphSpec {
@@ -97,6 +100,7 @@ fn weighted_sum_vector_scalar_weight_broadcasts_and_outputs_descriptive_ports() 
 }
 
 #[test]
+/// Internal helper for `weighted_sum_vector_length_mismatch_returns_nans`.
 fn weighted_sum_vector_length_mismatch_returns_nans() {
     // values length 3, weights length 2 -> mismatch after broadcasting
     let graph = GraphSpec {
@@ -136,6 +140,7 @@ fn weighted_sum_vector_length_mismatch_returns_nans() {
 }
 
 #[test]
+/// Blends weighted average computes normalized average.
 fn blend_weighted_average_computes_normalized_average() {
     // Compose WeightedSumVector -> BlendWeightedAverage
     // values [1,2,3], weight scalar 0.5 -> sum=3.0, total_weight=1.5, max=0.5
@@ -181,6 +186,7 @@ fn blend_weighted_average_computes_normalized_average() {
 }
 
 #[test]
+/// Blends multiply computes product of terms.
 fn blend_multiply_computes_product_of_terms() {
     // values [0.2,0.5], weight scalar 0.5 -> terms = (1-0.5)+v*0.5 -> 0.6 and 0.75 -> product 0.45
     let graph = GraphSpec {
@@ -212,6 +218,7 @@ fn blend_multiply_computes_product_of_terms() {
 }
 
 #[test]
+/// Blends max selects value of highest effective weight.
 fn blend_max_selects_value_of_highest_effective_weight() {
     // values [1,2,3], weights [0.1,0.9,0.2] -> best idx 1 => selected = 2.0 * 0.9 = 1.8
     let graph = GraphSpec {
@@ -243,6 +250,7 @@ fn blend_max_selects_value_of_highest_effective_weight() {
 }
 
 #[test]
+/// Blends max without values or base returns nan.
 fn blend_max_without_values_or_base_returns_nan() {
     // No inputs connected; optional base should be treated as absent, yielding NaN.
     let graph = GraphSpec {
@@ -270,6 +278,7 @@ fn blend_max_without_values_or_base_returns_nan() {
 }
 
 #[test]
+/// Creates a new instance.
 fn default_blend_matches_expected_vec3_output() {
     let baseline = Value::Vec3([0.1, -0.05, 0.2]);
     let offset = Value::Vec3([0.01, 0.02, -0.03]);
@@ -356,6 +365,7 @@ fn default_blend_matches_expected_vec3_output() {
 }
 
 #[test]
+/// Creates a new instance.
 fn default_blend_emits_nan_value_when_weight_length_mismatch() {
     let graph = GraphSpec {
         nodes: vec![
@@ -391,6 +401,7 @@ fn default_blend_emits_nan_value_when_weight_length_mismatch() {
 }
 
 #[test]
+/// Internal helper for `case_node_routes_based_on_case_labels_param`.
 fn case_node_routes_based_on_case_labels_param() {
     // Case with labels ["a","b"] and two variadic case inputs: cases_1 -> "first", cases_2 -> "second"
     let params = NodeParams {
@@ -433,6 +444,7 @@ fn case_node_routes_based_on_case_labels_param() {
 }
 
 #[test]
+/// Internal helper for `case_node_without_default_emits_nan_when_no_match`.
 fn case_node_without_default_emits_nan_when_no_match() {
     let params = NodeParams {
         case_labels: Some(vec!["a".to_string(), "b".to_string()]),

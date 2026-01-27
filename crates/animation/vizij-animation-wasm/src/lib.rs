@@ -26,10 +26,12 @@ pub struct VizijAnimation {
     core: Engine,
 }
 
+/// Internal helper for `jsvalue_is_undefined_or_null`.
 fn jsvalue_is_undefined_or_null(v: &JsValue) -> bool {
     v.is_undefined() || v.is_null()
 }
 
+/// Parses inputs JS.
 fn parse_inputs_js(inputs_json: JsValue) -> Result<Inputs, JsError> {
     if jsvalue_is_undefined_or_null(&inputs_json) {
         Ok(Inputs::default())
@@ -38,6 +40,7 @@ fn parse_inputs_js(inputs_json: JsValue) -> Result<Inputs, JsError> {
     }
 }
 
+/// Parses baking config JS.
 fn parse_baking_config_js(cfg: JsValue) -> Result<BakingConfig, JsError> {
     if jsvalue_is_undefined_or_null(&cfg) {
         Ok(BakingConfig::default())
@@ -60,6 +63,7 @@ struct JsResolver {
 }
 
 impl TargetResolver for JsResolver {
+    /// Internal helper for `resolve`.
     fn resolve(&mut self, path: &str) -> Option<String> {
         // Call JS resolver(path) - expect string key; allow number fallback -> string
         let arg = JsValue::from_str(path);
@@ -99,6 +103,7 @@ struct BakingConfigOptions {
 }
 
 impl BakingConfigOptions {
+    /// Converts config.
     fn into_config(self) -> Result<BakingConfig, String> {
         let mut cfg = BakingConfig::default();
         if let Some(fr) = self.frame_rate {
@@ -142,6 +147,7 @@ impl BakingConfigOptions {
     }
 }
 
+/// Parses baking config.
 fn parse_baking_config(cfg: JsValue) -> Result<BakingConfig, JsError> {
     if jsvalue_is_undefined_or_null(&cfg) {
         return Ok(BakingConfig::default());

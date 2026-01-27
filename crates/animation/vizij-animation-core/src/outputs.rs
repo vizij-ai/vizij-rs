@@ -276,6 +276,7 @@ mod tests {
     use vizij_api_core::Value;
 
     #[test]
+    /// Converts writebatch skips invalid paths.
     fn to_writebatch_skips_invalid_paths() {
         let mut outputs = Outputs::default();
         outputs.push_change(Change {

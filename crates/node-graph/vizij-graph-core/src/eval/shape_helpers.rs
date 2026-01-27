@@ -494,6 +494,7 @@ pub fn coerce_numeric_to_shape(target: &ShapeId, value: &Value) -> Option<Value>
     }
 }
 
+/// Builds numeric value.
 fn build_numeric_value(shape: &ShapeId, scalars: &[f32], offset: &mut usize) -> Option<Value> {
     match shape {
         ShapeId::Scalar => {
@@ -603,6 +604,7 @@ fn build_numeric_value(shape: &ShapeId, scalars: &[f32], offset: &mut usize) -> 
     }
 }
 
+/// Internal helper for `transform_field_value`.
 fn transform_field_value(
     field: &str,
     translation: &[f32; 3],
@@ -617,6 +619,7 @@ fn transform_field_value(
     }
 }
 
+/// Internal helper for `transform_field_shape`.
 fn transform_field_shape(field: &str) -> Option<ShapeId> {
     match field {
         "translation" | "position" => Some(ShapeId::Vec3),

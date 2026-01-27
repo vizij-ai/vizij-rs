@@ -10,6 +10,7 @@ use std::path::PathBuf;
 
 use vizij_graph_core::schema;
 
+/// Internal helper for `print_usage`.
 fn print_usage() {
     eprintln!("Usage: vizij-graph-registry-export [--output <path>] [--pretty]");
 }

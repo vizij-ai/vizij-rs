@@ -123,6 +123,7 @@ pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), Strin
     result
 }
 
+/// Internal helper for `resize_and_clear`.
 fn resize_and_clear(bucket: &mut Vec<PortValue>) {
     bucket.clear();
 }

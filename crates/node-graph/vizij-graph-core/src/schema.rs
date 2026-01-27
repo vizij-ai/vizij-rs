@@ -161,6 +161,7 @@ pub struct Registry {
 }
 
 // Helpers
+/// Internal helper for `p_in`.
 fn p_in() -> PortSpec {
     PortSpec {
         id: "in",
@@ -170,6 +171,7 @@ fn p_in() -> PortSpec {
         optional: false,
     }
 }
+/// Internal helper for `p_bool_in`.
 fn p_bool_in() -> PortSpec {
     PortSpec {
         id: "in",
@@ -179,6 +181,7 @@ fn p_bool_in() -> PortSpec {
         optional: false,
     }
 }
+/// Internal helper for `p_vector_in`.
 fn p_vector_in() -> PortSpec {
     PortSpec {
         id: "in",
@@ -188,6 +191,7 @@ fn p_vector_in() -> PortSpec {
         optional: false,
     }
 }
+/// Internal helper for `p_out_float`.
 fn p_out_float() -> PortSpec {
     PortSpec {
         id: "out",
@@ -197,6 +201,7 @@ fn p_out_float() -> PortSpec {
         optional: false,
     }
 }
+/// Internal helper for `p_out_bool`.
 fn p_out_bool() -> PortSpec {
     PortSpec {
         id: "out",
@@ -206,6 +211,7 @@ fn p_out_bool() -> PortSpec {
         optional: false,
     }
 }
+/// Internal helper for `p_out_vec3`.
 fn p_out_vec3() -> PortSpec {
     PortSpec {
         id: "out",
@@ -215,6 +221,7 @@ fn p_out_vec3() -> PortSpec {
         optional: false,
     }
 }
+/// Internal helper for `p_out_vector`.
 fn p_out_vector() -> PortSpec {
     PortSpec {
         id: "out",

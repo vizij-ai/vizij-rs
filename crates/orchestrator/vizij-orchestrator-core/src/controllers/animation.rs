@@ -90,6 +90,7 @@ impl AnimationController {
         Self::try_new(cfg).expect("AnimationController setup is invalid")
     }
 
+    /// Internal helper for `configure_from_setup`.
     fn configure_from_setup(&mut self, setup: &JsonValue) -> Result<()> {
         if setup.is_null() {
             return Ok(());
@@ -138,6 +139,7 @@ impl AnimationController {
         Ok(())
     }
 
+    /// Applies player overrides.
     fn apply_player_overrides(&mut self, player_id: PlayerId, cfg: &PlayerSetup) {
         if cfg.loop_mode.is_none() && cfg.speed.is_none() {
             return;
@@ -176,6 +178,7 @@ impl AnimationController {
         s.parse::<u32>().ok()
     }
 
+    /// Internal helper for `classify_path`.
     fn classify_path<'a>(tp: &'a TypedPath) -> Option<AnimationPathKind<'a>> {
         if tp.namespace_segment(0)? != "anim" || tp.namespace_segment(1)? != "player" {
             return None;
@@ -199,6 +202,7 @@ impl AnimationController {
         }
     }
 
+    /// Internal helper for `compose_field_name`.
     fn compose_field_name(tp: &TypedPath) -> String {
         if tp.fields.is_empty() {
             tp.target.clone()
@@ -393,6 +397,7 @@ mod tests {
     use crate::blackboard::Blackboard;
 
     #[test]
+    /// Internal helper for `map_blackboard_play_command_and_instance_update`.
     fn map_blackboard_play_command_and_instance_update() {
         let mut bb = Blackboard::new();
         // Player command: play

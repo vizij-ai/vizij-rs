@@ -253,6 +253,7 @@ mod tests {
     use vizij_api_core::{Value, WriteBatch, WriteOp};
 
     #[test]
+    /// Sets and get entry.
     fn set_and_get_entry() {
         let mut bb = Blackboard::new();
         let path = TypedPath::parse("a/b.c").expect("parse path");
@@ -271,6 +272,7 @@ mod tests {
     }
 
     #[test]
+    /// Applies writebatch conflict.
     fn apply_writebatch_conflict() {
         let mut bb = Blackboard::new();
         // initial

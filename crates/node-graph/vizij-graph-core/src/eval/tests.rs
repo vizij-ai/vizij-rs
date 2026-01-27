@@ -20,6 +20,7 @@ macro_rules! graph_spec {
     }};
 }
 
+/// Internal helper for `constant_node`.
 fn constant_node(id: &str, value: Value) -> NodeSpec {
     NodeSpec {
         id: id.to_string(),
@@ -34,6 +35,7 @@ fn constant_node(id: &str, value: Value) -> NodeSpec {
 }
 
 #[test]
+/// Internal helper for `plan_cache_reuses_layouts_when_spec_version_matches`.
 fn plan_cache_reuses_layouts_when_spec_version_matches() {
     let spec = graph_spec!({
         nodes: vec![constant_node("a", Value::Float(1.0))],
@@ -72,6 +74,7 @@ fn plan_cache_reuses_layouts_when_spec_version_matches() {
 }
 
 #[test]
+/// Internal helper for `plan_cache_rebuilds_when_spec_version_changes`.
 fn plan_cache_rebuilds_when_spec_version_changes() {
     let base = graph_spec!({
         nodes: vec![constant_node("a", Value::Float(1.0))],
@@ -104,6 +107,7 @@ fn plan_cache_rebuilds_when_spec_version_changes() {
 }
 
 #[test]
+/// Internal helper for `piecewise_remap_matches_linear_case`.
 fn piecewise_remap_matches_linear_case() {
     let mut defaults = HashMap::new();
     defaults.insert(
@@ -167,6 +171,7 @@ fn piecewise_remap_matches_linear_case() {
 }
 
 #[test]
+/// Internal helper for `piecewise_remap_handles_segments_and_extrapolation`.
 fn piecewise_remap_handles_segments_and_extrapolation() {
     let mut defaults = HashMap::new();
     defaults.insert(
@@ -237,6 +242,7 @@ fn piecewise_remap_handles_segments_and_extrapolation() {
 }
 
 #[test]
+/// Internal helper for `piecewise_remap_preserves_plateaus_with_duplicate_inputs`.
 fn piecewise_remap_preserves_plateaus_with_duplicate_inputs() {
     // Duplicate inputs with differing outputs should create a plateau segment, not collapse.
     let mut defaults = HashMap::new();
@@ -299,6 +305,7 @@ fn piecewise_remap_preserves_plateaus_with_duplicate_inputs() {
 }
 
 #[test]
+/// Internal helper for `piecewise_remap_allows_duplicate_inputs_with_different_outputs`.
 fn piecewise_remap_allows_duplicate_inputs_with_different_outputs() {
     let mut defaults = HashMap::new();
     defaults.insert(
@@ -360,6 +367,7 @@ fn piecewise_remap_allows_duplicate_inputs_with_different_outputs() {
 }
 
 #[test]
+/// Internal helper for `piecewise_remap_validates_duplicate_breakpoints`.
 fn piecewise_remap_validates_duplicate_breakpoints() {
     let mut defaults = HashMap::new();
     defaults.insert(
@@ -429,6 +437,7 @@ fn piecewise_remap_validates_duplicate_breakpoints() {
 }
 
 #[test]
+/// Internal helper for `piecewise_remap_errors_when_inputs_decrease`.
 fn piecewise_remap_errors_when_inputs_decrease() {
     let mut defaults = HashMap::new();
     defaults.insert(
@@ -482,10 +491,12 @@ fn piecewise_remap_errors_when_inputs_decrease() {
     );
 }
 
+/// Internal helper for `link`.
 fn link(from: &str, to: &str, input: &str) -> EdgeSpec {
     link_with_output(from, "out", to, input)
 }
 
+/// Internal helper for `link_with_output`.
 fn link_with_output(from: &str, output_key: &str, to: &str, input: &str) -> EdgeSpec {
     EdgeSpec {
         from: EdgeOutputEndpoint {
@@ -500,6 +511,7 @@ fn link_with_output(from: &str, output_key: &str, to: &str, input: &str) -> Edge
     }
 }
 
+/// Internal helper for `link_with_selector`.
 fn link_with_selector(
     from: &str,
     output_key: &str,
@@ -516,6 +528,7 @@ fn link_with_selector(
 // --- Shape validation ----------------------------------------------------
 
 #[test]
+/// Internal helper for `it_should_respect_declared_shape`.
 fn it_should_respect_declared_shape() {
     let mut node = constant_node("a", Value::Float(1.0));
     node.output_shapes
@@ -534,6 +547,7 @@ fn it_should_respect_declared_shape() {
 }
 
 #[test]
+/// Internal helper for `it_should_error_when_shape_mismatches`.
 fn it_should_error_when_shape_mismatches() {
     let mut node = constant_node("a", Value::Float(1.0));
     node.output_shapes
@@ -550,6 +564,7 @@ fn it_should_error_when_shape_mismatches() {
 }
 
 #[test]
+/// Internal helper for `abs_node_handles_negative_values`.
 fn abs_node_handles_negative_values() {
     let graph = GraphSpec {
         nodes: vec![
@@ -577,6 +592,7 @@ fn abs_node_handles_negative_values() {
 }
 
 #[test]
+/// Internal helper for `modulo_node_handles_division`.
 fn modulo_node_handles_division() {
     let graph = GraphSpec {
         nodes: vec![
@@ -605,6 +621,7 @@ fn modulo_node_handles_division() {
 }
 
 #[test]
+/// Internal helper for `sqrt_node_handles_vectors`.
 fn sqrt_node_handles_vectors() {
     let graph = GraphSpec {
         nodes: vec![
@@ -632,6 +649,7 @@ fn sqrt_node_handles_vectors() {
 }
 
 #[test]
+/// Internal helper for `sign_node_outputs_signum`.
 fn sign_node_outputs_signum() {
     let graph = GraphSpec {
         nodes: vec![
@@ -659,6 +677,7 @@ fn sign_node_outputs_signum() {
 }
 
 #[test]
+/// Internal helper for `min_max_nodes_select_expected_values`.
 fn min_max_nodes_select_expected_values() {
     let mut rt = GraphRuntime::default();
     let graph = GraphSpec {
@@ -719,6 +738,7 @@ fn min_max_nodes_select_expected_values() {
 }
 
 #[test]
+/// Internal helper for `round_node_respects_modes`.
 fn round_node_respects_modes() {
     let graph = GraphSpec {
         nodes: vec![
@@ -800,6 +820,7 @@ fn round_node_respects_modes() {
 // --- Runtime outputs -----------------------------------------------------
 
 #[test]
+/// Internal helper for `it_should_emit_write_for_output_nodes`.
 fn it_should_emit_write_for_output_nodes() {
     let graph = GraphSpec {
         nodes: vec![
@@ -836,6 +857,7 @@ fn it_should_emit_write_for_output_nodes() {
 }
 
 #[test]
+/// Internal helper for `writes_batch_json_roundtrip_from_graph`.
 fn writes_batch_json_roundtrip_from_graph() {
     // Build a trivial graph that emits a write.
     let graph = GraphSpec {
@@ -867,6 +889,7 @@ fn writes_batch_json_roundtrip_from_graph() {
 }
 
 #[test]
+/// Internal helper for `input_defaults_supply_missing_connections`.
 fn input_defaults_supply_missing_connections() {
     let mut defaults = HashMap::new();
     defaults.insert(
@@ -904,6 +927,7 @@ fn input_defaults_supply_missing_connections() {
 }
 
 #[test]
+/// Internal helper for `linked_inputs_override_defaults`.
 fn linked_inputs_override_defaults() {
     let mut defaults = HashMap::new();
     defaults.insert(
@@ -944,6 +968,7 @@ fn linked_inputs_override_defaults() {
 }
 
 #[test]
+/// Internal helper for `defaults_apply_when_output_key_missing`.
 fn defaults_apply_when_output_key_missing() {
     let mut defaults = HashMap::new();
     defaults.insert(
@@ -986,6 +1011,7 @@ fn defaults_apply_when_output_key_missing() {
 // --- Variadic & oscillator behaviour ------------------------------------
 
 #[test]
+/// Internal helper for `join_respects_operand_order`.
 fn join_respects_operand_order() {
     let graph = GraphSpec {
         nodes: vec![
@@ -1020,6 +1046,7 @@ fn join_respects_operand_order() {
 }
 
 #[test]
+/// Internal helper for `oscillator_broadcasts_vector_inputs`.
 fn oscillator_broadcasts_vector_inputs() {
     let graph = GraphSpec {
         nodes: vec![
@@ -1071,6 +1098,7 @@ fn oscillator_broadcasts_vector_inputs() {
 // --- Shape inference -----------------------------------------------------
 
 #[test]
+/// Internal helper for `it_should_infer_vector_length_hints`.
 fn it_should_infer_vector_length_hints() {
     let node = constant_node("vec", Value::Vector(vec![1.0, 2.0, 3.0]));
     let spec = GraphSpec {
@@ -1091,6 +1119,7 @@ fn it_should_infer_vector_length_hints() {
 // --- Declared shape error handling --------------------------------------
 
 #[test]
+/// Internal helper for `it_should_error_when_declared_output_missing`.
 fn it_should_error_when_declared_output_missing() {
     let mut node = constant_node("a", Value::Float(1.0));
     node.output_shapes
@@ -1107,6 +1136,7 @@ fn it_should_error_when_declared_output_missing() {
 }
 
 #[test]
+/// Internal helper for `it_should_validate_vector_length_against_declared_shape`.
 fn it_should_validate_vector_length_against_declared_shape() {
     let mut node = constant_node("a", Value::Vector(vec![1.0, 2.0, 3.0]));
     node.output_shapes.insert(
@@ -1124,6 +1154,7 @@ fn it_should_validate_vector_length_against_declared_shape() {
 }
 
 #[test]
+/// Internal helper for `it_should_reject_invalid_paths_during_deserialization`.
 fn it_should_reject_invalid_paths_during_deserialization() {
     let json = r#"{
         "id": "node",
@@ -1140,6 +1171,7 @@ fn it_should_reject_invalid_paths_during_deserialization() {
 // --- Staged input nodes & selectors -------------------------------------
 
 #[test]
+/// Internal helper for `input_node_emits_staged_value_with_declared_shape`.
 fn input_node_emits_staged_value_with_declared_shape() {
     let typed_path = TypedPath::parse("sensor/imu.accel").expect("valid path");
 
@@ -1188,6 +1220,7 @@ fn input_node_emits_staged_value_with_declared_shape() {
 }
 
 #[test]
+/// Internal helper for `input_node_coerces_vector_to_declared_vec3`.
 fn input_node_coerces_vector_to_declared_vec3() {
     // Stage a generic numeric vector and declare the Input's shape as Vec3.
     // The node should coerce the vector to a Vec3 value rather than erroring.
@@ -1237,6 +1270,7 @@ fn input_node_coerces_vector_to_declared_vec3() {
 }
 
 #[test]
+/// Internal helper for `input_node_missing_numeric_returns_null`.
 fn input_node_missing_numeric_returns_null() {
     let typed_path = TypedPath::parse("sensor/imu.accel").expect("valid path");
 
@@ -1277,6 +1311,7 @@ fn input_node_missing_numeric_returns_null() {
 }
 
 #[test]
+/// Internal helper for `input_node_missing_non_numeric_errors`.
 fn input_node_missing_non_numeric_errors() {
     let typed_path = TypedPath::parse("sensor/name").expect("valid path");
 
@@ -1305,6 +1340,7 @@ fn input_node_missing_non_numeric_errors() {
 }
 
 #[test]
+/// Internal helper for `input_node_requires_restaging_each_epoch`.
 fn input_node_requires_restaging_each_epoch() {
     let typed_path = TypedPath::parse("sensor/imu.accel").expect("valid path");
 
@@ -1358,6 +1394,7 @@ fn input_node_requires_restaging_each_epoch() {
 }
 
 #[test]
+/// Internal helper for `selector_projects_record_field`.
 fn selector_projects_record_field() {
     let mut record = HashMap::new();
     record.insert("translation".to_string(), Value::Vec3([3.0, 4.0, 0.0]));
@@ -1401,6 +1438,7 @@ fn selector_projects_record_field() {
 }
 
 #[test]
+/// Internal helper for `selector_projects_transform_field_and_nested_index`.
 fn selector_projects_transform_field_and_nested_index() {
     // Source provides a Transform; downstream selects .translation then [1] (y component).
     let graph = GraphSpec {
@@ -1452,6 +1490,7 @@ fn selector_projects_transform_field_and_nested_index() {
 }
 
 #[test]
+/// Internal helper for `selector_index_out_of_bounds_errors`.
 fn selector_index_out_of_bounds_errors() {
     // Select index 5 from a vec3; should error.
     let graph = GraphSpec {
@@ -1487,6 +1526,7 @@ fn selector_index_out_of_bounds_errors() {
 // --- Stateful nodes ------------------------------------------------------
 
 #[test]
+/// Internal helper for `spring_node_transitions_toward_new_target`.
 fn spring_node_transitions_toward_new_target() {
     let spring = NodeSpec {
         id: "spring".to_string(),
@@ -1554,6 +1594,7 @@ fn spring_node_transitions_toward_new_target() {
 }
 
 #[test]
+/// Internal helper for `damp_node_smooths_toward_target`.
 fn damp_node_smooths_toward_target() {
     let damp = NodeSpec {
         id: "damp".to_string(),
@@ -1616,6 +1657,7 @@ fn damp_node_smooths_toward_target() {
 }
 
 #[test]
+/// Internal helper for `slew_node_limits_rate_of_change`.
 fn slew_node_limits_rate_of_change() {
     let slew = NodeSpec {
         id: "slew".to_string(),
@@ -1684,6 +1726,7 @@ fn slew_node_limits_rate_of_change() {
 // --- End-to-end: Input → selector → math → Output ------------------------
 
 #[test]
+/// Internal helper for `end_to_end_input_selector_scalar_math_output`.
 fn end_to_end_input_selector_scalar_math_output() {
     // Build Input node producing a record { translation: vec3, label: text } with a declared record shape.
     let typed_path = TypedPath::parse("sensor/pose").expect("valid path");
@@ -1793,6 +1836,7 @@ fn end_to_end_input_selector_scalar_math_output() {
 }
 
 #[test]
+/// Internal helper for `centered_remap_handles_anchor_segments`.
 fn centered_remap_handles_anchor_segments() {
     let mut defaults = HashMap::new();
     defaults.insert(
@@ -1898,6 +1942,7 @@ fn centered_remap_handles_anchor_segments() {
 }
 
 #[test]
+/// Internal helper for `centered_remap_supports_asymmetric_ranges_and_vectors`.
 fn centered_remap_supports_asymmetric_ranges_and_vectors() {
     let mut defaults = HashMap::new();
     defaults.insert(

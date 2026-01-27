@@ -187,6 +187,7 @@ impl TypedPath {
 }
 
 impl fmt::Display for TypedPath {
+    /// Internal helper for `fmt`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut parts: Vec<String> = self.namespaces.clone();
         if self.fields.is_empty() {
@@ -203,6 +204,7 @@ impl fmt::Display for TypedPath {
 
 impl FromStr for TypedPath {
     type Err = String;
+    /// Creates str.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         TypedPath::parse(s)
     }
@@ -210,6 +212,7 @@ impl FromStr for TypedPath {
 
 // Serde support: serialize as string, deserialize from string
 impl Serialize for TypedPath {
+    /// Internal helper for `serialize`.
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -219,6 +222,7 @@ impl Serialize for TypedPath {
 }
 
 impl<'de> Deserialize<'de> for TypedPath {
+    /// Internal helper for `deserialize`.
     fn deserialize<D>(deserializer: D) -> Result<TypedPath, D::Error>
     where
         D: Deserializer<'de>,
@@ -233,6 +237,7 @@ mod tests {
     use super::*;
 
     #[test]
+    /// Parses simple.
     fn parse_simple() {
         let p = TypedPath::parse("robot1/Arm/Joint3.angle").unwrap();
         assert_eq!(p.namespaces, vec!["robot1".to_string(), "Arm".to_string()]);
@@ -242,6 +247,7 @@ mod tests {
     }
 
     #[test]
+    /// Parses no fields.
     fn parse_no_fields() {
         let p = TypedPath::parse("root/node").unwrap();
         assert_eq!(p.namespaces, vec!["root".to_string()]);
@@ -251,6 +257,7 @@ mod tests {
     }
 
     #[test]
+    /// Parses only target.
     fn parse_only_target() {
         let p = TypedPath::parse("node").unwrap();
         assert!(p.namespaces.is_empty());
@@ -260,6 +267,7 @@ mod tests {
     }
 
     #[test]
+    /// Parses rejects whitespace.
     fn parse_rejects_whitespace() {
         assert!(TypedPath::parse("invalid path").is_err());
         assert!(TypedPath::parse("robot /Arm/Joint").is_err());

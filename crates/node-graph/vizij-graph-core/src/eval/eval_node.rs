@@ -353,6 +353,7 @@ fn evaluate_kind(
     }
 }
 
+/// Internal helper for `input_or_default`.
 fn input_or_default(inputs: &InputSlots, key: &str) -> PortValue {
     inputs
         .get(key)
@@ -360,10 +361,12 @@ fn input_or_default(inputs: &InputSlots, key: &str) -> PortValue {
         .unwrap_or_else(|| PortValue::new(Value::Float(0.0)))
 }
 
+/// Evaluates constant.
 fn eval_constant(params: &NodeParams, outputs: &mut OutputSlots) -> Result<(), String> {
     single_output(outputs, params.value.clone().unwrap_or(Value::Float(0.0)))
 }
 
+/// Evaluates slider.
 fn eval_slider(params: &NodeParams, outputs: &mut OutputSlots) -> Result<(), String> {
     single_output(
         outputs,
@@ -371,12 +374,14 @@ fn eval_slider(params: &NodeParams, outputs: &mut OutputSlots) -> Result<(), Str
     )
 }
 
+/// Evaluates multi slider.
 fn eval_multi_slider(params: &NodeParams, outputs: &mut OutputSlots) -> Result<(), String> {
     keyed_output(outputs, "x", Value::Float(params.x.unwrap_or(0.0)))?;
     keyed_output(outputs, "y", Value::Float(params.y.unwrap_or(0.0)))?;
     keyed_output(outputs, "z", Value::Float(params.z.unwrap_or(0.0)))
 }
 
+/// Evaluates arithmetic.
 fn eval_arithmetic(
     kind: &NodeType,
     inputs: &InputSlots,
@@ -455,6 +460,7 @@ fn eval_arithmetic(
     }
 }
 
+/// Evaluates unary scalar.
 fn eval_unary_scalar(
     kind: &NodeType,
     inputs: &InputSlots,
@@ -480,6 +486,7 @@ fn eval_unary_scalar(
     }
 }
 
+/// Evaluates min max.
 fn eval_min_max(
     kind: &NodeType,
     inputs: &InputSlots,
@@ -499,6 +506,7 @@ fn eval_min_max(
     single_output(outputs, result)
 }
 
+/// Evaluates round.
 fn eval_round(
     params: &NodeParams,
     inputs: &InputSlots,
@@ -514,6 +522,7 @@ fn eval_round(
     single_output(outputs, unary_numeric(&input.value, op))
 }
 
+/// Evaluates trig.
 fn eval_trig(
     kind: &NodeType,
     inputs: &InputSlots,
@@ -529,10 +538,12 @@ fn eval_trig(
     single_output(outputs, unary_numeric(&input.value, op))
 }
 
+/// Evaluates time.
 fn eval_time(rt: &GraphRuntime, outputs: &mut OutputSlots) -> Result<(), String> {
     single_output(outputs, Value::Float(rt.t))
 }
 
+/// Evaluates oscillator.
 fn eval_oscillator(
     rt: &GraphRuntime,
     inputs: &InputSlots,
@@ -592,6 +603,7 @@ fn eval_oscillator(
 
     single_output(outputs, value)
 }
+/// Evaluates stateful.
 fn eval_stateful(
     kind: &NodeType,
     rt: &mut GraphRuntime,
@@ -707,6 +719,7 @@ fn eval_stateful(
     }
 }
 
+/// Evaluates logic.
 fn eval_logic(
     kind: &NodeType,
     inputs: &InputSlots,
@@ -731,6 +744,7 @@ fn eval_logic(
     single_output(outputs, Value::Bool(value))
 }
 
+/// Evaluates comparison.
 fn eval_comparison(
     kind: &NodeType,
     inputs: &InputSlots,
@@ -748,6 +762,7 @@ fn eval_comparison(
     single_output(outputs, Value::Bool(value))
 }
 
+/// Evaluates if.
 fn eval_if(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let cond = as_bool(&input_or_default(inputs, "cond").value);
     let branch = if cond {
@@ -758,6 +773,7 @@ fn eval_if(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String>
     single_output(outputs, branch.value)
 }
 
+/// Evaluates clamp.
 fn eval_clamp(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let value = inputs
         .get("in")
@@ -776,6 +792,7 @@ fn eval_clamp(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), Stri
     )
 }
 
+/// Evaluates remap.
 fn eval_remap(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let value = inputs
         .get("in")
@@ -809,6 +826,7 @@ fn eval_remap(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), Stri
     )
 }
 
+/// Evaluates centered remap.
 fn eval_centered_remap(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let value = inputs
         .get("in")
@@ -862,6 +880,7 @@ fn eval_centered_remap(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result
     single_output(outputs, remapped)
 }
 
+/// Evaluates piecewise remap.
 fn eval_piecewise_remap(
     params: &NodeParams,
     inputs: &InputSlots,
@@ -914,6 +933,7 @@ struct PiecewiseConfig {
     constant: Option<f32>,
 }
 
+/// Prepares piecewise breakpoints.
 fn prepare_piecewise_breakpoints(
     inputs: Vec<f32>,
     outputs: Vec<f32>,
@@ -983,6 +1003,7 @@ fn prepare_piecewise_breakpoints(
     })
 }
 
+/// Internal helper for `remap_piecewise_scalar`.
 fn remap_piecewise_scalar(
     value: f32,
     inputs: &[f32],
@@ -1048,10 +1069,12 @@ fn remap_piecewise_scalar(
     outputs[last_idx]
 }
 
+/// Internal helper for `approx_equal`.
 fn approx_equal(a: f32, b: f32) -> bool {
     (a - b).abs() <= PIECEWISE_BREAKPOINT_EPS
 }
 
+/// Evaluates vec3 cross.
 fn eval_vec3_cross(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let a = input_or_default(inputs, "a");
     let b = input_or_default(inputs, "b");
@@ -1074,6 +1097,7 @@ fn eval_vec3_cross(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(),
     }
 }
 
+/// Evaluates vector constant.
 fn eval_vector_constant(params: &NodeParams, outputs: &mut OutputSlots) -> Result<(), String> {
     if let Some(value) = &params.value {
         single_output(outputs, value.clone())
@@ -1082,6 +1106,7 @@ fn eval_vector_constant(params: &NodeParams, outputs: &mut OutputSlots) -> Resul
     }
 }
 
+/// Evaluates vector arithmetic.
 fn eval_vector_arithmetic(
     kind: &NodeType,
     inputs: &InputSlots,
@@ -1115,6 +1140,7 @@ fn eval_vector_arithmetic(
     }
 }
 
+/// Evaluates vector normalize.
 fn eval_vector_normalize(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let value = input_or_default(inputs, "in");
     match flatten_numeric(&value.value) {
@@ -1132,6 +1158,7 @@ fn eval_vector_normalize(inputs: &InputSlots, outputs: &mut OutputSlots) -> Resu
     }
 }
 
+/// Evaluates vector dot.
 fn eval_vector_dot(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let a = input_or_default(inputs, "a");
     let b = input_or_default(inputs, "b");
@@ -1147,6 +1174,7 @@ fn eval_vector_dot(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(),
     }
 }
 
+/// Evaluates vector length.
 fn eval_vector_length(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let value = input_or_default(inputs, "in");
     match flatten_numeric(&value.value) {
@@ -1158,6 +1186,7 @@ fn eval_vector_length(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<
     }
 }
 
+/// Evaluates vector index.
 fn eval_vector_index(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let value = input_or_default(inputs, "v");
     let index = as_float(&input_or_default(inputs, "index").value);
@@ -1174,6 +1203,7 @@ fn eval_vector_index(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(
     }
 }
 
+/// Evaluates join.
 fn eval_join(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let mut out: Vec<f32> = Vec::new();
     for port in collect_operand_ports(inputs) {
@@ -1184,6 +1214,7 @@ fn eval_join(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), Strin
     single_output(outputs, Value::Vector(out))
 }
 
+/// Evaluates split.
 fn eval_split(
     params: &NodeParams,
     inputs: &InputSlots,
@@ -1218,6 +1249,7 @@ fn eval_split(
     Ok(())
 }
 
+/// Evaluates vector reducer.
 fn eval_vector_reducer(
     kind: &NodeType,
     inputs: &InputSlots,
@@ -1300,6 +1332,7 @@ fn eval_vector_reducer(
 // Blend helpers
 //
 
+/// Internal helper for `vec_port_to_vec`.
 fn vec_port_to_vec(inputs: &InputSlots, key: &str) -> Vec<f32> {
     if !inputs.is_present(key) {
         return Vec::new();
@@ -1310,6 +1343,7 @@ fn vec_port_to_vec(inputs: &InputSlots, key: &str) -> Vec<f32> {
         .unwrap_or_default()
 }
 
+/// Evaluates default blend.
 fn eval_default_blend(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let baseline_port = input_or_default(inputs, "baseline");
     let offset_port = input_or_default(inputs, "offset");
@@ -1373,10 +1407,12 @@ fn eval_default_blend(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<
     single_output(outputs, final_value)
 }
 
+/// Internal helper for `float_port_opt`.
 fn float_port_opt(inputs: &InputSlots, key: &str) -> Option<f32> {
     inputs.get(key).map(|p| as_float(&p.value))
 }
 
+/// Computes normalized weighted average.
 fn compute_normalized_weighted_average(
     sum: f32,
     total_weight: f32,
@@ -1399,6 +1435,7 @@ fn compute_normalized_weighted_average(
     }
 }
 
+/// Builds float outputs.
 fn build_float_outputs(
     outputs: &mut OutputSlots,
     pairs: impl IntoIterator<Item = (String, f32)>,
@@ -1682,6 +1719,7 @@ fn eval_blend_max(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), 
     }
 }
 
+/// Evaluates case.
 fn eval_case(
     params: &NodeParams,
     inputs: &InputSlots,
@@ -1738,6 +1776,7 @@ fn eval_case(
     }
 }
 
+/// Evaluates inverse kinematics.
 fn eval_inverse_kinematics(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let l1 = as_float(&input_or_default(inputs, "bone1").value);
     let l2 = as_float(&input_or_default(inputs, "bone2").value);
@@ -1764,6 +1803,7 @@ fn eval_inverse_kinematics(inputs: &InputSlots, outputs: &mut OutputSlots) -> Re
 }
 
 #[cfg(feature = "urdf_ik")]
+/// Evaluates urdf fk.
 fn eval_urdf_fk(
     rt: &mut GraphRuntime,
     spec: &NodeSpec,
@@ -1818,6 +1858,7 @@ fn eval_urdf_fk(
 }
 
 #[cfg(feature = "urdf_ik")]
+/// Evaluates urdf position.
 fn eval_urdf_position(
     rt: &mut GraphRuntime,
     spec: &NodeSpec,
@@ -1897,6 +1938,7 @@ fn eval_urdf_position(
 }
 
 #[cfg(feature = "urdf_ik")]
+/// Evaluates urdf pose.
 fn eval_urdf_pose(
     rt: &mut GraphRuntime,
     spec: &NodeSpec,
@@ -1981,10 +2023,12 @@ fn eval_urdf_pose(
     single_output(outputs, state.solution_record(&solution))
 }
 
+/// Evaluates output.
 fn eval_output(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     single_output(outputs, input_or_default(inputs, "in").value)
 }
 
+/// Evaluates input node.
 fn eval_input_node(
     rt: &GraphRuntime,
     spec: &NodeSpec,
@@ -2062,6 +2106,7 @@ fn eval_input_node(
     ))
 }
 
+/// Internal helper for `align_input_to_declared`.
 fn align_input_to_declared(
     node_id: &str,
     path: &str,
@@ -2100,6 +2145,7 @@ fn align_input_to_declared(
     ))
 }
 
+/// Internal helper for `enforce_output_shapes_slots`.
 fn enforce_output_shapes_slots(
     spec: &NodeSpec,
     layout: &PortLayout,

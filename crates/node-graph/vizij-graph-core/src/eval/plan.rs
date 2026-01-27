@@ -47,6 +47,7 @@ impl PortLayout {
         self.variadics.get(group).copied()
     }
 
+    /// Internal helper for `insert_slot`.
     fn insert_slot(&mut self, name: String) {
         if !self.name_to_slot.contains_key(&name) {
             let slot = self.slots.len();
@@ -155,6 +156,7 @@ impl PlanCache {
         self.rebuild(spec, fp, spec.version)
     }
 
+    /// Internal helper for `rebuild`.
     fn rebuild(&mut self, spec: &GraphSpec, fingerprint: u64, version: u64) -> Result<(), String> {
         let inputs_map = spec.input_connections()?;
         let order_ids = crate::topo::topo_order(&spec.nodes, &spec.edges)?;
@@ -218,6 +220,7 @@ impl PlanCache {
     }
 }
 
+/// Builds input layout.
 fn build_input_layout(
     _node: &NodeSpec,
     signature: Option<&NodeSignature>,
@@ -266,6 +269,7 @@ fn build_input_layout(
     layout
 }
 
+/// Builds output layout.
 fn build_output_layout(
     node: &NodeSpec,
     signature: Option<&NodeSignature>,
@@ -317,6 +321,7 @@ fn build_output_layout(
     layout
 }
 
+/// Builds input bindings.
 fn build_input_bindings(
     node_idx: usize,
     connections: &HashMap<String, InputConnection>,
@@ -356,6 +361,7 @@ fn build_input_bindings(
     bindings
 }
 
+/// Internal helper for `connection_default_port`.
 fn connection_default_port(conn: &InputConnection) -> Option<PortValue> {
     conn.default_value.as_ref().map(|value| {
         if let Some(shape) = &conn.default_shape {
@@ -366,6 +372,7 @@ fn connection_default_port(conn: &InputConnection) -> Option<PortValue> {
     })
 }
 
+/// Internal helper for `gather_referenced_outputs`.
 fn gather_referenced_outputs(
     spec: &GraphSpec,
     node_index: &HashMap<&str, usize>,
@@ -379,6 +386,7 @@ fn gather_referenced_outputs(
     referenced
 }
 
+/// Internal helper for `signature_map`.
 fn signature_map() -> HashMap<NodeType, NodeSignature> {
     registry()
         .nodes

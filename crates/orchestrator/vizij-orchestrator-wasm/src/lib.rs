@@ -29,6 +29,7 @@ struct OrchestratorOptions {
 }
 
 impl VizijOrchestrator {
+    /// Internal helper for `next_graph_id`.
     fn next_graph_id(&mut self) -> String {
         let id = format!("graph:{}", self.graph_counter);
         self.graph_counter = self.graph_counter.wrapping_add(1);
@@ -42,6 +43,7 @@ struct JsResolver {
 }
 
 impl vizij_animation_core::TargetResolver for JsResolver {
+    /// Internal helper for `resolve`.
     fn resolve(&mut self, path: &str) -> Option<String> {
         let arg = JsValue::from_str(path);
         match self.f.call1(&JsValue::UNDEFINED, &arg) {
@@ -104,6 +106,7 @@ struct JsMergeStrategy {
     intermediate: Option<String>,
 }
 
+/// Internal helper for `map_graph_subscriptions`.
 fn map_graph_subscriptions(
     cfg: Option<JsGraphSubscriptions>,
 ) -> Result<vizij_orchestrator::controllers::graph::Subscriptions, String> {
@@ -132,6 +135,7 @@ fn map_graph_subscriptions(
     Ok(subs)
 }
 
+/// Parses conflict strategy.
 fn parse_conflict_strategy(value: &str) -> Result<OutputConflictStrategy, String> {
     match value.trim().to_ascii_lowercase().as_str() {
         "error" => Ok(OutputConflictStrategy::Error),
@@ -155,6 +159,7 @@ fn parse_conflict_strategy(value: &str) -> Result<OutputConflictStrategy, String
     }
 }
 
+/// Internal helper for `map_merge_options`.
 fn map_merge_options(cfg: Option<JsMergeStrategy>) -> Result<GraphMergeOptions, String> {
     let mut options = GraphMergeOptions::default();
     if let Some(strategy) = cfg {
@@ -168,6 +173,7 @@ fn map_merge_options(cfg: Option<JsMergeStrategy>) -> Result<GraphMergeOptions, 
     Ok(options)
 }
 
+/// Builds graph controller config.
 fn build_graph_controller_config(
     mut graph: JsGraphConfig,
     fallback_id: String,

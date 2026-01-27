@@ -65,6 +65,7 @@ impl PortValue {
 }
 
 impl Default for PortValue {
+    /// Creates a new instance.
     fn default() -> Self {
         PortValue::new(Value::Float(0.0))
     }
@@ -140,6 +141,7 @@ impl ValueLayout {
         }
     }
 
+    /// Checks scalar.
     fn is_scalar(&self) -> bool {
         matches!(self, ValueLayout::Scalar)
     }

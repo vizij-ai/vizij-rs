@@ -67,6 +67,7 @@ pub fn parse_stored_animation_json(s: &str) -> Result<AnimationData, String> {
     Ok(data)
 }
 
+/// Converts core value.
 fn to_core_value(v: &RawValue) -> Result<Value, String> {
     match v {
         RawValue::Boolean(b) => Ok(Value::Bool(*b)),
@@ -126,6 +127,7 @@ fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (f32, f32, f32) {
     (r, g, b)
 }
 
+/// Internal helper for `hue_to_rgb`.
 fn hue_to_rgb(p: f32, q: f32, mut t: f32) -> f32 {
     if t < 0.0 {
         t += 1.0;

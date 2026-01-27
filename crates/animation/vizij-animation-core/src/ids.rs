@@ -74,6 +74,7 @@ mod tests {
     use super::*;
 
     #[test]
+    /// Allocates monotonic.
     fn alloc_monotonic() {
         let mut alloc = IdAllocator::new();
         assert_eq!(alloc.alloc_anim(), AnimId(0));

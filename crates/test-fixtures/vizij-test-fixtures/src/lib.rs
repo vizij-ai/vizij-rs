@@ -50,6 +50,7 @@ enum OrchestrationEntry {
 }
 
 impl OrchestrationEntry {
+    /// Returns path.
     fn as_path(&self) -> &str {
         match self {
             OrchestrationEntry::Path(path) => path,
@@ -58,25 +59,30 @@ impl OrchestrationEntry {
     }
 }
 
+/// Internal helper for `fixtures_root`.
 fn fixtures_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../fixtures")
 }
 
+/// Internal helper for `resolve_path`.
 fn resolve_path(rel: &str) -> PathBuf {
     fixtures_root().join(rel)
 }
 
+/// Reads to string.
 fn read_to_string(rel: &str) -> Result<String> {
     let path = resolve_path(rel);
     fs::read_to_string(&path)
         .with_context(|| format!("failed to read fixture at {}", path.display()))
 }
 
+/// Loads JSON.
 fn load_json<T: DeserializeOwned>(rel: &str) -> Result<T> {
     let text = read_to_string(rel)?;
     serde_json::from_str(&text).with_context(|| format!("failed to parse JSON fixture {rel}"))
 }
 
+/// Internal helper for `lookup`.
 fn lookup<'a, T>(map: &'a HashMap<String, T>, kind: &str, name: &str) -> Result<&'a T> {
     map.get(name)
         .ok_or_else(|| anyhow!("unknown {kind} fixture '{name}'"))
@@ -271,6 +277,7 @@ mod tests {
     use super::*;
 
     #[test]
+    /// Internal helper for `animation_pose_quat_transform_loads`.
     fn animation_pose_quat_transform_loads() {
         let value: serde_json::Value =
             animations::load("pose-quat-transform").expect("load pose-quat-transform fixture");
@@ -278,6 +285,7 @@ mod tests {
     }
 
     #[test]
+    /// Internal helper for `node_graph_logic_gate_and_urdf_available`.
     fn node_graph_logic_gate_and_urdf_available() {
         let logic: serde_json::Value =
             node_graphs::spec("logic-gate").expect("load logic-gate graph spec");
@@ -296,6 +304,7 @@ mod tests {
     }
 
     #[test]
+    /// Internal helper for `orchestration_blend_pose_pipeline_exists`.
     fn orchestration_blend_pose_pipeline_exists() {
         let json = orchestrations::json("blend-pose-pipeline")
             .expect("load blend-pose-pipeline descriptor");

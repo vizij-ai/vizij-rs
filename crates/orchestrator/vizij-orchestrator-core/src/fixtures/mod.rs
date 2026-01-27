@@ -347,6 +347,7 @@ struct StepSeed {
 }
 
 impl From<InputSeed> for InputFixture {
+    /// Creates internal state.
     fn from(seed: InputSeed) -> Self {
         Self {
             path: seed.path,
@@ -357,6 +358,7 @@ impl From<InputSeed> for InputFixture {
 }
 
 impl From<StepSeed> for StepFixture {
+    /// Creates internal state.
     fn from(seed: StepSeed) -> Self {
         Self {
             delta: seed.delta,
@@ -365,6 +367,7 @@ impl From<StepSeed> for StepFixture {
     }
 }
 
+/// Parses strategy.
 fn parse_strategy(
     value: Option<String>,
     field: &str,
@@ -385,6 +388,7 @@ fn parse_strategy(
     }
 }
 
+/// Internal helper for `materialize_graph_fixture`.
 fn materialize_graph_fixture(seed: GraphSeed, name: &str) -> GraphFixture {
     let fixture_key = seed.fixture.clone();
     let mut graph: GraphFixture = node_graphs::spec(&fixture_key)
@@ -401,6 +405,7 @@ fn materialize_graph_fixture(seed: GraphSeed, name: &str) -> GraphFixture {
     graph
 }
 
+/// Internal helper for `materialize_animation_fixture`.
 fn materialize_animation_fixture(idx: usize, seed: AnimationSeed, name: &str) -> AnimationFixture {
     let animation_json: serde_json::Value = animations::load(&seed.fixture).unwrap_or_else(|_| {
         panic!(
@@ -437,6 +442,7 @@ fn materialize_animation_fixture(idx: usize, seed: AnimationSeed, name: &str) ->
     }
 }
 
+/// Internal helper for `materialize_merged_graph_fixture`.
 fn materialize_merged_graph_fixture(merged: MergedGraphSeed, name: &str) -> MergedGraphFixture {
     use crate::controllers::graph::GraphMergeOptions;
 
@@ -469,6 +475,7 @@ fn materialize_merged_graph_fixture(merged: MergedGraphSeed, name: &str) -> Merg
     }
 }
 
+/// Internal helper for `pipeline_fixture`.
 fn pipeline_fixture(name: &str) -> DemoFixture {
     let descriptor: PipelineDescriptor =
         orchestrations::load(name).unwrap_or_else(|_| panic!("load {name} descriptor"));

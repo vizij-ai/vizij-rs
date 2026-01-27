@@ -59,6 +59,7 @@ pub struct PendingOutputs {
 pub struct FixedDt(pub f32);
 
 impl Default for FixedDt {
+    /// Creates a new instance.
     fn default() -> Self {
         Self(1.0 / 60.0)
     }

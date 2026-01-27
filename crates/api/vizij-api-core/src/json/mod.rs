@@ -76,6 +76,7 @@ pub fn normalize_value_json_staging(value: JsonValue) -> JsonValue {
     normalize_value_json_with_policy(value, NumericArrayPolicy::AlwaysVector)
 }
 
+/// Normalizes value JSON with policy.
 fn normalize_value_json_with_policy(value: JsonValue, policy: NumericArrayPolicy) -> JsonValue {
     match value {
         JsonValue::Number(n) => json!({ "type": "float", "data": n }),
@@ -200,6 +201,7 @@ fn normalize_value_json_with_policy(value: JsonValue, policy: NumericArrayPolicy
     }
 }
 
+/// Normalizes shape JSON.
 fn normalize_shape_json(shape: JsonValue) -> JsonValue {
     match shape {
         JsonValue::String(id) => json!({ "id": id }),
@@ -208,6 +210,7 @@ fn normalize_shape_json(shape: JsonValue) -> JsonValue {
     }
 }
 
+/// Normalizes input default entry.
 fn normalize_input_default_entry(value: JsonValue) -> JsonValue {
     match value {
         JsonValue::Object(mut map) => {
@@ -236,6 +239,7 @@ fn normalize_input_default_entry(value: JsonValue) -> JsonValue {
     }
 }
 
+/// Normalizes operand key.
 fn normalize_operand_key(
     original: &str,
     aliases: &mut HashMap<String, String>,
@@ -862,6 +866,7 @@ mod tests {
     use super::*;
 
     #[test]
+    /// Normalizes numeric arrays auto vectors.
     fn normalize_numeric_arrays_auto_vectors() {
         let value = json!([1, 2, 3]);
         let normalized = normalize_value_json(value);
@@ -869,6 +874,7 @@ mod tests {
     }
 
     #[test]
+    /// Normalizes numeric arrays staging.
     fn normalize_numeric_arrays_staging() {
         let value = json!([1, 2, 3]);
         let normalized = normalize_value_json_staging(value);
@@ -876,6 +882,7 @@ mod tests {
     }
 
     #[test]
+    /// Parses enum payload.
     fn parse_enum_payload() {
         let value = json!({
             "enum": {
@@ -894,6 +901,7 @@ mod tests {
     }
 
     #[test]
+    /// Internal helper for `writebatch_legacy_roundtrip`.
     fn writebatch_legacy_roundtrip() {
         let tp = TypedPath::parse("robot/Arm/Joint.angle").unwrap();
         let batch = writebatch_from_pairs(vec![(tp, Value::Vec3([1.0, 2.0, 3.0]))]);
@@ -903,6 +911,7 @@ mod tests {
     }
 
     #[test]
+    /// Internal helper for `graph_spec_normalization_inserts_type`.
     fn graph_spec_normalization_inserts_type() {
         let mut root = json!({
             "nodes": [
@@ -924,6 +933,7 @@ mod tests {
     }
 
     #[test]
+    /// Internal helper for `graph_spec_normalization_converts_inputs_to_edges`.
     fn graph_spec_normalization_converts_inputs_to_edges() {
         let mut root = json!({
             "nodes": [
@@ -966,6 +976,7 @@ mod tests {
     }
 
     #[test]
+    /// Internal helper for `graph_spec_normalization_injects_empty_edges_array`.
     fn graph_spec_normalization_injects_empty_edges_array() {
         let mut root = json!({
             "nodes": [
@@ -983,6 +994,7 @@ mod tests {
     }
 
     #[test]
+    /// Internal helper for `graph_spec_normalization_preserves_default_only_inputs`.
     fn graph_spec_normalization_preserves_default_only_inputs() {
         let mut root = json!({
             "nodes": [
@@ -1018,6 +1030,7 @@ mod tests {
     }
 
     #[test]
+    /// Internal helper for `graph_spec_normalization_extracts_defaults_from_connections`.
     fn graph_spec_normalization_extracts_defaults_from_connections() {
         let mut root = json!({
             "nodes": [
@@ -1062,6 +1075,7 @@ mod tests {
     }
 
     #[test]
+    /// Internal helper for `graph_spec_normalization_rejects_legacy_links_field`.
     fn graph_spec_normalization_rejects_legacy_links_field() {
         let mut root = json!({
             "nodes": [],

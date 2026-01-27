@@ -227,6 +227,7 @@ pub fn blend_values(a: &Value, b: &Value, t: f32) -> Value {
     }
 }
 
+/// Blends list like.
 fn blend_list_like(a: &[Value], b: &[Value], t: f32) -> Vec<Value> {
     let len = a.len().max(b.len());
     let mut out = Vec::with_capacity(len);
@@ -276,6 +277,7 @@ mod tests {
     use crate::Value;
 
     #[test]
+    /// Blends floats.
     fn blend_floats() {
         let a = Value::Float(0.0);
         let b = Value::Float(1.0);
@@ -284,6 +286,7 @@ mod tests {
     }
 
     #[test]
+    /// Blends vec3.
     fn blend_vec3() {
         let a = Value::Vec3([0.0, 0.0, 0.0]);
         let b = Value::Vec3([1.0, 2.0, 3.0]);
@@ -292,6 +295,7 @@ mod tests {
     }
 
     #[test]
+    /// Blends vector mixed.
     fn blend_vector_mixed() {
         let a = Value::Vector(vec![1.0, 2.0]);
         let b = Value::Vector(vec![3.0, 4.0, 5.0]);
@@ -300,6 +304,7 @@ mod tests {
     }
 
     #[test]
+    /// Advances bool text.
     fn step_bool_text() {
         let a = Value::Bool(false);
         let b = Value::Bool(true);
