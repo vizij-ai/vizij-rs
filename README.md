@@ -314,6 +314,7 @@ Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wa
 Generate the TypeDoc HTML for the public npm packages:
 
 ```bash
+pnpm install
 pnpm run docs:typedoc
 ```
 

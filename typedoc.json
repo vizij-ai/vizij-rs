@@ -12,7 +12,7 @@
   ],
   "entryPointStrategy": "resolve",
   "out": "docs/api",
-  "tsconfig": "npm/@vizij/animation-wasm/tsconfig.json",
+  "tsconfig": "typedoc.tsconfig.json",
   "excludePrivate": true,
   "excludeProtected": true,
   "excludeInternal": true,
