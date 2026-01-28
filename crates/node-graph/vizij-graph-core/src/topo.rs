@@ -115,7 +115,7 @@ mod tests {
     };
     use vizij_api_core::Value;
     #[test]
-    /// Internal helper for `simple_topo`.
+    /// Basic topo-sort smoke test for a linear chain of nodes.
     fn simple_topo() {
         let g = GraphSpec {
             nodes: vec![

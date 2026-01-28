@@ -331,7 +331,7 @@ impl GraphControllerConfig {
             existing_ids: &'a mut HashSet<String>,
         }
 
-        /// Internal helper for `attach_conflict_resolution` in the orchestrator graph controller.
+        /// Apply conflict-resolution rewrites to merged graph nodes/edges for a single output path.
         fn attach_conflict_resolution(
             path: &str,
             source_node_id: &str,
@@ -905,7 +905,7 @@ impl GraphController {
     }
 }
 
-/// Internal helper for `make_namespace` in the orchestrator graph controller.
+/// Build a deterministic namespace prefix for a graph index/id pair used during merge.
 fn make_namespace(index: usize, id: &str) -> String {
     let mut sanitized = id
         .chars()
@@ -923,7 +923,7 @@ fn make_namespace(index: usize, id: &str) -> String {
     format!("g{index}_{sanitized}")
 }
 
-/// Internal helper for `find_node_mut` in the orchestrator graph controller.
+/// Find a mutable node spec by id within the merged node list.
 fn find_node_mut<'a>(
     nodes: &'a mut [vizij_graph_core::types::NodeSpec],
     id: &str,
@@ -931,7 +931,7 @@ fn find_node_mut<'a>(
     nodes.iter_mut().find(|node| node.id == id)
 }
 
-/// Internal helper for `sanitize_identifier` in the orchestrator graph controller.
+/// Sanitize a string to a graph-safe identifier segment (alphanumeric + `_`).
 fn sanitize_identifier(value: &str) -> String {
     value
         .chars()
@@ -939,7 +939,7 @@ fn sanitize_identifier(value: &str) -> String {
         .collect()
 }
 
-/// Internal helper for `unique_node_id` in the orchestrator graph controller.
+/// Generate a unique node id by suffixing until unused in `existing`.
 fn unique_node_id(base: &str, existing: &mut HashSet<String>) -> String {
     let mut candidate = base.to_string();
     let mut counter = 1usize;
@@ -960,7 +960,7 @@ mod tests {
     use vizij_graph_core::eval::{evaluate_all, GraphRuntime};
     use vizij_graph_core::types::SelectorSegment;
 
-    /// Internal helper for `cfg_from_json` in the orchestrator graph controller.
+    /// Build a controller config from a graph spec JSON fixture for tests.
     fn cfg_from_json(id: &str, spec_json: serde_json::Value) -> GraphControllerConfig {
         let mut spec_json = spec_json;
         vizij_api_core::json::normalize_graph_spec_value(&mut spec_json)
@@ -973,7 +973,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `merged_graph_errors_on_empty` in the orchestrator graph controller.
+    /// Assert that merging zero graphs returns `GraphMergeError::Empty`.
     fn merged_graph_errors_on_empty() {
         let err =
             GraphControllerConfig::merged("merged", Vec::new()).expect_err("merge should fail");
@@ -981,7 +981,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `merged_graph_errors_when_output_missing_source` in the orchestrator graph controller.
+    /// Assert that missing upstream output bindings are rejected.
     fn merged_graph_errors_when_output_missing_source() {
         let spec = json!({
             "nodes": [
@@ -1000,7 +1000,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `merged_graph_allows_output_defaults_without_edges` in the orchestrator graph controller.
+    /// Assert that output defaults without upstream edges are allowed.
     fn merged_graph_allows_output_defaults_without_edges() {
         let spec = json!({
             "nodes": [
@@ -1034,7 +1034,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `merged_graph_namespaces_node_ids` in the orchestrator graph controller.
+    /// Assert that merged graphs namespace node ids to avoid collisions.
     fn merged_graph_namespaces_node_ids() {
         let producer = json!({
             "nodes": [
@@ -1079,7 +1079,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `merged_graph_preserves_unmatched_inputs` in the orchestrator graph controller.
+    /// Assert that unmatched inputs remain staged after merging.
     fn merged_graph_preserves_unmatched_inputs() {
         let producer = json!({
             "nodes": [
@@ -1136,7 +1136,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `merged_graph_add_strategy_sums_outputs` in the orchestrator graph controller.
+    /// Assert that the Add strategy inserts a variadic sum node.
     fn merged_graph_add_strategy_sums_outputs() {
         let producer_a = json!({
             "nodes": [
@@ -1232,7 +1232,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `merged_graph_default_blend_strategy_inserts_weight_inputs` in the orchestrator graph controller.
+    /// Assert that DefaultBlend inserts per-producer weight inputs.
     fn merged_graph_default_blend_strategy_inserts_weight_inputs() {
         let producer_a = json!({
             "nodes": [
@@ -1374,7 +1374,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `merged_graph_composes_selectors` in the orchestrator graph controller.
+    /// Assert that merged selectors are composed across graph boundaries.
     fn merged_graph_composes_selectors() {
         let producer = json!({
             "nodes": [
@@ -1434,7 +1434,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `merged_graph_blends_final_outputs` in the orchestrator graph controller.
+    /// Assert that BlendEqualWeights inserts a blend node for final outputs.
     fn merged_graph_blends_final_outputs() {
         let producer_a = json!({
             "nodes": [
@@ -1484,7 +1484,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `merged_graph_blends_intermediate_outputs` in the orchestrator graph controller.
+    /// Assert that BlendEqualWeights inserts a blend node for intermediate outputs.
     fn merged_graph_blends_intermediate_outputs() {
         let producer_a = json!({
             "nodes": [
@@ -1544,7 +1544,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `merged_graph_namespaces_final_outputs` in the orchestrator graph controller.
+    /// Assert that Namespace strategy prefixes final output paths.
     fn merged_graph_namespaces_final_outputs() {
         let producer_a = json!({
             "nodes": [
@@ -1603,7 +1603,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `merged_graph_namespace_intermediate_errors` in the orchestrator graph controller.
+    /// Assert that Namespace strategy rejects intermediate conflicts.
     fn merged_graph_namespace_intermediate_errors() {
         let producer_a = json!({
             "nodes": [

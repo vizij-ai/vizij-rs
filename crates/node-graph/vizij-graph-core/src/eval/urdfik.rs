@@ -26,7 +26,7 @@ pub struct UrdfKinematicsState {
 
 #[cfg(feature = "urdf_ik")]
 impl fmt::Debug for UrdfKinematicsState {
-    /// Internal helper for `fmt`.
+    /// Format the URDF kinematics error for diagnostics.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("UrdfKinematicsState")
             .field("hash", &self.hash)

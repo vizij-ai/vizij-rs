@@ -388,7 +388,7 @@ fn parse_strategy(
     }
 }
 
-/// Internal helper for `materialize_graph_fixture`.
+/// Turn a graph seed into a fully materialized graph fixture.
 fn materialize_graph_fixture(seed: GraphSeed, name: &str) -> GraphFixture {
     let fixture_key = seed.fixture.clone();
     let mut graph: GraphFixture = node_graphs::spec(&fixture_key)
@@ -405,7 +405,7 @@ fn materialize_graph_fixture(seed: GraphSeed, name: &str) -> GraphFixture {
     graph
 }
 
-/// Internal helper for `materialize_animation_fixture`.
+/// Turn an animation seed into a fully materialized animation fixture.
 fn materialize_animation_fixture(idx: usize, seed: AnimationSeed, name: &str) -> AnimationFixture {
     let animation_json: serde_json::Value = animations::load(&seed.fixture).unwrap_or_else(|_| {
         panic!(
@@ -442,7 +442,7 @@ fn materialize_animation_fixture(idx: usize, seed: AnimationSeed, name: &str) ->
     }
 }
 
-/// Internal helper for `materialize_merged_graph_fixture`.
+/// Turn a merged-graph seed into a fully materialized fixture.
 fn materialize_merged_graph_fixture(merged: MergedGraphSeed, name: &str) -> MergedGraphFixture {
     use crate::controllers::graph::GraphMergeOptions;
 
@@ -475,7 +475,7 @@ fn materialize_merged_graph_fixture(merged: MergedGraphSeed, name: &str) -> Merg
     }
 }
 
-/// Internal helper for `pipeline_fixture`.
+/// Build a demo pipeline fixture from its manifest entry.
 fn pipeline_fixture(name: &str) -> DemoFixture {
     let descriptor: PipelineDescriptor =
         orchestrations::load(name).unwrap_or_else(|_| panic!("load {name} descriptor"));

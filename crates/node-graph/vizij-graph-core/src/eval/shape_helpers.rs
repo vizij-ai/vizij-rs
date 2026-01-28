@@ -604,7 +604,7 @@ fn build_numeric_value(shape: &ShapeId, scalars: &[f32], offset: &mut usize) -> 
     }
 }
 
-/// Internal helper for `transform_field_value` in shape inference and coercion.
+/// Apply a field-level transform to a value when coercing shapes.
 fn transform_field_value(
     field: &str,
     translation: &[f32; 3],
@@ -619,7 +619,7 @@ fn transform_field_value(
     }
 }
 
-/// Internal helper for `transform_field_shape` in shape inference and coercion.
+/// Map a field name to its expected output shape, if known.
 fn transform_field_shape(field: &str) -> Option<ShapeId> {
     match field {
         "translation" | "position" => Some(ShapeId::Vec3),

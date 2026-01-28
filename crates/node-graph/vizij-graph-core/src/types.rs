@@ -355,7 +355,7 @@ pub struct InputConnection {
     pub default_shape: Option<Shape>,
 }
 
-/// Creates a new instance for graph spec types and metadata.
+/// Build the default output key string for a port when none is provided.
 fn default_output_key() -> String {
     "out".to_string()
 }

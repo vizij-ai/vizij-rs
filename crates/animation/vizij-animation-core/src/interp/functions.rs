@@ -8,7 +8,7 @@
 use vizij_api_core::Value;
 
 #[inline]
-/// Internal helper for `sub_vec4` in interpolation helpers.
+/// Subtract two vec4 values component-wise.
 fn sub_vec4(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3]]
 }
@@ -86,13 +86,13 @@ pub fn lerp_vec4(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
 }
 
 #[inline]
-/// Internal helper for `dot4` in interpolation helpers.
+/// Compute the 4D dot product used in quaternion interpolation.
 fn dot4(a: [f32; 4], b: [f32; 4]) -> f32 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
 }
 
 #[inline]
-/// Internal helper for `normalize4` in interpolation helpers.
+/// Normalize a vec4/quaternion, falling back to identity on zero length.
 fn normalize4(mut q: [f32; 4]) -> [f32; 4] {
     let len2 = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
     if len2 > 0.0 {
@@ -136,7 +136,7 @@ pub fn nlerp_quat(a: [f32; 4], mut b: [f32; 4], t: f32) -> [f32; 4] {
 }
 
 #[inline]
-/// Internal helper for `quat_derivative_components` in interpolation helpers.
+/// Compute quaternion derivative components for nlerp.
 fn quat_derivative_components(
     a: [f32; 4],
     mut b: [f32; 4],
@@ -167,7 +167,7 @@ fn quat_derivative_components(
 }
 
 #[inline]
-/// Internal helper for `normalize4_derivative` in interpolation helpers.
+/// Normalize quaternion derivative to match normalized output.
 fn normalize4_derivative(raw: [f32; 4], raw_dt: [f32; 4]) -> [f32; 4] {
     let norm_sq = dot4(raw, raw);
     if norm_sq <= 0.0 {
@@ -373,14 +373,14 @@ pub fn bezier_value(a: &Value, b: &Value, t: f32, ctrl: [f32; 4]) -> Value {
 }
 
 #[inline]
-/// Internal helper for `cubic_bezier_derivative` in interpolation helpers.
+/// Evaluate the derivative of a cubic Bezier curve at `t`.
 fn cubic_bezier_derivative(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
     let u = 1.0 - t;
     3.0 * u * u * (p1 - p0) + 6.0 * u * t * (p2 - p1) + 3.0 * t * t * (p3 - p2)
 }
 
 #[inline]
-/// Internal helper for `bezier_ease_with_derivative` in interpolation helpers.
+/// Compute Bezier easing value and its derivative for timing curves.
 fn bezier_ease_with_derivative(t: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> (f32, f32) {
     let t = t.clamp(0.0, 1.0);
     if x1 == 0.0 && y1 == 0.0 && x2 == 1.0 && y2 == 1.0 {

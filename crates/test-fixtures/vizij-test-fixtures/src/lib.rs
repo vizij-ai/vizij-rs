@@ -59,12 +59,12 @@ impl OrchestrationEntry {
     }
 }
 
-/// Internal helper for `fixtures_root` in fixture manifest access.
+/// Resolve the on-disk fixtures root used by the manifest loader.
 fn fixtures_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../fixtures")
 }
 
-/// Internal helper for `resolve_path` in fixture manifest access.
+/// Resolve a manifest-relative path into an absolute fixture path.
 fn resolve_path(rel: &str) -> PathBuf {
     fixtures_root().join(rel)
 }
@@ -82,7 +82,7 @@ fn load_json<T: DeserializeOwned>(rel: &str) -> Result<T> {
     serde_json::from_str(&text).with_context(|| format!("failed to parse JSON fixture {rel}"))
 }
 
-/// Internal helper for `lookup` in fixture manifest access.
+    /// Look up a named fixture entry and surface a clear error if missing.
 fn lookup<'a, T>(map: &'a HashMap<String, T>, kind: &str, name: &str) -> Result<&'a T> {
     map.get(name)
         .ok_or_else(|| anyhow!("unknown {kind} fixture '{name}'"))
@@ -277,7 +277,7 @@ mod tests {
     use super::*;
 
     #[test]
-    /// Internal helper for `animation_pose_quat_transform_loads` in fixture manifest access.
+    /// Assert quaternion/transform animation fixtures load correctly.
     fn animation_pose_quat_transform_loads() {
         let value: serde_json::Value =
             animations::load("pose-quat-transform").expect("load pose-quat-transform fixture");
@@ -285,7 +285,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `node_graph_logic_gate_and_urdf_available` in fixture manifest access.
+    /// Assert node-graph fixtures include logic gate and URDF samples.
     fn node_graph_logic_gate_and_urdf_available() {
         let logic: serde_json::Value =
             node_graphs::spec("logic-gate").expect("load logic-gate graph spec");
@@ -304,7 +304,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `orchestration_blend_pose_pipeline_exists` in fixture manifest access.
+    /// Assert the orchestration blend-pose pipeline fixture exists.
     fn orchestration_blend_pose_pipeline_exists() {
         let json = orchestrations::json("blend-pose-pipeline")
             .expect("load blend-pose-pipeline descriptor");

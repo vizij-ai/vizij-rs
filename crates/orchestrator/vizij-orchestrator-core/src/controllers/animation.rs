@@ -90,7 +90,7 @@ impl AnimationController {
         Self::try_new(cfg).expect("AnimationController setup is invalid")
     }
 
-    /// Internal helper for `configure_from_setup` in the orchestrator animation controller.
+    /// Apply animation setup JSON to configure controller state (returns an error on invalid fields).
     fn configure_from_setup(&mut self, setup: &JsonValue) -> Result<()> {
         if setup.is_null() {
             return Ok(());
@@ -178,7 +178,7 @@ impl AnimationController {
         s.parse::<u32>().ok()
     }
 
-    /// Internal helper for `classify_path` in the orchestrator animation controller.
+    /// Classify a typed path into animation namespaces (inputs vs control).
     fn classify_path<'a>(tp: &'a TypedPath) -> Option<AnimationPathKind<'a>> {
         if tp.namespace_segment(0)? != "anim" || tp.namespace_segment(1)? != "player" {
             return None;
@@ -202,7 +202,7 @@ impl AnimationController {
         }
     }
 
-    /// Internal helper for `compose_field_name` in the orchestrator animation controller.
+    /// Compose a dotted field name from a typed path for output mapping.
     fn compose_field_name(tp: &TypedPath) -> String {
         if tp.fields.is_empty() {
             tp.target.clone()
@@ -397,7 +397,7 @@ mod tests {
     use crate::blackboard::Blackboard;
 
     #[test]
-    /// Internal helper for `map_blackboard_play_command_and_instance_update` in the orchestrator animation controller.
+    /// Assert play-command mappings and instance update handling in the blackboard adapter.
     fn map_blackboard_play_command_and_instance_update() {
         let mut bb = Blackboard::new();
         // Player command: play

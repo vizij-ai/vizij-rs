@@ -319,7 +319,7 @@ mod tests {
     use bevy::prelude::{Transform, Vec3, World};
 
     #[test]
-    /// Internal helper for `registry_and_apply_roundtrip`.
+    /// Verify registering setters and applying a write batch round-trips.
     fn registry_and_apply_roundtrip() {
         let mut world = World::new();
         // create an entity with Transform

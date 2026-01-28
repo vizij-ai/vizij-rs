@@ -47,7 +47,7 @@ impl PortLayout {
         self.variadics.get(group).copied()
     }
 
-    /// Internal helper for `insert_slot` in graph evaluation planning.
+    /// Insert a new input slot and update index mappings.
     fn insert_slot(&mut self, name: String) {
         if !self.name_to_slot.contains_key(&name) {
             let slot = self.slots.len();
@@ -156,7 +156,7 @@ impl PlanCache {
         self.rebuild(spec, fp, spec.version)
     }
 
-    /// Internal helper for `rebuild` in graph evaluation planning.
+    /// Rebuild the evaluation plan from the graph spec and fingerprint.
     fn rebuild(&mut self, spec: &GraphSpec, fingerprint: u64, version: u64) -> Result<(), String> {
         let inputs_map = spec.input_connections()?;
         let order_ids = crate::topo::topo_order(&spec.nodes, &spec.edges)?;
@@ -361,7 +361,7 @@ fn build_input_bindings(
     bindings
 }
 
-/// Internal helper for `connection_default_port` in graph evaluation planning.
+/// Extract a default port value from a connection if present.
 fn connection_default_port(conn: &InputConnection) -> Option<PortValue> {
     conn.default_value.as_ref().map(|value| {
         if let Some(shape) = &conn.default_shape {
@@ -372,7 +372,7 @@ fn connection_default_port(conn: &InputConnection) -> Option<PortValue> {
     })
 }
 
-/// Internal helper for `gather_referenced_outputs` in graph evaluation planning.
+/// Collect output slots referenced by downstream edges.
 fn gather_referenced_outputs(
     spec: &GraphSpec,
     node_index: &HashMap<&str, usize>,
@@ -386,7 +386,7 @@ fn gather_referenced_outputs(
     referenced
 }
 
-/// Internal helper for `signature_map` in graph evaluation planning.
+/// Build a lookup of node signatures for planning.
 fn signature_map() -> HashMap<NodeType, NodeSignature> {
     registry()
         .nodes

@@ -62,7 +62,7 @@ pub struct Player {
 }
 
 impl Player {
-    /// Creates a new instance (for `id`).
+    /// Construct a player record with its id and display name.
     fn new(id: PlayerId, name: String) -> Self {
         Self {
             id,
@@ -134,17 +134,17 @@ struct AnimLib {
 }
 
 impl AnimLib {
-    /// Internal helper for `insert` in the animation engine playback state.
+    /// Store animation data by id in the library backing the engine.
     fn insert(&mut self, id: AnimId, data: AnimationData) {
         self.items.push((id, data));
     }
-    /// Returns the requested value by id from the animation engine playback state.
+    /// Fetch animation data by id, or `None` if missing.
     fn get(&self, id: AnimId) -> Option<&AnimationData> {
         self.items
             .iter()
             .find_map(|(a, d)| if *a == id { Some(d) } else { None })
     }
-    /// Iterates internal state for the animation engine playback state.
+    /// Iterate all stored animations in the library.
     fn iter(&self) -> impl Iterator<Item = &(AnimId, AnimationData)> {
         self.items.iter()
     }
@@ -154,7 +154,7 @@ impl AnimLib {
         self.items.retain(|(a, _)| *a != id);
         before != self.items.len()
     }
-    /// Internal helper for `contains` in the animation engine playback state.
+    /// Check whether the library contains the given animation id.
     fn contains(&self, id: AnimId) -> bool {
         self.items.iter().any(|(a, _)| *a == id)
     }
@@ -183,7 +183,7 @@ pub struct Engine {
     outputs_with_derivatives: OutputsWithDerivatives,
 }
 
-/// Internal helper for `fmod` in the animation engine playback state.
+/// Compute floating-point modulus that matches animation time wrapping semantics.
 fn fmod(a: f32, b: f32) -> f32 {
     if b == 0.0 {
         return 0.0;
@@ -759,7 +759,7 @@ impl Engine {
         }
     }
 
-    /// Advances internal state (using `dt`).
+    /// Advance engine state by `dt`, optionally computing derivatives.
     fn step(&mut self, dt: f32, inputs: Inputs, with_derivatives: bool) {
         self.scratch.begin_frame();
         self.outputs.clear();
@@ -1032,7 +1032,7 @@ impl Engine {
             .collect()
     }
 
-    /// Internal helper for `derive_playback_state` in the animation engine playback state.
+    /// Derive playback state flags from player speed and time.
     fn derive_playback_state(p: &Player) -> PlaybackState {
         if p.speed == 0.0 {
             if (p.time - p.start_time).abs() < 1e-6 {
