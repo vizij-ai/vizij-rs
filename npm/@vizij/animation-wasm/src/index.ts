@@ -70,7 +70,10 @@ export {
 } from "@vizij/value-json";
 
 /**
- * Read the wasm ABI version after init() has completed.
+ * Read the wasm ABI version after {@link init} has completed.
+ *
+ * @returns ABI version number baked into the wasm binary.
+ * @throws Error if the bindings are not initialized yet.
  */
 export function abi_version(): number {
   if (!bindingCache.current) {
@@ -161,7 +164,13 @@ async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
 let _initPromise: Promise<void> | null = null;
 
 /**
- * Initialize the wasm module once. Must be awaited before constructing Engine.
+ * Initialize the wasm module once.
+ *
+ * Must be awaited before constructing {@link Engine} or {@link VizijAnimation}.
+ * The loader memoizes the bindings, so repeated calls reuse the same module.
+ *
+ * @param input - Optional wasm init input (URL, bytes, Response, or Module).
+ * @throws Error if ABI validation fails or the wasm module cannot be loaded.
  */
 export function init(input?: InitInput): Promise<void> {
   if (_initPromise) return _initPromise;
@@ -189,7 +198,10 @@ function ensureInited(): void {
 ----------------------------------------------------------- */
 
 /**
- * Ergonomic wrapper around the wasm VizijAnimation engine.
+ * High-level wrapper around the wasm VizijAnimation engine.
+ *
+ * Call {@link init} once before constructing. Methods throw when the underlying
+ * wasm bindings do not expose a required export (typically a version mismatch).
  */
 export class Engine {
   private inner: any;
@@ -202,8 +214,12 @@ export class Engine {
   }
 
   /**
-   * Load an animation clip into the engine.
-   * If `opts.format` is omitted, this auto-detects "stored" when `tracks` is present.
+   * Load an animation clip into the engine and return its id.
+   *
+   * @param data - Animation payload (stored or core format).
+   * @param opts - Optional format override.
+   * @returns Animation id used in other calls (player/instance/bake).
+   * @throws Error if the wasm bindings are missing the required loader export.
    */
   loadAnimation(
     data: AnimationData | StoredAnimation,
@@ -231,7 +247,13 @@ export class Engine {
     }
   }
 
-  /** Create a new player by display name. */
+  /**
+   * Create a new player by display name.
+   *
+   * @param name - Friendly label for debugging/inspection.
+   * @returns Player id used when adding instances.
+   * @throws Error if the wasm bindings are missing the required export.
+   */
   createPlayer(name: string): PlayerId {
     const inner: any = this.inner;
     if (typeof inner.create_player !== "function") {
@@ -242,7 +264,15 @@ export class Engine {
     return inner.create_player(name) as PlayerId;
   }
 
-  /** Add an instance to a player with optional InstanceCfg. */
+  /**
+   * Add an instance to a player with optional instance configuration.
+   *
+   * @param player - Player id returned by {@link createPlayer}.
+   * @param anim - Animation id returned by {@link loadAnimation}.
+   * @param cfg - Instance settings (weight, time scale, start offset).
+   * @returns Instance id used for later removal or inspection.
+   * @throws Error if the wasm bindings are missing the required export.
+   */
   addInstance(player: PlayerId, anim: AnimId, cfg?: unknown): InstId {
     const inner: any = this.inner;
     if (typeof inner.add_instance !== "function") {
@@ -255,7 +285,12 @@ export class Engine {
 
   /**
    * Resolve canonical target paths using a JS resolver callback.
-   * The resolver should return string | number | null/undefined.
+   *
+   * The resolver maps Vizij paths to host-specific keys and is cached by the engine.
+   * Returning `null`/`undefined` leaves the path unbound.
+   *
+   * @param resolver - Path resolver invoked by the engine when binding outputs.
+   * @throws Error if the wasm bindings are missing the required export.
    */
   prebind(resolver: (path: string) => string | number | null | undefined): void {
     const inner: any = this.inner;
@@ -267,7 +302,14 @@ export class Engine {
     inner.prebind(resolver as any);
   }
 
-  /** Step the simulation by dt (seconds) with optional Inputs; returns Outputs. */
+  /**
+   * Step the simulation by `dt` seconds and return output changes.
+   *
+   * @param dt - Delta time in seconds.
+   * @param inputs - Optional input overrides (values/weights/commands).
+   * @returns Output changes plus events from the engine.
+   * @throws Error if the wasm bindings are missing the required export.
+   */
   updateValues(dt: number, inputs?: Inputs): Outputs {
     const inner: any = this.inner;
     if (typeof inner.update_values !== "function") {
@@ -278,7 +320,14 @@ export class Engine {
     return inner.update_values(dt, (inputs ?? undefined) as any) as Outputs;
   }
 
-  /** Step the simulation by dt (seconds) returning Outputs and derivatives. */
+  /**
+   * Step the simulation by `dt` seconds and return outputs plus derivatives.
+   *
+   * @param dt - Delta time in seconds.
+   * @param inputs - Optional input overrides (values/weights/commands).
+   * @returns Output changes and derivative samples.
+   * @throws Error if the wasm bindings are missing the required export.
+   */
   updateValuesAndDerivatives(dt: number, inputs?: Inputs): OutputsWithDerivatives {
     const inner: any = this.inner;
     if (typeof inner.update_values_and_derivatives !== "function") {
@@ -289,14 +338,23 @@ export class Engine {
     return inner.update_values_and_derivatives(dt, (inputs ?? undefined) as any) as OutputsWithDerivatives;
   }
 
-  /** Backwards-compatible alias for updateValues. */
+  /**
+   * Backwards-compatible alias for {@link updateValues}.
+   *
+   * @param dt - Delta time in seconds.
+   * @param inputs - Optional input overrides.
+   */
   update(dt: number, inputs?: Inputs): Outputs {
     return this.updateValues(dt, inputs);
   }
 
   /**
    * Bake a loaded animation clip into pre-sampled tracks.
-   * The returned object mirrors vizij-animation-core's `BakedAnimationData` schema.
+   *
+   * @param anim - Animation id returned by {@link loadAnimation}.
+   * @param cfg - Sampling configuration (frame rate, range, derivatives).
+   * @returns Pre-sampled animation data.
+   * @throws Error if the wasm bindings are missing the required export.
    */
   bakeAnimation(anim: AnimId, cfg?: BakingConfig): BakedAnimationData {
     const inner: any = this.inner;
@@ -308,7 +366,14 @@ export class Engine {
     return inner.bake_animation(anim as number, (cfg ?? undefined) as any) as BakedAnimationData;
   }
 
-  /** Bake animation samples plus derivatives. */
+  /**
+   * Bake animation samples plus derivatives.
+   *
+   * @param anim - Animation id returned by {@link loadAnimation}.
+   * @param cfg - Sampling configuration (frame rate, range).
+   * @returns Bundle containing sampled values and derivatives.
+   * @throws Error if the wasm bindings are missing the required export.
+   */
   bakeAnimationWithDerivatives(anim: AnimId, cfg?: BakingConfig): BakedAnimationBundle {
     const inner: any = this.inner;
     if (typeof inner.bake_animation_with_derivatives !== "function") {
@@ -322,7 +387,12 @@ export class Engine {
     ) as BakedAnimationBundle;
   }
 
-  /** Remove a player and all its instances. */
+  /**
+   * Remove a player and all its instances.
+   *
+   * @param player - Player id to remove.
+   * @returns `true` if the player existed and was removed.
+   */
   removePlayer(player: PlayerId): boolean {
     const inner: any = this.inner;
     if (typeof inner.remove_player !== "function") {
@@ -331,7 +401,13 @@ export class Engine {
     return !!inner.remove_player(player as number);
   }
 
-  /** Remove a specific instance from a player. */
+  /**
+   * Remove a specific instance from a player.
+   *
+   * @param player - Player id that owns the instance.
+   * @param inst - Instance id to remove.
+   * @returns `true` if the instance existed and was removed.
+   */
   removeInstance(player: PlayerId, inst: InstId): boolean {
     const inner: any = this.inner;
     if (typeof inner.remove_instance !== "function") {
@@ -340,7 +416,12 @@ export class Engine {
     return !!inner.remove_instance(player as number, inst as number);
   }
 
-  /** Unload an animation; auto-detach referencing instances. */
+  /**
+   * Unload an animation and detach referencing instances.
+   *
+   * @param anim - Animation id to unload.
+   * @returns `true` if the animation existed and was removed.
+   */
   unloadAnimation(anim: AnimId): boolean {
     const inner: any = this.inner;
     if (typeof inner.unload_animation !== "function") {
@@ -349,7 +430,9 @@ export class Engine {
     return !!inner.unload_animation(anim as number);
   }
 
-  /** Enumerate animations in the engine. */
+  /**
+   * Enumerate animations currently loaded in the engine.
+   */
   listAnimations(): AnimationInfo[] {
     const inner: any = this.inner;
     if (typeof inner.list_animations !== "function") {
@@ -358,7 +441,9 @@ export class Engine {
     return (inner.list_animations() as unknown) as AnimationInfo[];
   }
 
-  /** Enumerate players and playback info. */
+  /**
+   * Enumerate players and playback info.
+   */
   listPlayers(): PlayerInfo[] {
     const inner: any = this.inner;
     if (typeof inner.list_players !== "function") {
@@ -367,7 +452,9 @@ export class Engine {
     return (inner.list_players() as unknown) as PlayerInfo[];
   }
 
-  /** Enumerate instances for a given player. */
+  /**
+   * Enumerate instances for a given player.
+   */
   listInstances(player: PlayerId): InstanceInfo[] {
     const inner: any = this.inner;
     if (typeof inner.list_instances !== "function") {
@@ -376,7 +463,9 @@ export class Engine {
     return (inner.list_instances(player as number) as unknown) as InstanceInfo[];
   }
 
-  /** Enumerate resolved output keys currently associated with a player's instances. */
+  /**
+   * Enumerate resolved output keys currently associated with a player's instances.
+   */
   listPlayerKeys(player: PlayerId): string[] {
     const inner: any = this.inner;
     if (typeof inner.list_player_keys !== "function") {
@@ -391,7 +480,10 @@ export class Engine {
 ----------------------------------------------------------- */
 
 /**
- * Convenience helper to init() and return a ready Engine instance.
+ * Convenience helper that awaits {@link init} and returns a ready {@link Engine}.
+ *
+ * @param config - Optional engine configuration.
+ * @returns Initialized Engine instance.
  */
 export async function createEngine(config?: Config): Promise<Engine> {
   await init();
@@ -412,8 +504,20 @@ export {
 ----------------------------------------------------------- */
 
 export default init;
-// Deprecated: prefer `Engine` wrapper. Kept temporarily for legacy code.
+/**
+ * Legacy alias for {@link VizijAnimation}.
+ *
+ * @deprecated Prefer {@link Engine} for ergonomic access.
+ */
 export { VizijAnimation as Animation };
+/**
+ * Low-level wasm class proxy.
+ *
+ * This is a thin wrapper around the wasm-bindgen class and expects you to pass
+ * JSON-serializable payloads exactly as the Rust API expects.
+ *
+ * @throws Error if {@link init} has not completed.
+ */
 export const VizijAnimation: WasmAnimationCtor = new Proxy(
   function () {},
   {

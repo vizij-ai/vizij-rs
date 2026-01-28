@@ -8,7 +8,11 @@ const nodesByType: NodeIndex = new Map(
   registry.nodes.map((node) => [node.type_id.toLowerCase(), node]),
 );
 
-/** Return the baked node registry payload (read-only). */
+/**
+ * Return the baked node registry payload (read-only).
+ *
+ * Useful for offline tooling and editor palettes when wasm is unavailable.
+ */
 export function getNodeRegistry(): Registry {
   return registry;
 }
@@ -17,6 +21,8 @@ export function getNodeRegistry(): Registry {
  * Look up a node signature by type id.
  *
  * The lookup is case-insensitive and returns `undefined` when the id is unknown.
+ *
+ * @param typeId - Node type identifier.
  */
 export function findNodeSignature(
   typeId: NodeType | string,
@@ -27,7 +33,8 @@ export function findNodeSignature(
 /**
  * Get a node signature or throw if it is missing.
  *
- * @throws If the node type does not exist in the embedded registry.
+ * @param typeId - Node type identifier.
+ * @throws Error if the node type does not exist in the embedded registry.
  */
 export function requireNodeSignature(
   typeId: NodeType | string,
@@ -39,7 +46,9 @@ export function requireNodeSignature(
   return entry;
 }
 
-/** List all node type identifiers available in the registry. */
+/**
+ * List all node type identifiers available in the registry.
+ */
 export function listNodeTypeIds(): NodeType[] {
   return registry.nodes.map((node) => node.type_id as NodeType);
 }
@@ -66,5 +75,7 @@ export function groupNodeSignaturesByCategory(): Map<
   return map;
 }
 
-/** Registry data version embedded in the package. */
+/**
+ * Registry data version embedded in the package.
+ */
 export const nodeRegistryVersion = registry.version;

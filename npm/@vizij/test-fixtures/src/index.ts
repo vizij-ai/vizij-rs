@@ -1,8 +1,7 @@
 /**
  * Browser/Node-friendly access to shared Vizij JSON fixtures.
  *
- * @example
- * const names = animations.animationNames();
+ * Re-exported modules surface helpers for animations, graphs, and orchestrations.
  */
 export * as animations from "./animations.js";
 export * as nodeGraphs from "./nodeGraphs.js";

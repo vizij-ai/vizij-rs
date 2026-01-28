@@ -35,22 +35,43 @@ function loadFixture<T>(relPath: string): T {
   return JSON.parse(readFixture(relPath)) as T;
 }
 
-/** List the animation fixture keys available via the embedded manifest. */
+/**
+ * List the animation fixture keys available via the embedded manifest.
+ *
+ * @returns Array of fixture keys.
+ */
 export async function listAnimationFixtures(): Promise<string[]> {
   return Object.keys(manifest.animations ?? {});
 }
 
-/** Load the StoredAnimation-compatible fixture payload for the given key. */
+/**
+ * Load the StoredAnimation-compatible fixture payload for the given key.
+ *
+ * @param name - Fixture key from the manifest.
+ * @returns Parsed StoredAnimation payload.
+ * @throws Error if the fixture key is unknown or missing in the bundle.
+ */
 export async function loadAnimationFixture<T = StoredAnimation>(name: string): Promise<T> {
   return loadFixture<T>(animationEntry(name));
 }
 
-/** Load the raw JSON text for the given animation fixture key. */
+/**
+ * Load the raw JSON text for the given animation fixture key.
+ *
+ * @param name - Fixture key from the manifest.
+ * @returns Raw JSON string.
+ * @throws Error if the fixture key is unknown or missing in the bundle.
+ */
 export async function loadAnimationJson(name: string): Promise<string> {
   return readFixture(animationEntry(name));
 }
 
-/** Resolve the virtual fixtures/ path for the given animation fixture key. */
+/**
+ * Resolve the virtual fixtures/ path for the given animation fixture key.
+ *
+ * @param name - Fixture key from the manifest.
+ * @returns Virtual fixtures path (for display/debugging).
+ */
 export async function resolveAnimationPath(name: string): Promise<string> {
   return `fixtures/${normalizeRelPath(animationEntry(name))}`;
 }
