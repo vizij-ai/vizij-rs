@@ -288,7 +288,7 @@ impl Orchestrator {
 }
 
 impl Default for Orchestrator {
-    /// Creates a new instance.
+    /// Creates a new `Default`.
     fn default() -> Self {
         Self::new(Schedule::SinglePass)
     }
@@ -301,7 +301,7 @@ mod tests {
         EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
     };
 
-    /// Samples graph.
+    /// Samples graph (for `id`).
     fn sample_graph(id: &str, value: f32) -> GraphControllerConfig {
         let spec = GraphSpec {
             nodes: vec![

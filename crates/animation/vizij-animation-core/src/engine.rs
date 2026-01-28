@@ -62,7 +62,7 @@ pub struct Player {
 }
 
 impl Player {
-    /// Creates a new instance.
+    /// Creates a new instance (for `id`).
     fn new(id: PlayerId, name: String) -> Self {
         Self {
             id,
@@ -116,7 +116,7 @@ pub struct InstanceCfg {
 }
 
 impl Default for InstanceCfg {
-    /// Creates a new instance.
+    /// Creates a new `Default`.
     fn default() -> Self {
         Self {
             weight: 1.0,
@@ -134,11 +134,11 @@ struct AnimLib {
 }
 
 impl AnimLib {
-    /// Internal helper for `insert`.
+    /// Internal helper for `insert` (for `id`).
     fn insert(&mut self, id: AnimId, data: AnimationData) {
         self.items.push((id, data));
     }
-    /// Returns the requested value.
+    /// Returns the requested value (for `id`).
     fn get(&self, id: AnimId) -> Option<&AnimationData> {
         self.items
             .iter()
@@ -148,13 +148,13 @@ impl AnimLib {
     fn iter(&self) -> impl Iterator<Item = &(AnimId, AnimationData)> {
         self.items.iter()
     }
-    /// Removes internal state.
+    /// Removes internal state (for `id`).
     fn remove(&mut self, id: AnimId) -> bool {
         let before = self.items.len();
         self.items.retain(|(a, _)| *a != id);
         before != self.items.len()
     }
-    /// Internal helper for `contains`.
+    /// Internal helper for `contains` (for `id`).
     fn contains(&self, id: AnimId) -> bool {
         self.items.iter().any(|(a, _)| *a == id)
     }
@@ -759,7 +759,7 @@ impl Engine {
         }
     }
 
-    /// Updates internal state.
+    /// Advances internal state (using `dt`).
     fn step(&mut self, dt: f32, inputs: Inputs, with_derivatives: bool) {
         self.scratch.begin_frame();
         self.outputs.clear();

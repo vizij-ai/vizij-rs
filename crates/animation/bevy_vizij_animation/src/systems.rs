@@ -104,7 +104,7 @@ pub fn prebind_core_system(
         idx: &'a BindingIndex,
     }
     impl<'a> TargetResolver for Resolver<'a> {
-        /// Internal helper for `resolve`.
+        /// Internal helper for `resolve` (returns `None` when unavailable).
         fn resolve(&mut self, path: &str) -> Option<String> {
             if self.idx.map.contains_key(path) {
                 Some(path.to_string())

@@ -20,7 +20,7 @@ macro_rules! graph_spec {
     }};
 }
 
-/// Internal helper for `constant_node`.
+/// Internal helper for `constant_node` (for `id`).
 fn constant_node(id: &str, value: Value) -> NodeSpec {
     NodeSpec {
         id: id.to_string(),

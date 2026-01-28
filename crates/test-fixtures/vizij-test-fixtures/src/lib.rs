@@ -69,20 +69,20 @@ fn resolve_path(rel: &str) -> PathBuf {
     fixtures_root().join(rel)
 }
 
-/// Reads to string.
+/// Reads to string (returns an error on invalid input).
 fn read_to_string(rel: &str) -> Result<String> {
     let path = resolve_path(rel);
     fs::read_to_string(&path)
         .with_context(|| format!("failed to read fixture at {}", path.display()))
 }
 
-/// Loads JSON.
+/// Loads JSON (returns an error on invalid input).
 fn load_json<T: DeserializeOwned>(rel: &str) -> Result<T> {
     let text = read_to_string(rel)?;
     serde_json::from_str(&text).with_context(|| format!("failed to parse JSON fixture {rel}"))
 }
 
-/// Internal helper for `lookup`.
+/// Internal helper for `lookup` (returns an error on invalid input).
 fn lookup<'a, T>(map: &'a HashMap<String, T>, kind: &str, name: &str) -> Result<&'a T> {
     map.get(name)
         .ok_or_else(|| anyhow!("unknown {kind} fixture '{name}'"))

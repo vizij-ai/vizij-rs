@@ -46,7 +46,7 @@ impl WriteOp {
 
 // Serialize WriteOp as { "path": "<string>", "value": <ValueJSON> }
 impl Serialize for WriteOp {
-    /// Internal helper for `serialize`.
+    /// Internal helper for `serialize` (returns an error on invalid input).
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -68,7 +68,7 @@ impl Serialize for WriteOp {
 }
 
 impl<'de> Deserialize<'de> for WriteOp {
-    /// Internal helper for `deserialize`.
+    /// Internal helper for `deserialize` (returns an error on invalid input).
     fn deserialize<D>(deserializer: D) -> Result<WriteOp, D::Error>
     where
         D: Deserializer<'de>,

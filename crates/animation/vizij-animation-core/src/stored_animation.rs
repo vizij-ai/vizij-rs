@@ -67,7 +67,7 @@ pub fn parse_stored_animation_json(s: &str) -> Result<AnimationData, String> {
     Ok(data)
 }
 
-/// Converts core value.
+/// Converts core value (returns an error on invalid input).
 fn to_core_value(v: &RawValue) -> Result<Value, String> {
     match v {
         RawValue::Boolean(b) => Ok(Value::Bool(*b)),

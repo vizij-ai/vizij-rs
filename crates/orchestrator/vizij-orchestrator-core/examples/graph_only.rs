@@ -3,7 +3,7 @@ use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
 use vizij_graph_core::types::GraphSpec;
 use vizij_orchestrator::{GraphControllerConfig, Orchestrator, Schedule, Subscriptions};
 
-/// Internal helper for `main`.
+/// Example helper for `main` (returns an error on invalid input).
 fn main() -> anyhow::Result<()> {
     // Create an orchestrator with the default single-pass schedule.
     let mut orch = Orchestrator::new(Schedule::SinglePass);

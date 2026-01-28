@@ -204,7 +204,7 @@ impl fmt::Display for TypedPath {
 
 impl FromStr for TypedPath {
     type Err = String;
-    /// Creates str.
+    /// Creates str (returns an error on invalid input).
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         TypedPath::parse(s)
     }
@@ -212,7 +212,7 @@ impl FromStr for TypedPath {
 
 // Serde support: serialize as string, deserialize from string
 impl Serialize for TypedPath {
-    /// Internal helper for `serialize`.
+    /// Internal helper for `serialize` (returns an error on invalid input).
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -222,7 +222,7 @@ impl Serialize for TypedPath {
 }
 
 impl<'de> Deserialize<'de> for TypedPath {
-    /// Internal helper for `deserialize`.
+    /// Internal helper for `deserialize` (returns an error on invalid input).
     fn deserialize<D>(deserializer: D) -> Result<TypedPath, D::Error>
     where
         D: Deserializer<'de>,

@@ -3,7 +3,7 @@ use vizij_api_core::{TypedPath, Value};
 use vizij_graph_core::types::GraphSpec;
 use vizij_orchestrator::{GraphControllerConfig, Orchestrator, Schedule, Subscriptions};
 
-/// Internal helper for `main`.
+/// Example helper for `main` (returns an error on invalid input).
 fn main() -> anyhow::Result<()> {
     // Graph A: produce a constant value and expose it via an output node.
     let producer_spec: GraphSpec = serde_json::from_value(json!({

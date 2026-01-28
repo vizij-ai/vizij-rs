@@ -156,7 +156,7 @@ impl PlanCache {
         self.rebuild(spec, fp, spec.version)
     }
 
-    /// Internal helper for `rebuild`.
+    /// Internal helper for `rebuild` (returns an error on invalid input).
     fn rebuild(&mut self, spec: &GraphSpec, fingerprint: u64, version: u64) -> Result<(), String> {
         let inputs_map = spec.input_connections()?;
         let order_ids = crate::topo::topo_order(&spec.nodes, &spec.edges)?;
@@ -361,7 +361,7 @@ fn build_input_bindings(
     bindings
 }
 
-/// Internal helper for `connection_default_port`.
+/// Internal helper for `connection_default_port` (returns `None` when unavailable).
 fn connection_default_port(conn: &InputConnection) -> Option<PortValue> {
     conn.default_value.as_ref().map(|value| {
         if let Some(shape) = &conn.default_shape {

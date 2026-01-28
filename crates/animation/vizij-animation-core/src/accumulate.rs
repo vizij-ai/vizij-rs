@@ -50,7 +50,7 @@ impl CollectionKind {
     }
 }
 
-/// Internal helper for `numeric_collection_from_value`.
+/// Internal helper for `numeric_collection_from_value` (returns `None` when unavailable).
 fn numeric_collection_from_value(value: &Value) -> Option<(CollectionKind, Vec<f32>)> {
     match value {
         Value::Vector(values) => Some((CollectionKind::Vector(values.len()), values.clone())),
@@ -138,7 +138,7 @@ enum AccumEntry {
 }
 
 impl AccumEntry {
-    /// Adds value.
+    /// Adds value (mutates internal state).
     fn add_value(&mut self, v: &Value, w: f32) {
         match (self, v) {
             (AccumEntry::Scalar { sum, w: ww }, Value::Float(x)) => {
@@ -313,7 +313,7 @@ impl AccumEntry {
         }
     }
 
-    /// Internal helper for `finalize`.
+    /// Internal helper for `finalize` (returns `None` when unavailable).
     fn finalize(self) -> Option<Value> {
         match self {
             AccumEntry::Scalar { sum, w } => {

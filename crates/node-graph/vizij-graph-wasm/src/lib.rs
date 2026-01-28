@@ -294,7 +294,7 @@ struct SlotStaging {
     declared: Option<Shape>,
 }
 
-/// Parses shape JSON.
+/// Parses shape JSON (returns JS-compatible data; returns an error on invalid input; returns `None` when unavailable).
 fn parse_shape_json(declared_shape_json: Option<String>) -> Result<Option<Shape>, JsValue> {
     match declared_shape_json {
         Some(s) => {
@@ -310,7 +310,7 @@ fn parse_shape_json(declared_shape_json: Option<String>) -> Result<Option<Shape>
     }
 }
 
-/// Parses shape JS.
+/// Parses shape JS (returns JS-compatible data; returns an error on invalid input; returns `None` when unavailable).
 fn parse_shape_js(declared: &JsValue) -> Result<Option<Shape>, JsValue> {
     if declared.is_undefined() || declared.is_null() {
         Ok(None)
@@ -321,7 +321,7 @@ fn parse_shape_js(declared: &JsValue) -> Result<Option<Shape>, JsValue> {
     }
 }
 
-/// Parses value JS.
+/// Parses value JS (returns JS-compatible data; returns an error on invalid input).
 fn parse_value_js(
     value: JsValue,
     normalize: fn(serde_json::Value) -> serde_json::Value,
@@ -335,7 +335,7 @@ fn parse_value_js(
 }
 
 impl Default for WasmGraph {
-    /// Creates a new instance.
+    /// Creates a new WASM wrapper instance.
     fn default() -> Self {
         Self::new()
     }
@@ -490,7 +490,7 @@ impl WasmGraph {
         self.spec = std::mem::take(&mut self.spec).with_cache();
     }
 
-    /// Evaluates internal.
+    /// Evaluates internal (returns JS-compatible data; returns an error on invalid input).
     fn eval_internal(&mut self) -> Result<(), JsValue> {
         let res = if self.plan_ready {
             evaluate_all_cached(&mut self.runtime, &self.spec)
@@ -532,7 +532,7 @@ impl WasmGraph {
         Ok(())
     }
 
-    /// Stages cached.
+    /// Stages cached (returns JS-compatible data; returns an error on invalid input).
     fn stage_cached(
         &mut self,
         slot_idx: usize,
@@ -1089,7 +1089,7 @@ impl WasmGraph {
         last.ok_or_else(|| JsValue::from_str("eval_steps: no steps executed"))
     }
 
-    /// Evaluates all JSON.
+    /// Evaluates all JSON (returns JS-compatible data; returns an error on invalid input).
     fn eval_all_json(&mut self) -> Result<serde_json::Value, JsValue> {
         let new_time = self.t as f32;
         let mut dt = new_time - self.runtime.t;
@@ -1265,9 +1265,9 @@ impl WasmGraph {
         self.set_param_inner(node_id, key, val)
     }
 
-    /// Sets param inner.
+    /// Sets param inner (returns JS-compatible data; returns an error on invalid input).
     fn set_param_inner(&mut self, node_id: &str, key: &str, val: Value) -> Result<(), JsValue> {
-        /// Internal helper for `expect_float`.
+        /// Internal helper for `expect_float` (returns JS-compatible data; returns an error on invalid input).
         fn expect_float(node_id: &str, key: &str, v: &Value) -> Result<f32, JsValue> {
             if let Value::Float(f) = v {
                 Ok(*f)
@@ -1278,7 +1278,7 @@ impl WasmGraph {
                 )))
             }
         }
-        /// Internal helper for `expect_bool`.
+        /// Internal helper for `expect_bool` (returns JS-compatible data; returns an error on invalid input).
         fn expect_bool(node_id: &str, key: &str, v: &Value) -> Result<bool, JsValue> {
             if let Value::Bool(b) = v {
                 Ok(*b)
@@ -1289,7 +1289,7 @@ impl WasmGraph {
                 )))
             }
         }
-        /// Internal helper for `expect_text`.
+        /// Internal helper for `expect_text` (returns JS-compatible data; returns an error on invalid input).
         fn expect_text<'a>(node_id: &str, key: &str, v: &'a Value) -> Result<&'a str, JsValue> {
             if let Value::Text(s) = v {
                 Ok(s.as_str())
@@ -1300,7 +1300,7 @@ impl WasmGraph {
                 )))
             }
         }
-        /// Parses u32.
+        /// Parses u32 (returns JS-compatible data; returns an error on invalid input).
         fn parse_u32(node_id: &str, key: &str, v: &Value) -> Result<u32, JsValue> {
             let f = expect_float(node_id, key, v)?;
             if f.is_finite() && f >= 0.0 {
@@ -1312,7 +1312,7 @@ impl WasmGraph {
                 )))
             }
         }
-        /// Parses pairs.
+        /// Parses pairs (returns JS-compatible data; returns an error on invalid input).
         fn parse_pairs(node_id: &str, key: &str, v: &Value) -> Result<Vec<(String, f32)>, JsValue> {
             let items: Vec<Value> = match v {
                 Value::List(xs) => xs.clone(),
@@ -1359,7 +1359,7 @@ impl WasmGraph {
             Ok(out)
         }
 
-        /// Parses string list.
+        /// Parses string list (returns JS-compatible data; returns an error on invalid input).
         fn parse_string_list(node_id: &str, key: &str, v: &Value) -> Result<Vec<String>, JsValue> {
             match v {
                 Value::List(items) | Value::Array(items) | Value::Tuple(items) => {
@@ -1383,7 +1383,7 @@ impl WasmGraph {
                 ))),
             }
         }
-        /// Parses round mode.
+        /// Parses round mode (returns JS-compatible data; returns an error on invalid input).
         fn parse_round_mode(node_id: &str, key: &str, v: &Value) -> Result<RoundMode, JsValue> {
             let raw = expect_text(node_id, key, v)?;
             let normalized = raw.trim().to_ascii_lowercase();

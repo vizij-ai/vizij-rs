@@ -35,7 +35,7 @@ pub struct BakingConfig {
 }
 
 impl Default for BakingConfig {
-    /// Creates a new instance.
+    /// Creates a new `Default`.
     fn default() -> Self {
         Self {
             frame_rate: 60.0,

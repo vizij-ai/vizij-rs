@@ -5,7 +5,7 @@ use vizij_orchestrator::{
     AnimationControllerConfig, GraphControllerConfig, Orchestrator, Schedule, Subscriptions,
 };
 
-/// Internal helper for `main`.
+/// Example helper for `main` (returns an error on invalid input).
 fn main() -> anyhow::Result<()> {
     let mut orch = Orchestrator::new(Schedule::SinglePass);
 

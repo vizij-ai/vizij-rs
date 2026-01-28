@@ -101,7 +101,7 @@ pub struct GraphMergeOptions {
 }
 
 impl Default for GraphMergeOptions {
-    /// Creates a new instance.
+    /// Creates a new `Default`.
     fn default() -> Self {
         Self {
             output_conflicts: OutputConflictStrategy::Error,
@@ -331,7 +331,7 @@ impl GraphControllerConfig {
             existing_ids: &'a mut HashSet<String>,
         }
 
-        /// Internal helper for `attach_conflict_resolution`.
+        /// Internal helper for `attach_conflict_resolution` (for `path`; returns an error on invalid input).
         fn attach_conflict_resolution(
             path: &str,
             source_node_id: &str,
@@ -905,7 +905,7 @@ impl GraphController {
     }
 }
 
-/// Internal helper for `make_namespace`.
+/// Internal helper for `make_namespace` (for `id`).
 fn make_namespace(index: usize, id: &str) -> String {
     let mut sanitized = id
         .chars()
@@ -923,7 +923,7 @@ fn make_namespace(index: usize, id: &str) -> String {
     format!("g{index}_{sanitized}")
 }
 
-/// Internal helper for `find_node_mut`.
+/// Internal helper for `find_node_mut` (for `id`; returns `None` when unavailable).
 fn find_node_mut<'a>(
     nodes: &'a mut [vizij_graph_core::types::NodeSpec],
     id: &str,
@@ -960,7 +960,7 @@ mod tests {
     use vizij_graph_core::eval::{evaluate_all, GraphRuntime};
     use vizij_graph_core::types::SelectorSegment;
 
-    /// Internal helper for `cfg_from_json`.
+    /// Internal helper for `cfg_from_json` (for `id`).
     fn cfg_from_json(id: &str, spec_json: serde_json::Value) -> GraphControllerConfig {
         let mut spec_json = spec_json;
         vizij_api_core::json::normalize_graph_spec_value(&mut spec_json)

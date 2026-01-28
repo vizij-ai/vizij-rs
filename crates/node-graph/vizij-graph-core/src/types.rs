@@ -361,7 +361,7 @@ fn default_output_key() -> String {
 }
 
 impl Default for InputConnection {
-    /// Creates a new instance.
+    /// Creates a new `Default`.
     fn default() -> Self {
         Self {
             node_id: None,

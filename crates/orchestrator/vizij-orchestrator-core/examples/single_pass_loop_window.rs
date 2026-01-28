@@ -6,7 +6,7 @@ use vizij_orchestrator::{
 };
 use vizij_test_fixtures::animations;
 
-/// Internal helper for `main`.
+/// Example helper for `main` (returns an error on invalid input).
 fn main() -> anyhow::Result<()> {
     // Create orchestrator with single-pass schedule
     let mut orch = Orchestrator::new(Schedule::SinglePass);
