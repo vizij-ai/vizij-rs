@@ -48,13 +48,14 @@
     "perf:wasm": "node scripts/run_perf_baselines_wasm.mjs",
     "perf:wasm:verify": "VERIFY_ONLY=1 node scripts/run_perf_baselines_wasm.mjs",
     "perf:smoke": "SMOKE=1 VERIFY_ONLY=1 node scripts/run_perf_baselines_wasm.mjs",
-    "docs:typedoc": "typedoc"
+    "docs:typedoc": "node scripts/embed-fixtures.mjs animation-wasm && node scripts/embed-fixtures.mjs node-graph-wasm && node scripts/embed-fixtures.mjs orchestrator-wasm && typedoc"
   },
   "workspaces": [
     "npm/@vizij/*"
   ],
   "devDependencies": {
     "@changesets/cli": "^2.27.7",
-    "typedoc": "^0.26.11"
+    "typedoc": "^0.26.11",
+    "typescript": "^5.5.4"
   }
 }
