@@ -309,7 +309,7 @@ impl VizijAnimation {
         swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
     }
 
-    /// Backwards-compatible alias for `update_values`.
+    /// Backwards-compatible alias for `update_values` (dt is in seconds).
     ///
     /// # Errors
     /// Returns an error if inputs fail to deserialize or outputs fail to serialize.

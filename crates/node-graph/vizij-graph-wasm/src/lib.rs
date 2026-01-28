@@ -759,6 +759,9 @@ impl WasmGraph {
     /// Stage a float32 vector without JSON, using a shared buffer view.
     ///
     /// The value is staged as a `Vector` with a vector shape.
+    ///
+    /// # Errors
+    /// Returns an error if the path fails to parse.
     /// Prefer this for high-throughput numeric inputs to avoid JSON stringify/parse.
     #[wasm_bindgen(js_name = "stage_input_f32")]
     pub fn stage_input_f32(&mut self, path: &str, data: &Float32Array) -> Result<(), JsValue> {
@@ -1213,6 +1216,8 @@ impl WasmGraph {
 
     /// Step forward multiple times and return only the final outputs/writes.
     ///
+    /// `dt` is in seconds and is applied per step.
+    ///
     /// Useful for amortizing JS/WASM boundary cost when ticking many frames.
     ///
     /// # Errors
@@ -1225,6 +1230,8 @@ impl WasmGraph {
     }
 
     /// Step forward multiple times and return the final outputs/writes as JSON.
+    ///
+    /// `dt` is in seconds and is applied per step.
     ///
     /// # Errors
     /// Returns a `JsValue` error if `dt` is negative/non-finite or evaluation fails.

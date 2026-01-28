@@ -850,6 +850,8 @@ impl GraphController {
 
     /// Evaluate the graph using the current blackboard state.
     ///
+    /// `dt` is in seconds and advances the runtime clock.
+    ///
     /// Behavior:
     /// - Advance `GraphRuntime.t`/`dt` so time-based nodes observe the new step.
     /// - Stage subscribed blackboard inputs into the runtime (only inputs listed in `Subscriptions`).

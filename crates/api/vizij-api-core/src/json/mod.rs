@@ -772,6 +772,8 @@ pub fn writebatch_to_legacy_json(batch: &WriteBatch) -> JsonValue {
 /// This helper is primarily intended for wasm consumers that still emit the
 /// legacy structure; it normalizes and then deserializes just like [`parse_value`].
 ///
+/// Returns an error if the legacy payload is malformed or unsupported.
+///
 /// # Examples
 ///
 /// ```rust
@@ -791,6 +793,8 @@ pub fn value_from_legacy_json(value: JsonValue) -> Result<Value, serde_json::Err
 /// Deserialize a legacy JSON write batch array back into a strongly typed [`WriteBatch`].
 ///
 /// If the input is not an array, this returns an empty batch.
+///
+/// Returns an error if any element is missing required fields or contains invalid JSON.
 ///
 /// # Examples
 ///

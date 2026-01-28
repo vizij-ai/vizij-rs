@@ -890,12 +890,14 @@ impl Engine {
         &self.outputs_with_derivatives
     }
 
-    /// Backwards-compatible alias for [`Engine::update_values`].
+    /// Backwards-compatible alias for [`Engine::update_values`] (dt is in seconds).
     pub fn update(&mut self, dt: f32, inputs: Inputs) -> &Outputs {
         self.update_values(dt, inputs)
     }
 
     /// Update and also return a typed `WriteBatch` (collection of `WriteOp`) where each
+    ///
+    /// `dt` is in seconds and is applied to the engine before the batch is produced.
     /// `WriteOp.path` is parsed as a `TypedPath`.
     ///
     /// If a change's key does not parse as a `TypedPath` it will be skipped in the returned

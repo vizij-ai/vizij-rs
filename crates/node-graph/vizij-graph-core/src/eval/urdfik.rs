@@ -431,6 +431,8 @@ pub fn solve_pose(
 #[cfg(feature = "urdf_ik")]
 /// Extract the numeric components from a supported value type.
 ///
+///
+/// Returns an error if the value cannot be interpreted as a numeric vector.
 /// This rejects record/tuple values that cannot be interpreted as numeric vectors.
 pub fn vector_from_value(value: &Value, label: &str) -> Result<Vec<f32>, String> {
     match value {
@@ -449,6 +451,8 @@ pub fn vector_from_value(value: &Value, label: &str) -> Result<Vec<f32>, String>
 #[cfg(feature = "urdf_ik")]
 /// Interpret a [`Value`] as a quaternion `[x, y, z, w]`.
 ///
+///
+/// Returns an error if the value is not a 4D numeric vector.
 /// Accepts `Value::Quat`, `Value::Vec4`, or a 4-element `Value::Vector`.
 pub fn quat_from_value(value: &Value, label: &str) -> Result<[f32; 4], String> {
     match value {
