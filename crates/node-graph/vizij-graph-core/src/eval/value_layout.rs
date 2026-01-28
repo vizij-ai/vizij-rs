@@ -65,7 +65,7 @@ impl PortValue {
 }
 
 impl Default for PortValue {
-    /// Creates a new `Default`.
+    /// Creates a default value for value layout and flattening.
     fn default() -> Self {
         PortValue::new(Value::Float(0.0))
     }

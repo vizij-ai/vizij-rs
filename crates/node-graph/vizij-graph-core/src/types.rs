@@ -355,13 +355,13 @@ pub struct InputConnection {
     pub default_shape: Option<Shape>,
 }
 
-/// Creates a new instance.
+/// Creates a new instance for graph spec types and metadata.
 fn default_output_key() -> String {
     "out".to_string()
 }
 
 impl Default for InputConnection {
-    /// Creates a new `Default`.
+    /// Creates a default value for graph spec types and metadata.
     fn default() -> Self {
         Self {
             node_id: None,

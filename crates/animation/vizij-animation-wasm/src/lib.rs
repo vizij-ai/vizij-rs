@@ -26,7 +26,7 @@ pub struct VizijAnimation {
     core: Engine,
 }
 
-/// Internal helper for `jsvalue_is_undefined_or_null`.
+/// Internal helper for `jsvalue_is_undefined_or_null` in the animation WASM wrapper.
 fn jsvalue_is_undefined_or_null(v: &JsValue) -> bool {
     v.is_undefined() || v.is_null()
 }
@@ -63,7 +63,7 @@ struct JsResolver {
 }
 
 impl TargetResolver for JsResolver {
-    /// Internal helper for `resolve` (returns `None` when unavailable).
+    /// Internal helper for `resolve` in the animation WASM wrapper.
     fn resolve(&mut self, path: &str) -> Option<String> {
         // Call JS resolver(path) - expect string key; allow number fallback -> string
         let arg = JsValue::from_str(path);

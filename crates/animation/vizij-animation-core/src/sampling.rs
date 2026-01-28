@@ -21,7 +21,7 @@ use vizij_api_core::{Value, ValueKind};
 /// the opposite. Consider exposing via configuration if tooling needs to tune accuracy.
 pub(crate) const DEFAULT_DERIVATIVE_EPSILON: f32 = 1e-3;
 
-/// Internal helper for `value_difference` (returns `None` when unavailable).
+/// Internal helper for `value_difference` in track sampling utilities.
 fn value_difference(a: &Value, b: &Value) -> Option<Value> {
     match (a, b) {
         (Value::Float(va), Value::Float(vb)) => Some(Value::Float(va - vb)),
@@ -63,7 +63,7 @@ fn value_difference(a: &Value, b: &Value) -> Option<Value> {
     }
 }
 
-/// Internal helper for `value_scale` (returns `None` when unavailable).
+/// Internal helper for `value_scale` in track sampling utilities.
 fn value_scale(value: &Value, scale: f32) -> Option<Value> {
     match value {
         Value::Float(v) => Some(Value::Float(v * scale)),
@@ -156,7 +156,7 @@ pub struct SampledValue {
     pub derivative: Value,
 }
 
-/// Internal helper for `zero_like`.
+/// Internal helper for `zero_like` in track sampling utilities.
 fn zero_like(value: &Value) -> Value {
     match value {
         Value::Float(_) => Value::Float(0.0),

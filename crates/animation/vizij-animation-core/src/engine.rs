@@ -116,7 +116,7 @@ pub struct InstanceCfg {
 }
 
 impl Default for InstanceCfg {
-    /// Creates a new `Default`.
+    /// Creates a default value for the animation engine playback state.
     fn default() -> Self {
         Self {
             weight: 1.0,
@@ -134,27 +134,27 @@ struct AnimLib {
 }
 
 impl AnimLib {
-    /// Internal helper for `insert` (for `id`).
+    /// Internal helper for `insert` in the animation engine playback state.
     fn insert(&mut self, id: AnimId, data: AnimationData) {
         self.items.push((id, data));
     }
-    /// Returns the requested value (for `id`).
+    /// Returns the requested value by id from the animation engine playback state.
     fn get(&self, id: AnimId) -> Option<&AnimationData> {
         self.items
             .iter()
             .find_map(|(a, d)| if *a == id { Some(d) } else { None })
     }
-    /// Iterates internal state.
+    /// Iterates internal state for the animation engine playback state.
     fn iter(&self) -> impl Iterator<Item = &(AnimId, AnimationData)> {
         self.items.iter()
     }
-    /// Removes internal state (for `id`).
+    /// Removes the entry by id from the animation engine playback state.
     fn remove(&mut self, id: AnimId) -> bool {
         let before = self.items.len();
         self.items.retain(|(a, _)| *a != id);
         before != self.items.len()
     }
-    /// Internal helper for `contains` (for `id`).
+    /// Internal helper for `contains` in the animation engine playback state.
     fn contains(&self, id: AnimId) -> bool {
         self.items.iter().any(|(a, _)| *a == id)
     }
@@ -183,7 +183,7 @@ pub struct Engine {
     outputs_with_derivatives: OutputsWithDerivatives,
 }
 
-/// Internal helper for `fmod`.
+/// Internal helper for `fmod` in the animation engine playback state.
 fn fmod(a: f32, b: f32) -> f32 {
     if b == 0.0 {
         return 0.0;
@@ -1032,7 +1032,7 @@ impl Engine {
             .collect()
     }
 
-    /// Internal helper for `derive_playback_state`.
+    /// Internal helper for `derive_playback_state` in the animation engine playback state.
     fn derive_playback_state(p: &Player) -> PlaybackState {
         if p.speed == 0.0 {
             if (p.time - p.start_time).abs() < 1e-6 {

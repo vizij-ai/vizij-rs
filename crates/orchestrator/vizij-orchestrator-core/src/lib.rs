@@ -288,7 +288,7 @@ impl Orchestrator {
 }
 
 impl Default for Orchestrator {
-    /// Creates a new `Default`.
+    /// Creates a default value for orchestrator runtime state.
     fn default() -> Self {
         Self::new(Schedule::SinglePass)
     }

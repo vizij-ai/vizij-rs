@@ -15,7 +15,7 @@ pub struct DiagnosticsCfg {
 }
 
 impl Default for DiagnosticsCfg {
-    /// Creates a new `Default`.
+    /// Creates a default value for orchestrator diagnostics.
     fn default() -> Self {
         Self { enabled: true }
     }

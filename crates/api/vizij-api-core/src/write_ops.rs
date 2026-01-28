@@ -46,7 +46,7 @@ impl WriteOp {
 
 // Serialize WriteOp as { "path": "<string>", "value": <ValueJSON> }
 impl Serialize for WriteOp {
-    /// Internal helper for `serialize` (returns an error on invalid input).
+    /// Internal helper for `serialize` in write batch assembly.
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -68,7 +68,7 @@ impl Serialize for WriteOp {
 }
 
 impl<'de> Deserialize<'de> for WriteOp {
-    /// Internal helper for `deserialize` (returns an error on invalid input).
+    /// Internal helper for `deserialize` in write batch assembly.
     fn deserialize<D>(deserializer: D) -> Result<WriteOp, D::Error>
     where
         D: Deserializer<'de>,
@@ -245,7 +245,7 @@ impl WriteBatch {
 }
 
 impl fmt::Display for WriteOp {
-    /// Internal helper for `fmt`.
+    /// Internal helper for `fmt` in write batch assembly.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let val = serde_json::to_string(&self.value).map_err(|_| fmt::Error)?;
         if let Some(shape) = &self.shape {
@@ -267,7 +267,7 @@ mod tests {
     use crate::{Shape, ShapeId, Value};
 
     #[test]
-    /// Internal helper for `writeop_roundtrip_json`.
+    /// Internal helper for `writeop_roundtrip_json` in write batch assembly.
     fn writeop_roundtrip_json() {
         let tp = TypedPath::parse("robot1/Arm/Joint3.angle").unwrap();
         let op = WriteOp::new(tp, Value::Vec3([1.0, 2.0, 3.0]));
@@ -277,7 +277,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `writebatch_json_array`.
+    /// Internal helper for `writebatch_json_array` in write batch assembly.
     fn writebatch_json_array() {
         let mut b = WriteBatch::new();
         b.push(WriteOp::new(
@@ -294,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `writeop_roundtrip_with_shape`.
+    /// Internal helper for `writeop_roundtrip_with_shape` in write batch assembly.
     fn writeop_roundtrip_with_shape() {
         let tp = TypedPath::parse("robot1/Arm/Joint3.angle").unwrap();
         let shape = Shape::new(ShapeId::Vec3);

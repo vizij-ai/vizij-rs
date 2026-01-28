@@ -35,7 +35,7 @@ pub struct BakingConfig {
 }
 
 impl Default for BakingConfig {
-    /// Creates a new `Default`.
+    /// Creates a default value for animation baking and sampling output.
     fn default() -> Self {
         Self {
             frame_rate: 60.0,

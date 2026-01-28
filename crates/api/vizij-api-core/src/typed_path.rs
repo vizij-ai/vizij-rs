@@ -187,7 +187,7 @@ impl TypedPath {
 }
 
 impl fmt::Display for TypedPath {
-    /// Internal helper for `fmt`.
+    /// Internal helper for `fmt` in typed path parsing and formatting.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut parts: Vec<String> = self.namespaces.clone();
         if self.fields.is_empty() {
@@ -212,7 +212,7 @@ impl FromStr for TypedPath {
 
 // Serde support: serialize as string, deserialize from string
 impl Serialize for TypedPath {
-    /// Internal helper for `serialize` (returns an error on invalid input).
+    /// Internal helper for `serialize` in typed path parsing and formatting.
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -222,7 +222,7 @@ impl Serialize for TypedPath {
 }
 
 impl<'de> Deserialize<'de> for TypedPath {
-    /// Internal helper for `deserialize` (returns an error on invalid input).
+    /// Internal helper for `deserialize` in typed path parsing and formatting.
     fn deserialize<D>(deserializer: D) -> Result<TypedPath, D::Error>
     where
         D: Deserializer<'de>,

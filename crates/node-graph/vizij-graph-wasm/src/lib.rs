@@ -45,7 +45,7 @@ mod tests {
     use vizij_api_core::json;
 
     #[test]
-    /// Internal helper for `it_should_normalize_value_and_path_shorthand`.
+    /// Internal helper for `it_should_normalize_value_and_path_shorthand` in the node-graph WASM wrapper.
     fn it_should_normalize_value_and_path_shorthand() {
         let input = r#"{
             "nodes": [
@@ -76,7 +76,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `it_should_normalize_numeric_sizes`.
+    /// Internal helper for `it_should_normalize_numeric_sizes` in the node-graph WASM wrapper.
     fn it_should_normalize_numeric_sizes() {
         let input = r#"{
             "nodes": [
@@ -99,7 +99,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `registry_exposes_urdf_nodes`.
+    /// Internal helper for `registry_exposes_urdf_nodes` in the node-graph WASM wrapper.
     fn registry_exposes_urdf_nodes() {
         let raw = get_node_schemas_json();
         let parsed: serde_json::Value = serde_json::from_str(&raw).expect("valid registry json");
@@ -122,7 +122,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `abi_version_matches_expected`.
+    /// Internal helper for `abi_version_matches_expected` in the node-graph WASM wrapper.
     fn abi_version_matches_expected() {
         assert_eq!(super::abi_version(), 2);
     }
@@ -233,7 +233,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `delta_since_greater_than_output_version_forces_full_resync`.
+    /// Internal helper for `delta_since_greater_than_output_version_forces_full_resync` in the node-graph WASM wrapper.
     fn delta_since_greater_than_output_version_forces_full_resync() {
         let mut graph = WasmGraph::new();
         let spec = r#"{
@@ -335,7 +335,7 @@ fn parse_value_js(
 }
 
 impl Default for WasmGraph {
-    /// Creates a new WASM wrapper instance.
+    /// Creates a new WASM wrapper instance for the node-graph WASM wrapper.
     fn default() -> Self {
         Self::new()
     }
@@ -560,7 +560,7 @@ impl WasmGraph {
         Ok(())
     }
 
-    /// Internal helper for `snapshot_outputs`.
+    /// Internal helper for `snapshot_outputs` in the node-graph WASM wrapper.
     fn snapshot_outputs(&self) -> HashMap<String, HashMap<String, PortValue>> {
         self.runtime
             .outputs
@@ -575,7 +575,7 @@ impl WasmGraph {
             .collect()
     }
 
-    /// Internal helper for `serialize_full`.
+    /// Internal helper for `serialize_full` in the node-graph WASM wrapper.
     fn serialize_full(&mut self) -> serde_json::Value {
         let snapshot = self.snapshot_outputs();
         self.last_outputs = snapshot.clone();
@@ -583,7 +583,7 @@ impl WasmGraph {
         self.serialize_full_from_snapshot(&snapshot)
     }
 
-    /// Internal helper for `serialize_full_from_snapshot`.
+    /// Internal helper for `serialize_full_from_snapshot` in the node-graph WASM wrapper.
     fn serialize_full_from_snapshot(
         &self,
         snapshot: &HashMap<String, HashMap<String, PortValue>>,
@@ -627,7 +627,7 @@ impl WasmGraph {
         })
     }
 
-    /// Internal helper for `serialize_delta`.
+    /// Internal helper for `serialize_delta` in the node-graph WASM wrapper.
     fn serialize_delta(&mut self, since: u64) -> serde_json::Value {
         // Fast path: caller is exactly up-to-date.
         if since == self.output_version {
@@ -1267,7 +1267,7 @@ impl WasmGraph {
 
     /// Sets param inner (returns JS-compatible data; returns an error on invalid input).
     fn set_param_inner(&mut self, node_id: &str, key: &str, val: Value) -> Result<(), JsValue> {
-        /// Internal helper for `expect_float` (returns JS-compatible data; returns an error on invalid input).
+        /// Internal helper for `expect_float` in the node-graph WASM wrapper.
         fn expect_float(node_id: &str, key: &str, v: &Value) -> Result<f32, JsValue> {
             if let Value::Float(f) = v {
                 Ok(*f)
@@ -1278,7 +1278,7 @@ impl WasmGraph {
                 )))
             }
         }
-        /// Internal helper for `expect_bool` (returns JS-compatible data; returns an error on invalid input).
+        /// Internal helper for `expect_bool` in the node-graph WASM wrapper.
         fn expect_bool(node_id: &str, key: &str, v: &Value) -> Result<bool, JsValue> {
             if let Value::Bool(b) = v {
                 Ok(*b)
@@ -1289,7 +1289,7 @@ impl WasmGraph {
                 )))
             }
         }
-        /// Internal helper for `expect_text` (returns JS-compatible data; returns an error on invalid input).
+        /// Internal helper for `expect_text` in the node-graph WASM wrapper.
         fn expect_text<'a>(node_id: &str, key: &str, v: &'a Value) -> Result<&'a str, JsValue> {
             if let Value::Text(s) = v {
                 Ok(s.as_str())

@@ -35,7 +35,7 @@ pub fn build_binding_index_system(
     let mut map: HashMap<String, (Entity, TargetProp)> = HashMap::new();
 
     // Depth-first traversal from each root
-    /// Internal helper for `walk`.
+    /// Internal helper for `walk` in Bevy animation systems.
     fn walk(
         e: Entity,
         map: &mut HashMap<String, (Entity, TargetProp)>,
@@ -104,7 +104,7 @@ pub fn prebind_core_system(
         idx: &'a BindingIndex,
     }
     impl<'a> TargetResolver for Resolver<'a> {
-        /// Internal helper for `resolve` (returns `None` when unavailable).
+        /// Internal helper for `resolve` in Bevy animation systems.
         fn resolve(&mut self, path: &str) -> Option<String> {
             if self.idx.map.contains_key(path) {
                 Some(path.to_string())

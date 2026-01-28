@@ -59,7 +59,7 @@ pub struct PendingOutputs {
 pub struct FixedDt(pub f32);
 
 impl Default for FixedDt {
-    /// Creates a new Bevy integration value.
+    /// Creates a new Bevy integration value for Bevy animation resources.
     fn default() -> Self {
         Self(1.0 / 60.0)
     }

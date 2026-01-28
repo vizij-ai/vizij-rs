@@ -901,7 +901,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `writebatch_legacy_roundtrip`.
+    /// Internal helper for `writebatch_legacy_roundtrip` in JSON normalization and parsing.
     fn writebatch_legacy_roundtrip() {
         let tp = TypedPath::parse("robot/Arm/Joint.angle").unwrap();
         let batch = writebatch_from_pairs(vec![(tp, Value::Vec3([1.0, 2.0, 3.0]))]);
@@ -911,7 +911,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `graph_spec_normalization_inserts_type`.
+    /// Internal helper for `graph_spec_normalization_inserts_type` in JSON normalization and parsing.
     fn graph_spec_normalization_inserts_type() {
         let mut root = json!({
             "nodes": [
@@ -933,7 +933,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `graph_spec_normalization_converts_inputs_to_edges`.
+    /// Internal helper for `graph_spec_normalization_converts_inputs_to_edges` in JSON normalization and parsing.
     fn graph_spec_normalization_converts_inputs_to_edges() {
         let mut root = json!({
             "nodes": [
@@ -976,7 +976,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `graph_spec_normalization_injects_empty_edges_array`.
+    /// Internal helper for `graph_spec_normalization_injects_empty_edges_array` in JSON normalization and parsing.
     fn graph_spec_normalization_injects_empty_edges_array() {
         let mut root = json!({
             "nodes": [
@@ -994,7 +994,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `graph_spec_normalization_preserves_default_only_inputs`.
+    /// Internal helper for `graph_spec_normalization_preserves_default_only_inputs` in JSON normalization and parsing.
     fn graph_spec_normalization_preserves_default_only_inputs() {
         let mut root = json!({
             "nodes": [
@@ -1030,7 +1030,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `graph_spec_normalization_extracts_defaults_from_connections`.
+    /// Internal helper for `graph_spec_normalization_extracts_defaults_from_connections` in JSON normalization and parsing.
     fn graph_spec_normalization_extracts_defaults_from_connections() {
         let mut root = json!({
             "nodes": [
@@ -1075,7 +1075,7 @@ mod tests {
     }
 
     #[test]
-    /// Internal helper for `graph_spec_normalization_rejects_legacy_links_field`.
+    /// Internal helper for `graph_spec_normalization_rejects_legacy_links_field` in JSON normalization and parsing.
     fn graph_spec_normalization_rejects_legacy_links_field() {
         let mut root = json!({
             "nodes": [],

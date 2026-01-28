@@ -353,7 +353,7 @@ fn evaluate_kind(
     }
 }
 
-/// Internal helper for `input_or_default`.
+/// Internal helper for `input_or_default` in graph node evaluation.
 fn input_or_default(inputs: &InputSlots, key: &str) -> PortValue {
     inputs
         .get(key)
@@ -1003,7 +1003,7 @@ fn prepare_piecewise_breakpoints(
     })
 }
 
-/// Internal helper for `remap_piecewise_scalar`.
+/// Internal helper for `remap_piecewise_scalar` in graph node evaluation.
 fn remap_piecewise_scalar(
     value: f32,
     inputs: &[f32],
@@ -1069,7 +1069,7 @@ fn remap_piecewise_scalar(
     outputs[last_idx]
 }
 
-/// Internal helper for `approx_equal`.
+/// Internal helper for `approx_equal` in graph node evaluation.
 fn approx_equal(a: f32, b: f32) -> bool {
     (a - b).abs() <= PIECEWISE_BREAKPOINT_EPS
 }
@@ -1332,7 +1332,7 @@ fn eval_vector_reducer(
 // Blend helpers
 //
 
-/// Internal helper for `vec_port_to_vec`.
+/// Internal helper for `vec_port_to_vec` in graph node evaluation.
 fn vec_port_to_vec(inputs: &InputSlots, key: &str) -> Vec<f32> {
     if !inputs.is_present(key) {
         return Vec::new();
@@ -1407,7 +1407,7 @@ fn eval_default_blend(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<
     single_output(outputs, final_value)
 }
 
-/// Internal helper for `float_port_opt` (returns `None` when unavailable).
+/// Internal helper for `float_port_opt` in graph node evaluation.
 fn float_port_opt(inputs: &InputSlots, key: &str) -> Option<f32> {
     inputs.get(key).map(|p| as_float(&p.value))
 }
@@ -2106,7 +2106,7 @@ fn eval_input_node(
     ))
 }
 
-/// Internal helper for `align_input_to_declared` (for `path`; returns an error on invalid input).
+/// Internal helper for `align_input_to_declared` in graph node evaluation.
 fn align_input_to_declared(
     node_id: &str,
     path: &str,
@@ -2145,7 +2145,7 @@ fn align_input_to_declared(
     ))
 }
 
-/// Internal helper for `enforce_output_shapes_slots` (returns an error on invalid input).
+/// Internal helper for `enforce_output_shapes_slots` in graph node evaluation.
 fn enforce_output_shapes_slots(
     spec: &NodeSpec,
     layout: &PortLayout,

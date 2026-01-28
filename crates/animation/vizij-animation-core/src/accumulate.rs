@@ -15,7 +15,7 @@ enum CollectionKind {
 }
 
 impl CollectionKind {
-    /// Internal helper for `len`.
+    /// Internal helper for `len` in the animation accumulation pipeline.
     fn len(&self) -> usize {
         match *self {
             CollectionKind::Vector(len)
@@ -25,7 +25,7 @@ impl CollectionKind {
         }
     }
 
-    /// Internal helper for `matches`.
+    /// Internal helper for `matches` in the animation accumulation pipeline.
     fn matches(&self, other: &CollectionKind) -> bool {
         std::mem::discriminant(self) == std::mem::discriminant(other) && self.len() == other.len()
     }
@@ -50,7 +50,7 @@ impl CollectionKind {
     }
 }
 
-/// Internal helper for `numeric_collection_from_value` (returns `None` when unavailable).
+/// Internal helper for `numeric_collection_from_value` in the animation accumulation pipeline.
 fn numeric_collection_from_value(value: &Value) -> Option<(CollectionKind, Vec<f32>)> {
     match value {
         Value::Vector(values) => Some((CollectionKind::Vector(values.len()), values.clone())),
@@ -313,7 +313,7 @@ impl AccumEntry {
         }
     }
 
-    /// Internal helper for `finalize` (returns `None` when unavailable).
+    /// Internal helper for `finalize` in the animation accumulation pipeline.
     fn finalize(self) -> Option<Value> {
         match self {
             AccumEntry::Scalar { sum, w } => {

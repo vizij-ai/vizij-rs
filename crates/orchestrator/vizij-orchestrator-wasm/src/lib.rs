@@ -29,7 +29,7 @@ struct OrchestratorOptions {
 }
 
 impl VizijOrchestrator {
-    /// Internal helper for `next_graph_id`.
+    /// Internal helper for `next_graph_id` in the orchestrator WASM wrapper.
     fn next_graph_id(&mut self) -> String {
         let id = format!("graph:{}", self.graph_counter);
         self.graph_counter = self.graph_counter.wrapping_add(1);
@@ -43,7 +43,7 @@ struct JsResolver {
 }
 
 impl vizij_animation_core::TargetResolver for JsResolver {
-    /// Internal helper for `resolve` (returns `None` when unavailable).
+    /// Internal helper for `resolve` in the orchestrator WASM wrapper.
     fn resolve(&mut self, path: &str) -> Option<String> {
         let arg = JsValue::from_str(path);
         match self.f.call1(&JsValue::UNDEFINED, &arg) {
@@ -106,7 +106,7 @@ struct JsMergeStrategy {
     intermediate: Option<String>,
 }
 
-/// Internal helper for `map_graph_subscriptions` (returns an error on invalid input).
+/// Internal helper for `map_graph_subscriptions` in the orchestrator WASM wrapper.
 fn map_graph_subscriptions(
     cfg: Option<JsGraphSubscriptions>,
 ) -> Result<vizij_orchestrator::controllers::graph::Subscriptions, String> {
@@ -159,7 +159,7 @@ fn parse_conflict_strategy(value: &str) -> Result<OutputConflictStrategy, String
     }
 }
 
-/// Internal helper for `map_merge_options` (returns an error on invalid input; returns `None` when unavailable).
+/// Internal helper for `map_merge_options` in the orchestrator WASM wrapper.
 fn map_merge_options(cfg: Option<JsMergeStrategy>) -> Result<GraphMergeOptions, String> {
     let mut options = GraphMergeOptions::default();
     if let Some(strategy) = cfg {
