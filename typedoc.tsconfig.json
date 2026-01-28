@@ -7,6 +7,7 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "types": ["node"],
+    "baseUrl": ".",
     "paths": {
       "@vizij/wasm-loader": ["npm/@vizij/wasm-loader/src/index.ts"],
       "@vizij/wasm-loader/browser": ["npm/@vizij/wasm-loader/src/browser.ts"],
