@@ -39,12 +39,22 @@ function entry(name: string): NodeGraphManifestEntry {
   return value as NodeGraphManifestEntry;
 }
 
-/** List the node-graph fixture keys available via the embedded manifest. */
+/**
+ * List the node-graph fixture keys available via the embedded manifest.
+ *
+ * @returns Array of fixture keys.
+ */
 export async function listNodeGraphFixtures(): Promise<string[]> {
   return Object.keys(nodeGraphMap());
 }
 
-/** Load the GraphSpec for the given shared fixture key. */
+/**
+ * Load the GraphSpec for the given shared fixture key.
+ *
+ * @param name - Fixture key from the manifest.
+ * @returns Parsed GraphSpec payload.
+ * @throws Error if the fixture payload is missing or malformed.
+ */
 export async function loadNodeGraphSpec(name: string): Promise<GraphSpec> {
   const raw = loadFixture<unknown>(entry(name).spec);
   if (raw && typeof raw === "object") {
@@ -59,12 +69,22 @@ export async function loadNodeGraphSpec(name: string): Promise<GraphSpec> {
   throw new Error(`Fixture '${name}' did not contain a GraphSpec-compatible payload`);
 }
 
-/** Load the GraphSpec JSON string for the given shared fixture key. */
+/**
+ * Load the GraphSpec JSON string for the given shared fixture key.
+ *
+ * @param name - Fixture key from the manifest.
+ * @returns Raw JSON string.
+ */
 export async function loadNodeGraphSpecJson(name: string): Promise<string> {
   return readFixture(entry(name).spec);
 }
 
-/** Load any staged input bundle associated with the node-graph fixture. */
+/**
+ * Load any staged input bundle associated with the node-graph fixture.
+ *
+ * @param name - Fixture key from the manifest.
+ * @returns Parsed stage payload or `null` when none is defined.
+ */
 export async function loadNodeGraphStage<T = unknown>(name: string): Promise<T | null> {
   const stagePath = entry(name).stage;
   if (!stagePath) return null;

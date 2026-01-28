@@ -108,19 +108,22 @@ async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
   return bindingCache.current!;
 }
 
-/** Init input forwarded to @vizij/wasm-loader. */
+/**
+ * Init input forwarded to @vizij/wasm-loader.
+ *
+ * Pass a URL/bytes/module when hosting the wasm binary yourself.
+ */
 export type InitInput = LoaderInitInput;
 
 let _initPromise: Promise<void> | null = null;
 /**
- * Initialize the wasm module once. Must be awaited before constructing Orchestrator.
+ * Initialize the wasm module once.
  *
- * @example
- * ```ts
- * import { init } from "@vizij/orchestrator-wasm";
+ * Must be awaited before constructing {@link Orchestrator}. The loader memoizes
+ * bindings, so repeated calls reuse the same module.
  *
- * await init();
- * ```
+ * @param input - Optional wasm init input (URL, bytes, Response, or Module).
+ * @throws Error if ABI validation fails or the wasm module cannot be loaded.
  */
 export function init(input?: InitInput): Promise<void> {
   if (_initPromise) return _initPromise;
@@ -131,9 +134,10 @@ export function init(input?: InitInput): Promise<void> {
 }
 
 /**
- * Read the wasm ABI version after init() has completed.
+ * Read the wasm ABI version after {@link init} has completed.
  *
- * @throws Error if init() has not completed yet.
+ * @returns ABI version number baked into the wasm binary.
+ * @throws Error if the bindings are not initialized yet.
  */
 export function abi_version(): number {
   if (!bindingCache.current) {
@@ -187,16 +191,10 @@ export {
 } from "./fixtures.js";
 
 /**
- * Ergonomic wrapper around the wasm VizijOrchestrator.
- * Always await init() once before constructing.
+ * High-level wrapper around the wasm VizijOrchestrator.
  *
- * @example
- * ```ts
- * import { init, Orchestrator } from "@vizij/orchestrator-wasm";
- *
- * await init();
- * const orch = new Orchestrator();
- * ```
+ * Always await {@link init} once before constructing. Methods throw when
+ * the underlying wasm bindings do not expose required exports.
  */
 export class Orchestrator {
   private inner: WasmOrchestratorInstance;
@@ -217,15 +215,12 @@ export class Orchestrator {
 
   /**
    * Register a graph controller.
-   * Accepts a GraphSpec object or a JSON string or { id?, spec }.
    *
-   * @example
-   * ```ts
-   * const id = orch.registerGraph({
-   *   spec: { nodes: [], edges: [] },
-   *   subs: { inputs: ["inputs.foo"], outputs: ["outputs.bar"] },
-   * });
-   * ```
+   * Accepts a GraphSpec object, a JSON string, or `{ id?, spec }`.
+   *
+   * @param cfg - Graph registration payload.
+   * @returns Controller id (auto-generated when omitted).
+   * @throws Error when the payload is invalid or wasm rejects the spec.
    */
   registerGraph(cfg: GraphRegistrationInput): string {
     return this.inner.register_graph(cfg);
@@ -233,14 +228,12 @@ export class Orchestrator {
 
   /**
    * Replace an existing graph controller's spec/subscriptions.
+   *
    * This is the supported way to apply structural edits at runtime.
+   * Requires `{ id, spec, subs? }` (string form is not supported).
    *
-   * Requires { id, spec, subs? } (string form is not supported here).
-   *
-   * @example
-   * ```ts
-   * orch.replaceGraph({ id: "graph-1", spec: { nodes: [], edges: [] } });
-   * ```
+   * @param cfg - Replacement config with existing controller id.
+   * @throws Error when the payload is invalid or wasm rejects the spec.
    */
   replaceGraph(cfg: GraphReplaceConfig): void {
     this.inner.replace_graph(cfg);
@@ -251,13 +244,9 @@ export class Orchestrator {
   /**
    * Register a merged graph controller.
    *
-   * @example
-   * ```ts
-   * const mergedId = orch.registerMergedGraph({
-   *   graphs: [{ id: "a", spec: { nodes: [] } }, { id: "b", spec: { nodes: [] } }],
-   *   strategy: { outputs: "namespace" },
-   * });
-   * ```
+   * @param cfg - Merge configuration (graphs + conflict strategy).
+   * @returns Controller id (auto-generated when omitted).
+   * @throws Error when the payload is invalid or wasm rejects the merge.
    */
   registerMergedGraph(cfg: MergedGraphRegistrationConfig): string {
     return this.inner.register_merged_graph(cfg);
@@ -265,12 +254,10 @@ export class Orchestrator {
 
   /**
    * Register an animation controller.
-   * Accepts { id?: string, setup?: any }.
    *
-   * @example
-   * ```ts
-   * const animId = orch.registerAnimation({ setup: { player: { loop_mode: "loop" } } });
-   * ```
+   * @param cfg - Animation registration config (`setup` seeds players/instances).
+   * @returns Controller id (auto-generated when omitted).
+   * @throws Error when the payload is invalid or wasm rejects the setup.
    */
   registerAnimation(cfg: AnimationRegistrationConfig): string {
     return this.inner.register_animation(cfg);
@@ -278,12 +265,11 @@ export class Orchestrator {
 
   /**
    * Prebind resolver used by animation controllers.
-   * resolver(path: string) => string|number|null|undefined
    *
-   * @example
-   * ```ts
-   * orch.prebind((path) => (path.startsWith("arm.") ? 0 : null));
-   * ```
+   * The resolver maps typed paths to host-specific keys and is cached by the engine.
+   * Returning `null`/`undefined` leaves the path unbound.
+   *
+   * @param resolver - Callback invoked on demand for target path binding.
    */
   prebind(resolver: WasmResolver): void {
     const f = (path: string) => resolver(path);
@@ -291,13 +277,11 @@ export class Orchestrator {
   }
 
   /**
-   * Set a blackboard input. value may be a ValueJSON or legacy shape.
-   * shape is optional.
+   * Set a blackboard input.
    *
-   * @example
-   * ```ts
-   * orch.setInput("inputs.speed", 1.0);
-   * ```
+   * @param path - Typed path string.
+   * @param value - Value payload (legacy or normalized).
+   * @param shape - Optional shape metadata.
    */
   setInput(path: string, value: Value, shape?: ShapeJSON): void {
     const v = toValueJSON(value);
@@ -308,10 +292,8 @@ export class Orchestrator {
   /**
    * Remove a blackboard input by path.
    *
-   * @example
-   * ```ts
-   * orch.removeInput("inputs.speed");
-   * ```
+   * @param path - Typed path string.
+   * @returns `true` if the input existed and was removed.
    */
   removeInput(path: string): boolean {
     return this.inner.remove_input(path);
@@ -320,10 +302,10 @@ export class Orchestrator {
   /**
    * Declare hot inputs to enable diffed staging for scalars.
    *
-   * @example
-   * ```ts
-   * orch.setHotInputs(["inputs.speed"], { epsilon: 0.01 });
-   * ```
+   * Hot paths are cached in the JS wrapper and compared with an optional epsilon.
+   *
+   * @param paths - Typed path strings to track as hot.
+   * @param opts - Optional diff epsilon for numeric comparisons.
    */
   setHotInputs(paths: string[], opts?: { epsilon?: number }): void {
     this._hotInputs = new Set(paths);
@@ -336,12 +318,12 @@ export class Orchestrator {
 
   /**
    * Smart staging: routes hot scalar inputs through a diff and only calls setInput when changed.
-   * Non-hot or non-numeric values always call setInput.
    *
-   * @example
-   * ```ts
-   * orch.setInputsSmart(["inputs.speed"], new Float32Array([1.2]));
-   * ```
+   * Non-hot or non-numeric values always call {@link setInput}.
+   *
+   * @param paths - Typed path strings aligned with `values`.
+   * @param values - Numeric values aligned with `paths`.
+   * @param shapes - Optional shape metadata aligned with `paths`.
    */
   setInputsSmart(paths: string[], values: Float32Array, shapes?: (ShapeJSON | null)[]): void {
     const hot = this._hotInputs;
@@ -379,12 +361,12 @@ export class Orchestrator {
 
   /**
    * Step the orchestrator and return only changes since a version token.
-   * Pass 0 (or omit) to force a full frame and establish the baseline.
    *
-   * @example
-   * ```ts
-   * const frame = orch.stepDelta(1 / 60);
-   * ```
+   * Pass `0` (or omit) to force a full frame and establish the baseline.
+   *
+   * @param dt - Delta time in seconds.
+   * @param sinceVersion - Version token from a previous call.
+   * @returns Delta frame plus new version token.
    */
   stepDelta(dt: number, sinceVersion?: number | bigint): OrchestratorFrame & { version: bigint } {
     const token =
@@ -402,12 +384,10 @@ export class Orchestrator {
   }
 
   /**
-   * Step the orchestrator by dt seconds. Returns the OrchestratorFrame (JS object).
+   * Step the orchestrator by dt seconds.
    *
-   * @example
-   * ```ts
-   * const frame = orch.step(1 / 60);
-   * ```
+   * @param dt - Delta time in seconds.
+   * @returns OrchestratorFrame for this step.
    */
   step(dt: number): OrchestratorFrame {
     const frame = this.inner.step(dt);
@@ -417,10 +397,7 @@ export class Orchestrator {
   /**
    * List registered graph and animation controller ids.
    *
-   * @example
-   * ```ts
-   * const { graphs, anims } = orch.listControllers();
-   * ```
+   * @returns Object containing `graphs` and `anims` arrays.
    */
   listControllers(): { graphs: string[]; anims: string[] } {
     const result = this.inner.list_controllers();
@@ -432,10 +409,8 @@ export class Orchestrator {
   /**
    * Remove a graph controller by id.
    *
-   * @example
-   * ```ts
-   * orch.removeGraph("graph-1");
-   * ```
+   * @param id - Controller id to remove.
+   * @returns `true` if the controller existed and was removed.
    */
   removeGraph(id: string): boolean {
     return this.inner.remove_graph(id);
@@ -444,10 +419,8 @@ export class Orchestrator {
   /**
    * Remove an animation controller by id.
    *
-   * @example
-   * ```ts
-   * orch.removeAnimation("anim-1");
-   * ```
+   * @param id - Controller id to remove.
+   * @returns `true` if the controller existed and was removed.
    */
   removeAnimation(id: string): boolean {
     return this.inner.remove_animation(id);
@@ -456,10 +429,7 @@ export class Orchestrator {
   /**
    * Enable or disable debug logging in the JS wrapper.
    *
-   * @example
-   * ```ts
-   * orch.setDebugLogging(true);
-   * ```
+   * @param enabled - When true, logs staging and hot-input events to console.
    */
   setDebugLogging(enabled: boolean): void {
     this._debugLogging = enabled;
@@ -468,10 +438,8 @@ export class Orchestrator {
   /**
    * Normalize a GraphSpec (object or JSON string) using the Rust normalizer.
    *
-   * @example
-   * ```ts
-   * const normalized = await orch.normalizeGraphSpec({ nodes: [] });
-   * ```
+   * @param spec - GraphSpec object or JSON string.
+   * @returns Normalized GraphSpec with explicit edges/paths.
    */
   async normalizeGraphSpec(spec: object | string): Promise<object> {
     await init();
@@ -483,14 +451,10 @@ export class Orchestrator {
 }
 
 /**
- * Convenience helper to init() and return a ready Orchestrator instance.
+ * Convenience helper that awaits {@link init} and returns a ready {@link Orchestrator}.
  *
- * @example
- * ```ts
- * import { createOrchestrator } from "@vizij/orchestrator-wasm";
- *
- * const orch = await createOrchestrator();
- * ```
+ * @param opts - Optional constructor options (schedule, config).
+ * @returns Initialized orchestrator instance.
  */
 export async function createOrchestrator(opts?: any): Promise<Orchestrator> {
   await init();

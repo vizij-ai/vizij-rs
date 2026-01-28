@@ -1,13 +1,16 @@
 import { animationEntry, loadFixture, manifest, readFixture, resolveFixturePath } from "./shared.js";
 
-/** JSON shape for an animation fixture payload. */
+/**
+ * JSON shape for an animation fixture payload.
+ *
+ * @typeParam T - Parsed JSON payload type for the fixture.
+ */
 export type AnimationFixture<T = unknown> = T;
 
 /**
  * List all animation fixture names in the manifest.
  *
- * @example
- * animationNames(); // ["simple-walk", "run-cycle", ...]
+ * @returns Array of fixture keys.
  */
 export function animationNames(): string[] {
   return Object.keys(manifest().animations);
@@ -16,9 +19,9 @@ export function animationNames(): string[] {
 /**
  * Load an animation fixture as raw JSON text.
  *
+ * @param name - Fixture key from the manifest.
+ * @returns Raw JSON string for the fixture.
  * @throws If the name is not present in the manifest or the file is missing.
- * @example
- * const json = animationJson("simple-walk");
  */
 export function animationJson(name: string): string {
   return readFixture(animationEntry(name));
@@ -27,9 +30,9 @@ export function animationJson(name: string): string {
 /**
  * Load an animation fixture and parse it as JSON.
  *
+ * @param name - Fixture key from the manifest.
+ * @returns Parsed fixture payload.
  * @throws If the name is not present in the manifest or the JSON is invalid.
- * @example
- * const animation = animationFixture("simple-walk");
  */
 export function animationFixture<T = unknown>(name: string): AnimationFixture<T> {
   return loadFixture<T>(animationEntry(name));
@@ -38,9 +41,9 @@ export function animationFixture<T = unknown>(name: string): AnimationFixture<T>
 /**
  * Resolve an animation fixture name to an absolute path.
  *
+ * @param name - Fixture key from the manifest.
+ * @returns Absolute path to the fixture file.
  * @throws If the name is not present in the manifest.
- * @example
- * const path = animationPath("simple-walk");
  */
 export function animationPath(name: string): string {
   return resolveFixturePath(animationEntry(name));
@@ -49,16 +52,15 @@ export function animationPath(name: string): string {
 /**
  * Absolute path to the animations fixtures directory.
  *
- * @example
- * const root = animationsRoot();
+ * @returns Absolute path to the animations root directory.
  */
 export function animationsRoot(): string {
   return resolveFixturePath("animations");
 }
 
 /**
- * Deprecated alias for animationsRoot.
+ * Deprecated alias for {@link animationsRoot}.
  *
- * @deprecated Use animationsRoot instead.
+ * @deprecated Use {@link animationsRoot} instead.
  */
 export const fixturesDirectory = animationsRoot();

@@ -49,7 +49,11 @@ export type Transform = {
   };
 };
 
-/** Normalized `{ type, data }` representation used by Rust helpers. */
+/**
+ * Normalized `{ type, data }` representation used by Rust helpers.
+ *
+ * Discriminants are lowercase (e.g., `"vec3"`, `"transform"`).
+ */
 export type NormalizedValue =
   | { type: "float"; data: number }
   | { type: "bool"; data: boolean }
@@ -69,7 +73,9 @@ export type NormalizedValue =
 
 /**
  * Union covering all accepted Value JSON shapes.
+ *
  * Includes legacy tagged payloads, normalized payloads, and primitive shorthands.
+ * Arrays are treated as generic vectors unless wrapped in a tagged object.
  */
 export type ValueJSON =
   | Float
@@ -92,7 +98,11 @@ export type ValueJSON =
   | string
   | boolean;
 
-/** Accepts ValueJSON plus raw arrays (treated as generic vectors). */
+/**
+ * Accepts ValueJSON plus raw arrays (treated as generic vectors).
+ *
+ * Useful for staging inputs where callers may already have numeric arrays.
+ */
 export type ValueInput = ValueJSON | number[];
 
 const DEFAULT_VEC2: [number, number] = [0, 0];
@@ -882,6 +892,10 @@ function legacyValueAsText(value: ValueJSON | undefined | null): string | undefi
  * Normalize primitive JS values into the ValueJSON surface.
  *
  * Arrays are encoded as generic vectors to avoid implicit vec2/vec3 coercions.
+ * Does not clone object/record payloads beyond returning them as-is.
+ *
+ * @param value - Primitive, array, legacy object, or normalized value.
+ * @returns A ValueJSON payload suitable for wasm bindings.
  *
  * @example
  * toValueJSON(2); // { float: 2 }
@@ -905,12 +919,21 @@ export function toValueJSON(value: ValueInput): ValueJSON {
 
 /**
  * Returns true when a ValueJSON payload is already normalized.
+ *
+ * @param value - Any ValueJSON payload (legacy or normalized).
  */
 export function isNormalizedValue(value: ValueJSON): value is NormalizedValue {
   return typeof value === "object" && value !== null && "type" in (value as any) && "data" in (value as any);
 }
 
-/** Coerce a ValueJSON payload into a scalar number when possible. */
+/**
+ * Coerce a ValueJSON payload into a scalar number when possible.
+ *
+ * - Scalars return their numeric value.
+ * - Vectors/quats return the first component.
+ * - Enums, arrays, lists, tuples recurse into the first entry.
+ * - Returns `undefined` when coercion fails.
+ */
 export function valueAsNumber(value: ValueJSON | undefined | null): number | undefined {
   if (value == null) return undefined;
   if (isNormalizedValue(value)) {
@@ -921,7 +944,10 @@ export function valueAsNumber(value: ValueJSON | undefined | null): number | und
 
 /**
  * Coerce a ValueJSON payload into a numeric array.
- * When values are not finite, use the provided fallback.
+ *
+ * @param value - ValueJSON payload to coerce.
+ * @param fallback - Value used when entries are missing or non-finite.
+ * @returns A numeric array or `undefined` when coercion fails.
  */
 export function valueAsNumericArray(
   value: ValueJSON | undefined | null,
@@ -934,7 +960,11 @@ export function valueAsNumericArray(
   return legacyValueAsNumericArray(value, fallback);
 }
 
-/** Coerce a ValueJSON payload into a transform if possible. */
+/**
+ * Coerce a ValueJSON payload into a normalized transform if possible.
+ *
+ * Returns `undefined` when no transform-like payload can be derived.
+ */
 export function valueAsTransform(
   value: ValueJSON | undefined | null,
 ): NormalizedTransform | undefined {
@@ -945,7 +975,11 @@ export function valueAsTransform(
   return legacyValueAsTransform(value);
 }
 
-/** Coerce a ValueJSON payload into a vec3 if possible. */
+/**
+ * Coerce a ValueJSON payload into a vec3 if possible.
+ *
+ * Returns `undefined` when no vec3-like payload can be derived.
+ */
 export function valueAsVec3(
   value: ValueJSON | undefined | null,
 ): [number, number, number] | undefined {
@@ -956,7 +990,11 @@ export function valueAsVec3(
   return legacyValueAsVec3(value);
 }
 
-/** Coerce a ValueJSON payload into a numeric vector if possible. */
+/**
+ * Coerce a ValueJSON payload into a numeric vector if possible.
+ *
+ * Returns `undefined` when no vector-like payload can be derived.
+ */
 export function valueAsVector(value: ValueJSON | undefined | null): number[] | undefined {
   if (value == null) return undefined;
   if (isNormalizedValue(value)) {
@@ -965,7 +1003,11 @@ export function valueAsVector(value: ValueJSON | undefined | null): number[] | u
   return legacyValueAsVector(value);
 }
 
-/** Coerce a ValueJSON payload into a boolean if possible. */
+/**
+ * Coerce a ValueJSON payload into a boolean if possible.
+ *
+ * Returns `undefined` when no boolean-like payload can be derived.
+ */
 export function valueAsBool(value: ValueJSON | undefined | null): boolean | undefined {
   if (value == null) return undefined;
   if (isNormalizedValue(value)) {
@@ -974,7 +1016,11 @@ export function valueAsBool(value: ValueJSON | undefined | null): boolean | unde
   return legacyValueAsBool(value);
 }
 
-/** Coerce a ValueJSON payload into a quaternion if possible. */
+/**
+ * Coerce a ValueJSON payload into a quaternion if possible.
+ *
+ * Returns `undefined` when no quaternion-like payload can be derived.
+ */
 export function valueAsQuat(
   value: ValueJSON | undefined | null,
 ): [number, number, number, number] | undefined {
@@ -985,7 +1031,11 @@ export function valueAsQuat(
   return legacyValueAsQuat(value);
 }
 
-/** Coerce a ValueJSON payload into RGBA color if possible. */
+/**
+ * Coerce a ValueJSON payload into RGBA color if possible.
+ *
+ * Returns `undefined` when no color-like payload can be derived.
+ */
 export function valueAsColorRgba(
   value: ValueJSON | undefined | null,
 ): [number, number, number, number] | undefined {
@@ -996,7 +1046,11 @@ export function valueAsColorRgba(
   return legacyValueAsColorRgba(value);
 }
 
-/** Coerce a ValueJSON payload into a string if possible. */
+/**
+ * Coerce a ValueJSON payload into a string if possible.
+ *
+ * Returns `undefined` when no string-like payload can be derived.
+ */
 export function valueAsText(value: ValueJSON | undefined | null): string | undefined {
   if (value == null) return undefined;
   if (isNormalizedValue(value)) {

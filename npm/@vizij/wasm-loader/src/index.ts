@@ -46,7 +46,15 @@ async function maybeReadFileBytes(initArg: unknown): Promise<unknown> {
 }
 
 /**
- * Load wasm bindings with Node/browser-aware defaults and ABI validation.
+ * Load wasm bindings with Node-aware file URL handling and optional ABI validation.
+ *
+ * `file://` URLs are converted to bytes in Node so wasm-bindgen can initialize
+ * without needing fetch support.
+ *
+ * @param options - Loader configuration (cache, import, init, ABI guard).
+ * @param initInput - Optional init argument (URL, bytes, module, response).
+ * @returns The initialized bindings, cached for subsequent calls.
+ * @throws Error when ABI validation fails or the init call rejects.
  */
 export async function loadBindings<TBindings>(
   options: LoadBindingsOptions<TBindings>,

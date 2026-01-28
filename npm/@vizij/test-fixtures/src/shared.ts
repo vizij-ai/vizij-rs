@@ -46,10 +46,9 @@ function locateFixturesRoot(): string {
 /**
  * Absolute path to the fixtures directory.
  *
+ * @returns Absolute path to the fixtures root.
  * @throws If the package cannot locate `fixtures/manifest.json` relative to
  *   the installed module location.
- * @example
- * const root = fixturesRoot();
  */
 export function fixturesRoot(): string {
   return locateFixturesRoot();
@@ -58,9 +57,8 @@ export function fixturesRoot(): string {
 /**
  * Parsed fixtures manifest (cached after first load).
  *
- * @throws When the manifest cannot be read or parsed.
- * @example
- * const data = manifest();
+ * @returns Parsed manifest JSON.
+ * @throws Error when the manifest cannot be read or parsed.
  */
 export function manifest(): FixturesManifest {
   if (!manifestCache) {
@@ -74,8 +72,9 @@ export function manifest(): FixturesManifest {
  * Resolve a fixtures-relative path to an absolute path.
  *
  * This does not validate that the path exists on disk.
- * @example
- * const abs = resolveFixturePath("animations/simple-walk.json");
+ *
+ * @param relPath - Path relative to the fixtures root.
+ * @returns Absolute path to the fixture.
  */
 export function resolveFixturePath(relPath: string): string {
   return resolve(locateFixturesRoot(), relPath);
@@ -84,9 +83,9 @@ export function resolveFixturePath(relPath: string): string {
 /**
  * Read fixture JSON from disk as a string.
  *
- * @throws When the fixture file is missing.
- * @example
- * const raw = readFixture("animations/simple-walk.json");
+ * @param relPath - Path relative to the fixtures root.
+ * @returns Raw JSON string.
+ * @throws Error when the fixture file is missing.
  */
 export function readFixture(relPath: string): string {
   return readFileSync(resolveFixturePath(relPath), "utf8");
@@ -95,9 +94,9 @@ export function readFixture(relPath: string): string {
 /**
  * Load fixture JSON from disk and parse it.
  *
- * @throws When the fixture file is missing or contains invalid JSON.
- * @example
- * const payload = loadFixture("animations/simple-walk.json");
+ * @param relPath - Path relative to the fixtures root.
+ * @returns Parsed JSON payload.
+ * @throws Error when the fixture file is missing or contains invalid JSON.
  */
 export function loadFixture<T>(relPath: string): T {
   return JSON.parse(readFixture(relPath)) as T;
@@ -106,9 +105,9 @@ export function loadFixture<T>(relPath: string): T {
 /**
  * Resolve a named animation fixture to its manifest path.
  *
- * @throws If the animation fixture key is missing.
- * @example
- * const relPath = animationEntry("simple-walk");
+ * @param name - Fixture key from the manifest.
+ * @returns Manifest path relative to the fixtures root.
+ * @throws Error if the animation fixture key is missing.
  */
 export function animationEntry(name: string): string {
   const entry = manifest().animations[name];
@@ -121,9 +120,9 @@ export function animationEntry(name: string): string {
 /**
  * Resolve a named node-graph fixture to its manifest entry.
  *
- * @throws If the node-graph fixture key is missing.
- * @example
- * const entry = nodeGraphEntry("oscillator-basics");
+ * @param name - Fixture key from the manifest.
+ * @returns Manifest entry for the graph (spec + optional stage).
+ * @throws Error if the node-graph fixture key is missing.
  */
 export function nodeGraphEntry(name: string): NodeGraphManifestEntry {
   const entry = manifest()["node-graphs"][name];
@@ -136,9 +135,9 @@ export function nodeGraphEntry(name: string): NodeGraphManifestEntry {
 /**
  * Resolve a named orchestration fixture to its manifest entry.
  *
- * @throws If the orchestration fixture key is missing.
- * @example
- * const entry = orchestrationEntry("simple-orchestration");
+ * @param name - Fixture key from the manifest.
+ * @returns Manifest entry for the orchestration.
+ * @throws Error if the orchestration fixture key is missing.
  */
 export function orchestrationEntry(name: string): OrchestrationManifestEntry {
   const entry = manifest().orchestrations[name];
@@ -151,8 +150,8 @@ export function orchestrationEntry(name: string): OrchestrationManifestEntry {
 /**
  * Resolve an orchestration manifest entry into an absolute path.
  *
- * @example
- * const abs = orchestrationPath(orchestrationEntry("simple-orchestration"));
+ * @param entry - Manifest entry string or { path } object.
+ * @returns Absolute path to the orchestration descriptor.
  */
 export function orchestrationPath(entry: OrchestrationManifestEntry): string {
   if (typeof entry === "string") {
