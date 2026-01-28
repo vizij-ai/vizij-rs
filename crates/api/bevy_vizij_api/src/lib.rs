@@ -32,7 +32,6 @@ impl WriterRegistry {
     /// Create an empty registry of path-to-setter functions.
     ///
     /// Register setters before calling `apply_write_batch`.
-    /// Register setters before calling `apply_write_batch`.
     pub fn new() -> Self {
         WriterRegistry {
             inner: Arc::new(Mutex::new(hashbrown::HashMap::new())),

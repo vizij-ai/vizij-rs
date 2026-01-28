@@ -187,7 +187,6 @@ impl Outputs {
     /// Clear all accumulated changes and events.
     ///
     /// Call after consuming outputs to reuse buffers.
-    /// Call after consuming outputs to reuse buffers.
     #[inline]
     pub fn clear(&mut self) {
         self.changes.clear();
@@ -197,7 +196,6 @@ impl Outputs {
     /// Append a sampled change.
     ///
     /// This mutates the internal change list.
-    /// This mutates the internal change list.
     #[inline]
     pub fn push_change(&mut self, change: Change) {
         self.changes.push(change);
@@ -205,7 +203,6 @@ impl Outputs {
 
     /// Append a semantic event.
     ///
-    /// This mutates the internal event list.
     /// This mutates the internal event list.
     #[inline]
     pub fn push_event(&mut self, event: CoreEvent) {
@@ -256,7 +253,6 @@ impl OutputsWithDerivatives {
     /// Clear all accumulated changes and events.
     ///
     /// Call after consuming outputs to reuse buffers.
-    /// Call after consuming outputs to reuse buffers.
     #[inline]
     pub fn clear(&mut self) {
         self.changes.clear();
@@ -266,7 +262,6 @@ impl OutputsWithDerivatives {
     /// Append a sampled change with derivative.
     ///
     /// This mutates the internal change list.
-    /// This mutates the internal change list.
     #[inline]
     pub fn push_change(&mut self, change: ChangeWithDerivative) {
         self.changes.push(change);
@@ -274,7 +269,6 @@ impl OutputsWithDerivatives {
 
     /// Append a semantic event.
     ///
-    /// This mutates the internal event list.
     /// This mutates the internal event list.
     #[inline]
     pub fn push_event(&mut self, event: CoreEvent) {

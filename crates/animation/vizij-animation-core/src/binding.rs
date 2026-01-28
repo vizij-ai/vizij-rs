@@ -53,14 +53,12 @@ impl BindingTable {
     /// Create an empty binding table.
     ///
     /// Entries map channel keys to target handles.
-    /// Entries map channel keys to target handles.
     pub fn new() -> Self {
         Self { rows: Vec::new() }
     }
 
     /// Look up an existing row by channel key.
     ///
-    /// Returns `None` when the channel is not bound.
     /// Returns `None` when the channel is not bound.
     pub fn get(&self, channel: ChannelKey) -> Option<&BindingRow> {
         self.rows.iter().find(|r| r.channel == channel)

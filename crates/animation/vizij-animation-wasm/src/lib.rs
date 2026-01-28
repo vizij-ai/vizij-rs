@@ -376,7 +376,6 @@ impl VizijAnimation {
     /// Remove a player and all its instances. Returns boolean success.
     ///
     /// No-op when the player id is unknown.
-    /// No-op when the player id is unknown.
     #[wasm_bindgen(js_name = remove_player)]
     pub fn remove_player(&mut self, player_id: u32) -> bool {
         self.core.remove_player(PlayerId(player_id))
@@ -384,7 +383,6 @@ impl VizijAnimation {
 
     /// Remove a specific instance from a player. Returns boolean success.
     ///
-    /// No-op if the player or instance id is unknown.
     /// No-op if the player or instance id is unknown.
     #[wasm_bindgen(js_name = remove_instance)]
     pub fn remove_instance(&mut self, player_id: u32, inst_id: u32) -> bool {
@@ -394,7 +392,6 @@ impl VizijAnimation {
 
     /// Unload an animation and detach all referencing instances. Returns boolean success.
     ///
-    /// Returns false when the animation id is unknown.
     /// Returns false when the animation id is unknown.
     #[wasm_bindgen(js_name = unload_animation)]
     pub fn unload_animation(&mut self, anim_id: u32) -> bool {

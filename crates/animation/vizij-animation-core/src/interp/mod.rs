@@ -18,7 +18,6 @@ impl InterpRegistry {
     /// Construct a new interpolation registry.
     ///
     /// Pre-populated with the built-in interpolation modes.
-    /// Pre-populated with the built-in interpolation modes.
     pub fn new() -> Self {
         Self
     }

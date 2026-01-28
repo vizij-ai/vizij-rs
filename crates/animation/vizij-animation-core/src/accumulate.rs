@@ -418,7 +418,6 @@ impl AccumulatorWithDerivatives {
     /// Create a new empty accumulator.
     ///
     /// Call `add` for weighted contributions and `finalize` to emit results.
-    /// Call `add` for weighted contributions and `finalize` to emit results.
     pub fn new() -> Self {
         Self::default()
     }
