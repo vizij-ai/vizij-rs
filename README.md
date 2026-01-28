@@ -309,6 +309,16 @@ Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wa
 - [@vizij/test-fixtures/README](npm/@vizij/test-fixtures/README.md)
 - [@vizij/wasm-loader/README](npm/@vizij/wasm-loader/README.md)
 
+### TypeDoc (JS/TS API reference)
+
+Generate the TypeDoc HTML for the public npm packages:
+
+```bash
+pnpm run docs:typedoc
+```
+
+The output is written to `docs/api/`.
+
 If you notice gaps or outdated instructions, please open an issue or ping the Vizij runtime team. High-quality documentation is as critical as the code it describes.
 
 ---

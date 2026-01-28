@@ -47,12 +47,14 @@
     "verify:registry": "node scripts/verify-node-registry.mjs",
     "perf:wasm": "node scripts/run_perf_baselines_wasm.mjs",
     "perf:wasm:verify": "VERIFY_ONLY=1 node scripts/run_perf_baselines_wasm.mjs",
-    "perf:smoke": "SMOKE=1 VERIFY_ONLY=1 node scripts/run_perf_baselines_wasm.mjs"
+    "perf:smoke": "SMOKE=1 VERIFY_ONLY=1 node scripts/run_perf_baselines_wasm.mjs",
+    "docs:typedoc": "typedoc"
   },
   "workspaces": [
     "npm/@vizij/*"
   ],
   "devDependencies": {
-    "@changesets/cli": "^2.27.7"
+    "@changesets/cli": "^2.27.7",
+    "typedoc": "^0.26.11"
   }
 }
