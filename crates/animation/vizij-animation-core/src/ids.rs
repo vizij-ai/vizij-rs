@@ -28,6 +28,8 @@ pub struct IdAllocator {
 
 impl IdAllocator {
     /// Create a new allocator with counters reset to zero.
+    ///
+    /// IDs are opaque and may wrap on `u32` overflow in long-running sessions.
     pub fn new() -> Self {
         Self::default()
     }
@@ -64,6 +66,8 @@ impl IdAllocator {
 
     #[inline]
     /// Reset all counters back to zero.
+    ///
+    /// Existing IDs may be reused after reset.
     pub fn reset(&mut self) {
         *self = Self::default();
     }

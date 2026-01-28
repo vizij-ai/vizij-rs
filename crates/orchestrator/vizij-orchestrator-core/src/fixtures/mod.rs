@@ -237,6 +237,9 @@ impl DemoFixture {
     }
 
     /// Return merged graph fixtures.
+    ///
+    /// The slice is borrowed from the loaded fixture set.
+    /// The slice is borrowed from the loaded fixture set.
     pub fn merged_graphs(&self) -> &[MergedGraphFixture] {
         &self.merged_graphs
     }
@@ -263,11 +266,17 @@ impl DemoFixture {
     }
 
     /// Return initial input fixtures staged before the first step.
+    ///
+    /// These are applied in order before any steps run.
+    /// These are applied in order before any steps run.
     pub fn initial_inputs(&self) -> &[InputFixture] {
         &self.initial_inputs
     }
 
     /// Return step-by-step expectations for this fixture.
+    ///
+    /// Each step describes expected outputs after a tick.
+    /// Each step describes expected outputs after a tick.
     pub fn steps(&self) -> &[StepFixture] {
         &self.steps
     }

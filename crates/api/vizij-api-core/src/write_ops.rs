@@ -34,11 +34,17 @@ pub struct WriteOp {
 
 impl WriteOp {
     /// Create a write op without shape metadata.
+    ///
+    /// Use this when the shape can be inferred by consumers.
+    /// Use this when the shape can be inferred by consumers.
     pub fn new(path: TypedPath, value: Value) -> Self {
         Self::new_with_shape(path, value, None)
     }
 
     /// Create a write op with an explicit shape.
+    ///
+    /// Prefer this when downstream needs the declared shape.
+    /// Prefer this when downstream needs the declared shape.
     pub fn new_with_shape(path: TypedPath, value: Value, shape: Option<Shape>) -> Self {
         Self { path, value, shape }
     }

@@ -21,6 +21,9 @@ pub struct Scratch {
 
 impl Scratch {
     /// Create scratch buffers sized from the engine config.
+    ///
+    /// Buffers are reused per frame to reduce allocations.
+    /// Reused across frames to avoid per-tick allocations.
     pub fn new(cfg: &Config) -> Self {
         Self {
             cap_samples: cfg.scratch_samples,
