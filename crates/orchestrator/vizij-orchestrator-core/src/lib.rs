@@ -75,7 +75,7 @@ impl Orchestrator {
     /// # Examples
     ///
     /// ```
-    /// use vizij_orchestrator_core::{Orchestrator, Schedule};
+    /// use vizij_orchestrator::{Orchestrator, Schedule};
     ///
     /// let orchestrator = Orchestrator::new(Schedule::SinglePass);
     /// assert_eq!(orchestrator.epoch, 0);
@@ -99,7 +99,7 @@ impl Orchestrator {
     ///
     /// ```
     /// use vizij_graph_core::types::GraphSpec;
-    /// use vizij_orchestrator_core::{GraphControllerConfig, Orchestrator, Schedule};
+    /// use vizij_orchestrator::{GraphControllerConfig, Orchestrator, Schedule};
     ///
     /// let cfg = GraphControllerConfig {
     ///     id: "graph".to_string(),
@@ -154,7 +154,7 @@ impl Orchestrator {
     ///
     /// ```
     /// use vizij_graph_core::types::GraphSpec;
-    /// use vizij_orchestrator_core::{GraphControllerConfig, Orchestrator, Schedule};
+    /// use vizij_orchestrator::{GraphControllerConfig, Orchestrator, Schedule};
     ///
     /// let cfg = GraphControllerConfig {
     ///     id: "graph".to_string(),
@@ -183,7 +183,7 @@ impl Orchestrator {
     ///
     /// ```
     /// use vizij_graph_core::types::GraphSpec;
-    /// use vizij_orchestrator_core::{GraphControllerConfig, Orchestrator, Schedule};
+    /// use vizij_orchestrator::{GraphControllerConfig, Orchestrator, Schedule};
     ///
     /// let cfg = GraphControllerConfig {
     ///     id: "graph".to_string(),
@@ -213,7 +213,7 @@ impl Orchestrator {
     ///
     /// ```
     /// use serde_json::Value as JsonValue;
-    /// use vizij_orchestrator_core::{AnimationControllerConfig, Orchestrator, Schedule};
+    /// use vizij_orchestrator::{AnimationControllerConfig, Orchestrator, Schedule};
     ///
     /// let cfg = AnimationControllerConfig {
     ///     id: "anim".to_string(),
@@ -243,7 +243,7 @@ impl Orchestrator {
     /// # Examples
     /// ```
     /// use serde_json::json;
-    /// use vizij_orchestrator_core::{Orchestrator, Schedule};
+    /// use vizij_orchestrator::{Orchestrator, Schedule};
     ///
     /// let mut orchestrator = Orchestrator::new(Schedule::SinglePass);
     /// orchestrator.set_input(

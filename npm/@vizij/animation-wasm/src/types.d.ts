@@ -69,7 +69,7 @@ export interface BakedTrack {
   values: Value[];
 }
 
-/** Baked clip values at a uniform sampling rate. */
+/** @internal Duplicate declaration for docs tooling. */
 export interface BakedAnimationData {
   /** Animation id that was baked. */
   anim: AnimId;

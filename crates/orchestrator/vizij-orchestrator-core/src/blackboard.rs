@@ -110,7 +110,7 @@ impl Blackboard {
     /// # Examples
     /// ```
     /// use serde_json::json;
-    /// use vizij_orchestrator_core::Blackboard;
+    /// use vizij_orchestrator::Blackboard;
     ///
     /// let mut bb = Blackboard::new();
     /// bb.set(

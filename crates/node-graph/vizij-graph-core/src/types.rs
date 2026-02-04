@@ -454,7 +454,7 @@ impl GraphSpec {
     /// # Examples
     ///
     /// ```
-    /// use std::collections::HashMap;
+    /// use hashbrown::HashMap;
     /// use vizij_api_core::Value;
     /// use vizij_graph_core::types::{GraphSpec, InputDefault, NodeSpec, NodeType};
     ///

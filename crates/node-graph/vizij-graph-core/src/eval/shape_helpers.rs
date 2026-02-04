@@ -22,7 +22,7 @@ pub fn infer_shape(value: &Value) -> Shape {
 ///
 /// ```
 /// use vizij_api_core::{ShapeId, Value};
-/// use vizij_graph_core::eval::shape_helpers::infer_shape_id;
+/// use vizij_graph_core::eval::infer_shape_id;
 ///
 /// let id = infer_shape_id(&Value::Vec3([1.0, 2.0, 3.0]));
 /// assert_eq!(id, ShapeId::Vec3);
@@ -133,7 +133,7 @@ pub fn enforce_output_shapes(
 ///
 /// ```
 /// use vizij_api_core::{ShapeId, Value};
-/// use vizij_graph_core::eval::shape_helpers::value_matches_shape;
+/// use vizij_graph_core::eval::value_matches_shape;
 ///
 /// let ok = value_matches_shape(&ShapeId::Vec2, &Value::Vec2([0.0, 1.0]));
 /// let nope = value_matches_shape(&ShapeId::Vec2, &Value::Vec3([0.0, 1.0, 2.0]));
@@ -202,7 +202,7 @@ pub fn value_matches_shape(shape: &ShapeId, value: &Value) -> bool {
 ///
 /// ```
 /// use vizij_api_core::ShapeId;
-/// use vizij_graph_core::eval::shape_helpers::is_numeric_like;
+/// use vizij_graph_core::eval::is_numeric_like;
 ///
 /// assert!(is_numeric_like(&ShapeId::Vec4));
 /// assert!(!is_numeric_like(&ShapeId::Text));
@@ -232,7 +232,7 @@ pub fn is_numeric_like(shape: &ShapeId) -> bool {
 ///
 /// ```
 /// use vizij_api_core::{ShapeId, Value};
-/// use vizij_graph_core::eval::shape_helpers::null_of_shape_numeric;
+/// use vizij_graph_core::eval::null_of_shape_numeric;
 ///
 /// let value = null_of_shape_numeric(&ShapeId::Vec2);
 /// assert!(matches!(value, Value::Vec2(_)));
@@ -297,7 +297,7 @@ pub fn null_of_shape_numeric(shape: &ShapeId) -> Value {
 /// ```
 /// use vizij_api_core::{ShapeId, Value};
 /// use vizij_graph_core::types::SelectorSegment;
-/// use vizij_graph_core::eval::shape_helpers::project_by_selector;
+/// use vizij_graph_core::eval::project_by_selector;
 ///
 /// let value = Value::Transform {
 ///     translation: [1.0, 2.0, 3.0],
@@ -470,7 +470,7 @@ pub fn project_by_selector(
 ///
 /// ```
 /// use vizij_api_core::{ShapeId, Value};
-/// use vizij_graph_core::eval::shape_helpers::coerce_numeric_to_shape;
+/// use vizij_graph_core::eval::coerce_numeric_to_shape;
 ///
 /// let value = Value::Vector(vec![1.0, 2.0, 3.0]);
 /// let coerced = coerce_numeric_to_shape(&ShapeId::Vec3, &value);

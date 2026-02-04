@@ -30,3 +30,5 @@ npm/@vizij/wasm-loader/node_modules/
 
 # ralph loop logs (local)
 .ralph/logs/
+docs/*
+npm/@vizij/test-fixtures/node_modules/.bin/*

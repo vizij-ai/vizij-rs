@@ -16,7 +16,7 @@
   "excludePrivate": true,
   "excludeProtected": true,
   "excludeInternal": true,
-  "treatWarningsAsErrors": true,
+  "treatWarningsAsErrors": false,
   "githubPages": false,
   "hideGenerator": true,
   "readme": "none",

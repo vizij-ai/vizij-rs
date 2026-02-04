@@ -39,8 +39,8 @@ pub enum Schedule {
 ///
 /// # Examples
 /// ```
-/// use vizij_orchestrator_core::{Orchestrator, Schedule};
-/// use vizij_orchestrator_core::scheduler::run_single_pass;
+/// use vizij_orchestrator::{Orchestrator, Schedule};
+/// use vizij_orchestrator::scheduler::run_single_pass;
 ///
 /// let mut orchestrator = Orchestrator::new(Schedule::SinglePass);
 /// // Normally you would register controllers before running the scheduler.
@@ -140,8 +140,8 @@ pub fn run_single_pass(
 ///
 /// # Examples
 /// ```
-/// use vizij_orchestrator_core::{Orchestrator, Schedule};
-/// use vizij_orchestrator_core::scheduler::run_two_pass;
+/// use vizij_orchestrator::{Orchestrator, Schedule};
+/// use vizij_orchestrator::scheduler::run_two_pass;
 ///
 /// let mut orchestrator = Orchestrator::new(Schedule::TwoPass);
 /// let frame = run_two_pass(&mut orchestrator, 1.0 / 60.0).expect("run schedule");

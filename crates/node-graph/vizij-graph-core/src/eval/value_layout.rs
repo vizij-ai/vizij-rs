@@ -118,7 +118,7 @@ impl ValueLayout {
     /// # Examples
     ///
     /// ```
-    /// use vizij_graph_core::eval::value_layout::ValueLayout;
+    /// use vizij_graph_core::eval::ValueLayout;
     ///
     /// assert_eq!(ValueLayout::Vec3.scalar_len(), 3);
     /// ```
@@ -270,7 +270,7 @@ impl ValueLayout {
     ///
     /// ```
     /// use vizij_api_core::Value;
-    /// use vizij_graph_core::eval::value_layout::ValueLayout;
+    /// use vizij_graph_core::eval::ValueLayout;
     ///
     /// let value = ValueLayout::Vec2.fill_with(0.5);
     /// assert_eq!(value, Value::Vec2([0.5, 0.5]));

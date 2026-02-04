@@ -20,6 +20,7 @@ import { toValueJSON, type ValueInput } from "@vizij/value-json";
 import {
   loadBindings as loadWasmBindings,
   type InitInput as LoaderInitInput,
+  type LoadBindingsOptions,
 } from "@vizij/wasm-loader";
 import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 type WasmResolver = (path: string) => string | number | null | undefined;
@@ -54,11 +55,11 @@ let wasmModulePromise: Promise<WasmBindings | unknown> | null = null;
 let wasmUrlCache: string | null = null;
 
 function pkgWasmJsUrl(): URL {
-  return new URL("../../pkg/vizij_orchestrator_wasm.js", import.meta.url);
+  return new URL("../pkg/vizij_orchestrator_wasm.js", import.meta.url);
 }
 
 function importStaticWasmModule(): Promise<unknown> {
-  return import("../../pkg/vizij_orchestrator_wasm.js");
+  return import("../pkg/vizij_orchestrator_wasm.js") as unknown as Promise<unknown>;
 }
 
 function importDynamicWasmModule(): Promise<unknown> {
@@ -82,16 +83,22 @@ async function importWasmModule(): Promise<unknown> {
 
 function defaultWasmUrl(): string {
   if (!wasmUrlCache) {
-    wasmUrlCache = new URL("../../pkg/vizij_orchestrator_wasm_bg.wasm", import.meta.url).toString();
+    wasmUrlCache = new URL("../pkg/vizij_orchestrator_wasm_bg.wasm", import.meta.url).toString();
   }
   return wasmUrlCache;
 }
 
-const loadBindingsImpl: typeof loadWasmBindings =
+const loadBindingsImpl: <TBindings>(
+  options: LoadBindingsOptions<TBindings>,
+  initInput?: LoaderInitInput,
+) => Promise<TBindings> =
   typeof window === "undefined" ? loadWasmBindings : loadWasmBindingsBrowser;
 
 async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
-  await loadBindingsImpl<WasmBindings>(
+  await (loadBindingsImpl as <TBindings>(
+    options: Parameters<typeof loadWasmBindings>[0],
+    initInput?: LoaderInitInput
+  ) => Promise<TBindings>)<WasmBindings>(
     {
       cache: bindingCache,
       importModule: () => importWasmModule(),
@@ -101,7 +108,7 @@ async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
       },
       getBindings: (module) => module as WasmBindings,
       expectedAbi: 2,
-      getAbiVersion: (bindings) => Number(bindings.abi_version()),
+      getAbiVersion: (bindings) => Number((bindings as WasmBindings).abi_version()),
     },
     input
   );

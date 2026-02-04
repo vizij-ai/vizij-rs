@@ -28,8 +28,15 @@ mod variadic;
 
 pub use eval_node::eval_node;
 pub use graph_runtime::{GraphRuntime, StagedInput};
+pub use numeric::{as_bool, as_float, binary_numeric, unary_numeric};
 pub use plan::{fingerprint_spec, PlanCache};
+pub use shape_helpers::{
+    coerce_numeric_to_shape, infer_shape_id, is_numeric_like, null_of_shape_numeric,
+    project_by_selector, value_matches_shape,
+};
 pub use value_layout::PortValue;
+pub use value_layout::ValueLayout;
+pub use variadic::fold_numeric_variadic;
 
 #[cfg(test)]
 mod blend_tests;

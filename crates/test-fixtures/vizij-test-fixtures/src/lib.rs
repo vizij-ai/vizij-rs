@@ -82,7 +82,7 @@ fn load_json<T: DeserializeOwned>(rel: &str) -> Result<T> {
     serde_json::from_str(&text).with_context(|| format!("failed to parse JSON fixture {rel}"))
 }
 
-    /// Look up a named fixture entry and surface a clear error if missing.
+/// Look up a named fixture entry and surface a clear error if missing.
 fn lookup<'a, T>(map: &'a HashMap<String, T>, kind: &str, name: &str) -> Result<&'a T> {
     map.get(name)
         .ok_or_else(|| anyhow!("unknown {kind} fixture '{name}'"))

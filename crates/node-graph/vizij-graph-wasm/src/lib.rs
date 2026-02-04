@@ -1296,7 +1296,7 @@ impl WasmGraph {
                 )))
             }
         }
-/// Extract a string output value or return a JS error with node context.
+        /// Extract a string output value or return a JS error with node context.
         fn expect_text<'a>(node_id: &str, key: &str, v: &'a Value) -> Result<&'a str, JsValue> {
             if let Value::Text(s) = v {
                 Ok(s.as_str())

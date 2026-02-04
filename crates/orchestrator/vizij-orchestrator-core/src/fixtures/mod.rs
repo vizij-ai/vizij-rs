@@ -95,7 +95,7 @@ impl GraphFixture {
     ///
     /// # Examples
     /// ```no_run
-    /// use vizij_orchestrator_core::fixtures::graph_controller_config_from_fixture;
+    /// use vizij_orchestrator::fixtures::graph_controller_config_from_fixture;
     ///
     /// let cfg = graph_controller_config_from_fixture("simple-gain-offset");
     /// assert!(!cfg.id.is_empty());

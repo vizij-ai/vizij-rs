@@ -319,8 +319,10 @@ impl AnimationController {
     ///
     /// # Examples
     /// ```
-    /// use vizij_orchestrator_core::controllers::AnimationControllerConfig;
-    /// use vizij_orchestrator_core::{Blackboard, controllers::AnimationController};
+    /// use vizij_orchestrator::controllers::AnimationControllerConfig;
+    /// use vizij_api_core::WriteBatch;
+    /// use vizij_orchestrator::Blackboard;
+    /// use vizij_orchestrator::controllers::animation::AnimationController;
     ///
     /// let mut controller = AnimationController::try_new(AnimationControllerConfig {
     ///     id: "anim:demo".into(),
@@ -328,7 +330,7 @@ impl AnimationController {
     /// }).expect("controller");
     /// let mut blackboard = Blackboard::new();
     ///
-    /// let (writes, events) = controller
+    /// let (writes, events): (WriteBatch, Vec<serde_json::Value>) = controller
     ///     .update(1.0 / 60.0, &mut blackboard)
     ///     .expect("update ok");
     /// assert!(events.is_empty());

@@ -13,7 +13,7 @@ use super::value_layout::{align_flattened, flatten_numeric};
 ///
 /// ```
 /// use vizij_api_core::Value;
-/// use vizij_graph_core::eval::numeric::binary_numeric;
+/// use vizij_graph_core::eval::binary_numeric;
 ///
 /// let lhs = Value::Vec3([1.0, 2.0, 3.0]);
 /// let rhs = Value::Float(1.0);
@@ -46,7 +46,7 @@ where
 ///
 /// ```
 /// use vizij_api_core::Value;
-/// use vizij_graph_core::eval::numeric::unary_numeric;
+/// use vizij_graph_core::eval::unary_numeric;
 ///
 /// let input = Value::Vec2([3.0, 4.0]);
 /// let out = unary_numeric(&input, |x| x * 2.0);
@@ -73,7 +73,7 @@ where
 ///
 /// ```
 /// use vizij_api_core::Value;
-/// use vizij_graph_core::eval::numeric::as_float;
+/// use vizij_graph_core::eval::as_float;
 ///
 /// let value = Value::Vec3([2.0, 0.0, 0.0]);
 /// assert_eq!(as_float(&value), 2.0);
@@ -91,7 +91,7 @@ pub fn as_float(v: &Value) -> f32 {
 ///
 /// ```
 /// use vizij_api_core::Value;
-/// use vizij_graph_core::eval::numeric::as_bool;
+/// use vizij_graph_core::eval::as_bool;
 ///
 /// assert!(as_bool(&Value::Text("ok".into())));
 /// assert!(!as_bool(&Value::Float(0.0)));

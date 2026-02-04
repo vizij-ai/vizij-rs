@@ -53,7 +53,7 @@ pub fn collect_operand_ports<'a>(inputs: &'a InputSlots<'a>) -> Vec<&'a PortValu
 ///
 /// ```
 /// use vizij_api_core::Value;
-/// use vizij_graph_core::eval::variadic::fold_numeric_variadic;
+/// use vizij_graph_core::eval::fold_numeric_variadic;
 ///
 /// let values = vec![Value::Float(1.0), Value::Float(2.0), Value::Float(3.0)];
 /// let sum = fold_numeric_variadic(&values, |a, b| a + b, Value::Float(0.0));
