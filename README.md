@@ -222,7 +222,7 @@ Fixtures live in `fixtures/` for repeatable scenario testing. Use them in integr
 
 - Canonical scenarios live in `fixtures/perf_scenarios` (hashes tracked in `fixtures/perf_scenarios/index.json`).
 - Build wasm once: `pnpm run build:wasm`
-- Full run (appends table rows in `vizij_docs/current_documentation/perf_baselines.md`): `pnpm run perf:wasm`
+- Full run (appends table rows in `vizij-docs/current_documentation/perf_baselines.md`): `pnpm run perf:wasm`
 - Verify-only (no append, warns on signature/variance drift): `pnpm run perf:wasm:verify`
 - CI smoke uses: `SMOKE=1 VERIFY_ONLY=1 pnpm run perf:smoke`
 - Update goldens intentionally: `UPDATE_GOLDEN=1 pnpm run perf:wasm`
