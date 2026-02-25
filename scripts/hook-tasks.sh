@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Shared task runner for git hooks and npm scripts.
-set -euo pipefail
+set -eu
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
