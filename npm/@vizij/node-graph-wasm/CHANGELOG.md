@@ -1,5 +1,12 @@
 # @vizij/node-graph-wasm
 
+## 0.6.0
+
+### Minor Changes
+
+- 0fa5752: Add noise generator and to/from vector node support in the graph runtime,
+  including runtime param handling updates for noise-related node params.
+
 ## 0.5.0
 
 ### Minor Changes
