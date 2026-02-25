@@ -89,6 +89,13 @@ pub enum NodeType {
     VectorMean,
     VectorMedian,
     VectorMode,
+    ToVector,
+    FromVector,
+
+    // Noise generators
+    SimpleNoise,
+    PerlinNoise,
+    SimplexNoise,
 
     // Blend helpers
     WeightedSumVector,
@@ -161,6 +168,12 @@ pub struct NodeParams {
     pub index: Option<f32>,
     // For Split sizes (vector of sizes, floored to usize)
     pub sizes: Option<Vec<f32>>,
+
+    // Noise parameters
+    pub noise_seed: Option<f32>,
+    pub octaves: Option<f32>,
+    pub lacunarity: Option<f32>,
+    pub persistence: Option<f32>,
 
     // Transition parameters
     pub stiffness: Option<f32>,

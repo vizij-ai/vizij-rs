@@ -209,6 +209,68 @@ mod tests {
     }
 
     #[test]
+    fn set_param_supports_noise_params() {
+        let mut graph = WasmGraph::new();
+        let spec = r#"{
+            "nodes": [
+                {
+                    "id": "noise",
+                    "type": "simplenoise",
+                    "params": {
+                        "noise_seed": 0.0,
+                        "frequency": 1.0,
+                        "octaves": 1.0,
+                        "lacunarity": 2.0,
+                        "persistence": 0.5
+                    },
+                    "inputs": {},
+                    "output_shapes": {}
+                }
+            ]
+        }"#;
+
+        graph.load_graph(spec).expect("graph loads");
+        graph.eval_all().expect("initial eval");
+        assert!(graph.plan_ready, "plan should be ready after first eval");
+        let initial_layouts = graph.runtime.plan.layouts.len();
+        assert!(initial_layouts > 0, "plan layouts should be populated");
+
+        graph
+            .set_param("noise", "noise_seed", "42.0")
+            .expect("noise_seed set_param succeeds");
+        graph
+            .set_param("noise", "octaves", "4.0")
+            .expect("octaves set_param succeeds");
+        graph
+            .set_param("noise", "lacunarity", "2.5")
+            .expect("lacunarity set_param succeeds");
+        graph
+            .set_param("noise", "persistence", "0.4")
+            .expect("persistence set_param succeeds");
+
+        assert!(
+            graph.plan_ready,
+            "noise params are non-structural and should not invalidate plan cache"
+        );
+        assert_eq!(
+            graph.runtime.plan.layouts.len(),
+            initial_layouts,
+            "plan layouts should remain unchanged for noise param edits"
+        );
+
+        let noise = graph
+            .spec
+            .nodes
+            .iter()
+            .find(|n| n.id == "noise")
+            .expect("noise node present");
+        assert_eq!(noise.params.noise_seed, Some(42.0));
+        assert_eq!(noise.params.octaves, Some(4.0));
+        assert_eq!(noise.params.lacunarity, Some(2.5));
+        assert_eq!(noise.params.persistence, Some(0.4));
+    }
+
+    #[test]
     fn delta_since_greater_than_output_version_forces_full_resync() {
         let mut graph = WasmGraph::new();
         let spec = r#"{
@@ -1185,6 +1247,10 @@ impl WasmGraph {
 
                 // Scalars / options (strict float)
                 "frequency" => node.params.frequency = Some(expect_float(node_id, key, &val)?),
+                "noise_seed" => node.params.noise_seed = Some(expect_float(node_id, key, &val)?),
+                "octaves" => node.params.octaves = Some(expect_float(node_id, key, &val)?),
+                "lacunarity" => node.params.lacunarity = Some(expect_float(node_id, key, &val)?),
+                "persistence" => node.params.persistence = Some(expect_float(node_id, key, &val)?),
                 "phase" => node.params.phase = Some(expect_float(node_id, key, &val)?),
                 "min" => node.params.min = expect_float(node_id, key, &val)?,
                 "max" => node.params.max = expect_float(node_id, key, &val)?,

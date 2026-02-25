@@ -91,6 +91,18 @@ fn system_set_params(mut ev: EventReader<SetNodeParam>, mut g: ResMut<GraphResou
                 "frequency" => {
                     node.params.frequency = Some(value_to_f32(&e.value));
                 }
+                "noise_seed" => {
+                    node.params.noise_seed = Some(value_to_f32(&e.value));
+                }
+                "octaves" => {
+                    node.params.octaves = Some(value_to_f32(&e.value));
+                }
+                "lacunarity" => {
+                    node.params.lacunarity = Some(value_to_f32(&e.value));
+                }
+                "persistence" => {
+                    node.params.persistence = Some(value_to_f32(&e.value));
+                }
                 "phase" => {
                     node.params.phase = Some(value_to_f32(&e.value));
                 }

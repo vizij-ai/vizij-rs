@@ -242,7 +242,6 @@ fn build_output_layout(
 
     if let Some(sig) = signature {
         if let Some(var_out) = &sig.variadic_outputs {
-            // Currently Split is the only variadic-output node.
             if matches!(node.kind, NodeType::Split) {
                 let sizes_len = node.params.sizes.as_ref().map(|v| v.len()).unwrap_or(0);
                 let mut max_ref = 0usize;
@@ -260,6 +259,23 @@ fn build_output_layout(
                 }
                 let range = VariadicRange { start, len: count };
                 layout.variadics.insert("part".to_string(), range);
+                layout.variadics.insert(var_out.id.to_string(), range);
+            } else if matches!(node.kind, NodeType::FromVector) {
+                let mut max_ref = 0usize;
+                for name in referenced.iter() {
+                    if let Some(stripped) = name.strip_prefix("element") {
+                        if let Ok(idx) = stripped.parse::<usize>() {
+                            max_ref = max_ref.max(idx);
+                        }
+                    }
+                }
+                let count = std::cmp::max(1, max_ref);
+                let start = layout.slots.len();
+                for i in 0..count {
+                    layout.insert_slot(format!("element{}", i + 1));
+                }
+                let range = VariadicRange { start, len: count };
+                layout.variadics.insert("element".to_string(), range);
                 layout.variadics.insert(var_out.id.to_string(), range);
             }
         }

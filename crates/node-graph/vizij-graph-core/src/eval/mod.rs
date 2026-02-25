@@ -18,6 +18,7 @@ use std::mem;
 
 pub mod eval_node;
 mod graph_runtime;
+mod noise;
 mod numeric;
 mod plan;
 mod shape_helpers;

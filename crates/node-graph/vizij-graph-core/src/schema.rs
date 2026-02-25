@@ -1397,6 +1397,46 @@ pub fn registry() -> Registry {
         ],
     });
 
+    // ToVector (variadic Float inputs -> single Vector output)
+    nodes.push(NodeSignature {
+        type_id: ToVector,
+        name: "To Vector",
+        category: "Vectors",
+        doc: "Assembles variadic Float inputs into a single Vector output in port order.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "operand",
+            ty: PortType::Float,
+            label: "Element",
+            doc: "Each scalar element to pack into the vector.",
+            min: 1,
+            max: None,
+        }),
+        outputs: vec![p_out_vector()],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // FromVector (single Vector input -> variadic Float outputs)
+    nodes.push(NodeSignature {
+        type_id: FromVector,
+        name: "From Vector",
+        category: "Vectors",
+        doc: "Unpacks a Vector into variadic Float outputs; excess ports beyond vector length emit NaN.",
+        inputs: vec![p_vector_in()],
+        variadic_inputs: None,
+        outputs: vec![],
+        variadic_outputs: Some(VariadicSpec {
+            id: "elements",
+            ty: PortType::Float,
+            label: "Element",
+            doc: "Individual scalar element extracted from the input vector.",
+            min: 1,
+            max: None,
+        }),
+        params: vec![],
+    });
+
     // Reducers: vector -> float
     for (nt, name, doc) in [
         (
@@ -1435,6 +1475,98 @@ pub fn registry() -> Registry {
             outputs: vec![p_out_float()],
             variadic_outputs: None,
             params: vec![],
+        });
+    }
+
+    // Noise generators
+    for (nt, name, doc) in [
+        (
+            SimpleNoise,
+            "Simple Noise",
+            "Hash-based 2D value noise returning [-1, 1]; deterministic for identical inputs and seed.",
+        ),
+        (
+            PerlinNoise,
+            "Perlin Noise",
+            "Classic 2D Perlin gradient noise returning [-1, 1]; deterministic for identical inputs and seed.",
+        ),
+        (
+            SimplexNoise,
+            "Simplex Noise",
+            "2D simplex noise returning [-1, 1]; deterministic for identical inputs and seed.",
+        ),
+    ] {
+        nodes.push(NodeSignature {
+            type_id: nt,
+            name,
+            category: "Noise",
+            doc,
+            inputs: vec![
+                PortSpec {
+                    id: "x",
+                    ty: PortType::Float,
+                    label: "X",
+                    doc: "X coordinate for noise sampling.",
+                    optional: false,
+                },
+                PortSpec {
+                    id: "y",
+                    ty: PortType::Float,
+                    label: "Y",
+                    doc: "Y coordinate for noise sampling.",
+                    optional: false,
+                },
+            ],
+            variadic_inputs: None,
+            outputs: vec![p_out_float()],
+            variadic_outputs: None,
+            params: vec![
+                ParamSpec {
+                    id: "noise_seed",
+                    ty: ParamType::Float,
+                    label: "Seed",
+                    doc: "Integer seed for deterministic noise generation.",
+                    default_json: Some(serde_json::json!({ "float": 0.0 })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "frequency",
+                    ty: ParamType::Float,
+                    label: "Frequency",
+                    doc: "Spatial frequency multiplier applied to coordinates.",
+                    default_json: Some(serde_json::json!({ "float": 1.0 })),
+                    min: Some(0.0),
+                    max: None,
+                },
+                ParamSpec {
+                    id: "octaves",
+                    ty: ParamType::Float,
+                    label: "Octaves",
+                    doc: "Number of noise layers to sum for fBm (fractal Brownian motion).",
+                    default_json: Some(serde_json::json!({ "float": 1.0 })),
+                    min: Some(1.0),
+                    max: Some(16.0),
+                },
+                ParamSpec {
+                    id: "lacunarity",
+                    ty: ParamType::Float,
+                    label: "Lacunarity",
+                    doc: "Frequency multiplier between successive octaves.",
+                    default_json: Some(serde_json::json!({ "float": 2.0 })),
+                    min: None,
+                    max: None,
+                },
+                ParamSpec {
+                    id: "persistence",
+                    ty: ParamType::Float,
+                    label: "Persistence",
+                    doc: "Amplitude multiplier between successive octaves.",
+                    default_json: Some(serde_json::json!({ "float": 0.5 })),
+                    min: None,
+                    max: None,
+                },
+            ],
         });
     }
 

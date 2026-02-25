@@ -7,6 +7,7 @@ use crate::types::{NodeParams, NodeSpec, NodeType, RoundMode};
 use hashbrown::HashMap;
 use vizij_api_core::{coercion, Shape, Value, WriteOp};
 
+use super::noise;
 use super::numeric::{as_bool, as_float, binary_numeric, unary_numeric};
 use super::shape_helpers::{
     coerce_numeric_to_shape, is_numeric_like, null_of_shape_numeric, project_by_selector,
@@ -256,6 +257,8 @@ fn evaluate_kind(
         NodeType::VectorIndex => eval_vector_index(inputs, outputs),
         NodeType::Join => eval_join(inputs, outputs),
         NodeType::Split => eval_split(params, inputs, outputs),
+        NodeType::ToVector => eval_to_vector(inputs, outputs),
+        NodeType::FromVector => eval_from_vector(inputs, outputs),
         node_type @ (NodeType::VectorMin
         | NodeType::VectorMax
         | NodeType::VectorMean
@@ -271,6 +274,9 @@ fn evaluate_kind(
             eval_blend_weighted_average_overlay(inputs, outputs)
         }
         NodeType::BlendMax => eval_blend_max(inputs, outputs),
+        node_type @ (NodeType::SimpleNoise | NodeType::PerlinNoise | NodeType::SimplexNoise) => {
+            eval_noise(node_type, params, inputs, outputs)
+        }
         NodeType::InverseKinematics => eval_inverse_kinematics(inputs, outputs),
         #[cfg(feature = "urdf_ik")]
         NodeType::UrdfIkPosition => eval_urdf_position(rt, spec, params, inputs, outputs),
@@ -1155,6 +1161,63 @@ fn eval_split(
     }
 
     Ok(())
+}
+
+fn eval_to_vector(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+    let operands = collect_operand_ports(inputs);
+    let vec: Vec<f32> = operands.iter().map(|pv| as_float(&pv.value)).collect();
+    single_output(outputs, Value::Vector(vec))
+}
+
+fn eval_from_vector(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+    let input = input_or_default(inputs, "in");
+    let data = flatten_numeric(&input.value)
+        .map(|f| f.data)
+        .unwrap_or_default();
+
+    if let Some(range) = outputs.layout.variadic_range("elements") {
+        for i in 0..range.len {
+            let val = data.get(i).copied().unwrap_or(f32::NAN);
+            outputs.set_variadic("elements", i, PortValue::new(Value::Float(val)))?;
+        }
+    }
+
+    Ok(())
+}
+
+fn eval_noise(
+    kind: &NodeType,
+    params: &NodeParams,
+    inputs: &InputSlots,
+    outputs: &mut OutputSlots,
+) -> Result<(), String> {
+    let x = as_float(&input_or_default(inputs, "x").value);
+    let y = as_float(&input_or_default(inputs, "y").value);
+
+    let seed = params.noise_seed.unwrap_or(0.0).floor() as i32;
+    let frequency = params.frequency.unwrap_or(1.0);
+    let octaves = params.octaves.unwrap_or(1.0).floor().clamp(1.0, 16.0) as u32;
+    let lacunarity = params.lacunarity.unwrap_or(2.0);
+    let persistence = params.persistence.unwrap_or(0.5);
+
+    let base_fn: fn(f32, f32, i32) -> f32 = match kind {
+        NodeType::SimpleNoise => noise::value_noise_2d,
+        NodeType::PerlinNoise => noise::perlin_noise_2d,
+        NodeType::SimplexNoise => noise::simplex_noise_2d,
+        _ => unreachable!(),
+    };
+
+    let result = noise::fbm(
+        x,
+        y,
+        seed,
+        frequency,
+        octaves,
+        lacunarity,
+        persistence,
+        base_fn,
+    );
+    single_output(outputs, Value::Float(result.clamp(-1.0, 1.0)))
 }
 
 fn eval_vector_reducer(
