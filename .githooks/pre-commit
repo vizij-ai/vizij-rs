@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
-# Skip hooks on Windows / WSL (GitHub Desktop may invoke hooks via WSL where cargo is unavailable)
-case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) exit 0 ;; esac
-if grep -qi microsoft /proc/version 2>/dev/null; then exit 0; fi
 set -eu
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "[pre-commit] pnpm not found; skipping checks"
+  exit 0
+fi
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "[pre-commit] cargo not found; skipping checks"
+  exit 0
+fi
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 pnpm run hook:pre-commit
