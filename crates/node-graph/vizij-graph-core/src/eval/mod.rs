@@ -18,12 +18,12 @@ use std::mem;
 
 pub mod eval_node;
 mod graph_runtime;
+mod noise;
 mod numeric;
 mod plan;
 mod shape_helpers;
 mod urdfik;
 mod value_layout;
-mod noise;
 mod variadic;
 
 pub use eval_node::eval_node;

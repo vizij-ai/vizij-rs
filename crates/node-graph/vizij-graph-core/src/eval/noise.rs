@@ -130,6 +130,7 @@ pub fn simplex_noise_2d(x: f32, y: f32, seed: i32) -> f32 {
 }
 
 /// Fractal Brownian motion wrapper for any base noise function.
+#[allow(clippy::too_many_arguments)]
 pub fn fbm<F>(
     x: f32,
     y: f32,

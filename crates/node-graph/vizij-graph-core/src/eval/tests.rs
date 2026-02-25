@@ -2119,10 +2119,9 @@ fn from_vector_unpacks_with_nan_padding() {
     ] {
         let port = fv_out.get(key).unwrap_or_else(|| panic!("missing {key}"));
         match (&port.value, expected) {
-            (Value::Float(f), Some(e)) => assert!(
-                (f - e).abs() < 1e-6,
-                "{key}: expected {e}, got {f}"
-            ),
+            (Value::Float(f), Some(e)) => {
+                assert!((f - e).abs() < 1e-6, "{key}: expected {e}, got {f}")
+            }
             (Value::Float(f), None) => assert!(f.is_nan(), "{key}: expected NaN, got {f}"),
             (other, _) => panic!("{key}: expected Float, got {:?}", other),
         }

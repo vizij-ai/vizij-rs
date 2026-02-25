@@ -114,6 +114,10 @@ export interface NodeParams {
   value?: ValueJSON | number | boolean | [number, number, number] | number[];
   sizes?: number[]; // for Split
   frequency?: number;
+  noise_seed?: number;
+  octaves?: number;
+  lacunarity?: number;
+  persistence?: number;
   phase?: number;
   min?: number;
   max?: number;

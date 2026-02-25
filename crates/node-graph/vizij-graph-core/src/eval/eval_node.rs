@@ -274,9 +274,9 @@ fn evaluate_kind(
             eval_blend_weighted_average_overlay(inputs, outputs)
         }
         NodeType::BlendMax => eval_blend_max(inputs, outputs),
-        node_type @ (NodeType::SimpleNoise
-        | NodeType::PerlinNoise
-        | NodeType::SimplexNoise) => eval_noise(node_type, params, inputs, outputs),
+        node_type @ (NodeType::SimpleNoise | NodeType::PerlinNoise | NodeType::SimplexNoise) => {
+            eval_noise(node_type, params, inputs, outputs)
+        }
         NodeType::InverseKinematics => eval_inverse_kinematics(inputs, outputs),
         #[cfg(feature = "urdf_ik")]
         NodeType::UrdfIkPosition => eval_urdf_position(rt, spec, params, inputs, outputs),
@@ -1207,7 +1207,16 @@ fn eval_noise(
         _ => unreachable!(),
     };
 
-    let result = noise::fbm(x, y, seed, frequency, octaves, lacunarity, persistence, base_fn);
+    let result = noise::fbm(
+        x,
+        y,
+        seed,
+        frequency,
+        octaves,
+        lacunarity,
+        persistence,
+        base_fn,
+    );
     single_output(outputs, Value::Float(result.clamp(-1.0, 1.0)))
 }
 
