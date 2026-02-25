@@ -23,6 +23,7 @@ mod plan;
 mod shape_helpers;
 mod urdfik;
 mod value_layout;
+mod noise;
 mod variadic;
 
 pub use eval_node::eval_node;

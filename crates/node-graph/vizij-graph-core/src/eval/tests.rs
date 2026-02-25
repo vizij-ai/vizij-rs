@@ -2012,3 +2012,195 @@ fn centered_remap_supports_asymmetric_ranges_and_vectors() {
         other => panic!("expected vec3, got {:?}", other),
     }
 }
+
+// --- ToVector / FromVector -------------------------------------------------
+
+#[test]
+fn to_vector_packs_floats() {
+    let spec = graph_spec!({
+        nodes: vec![
+            constant_node("a", Value::Float(1.0)),
+            constant_node("b", Value::Float(2.0)),
+            constant_node("c", Value::Float(3.0)),
+            NodeSpec {
+                id: "tv".to_string(),
+                kind: NodeType::ToVector,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![
+            link("a", "tv", "operand_1"),
+            link("b", "tv", "operand_2"),
+            link("c", "tv", "operand_3"),
+        ],
+    });
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &spec).expect("to_vector should evaluate");
+    let port = rt
+        .outputs
+        .get("tv")
+        .and_then(|o| o.get("out"))
+        .expect("out port");
+    match &port.value {
+        Value::Vector(v) => assert_eq!(v, &vec![1.0, 2.0, 3.0]),
+        other => panic!("expected Vector, got {:?}", other),
+    }
+}
+
+#[test]
+fn from_vector_unpacks_with_nan_padding() {
+    let spec = graph_spec!({
+        nodes: vec![
+            constant_node("src", Value::Vector(vec![10.0, 20.0, 30.0])),
+            NodeSpec {
+                id: "fv".to_string(),
+                kind: NodeType::FromVector,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "s1".to_string(),
+                kind: NodeType::Constant,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "s2".to_string(),
+                kind: NodeType::Constant,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "s3".to_string(),
+                kind: NodeType::Constant,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "s4".to_string(),
+                kind: NodeType::Constant,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "s5".to_string(),
+                kind: NodeType::Constant,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![
+            link("src", "fv", "in"),
+            link_with_output("fv", "element1", "s1", "in"),
+            link_with_output("fv", "element2", "s2", "in"),
+            link_with_output("fv", "element3", "s3", "in"),
+            link_with_output("fv", "element4", "s4", "in"),
+            link_with_output("fv", "element5", "s5", "in"),
+        ],
+    });
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &spec).expect("from_vector should evaluate");
+
+    let fv_out = rt.outputs.get("fv").expect("fv outputs");
+    for (key, expected) in [
+        ("element1", Some(10.0f32)),
+        ("element2", Some(20.0)),
+        ("element3", Some(30.0)),
+        ("element4", None),
+        ("element5", None),
+    ] {
+        let port = fv_out.get(key).unwrap_or_else(|| panic!("missing {key}"));
+        match (&port.value, expected) {
+            (Value::Float(f), Some(e)) => assert!(
+                (f - e).abs() < 1e-6,
+                "{key}: expected {e}, got {f}"
+            ),
+            (Value::Float(f), None) => assert!(f.is_nan(), "{key}: expected NaN, got {f}"),
+            (other, _) => panic!("{key}: expected Float, got {:?}", other),
+        }
+    }
+}
+
+// --- Noise -----------------------------------------------------------------
+
+#[test]
+fn noise_nodes_are_deterministic_and_in_range() {
+    for kind in [
+        NodeType::SimpleNoise,
+        NodeType::PerlinNoise,
+        NodeType::SimplexNoise,
+    ] {
+        let mut defaults = HashMap::new();
+        defaults.insert(
+            "x".to_string(),
+            InputDefault {
+                value: Value::Float(1.5),
+                shape: None,
+            },
+        );
+        defaults.insert(
+            "y".to_string(),
+            InputDefault {
+                value: Value::Float(2.5),
+                shape: None,
+            },
+        );
+
+        let spec = graph_spec!({
+            nodes: vec![NodeSpec {
+                id: "n".to_string(),
+                kind: kind.clone(),
+                params: NodeParams {
+                    noise_seed: Some(42.0),
+                    frequency: Some(1.0),
+                    octaves: Some(4.0),
+                    lacunarity: Some(2.0),
+                    persistence: Some(0.5),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: defaults.clone(),
+            }],
+            edges: vec![],
+        });
+
+        let mut rt = GraphRuntime::default();
+        evaluate_all(&mut rt, &spec).expect("noise should evaluate");
+        let v1 = match rt
+            .outputs
+            .get("n")
+            .and_then(|o| o.get("out"))
+            .map(|p| &p.value)
+        {
+            Some(Value::Float(f)) => *f,
+            other => panic!("expected Float, got {:?}", other),
+        };
+
+        // Evaluate again — must produce identical result
+        evaluate_all(&mut rt, &spec).expect("noise second eval");
+        let v2 = match rt
+            .outputs
+            .get("n")
+            .and_then(|o| o.get("out"))
+            .map(|p| &p.value)
+        {
+            Some(Value::Float(f)) => *f,
+            other => panic!("expected Float, got {:?}", other),
+        };
+
+        assert_eq!(v1, v2, "noise must be deterministic for {:?}", kind);
+        assert!(
+            (-1.0..=1.0).contains(&v1),
+            "noise output must be in [-1, 1], got {v1} for {:?}",
+            kind
+        );
+    }
+}

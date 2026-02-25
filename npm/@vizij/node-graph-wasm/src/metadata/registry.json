@@ -1606,6 +1606,54 @@
       ]
     },
     {
+      "type_id": "tovector",
+      "name": "To Vector",
+      "category": "Vectors",
+      "doc": "Assembles variadic Float inputs into a single Vector output in port order.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "operand",
+        "ty": "float",
+        "label": "Element",
+        "doc": "Each scalar element to pack into the vector.",
+        "min": 1
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "vector",
+          "label": "Out",
+          "doc": "Computed numeric vector result.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "fromvector",
+      "name": "From Vector",
+      "category": "Vectors",
+      "doc": "Unpacks a Vector into variadic Float outputs; excess ports beyond vector length emit NaN.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "vector",
+          "label": "In",
+          "doc": "Input numeric vector; accepts scalars and arrays.",
+          "optional": false
+        }
+      ],
+      "outputs": [],
+      "variadic_outputs": {
+        "id": "elements",
+        "ty": "float",
+        "label": "Element",
+        "doc": "Individual scalar element extracted from the input vector.",
+        "min": 1
+      },
+      "params": []
+    },
+    {
       "type_id": "vectormin",
       "name": "Vector Min",
       "category": "Vectors",
@@ -1729,6 +1777,249 @@
         }
       ],
       "params": []
+    },
+    {
+      "type_id": "simplenoise",
+      "name": "Simple Noise",
+      "category": "Noise",
+      "doc": "Hash-based 2D value noise returning [-1, 1]; deterministic for identical inputs and seed.",
+      "inputs": [
+        {
+          "id": "x",
+          "ty": "float",
+          "label": "X",
+          "doc": "X coordinate for noise sampling.",
+          "optional": false
+        },
+        {
+          "id": "y",
+          "ty": "float",
+          "label": "Y",
+          "doc": "Y coordinate for noise sampling.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "noise_seed",
+          "ty": "float",
+          "label": "Seed",
+          "doc": "Integer seed for deterministic noise generation.",
+          "default_json": {
+            "float": 0.0
+          }
+        },
+        {
+          "id": "frequency",
+          "ty": "float",
+          "label": "Frequency",
+          "doc": "Spatial frequency multiplier applied to coordinates.",
+          "default_json": {
+            "float": 1.0
+          },
+          "min": 0.0
+        },
+        {
+          "id": "octaves",
+          "ty": "float",
+          "label": "Octaves",
+          "doc": "Number of noise layers to sum for fBm (fractal Brownian motion).",
+          "default_json": {
+            "float": 1.0
+          },
+          "min": 1.0,
+          "max": 16.0
+        },
+        {
+          "id": "lacunarity",
+          "ty": "float",
+          "label": "Lacunarity",
+          "doc": "Frequency multiplier between successive octaves.",
+          "default_json": {
+            "float": 2.0
+          }
+        },
+        {
+          "id": "persistence",
+          "ty": "float",
+          "label": "Persistence",
+          "doc": "Amplitude multiplier between successive octaves.",
+          "default_json": {
+            "float": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "type_id": "perlinnoise",
+      "name": "Perlin Noise",
+      "category": "Noise",
+      "doc": "Classic 2D Perlin gradient noise returning [-1, 1]; deterministic for identical inputs and seed.",
+      "inputs": [
+        {
+          "id": "x",
+          "ty": "float",
+          "label": "X",
+          "doc": "X coordinate for noise sampling.",
+          "optional": false
+        },
+        {
+          "id": "y",
+          "ty": "float",
+          "label": "Y",
+          "doc": "Y coordinate for noise sampling.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "noise_seed",
+          "ty": "float",
+          "label": "Seed",
+          "doc": "Integer seed for deterministic noise generation.",
+          "default_json": {
+            "float": 0.0
+          }
+        },
+        {
+          "id": "frequency",
+          "ty": "float",
+          "label": "Frequency",
+          "doc": "Spatial frequency multiplier applied to coordinates.",
+          "default_json": {
+            "float": 1.0
+          },
+          "min": 0.0
+        },
+        {
+          "id": "octaves",
+          "ty": "float",
+          "label": "Octaves",
+          "doc": "Number of noise layers to sum for fBm (fractal Brownian motion).",
+          "default_json": {
+            "float": 1.0
+          },
+          "min": 1.0,
+          "max": 16.0
+        },
+        {
+          "id": "lacunarity",
+          "ty": "float",
+          "label": "Lacunarity",
+          "doc": "Frequency multiplier between successive octaves.",
+          "default_json": {
+            "float": 2.0
+          }
+        },
+        {
+          "id": "persistence",
+          "ty": "float",
+          "label": "Persistence",
+          "doc": "Amplitude multiplier between successive octaves.",
+          "default_json": {
+            "float": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "type_id": "simplexnoise",
+      "name": "Simplex Noise",
+      "category": "Noise",
+      "doc": "2D simplex noise returning [-1, 1]; deterministic for identical inputs and seed.",
+      "inputs": [
+        {
+          "id": "x",
+          "ty": "float",
+          "label": "X",
+          "doc": "X coordinate for noise sampling.",
+          "optional": false
+        },
+        {
+          "id": "y",
+          "ty": "float",
+          "label": "Y",
+          "doc": "Y coordinate for noise sampling.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "float",
+          "label": "Out",
+          "doc": "Computed scalar result.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "noise_seed",
+          "ty": "float",
+          "label": "Seed",
+          "doc": "Integer seed for deterministic noise generation.",
+          "default_json": {
+            "float": 0.0
+          }
+        },
+        {
+          "id": "frequency",
+          "ty": "float",
+          "label": "Frequency",
+          "doc": "Spatial frequency multiplier applied to coordinates.",
+          "default_json": {
+            "float": 1.0
+          },
+          "min": 0.0
+        },
+        {
+          "id": "octaves",
+          "ty": "float",
+          "label": "Octaves",
+          "doc": "Number of noise layers to sum for fBm (fractal Brownian motion).",
+          "default_json": {
+            "float": 1.0
+          },
+          "min": 1.0,
+          "max": 16.0
+        },
+        {
+          "id": "lacunarity",
+          "ty": "float",
+          "label": "Lacunarity",
+          "doc": "Frequency multiplier between successive octaves.",
+          "default_json": {
+            "float": 2.0
+          }
+        },
+        {
+          "id": "persistence",
+          "ty": "float",
+          "label": "Persistence",
+          "doc": "Amplitude multiplier between successive octaves.",
+          "default_json": {
+            "float": 0.5
+          }
+        }
+      ]
     },
     {
       "type_id": "weightedsumvector",
