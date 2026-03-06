@@ -10,14 +10,20 @@ use vizij_api_core::{json, Shape, TypedPath, Value, WriteBatch};
 /// Single blackboard entry with provenance information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlackboardEntry {
+    /// Current normalized value stored at the path.
     pub value: Value,
+    /// Optional declared shape associated with [`Self::value`].
     pub shape: Option<Shape>,
+    /// Epoch when this entry was last written.
     pub epoch: u64,
+    /// Writer/controller label that last updated this entry.
     pub source: String,
+    /// Reserved priority field for future conflict policies. Current writes still use last-writer-wins.
     pub priority: u8,
 }
 
 impl BlackboardEntry {
+    /// Construct a blackboard entry with explicit provenance metadata.
     pub fn new(
         value: Value,
         shape: Option<Shape>,
@@ -39,15 +45,24 @@ impl BlackboardEntry {
 /// Provides prior metadata for diagnostics.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConflictLog {
+    /// Path that was overwritten.
     pub path: TypedPath,
+    /// Value present before the overwrite, if any.
     pub previous_value: Option<Value>,
+    /// Shape present before the overwrite, if any.
     pub previous_shape: Option<Shape>,
+    /// Epoch of the overwritten entry, if any.
     pub previous_epoch: Option<u64>,
+    /// Source label of the overwritten entry, if any.
     pub previous_source: Option<String>,
 
+    /// Replacement value written by the incoming operation.
     pub new_value: Value,
+    /// Replacement shape written by the incoming operation.
     pub new_shape: Option<Shape>,
+    /// Epoch assigned to the replacement write.
     pub new_epoch: u64,
+    /// Source label assigned to the replacement write.
     pub new_source: String,
 }
 
@@ -69,7 +84,8 @@ impl Blackboard {
     ///
     /// This convenience accepts JSON values (serde_json::Value) which are converted
     /// into the workspace `vizij_api_core::Value` and `Shape` types. The `path` is
-    /// provided as a String and parsed into a `TypedPath`.
+    /// provided as a String and parsed into a `TypedPath`. Existing entries at the same
+    /// path are overwritten.
     pub fn set(
         &mut self,
         path: String,
@@ -99,6 +115,8 @@ impl Blackboard {
     }
 
     /// Directly set a value using typed API types.
+    ///
+    /// Existing entries at the same path are overwritten and returned.
     pub fn set_entry(
         &mut self,
         path: TypedPath,
@@ -107,7 +125,7 @@ impl Blackboard {
         self.inner.insert(path, entry)
     }
 
-    /// Get an entry by path string. Returns None if absent or parse fails.
+    /// Get an entry by path string. Returns `None` if absent or if the path fails to parse.
     pub fn get(&self, path: &str) -> Option<&BlackboardEntry> {
         if let Ok(tp) = TypedPath::parse(path) {
             self.inner.get(&tp)
@@ -121,7 +139,7 @@ impl Blackboard {
         self.inner.get(path)
     }
 
-    /// Remove an entry by path string. Returns the removed entry if present.
+    /// Remove an entry by path string. Returns `None` if absent or if the path fails to parse.
     pub fn remove(&mut self, path: &str) -> Option<BlackboardEntry> {
         if let Ok(tp) = TypedPath::parse(path) {
             self.inner.remove(&tp)
@@ -130,13 +148,15 @@ impl Blackboard {
         }
     }
 
-    /// Iterate over all entries.
+    /// Iterate over all entries in unspecified hash-map order.
     pub fn iter(&self) -> impl Iterator<Item = (&TypedPath, &BlackboardEntry)> {
         self.inner.iter()
     }
 
-    /// Apply a WriteBatch onto the blackboard using last-writer-wins semantics.
-    /// Returns a Vec<ConflictLog> describing any overwrites that occurred.
+    /// Apply a [`WriteBatch`] onto the blackboard using last-writer-wins semantics.
+    ///
+    /// Batch order determines the final value when multiple ops target the same path. Returned
+    /// conflict logs include both the overwritten entry metadata and the replacement metadata.
     pub fn apply_writebatch(
         &mut self,
         batch: WriteBatch,

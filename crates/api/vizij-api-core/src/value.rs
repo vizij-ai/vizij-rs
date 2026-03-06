@@ -10,23 +10,39 @@ use serde::{Deserialize, Serialize};
 /// and quick dispatch during migration.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ValueKind {
+    /// Single floating-point scalar.
     Float,
+    /// Boolean value.
     Bool,
+    /// Fixed-size 2D float vector.
     Vec2,
+    /// Fixed-size 3D float vector.
     Vec3,
+    /// Fixed-size 4D float vector.
     Vec4,
+    /// Quaternion stored as `[x, y, z, w]`.
     Quat,
+    /// RGBA color value.
     ColorRgba,
+    /// Translation/rotation/scale transform payload.
     Transform,
+    /// Variable-length homogeneous float vector.
     Vector,
+    /// Named-field record/struct.
     Record,
+    /// Fixed-size homogeneous array.
     Array,
+    /// Variable-length homogeneous list.
     List,
+    /// Ordered heterogeneous tuple.
     Tuple,
+    /// Tagged enum with payload.
     Enum,
+    /// UTF-8 text payload.
     Text,
 }
 
+/// Normalized runtime value payload shared across Vizij crates and wasm bridges.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "data", rename_all = "lowercase")]
 pub enum Value {
@@ -61,7 +77,7 @@ pub enum Value {
     /// Generic, variable-length numeric vector
     Vector(Vec<f32>),
 
-    /// Enum with tag and nested value (value is optional depending on variant)
+    /// Enum with tag and nested payload value.
     Enum(String, Box<Value>),
 
     /// Text / string; step-only for interpolation
@@ -103,19 +119,22 @@ impl Value {
         }
     }
 
-    /// Convenience constructors
+    /// Convenience constructor for a scalar float.
     pub fn f(v: f32) -> Self {
         Value::Float(v)
     }
 
+    /// Convenience constructor for a 3D vector.
     pub fn vec3(x: f32, y: f32, z: f32) -> Self {
         Value::Vec3([x, y, z])
     }
 
+    /// Convenience constructor for a quaternion.
     pub fn quat(x: f32, y: f32, z: f32, w: f32) -> Self {
         Value::Quat([x, y, z, w])
     }
 
+    /// Convenience constructor for a transform payload.
     pub fn transform(translation: [f32; 3], rotation: [f32; 4], scale: [f32; 3]) -> Self {
         Value::Transform {
             translation,
