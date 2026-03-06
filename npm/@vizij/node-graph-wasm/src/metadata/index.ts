@@ -1,3 +1,9 @@
+/**
+ * Baked node-registry lookup helpers for `@vizij/node-graph-wasm`.
+ *
+ * These helpers wrap the generated registry payload so tooling can inspect node metadata
+ * without calling into wasm at runtime.
+ */
 import registry from "./registry.js";
 
 import type { NodeSignature, NodeType, Registry } from "../types.js";

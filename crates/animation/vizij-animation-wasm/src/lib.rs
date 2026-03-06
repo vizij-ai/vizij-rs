@@ -1,3 +1,8 @@
+//! `wasm-bindgen` facade for the Vizij animation engine.
+//!
+//! This module exposes the Rust animation runtime to JavaScript hosts, handling JSON/JsValue
+//! conversion for animation payloads, engine inputs, baking helpers, and target prebinding.
+
 use js_sys::{Function, JSON};
 use serde_wasm_bindgen as swb;
 use wasm_bindgen::prelude::*;

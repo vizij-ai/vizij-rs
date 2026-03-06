@@ -1,3 +1,5 @@
+//! Parsing helpers for Vizij's stored-animation JSON format.
+
 use serde::Deserialize;
 
 use crate::data::{AnimationData, Keypoint, Track, TrackSettings, Transitions};

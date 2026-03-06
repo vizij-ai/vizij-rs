@@ -1,3 +1,8 @@
+//! Animation-controller integration for the orchestrator.
+//!
+//! The animation controller owns a `vizij-animation-core` engine instance and translates
+//! blackboard paths into player commands and instance updates on each orchestrator step.
+
 use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
 use serde_json::Value as JsonValue;

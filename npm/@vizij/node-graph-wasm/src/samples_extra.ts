@@ -1,3 +1,6 @@
+/**
+ * Extra graph samples that focus on URDF/IK-oriented flows.
+ */
 import type {
   GraphSpec,
   EdgeSpec,

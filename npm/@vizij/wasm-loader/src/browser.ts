@@ -1,3 +1,9 @@
+/**
+ * Browser-oriented loader entrypoint for Vizij wasm wrapper packages.
+ *
+ * Browsers can pass URLs, Responses, or modules directly, so this variant forwards inputs to
+ * the shared loader without any Node-specific file handling.
+ */
 import {
   loadBindingsInternal,
   type InitInput,

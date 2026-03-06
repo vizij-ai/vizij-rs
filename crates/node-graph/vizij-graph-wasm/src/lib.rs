@@ -1,3 +1,8 @@
+//! `wasm-bindgen` bridge for the Vizij node-graph runtime.
+//!
+//! This module exposes graph normalization, evaluation, staged-input handling, registry
+//! metadata, and delta-friendly output snapshots to JavaScript consumers.
+
 use hashbrown::HashMap;
 use js_sys::{Float32Array, Uint32Array, JSON};
 use serde_wasm_bindgen as swb;

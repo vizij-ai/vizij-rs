@@ -1,3 +1,5 @@
+//! System implementations that keep the Bevy binding index and animation engine in sync.
+
 use bevy::prelude::*;
 use std::collections::HashMap;
 

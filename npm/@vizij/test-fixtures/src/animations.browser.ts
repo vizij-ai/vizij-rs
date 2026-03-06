@@ -1,3 +1,6 @@
+/**
+ * Browser-bundle animation fixture helpers for `@vizij/test-fixtures`.
+ */
 import {
   animationEntry,
   loadFixture,

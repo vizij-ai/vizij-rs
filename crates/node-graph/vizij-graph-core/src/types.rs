@@ -1,3 +1,8 @@
+//! Canonical graph specification types shared across all Vizij graph hosts.
+//!
+//! These structs are the serde-facing representation consumed by the evaluator, wasm bridge,
+//! fixture tooling, and orchestration layer.
+
 use hashbrown::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use vizij_api_core::{Shape, TypedPath, Value};

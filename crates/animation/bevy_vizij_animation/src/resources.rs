@@ -1,3 +1,5 @@
+//! Shared Bevy resources used by the animation plugin systems.
+
 use bevy::prelude::*;
 use std::collections::HashMap;
 use vizij_animation_core::outputs::Change;

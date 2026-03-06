@@ -1,3 +1,6 @@
+/**
+ * Browser-bundle node-graph fixture helpers for `@vizij/test-fixtures`.
+ */
 import {
   nodeGraphEntry,
   loadFixture,

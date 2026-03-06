@@ -1,6 +1,9 @@
-// Stable ESM entry for @vizij/node-graph-wasm
-// Wraps the wasm-pack output in ../../pkg (built with `--target web`).
-// Adjust the import path if your pkg name differs.
+/**
+ * Stable ESM entrypoint for `@vizij/node-graph-wasm`.
+ *
+ * The wrapper handles wasm initialization, ABI checks, graph normalization, staged inputs,
+ * delta-friendly evaluation helpers, and access to the baked node registry metadata.
+ */
 import {
   loadBindings as loadWasmBindings,
   type InitInput as LoaderInitInput,

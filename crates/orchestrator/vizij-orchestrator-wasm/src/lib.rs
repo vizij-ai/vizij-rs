@@ -1,3 +1,9 @@
+//! `wasm-bindgen` facade for the Vizij orchestrator runtime.
+//!
+//! The exported class and helpers translate JavaScript configuration and blackboard values into
+//! the Rust orchestrator, exposing registration, stepping, graph export, and incremental frame
+//! APIs to the npm wrapper.
+
 use js_sys::Function;
 use serde::Deserialize;
 use serde_wasm_bindgen as swb;

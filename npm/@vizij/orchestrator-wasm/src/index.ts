@@ -1,5 +1,9 @@
-// Stable ESM entry for @vizij/orchestrator-wasm
-// Wraps the wasm-pack output in ../../pkg (built with `--target web`).
+/**
+ * Stable ESM entrypoint for `@vizij/orchestrator-wasm`.
+ *
+ * This wrapper initializes the orchestrator wasm bindings, validates ABI compatibility, and
+ * exposes the higher-level `Orchestrator` class used by browser and Node consumers.
+ */
 import type {
   AnimationRegistrationConfig,
   AnimationSetup,

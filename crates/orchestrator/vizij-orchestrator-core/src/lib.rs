@@ -1,10 +1,8 @@
-//! vizij-orchestrator
+//! Deterministic orchestration layer for Vizij graphs, animations, and blackboard state.
 //!
-//! Minimal scaffold of the orchestrator crate. See implementation_plan.md for full plan.
-//!
-//! This file provides a tiny, safe-to-compile public surface for early integration and
-//! iterative development. Most types here are thin wrappers / placeholders that will be
-//! expanded in subsequent steps (blackboard, controllers, scheduler, diagnostics).
+//! The orchestrator coordinates graph and animation controllers against a shared blackboard,
+//! runs them according to a configurable schedule, and returns merged writes plus conflict
+//! diagnostics for each frame.
 
 pub mod blackboard;
 pub mod controllers;

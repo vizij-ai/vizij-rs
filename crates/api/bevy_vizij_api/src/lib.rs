@@ -1,17 +1,9 @@
-// Minimal Bevy adapter: a writer registry and apply sink.
-//
-// This crate intentionally does not force any automatic binding strategy.
-// Instead it provides:
-//  - WriterRegistry: a thread-safe map of string path -> setter closure
-//  - apply_write_batch: apply a WriteBatch by invoking registered setters
-//
-// Adapters (the application code or higher-level plugins) can register
-// typed setters for specific TypedPath strings (for example, "robot1/Arm/Joint3.translation")
-// and provide closures that know how to locate & mutate the appropriate component(s)
-// in the Bevy `World` given the TypedPath and Value.
-//
-// This keeps vizij-api-core engine-agnostic while providing a small, well-scoped
-// Bevy integration surface.
+//! Bevy application helpers for applying Vizij write batches.
+//!
+//! The crate intentionally avoids imposing a binding strategy. Instead it provides a shared
+//! [`WriterRegistry`] plus convenience helpers for mapping canonical typed paths onto Bevy
+//! world mutations. Higher-level adapters register setters and then call [`apply_write_batch`]
+//! with the runtime writes they want to project into ECS state.
 
 use bevy::prelude::*;
 use std::sync::{Arc, Mutex};

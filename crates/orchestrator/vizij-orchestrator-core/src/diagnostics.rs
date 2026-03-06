@@ -1,3 +1,5 @@
+//! Lightweight diagnostics configuration types for the orchestrator runtime.
+
 use serde::{Deserialize, Serialize};
 
 /// Minimal diagnostics configuration placeholder.

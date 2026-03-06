@@ -1,3 +1,9 @@
+//! Graph-controller integration for the orchestrator.
+//!
+//! This module stages subscribed blackboard inputs into a graph runtime, evaluates the
+//! configured graph spec, and returns write batches that the scheduler can merge back into the
+//! orchestrator blackboard.
+
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
 use std::collections::{HashMap, HashSet};

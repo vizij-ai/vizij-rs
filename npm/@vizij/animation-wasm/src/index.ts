@@ -1,5 +1,9 @@
-// Stable ESM entry for @vizij/animation-wasm
-// Wraps the wasm-pack output in ../pkg (built with `--target web`).
+/**
+ * Stable ESM entrypoint for `@vizij/animation-wasm`.
+ *
+ * This wrapper initializes the wasm-bindgen package, enforces ABI compatibility, and exposes
+ * an ergonomic `Engine` class plus the shared value helpers used by Vizij hosts.
+ */
 import {
   loadBindings as loadWasmBindings,
   type InitInput as LoaderInitInput,

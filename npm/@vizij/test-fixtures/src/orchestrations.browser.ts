@@ -1,3 +1,6 @@
+/**
+ * Browser-bundle orchestration fixture helpers for `@vizij/test-fixtures`.
+ */
 import {
   orchestrationEntry,
   orchestrationPath,

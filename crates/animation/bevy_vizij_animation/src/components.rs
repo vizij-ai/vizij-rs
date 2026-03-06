@@ -1,3 +1,5 @@
+//! Public Bevy marker components used by the animation plugin.
+
 use bevy::prelude::*;
 
 /// Marker component designating the root of a subtree to bind animation targets under.

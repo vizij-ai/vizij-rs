@@ -1,3 +1,5 @@
+//! Blackboard storage and conflict tracking for orchestrator frames.
+
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 

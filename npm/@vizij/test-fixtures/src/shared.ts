@@ -1,3 +1,9 @@
+/**
+ * Shared manifest and file-loading helpers for `@vizij/test-fixtures`.
+ *
+ * This Node-oriented module locates the workspace `fixtures/` directory, caches the manifest,
+ * and provides the small helpers consumed by the package's domain-specific fixture modules.
+ */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
