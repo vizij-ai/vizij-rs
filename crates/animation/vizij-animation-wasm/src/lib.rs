@@ -167,7 +167,9 @@ impl VizijAnimation {
         })
     }
 
-    /// Load an AnimationData (JSON) into the engine. Returns an AnimId (u32).
+    /// Load core-format `AnimationData` JSON into the engine.
+    ///
+    /// Returns the allocated animation id.
     #[wasm_bindgen(js_name = load_animation)]
     pub fn load_animation(&mut self, data_json: JsValue) -> Result<u32, JsError> {
         let data: AnimationData = swb::from_value(data_json)
@@ -176,8 +178,11 @@ impl VizijAnimation {
         Ok(id.0)
     }
 
-    /// Load a StoredAnimation JSON (new format: tracks with keypoints and transitions.in/out) into the engine.
-    /// Accepts any compatible JS object, e.g. fixtures/animations/vector-pose-combo.json. Returns an AnimId (u32).
+    /// Load stored-animation JSON into the engine.
+    ///
+    /// Accepts any compatible JS object, stringifies it, then parses it with the Rust
+    /// `parse_stored_animation_json` entrypoint. `null`/`undefined` are rejected. Returns the
+    /// allocated animation id.
     #[wasm_bindgen(js_name = load_stored_animation)]
     pub fn load_stored_animation(&mut self, data_json: JsValue) -> Result<u32, JsError> {
         if jsvalue_is_undefined_or_null(&data_json) {
@@ -203,8 +208,9 @@ impl VizijAnimation {
         pid.0
     }
 
-    /// Add an animation instance to a player. `cfg` is optional JSON matching InstanceCfg.
-    /// Returns an InstId (u32).
+    /// Add an animation instance to a player.
+    ///
+    /// `cfg` is optional JSON matching `InstanceCfg`. Returns the allocated instance id.
     #[wasm_bindgen(js_name = add_instance)]
     pub fn add_instance(
         &mut self,
@@ -225,14 +231,15 @@ impl VizijAnimation {
 
     /// Resolve canonical target paths to opaque keys using a JS resolver callback.
     /// The resolver is called as `resolver(path: string) -> string | number | null/undefined`.
-    /// Resolved values are stored as strings.
+    /// Resolved values are stored as strings. Resolver failures are ignored rather than surfaced
+    /// as hard errors.
     #[wasm_bindgen]
     pub fn prebind(&mut self, resolver: Function) {
         let mut js_resolver = JsResolver { f: resolver };
         let _ = self.core.prebind_with_report(&mut js_resolver);
     }
 
-    /// Step the simulation by dt (seconds) with inputs JSON. Returns Outputs JSON.
+    /// Step the simulation by `dt` seconds with inputs JSON and return `Outputs` JSON.
     #[wasm_bindgen(js_name = update_values)]
     pub fn update_values(&mut self, dt: f32, inputs_json: JsValue) -> Result<JsValue, JsError> {
         let inputs = parse_inputs_js(inputs_json)?;
@@ -240,7 +247,7 @@ impl VizijAnimation {
         swb::to_value(out).map_err(|e| JsError::new(&format!("outputs error: {e}")))
     }
 
-    /// Step the simulation by dt returning both values and derivatives.
+    /// Step the simulation by `dt` seconds and return `OutputsWithDerivatives` JSON.
     #[wasm_bindgen(js_name = update_values_and_derivatives)]
     pub fn update_values_and_derivatives(
         &mut self,
@@ -259,6 +266,9 @@ impl VizijAnimation {
     }
 
     /// Bake an animation clip into pre-sampled tracks using the engine's loaded data.
+    ///
+    /// The config validator requires finite values, `frame_rate > 0`, positive derivative epsilon,
+    /// and `end_time >= start_time` when `end_time` is supplied.
     #[wasm_bindgen(js_name = bake_animation)]
     pub fn bake_animation(&self, anim_id: u32, cfg: JsValue) -> Result<JsValue, JsError> {
         let cfg_rs = parse_baking_config(cfg)?;
@@ -270,10 +280,12 @@ impl VizijAnimation {
             .map_err(|e| JsError::new(&format!("bake_animation serialize error: {e}")))
     }
 
-    /// Step the simulation and return a nodes+writes JSON object compatible with
-    /// the node-graph WASM output shape.
+    /// Step the simulation and return a `{ nodes, writes }` object compatible with
+    /// the node-graph wasm output shape.
     /// Returns an object with shape:
     /// { nodes: Record<string, Record<string, ValueJSON>>, writes: Array<{ path: string, value: ValueJSON }> }.
+    ///
+    /// `nodes` is intentionally empty for animation outputs; only `writes` carries data here.
     #[wasm_bindgen(js_name = update_nodes_writes)]
     pub fn update_nodes_writes(
         &mut self,
