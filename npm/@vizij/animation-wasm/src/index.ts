@@ -73,6 +73,12 @@ export {
   valueAsText,
 } from "@vizij/value-json";
 
+/**
+ * Return the ABI version reported by the loaded animation wasm module.
+ *
+ * This is mainly useful when diagnosing local rebuild mismatches between the wrapper and the
+ * generated `pkg/` artifacts. Call `init()` successfully before reading it.
+ */
 export function abi_version(): number {
   if (!bindingCache.current) {
     throw new Error("Call init() from @vizij/animation-wasm before reading abi_version().");
@@ -95,6 +101,10 @@ type WasmBindings = {
 const bindingCache: { current: WasmBindings | null } = { current: null };
 let wasmModulePromise: Promise<WasmBindings | unknown> | null = null;
 let wasmUrlCache: string | null = null;
+
+function toWasmBindgenInitOptions(initArg: unknown): { module_or_path: unknown } {
+  return { module_or_path: initArg };
+}
 
 function pkgWasmJsUrl(): URL {
   return new URL("../../pkg/vizij_animation_wasm.js", import.meta.url);
@@ -143,7 +153,7 @@ async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
       defaultWasmUrl,
       init: async (module: unknown, initArg: unknown) => {
         const typed = module as WasmBindings;
-        await typed.default(initArg);
+        await typed.default(toWasmBindgenInitOptions(initArg));
       },
       getBindings: (module: unknown) => module as WasmBindings,
       expectedAbi: 2,
@@ -161,6 +171,12 @@ async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
 
 let _initPromise: Promise<void> | null = null;
 
+/**
+ * Initialize the wasm module once.
+ *
+ * The returned promise is memoized, so repeated calls reuse the same wasm instance. Most hosts
+ * should await this during startup before constructing `Engine` or `VizijAnimation`.
+ */
 export function init(input?: InitInput): Promise<void> {
   if (_initPromise) return _initPromise;
 
@@ -186,9 +202,21 @@ function ensureInited(): void {
    Ergonomic wrapper — Engine (parity with node-graph Graph)
 ----------------------------------------------------------- */
 
+/**
+ * High-level animation wrapper around the wasm runtime.
+ *
+ * Use this class for normal application code: loading clips, creating players, attaching
+ * instances, stepping time, and consuming emitted value changes/events. Prefer this over the raw
+ * `VizijAnimation` binding unless you specifically need the low-level surface.
+ */
 export class Engine {
   private inner: any;
 
+  /**
+   * Create an animation engine wrapper bound to the already-initialized wasm module.
+   *
+   * `config` is forwarded to the underlying runtime constructor as-is.
+   */
   constructor(config?: Config) {
     ensureInited();
     const bindings = bindingCache.current!;
@@ -198,7 +226,10 @@ export class Engine {
 
   /**
    * Load an animation clip into the engine. If `opts.format` is omitted,
-   * this will auto-detect "stored" when `tracks` is present on the object.
+   * this will auto-detect `"stored"` when `tracks` is present on the object.
+   *
+   * The returned `AnimId` is later used by `addInstance()`, `bakeAnimation()`, and
+   * `unloadAnimation()`.
    */
   loadAnimation(
     data: AnimationData | StoredAnimation,
@@ -226,7 +257,11 @@ export class Engine {
     }
   }
 
-  /** Create a new player by display name */
+  /**
+   * Create a new player and return its opaque player id.
+   *
+   * The `name` is for host/debug readability; it does not need to be unique.
+   */
   createPlayer(name: string): PlayerId {
     const inner: any = this.inner;
     if (typeof inner.create_player !== "function") {
@@ -237,7 +272,12 @@ export class Engine {
     return inner.create_player(name) as PlayerId;
   }
 
-  /** Add an instance to a player with optional InstanceCfg */
+  /**
+   * Attach a loaded animation to a player and return the created instance id.
+   *
+   * Use `cfg` to pass optional instance settings such as weight, time scaling, or start offset
+   * when the underlying wasm build supports them.
+   */
   addInstance(player: PlayerId, anim: AnimId, cfg?: unknown): InstId {
     const inner: any = this.inner;
     if (typeof inner.add_instance !== "function") {
@@ -249,8 +289,10 @@ export class Engine {
   }
 
   /**
-   * Resolve canonical target paths using a JS resolver callback.
-   * The resolver should return string | number | null/undefined.
+   * Resolve canonical animation target paths to host-specific keys before stepping.
+   *
+   * The resolver should return a stable string or number handle. Returning `null`/`undefined`
+   * keeps the original canonical path, which will then appear in emitted change records.
    */
   prebind(resolver: (path: string) => string | number | null | undefined): void {
     const inner: any = this.inner;
@@ -262,7 +304,12 @@ export class Engine {
     inner.prebind(resolver as any);
   }
 
-  /** Step the simulation by dt (seconds) with optional Inputs; returns Outputs */
+  /**
+   * Advance the engine by `dt` seconds and return the value changes/events for that tick.
+   *
+   * Optional `inputs` are applied before the engine advances time, so player commands and instance
+   * updates affect the same returned frame.
+   */
   updateValues(dt: number, inputs?: Inputs): Outputs {
     const inner: any = this.inner;
     if (typeof inner.update_values !== "function") {
@@ -273,7 +320,11 @@ export class Engine {
     return inner.update_values(dt, (inputs ?? undefined) as any) as Outputs;
   }
 
-  /** Step the simulation by dt (seconds) returning Outputs and derivatives */
+  /**
+   * Advance the engine by `dt` seconds and return both emitted changes and derivative samples.
+   *
+   * Use this when a host needs per-output velocity-style data in addition to the sampled values.
+   */
   updateValuesAndDerivatives(dt: number, inputs?: Inputs): OutputsWithDerivatives {
     const inner: any = this.inner;
     if (typeof inner.update_values_and_derivatives !== "function") {
@@ -284,14 +335,18 @@ export class Engine {
     return inner.update_values_and_derivatives(dt, (inputs ?? undefined) as any) as OutputsWithDerivatives;
   }
 
-  /** Backwards-compatible alias for updateValues */
+  /**
+   * Backwards-compatible alias for `updateValues()`.
+   */
   update(dt: number, inputs?: Inputs): Outputs {
     return this.updateValues(dt, inputs);
   }
 
   /**
    * Bake a loaded animation clip into pre-sampled tracks. The returned object
-   * mirrors vizij-animation-core's `BakedAnimationData` schema.
+   * mirrors `vizij-animation-core`'s `BakedAnimationData` schema.
+   *
+   * Baking does not require a player or instance; it operates directly on the loaded clip id.
    */
   bakeAnimation(anim: AnimId, cfg?: BakingConfig): BakedAnimationData {
     const inner: any = this.inner;
@@ -303,7 +358,11 @@ export class Engine {
     return inner.bake_animation(anim as number, (cfg ?? undefined) as any) as BakedAnimationData;
   }
 
-  /** Bake animation samples plus derivatives */
+  /**
+   * Bake a loaded animation clip into sampled values plus derivative tracks.
+   *
+   * This is the offline/export-oriented companion to `updateValuesAndDerivatives()`.
+   */
   bakeAnimationWithDerivatives(anim: AnimId, cfg?: BakingConfig): BakedAnimationBundle {
     const inner: any = this.inner;
     if (typeof inner.bake_animation_with_derivatives !== "function") {
@@ -317,7 +376,11 @@ export class Engine {
     ) as BakedAnimationBundle;
   }
 
-  /** Remove a player and all its instances */
+  /**
+   * Remove a player and all instances attached to it.
+   *
+   * Returns `false` when the player id is unknown.
+   */
   removePlayer(player: PlayerId): boolean {
     const inner: any = this.inner;
     if (typeof inner.remove_player !== "function") {
@@ -326,7 +389,11 @@ export class Engine {
     return !!inner.remove_player(player as number);
   }
 
-  /** Remove a specific instance from a player */
+  /**
+   * Remove one instance from a player.
+   *
+   * Returns `false` when either the player or instance id is unknown.
+   */
   removeInstance(player: PlayerId, inst: InstId): boolean {
     const inner: any = this.inner;
     if (typeof inner.remove_instance !== "function") {
@@ -335,7 +402,11 @@ export class Engine {
     return !!inner.remove_instance(player as number, inst as number);
   }
 
-  /** Unload an animation; auto-detach referencing instances */
+  /**
+   * Unload a previously loaded animation clip.
+   *
+   * Any instances that still reference the clip are detached by the underlying runtime.
+   */
   unloadAnimation(anim: AnimId): boolean {
     const inner: any = this.inner;
     if (typeof inner.unload_animation !== "function") {
@@ -344,7 +415,9 @@ export class Engine {
     return !!inner.unload_animation(anim as number);
   }
 
-  /** Enumerate animations in the engine */
+  /**
+   * Return the currently loaded animations and their runtime metadata.
+   */
   listAnimations(): AnimationInfo[] {
     const inner: any = this.inner;
     if (typeof inner.list_animations !== "function") {
@@ -353,7 +426,9 @@ export class Engine {
     return (inner.list_animations() as unknown) as AnimationInfo[];
   }
 
-  /** Enumerate players and playback info */
+  /**
+   * Return the currently registered players and their playback state.
+   */
   listPlayers(): PlayerInfo[] {
     const inner: any = this.inner;
     if (typeof inner.list_players !== "function") {
@@ -362,7 +437,9 @@ export class Engine {
     return (inner.list_players() as unknown) as PlayerInfo[];
   }
 
-  /** Enumerate instances for a given player */
+  /**
+   * Return the instances currently attached to `player`.
+   */
   listInstances(player: PlayerId): InstanceInfo[] {
     const inner: any = this.inner;
     if (typeof inner.list_instances !== "function") {
@@ -371,7 +448,12 @@ export class Engine {
     return (inner.list_instances(player as number) as unknown) as InstanceInfo[];
   }
 
-  /** Enumerate resolved output keys currently associated with a player's instances */
+  /**
+   * Return the resolved output keys currently associated with a player's instances.
+   *
+   * When `prebind()` mapped canonical target paths to host handles, those resolved keys are what
+   * appear here.
+   */
   listPlayerKeys(player: PlayerId): string[] {
     const inner: any = this.inner;
     if (typeof inner.list_player_keys !== "function") {
@@ -385,6 +467,9 @@ export class Engine {
    Convenience factory
 ----------------------------------------------------------- */
 
+/**
+ * Initialize the wasm module if needed and return a ready-to-use `Engine`.
+ */
 export async function createEngine(config?: Config): Promise<Engine> {
   await init();
   return new Engine(config);
@@ -404,8 +489,18 @@ export {
 ----------------------------------------------------------- */
 
 export default init;
-// Deprecated: prefer `Engine` wrapper. Kept temporarily for legacy code.
+/**
+ * Deprecated compatibility alias for the raw `VizijAnimation` binding.
+ *
+ * New code should prefer `Engine`, which provides the stable consumer-oriented wrapper surface.
+ */
 export { VizijAnimation as Animation };
+/**
+ * Raw wasm-bindgen animation binding exposed for legacy consumers.
+ *
+ * Prefer `Engine` for new code. This surface mirrors the underlying wasm methods more directly and
+ * therefore exposes fewer TypeScript-level ergonomics and guarantees.
+ */
 export const VizijAnimation: WasmAnimationCtor = new Proxy(
   function () {},
   {

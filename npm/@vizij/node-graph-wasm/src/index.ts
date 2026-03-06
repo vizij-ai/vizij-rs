@@ -73,6 +73,10 @@ const bindingCache: { current: WasmBindings | null } = { current: null };
 let wasmModulePromise: Promise<WasmBindings | unknown> | null = null;
 let wasmUrlCache: string | null = null;
 
+function toWasmBindgenInitOptions(initArg: unknown): { module_or_path: unknown } {
+  return { module_or_path: initArg };
+}
+
 function pkgWasmJsUrl(): URL {
   // Resolve package-local pkg/ for both src/ and dist/src/ callers
   return new URL("../../pkg/vizij_graph_wasm.js", import.meta.url);
@@ -128,7 +132,7 @@ async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
               ? (typed as any)
               : null;
         if (initFn) {
-          await initFn(initArg);
+          await initFn(toWasmBindgenInitOptions(initArg));
         } // CJS/node target exports are already initialised if no init fn
       },
       getBindings: (module: unknown) => module as WasmBindings,
@@ -143,6 +147,12 @@ async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
 
 export type InitInput = LoaderInitInput;
 
+/**
+ * Return the ABI version reported by the loaded wasm module.
+ *
+ * This is mainly useful for troubleshooting local rebuild mismatches between the wrapper and the
+ * generated `pkg/` artifacts. Call `init()` successfully before reading it.
+ */
 export function abi_version(): number {
   if (!bindingCache.current) {
     throw new Error("Call init() from @vizij/node-graph-wasm before reading abi_version().");
@@ -156,6 +166,9 @@ let _initPromise: Promise<void> | null = null;
 
 /**
  * Initialize the wasm module once.
+ *
+ * The promise is memoized, so repeated calls reuse the same wasm instance. Most consumers should
+ * await this once during app startup before constructing any `Graph` wrappers.
  */
 export function init(input?: InitInput): Promise<void> {
   if (_initPromise) return _initPromise;
@@ -226,7 +239,10 @@ function mergeDelta(base: EvalResult, delta: EvalResult & { version?: unknown })
 
 /**
  * Ergonomic wrapper around wasm WasmGraph.
- * Always await init() once before constructing.
+ *
+ * Use this wrapper when you want a stable, TypeScript-friendly API for loading graph specs,
+ * staging inputs, evaluating outputs, and consuming output deltas without talking to the raw
+ * wasm-bindgen class directly. Always await `init()` once before constructing.
  */
 // JS wrapper around WasmGraph that handles delta merging, hot-path staging, and cache invalidation.
 export class Graph {
@@ -259,6 +275,11 @@ export class Graph {
     this._outputsDirty = true;
   }
 
+  /**
+   * Create a graph wrapper bound to the already-initialized wasm module.
+   *
+   * The constructor does not load a graph spec; call `loadGraph()` before evaluating.
+   */
   constructor() {
     ensureInited();
     const bindings = bindingCache.current!;
@@ -267,8 +288,11 @@ export class Graph {
   }
 
   /**
-   * Load a graph spec (object or JSON string).
-   * Optional opts allow hot-path registration in one call.
+   * Replace the active graph specification for this wrapper instance.
+   *
+   * Accepts either a parsed `GraphSpec` object or the equivalent JSON string. Loading a new graph
+   * clears staged-input caches and resets the wrapper's output-delta baseline. Pass `hotPaths`
+   * when you already know which scalar input paths should use slot-based fast staging.
    */
   loadGraph(
     spec: GraphSpec | string,
@@ -306,13 +330,23 @@ export class Graph {
     }
   }
 
-  /** Set absolute time (seconds). */
+  /**
+   * Set the graph clock to an absolute time in seconds.
+   *
+   * This only updates graph time state; call `evalAll()` or another evaluation helper to observe
+   * the resulting outputs.
+   */
   setTime(t: number): void {
     this.invalidateCachedOutputs();
     this.inner.set_time(t);
   }
 
-  /** Increment time (seconds). */
+  /**
+   * Advance the graph clock by `dt` seconds without immediately reading outputs.
+   *
+   * This is useful when you want to separate time stepping from evaluation or batch several
+   * updates before the next `evalAll()`.
+   */
   step(dt: number): void {
     this.invalidateCachedOutputs();
     this.inner.step(dt);
@@ -320,7 +354,10 @@ export class Graph {
 
   /**
    * Stage a host-provided input for the next evalAll() tick.
-   * Values staged before evalAll will be visible in that evaluation (epoch semantics).
+   *
+   * The `path` should match the typed-path consumed by an `input` node. Values staged before the
+   * next evaluation call are visible in that evaluation; they remain staged until overwritten or
+   * cleared.
    */
   stageInput(path: string, value: Value, declaredShape?: ShapeJSON): void {
     this.invalidateCachedOutputs();
@@ -335,8 +372,11 @@ export class Graph {
   }
 
   /**
-   * Evaluate the whole graph and return a map of nodeId -> outputKey -> ValueJSON.
-   * (One batched wasm call.)
+   * Evaluate the current graph and return the latest logical output snapshot.
+   *
+   * The wrapper prefers delta-aware wasm entrypoints when available, but always returns the same
+   * merged `EvalResult` shape to consumers. Calling this method also refreshes the wrapper's
+   * internal delta baseline for later `getOutputsDelta()` calls.
    */
   evalAll(): EvalResult {
     const target = this.inner as any;
@@ -402,7 +442,10 @@ export class Graph {
   }
 
   /**
-   * Force a full snapshot and reset the delta baseline (e.g., after structural edits).
+   * Force a full output snapshot and reset the wrapper's delta baseline.
+   *
+   * Use this after a structural change or whenever a host wants to discard any previously cached
+   * output version token and start a fresh delta sequence.
    */
   evalAllFull(): EvalResult {
     const target = this.inner as any;
@@ -441,8 +484,12 @@ export class Graph {
   }
 
   /**
-   * Unified staging entry: automatically routes hot paths through slots (with diff) and others via path batch.
-   * Accepts numeric values; non-hot or unsupported types go through path staging.
+   * Stage many inputs in one call, automatically choosing the fastest supported path per entry.
+   *
+   * Numeric scalar inputs whose paths were registered as hot paths are routed through slot-based
+   * staging (with optional diffing). Entries with shapes, or entries on non-hot paths, fall back
+   * to ordinary path staging. When `shapes` is provided it must align index-for-index with
+   * `paths` and `values`.
    */
   stageInputs(
     paths: string[],
@@ -537,7 +584,10 @@ export class Graph {
   }
 
   /**
-   * Register paths once and reuse their indices for faster staging.
+   * Register input paths once and receive stable indices for faster subsequent staging.
+   *
+   * The returned indices are only valid for the currently loaded graph. Re-loads or structural
+   * graph changes should be treated as invalidating previously registered indices.
    */
   registerInputPaths(paths: string[]): Uint32Array {
     const target = this.inner as any;
@@ -547,6 +597,13 @@ export class Graph {
     return target.register_input_paths(paths);
   }
 
+  /**
+   * Predeclare shapes for slot-based staging using indices returned by `registerInputPaths()`.
+   *
+   * Call this before `stageInputsBySlot()` or `stageInputsBySlotDiff()` so the runtime can reuse
+   * shape metadata without reparsing per frame. Omit `declaredShapes` or pass `null` entries for
+   * scalar/unshaped slots.
+   */
   prepareInputSlots(indices: Uint32Array, declaredShapes?: Array<ShapeJSON | null>): void {
     const target = this.inner as any;
     if (typeof target.prepare_input_slots !== "function") {
@@ -559,8 +616,11 @@ export class Graph {
   }
 
   /**
-   * Stage inputs using indices returned by registerInputPaths.
-   * Length of indices must match values length.
+   * Stage numeric scalar inputs by registered path index instead of by path string.
+   *
+   * This still incurs per-call shape lookup in the runtime; use `prepareInputSlots()` together
+   * with `stageInputsBySlot()` when you also want to reuse declared shapes. `indices.length` must
+   * match `values.length`.
    */
   stageInputsByIndex(indices: Uint32Array, values: Float32Array): void {
     this.invalidateCachedOutputs();
@@ -573,7 +633,10 @@ export class Graph {
   }
 
   /**
-   * Stage inputs using pre-prepared slots (no path parse, reuse declared shapes).
+   * Stage numeric scalar inputs using pre-prepared slots.
+   *
+   * This is the lowest-overhead staging path in the wrapper. It assumes the indices came from
+   * `registerInputPaths()` and were prepared with `prepareInputSlots()` for the current graph.
    */
   stageInputsBySlot(indices: Uint32Array, values: Float32Array): void {
     this.invalidateCachedOutputs();
@@ -586,8 +649,10 @@ export class Graph {
   }
 
   /**
-   * Stage inputs by slot but only send indices whose values differ from the last call.
-   * Optionally supply an epsilon for float comparisons (default exact).
+   * Stage slot-based inputs, but only forward entries whose value changed since the previous call.
+   *
+   * The first call treats every slot as changed. Use `epsilon` to suppress tiny float jitter when
+   * driving hot paths from continuously sampled host data.
    */
   stageInputsBySlotDiff(
     indices: Uint32Array,
@@ -632,8 +697,10 @@ export class Graph {
   }
 
   /**
-   * Fetch the default 'out' port for many nodes as a Float32Array.
-   * Non-scalar outputs return NaN for that entry.
+   * Read the default `"out"` port for many nodes as a `Float32Array`.
+   *
+   * This convenience API is intentionally scalar-focused. Non-scalar outputs are represented as
+   * `NaN` in the returned array.
    */
   getOutputsBatch(nodeIds: string[]): Float32Array {
     const target = this.inner as any;
@@ -659,8 +726,10 @@ export class Graph {
   }
 
   /**
-   * Fetch only the outputs that changed since a version token. Returns { version, nodes, writes }.
-   * Pass version 0 (or undefined) to force a full snapshot on first call.
+   * Return only the output changes since a previously observed version token.
+   *
+   * Pass the `version` returned by an earlier delta or full snapshot call. Passing `0` or leaving
+   * `sinceVersion` undefined forces the runtime to establish a fresh full-snapshot baseline.
    */
   getOutputsDelta(sinceVersion?: number): EvalResult & { version: number } {
     const target = this.inner as any;
@@ -714,8 +783,10 @@ export class Graph {
   }
 
   /**
-   * Run N steps of fixed dt inside WASM, returning the final frame.
-   * This amortizes JS/WASM crossings for tight loops.
+   * Run a fixed-step loop inside wasm and return only the final evaluation result.
+   *
+   * This is equivalent to repeatedly calling `step(dt)` and `evalAll()`, but reduces JS/wasm
+   * crossings when a host wants to fast-forward by several deterministic ticks.
    */
   evalSteps(steps: number, dt: number): EvalResult {
     const target = this.inner as any;
@@ -741,7 +812,9 @@ export class Graph {
   /**
    * Update a node parameter by key (e.g., "value", "frequency", "phase", "min", "max",
    * "stiffness", "damping", "half_life", "max_rate").
-   * Value may be number | boolean | vec3 or a pre-encoded ValueJSON.
+   *
+   * `value` may be a convenient JS authoring form (`number`, `boolean`, numeric vector) or an
+   * already-normalized `ValueJSON`.
    *
    * Structural edits (e.g., Split sizes) cause the wasm runtime to drop its plan and
    * delta caches; reset the JS baseline so the next eval consumes the fresh snapshot.
@@ -762,7 +835,10 @@ export class Graph {
   // --- New unified hot-path helpers ---
 
   /**
-   * Declare hot paths for slot-based staging. Can be called after loadGraph; re-registers slots.
+   * Mark a subset of input paths as hot so future staging can use slot-based fast paths.
+   *
+   * Hot paths are best for frequently updated numeric scalars. Entries that later carry shapes or
+   * non-numeric values automatically fall back to ordinary path staging.
    */
   setHotPaths(paths: string[], opts?: { epsilon?: number; autoClearDroppedHotPaths?: boolean }): void {
     const target = this.inner as any;
@@ -810,7 +886,10 @@ export class Graph {
   }
 
   /**
-   * Clear a cached/staged slot value (allows node defaults to apply on next eval).
+   * Clear a staged slot value by slot index.
+   *
+   * After clearing, the next evaluation falls back to whatever the graph would normally see at
+   * that input: an inline default, another upstream edge, or no staged host value at all.
    */
   async clearSlot(slotIdx: number): Promise<void> {
     const target = this.inner as any;
@@ -829,7 +908,10 @@ export class Graph {
   }
 
   /**
-   * Clear a staged input by path.
+   * Clear a staged input by typed path.
+   *
+   * Use this when a host wants to stop overriding a graph input and let the graph's own defaults
+   * or upstream wiring take effect on the next evaluation.
    */
   async clearInput(path: string): Promise<void> {
     const target = this.inner as any;
@@ -851,12 +933,20 @@ export class Graph {
     }
   }
 
-  /** Enable or disable verbose staging/eval logs for debugging. */
+  /**
+   * Enable or disable verbose console logging for staging and evaluation helpers.
+   *
+   * This is intended for local debugging only; it does not affect graph behavior or outputs.
+   */
   setDebugLogging(enabled: boolean): void {
     this._debugLogging = enabled;
   }
 
-  /** Inspect current staging state (hot paths, versions, flags). */
+  /**
+   * Inspect the wrapper's current staging configuration and cached delta state.
+   *
+   * This is mainly useful when debugging hot-path registration or version-token behavior.
+   */
   inspectStaging(): {
     hotPaths: string[];
     epsilon: number;
@@ -885,6 +975,12 @@ export {
 } from "./fixtures.js";
 
 // Convenience re-exports for consumers who prefer a function-style API
+/**
+ * Create and optionally load a `Graph` in one call.
+ *
+ * This convenience helper awaits `init()` for you, constructs a wrapper, and calls `loadGraph()`
+ * when `spec` is provided.
+ */
 export async function createGraph(
   spec?: GraphSpec | string
 ): Promise<Graph> {
