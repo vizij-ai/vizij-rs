@@ -1,91 +1,43 @@
 # Vizij Animation Stack
 
-> **Core engine, Bevy integration, and WebAssembly bridge for Vizij’s animation system.**
+> Core engine, Bevy integration, and WebAssembly bindings for Vizij animation playback.
 
-The `crates/animation` directory contains the Rust sources that power Vizij’s runtime animation features and the bindings that surface them to other environments. This README explains how the crates relate to one another, when to use each, and how to build, test, and publish them.
-
----
-
-## Table of Contents
-
-1. [Crate Map](#crate-map)
-2. [Typical Workflows](#typical-workflows)
-3. [Building & Testing](#building--testing)
-4. [Publishing](#publishing)
-5. [Reference Links](#reference-links)
-
----
+The `crates/animation` directory contains the Rust-side animation stack. The three crates here share the same animation data model and are usually changed together when playback, bindings, or wasm surfaces move.
 
 ## Crate Map
 
-| Crate | Description | Consumers |
-|-------|-------------|-----------|
-| [`vizij-animation-core`](vizij-animation-core/README.md) | Deterministic animation engine (parsing, playback, blending, baking). | Native hosts, orchestrator runtime, wasm binding, Bevy plugin. |
-| [`bevy_vizij_animation`](bevy_vizij_animation/README.md) | Bevy plugin wrapping the core engine in ECS systems and component bindings. | Bevy games/tools that need Vizij animation playback. |
-| [`vizij-animation-wasm`](vizij-animation-wasm/README.md) | `wasm-bindgen` binding that exposes the core engine to JavaScript/TypeScript. | npm package `@vizij/animation-wasm`, vizij-web demos/apps. |
-
-All crates share the same data model (`StoredAnimation`, `AnimationData`, `Change`, `Event`) defined in `vizij-animation-core`.
-
----
-
-## Architecture Flow
-
-```text
-fixtures/manifest.json
-      │
-      ▼
-vizij-test-fixtures ── loads canonical StoredAnimation JSON
-      │
-      ▼
-vizij-animation-core ── parses → stores → samples animations
-      │                                │
-      │                         emits Outputs / Events
-      │                                │
-      │          ┌─────────────────────┴─────────────────────┐
-      ▼          ▼                                           ▼
-bevy_vizij_animation      vizij-animation-wasm      vizij-orchestrator-core
-  (ECS bindings)            (wasm-bindgen bridge)        (drives Engine instances)
-      │                           │
-      ▼                           ▼
-Bevy host                         npm/@vizij/animation-wasm
-                                  │
-                                  ▼
-Browser / Node consumers (vizij-web, tooling)
-```
-
-The swim-lane highlights that fixture assets flow through the core engine before being adapted for Bevy, wasm, or orchestrator hosts. When you change the core APIs, remember that both the plugin and the wasm binding must remain in sync.
-
----
+| Crate | Purpose | Primary consumers |
+|-------|---------|-------------------|
+| [`vizij-animation-core`](vizij-animation-core/README.md) | Deterministic animation engine, parsing, playback, blending, baking. | Native hosts, orchestrator runtime, wasm binding, Bevy plugin. |
+| [`bevy_vizij_animation`](bevy_vizij_animation/README.md) | Bevy plugin that maps engine outputs onto ECS entities/components. | Bevy apps and tools. |
+| [`vizij-animation-wasm`](vizij-animation-wasm/README.md) | `wasm-bindgen` bridge used by the npm wrapper. | [`@vizij/animation-wasm`](../../npm/@vizij/animation-wasm/README.md). |
 
 ## Typical Workflows
 
-### Native Rust host
+### Rust host
 
-1. Add `vizij-animation-core` to your project.
-2. Load animation data (either `StoredAnimation` JSON or generated `AnimationData`).
-3. Create an `Engine`, load animations, create players/instances, and call `update_values(dt, inputs)` each frame.
-4. Apply `Outputs.changes` to your rig/renderer and handle `Outputs.events` for instrumentation.
+1. Add `vizij-animation-core`.
+2. Parse `StoredAnimation` JSON or construct `AnimationData`.
+3. Create an `Engine`, register animations, create players/instances, and call `update_values(dt, inputs)` every frame.
+4. Apply `Outputs.changes` to your host and consume `Outputs.events` as needed.
 
-### Bevy project
+### Bevy app
 
-1. Depend on both `vizij-animation-core` and `bevy_vizij_animation`.
-2. Add `VizijAnimationPlugin` to your `App`.
-3. Tag a root entity with `VizijTargetRoot` (or use `VizijBindingHint` on specific entities) so the plugin can build canonical bindings.
-4. Load animations via the `VizijEngine` resource, create players/instances, and let the plugin schedule handle playback updates.
+1. Add `bevy_vizij_animation`.
+2. Insert `VizijAnimationPlugin`.
+3. Mark a hierarchy root with `VizijTargetRoot` and optional overrides with `VizijBindingHint`.
+4. Load animations through the shared `VizijEngine` resource and let the plugin drive fixed updates.
 
-### Web / JavaScript consumer
+### JavaScript / TypeScript
 
-1. Install the npm package published from `vizij-animation-wasm`: `npm install @vizij/animation-wasm`.
-2. Call `await init()` once to initialise the WASM module (includes ABI guard).
-3. Construct the provided `Engine` wrapper, load stored animations, and use the same player/instance/update loop as the Rust engine.
-4. Use helpers like `bakeAnimationWithDerivatives` when you need baked outputs for tooling.
+1. Build the wasm package with `pnpm run build:wasm:animation`.
+2. Use the npm wrapper from [`npm/@vizij/animation-wasm`](../../npm/@vizij/animation-wasm/README.md).
+3. Call `await init()` once, then work through the wrapper `Engine` class.
 
-### CLI smoke test (Rust)
-
-Run a single-frame playback straight from fixtures:
+## Minimal Smoke Test
 
 ```rust
-use vizij_animation_core::{Engine, InstanceCfg, Inputs};
+use vizij_animation_core::{Engine, Inputs, InstanceCfg};
 use vizij_animation_core::stored_animation::parse_stored_animation_json;
 use vizij_test_fixtures::animations;
 
@@ -106,56 +58,28 @@ fn main() -> anyhow::Result<()> {
 }
 ```
 
-This minimal example mirrors the flow used by Bevy and the wasm wrapper—great for sanity checks when adjusting animation parsing or sampling behaviour.
+## Build And Test
 
----
-
-## Building & Testing
-
-All commands run from the repository root unless noted otherwise.
+Run from the repository root.
 
 ```bash
-# Run Rust tests for the stack
 cargo test -p vizij-animation-core
 cargo test -p bevy_vizij_animation
-
-# Build the WASM binding (prod)
 pnpm run build:wasm:animation
-
-# Continuous WASM rebuild during development (requires cargo-watch)
-pnpm run watch:wasm:animation
+pnpm --filter @vizij/animation-wasm test
 ```
 
-The WASM build script emits `crates/animation/vizij-animation-wasm/pkg/` which is then consumed by the npm wrapper in `npm/@vizij/animation-wasm`.
+`pnpm run build:wasm:animation` writes the wasm-bindgen output directly to `npm/@vizij/animation-wasm/pkg/`, which the npm wrapper copies into its published `dist/` layout during `pnpm --filter @vizij/animation-wasm build`.
 
-Vitest-based tests for the npm wrapper live alongside the package; run them with:
+## Release Notes
 
-```bash
-pnpm --filter "@vizij/animation-wasm" test
-```
+Animation releases follow the workspace Changesets flow rather than manual `cargo publish` / `npm publish` steps from this directory:
 
----
+1. Add a Changeset with `pnpm changeset` for any publishable package change.
+2. Run `pnpm release` to rebuild wasm and shared packages before tagging.
+3. Let CI handle `pnpm ci:version` and `pnpm ci:publish`.
 
-## Publishing
-
-When preparing a release, keep crate and npm package versions in sync:
-
-1. Bump versions in `vizij-animation-core`, `vizij-animation-wasm`, `bevy_vizij_animation`, and `npm/@vizij/animation-wasm`.
-2. Publish the Rust crates (`cargo publish -p …`) in dependency order: core → wasm → Bevy.
-3. Rebuild the WASM artefacts (`pnpm run build:wasm:animation`).
-4. Publish the npm package from `npm/@vizij/animation-wasm`.
-5. Update change logs as needed.
-
-The helper script `scripts/dry-run-release.sh` runs through the build/publish checks without pushing artifacts.
-
-### ABI / version checklist
-
-- Confirm `vizij-animation-wasm::abi_version()` matches the constant asserted inside `@vizij/animation-wasm` (rebuild the wasm crate if you touch the core).
-- Bump versions across Rust + npm manifests together so local links and CI builds stay consistent.
-- After publishing crates, rerun `pnpm run build:wasm:animation` to regenerate the JS glue that the npm package will ship.
-- If ABI drift is intentional, update the wrapper’s error message to mention the new version so downstream teams know which release to pull.
-
----
+If you change animation ABI or wrapper-visible behavior, rebuild the wasm package and confirm the wrapper still agrees on `abi_version()`.
 
 ## Reference Links
 
@@ -163,5 +87,3 @@ The helper script `scripts/dry-run-release.sh` runs through the build/publish ch
 - [bevy_vizij_animation README](bevy_vizij_animation/README.md)
 - [vizij-animation-wasm README](vizij-animation-wasm/README.md)
 - [@vizij/animation-wasm README](../../npm/@vizij/animation-wasm/README.md)
-
-Found something outdated? Please open an issue or ping the Vizij animation team—great docs keep the stack approachable. 🎬

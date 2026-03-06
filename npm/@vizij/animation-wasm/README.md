@@ -146,17 +146,17 @@ const baked = engine.bakeAnimationWithDerivatives(animId, { frame_rate: 60 });
 console.log(baked.values.tracks.length, baked.derivatives.tracks.length);
 ```
 
-Low-level binding usage (when you want direct control over JSON serialisation):
+Low-level binding usage (when you want direct access to the wasm-bindgen class without the `Engine` wrapper):
 
 ```ts
-import initWasm, { VizijAnimation } from "@vizij/animation-wasm/pkg";
+import { init, VizijAnimation } from "@vizij/animation-wasm";
 
-await initWasm();
+await init();
 const raw = new VizijAnimation();
-const animId = raw.load_stored_animation(JSON.stringify(storedAnimationJson));
+const animId = raw.load_stored_animation(storedAnimationJson);
 const player = raw.create_player("demo");
 raw.add_instance(player, animId, undefined);
-const outputs = JSON.parse(raw.update_values(0.016, undefined));
+const outputs = raw.update_values(0.016, undefined);
 ```
 
 ### Custom loader options
@@ -165,17 +165,11 @@ const outputs = JSON.parse(raw.update_values(0.016, undefined));
 
 ```ts
 import { init } from "@vizij/animation-wasm";
-import { readFile } from "node:fs/promises";
 
-// CDN or edge deploy
-await init(new URL("https://cdn.example.com/vizij/animation_wasm_bg.wasm"));
-
-// Node / Electron / tests
-const bytes = await readFile("dist/animation_wasm_bg.wasm");
-await init(bytes);
+await init("https://cdn.example.com/vizij/vizij_animation_wasm_bg.wasm");
 ```
 
-Provide your own loader when running inside service workers or sandboxed environments that restrict network access.
+You can also pass a `URL`, `Response`, `ArrayBuffer`, `Uint8Array`, or `WebAssembly.Module` when a host needs explicit control over asset loading.
 
 ---
 
@@ -206,7 +200,7 @@ Use `listAnimationFixtures()` to enumerate available fixtures at runtime.
 
 ## Bundler Notes
 
-- ESM entry (`dist/index.js`) is optimised for modern bundlers; CJS (`dist/index.cjs`) supports Node-only tooling.
+- The package exposes an ESM entry (`dist/animation-wasm/src/index.js`) and loads the generated `pkg/` asset through `@vizij/wasm-loader`.
 - For Vite, add `optimizeDeps.exclude = ["@vizij/animation-wasm"]` to avoid pre-bundling the wasm artefact.
 - Webpack >=5 handles wasm automatically. Enable `experiments.asyncWebAssembly = true` if you are on an older configuration.
 - The package delegates loading to `@vizij/wasm-loader`, which memoises initialisation so multiple `init()` calls reuse the same module.
@@ -221,7 +215,7 @@ cd npm/@vizij/animation-wasm
 pnpm test
 ```
 
-The Vitest suite checks ABI guards, StoredAnimation parsing, and parity with the native engine for common scenarios.
+The package test script runs the built Node test harness in `dist/animation-wasm/tests/all.test.js` after rebuilding the wrapper.
 
 ---
 
@@ -229,7 +223,6 @@ The Vitest suite checks ABI guards, StoredAnimation parsing, and parity with the
 
 - [`vizij-animation-wasm`](../../crates/animation/vizij-animation-wasm/README.md) – Rust source of these bindings.
 - [`vizij-animation-core`](../../crates/animation/vizij-animation-core/README.md) – underlying engine logic.
-- [`@vizij/animation-react`](../../../vizij-web/packages/@vizij/animation-react/README.md) – React provider built on this npm package.
 - [`@vizij/value-json`](../value-json/README.md) – canonical value helpers used internally.
 
 Need help or spotted an inconsistency? Open an issue—reliable bindings keep animation workflows smooth. 🎥
