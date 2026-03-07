@@ -1,4 +1,4 @@
-//! vizij-api-core: unified Shape & Value API (core, engine-agnostic)
+//! `vizij-api-core`: unified Shape and Value API shared across Vizij runtimes.
 
 /// Blend helpers shared by animation and graph runtimes.
 pub mod blend;

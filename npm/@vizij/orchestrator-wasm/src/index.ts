@@ -95,8 +95,10 @@ function defaultWasmUrl(): string {
   return wasmUrlCache;
 }
 
-const loadBindingsImpl: typeof loadWasmBindings =
-  typeof window === "undefined" ? loadWasmBindings : loadWasmBindingsBrowser;
+const loadBindingsImpl =
+  typeof window === "undefined"
+    ? loadWasmBindings
+    : (loadWasmBindingsBrowser as typeof loadWasmBindings);
 
 async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
   await loadBindingsImpl<WasmBindings>(

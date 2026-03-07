@@ -1,10 +1,10 @@
 //! Write operations produced by engines (node graph, animation) to describe
 //! writes into a blackboard / external world using typed paths.
 //!
-//! WriteOp serializes to JSON as:
-//!   { "path": "robot1/Arm/Joint3.angle", "value": { "vec3": [1,2,3] } }
+//! `WriteOp` serializes to JSON as:
+//! `{ "path": "robot1/Arm/Joint3.angle", "value": { "vec3": [1, 2, 3] } }`
 //!
-//! WriteBatch is a simple Vec<WriteOp> with helpers.
+//! `WriteBatch` is a simple `Vec<WriteOp>` with helpers.
 
 use crate::{typed_path::TypedPath, Shape, Value};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};

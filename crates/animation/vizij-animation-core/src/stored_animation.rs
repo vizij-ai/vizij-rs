@@ -11,7 +11,7 @@ use vizij_api_core::Value;
 ///
 /// Notes:
 /// - Duration is provided in milliseconds in the JSON and kept as milliseconds (duration_ms).
-/// - Keypoint stamps are normalized [0,1] and kept normalized.
+/// - Keypoint stamps are normalized in `[0, 1]` and kept normalized.
 /// - Per-keypoint transitions { in?, out? } are preserved; defaults are applied at sampling time.
 /// - Values are converted from untagged RawValue shapes into core Value enum.
 pub fn parse_stored_animation_json(s: &str) -> Result<AnimationData, String> {

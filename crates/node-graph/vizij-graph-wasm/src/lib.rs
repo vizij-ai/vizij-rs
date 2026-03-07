@@ -1043,8 +1043,8 @@ impl WasmGraph {
     /// Evaluate the entire graph and return all outputs as JSON.
     /// Returned JSON shape:
     /// {
-    ///   "nodes": { [nodeId]: { [outputKey]: { "value": ValueJSON, "shape": ShapeJSON } } },
-    ///   "writes": [ { "path": string, "value": ValueJSON, "shape": ShapeJSON }, ... ]
+    ///   `"nodes": { "[nodeId]": { "[outputKey]": { "value": ValueJSON, "shape": ShapeJSON } } },`
+    ///   `"writes": [{ "path": string, "value": ValueJSON, "shape": ShapeJSON }, ...]`
     /// }
     #[wasm_bindgen]
     pub fn eval_all(&mut self) -> Result<String, JsValue> {
