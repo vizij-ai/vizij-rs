@@ -1,3 +1,8 @@
+//! JSON normalization and parsing helpers shared across Vizij hosts.
+//!
+//! These helpers accept ergonomic shorthand payloads and coerce them into the canonical serde
+//! shapes consumed by `vizij-api-core`, graph specs, and the wasm adapters.
+
 use serde::de::Error as _;
 use serde_json::{json, Map, Value as JsonValue};
 use std::collections::HashMap;

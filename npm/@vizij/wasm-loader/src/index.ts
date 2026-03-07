@@ -1,3 +1,9 @@
+/**
+ * Node/server-oriented loader entrypoint for Vizij wasm wrapper packages.
+ *
+ * This variant adds file-URL handling before delegating to the shared binding loader so Node,
+ * Electron, and similar hosts can pass local wasm paths directly.
+ */
 import {
   loadBindingsInternal,
   type InitInput,

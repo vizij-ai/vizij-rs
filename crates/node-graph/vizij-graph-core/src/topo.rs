@@ -1,6 +1,9 @@
+//! Topological ordering helpers for graph execution planning.
+
 use crate::types::{EdgeSpec, NodeId, NodeSpec};
 use std::collections::{HashMap, VecDeque};
 
+/// Compute a stable topological order for the given graph nodes and edges.
 pub fn topo_order(nodes: &[NodeSpec], edges: &[EdgeSpec]) -> Result<Vec<NodeId>, String> {
     let mut indeg: HashMap<NodeId, usize> = HashMap::new();
     let mut adj: HashMap<NodeId, Vec<NodeId>> = HashMap::new();

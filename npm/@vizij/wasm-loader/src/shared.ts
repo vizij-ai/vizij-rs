@@ -1,3 +1,9 @@
+/**
+ * Shared wasm binding loader primitives used by the Vizij npm wrappers.
+ *
+ * The helpers in this module coordinate module import, initialization, ABI checks, and cached
+ * binding reuse across the browser and Node-facing loader entrypoints.
+ */
 export type InitInput =
   | string
   | URL

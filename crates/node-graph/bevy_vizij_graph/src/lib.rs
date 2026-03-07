@@ -1,11 +1,19 @@
+//! Bevy adapter for evaluating Vizij node graphs.
+//!
+//! The plugin owns the active [`GraphSpec`], advances a persistent [`GraphRuntime`], applies
+//! parameter updates from Bevy events, and exposes the latest output snapshot for inspection
+//! or world writes through `bevy_vizij_api`.
+
 use bevy::prelude::*;
 use hashbrown::HashMap;
 use vizij_api_core::Value;
 use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, NodeId, PortValue};
 
+/// Resource containing the currently active graph specification.
 #[derive(Resource, Default, Clone)]
 pub struct GraphResource(pub GraphSpec);
 
+/// Snapshot of the latest per-node outputs produced by evaluation.
 #[derive(Resource, Default, Clone)]
 pub struct GraphOutputs(pub HashMap<NodeId, HashMap<String, PortValue>>);
 
@@ -54,12 +62,14 @@ pub struct SetNodeParam {
     pub value: Value,
 }
 
+/// Public graph time state derived from Bevy `Time`.
 #[derive(Resource, Default, Clone)]
 pub struct GraphTime {
     pub t: f32,
     pub dt: f32,
 }
 
+/// Plugin that installs the graph resources, parameter event, and evaluation systems.
 pub struct VizijGraphPlugin;
 
 impl Plugin for VizijGraphPlugin {

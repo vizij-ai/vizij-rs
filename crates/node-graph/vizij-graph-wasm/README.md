@@ -53,20 +53,13 @@ Manual build:
 
 ```bash
 wasm-pack build crates/node-graph/vizij-graph-wasm \
-  --target bundler \
-  --out-dir pkg \
-  --release
+  --target web \
+  --out-dir npm/@vizij/node-graph-wasm/pkg \
+  --release \
+  --features urdf_ik
 ```
 
-The `pkg/` directory is consumed by `npm/@vizij/node-graph-wasm`.
-
-### Build targets
-
-- `--target bundler` – ESM glue for Vite/Webpack/Rspack (default in repo scripts).
-- `--target web` – Fetch-based ESM for direct browser usage without a bundler.
-- `--target nodejs` – CommonJS glue for Node environments (CLI tools, offline baking).
-
-Rebuild the npm wrapper after switching targets so generated type definitions stay aligned.
+The workspace scripts emit the generated files directly into `npm/@vizij/node-graph-wasm/pkg/`, which is the source consumed by the npm wrapper.
 
 ---
 
@@ -90,23 +83,21 @@ const graph = new Graph();
 const spec: GraphSpec = await normalizeGraphSpec(graphSamples.vectorPlayground);
 graph.loadGraph(spec);
 
-graph.stageInput("nodes.inputA.inputs.in", { float: 1 }, undefined, true);
+graph.stageInput("demo/path", { float: 1 });
 const result: EvalResult = graph.evalAll();
 console.log(result.nodes, result.writes);
 ```
 
-Direct WASM usage without the wrapper:
+Minimal JS usage through the public wrapper API:
 
 ```ts
-import initWasm, { WasmGraph, normalize_graph_spec_json } from "@vizij/node-graph-wasm/pkg";
+import { init, createGraph, normalizeGraphSpec } from "@vizij/node-graph-wasm";
 
-await initWasm();
-const raw = new WasmGraph();
-const normalized = normalize_graph_spec_json(JSON.stringify(spec));
-raw.load_graph(normalized);
-raw.stage_input("demo/path", JSON.stringify({ float: 1 }), null);
-const evalJson = raw.eval_all();
-console.log(JSON.parse(evalJson));
+await init();
+const normalized = await normalizeGraphSpec(spec);
+const graph = await createGraph(normalized);
+graph.stageInput("demo/path", { float: 1 });
+console.log(graph.evalAll());
 ```
 
 ### Performance notes
@@ -180,6 +171,5 @@ cargo test -p vizij-graph-wasm
 
 - [`vizij-graph-core`](../vizij-graph-core/README.md) – core evaluator used by this crate.
 - [`npm/@vizij/node-graph-wasm`](../../../npm/@vizij/node-graph-wasm/README.md) – npm package built from this binding.
-- [`@vizij/node-graph-react`](../../../vizij-web/packages/@vizij/node-graph-react/README.md) – React integration built on the npm wrapper.
 
 Need assistance? Open an issue—predictable WASM bindings keep Vizij graphs portable. 🕸️

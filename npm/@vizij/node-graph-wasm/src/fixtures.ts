@@ -1,3 +1,9 @@
+/**
+ * Embedded node-graph fixture helpers for `@vizij/node-graph-wasm`.
+ *
+ * These helpers read the generated bundle baked into the package so tests and demos can load
+ * shared graph specs without reaching back into the workspace fixture files.
+ */
 import bundle from "./generated/fixtures-bundle.js";
 import type { GraphSpec } from "./types.js";
 

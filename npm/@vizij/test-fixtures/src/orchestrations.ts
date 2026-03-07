@@ -1,3 +1,6 @@
+/**
+ * Orchestration fixture helpers for the Node entrypoint of `@vizij/test-fixtures`.
+ */
 import {
   orchestrationEntry,
   orchestrationPath,

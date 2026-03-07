@@ -94,7 +94,7 @@ You can normalize the merged graph for inspection:
 
 ```ts
 const merged = orchestrator.registerMergedGraph({ graphs: [...] });
-const mergedSpec = await orchestrator.normalizeGraphSpec({ id: merged, spec: {} }); // returns JSON
+const mergedSpec = orchestrator.exportGraph(merged);
 console.log(JSON.stringify(mergedSpec, null, 2));
 ```
 
@@ -236,8 +236,9 @@ console.log(frame.merged_writes);
    ```
 
 2. **Fixtures**:
-   Add merged scenarios to Vitest/Vitest tests. The repository’s `npm/@vizij/orchestrator-wasm/tests/all.test.ts`
-   showcases a real example (`testMergedGraphRegistration`).
+   Add merged scenarios to the package test bundle. The repository's
+   `npm/@vizij/orchestrator-wasm/tests/all.test.ts` includes a concrete example
+   (`testMergedGraphRegistration`).
 
 3. **Snapshot the merged spec**:
    Serialize and store the normalized graph for regression tests (helps detect schema drift).

@@ -2,7 +2,7 @@
 
 > **Browser/Node-friendly bundle of Vizij animation, graph, and orchestration fixtures.**
 
-This package mirrors the Rust crate `vizij-test-fixtures`, repackaging the fixtures declared in `fixtures/manifest.json` so JavaScript tooling, demos, and automated tests can load the same assets as the Rust workspace.
+This workspace package mirrors the Rust crate `vizij-test-fixtures`, repackaging the fixtures declared in `fixtures/manifest.json` so JavaScript tooling, demos, and automated tests can load the same assets as the Rust workspace. It is currently marked `"private": true` in this repo and is primarily consumed by the sibling wasm packages.
 
 ---
 
@@ -43,8 +43,8 @@ Each domain module exposes helpers similar to the Rust crate:
 | Module | Helpers | Notes |
 |--------|---------|-------|
 | `animations` | `animationNames()`, `animationJson()`, `animationFixture<T>()`, `animationPath()` | Raw JSON strings or parsed data for stored animations. |
-| `nodeGraphs` | `graphNames()`, `graphSpecJson()`, `graphSpec<T>()`, `stageJson()`, `stage<T>()`, `graphSpecPath()` | Supports optional stage payloads for seeding graph inputs. |
-| `orchestrations` | `orchestrationNames()`, `orchestrationJson()`, `orchestrationFixture<T>()`, `orchestrationPath()` | Mirrors orchestrator bundles used by demos. |
+| `nodeGraphs` | `nodeGraphNames()`, `nodeGraphSpecJson()`, `nodeGraphSpec<T>()`, `nodeGraphStageJson()`, `nodeGraphStage<T>()`, `nodeGraphSpecPath()`, `nodeGraphStagePath()` | Supports optional stage payloads for seeding graph inputs. |
+| `orchestrations` | `orchestrationNames()`, `orchestrationJson()`, `orchestrationDescriptor<T>()`, `orchestrationDescriptorPath()`, `loadOrchestrationBundle()` | Expands orchestration descriptors into ready-to-use bundles. |
 | Shared | `manifest()`, `fixturesRoot()`, `resolveFixturePath(rel)` | Inspect the manifest or compute absolute paths from relative entries. |
 
 ---
@@ -55,10 +55,10 @@ Each domain module exposes helpers similar to the Rust crate:
 import { animations, nodeGraphs, orchestrations } from "@vizij/test-fixtures";
 
 const storedAnimation = animations.animationFixture("pose-quat-transform");
-const graphSpec = nodeGraphs.graphSpec("simple-gain-offset");
-const orchestrationBundle = orchestrations.orchestrationFixture("chain-sign-slew-pipeline");
+const graphSpec = nodeGraphs.nodeGraphSpec("simple-gain-offset");
+const orchestrationBundle = orchestrations.loadOrchestrationBundle("chain-sign-slew-pipeline");
 
-for (const name of nodeGraphs.graphNames()) {
+for (const name of nodeGraphs.nodeGraphNames()) {
   console.log("available graph", name);
 }
 ```
@@ -78,30 +78,27 @@ const text = await readFile(path, "utf8");
 ## Distribution Layout
 
 - ESM entry: `dist/index.js` with matching type definitions (`dist/index.d.ts`).
-- CJS build: `dist/index.cjs` for legacy Node bundlers.
+- Browser-specific shared helpers are also emitted at `dist/shared.browser.js` and exposed via the `./shared/browser` export.
 - Raw JSON assets live under `dist/fixtures/**`; helper functions resolve paths relative to that directory.
-
-Import the scoped entry points (`@vizij/test-fixtures/animations`, etc.) when you only need a subset of fixtures to keep bundle size down.
 
 ### Versioning guidance
 
 - Update this package and the Rust crate (`vizij-test-fixtures`) together so manifests stay in sync across languages.
-- After editing `fixtures/manifest.json`, run `pnpm run build:shared` to regenerate the npm artefacts before publishing.
+- After editing `fixtures/manifest.json`, run `pnpm run build:shared` to regenerate the browser artifacts consumed by the wrapper packages.
 
 ---
 
 ## Development & Testing
 
 ```bash
-pnpm install
-pnpm test
+pnpm --filter @vizij/test-fixtures run build
 ```
 
-Vitest verifies manifest coverage, JSON parsing, and helper behaviour. When adding new fixtures:
+This package does not currently define a standalone test script; coverage comes from the downstream wasm package tests that consume the generated fixture bundle. When adding new fixtures:
 
 1. Update `fixtures/manifest.json` in the Rust workspace.
-2. Copy or generate the corresponding JSON within `src/`.
-3. Regenerate type definitions (`pnpm run build`) and extend tests.
+2. Add the corresponding JSON files under `fixtures/`.
+3. Regenerate the browser bundle with `pnpm run build:shared`.
 
 ---
 
@@ -109,4 +106,3 @@ Vitest verifies manifest coverage, JSON parsing, and helper behaviour. When addi
 
 - [`vizij-test-fixtures`](../../../crates/test-fixtures/vizij-test-fixtures/README.md) – Rust crate exposing the same fixture catalogue.
 - [`@vizij/animation-wasm`](../animation-wasm/README.md) • [`@vizij/node-graph-wasm`](../node-graph-wasm/README.md) • [`@vizij/orchestrator-wasm`](../orchestrator-wasm/README.md) – wasm packages that re-export helpers from this bundle.
-

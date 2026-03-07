@@ -1,3 +1,6 @@
+/**
+ * Node-graph fixture helpers for the Node entrypoint of `@vizij/test-fixtures`.
+ */
 import {
   nodeGraphEntry,
   loadFixture,

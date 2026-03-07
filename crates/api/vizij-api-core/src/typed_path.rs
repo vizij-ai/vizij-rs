@@ -11,6 +11,8 @@
 //!
 //! TypedPath is intentionally simple and string-based; adapters (e.g., Bevy) may
 //! parse and resolve it into engine-specific bindings.
+//! There is no escaping syntax: `/` and `.` always act as separators, and whitespace inside any
+//! segment is rejected.
 
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
@@ -37,6 +39,9 @@ impl TypedPath {
     }
 
     /// Parse a path string according to the grammar described above.
+    ///
+    /// This parser rejects empty segments, embedded whitespace, and any path that would require
+    /// escaping; callers should treat `/` and `.` as reserved separators.
     pub fn parse(s: &str) -> Result<Self, String> {
         if s.is_empty() {
             return Err("empty path".to_string());

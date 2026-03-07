@@ -1,3 +1,9 @@
+//! `wasm-bindgen` facade for the Vizij orchestrator runtime.
+//!
+//! The exported class and helpers translate JavaScript configuration and blackboard values into
+//! the Rust orchestrator, exposing registration, stepping, graph export, and incremental frame
+//! APIs to the npm wrapper.
+
 use js_sys::Function;
 use serde::Deserialize;
 use serde_wasm_bindgen as swb;
@@ -194,7 +200,11 @@ pub struct VizijOrchestrator {
 
 #[wasm_bindgen]
 impl VizijOrchestrator {
-    /// Create new orchestrator. Accepts optional { schedule: "SinglePass"|"TwoPass"|"RateDecoupled" }.
+    /// Create a new orchestrator.
+    ///
+    /// Accepts an optional object `{ schedule }` where `schedule` is one of
+    /// `"SinglePass"`, `"TwoPass"`, or `"RateDecoupled"`. Omitting it defaults to
+    /// `SinglePass`.
     #[wasm_bindgen(constructor)]
     pub fn new(opts: JsValue) -> Result<VizijOrchestrator, JsError> {
         #[cfg(feature = "console_error")]
@@ -232,9 +242,11 @@ impl VizijOrchestrator {
     ///
     /// Accepts either:
     ///  - a string containing the GraphSpec JSON, or
-    ///  - an object { id?: string, spec: object } where spec is a GraphSpec-compatible object.
+    ///  - an object `{ id?: string, spec: object, subs?: ... }` where `spec` is
+    ///    GraphSpec-compatible.
     ///
-    /// Returns the controller id.
+    /// The spec is normalized before deserialization and `with_cache()` is applied before the
+    /// controller is registered. Returns the resolved controller id.
     #[wasm_bindgen(js_name = register_graph)]
     pub fn register_graph(&mut self, cfg: JsValue) -> Result<String, JsError> {
         if cfg.is_undefined() || cfg.is_null() {
@@ -341,6 +353,9 @@ impl VizijOrchestrator {
     ///
     /// Accepts an object { id?: string, graphs: GraphRegistrationConfig[] } mirroring the single
     /// controller shape. Each entry supports the same `spec` and optional `subs` fields.
+    ///
+    /// Optional `strategy` fields map to the orchestrator merge strategies for final outputs and
+    /// intermediate/shared paths. Omitting `strategy` uses the Rust defaults.
     #[wasm_bindgen(js_name = register_merged_graph)]
     pub fn register_merged_graph(&mut self, cfg: JsValue) -> Result<String, JsError> {
         if cfg.is_undefined() || cfg.is_null() {
@@ -379,7 +394,7 @@ impl VizijOrchestrator {
     ///
     /// Accepts an object { id?: string, setup?: any } where setup is forwarded to the
     /// AnimationControllerConfig.setup field.
-    /// Returns the controller id.
+    /// Returns the resolved controller id.
     #[wasm_bindgen(js_name = register_animation)]
     pub fn register_animation(&mut self, cfg: JsValue) -> Result<String, JsError> {
         if cfg.is_undefined() || cfg.is_null() {
@@ -417,6 +432,7 @@ impl VizijOrchestrator {
     ///
     /// The resolver should be `function(path: string): string|number|null|undefined`.
     /// For each registered animation controller we call engine.prebind(&mut JsResolver).
+    /// Resolver exceptions are swallowed so one failed resolution does not abort prebinding.
     #[wasm_bindgen]
     pub fn prebind(&mut self, resolver: Function) {
         let mut js_resolver = JsResolver { f: resolver };
@@ -430,6 +446,8 @@ impl VizijOrchestrator {
     /// Set a blackboard input value (convenience).
     ///
     /// `value_json` and `shape_json` should be JS objects compatible with the core Value/Shape JSON shapes.
+    /// `shape_json` may be `null`/`undefined` to omit explicit shape metadata. The write is stored
+    /// at the current orchestrator epoch with source `"host"`.
     #[wasm_bindgen(js_name = set_input)]
     pub fn set_input(
         &mut self,
@@ -483,8 +501,11 @@ impl VizijOrchestrator {
         swb::to_value(&frame).map_err(|e| JsError::new(&format!("serialize frame error: {}", e)))
     }
 
-    /// Step and return only changes since the caller's version. If the caller's
-    /// version does not match the last snapshot, a full frame is returned.
+    /// Step and return a delta-style payload keyed by an optional caller version token.
+    ///
+    /// When `since_version` matches the most recent frame version, unchanged `merged_writes` are
+    /// returned as an empty batch. Conflicts, events, and timings are still returned in full. If
+    /// the caller's version is stale or absent, the payload behaves like a full frame snapshot.
     #[wasm_bindgen(js_name = step_delta)]
     pub fn step_delta(&mut self, dt: f32, since_version: Option<u64>) -> Result<JsValue, JsError> {
         let frame = self
@@ -574,7 +595,7 @@ pub fn normalize_graph_spec_json(json: &str) -> Result<JsValue, JsError> {
     }
 }
 
-/// ABI version for compatibility checks.
+/// ABI version for compatibility checks with the npm wrapper.
 #[wasm_bindgen]
 pub fn abi_version() -> u32 {
     2

@@ -1,3 +1,8 @@
+//! Fixture manifest helpers shared across Rust tests and examples.
+//!
+//! This crate loads the workspace fixture manifest and exposes small helper modules for
+//! resolving animation, node-graph, and orchestration assets by logical key.
+
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};

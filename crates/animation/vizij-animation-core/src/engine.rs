@@ -24,21 +24,32 @@ use vizij_api_core::WriteBatch;
 
 #[derive(Clone, Debug, Default)]
 pub struct PrebindReport {
+    /// Total number of track channels examined during prebinding.
     pub total: usize,
+    /// Number of channels that resolved to a host handle.
     pub resolved: usize,
+    /// Canonical track paths that the resolver could not bind.
     pub unresolved: Vec<String>,
 }
 
 /// Per-player controller and instance list.
 #[derive(Debug)]
 pub struct Player {
+    /// Stable player identifier.
     pub id: PlayerId,
+    /// Human-readable display name.
     pub name: String,
+    /// Playback speed multiplier. A zero value is treated as paused/stopped.
     pub speed: f32,
+    /// Internal accumulated player time in seconds.
     pub time: f32,
+    /// Looping mode used when mapping player time into clip-local time.
     pub mode: LoopMode,
+    /// Window start in seconds for `LoopMode::Once`.
     pub start_time: f32,
+    /// Optional window end in seconds for `LoopMode::Once`.
     pub end_time: Option<f32>,
+    /// Attached instance ids in evaluation order.
     pub instances: Vec<InstId>,
     /// Effective total duration in player time, computed from instances (offsets/scales) and window.
     pub total_duration: f32,
@@ -75,9 +86,13 @@ pub struct Instance {
 /// Configuration for adding an instance.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct InstanceCfg {
+    /// Blend weight applied to the instance contribution.
     pub weight: f32,
+    /// Playback scaling factor used by the local-time mapping.
     pub time_scale: f32,
+    /// Start offset in seconds on the player timeline.
     pub start_offset: f32,
+    /// Whether the instance participates in evaluation.
     pub enabled: bool,
 }
 
@@ -176,37 +191,58 @@ fn ping_pong(t: f32, span: f32) -> f32 {
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub enum PlaybackState {
+    /// Player time is advancing.
     Playing,
+    /// Player time is held at a non-start position.
     Paused,
+    /// Player is stopped at the start of its window.
     Stopped,
 }
 
+/// Lightweight metadata snapshot for one loaded animation.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct AnimationInfo {
+    /// Animation id.
     pub id: u32,
+    /// Optional clip name.
     pub name: Option<String>,
+    /// Source animation duration in milliseconds.
     pub duration_ms: u32,
+    /// Number of tracks in the clip.
     pub track_count: usize,
 }
 
+/// Inspection snapshot for one player.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct PlayerInfo {
+    /// Player id.
     pub id: u32,
+    /// Player display name.
     pub name: String,
+    /// Derived playback state.
     pub state: PlaybackState,
+    /// Display/playhead time in seconds after loop/window mapping.
     pub time: f32,
+    /// Playback speed multiplier.
     pub speed: f32,
+    /// Active loop mode.
     pub loop_mode: LoopMode,
+    /// Window start in seconds.
     pub start_time: f32,
+    /// Optional window end in seconds.
     pub end_time: Option<f32>,
     /// Full player length (seconds): max over instances of start_offset + (anim_duration * |time_scale|)
     pub length: f32,
 }
 
+/// Inspection snapshot for one instance attached to a player.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct InstanceInfo {
+    /// Instance id.
     pub id: u32,
+    /// Referenced animation id.
     pub animation: u32,
+    /// Effective instance configuration.
     pub cfg: InstanceCfg,
 }
 
@@ -286,7 +322,9 @@ impl Engine {
         }
     }
 
-    /// Load animation data into the engine, returning an AnimId.
+    /// Load animation data into the engine and return its assigned [`AnimId`].
+    ///
+    /// The engine stores the clip internally and stamps the allocated id into `data.id`.
     pub fn load_animation(&mut self, mut data: AnimationData) -> AnimId {
         let id = self.ids.alloc_anim();
         data.id = Some(id);
@@ -294,7 +332,9 @@ impl Engine {
         id
     }
 
-    /// Bake a stored animation into per-frame samples using the provided config.
+    /// Bake a loaded animation into per-frame samples using the provided config.
+    ///
+    /// Returns `None` when `anim` is not currently loaded.
     pub fn bake_animation(&self, anim: AnimId, cfg: &BakingConfig) -> Option<BakedAnimationData> {
         self.anims
             .get(anim)
@@ -302,6 +342,8 @@ impl Engine {
     }
 
     /// Bake animation values and derivatives in one pass.
+    ///
+    /// Returns `None` when `anim` is not currently loaded.
     pub fn bake_animation_with_derivatives(
         &self,
         anim: AnimId,
@@ -312,7 +354,7 @@ impl Engine {
             .map(|data| bake_animation_data_with_derivatives(anim, data, cfg))
     }
 
-    /// Create a new player with a display name.
+    /// Create a new player with a display name and default looping behavior.
     pub fn create_player(&mut self, name: &str) -> PlayerId {
         let pid = self.ids.alloc_player();
         self.players.push(Player::new(pid, name.to_string()));
@@ -320,6 +362,9 @@ impl Engine {
     }
 
     /// Add an animation instance to a player.
+    ///
+    /// The returned instance is appended to the player's evaluation order. If `player` does not
+    /// exist, the instance is still stored internally but is not attached to any player.
     pub fn add_instance(&mut self, player: PlayerId, anim: AnimId, cfg: InstanceCfg) -> InstId {
         let iid = self.ids.alloc_inst();
 
@@ -645,13 +690,19 @@ impl Engine {
         }
     }
 
-    /// Step the simulation by dt with given inputs, returning only values.
+    /// Step the simulation by `dt` seconds with the provided inputs, returning value changes only.
+    ///
+    /// The returned reference borrows the engine's internal output buffer and is invalidated by
+    /// the next call that mutates outputs (`update*`, `step`, or `update_writebatch`).
     pub fn update_values(&mut self, dt: f32, inputs: Inputs) -> &Outputs {
         self.step(dt, inputs, false);
         &self.outputs
     }
 
-    /// Step the simulation by dt returning values and derivatives.
+    /// Step the simulation by `dt` seconds, returning both values and derivatives.
+    ///
+    /// The returned reference borrows the engine's internal derivative-output buffer and is
+    /// invalidated by the next call that mutates outputs.
     pub fn update_values_and_derivatives(
         &mut self,
         dt: f32,
@@ -661,7 +712,7 @@ impl Engine {
         &self.outputs_with_derivatives
     }
 
-    /// Backwards-compatible alias for `update_values`.
+    /// Backwards-compatible alias for [`Self::update_values`].
     pub fn update(&mut self, dt: f32, inputs: Inputs) -> &Outputs {
         self.update_values(dt, inputs)
     }
@@ -677,7 +728,9 @@ impl Engine {
         self.outputs.to_writebatch()
     }
 
-    /// Remove an instance from a player. Returns true if removed.
+    /// Remove an instance from a player.
+    ///
+    /// Returns `true` only when the instance was attached to `player` and was removed.
     pub fn remove_instance(&mut self, player: PlayerId, inst: InstId) -> bool {
         // Detach from player
         if let Some(p) = self.players.iter_mut().find(|pp| pp.id == player) {
@@ -695,7 +748,9 @@ impl Engine {
         false
     }
 
-    /// Remove a player and all its instances. Returns true if removed.
+    /// Remove a player and all its attached instances.
+    ///
+    /// Returns `true` when the player existed.
     pub fn remove_player(&mut self, player: PlayerId) -> bool {
         if let Some(idx) = self.players.iter().position(|p| p.id == player) {
             let inst_ids: Vec<InstId> = self.players[idx].instances.clone();
@@ -711,7 +766,9 @@ impl Engine {
         }
     }
 
-    /// Unload an animation and remove all instances referencing it across all players. Returns true if animation existed.
+    /// Unload an animation and remove all instances referencing it across all players.
+    ///
+    /// Returns `true` when the animation existed.
     pub fn unload_animation(&mut self, anim: AnimId) -> bool {
         if !self.anims.contains(anim) {
             return false;
@@ -746,7 +803,7 @@ impl Engine {
         self.anims.remove(anim)
     }
 
-    /// List all animations in the engine.
+    /// List all loaded animations.
     pub fn list_animations(&self) -> Vec<AnimationInfo> {
         self.anims
             .iter()
@@ -793,7 +850,9 @@ impl Engine {
             .collect()
     }
 
-    /// List all instances for a given player.
+    /// List all instances attached to a given player.
+    ///
+    /// Returns an empty vector when the player does not exist.
     pub fn list_instances(&self, player: PlayerId) -> Vec<InstanceInfo> {
         if let Some(p) = self.players.iter().find(|pp| pp.id == player) {
             p.instances
@@ -848,7 +907,9 @@ impl Engine {
 }
 
 impl Engine {
-    /// Public helper to inspect an instance's bound channel keys (useful for tests and tooling)
+    /// Inspect an instance's bound channel keys.
+    ///
+    /// Useful for tests and tooling that need to understand binding coverage.
     pub fn get_instance_channels(&self, inst: InstId) -> Option<Vec<ChannelKey>> {
         self.instances
             .iter()

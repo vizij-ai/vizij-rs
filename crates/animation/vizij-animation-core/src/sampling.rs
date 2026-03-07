@@ -2,7 +2,7 @@
 //! Track/animation sampling utilities for the canonical StoredAnimation schema.
 //!
 //! Model:
-//! - Each Track has ordered Keypoints with normalized stamps in [0,1].
+//! - Each Track has ordered Keypoints with normalized stamps in `[0, 1]`.
 //! - Segment [Pi -> P(i+1)] timing is a cubic-bezier determined by:
 //!   cp0 = Pi.transitions.out or default {x:0.42, y:0.0}
 //!   cp1 = P(i+1).transitions.in or default {x:0.58, y:1.0}
@@ -10,7 +10,7 @@
 //! - All other kinds use bezier easing on time, then linear/nlerp blend on value.
 //!
 //! API:
-//! - sample_track(&Track, u) where u is normalized time in [0,1] over the whole clip.
+//! - `sample_track(&Track, u)` where `u` is normalized time in `[0, 1]` over the whole clip.
 
 use crate::data::{Keypoint, Track};
 use crate::interp::functions::{bezier_value, step_value};
@@ -165,7 +165,7 @@ fn zero_like(value: &Value) -> Value {
     }
 }
 
-/// Sample a single track at normalized time u ∈ [0,1].
+/// Sample a single track at normalized time `u` in `[0, 1]`.
 pub fn sample_track(track: &Track, u: f32) -> Value {
     let points = &track.points;
     let n = points.len();

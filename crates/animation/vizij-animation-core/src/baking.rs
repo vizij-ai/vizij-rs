@@ -11,12 +11,20 @@ use vizij_api_core::Value;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakingConfig {
     /// Target frame rate (Hz) for baked samples.
+    ///
+    /// Non-finite or non-positive values fall back to `60.0`, then clamp to at least `1.0`.
     pub frame_rate: f32,
     /// Start time (seconds) in clip space.
+    ///
+    /// Negative values clamp to `0.0`.
     pub start_time: f32,
-    /// End time (seconds) in clip space; if None, uses animation duration (seconds).
+    /// End time (seconds) in clip space; if `None`, uses the animation duration in seconds.
+    ///
+    /// Non-finite values fall back to the clip duration, then clamp into `[start_time, duration]`.
     pub end_time: Option<f32>,
     /// Optional override for the finite-difference epsilon used when estimating derivatives.
+    ///
+    /// Non-finite or non-positive values fall back to the default epsilon.
     pub derivative_epsilon: Option<f32>,
 }
 
@@ -41,29 +49,45 @@ pub struct BakedTrack {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakedDerivativeTrack {
+    /// Canonical target path (animatable id).
     pub target_path: String,
+    /// Sampled derivatives at each frame. `None` marks an unavailable derivative sample.
     pub values: Vec<Option<Value>>,
 }
 
+/// Baked animation values for one clip over a fixed sample window.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakedAnimationData {
+    /// Source animation id.
     pub anim: AnimId,
+    /// Effective frame rate used during baking.
     pub frame_rate: f32,
+    /// Clip-space start time in seconds.
     pub start_time: f32,
+    /// Clip-space end time in seconds.
     pub end_time: f32,
+    /// Per-track sampled values.
     pub tracks: Vec<BakedTrack>,
 }
 
+/// Baked animation derivatives for one clip over a fixed sample window.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakedDerivativeAnimationData {
+    /// Source animation id.
     pub anim: AnimId,
+    /// Effective frame rate used during baking.
     pub frame_rate: f32,
+    /// Clip-space start time in seconds.
     pub start_time: f32,
+    /// Clip-space end time in seconds.
     pub end_time: f32,
+    /// Per-track sampled derivatives.
     pub tracks: Vec<BakedDerivativeTrack>,
 }
 
-/// Bake a single AnimationData using the provided config.
+/// Bake a single [`AnimationData`] using the provided config.
+///
+/// Invalid or non-finite config values are clamped/fallback-adjusted to safe defaults.
 pub fn bake_animation_data(
     anim_id: AnimId,
     data: &AnimationData,
@@ -73,6 +97,9 @@ pub fn bake_animation_data(
 }
 
 /// Bake animation values and derivatives simultaneously.
+///
+/// The returned time window is expressed in clip seconds even though `AnimationData` stores
+/// durations in milliseconds.
 pub fn bake_animation_data_with_derivatives(
     anim_id: AnimId,
     data: &AnimationData,
@@ -146,12 +173,12 @@ pub fn bake_animation_data_with_derivatives(
     )
 }
 
-/// Export baked data as serde_json::Value (stable schema for FFI/serialization).
+/// Export baked data as `serde_json::Value` using the stable baked-data schema.
 pub fn export_baked_json(baked: &BakedAnimationData) -> serde_json::Value {
     serde_json::to_value(baked).unwrap_or(serde_json::Value::Null)
 }
 
-/// Export baked values and derivatives as serde_json::Value.
+/// Export baked values and derivatives as a JSON object with `values` and `derivatives` fields.
 pub fn export_baked_with_derivatives_json(
     baked: &BakedAnimationData,
     derivatives: &BakedDerivativeAnimationData,

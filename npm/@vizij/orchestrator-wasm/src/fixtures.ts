@@ -1,3 +1,9 @@
+/**
+ * Embedded orchestration fixture helpers for `@vizij/orchestrator-wasm`.
+ *
+ * The generated bundle keeps orchestration descriptors, referenced graph specs, and animation
+ * payloads available inside the published package for tests and example flows.
+ */
 import bundle from "./generated/fixtures-bundle.js";
 import type { AnimationSetup, GraphRegistrationConfig, GraphSubscriptions } from "./types.js";
 
