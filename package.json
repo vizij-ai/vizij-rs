@@ -48,7 +48,7 @@
     "perf:wasm": "node scripts/run_perf_baselines_wasm.mjs",
     "perf:wasm:verify": "VERIFY_ONLY=1 node scripts/run_perf_baselines_wasm.mjs",
     "perf:smoke": "SMOKE=1 VERIFY_ONLY=1 node scripts/run_perf_baselines_wasm.mjs",
-    "docs:typedoc": "typedoc --options typedoc.json",
+    "docs:typedoc": "node scripts/embed-fixtures.mjs animation-wasm node-graph-wasm orchestrator-wasm && node npm/@vizij/test-fixtures/scripts/generate-browser-fixtures.mjs && typedoc --options typedoc.json",
     "docs:rust": "cargo doc --no-deps --all-features --target-dir target/docs-rust -p vizij-api-core -p vizij-api-wasm -p bevy_vizij_api -p vizij-animation-core -p vizij-animation-wasm -p bevy_vizij_animation -p vizij-graph-core -p vizij-graph-wasm -p bevy_vizij_graph -p vizij-orchestrator-core -p vizij-orchestrator-wasm -p vizij-test-fixtures",
     "docs:site": "pnpm run docs:typedoc && pnpm run docs:rust && node scripts/build-docs-site.mjs"
   },
