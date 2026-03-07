@@ -179,6 +179,22 @@ pnpm run link:value-json
 
 Use `pnpm run link:value-json` (or the aggregate `pnpm run link:wasm`) when you need to exercise local builds inside `vizij-web`.
 
+### Generate API docs locally
+
+Build the publishable docs site locally with:
+
+```bash
+pnpm run docs:site
+```
+
+That command generates:
+
+- Rust API docs in `target/docs-rust/doc`
+- TypeDoc output in `target/docs-typedoc`
+- a publishable combined site in `target/docs-site`
+
+The GitHub Actions docs workflow publishes `target/docs-site` to GitHub Pages from `main` and uploads it as an artifact for pull requests.
+
 ---
 
 ## Fixture Catalog
@@ -298,6 +314,12 @@ Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wa
 ---
 
 ## Reference Documentation
+
+- Hosted API docs site (published from `main`): <https://vizij-ai.github.io/vizij-rs/>
+- Rust API index: <https://vizij-ai.github.io/vizij-rs/rust/>
+- npm API index: <https://vizij-ai.github.io/vizij-rs/npm/>
+
+### Crate & Package Guides
 
 - [vizij-animation-core/README](crates/animation/vizij-animation-core/README.md)
 - [vizij-graph-core/README](crates/node-graph/vizij-graph-core/README.md)
