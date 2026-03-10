@@ -17,22 +17,32 @@ fn default_zero_derivative() -> Value {
 /// One changed target value for a given player this tick.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Change {
+    /// Player that produced the change.
     pub player: PlayerId,
-    pub key: String, // TargetHandle (small string key)
+    /// Bound target handle when available, otherwise the canonical track path.
+    pub key: String,
+    /// Blended output value for the tick.
     pub value: Value,
 }
 
 /// Change paired with a derivative value.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ChangeWithDerivative {
+    /// Player that produced the change.
     pub player: PlayerId,
+    /// Bound target handle when available, otherwise the canonical track path.
     pub key: String,
+    /// Blended output value for the tick.
     pub value: Value,
+    /// Optional derivative sample for the same output value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub derivative: Option<Value>,
 }
 
 /// Discrete semantic signals emitted during stepping.
+///
+/// Event emission is best-effort and adapter-facing: consumers should treat this as an
+/// append-only contract and tolerate new variants over time.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum CoreEvent {
@@ -83,8 +93,10 @@ pub enum CoreEvent {
 /// Outputs returned by Engine::update().
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Outputs {
+    /// Value changes emitted during the tick.
     #[serde(default)]
     pub changes: Vec<Change>,
+    /// Semantic events emitted during the tick.
     #[serde(default)]
     pub events: Vec<CoreEvent>,
 }
@@ -92,8 +104,10 @@ pub struct Outputs {
 /// Outputs returned when derivatives are requested.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct OutputsWithDerivatives {
+    /// Value/derivative pairs emitted during the tick.
     #[serde(default)]
     pub changes: Vec<ChangeWithDerivative>,
+    /// Semantic events emitted during the tick.
     #[serde(default)]
     pub events: Vec<CoreEvent>,
 }
@@ -121,8 +135,10 @@ impl Outputs {
     }
 
     /// Convert the current set of changes into a [`WriteBatch`], parsing each
-    /// change key as a [`TypedPath`]. Entries whose keys do not parse are
-    /// skipped.
+    /// change key as a [`TypedPath`].
+    ///
+    /// Entries whose keys do not parse are skipped rather than erroring, so callers that need
+    /// diagnostics should validate keys before or after conversion.
     pub fn to_writebatch(&self) -> WriteBatch {
         let mut batch = WriteBatch::new();
         for change in &self.changes {

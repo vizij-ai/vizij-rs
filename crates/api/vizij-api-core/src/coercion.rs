@@ -36,7 +36,7 @@ pub fn to_float(v: &Value) -> f32 {
     }
 }
 
-/// Convert a Value into a Vec<f32> (generic vector).
+/// Convert a Value into a `Vec<f32>` (generic vector).
 /// - VecN -> vector of components
 /// - Float -> single-element vec
 /// - Bool -> single 0/1
@@ -65,8 +65,8 @@ pub fn to_vector(v: &Value) -> Vec<f32> {
     }
 }
 
-/// Try to coerce a Value into a Vec3. If impossible, returns a default [0,0,0].
-/// Uses broadcasting/coercion rules: scalar -> [s,0,0]? Here we choose scalar -> [s,s,s].
+/// Try to coerce a Value into a Vec3. If impossible, returns a default `[0, 0, 0]`.
+/// Uses broadcasting/coercion rules: scalar -> `[s, s, s]`.
 pub fn to_vec3(v: &Value) -> [f32; 3] {
     match v {
         Value::Vec3(a) => *a,

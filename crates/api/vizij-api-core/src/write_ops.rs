@@ -1,10 +1,10 @@
 //! Write operations produced by engines (node graph, animation) to describe
 //! writes into a blackboard / external world using typed paths.
 //!
-//! WriteOp serializes to JSON as:
-//!   { "path": "robot1/Arm/Joint3.angle", "value": { "vec3": [1,2,3] } }
+//! `WriteOp` serializes to JSON as:
+//! `{ "path": "robot1/Arm/Joint3.angle", "value": { "vec3": [1, 2, 3] } }`
 //!
-//! WriteBatch is a simple Vec<WriteOp> with helpers.
+//! `WriteBatch` is a simple `Vec<WriteOp>` with helpers.
 
 use crate::{typed_path::TypedPath, Shape, Value};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -12,16 +12,21 @@ use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WriteOp {
+    /// Destination typed path for the write.
     pub path: TypedPath,
+    /// Value payload to write.
     pub value: Value,
+    /// Optional explicit shape metadata carried with the write.
     pub shape: Option<Shape>,
 }
 
 impl WriteOp {
+    /// Construct a write op without explicit shape metadata.
     pub fn new(path: TypedPath, value: Value) -> Self {
         Self::new_with_shape(path, value, None)
     }
 
+    /// Construct a write op with optional explicit shape metadata.
     pub fn new_with_shape(path: TypedPath, value: Value, shape: Option<Shape>) -> Self {
         Self { path, value, shape }
     }
@@ -88,35 +93,46 @@ impl<'de> Deserialize<'de> for WriteOp {
 }
 
 /// A batch of write operations. Engines can emit a WriteBatch each tick.
+///
+/// Batch order is preserved. Duplicate paths are allowed and are resolved later by the consumer
+/// that applies the batch.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct WriteBatch(pub Vec<WriteOp>);
 
 impl WriteBatch {
+    /// Construct an empty batch.
     pub fn new() -> Self {
         WriteBatch(Vec::new())
     }
 
+    /// Append one write op to the batch.
     pub fn push(&mut self, op: WriteOp) {
         self.0.push(op);
     }
 
+    /// Extend the batch with multiple write ops in iteration order.
     pub fn extend(&mut self, other: impl IntoIterator<Item = WriteOp>) {
         self.0.extend(other);
     }
 
+    /// Consume the batch and return the underlying vector.
     pub fn into_vec(self) -> Vec<WriteOp> {
         self.0
     }
 
+    /// Iterate over the batch in append order.
     pub fn iter(&self) -> impl Iterator<Item = &WriteOp> {
         self.0.iter()
     }
 
+    /// Return `true` when the batch has no writes.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
-    /// Merge another batch in-place (append). Dedup/merge semantics can be added later.
+    /// Merge another batch in-place by appending it after the existing writes.
+    ///
+    /// This does not deduplicate or reconcile duplicate paths.
     pub fn append(&mut self, mut other: WriteBatch) {
         self.0.append(&mut other.0)
     }

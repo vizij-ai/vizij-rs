@@ -1,3 +1,8 @@
+//! `wasm-bindgen` bridge for the Vizij node-graph runtime.
+//!
+//! This module exposes graph normalization, evaluation, staged-input handling, registry
+//! metadata, and delta-friendly output snapshots to JavaScript consumers.
+
 use hashbrown::HashMap;
 use js_sys::{Float32Array, Uint32Array, JSON};
 use serde_wasm_bindgen as swb;
@@ -9,6 +14,7 @@ use vizij_graph_core::{
 };
 use wasm_bindgen::prelude::*;
 
+/// Normalize a graph-spec JSON string into the canonical serde shape expected by the runtime.
 #[wasm_bindgen]
 pub fn normalize_graph_spec_json(json: &str) -> Result<String, JsValue> {
     json::normalize_graph_spec_json_string(json).map_err(|e| JsValue::from_str(&e.to_string()))
@@ -380,6 +386,7 @@ impl Default for WasmGraph {
 #[wasm_bindgen]
 impl WasmGraph {
     #[wasm_bindgen(constructor)]
+    /// Construct an empty graph wrapper with no loaded spec and cleared caches.
     pub fn new() -> WasmGraph {
         #[cfg(feature = "console_error_panic_hook")]
         console_error_panic_hook::set_once();
@@ -402,6 +409,7 @@ impl WasmGraph {
         }
     }
 
+    /// Load a new graph spec from JSON and reset all staged inputs, output snapshots, and caches.
     #[wasm_bindgen]
     pub fn load_graph(&mut self, json_str: &str) -> Result<(), JsValue> {
         let normalized = json::normalize_graph_spec_json(json_str)
@@ -426,6 +434,9 @@ impl WasmGraph {
         Ok(())
     }
 
+    /// Stage one input by typed path using a JSON string payload.
+    ///
+    /// This path-based staging route bypasses the slot/index cache helpers.
     #[wasm_bindgen]
     pub fn stage_input(
         &mut self,
@@ -446,6 +457,9 @@ impl WasmGraph {
         Ok(())
     }
 
+    /// Stage one input by typed path using a JS value payload.
+    ///
+    /// This path-based staging route bypasses the slot/index cache helpers.
     #[wasm_bindgen(js_name = "stage_input_value")]
     pub fn stage_input_value(
         &mut self,
@@ -747,17 +761,21 @@ impl WasmGraph {
         JSON::parse(&s)
     }
 
+    /// Set the external graph clock in seconds.
     #[wasm_bindgen]
     pub fn set_time(&mut self, t: f64) {
         self.t = t;
     }
 
+    /// Advance the external graph clock by `dt` seconds without evaluating the graph.
     #[wasm_bindgen]
     pub fn step(&mut self, dt: f64) {
         self.t += dt;
     }
 
-    /// Stage a float32 vector without JSON, using a shared buffer view.
+    /// Stage one numeric vector without JSON, using a `Float32Array`.
+    ///
+    /// This path-based staging route bypasses the slot/index cache helpers.
     #[wasm_bindgen(js_name = "stage_input_f32")]
     pub fn stage_input_f32(&mut self, path: &str, data: &Float32Array) -> Result<(), JsValue> {
         let typed_path = TypedPath::parse(path)
@@ -771,7 +789,9 @@ impl WasmGraph {
         Ok(())
     }
 
-    /// Batch-stage many scalar/vector inputs in one call (paths[i] -> values[i]).
+    /// Batch-stage many scalar inputs in one call (`paths[i] -> values[i]`).
+    ///
+    /// This path-based staging route bypasses the slot/index cache helpers.
     #[wasm_bindgen(js_name = "stage_inputs_batch")]
     pub fn stage_inputs_batch(
         &mut self,
@@ -797,7 +817,10 @@ impl WasmGraph {
         Ok(())
     }
 
-    /// Register paths once and reuse their indices for faster staging.
+    /// Register typed paths once and reuse their indices for faster staging.
+    ///
+    /// Returned indices are stable for the lifetime of the loaded graph wrapper unless
+    /// `load_graph()` is called again.
     #[wasm_bindgen(js_name = "register_input_paths")]
     pub fn register_input_paths(&mut self, paths: JsValue) -> Result<Uint32Array, JsValue> {
         let new_paths: Vec<String> = swb::from_value(paths)
@@ -814,7 +837,10 @@ impl WasmGraph {
         Ok(Uint32Array::from(indices.as_slice()))
     }
 
-    /// Stage inputs by index using previously registered paths.
+    /// Stage scalar inputs by path index using previously registered paths.
+    ///
+    /// This route participates in the cached fast path, so unchanged values can be restaged
+    /// without re-sending them from JS every frame.
     #[wasm_bindgen(js_name = "stage_inputs_indices")]
     pub fn stage_inputs_indices(
         &mut self,
@@ -843,7 +869,7 @@ impl WasmGraph {
         Ok(())
     }
 
-    /// Pre-allocate slots with declared shapes to enable slot staging.
+    /// Attach declared-shape metadata to previously registered indices so slot staging can reuse it.
     #[wasm_bindgen(js_name = "prepare_input_slots")]
     pub fn prepare_input_slots(
         &mut self,
@@ -872,7 +898,7 @@ impl WasmGraph {
         Ok(())
     }
 
-    /// Stage inputs by pre-prepared slots (no path parse, reuse declared).
+    /// Stage scalar inputs by pre-prepared slots with no path parsing and reused declared shapes.
     #[wasm_bindgen(js_name = "stage_inputs_slots")]
     pub fn stage_inputs_slots(
         &mut self,
@@ -1006,6 +1032,8 @@ impl WasmGraph {
     }
 
     /// Evaluate the entire graph and return a JS object (avoids JSON stringify/parse).
+    ///
+    /// Uses the currently staged inputs, refreshes output snapshots, and bumps the output version.
     #[wasm_bindgen(js_name = "eval_all_js")]
     pub fn eval_all_js(&mut self) -> Result<JsValue, JsValue> {
         let out_obj = self.eval_all_json()?;
@@ -1016,8 +1044,8 @@ impl WasmGraph {
     /// Evaluate the entire graph and return all outputs as JSON.
     /// Returned JSON shape:
     /// {
-    ///   "nodes": { [nodeId]: { [outputKey]: { "value": ValueJSON, "shape": ShapeJSON } } },
-    ///   "writes": [ { "path": string, "value": ValueJSON, "shape": ShapeJSON }, ... ]
+    ///   `"nodes": { "[nodeId]": { "[outputKey]": { "value": ValueJSON, "shape": ShapeJSON } } },`
+    ///   `"writes": [{ "path": string, "value": ValueJSON, "shape": ShapeJSON }, ...]`
     /// }
     #[wasm_bindgen]
     pub fn eval_all(&mut self) -> Result<String, JsValue> {
@@ -1025,7 +1053,7 @@ impl WasmGraph {
         serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
-    /// Evaluate without serializing to JSON; returns a monotonic output version.
+    /// Evaluate without serializing to JSON and return the current output version token.
     #[wasm_bindgen(js_name = "eval_all_slots")]
     pub fn eval_all_slots(&mut self) -> Result<u64, JsValue> {
         let new_time = self.t as f32;
@@ -1049,12 +1077,18 @@ impl WasmGraph {
     }
 
     /// Return only outputs that changed since the provided version token.
+    ///
+    /// If the caller baseline is stale, missing, or from a future/reset runtime, a full snapshot
+    /// is returned so the host can resynchronize immediately.
     #[wasm_bindgen(js_name = "get_outputs_delta")]
     pub fn get_outputs_delta(&mut self, since_version: u64) -> Result<JsValue, JsValue> {
         self.serialize_delta_js(since_version)
     }
 
     /// Evaluate and return only outputs that changed since the provided version token in a single crossing.
+    ///
+    /// If the caller baseline is stale, missing, or from a future/reset runtime, a full snapshot
+    /// is returned so the host can resynchronize immediately.
     #[wasm_bindgen(js_name = "eval_all_slots_delta")]
     pub fn eval_all_slots_delta(&mut self, since_version: u64) -> Result<JsValue, JsValue> {
         let new_time = self.t as f32;
@@ -1086,8 +1120,9 @@ impl WasmGraph {
 
     /// Set a param on a node (e.g., key="value" with float/bool/vec3 JSON).
     ///
-    /// Structural parameter edits (e.g., adjusting Split sizes) invalidate the
-    /// cached execution plan so the next evaluation rebuilds layouts safely.
+    /// Structural parameter edits invalidate the cached execution plan so the next evaluation
+    /// rebuilds layouts safely. The current bridge treats `Split.sizes` as the main structural
+    /// case.
     #[wasm_bindgen]
     pub fn set_param(&mut self, node_id: &str, key: &str, json_value: &str) -> Result<(), JsValue> {
         let raw: serde_json::Value =

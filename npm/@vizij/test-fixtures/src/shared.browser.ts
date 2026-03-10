@@ -1,3 +1,9 @@
+/**
+ * Browser bundle helpers for `@vizij/test-fixtures`.
+ *
+ * This module reads from the generated JSON bundle emitted at build time instead of touching the
+ * filesystem, making it suitable for browser demos and tests.
+ */
 import type {
   FixturesManifest,
   NodeGraphManifestEntry,

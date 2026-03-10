@@ -11,9 +11,13 @@ use super::value_layout::{FlatValue, PortValue, ValueLayout};
 /// Internal integration state for a spring node. Values remain flattened for efficiency.
 #[derive(Clone, Debug)]
 pub struct SpringState {
+    /// Layout used to reconstruct structured values from the flattened buffers.
     pub layout: ValueLayout,
+    /// Current integrated position.
     pub position: Vec<f32>,
+    /// Current integrated velocity.
     pub velocity: Vec<f32>,
+    /// Most recent requested target position.
     pub target: Vec<f32>,
 }
 
@@ -42,7 +46,9 @@ impl SpringState {
 /// Integration state for a damp node.
 #[derive(Clone, Debug)]
 pub struct DampState {
+    /// Layout used to reconstruct structured values from the flattened buffers.
     pub layout: ValueLayout,
+    /// Current smoothed value.
     pub value: Vec<f32>,
 }
 
@@ -65,7 +71,9 @@ impl DampState {
 /// Integration state for a slew node.
 #[derive(Clone, Debug)]
 pub struct SlewState {
+    /// Layout used to reconstruct structured values from the flattened buffers.
     pub layout: ValueLayout,
+    /// Current rate-limited value.
     pub value: Vec<f32>,
 }
 
@@ -98,29 +106,42 @@ pub enum NodeRuntimeState {
 /// Data staged by the host for consumption by [`NodeType::Input`](crate::types::NodeType::Input).
 #[derive(Debug, Clone)]
 pub struct StagedInput {
+    /// Incoming value for the staged epoch.
     pub value: Value,
+    /// Optional caller-declared shape used by hosts that preserve explicit shape metadata.
     pub declared: Option<Shape>,
+    /// Epoch at which this input becomes visible.
     pub epoch: u64,
 }
 
 /// Runtime data shared by all node evaluations.
 #[derive(Debug, Default)]
 pub struct GraphRuntime {
+    /// Current graph time in seconds.
     pub t: f32,
+    /// Step delta in seconds for the active evaluation.
     pub dt: f32,
     /// Output map for external consumers/tests keyed by node id.
     pub outputs: HashMap<NodeId, HashMap<String, PortValue>>,
     /// Fast per-index storage aligned to spec.nodes order (mirrors `plan.node_index`).
     pub outputs_vec: Vec<Vec<PortValue>>,
+    /// Writes emitted by output/sink nodes during the current evaluation.
     pub writes: WriteBatch,
+    /// Per-node persistent state for smoothing, kinematics, and other stateful nodes.
     pub node_states: HashMap<NodeId, NodeRuntimeState>,
+    /// Host-staged inputs keyed by canonical typed path.
     pub staged_inputs: HashMap<TypedPath, StagedInput>,
+    /// Current input epoch. Newly staged values target `input_epoch + 1`.
     pub input_epoch: u64,
+    /// Cached execution plan and node-index lookup derived from the current spec.
     pub plan: PlanCache,
 }
 
 impl GraphRuntime {
     /// Reset runtime state for a new spec, clearing plan and per-node caches.
+    ///
+    /// Call this when a structural graph change invalidates cached layouts, bindings, or node
+    /// state. Ordinary param updates can continue reusing the existing runtime.
     pub fn reset_for_spec(&mut self) {
         self.plan = PlanCache::default();
         self.outputs.clear();
@@ -141,6 +162,8 @@ impl GraphRuntime {
     }
 
     /// Stage an input value for the next evaluation epoch using a [`TypedPath`] key.
+    ///
+    /// A later call with the same path replaces the previously staged value for that future epoch.
     pub fn set_input(
         &mut self,
         path: TypedPath,
@@ -156,6 +179,8 @@ impl GraphRuntime {
     }
 
     /// Fetch a staged input for the current evaluation epoch, if present.
+    ///
+    /// Values staged for later epochs remain hidden until [`Self::advance_epoch`] promotes them.
     pub fn get_input(&self, path: &TypedPath) -> Option<&StagedInput> {
         self.staged_inputs
             .get(path)
@@ -163,6 +188,8 @@ impl GraphRuntime {
     }
 
     /// Consume a staged input for the current epoch, removing it from the cache.
+    ///
+    /// Entries staged for other epochs are left untouched and return `None`.
     pub fn take_input(&mut self, path: &TypedPath) -> Option<StagedInput> {
         let matches_epoch = self
             .staged_inputs

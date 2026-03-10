@@ -1,3 +1,5 @@
+//! GraphSpec normalization helpers reused by the wasm facade.
+
 use vizij_api_core::json;
 
 /// Normalize a full GraphSpec JSON string into a serde_json::Value with

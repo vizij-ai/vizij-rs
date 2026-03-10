@@ -30,7 +30,7 @@ pub struct Transitions {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Keypoint {
     pub id: String,
-    /// Normalized time in [0,1] within the clip duration.
+    /// Normalized time in `[0, 1]` within the clip duration.
     pub stamp: f32,
     pub value: Value,
     #[serde(default)]
@@ -73,7 +73,7 @@ pub struct AnimationData {
 }
 
 impl AnimationData {
-    /// Validate basic invariants (monotonic stamps in [0,1], non-zero duration).
+    /// Validate basic invariants (monotonic stamps in `[0, 1]`, non-zero duration).
     pub fn validate_basic(&self) -> Result<(), String> {
         if self.duration_ms == 0 {
             return Err("AnimationData.duration must be > 0 ms".into());
@@ -83,7 +83,7 @@ impl AnimationData {
             for p in &track.points {
                 if !p.stamp.is_finite() || p.stamp < 0.0 || p.stamp > 1.0 {
                     return Err(format!(
-                        "Keypoint stamp must be in [0,1] and finite for '{}'",
+                        "Keypoint stamp must be in [0, 1] and finite for '{}'",
                         track.animatable_id
                     ));
                 }

@@ -2,7 +2,7 @@
 
 > **TypeScript definitions and helpers for Vizij’s Value/Shape ecosystem.**
 
-`@vizij/value-json` is the canonical TypeScript companion to `vizij-api-core`. It defines the normalised `{ type, data }` value union, offers coercion utilities, and keeps every Vizij npm package (animation, node graph, orchestrator, renderer) speaking the same JSON dialect. Install it whenever your tooling, UI, or Node service needs to produce or consume Vizij values.
+`@vizij/value-json` is the canonical TypeScript companion to `vizij-api-core`. It defines the accepted Vizij value union, offers coercion utilities, and keeps the animation, node graph, and orchestrator npm packages speaking the same JSON dialect. Install it whenever your tooling, UI, or Node service needs to produce or consume Vizij values.
 
 ---
 
@@ -39,13 +39,12 @@
 
 | Input form | `toValueJSON` output | Notes |
 |------------|---------------------|-------|
-| `42` | `{ type: "float", data: 42 }` | Scalars normalise to floats. |
-| `true` | `{ type: "bool", data: true }` | Boolean primitives become tagged bools. |
-| `[0, 1, 2]` | `{ type: "vec3", data: [0, 1, 2] }` | Arrays of length 2/3/4 map to `vec2`/`vec3`/`vec4`; longer arrays become `vector`. |
-| `{ vec3: [0, 1, 0] }` | `{ type: "vec3", data: [0, 1, 0] }` | Legacy objects are translated to canonical discriminants. |
-| `{ transform: { translation: [0,0,0] } }` | `{ type: "transform", data: { translation: [0,0,0], rotation: [0,0,0,1], scale: [1,1,1] } }` | Missing axes are filled with defaults. |
-| `{ enum: { tag: "State", value: { bool: true } } }` | `{ type: "enum", data: ["State", { type: "bool", data: true }] }` | Enum payloads normalise to `[tag, value]`. |
-| `{ record: { a: { float: 1 }, b: { bool: false } } }` | `{ type: "record", data: { a: { type: "float", data: 1 }, b: { type: "bool", data: false } } }` | Nested structures recurse automatically. |
+| `42` | `{ float: 42 }` | Numbers become legacy float payloads accepted by the wrappers. |
+| `true` | `{ bool: true }` | Boolean primitives become legacy bool payloads. |
+| `"hello"` | `{ text: "hello" }` | Strings become legacy text payloads. |
+| `[0, 1, 2]` | `{ vector: [0, 1, 2] }` | Arrays are preserved as generic numeric vectors. |
+| `{ vec3: [0, 1, 0] }` | `{ vec3: [0, 1, 0] }` | Existing tagged payloads are returned unchanged. |
+| `{ type: "vec3", data: [0, 1, 0] }` | `{ type: "vec3", data: [0, 1, 0] }` | Canonical normalized values also pass through unchanged. |
 
 Anything that cannot be coerced throws, signalling that upstream JSON needs to be corrected.
 
@@ -64,9 +63,9 @@ Within the monorepo the package is built from `vizij-rs/npm/@vizij/value-json`.
 
 ## Bundler Notes
 
-- The published package ships both ESM (`dist/index.js`) and CJS (`dist/index.cjs`) builds—Node and modern bundlers resolve the correct entry automatically via `package.json` exports.
+- The published package exposes an ESM entry (`dist/index.js`) with matching type definitions (`dist/index.d.ts`).
 - Helpers are tree-shakeable; prefer `import { toValueJSON } from "@vizij/value-json"` so unused utilities drop out of production builds.
-- Type definitions (`dist/index.d.ts`) mirror the ESM entry and surface literal union types for discriminants, keeping TypeScript narrowing aligned with the Rust schema.
+- Type definitions surface literal union types for discriminants, keeping TypeScript narrowing aligned with the Rust schema.
 
 ---
 
@@ -83,19 +82,13 @@ type NormalizedValue =
   | { type: "record"; data: Record<string, NormalizedValue> }
   | ...;
 
-type ValueJSON = NormalizedValue | { float: number } | { vec3: number[] } | number | boolean | string | number[];
+type ValueJSON = NormalizedValue | { float: number } | { vec3: [number, number, number] } | number | boolean | string | number[];
 ```
 
 - `NormalizedValue` – canonical tagged union.
 - `ValueJSON` – accepts both normalized values and legacy aliases/primitives for input convenience.
 - `ValueInput` – alias for `ValueJSON | number[]`, used by staging helpers in other packages.
 - `NormalizedTransform` – `{ translation: [x,y,z], rotation: [x,y,z,w], scale: [x,y,z] }`.
-
-### Working with `ShapeJSON`
-
-- Shapes are optional metadata that mirror `vizij-api-core::Shape`. When targeting Vizij runtimes, supply shapes for numeric types that benefit from validation (e.g., `Transform`, `Vector` of fixed length).
-- Helper `normalizeShape` (exported alongside value helpers) converts `{ id: "Vec3" }` or legacy strings (`"Vec3"`) into the canonical object.
-- When consuming data, rely on `value.shape ?? inferShape(value)`—the helper returns `ShapeJSON` if provided; otherwise it infers from the value union.
 
 ---
 
@@ -123,8 +116,8 @@ Normalising inputs before staging them into WASM bindings:
 import { toValueJSON } from "@vizij/value-json";
 import { Graph } from "@vizij/node-graph-wasm";
 
-graph.stageInput("nodes.inputA.inputs.in", toValueJSON([1, 2, 3]));
-graph.stageInput("nodes.mode.inputs.in", toValueJSON({ enum: { tag: "A", value: { float: 1 } } }));
+graph.stageInput("demo/input/vector", toValueJSON([1, 2, 3]));
+graph.stageInput("demo/input/mode", toValueJSON({ enum: { tag: "A", value: { float: 1 } } }));
 ```
 
 Reading values emitted by the animation engine:
@@ -158,14 +151,13 @@ pnpm install
 pnpm test
 ```
 
-Vitest covers coercion edge cases and regression scenarios. Add to the suite whenever you extend the helper surface.
+The package uses Node's built-in test runner (`node --test`) to cover coercion edge cases and regressions. Add to the suite whenever you extend the helper surface.
 
 ---
 
 ## Related Packages
 
 - [`vizij-api-core`](../../../crates/api/vizij-api-core/README.md) – Rust source of truth for Value/Shape types.
-- [`@vizij/node-graph-wasm`](../node-graph-wasm/README.md) • [`@vizij/orchestrator-wasm`](../orchestrator-wasm/README.md) • [`@vizij/animation-wasm`](../animation-wasm/README.md) – WASM packages that rely on these helpers.
-- React bindings (`@vizij/node-graph-react`, `@vizij/orchestrator-react`, `@vizij/animation-react`) use the helpers to normalise staged inputs and render outputs.
+- [`@vizij/node-graph-wasm`](../node-graph-wasm/README.md) • [`@vizij/orchestrator-wasm`](../orchestrator-wasm/README.md) • [`@vizij/animation-wasm`](../animation-wasm/README.md) – wrapper packages that rely on these helpers.
 
 Questions or improvements? Open an issue—aligned value handling keeps Vizij runtimes interoperable. 🔄

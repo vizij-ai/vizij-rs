@@ -1,3 +1,8 @@
+//! Static node schema metadata exposed to tooling and wasm wrappers.
+//!
+//! The registry in this module describes the runtime-supported node types, their ports, and
+//! their parameter surfaces so editors and host integrations can stay aligned with the core.
+
 use crate::types::NodeType;
 use serde::{Deserialize, Serialize};
 

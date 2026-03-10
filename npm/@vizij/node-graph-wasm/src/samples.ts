@@ -1,3 +1,6 @@
+/**
+ * Built-in graph samples used by tests, demos, and quick-start experiments.
+ */
 import type {
   GraphSpec,
   EdgeSpec,

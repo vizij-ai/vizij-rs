@@ -1,3 +1,8 @@
+//! Animation-controller integration for the orchestrator.
+//!
+//! The animation controller owns a `vizij-animation-core` engine instance and translates
+//! blackboard paths into player commands and instance updates on each orchestrator step.
+
 use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
@@ -16,14 +21,20 @@ use crate::blackboard::Blackboard;
 /// Lightweight config for registering an animation controller with the orchestrator.
 #[derive(Debug, Clone)]
 pub struct AnimationControllerConfig {
+    /// Controller id used for registration and diagnostics.
     pub id: String,
-    /// Arbitrary setup blob for future wiring (e.g., animation JSON, prebind config).
+    /// Optional setup object interpreted as `{ animation?, player?, instance? }`.
+    ///
+    /// Unknown fields are ignored by serde. When `animation` is present it must match the stored
+    /// animation JSON format accepted by `parse_stored_animation_json`.
     pub setup: JsonValue,
 }
 
 #[derive(Debug)]
 pub struct AnimationController {
+    /// Controller id used by the orchestrator registry.
     pub id: String,
+    /// Owned animation engine instance.
     pub engine: Engine,
 }
 
@@ -40,6 +51,7 @@ enum AnimationPathKind<'a> {
 }
 
 impl AnimationController {
+    /// Construct a controller, returning an error when the setup payload is invalid.
     pub fn try_new(cfg: AnimationControllerConfig) -> Result<Self> {
         // Create engine with a default config, then apply any optional setup payload.
         let mut controller = Self {
@@ -50,6 +62,7 @@ impl AnimationController {
         Ok(controller)
     }
 
+    /// Construct a controller and panic if the setup payload is invalid.
     pub fn new(cfg: AnimationControllerConfig) -> Self {
         Self::try_new(cfg).expect("AnimationController setup is invalid")
     }
@@ -266,7 +279,7 @@ impl AnimationController {
         inputs
     }
 
-    /// Update the animation controller for dt seconds, reading relevant inputs from the
+    /// Update the animation controller for `dt` seconds, reading relevant inputs from the
     /// blackboard and returning a WriteBatch plus a list of high-level event values.
     ///
     /// Behavior:
@@ -275,6 +288,8 @@ impl AnimationController {
     ///  - Translate `Outputs.changes` into a WriteBatch using the shared helper on
     ///    `vizij_animation_core::Outputs`, which handles the TypedPath parsing.
     ///  - Serialize engine events into `serde_json::Value` and return them alongside the batch.
+    ///
+    /// Unsupported command paths or value types are ignored rather than treated as hard errors.
     pub fn update(&mut self, dt: f32, bb: &mut Blackboard) -> Result<(WriteBatch, Vec<JsonValue>)> {
         // Build Inputs from Blackboard
         let inputs = Self::map_blackboard_to_inputs(bb);

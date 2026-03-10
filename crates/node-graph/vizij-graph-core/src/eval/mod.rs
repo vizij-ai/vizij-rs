@@ -1,15 +1,15 @@
 //! Evaluation pipeline for the Vizij node graph.
 //!
-//! The `eval` module hosts the runtime utilities that turn a [`GraphSpec`](crate::types::GraphSpec)
+//! The `eval` module hosts the runtime utilities that turn a [`GraphSpec`]
 //! into concrete values by walking the graph in topological order. The submodules are organised to
 //! keep domain concerns isolated:
 //!
-//! - [`graph_runtime`] tracks per-node state and staging buffers between frames.
-//! - [`value_layout`] flattens structured values for numeric operators.
-//! - [`shape_helpers`] validates declared output shapes.
-//! - [`numeric`] and [`variadic`] provide shared math helpers.
-//! - [`eval_node`] houses the dispatch logic for individual [`NodeType`](crate::types::NodeType)s.
-//! - [`urdfik`] is gated behind the `urdf_ik` feature and packages the IK solver helpers.
+//! - `graph_runtime` tracks per-node state and staging buffers between frames.
+//! - `value_layout` flattens structured values for numeric operators.
+//! - `shape_helpers` validates declared output shapes.
+//! - `numeric` and `variadic` provide shared math helpers.
+//! - [`mod@eval_node`] houses the dispatch logic for individual [`NodeType`](crate::types::NodeType)s.
+//! - `urdfik` is gated behind the `urdf_ik` feature and packages the IK solver helpers.
 //!
 //! Integration code should primarily interact with [`GraphRuntime`] and [`evaluate_all`].
 

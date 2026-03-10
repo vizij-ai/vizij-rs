@@ -1,0 +1,28 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "npm/@vizij/animation-wasm/src/index.ts",
+    "npm/@vizij/node-graph-wasm/src/index.ts",
+    "npm/@vizij/orchestrator-wasm/src/index.ts",
+    "npm/@vizij/value-json/src/index.ts",
+    "npm/@vizij/test-fixtures/src/index.ts",
+    "npm/@vizij/wasm-loader/src/index.ts",
+    "npm/@vizij/wasm-loader/src/browser.ts",
+    "npm/@vizij/wasm-loader/src/shared.ts"
+  ],
+  "entryPointStrategy": "resolve",
+  "out": "target/docs-typedoc",
+  "tsconfig": "typedoc.tsconfig.json",
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "treatWarningsAsErrors": false,
+  "githubPages": false,
+  "hideGenerator": true,
+  "readme": "none",
+  "sort": [
+    "alphabetical",
+    "static-first",
+    "source-order"
+  ]
+}

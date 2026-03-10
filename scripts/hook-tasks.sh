@@ -197,7 +197,7 @@ cmd_pre_push() {
   rust_fmt_check
   rust_clippy
   rust_test
-  run_cmd "verify node registry" pnpm --filter vizij-rs verify:registry
+  run_cmd "verify node registry" pnpm run verify:registry
 
   if [[ "${HOOK_RUN_WASM:-0}" == "1" ]]; then
     run_wasm_checks

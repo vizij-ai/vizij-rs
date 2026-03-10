@@ -8,6 +8,12 @@ import type { NormalizedValue, ValueJSON as SharedValueJSON } from "@vizij/value
 /* -----------------------------------------------------------
    WASM init input (parity with node-graph)
 ----------------------------------------------------------- */
+/**
+ * Source accepted by the wasm-pack generated initializer.
+ *
+ * In browsers this is typically a URL, RequestInfo, or Response. Bundled/server-side hosts may
+ * also provide a `BufferSource` or precompiled `WebAssembly.Module`.
+ */
 export type InitInput =
   | RequestInfo
   | URL
@@ -30,6 +36,7 @@ export interface Features {
   reserved0?: boolean;
 }
 
+/** Engine construction options forwarded to the wasm animation engine. */
 export interface Config {
   /** Initial capacity hints for scratch/sample buffers */
   scratch_samples?: number;
@@ -47,6 +54,7 @@ export interface Config {
 /* -----------------------------------------------------------
    Baking (vizij-animation-core/src/baking.rs)
 ----------------------------------------------------------- */
+/** Options controlling baked sample extraction from an animation clip. */
 export interface BakingConfig {
   /** Target frame rate (Hz) for baked samples */
   frame_rate?: number;
@@ -77,6 +85,7 @@ export interface BakedAnimationData {
 ----------------------------------------------------------- */
 export type LoopMode = "Once" | "Loop" | "PingPong";
 
+/** Player-level command bag applied before the engine advances time for a tick. */
 export type PlayerCommand =
   | { Play: { player: PlayerId } }
   | { Pause: { player: PlayerId } }
@@ -84,8 +93,10 @@ export type PlayerCommand =
   | { SetSpeed: { player: PlayerId; speed: number } }
   | { Seek: { player: PlayerId; time: number } }
   | { SetLoopMode: { player: PlayerId; mode: LoopMode } }
+  /** `end_time: null` clears the explicit end bound and reuses the player's natural end. */
   | { SetWindow: { player: PlayerId; start_time: number; end_time?: number | null } };
 
+/** Partial instance update applied before stepping. Omitted fields leave the current value unchanged. */
 export interface InstanceUpdate {
   player: PlayerId;
   inst: InstId;
@@ -95,10 +106,11 @@ export interface InstanceUpdate {
   enabled?: boolean;
 }
 
+/** Input payload accepted by `Engine.update*()` for one tick. */
 export interface Inputs {
-  /** Player-level commands applied before stepping */
+  /** Player-level commands applied first, before instance updates and time advancement. */
   player_cmds?: PlayerCommand[];
-  /** Instance-level updates applied before stepping */
+  /** Instance-level updates applied after `player_cmds` and before sampling. */
   instance_updates?: InstanceUpdate[];
 }
 
@@ -112,6 +124,7 @@ export type Value = NormalizedValue;
 /* -----------------------------------------------------------
    Outputs (vizij-animation-core/src/outputs.rs)
 ----------------------------------------------------------- */
+/** One emitted target change for a player during a tick. */
 export interface Change {
   player: PlayerId;
   /** Opaque key (resolved via prebind or canonical path when unresolved) */
@@ -119,7 +132,9 @@ export interface Change {
   value: Value;
 }
 
+/** Change paired with an optional derivative sample. */
 export interface ChangeWithDerivative extends Change {
+  /** Present only when derivative-aware sampling/output is requested. */
   derivative?: Value | null;
 }
 
@@ -150,7 +165,9 @@ export type CoreEvent =
   | { Custom: { kind: string; data: unknown } };
 
 export interface Outputs {
+  /** Value changes produced during this tick. */
   changes: Change[];
+  /** Semantic playback/events emitted during this tick. */
   events: CoreEvent[];
 }
 
@@ -200,6 +217,7 @@ export interface Track {
   name?: string;
   /** Canonical target path (e.g., "node/Transform.translation") */
   animatableId: string;
+  /** Keypoints ordered in normalized clip space. */
   points: Keypoint[];
   settings?: { color?: string };
 }
@@ -209,6 +227,7 @@ export interface StoredAnimation {
   name?: string;
   /** Duration in milliseconds */
   duration: number;
+  /** Tracks sampled across the normalized `[0, 1]` clip domain. */
   tracks: Track[];
   /** Optional grouping metadata */
   groups?: Record<string, unknown>;
@@ -230,13 +249,16 @@ export interface BakedTrack {
 
 export interface BakedDerivativeTrack {
   target_path: string;
+  /** Null means no stable derivative sample was emitted for that frame. */
   values: Array<Value | null>;
 }
 
 export interface BakedAnimationData {
   anim: AnimId;
   frame_rate: number;
+  /** Clip-space start time in seconds. */
   start_time: number;
+  /** Clip-space end time in seconds. */
   end_time: number;
   tracks: BakedTrack[];
 }
@@ -244,7 +266,9 @@ export interface BakedAnimationData {
 export interface BakedDerivativeAnimationData {
   anim: AnimId;
   frame_rate: number;
+  /** Clip-space start time in seconds. */
   start_time: number;
+  /** Clip-space end time in seconds. */
   end_time: number;
   tracks: BakedDerivativeTrack[];
 }
@@ -261,6 +285,7 @@ export interface BakedAnimationBundle {
 export interface AnimationInfo {
   id: number;
   name?: string;
+  /** Source animation duration in milliseconds. */
   duration_ms: number;
   track_count: number;
 }
@@ -268,18 +293,23 @@ export interface AnimationInfo {
 export type PlaybackState = "Playing" | "Paused" | "Stopped";
 
 export interface InstanceCfg {
+  /** Blend weight applied to the instance contribution. */
   weight: number;
+  /** Playback scaling factor used by the engine's local-time mapping. */
   time_scale: number;
+  /** Start offset in seconds on the player timeline. */
   start_offset: number;
   enabled: boolean;
 }
 
+/** Snapshot of one registered animation instance. */
 export interface InstanceInfo {
   id: number;
   animation: number;
   cfg: InstanceCfg;
 }
 
+/** Snapshot of one player after stepping or inspection. */
 export interface PlayerInfo {
   id: number;
   name: string;

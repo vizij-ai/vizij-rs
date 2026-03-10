@@ -49,20 +49,12 @@ Manual build:
 
 ```bash
 wasm-pack build crates/animation/vizij-animation-wasm \
-  --target bundler \
-  --out-dir pkg \
+  --target web \
+  --out-dir npm/@vizij/animation-wasm/pkg \
   --release
 ```
 
-The result lands in `crates/animation/vizij-animation-wasm/pkg/` and is copied into the npm package during the build script.
-
-### Choosing a wasm-pack target
-
-- `--target bundler` (default in the workspace scripts): ideal for Vite, Webpack, and other bundlers that understand ES modules and handle `.wasm` assets automatically.
-- `--target web`: emits self-contained ESM that fetches the `.wasm` file at runtime—prefer this when shipping straight to browsers without a bundler.
-- `--target nodejs`: produces CommonJS + Node glue, useful for server-side baking or CLI tools.
-
-If you change the target, rebuild the npm wrapper so the generated JS and type definitions stay aligned.
+The workspace scripts emit the generated files directly into `npm/@vizij/animation-wasm/pkg/`, which is the source consumed by the npm wrapper.
 
 ---
 
@@ -88,19 +80,19 @@ const baked = eng.bakeAnimationWithDerivatives(animId, { frame_rate: 60 });
 console.log(baked.values.tracks.length, baked.derivatives.tracks.length);
 ```
 
-Low-level binding:
+Low-level binding through the npm wrapper's raw export:
 
 ```ts
-import initWasm, { VizijAnimation, abi_version } from "@vizij/animation-wasm/pkg";
+import { init, VizijAnimation, abi_version } from "@vizij/animation-wasm";
 
-await initWasm();
+await init();
 console.log("ABI", abi_version());
 const raw = new VizijAnimation();
-const animId = raw.load_stored_animation(JSON.stringify(storedAnimationJson));
+const animId = raw.load_stored_animation(storedAnimationJson);
 const playerId = raw.create_player("demo");
 raw.add_instance(playerId, animId, undefined);
-const result = raw.update_values(1 / 60, "{}");
-console.log(JSON.parse(result));
+const result = raw.update_values(1 / 60, undefined);
+console.log(result);
 ```
 
 ### Custom `.wasm` location
@@ -137,7 +129,7 @@ Any `Response`, `URL`, `ArrayBuffer`, or `Uint8Array` accepted by wasm-bindgen w
 - `TypeError: WebAssembly.instantiateStreaming` – Occurs when serving over `file://` or an HTTP server without the correct MIME type. Use `await init(fetch(url))` or pass bytes directly.
 - `ABI mismatch: expected 2` – Indicates stale JS glue. Re-run `pnpm run build:wasm:animation` so the `.wasm` binary and JS wrapper agree on `abi_version()`.
 - Silent failures when prebinding – Ensure your resolver returns `null` for unknown paths; throwing from the resolver prevents bindings from being applied.
-- Large bundles – Use `wasm-pack build --release` and rely on `--target bundler` so tree-shaking removes unused helpers.
+- Large bundles – Use `wasm-pack build --release`; the workspace scripts expect `--target web` and the npm wrapper handles loading and caching on top.
 
 ## Development & Testing
 
@@ -151,7 +143,7 @@ cd npm/@vizij/animation-wasm
 pnpm test
 ```
 
-The npm test suite compares WASM outputs against fixtures to ensure parity with the native engine.
+The npm wrapper test suite compares WASM outputs against fixtures to ensure parity with the native engine.
 
 ---
 
@@ -159,6 +151,5 @@ The npm test suite compares WASM outputs against fixtures to ensure parity with 
 
 - [`vizij-animation-core`](../vizij-animation-core/README.md) – underlying animation engine.
 - [`@vizij/animation-wasm`](../../../npm/@vizij/animation-wasm/README.md) – npm wrapper with ESM entry and TypeScript types.
-- [`@vizij/animation-react`](../../../vizij-web/packages/@vizij/animation-react/README.md) – React provider built on the wrapper.
 
 Documentation improvements? Open an issue—consistent bindings keep Vizij animation accessible across platforms. 🎬

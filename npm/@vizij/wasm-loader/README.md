@@ -56,15 +56,15 @@ interface LoadBindingsOptions<TBindings> {
 Each wasm npm package wraps `loadBindings` with package-specific defaults:
 
 ```ts
-// Inside @vizij/animation-wasm (simplified)
+// Inside a Vizij wasm wrapper (simplified)
 const cache = { current: null };
 
 export async function init(input?: InitInput): Promise<void> {
   await loadBindings({
     cache,
-    importModule: () => import("./pkg/animation_wasm.js"),
+    importModule: () => import("../../pkg/package.js"),
     defaultWasmUrl: () =>
-      new URL("./pkg/animation_wasm_bg.wasm", import.meta.url).toString(),
+      new URL("../../pkg/package_bg.wasm", import.meta.url).toString(),
     init: (module, initArg) => module.default(initArg),
     getBindings: (module) => module,
     expectedAbi: 2,
@@ -97,20 +97,19 @@ Wrap initialisation in `try/catch` to present actionable messages (e.g. `Failed 
 
 ## Bundler Notes
 
-- Tree-shakeable ESM build; import only what you need.
+- Tree-shakeable ESM build with explicit `browser` and `node` exports.
 - Browser bundles never include Node-specific code paths because the `fs/promises` import is behind a dynamic `import()`.
-- Node/CommonJS consumers resolve the CJS export automatically.
+- The browser entry (`@vizij/wasm-loader/browser`) skips the `file://` handling path entirely.
 
 ---
 
 ## Development & Testing
 
 ```bash
-pnpm install
-pnpm test
+pnpm --filter @vizij/wasm-loader run build
 ```
 
-Vitest covers caching behaviour, file URL resolution, and ABI mismatch errors.
+`@vizij/wasm-loader` does not currently define a standalone test script; validate changes through the wrapper packages that consume it.
 
 ---
 

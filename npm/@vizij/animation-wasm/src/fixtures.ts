@@ -1,3 +1,9 @@
+/**
+ * Embedded animation fixture helpers for `@vizij/animation-wasm`.
+ *
+ * The functions in this module read the generated fixture bundle shipped with the package so
+ * browser and Node tests can load canonical animation payloads without reading the repo files.
+ */
 import bundle from "./generated/fixtures-bundle.js";
 import type { StoredAnimation } from "./types.js";
 

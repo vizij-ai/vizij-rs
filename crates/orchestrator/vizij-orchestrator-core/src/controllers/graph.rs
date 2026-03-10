@@ -1,3 +1,9 @@
+//! Graph-controller integration for the orchestrator.
+//!
+//! This module stages subscribed blackboard inputs into a graph runtime, evaluates the
+//! configured graph spec, and returns write batches that the scheduler can merge back into the
+//! orchestrator blackboard.
+
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
 use std::collections::{HashMap, HashSet};
@@ -14,7 +20,11 @@ use crate::blackboard::Blackboard;
 /// unnecessary work and keep evaluation deterministic.
 #[derive(Debug, Clone, Default)]
 pub struct Subscriptions {
+    /// Blackboard paths staged into the graph before each evaluation.
     pub inputs: Vec<TypedPath>,
+    /// Output paths published back to the orchestrator frame.
+    ///
+    /// When empty, all graph writes are published.
     pub outputs: Vec<TypedPath>,
     /// Mirror the full controller write batch into the blackboard even when `outputs`
     /// restrict which paths are surfaced to consumers.
@@ -28,12 +38,15 @@ pub struct Subscriptions {
 /// Lightweight config for registering a graph with the orchestrator.
 #[derive(Debug, Clone)]
 pub struct GraphControllerConfig {
+    /// Controller id used for registration and diagnostics.
     pub id: String,
+    /// Graph specification evaluated by the controller.
     pub spec: GraphSpec,
     /// Optional subscriptions to restrict staging/publishing.
     pub subs: Subscriptions,
 }
 
+/// Validation and merge failures that can occur while combining graph controllers.
 #[derive(Debug, Error)]
 pub enum GraphMergeError {
     #[error("no graphs provided for merge")]
@@ -50,18 +63,27 @@ pub enum GraphMergeError {
     InvalidNamespacedPath { path: String, reason: String },
 }
 
+/// Conflict policy used when multiple merged graphs target the same path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputConflictStrategy {
+    /// Reject the merge when multiple producers target the same path.
     Error,
+    /// Namespace final outputs by graph id instead of combining them.
     Namespace,
+    /// Combine conflicting values with equal weights via `default-blend`.
     BlendEqualWeights,
+    /// Combine conflicting values with an `add` node.
     Add,
+    /// Combine conflicting values with `default-blend` and explicit weight inputs.
     DefaultBlend,
 }
 
+/// Merge-time conflict configuration for [`GraphControllerConfig::merged_with_options`].
 #[derive(Debug, Clone, Copy)]
 pub struct GraphMergeOptions {
+    /// Strategy used when final published output paths collide.
     pub output_conflicts: OutputConflictStrategy,
+    /// Strategy used when intermediate/shared paths collide and still feed downstream consumers.
     pub intermediate_conflicts: OutputConflictStrategy,
 }
 
@@ -88,6 +110,12 @@ impl GraphControllerConfig {
         Self::merged_with_options(id, graphs, GraphMergeOptions::default())
     }
 
+    /// Merge multiple graph controller configs with explicit conflict rules.
+    ///
+    /// Final output collisions use [`GraphMergeOptions::output_conflicts`]. Collisions that still
+    /// feed downstream consumers use [`GraphMergeOptions::intermediate_conflicts`]. Namespace
+    /// resolution is only valid for final outputs; intermediate collisions that still have
+    /// consumers return [`GraphMergeError::NamespaceIntermediateUnsupported`].
     pub fn merged_with_options(
         id: impl Into<String>,
         graphs: Vec<GraphControllerConfig>,
@@ -763,14 +791,19 @@ impl GraphControllerConfig {
 /// Controller owning a persistent GraphRuntime for evaluations.
 #[derive(Debug)]
 pub struct GraphController {
+    /// Controller id used by the orchestrator registry.
     pub id: String,
+    /// Current graph specification.
     pub spec: GraphSpec,
+    /// Persistent graph runtime carrying staged inputs, plan cache, and node state.
     pub rt: GraphRuntime,
+    /// Subscription filters controlling staged inputs and published outputs.
     pub subs: Subscriptions,
     plan_ready: bool,
 }
 
 impl GraphController {
+    /// Construct a controller with a fresh runtime and no cached plan.
     pub fn new(cfg: GraphControllerConfig) -> Self {
         Self {
             id: cfg.id,
@@ -781,6 +814,7 @@ impl GraphController {
         }
     }
 
+    /// Replace the controller config and invalidate any cached execution plan.
     pub fn replace_config(&mut self, cfg: GraphControllerConfig) {
         // Structural edits require invalidating the cached plan. Always re-apply `with_cache()`
         // at the boundary so versioned plan caching cannot reuse stale layouts.
@@ -794,8 +828,11 @@ impl GraphController {
     /// Behavior:
     ///  - Advance the GraphRuntime epoch so newly staged inputs become visible.
     ///  - Stage subscribed Blackboard inputs into the runtime (only inputs listed in Subscriptions).
-    ///  - Call evaluate_all(runtime, &spec)
-    ///  - Collect runtime.writes and return as WriteBatch.
+    ///  - Call `evaluate_all*` against the current spec.
+    ///  - Preserve any pre-populated runtime writes and append newly emitted writes after them.
+    ///
+    /// Non-finite or negative `dt` values are clamped to `0.0` before they reach the graph
+    /// runtime so evaluation stays deterministic.
     pub fn evaluate(&mut self, bb: &mut Blackboard, _epoch: u64, dt: f32) -> Result<WriteBatch> {
         // Update runtime timekeeping so transition/time nodes observe advancing time.
         let delta = if dt.is_finite() { dt.max(0.0) } else { 0.0 };

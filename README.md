@@ -42,7 +42,8 @@ vizij-rs/
 │  ├─ node-graph/
 │  │  ├─ vizij-graph-core          # Data-flow node graph evaluator
 │  │  ├─ bevy_vizij_graph          # Bevy plugin
-│  │  └─ vizij-graph-wasm          # wasm-bindgen binding
+│  │  ├─ vizij-graph-wasm          # wasm-bindgen binding
+│  │  └─ vizij-graph-registry-export # Registry export utility used by npm tooling
 │  ├─ orchestrator/
 │  │  ├─ vizij-orchestrator-core   # Blackboard + pass scheduling runtime
 │  │  └─ vizij-orchestrator-wasm   # wasm-bindgen binding
@@ -59,7 +60,7 @@ vizij-rs/
 └─ scripts/                        # Build, watch, and release helpers
 ```
 
-Every crate includes a dedicated README with domain-specific guidance; the top-level README focuses on cross-cutting processes.
+The major runtime crates and npm packages include dedicated READMEs with domain-specific guidance; the top-level README focuses on cross-cutting processes.
 
 ---
 
@@ -72,8 +73,8 @@ Every crate includes a dedicated README with domain-specific guidance; the top-l
 | Orchestrator   | `vizij-orchestrator-core`| (planned)                 | `vizij-orchestrator-wasm`  | `@vizij/orchestrator-wasm`   |
 | Test fixtures  | `vizij-test-fixtures`    | —                         | —                          | `@vizij/test-fixtures`       |
 
-Shared API crates (`vizij-api-core`, `vizij-api-wasm`, `bevy_vizij_api`) provide the Value/Shape/TyperPath contract that keeps the stacks interoperable.
-`vizij-test-fixtures` exposes the JSON assets defined under `fixtures/` and powers the `@vizij/test-fixtures` bundle for browser consumers.
+Shared API crates (`vizij-api-core`, `vizij-api-wasm`, `bevy_vizij_api`) provide the Value/Shape/TypedPath contract that keeps the stacks interoperable.
+`vizij-test-fixtures` exposes the JSON assets defined under `fixtures/`, while `vizij-graph-registry-export` supports registry generation for the node-graph npm tooling.
 
 Each WASM crate exposes a stable `abi_version()` (currently `2`); the npm wrappers verify this at runtime and instruct you to rebuild if versions drift.
 
@@ -82,7 +83,7 @@ Each WASM crate exposes a stable `abi_version()` (currently `2`); the npm wrappe
 | Package | Purpose |
 |---------|---------|
 | `@vizij/value-json` | TypeScript helpers that normalise Value/Shape payloads to match `vizij-api-core`. |
-| `@vizij/test-fixtures` | Ships the shared fixture manifest + JSON for browsers and Node tooling. |
+| `@vizij/test-fixtures` | Workspace package that bundles the shared fixture manifest + JSON for browsers and Node tooling. |
 | `@vizij/wasm-loader` | Shared loader that caches wasm-bindgen modules, resolves `file://` URLs, and enforces ABI checks. |
 
 These packages build quickly (`pnpm run build:shared`) and should be rebuilt whenever fixtures or API contracts change.
@@ -136,7 +137,7 @@ Hooks can be bypassed with `SKIP_GIT_HOOKS=1` or extended using the `HOOK_RUN_*`
 pnpm run build
 ```
 
-This command runs the Rust checks, each WASM wrapper build, and the shared npm packages (`@vizij/value-json`, `@vizij/wasm-loader`, `@vizij/test-fixtures`). The Rust build uses the fast `cargo check --workspace` path; WASM bundles land in `crates/*/*/pkg/` and are copied into `npm/@vizij/*/pkg/`.
+This command runs the Rust workspace build, each WASM build, and the shared npm package builds (`@vizij/value-json`, `@vizij/wasm-loader`, `@vizij/test-fixtures`). Under the hood `build:rust` runs `cargo build --all-features --all-targets`, and the WASM scripts write their generated artifacts directly into `npm/@vizij/*/pkg/`.
 
 ### Build a specific WASM stack
 
@@ -146,7 +147,7 @@ pnpm run build:wasm:graph
 pnpm run build:wasm:orchestrator
 ```
 
-Each script invokes the corresponding Node helper in `scripts/` which runs `cargo build --target wasm32-unknown-unknown`, `wasm-bindgen`, and copies the generated JS+wasm artefacts into the npm package.
+Each script invokes the corresponding Node helper in `scripts/`, which runs `wasm-pack build --target web --release` for the matching crate and writes the generated JS + `.wasm` artifacts into the npm package's `pkg/` directory.
 
 ### Continuous rebuilds during development
 
@@ -168,15 +169,31 @@ This keeps the published versions as the default source of truth while still all
 
 ### Shared npm packages
 
-The support packages (`@vizij/value-json`, `@vizij/test-fixtures`, `@vizij/wasm-loader`) share common scripts:
+The support packages (`@vizij/value-json`, `@vizij/test-fixtures`, `@vizij/wasm-loader`) share the build flow, but only `@vizij/value-json` currently has a standalone test script:
 
 ```bash
 pnpm run build:shared   # rebuild support packages after API/fixture changes
-pnpm run test:shared    # runs package-level Vitest suites
+pnpm run test:shared    # runs the current shared-package test target (@vizij/value-json)
 pnpm run link:value-json
 ```
 
 Use `pnpm run link:value-json` (or the aggregate `pnpm run link:wasm`) when you need to exercise local builds inside `vizij-web`.
+
+### Generate API docs locally
+
+Build the publishable docs site locally with:
+
+```bash
+pnpm run docs:site
+```
+
+That command generates:
+
+- Rust API docs in `target/docs-rust/doc`
+- TypeDoc output in `target/docs-typedoc`
+- a publishable combined site in `target/docs-site`
+
+The GitHub Actions docs workflow publishes `target/docs-site` to GitHub Pages from `main` and uploads it as an artifact for pull requests.
 
 ---
 
@@ -194,10 +211,10 @@ Use `pnpm run link:value-json` (or the aggregate `pnpm run link:wasm`) when you 
 Rust tests are colocated with their crates. To run the full test suite:
 
 ```bash
-pnpm run test:rust        # cargo fmt --check, clippy, test
-pnpm run check:rust       # adds workspace build to the test suite
-pnpm run test             # runs wasm + shared package test suites
-pnpm run test:wasm        # convenience alias for wasm wrapper vitest suites
+pnpm run test:rust        # cargo test --workspace --all-features
+pnpm run check:rust       # fmt --check, clippy, build, and test
+pnpm run test             # rust tests + wasm wrapper tests + test:shared
+pnpm run test:wasm        # wrapper package test suites
 ```
 
 Per-crate runs are equally useful:
@@ -208,7 +225,7 @@ cargo test -p vizij-animation-core
 cargo test -p vizij-orchestrator-core
 ```
 
-Many WASM crates include wasm-bindgen integration tests under `tests/` that execute with `wasm-pack test --node`. Trigger them via the package script:
+The wrapper packages exercise their generated bindings through package-level test scripts:
 
 ```bash
 pnpm --filter "@vizij/node-graph-wasm" test
@@ -222,7 +239,7 @@ Fixtures live in `fixtures/` for repeatable scenario testing. Use them in integr
 
 - Canonical scenarios live in `fixtures/perf_scenarios` (hashes tracked in `fixtures/perf_scenarios/index.json`).
 - Build wasm once: `pnpm run build:wasm`
-- Full run (appends table rows in `vizij_docs/current_documentation/perf_baselines.md`): `pnpm run perf:wasm`
+- Full run (appends table rows in `../vizij_docs/current_documentation/perf_baselines.md` when that companion checkout exists): `pnpm run perf:wasm`
 - Verify-only (no append, warns on signature/variance drift): `pnpm run perf:wasm:verify`
 - CI smoke uses: `SMOKE=1 VERIFY_ONLY=1 pnpm run perf:smoke`
 - Update goldens intentionally: `UPDATE_GOLDEN=1 pnpm run perf:wasm`
@@ -235,10 +252,11 @@ Scenarios cover: tiny smoke, defaults-only, kitchen mid (25 blocks), kitchen hea
 
 Before landing changes, run the same checks that CI enforces:
 
-- `./.githooks/pre-commit` – fmt, clippy, rust tests.
+- `./.githooks/pre-commit` – `cargo fmt --all` plus clippy.
+- `./.githooks/pre-push` – fmt check, clippy, rust tests, and node registry verification.
 - `pnpm run build` – workspace build, wasm bundles, shared packages.
-- `pnpm run test` – wasm + shared package tests (Vitest).
-- `pnpm run test:rust` – ensures Rust format/lint/test stay green (redundant with hook but useful in CI).
+- `pnpm run test` – rust tests, wasm wrapper tests, and the current shared-package test target.
+- `pnpm run check:rust` – aligns with the full Rust CI pipeline.
 - `pnpm run build:wasm:<stack>` – rebuild specific stacks touched by your changes.
 - `bash scripts/dry-run-release.sh` – preflight before publishing crates/npm packages.
 
@@ -296,6 +314,12 @@ Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wa
 ---
 
 ## Reference Documentation
+
+- Hosted API docs site (published from `main`): <https://vizij-ai.github.io/vizij-rs/>
+- Rust API index: <https://vizij-ai.github.io/vizij-rs/rust/>
+- npm API index: <https://vizij-ai.github.io/vizij-rs/npm/>
+
+### Crate & Package Guides
 
 - [vizij-animation-core/README](crates/animation/vizij-animation-core/README.md)
 - [vizij-graph-core/README](crates/node-graph/vizij-graph-core/README.md)

@@ -1,10 +1,8 @@
-//! vizij-orchestrator
+//! Deterministic orchestration layer for Vizij graphs, animations, and blackboard state.
 //!
-//! Minimal scaffold of the orchestrator crate. See implementation_plan.md for full plan.
-//!
-//! This file provides a tiny, safe-to-compile public surface for early integration and
-//! iterative development. Most types here are thin wrappers / placeholders that will be
-//! expanded in subsequent steps (blackboard, controllers, scheduler, diagnostics).
+//! The orchestrator coordinates graph and animation controllers against a shared blackboard,
+//! runs them according to a configurable schedule, and returns merged writes plus conflict
+//! diagnostics for each frame.
 
 pub mod blackboard;
 pub mod controllers;
@@ -28,21 +26,28 @@ pub use crate::scheduler::Schedule;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestratorFrame {
+    /// Frame counter for this orchestrator instance.
     pub epoch: u64,
+    /// Requested step duration in seconds.
     pub dt: f32,
     /// Merged writes produced during the frame (append order is deterministic: pass order then controller order).
     pub merged_writes: WriteBatch,
+    /// Overwrite diagnostics emitted while applying frame writes to the blackboard.
     pub conflicts: Vec<ConflictLog>,
     /// Per-pass timings in milliseconds. Currently populated with synthetic values derived
     /// from the configured `dt` may change if scheduler wires in real wall-clock measurements.
     pub timings_ms: HashMap<String, f32>,
+    /// Controller-specific events emitted during the frame.
     pub events: Vec<serde_json::Value>,
 }
 
 #[derive(Debug)]
 pub struct Orchestrator {
+    /// Shared blackboard visible to all registered controllers.
     pub blackboard: Blackboard,
+    /// Current frame counter. Incremented with wrapping semantics in [`Self::step`].
     pub epoch: u64,
+    /// Scheduler determining controller pass ordering.
     pub schedule: Schedule,
     /// Registered graph controllers keyed by id.
     pub graphs: IndexMap<String, crate::controllers::graph::GraphController>,
@@ -63,6 +68,8 @@ impl Orchestrator {
     }
 
     /// Register a graph controller.
+    ///
+    /// If another graph already exists with the same id, it is replaced.
     pub fn with_graph(mut self, cfg: GraphControllerConfig) -> Self {
         let g = crate::controllers::graph::GraphController::new(cfg);
         self.graphs.insert(g.id.clone(), g);
@@ -79,6 +86,8 @@ impl Orchestrator {
     }
 
     /// Merge multiple graph configs with explicit conflict options.
+    ///
+    /// The merged controller is registered under `id`, replacing any existing graph with that id.
     pub fn with_merged_graph_with_options(
         mut self,
         id: impl Into<String>,
@@ -111,6 +120,8 @@ impl Orchestrator {
     }
 
     /// Register an animation controller.
+    ///
+    /// If another animation already exists with the same id, it is replaced.
     pub fn with_animation(mut self, cfg: AnimationControllerConfig) -> Self {
         let a = crate::controllers::animation::AnimationController::new(cfg);
         self.anims.insert(a.id.clone(), a);
@@ -119,6 +130,9 @@ impl Orchestrator {
 
     /// Set a blackboard input value at a given typed path.
     /// This is a convenience for tests and host integrations.
+    ///
+    /// The path is parsed as a [`vizij_api_core::TypedPath`], values are normalized through the
+    /// JSON helpers, and any existing entry at the same path is overwritten.
     pub fn set_input(
         &mut self,
         path: &str,
@@ -130,7 +144,11 @@ impl Orchestrator {
         Ok(())
     }
 
-    /// Advance the orchestrator by dt seconds and return an OrchestratorFrame.
+    /// Advance the orchestrator by `dt` seconds and return the resulting frame snapshot.
+    ///
+    /// This increments [`Self::epoch`] first using `wrapping_add(1)`, then dispatches according to
+    /// the configured schedule. Unsupported/future schedules currently fall back to single-pass
+    /// execution.
     pub fn step(&mut self, dt: f32) -> Result<OrchestratorFrame> {
         // advance epoch first to mark this frame
         self.epoch = self.epoch.wrapping_add(1);

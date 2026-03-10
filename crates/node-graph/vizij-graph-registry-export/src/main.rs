@@ -1,3 +1,5 @@
+//! CLI for exporting the baked node registry as JSON.
+
 use std::env;
 use std::fs;
 use std::io::{self, Write};

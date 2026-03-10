@@ -1,3 +1,5 @@
+//! Execution-plan construction and cache management for graph evaluation.
+
 use crate::schema::{registry, NodeSignature};
 use crate::types::{
     GraphSpec, InputConnection, InputDefault, NodeSpec, NodeType, Selector, SelectorSegment,

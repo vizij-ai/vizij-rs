@@ -1,3 +1,9 @@
+//! Bevy adapter for [`vizij_animation_core`] playback.
+//!
+//! This crate wires the shared animation engine into Bevy schedules and resources. The
+//! public surface is intentionally small: a plugin, binding marker components, and a few
+//! resources used to control fixed-step playback and inspect pending outputs.
+
 use bevy::prelude::*;
 use vizij_animation_core::{Config, Engine};
 
@@ -11,6 +17,7 @@ pub use resources::{BindingIndex, FixedDt, PendingOutputs};
 #[derive(Resource)]
 pub struct VizijEngine(pub Engine);
 
+/// Bevy plugin that inserts the animation engine, binding index, and fixed-step systems.
 pub struct VizijAnimationPlugin;
 
 impl Plugin for VizijAnimationPlugin {
