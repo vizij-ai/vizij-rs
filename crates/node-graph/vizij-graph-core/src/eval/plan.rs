@@ -35,6 +35,10 @@ impl PortLayout {
         self.variadics.get(group).copied()
     }
 
+    pub fn variadic_groups(&self) -> &HashMap<String, VariadicRange> {
+        &self.variadics
+    }
+
     fn insert_slot(&mut self, name: String) {
         if !self.name_to_slot.contains_key(&name) {
             let slot = self.slots.len();
@@ -242,42 +246,89 @@ fn build_output_layout(
 
     if let Some(sig) = signature {
         if let Some(var_out) = &sig.variadic_outputs {
-            if matches!(node.kind, NodeType::Split) {
-                let sizes_len = node.params.sizes.as_ref().map(|v| v.len()).unwrap_or(0);
-                let mut max_ref = 0usize;
-                for name in referenced.iter() {
-                    if let Some(stripped) = name.strip_prefix("part") {
-                        if let Ok(idx) = stripped.parse::<usize>() {
-                            max_ref = max_ref.max(idx);
-                        }
+            let var_id = var_out.id;
+
+            // Detect canonical {id}_{N} references via parse_variadic_key.
+            // The frontend uses 0-indexed naming: elements_0, elements_1, ...
+            let mut has_canonical = false;
+            let mut max_canonical_idx: Option<usize> = None;
+            for name in referenced.iter() {
+                let (prefix, idx_opt) = parse_variadic_key(name);
+                if prefix == var_id {
+                    if let Some(idx) = idx_opt {
+                        has_canonical = true;
+                        max_canonical_idx =
+                            Some(max_canonical_idx.map_or(idx, |prev: usize| prev.max(idx)));
                     }
                 }
-                let count = std::cmp::max(1, std::cmp::max(sizes_len, max_ref));
-                let start = layout.slots.len();
-                for i in 0..count {
-                    layout.insert_slot(format!("part{}", i + 1));
-                }
-                let range = VariadicRange { start, len: count };
-                layout.variadics.insert("part".to_string(), range);
-                layout.variadics.insert(var_out.id.to_string(), range);
-            } else if matches!(node.kind, NodeType::FromVector) {
-                let mut max_ref = 0usize;
-                for name in referenced.iter() {
-                    if let Some(stripped) = name.strip_prefix("element") {
-                        if let Ok(idx) = stripped.parse::<usize>() {
-                            max_ref = max_ref.max(idx);
-                        }
-                    }
-                }
-                let count = std::cmp::max(1, max_ref);
-                let start = layout.slots.len();
-                for i in 0..count {
-                    layout.insert_slot(format!("element{}", i + 1));
-                }
-                let range = VariadicRange { start, len: count };
-                layout.variadics.insert("element".to_string(), range);
-                layout.variadics.insert(var_out.id.to_string(), range);
             }
+
+            // Detect legacy concatenated {stem}{N} references (e.g. "part1" for id "parts").
+            let stem = var_id.strip_suffix('s').unwrap_or(var_id);
+            let mut max_legacy = 0usize;
+            if stem != var_id {
+                for name in referenced.iter() {
+                    if let Some(tail) = name.strip_prefix(stem) {
+                        if let Ok(idx) = tail.parse::<usize>() {
+                            max_legacy = max_legacy.max(idx);
+                        }
+                    }
+                }
+            }
+
+            // For canonical refs, count = max_index + 1 (0-indexed).
+            // For legacy refs, count = max_index (1-indexed, so max IS the count).
+            let canonical_count = max_canonical_idx.map(|m| m + 1).unwrap_or(0);
+            let max_ref = std::cmp::max(canonical_count, max_legacy);
+
+            // Node-type-specific param-based minimum count.
+            let min_from_params = match node.kind {
+                NodeType::Split => node.params.sizes.as_ref().map(|v| v.len()).unwrap_or(0),
+                NodeType::ReadRecord => node
+                    .params
+                    .record_keys
+                    .as_ref()
+                    .map(|v| v.len())
+                    .unwrap_or(0),
+                NodeType::FromVector => node.params.sizes.as_ref().map(|v| v.len()).unwrap_or(0),
+                _ => 0,
+            };
+
+            let count = std::cmp::max(1, std::cmp::max(min_from_params, max_ref));
+            let start = layout.slots.len();
+
+            if var_out.keyed || has_canonical {
+                // Frontend convention: 0-indexed {id}_{N} (elements_0, elements_1, ...).
+                // Also used for keyed variadics (e.g. ReadRecord fields_0, fields_1).
+                for i in 0..count {
+                    layout.insert_slot(format!("{}_{}", var_id, i));
+                }
+            } else {
+                // Legacy concatenated convention: {stem}{N} (1-indexed).
+                for i in 0..count {
+                    layout.insert_slot(format!("{}{}", stem, i + 1));
+                }
+            }
+
+            let range = VariadicRange { start, len: count };
+            layout.variadics.insert(var_id.to_string(), range);
+            // Also register under the stem for backward eval-function compat.
+            if stem != var_id {
+                layout.variadics.insert(stem.to_string(), range);
+            }
+
+            // Debug: surface variadic output layout in browser console
+            // (eprintln routes to console.error in WASM).
+            // TODO: remove after verifying FromVector fix.
+            eprintln!(
+                "[vizij-debug] node={} var_id={} has_canonical={} count={} slots={:?} referenced={:?}",
+                node.id,
+                var_id,
+                has_canonical,
+                count,
+                &layout.slots[start..start + count],
+                referenced,
+            );
         }
     }
 

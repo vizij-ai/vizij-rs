@@ -90,6 +90,15 @@ export type NodeType =
   | "urdfikposition"
   | "urdfikpose"
   | "urdffk"
+  | "buildrecord"
+  | "readrecord"
+  | "switchrecord"
+  | "mergerecord"
+  | "splitrecord"
+  | "mathmultrecord"
+  | "mathaddrecord"
+  | "mathdivrecord"
+  | "mathsubrecord"
   | "input"
   | "output";
 
@@ -145,6 +154,8 @@ export interface NodeParams {
   tol_rot?: number;
   joint_defaults?: [string, number][];
   case_labels?: string[];
+  record_keys?: string[]; // for BuildRecord/ReadRecord
+  keys?: string; // for SplitRecord (comma-separated field names)
 }
 
 export type SelectorSegmentJSON =
@@ -242,7 +253,7 @@ export type PortType =
   | "transform"
   | "vector"
   | "any";
-export type ParamType = "float" | "bool" | "vec3" | "vector" | "any";
+export type ParamType = "float" | "bool" | "vec3" | "vector" | "any" | "text";
 
 export interface PortSpec {
   id: string;            // canonical port id (e.g., "out", "in", "lhs", "rhs", "x", "y", "z")
@@ -256,6 +267,7 @@ export interface VariadicSpec {
   id: string;            // group id for variadic inputs (e.g., "operands")
   ty: PortType;
   label: string;
+  keyed?: boolean;       // true when each slot has a user-editable string key
   doc?: string;
   min: number;
   max?: number;

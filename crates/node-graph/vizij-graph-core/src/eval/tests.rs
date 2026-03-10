@@ -2128,6 +2128,72 @@ fn from_vector_unpacks_with_nan_padding() {
     }
 }
 
+#[test]
+fn from_vector_underscore_naming_convention() {
+    // This test uses the 0-indexed naming convention the frontend actually sends:
+    // {variadic_id}_{N} = elements_0, elements_1, elements_2
+    // (formatVariadicPortId in the vizij-web frontend uses 0-based indices).
+    let spec = graph_spec!({
+        nodes: vec![
+            constant_node("src", Value::Vector(vec![10.0, 20.0, 30.0])),
+            NodeSpec {
+                id: "fv".to_string(),
+                kind: NodeType::FromVector,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "s1".to_string(),
+                kind: NodeType::Constant,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "s2".to_string(),
+                kind: NodeType::Constant,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+            NodeSpec {
+                id: "s3".to_string(),
+                kind: NodeType::Constant,
+                params: NodeParams::default(),
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![
+            link("src", "fv", "in"),
+            link_with_output("fv", "elements_0", "s1", "in"),
+            link_with_output("fv", "elements_1", "s2", "in"),
+            link_with_output("fv", "elements_2", "s3", "in"),
+        ],
+    });
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &spec).expect("from_vector should evaluate");
+
+    let fv_out = rt.outputs.get("fv").expect("fv outputs");
+    for (key, expected) in [
+        ("elements_0", 10.0f32),
+        ("elements_1", 20.0),
+        ("elements_2", 30.0),
+    ] {
+        let port = fv_out.get(key).unwrap_or_else(|| panic!("missing {key}"));
+        match &port.value {
+            Value::Float(f) => {
+                assert!(
+                    (f - expected).abs() < 1e-6,
+                    "{key}: expected {expected}, got {f}"
+                );
+            }
+            other => panic!("{key}: expected Float, got {:?}", other),
+        }
+    }
+}
+
 // --- Noise -----------------------------------------------------------------
 
 #[test]

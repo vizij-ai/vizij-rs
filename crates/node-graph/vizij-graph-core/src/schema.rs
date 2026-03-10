@@ -21,6 +21,7 @@ pub enum ParamType {
     Vec3,
     Vector,
     Any, // union (Value)
+    Text, // free-form string
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,6 +45,8 @@ pub struct VariadicSpec {
     pub min: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max: Option<usize>,
+    #[serde(default)]
+    pub keyed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -288,6 +291,7 @@ pub fn registry() -> Registry {
             doc: "Each scalar to include in the sum.",
             min: 2,
             max: None,
+            keyed: false,
         }),
         outputs: vec![p_out_float()],
         variadic_outputs: None,
@@ -334,6 +338,7 @@ pub fn registry() -> Registry {
             doc: "Each scalar to include in the product.",
             min: 2,
             max: None,
+            keyed: false,
         }),
         outputs: vec![p_out_float()],
         variadic_outputs: None,
@@ -497,6 +502,7 @@ pub fn registry() -> Registry {
             doc: "Scalar operand to consider.",
             min: 2,
             max: None,
+            keyed: false,
         }),
         outputs: vec![p_out_float()],
         variadic_outputs: None,
@@ -516,6 +522,7 @@ pub fn registry() -> Registry {
             doc: "Scalar operand to consider.",
             min: 2,
             max: None,
+            keyed: false,
         }),
         outputs: vec![p_out_float()],
         variadic_outputs: None,
@@ -1361,6 +1368,7 @@ pub fn registry() -> Registry {
             doc: "Each vector or scalar slice to append in order.",
             min: 1,
             max: None,
+            keyed: false,
         }),
         outputs: vec![p_out_vector()],
         variadic_outputs: None,
@@ -1383,6 +1391,7 @@ pub fn registry() -> Registry {
             doc: "Returned segment corresponding to each requested size.",
             min: 1,
             max: None,
+            keyed: false,
         }),
         params: vec![
             ParamSpec {
@@ -1411,6 +1420,7 @@ pub fn registry() -> Registry {
             doc: "Each scalar element to pack into the vector.",
             min: 1,
             max: None,
+            keyed: false,
         }),
         outputs: vec![p_out_vector()],
         variadic_outputs: None,
@@ -1433,6 +1443,7 @@ pub fn registry() -> Registry {
             doc: "Individual scalar element extracted from the input vector.",
             min: 1,
             max: None,
+            keyed: false,
         }),
         params: vec![],
     });
@@ -1669,6 +1680,7 @@ pub fn registry() -> Registry {
             doc: "Operand values to blend before adding baseline and offset.",
             min: 0,
             max: None,
+            keyed: false,
         }),
         outputs: vec![PortSpec {
             id: "out",
@@ -1941,6 +1953,7 @@ pub fn registry() -> Registry {
             doc: "Values routed when their corresponding case_labels entry equals the selector.",
             min: 0,
             max: None,
+            keyed: false,
         }),
         outputs: vec![PortSpec {
             id: "out",
@@ -2357,6 +2370,299 @@ pub fn registry() -> Registry {
             min: None,
             max: None,
         }],
+    });
+
+    // Records
+    nodes.push(NodeSignature {
+        type_id: BuildRecord,
+        name: "Build Record",
+        category: "Records",
+        doc: "Assembles a Record from variadic Any-typed inputs. \
+              Each slot has a user-defined string key stored in params.record_keys.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "field",
+            ty: PortType::Any,
+            label: "Field",
+            doc: "A value to insert into the record under its corresponding key.",
+            min: 1,
+            max: None,
+            keyed: true,
+        }),
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Record",
+            doc: "The assembled Record value.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    nodes.push(NodeSignature {
+        type_id: ReadRecord,
+        name: "Read Record",
+        category: "Records",
+        doc: "Extracts individual fields from a Record by key. \
+              Each output slot corresponds to one key stored in params.record_keys.",
+        inputs: vec![PortSpec {
+            id: "in",
+            ty: PortType::Any,
+            label: "Record",
+            doc: "The Record to read from.",
+            optional: false,
+        }],
+        variadic_inputs: None,
+        outputs: vec![],
+        variadic_outputs: Some(VariadicSpec {
+            id: "field",
+            ty: PortType::Any,
+            label: "Field",
+            doc: "The value extracted from the record under its corresponding key.",
+            min: 1,
+            max: None,
+            keyed: true,
+        }),
+        params: vec![],
+    });
+
+    // SwitchRecord
+    nodes.push(NodeSignature {
+        type_id: SwitchRecord,
+        name: "Switch Record",
+        category: "Records",
+        doc: "Selects one of the variadic Record inputs by index (floored from the Switch scalar).",
+        inputs: vec![PortSpec {
+            id: "switch",
+            ty: PortType::Float,
+            label: "Switch",
+            doc: "Index of the record to pass through (floored to integer, clamped to range).",
+            optional: false,
+        }],
+        variadic_inputs: Some(VariadicSpec {
+            id: "record",
+            ty: PortType::Any,
+            label: "Record",
+            doc: "A Record input to select from.",
+            min: 2,
+            max: None,
+            keyed: false,
+        }),
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "The selected Record value.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // MergeRecord
+    nodes.push(NodeSignature {
+        type_id: MergeRecord,
+        name: "Merge Record",
+        category: "Records",
+        doc: "Merges variadic Record inputs into one; later inputs overwrite earlier fields.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "record",
+            ty: PortType::Any,
+            label: "Record",
+            doc: "A Record to merge into the output.",
+            min: 2,
+            max: None,
+            keyed: false,
+        }),
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "The merged Record value.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // SplitRecord
+    nodes.push(NodeSignature {
+        type_id: SplitRecord,
+        name: "Split Record",
+        category: "Records",
+        doc: "Splits a Record into two: fields whose keys are listed in the Keys param, and the rest.",
+        inputs: vec![PortSpec {
+            id: "in",
+            ty: PortType::Any,
+            label: "Record",
+            doc: "The Record to split.",
+            optional: false,
+        }],
+        variadic_inputs: None,
+        outputs: vec![
+            PortSpec {
+                id: "included",
+                ty: PortType::Any,
+                label: "Included",
+                doc: "Record containing only the keys listed in the Keys param.",
+                optional: false,
+            },
+            PortSpec {
+                id: "excluded",
+                ty: PortType::Any,
+                label: "Excluded",
+                doc: "Record containing the remaining keys not listed in the Keys param.",
+                optional: false,
+            },
+        ],
+        variadic_outputs: None,
+        params: vec![ParamSpec {
+            id: "keys",
+            ty: ParamType::Text,
+            label: "Keys",
+            doc: "Comma-separated list of field keys to route to the Included output.",
+            default_json: None,
+            min: None,
+            max: None,
+        }],
+    });
+
+    // MathMultRecord
+    nodes.push(NodeSignature {
+        type_id: MathMultRecord,
+        name: "Math Mult Record",
+        category: "Records",
+        doc: "Multiplies each numeric field in the Record by a scalar value.",
+        inputs: vec![
+            PortSpec {
+                id: "in",
+                ty: PortType::Any,
+                label: "Record",
+                doc: "The Record whose numeric fields to scale.",
+                optional: false,
+            },
+            PortSpec {
+                id: "value",
+                ty: PortType::Float,
+                label: "Value",
+                doc: "Scalar multiplier applied to each numeric field.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Record with scaled numeric fields.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // MathAddRecord
+    nodes.push(NodeSignature {
+        type_id: MathAddRecord,
+        name: "Math Add Record",
+        category: "Records",
+        doc: "Adds a scalar value to each numeric field in the Record.",
+        inputs: vec![
+            PortSpec {
+                id: "in",
+                ty: PortType::Any,
+                label: "Record",
+                doc: "The Record whose numeric fields to offset.",
+                optional: false,
+            },
+            PortSpec {
+                id: "value",
+                ty: PortType::Float,
+                label: "Value",
+                doc: "Scalar addend applied to each numeric field.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Record with offset numeric fields.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // MathDivRecord
+    nodes.push(NodeSignature {
+        type_id: MathDivRecord,
+        name: "Math Div Record",
+        category: "Records",
+        doc: "Divides each numeric field in the Record by a scalar value; division by zero yields NaN.",
+        inputs: vec![
+            PortSpec {
+                id: "in",
+                ty: PortType::Any,
+                label: "Record",
+                doc: "The Record whose numeric fields to divide.",
+                optional: false,
+            },
+            PortSpec {
+                id: "value",
+                ty: PortType::Float,
+                label: "Value",
+                doc: "Scalar divisor applied to each numeric field.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Record with divided numeric fields.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
+    // MathSubRecord
+    nodes.push(NodeSignature {
+        type_id: MathSubRecord,
+        name: "Math Sub Record",
+        category: "Records",
+        doc: "Subtracts a scalar value from each numeric field in the Record.",
+        inputs: vec![
+            PortSpec {
+                id: "in",
+                ty: PortType::Any,
+                label: "Record",
+                doc: "The Record whose numeric fields to subtract from.",
+                optional: false,
+            },
+            PortSpec {
+                id: "value",
+                ty: PortType::Float,
+                label: "Value",
+                doc: "Scalar subtrahend applied to each numeric field.",
+                optional: false,
+            },
+        ],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Record with subtracted numeric fields.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
     });
 
     Registry {

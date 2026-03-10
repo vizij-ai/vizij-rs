@@ -114,6 +114,17 @@ pub enum NodeType {
     UrdfIkPose,
     UrdfFk,
 
+    // Records
+    BuildRecord,
+    ReadRecord,
+    SwitchRecord,
+    MergeRecord,
+    SplitRecord,
+    MathMultRecord,
+    MathAddRecord,
+    MathDivRecord,
+    MathSubRecord,
+
     // IO
     Input,
     // Sinks (for external binding in hosts)
@@ -185,6 +196,14 @@ pub struct NodeParams {
     // For Case routing nodes
     #[serde(default)]
     pub case_labels: Option<Vec<String>>,
+
+    // For BuildRecord/ReadRecord – one key string per variadic slot, in slot order
+    #[serde(default)]
+    pub record_keys: Option<Vec<String>>,
+
+    // For SplitRecord – comma-separated field keys to include in `included` output
+    #[serde(default)]
+    pub keys: Option<String>,
 
     // Optional target typed path for Output nodes and sinks.
     // Example: "robot1/Arm/Joint3.translation"

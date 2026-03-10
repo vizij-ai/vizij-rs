@@ -293,6 +293,15 @@ fn evaluate_kind(
         #[cfg(not(feature = "urdf_ik"))]
         NodeType::UrdfFk => Err("UrdfFk node requires the 'urdf_ik' feature".to_string()),
         NodeType::Case => eval_case(params, inputs, outputs),
+        NodeType::BuildRecord => eval_build_record(params, inputs, outputs),
+        NodeType::ReadRecord => eval_read_record(params, inputs, outputs),
+        NodeType::SwitchRecord => eval_switch_record(inputs, outputs),
+        NodeType::MergeRecord => eval_merge_record(inputs, outputs),
+        NodeType::SplitRecord => eval_split_record(params, inputs, outputs),
+        NodeType::MathMultRecord => eval_math_record(inputs, outputs, |a, b| a * b),
+        NodeType::MathAddRecord => eval_math_record(inputs, outputs, |a, b| a + b),
+        NodeType::MathDivRecord => eval_math_record(inputs, outputs, |a, b| a / b),
+        NodeType::MathSubRecord => eval_math_record(inputs, outputs, |a, b| a - b),
         NodeType::Input => eval_input_node(rt, spec, outputs),
         NodeType::Output => eval_output(inputs, outputs),
     }
@@ -1175,6 +1184,15 @@ fn eval_from_vector(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<()
         .map(|f| f.data)
         .unwrap_or_default();
 
+    // TODO: remove after verifying FromVector fix.
+    eprintln!(
+        "[vizij-debug] eval_from_vector: input={:?} data={:?} range={:?} slots={:?}",
+        input.value,
+        data,
+        outputs.layout.variadic_range("elements"),
+        outputs.layout.slots,
+    );
+
     if let Some(range) = outputs.layout.variadic_range("elements") {
         for i in 0..range.len {
             let val = data.get(i).copied().unwrap_or(f32::NAN);
@@ -1957,6 +1975,137 @@ fn eval_urdf_pose(
 
 fn eval_output(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     single_output(outputs, input_or_default(inputs, "in").value)
+}
+
+fn eval_build_record(
+    params: &NodeParams,
+    inputs: &InputSlots,
+    outputs: &mut OutputSlots,
+) -> Result<(), String> {
+    let slots = inputs.variadic("field");
+    let keys = params.record_keys.as_deref().unwrap_or(&[]);
+
+    let mut map = HashMap::with_capacity(slots.len());
+    for (i, pv) in slots.iter().enumerate() {
+        let key = keys
+            .get(i)
+            .filter(|k| !k.is_empty())
+            .map(|k| k.as_str())
+            .unwrap_or("field")
+            .to_string();
+        let final_key = if map.contains_key(&key) {
+            format!("{key}_{i}")
+        } else {
+            key
+        };
+        map.insert(final_key, pv.value.clone());
+    }
+
+    single_output(outputs, Value::Record(map))
+}
+
+fn eval_read_record(
+    params: &NodeParams,
+    inputs: &InputSlots,
+    outputs: &mut OutputSlots,
+) -> Result<(), String> {
+    let input = input_or_default(inputs, "in");
+    let record = match &input.value {
+        Value::Record(m) => m.clone(),
+        _ => HashMap::new(),
+    };
+    let keys = params.record_keys.as_deref().unwrap_or(&[]);
+
+    if let Some(range) = outputs.layout.variadic_range("field") {
+        for i in 0..range.len {
+            let key = keys.get(i).map(|k| k.as_str()).unwrap_or("");
+            let value = if key.is_empty() {
+                Value::Float(0.0)
+            } else {
+                record.get(key).cloned().unwrap_or(Value::Float(0.0))
+            };
+            outputs.set_variadic("field", i, PortValue::new(value))?;
+        }
+    }
+
+    Ok(())
+}
+
+fn eval_switch_record(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+    let switch_val = as_float(&input_or_default(inputs, "switch").value);
+    let records = inputs.variadic("record");
+    if records.is_empty() {
+        return single_output(outputs, Value::Record(HashMap::new()));
+    }
+    let idx = (switch_val.floor() as isize).clamp(0, records.len() as isize - 1) as usize;
+    single_output(outputs, records[idx].value.clone())
+}
+
+fn eval_merge_record(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+    let mut merged = HashMap::new();
+    for pv in inputs.variadic("record") {
+        if let Value::Record(m) = &pv.value {
+            for (k, v) in m {
+                merged.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    single_output(outputs, Value::Record(merged))
+}
+
+fn eval_split_record(
+    params: &NodeParams,
+    inputs: &InputSlots,
+    outputs: &mut OutputSlots,
+) -> Result<(), String> {
+    let input = input_or_default(inputs, "in");
+    let record = match &input.value {
+        Value::Record(m) => m.clone(),
+        _ => HashMap::new(),
+    };
+    let key_set: std::collections::HashSet<&str> = params
+        .keys
+        .as_deref()
+        .unwrap_or("")
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let mut included = HashMap::new();
+    let mut excluded = HashMap::new();
+    for (k, v) in &record {
+        if key_set.contains(k.as_str()) {
+            included.insert(k.clone(), v.clone());
+        } else {
+            excluded.insert(k.clone(), v.clone());
+        }
+    }
+
+    outputs.set("included", PortValue::new(Value::Record(included)))?;
+    outputs.set("excluded", PortValue::new(Value::Record(excluded)))?;
+    Ok(())
+}
+
+fn eval_math_record(
+    inputs: &InputSlots,
+    outputs: &mut OutputSlots,
+    op: fn(f32, f32) -> f32,
+) -> Result<(), String> {
+    let input = input_or_default(inputs, "in");
+    let scalar = as_float(&input_or_default(inputs, "value").value);
+    let record = match &input.value {
+        Value::Record(m) => m.clone(),
+        _ => HashMap::new(),
+    };
+    let result: HashMap<String, Value> = record
+        .into_iter()
+        .map(|(k, v)| {
+            let new_v = unary_numeric(&v, |x| op(x, scalar));
+            (k, new_v)
+        })
+        .collect();
+    single_output(outputs, Value::Record(result))
 }
 
 fn eval_input_node(

@@ -146,7 +146,8 @@ const registry: Registry = {
         "ty": "float",
         "label": "Operand",
         "doc": "Each scalar to include in the sum.",
-        "min": 2
+        "min": 2,
+        "keyed": false
       },
       "outputs": [
         {
@@ -202,7 +203,8 @@ const registry: Registry = {
         "ty": "float",
         "label": "Operand",
         "doc": "Each scalar to include in the product.",
-        "min": 2
+        "min": 2,
+        "keyed": false
       },
       "outputs": [
         {
@@ -429,7 +431,8 @@ const registry: Registry = {
         "ty": "float",
         "label": "Operand",
         "doc": "Scalar operand to consider.",
-        "min": 2
+        "min": 2,
+        "keyed": false
       },
       "outputs": [
         {
@@ -453,7 +456,8 @@ const registry: Registry = {
         "ty": "float",
         "label": "Operand",
         "doc": "Scalar operand to consider.",
-        "min": 2
+        "min": 2,
+        "keyed": false
       },
       "outputs": [
         {
@@ -1561,7 +1565,8 @@ const registry: Registry = {
         "ty": "vector",
         "label": "Operand",
         "doc": "Each vector or scalar slice to append in order.",
-        "min": 1
+        "min": 1,
+        "keyed": false
       },
       "outputs": [
         {
@@ -1594,7 +1599,8 @@ const registry: Registry = {
         "ty": "vector",
         "label": "Part",
         "doc": "Returned segment corresponding to each requested size.",
-        "min": 1
+        "min": 1,
+        "keyed": false
       },
       "params": [
         {
@@ -1619,7 +1625,8 @@ const registry: Registry = {
         "ty": "float",
         "label": "Element",
         "doc": "Each scalar element to pack into the vector.",
-        "min": 1
+        "min": 1,
+        "keyed": false
       },
       "outputs": [
         {
@@ -1652,7 +1659,8 @@ const registry: Registry = {
         "ty": "float",
         "label": "Element",
         "doc": "Individual scalar element extracted from the input vector.",
-        "min": 1
+        "min": 1,
+        "keyed": false
       },
       "params": []
     },
@@ -2117,7 +2125,8 @@ const registry: Registry = {
         "ty": "any",
         "label": "Operand",
         "doc": "Operand values to blend before adding baseline and offset.",
-        "min": 0
+        "min": 0,
+        "keyed": false
       },
       "outputs": [
         {
@@ -2411,7 +2420,8 @@ const registry: Registry = {
         "ty": "any",
         "label": "Case Value",
         "doc": "Values routed when their corresponding case_labels entry equals the selector.",
-        "min": 0
+        "min": 0,
+        "keyed": false
       },
       "outputs": [
         {
@@ -2819,6 +2829,281 @@ const registry: Registry = {
           "doc": "TypedPath string used when queuing external writes."
         }
       ]
+    },
+    {
+      "type_id": "buildrecord",
+      "name": "Build Record",
+      "category": "Records",
+      "doc": "Assembles a Record from variadic Any-typed inputs. Each slot has a user-defined string key stored in params.record_keys.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "field",
+        "ty": "any",
+        "label": "Field",
+        "doc": "A value to insert into the record under its corresponding key.",
+        "min": 1,
+        "keyed": true
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "any",
+          "label": "Record",
+          "doc": "The assembled Record value.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "readrecord",
+      "name": "Read Record",
+      "category": "Records",
+      "doc": "Extracts individual fields from a Record by key. Each output slot corresponds to one key stored in params.record_keys.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "any",
+          "label": "Record",
+          "doc": "The Record to read from.",
+          "optional": false
+        }
+      ],
+      "outputs": [],
+      "variadic_outputs": {
+        "id": "field",
+        "ty": "any",
+        "label": "Field",
+        "doc": "The value extracted from the record under its corresponding key.",
+        "min": 1,
+        "keyed": true
+      },
+      "params": []
+    },
+    {
+      "type_id": "switchrecord",
+      "name": "Switch Record",
+      "category": "Records",
+      "doc": "Selects one of the variadic Record inputs by index (floored from the Switch scalar).",
+      "inputs": [
+        {
+          "id": "switch",
+          "ty": "float",
+          "label": "Switch",
+          "doc": "Index of the record to pass through (floored to integer, clamped to range).",
+          "optional": false
+        }
+      ],
+      "variadic_inputs": {
+        "id": "record",
+        "ty": "any",
+        "label": "Record",
+        "doc": "A Record input to select from.",
+        "min": 2,
+        "keyed": false
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "any",
+          "label": "Out",
+          "doc": "The selected Record value.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "mergerecord",
+      "name": "Merge Record",
+      "category": "Records",
+      "doc": "Merges variadic Record inputs into one; later inputs overwrite earlier fields.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "record",
+        "ty": "any",
+        "label": "Record",
+        "doc": "A Record to merge into the output.",
+        "min": 2,
+        "keyed": false
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "any",
+          "label": "Out",
+          "doc": "The merged Record value.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "splitrecord",
+      "name": "Split Record",
+      "category": "Records",
+      "doc": "Splits a Record into two: fields whose keys are listed in the Keys param, and the rest.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "any",
+          "label": "Record",
+          "doc": "The Record to split.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "included",
+          "ty": "any",
+          "label": "Included",
+          "doc": "Record containing only the keys listed in the Keys param.",
+          "optional": false
+        },
+        {
+          "id": "excluded",
+          "ty": "any",
+          "label": "Excluded",
+          "doc": "Record containing the remaining keys not listed in the Keys param.",
+          "optional": false
+        }
+      ],
+      "params": [
+        {
+          "id": "keys",
+          "ty": "text",
+          "label": "Keys",
+          "doc": "Comma-separated list of field keys to route to the Included output."
+        }
+      ]
+    },
+    {
+      "type_id": "mathmultrecord",
+      "name": "Math Mult Record",
+      "category": "Records",
+      "doc": "Multiplies each numeric field in the Record by a scalar value.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "any",
+          "label": "Record",
+          "doc": "The Record whose numeric fields to scale.",
+          "optional": false
+        },
+        {
+          "id": "value",
+          "ty": "float",
+          "label": "Value",
+          "doc": "Scalar multiplier applied to each numeric field.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "any",
+          "label": "Out",
+          "doc": "Record with scaled numeric fields.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "mathaddrecord",
+      "name": "Math Add Record",
+      "category": "Records",
+      "doc": "Adds a scalar value to each numeric field in the Record.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "any",
+          "label": "Record",
+          "doc": "The Record whose numeric fields to offset.",
+          "optional": false
+        },
+        {
+          "id": "value",
+          "ty": "float",
+          "label": "Value",
+          "doc": "Scalar addend applied to each numeric field.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "any",
+          "label": "Out",
+          "doc": "Record with offset numeric fields.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "mathdivrecord",
+      "name": "Math Div Record",
+      "category": "Records",
+      "doc": "Divides each numeric field in the Record by a scalar value; division by zero yields NaN.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "any",
+          "label": "Record",
+          "doc": "The Record whose numeric fields to divide.",
+          "optional": false
+        },
+        {
+          "id": "value",
+          "ty": "float",
+          "label": "Value",
+          "doc": "Scalar divisor applied to each numeric field.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "any",
+          "label": "Out",
+          "doc": "Record with divided numeric fields.",
+          "optional": false
+        }
+      ],
+      "params": []
+    },
+    {
+      "type_id": "mathsubrecord",
+      "name": "Math Sub Record",
+      "category": "Records",
+      "doc": "Subtracts a scalar value from each numeric field in the Record.",
+      "inputs": [
+        {
+          "id": "in",
+          "ty": "any",
+          "label": "Record",
+          "doc": "The Record whose numeric fields to subtract from.",
+          "optional": false
+        },
+        {
+          "id": "value",
+          "ty": "float",
+          "label": "Value",
+          "doc": "Scalar subtrahend applied to each numeric field.",
+          "optional": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "any",
+          "label": "Out",
+          "doc": "Record with subtracted numeric fields.",
+          "optional": false
+        }
+      ],
+      "params": []
     }
   ]
 };

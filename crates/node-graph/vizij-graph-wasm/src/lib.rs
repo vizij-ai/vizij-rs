@@ -410,6 +410,7 @@ impl WasmGraph {
         self.spec = serde_json::from_value::<GraphSpec>(normalized)
             .map_err(|e| JsValue::from_str(&e.to_string()))?
             .with_cache();
+
         self.runtime = GraphRuntime::default();
         self.runtime.t = self.t as f32;
         self.runtime.dt = 0.0;
@@ -1235,10 +1236,13 @@ impl WasmGraph {
 
         if let Some(node) = self.spec.nodes.iter_mut().find(|n| n.id == node_id) {
             // Structural params are those that can change the cached plan's port layouts or
-            // bindings. Today, the only known structural mutation via `set_param` is changing
-            // `Split.sizes`, which affects the number of variadic outputs and therefore slot
-            // indices.
-            let structural_change = matches!((&node.kind, key), (NodeType::Split, "sizes"));
+            // bindings. Known structural mutations via `set_param`:
+            // - `Split.sizes`: changes the number of variadic outputs and slot indices.
+            // - `ReadRecord.record_keys`: changes the number of variadic outputs and slot indices.
+            let structural_change = matches!(
+                (&node.kind, key),
+                (NodeType::Split, "sizes") | (NodeType::ReadRecord, "record_keys")
+            );
 
             match key {
                 "value" => {
@@ -1324,6 +1328,20 @@ impl WasmGraph {
                 "case_labels" => {
                     node.params.case_labels = Some(parse_string_list(node_id, key, &val)?);
                 }
+                "record_keys" => {
+                    node.params.record_keys = Some(parse_string_list(node_id, key, &val)?);
+                }
+                "keys" => {
+                    node.params.keys = match &val {
+                        Value::Text(s) => Some(s.clone()),
+                        _ => {
+                            return Err(JsValue::from_str(&format!(
+                                "set_param: node '{}' key 'keys' expects a string value",
+                                node_id
+                            )))
+                        }
+                    };
+                }
 
                 _ => {
                     return Err(JsValue::from_str(&format!(
@@ -1350,6 +1368,7 @@ impl WasmGraph {
             Err(JsValue::from_str("unknown node"))
         }
     }
+
 }
 
 /// Expose the node schema registry as JSON for tooling/UI.
