@@ -318,19 +318,6 @@ fn build_output_layout(
             if stem != var_id {
                 layout.variadics.insert(stem.to_string(), range);
             }
-
-            // Debug: surface variadic output layout in browser console
-            // (eprintln routes to console.error in WASM).
-            // TODO: remove after verifying FromVector fix.
-            eprintln!(
-                "[vizij-debug] node={} var_id={} has_canonical={} count={} slots={:?} referenced={:?}",
-                node.id,
-                var_id,
-                has_canonical,
-                count,
-                &layout.slots[start..start + count],
-                referenced,
-            );
         }
     }
 

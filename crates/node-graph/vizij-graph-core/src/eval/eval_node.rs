@@ -1184,15 +1184,6 @@ fn eval_from_vector(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<()
         .map(|f| f.data)
         .unwrap_or_default();
 
-    // TODO: remove after verifying FromVector fix.
-    eprintln!(
-        "[vizij-debug] eval_from_vector: input={:?} data={:?} range={:?} slots={:?}",
-        input.value,
-        data,
-        outputs.layout.variadic_range("elements"),
-        outputs.layout.slots,
-    );
-
     if let Some(range) = outputs.layout.variadic_range("elements") {
         for i in 0..range.len {
             let val = data.get(i).copied().unwrap_or(f32::NAN);

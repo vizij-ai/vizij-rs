@@ -12,6 +12,14 @@ use wasm_bindgen::JsError;
 
 use vizij_api_core::{json, TypedPath, WriteBatch};
 use vizij_graph_core::types::GraphSpec;
+
+// TODO: remove after debugging transition nodes.
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn warn(s: &str);
+}
+
 use vizij_orchestrator::{
     blackboard::ConflictLog,
     controllers::animation::AnimationControllerConfig,
@@ -488,6 +496,17 @@ impl VizijOrchestrator {
     /// Step the orchestrator by dt seconds and return an OrchestratorFrame as a JS value.
     #[wasm_bindgen]
     pub fn step(&mut self, dt: f32) -> Result<JsValue, JsError> {
+        // TODO: remove after debugging transition nodes.
+        for (id, gc) in self.core.graphs.iter() {
+            let ns = gc.rt.node_states.len();
+            let rt_dt = gc.rt.dt;
+            let rt_t = gc.rt.t;
+            warn(&format!(
+                "[vizij-debug] pre-step graph={} dt_arg={} rt.dt={} rt.t={} node_states={}",
+                id, dt, rt_dt, rt_t, ns
+            ));
+        }
+
         let frame = self
             .core
             .step(dt)
