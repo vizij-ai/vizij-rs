@@ -4,13 +4,17 @@
  * The helpers in this module coordinate module import, initialization, ABI checks, and cached
  * binding reuse across the browser and Node-facing loader entrypoints.
  */
-export type InitInput =
+type InitInputValue =
   | string
   | URL
   | ArrayBufferView
   | ArrayBuffer
   | WebAssembly.Module
   | Response;
+
+export type InitInput =
+  | InitInputValue
+  | { module_or_path: InitInputValue };
 
 export interface LoadBindingsOptions<TBindings> {
   cache: { current: TBindings | null };
@@ -36,7 +40,18 @@ export async function loadBindingsInternal<TBindings>(
     typeof initInput === "undefined"
       ? options.defaultWasmUrl()
       : initInput;
-  initArg = await maybeReadFileBytes(initArg);
+  if (
+    initArg &&
+    typeof initArg === "object" &&
+    "module_or_path" in (initArg as Record<string, unknown>)
+  ) {
+    const moduleOrPath = await maybeReadFileBytes(
+      (initArg as { module_or_path: unknown }).module_or_path,
+    );
+    initArg = { module_or_path: moduleOrPath };
+  } else {
+    initArg = await maybeReadFileBytes(initArg);
+  }
 
   await options.init(module, initArg);
 

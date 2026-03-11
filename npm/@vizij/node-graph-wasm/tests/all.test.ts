@@ -483,7 +483,7 @@ function assertText(write: WriteOpJSON, expected: string): void {
 /* ---------- Entrypoint: run all grouped checks ---------- */
 (async () => {
   try {
-    await init(pkgWasmUrl());
+    await init({ module_or_path: pkgWasmUrl() });
 
     const registry = getNodeRegistry();
     assert.ok(Array.isArray(registry.nodes) && registry.nodes.length > 0, "registry should contain nodes");

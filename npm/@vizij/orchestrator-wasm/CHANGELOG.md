@@ -1,5 +1,13 @@
 # @vizij/orchestrator-wasm
 
+## 0.3.1
+
+### Patch Changes
+
+- 6d9b035: Publish a new orchestrator-wasm build that recognizes the newly-added node-graph noise node variants (`simplenoise`, `perlinnoise`, `simplexnoise`) when registering graph specs.
+
+  This resolves runtime graph registration failures when `@vizij/node-graph-wasm@0.6.x` graphs are passed through orchestrator.
+
 ## 0.3.0
 
 ### Minor Changes

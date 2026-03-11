@@ -623,7 +623,7 @@ process.env.RUST_BACKTRACE = "1";
 
 (async () => {
   try {
-    await init(pkgWasmUrl());
+    await init({ module_or_path: pkgWasmUrl() });
     await testScalarRampPipeline();
     await testChainedSlewPipeline();
     await testChainSignSlewFixture();

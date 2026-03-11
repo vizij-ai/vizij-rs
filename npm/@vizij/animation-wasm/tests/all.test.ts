@@ -255,7 +255,7 @@ process.env.RUST_BACKTRACE = "1";
 
 (async () => {
   try {
-    await init(pkgWasmUrl());
+    await init({ module_or_path: pkgWasmUrl() });
     await testLoadAnimationFromTypescriptObject();
     await testLoadAnimationFromVectorFixture();
     await testLoadAnimationStateToggleFixture();
