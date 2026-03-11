@@ -1,5 +1,13 @@
 # @vizij/wasm-loader
 
+## 0.1.5
+
+### Patch Changes
+
+- 7f68b05: Fix wasm init normalization so wrapper packages accept `{ module_or_path: ... }`
+  inputs without double-wrapping them, and make the shared loader normalize that
+  object form consistently in Node and browser contexts.
+
 ## 0.1.4
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @vizij/orchestrator-wasm
 
+## 0.3.2
+
+### Patch Changes
+
+- 7f68b05: Fix wasm init normalization so wrapper packages accept `{ module_or_path: ... }`
+  inputs without double-wrapping them, and make the shared loader normalize that
+  object form consistently in Node and browser contexts.
+- Updated dependencies [7f68b05]
+  - @vizij/wasm-loader@0.1.5
+
 ## 0.3.1
 
 ### Patch Changes

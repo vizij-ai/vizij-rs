@@ -1,6 +1,6 @@
 {
   "name": "@vizij/wasm-loader",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Shared loader utilities for Vizij wasm packages",
   "license": "MIT",
   "repository": {
