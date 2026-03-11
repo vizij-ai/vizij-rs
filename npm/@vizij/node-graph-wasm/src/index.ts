@@ -74,6 +74,13 @@ let wasmModulePromise: Promise<WasmBindings | unknown> | null = null;
 let wasmUrlCache: string | null = null;
 
 function toWasmBindgenInitOptions(initArg: unknown): { module_or_path: unknown } {
+  if (
+    initArg &&
+    typeof initArg === "object" &&
+    "module_or_path" in (initArg as Record<string, unknown>)
+  ) {
+    return initArg as { module_or_path: unknown };
+  }
   return { module_or_path: initArg };
 }
 

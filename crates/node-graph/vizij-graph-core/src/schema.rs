@@ -25,7 +25,7 @@ pub enum ParamType {
     Bool,
     Vec3,
     Vector,
-    Any, // union (Value)
+    Any,  // union (Value)
     Text, // free-form string
 }
 

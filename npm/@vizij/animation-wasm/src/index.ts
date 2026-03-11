@@ -10,7 +10,6 @@ import {
 } from "@vizij/wasm-loader";
 import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 import type {
-  InitInput,
   Config,
   BakingConfig,
   Inputs,
@@ -35,7 +34,6 @@ import type {
 } from "./types";
 
 export type {
-  InitInput,
   Config,
   BakingConfig,
   Inputs,
@@ -103,6 +101,13 @@ let wasmModulePromise: Promise<WasmBindings | unknown> | null = null;
 let wasmUrlCache: string | null = null;
 
 function toWasmBindgenInitOptions(initArg: unknown): { module_or_path: unknown } {
+  if (
+    initArg &&
+    typeof initArg === "object" &&
+    "module_or_path" in (initArg as Record<string, unknown>)
+  ) {
+    return initArg as { module_or_path: unknown };
+  }
   return { module_or_path: initArg };
 }
 
@@ -144,6 +149,8 @@ const loadBindingsImpl =
   typeof window === "undefined"
     ? loadWasmBindings
     : (loadWasmBindingsBrowser as typeof loadWasmBindings);
+
+export type InitInput = LoaderInitInput;
 
 async function loadBindings(input?: LoaderInitInput): Promise<WasmBindings> {
   await loadBindingsImpl<WasmBindings>(

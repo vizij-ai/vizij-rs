@@ -1403,7 +1403,6 @@ impl WasmGraph {
             Err(JsValue::from_str("unknown node"))
         }
     }
-
 }
 
 /// Expose the node schema registry as JSON for tooling/UI.
