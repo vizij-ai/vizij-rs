@@ -1,3 +1,6 @@
+/**
+ * Orchestration fixture helpers for the Node entrypoint of `@vizij/test-fixtures`.
+ */
 import { orchestrationEntry, orchestrationPath, loadFixture, manifest, readFixture, } from "./shared.js";
 import { animationFixture } from "./animations.js";
 import { nodeGraphSpec } from "./nodeGraphs.js";

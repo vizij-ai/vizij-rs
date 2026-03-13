@@ -1,3 +1,6 @@
+/**
+ * Browser-bundle node-graph fixture helpers for `@vizij/test-fixtures`.
+ */
 import { nodeGraphEntry, loadFixture, manifest, readFixture, resolveFixturePath, } from "./shared.browser.js";
 function entry(name) {
     return nodeGraphEntry(name);

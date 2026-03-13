@@ -1,3 +1,6 @@
+/**
+ * Browser-bundle animation fixture helpers for `@vizij/test-fixtures`.
+ */
 import { animationEntry, loadFixture, manifest, readFixture, resolveFixturePath, } from "./shared.browser.js";
 export function animationNames() {
     return Object.keys(manifest().animations);

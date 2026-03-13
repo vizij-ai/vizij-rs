@@ -1,3 +1,6 @@
+/**
+ * Animation fixture helpers for the Node entrypoint of `@vizij/test-fixtures`.
+ */
 import { animationEntry, loadFixture, manifest, readFixture, resolveFixturePath } from "./shared.js";
 export function animationNames() {
     return Object.keys(manifest().animations);

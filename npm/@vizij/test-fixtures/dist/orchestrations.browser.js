@@ -1,3 +1,6 @@
+/**
+ * Browser-bundle orchestration fixture helpers for `@vizij/test-fixtures`.
+ */
 import { orchestrationEntry, orchestrationPath, loadFixture, manifest, readFixture, } from "./shared.browser.js";
 import { animationFixture } from "./animations.browser.js";
 import { nodeGraphSpec } from "./nodeGraphs.browser.js";
