@@ -1,6 +1,6 @@
 use serde_json::json;
 use vizij_animation_core::{
-    data::{AnimationData, Keypoint, Track, Transitions, Vec2},
+    data::{AnimationData, AuthoredTransition, Keypoint, Track, Transitions},
     engine::InstanceCfg,
     Config, Engine, Value,
 };
@@ -15,7 +15,8 @@ fn mk_anim(name: &str, duration_s: f32) -> AnimationData {
             value: Value::Float(0.0),
             transitions: Some(Transitions {
                 r#in: None,
-                r#out: Some(Vec2 { x: 0.0, y: 0.0 }),
+                r#out: Some(AuthoredTransition::explicit(0.0, 0.0)),
+                pairing: None,
             }),
         },
         Keypoint {
@@ -23,8 +24,9 @@ fn mk_anim(name: &str, duration_s: f32) -> AnimationData {
             stamp: 1.0,
             value: Value::Float(1.0),
             transitions: Some(Transitions {
-                r#in: Some(Vec2 { x: 1.0, y: 1.0 }),
+                r#in: Some(AuthoredTransition::explicit(1.0, 1.0)),
                 r#out: None,
+                pairing: None,
             }),
         },
     ];

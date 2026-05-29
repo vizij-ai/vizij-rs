@@ -177,8 +177,10 @@ export interface OutputsWithDerivatives {
 }
 
 /* -----------------------------------------------------------
-   StoredAnimation (new JSON format) — minimal typing
-   See vizij-spec/Animation.md and fixtures/animations/vector-pose-combo.json
+   StoredAnimation (Studio-compatible JSON format)
+   v2 is canonical: keypoint stamps are milliseconds, explicit transition
+   vectors are anchor-relative `{ x: ms, y: valueDelta }` handles.
+   Legacy v1/absent format payloads are accepted by the Rust importer.
 ----------------------------------------------------------- */
 export type StoredScalarVec2 = { x: number; y: number };
 export type StoredScalarVec3 = { x: number; y: number; z: number };
@@ -196,19 +198,41 @@ export type StoredValue =
   | boolean
   | string;
 
-export interface BezierCP {
+export type AnimationFormatVersion = 1 | 2;
+
+export type StandardTransitionType =
+  | "sine"
+  | "cubic"
+  | "quint"
+  | "circ"
+  | "quad"
+  | "quart"
+  | "expo"
+  | "back"
+  | "linear";
+
+export type TransitionDirective = "explicit-handles" | "inferred-auto-clamped";
+export type TransitionPairing = "paired" | "free";
+
+export interface ExplicitTransitionHandle {
   x: number;
   y: number;
 }
 
+export type AuthoredTransition =
+  | ExplicitTransitionHandle
+  | StandardTransitionType
+  | TransitionDirective;
+
 export interface Keypoint {
   id: string;
-  /** Normalized stamp [0..1] within the track */
+  /** Studio v2: absolute milliseconds. Legacy v1: normalized [0..1]. */
   stamp: number;
   value: StoredValue;
   transitions?: {
-    in?: BezierCP;
-    out?: BezierCP;
+    in?: AuthoredTransition;
+    out?: AuthoredTransition;
+    pairing?: TransitionPairing;
   };
 }
 
@@ -217,7 +241,7 @@ export interface Track {
   name?: string;
   /** Canonical target path (e.g., "node/Transform.translation") */
   animatableId: string;
-  /** Keypoints ordered in normalized clip space. */
+  /** Keypoints ordered in clip-local stamp space. */
   points: Keypoint[];
   settings?: { color?: string };
 }
@@ -225,12 +249,16 @@ export interface Track {
 export interface StoredAnimation {
   id?: string;
   name?: string;
-  /** Duration in milliseconds */
-  duration: number;
-  /** Tracks sampled across the normalized `[0, 1]` clip domain. */
+  /** Legacy v1 duration in milliseconds; v2 preserves this only as a viewport hint. */
+  duration?: number;
+  /** Studio v2 viewport floor in milliseconds. */
+  defaultViewportExtent?: number;
+  /** Absent means legacy Vizij normalized payload; 1 means Studio v1; 2 is canonical Studio v2. */
+  formatVersion?: AnimationFormatVersion;
+  /** Tracks sampled across the clip-local stamp domain. */
   tracks: Track[];
   /** Optional grouping metadata */
-  groups?: Record<string, unknown>;
+  groups?: unknown;
 }
 
 /* -----------------------------------------------------------

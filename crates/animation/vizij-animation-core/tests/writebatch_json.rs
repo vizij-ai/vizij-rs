@@ -1,6 +1,6 @@
 use serde_json::Value as JsonValue;
 use vizij_animation_core::{
-    data::{AnimationData, Keypoint, Track, Transitions, Vec2},
+    data::{AnimationData, AuthoredTransition, Keypoint, Track, Transitions},
     Config, Engine, Inputs, Value,
 };
 
@@ -14,12 +14,13 @@ fn mk_scalar_track_linear(path: &str, keys: &[(f32, f32)]) -> Track {
             let mut t = Transitions {
                 r#in: None,
                 r#out: None,
+                pairing: None,
             };
             if !is_last {
-                t.r#out = Some(Vec2 { x: 0.0, y: 0.0 });
+                t.r#out = Some(AuthoredTransition::explicit(0.0, 0.0));
             }
             if !is_first {
-                t.r#in = Some(Vec2 { x: 1.0, y: 1.0 });
+                t.r#in = Some(AuthoredTransition::explicit(1.0, 1.0));
             }
             if t.r#in.is_some() || t.r#out.is_some() {
                 transitions = Some(t);

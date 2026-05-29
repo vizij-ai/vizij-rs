@@ -123,10 +123,16 @@ pub fn bake_animation_data_with_derivatives(
     let frames_f = (span * sr).ceil();
     let frame_count = frames_f as usize + 1; // inclusive of end
 
+    let unit_domain = data.appears_unit_domain();
     let derivative_epsilon = cfg
         .derivative_epsilon
         .filter(|eps| eps.is_finite() && *eps > 0.0)
-        .unwrap_or(DEFAULT_DERIVATIVE_EPSILON);
+        .unwrap_or(if unit_domain {
+            DEFAULT_DERIVATIVE_EPSILON
+        } else {
+            1.0
+        });
+    let stamp_delta_seconds = if unit_domain { duration_s } else { 0.001 };
 
     let mut tracks = Vec::with_capacity(data.tracks.len());
     let mut derivative_tracks = Vec::with_capacity(data.tracks.len());
@@ -135,13 +141,13 @@ pub fn bake_animation_data_with_derivatives(
         let mut derivatives = Vec::with_capacity(frame_count);
         for f in 0..frame_count {
             let t = start + (f as f32) / sr; // seconds in clip space
-            let u = if duration_s > 0.0 {
-                (t / duration_s).clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
-            let (v, deriv) =
-                sample_track_with_derivative_epsilon(track, u, duration_s, derivative_epsilon);
+            let stamp = data.sample_stamp_for_seconds(t);
+            let (v, deriv) = sample_track_with_derivative_epsilon(
+                track,
+                stamp,
+                stamp_delta_seconds,
+                derivative_epsilon,
+            );
             values.push(v);
             derivatives.push(deriv);
         }

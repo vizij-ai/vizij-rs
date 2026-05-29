@@ -637,15 +637,11 @@ impl Engine {
                             if track.points.is_empty() {
                                 continue;
                             }
-                            let u = if anim_duration_s > 0.0 {
-                                (local_t / anim_duration_s).clamp(0.0, 1.0)
-                            } else {
-                                0.0
-                            };
+                            let stamp = anim_data.sample_stamp_for_seconds(local_t);
                             let (value, derivative) = if with_derivatives {
-                                sample_track_with_derivative(track, u, anim_duration_s)
+                                sample_track_with_derivative(track, stamp, anim_duration_s)
                             } else {
-                                (sample_track(track, u), None)
+                                (sample_track(track, stamp), None)
                             };
                             let handle = if let Some(row) = self.binds.get(*ch) {
                                 row.handle.as_str()

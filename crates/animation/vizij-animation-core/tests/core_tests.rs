@@ -4,7 +4,7 @@ use vizij_animation_core::{
     baking::{export_baked_json, BakingConfig},
     binding::TargetResolver,
     config::Config,
-    data::{AnimationData, Keypoint, Track, Transitions, Vec2},
+    data::{AnimationData, AuthoredTransition, Keypoint, Track, Transitions},
     engine::{Engine, InstanceCfg},
     ids::{AnimId, IdAllocator, PlayerId},
     inputs::{Inputs, InstanceUpdate, LoopMode, PlayerCommand},
@@ -33,12 +33,13 @@ fn mk_scalar_track_linear(path: &str, keys: &[(f32, f32)]) -> Track {
             let mut t = Transitions {
                 r#in: None,
                 r#out: None,
+                pairing: None,
             };
             if !is_last {
-                t.r#out = Some(Vec2 { x: 0.0, y: 0.0 });
+                t.r#out = Some(AuthoredTransition::explicit(0.0, 0.0));
             }
             if !is_first {
-                t.r#in = Some(Vec2 { x: 1.0, y: 1.0 });
+                t.r#in = Some(AuthoredTransition::explicit(1.0, 1.0));
             }
             // Only assign if at least one is present
             if t.r#in.is_some() || t.r#out.is_some() {
@@ -71,12 +72,13 @@ fn mk_quat_track_linear(path: &str, keys: &[(f32, [f32; 4])]) -> Track {
             let mut t = Transitions {
                 r#in: None,
                 r#out: None,
+                pairing: None,
             };
             if !is_last {
-                t.r#out = Some(Vec2 { x: 0.0, y: 0.0 });
+                t.r#out = Some(AuthoredTransition::explicit(0.0, 0.0));
             }
             if !is_first {
-                t.r#in = Some(Vec2 { x: 1.0, y: 1.0 });
+                t.r#in = Some(AuthoredTransition::explicit(1.0, 1.0));
             }
             if t.r#in.is_some() || t.r#out.is_some() {
                 transitions = Some(t);

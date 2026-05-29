@@ -1,5 +1,5 @@
 use vizij_animation_core::{
-    data::{Keypoint, Track, Transitions, Vec2},
+    data::{AuthoredTransition, Keypoint, Track, Transitions},
     sampling::sample_track,
     value::Value,
 };
@@ -44,7 +44,8 @@ fn euler_vec3_bezier_vs_linear_shape() {
                 value: Value::Vec3([0.0, 0.0, 0.0]),
                 transitions: Some(Transitions {
                     r#in: None,
-                    r#out: Some(Vec2 { x: 0.0, y: 0.0 }),
+                    r#out: Some(AuthoredTransition::explicit(0.0, 0.0)),
+                    pairing: None,
                 }),
             },
             Keypoint {
@@ -52,8 +53,9 @@ fn euler_vec3_bezier_vs_linear_shape() {
                 stamp: 1.0,
                 value: Value::Vec3([1.0, 2.0, 3.0]),
                 transitions: Some(Transitions {
-                    r#in: Some(Vec2 { x: 1.0, y: 1.0 }),
+                    r#in: Some(AuthoredTransition::explicit(1.0, 1.0)),
                     r#out: None,
+                    pairing: None,
                 }),
             },
         ],
@@ -87,7 +89,8 @@ fn color_bezier_with_explicit_ctrl_points() {
                 value: Value::ColorRgba([0.0, 0.0, 0.0, 1.0]),
                 transitions: Some(Transitions {
                     r#in: None,
-                    r#out: Some(Vec2 { x: 0.8, y: 0.0 }),
+                    r#out: Some(AuthoredTransition::explicit(0.8, 0.0)),
+                    pairing: None,
                 }),
             },
             Keypoint {
@@ -95,8 +98,9 @@ fn color_bezier_with_explicit_ctrl_points() {
                 stamp: 1.0,
                 value: Value::ColorRgba([1.0, 1.0, 1.0, 1.0]),
                 transitions: Some(Transitions {
-                    r#in: Some(Vec2 { x: 0.2, y: 1.0 }),
+                    r#in: Some(AuthoredTransition::explicit(0.2, 1.0)),
                     r#out: None,
+                    pairing: None,
                 }),
             },
         ],

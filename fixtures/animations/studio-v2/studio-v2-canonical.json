@@ -1,0 +1,110 @@
+{
+  "id": "vizij-engine-backend-studio-v2-canonical",
+  "name": "Vizij Engine Backend Studio v2 Canonical Fixture",
+  "formatVersion": 2,
+  "defaultViewportExtent": 3000,
+  "groups": [],
+  "tracks": [
+    {
+      "id": "face.smile.amount",
+      "name": "Smile Amount",
+      "groupName": "Face",
+      "animatableId": "vizij-face",
+      "points": [
+        {
+          "id": "smile-0000",
+          "stamp": 0,
+          "value": 0,
+          "transitions": {
+            "out": "cubic"
+          }
+        },
+        {
+          "id": "smile-1000",
+          "stamp": 1000,
+          "value": 0.8,
+          "transitions": {
+            "in": {
+              "x": -240,
+              "y": 0.12
+            },
+            "out": {
+              "x": 320,
+              "y": -0.18
+            },
+            "pairing": "free"
+          }
+        },
+        {
+          "id": "smile-2000",
+          "stamp": 2000,
+          "value": 0.25
+        },
+        {
+          "id": "smile-3000",
+          "stamp": 3000,
+          "value": 1,
+          "transitions": {
+            "in": "inferred-auto-clamped"
+          }
+        }
+      ],
+      "settings": {
+        "color": "#ff8a3d"
+      }
+    },
+    {
+      "id": "face.eyes.visible",
+      "name": "Eyes Visible",
+      "groupName": "Face",
+      "animatableId": "vizij-face",
+      "points": [
+        {
+          "id": "eyes-visible-0000",
+          "stamp": 0,
+          "value": true
+        },
+        {
+          "id": "eyes-visible-1200",
+          "stamp": 1200,
+          "value": false
+        },
+        {
+          "id": "eyes-visible-2600",
+          "stamp": 2600,
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": "face.expression.label",
+      "name": "Expression Label",
+      "groupName": "Face",
+      "animatableId": "vizij-face",
+      "points": [
+        {
+          "id": "expression-neutral",
+          "stamp": 0,
+          "value": "neutral",
+          "transitions": {
+            "out": "linear"
+          }
+        },
+        {
+          "id": "expression-smile",
+          "stamp": 1500,
+          "value": "smile",
+          "transitions": {
+            "in": "sine",
+            "out": "cubic"
+          }
+        },
+        {
+          "id": "expression-blink",
+          "stamp": 2750,
+          "value": "blink"
+        }
+      ]
+    }
+  ]
+}
