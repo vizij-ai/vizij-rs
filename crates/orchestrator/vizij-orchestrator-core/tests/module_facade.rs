@@ -134,3 +134,58 @@ fn facade_reports_errors_as_json() {
         .expect("error string")
         .contains("runtime is not created"));
 }
+
+#[test]
+fn facade_normalizes_graph_specs_without_runtime() {
+    let mut facade = VizijModuleFacade::new();
+    let normalized = dispatch(
+        &mut facade,
+        "graph.normalize",
+        json!({
+            "spec": {
+                "nodes": [
+                    {
+                        "id": "source",
+                        "kind": "Node",
+                        "params": {
+                            "value": { "float": 1.0 }
+                        }
+                    }
+                ]
+            }
+        }),
+    );
+
+    assert_eq!(normalized["nodes"][0]["type"], "node");
+    assert_eq!(normalized["nodes"][0]["params"]["value"]["type"], "float");
+    assert_eq!(
+        normalized["edges"].as_array().map(|edges| edges.len()),
+        Some(0)
+    );
+}
+
+#[test]
+fn facade_rejects_mismatched_runtime_handles() {
+    let mut facade = VizijModuleFacade::new();
+    dispatch(
+        &mut facade,
+        "runtime.create",
+        json!({ "schedule": "SinglePass" }),
+    );
+
+    let response = facade.dispatch_json(
+        &json!({
+            "call": "orchestrator.step",
+            "runtimeHandle": "runtime:wrong",
+            "requestId": "req:step",
+            "args": { "dt": 0.016 }
+        })
+        .to_string(),
+    );
+    let parsed: Value = serde_json::from_str(&response).expect("facade response json");
+    assert_eq!(parsed["ok"], false);
+    assert!(parsed["error"]
+        .as_str()
+        .expect("error string")
+        .contains("runtime handle mismatch"));
+}

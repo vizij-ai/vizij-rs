@@ -76,6 +76,7 @@ fn samples_studio_v2_bool_and_string_tracks_as_step_values() {
         .find(|track| track.id == "face.eyes.visible")
         .expect("eyes-visible track");
     assert_eq!(sample_track(eyes, 1000.0), Value::Bool(true));
+    assert_eq!(sample_track(eyes, 1200.0), Value::Bool(false));
     assert_eq!(sample_track(eyes, 1300.0), Value::Bool(false));
 
     let expression = anim
@@ -86,6 +87,10 @@ fn samples_studio_v2_bool_and_string_tracks_as_step_values() {
     assert_eq!(
         sample_track(expression, 1499.0),
         Value::Text("neutral".into())
+    );
+    assert_eq!(
+        sample_track(expression, 1500.0),
+        Value::Text("smile".into())
     );
     assert_eq!(
         sample_track(expression, 2000.0),

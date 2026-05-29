@@ -207,7 +207,10 @@ pub fn sample_track(track: &Track, stamp: f32) -> Value {
 
             // Step behavior for Bool/Text tracks regardless of transitions.
             match left.value.kind() {
-                ValueKind::Bool | ValueKind::Text => return step_value(&left.value),
+                ValueKind::Bool | ValueKind::Text => {
+                    let value = if lt >= 1.0 { &right.value } else { &left.value };
+                    return step_value(value);
+                }
                 _ => {}
             }
 

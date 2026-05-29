@@ -66,20 +66,57 @@ impl VizijModuleFacade {
     fn dispatch_inner(&mut self, request: FacadeRequest) -> Result<JsonValue> {
         match request.call.as_str() {
             "runtime.create" => self.create_runtime(request.args),
-            "runtime.dispose" => self.dispose_runtime(),
-            "controllers.list" | "runtime.controllers" => self.list_controllers(),
-            "graph.register" | "graph.load" => self.register_graph(request.args),
-            "graph.replace" => self.replace_graph(request.args),
+            "graph.normalize" | "graph.normalizeSpec" | "graph.normalize_spec" => {
+                self.normalize_graph(request.args)
+            }
+            "runtime.dispose" => {
+                self.validate_runtime_handle(request.runtime_handle.as_deref())?;
+                self.dispose_runtime()
+            }
+            "controllers.list" | "runtime.controllers" => {
+                self.validate_runtime_handle(request.runtime_handle.as_deref())?;
+                self.list_controllers()
+            }
+            "graph.register" | "graph.load" => {
+                self.validate_runtime_handle(request.runtime_handle.as_deref())?;
+                self.register_graph(request.args)
+            }
+            "graph.replace" => {
+                self.validate_runtime_handle(request.runtime_handle.as_deref())?;
+                self.replace_graph(request.args)
+            }
             "graph.merge" | "graph.registerMerged" | "graph.register_merged" => {
+                self.validate_runtime_handle(request.runtime_handle.as_deref())?;
                 self.register_merged_graph(request.args)
             }
-            "graph.remove" => self.remove_graph(request.args),
-            "animation.register" | "animation.load" => self.register_animation(request.args),
-            "animation.remove" => self.remove_animation(request.args),
-            "input.set" => self.set_input(request.args),
-            "input.remove" => self.remove_input(request.args),
-            "orchestrator.step" => self.step(request.args),
-            "orchestrator.stepDelta" | "orchestrator.step_delta" => self.step_delta(request.args),
+            "graph.remove" => {
+                self.validate_runtime_handle(request.runtime_handle.as_deref())?;
+                self.remove_graph(request.args)
+            }
+            "animation.register" | "animation.load" => {
+                self.validate_runtime_handle(request.runtime_handle.as_deref())?;
+                self.register_animation(request.args)
+            }
+            "animation.remove" => {
+                self.validate_runtime_handle(request.runtime_handle.as_deref())?;
+                self.remove_animation(request.args)
+            }
+            "input.set" => {
+                self.validate_runtime_handle(request.runtime_handle.as_deref())?;
+                self.set_input(request.args)
+            }
+            "input.remove" => {
+                self.validate_runtime_handle(request.runtime_handle.as_deref())?;
+                self.remove_input(request.args)
+            }
+            "orchestrator.step" => {
+                self.validate_runtime_handle(request.runtime_handle.as_deref())?;
+                self.step(request.args)
+            }
+            "orchestrator.stepDelta" | "orchestrator.step_delta" => {
+                self.validate_runtime_handle(request.runtime_handle.as_deref())?;
+                self.step_delta(request.args)
+            }
             other => Err(anyhow!("unknown facade call '{other}'")),
         }
     }
@@ -132,6 +169,13 @@ impl VizijModuleFacade {
         self.runtime_mut()?.graphs.insert(id.clone(), controller);
         self.reset_delta_baseline();
         Ok(json!({ "graphId": id }))
+    }
+
+    fn normalize_graph(&mut self, args: JsonValue) -> Result<JsonValue> {
+        let mut spec = parse_args::<GraphNormalizeArgs>(args)?.spec;
+        api_json::normalize_graph_spec_value(&mut spec)
+            .map_err(|error| anyhow!("normalize graph spec error: {error}"))?;
+        Ok(spec)
     }
 
     fn replace_graph(&mut self, args: JsonValue) -> Result<JsonValue> {
@@ -260,6 +304,21 @@ impl VizijModuleFacade {
             .ok_or_else(|| anyhow!("runtime is not created; call runtime.create first"))
     }
 
+    fn validate_runtime_handle(&self, requested: Option<&str>) -> Result<()> {
+        let Some(requested) = requested else {
+            return Ok(());
+        };
+        let Some(current) = self.runtime_handle.as_deref() else {
+            return Err(anyhow!("runtime is not created; call runtime.create first"));
+        };
+        if requested != current {
+            return Err(anyhow!(
+                "runtime handle mismatch: request targeted '{requested}' but active runtime is '{current}'"
+            ));
+        }
+        Ok(())
+    }
+
     fn next_graph_id(&mut self) -> String {
         let id = format!("graph:{}", self.graph_counter);
         self.graph_counter = self.graph_counter.wrapping_add(1);
@@ -349,6 +408,11 @@ struct GraphRegistrationArgs {
     spec: JsonValue,
     #[serde(default)]
     subs: Option<GraphSubscriptionsArgs>,
+}
+
+#[derive(Deserialize)]
+struct GraphNormalizeArgs {
+    spec: JsonValue,
 }
 
 #[derive(Deserialize)]
