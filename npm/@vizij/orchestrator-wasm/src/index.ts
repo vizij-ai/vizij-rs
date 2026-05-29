@@ -19,6 +19,8 @@ import type {
   ConflictLog,
   GraphRegistrationConfig,
   GraphReplaceConfig,
+  ModuleFacadeRequest,
+  ModuleFacadeResponse,
 } from "./types";
 import { toValueJSON, type ValueInput } from "@vizij/value-json";
 import {
@@ -46,11 +48,21 @@ interface WasmOrchestratorCtor {
   new (opts?: unknown): WasmOrchestratorInstance;
 }
 
+interface WasmModuleFacadeInstance {
+  dispatch_json(requestJson: string): string;
+}
+
+interface WasmModuleFacadeCtor {
+  new (): WasmModuleFacadeInstance;
+}
+
 interface WasmBindings {
   default: (input?: unknown) => Promise<unknown>;
   VizijOrchestrator: WasmOrchestratorCtor;
+  VizijModuleFacade: WasmModuleFacadeCtor;
   normalize_graph_spec_json: (json: string) => string;
   abi_version: () => number;
+  module_facade_version?: () => number;
 }
 
 const bindingCache: { current: WasmBindings | null } = { current: null };
@@ -155,6 +167,16 @@ export function abi_version(): number {
   return Number(bindingCache.current.abi_version());
 }
 
+/**
+ * Return the shared module-facade JSON contract version reported by wasm.
+ */
+export function module_facade_version(): number {
+  if (!bindingCache.current) {
+    throw new Error("Call init() from @vizij/orchestrator-wasm before reading module_facade_version().");
+  }
+  return Number(bindingCache.current.module_facade_version?.() ?? 1);
+}
+
 function ensureInited(): void {
   if (!_initPromise) {
     throw new Error("Call init() from @vizij/orchestrator-wasm before creating Orchestrator instances.");
@@ -175,6 +197,8 @@ export type {
   GraphSubscriptions,
   AnimationRegistrationConfig,
   AnimationSetup,
+  ModuleFacadeRequest,
+  ModuleFacadeResponse,
 };
 
 export {
@@ -449,9 +473,50 @@ export class Orchestrator {
 }
 
 /**
+ * Browser-safe wrapper around the same JSON facade used by Arora module hosts.
+ */
+export class VizijModuleFacade {
+  private inner: WasmModuleFacadeInstance;
+
+  constructor() {
+    ensureInited();
+    if (!bindingCache.current) {
+      throw new Error("Call init() from @vizij/orchestrator-wasm before creating VizijModuleFacade instances.");
+    }
+    const Ctor = bindingCache.current.VizijModuleFacade;
+    this.inner = new Ctor();
+  }
+
+  /**
+   * Dispatch a typed request object and parse the JSON facade response.
+   */
+  dispatch<TResult = unknown, TArgs = unknown>(
+    request: ModuleFacadeRequest<TArgs>,
+  ): ModuleFacadeResponse<TResult> {
+    const response = this.dispatchJson(JSON.stringify(request));
+    return JSON.parse(response) as ModuleFacadeResponse<TResult>;
+  }
+
+  /**
+   * Dispatch a pre-serialized JSON request and return the raw JSON response.
+   */
+  dispatchJson(requestJson: string): string {
+    return this.inner.dispatch_json(requestJson);
+  }
+}
+
+/**
  * Initialize the wasm module if needed and return a ready-to-use `Orchestrator`.
  */
 export async function createOrchestrator(opts?: any): Promise<Orchestrator> {
   await init();
   return new Orchestrator(opts);
+}
+
+/**
+ * Initialize the wasm module if needed and return a ready-to-use module facade.
+ */
+export async function createModuleFacade(): Promise<VizijModuleFacade> {
+  await init();
+  return new VizijModuleFacade();
 }

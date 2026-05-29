@@ -123,6 +123,27 @@ export interface OrchestratorAPI {
   normalizeGraphSpec(spec: object | string): Promise<object>;
 }
 
+/** Module-shaped request shared by browser wasm and Arora module hosts. */
+export interface ModuleFacadeRequest<TArgs = unknown> {
+  /** Call identifier, for example `runtime.create`, `graph.register`, or `orchestrator.step`. */
+  call: string;
+  /** Optional runtime handle for hosts that multiplex runtimes. The v1 facade owns one runtime. */
+  runtimeHandle?: string;
+  /** Optional caller-provided id echoed in the response. */
+  requestId?: string;
+  /** Call-specific payload. */
+  args?: TArgs;
+}
+
+/** Module-shaped response shared by browser wasm and Arora module hosts. */
+export interface ModuleFacadeResponse<TResult = unknown> {
+  ok: boolean;
+  result?: TResult;
+  error?: string;
+  version: number;
+  requestId?: string;
+}
+
 /* exported helper types for consumers */
 export type { NormalizedValue as ValueNormalized };
 export type { ValueJSON as Value };

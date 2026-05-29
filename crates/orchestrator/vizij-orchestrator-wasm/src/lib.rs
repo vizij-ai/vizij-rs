@@ -25,7 +25,7 @@ use vizij_orchestrator::{
     controllers::animation::AnimationControllerConfig,
     controllers::graph::{GraphControllerConfig, GraphMergeOptions, OutputConflictStrategy},
     scheduler::Schedule,
-    Orchestrator,
+    Orchestrator, VizijModuleFacade as CoreVizijModuleFacade, MODULE_FACADE_VERSION,
 };
 mod normalize;
 
@@ -204,6 +204,37 @@ pub struct VizijOrchestrator {
     last_conflicts: Vec<ConflictLog>,
     last_events: Vec<serde_json::Value>,
     last_timings: std::collections::HashMap<String, f32>,
+}
+
+#[wasm_bindgen(js_name = VizijModuleFacade)]
+pub struct WasmVizijModuleFacade {
+    inner: CoreVizijModuleFacade,
+}
+
+impl Default for WasmVizijModuleFacade {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[wasm_bindgen(js_class = VizijModuleFacade)]
+impl WasmVizijModuleFacade {
+    /// Create a module-shaped JSON facade around the core orchestrator runtime.
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> WasmVizijModuleFacade {
+        #[cfg(feature = "console_error")]
+        console_error_panic_hook::set_once();
+
+        WasmVizijModuleFacade {
+            inner: CoreVizijModuleFacade::new(),
+        }
+    }
+
+    /// Dispatch one JSON request and return a JSON response string.
+    #[wasm_bindgen(js_name = dispatch_json)]
+    pub fn dispatch_json(&mut self, request_json: &str) -> String {
+        self.inner.dispatch_json(request_json)
+    }
 }
 
 #[wasm_bindgen]
@@ -617,4 +648,10 @@ pub fn normalize_graph_spec_json(json: &str) -> Result<JsValue, JsError> {
 #[wasm_bindgen]
 pub fn abi_version() -> u32 {
     2
+}
+
+/// JSON facade contract version shared by wasm and Arora module hosts.
+#[wasm_bindgen]
+pub fn module_facade_version() -> u32 {
+    MODULE_FACADE_VERSION
 }

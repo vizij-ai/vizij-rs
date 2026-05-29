@@ -8,6 +8,7 @@ pub mod blackboard;
 pub mod controllers;
 pub mod diagnostics;
 pub mod fixtures;
+pub mod module_facade;
 pub mod scheduler;
 
 use anyhow::{anyhow, Result};
@@ -22,6 +23,7 @@ pub use crate::controllers::{
     AnimationControllerConfig, GraphControllerConfig, GraphMergeError, GraphMergeOptions,
     OutputConflictStrategy, Subscriptions,
 };
+pub use crate::module_facade::{VizijModuleFacade, MODULE_FACADE_VERSION};
 pub use crate::scheduler::Schedule;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

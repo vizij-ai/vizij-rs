@@ -12,8 +12,18 @@ import {
   type ValueJSON,
   type ValueInput,
 } from "@vizij/value-json";
-import type { GraphRegistrationConfig, AnimationRegistrationConfig } from "../src/index.js";
-import { init, createOrchestrator, loadOrchestrationBundle } from "../src/index.js";
+import type {
+  GraphRegistrationConfig,
+  AnimationRegistrationConfig,
+  ModuleFacadeResponse,
+} from "../src/index.js";
+import {
+  init,
+  createOrchestrator,
+  createModuleFacade,
+  loadOrchestrationBundle,
+  module_facade_version,
+} from "../src/index.js";
 import {
   loadAnimationFixture as loadEmbeddedAnimation,
   loadNodeGraphSpec as loadEmbeddedGraphSpec,
@@ -164,6 +174,12 @@ function expectWriteMatches(
   expectValueMatches(hit!.value as ValueJSON, expected, path);
 }
 
+function unwrapFacadeResult<T>(response: ModuleFacadeResponse<T>): T {
+  assert.equal(response.ok, true, response.error);
+  assert.ok(response.result !== undefined, "expected facade result");
+  return response.result;
+}
+
 async function testScalarRampPipeline(): Promise<void> {
   const bundle = await loadOrchestrationBundle("scalar-ramp-pipeline");
   const schedule =
@@ -206,6 +222,48 @@ async function testScalarRampPipeline(): Promise<void> {
       );
     }
   }
+}
+
+async function testModuleFacadeContract(): Promise<void> {
+  assert.equal(module_facade_version(), 1);
+  const facade = await createModuleFacade();
+
+  const runtime = unwrapFacadeResult<{ runtimeHandle: string }>(
+    facade.dispatch({
+      call: "runtime.create",
+      requestId: "runtime",
+      args: { schedule: "SinglePass" },
+    }),
+  );
+  assert.equal(runtime.runtimeHandle, "runtime:0");
+
+  const signGraph = await loadEmbeddedGraphSpec("sign-graph");
+  const graph = unwrapFacadeResult<{ graphId: string }>(
+    facade.dispatch({
+      call: "graph.register",
+      args: graphConfigFromFixture(signGraph),
+    }),
+  );
+  assert.ok(graph.graphId.length > 0);
+
+  unwrapFacadeResult(
+    facade.dispatch({
+      call: "input.set",
+      args: {
+        path: "chain/input.value",
+        value: toValueJSON(1),
+      },
+    }),
+  );
+
+  const frame = unwrapFacadeResult<{ merged_writes?: Array<{ path: string; value: unknown }> }>(
+    facade.dispatch({
+      call: "orchestrator.step",
+      args: { dt: 1 / 60 },
+    }),
+  );
+  const writes = frame.merged_writes ?? [];
+  assert.ok(writes.some((write) => write.path === "chain/sign.value"), "facade graph write missing");
 }
 
 async function testChainedSlewPipeline(): Promise<void> {
@@ -624,6 +682,7 @@ process.env.RUST_BACKTRACE = "1";
 (async () => {
   try {
     await init({ module_or_path: pkgWasmUrl() });
+    await testModuleFacadeContract();
     await testScalarRampPipeline();
     await testChainedSlewPipeline();
     await testChainSignSlewFixture();
