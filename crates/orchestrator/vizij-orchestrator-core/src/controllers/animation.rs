@@ -40,10 +40,12 @@ pub struct AnimationController {
 
 enum AnimationPathKind<'a> {
     PlayerCommand {
+        controller: Option<String>,
         player: PlayerId,
         action: &'a str,
     },
     InstanceField {
+        controller: Option<String>,
         player: PlayerId,
         inst: InstId,
         field: String,
@@ -140,19 +142,49 @@ impl AnimationController {
     }
 
     fn classify_path<'a>(tp: &'a TypedPath) -> Option<AnimationPathKind<'a>> {
-        if tp.namespace_segment(0)? != "anim" || tp.namespace_segment(1)? != "player" {
+        if tp.namespace_segment(0)? != "anim" {
             return None;
         }
 
-        let player_id = Self::parse_u32_segment(tp.namespace_segment(2)?)?;
-        match tp.namespace_segment(3)? {
+        if tp.namespace_segment(1)? == "player" {
+            return Self::classify_player_path(tp, None, 1);
+        }
+
+        if tp.namespace_segment(1)? != "controller" {
+            return None;
+        }
+
+        let player_idx = (2..tp.namespaces.len()).find(|idx| {
+            tp.namespace_segment(*idx) == Some("player")
+                && tp
+                    .namespace_segment(*idx + 1)
+                    .and_then(Self::parse_u32_segment)
+                    .is_some()
+                && matches!(tp.namespace_segment(*idx + 2), Some("cmd" | "instance"))
+        })?;
+        if player_idx <= 2 {
+            return None;
+        }
+        let controller = tp.namespaces[2..player_idx].join("/");
+        Self::classify_player_path(tp, Some(controller), player_idx)
+    }
+
+    fn classify_player_path<'a>(
+        tp: &'a TypedPath,
+        controller: Option<String>,
+        player_idx: usize,
+    ) -> Option<AnimationPathKind<'a>> {
+        let player_id = Self::parse_u32_segment(tp.namespace_segment(player_idx + 1)?)?;
+        match tp.namespace_segment(player_idx + 2)? {
             "cmd" => Some(AnimationPathKind::PlayerCommand {
+                controller,
                 player: PlayerId(player_id),
                 action: tp.target_name(),
             }),
             "instance" => {
-                let inst_id = Self::parse_u32_segment(tp.namespace_segment(4)?)?;
+                let inst_id = Self::parse_u32_segment(tp.namespace_segment(player_idx + 3)?)?;
                 Some(AnimationPathKind::InstanceField {
+                    controller,
                     player: PlayerId(player_id),
                     inst: InstId(inst_id),
                     field: Self::compose_field_name(tp),
@@ -173,18 +205,41 @@ impl AnimationController {
         }
     }
 
+    fn path_matches_controller(controller: Option<&str>, filter: Option<&str>) -> bool {
+        match (controller, filter) {
+            (None, _) => true,
+            (Some(actual), Some(expected)) => actual == expected,
+            (Some(_), None) => false,
+        }
+    }
+
+    fn parse_loop_mode_value(value: &ApiValue) -> Option<LoopMode> {
+        let text = match value {
+            ApiValue::Text(text) => text.as_str(),
+            _ => return None,
+        };
+        match text.trim().to_ascii_lowercase().as_str() {
+            "once" => Some(LoopMode::Once),
+            "loop" => Some(LoopMode::Loop),
+            "pingpong" | "ping_pong" | "ping-pong" => Some(LoopMode::PingPong),
+            _ => None,
+        }
+    }
+
     /// Map Blackboard entries into Engine Inputs using a small convention:
     ///
     /// - Player-level commands:
     ///   TypedPath: "anim/player/<player_id>/cmd/<action>"
+    ///   TypedPath: "anim/controller/<controller_id>/player/<player_id>/cmd/<action>"
     ///   where <action> is one of:
     ///     - "play", "pause", "stop"
     ///     - "set_speed" (value must be Float)
     ///     - "seek" (value must be Float)
-    ///     - "set_loop" (value: "once" | "loop" | "pingpong") -- not implemented here
+    ///     - "set_loop" (value must be Text: "once" | "loop" | "pingpong")
     ///
     /// - Instance updates:
     ///   TypedPath: "anim/player/<player_id>/instance/<inst_id>/weight"
+    ///   TypedPath: "anim/controller/<controller_id>/player/<player_id>/instance/<inst_id>/weight"
     ///   TypedPath: "anim/player/<player_id>/instance/<inst_id>/time_scale"
     ///   TypedPath: "anim/player/<player_id>/instance/<inst_id>/start_offset"
     ///   TypedPath: "anim/player/<player_id>/instance/<inst_id>/enabled"
@@ -193,37 +248,66 @@ impl AnimationController {
     /// Build animation-engine inputs from the orchestrator blackboard using the shared
     /// animation command path convention.
     pub fn inputs_from_blackboard(bb: &Blackboard) -> Inputs {
+        Self::inputs_from_blackboard_with_filter(bb, None)
+    }
+
+    /// Build animation-engine inputs for a specific controller id.
+    ///
+    /// Legacy `anim/player/...` paths still apply as broadcast compatibility commands. Scoped
+    /// `anim/controller/<controller_id>/...` paths apply only when the id matches this controller.
+    pub fn inputs_from_blackboard_for_controller(bb: &Blackboard, controller_id: &str) -> Inputs {
+        Self::inputs_from_blackboard_with_filter(bb, Some(controller_id))
+    }
+
+    fn inputs_from_blackboard_with_filter(
+        bb: &Blackboard,
+        controller_filter: Option<&str>,
+    ) -> Inputs {
         let mut inputs = Inputs::default();
 
         for (tp, entry) in bb.iter() {
             match Self::classify_path(tp) {
-                Some(AnimationPathKind::PlayerCommand { player, action }) => match action {
-                    "play" => inputs.player_cmds.push(PlayerCommand::Play { player }),
-                    "pause" => inputs.player_cmds.push(PlayerCommand::Pause { player }),
-                    "stop" => inputs.player_cmds.push(PlayerCommand::Stop { player }),
-                    "set_speed" => {
-                        if let ApiValue::Float(f) = &entry.value {
-                            inputs
-                                .player_cmds
-                                .push(PlayerCommand::SetSpeed { player, speed: *f });
+                Some(AnimationPathKind::PlayerCommand {
+                    controller,
+                    player,
+                    action,
+                }) if Self::path_matches_controller(controller.as_deref(), controller_filter) => {
+                    match action {
+                        "play" => inputs.player_cmds.push(PlayerCommand::Play { player }),
+                        "pause" => inputs.player_cmds.push(PlayerCommand::Pause { player }),
+                        "stop" => inputs.player_cmds.push(PlayerCommand::Stop { player }),
+                        "set_speed" => {
+                            if let ApiValue::Float(f) = &entry.value {
+                                inputs
+                                    .player_cmds
+                                    .push(PlayerCommand::SetSpeed { player, speed: *f });
+                            }
+                        }
+                        "seek" => {
+                            if let ApiValue::Float(f) = &entry.value {
+                                inputs
+                                    .player_cmds
+                                    .push(PlayerCommand::Seek { player, time: *f });
+                            }
+                        }
+                        "set_loop" | "set_loop_mode" => {
+                            if let Some(mode) = Self::parse_loop_mode_value(&entry.value) {
+                                inputs
+                                    .player_cmds
+                                    .push(PlayerCommand::SetLoopMode { player, mode });
+                            }
+                        }
+                        _ => {
+                            // Unknown action - skip for now
                         }
                     }
-                    "seek" => {
-                        if let ApiValue::Float(f) = &entry.value {
-                            inputs
-                                .player_cmds
-                                .push(PlayerCommand::Seek { player, time: *f });
-                        }
-                    }
-                    _ => {
-                        // Unknown action - skip for now
-                    }
-                },
+                }
                 Some(AnimationPathKind::InstanceField {
+                    controller,
                     player,
                     inst,
                     field,
-                }) => {
+                }) if Self::path_matches_controller(controller.as_deref(), controller_filter) => {
                     let mut upd = InstanceUpdate {
                         player,
                         inst,
@@ -260,6 +344,7 @@ impl AnimationController {
                         _ => {}
                     }
                 }
+                Some(_) => {}
                 None => {}
             }
         }
@@ -280,7 +365,7 @@ impl AnimationController {
     /// Unsupported command paths or value types are ignored rather than treated as hard errors.
     pub fn update(&mut self, dt: f32, bb: &mut Blackboard) -> Result<(WriteBatch, Vec<JsonValue>)> {
         // Build Inputs from Blackboard
-        let inputs = Self::inputs_from_blackboard(bb);
+        let inputs = Self::inputs_from_blackboard_for_controller(bb, &self.id);
 
         // Step engine and get outputs reference
         let outputs = self.engine.update_values(dt, inputs);
@@ -394,5 +479,133 @@ mod tests {
             .instance_updates
             .iter()
             .any(|u| u.player.0 == 0 && u.inst.0 == 1 && u.weight == Some(0.75)));
+    }
+
+    #[test]
+    fn scoped_blackboard_commands_apply_only_to_matching_controller() {
+        let mut bb = Blackboard::new();
+        bb.set(
+            "anim/controller/default/animation/blink/player/0/cmd/play".to_string(),
+            serde_json::json!({"type":"bool","data":true}),
+            None,
+            0,
+            "test".into(),
+        )
+        .expect("set scoped play");
+        bb.set(
+            "anim/controller/default/animation/smile/player/0/cmd/set_speed".to_string(),
+            serde_json::json!({"type":"float","data":2.0}),
+            None,
+            0,
+            "test".into(),
+        )
+        .expect("set scoped speed");
+        bb.set(
+            "anim/player/0/cmd/seek".to_string(),
+            serde_json::json!({"type":"float","data":0.25}),
+            None,
+            0,
+            "test".into(),
+        )
+        .expect("set broadcast seek");
+
+        let blink = AnimationController::inputs_from_blackboard_for_controller(
+            &bb,
+            "default/animation/blink",
+        );
+        assert!(blink
+            .player_cmds
+            .iter()
+            .any(|cmd| matches!(cmd, PlayerCommand::Play { player } if player.0 == 0)));
+        assert!(blink
+            .player_cmds
+            .iter()
+            .any(|cmd| matches!(cmd, PlayerCommand::Seek { player, time } if player.0 == 0 && (*time - 0.25).abs() < 0.0001)));
+        assert!(!blink
+            .player_cmds
+            .iter()
+            .any(|cmd| matches!(cmd, PlayerCommand::SetSpeed { .. })));
+
+        let smile = AnimationController::inputs_from_blackboard_for_controller(
+            &bb,
+            "default/animation/smile",
+        );
+        assert!(smile
+            .player_cmds
+            .iter()
+            .any(|cmd| matches!(cmd, PlayerCommand::SetSpeed { player, speed } if player.0 == 0 && (*speed - 2.0).abs() < 0.0001)));
+        assert!(smile
+            .player_cmds
+            .iter()
+            .any(|cmd| matches!(cmd, PlayerCommand::Seek { player, time } if player.0 == 0 && (*time - 0.25).abs() < 0.0001)));
+        assert!(!smile
+            .player_cmds
+            .iter()
+            .any(|cmd| matches!(cmd, PlayerCommand::Play { .. })));
+    }
+
+    #[test]
+    fn scoped_blackboard_commands_allow_player_segment_inside_controller_id() {
+        let mut bb = Blackboard::new();
+        bb.set(
+            "anim/controller/demo-player/animation/blink/player/0/cmd/seek".to_string(),
+            serde_json::json!({"type":"float","data":0.4}),
+            None,
+            0,
+            "test".into(),
+        )
+        .expect("set scoped seek");
+
+        let inputs = AnimationController::inputs_from_blackboard_for_controller(
+            &bb,
+            "demo-player/animation/blink",
+        );
+        assert!(inputs
+            .player_cmds
+            .iter()
+            .any(|cmd| matches!(cmd, PlayerCommand::Seek { player, time } if player.0 == 0 && (*time - 0.4).abs() < 0.0001)));
+    }
+
+    #[test]
+    fn scoped_blackboard_loop_and_instance_updates_are_controller_specific() {
+        let mut bb = Blackboard::new();
+        bb.set(
+            "anim/controller/default/animation/blink/player/0/cmd/set_loop".to_string(),
+            serde_json::json!({"type":"text","data":"pingpong"}),
+            None,
+            0,
+            "test".into(),
+        )
+        .expect("set scoped loop");
+        bb.set(
+            "anim/controller/default/animation/blink/player/0/instance/0/weight".to_string(),
+            serde_json::json!({"type":"float","data":0.5}),
+            None,
+            0,
+            "test".into(),
+        )
+        .expect("set scoped instance weight");
+
+        let blink = AnimationController::inputs_from_blackboard_for_controller(
+            &bb,
+            "default/animation/blink",
+        );
+        assert!(blink
+            .player_cmds
+            .iter()
+            .any(|cmd| matches!(cmd, PlayerCommand::SetLoopMode { player, mode } if player.0 == 0 && *mode == LoopMode::PingPong)));
+        assert!(blink
+            .instance_updates
+            .iter()
+            .any(|update| update.player.0 == 0
+                && update.inst.0 == 0
+                && update.weight == Some(0.5)));
+
+        let smile = AnimationController::inputs_from_blackboard_for_controller(
+            &bb,
+            "default/animation/smile",
+        );
+        assert!(smile.player_cmds.is_empty());
+        assert!(smile.instance_updates.is_empty());
     }
 }

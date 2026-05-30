@@ -94,6 +94,10 @@ fn graph_time_output(path: &str) -> Value {
 }
 
 fn fixture_animation() -> Value {
+    fixture_animation_for_path("face/smile.amount")
+}
+
+fn fixture_animation_for_path(output_path: &str) -> Value {
     json!({
         "id": "facade-animation-smoke",
         "name": "Facade Animation Smoke",
@@ -104,7 +108,7 @@ fn fixture_animation() -> Value {
             {
                 "id": "smile-track",
                 "name": "Smile",
-                "animatableId": "face/smile.amount",
+                "animatableId": output_path,
                 "points": [
                     { "id": "smile-0", "stamp": 0, "value": 0, "transitions": { "out": "linear" } },
                     { "id": "smile-1", "stamp": 1000, "value": 1, "transitions": { "in": "linear" } }
@@ -319,6 +323,119 @@ fn animation_setup_active_false_disables_studio_instance() {
             .any(|write| write["path"] == "face/smile.amount"),
         "inactive Studio instance should not publish animation writes: {writes:?}"
     );
+}
+
+#[test]
+fn scoped_animation_commands_target_registered_controller_id() {
+    let mut facade = VizijModuleFacade::new();
+    dispatch(
+        &mut facade,
+        "runtime.create",
+        json!({ "schedule": "SinglePass" }),
+    );
+
+    dispatch(
+        &mut facade,
+        "animation.register",
+        json!({
+            "id": "default/animation/blink",
+            "setup": {
+                "animation": fixture_animation_for_path("face/blink.amount"),
+                "player": { "speed": 0.0 }
+            }
+        }),
+    );
+    dispatch(
+        &mut facade,
+        "animation.register",
+        json!({
+            "id": "default/animation/smile",
+            "setup": {
+                "animation": fixture_animation_for_path("face/smile.amount"),
+                "player": { "speed": 0.0 }
+            }
+        }),
+    );
+
+    dispatch(
+        &mut facade,
+        "input.set",
+        json!({
+            "path": "anim/controller/default/animation/blink/player/0/cmd/seek",
+            "value": { "type": "float", "data": 0.75 }
+        }),
+    );
+
+    let frame = dispatch(&mut facade, "orchestrator.step", json!({ "dt": 0.0 }));
+    let writes = frame["merged_writes"].as_array().expect("writes array");
+    let blink = writes
+        .iter()
+        .find(|write| write["path"] == "face/blink.amount")
+        .expect("blink animation write");
+    let value = blink["value"]["data"].as_f64().expect("float value");
+    assert!(
+        (value - 0.75).abs() < 0.0001,
+        "expected scoped seek to move blink only, got {value}"
+    );
+    let smile = writes
+        .iter()
+        .find(|write| write["path"] == "face/smile.amount")
+        .expect("smile animation should still report its unchanged initial value");
+    let smile_value = smile["value"]["data"].as_f64().expect("float value");
+    assert!(
+        smile_value.abs() < 0.0001,
+        "scoped blink command should not move smile, got {smile_value}"
+    );
+}
+
+#[test]
+fn legacy_animation_commands_remain_broadcast_compatible() {
+    let mut facade = VizijModuleFacade::new();
+    dispatch(
+        &mut facade,
+        "runtime.create",
+        json!({ "schedule": "SinglePass" }),
+    );
+
+    for (id, path) in [
+        ("default/animation/blink", "face/blink.amount"),
+        ("default/animation/smile", "face/smile.amount"),
+    ] {
+        dispatch(
+            &mut facade,
+            "animation.register",
+            json!({
+                "id": id,
+                "setup": {
+                    "animation": fixture_animation_for_path(path),
+                    "player": { "speed": 0.0 }
+                }
+            }),
+        );
+    }
+
+    dispatch(
+        &mut facade,
+        "input.set",
+        json!({
+            "path": "anim/player/0/cmd/seek",
+            "value": { "type": "float", "data": 0.5 }
+        }),
+    );
+
+    let frame = dispatch(&mut facade, "orchestrator.step", json!({ "dt": 0.0 }));
+    let writes = frame["merged_writes"].as_array().expect("writes array");
+    for path in ["face/blink.amount", "face/smile.amount"] {
+        let write = writes
+            .iter()
+            .find(|write| write["path"] == path)
+            .unwrap_or_else(|| panic!("missing broadcast write for {path}: {writes:?}"));
+        let value = write["value"]["data"].as_f64().expect("float value");
+        assert!(
+            (value - 0.5).abs() < 0.0001,
+            "expected legacy command to broadcast to {path}, got {value}"
+        );
+    }
 }
 
 #[test]
