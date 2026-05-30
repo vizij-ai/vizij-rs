@@ -83,12 +83,22 @@ pub struct Instance {
     pub binding_set: BindingSet,
 }
 
+fn scaled_instance_duration_seconds(anim_duration: f32, time_scale: f32) -> f32 {
+    if anim_duration <= 0.0 || time_scale == 0.0 {
+        0.0
+    } else {
+        anim_duration / time_scale.abs()
+    }
+}
+
 /// Configuration for adding an instance.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct InstanceCfg {
     /// Blend weight applied to the instance contribution.
     pub weight: f32,
-    /// Playback scaling factor used by the local-time mapping.
+    /// Studio-compatible playback speed multiplier used by the local-time mapping.
+    ///
+    /// `2.0` advances the clip twice as fast and halves the instance span on the player timeline.
     pub time_scale: f32,
     /// Start offset in seconds on the player timeline.
     pub start_offset: f32,
@@ -231,7 +241,7 @@ pub struct PlayerInfo {
     pub start_time: f32,
     /// Optional window end in seconds.
     pub end_time: Option<f32>,
-    /// Full player length (seconds): max over instances of start_offset + (anim_duration * |time_scale|)
+    /// Full player length (seconds): max over instances of start_offset + (anim_duration / |time_scale|)
     pub length: f32,
 }
 
@@ -274,8 +284,8 @@ impl Engine {
                     if let Some(inst) = self.instances.iter().find(|ii| ii.id == *iid) {
                         if let Some(anim) = self.anims.get(inst.anim) {
                             let anim_duration = anim.duration_ms as f32 / 1000.0;
-                            let ts_abs = inst.time_scale.abs().max(1e-6);
-                            let end_time = inst.start_offset + (anim_duration * ts_abs);
+                            let end_time = inst.start_offset
+                                + scaled_instance_duration_seconds(anim_duration, inst.time_scale);
                             if end_time > full_span {
                                 full_span = end_time;
                             }
@@ -430,7 +440,7 @@ impl Engine {
     }
 
     /// Recalculate a player's full length (seconds) from its instances.
-    /// length = max over instances of: start_offset + (anim_duration * |time_scale|)
+    /// length = max over instances of: start_offset + (anim_duration / |time_scale|)
     fn recalc_player_duration(&mut self, player: PlayerId) {
         if let Some(p) = self.players.iter_mut().find(|pp| pp.id == player) {
             let mut max_end = 0.0f32;
@@ -438,8 +448,8 @@ impl Engine {
                 if let Some(inst) = self.instances.iter().find(|ii| ii.id == *iid) {
                     if let Some(anim) = self.anims.get(inst.anim) {
                         let anim_duration = anim.duration_ms as f32 / 1000.0;
-                        let ts_abs = inst.time_scale.abs().max(1e-6);
-                        let end_time = inst.start_offset + (anim_duration * ts_abs);
+                        let end_time = inst.start_offset
+                            + scaled_instance_duration_seconds(anim_duration, inst.time_scale);
                         if end_time > max_end {
                             max_end = end_time;
                         }
@@ -560,16 +570,18 @@ impl Engine {
     /// Compute instance-local time given a player and animation duration under the player's loop mode.
     fn local_time_for_instance(&self, player: &Player, inst: &Instance, anim_duration: f32) -> f32 {
         // Interpret start_offset as a player-time shift (when the instance starts).
-        // Interpret time_scale as a duration multiplier (|ts| > 1 => longer, |ts| < 1 => shorter).
+        // Interpret time_scale with Studio semantics: |ts| > 1 => faster/shorter,
+        // |ts| < 1 => slower/longer.
         // Mapping from player time to clip local time:
-        //   base = (player.time - inst.start_offset) / inst.time_scale
+        //   base = (player.time - inst.start_offset) * inst.time_scale
         // Before the instance starts (player.time < start_offset), we must NOT wrap:
         //   return 0.0 so the instance outputs its initial values until start.
         // After start, apply Once/Loop/PingPong in the clip's [0, anim_duration] domain.
         if anim_duration <= 0.0 {
             return 0.0;
         }
-        // Special-case zero time scale: hold at start_offset in clip time.
+        // Special-case zero time scale: hold at start_offset in clip time for compatibility with
+        // earlier programmatic callers that used it as a static-pose selector.
         if inst.time_scale == 0.0 {
             return inst.start_offset.clamp(0.0, anim_duration);
         }
@@ -587,7 +599,7 @@ impl Engine {
             // Hold initial value up to the instance start within each cycle.
             return 0.0;
         }
-        let base = rel / ts;
+        let base = rel * ts;
         match player.mode {
             crate::inputs::LoopMode::Once => base.clamp(0.0, anim_duration),
             crate::inputs::LoopMode::Loop => {

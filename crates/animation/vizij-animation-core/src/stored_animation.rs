@@ -20,9 +20,9 @@ const LEGACY_VIZIJ_DEFAULT_IN: CoreVec2 = CoreVec2 { x: 0.58, y: 1.0 };
 /// - Studio v2 (`formatVersion: 2`) uses millisecond stamps and anchor-relative transition deltas.
 /// - Studio v1 (`formatVersion: 1`) follows Studio's migration rule: normalized stamps and
 ///   transition x-deltas are scaled by duration, transition y-deltas are preserved.
-/// - Legacy Vizij assets without `formatVersion` used normalized stamps and segment-normalized
-///   cubic-bezier handles. Those handles are materialized into Studio v2 explicit deltas so the
-///   sampler does not need old implicit defaults.
+/// - Assets without `formatVersion` are intentionally treated as legacy Vizij assets, not Studio
+///   v1. They used normalized stamps and segment-normalized cubic-bezier handles; those handles are
+///   materialized into Studio v2 explicit deltas so the sampler does not need old implicit defaults.
 /// - Values are converted from untagged RawValue shapes into core Value enum.
 pub fn parse_stored_animation_json(s: &str) -> Result<AnimationData, String> {
     let sa: StoredAnimation = serde_json::from_str(s).map_err(|e| format!("parse error: {e}"))?;

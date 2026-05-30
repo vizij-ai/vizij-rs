@@ -65,8 +65,8 @@ fn durations_are_independent_per_player() {
             enabled: true,
         },
     );
-    // P2: two instances with different spans (multiplier semantics):
-    // (3.0 * (1/3)) = 1.0 and (3.0 * 2.0) = 6.0 => max span 6.0
+    // P2: two instances with different spans (Studio speed semantics):
+    // (3.0 / (1/3)) = 9.0 and (3.0 / 2.0) = 1.5 => max span 9.0
     eng.add_instance(
         p2,
         a,
@@ -92,7 +92,7 @@ fn durations_are_independent_per_player() {
     let d2 = eng.player_total_duration(p2).unwrap();
 
     assert!((d1 - 3.0).abs() < 1e-6, "P1 total_duration should be 3.0");
-    assert!((d2 - 6.0).abs() < 1e-6, "P2 total_duration should be 6.0");
+    assert!((d2 - 9.0).abs() < 1e-6, "P2 total_duration should be 9.0");
 
     // Apply window to P2 that is smaller than span; duration should clamp to window
     let _ = eng.update(

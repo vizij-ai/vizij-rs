@@ -32,6 +32,10 @@
 
 - Cubic-bezier easing with per-key overrides and sensible defaults.
 - Support for scalar, vector, quaternion, colour, transform, boolean, and text tracks.
+- Studio-format parity for scalar numeric tracks, including millisecond keypoint stamps, explicit
+  handles, standard transition presets, auto-clamped handles, and Studio `timescale` semantics.
+  Complex-valued tracks remain supported for Vizij host compatibility, but Studio complex
+  `RawValue` tracks are treated as a compatibility path rather than the canonical target.
 - Deterministic player state machine with loop modes (`Loop`, `Once`, `PingPong`) and playback controls.
 - Instance-level blending (weight, time scaling, offsets) across multiple animations per player.
 - Optional derivative export for downstream tooling and analysis.
@@ -114,7 +118,7 @@ fn main() -> anyhow::Result<()> {
 }
 ```
 
-Instances are blended in insertion order. Adjust `weight`, `time_scale`, and `start_offset` to compose layered motion before applying the resulting `Outputs` to your rig.
+Instances are blended in insertion order. Adjust `weight`, `time_scale`, and `start_offset` to compose layered motion before applying the resulting `Outputs` to your rig. `time_scale` follows Studio's speed-multiplier semantics: `2.0` plays twice as fast, while `0.5` plays half speed.
 
 ---
 

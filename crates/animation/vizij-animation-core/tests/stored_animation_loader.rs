@@ -75,6 +75,69 @@ fn parses_new_format_fixture_and_preserves_points_and_transitions() {
 }
 
 #[test]
+fn unversioned_assets_use_legacy_vizij_handle_migration() {
+    let json = r#"
+    {
+      "id": "unversioned-legacy-vizij",
+      "name": "Unversioned Legacy Vizij",
+      "duration": 1000,
+      "groups": {},
+      "tracks": [
+        {
+          "id": "legacy.scalar",
+          "name": "Legacy Scalar",
+          "animatableId": "node.scalar",
+          "points": [
+            {
+              "id": "k0",
+              "stamp": 0,
+              "value": 10,
+              "transitions": { "out": { "x": 0.5, "y": 0.25 } }
+            },
+            {
+              "id": "k1",
+              "stamp": 1,
+              "value": 20,
+              "transitions": { "in": { "x": 0.75, "y": 0.75 } }
+            }
+          ]
+        }
+      ]
+    }
+    "#;
+
+    let anim = parse_stored_animation_json(json).expect("parse unversioned legacy animation");
+    let track = &anim.tracks[0];
+    approx(track.points[1].stamp, 1000.0, 1e-6);
+
+    match track.points[0]
+        .transitions
+        .as_ref()
+        .and_then(|transitions| transitions.r#out.as_ref())
+        .expect("legacy out handle")
+    {
+        AuthoredTransition::Explicit(delta) => {
+            approx(delta.x, 500.0, 1e-6);
+            approx(delta.y, 2.5, 1e-6);
+        }
+        other => panic!("expected materialized legacy out handle, got {other:?}"),
+    }
+
+    match track.points[1]
+        .transitions
+        .as_ref()
+        .and_then(|transitions| transitions.r#in.as_ref())
+        .expect("legacy in handle")
+    {
+        AuthoredTransition::Explicit(delta) => {
+            approx(delta.x, -250.0, 1e-6);
+            approx(delta.y, -2.5, 1e-6);
+        }
+        other => panic!("expected materialized legacy in handle, got {other:?}"),
+    }
+}
+
+#[test]
 fn parses_pose_quat_transform_fixture_with_extended_values() {
     let json = vizij_test_fixtures::animations::json("pose-quat-transform")
         .expect("load pose-quat-transform fixture");

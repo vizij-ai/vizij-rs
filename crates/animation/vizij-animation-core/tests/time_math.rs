@@ -46,6 +46,13 @@ fn mk_anim(name: &str, duration_s: f32) -> AnimationData {
     }
 }
 
+fn approx(left: f32, right: f32, epsilon: f32) {
+    assert!(
+        (left - right).abs() <= epsilon,
+        "left={left} right={right} epsilon={epsilon}"
+    );
+}
+
 #[test]
 fn total_duration_multiple_instances_basic() {
     let mut eng = Engine::new(Config::default());
@@ -66,7 +73,7 @@ fn total_duration_multiple_instances_basic() {
         },
     );
 
-    // Instance 2: time_scale 2.0 (slower by multiplier semantics), offset 0.0 -> span = 1.0 * 2.0 = 2.0
+    // Instance 2: time_scale 2.0 (Studio speed semantics), offset 0.0 -> span = 1.0 / 2.0 = 0.5
     eng.add_instance(
         p,
         a2,
@@ -109,6 +116,41 @@ fn total_duration_multiple_instances_basic() {
         (dur1 - 2.0).abs() < 1e-6,
         "total duration should remain 2.0 after large window"
     );
+}
+
+#[test]
+fn studio_timescale_two_advances_clip_twice_as_fast() {
+    let mut eng = Engine::new(Config::default());
+    let anim = eng.load_animation(mk_anim("Studio Timescale", 1.0));
+    let player = eng.create_player("P");
+
+    eng.add_instance(
+        player,
+        anim,
+        InstanceCfg {
+            weight: 1.0,
+            time_scale: 2.0,
+            start_offset: 0.0,
+            enabled: true,
+        },
+    );
+
+    let out = eng.update(0.25, vizij_animation_core::Inputs::default());
+    let value = out
+        .changes
+        .iter()
+        .find(|change| change.key == "Dummy")
+        .expect("animated value")
+        .value
+        .clone();
+
+    match value {
+        Value::Float(sample) => approx(sample, 0.5, 1e-5),
+        other => panic!("expected scalar sample, got {other:?}"),
+    }
+
+    let duration = eng.player_total_duration(player).expect("player duration");
+    approx(duration, 0.5, 1e-6);
 }
 
 #[test]

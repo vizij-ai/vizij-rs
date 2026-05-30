@@ -7,6 +7,9 @@
 //! - Numeric tracks use Studio's world-space cubic Bezier handles: explicit `{x,y}` transitions
 //!   are anchor-relative time/value deltas; named transitions resolve to Studio easing presets.
 //! - Bool/Text value kinds use step behavior.
+//! - Studio parity is exact for scalar numeric tracks. Complex values are supported for Vizij host
+//!   compatibility, but complex Studio `RawValue` tracks are being phased out upstream and use the
+//!   core's generic interpolation path rather than Studio's object-shaped control-point evaluator.
 //! - Legacy Vizij assets are migrated into this shape at the importer boundary.
 //!
 //! API:
