@@ -22,8 +22,8 @@ fn norm4(q: [f32; 4]) -> f32 {
 }
 
 fn mk_scalar_track_linear(path: &str, keys: &[(f32, f32)]) -> Track {
-    // Build normalized keypoints with per-segment linear timing:
-    // For each segment, left.out=(0,0), right.in=(1,1)
+    // Test fixtures may use normalized stamps, but animation data loaded into the
+    // engine is canonicalized to Studio v2 millisecond stamps in `mk_anim`.
     let mut points: Vec<Keypoint> = Vec::with_capacity(keys.len());
     for (i, (stamp, v)) in keys.iter().enumerate() {
         let mut transitions: Option<Transitions> = None;
@@ -36,10 +36,10 @@ fn mk_scalar_track_linear(path: &str, keys: &[(f32, f32)]) -> Track {
                 pairing: None,
             };
             if !is_last {
-                t.r#out = Some(AuthoredTransition::explicit(0.0, 0.0));
+                t.r#out = Some(AuthoredTransition::name("linear"));
             }
             if !is_first {
-                t.r#in = Some(AuthoredTransition::explicit(1.0, 1.0));
+                t.r#in = Some(AuthoredTransition::name("linear"));
             }
             // Only assign if at least one is present
             if t.r#in.is_some() || t.r#out.is_some() {
@@ -75,10 +75,10 @@ fn mk_quat_track_linear(path: &str, keys: &[(f32, [f32; 4])]) -> Track {
                 pairing: None,
             };
             if !is_last {
-                t.r#out = Some(AuthoredTransition::explicit(0.0, 0.0));
+                t.r#out = Some(AuthoredTransition::name("linear"));
             }
             if !is_first {
-                t.r#in = Some(AuthoredTransition::explicit(1.0, 1.0));
+                t.r#in = Some(AuthoredTransition::name("linear"));
             }
             if t.r#in.is_some() || t.r#out.is_some() {
                 transitions = Some(t);
@@ -102,13 +102,33 @@ fn mk_quat_track_linear(path: &str, keys: &[(f32, [f32; 4])]) -> Track {
 
 fn mk_anim(name: &str, duration_s: f32, tracks: Vec<Track>) -> AnimationData {
     serde_json::json!({}); // keep serde_json in scope for macros even if unused
+    let duration_ms = (duration_s * 1000.0) as u32;
     AnimationData {
         id: None,
         name: name.to_string(),
-        tracks,
+        tracks: tracks
+            .into_iter()
+            .map(|track| canonicalize_test_track_stamps(track, duration_ms))
+            .collect(),
         groups: serde_json::json!({}),
-        duration_ms: (duration_s * 1000.0) as u32,
+        duration_ms,
     }
+}
+
+fn canonicalize_test_track_stamps(mut track: Track, duration_ms: u32) -> Track {
+    if duration_ms > 1 {
+        let max_stamp = track
+            .points
+            .iter()
+            .map(|point| point.stamp)
+            .fold(0.0, f32::max);
+        if max_stamp <= 1.0 {
+            for point in &mut track.points {
+                point.stamp *= duration_ms as f32;
+            }
+        }
+    }
+    track
 }
 
 // A simple resolver used by tests
@@ -256,15 +276,15 @@ fn accumulates_vector_values_componentwise() {
 
 #[test]
 fn sampling_derivative_linear_and_step() {
-    let track_lin = mk_scalar_track_linear("node.value", &[(0.0, 0.0), (1.0, 1.0)]);
-    let sample = sample_track_with_derivative(&track_lin, 0.5, 1.0);
+    let track_lin = mk_scalar_track_linear("node.value", &[(0.0, 0.0), (1000.0, 1.0)]);
+    let sample = sample_track_with_derivative(&track_lin, 500.0, 1.0);
     if let Value::Float(v) = sample.0 {
         approx(v, 0.5, 1e-6);
     } else {
         panic!();
     }
     if let Some(Value::Float(dv)) = sample.1 {
-        approx(dv, 1.0, 1e-6);
+        approx(dv, 1.0, 1e-4);
     } else {
         panic!();
     }

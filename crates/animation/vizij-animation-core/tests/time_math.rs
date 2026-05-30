@@ -6,8 +6,8 @@ use vizij_animation_core::{
 };
 
 fn mk_anim(name: &str, duration_s: f32) -> AnimationData {
-    // Minimal scalar track with linear transitions encoded via per-point transitions:
-    // left.out=(0,0), right.in=(1,1)
+    let duration_ms = (duration_s * 1000.0) as u32;
+    // Minimal canonical Studio v2 scalar track with millisecond stamps.
     let points = vec![
         Keypoint {
             id: "k0".into(),
@@ -15,16 +15,16 @@ fn mk_anim(name: &str, duration_s: f32) -> AnimationData {
             value: Value::Float(0.0),
             transitions: Some(Transitions {
                 r#in: None,
-                r#out: Some(AuthoredTransition::explicit(0.0, 0.0)),
+                r#out: Some(AuthoredTransition::name("linear")),
                 pairing: None,
             }),
         },
         Keypoint {
             id: "k1".into(),
-            stamp: 1.0,
+            stamp: duration_ms as f32,
             value: Value::Float(1.0),
             transitions: Some(Transitions {
-                r#in: Some(AuthoredTransition::explicit(1.0, 1.0)),
+                r#in: Some(AuthoredTransition::name("linear")),
                 r#out: None,
                 pairing: None,
             }),
@@ -42,7 +42,7 @@ fn mk_anim(name: &str, duration_s: f32) -> AnimationData {
         name: name.to_string(),
         tracks: vec![track],
         groups: json!({}),
-        duration_ms: (duration_s * 1000.0) as u32,
+        duration_ms,
     }
 }
 

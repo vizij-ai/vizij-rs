@@ -17,10 +17,10 @@ fn mk_scalar_track_linear(path: &str, keys: &[(f32, f32)]) -> Track {
                 pairing: None,
             };
             if !is_last {
-                t.r#out = Some(AuthoredTransition::explicit(0.0, 0.0));
+                t.r#out = Some(AuthoredTransition::name("linear"));
             }
             if !is_first {
-                t.r#in = Some(AuthoredTransition::explicit(1.0, 1.0));
+                t.r#in = Some(AuthoredTransition::name("linear"));
             }
             if t.r#in.is_some() || t.r#out.is_some() {
                 transitions = Some(t);
@@ -46,7 +46,23 @@ fn mk_anim(name: &str, duration_s: f32, tracks: Vec<Track>) -> AnimationData {
     AnimationData {
         id: None,
         name: name.to_string(),
-        tracks,
+        tracks: tracks
+            .into_iter()
+            .map(|mut track| {
+                let duration_ms = (duration_s * 1000.0) as u32;
+                let max_stamp = track
+                    .points
+                    .iter()
+                    .map(|point| point.stamp)
+                    .fold(0.0, f32::max);
+                if duration_ms > 1 && max_stamp <= 1.0 {
+                    for point in &mut track.points {
+                        point.stamp *= duration_ms as f32;
+                    }
+                }
+                track
+            })
+            .collect(),
         groups: serde_json::json!({}),
         duration_ms: (duration_s * 1000.0) as u32,
     }

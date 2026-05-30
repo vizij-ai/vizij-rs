@@ -29,11 +29,21 @@ pub fn parse_stored_animation_json(s: &str) -> Result<AnimationData, String> {
     let duration = sa.duration.unwrap_or(LEGACY_DEFAULT_DURATION_MS);
     let mut tracks: Vec<Track> = Vec::with_capacity(sa.tracks.len());
 
+    let format_version = sa.format_version;
+    if let Some(version) = format_version {
+        if version != 1 && version != CURRENT_ANIMATION_FORMAT_VERSION {
+            return Err(format!(
+                "unsupported animation formatVersion {version}; expected 1 or {CURRENT_ANIMATION_FORMAT_VERSION}"
+            ));
+        }
+    }
+
     for st in sa.tracks {
-        let points = match sa.format_version {
+        let points = match format_version {
             Some(CURRENT_ANIMATION_FORMAT_VERSION) => parse_studio_v2_points(st.points)?,
             Some(1) => parse_studio_v1_points(st.points, duration)?,
-            _ => parse_legacy_vizij_points(st.points, duration)?,
+            None => parse_legacy_vizij_points(st.points, duration)?,
+            Some(_) => unreachable!("unsupported format version handled above"),
         };
 
         tracks.push(Track {

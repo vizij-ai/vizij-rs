@@ -138,6 +138,36 @@ fn unversioned_assets_use_legacy_vizij_handle_migration() {
 }
 
 #[test]
+fn explicit_unknown_format_versions_are_rejected() {
+    let json = r#"
+    {
+      "id": "future-studio",
+      "name": "Future Studio",
+      "formatVersion": 3,
+      "defaultViewportExtent": 1000,
+      "groups": [],
+      "tracks": [
+        {
+          "id": "face.smile",
+          "name": "Smile",
+          "animatableId": "face/smile",
+          "points": [
+            { "id": "k0", "stamp": 0, "value": 0 },
+            { "id": "k1", "stamp": 1000, "value": 1 }
+          ]
+        }
+      ]
+    }
+    "#;
+
+    let error = parse_stored_animation_json(json).expect_err("formatVersion 3 should fail");
+    assert!(
+        error.contains("unsupported animation formatVersion 3"),
+        "{error}"
+    );
+}
+
+#[test]
 fn parses_pose_quat_transform_fixture_with_extended_values() {
     let json = vizij_test_fixtures::animations::json("pose-quat-transform")
         .expect("load pose-quat-transform fixture");

@@ -60,8 +60,7 @@ pub struct Transitions {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Keypoint {
     pub id: String,
-    /// Studio v2 uses absolute milliseconds. Some low-level tests still construct unit-domain
-    /// tracks directly; the sampler treats this as a generic local stamp and does not normalize.
+    /// Studio v2 uses absolute milliseconds.
     pub stamp: f32,
     pub value: Value,
     #[serde(default)]
@@ -134,36 +133,16 @@ impl AnimationData {
         Ok(())
     }
 
-    /// Heuristic compatibility guard for programmatic callers that still build unit-domain
-    /// `AnimationData` directly instead of using the stored-animation importer.
-    pub fn appears_unit_domain(&self) -> bool {
-        let max_stamp = self
-            .tracks
-            .iter()
-            .flat_map(|track| track.points.iter().map(|point| point.stamp))
-            .fold(0.0_f32, f32::max);
-        self.duration_ms > 1 && max_stamp <= 1.0
-    }
-
-    /// Convert clip-local seconds to the stamp domain used by this data.
+    /// Convert clip-local seconds to canonical Studio v2 millisecond stamps.
     pub fn sample_stamp_for_seconds(&self, local_seconds: f32) -> f32 {
-        let duration_s = self.duration_ms as f32 / 1000.0;
-        if duration_s <= 0.0 || !local_seconds.is_finite() {
+        if self.duration_ms == 0 || !local_seconds.is_finite() {
             return 0.0;
         }
-        if self.appears_unit_domain() {
-            (local_seconds / duration_s).clamp(0.0, 1.0)
-        } else {
-            (local_seconds * 1000.0).clamp(0.0, self.duration_ms as f32)
-        }
+        (local_seconds * 1000.0).clamp(0.0, self.duration_ms as f32)
     }
 
     /// Convert a finite-difference epsilon in the data's stamp domain into seconds.
     pub fn stamp_delta_to_seconds(&self, delta: f32) -> f32 {
-        if self.appears_unit_domain() {
-            (delta * self.duration_ms as f32) / 1000.0
-        } else {
-            delta / 1000.0
-        }
+        delta / 1000.0
     }
 }

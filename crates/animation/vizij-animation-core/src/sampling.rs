@@ -2,8 +2,7 @@
 //! Track/animation sampling utilities for the canonical Studio StoredAnimation schema.
 //!
 //! Model:
-//! - Studio v2 keypoint stamps are in milliseconds, though programmatic callers may still pass
-//!   unit-domain test tracks directly.
+//! - Studio v2 keypoint stamps are in milliseconds.
 //! - Numeric tracks use Studio's world-space cubic Bezier handles: explicit `{x,y}` transitions
 //!   are anchor-relative time/value deltas; named transitions resolve to Studio easing presets.
 //! - Bool/Text value kinds use step behavior.
@@ -22,7 +21,7 @@ use vizij_api_core::{Value, ValueKind};
 /// Symmetric finite difference offset applied around the normalized parameter when approximating
 /// derivatives. Smaller values reduce smoothing but increase numerical noise; larger values trade
 /// the opposite. Consider exposing via configuration if tooling needs to tune accuracy.
-pub(crate) const DEFAULT_DERIVATIVE_EPSILON: f32 = 1e-3;
+pub(crate) const DEFAULT_DERIVATIVE_EPSILON: f32 = 1.0;
 
 fn value_difference(a: &Value, b: &Value) -> Option<Value> {
     match (a, b) {
@@ -247,32 +246,21 @@ pub fn sample_track(track: &Track, stamp: f32) -> Value {
 
 /// Sample a track and approximate its time derivative (seconds).
 ///
-/// Derivatives are estimated with a symmetric finite difference of width `DEFAULT_DERIVATIVE_EPSILON`
-/// normalized domain, scaled by the clip duration. This captures velocity-like behaviour for
-/// numeric tracks but intentionally returns `None` for non-numeric kinds such as Bool/Text to avoid
-/// misleading data. Quaternion derivatives are currently computed component-wise which is a
-/// reasonable first approximation for small deltas but does not map to angular velocity; replace
-/// with a proper log/exp-based interpolation when higher fidelity is required.
+/// Derivatives are estimated with a symmetric finite difference in the canonical millisecond stamp
+/// domain. This captures velocity-like behaviour for numeric tracks but intentionally returns
+/// `None` for non-numeric kinds such as Bool/Text to avoid misleading data. Quaternion derivatives
+/// are currently computed component-wise which is a reasonable first approximation for small deltas
+/// but does not map to angular velocity; replace with a proper log/exp-based interpolation when
+/// higher fidelity is required.
 ///
 /// TODO: expose derivative configuration (epsilon, strategy) via `BakingConfig` or a sampling
 /// struct so hosts can balance accuracy and performance.
 pub fn sample_track_with_derivative(
     track: &Track,
     stamp: f32,
-    duration_s: f32,
+    _duration_s: f32,
 ) -> (Value, Option<Value>) {
-    let unit_domain = track
-        .points
-        .last()
-        .map(|point| point.stamp <= 1.0)
-        .unwrap_or(true);
-    let stamp_delta_seconds = if unit_domain { duration_s } else { 0.001 };
-    let epsilon = if unit_domain {
-        DEFAULT_DERIVATIVE_EPSILON
-    } else {
-        1.0
-    };
-    sample_track_with_derivative_epsilon(track, stamp, stamp_delta_seconds, epsilon)
+    sample_track_with_derivative_epsilon(track, stamp, 0.001, 1.0)
 }
 
 /// Variant of [`sample_track_with_derivative`] that allows callers to specify the finite
@@ -630,9 +618,6 @@ fn world_cp_for_transition(
 ) -> WorldPoint {
     match transition {
         AuthoredTransition::Explicit(delta) => {
-            if let Some(cp) = legacy_unit_domain_cp(side, start, end, *delta) {
-                return cp;
-            }
             let anchor = match side {
                 TransitionSide::Out => start,
                 TransitionSide::In => end,
@@ -665,9 +650,6 @@ fn fallback_parametric_ctrl(left: &Keypoint, right: &Keypoint) -> [f32; 4] {
 
 fn transition_parametric(side: TransitionSide, transition: &AuthoredTransition, span: f32) -> Vec2 {
     match transition {
-        AuthoredTransition::Explicit(delta) if is_legacy_unit_domain_explicit(span, *delta) => {
-            *delta
-        }
         AuthoredTransition::Explicit(delta) => match side {
             TransitionSide::Out => Vec2 {
                 x: delta.x / span,
@@ -680,29 +662,6 @@ fn transition_parametric(side: TransitionSide, transition: &AuthoredTransition, 
         },
         AuthoredTransition::Name(name) => standard_transition_params(side, name),
     }
-}
-
-fn legacy_unit_domain_cp(
-    _side: TransitionSide,
-    start: NumericPoint,
-    end: NumericPoint,
-    delta: Vec2,
-) -> Option<WorldPoint> {
-    let span = end.stamp - start.stamp;
-    if !is_legacy_unit_domain_explicit(span, delta) {
-        return None;
-    }
-    Some(WorldPoint {
-        x: start.stamp + delta.x * span,
-        y: start.value + delta.y * (end.value - start.value),
-    })
-}
-
-fn is_legacy_unit_domain_explicit(span: f32, delta: Vec2) -> bool {
-    span.abs() <= 1.0
-        && (0.0..=1.0).contains(&delta.x)
-        && delta.y.is_finite()
-        && (-1.0..=2.0).contains(&delta.y)
 }
 
 fn standard_transition_params(side: TransitionSide, name: &str) -> Vec2 {

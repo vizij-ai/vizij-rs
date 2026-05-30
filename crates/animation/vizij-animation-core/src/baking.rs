@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::data::AnimationData;
 use crate::ids::AnimId;
-use crate::sampling::{sample_track_with_derivative_epsilon, DEFAULT_DERIVATIVE_EPSILON};
+use crate::sampling::sample_track_with_derivative_epsilon;
 use vizij_api_core::Value;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -24,7 +24,7 @@ pub struct BakingConfig {
     pub end_time: Option<f32>,
     /// Optional override for the finite-difference epsilon used when estimating derivatives.
     ///
-    /// Non-finite or non-positive values fall back to the default epsilon.
+    /// Non-finite or non-positive values fall back to one millisecond.
     pub derivative_epsilon: Option<f32>,
 }
 
@@ -123,16 +123,11 @@ pub fn bake_animation_data_with_derivatives(
     let frames_f = (span * sr).ceil();
     let frame_count = frames_f as usize + 1; // inclusive of end
 
-    let unit_domain = data.appears_unit_domain();
     let derivative_epsilon = cfg
         .derivative_epsilon
         .filter(|eps| eps.is_finite() && *eps > 0.0)
-        .unwrap_or(if unit_domain {
-            DEFAULT_DERIVATIVE_EPSILON
-        } else {
-            1.0
-        });
-    let stamp_delta_seconds = if unit_domain { duration_s } else { 0.001 };
+        .unwrap_or(1.0);
+    let stamp_delta_seconds = 0.001;
 
     let mut tracks = Vec::with_capacity(data.tracks.len());
     let mut derivative_tracks = Vec::with_capacity(data.tracks.len());
