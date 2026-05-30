@@ -42,6 +42,57 @@ fn fixture_graph() -> Value {
     })
 }
 
+fn graph_constant_output(path: &str, value: f32) -> Value {
+    json!({
+        "nodes": [
+            {
+                "id": "source",
+                "type": "constant",
+                "params": {
+                    "value": { "type": "float", "data": value }
+                }
+            },
+            {
+                "id": "out",
+                "type": "output",
+                "params": {
+                    "path": path
+                }
+            }
+        ],
+        "edges": [
+            {
+                "from": { "node_id": "source", "output": "out" },
+                "to": { "node_id": "out", "input": "in" }
+            }
+        ]
+    })
+}
+
+fn graph_time_output(path: &str) -> Value {
+    json!({
+        "nodes": [
+            {
+                "id": "time",
+                "type": "time"
+            },
+            {
+                "id": "out",
+                "type": "output",
+                "params": {
+                    "path": path
+                }
+            }
+        ],
+        "edges": [
+            {
+                "from": { "node_id": "time", "output": "out" },
+                "to": { "node_id": "out", "input": "in" }
+            }
+        ]
+    })
+}
+
 fn fixture_animation() -> Value {
     json!({
         "id": "facade-animation-smoke",
@@ -61,6 +112,51 @@ fn fixture_animation() -> Value {
             }
         ]
     })
+}
+
+#[test]
+fn step_delta_suppresses_only_unchanged_paths() {
+    let mut facade = VizijModuleFacade::new();
+    dispatch(
+        &mut facade,
+        "runtime.create",
+        json!({ "schedule": "SinglePass" }),
+    );
+    dispatch(
+        &mut facade,
+        "graph.register",
+        json!({
+            "id": "graph:static",
+            "spec": graph_constant_output("face/static.value", 0.25)
+        }),
+    );
+    dispatch(
+        &mut facade,
+        "graph.register",
+        json!({
+            "id": "graph:time",
+            "spec": graph_time_output("face/time.value")
+        }),
+    );
+
+    let initial = dispatch(&mut facade, "orchestrator.stepDelta", json!({ "dt": 0.25 }));
+    assert_eq!(initial["version"], 1);
+    assert_eq!(
+        initial["merged_writes"]
+            .as_array()
+            .expect("initial writes")
+            .len(),
+        2
+    );
+
+    let delta = dispatch(
+        &mut facade,
+        "orchestrator.stepDelta",
+        json!({ "dt": 0.25, "sinceVersion": 1 }),
+    );
+    let writes = delta["merged_writes"].as_array().expect("delta writes");
+    assert_eq!(writes.len(), 1);
+    assert_eq!(writes[0]["path"], "face/time.value");
 }
 
 #[test]

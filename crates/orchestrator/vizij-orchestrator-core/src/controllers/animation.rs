@@ -204,7 +204,9 @@ impl AnimationController {
     ///   TypedPath: "anim/player/<player_id>/instance/<inst_id>/enabled"
     ///
     /// These conventions are intentionally conservative and documented for now.
-    fn map_blackboard_to_inputs(bb: &Blackboard) -> Inputs {
+    /// Build animation-engine inputs from the orchestrator blackboard using the shared
+    /// animation command path convention.
+    pub fn inputs_from_blackboard(bb: &Blackboard) -> Inputs {
         let mut inputs = Inputs::default();
 
         for (tp, entry) in bb.iter() {
@@ -292,7 +294,7 @@ impl AnimationController {
     /// Unsupported command paths or value types are ignored rather than treated as hard errors.
     pub fn update(&mut self, dt: f32, bb: &mut Blackboard) -> Result<(WriteBatch, Vec<JsonValue>)> {
         // Build Inputs from Blackboard
-        let inputs = Self::map_blackboard_to_inputs(bb);
+        let inputs = Self::inputs_from_blackboard(bb);
 
         // Step engine and get outputs reference
         let outputs = self.engine.update_values(dt, inputs);
@@ -372,7 +374,7 @@ mod tests {
         )
         .expect("set instance weight");
 
-        let inputs = AnimationController::map_blackboard_to_inputs(&bb);
+        let inputs = AnimationController::inputs_from_blackboard(&bb);
         // Expect one Play command and one InstanceUpdate with weight 0.75
         assert!(inputs
             .player_cmds

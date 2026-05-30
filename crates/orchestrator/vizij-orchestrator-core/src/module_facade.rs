@@ -7,6 +7,7 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
+use std::collections::{BTreeMap, VecDeque};
 use vizij_api_core::{json as api_json, TypedPath, WriteBatch};
 use vizij_graph_core::types::GraphSpec;
 
@@ -272,10 +273,11 @@ impl VizijModuleFacade {
         let version = self.output_version;
         let since = args.since_version.unwrap_or(0);
 
-        let mut merged_writes = frame.merged_writes.clone();
-        if since == self.last_version && frame.merged_writes == self.last_writes {
-            merged_writes = WriteBatch::default();
-        }
+        let merged_writes = if since == self.last_version {
+            filter_unchanged_writes(&frame.merged_writes, &self.last_writes)
+        } else {
+            frame.merged_writes.clone()
+        };
 
         self.last_version = version;
         self.last_writes = frame.merged_writes;
@@ -335,6 +337,32 @@ impl VizijModuleFacade {
         self.last_version = 0;
         self.last_writes = WriteBatch::default();
     }
+}
+
+/// Return writes whose path occurrence changed compared with the previous frame.
+///
+/// Write batches preserve order and may include duplicate paths. This compares each current
+/// write against the previous write at the same path occurrence, suppressing unchanged writes
+/// without reordering the remaining batch.
+pub fn filter_unchanged_writes(current: &WriteBatch, previous: &WriteBatch) -> WriteBatch {
+    let mut previous_by_path: BTreeMap<String, VecDeque<_>> = BTreeMap::new();
+    for op in previous.iter() {
+        previous_by_path
+            .entry(op.path.to_string())
+            .or_default()
+            .push_back(op.clone());
+    }
+
+    let mut changed = WriteBatch::new();
+    for op in current.iter() {
+        let previous_op = previous_by_path
+            .get_mut(&op.path.to_string())
+            .and_then(VecDeque::pop_front);
+        if previous_op.as_ref() != Some(op) {
+            changed.push(op.clone());
+        }
+    }
+    changed
 }
 
 /// JSON request accepted by [`VizijModuleFacade`].
