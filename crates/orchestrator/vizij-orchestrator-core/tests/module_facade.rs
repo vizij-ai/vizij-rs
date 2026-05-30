@@ -212,6 +212,116 @@ fn facade_dispatches_stateful_runtime_calls() {
 }
 
 #[test]
+fn animation_setup_accepts_studio_instance_aliases() {
+    let mut facade = VizijModuleFacade::new();
+    dispatch(
+        &mut facade,
+        "runtime.create",
+        json!({ "schedule": "SinglePass" }),
+    );
+
+    dispatch(
+        &mut facade,
+        "animation.register",
+        json!({
+            "id": "anim:studio-aliases",
+            "setup": {
+                "animation": fixture_animation(),
+                "player": { "name": "studio-player", "loopMode": "once" },
+                "instance": {
+                    "weight": 1.0,
+                    "timeScale": 2.0,
+                    "offset": 250.0,
+                    "active": true
+                }
+            }
+        }),
+    );
+
+    let frame = dispatch(&mut facade, "orchestrator.step", json!({ "dt": 0.375 }));
+    let writes = frame["merged_writes"].as_array().expect("writes array");
+    let smile = writes
+        .iter()
+        .find(|write| write["path"] == "face/smile.amount")
+        .expect("animation write");
+    let value = smile["value"]["data"].as_f64().expect("float value");
+    assert!(
+        (value - 0.25).abs() < 0.0001,
+        "expected Studio offset/timeScale aliases to produce 0.25, got {value}"
+    );
+}
+
+#[test]
+fn animation_setup_accepts_legacy_timescale_and_start_offset_aliases() {
+    let mut facade = VizijModuleFacade::new();
+    dispatch(
+        &mut facade,
+        "runtime.create",
+        json!({ "schedule": "SinglePass" }),
+    );
+
+    dispatch(
+        &mut facade,
+        "animation.register",
+        json!({
+            "id": "anim:legacy-aliases",
+            "setup": {
+                "animation": fixture_animation(),
+                "instance": {
+                    "timescale": 2.0,
+                    "startOffset": 0.25
+                }
+            }
+        }),
+    );
+
+    let frame = dispatch(&mut facade, "orchestrator.step", json!({ "dt": 0.375 }));
+    let writes = frame["merged_writes"].as_array().expect("writes array");
+    let smile = writes
+        .iter()
+        .find(|write| write["path"] == "face/smile.amount")
+        .expect("animation write");
+    let value = smile["value"]["data"].as_f64().expect("float value");
+    assert!(
+        (value - 0.25).abs() < 0.0001,
+        "expected legacy timescale/startOffset aliases to produce 0.25, got {value}"
+    );
+}
+
+#[test]
+fn animation_setup_active_false_disables_studio_instance() {
+    let mut facade = VizijModuleFacade::new();
+    dispatch(
+        &mut facade,
+        "runtime.create",
+        json!({ "schedule": "SinglePass" }),
+    );
+
+    dispatch(
+        &mut facade,
+        "animation.register",
+        json!({
+            "id": "anim:inactive",
+            "setup": {
+                "animation": fixture_animation(),
+                "instance": {
+                    "active": false
+                }
+            }
+        }),
+    );
+
+    let frame = dispatch(&mut facade, "orchestrator.step", json!({ "dt": 0.5 }));
+    let writes = frame["merged_writes"].as_array().expect("writes array");
+    assert!(
+        !writes
+            .iter()
+            .any(|write| write["path"] == "face/smile.amount"),
+        "inactive Studio instance should not publish animation writes: {writes:?}"
+    );
+}
+
+#[test]
 fn facade_reports_errors_as_json() {
     let mut facade = VizijModuleFacade::new();
     let response = facade.dispatch_json(

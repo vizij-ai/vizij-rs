@@ -48,7 +48,10 @@ export type {
 /* ShapeJSON: typed metadata describing a Value's shape.
    We provide a couple of common helpers while remaining permissive. */
 /** Permissive shape metadata accepted by the orchestrator wasm boundary. */
-export type ShapePrimitive = { id: string } | { id: string; sizes?: number[] } | { id: string; params?: any };
+export type ShapePrimitive =
+  | { id: string }
+  | { id: string; sizes?: number[] }
+  | { id: string; params?: any };
 export type ShapeField = { [k: string]: ShapeJSON };
 /**
  * Forward-compatible shape contract.
@@ -56,7 +59,11 @@ export type ShapeField = { [k: string]: ShapeJSON };
  * Stable consumers should at least provide an `id`-based shape object; broader forms remain
  * accepted so older wrappers and host-specific metadata continue to round-trip.
  */
-export type ShapeJSON = ShapePrimitive | { record?: ShapeField } | { array?: ShapeJSON } | any;
+export type ShapeJSON =
+  | ShapePrimitive
+  | { record?: ShapeField }
+  | { array?: ShapeJSON }
+  | any;
 
 /** Write operation emitted by graph or animation controllers during a frame. */
 export interface WriteOpJSON {
@@ -250,6 +257,7 @@ export interface AnimationSetup {
   player?: {
     name?: string;
     loop_mode?: "once" | "loop" | "pingpong";
+    loopMode?: "once" | "loop" | "pingpong";
     speed?: number;
   };
   instance?: {
@@ -257,8 +265,18 @@ export interface AnimationSetup {
     weight?: number;
     /** Playback scaling factor applied by the animation engine. */
     time_scale?: number;
+    /** Studio/browser spelling for the playback scaling factor. */
+    timeScale?: number;
+    /** Legacy Studio spelling for the playback scaling factor. */
+    timescale?: number;
     /** Start offset in seconds on the player timeline. */
     start_offset?: number;
+    /** Browser spelling for start offset in seconds on the player timeline. */
+    startOffset?: number;
+    /** Studio instance offset in milliseconds. */
+    offset?: number;
     enabled?: boolean;
+    /** Studio active flag; false disables the registered instance. */
+    active?: boolean;
   };
 }

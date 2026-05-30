@@ -94,21 +94,7 @@ impl AnimationController {
 
             self.apply_player_overrides(player_id, &player_cfg);
 
-            let mut instance_cfg = InstanceCfg::default();
-            if let Some(inst) = spec.instance {
-                if let Some(weight) = inst.weight {
-                    instance_cfg.weight = weight;
-                }
-                if let Some(time_scale) = inst.time_scale {
-                    instance_cfg.time_scale = time_scale;
-                }
-                if let Some(start_offset) = inst.start_offset {
-                    instance_cfg.start_offset = start_offset;
-                }
-                if let Some(enabled) = inst.enabled {
-                    instance_cfg.enabled = enabled;
-                }
-            }
+            let instance_cfg = spec.instance.map(InstanceCfg::from).unwrap_or_default();
             self.engine.add_instance(player_id, anim, instance_cfg);
         }
 
@@ -328,7 +314,7 @@ struct AnimationSetup {
 struct PlayerSetup {
     #[serde(default)]
     name: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "loopMode")]
     loop_mode: Option<String>,
     #[serde(default)]
     speed: Option<f32>,
@@ -338,12 +324,36 @@ struct PlayerSetup {
 struct InstanceSetup {
     #[serde(default)]
     weight: Option<f32>,
-    #[serde(default)]
+    #[serde(default, alias = "timeScale", alias = "timescale")]
     time_scale: Option<f32>,
-    #[serde(default)]
+    #[serde(default, alias = "startOffset")]
     start_offset: Option<f32>,
+    /// Studio instance offset in milliseconds. `startOffset`/`start_offset` remain seconds.
     #[serde(default)]
+    offset: Option<f32>,
+    #[serde(default, alias = "active")]
     enabled: Option<bool>,
+}
+
+impl From<InstanceSetup> for InstanceCfg {
+    fn from(setup: InstanceSetup) -> Self {
+        let mut config = InstanceCfg::default();
+        if let Some(weight) = setup.weight {
+            config.weight = weight;
+        }
+        if let Some(time_scale) = setup.time_scale {
+            config.time_scale = time_scale;
+        }
+        if let Some(start_offset) = setup.start_offset {
+            config.start_offset = start_offset;
+        } else if let Some(offset_ms) = setup.offset {
+            config.start_offset = offset_ms / 1000.0;
+        }
+        if let Some(enabled) = setup.enabled {
+            config.enabled = enabled;
+        }
+        config
+    }
 }
 
 #[cfg(test)]
