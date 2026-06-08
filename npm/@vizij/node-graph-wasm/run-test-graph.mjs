@@ -3,10 +3,13 @@ import path from "path";
 
 const moduleDir = path.dirname(new URL(import.meta.url).pathname);
 const modulePath = path.join(moduleDir, "dist/src/index.js");
-const { init, createGraph, normalizeGraphSpec } = await import(modulePath);
 
-const specPath =
-  process.argv[2] ?? "/home/chris/Code/Semio/vizij_ws/q-short_emotion_rig (2).json";
+const specPath = process.argv[2];
+if (!specPath) {
+  console.error("Usage: node run-test-graph.mjs /path/to/graph-spec.json");
+  process.exit(2);
+}
+const { init, createGraph, normalizeGraphSpec } = await import(modulePath);
 const spec = JSON.parse(fs.readFileSync(specPath, "utf8"));
 
 await init();
