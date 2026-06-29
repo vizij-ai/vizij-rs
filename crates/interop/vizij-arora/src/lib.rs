@@ -10,9 +10,12 @@
 //! `Value` carries no metadata, so a value's `Shape.meta` (unit/space/range/
 //! color_space) rides a **sidecar key** `"/meta/<path>"` -- see [`meta_key`].
 //!
-//! The ids below are placeholders chosen to be stable and collision-free; they
-//! are intended to be unified with the canonical Arora type records once those
-//! land (VIZ-39).
+//! The ids below are **Vizij type ids** — UUIDs namespaced under the ASCII
+//! bytes of "vizij" so they are self-identifying and collision-free. They are
+//! the source of truth for Vizij's structured values. An equivalent
+//! Arora-declared type (identical structural shape) would be linked by mapping
+//! its id onto the matching Vizij id here; nothing in vizij-rs needs to run the
+//! Arora generator for that.
 
 use std::collections::HashMap;
 
@@ -42,8 +45,12 @@ pub enum ConversionError {
 
 // ---- declared type / field ids ------------------------------------------------
 
-const fn id(n: u128) -> Uuid {
-    Uuid::from_u128(n)
+/// Namespace for all Vizij type ids: the ASCII bytes of "vizij"
+/// (`76 69 7a 69 6a`) in the leading bytes, so every id is self-identifying.
+const VIZIJ_NS: u128 = 0x7669_7a69_6a00_0000_0000_0000_0000_0000;
+
+const fn id(offset: u128) -> Uuid {
+    Uuid::from_u128(VIZIJ_NS | offset)
 }
 
 const VEC2_TYPE: Uuid = id(0x0002);
