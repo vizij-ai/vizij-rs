@@ -206,10 +206,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "arora-types"
-version = "1.5.0"
+name = "arora-hal"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b19ef73d661ad225f6d208877fea9257c2300d1a50814e7a1709d03be5821fc"
+checksum = "24a305d611741ac3ba50a5939a2ec977d2290d86bf30928f2d0477ddac5590df"
+dependencies = [
+ "arora-types",
+ "async-trait",
+]
+
+[[package]]
+name = "arora-types"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f0d81688eddd55f4174ed29ff96a2fdd1264d8bb0452d9ffa1c8405ea415aa2"
 dependencies = [
  "async-trait",
  "derive_more",
@@ -3998,6 +4008,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
+name = "tokio"
+version = "1.52.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fc7f01b389ac15039e4dc9531aa973a135d7a4135281b12d7c1bc79fd57fffe"
+dependencies = [
+ "pin-project-lite",
+ "tokio-macros",
+]
+
+[[package]]
+name = "tokio-macros"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "385a6cb71ab9ab790c5fe8d67f1645e6c450a7ce006a33de03daa956cf70a496"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
+]
+
+[[package]]
 name = "toml_datetime"
 version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4245,6 +4276,18 @@ dependencies = [
  "thiserror",
  "uuid",
  "vizij-api-core",
+]
+
+[[package]]
+name = "vizij-arora-hal"
+version = "0.0.0"
+dependencies = [
+ "arora-hal",
+ "arora-types",
+ "async-trait",
+ "tokio",
+ "vizij-api-core",
+ "vizij-arora",
 ]
 
 [[package]]
