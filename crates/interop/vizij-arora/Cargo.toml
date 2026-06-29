@@ -1,0 +1,13 @@
+[package]
+name = "vizij-arora"
+version = "0.0.0"
+edition.workspace = true
+publish = false
+description = "Conversion between Vizij values (vizij-api-core) and the Arora Value vocabulary (arora-types)."
+
+[dependencies]
+vizij-api-core = { path = "../../api/vizij-api-core" }
+arora-types = "1"
+uuid = "1"
+thiserror = { workspace = true }
+serde_json = { workspace = true }

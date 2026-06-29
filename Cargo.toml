@@ -13,6 +13,7 @@ members = [
   "crates/orchestrator/vizij-orchestrator-core",
   "crates/orchestrator/vizij-orchestrator-wasm",
   "crates/test-fixtures/vizij-test-fixtures",
+  "crates/interop/vizij-arora",
 ]
 resolver = "2"
 
