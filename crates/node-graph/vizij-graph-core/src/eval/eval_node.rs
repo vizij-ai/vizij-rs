@@ -899,7 +899,7 @@ fn prepare_piecewise_breakpoints(
     let mut unique_inputs = Vec::with_capacity(inputs.len());
     let mut unique_outputs = Vec::with_capacity(outputs.len());
 
-    for (idx, (input, output)) in inputs.into_iter().zip(outputs.into_iter()).enumerate() {
+    for (idx, (input, output)) in inputs.into_iter().zip(outputs).enumerate() {
         if let Some(&prev_input) = unique_inputs.last() {
             let delta: f32 = input - prev_input;
             if delta < -PIECEWISE_BREAKPOINT_EPS {
