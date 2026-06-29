@@ -10,6 +10,10 @@
 //! Queue one into an Arora runtime with `Runtime::queue_behavior(Box::new(pg))`;
 //! it then reads/writes the same blackboard the behavior tree and the bridge do.
 //!
+//! [`orchestrator::OrchestratorBehavior`] wraps a whole Vizij orchestrator (many
+//! controllers + their merge) as one `Behavior` (VIZ-38).
+
+pub mod orchestrator;
 
 use arora_behavior::{Behavior, BehaviorContext, BehaviorError, BehaviorStatus};
 use arora_types::data::{DataStore, Key, StateChange};

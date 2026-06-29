@@ -4307,6 +4307,7 @@ dependencies = [
  "vizij-api-core",
  "vizij-arora",
  "vizij-graph-core",
+ "vizij-orchestrator-core",
 ]
 
 [[package]]
