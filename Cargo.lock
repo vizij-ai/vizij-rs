@@ -206,6 +206,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "arora-behavior"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9fea09635fab78d2bb5381483a3f1487cff7be07e6000dae5f8b5cd892d66253"
+dependencies = [
+ "arora-types",
+]
+
+[[package]]
 name = "arora-hal"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -213,6 +222,15 @@ checksum = "24a305d611741ac3ba50a5939a2ec977d2290d86bf30928f2d0477ddac5590df"
 dependencies = [
  "arora-types",
  "async-trait",
+]
+
+[[package]]
+name = "arora-simple-data-store"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d061192b2a7fba820ad189d411d85640d1a2fa159e30d7ebad6f4e388946849"
+dependencies = [
+ "arora-types",
 ]
 
 [[package]]
@@ -4279,6 +4297,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "vizij-arora-behavior"
+version = "0.0.0"
+dependencies = [
+ "arora-behavior",
+ "arora-simple-data-store",
+ "arora-types",
+ "serde_json",
+ "vizij-api-core",
+ "vizij-arora",
+ "vizij-graph-core",
+]
+
+[[package]]
 name = "vizij-arora-hal"
 version = "0.0.0"
 dependencies = [
@@ -4288,6 +4319,16 @@ dependencies = [
  "tokio",
  "vizij-api-core",
  "vizij-arora",
+]
+
+[[package]]
+name = "vizij-arora-store"
+version = "0.0.0"
+dependencies = [
+ "arora-types",
+ "vizij-api-core",
+ "vizij-arora",
+ "vizij-orchestrator-core",
 ]
 
 [[package]]

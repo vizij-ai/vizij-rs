@@ -16,6 +16,7 @@ members = [
   "crates/interop/vizij-arora",
   "crates/interop/vizij-arora-store",
   "crates/interop/vizij-arora-hal",
+  "crates/interop/vizij-arora-behavior",
 ]
 resolver = "2"
 
