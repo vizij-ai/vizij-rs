@@ -10,6 +10,13 @@
 //! `Value` carries no metadata, so a value's `Shape.meta` (unit/space/range/
 //! color_space) rides a **sidecar key** `"/meta/<path>"` -- see [`meta_key`].
 //!
+//! Vizij's *recursive* composites convert structurally, to arbitrary depth:
+//! `Record` <-> `Value::KeyValue` (string-keyed, field ids derived from the
+//! key names), `List`/`Array`/`Tuple` -> `Value::ArrayValue`, and `Enum` <->
+//! a tagged `Value::Structure`. Arora's `ArrayValue` has a single sequence
+//! kind, so `Array` and `Tuple` come back as `List`; the declared `Shape` of
+//! the path, not the wire value, is what preserves that distinction.
+//!
 //! The ids below are **Vizij type ids** — UUIDs namespaced under the ASCII
 //! bytes of "vizij" so they are self-identifying and collision-free. They are
 //! the source of truth for Vizij's structured values. An equivalent
@@ -19,6 +26,8 @@
 
 use std::collections::HashMap;
 
+use arora_types::gen_uuid_from_str;
+use arora_types::keyvalue::{KeyValue, KeyValueField};
 use arora_types::value::{Structure, StructureField, Value as AValue};
 use uuid::Uuid;
 use vizij_api_core::{Shape, Value as VValue};
@@ -26,9 +35,6 @@ use vizij_api_core::{Shape, Value as VValue};
 /// Failures converting between the two `Value` vocabularies.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ConversionError {
-    /// The Vizij value has no Arora mapping yet.
-    #[error("no Arora mapping for Vizij value `{0}`")]
-    UnsupportedVizij(&'static str),
     /// The Arora value has no Vizij mapping.
     #[error("no Vizij mapping for this Arora value")]
     UnsupportedArora,
@@ -83,6 +89,12 @@ const COLOR_FIELDS: [Uuid; 4] = [
     id(0x0020_0004),
 ];
 
+const ENUM_TYPE: Uuid = id(0x0040);
+const ENUM_TAG: Uuid = id(0x0040_0001);
+const ENUM_VALUE: Uuid = id(0x0040_0002);
+
+const RECORD_TYPE: Uuid = id(0x0050);
+
 const TRANSFORM_TYPE: Uuid = id(0x0030);
 const TRANSFORM_TRANSLATION: Uuid = id(0x0030_0001);
 const TRANSFORM_ROTATION: Uuid = id(0x0030_0002);
@@ -120,7 +132,36 @@ pub fn to_arora(value: &VValue) -> Result<AValue, ConversionError> {
                 (TRANSFORM_SCALE, vec_struct(VEC3_TYPE, &VEC3_FIELDS, scale)),
             ],
         ),
-        other => return Err(ConversionError::UnsupportedVizij(vizij_variant_name(other))),
+        VValue::Enum(tag, payload) => structure(
+            ENUM_TYPE,
+            vec![
+                (ENUM_TAG, AValue::String(tag.clone())),
+                (ENUM_VALUE, to_arora(payload)?),
+            ],
+        ),
+        VValue::Record(entries) => {
+            let mut fields = HashMap::with_capacity(entries.len());
+            for (key, entry) in entries {
+                fields.insert(
+                    key.clone(),
+                    KeyValueField {
+                        id: gen_uuid_from_str(key),
+                        name: key.clone(),
+                        value: Some(Box::new(to_arora(entry)?)),
+                    },
+                );
+            }
+            AValue::KeyValue(KeyValue {
+                id: RECORD_TYPE,
+                fields,
+            })
+        }
+        VValue::Array(items) | VValue::List(items) | VValue::Tuple(items) => AValue::ArrayValue(
+            items
+                .iter()
+                .map(to_arora)
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
     })
 }
 
@@ -148,17 +189,6 @@ fn structure(id: Uuid, fields: Vec<(Uuid, AValue)>) -> AValue {
     })
 }
 
-fn vizij_variant_name(value: &VValue) -> &'static str {
-    match value {
-        VValue::Enum(..) => "Enum",
-        VValue::Record(..) => "Record",
-        VValue::Array(..) => "Array",
-        VValue::List(..) => "List",
-        VValue::Tuple(..) => "Tuple",
-        _ => "unsupported",
-    }
-}
-
 // ---- Arora -> Vizij -----------------------------------------------------------
 
 /// Convert an Arora value into a Vizij value.
@@ -170,6 +200,24 @@ pub fn from_arora(value: &AValue) -> Result<VValue, ConversionError> {
         AValue::String(s) => VValue::Text(s.clone()),
         AValue::ArrayF32(xs) => VValue::Vector(xs.clone()),
         AValue::Structure(s) => structure_to_vizij(s)?,
+        AValue::ArrayValue(items) => VValue::List(
+            items
+                .iter()
+                .map(from_arora)
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
+        AValue::KeyValue(kv) => VValue::Record(
+            kv.fields
+                .iter()
+                .map(|(key, field)| {
+                    let value = field
+                        .value
+                        .as_deref()
+                        .ok_or(ConversionError::FieldKind { field: field.id })?;
+                    Ok((key.clone(), from_arora(value)?))
+                })
+                .collect::<Result<_, ConversionError>>()?,
+        ),
         _ => return Err(ConversionError::UnsupportedArora),
     })
 }
@@ -192,6 +240,13 @@ fn structure_to_vizij(s: &Structure) -> Result<VValue, ConversionError> {
             rotation: read_array(read_struct(s, TRANSFORM_ROTATION)?, &QUAT_FIELDS)?,
             scale: read_array(read_struct(s, TRANSFORM_SCALE)?, &VEC3_FIELDS)?,
         }
+    } else if ty == ENUM_TYPE {
+        let tag = match read_field(s, ENUM_TAG)? {
+            AValue::String(tag) => tag.clone(),
+            _ => return Err(ConversionError::FieldKind { field: ENUM_TAG }),
+        };
+        let payload = from_arora(read_field(s, ENUM_VALUE)?)?;
+        VValue::Enum(tag, Box::new(payload))
     } else {
         return Err(ConversionError::UnknownStructure(ty));
     })
@@ -219,6 +274,14 @@ fn read_f32(s: &Structure, field: Uuid) -> Result<f32, ConversionError> {
         AValue::F64(v) => Ok(*v as f32),
         _ => Err(ConversionError::FieldKind { field }),
     }
+}
+
+fn read_field(s: &Structure, field: Uuid) -> Result<&AValue, ConversionError> {
+    s.fields
+        .iter()
+        .find(|f| f.id == field)
+        .map(|f| f.value.as_ref())
+        .ok_or(ConversionError::MissingField { ty: s.id, field })
 }
 
 fn read_struct(s: &Structure, field: Uuid) -> Result<&Structure, ConversionError> {
@@ -299,9 +362,62 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_vizij_is_reported() {
-        let err = to_arora(&VValue::Record(Default::default())).unwrap_err();
-        assert_eq!(err, ConversionError::UnsupportedVizij("Record"));
+    fn record_of_records_round_trips() {
+        // The URDF IK/FK shape: a record of joint -> angle, here nested one
+        // level deeper to prove arbitrary depth.
+        let joints = VValue::Record(
+            [
+                ("shoulder".to_string(), VValue::Float(0.4)),
+                ("elbow".to_string(), VValue::Float(-1.2)),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let record = VValue::Record(
+            [
+                ("left_arm".to_string(), joints.clone()),
+                ("confidence".to_string(), VValue::Float(0.9)),
+            ]
+            .into_iter()
+            .collect(),
+        );
+
+        let arora = to_arora(&record).unwrap();
+        assert!(matches!(arora, AValue::KeyValue(_)));
+        assert_eq!(from_arora(&arora).unwrap(), record);
+    }
+
+    #[test]
+    fn list_round_trips_and_sequences_collapse_to_list() {
+        let list = VValue::List(vec![
+            VValue::Float(1.0),
+            VValue::Vec3([1.0, 2.0, 3.0]),
+            VValue::Text("mixed".into()),
+        ]);
+        let arora = to_arora(&list).unwrap();
+        assert!(matches!(arora, AValue::ArrayValue(_)));
+        assert_eq!(from_arora(&arora).unwrap(), list);
+
+        // Tuple and Array share ArrayValue on the wire, so they come back as
+        // List: the path's declared Shape carries the distinction instead.
+        let tuple = VValue::Tuple(vec![VValue::Float(1.0), VValue::Bool(true)]);
+        let back = from_arora(&to_arora(&tuple).unwrap()).unwrap();
+        assert_eq!(
+            back,
+            VValue::List(vec![VValue::Float(1.0), VValue::Bool(true)])
+        );
+    }
+
+    #[test]
+    fn enum_round_trips() {
+        let value = VValue::Enum(
+            "grasp".to_string(),
+            Box::new(VValue::Record(
+                [("force".to_string(), VValue::Float(0.5))].into_iter().collect(),
+            )),
+        );
+        let arora = to_arora(&value).unwrap();
+        assert_eq!(from_arora(&arora).unwrap(), value);
     }
 
     #[test]
