@@ -1,0 +1,4 @@
+# Consuming `arora` from git makes cargo enumerate that repo's workspace,
+# whose robot-module manifests use artifact dependencies — nightly bindeps.
+[unstable]
+bindeps = true

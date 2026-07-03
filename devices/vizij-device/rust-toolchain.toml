@@ -1,0 +1,4 @@
+# Match arora-sdk's pin: consuming `arora` from git makes cargo scan that
+# repo's workspace, whose module manifests use -Z bindeps (nightly-only).
+[toolchain]
+channel = "nightly-2026-06-03"
