@@ -8,7 +8,7 @@
 //! VIZ-39 / arora-sdk#100). Primitives map directly (`Float`->`F32`, ...).
 //!
 //! `Value` carries no metadata, so a value's `Shape.meta` (unit/space/range/
-//! color_space) rides a **sidecar key** `"/meta/<path>"` -- see [`meta_key`].
+//! color_space) rides a **sidecar key** `"meta/<path>"` -- see [`meta_key`].
 //!
 //! Vizij's *recursive* composites convert structurally, to arbitrary depth:
 //! `Record` <-> `Value::KeyValue` (string-keyed, field ids derived from the
@@ -156,12 +156,9 @@ pub fn to_arora(value: &VValue) -> Result<AValue, ConversionError> {
                 fields,
             })
         }
-        VValue::Array(items) | VValue::List(items) | VValue::Tuple(items) => AValue::ArrayValue(
-            items
-                .iter()
-                .map(to_arora)
-                .collect::<Result<Vec<_>, _>>()?,
-        ),
+        VValue::Array(items) | VValue::List(items) | VValue::Tuple(items) => {
+            AValue::ArrayValue(items.iter().map(to_arora).collect::<Result<Vec<_>, _>>()?)
+        }
     })
 }
 
@@ -301,9 +298,9 @@ fn read_struct(s: &Structure, field: Uuid) -> Result<&Structure, ConversionError
 /// The sidecar key carrying the metadata for the value stored at `data_path`.
 ///
 /// Arora's `Value` has no place for `Shape.meta` (unit/space/range/color_space),
-/// so it travels the same store under a reserved `"/meta/"` namespace.
+/// so it travels the same store under a reserved `"meta/"` namespace. (No leading slash: `TypedPath` rejects an empty first segment, and the sidecar must be storable in a `BlackboardStore`.)
 pub fn meta_key(data_path: &str) -> String {
-    format!("/meta/{}", data_path.trim_start_matches('/'))
+    format!("meta/{}", data_path.trim_start_matches('/'))
 }
 
 /// Encode a value's shape metadata for the sidecar key, if any is present.
@@ -413,7 +410,9 @@ mod tests {
         let value = VValue::Enum(
             "grasp".to_string(),
             Box::new(VValue::Record(
-                [("force".to_string(), VValue::Float(0.5))].into_iter().collect(),
+                [("force".to_string(), VValue::Float(0.5))]
+                    .into_iter()
+                    .collect(),
             )),
         );
         let arora = to_arora(&value).unwrap();
@@ -436,7 +435,7 @@ mod tests {
     fn meta_sidecar_round_trips() {
         assert_eq!(
             meta_key("standard/semio/mouth.x"),
-            "/meta/standard/semio/mouth.x"
+            "meta/standard/semio/mouth.x"
         );
         let shape = Shape::new(ShapeId::Vec3)
             .with_meta("unit", "radians")
