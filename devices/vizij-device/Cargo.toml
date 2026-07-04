@@ -5,23 +5,13 @@ edition = "2021"
 publish = false
 description = "A Vizij rig as a Semio Studio device: RigHal + the arora headless runner (Zenoh registration)."
 
-# Standalone on purpose: this binary needs the not-yet-published `arora`
-# wrapper from git, and unifying its arora-types/arora-hal with the crates.io
-# copies used by the vizij interop crates requires a [patch.crates-io] block.
-# Keeping the crate out of the vizij-rs workspace contains that stopgap here.
-# Retarget everything to crates.io versions once `arora` is published
-# (arora-sdk PRs #112/#113).
+# Standalone on purpose: the vizij-rs workspace pins its own toolchain and
+# member set; this binary is a leaf that composes published arora crates with
+# the in-repo RigHal.
 [workspace]
 
 [dependencies]
 anyhow = "1"
-arora = { git = "https://github.com/semio-ai/arora-sdk.git", branch = "feat/studio-bridge-opt-in", features = ["studio-bridge"] }
+arora = { version = "0.1", features = ["studio-bridge"] }
 arora-hal = "0.1"
 vizij-arora-hal = { path = "../../crates/interop/vizij-arora-hal" }
-
-# One arora-types / arora-hal across the git `arora` and the crates.io deps of
-# the vizij interop crates, so RigHal satisfies arora's `Arc<dyn Hal>`.
-[patch.crates-io]
-arora-types = { git = "https://github.com/semio-ai/arora-sdk.git", branch = "feat/studio-bridge-opt-in" }
-arora-hal = { git = "https://github.com/semio-ai/arora-sdk.git", branch = "feat/studio-bridge-opt-in" }
-arora-bridge = { git = "https://github.com/semio-ai/arora-sdk.git", branch = "feat/studio-bridge-opt-in" }

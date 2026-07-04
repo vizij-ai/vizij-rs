@@ -164,7 +164,8 @@ dependencies = [
 [[package]]
 name = "arora"
 version = "0.1.0"
-source = "git+https://github.com/semio-ai/arora-sdk.git?branch=feat%2Fstudio-bridge-opt-in#732ef9fd4404328e60141eb10dda71d88a7809c2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f19401d7d962ee2aa85135b6adf910b94431f0d44df2c03f2faeb8097bcf2327"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -188,7 +189,8 @@ dependencies = [
 [[package]]
 name = "arora-behavior"
 version = "0.1.0"
-source = "git+https://github.com/semio-ai/arora-sdk.git?branch=feat%2Fstudio-bridge-opt-in#732ef9fd4404328e60141eb10dda71d88a7809c2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9fea09635fab78d2bb5381483a3f1487cff7be07e6000dae5f8b5cd892d66253"
 dependencies = [
  "arora-types",
 ]
@@ -196,7 +198,8 @@ dependencies = [
 [[package]]
 name = "arora-behavior-tree"
 version = "0.1.0"
-source = "git+https://github.com/semio-ai/arora-sdk.git?branch=feat%2Fstudio-bridge-opt-in#732ef9fd4404328e60141eb10dda71d88a7809c2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac32eae75337dd38709bcfd06a9b7229e3054549188ee2afe90cdae47ebd6c47"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -218,7 +221,8 @@ dependencies = [
 [[package]]
 name = "arora-behavior-tree-types"
 version = "0.1.0"
-source = "git+https://github.com/semio-ai/arora-sdk.git?branch=feat%2Fstudio-bridge-opt-in#732ef9fd4404328e60141eb10dda71d88a7809c2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f136a84a870d32ec032e4c4ed62d2dfd513b632e378741fb87a31f16104a2b29"
 dependencies = [
  "arora-types",
  "lazy_static",
@@ -229,7 +233,8 @@ dependencies = [
 [[package]]
 name = "arora-bridge"
 version = "1.0.0"
-source = "git+https://github.com/semio-ai/arora-sdk.git?branch=feat%2Fstudio-bridge-opt-in#732ef9fd4404328e60141eb10dda71d88a7809c2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdb38ca1266a6c84850a0c9c35d60dd0756003492ddf086f174045c52e3d0500"
 dependencies = [
  "arora-types",
  "async-trait",
@@ -239,7 +244,8 @@ dependencies = [
 [[package]]
 name = "arora-buffers"
 version = "0.1.0"
-source = "git+https://github.com/semio-ai/arora-sdk.git?branch=feat%2Fstudio-bridge-opt-in#732ef9fd4404328e60141eb10dda71d88a7809c2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9e030968ceab3d1a0ec9320795de0ca6c579e032a83bd3e18cdc22cb06788a1"
 dependencies = [
  "arora-types",
  "bytes",
@@ -252,7 +258,8 @@ dependencies = [
 [[package]]
 name = "arora-engine"
 version = "0.1.0"
-source = "git+https://github.com/semio-ai/arora-sdk.git?branch=feat%2Fstudio-bridge-opt-in#732ef9fd4404328e60141eb10dda71d88a7809c2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2e1b4060b86bad406567749556b38c31292577d6fc5e9c5898ce0c1b4a7b4ef"
 dependencies = [
  "anyhow",
  "arora-buffers",
@@ -282,7 +289,8 @@ dependencies = [
 [[package]]
 name = "arora-hal"
 version = "0.1.0"
-source = "git+https://github.com/semio-ai/arora-sdk.git?branch=feat%2Fstudio-bridge-opt-in#732ef9fd4404328e60141eb10dda71d88a7809c2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24a305d611741ac3ba50a5939a2ec977d2290d86bf30928f2d0477ddac5590df"
 dependencies = [
  "arora-types",
  "async-trait",
@@ -291,7 +299,8 @@ dependencies = [
 [[package]]
 name = "arora-module-core"
 version = "0.1.0"
-source = "git+https://github.com/semio-ai/arora-sdk.git?branch=feat%2Fstudio-bridge-opt-in#732ef9fd4404328e60141eb10dda71d88a7809c2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3c45893deddcefe7837d300589fd73926bb14ed3d5a996f44f9eebada1332ea"
 dependencies = [
  "arora-registry",
  "arora-types",
@@ -310,7 +319,8 @@ dependencies = [
 [[package]]
 name = "arora-module-rust"
 version = "0.1.0"
-source = "git+https://github.com/semio-ai/arora-sdk.git?branch=feat%2Fstudio-bridge-opt-in#732ef9fd4404328e60141eb10dda71d88a7809c2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6fb35d72831a888cde3f8f69d249db9e2b7406bc176f8bf37e3998a79ac3baf"
 dependencies = [
  "anyhow",
  "arora-module-core",
@@ -328,7 +338,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "serde_yaml 0.9.34+deprecated",
+ "serde_yaml 0.8.26",
  "tokio",
  "uuid",
 ]
@@ -336,7 +346,8 @@ dependencies = [
 [[package]]
 name = "arora-registry"
 version = "0.1.0"
-source = "git+https://github.com/semio-ai/arora-sdk.git?branch=feat%2Fstudio-bridge-opt-in#732ef9fd4404328e60141eb10dda71d88a7809c2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5378d768307dee7e47e332a3a391506250a7ee2cb3d5f4923930e2e7ef1b0a8"
 dependencies = [
  "anyhow",
  "arora-types",
@@ -353,7 +364,8 @@ dependencies = [
 [[package]]
 name = "arora-simple-data-store"
 version = "0.1.0"
-source = "git+https://github.com/semio-ai/arora-sdk.git?branch=feat%2Fstudio-bridge-opt-in#732ef9fd4404328e60141eb10dda71d88a7809c2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d061192b2a7fba820ad189d411d85640d1a2fa159e30d7ebad6f4e388946849"
 dependencies = [
  "arora-types",
 ]
@@ -390,7 +402,8 @@ dependencies = [
 [[package]]
 name = "arora-types"
 version = "1.6.0"
-source = "git+https://github.com/semio-ai/arora-sdk.git?branch=feat%2Fstudio-bridge-opt-in#732ef9fd4404328e60141eb10dda71d88a7809c2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d6dc0309d40578b5df7b522c3704585e2c1d569bf10573d4bb599777e77c71e"
 dependencies = [
  "async-trait",
  "derive_more",
@@ -406,7 +419,8 @@ dependencies = [
 [[package]]
 name = "arora-vfs"
 version = "0.1.0"
-source = "git+https://github.com/semio-ai/arora-sdk.git?branch=feat%2Fstudio-bridge-opt-in#732ef9fd4404328e60141eb10dda71d88a7809c2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c684bb078ae264585b66a78586cc8064a3f1b2fe47d4604bcbb7572f7e2f926b"
 dependencies = [
  "async-recursion",
  "derive_more",
