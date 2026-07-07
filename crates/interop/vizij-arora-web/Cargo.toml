@@ -1,0 +1,40 @@
+[package]
+name = "vizij-arora-web"
+version = "0.0.0"
+edition.workspace = true
+publish = false
+description = "Run a Vizij runtime in the browser as an Arora device: a thin wasm-bindgen cdylib over arora-web's BrowserRuntime, injected with a BlackboardStore + RigHal + a Vizij Behavior (VIZ-14)."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# The whole crate is `wasm32`-only (arora-web's browser runtime is), so every
+# dependency is gated to that target. On the host the crate is an empty shim with
+# no dependencies, so it still participates in a native `cargo build`/`cargo test`
+# without pulling the browser runtime into a host link.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# The published browser-runtime primitive: assembles arora's Runtime over an
+# injected HAL/bridge/store and exposes step() + the Value<->JSON store accessors.
+arora-web = "0.1"
+# The default Bridge: the in-process fake, all this device needs for now.
+arora-bridge = "1"
+
+# The interop crates that already implement the Arora traits over Vizij.
+vizij-arora-store = { path = "../vizij-arora-store" }
+vizij-arora-hal = { path = "../vizij-arora-hal" }
+vizij-arora-behavior = { path = "../vizij-arora-behavior" }
+
+# Vizij pieces the browser wrapper builds the injected behavior from.
+vizij-api-core = { path = "../../api/vizij-api-core" }
+vizij-graph-core = { path = "../../node-graph/vizij-graph-core" }
+
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = "0.4"
+serde_json = { workspace = true }
+console_error_panic_hook = "0.1"
+# uuid v4 on wasm needs a browser RNG (selects getrandom's wasm_js backend).
+getrandom = { version = "0.4", features = ["wasm_js"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
+serde-wasm-bindgen = { workspace = true }
