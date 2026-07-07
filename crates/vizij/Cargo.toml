@@ -1,0 +1,26 @@
+[package]
+name = "vizij"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Vizij: an arora with a head. cargo run opens the view, serving the open local bridge."
+
+[features]
+default = []
+# Connect to Semio Studio (Zenoh + device registration) instead of serving the
+# local WebSocket bridge. The two are mutually exclusive by construction: the
+# runtime owns exactly one bridge.
+semio-studio-bridge = ["arora/studio-bridge"]
+
+[dependencies]
+anyhow = "1"
+arora = "0.2"
+arora-bridge = "1"
+arora-hal = "0.1"
+arora-simple-data-store = "0.1"
+arora-websocket = "1"
+bevy = { workspace = true }
+log = "0.4"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+vizij-api-core = { path = "../api/vizij-api-core" }
+vizij-arora-hal = { path = "../interop/vizij-arora-hal" }
