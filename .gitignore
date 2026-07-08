@@ -1,5 +1,5 @@
-# Rust build
-/target
+# Rust build (root workspace + any nested crate, e.g. devices/vizij-device)
+**/target/
 /node_modules
 # wasm-pack output (generated)
 npm/@vizij/animation-wasm/pkg/
