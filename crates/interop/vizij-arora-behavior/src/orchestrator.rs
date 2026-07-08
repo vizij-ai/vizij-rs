@@ -1,5 +1,5 @@
 //! [`OrchestratorBehavior`]: a whole Vizij orchestrator driven as one Arora
-//! [`Behavior`](arora_behavior::Behavior) (VIZ-38).
+//! [`BehaviorInterpreter`](arora_behavior::BehaviorInterpreter) (VIZ-38).
 //!
 //! The orchestrator coordinates several graph/animation controllers against its
 //! own blackboard and **merges** their writes each frame — the load-bearing
@@ -10,13 +10,16 @@
 //! inputs in, merged writes out. Decomposing the orchestrator into per-controller
 //! behaviors is a later step; doing it this way first is the safe migration that
 //! cannot lose the merge semantics.
+//!
+//! Like the graph, it reads the frame's `dt` from the runtime's `arora/dt`
+//! golden key rather than a tick argument.
 
-use arora_behavior::{Behavior, BehaviorContext, BehaviorError, BehaviorStatus};
+use arora_behavior::{BehaviorContext, BehaviorError, BehaviorInterpreter, BehaviorStatus};
 use arora_types::data::{DataStore, Key, StateChange};
 use vizij_api_core::TypedPath;
 use vizij_orchestrator::Orchestrator;
 
-use crate::conv;
+use crate::{conv, dt_from_store};
 
 /// A Vizij orchestrator as an Arora behavior.
 pub struct OrchestratorBehavior {
@@ -39,8 +42,9 @@ impl OrchestratorBehavior {
 
     /// Tick the orchestrator against `store` for `dt`: stage subscribed inputs,
     /// step (controllers run and their writes are merged), then publish the
-    /// merged writes. The inherent method behind the [`Behavior`] impl — handy
-    /// for driving an orchestrator directly and for tests.
+    /// merged writes. The inherent method behind the [`BehaviorInterpreter`] impl
+    /// — handy for driving an orchestrator directly (with an explicit `dt`) and
+    /// for tests.
     pub fn tick_store(&mut self, store: &dyn DataStore, dt: f32) -> Result<(), BehaviorError> {
         let delta = if dt.is_finite() { dt.max(0.0) } else { 0.0 };
 
@@ -87,9 +91,9 @@ impl OrchestratorBehavior {
     }
 }
 
-impl Behavior for OrchestratorBehavior {
+impl BehaviorInterpreter for OrchestratorBehavior {
     fn tick(&mut self, ctx: &mut BehaviorContext) -> Result<BehaviorStatus, BehaviorError> {
-        self.tick_store(ctx.store, ctx.dt)?;
+        self.tick_store(ctx.store, dt_from_store(ctx.store))?;
         // An orchestrator runs every frame.
         Ok(BehaviorStatus::Running)
     }

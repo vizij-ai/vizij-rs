@@ -1,5 +1,5 @@
 //! [`ProcessingGraph`]: a Vizij node graph driven as an Arora
-//! [`Behavior`](arora_behavior::Behavior) (VIZ-34).
+//! [`BehaviorInterpreter`](arora_behavior::BehaviorInterpreter) (VIZ-34).
 //!
 //! Each tick it reads its subscribed input paths from the shared store (Arora
 //! values → Vizij via [`vizij_arora`]), evaluates the graph for `dt`, and writes
@@ -7,16 +7,21 @@
 //! [`BehaviorStatus::Running`] — a node graph runs every frame, unlike a tree
 //! that runs to a terminal status.
 //!
+//! Timing is not a tick argument: the runtime publishes the frame clock into the
+//! store under the [`golden`](arora_behavior::golden) keys before ticking, so the
+//! graph reads `dt` from `arora/dt` (nanoseconds) like any other slot.
+//!
 //! Queue one into an Arora runtime with `Runtime::queue_behavior(Box::new(pg))`;
 //! it then reads/writes the same blackboard the behavior tree and the bridge do.
 //!
 //! [`orchestrator::OrchestratorBehavior`] wraps a whole Vizij orchestrator (many
-//! controllers + their merge) as one `Behavior` (VIZ-38).
+//! controllers + their merge) as one `BehaviorInterpreter` (VIZ-38).
 
 pub mod orchestrator;
 
-use arora_behavior::{Behavior, BehaviorContext, BehaviorError, BehaviorStatus};
+use arora_behavior::{BehaviorContext, BehaviorError, BehaviorInterpreter, BehaviorStatus};
 use arora_types::data::{DataStore, Key, StateChange};
+use arora_types::value::Value as AValue;
 use vizij_api_core::TypedPath;
 use vizij_graph_core::eval::{evaluate_all, GraphRuntime};
 use vizij_graph_core::types::GraphSpec;
@@ -40,8 +45,9 @@ impl ProcessingGraph {
     }
 
     /// Tick the graph against `store` for `dt`: read subscribed inputs, evaluate,
-    /// write outputs. This is the inherent method behind the [`Behavior`] impl —
-    /// handy for driving a graph directly and for tests.
+    /// write outputs. This is the inherent method behind the
+    /// [`BehaviorInterpreter`] impl — handy for driving a graph directly (with an
+    /// explicit `dt`) and for tests.
     pub fn tick_store(&mut self, store: &dyn DataStore, dt: f32) -> Result<(), BehaviorError> {
         let delta = if dt.is_finite() { dt.max(0.0) } else { 0.0 };
         self.rt.dt = delta;
@@ -79,11 +85,24 @@ impl ProcessingGraph {
     }
 }
 
-impl Behavior for ProcessingGraph {
+impl BehaviorInterpreter for ProcessingGraph {
     fn tick(&mut self, ctx: &mut BehaviorContext) -> Result<BehaviorStatus, BehaviorError> {
-        self.tick_store(ctx.store, ctx.dt)?;
+        self.tick_store(ctx.store, dt_from_store(ctx.store))?;
         // A node graph is continuous: tick it again next step.
         Ok(BehaviorStatus::Running)
+    }
+}
+
+/// Read the frame's `dt` (seconds) from the runtime's golden key.
+///
+/// The runtime publishes `arora/dt` as [`Value::U64`](AValue::U64) nanoseconds
+/// before each tick; we convert to seconds. Absent or wrong-typed (e.g. driven
+/// outside a runtime) reads as `0.0`.
+pub(crate) fn dt_from_store(store: &dyn DataStore) -> f32 {
+    let key = Key::new(arora_behavior::golden::DT);
+    match store.read(std::slice::from_ref(&key)).into_iter().next() {
+        Some(Some(AValue::U64(ns))) => (ns as f64 / 1e9) as f32,
+        _ => 0.0,
     }
 }
 
@@ -117,6 +136,22 @@ mod tests {
 
     fn read(store: &SimpleDataStore, path: &str) -> Option<AValue> {
         store.read(&[Key::from(path)]).into_iter().next().flatten()
+    }
+
+    #[test]
+    fn dt_reads_the_golden_key_as_seconds() {
+        let store = SimpleDataStore::new();
+        // Absent golden key -> 0.0 (e.g. driven outside a runtime).
+        assert_eq!(dt_from_store(&store), 0.0);
+
+        // The runtime publishes arora/dt as U64 nanoseconds; we read seconds.
+        store
+            .write(StateChange::set(
+                arora_behavior::golden::DT,
+                AValue::U64(500_000_000),
+            ))
+            .unwrap();
+        assert!((dt_from_store(&store) - 0.5).abs() < 1e-6);
     }
 
     #[test]

@@ -6,7 +6,7 @@ publish = false
 description = "Vizij node graph / orchestrator driven as Arora Behaviors (ProcessingGraph, OrchestratorBehavior)."
 
 [dependencies]
-arora-behavior = "0.1"
+arora-behavior = "2"
 arora-types = "1"
 vizij-arora = { path = "../vizij-arora" }
 vizij-api-core = { path = "../../api/vizij-api-core" }
