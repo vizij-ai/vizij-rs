@@ -13,6 +13,8 @@
 //! Modelled on `arora-hal`'s `FakeHal`: cheaply cloneable, clones share state,
 //! std-channel update feed.
 
+pub mod shapes;
+
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 
