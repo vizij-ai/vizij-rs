@@ -1,0 +1,34 @@
+[package]
+name = "vizij-animation-module"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "vizij-animation-core packaged as an Arora wasm module (build once, run in any Arora runtime)."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+arora-buffers = "0.2"
+arora-types = "1"
+vizij-animation-core = { path = "../../animation/vizij-animation-core" }
+vizij-arora = { path = "../vizij-arora" }
+vizij-api-core = { path = "../../api/vizij-api-core" }
+lazy_static = "1"
+derive_more = { version = "2", features = ["display"] }
+uuid = { version = "1", features = ["v4"] }
+
+[build-dependencies]
+anyhow = "1"
+arora-module-core = "0.2"
+arora-module-rust = "0.2"
+arora-registry = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[dev-dependencies]
+anyhow = "1"
+arora-engine = "0.1"
+arora-types = "1"
+uuid = { version = "1", features = ["v4"] }
+serde_yaml = "0.9"
+vizij-arora = { path = "../vizij-arora" }

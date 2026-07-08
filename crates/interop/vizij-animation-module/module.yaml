@@ -1,0 +1,62 @@
+id: 76697a69-6a00-0000-0d00-000000000000
+author: Semio
+description: vizij-animation-core as an Arora wasm module
+license: Proprietary
+name: vizij-animation
+version:
+  major: 0
+  minor: 1
+  patch: 0
+executor:
+  name: wasm
+exports:
+  # setup -------------------------------------------------------------------
+  - type: function
+    id: 76697a69-6a00-0000-0f00-000000000001
+    name: load_animation
+    parameters:
+      - id: 76697a69-6a00-0000-0f01-000000000001
+        name: clip
+        type: { kind: scalar, id: 76697a69-6a00-0000-0000-000000000100 }
+    ret: { kind: scalar, id: u32 }
+
+  - type: function
+    id: 76697a69-6a00-0000-0f00-000000000002
+    name: create_player
+    parameters:
+      - id: 76697a69-6a00-0000-0f02-000000000001
+        name: name
+        type: { kind: scalar, id: str }
+    ret: { kind: scalar, id: u32 }
+
+  - type: function
+    id: 76697a69-6a00-0000-0f00-000000000003
+    name: add_instance
+    parameters:
+      - id: 76697a69-6a00-0000-0f03-000000000001
+        name: player
+        type: { kind: scalar, id: u32 }
+      - id: 76697a69-6a00-0000-0f03-000000000002
+        name: anim
+        type: { kind: scalar, id: u32 }
+    ret: { kind: scalar, id: u32 }
+
+  # per-tick ----------------------------------------------------------------
+  # `dt_ns` is the runtime's `arora/dt` golden key (nanoseconds). Player-command
+  # inputs are a future extension: a dynamic `Value` cannot be a function
+  # parameter directly (only a struct field), so they would arrive as a declared
+  # `AnimInputs` struct. Today the player plays by default, so `dt_ns` suffices.
+  - type: function
+    id: 76697a69-6a00-0000-0f00-000000000004
+    name: step
+    parameters:
+      - id: 76697a69-6a00-0000-0f04-000000000001
+        name: dt_ns
+        type: { kind: scalar, id: u64 }
+    ret: { kind: array, id: 76697a69-6a00-0000-0000-000000000110 }
+
+imports: []
+dependencies:
+  - { id: 76697a69-6a00-0000-0000-000000000100, version: "1.0.0" }
+  - { id: 76697a69-6a00-0000-0000-000000000110, version: "1.0.0" }
+executable_mime: application/wasm
