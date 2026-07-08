@@ -13,6 +13,7 @@
 //!
 //! Integration code should primarily interact with [`GraphRuntime`] and [`evaluate_all`].
 
+use crate::host::{GraphHost, NoHost};
 use crate::types::GraphSpec;
 use std::mem;
 
@@ -40,7 +41,23 @@ mod tests;
 ///
 /// The runtime is cleared before evaluation and is repopulated as nodes are visited in topological
 /// order. Any error propagated from an individual node halts evaluation.
+///
+/// This is the host-less entry point: it wires a [`NoHost`], so graphs that
+/// contain a [`ModuleCall`](crate::types::NodeType::ModuleCall) node error only
+/// if such a node is actually reached. Use [`evaluate_all_with_host`] to supply
+/// a real host.
 pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), String> {
+    evaluate_all_with_host(rt, spec, &mut NoHost)
+}
+
+/// Evaluate every node in `spec`, dispatching [`ModuleCall`] nodes through `host`.
+///
+/// [`ModuleCall`]: crate::types::NodeType::ModuleCall
+pub fn evaluate_all_with_host(
+    rt: &mut GraphRuntime,
+    spec: &GraphSpec,
+    host: &mut dyn GraphHost,
+) -> Result<(), String> {
     if spec.version > 0 {
         rt.plan.ensure_versioned(spec)?;
     } else {
@@ -78,7 +95,7 @@ pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), Strin
                 let mut outputs =
                     eval_node::OutputSlots::new(&mut vec_out, &plan.layouts[idx].outputs);
                 outputs.clear();
-                eval_node::eval_node(rt, node, &inputs, &mut outputs)?;
+                eval_node::eval_node(rt, node, &inputs, &mut outputs, host)?;
             }
 
             let compat = eval_node::materialize_outputs(&plan.layouts[idx].outputs, &vec_out);
@@ -100,7 +117,20 @@ fn resize_and_clear(bucket: &mut Vec<PortValue>) {
 /// `spec` matches the cached plan; it returns an error if the layouts are missing or mis-sized.
 /// Intended for callers that manage plan invalidation themselves (e.g., WASM wrapper with
 /// immutable specs).
+///
+/// Host-less entry point (wires a [`NoHost`]); see [`evaluate_all_cached_with_host`].
 pub fn evaluate_all_cached(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), String> {
+    evaluate_all_cached_with_host(rt, spec, &mut NoHost)
+}
+
+/// Cached-plan evaluation that dispatches [`ModuleCall`] nodes through `host`.
+///
+/// [`ModuleCall`]: crate::types::NodeType::ModuleCall
+pub fn evaluate_all_cached_with_host(
+    rt: &mut GraphRuntime,
+    spec: &GraphSpec,
+    host: &mut dyn GraphHost,
+) -> Result<(), String> {
     if rt.plan.layouts.len() != spec.nodes.len() {
         return Err("plan cache not initialised for this spec".to_string());
     }
@@ -151,7 +181,7 @@ pub fn evaluate_all_cached(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<()
                 let mut outputs =
                     eval_node::OutputSlots::new(&mut vec_out, &plan.layouts[idx].outputs);
                 outputs.clear();
-                eval_node::eval_node(rt, node, &inputs, &mut outputs)?;
+                eval_node::eval_node(rt, node, &inputs, &mut outputs, host)?;
             }
 
             let compat = eval_node::materialize_outputs(&plan.layouts[idx].outputs, &vec_out);

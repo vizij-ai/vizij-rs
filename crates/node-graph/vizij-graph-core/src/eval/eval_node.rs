@@ -3,6 +3,7 @@
 use crate::eval::graph_runtime::{GraphRuntime, StagedInput};
 use crate::eval::plan::{PlanCache, PortLayout};
 use crate::eval::variadic::collect_operand_ports;
+use crate::host::{CallTarget, GraphHost};
 use crate::types::{NodeParams, NodeSpec, NodeType, RoundMode};
 use hashbrown::HashMap;
 use vizij_api_core::{coercion, Shape, Value, WriteOp};
@@ -176,13 +177,18 @@ fn single_output(outputs: &mut OutputSlots, value: Value) -> Result<(), String> 
 }
 
 /// Evaluate a single node, updating `rt` with new outputs and queued writes.
+///
+/// `host` is the callout seam used by [`NodeType::ModuleCall`] nodes; nodes that
+/// do not call out ignore it entirely, so a [`NoHost`](crate::host::NoHost) is
+/// perfectly fine for host-less graphs.
 pub fn eval_node(
     rt: &mut GraphRuntime,
     spec: &NodeSpec,
     inputs: &InputSlots,
     outputs: &mut OutputSlots,
+    host: &mut dyn GraphHost,
 ) -> Result<(), String> {
-    evaluate_kind(rt, spec, inputs, outputs)?;
+    evaluate_kind(rt, spec, inputs, outputs, host)?;
     enforce_output_shapes_slots(spec, outputs.layout, outputs.as_mut_slice())?;
 
     // Only explicit sink nodes (Output) publish external writes.
@@ -207,6 +213,7 @@ fn evaluate_kind(
     spec: &NodeSpec,
     inputs: &InputSlots,
     outputs: &mut OutputSlots,
+    host: &mut dyn GraphHost,
 ) -> Result<(), String> {
     let params = &spec.params;
     match &spec.kind {
@@ -304,7 +311,42 @@ fn evaluate_kind(
         NodeType::MathSubRecord => eval_math_record(inputs, outputs, |a, b| a - b),
         NodeType::Input => eval_input_node(rt, spec, outputs),
         NodeType::Output => eval_output(inputs, outputs),
+        NodeType::ModuleCall => eval_module_call(spec, inputs, outputs, host),
     }
+}
+
+/// Build a [`CallTarget`] from the node's params and args from the `args` input,
+/// dispatch through the [`GraphHost`], and expose the returned value on `out`.
+///
+/// Generic by construction: it calls *a module function*, not a specific one.
+/// Missing `args` defaults to an empty record ("no arguments"); the host decides
+/// how to marshal it.
+fn eval_module_call(
+    spec: &NodeSpec,
+    inputs: &InputSlots,
+    outputs: &mut OutputSlots,
+    host: &mut dyn GraphHost,
+) -> Result<(), String> {
+    let params = &spec.params;
+    let module = params.module.clone().ok_or_else(|| {
+        format!(
+            "ModuleCall node '{}' missing required 'module' parameter",
+            spec.id
+        )
+    })?;
+    let function = params.function.clone().ok_or_else(|| {
+        format!(
+            "ModuleCall node '{}' missing required 'function' parameter",
+            spec.id
+        )
+    })?;
+    let target = CallTarget::ModuleFn { module, function };
+    let args = inputs
+        .get("args")
+        .map(|pv| pv.value.clone())
+        .unwrap_or_else(|| Value::Record(Default::default()));
+    let ret = host.call(&target, args)?;
+    single_output(outputs, ret)
 }
 
 fn input_or_default(inputs: &InputSlots, key: &str) -> PortValue {

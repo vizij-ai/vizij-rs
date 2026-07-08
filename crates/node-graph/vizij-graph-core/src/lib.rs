@@ -4,13 +4,16 @@
 //! and evaluation runtime used by Bevy adapters, wasm bindings, and the orchestrator.
 
 pub mod eval;
+pub mod host;
 pub mod schema;
 pub mod topo;
 pub mod types;
 
 pub use eval::{
-    eval_node, evaluate_all, evaluate_all_cached, GraphRuntime, PortValue, StagedInput,
+    eval_node, evaluate_all, evaluate_all_cached, evaluate_all_cached_with_host,
+    evaluate_all_with_host, GraphRuntime, PortValue, StagedInput,
 };
+pub use host::{CallTarget, GraphHost, NoHost};
 pub use schema::registry;
 pub use topo::topo_order;
 pub use types::*;

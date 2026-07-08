@@ -2269,3 +2269,114 @@ fn noise_nodes_are_deterministic_and_in_range() {
         );
     }
 }
+
+/// The [`GraphHost`](crate::host::GraphHost) seam, proven arora-free: a mock
+/// host that doubles a scalar arg is dispatched by a `ModuleCall` node, and its
+/// result flows to the node output and the `Output` sink's write.
+mod module_call {
+    use super::*;
+    use crate::host::{CallTarget, GraphHost};
+
+    /// A host that returns `2 * args` for a scalar arg, recording the target.
+    #[derive(Default)]
+    struct DoublingHost {
+        seen: Option<(String, String)>,
+    }
+
+    impl GraphHost for DoublingHost {
+        fn call(&mut self, target: &CallTarget, args: Value) -> Result<Value, String> {
+            let CallTarget::ModuleFn { module, function } = target;
+            self.seen = Some((module.clone(), function.clone()));
+            match args {
+                Value::Float(f) => Ok(Value::Float(f * 2.0)),
+                other => Err(format!("expected a scalar arg, got {other:?}")),
+            }
+        }
+    }
+
+    fn module_call_node(id: &str, module: &str, function: &str) -> NodeSpec {
+        NodeSpec {
+            id: id.to_string(),
+            kind: NodeType::ModuleCall,
+            params: NodeParams {
+                module: Some(module.to_string()),
+                function: Some(function.to_string()),
+                ..Default::default()
+            },
+            output_shapes: HashMap::new(),
+            input_defaults: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn module_call_dispatches_through_the_host() {
+        let spec = graph_spec!({
+            nodes: vec![
+                constant_node("a", Value::Float(21.0)),
+                module_call_node("call", "mod-x", "fn-y"),
+                NodeSpec {
+                    id: "out".into(),
+                    kind: NodeType::Output,
+                    params: NodeParams {
+                        path: Some(TypedPath::parse("result/x").unwrap()),
+                        ..Default::default()
+                    },
+                    output_shapes: HashMap::new(),
+                    input_defaults: HashMap::new(),
+                },
+            ],
+            edges: vec![
+                EdgeSpec {
+                    from: EdgeOutputEndpoint { node_id: "a".into(), output: "out".into() },
+                    to: EdgeInputEndpoint { node_id: "call".into(), input: "args".into() },
+                    selector: None,
+                },
+                EdgeSpec {
+                    from: EdgeOutputEndpoint { node_id: "call".into(), output: "out".into() },
+                    to: EdgeInputEndpoint { node_id: "out".into(), input: "in".into() },
+                    selector: None,
+                },
+            ],
+        });
+
+        let mut rt = GraphRuntime::default();
+        let mut host = DoublingHost::default();
+        evaluate_all_with_host(&mut rt, &spec, &mut host).expect("evaluation succeeds");
+
+        let out = rt
+            .outputs
+            .get("call")
+            .and_then(|ports| ports.get("out"))
+            .map(|p| &p.value);
+        assert_eq!(out, Some(&Value::Float(42.0)));
+
+        let write = rt
+            .writes
+            .iter()
+            .find(|op| op.path.to_string() == "result/x")
+            .expect("output write emitted");
+        assert_eq!(write.value, Value::Float(42.0));
+
+        assert_eq!(host.seen, Some(("mod-x".into(), "fn-y".into())));
+    }
+
+    #[test]
+    fn host_less_evaluation_errors_only_when_a_module_call_is_hit() {
+        let spec = graph_spec!({
+            nodes: vec![
+                constant_node("a", Value::Float(1.0)),
+                module_call_node("call", "mod-x", "fn-y"),
+            ],
+            edges: vec![EdgeSpec {
+                from: EdgeOutputEndpoint { node_id: "a".into(), output: "out".into() },
+                to: EdgeInputEndpoint { node_id: "call".into(), input: "args".into() },
+                selector: None,
+            }],
+        });
+
+        // `evaluate_all` wires a `NoHost`, so hitting the ModuleCall node errors.
+        let mut rt = GraphRuntime::default();
+        let err = evaluate_all(&mut rt, &spec).expect_err("NoHost should reject a ModuleCall");
+        assert!(err.contains("without a GraphHost"), "got: {err}");
+    }
+}

@@ -13,6 +13,7 @@ vizij-api-core = { path = "../../api/vizij-api-core" }
 vizij-graph-core = { path = "../../node-graph/vizij-graph-core" }
 vizij-orchestrator-core = { path = "../../orchestrator/vizij-orchestrator-core" }
 serde_json = { workspace = true }
+uuid = "1"
 
 [dev-dependencies]
 arora-simple-data-store = "0.1"

@@ -151,6 +151,13 @@ pub enum NodeType {
     Input,
     /// Writes a value to a host-visible typed path sink.
     Output,
+
+    // Host callout
+    /// Calls a module function through the host
+    /// [`GraphHost`](crate::host::GraphHost) seam, exposing the returned value
+    /// on its `out` port.
+    #[serde(rename = "module_call")]
+    ModuleCall,
 }
 
 /// Node-construction parameters consumed selectively by different [`NodeType`] variants.
@@ -272,6 +279,14 @@ pub struct NodeParams {
     /// Example: `"robot1/Arm/Joint3.translation"`.
     #[serde(default)]
     pub path: Option<TypedPath>,
+
+    /// Host-opaque module identifier for [`NodeType::ModuleCall`].
+    #[serde(default)]
+    pub module: Option<String>,
+    /// Host-opaque function identifier within [`Self::module`] for
+    /// [`NodeType::ModuleCall`].
+    #[serde(default)]
+    pub function: Option<String>,
 }
 
 /// Rounding strategy for [`NodeType::Round`].

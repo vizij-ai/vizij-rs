@@ -2670,6 +2670,52 @@ pub fn registry() -> Registry {
         params: vec![],
     });
 
+    // Host callout
+    nodes.push(NodeSignature {
+        type_id: ModuleCall,
+        name: "Module Call",
+        category: "Host",
+        doc: "Calls a module function through the host GraphHost seam, passing the \
+              args value and exposing the returned value on the out port.",
+        inputs: vec![PortSpec {
+            id: "args",
+            ty: PortType::Any,
+            label: "Args",
+            doc: "Arguments value handed to the host call; the host maps it onto the \
+                  target's call vocabulary.",
+            optional: true,
+        }],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Value returned by the host call.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![
+            ParamSpec {
+                id: "module",
+                ty: ParamType::Text,
+                label: "Module",
+                doc: "Host-opaque module identifier to call.",
+                default_json: None,
+                min: None,
+                max: None,
+            },
+            ParamSpec {
+                id: "function",
+                ty: ParamType::Text,
+                label: "Function",
+                doc: "Host-opaque function identifier within the module.",
+                default_json: None,
+                min: None,
+                max: None,
+            },
+        ],
+    });
+
     Registry {
         version: "1.0.0",
         nodes,

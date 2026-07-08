@@ -17,7 +17,10 @@
 //! [`orchestrator::OrchestratorBehavior`] wraps a whole Vizij orchestrator (many
 //! controllers + their merge) as one `BehaviorInterpreter` (VIZ-38).
 
+pub mod host;
 pub mod orchestrator;
+
+pub use host::AroraGraphHost;
 
 use arora_behavior::{BehaviorContext, BehaviorError, BehaviorInterpreter, BehaviorStatus};
 use arora_types::data::{DataStore, Key, StateChange};
