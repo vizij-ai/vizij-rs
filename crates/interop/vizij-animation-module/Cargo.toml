@@ -21,7 +21,7 @@ uuid = { version = "1", features = ["v4"] }
 [build-dependencies]
 anyhow = "1"
 arora-module-core = "0.2"
-arora-module-rust = "0.2"
+arora-module-rust = "0.2.1"
 arora-registry = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
