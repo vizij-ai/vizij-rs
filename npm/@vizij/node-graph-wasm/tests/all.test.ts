@@ -28,6 +28,13 @@ import {
   type WriteOpJSON,
   type ShapeJSON,
 } from "../src/index.js";
+import {
+  fromAroraValueJSON,
+  valueAsBool,
+  valueAsNumber,
+  valueAsText,
+  valueAsVector,
+} from "@vizij/value-json";
 
 type EvalSpec = Parameters<Graph["loadGraph"]>[0];
 
@@ -214,25 +221,9 @@ function expectNumericVector(value: ValueJSON | undefined, expected: number[], l
     assertNearlyEqual(value, expected[0], label);
     return;
   }
-  const obj = asValueObject(value);
-  if (!obj) {
-    throw new Error(`${label} expected numeric vector value`);
-  }
   assertValueFinite(value!, label);
 
-  let actual: number[] | undefined;
-  if ("vector" in obj) {
-    actual = (obj.vector as number[]).slice();
-  } else if ("vec2" in obj) {
-    actual = (obj.vec2 as number[]).slice();
-  } else if ("vec3" in obj) {
-    actual = (obj.vec3 as number[]).slice();
-  } else if ("vec4" in obj) {
-    actual = (obj.vec4 as number[]).slice();
-  } else if ("quat" in obj) {
-    actual = (obj.quat as number[]).slice();
-  }
-
+  const actual = valueAsVector(value);
   if (!actual) {
     throw new Error(`${label} expected numeric vector, received ${JSON.stringify(value)}`);
   }
@@ -243,15 +234,22 @@ function expectNumericVector(value: ValueJSON | undefined, expected: number[], l
 }
 
 function expectListOfText(value: ValueJSON | undefined, expected: string[], label: string): void {
-  if (!value || typeof value !== "object" || value === null || !("list" in value)) {
+  let entries: (ValueJSON | undefined)[] | undefined;
+  const decoded = fromAroraValueJSON(value);
+  if (decoded?.type === "array") {
+    entries = decoded.data;
+  } else if (value && typeof value === "object" && "list" in value) {
+    entries = (value as { list: ValueJSON[] }).list;
+  }
+  if (!entries) {
     throw new Error(`${label} expected list of text values`);
   }
-  const listEntries = (value as { list: ValueJSON[] }).list;
-  const actual = listEntries.map((entry: ValueJSON, idx: number) => {
-    if (entry && typeof entry === "object" && "text" in entry) {
-      return (entry as { text: string }).text;
+  const actual = entries.map((entry, idx: number) => {
+    const text = valueAsText(entry as ValueJSON);
+    if (text === undefined) {
+      throw new Error(`${label} entry ${idx} expected text but received ${JSON.stringify(entry)}`);
     }
-    throw new Error(`${label} entry ${idx} expected text but received ${JSON.stringify(entry)}`);
+    return text;
   });
   if (actual.length !== expected.length) {
     throw new Error(`${label} expected ${expected.length} entries but received ${actual.length}`);
@@ -264,40 +262,56 @@ function expectListOfText(value: ValueJSON | undefined, expected: string[], labe
 }
 
 function expectTupleOfFloats(value: ValueJSON | undefined, expected: number[], label: string): void {
-  if (!value || typeof value !== "object" || value === null || !("tuple" in value)) {
+  let entries: (ValueJSON | undefined)[] | undefined;
+  const decoded = fromAroraValueJSON(value);
+  if (decoded?.type === "array" || decoded?.type === "vector") {
+    entries = decoded.data as (ValueJSON | undefined)[];
+  } else if (value && typeof value === "object" && "tuple" in value) {
+    entries = (value as { tuple: ValueJSON[] }).tuple;
+  }
+  if (!entries) {
     throw new Error(`${label} expected tuple value`);
   }
-  const tuple = (value as { tuple: ValueJSON[] }).tuple;
-  if (tuple.length !== expected.length) {
-    throw new Error(`${label} expected ${expected.length} items but received ${tuple.length}`);
+  if (entries.length !== expected.length) {
+    throw new Error(`${label} expected ${expected.length} items but received ${entries.length}`);
   }
-  tuple.forEach((entry: ValueJSON, idx: number) => {
-    const obj = asValueObject(entry);
-    if (!obj || typeof obj.float !== "number") {
+  entries.forEach((entry, idx: number) => {
+    const num = typeof entry === "number" ? entry : valueAsNumber(entry as ValueJSON);
+    if (num === undefined || !Number.isFinite(num)) {
       throw new Error(`${label}[${idx}] expected float but received ${JSON.stringify(entry)}`);
     }
-    assertNearlyEqual(obj.float, expected[idx], `${label}[${idx}]`);
+    assertNearlyEqual(num, expected[idx], `${label}[${idx}]`);
   });
 }
 
+function valueToRecord(value: ValueJSON | undefined): Record<string, ValueJSON> | undefined {
+  const decoded = fromAroraValueJSON(value);
+  if (decoded?.type === "record") {
+    return decoded.data as Record<string, ValueJSON>;
+  }
+  if (value && typeof value === "object" && "record" in value) {
+    return (value as { record: Record<string, ValueJSON> }).record;
+  }
+  return undefined;
+}
+
 function expectRecordTexts(value: ValueJSON | undefined, expected: Record<string, string>, label: string): void {
-  if (!value || typeof value !== "object" || value === null || !("record" in value)) {
+  const recordEntries = valueToRecord(value);
+  if (!recordEntries) {
     throw new Error(`${label} expected record value`);
   }
-  const recordEntries = (value as { record: Record<string, ValueJSON> }).record;
   const actualEntries = Object.entries(recordEntries);
   const expectedEntries = Object.entries(expected);
   if (actualEntries.length !== expectedEntries.length) {
     throw new Error(`${label} expected ${expectedEntries.length} fields but received ${actualEntries.length}`);
   }
   for (const [key, expectedText] of expectedEntries) {
-    const entry = recordEntries[key];
-    const entryObj = asValueObject(entry);
-    if (!entryObj || typeof entryObj.text !== "string") {
+    const text = valueAsText(recordEntries[key]);
+    if (text === undefined) {
       throw new Error(`${label}.${key} expected text value`);
     }
-    if (entryObj.text !== expectedText) {
-      throw new Error(`${label}.${key} expected '${expectedText}' but received '${entryObj.text}'`);
+    if (text !== expectedText) {
+      throw new Error(`${label}.${key} expected '${expectedText}' but received '${text}'`);
     }
   }
 }
@@ -315,24 +329,20 @@ function approxVector(actual: number[], expected: number[], eps = EPSILON): void
 }
 
 function valueToVector(value: ValueJSON | undefined): number[] {
-  const obj = asValueObject(value);
-  if (!obj) {
-    if (typeof value === "number") return [value];
+  if (typeof value === "number") return [value];
+  const vector = valueAsVector(value);
+  if (!vector) {
     throw new Error(`Value is not a vector-like payload: ${JSON.stringify(value)}`);
   }
-  if ("vector" in obj) return (obj.vector as number[]).slice();
-  if ("vec4" in obj) return (obj.vec4 as number[]).slice();
-  if ("vec3" in obj) return (obj.vec3 as number[]).slice();
-  if ("vec2" in obj) return (obj.vec2 as number[]).slice();
-  if ("quat" in obj) return (obj.quat as number[]).slice();
-  throw new Error(`Value is not a vector-like payload: ${JSON.stringify(value)}`);
+  return vector;
 }
 
 function valueToFloat(value: ValueJSON | undefined): number {
-  if (typeof value === "number") return value;
-  const obj = asValueObject(value);
-  if (obj && "float" in obj) return obj.float as number;
-  throw new Error(`Value is not a float payload: ${JSON.stringify(value)}`);
+  const num = valueAsNumber(value);
+  if (num === undefined) {
+    throw new Error(`Value is not a float payload: ${JSON.stringify(value)}`);
+  }
+  return num;
 }
 
 function findWrite(res: EvalResult, path: string) {
@@ -461,22 +471,22 @@ function assertFloat(write: WriteOpJSON, expected: number, epsilon = 1e-4): void
 }
 
 function assertBool(write: WriteOpJSON, expected: boolean): void {
-  const obj = asValueObject(write.value);
-  if (!obj || typeof obj.bool !== "boolean") {
+  const actual = valueAsBool(write.value);
+  if (typeof actual !== "boolean") {
     throw new Error(`Write '${write.path}' does not contain a bool value`);
   }
-  if (obj.bool !== expected) {
-    throw new Error(`Bool value mismatch for '${write.path}': expected ${expected}, received ${obj.bool}`);
+  if (actual !== expected) {
+    throw new Error(`Bool value mismatch for '${write.path}': expected ${expected}, received ${actual}`);
   }
 }
 
 function assertText(write: WriteOpJSON, expected: string): void {
-  const obj = asValueObject(write.value);
-  if (!obj || typeof obj.text !== "string") {
+  const actual = valueAsText(write.value);
+  if (typeof actual !== "string") {
     throw new Error(`Write '${write.path}' does not contain a text value`);
   }
-  if (obj.text !== expected) {
-    throw new Error(`Text value mismatch for '${write.path}': expected '${expected}', received '${obj.text}'`);
+  if (actual !== expected) {
+    throw new Error(`Text value mismatch for '${write.path}': expected '${expected}', received '${actual}'`);
   }
 }
 
@@ -623,14 +633,13 @@ function assertText(write: WriteOpJSON, expected: string): void {
 
       const urdfWrites = writesToMap(urdfResult.writes);
       const solution = urdfWrites.get("tests/urdf.solution");
-      const solutionObj = asValueObject(solution);
-      assert.ok(solutionObj && "record" in solutionObj, "urdf solution must be a record");
-      const record = solutionObj!.record as Record<string, ValueJSON>;
+      const record = valueToRecord(solution);
+      assert.ok(record, "urdf solution must be a record");
       const jointNames = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"] as const;
       jointNames.forEach((joint) => {
-        const entry = asValueObject(record[joint]);
-        assert.ok(entry && typeof entry.float === "number", `missing float for ${joint}`);
-        assertNearlyEqual(entry!.float as number, 0, joint);
+        const angle = valueAsNumber(record![joint]);
+        assert.ok(typeof angle === "number" && Number.isFinite(angle), `missing float for ${joint}`);
+        assertNearlyEqual(angle!, 0, joint);
       });
     }
 
@@ -704,22 +713,18 @@ function assertText(write: WriteOpJSON, expected: string): void {
         assert.ok(ikNode, `ik node result missing for sample ${sampleIdx}`);
         const ikValue: ValueJSON | undefined = ikNode.out?.value;
         // console.log("ik result", ikValue, "\n");
-        const ikObj = asValueObject(ikValue);
-        assert.ok(ikObj && "record" in ikObj, `ik output missing record for sample ${sampleIdx}`);
+        const ikRecord = valueToRecord(ikValue);
+        assert.ok(ikRecord, `ik output missing record for sample ${sampleIdx}`);
 
-        const ikRecord = (ikObj!.record as Record<string, ValueJSON>);
         expectedJointNames.forEach((jointName) => {
-          const entry = ikRecord[jointName];
-          const entryObj = asValueObject(entry);
-          assert.ok(entryObj && typeof entryObj.float === "number", `ik output missing float for joint '${jointName}' (sample ${sampleIdx})`);
-          const jointAngle = entryObj!.float as number;
-          assert.ok(Number.isFinite(jointAngle), `ik joint '${jointName}' produced non-finite value`);
+          const jointAngle = valueAsNumber(ikRecord![jointName]);
+          assert.ok(
+            typeof jointAngle === "number" && Number.isFinite(jointAngle),
+            `ik output missing float for joint '${jointName}' (sample ${sampleIdx})`,
+          );
         });
 
-        const ikAngles = expectedJointNames.map((jointName) => {
-          const entryObj = asValueObject(ikRecord[jointName]);
-          return typeof entryObj?.float === "number" ? (entryObj.float as number) : 0;
-        });
+        const ikAngles = expectedJointNames.map((jointName) => valueAsNumber(ikRecord![jointName]) ?? 0);
 
         // Backward pass: feed IK joint solution into FK and ensure pose matches.
         fkIkGraphInstance.stageInput("tests/urdf.joints", ikAngles);

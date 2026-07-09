@@ -25,14 +25,14 @@ importers:
     dependencies:
       '@vizij/value-json':
         specifier: workspace:*
-        version: 0.1.0
+        version: link:../value-json
       '@vizij/wasm-loader':
         specifier: workspace:*
         version: link:../wasm-loader
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 24.6.2
+        version: 26.1.1
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
@@ -41,7 +41,7 @@ importers:
     dependencies:
       '@vizij/value-json':
         specifier: workspace:*
-        version: 0.1.0
+        version: link:../value-json
       '@vizij/wasm-loader':
         specifier: workspace:*
         version: link:../wasm-loader
@@ -57,7 +57,7 @@ importers:
     dependencies:
       '@vizij/value-json':
         specifier: workspace:*
-        version: 0.1.0
+        version: link:../value-json
       '@vizij/wasm-loader':
         specifier: workspace:*
         version: link:../wasm-loader
@@ -211,11 +211,11 @@ packages:
   '@types/node@24.6.2':
     resolution: {integrity: sha512-d2L25Y4j+W3ZlNAeMKcy7yDsK425ibcAOO2t7aPTz6gNMH0z2GThtwENCDc0d/Pw9wgyRqE5Px1wkV7naz8ang==}
 
+  '@types/node@26.1.1':
+    resolution: {integrity: sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw==}
+
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
-
-  '@vizij/value-json@0.1.0':
-    resolution: {integrity: sha512-NzSX14YLnA1ZPaxib0qhgHn5+cVxPZpiTINhqfQwD07FBtkLHPNh/FdQTUmyNAdhZB/RVvdobbEnFCEVLRQJqw==}
 
   ansi-colors@4.1.3:
     resolution: {integrity: sha512-/6w/C21Pm1A7aZitlI5Ni/2J6FFQN8i1Cvz3kHABAAbw93v/NlvKdVOqz7CCWz/3iv/JplRSEEZ83XION15ovw==}
@@ -542,6 +542,9 @@ packages:
   undici-types@7.13.0:
     resolution: {integrity: sha512-Ov2Rr9Sx+fRgagJ5AX0qvItZG/JKKoBRAVITs1zk7IqZGTJUwgUr7qoYBpWwakpWilTZFM98rG/AFRocu10iIQ==}
 
+  undici-types@8.3.0:
+    resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
+
   universalify@0.1.2:
     resolution: {integrity: sha512-rBJeI5CXAlmy1pV+617WB9J63U6XcazHHF2f2dbJix4XzpUF0RS3Zbj0FGIOCAva5P/d/GBOYaACQ1w+0azUkg==}
     engines: {node: '>= 4.0.0'}
@@ -781,9 +784,11 @@ snapshots:
     dependencies:
       undici-types: 7.13.0
 
-  '@types/unist@3.0.3': {}
+  '@types/node@26.1.1':
+    dependencies:
+      undici-types: 8.3.0
 
-  '@vizij/value-json@0.1.0': {}
+  '@types/unist@3.0.3': {}
 
   ansi-colors@4.1.3: {}
 
@@ -1061,6 +1066,8 @@ snapshots:
   undici-types@6.21.0: {}
 
   undici-types@7.13.0: {}
+
+  undici-types@8.3.0: {}
 
   universalify@0.1.2: {}
 
