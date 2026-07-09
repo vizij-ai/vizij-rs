@@ -1,0 +1,13 @@
+[package]
+name = "vizij-glb-migrate"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Rewrites the Value-bearing JSON embedded in Vizij face-bundle .glb files to canonical arora Value serde"
+
+[dependencies]
+vizij-api-core = { path = "../../api/vizij-api-core" }
+# preserve_order keeps glTF JSON member order stable across the rewrite so
+# migrated files diff cleanly against their sources.
+serde_json = { version = "1", features = ["preserve_order"] }
+thiserror = "1"
