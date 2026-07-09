@@ -1,4 +1,12 @@
 //! Shape definitions (schema/type) for vizij-api-core.
+//!
+//! A [`Shape`] is declared metadata about the values expected at a path; it
+//! is not stored inside the values themselves (`arora_types::value::Value`
+//! carries no metadata). Where a wire value cannot express a declared
+//! distinction — arora has a single sequence kind, so array/list/tuple all
+//! travel as `ArrayValue` — the path's `Shape` is what preserves it.
+//! Value-facing checks decode values through the accessors in
+//! [`crate::value`] and compare against the declared `ShapeId`.
 
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};

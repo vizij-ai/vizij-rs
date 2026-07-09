@@ -1,22 +1,27 @@
 //! Write operations produced by engines (node graph, animation) to describe
 //! writes into a blackboard / external world using typed paths.
 //!
-//! `WriteOp` serializes to JSON as:
-//! `{ "path": "robot1/Arm/Joint3.angle", "value": { "vec3": [1, 2, 3] } }`
+//! `WriteOp` serializes with the path as a string and the value in Arora
+//! `Value` serde form:
+//! `{ "path": "robot1/Arm/Joint3.angle", "value": { "struct": { ... } } }`
+//! (a scalar value would be `{ "f32": 1.0 }`). The optional `shape` field
+//! carries declared [`Shape`] metadata and is omitted when absent.
 //!
 //! `WriteBatch` is a simple `Vec<WriteOp>` with helpers.
 
 use crate::{typed_path::TypedPath, Shape, Value};
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq)]
+/// One write of a value (with optional declared shape) to a typed path.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WriteOp {
     /// Destination typed path for the write.
     pub path: TypedPath,
     /// Value payload to write.
     pub value: Value,
     /// Optional explicit shape metadata carried with the write.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shape: Option<Shape>,
 }
 
@@ -29,66 +34,6 @@ impl WriteOp {
     /// Construct a write op with optional explicit shape metadata.
     pub fn new_with_shape(path: TypedPath, value: Value, shape: Option<Shape>) -> Self {
         Self { path, value, shape }
-    }
-}
-
-// Serialize WriteOp as { "path": "<string>", "value": <ValueJSON> }
-impl Serialize for WriteOp {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        use serde::ser::SerializeStruct;
-
-        let mut state = if self.shape.is_some() {
-            serializer.serialize_struct("WriteOp", 3)?
-        } else {
-            serializer.serialize_struct("WriteOp", 2)?
-        };
-        state.serialize_field("path", &self.path)?;
-        state.serialize_field("value", &self.value)?;
-        if let Some(shape) = &self.shape {
-            state.serialize_field("shape", shape)?;
-        }
-        state.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for WriteOp {
-    fn deserialize<D>(deserializer: D) -> Result<WriteOp, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Deserialize into an intermediate map
-        let v = serde_json::Value::deserialize(deserializer).map_err(de::Error::custom)?;
-        let path_s = v
-            .get("path")
-            .and_then(|p| p.as_str())
-            .ok_or_else(|| de::Error::custom("missing or invalid 'path' field"))?;
-
-        let tp = TypedPath::parse(path_s).map_err(de::Error::custom)?;
-
-        let val = v
-            .get("value")
-            .ok_or_else(|| de::Error::custom("missing 'value' field"))?;
-
-        // Deserialize the value JSON into Value using serde_json -> Value
-        let value: Value = serde_json::from_value(val.clone()).map_err(de::Error::custom)?;
-
-        let shape = match v.get("shape") {
-            Some(shape_value) => {
-                let parsed: Shape =
-                    serde_json::from_value(shape_value.clone()).map_err(de::Error::custom)?;
-                Some(parsed)
-            }
-            None => None,
-        };
-
-        Ok(WriteOp {
-            path: tp,
-            value,
-            shape,
-        })
     }
 }
 
@@ -157,28 +102,33 @@ impl fmt::Display for WriteOp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Shape, ShapeId, Value};
+    use crate::value::{float, text, vec3};
+    use crate::{Shape, ShapeId};
 
     #[test]
     fn writeop_roundtrip_json() {
         let tp = TypedPath::parse("robot1/Arm/Joint3.angle").unwrap();
-        let op = WriteOp::new(tp, Value::Vec3([1.0, 2.0, 3.0]));
+        let op = WriteOp::new(tp, vec3([1.0, 2.0, 3.0]));
         let s = serde_json::to_string(&op).unwrap();
         let parsed: WriteOp = serde_json::from_str(&s).unwrap();
         assert_eq!(op, parsed);
     }
 
     #[test]
+    fn writeop_serializes_path_as_string_and_value_as_arora_serde() {
+        let tp = TypedPath::parse("r/t.a").unwrap();
+        let op = WriteOp::new(tp, float(0.5));
+        let json: serde_json::Value = serde_json::to_value(&op).unwrap();
+        assert_eq!(json["path"], "r/t.a");
+        assert_eq!(json["value"]["f32"], 0.5);
+        assert!(json.get("shape").is_none(), "absent shape is omitted");
+    }
+
+    #[test]
     fn writebatch_json_array() {
         let mut b = WriteBatch::new();
-        b.push(WriteOp::new(
-            TypedPath::parse("r/t.a").unwrap(),
-            Value::Float(0.5),
-        ));
-        b.push(WriteOp::new(
-            TypedPath::parse("r/t.b").unwrap(),
-            Value::Text("hi".to_string()),
-        ));
+        b.push(WriteOp::new(TypedPath::parse("r/t.a").unwrap(), float(0.5)));
+        b.push(WriteOp::new(TypedPath::parse("r/t.b").unwrap(), text("hi")));
         let s = serde_json::to_string(&b).unwrap();
         let parsed: WriteBatch = serde_json::from_str(&s).unwrap();
         assert_eq!(b, parsed);
@@ -188,7 +138,7 @@ mod tests {
     fn writeop_roundtrip_with_shape() {
         let tp = TypedPath::parse("robot1/Arm/Joint3.angle").unwrap();
         let shape = Shape::new(ShapeId::Vec3);
-        let op = WriteOp::new_with_shape(tp, Value::Vec3([1.0, 2.0, 3.0]), Some(shape));
+        let op = WriteOp::new_with_shape(tp, vec3([1.0, 2.0, 3.0]), Some(shape));
         let s = serde_json::to_string(&op).unwrap();
         let parsed: WriteOp = serde_json::from_str(&s).unwrap();
         assert_eq!(op, parsed);

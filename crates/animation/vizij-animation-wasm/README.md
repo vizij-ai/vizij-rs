@@ -33,7 +33,8 @@
 |--------|-------------|
 | `class VizijAnimation` | Methods: `load_animation`, `load_stored_animation`, `create_player`, `add_instance`, `prebind`, `update_values`, `update_values_and_derivatives`, `update`, `bake_animation`, `bake_animation_with_derivatives`, `list_players`, `list_instances`, `set_input`, etc. |
 | `abi_version() -> u32` | Returns `2`; the npm wrapper asserts this during `init()`. |
-| Helper functions | Utility conversions (legacy value JSON, etc.) reused by the wrapper. |
+
+Runtime values (output changes, write batches, keypoint values in `AnimationData`) cross the boundary in Arora `Value` serde form (`{"f32": 1.0}`, `{"bool": true}`, `{"str": "hi"}`, `{"struct": {...}}`, ...).
 
 The npm wrapper (`@vizij/animation-wasm`) layers a higher-level `Engine` class on top of these bindings.
 

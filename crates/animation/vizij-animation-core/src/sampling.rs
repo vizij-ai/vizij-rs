@@ -2,107 +2,117 @@
 //! Track/animation sampling utilities for the canonical StoredAnimation schema.
 //!
 //! Model:
-//! - Each Track has ordered Keypoints with normalized stamps in `[0, 1]`.
+//! - Each Track has ordered Keypoints with normalized stamps in `[0, 1]`,
+//!   holding POD [`TrackValue`]s decoded once at load.
 //! - Segment [Pi -> P(i+1)] timing is a cubic-bezier determined by:
 //!   cp0 = Pi.transitions.out or default {x:0.42, y:0.0}
 //!   cp1 = P(i+1).transitions.in or default {x:0.58, y:1.0}
-//! - For Bool/Text value kinds we use true step behavior (hold left).
-//! - All other kinds use bezier easing on time, then linear/nlerp blend on value.
+//! - Bool/Text kinds use true step behavior (hold left).
+//! - All other kinds use bezier easing on time, then linear/nlerp blend on
+//!   value (step-only kinds hold left through the blend fallback).
 //!
 //! API:
 //! - `sample_track(&Track, u)` where `u` is normalized time in `[0, 1]` over the whole clip.
 
 use crate::data::{Keypoint, Track};
 use crate::interp::functions::{bezier_value, step_value};
-use vizij_api_core::{Value, ValueKind};
+use crate::value::{TrackValue, Transform};
 
 /// Symmetric finite difference offset applied around the normalized parameter when approximating
 /// derivatives. Smaller values reduce smoothing but increase numerical noise; larger values trade
 /// the opposite. Consider exposing via configuration if tooling needs to tune accuracy.
 pub(crate) const DEFAULT_DERIVATIVE_EPSILON: f32 = 1e-3;
 
-fn value_difference(a: &Value, b: &Value) -> Option<Value> {
+fn value_difference(a: &TrackValue, b: &TrackValue) -> Option<TrackValue> {
     match (a, b) {
-        (Value::Float(va), Value::Float(vb)) => Some(Value::Float(va - vb)),
-        (Value::Vec2(va), Value::Vec2(vb)) => Some(Value::Vec2([va[0] - vb[0], va[1] - vb[1]])),
-        (Value::Vec3(va), Value::Vec3(vb)) => {
-            Some(Value::Vec3([va[0] - vb[0], va[1] - vb[1], va[2] - vb[2]]))
+        (TrackValue::Float(va), TrackValue::Float(vb)) => Some(TrackValue::Float(va - vb)),
+        (TrackValue::Vec2(va), TrackValue::Vec2(vb)) => {
+            Some(TrackValue::Vec2([va[0] - vb[0], va[1] - vb[1]]))
         }
-        (Value::Vec4(va), Value::Vec4(vb)) | (Value::ColorRgba(va), Value::ColorRgba(vb)) => {
-            Some(Value::Vec4([
-                va[0] - vb[0],
-                va[1] - vb[1],
-                va[2] - vb[2],
-                va[3] - vb[3],
-            ]))
-        }
-        (Value::Quat(qa), Value::Quat(qb)) => Some(Value::Quat([
+        (TrackValue::Vec3(va), TrackValue::Vec3(vb)) => Some(TrackValue::Vec3([
+            va[0] - vb[0],
+            va[1] - vb[1],
+            va[2] - vb[2],
+        ])),
+        (TrackValue::Vec4(va), TrackValue::Vec4(vb)) => Some(TrackValue::Vec4([
+            va[0] - vb[0],
+            va[1] - vb[1],
+            va[2] - vb[2],
+            va[3] - vb[3],
+        ])),
+        (TrackValue::ColorRgba(va), TrackValue::ColorRgba(vb)) => Some(TrackValue::ColorRgba([
+            va[0] - vb[0],
+            va[1] - vb[1],
+            va[2] - vb[2],
+            va[3] - vb[3],
+        ])),
+        (TrackValue::Quat(qa), TrackValue::Quat(qb)) => Some(TrackValue::Quat([
             qa[0] - qb[0],
             qa[1] - qb[1],
             qa[2] - qb[2],
             qa[3] - qb[3],
         ])),
-        (
-            Value::Transform {
-                translation: pa,
-                rotation: ra,
-                scale: sa,
-            },
-            Value::Transform {
-                translation: pb,
-                rotation: rb,
-                scale: sb,
-            },
-        ) => Some(Value::Transform {
-            translation: [pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]],
-            rotation: [ra[0] - rb[0], ra[1] - rb[1], ra[2] - rb[2], ra[3] - rb[3]],
-            scale: [sa[0] - sb[0], sa[1] - sb[1], sa[2] - sb[2]],
-        }),
+        (TrackValue::Transform(ta), TrackValue::Transform(tb)) => {
+            Some(TrackValue::Transform(Transform {
+                translation: [
+                    ta.translation[0] - tb.translation[0],
+                    ta.translation[1] - tb.translation[1],
+                    ta.translation[2] - tb.translation[2],
+                ],
+                rotation: [
+                    ta.rotation[0] - tb.rotation[0],
+                    ta.rotation[1] - tb.rotation[1],
+                    ta.rotation[2] - tb.rotation[2],
+                    ta.rotation[3] - tb.rotation[3],
+                ],
+                scale: [
+                    ta.scale[0] - tb.scale[0],
+                    ta.scale[1] - tb.scale[1],
+                    ta.scale[2] - tb.scale[2],
+                ],
+            }))
+        }
         _ => None,
     }
 }
 
-fn value_scale(value: &Value, scale: f32) -> Option<Value> {
+fn value_scale(value: &TrackValue, scale: f32) -> Option<TrackValue> {
     match value {
-        Value::Float(v) => Some(Value::Float(v * scale)),
-        Value::Vec2(v) => Some(Value::Vec2([v[0] * scale, v[1] * scale])),
-        Value::Vec3(v) => Some(Value::Vec3([v[0] * scale, v[1] * scale, v[2] * scale])),
-        Value::Vec4(v) => Some(Value::Vec4([
+        TrackValue::Float(v) => Some(TrackValue::Float(v * scale)),
+        TrackValue::Vec2(v) => Some(TrackValue::Vec2([v[0] * scale, v[1] * scale])),
+        TrackValue::Vec3(v) => Some(TrackValue::Vec3([v[0] * scale, v[1] * scale, v[2] * scale])),
+        TrackValue::Vec4(v) => Some(TrackValue::Vec4([
             v[0] * scale,
             v[1] * scale,
             v[2] * scale,
             v[3] * scale,
         ])),
-        Value::ColorRgba(v) => Some(Value::ColorRgba([
+        TrackValue::ColorRgba(v) => Some(TrackValue::ColorRgba([
             v[0] * scale,
             v[1] * scale,
             v[2] * scale,
             v[3] * scale,
         ])),
-        Value::Quat(v) => Some(Value::Quat([
+        TrackValue::Quat(v) => Some(TrackValue::Quat([
             v[0] * scale,
             v[1] * scale,
             v[2] * scale,
             v[3] * scale,
         ])),
-        Value::Transform {
-            translation,
-            rotation,
-            scale: s,
-        } => Some(Value::Transform {
+        TrackValue::Transform(t) => Some(TrackValue::Transform(Transform {
             translation: [
-                translation[0] * scale,
-                translation[1] * scale,
-                translation[2] * scale,
+                t.translation[0] * scale,
+                t.translation[1] * scale,
+                t.translation[2] * scale,
             ],
             rotation: [
-                rotation[0] * scale,
-                rotation[1] * scale,
-                rotation[2] * scale,
-                rotation[3] * scale,
+                t.rotation[0] * scale,
+                t.rotation[1] * scale,
+                t.rotation[2] * scale,
+                t.rotation[3] * scale,
             ],
-            scale: [s[0] * scale, s[1] * scale, s[2] * scale],
-        }),
+            scale: [t.scale[0] * scale, t.scale[1] * scale, t.scale[2] * scale],
+        })),
         _ => None,
     }
 }
@@ -141,38 +151,14 @@ fn find_segment(points: &[Keypoint], u: f32) -> (usize, usize, f32) {
     (n - 1, n - 1, 0.0)
 }
 
-#[derive(Clone, Debug)]
-pub struct SampledValue {
-    pub value: Value,
-    pub derivative: Value,
-}
-
-fn zero_like(value: &Value) -> Value {
-    match value {
-        Value::Float(_) => Value::Float(0.0),
-        Value::Vec2(_) => Value::Vec2([0.0, 0.0]),
-        Value::Vec3(_) => Value::Vec3([0.0, 0.0, 0.0]),
-        Value::Vec4(_) => Value::Vec4([0.0, 0.0, 0.0, 0.0]),
-        Value::Quat(_) => Value::Quat([0.0, 0.0, 0.0, 0.0]),
-        Value::ColorRgba(_) => Value::ColorRgba([0.0, 0.0, 0.0, 0.0]),
-        Value::Transform { .. } => Value::Transform {
-            translation: [0.0, 0.0, 0.0],
-            rotation: [0.0, 0.0, 0.0, 0.0],
-            scale: [0.0, 0.0, 0.0],
-        },
-        Value::Vector(v) => Value::Vector(vec![0.0; v.len()]),
-        _ => Value::Float(0.0),
-    }
-}
-
 /// Sample a single track at normalized time `u` in `[0, 1]`.
-pub fn sample_track(track: &Track, u: f32) -> Value {
+pub fn sample_track(track: &Track, u: f32) -> TrackValue {
     let points = &track.points;
     let n = points.len();
     match n {
         0 => {
             // No points: return a neutral scalar 0.0 (fail-soft). Adapters can choose policy.
-            Value::Float(0.0)
+            TrackValue::Float(0.0)
         }
         1 => points[0].value.clone(),
         _ => {
@@ -184,9 +170,8 @@ pub fn sample_track(track: &Track, u: f32) -> Value {
             let right = &points[i1];
 
             // Step behavior for Bool/Text tracks regardless of transitions.
-            match left.value.kind() {
-                ValueKind::Bool | ValueKind::Text => return step_value(&left.value),
-                _ => {}
+            if matches!(left.value, TrackValue::Bool(_) | TrackValue::Text(_)) {
+                return step_value(&left.value);
             }
 
             // Derive per-segment cubic-bezier control points from keypoint transitions.
@@ -224,7 +209,7 @@ pub fn sample_track_with_derivative(
     track: &Track,
     u: f32,
     duration_s: f32,
-) -> (Value, Option<Value>) {
+) -> (TrackValue, Option<TrackValue>) {
     sample_track_with_derivative_epsilon(track, u, duration_s, DEFAULT_DERIVATIVE_EPSILON)
 }
 
@@ -235,7 +220,7 @@ pub fn sample_track_with_derivative_epsilon(
     u: f32,
     duration_s: f32,
     epsilon: f32,
-) -> (Value, Option<Value>) {
+) -> (TrackValue, Option<TrackValue>) {
     let value = sample_track(track, u);
     if track.points.len() <= 1 || duration_s <= 0.0 {
         return (value, None);
@@ -260,11 +245,6 @@ pub fn sample_track_with_derivative_epsilon(
         return (value, None);
     }
 
-    let derivative = value_difference(&next, &prev)
-        .and_then(|diff| value_scale(&diff, dt.recip()))
-        .map(|v| match v {
-            Value::Vec4(arr) if matches!(value, Value::ColorRgba(_)) => Value::ColorRgba(arr),
-            other => other,
-        });
+    let derivative = value_difference(&next, &prev).and_then(|diff| value_scale(&diff, dt.recip()));
     (value, derivative)
 }

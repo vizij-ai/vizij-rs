@@ -1,40 +1,30 @@
 # vizij-api-core
 
-> **Shared Value/Shape/TypedPath contracts used by every Vizij engine, adapter, and tooling surface.**
+> **The vizij vocabulary over `arora_types::value::Value`, plus the Shape/TypedPath/WriteBatch contracts used by every Vizij engine, adapter, and tooling surface.**
 
-`vizij-api-core` provides the canonical data model for Vizij. Engines emit `Value` changes and typed write batches; hosts, Bevy plugins, and WebAssembly bindings all depend on this crate to speak the same language.
+Vizij runs on Arora: the store, the modules, the behaviors, and Studio all speak `arora_types::value::Value`. This crate re-exports that `Value` and declares vizij's vocabulary on top of it — the composite type ids, the constructors and accessors, and the helpers engines need to blend, coerce, and serialize values consistently.
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Features](#features)
-3. [Installation](#installation)
-4. [Key Concepts](#key-concepts)
-5. [Examples](#examples)
-6. [Development & Testing](#development--testing)
-7. [Related Packages](#related-packages)
+2. [Installation](#installation)
+3. [Key Concepts](#key-concepts)
+4. [Examples](#examples)
+5. [Development & Testing](#development--testing)
+6. [Related Packages](#related-packages)
 
 ---
 
 ## Overview
 
-- Rust 2021 library with minimal dependencies (`serde`, `hashbrown`, `thiserror`).
-- Defines the tagged `Value` enum and `Shape` metadata shared by animation, graph, and orchestrator stacks.
+- Rust 2021 library over `arora-types` (plus `serde`, `serde_json`, `hashbrown`, `thiserror`, `uuid`).
+- Re-exports `arora_types::value::Value` and declares the vizij composite type ids (`vec2`/`vec3`/`vec4`/`quat`/`color-rgba`/`transform`) with constructors and accessors.
+- Defines `Shape` metadata shared by animation, graph, and orchestrator stacks.
 - Implements canonical `TypedPath` parsing/formatting for target identifiers.
 - Supplies `WriteOp` / `WriteBatch` helpers so engines can communicate deterministic side effects.
-- Ships JSON normalisation utilities used by the WASM bindings and fixtures.
-
----
-
-## Features
-
-- Structured values covering scalars, vectors, quaternions, colours, transforms, enums, records, arrays, lists, tuples, text, and bool.
-- Shape metadata (`ShapeId`, `Shape`) for validation and tooling.
-- Deterministic path grammar with serde support.
-- Lightweight write-batch helpers with provenance-friendly metadata.
-- JSON coercion helpers for parsing shorthand payloads into the canonical `{ "type": "...", "data": ... }` envelope.
+- Ships JSON normalisation utilities that accept every historical payload form and produce Arora `Value` serde.
 
 ---
 
@@ -45,34 +35,27 @@ cargo add vizij-api-core
 ```
 
 No feature flags are required; the crate is always built with the full surface enabled.
-`serde` support is always compiled in so `Value`, `Shape`, and `TypedPath` can be serialised/deserialised across Rust and wasm hosts. Disabling `serde` or targeting `no_std` is currently unsupported; downstream engines rely on these derives.
+`serde` support is always compiled in so values, `Shape`, and `TypedPath` can be serialised/deserialised across Rust and wasm hosts. Disabling `serde` or targeting `no_std` is currently unsupported; downstream engines rely on these derives.
 
 ---
 
 ## Key Concepts
 
-### Value & Shape
+### Value: the vizij vocabulary
 
-- `Value` is a tagged enum serialised with `{ "type": "...", "data": ... }`. Helper constructors (`Value::vec3`, `Value::quat`, etc.) simplify native code.
-- `ShapeId` mirrors the possible structural forms (`Scalar`, `Vec3`, `Transform`, `Record`, …). `Shape` wraps the ID plus optional metadata (`HashMap<String, String>`).
-- Consuming crates rely on shape metadata to catch schema drift early and to build “null-of-shape” placeholders (e.g., NaN vectors).
+`Value` is Arora's enum; the `value` module gives it vizij semantics:
 
-| Variant | Canonical JSON | Legacy shorthand input |
-|---------|----------------|------------------------|
-| `Value::Float(1.0)` | `{"type":"float","data":1.0}` | `{"float":1}` |
-| `Value::Bool(true)` | `{"type":"bool","data":true}` | `{"bool":true}` |
-| `Value::Vec3([0,1,0])` | `{"type":"vec3","data":[0,1,0]}` | `{"vec3":[0,1,0]}` |
-| `Value::Quat([0,0,0,1])` | `{"type":"quat","data":[0,0,0,1]}` | `{"quat":[0,0,0,1]}` |
-| `Value::ColorRgba([1,0,0,1])` | `{"type":"colorrgba","data":[1,0,0,1]}` | `{"color":[1,0,0,1]}` |
-| `Value::Transform { .. }` | `{"type":"transform","data":{"translation":[0,0,0],"rotation":[0,0,0,1],"scale":[1,1,1]}}` | `{"transform":{"translation":[0,0,0],"rotation":[0,0,0,1],"scale":[1,1,1]}}` |
-| `Value::Enum("State", box Value::Bool(true))` | `{"type":"enum","data":["State",{"type":"bool","data":true}]}` | `{"enum":{"tag":"State","value":{"bool":true}}}` |
-| `Value::Record({ "joint": Value::Float(2.0) })` | `{"type":"record","data":{"joint":{"type":"float","data":2.0}}}` | `{"record":{"joint":{"float":2}}}` |
-| `Value::Array([Value::Float(0.0)])` | `{"type":"array","data":[{"type":"float","data":0.0}]}` | `{"array":[{"float":0}]}` |
-| `Value::List([Value::Vec3([1,1,1])])` | `{"type":"list","data":[{"type":"vec3","data":[1,1,1]}]}` | `{"list":[{"vec3":[1,1,1]}]}` |
-| `Value::Tuple([Value::Float(1.0), Value::Bool(false)])` | `{"type":"tuple","data":[{"type":"float","data":1.0},{"type":"bool","data":false}]}` | `{"tuple":[{"float":1},{"bool":false}]}` |
-| `Value::Text("hello")` | `{"type":"text","data":"hello"}` | `{"text":"hello"}` |
+- **Type ids** (`value::VEC3_TYPE`, `value::TRANSFORM_TYPE`, ...) are UUIDs namespaced under the ASCII bytes of "vizij". Composites are `Value::Structure` with these ids; the ids are shared by module codegen and Studio introspection.
+- **Constructors** build the canonical encoding: `float`, `bool_`, `text`, `vector`, `vec2`, `vec3`, `vec4`, `quat`, `color_rgba`, `transform`, `record`, `array`, `enumeration`.
+- **Accessors** read values back into PODs: `as_float`, `as_bool`, `as_text`, `as_vector`, `as_vec2/3/4`, `as_quat`, `as_color_rgba`, `as_transform`, `as_record`, `as_array`, `as_enumeration`. Kernels decode a value once through these, do their math on plain Rust types, and re-encode at the store boundary.
+- **`kind(&Value) -> VizijKind`** classifies a value for dispatch; anything outside the vocabulary is `VizijKind::Other` and flows through untouched.
 
-Use the canonical JSON form when serialising fixtures or interoperating with other runtimes; the legacy column remains accepted on input for backwards compatibility.
+Mapping: `f32` -> `F32`, `bool` -> `Boolean`, text -> `String`, numeric vector -> `ArrayF32`, composites -> `Structure`, records -> `KeyValue` (field ids derived from key names), sequences -> `ArrayValue`, enums -> native `Enumeration` (variant ids derived from variant names via `value::variant_id`).
+
+### Shape
+
+- `ShapeId` mirrors the declared structural forms (`Scalar`, `Vec3`, `Transform`, `Record`, …). `Shape` wraps the ID plus optional metadata (`HashMap<String, String>`).
+- Shapes are declared metadata about a path, not part of the wire value. Where the wire value cannot express a declared distinction — arora has a single sequence kind, so array/list/tuple all travel as `ArrayValue` — the path's `Shape` preserves it.
 
 ### TypedPath
 
@@ -82,109 +65,86 @@ Use the canonical JSON form when serialising fixtures or interoperating with oth
 
 ### Write Operations
 
-- `WriteOp` captures a single `{ path, value, shape? }` produced by an engine.
+- `WriteOp` captures a single `{ path, value, shape? }` produced by an engine; it serialises with the path as a string and the value in Arora serde form.
 - `WriteBatch` is a thin wrapper around `Vec<WriteOp>` with append helpers and serde support.
 - Engines use `WriteBatch` to communicate external side effects to orchestrators or hosts.
 
 ### JSON Normalisation
 
-- The `json` module converts shorthand objects (`{ float: 1 }`, `{ vec3: [0,1,0] }`) into canonical `Value` envelopes.
-- Shared by WASM bindings (`vizij-*-wasm`), fixtures, and hosted tools to ensure identical parsing across environments.
-- Legacy helpers (`value_to_legacy_json`, `writebatch_to_legacy_json`) keep older tools functioning during transitions.
-- Graph specs are normalised so node shorthands stay ergonomic while the runtime always sees the canonical schema:
-  - Node `type` strings are lowercased and legacy `kind` aliases are rewritten.
-  - Inline `inputs` maps are expanded into the top-level `edges` array so wiring is explicit.
-  - Scalar/boolean/vector literals placed on an input (for example `"rhs": 2`) are lifted into `node.input_defaults` and survive the `inputs → edges` rewrite.
-  - Connection objects can provide both wiring and fallbacks (`{ "node_id": "config", "default": 0.5 }`), which normalise into a link plus an `input_defaults` entry.
-  - Optional `default_shape` or `shape` keys are accepted (string IDs become `{ "id": "Scalar" }`) so downstream coercion can infer the intended layout.
+The canonical JSON form of a value is Arora `Value`'s own serde: `{"f32": 1.0}`, `{"str": "hi"}`, `{"f32s": [...]}`, `{"struct": {"id": ..., "fields": [...]}}`, `{"keyvalue": ...}`, `{"enum": {"id": ..., "variant_id": ..., "value": ...}}`. `json::parse_value` and `json::normalize_value_json` additionally accept every payload form vizij hosts have emitted, and produce the canonical form:
 
-  ```jsonc
-  // authoring shorthand
-  {
-    "id": "scale",
-    "type": "multiply",
-    "inputs": {
-      "lhs": "sensor_gain",
-      "rhs": 2
-    }
+| Accepted input | Reading |
+|----------------|---------|
+| `1.0`, `true`, `"hi"` | float / bool / text |
+| `[1, 2]`, `[1, 2, 3]`, `[1, 2, 3, 4]` | vec2 / vec3 / vec4 (`AutoVectorKinds` policy; `AlwaysVector` reads all numeric arrays as generic vectors) |
+| `{"float": 1}`, `{"bool": true}`, `{"text": "hi"}` | float / bool / text |
+| `{"vec3": [0, 1, 0]}` (also `vec2`/`vec4`/`quat`/`color`/`vector`) | the corresponding composite |
+| `{"transform": {"translation": ..., "rotation": ..., "scale": ...}}` | transform (components as arrays or `{x, y, z[, w]}` objects) |
+| `{"enum": {"tag": "On", "value": ...}}` | native `Enumeration` with `variant_id("On")` |
+| `{"record": {...}}` | `KeyValue` record |
+| `{"array"\|"list"\|"tuple": [...]}` | `ArrayValue` sequence |
+| `{"type": "vec3", "data": [0, 1, 0]}` (any type tag) | the corresponding value |
+| `{"x": ..., "y": ...}` / `{x, y, z}` / `{x, y, z, w}` | vec2 / vec3 / quat |
+| canonical Arora serde | passed through unchanged |
+
+This normaliser is the single entry point for migrating persisted documents (e.g. Value-bearing JSON embedded in `.glb` face bundles) to the canonical form. Values serialise back to JSON with plain `serde_json`; there is no producer of the legacy forms. `json::writebatch_from_json` reads write batches whose values use any accepted form.
+
+Graph specs are normalised so node shorthands stay ergonomic while the runtime always sees the canonical schema:
+
+- Node `type` strings are lowercased and legacy `kind` aliases are rewritten.
+- Inline `inputs` maps are expanded into the top-level `edges` array so wiring is explicit.
+- Scalar/boolean/vector literals placed on an input (for example `"rhs": 2`) are lifted into `node.input_defaults` and survive the `inputs → edges` rewrite.
+- Connection objects can provide both wiring and fallbacks (`{ "node_id": "config", "default": 0.5 }`), which normalise into a link plus an `input_defaults` entry.
+- Optional `default_shape` or `shape` keys are accepted (string IDs become `{ "id": "Scalar" }`) so downstream coercion can infer the intended layout.
+
+```jsonc
+// authoring shorthand
+{
+  "id": "scale",
+  "type": "multiply",
+  "inputs": {
+    "lhs": "sensor_gain",
+    "rhs": 2
   }
+}
 
-  // normalised representation consumed by vizij-graph-core
-  {
-    "id": "scale",
-    "type": "multiply",
-    "input_defaults": {
-      "rhs": { "value": { "type": "float", "data": 2.0 } }
-    }
+// normalised representation consumed by vizij-graph-core
+{
+  "id": "scale",
+  "type": "multiply",
+  "input_defaults": {
+    "rhs": { "value": { "f32": 2.0 } }
   }
-  ```
+}
+```
 
-  This means authors can skip boilerplate constant nodes, but hosts still receive a deterministic graph definition with explicit edges and defaults.
+This means authors can skip boilerplate constant nodes, but hosts still receive a deterministic graph definition with explicit edges and defaults.
 
-  ```jsonc
-  // enum/record defaults survive normalisation
-  {
-    "id": "mode-selector",
-    "type": "switch",
-    "inputs": {
-      "mode": { "enum": { "tag": "On", "value": { "bool": true } } }
-    },
-    "input_defaults": {
-      "payload": { "record": { "intensity": { "float": 0.75 } } }
-    }
-  }
+### Blending and coercion
 
-  // becomes
-  {
-    "id": "mode-selector",
-    "type": "switch",
-    "input_defaults": {
-      "mode": {
-        "value": {
-          "type": "enum",
-          "data": ["On", { "type": "bool", "data": true }]
-        }
-      },
-      "payload": {
-        "value": {
-          "type": "record",
-          "data": {
-            "intensity": { "type": "float", "data": 0.75 }
-          }
-        }
-      }
-    }
-  }
-  ```
+- `blend::blend_values` decodes both operands into PODs, blends (lerp for floats/vectors/colors, slerp for quaternions, TRS-wise for transforms, field-wise for records, index-wise for sequences), and re-encodes. `blend::step_blend` picks an operand whole for step-only kinds.
+- `coercion::to_float` / `to_vector` / `to_vec3` give every value a lossy numeric reading so mixed-kind blends and adapters always have something sensible to work with.
 
 ---
 
 ## Examples
 
 ```rust
-use vizij_api_core::{Shape, ShapeId, TypedPath, Value, WriteBatch, WriteOp};
+use vizij_api_core::{json, value, Shape, ShapeId, TypedPath, WriteBatch, WriteOp};
 
 let path = TypedPath::parse("robot/Arm/Joint3.rotation")?;
-let value = Value::quat(0.0, 0.0, 0.0, 1.0);
+let rotation = value::quat([0.0, 0.0, 0.0, 1.0]);
 let shape = Shape::new(ShapeId::Quat);
 
 let mut batch = WriteBatch::new();
-batch.push(WriteOp::new_with_shape(path.clone(), value.clone(), Some(shape.clone())));
+batch.push(WriteOp::new_with_shape(path.clone(), rotation.clone(), Some(shape)));
 
-for op in batch.iter() {
-    println!("{} => {:?} ({:?})", op.path, op.value, op.shape.as_ref().map(|s| &s.id));
-}
-```
+// Kernels decode once into PODs:
+let pod: [f32; 4] = value::as_quat(&rotation).expect("quat");
 
-Parsing JSON using the normaliser:
-
-```rust
-use vizij_api_core::json;
-use serde_json::json;
-
-let raw = json!({ "vec3": [0.0, 1.0, 0.0] });
-let canonical = json::normalize_value_json(raw);
-let value: vizij_api_core::Value = serde_json::from_value(canonical)?;
+// The normaliser reads any historical payload form:
+let parsed = json::parse_value(serde_json::json!({ "vec3": [0.0, 1.0, 0.0] }))?;
+assert_eq!(value::as_vec3(&parsed), Some([0.0, 1.0, 0.0]));
 ```
 
 ---
@@ -195,7 +155,7 @@ let value: vizij_api_core::Value = serde_json::from_value(canonical)?;
 cargo test -p vizij-api-core
 ```
 
-Modules include unit tests for parsing, coercion, and normalisation. Run `pnpm run test:rust` from the repo root to exercise the entire workspace.
+Modules include unit tests for the constructor/accessor round-trips, blending, coercion, and normalisation. Run `pnpm run test:rust` from the repo root to exercise the entire workspace.
 
 ---
 

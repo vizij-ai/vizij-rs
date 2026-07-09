@@ -1,5 +1,7 @@
 //! Numeric helper utilities shared across node evaluators.
 
+use vizij_api_core::value as vocab;
+use vizij_api_core::value::VizijKind;
 use vizij_api_core::{coercion, Value};
 
 use super::value_layout::{align_flattened, flatten_numeric};
@@ -19,7 +21,7 @@ where
         },
         (Some(a), None) => a.layout.fill_with(f32::NAN),
         (None, Some(b)) => b.layout.fill_with(f32::NAN),
-        (None, None) => Value::Float(f32::NAN),
+        (None, None) => vocab::float(f32::NAN),
     }
 }
 
@@ -33,7 +35,7 @@ where
             let data: Vec<f32> = flat.data.iter().map(|x| op(*x)).collect();
             flat.layout.reconstruct(&data)
         }
-        None => Value::Float(f32::NAN),
+        None => vocab::float(f32::NAN),
     }
 }
 
@@ -44,9 +46,9 @@ pub fn as_float(v: &Value) -> f32 {
 
 /// Coerce a [`Value`] to a boolean, treating non-zero numeric entries as `true`.
 pub fn as_bool(v: &Value) -> bool {
-    match v {
-        Value::Bool(b) => *b,
-        Value::Text(s) => !s.is_empty(),
+    match vocab::kind(v) {
+        VizijKind::Bool => vocab::as_bool(v).unwrap_or(false),
+        VizijKind::Text => vocab::as_text(v).is_some_and(|s| !s.is_empty()),
         _ => coercion::to_vector(v).iter().any(|x| *x != 0.0),
     }
 }

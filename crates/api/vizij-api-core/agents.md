@@ -1,6 +1,6 @@
 # vizij-api-core — Agent Notes
 
-- **Purpose**: Canonical `Value`, `Shape`, and `TypedPath` types plus write-batch helpers used by every engine.
+- **Purpose**: The vizij vocabulary over `arora_types::value::Value` (type ids, constructors, accessors), plus `Shape`, `TypedPath`, and write-batch helpers used by every engine.
 - **Key files**: `src/value.rs`, `src/shape.rs`, `src/typed_path.rs`, `src/json/`.
 - **Commands**: `cargo test -p vizij-api-core`; run `pnpm --filter @vizij/value-json test` when changing JSON normalisation.
 - **Policy**: Treat changes as breaking unless proven otherwise—coordinate with all dependent crates and npm packages.

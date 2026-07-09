@@ -10,8 +10,9 @@ use vizij_animation_core::{
     inputs::{Inputs, InstanceUpdate, LoopMode, PlayerCommand},
     outputs::{CoreEvent, Outputs},
     sampling::{sample_track, sample_track_with_derivative},
-    value::Value,
+    value::TrackValue,
 };
+use vizij_api_core::value::{as_quat, Value};
 
 fn approx(a: f32, b: f32, eps: f32) {
     assert!((a - b).abs() <= eps, "left={a} right={b} eps={eps}");
@@ -48,7 +49,7 @@ fn mk_scalar_track_linear(path: &str, keys: &[(f32, f32)]) -> Track {
         points.push(Keypoint {
             id: format!("k{i}"),
             stamp: *stamp,
-            value: Value::Float(*v),
+            value: TrackValue::Float(*v),
             transitions,
         });
     }
@@ -85,7 +86,7 @@ fn mk_quat_track_linear(path: &str, keys: &[(f32, [f32; 4])]) -> Track {
         points.push(Keypoint {
             id: format!("k{i}"),
             stamp: *stamp,
-            value: Value::Quat(*q),
+            value: TrackValue::Quat(*q),
             transitions,
         });
     }
@@ -136,17 +137,17 @@ fn ids_allocator_basics() {
 fn sampling_linear_step_bezier() {
     // Linear scalar 0..1 over [0,1]
     let track_lin = mk_scalar_track_linear("node.value", &[(0.0, 0.0), (1.0, 1.0)]);
-    if let Value::Float(v) = sample_track(&track_lin, 0.5) {
+    if let TrackValue::Float(v) = sample_track(&track_lin, 0.5) {
         approx(v, 0.5, 1e-6);
     } else {
         panic!();
     }
-    if let Value::Float(v) = sample_track(&track_lin, 0.0) {
+    if let TrackValue::Float(v) = sample_track(&track_lin, 0.0) {
         approx(v, 0.0, 1e-6);
     } else {
         panic!();
     }
-    if let Value::Float(v) = sample_track(&track_lin, 1.0) {
+    if let TrackValue::Float(v) = sample_track(&track_lin, 1.0) {
         approx(v, 1.0, 1e-6);
     } else {
         panic!();
@@ -161,19 +162,19 @@ fn sampling_linear_step_bezier() {
             Keypoint {
                 id: "k0".into(),
                 stamp: 0.0,
-                value: Value::Bool(true),
+                value: TrackValue::Bool(true),
                 transitions: None,
             },
             Keypoint {
                 id: "k1".into(),
                 stamp: 1.0,
-                value: Value::Bool(false),
+                value: TrackValue::Bool(false),
                 transitions: None,
             },
         ],
         settings: None,
     };
-    if let Value::Bool(v) = sample_track(&bool_track, 0.5) {
+    if let TrackValue::Bool(v) = sample_track(&bool_track, 0.5) {
         assert!(v);
     } else {
         panic!();
@@ -188,19 +189,19 @@ fn sampling_linear_step_bezier() {
             Keypoint {
                 id: "k0".into(),
                 stamp: 0.0,
-                value: Value::Float(0.0),
+                value: TrackValue::Float(0.0),
                 transitions: None,
             },
             Keypoint {
                 id: "k1".into(),
                 stamp: 1.0,
-                value: Value::Float(1.0),
+                value: TrackValue::Float(1.0),
                 transitions: None,
             },
         ],
         settings: None,
     };
-    if let Value::Float(v) = sample_track(&track_bezier_default, 0.5) {
+    if let TrackValue::Float(v) = sample_track(&track_bezier_default, 0.5) {
         assert!(v > 0.4 && v < 0.6, "bezier mid expected near 0.5 got {v}");
     } else {
         panic!();
@@ -210,39 +211,31 @@ fn sampling_linear_step_bezier() {
 #[test]
 fn accumulates_vector_values_componentwise() {
     let mut acc = AccumulatorWithDerivatives::new();
-    acc.add("vec", &Value::Vector(vec![0.0, 2.0, 4.0]), None, 1.0);
-    acc.add("vec", &Value::Vector(vec![2.0, 0.0, 2.0]), None, 1.0);
+    acc.add("vec", &TrackValue::Vector(vec![0.0, 2.0, 4.0]), None, 1.0);
+    acc.add("vec", &TrackValue::Vector(vec![2.0, 0.0, 2.0]), None, 1.0);
     let finalized = acc.finalize();
     let (value, derivative) = finalized.get("vec").expect("vector entry");
     assert!(derivative.is_none());
-    if let Value::Vector(data) = value {
+    if let Value::ArrayF32(data) = value {
         assert_eq!(data, &vec![1.0, 1.0, 3.0]);
     } else {
         panic!("expected vector average, got {value:?}");
     }
 
     let mut acc_list = AccumulatorWithDerivatives::new();
-    acc_list.add(
-        "list",
-        &Value::List(vec![Value::Float(0.0), Value::Float(4.0)]),
-        None,
-        1.0,
-    );
-    acc_list.add(
-        "list",
-        &Value::List(vec![Value::Float(2.0), Value::Float(0.0)]),
-        None,
-        1.0,
-    );
+    acc_list.add("list", &TrackValue::NumericArray(vec![0.0, 4.0]), None, 1.0);
+    acc_list.add("list", &TrackValue::NumericArray(vec![2.0, 0.0]), None, 1.0);
     let list_finalized = acc_list.finalize();
     let (list_value, list_deriv) = list_finalized.get("list").expect("list entry");
     assert!(list_deriv.is_none());
+    // Sequences are one ArrayValue kind: the old List/Tuple distinction is
+    // gone, so the averaged result comes back as an ArrayValue of floats.
     match list_value {
-        Value::List(items) => {
+        Value::ArrayValue(items) => {
             let floats: Vec<f32> = items
                 .iter()
                 .map(|v| match v {
-                    Value::Float(f) => *f,
+                    Value::F32(f) => *f,
                     _ => panic!("expected numeric list component, got {v:?}"),
                 })
                 .collect();
@@ -256,12 +249,12 @@ fn accumulates_vector_values_componentwise() {
 fn sampling_derivative_linear_and_step() {
     let track_lin = mk_scalar_track_linear("node.value", &[(0.0, 0.0), (1.0, 1.0)]);
     let sample = sample_track_with_derivative(&track_lin, 0.5, 1.0);
-    if let Value::Float(v) = sample.0 {
+    if let TrackValue::Float(v) = sample.0 {
         approx(v, 0.5, 1e-6);
     } else {
         panic!();
     }
-    if let Some(Value::Float(dv)) = sample.1 {
+    if let Some(TrackValue::Float(dv)) = sample.1 {
         approx(dv, 1.0, 1e-6);
     } else {
         panic!();
@@ -275,26 +268,26 @@ fn sampling_derivative_linear_and_step() {
             Keypoint {
                 id: "k0".into(),
                 stamp: 0.0,
-                value: Value::Bool(true),
+                value: TrackValue::Bool(true),
                 transitions: None,
             },
             Keypoint {
                 id: "k1".into(),
                 stamp: 1.0,
-                value: Value::Bool(false),
+                value: TrackValue::Bool(false),
                 transitions: None,
             },
         ],
         settings: None,
     };
     let step_sample = sample_track_with_derivative(&bool_track, 0.5, 1.0);
-    if let Value::Bool(v) = step_sample.0 {
+    if let TrackValue::Bool(v) = step_sample.0 {
         assert!(v);
     } else {
         panic!();
     }
     // TODO: Determine what behavior is appropriate for derivative of boolean track
-    // if let Some(Value::Float(dv)) = step_sample.1 {
+    // if let Some(TrackValue::Float(dv)) = step_sample.1 {
     //     approx(dv, 0.0, 1e-6);
     // } else {
     //     panic!("{:?}",step_sample);
@@ -309,7 +302,7 @@ fn sampling_quat_nlerp_shortest_arc() {
         "node.rot",
         &[(0.0, [0.0, 0.0, 0.0, 1.0]), (1.0, [0.0, 1.0, 0.0, 0.0])],
     );
-    if let Value::Quat(q) = sample_track(&track, 0.5) {
+    if let TrackValue::Quat(q) = sample_track(&track, 0.5) {
         let n = norm4(q);
         approx(n, 1.0, 1e-4);
     } else {
@@ -383,7 +376,7 @@ fn engine_loop_modes_and_window_and_seek() {
         .expect("change")
         .value
         .clone();
-    if let Value::Float(v) = val {
+    if let Value::F32(v) = val {
         approx(v, 0.8, 1e-6);
     } else {
         panic!();
@@ -407,7 +400,7 @@ fn engine_loop_modes_and_window_and_seek() {
         .unwrap()
         .value
         .clone();
-    if let Value::Float(v) = val2 {
+    if let Value::F32(v) = val2 {
         approx(v, 0.75, 1e-6);
     } else {
         panic!();
@@ -441,7 +434,7 @@ fn pingpong_reflection_mapping() {
         .unwrap()
         .value
         .clone();
-    if let Value::Float(s) = v {
+    if let Value::F32(s) = v {
         approx(s, 0.75, 1e-6);
     } else {
         panic!();
@@ -461,7 +454,7 @@ fn pingpong_reflection_mapping() {
         .unwrap()
         .value
         .clone();
-    if let Value::Float(s) = v2 {
+    if let Value::F32(s) = v2 {
         approx(s, 0.75, 1e-6);
     } else {
         panic!();
@@ -500,7 +493,7 @@ fn time_scale_zero_static_pose() {
         .unwrap()
         .value
         .clone();
-    if let Value::Float(s) = v {
+    if let Value::F32(s) = v {
         approx(s, 0.7, 1e-5);
     } else {
         panic!();
@@ -519,7 +512,7 @@ fn time_scale_zero_static_pose() {
         .unwrap()
         .value
         .clone();
-    if let Value::Float(s) = v2 {
+    if let Value::F32(s) = v2 {
         approx(s, 0.7, 1e-5);
     } else {
         panic!();
@@ -564,7 +557,7 @@ fn disabled_instance_skipped() {
         .unwrap()
         .value
         .clone();
-    if let Value::Float(s) = v {
+    if let Value::F32(s) = v {
         approx(s, 0.0, 1e-6);
     } else {
         panic!();
@@ -579,7 +572,7 @@ fn outputs_api_basics() {
     out.push_change(vizij_animation_core::outputs::Change {
         player: PlayerId(0),
         key: "a".into(),
-        value: Value::Float(1.0),
+        value: vizij_api_core::value::float(1.0),
     });
     assert!(!out.is_empty());
     out.clear();
@@ -602,19 +595,29 @@ fn outputs_push_event_manual() {
 fn accumulator_blends_values_and_derivatives() {
     let mut accum = AccumulatorWithDerivatives::new();
     let key = "node.scalar";
-    accum.add(key, &Value::Float(1.0), Some(&Value::Float(4.0)), 0.25);
-    accum.add(key, &Value::Float(3.0), Some(&Value::Float(2.0)), 0.75);
+    accum.add(
+        key,
+        &TrackValue::Float(1.0),
+        Some(&TrackValue::Float(4.0)),
+        0.25,
+    );
+    accum.add(
+        key,
+        &TrackValue::Float(3.0),
+        Some(&TrackValue::Float(2.0)),
+        0.75,
+    );
     // Derivatives omitted should not register in the map.
-    accum.add("node.flag", &Value::Bool(true), None, 1.0);
+    accum.add("node.flag", &TrackValue::Bool(true), None, 1.0);
 
     let blended = accum.finalize();
     let (value, derivative) = blended.get(key).expect("blended scalar value present");
-    if let Value::Float(v) = value {
+    if let Value::F32(v) = value {
         approx(*v, 2.5, 1e-6);
     } else {
         panic!("expected blended float value");
     }
-    if let Some(Value::Float(dv)) = derivative {
+    if let Some(Value::F32(dv)) = derivative {
         approx(*dv, 2.5, 1e-6);
     } else {
         panic!("expected blended float derivative");
@@ -678,13 +681,13 @@ fn baking_matches_sampling_and_counts() {
     assert_eq!(baked.tracks[0].values.len(), expected_samples);
 
     // Check a couple of points match sampling
-    if let Value::Float(v0) = baked.tracks[0].values[0].clone() {
+    if let Value::F32(v0) = baked.tracks[0].values[0].clone() {
         approx(v0, 0.0, 1e-6);
     } else {
         panic!();
     }
     let mid_idx = expected_samples / 2;
-    if let Value::Float(vm) = baked.tracks[0].values[mid_idx].clone() {
+    if let Value::F32(vm) = baked.tracks[0].values[mid_idx].clone() {
         approx(vm, (mid_idx as f32) / 60.0, 1e-2); // linear over [0,1]
     } else {
         panic!();
@@ -783,7 +786,6 @@ fn determinism_same_sequence_same_outputs() {
 /// it should normalize the final quaternion when blending two quat contributions on the same key
 #[test]
 fn multi_quat_blend_normalized() {
-    use vizij_animation_core::value::Value::Quat;
     // Two quats roughly 90 degrees apart
     let q0 = [0.0, 0.0, 0.0, 1.0];
     let q1 = [0.0, 0.70710677, 0.0, 0.70710677];
@@ -823,7 +825,7 @@ fn multi_quat_blend_normalized() {
         .unwrap()
         .value
         .clone();
-    if let Quat(qb) = v {
+    if let Some(qb) = as_quat(&v) {
         let n = norm4(qb);
         approx(n, 1.0, 1e-4);
     } else {
@@ -836,12 +838,12 @@ fn multi_quat_blend_normalized() {
 fn sampling_boundaries_single_and_empty() {
     // Outside ranges hold ends: keys at 0.25->2.0 and 0.75->4.0
     let track = mk_scalar_track_linear("node.bound", &[(0.0, 2.0), (1.0, 4.0)]);
-    if let Value::Float(v) = sample_track(&track, 0.0) {
+    if let TrackValue::Float(v) = sample_track(&track, 0.0) {
         approx(v, 2.0, 1e-6)
     } else {
         panic!()
     }
-    if let Value::Float(v) = sample_track(&track, 1.0) {
+    if let TrackValue::Float(v) = sample_track(&track, 1.0) {
         approx(v, 4.0, 1e-6)
     } else {
         panic!()
@@ -855,17 +857,17 @@ fn sampling_boundaries_single_and_empty() {
         points: vec![Keypoint {
             id: "k".into(),
             stamp: 0.5,
-            value: Value::Float(7.0),
+            value: TrackValue::Float(7.0),
             transitions: None,
         }],
         settings: None,
     };
-    if let Value::Float(v) = sample_track(&single, 0.0) {
+    if let TrackValue::Float(v) = sample_track(&single, 0.0) {
         approx(v, 7.0, 1e-6)
     } else {
         panic!()
     }
-    if let Value::Float(v) = sample_track(&single, 2.0) {
+    if let TrackValue::Float(v) = sample_track(&single, 2.0) {
         approx(v, 7.0, 1e-6)
     } else {
         panic!()
@@ -977,7 +979,7 @@ fn speed_play_stop_controls() {
         .unwrap()
         .value
         .clone();
-    if let Value::Float(s) = v {
+    if let Value::F32(s) = v {
         approx(s, 0.0, 1e-6);
     } else {
         panic!();
@@ -997,7 +999,7 @@ fn speed_play_stop_controls() {
         .value
         .clone();
     // With duration_ms=10s and dt=1s after Play, normalized u ~= 0.1
-    if let Value::Float(s2) = v2 {
+    if let Value::F32(s2) = v2 {
         approx(s2, 0.1, 1e-3);
     } else {
         panic!();
@@ -1015,7 +1017,7 @@ fn speed_play_stop_controls() {
         .unwrap()
         .value
         .clone();
-    if let Value::Float(s3) = v3 {
+    if let Value::F32(s3) = v3 {
         approx(s3, 0.0, 1e-6);
     } else {
         panic!();
@@ -1043,13 +1045,13 @@ fn mixed_kind_same_target_safe() {
             Keypoint {
                 id: "k0".into(),
                 stamp: 0.0,
-                value: Value::Vec3([0.0, 0.0, 0.0]),
+                value: TrackValue::Vec3([0.0, 0.0, 0.0]),
                 transitions: None,
             },
             Keypoint {
                 id: "k1".into(),
                 stamp: 1.0,
-                value: Value::Vec3([1.0, 1.0, 1.0]),
+                value: TrackValue::Vec3([1.0, 1.0, 1.0]),
                 transitions: None,
             },
         ],
@@ -1085,7 +1087,6 @@ fn mixed_kind_same_target_safe() {
 /// it should normalize quaternion when two instances with different orientations contribute to same key
 #[test]
 fn multi_quat_instances_normalized() {
-    use vizij_animation_core::value::Value::Quat;
     let q0 = [0.0, 0.0, 0.0, 1.0];
     let q1 = [0.0, 0.38268343, 0.0, 0.9238795]; // 45 deg around Y
     let t0 = mk_quat_track_linear("node.rot", &[(0.0, q0), (1.0, q0)]);
@@ -1121,7 +1122,7 @@ fn multi_quat_instances_normalized() {
         .unwrap()
         .value
         .clone();
-    if let Quat(qb) = v {
+    if let Some(qb) = as_quat(&v) {
         approx(norm4(qb), 1.0, 1e-4);
     } else {
         panic!();
@@ -1146,7 +1147,7 @@ fn baking_empty_and_single_key_tracks() {
         points: vec![Keypoint {
             id: "k".into(),
             stamp: 0.5,
-            value: Value::Float(3.14),
+            value: TrackValue::Float(3.14),
             transitions: None,
         }],
         settings: None,
@@ -1164,7 +1165,7 @@ fn baking_empty_and_single_key_tracks() {
     assert!(baked.tracks.iter().any(|t| t.target_path == "node.single"
         && t.values
             .iter()
-            .all(|v| matches!(v, Value::Float(x) if (*x - 3.14).abs() < 1e-6))));
+            .all(|v| matches!(v, Value::F32(x) if (*x - 3.14).abs() < 1e-6))));
 }
 
 /// it should round-trip Config and selected Value variants through serde
@@ -1176,30 +1177,41 @@ fn config_and_value_serde_roundtrip() {
     let cfg2: Config = serde_json::from_str(&s).unwrap();
     assert!(cfg2.scratch_samples > 0);
 
-    // Value roundtrips
-    let vq = Value::Quat([0.0, 0.0, 0.0, 1.0]);
+    // Value roundtrips through the vocabulary encodings
+    let vq = vizij_api_core::value::quat([0.0, 0.0, 0.0, 1.0]);
     let svq = serde_json::to_string(&vq).unwrap();
     let vq2: Value = serde_json::from_str(&svq).unwrap();
     assert_eq!(vq, vq2);
 
-    let vt = Value::Transform {
+    let vt = vizij_api_core::value::transform(vizij_api_core::Transform {
         translation: [1.0, 2.0, 3.0],
         rotation: [0.0, 0.0, 0.0, 1.0],
         scale: [1.0, 1.0, 1.0],
-    };
+    });
     let svt = serde_json::to_string(&vt).unwrap();
     let vt2: Value = serde_json::from_str(&svt).unwrap();
     assert_eq!(vt, vt2);
 
     // Bool roundtrip
-    let vb = Value::Bool(true);
+    let vb = vizij_api_core::value::bool_(true);
     let svb = serde_json::to_string(&vb).unwrap();
     let vb2: Value = serde_json::from_str(&svb).unwrap();
     assert_eq!(vb, vb2);
 
     // Text roundtrip
-    let vtxt = Value::Text("hello".to_string());
+    let vtxt = vizij_api_core::value::text("hello");
     let svtxt = serde_json::to_string(&vtxt).unwrap();
     let vtxt2: Value = serde_json::from_str(&svtxt).unwrap();
     assert_eq!(vtxt, vtxt2);
+
+    // Keypoint roundtrip: TrackValue serializes as the wire-form Value.
+    let kp = Keypoint {
+        id: "k0".into(),
+        stamp: 0.5,
+        value: TrackValue::Vec3([1.0, 2.0, 3.0]),
+        transitions: None,
+    };
+    let skp = serde_json::to_string(&kp).unwrap();
+    let kp2: Keypoint = serde_json::from_str(&skp).unwrap();
+    assert_eq!(kp, kp2);
 }

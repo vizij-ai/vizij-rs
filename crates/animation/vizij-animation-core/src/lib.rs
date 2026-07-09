@@ -63,5 +63,7 @@ pub use sampling::{sample_track, sample_track_with_derivative};
 pub use scratch::Scratch;
 /// Stored-animation parser entrypoint.
 pub use stored_animation::parse_stored_animation_json;
-/// Shared normalized value types.
-pub use vizij_api_core::{Value, ValueKind};
+/// POD keyframe values held by tracks.
+pub use value::TrackValue;
+/// The shared runtime value used at the output boundary.
+pub use vizij_api_core::Value;

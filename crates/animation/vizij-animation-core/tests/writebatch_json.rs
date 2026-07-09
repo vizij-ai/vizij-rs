@@ -1,7 +1,7 @@
 use serde_json::Value as JsonValue;
 use vizij_animation_core::{
     data::{AnimationData, Keypoint, Track, Transitions, Vec2},
-    Config, Engine, Inputs, Value,
+    Config, Engine, Inputs, TrackValue,
 };
 
 fn mk_scalar_track_linear(path: &str, keys: &[(f32, f32)]) -> Track {
@@ -28,7 +28,7 @@ fn mk_scalar_track_linear(path: &str, keys: &[(f32, f32)]) -> Track {
         points.push(Keypoint {
             id: format!("k{i}"),
             stamp: *stamp,
-            value: Value::Float(*v),
+            value: TrackValue::Float(*v),
             transitions,
         });
     }

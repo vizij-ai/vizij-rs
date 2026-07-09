@@ -4,31 +4,33 @@
 //! In Vizij-on-Arora terms the "device" is a GLB rig: the runtime's behavior
 //! writes actuator targets (bone transforms, morph weights), the HAL applies
 //! them, and a renderer reads what to draw. This HAL is that boundary on the
-//! Rust side — it holds the GLB, accumulates the latest actuation `State`
-//! (Arora values), and feeds [`updates`](arora_hal::Hal::updates) so a renderer
-//! knows what changed. [`RigHal::pose`] exposes that state as native Vizij
-//! values (via [`vizij_arora`]) for a Vizij renderer; the actual bone/morph
-//! application stays in the renderer.
+//! Rust side — it holds the GLB, accumulates the latest actuation `State`,
+//! and feeds [`updates`](arora_hal::Hal::updates) so a renderer knows what
+//! changed. Vizij and Arora share one runtime value type
+//! ([`vizij_api_core::Value`] is `arora_types::value::Value`), so
+//! [`RigHal::pose`] exposes that state to a Vizij renderer directly — the
+//! only translation is string [`Key`]s to [`TypedPath`]s; the actual
+//! bone/morph application stays in the renderer.
 //!
 //! Modelled on `arora-hal`'s `FakeHal`: cheaply cloneable, clones share state,
-//! std-channel update feed.
+//! writes apply synchronously (so [`try_send`](arora_hal::Hal::try_send) needs
+//! no internal task), and the update feed is an owned stream per subscriber.
 
-use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 
-use arora_hal::{Hal, HalAssets, HalDescription, HalResult};
-use arora_types::data::{Key, State, StateChange, Subscription};
-use arora_types::value::Value as AValue;
+use arora_hal::{Hal, HalAssets, HalDescription, HalResult, UpdatesStream};
+use arora_types::data::{Key, State, StateChange};
 use async_trait::async_trait;
-use vizij_api_core::{TypedPath, Value as VValue};
+use futures_channel::mpsc::UnboundedSender;
+use vizij_api_core::{TypedPath, Value};
 
 #[derive(Default)]
 struct Inner {
     description: HalDescription,
     model_glb: Option<Vec<u8>>,
-    /// Latest actuation targets the rig has been driven to (Arora values).
+    /// Latest actuation targets the rig has been driven to.
     state: State,
-    subscribers: Vec<Sender<StateChange>>,
+    subscribers: Vec<UnboundedSender<StateChange>>,
 }
 
 impl Inner {
@@ -37,7 +39,7 @@ impl Inner {
             return;
         }
         self.subscribers
-            .retain(|tx| tx.send(change.clone()).is_ok());
+            .retain(|tx| tx.unbounded_send(change.clone()).is_ok());
     }
 }
 
@@ -68,20 +70,32 @@ impl RigHal {
         self.inner.lock().unwrap().model_glb = Some(glb);
     }
 
-    /// The current rig pose as native Vizij values, for a Vizij renderer.
-    /// Entries whose path or value cannot be converted are skipped.
-    pub fn pose(&self) -> Vec<(TypedPath, VValue)> {
+    /// The current rig pose for a Vizij renderer: the accumulated actuation
+    /// state keyed by [`TypedPath`]. Entries whose key is not a valid typed
+    /// path are skipped.
+    pub fn pose(&self) -> Vec<(TypedPath, Value)> {
         let inner = self.inner.lock().unwrap();
         inner
             .state
             .iter()
             .filter_map(|(key, value)| {
-                let arora = value.as_ref()?;
+                let value = value.as_ref()?;
                 let tp = TypedPath::parse(&key.path).ok()?;
-                let vizij = vizij_arora::from_arora(arora).ok()?;
-                Some((tp, vizij))
+                Some((tp, value.clone()))
             })
             .collect()
+    }
+
+    /// Apply a write synchronously: store it and echo it to subscribers.
+    /// Shared by [`Hal::write`] and [`Hal::try_send`] — the rig is in-memory,
+    /// so applying never blocks.
+    fn apply_write(&self, changes: &StateChange) {
+        if changes.is_empty() {
+            return;
+        }
+        let mut inner = self.inner.lock().unwrap();
+        inner.state.apply(changes.clone());
+        inner.notify(changes);
     }
 }
 
@@ -91,7 +105,7 @@ impl Hal for RigHal {
         self.inner.lock().unwrap().description.clone()
     }
 
-    async fn read(&self, keys: &[Key]) -> HalResult<Vec<Option<AValue>>> {
+    async fn read(&self, keys: &[Key]) -> HalResult<Vec<Option<Value>>> {
         let inner = self.inner.lock().unwrap();
         Ok(keys
             .iter()
@@ -104,19 +118,18 @@ impl Hal for RigHal {
     }
 
     async fn write(&self, changes: StateChange) -> HalResult<()> {
-        if changes.is_empty() {
-            return Ok(());
-        }
-        let mut inner = self.inner.lock().unwrap();
-        inner.state.apply(changes.clone());
-        inner.notify(&changes);
+        self.apply_write(&changes);
         Ok(())
     }
 
-    fn updates(&self) -> Subscription {
-        let (tx, rx) = channel();
+    fn try_send(&self, changes: &StateChange) {
+        self.apply_write(changes);
+    }
+
+    fn updates(&self) -> UpdatesStream {
+        let (tx, rx) = futures_channel::mpsc::unbounded();
         self.inner.lock().unwrap().subscribers.push(tx);
-        Subscription::new(rx)
+        Box::pin(rx)
     }
 }
 
@@ -130,49 +143,62 @@ impl HalAssets for RigHal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::{FutureExt, StreamExt};
+    use vizij_api_core::value::{as_float, as_vec3, bool_, float, vec3};
 
-    fn av(v: VValue) -> AValue {
-        vizij_arora::to_arora(&v).unwrap()
+    /// Drain everything the feed has already buffered, without blocking.
+    fn drain(feed: &mut UpdatesStream) -> Vec<StateChange> {
+        let mut out = Vec::new();
+        while let Some(Some(change)) = feed.next().now_or_never() {
+            out.push(change);
+        }
+        out
     }
 
     #[tokio::test]
     async fn write_target_then_read_and_pose() {
         let hal = RigHal::new();
-        // Drive a scalar morph and a Vec3 bone translation.
-        hal.write(StateChange::set("mouth/jaw.open", av(VValue::Float(0.8))))
+        // Drive a scalar morph and a vec3 bone translation.
+        hal.write(StateChange::set("mouth/jaw.open", float(0.8)))
             .await
             .unwrap();
         hal.write(StateChange::set(
             "head/root.translation",
-            av(VValue::Vec3([0.0, 1.0, 0.0])),
+            vec3([0.0, 1.0, 0.0]),
         ))
         .await
         .unwrap();
 
-        // Read back through the Arora value view.
+        // Read back through the HAL value view.
         assert_eq!(
             hal.read(&[Key::from("mouth/jaw.open")]).await.unwrap(),
-            vec![Some(AValue::F32(0.8))]
+            vec![Some(float(0.8))]
         );
 
-        // The Vizij renderer sees native Vizij values.
+        // The Vizij renderer reads the same values keyed by TypedPath.
         let pose = hal.pose();
         assert!(pose
             .iter()
-            .any(|(_, v)| matches!(v, VValue::Vec3(a) if *a == [0.0, 1.0, 0.0])));
-        assert!(pose
-            .iter()
-            .any(|(_, v)| matches!(v, VValue::Float(f) if *f == 0.8)));
+            .any(|(_, v)| as_vec3(v) == Some([0.0, 1.0, 0.0])));
+        assert!(pose.iter().any(|(_, v)| as_float(v) == Some(0.8)));
+    }
+
+    #[tokio::test]
+    async fn try_send_applies_like_write() {
+        let hal = RigHal::new();
+        hal.try_send(&StateChange::set("mouth/jaw.open", float(0.4)));
+        assert_eq!(
+            hal.read(&[Key::from("mouth/jaw.open")]).await.unwrap(),
+            vec![Some(float(0.4))]
+        );
     }
 
     #[tokio::test]
     async fn updates_feed_sees_writes() {
         let hal = RigHal::new();
-        let sub = hal.updates();
-        hal.write(StateChange::set("k", av(VValue::Bool(true))))
-            .await
-            .unwrap();
-        assert!(sub.try_iter().any(|c| c.contains(&Key::from("k"))));
+        let mut sub = hal.updates();
+        hal.write(StateChange::set("k", bool_(true))).await.unwrap();
+        assert!(drain(&mut sub).iter().any(|c| c.contains(&Key::from("k"))));
     }
 
     #[tokio::test]
@@ -190,12 +216,12 @@ mod tests {
     async fn clones_share_the_rig() {
         let hal = RigHal::new();
         let other = hal.clone();
-        hal.write(StateChange::set("shared", av(VValue::Float(1.0))))
+        hal.write(StateChange::set("shared", float(1.0)))
             .await
             .unwrap();
         assert_eq!(
             other.read(&[Key::from("shared")]).await.unwrap(),
-            vec![Some(AValue::F32(1.0))]
+            vec![Some(float(1.0))]
         );
     }
 }

@@ -1,26 +1,50 @@
-//! JSON normalization and parsing helpers shared across Vizij hosts.
+//! JSON parsing and normalization for [`Value`] payloads and graph specs.
 //!
-//! These helpers accept ergonomic shorthand payloads and coerce them into the canonical serde
-//! shapes consumed by `vizij-api-core`, graph specs, and the wasm adapters.
+//! The canonical JSON form of a value is Arora `Value`'s own serde
+//! (externally tagged: `{"f32": 1.0}`, `{"str": "hi"}`, `{"f32s": [...]}`,
+//! `{"struct": {"id": ..., "fields": [...]}}`, ...). [`parse_value`] and
+//! [`normalize_value_json`] additionally accept every payload form vizij
+//! hosts have emitted, and produce the canonical form:
+//!
+//! - bare JSON primitives (`1.0`, `true`, `"hi"`) and numeric arrays
+//!   (`[1, 2, 3]`, arity-mapped per [`NumericArrayPolicy`]);
+//! - legacy shorthand objects (`{"vec3": [1, 2, 3]}`, `{"float": 1.0}`,
+//!   `{"transform": {...}}`, `{"enum": {"tag": ..., "value": ...}}`,
+//!   `{"record": {...}}`, `{"array"|"list"|"tuple": [...]}`);
+//! - tagged objects (`{"type": "vec3", "data": [1, 2, 3]}`);
+//! - raw component objects (`{"x": ..., "y": ...[, "z"[, "w"]]}` — two or
+//!   three components read as vec2/vec3, four as a quaternion);
+//! - canonical Arora serde, passed through unchanged.
+//!
+//! This normalizer is the single entry point for migrating persisted
+//! documents (e.g. Value-bearing JSON embedded in `.glb` face bundles) to
+//! the canonical form. Values serialize back to JSON with plain `serde_json`;
+//! there is no producer of the legacy forms.
+//!
+//! Graph-spec normalization (`inputs` -> `edges`, operand aliasing, shape
+//! shorthand) also lives here; value payloads inside specs normalize through
+//! the same rules.
 
 use serde::de::Error as _;
 use serde_json::{json, Map, Value as JsonValue};
 use std::collections::HashMap;
 use thiserror::Error;
 
+use crate::value::{
+    array, bool_, color_rgba, enumeration, float, quat, record, text, transform, vec2, vec3, vec4,
+    vector, Transform,
+};
 use crate::{TypedPath, Value, WriteBatch, WriteOp};
 
-/// Policy describing how purely numeric arrays should be normalized when
-/// converting shorthand JSON into the canonical `{ "type": ..., "data": ... }`
-/// representation used by `vizij_api_core::Value`.
+/// Policy describing how purely numeric JSON arrays are read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericArrayPolicy {
-    /// Match the historical behaviour used in production builds where arrays of
-    /// length 2/3/4 become Vec2/Vec3/Vec4 respectively and any other numeric
-    /// array becomes `Vector`.
+    /// Arrays of length 2/3/4 become vec2/vec3/vec4 structures; any other
+    /// numeric array becomes a generic vector (`ArrayF32`). This matches the
+    /// historical behaviour used in production builds.
     AutoVectorKinds,
-    /// Treat all numeric arrays as `Vector` regardless of length. This matches
-    /// the staging normalizer that avoids guessing the intended vector arity.
+    /// All numeric arrays become generic vectors regardless of length. This
+    /// matches the staging normalizer that avoids guessing vector arity.
     AlwaysVector,
 }
 
@@ -35,144 +59,372 @@ pub enum JsonError {
     LegacyLinksField,
 }
 
-/// Normalize shorthand `Value` JSON into the canonical `{ "type": ..., "data": ... }`
-/// representation understood by the serde derives on [`Value`]. This helper accepts
-/// both shorthand objects such as `{ "vec3": [1, 2, 3] }` and primitive aliases
-/// like `1.0` or `[0, 1, 0]`.
+/// Parse any accepted JSON payload form (see the module header) into a
+/// [`Value`], using the [`NumericArrayPolicy::AutoVectorKinds`] policy.
+pub fn parse_value(value: JsonValue) -> Result<Value, serde_json::Error> {
+    parse_value_with_policy(value, NumericArrayPolicy::AutoVectorKinds)
+}
+
+/// Variant of [`parse_value`] using [`NumericArrayPolicy::AlwaysVector`],
+/// mirroring the staging graph normalizer.
+pub fn parse_value_staging(value: JsonValue) -> Result<Value, serde_json::Error> {
+    parse_value_with_policy(value, NumericArrayPolicy::AlwaysVector)
+}
+
+/// Normalize any accepted JSON payload form into canonical Arora `Value`
+/// serde JSON. Unrecognized payloads pass through unchanged (deserializing
+/// them into [`Value`] then reports the error).
 pub fn normalize_value_json(value: JsonValue) -> JsonValue {
     normalize_value_json_with_policy(value, NumericArrayPolicy::AutoVectorKinds)
 }
 
-/// Variant of [`normalize_value_json`] that mirrors the staging normalizer used by
-/// the graph wasm crate. Numeric arrays are always treated as `Vector` unless they
-/// are explicitly tagged with a `vec*` alias.
+/// Variant of [`normalize_value_json`] using
+/// [`NumericArrayPolicy::AlwaysVector`].
 pub fn normalize_value_json_staging(value: JsonValue) -> JsonValue {
     normalize_value_json_with_policy(value, NumericArrayPolicy::AlwaysVector)
 }
 
 fn normalize_value_json_with_policy(value: JsonValue, policy: NumericArrayPolicy) -> JsonValue {
-    match value {
-        JsonValue::Number(n) => json!({ "type": "float", "data": n }),
-        JsonValue::Bool(b) => json!({ "type": "bool", "data": b }),
-        JsonValue::String(s) => json!({ "type": "text", "data": s }),
-        JsonValue::Array(arr) => {
-            let all_numbers = arr.iter().all(|x| x.is_number());
-            if all_numbers {
-                match policy {
-                    NumericArrayPolicy::AutoVectorKinds => match arr.len() {
-                        2 => json!({ "type": "vec2", "data": arr }),
-                        3 => json!({ "type": "vec3", "data": arr }),
-                        4 => json!({ "type": "vec4", "data": arr }),
-                        _ => json!({ "type": "vector", "data": arr }),
-                    },
-                    NumericArrayPolicy::AlwaysVector => {
-                        json!({ "type": "vector", "data": arr })
-                    }
-                }
-            } else {
-                let data: Vec<JsonValue> = arr
-                    .into_iter()
-                    .map(|item| normalize_value_json_with_policy(item, policy))
-                    .collect();
-                json!({ "type": "list", "data": data })
-            }
-        }
-        JsonValue::Object(obj) => {
-            if obj.contains_key("type") && obj.contains_key("data") {
-                return JsonValue::Object(obj);
-            }
-            if let Some(text) = obj.get("text").and_then(|x| x.as_str()) {
-                return json!({ "type": "text", "data": text });
-            }
-            if let Some(f) = obj.get("float").and_then(|x| x.as_f64()) {
-                return json!({ "type": "float", "data": f });
-            }
-            if let Some(b) = obj.get("bool").and_then(|x| x.as_bool()) {
-                return json!({ "type": "bool", "data": b });
-            }
-            if let Some(arr) = obj.get("vec2").and_then(|x| x.as_array()) {
-                return json!({ "type": "vec2", "data": arr });
-            }
-            if let Some(arr) = obj.get("vec3").and_then(|x| x.as_array()) {
-                return json!({ "type": "vec3", "data": arr });
-            }
-            if let Some(arr) = obj.get("vec4").and_then(|x| x.as_array()) {
-                return json!({ "type": "vec4", "data": arr });
-            }
-            if let Some(arr) = obj.get("quat").and_then(|x| x.as_array()) {
-                return json!({ "type": "quat", "data": arr });
-            }
-            if let Some(arr) = obj.get("color").and_then(|x| x.as_array()) {
-                return json!({ "type": "colorrgba", "data": arr });
-            }
-            if let Some(arr) = obj.get("vector").and_then(|x| x.as_array()) {
-                return json!({ "type": "vector", "data": arr });
-            }
-            if let Some(transform) = obj.get("transform").and_then(|x| x.as_object()) {
-                let translation = transform
-                    .get("translation")
-                    .cloned()
-                    .unwrap_or(JsonValue::Null);
-                let rotation = transform
-                    .get("rotation")
-                    .cloned()
-                    .unwrap_or(JsonValue::Null);
-                let scale = transform.get("scale").cloned().unwrap_or(JsonValue::Null);
-                return json!({
-                    "type": "transform",
-                    "data": { "translation": translation, "rotation": rotation, "scale": scale }
-                });
-            }
-            if let Some(enum_obj) = obj.get("enum").and_then(|x| x.as_object()) {
-                let tag = enum_obj
-                    .get("tag")
-                    .and_then(|x| x.as_str())
-                    .unwrap_or_default()
-                    .to_string();
-                let payload = enum_obj.get("value").cloned().unwrap_or(JsonValue::Null);
-                let normalized_payload = normalize_value_json_with_policy(payload, policy);
-                return json!({ "type": "enum", "data": [tag, normalized_payload] });
-            }
-            if let Some(record) = obj.get("record").and_then(|x| x.as_object()) {
-                let mut data = Map::new();
-                for (key, val) in record.iter() {
-                    data.insert(
-                        key.clone(),
-                        normalize_value_json_with_policy(val.clone(), policy),
-                    );
-                }
-                return json!({ "type": "record", "data": JsonValue::Object(data) });
-            }
-            if let Some(array_items) = obj.get("array").and_then(|x| x.as_array()) {
-                let data: Vec<JsonValue> = array_items
-                    .iter()
-                    .cloned()
-                    .map(|v| normalize_value_json_with_policy(v, policy))
-                    .collect();
-                return json!({ "type": "array", "data": data });
-            }
-            if let Some(list_items) = obj.get("list").and_then(|x| x.as_array()) {
-                let data: Vec<JsonValue> = list_items
-                    .iter()
-                    .cloned()
-                    .map(|v| normalize_value_json_with_policy(v, policy))
-                    .collect();
-                return json!({ "type": "list", "data": data });
-            }
-            if let Some(tuple_items) = obj.get("tuple").and_then(|x| x.as_array()) {
-                let data: Vec<JsonValue> = tuple_items
-                    .iter()
-                    .cloned()
-                    .map(|v| normalize_value_json_with_policy(v, policy))
-                    .collect();
-                return json!({ "type": "tuple", "data": data });
-            }
-
-            JsonValue::Object(obj)
-        }
-        other => other,
+    match parse_value_with_policy(value.clone(), policy) {
+        Ok(parsed) => serde_json::to_value(&parsed).unwrap_or(value),
+        Err(_) => value,
     }
 }
+
+fn parse_value_with_policy(
+    value: JsonValue,
+    policy: NumericArrayPolicy,
+) -> Result<Value, serde_json::Error> {
+    match value {
+        JsonValue::Number(n) => Ok(float(
+            n.as_f64()
+                .ok_or_else(|| serde_json::Error::custom("non-finite number"))? as f32,
+        )),
+        JsonValue::Bool(b) => Ok(bool_(b)),
+        JsonValue::String(s) => Ok(text(&s)),
+        JsonValue::Array(items) => parse_array(items, policy),
+        JsonValue::Object(obj) => parse_object(obj, policy),
+        JsonValue::Null => Err(serde_json::Error::custom("null is not a value")),
+    }
+}
+
+fn parse_array(
+    items: Vec<JsonValue>,
+    policy: NumericArrayPolicy,
+) -> Result<Value, serde_json::Error> {
+    if items.iter().all(|x| x.is_number()) {
+        let xs: Vec<f32> = items
+            .iter()
+            .map(|x| x.as_f64().unwrap_or(0.0) as f32)
+            .collect();
+        return Ok(match policy {
+            NumericArrayPolicy::AutoVectorKinds => match xs.len() {
+                2 => vec2([xs[0], xs[1]]),
+                3 => vec3([xs[0], xs[1], xs[2]]),
+                4 => vec4([xs[0], xs[1], xs[2], xs[3]]),
+                _ => vector(xs),
+            },
+            NumericArrayPolicy::AlwaysVector => vector(xs),
+        });
+    }
+    Ok(array(
+        items
+            .into_iter()
+            .map(|item| parse_value_with_policy(item, policy))
+            .collect::<Result<Vec<_>, _>>()?,
+    ))
+}
+
+fn parse_object(
+    obj: Map<String, JsonValue>,
+    policy: NumericArrayPolicy,
+) -> Result<Value, serde_json::Error> {
+    // Tagged form: { "type": ..., "data": ... }.
+    if obj.contains_key("type") && obj.contains_key("data") {
+        return parse_tagged(&obj, policy);
+    }
+
+    // Canonical Arora serde passes through. (Legacy shorthands never parse
+    // here: their keys are not Arora tags, except `bool` — identical in both
+    // vocabularies — and `enum`, whose legacy payload lacks the
+    // `id`/`variant_id` fields Arora requires and thus falls through.)
+    if let Ok(parsed) = serde_json::from_value::<Value>(JsonValue::Object(obj.clone())) {
+        return Ok(parsed);
+    }
+
+    // Legacy shorthand objects, in the historical priority order.
+    if let Some(s) = obj.get("text").and_then(|x| x.as_str()) {
+        return Ok(text(s));
+    }
+    if let Some(f) = obj.get("float").and_then(|x| x.as_f64()) {
+        return Ok(float(f as f32));
+    }
+    if let Some(b) = obj.get("bool").and_then(|x| x.as_bool()) {
+        return Ok(bool_(b));
+    }
+    if let Some(v) = obj.get("vec2") {
+        return parse_components::<2>(v, "vec2").map(vec2);
+    }
+    if let Some(v) = obj.get("vec3") {
+        return parse_components::<3>(v, "vec3").map(vec3);
+    }
+    if let Some(v) = obj.get("vec4") {
+        return parse_components::<4>(v, "vec4").map(vec4);
+    }
+    if let Some(v) = obj.get("quat") {
+        return parse_components::<4>(v, "quat").map(quat);
+    }
+    if let Some(v) = obj.get("color") {
+        return parse_components::<4>(v, "color").map(color_rgba);
+    }
+    if let Some(items) = obj.get("vector").and_then(|x| x.as_array()) {
+        let xs: Vec<f32> = items
+            .iter()
+            .map(|x| x.as_f64().unwrap_or(0.0) as f32)
+            .collect();
+        return Ok(vector(xs));
+    }
+    if let Some(t) = obj.get("transform").and_then(|x| x.as_object()) {
+        return parse_transform(t);
+    }
+    if let Some(e) = obj.get("enum").and_then(|x| x.as_object()) {
+        let tag = e.get("tag").and_then(|x| x.as_str()).unwrap_or_default();
+        let payload = e.get("value").cloned().unwrap_or(JsonValue::Null);
+        return Ok(enumeration(tag, parse_value_with_policy(payload, policy)?));
+    }
+    if let Some(entries) = obj.get("record").and_then(|x| x.as_object()) {
+        return parse_record(entries, policy);
+    }
+    for key in ["array", "list", "tuple"] {
+        if let Some(items) = obj.get(key).and_then(|x| x.as_array()) {
+            return Ok(array(
+                items
+                    .iter()
+                    .cloned()
+                    .map(|item| parse_value_with_policy(item, policy))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ));
+        }
+    }
+
+    // Raw component objects: {x, y}, {x, y, z}, {x, y, z, w}.
+    if obj.contains_key("x") && obj.contains_key("y") {
+        let raw = JsonValue::Object(obj.clone());
+        match obj.len() {
+            2 => {
+                if let Ok(a) = parse_components::<2>(&raw, "raw vec2") {
+                    return Ok(vec2(a));
+                }
+            }
+            3 => {
+                if let Ok(a) = parse_components::<3>(&raw, "raw vec3") {
+                    return Ok(vec3(a));
+                }
+            }
+            4 => {
+                if let Ok(a) = parse_components::<4>(&raw, "raw quat") {
+                    return Ok(quat(a));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Err(serde_json::Error::custom(format!(
+        "unrecognized value payload with keys [{}]",
+        obj.keys().cloned().collect::<Vec<_>>().join(", ")
+    )))
+}
+
+fn parse_tagged(
+    obj: &Map<String, JsonValue>,
+    policy: NumericArrayPolicy,
+) -> Result<Value, serde_json::Error> {
+    let ty = obj
+        .get("type")
+        .and_then(|x| x.as_str())
+        .ok_or_else(|| serde_json::Error::custom("'type' must be a string"))?;
+    let data = obj
+        .get("data")
+        .cloned()
+        .ok_or_else(|| serde_json::Error::custom("missing 'data'"))?;
+    match ty {
+        "float" => Ok(float(
+            data.as_f64()
+                .ok_or_else(|| serde_json::Error::custom("float data must be a number"))?
+                as f32,
+        )),
+        "bool" => Ok(bool_(data.as_bool().ok_or_else(|| {
+            serde_json::Error::custom("bool data must be a boolean")
+        })?)),
+        "text" => Ok(text(data.as_str().ok_or_else(|| {
+            serde_json::Error::custom("text data must be a string")
+        })?)),
+        "vec2" => parse_components::<2>(&data, "vec2").map(vec2),
+        "vec3" => parse_components::<3>(&data, "vec3").map(vec3),
+        "vec4" => parse_components::<4>(&data, "vec4").map(vec4),
+        "quat" => parse_components::<4>(&data, "quat").map(quat),
+        "colorrgba" => parse_components::<4>(&data, "colorrgba").map(color_rgba),
+        "vector" => {
+            let items = data
+                .as_array()
+                .ok_or_else(|| serde_json::Error::custom("vector data must be an array"))?;
+            Ok(vector(
+                items
+                    .iter()
+                    .map(|x| x.as_f64().unwrap_or(0.0) as f32)
+                    .collect(),
+            ))
+        }
+        "transform" => {
+            let t = data
+                .as_object()
+                .ok_or_else(|| serde_json::Error::custom("transform data must be an object"))?;
+            parse_transform(t)
+        }
+        "enum" => {
+            let parts = data
+                .as_array()
+                .ok_or_else(|| serde_json::Error::custom("enum data must be [tag, value]"))?;
+            let tag = parts
+                .first()
+                .and_then(|x| x.as_str())
+                .ok_or_else(|| serde_json::Error::custom("enum tag must be a string"))?;
+            let payload = parts
+                .get(1)
+                .cloned()
+                .ok_or_else(|| serde_json::Error::custom("enum data must be [tag, value]"))?;
+            Ok(enumeration(tag, parse_value_with_policy(payload, policy)?))
+        }
+        "record" => {
+            let entries = data
+                .as_object()
+                .ok_or_else(|| serde_json::Error::custom("record data must be an object"))?;
+            parse_record(entries, policy)
+        }
+        "array" | "list" | "tuple" => {
+            let items = data
+                .as_array()
+                .ok_or_else(|| serde_json::Error::custom("sequence data must be an array"))?;
+            Ok(array(
+                items
+                    .iter()
+                    .cloned()
+                    .map(|item| parse_value_with_policy(item, policy))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ))
+        }
+        other => Err(serde_json::Error::custom(format!(
+            "unknown value type tag '{other}'"
+        ))),
+    }
+}
+
+fn parse_record(
+    entries: &Map<String, JsonValue>,
+    policy: NumericArrayPolicy,
+) -> Result<Value, serde_json::Error> {
+    let fields = entries
+        .iter()
+        .map(|(key, val)| Ok((key.as_str(), parse_value_with_policy(val.clone(), policy)?)))
+        .collect::<Result<Vec<_>, serde_json::Error>>()?;
+    Ok(record(fields))
+}
+
+fn parse_transform(t: &Map<String, JsonValue>) -> Result<Value, serde_json::Error> {
+    let component = |key: &str| {
+        t.get(key)
+            .ok_or_else(|| serde_json::Error::custom(format!("transform missing '{key}'")))
+    };
+    Ok(transform(Transform {
+        translation: parse_components::<3>(component("translation")?, "translation")?,
+        rotation: parse_components::<4>(component("rotation")?, "rotation")?,
+        scale: parse_components::<3>(component("scale")?, "scale")?,
+    }))
+}
+
+/// Read `N` float components from a JSON array of numbers or from an object
+/// with `x`/`y`/`z`/`w` keys.
+fn parse_components<const N: usize>(
+    v: &JsonValue,
+    what: &str,
+) -> Result<[f32; N], serde_json::Error> {
+    const KEYS: [&str; 4] = ["x", "y", "z", "w"];
+    let mut out = [0.0f32; N];
+    if let Some(items) = v.as_array() {
+        if items.len() != N {
+            return Err(serde_json::Error::custom(format!(
+                "{what} expects {N} components, got {}",
+                items.len()
+            )));
+        }
+        for (slot, item) in out.iter_mut().zip(items) {
+            *slot = item.as_f64().ok_or_else(|| {
+                serde_json::Error::custom(format!("{what} component not a number"))
+            })? as f32;
+        }
+        return Ok(out);
+    }
+    if let Some(obj) = v.as_object() {
+        for (slot, key) in out.iter_mut().zip(KEYS.iter().take(N)) {
+            *slot = obj.get(*key).and_then(|x| x.as_f64()).ok_or_else(|| {
+                serde_json::Error::custom(format!("{what} missing numeric '{key}'"))
+            })? as f32;
+        }
+        return Ok(out);
+    }
+    Err(serde_json::Error::custom(format!(
+        "{what} must be an array or component object"
+    )))
+}
+
+// ---- write batches ---------------------------------------------------------------
+
+/// Deserialize a JSON write-batch array (`[{ "path": ..., "value": ...,
+/// "shape"? }]`) into a [`WriteBatch`], accepting values in any form
+/// [`parse_value`] accepts. Canonical batches also deserialize directly with
+/// serde; this helper exists for payloads carrying legacy value forms.
+pub fn writebatch_from_json(value: JsonValue) -> Result<WriteBatch, serde_json::Error> {
+    let Some(items) = value.as_array() else {
+        return Ok(WriteBatch::new());
+    };
+
+    let mut batch = WriteBatch::new();
+    for item in items {
+        let path_str = item
+            .get("path")
+            .and_then(|p| p.as_str())
+            .ok_or_else(|| serde_json::Error::custom("missing 'path' field"))?;
+        let path = TypedPath::parse(path_str).map_err(serde_json::Error::custom)?;
+
+        let value_field = item
+            .get("value")
+            .cloned()
+            .ok_or_else(|| serde_json::Error::custom("missing 'value' field"))?;
+        let value = parse_value(value_field)?;
+
+        let shape = match item.get("shape") {
+            Some(shape_value) => Some(serde_json::from_value(shape_value.clone())?),
+            None => None,
+        };
+
+        batch.push(WriteOp::new_with_shape(path, value, shape));
+    }
+
+    Ok(batch)
+}
+
+/// Helper to create a [`WriteBatch`] from a list of changes expressed as `(TypedPath, Value)`
+/// pairs. This is primarily used in tests where ergonomic builders are desirable.
+pub fn writebatch_from_pairs(pairs: impl IntoIterator<Item = (TypedPath, Value)>) -> WriteBatch {
+    let mut batch = WriteBatch::new();
+    for (path, value) in pairs {
+        batch.push(WriteOp::new(path, value));
+    }
+    batch
+}
+
+// ---- graph specs ----------------------------------------------------------------
 
 fn normalize_shape_json(shape: JsonValue) -> JsonValue {
     match shape {
@@ -229,22 +481,6 @@ fn normalize_operand_key(
     *next_index += 1;
     aliases.insert(original.to_string(), key.clone());
     key
-}
-
-/// Convenience helper that normalizes Value JSON then deserializes it into the
-/// strongly typed [`Value`] enum. This keeps JSON shorthands consistent across
-/// call-sites (blackboard, wasm wrappers, tests).
-pub fn parse_value(value: JsonValue) -> Result<Value, serde_json::Error> {
-    let normalized = normalize_value_json(value);
-    serde_json::from_value(normalized)
-}
-
-/// Convert the legacy shorthand `Value` JSON into a strongly typed [`Value`]
-/// while using the staging numeric policy. This mirrors the staging graph wasm
-/// normalizer behaviour.
-pub fn parse_value_staging(value: JsonValue) -> Result<Value, serde_json::Error> {
-    let normalized = normalize_value_json_staging(value);
-    serde_json::from_value(normalized)
 }
 
 /// Normalize a graph specification JSON value in-place. This mirrors the wasm
@@ -551,168 +787,259 @@ pub fn normalize_graph_spec_json_string(json_str: &str) -> Result<String, JsonEr
     serde_json::to_string(&value).map_err(|e| JsonError::GraphSerialize(e.to_string()))
 }
 
-/// Convert a core [`Value`] into the legacy JSON structure used by existing wasm
-/// consumers (objects like `{ "vec3": [...] }`).
-pub fn value_to_legacy_json(value: &Value) -> JsonValue {
-    match value {
-        Value::Float(f) => json!({ "float": *f }),
-        Value::Bool(b) => json!({ "bool": *b }),
-        Value::Vec2(a) => json!({ "vec2": [a[0], a[1]] }),
-        Value::Vec3(a) => json!({ "vec3": [a[0], a[1], a[2]] }),
-        Value::Vec4(a) => json!({ "vec4": [a[0], a[1], a[2], a[3]] }),
-        Value::Quat(a) => json!({ "quat": [a[0], a[1], a[2], a[3]] }),
-        Value::ColorRgba(a) => json!({ "color": [a[0], a[1], a[2], a[3]] }),
-        Value::Transform {
-            translation,
-            rotation,
-            scale,
-        } => {
-            json!({
-                "transform": {
-                    "translation": translation,
-                    "rotation": rotation,
-                    "scale": scale
-                }
-            })
-        }
-        Value::Vector(a) => json!({ "vector": a }),
-        Value::Enum(tag, boxed) => {
-            json!({ "enum": { "tag": tag, "value": value_to_legacy_json(boxed) } })
-        }
-        Value::Text(s) => json!({ "text": s }),
-        Value::Record(map) => {
-            let mut obj = Map::new();
-            for (key, val) in map.iter() {
-                obj.insert(key.clone(), value_to_legacy_json(val));
-            }
-            json!({ "record": JsonValue::Object(obj) })
-        }
-        Value::Array(items) => {
-            let data: Vec<JsonValue> = items.iter().map(value_to_legacy_json).collect();
-            json!({ "array": data })
-        }
-        Value::List(items) => {
-            let data: Vec<JsonValue> = items.iter().map(value_to_legacy_json).collect();
-            json!({ "list": data })
-        }
-        Value::Tuple(items) => {
-            let data: Vec<JsonValue> = items.iter().map(value_to_legacy_json).collect();
-            json!({ "tuple": data })
-        }
-    }
-}
-
-/// Convert a single [`WriteOp`] into the legacy JSON representation used by wasm wrappers.
-pub fn writeop_to_legacy_json(op: &WriteOp) -> JsonValue {
-    let mut map = Map::new();
-    map.insert("path".to_string(), JsonValue::String(op.path.to_string()));
-    map.insert("value".to_string(), value_to_legacy_json(&op.value));
-    if let Some(shape) = &op.shape {
-        map.insert(
-            "shape".to_string(),
-            serde_json::to_value(shape).unwrap_or(JsonValue::Null),
-        );
-    }
-    JsonValue::Object(map)
-}
-
-/// Convert a [`WriteBatch`] into the legacy JSON array structure used by wasm wrappers.
-pub fn writebatch_to_legacy_json(batch: &WriteBatch) -> JsonValue {
-    let arr: Vec<JsonValue> = batch.iter().map(writeop_to_legacy_json).collect();
-    JsonValue::Array(arr)
-}
-
-/// Deserialize a legacy JSON value (e.g. `{ "vec3": [...] }`) into a [`Value`].
-/// This helper is primarily intended for wasm consumers that still emit the legacy
-/// structure; it normalizes and then deserializes just like [`parse_value`].
-pub fn value_from_legacy_json(value: JsonValue) -> Result<Value, serde_json::Error> {
-    parse_value(value)
-}
-
-/// Deserialize a legacy JSON write batch array back into a strongly typed [`WriteBatch`].
-pub fn writebatch_from_legacy_json(value: JsonValue) -> Result<WriteBatch, serde_json::Error> {
-    let Some(items) = value.as_array() else {
-        return Ok(WriteBatch::new());
-    };
-
-    let mut batch = WriteBatch::new();
-    for item in items {
-        let path_str = item
-            .get("path")
-            .and_then(|p| p.as_str())
-            .ok_or_else(|| serde_json::Error::custom("missing 'path' field"))?;
-        let path = TypedPath::parse(path_str).map_err(serde_json::Error::custom)?;
-
-        let value_field = item
-            .get("value")
-            .cloned()
-            .ok_or_else(|| serde_json::Error::custom("missing 'value' field"))?;
-        let value = value_from_legacy_json(value_field)?;
-
-        let shape = match item.get("shape") {
-            Some(shape_value) => Some(serde_json::from_value(shape_value.clone())?),
-            None => None,
-        };
-
-        batch.push(WriteOp::new_with_shape(path, value, shape));
-    }
-
-    Ok(batch)
-}
-
-/// Helper to create a [`WriteBatch`] from a list of changes expressed as `(TypedPath, Value)`
-/// pairs. This is primarily used in tests where ergonomic builders are desirable.
-pub fn writebatch_from_pairs(pairs: impl IntoIterator<Item = (TypedPath, Value)>) -> WriteBatch {
-    let mut batch = WriteBatch::new();
-    for (path, value) in pairs {
-        batch.push(WriteOp::new(path, value));
-    }
-    batch
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::value::{
+        as_array, as_bool, as_color_rgba, as_enumeration, as_float, as_quat, as_record, as_text,
+        as_transform, as_vec2, as_vec3, as_vec4, as_vector, variant_id, VEC3_TYPE,
+    };
 
     #[test]
-    fn normalize_numeric_arrays_auto_vectors() {
-        let value = json!([1, 2, 3]);
-        let normalized = normalize_value_json(value);
-        assert_eq!(normalized["type"], "vec3");
+    fn bare_primitives_normalize_to_arora_serde() {
+        assert_eq!(normalize_value_json(json!(1.5)), json!({ "f32": 1.5 }));
+        assert_eq!(normalize_value_json(json!(true)), json!({ "bool": true }));
+        assert_eq!(normalize_value_json(json!("hi")), json!({ "str": "hi" }));
     }
 
     #[test]
-    fn normalize_numeric_arrays_staging() {
-        let value = json!([1, 2, 3]);
-        let normalized = normalize_value_json_staging(value);
-        assert_eq!(normalized["type"], "vector");
+    fn numeric_arrays_follow_policy() {
+        assert_eq!(
+            as_vec2(&parse_value(json!([1, 2])).unwrap()),
+            Some([1.0, 2.0])
+        );
+        assert_eq!(
+            as_vec3(&parse_value(json!([1, 2, 3])).unwrap()),
+            Some([1.0, 2.0, 3.0])
+        );
+        assert_eq!(
+            as_vec4(&parse_value(json!([1, 2, 3, 4])).unwrap()),
+            Some([1.0, 2.0, 3.0, 4.0])
+        );
+        assert_eq!(
+            as_vector(&parse_value(json!([1, 2, 3, 4, 5])).unwrap()),
+            Some(&[1.0, 2.0, 3.0, 4.0, 5.0][..])
+        );
+
+        // Staging: never guess arity.
+        assert_eq!(
+            as_vector(&parse_value_staging(json!([1, 2, 3])).unwrap()),
+            Some(&[1.0, 2.0, 3.0][..])
+        );
+        assert_eq!(
+            normalize_value_json_staging(json!([1, 2, 3])),
+            json!({ "f32s": [1.0, 2.0, 3.0] })
+        );
     }
 
     #[test]
-    fn parse_enum_payload() {
-        let value = json!({
-            "enum": {
-                "tag": "Option",
-                "value": { "float": 1.0 }
+    fn vec3_normalizes_to_structure_with_vizij_id() {
+        let normalized = normalize_value_json(json!({ "vec3": [1, 2, 3] }));
+        assert_eq!(normalized["struct"]["id"], VEC3_TYPE.to_string());
+        let parsed: Value = serde_json::from_value(normalized).unwrap();
+        assert_eq!(as_vec3(&parsed), Some([1.0, 2.0, 3.0]));
+    }
+
+    #[test]
+    fn legacy_shorthand_objects_parse() {
+        assert_eq!(
+            as_float(&parse_value(json!({ "float": 1.5 })).unwrap()),
+            Some(1.5)
+        );
+        assert_eq!(
+            as_bool(&parse_value(json!({ "bool": true })).unwrap()),
+            Some(true)
+        );
+        assert_eq!(
+            as_text(&parse_value(json!({ "text": "hi" })).unwrap()),
+            Some("hi")
+        );
+        assert_eq!(
+            as_vec2(&parse_value(json!({ "vec2": [1, 2] })).unwrap()),
+            Some([1.0, 2.0])
+        );
+        assert_eq!(
+            as_vec4(&parse_value(json!({ "vec4": [1, 2, 3, 4] })).unwrap()),
+            Some([1.0, 2.0, 3.0, 4.0])
+        );
+        assert_eq!(
+            as_quat(&parse_value(json!({ "quat": [0, 0, 0, 1] })).unwrap()),
+            Some([0.0, 0.0, 0.0, 1.0])
+        );
+        assert_eq!(
+            as_color_rgba(&parse_value(json!({ "color": [0.1, 0.2, 0.3, 1.0] })).unwrap()),
+            Some([0.1, 0.2, 0.3, 1.0])
+        );
+        assert_eq!(
+            as_vector(&parse_value(json!({ "vector": [9, 8] })).unwrap()),
+            Some(&[9.0, 8.0][..])
+        );
+    }
+
+    #[test]
+    fn legacy_transform_parses() {
+        let t = parse_value(json!({
+            "transform": {
+                "translation": [1, 2, 3],
+                "rotation": [0, 0, 0, 1],
+                "scale": [1, 1, 1]
             }
-        });
-        let parsed = parse_value(value).expect("parse value");
-        match parsed {
-            Value::Enum(tag, boxed) => {
-                assert_eq!(tag, "Option");
-                assert!(matches!(*boxed, Value::Float(f) if (f - 1.0).abs() < f32::EPSILON));
-            }
-            other => panic!("unexpected variant: {other:?}"),
+        }))
+        .unwrap();
+        let pod = as_transform(&t).expect("transform");
+        assert_eq!(pod.translation, [1.0, 2.0, 3.0]);
+        assert_eq!(pod.rotation, [0.0, 0.0, 0.0, 1.0]);
+        assert_eq!(pod.scale, [1.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn legacy_enum_becomes_native_enumeration() {
+        let v = parse_value(json!({
+            "enum": { "tag": "Option", "value": { "float": 1.0 } }
+        }))
+        .unwrap();
+        let (variant, payload) = as_enumeration(&v).expect("enumeration");
+        assert_eq!(variant, variant_id("Option"));
+        assert_eq!(as_float(payload), Some(1.0));
+
+        // Normalized JSON is the native Arora form.
+        let normalized = normalize_value_json(json!({
+            "enum": { "tag": "Option", "value": { "float": 1.0 } }
+        }));
+        assert_eq!(
+            normalized["enum"]["variant_id"],
+            variant_id("Option").to_string()
+        );
+    }
+
+    #[test]
+    fn legacy_record_becomes_keyvalue() {
+        let v = parse_value(json!({
+            "record": { "angle": { "float": 0.4 }, "nested": { "record": { "x": 1.0 } } }
+        }))
+        .unwrap();
+        let entries = as_record(&v).expect("record");
+        assert_eq!(entries[0].0, "angle");
+        assert_eq!(as_float(entries[0].1), Some(0.4));
+        let nested = as_record(entries[1].1).expect("nested");
+        assert_eq!(as_float(nested[0].1), Some(1.0));
+    }
+
+    #[test]
+    fn legacy_sequences_collapse_to_array_value() {
+        for key in ["array", "list", "tuple"] {
+            let v = parse_value(json!({ key: [1.0, true] })).unwrap();
+            let items = as_array(&v).expect("array value");
+            assert_eq!(as_float(&items[0]), Some(1.0));
+            assert_eq!(as_bool(&items[1]), Some(true));
         }
     }
 
     #[test]
-    fn writebatch_legacy_roundtrip() {
+    fn tagged_forms_parse() {
+        assert_eq!(
+            as_float(&parse_value(json!({ "type": "float", "data": 1.0 })).unwrap()),
+            Some(1.0)
+        );
+        assert_eq!(
+            as_vec3(&parse_value(json!({ "type": "vec3", "data": [1, 2, 3] })).unwrap()),
+            Some([1.0, 2.0, 3.0])
+        );
+        assert_eq!(
+            as_color_rgba(
+                &parse_value(json!({ "type": "colorrgba", "data": [0.0, 0.5, 1.0, 1.0] })).unwrap()
+            ),
+            Some([0.0, 0.5, 1.0, 1.0])
+        );
+        let e = parse_value(json!({
+            "type": "enum",
+            "data": ["grasp", { "type": "float", "data": 0.5 }]
+        }))
+        .unwrap();
+        let (variant, payload) = as_enumeration(&e).expect("enumeration");
+        assert_eq!(variant, variant_id("grasp"));
+        assert_eq!(as_float(payload), Some(0.5));
+        let r = parse_value(json!({ "type": "record", "data": { "a": 1.0 } })).unwrap();
+        assert_eq!(as_float(as_record(&r).unwrap()[0].1), Some(1.0));
+        let t = parse_value(json!({
+            "type": "transform",
+            "data": {
+                "translation": [1, 2, 3],
+                "rotation": [0, 0, 0, 1],
+                "scale": [1, 1, 1]
+            }
+        }))
+        .unwrap();
+        assert!(as_transform(&t).is_some());
+    }
+
+    #[test]
+    fn raw_component_objects_parse() {
+        assert_eq!(
+            as_vec2(&parse_value(json!({ "x": 1.0, "y": 2.0 })).unwrap()),
+            Some([1.0, 2.0])
+        );
+        assert_eq!(
+            as_vec3(&parse_value(json!({ "x": 1.0, "y": 2.0, "z": 3.0 })).unwrap()),
+            Some([1.0, 2.0, 3.0])
+        );
+        // Four components read as a quaternion (the historical raw form).
+        assert_eq!(
+            as_quat(&parse_value(json!({ "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 })).unwrap()),
+            Some([0.0, 0.0, 0.0, 1.0])
+        );
+        // Transforms with raw components in their fields also parse.
+        let t = parse_value(json!({
+            "transform": {
+                "translation": { "x": 1.0, "y": 2.0, "z": 3.0 },
+                "rotation": { "x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0 },
+                "scale": { "x": 1.0, "y": 1.0, "z": 1.0 }
+            }
+        }))
+        .unwrap();
+        assert_eq!(as_transform(&t).unwrap().translation, [1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn canonical_arora_serde_passes_through() {
+        let forms = [
+            json!({ "f32": 1.5 }),
+            json!({ "str": "hi" }),
+            json!({ "f32s": [1.0, 2.0] }),
+            normalize_value_json(json!({ "vec3": [1, 2, 3] })),
+            normalize_value_json(json!({ "record": { "a": 1.0 } })),
+            normalize_value_json(json!({ "enum": { "tag": "t", "value": 1.0 } })),
+        ];
+        for form in forms {
+            assert_eq!(
+                normalize_value_json(form.clone()),
+                form,
+                "must be idempotent"
+            );
+        }
+    }
+
+    #[test]
+    fn unrecognized_payloads_pass_through_and_fail_parse() {
+        let unknown = json!({ "mystery": 1 });
+        assert_eq!(normalize_value_json(unknown.clone()), unknown);
+        assert!(parse_value(unknown).is_err());
+        assert!(parse_value(json!(null)).is_err());
+    }
+
+    #[test]
+    fn writebatch_accepts_legacy_value_forms() {
         let tp = TypedPath::parse("robot/Arm/Joint.angle").unwrap();
-        let batch = writebatch_from_pairs(vec![(tp, Value::Vec3([1.0, 2.0, 3.0]))]);
-        let json = writebatch_to_legacy_json(&batch);
-        let parsed = writebatch_from_legacy_json(json).expect("deserialize");
-        assert_eq!(batch, parsed);
+        let expected = writebatch_from_pairs(vec![(tp, crate::value::vec3([1.0, 2.0, 3.0]))]);
+        let parsed = writebatch_from_json(json!([
+            { "path": "robot/Arm/Joint.angle", "value": { "vec3": [1, 2, 3] } }
+        ]))
+        .expect("deserialize");
+        assert_eq!(expected, parsed);
+
+        // Canonical batches round-trip through the same helper.
+        let canonical = serde_json::to_value(&expected).unwrap();
+        assert_eq!(writebatch_from_json(canonical).unwrap(), expected);
     }
 
     #[test]
@@ -732,7 +1059,7 @@ mod tests {
         });
         normalize_graph_spec_value(&mut root).expect("normalize graph spec");
         assert_eq!(root["nodes"][0]["type"], "node");
-        assert_eq!(root["nodes"][0]["params"]["value"]["type"], "float");
+        assert_eq!(root["nodes"][0]["params"]["value"], json!({ "f32": 1.0 }));
         assert_eq!(root["nodes"][0]["output_shapes"]["value"]["id"], "vec3");
     }
 
@@ -820,8 +1147,7 @@ mod tests {
             .as_object()
             .expect("defaults map present");
         let rhs_default = defaults.get("rhs").expect("rhs default retained");
-        assert_eq!(rhs_default["value"]["type"], "float");
-        assert_eq!(rhs_default["value"]["data"], 2.0);
+        assert_eq!(rhs_default["value"], json!({ "f32": 2.0 }));
 
         let edges = root["edges"].as_array().expect("edges array");
         assert_eq!(edges.len(), 1, "only the lhs connection becomes an edge");
@@ -858,8 +1184,7 @@ mod tests {
             .as_object()
             .expect("defaults map present");
         let rhs_default = defaults.get("rhs").expect("rhs default retained");
-        assert_eq!(rhs_default["value"]["type"], "float");
-        assert_eq!(rhs_default["value"]["data"], 0.5);
+        assert_eq!(rhs_default["value"], json!({ "f32": 0.5 }));
         assert_eq!(rhs_default["shape"]["id"], "Scalar");
 
         let edges = root["edges"].as_array().expect("edges array");

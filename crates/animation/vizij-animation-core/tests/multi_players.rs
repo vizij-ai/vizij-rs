@@ -2,7 +2,7 @@ use serde_json::json;
 use vizij_animation_core::{
     data::{AnimationData, Keypoint, Track, Transitions, Vec2},
     engine::InstanceCfg,
-    Config, Engine, Value,
+    Config, Engine, TrackValue,
 };
 
 fn mk_anim(name: &str, duration_s: f32) -> AnimationData {
@@ -12,7 +12,7 @@ fn mk_anim(name: &str, duration_s: f32) -> AnimationData {
         Keypoint {
             id: "k0".into(),
             stamp: 0.0,
-            value: Value::Float(0.0),
+            value: TrackValue::Float(0.0),
             transitions: Some(Transitions {
                 r#in: None,
                 r#out: Some(Vec2 { x: 0.0, y: 0.0 }),
@@ -21,7 +21,7 @@ fn mk_anim(name: &str, duration_s: f32) -> AnimationData {
         Keypoint {
             id: "k1".into(),
             stamp: 1.0,
-            value: Value::Float(1.0),
+            value: TrackValue::Float(1.0),
             transitions: Some(Transitions {
                 r#in: Some(Vec2 { x: 1.0, y: 1.0 }),
                 r#out: None,

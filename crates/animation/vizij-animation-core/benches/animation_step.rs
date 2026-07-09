@@ -1,10 +1,10 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::time::Duration;
+use vizij_animation_core::TrackValue;
 use vizij_animation_core::{
     parse_stored_animation_json, AnimationData, Config, Engine, Inputs, InstanceCfg, Keypoint,
     Track, Transitions,
 };
-use vizij_api_core::Value;
 use vizij_test_fixtures::animations;
 
 fn make_track(id: usize, keyframes: usize, _duration_ms: u32) -> Track {
@@ -30,7 +30,7 @@ fn make_track(id: usize, keyframes: usize, _duration_ms: u32) -> Track {
         points.push(Keypoint {
             id: format!("k{idx}"),
             stamp: t,
-            value: Value::Float(idx as f32),
+            value: TrackValue::Float(idx as f32),
             transitions,
         });
     }

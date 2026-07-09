@@ -10,10 +10,6 @@ use serde::{Deserialize, Serialize};
 use crate::ids::PlayerId;
 use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
 
-fn default_zero_derivative() -> Value {
-    Value::Float(0.0)
-}
-
 /// One changed target value for a given player this tick.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Change {
@@ -176,7 +172,7 @@ impl OutputsWithDerivatives {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vizij_api_core::Value;
+    use vizij_api_core::value::{as_bool, bool_, float};
 
     #[test]
     fn to_writebatch_skips_invalid_paths() {
@@ -184,18 +180,18 @@ mod tests {
         outputs.push_change(Change {
             player: PlayerId(1),
             key: "anim/player/1/cmd/play".into(),
-            value: Value::Bool(true),
+            value: bool_(true),
         });
         outputs.push_change(Change {
             player: PlayerId(2),
             key: "not a typed path".into(),
-            value: Value::Float(1.0),
+            value: float(1.0),
         });
 
         let batch = outputs.to_writebatch();
         assert_eq!(batch.iter().count(), 1);
         let op = batch.iter().next().unwrap();
         assert_eq!(op.path.to_string(), "anim/player/1/cmd/play");
-        assert!(matches!(op.value, Value::Bool(true)));
+        assert_eq!(as_bool(&op.value), Some(true));
     }
 }

@@ -82,7 +82,7 @@ Example custom setter:
 ```rust
 use bevy::prelude::*;
 use bevy_vizij_api::WriterRegistry;
-use vizij_api_core::Value;
+use vizij_api_core::value::as_float;
 
 #[derive(Component)]
 struct AnimatedLight;
@@ -95,8 +95,8 @@ fn register_light_setter(
     registry.register_setter("rig/Lights/Main.intensity", move |world, _, value| {
         if let Some(mut e) = world.get_entity_mut(entity) {
             if let Some(mut light) = e.get_mut::<PointLight>() {
-                if let Value::Float(intensity) = value {
-                    light.intensity = *intensity;
+                if let Some(intensity) = as_float(value) {
+                    light.intensity = intensity;
                 }
             }
         }

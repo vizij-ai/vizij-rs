@@ -7,6 +7,7 @@ use crate::components::{VizijBindingHint, VizijTargetRoot};
 use crate::resources::{BindingIndex, FixedDt, PendingOutputs, TargetProp};
 use crate::VizijEngine;
 use vizij_animation_core::{inputs::Inputs, outputs::Change, TargetResolver};
+use vizij_api_core::Value;
 
 /// Internal: build a canonical path for an entity from its Name and the requested transform prop.
 fn make_handle(name: &str, prop: TargetProp) -> String {
@@ -131,6 +132,41 @@ pub fn fixed_update_core_system(
     pending.changes.extend(out.changes.iter().cloned());
 }
 
+/// Decode a value once at the ECS boundary and apply it to the targeted
+/// transform property. A whole `transform` structure contributes its matching
+/// component; otherwise translation/scale read as `vec3` structures and
+/// rotation as a `quat` structure. Rotations are re-normalized on apply.
+fn apply_target_prop(tf: &mut Transform, prop: TargetProp, val: &Value) {
+    use vizij_api_core::value as vocab;
+    let whole = bevy_vizij_api::as_bevy_transform(val);
+    match prop {
+        TargetProp::Translation => {
+            let v = whole
+                .map(|t| t.translation)
+                .or_else(|| vocab::as_vec3(val).map(Vec3::from_array));
+            if let Some(v) = v {
+                tf.translation = v;
+            }
+        }
+        TargetProp::Rotation => {
+            let q = whole
+                .map(|t| t.rotation)
+                .or_else(|| vocab::as_quat(val).map(Quat::from_array));
+            if let Some(q) = q {
+                tf.rotation = q.normalize();
+            }
+        }
+        TargetProp::Scale => {
+            let v = whole
+                .map(|t| t.scale)
+                .or_else(|| vocab::as_vec3(val).map(Vec3::from_array));
+            if let Some(v) = v {
+                tf.scale = v;
+            }
+        }
+    }
+}
+
 /// Apply staged outputs by converting them to a typed WriteBatch and invoking
 /// the bevy_vizij_api writer registry when available. Falls back to direct
 /// transform application for writes that don't parse as TypedPath or when no
@@ -173,36 +209,7 @@ pub fn apply_outputs_system(world: &mut World) {
         for (path_str, val) in non_typed.iter() {
             if let Some((entity, prop)) = index_map.get(path_str) {
                 if let Ok(mut tf) = q_tf.get_mut(world, *entity) {
-                    match (prop, val) {
-                        (
-                            TargetProp::Translation,
-                            vizij_api_core::Value::Transform {
-                                translation: pos, ..
-                            },
-                        ) => {
-                            tf.translation = Vec3::new(pos[0], pos[1], pos[2]);
-                        }
-                        (
-                            TargetProp::Rotation,
-                            vizij_api_core::Value::Transform { rotation: rot, .. },
-                        ) => {
-                            tf.rotation =
-                                Quat::from_xyzw(rot[0], rot[1], rot[2], rot[3]).normalize();
-                        }
-                        (TargetProp::Scale, vizij_api_core::Value::Transform { scale, .. }) => {
-                            tf.scale = Vec3::new(scale[0], scale[1], scale[2]);
-                        }
-                        (TargetProp::Translation, vizij_api_core::Value::Vec3(v)) => {
-                            tf.translation = Vec3::new(v[0], v[1], v[2]);
-                        }
-                        (TargetProp::Rotation, vizij_api_core::Value::Quat(q)) => {
-                            tf.rotation = Quat::from_xyzw(q[0], q[1], q[2], q[3]).normalize();
-                        }
-                        (TargetProp::Scale, vizij_api_core::Value::Vec3(v)) => {
-                            tf.scale = Vec3::new(v[0], v[1], v[2]);
-                        }
-                        _ => {}
-                    }
+                    apply_target_prop(&mut tf, *prop, val);
                 }
             }
         }
@@ -217,32 +224,7 @@ pub fn apply_outputs_system(world: &mut World) {
         let path_str = op.path.to_string();
         if let Some((entity, prop)) = index_map.get(&path_str) {
             if let Ok(mut tf) = q_tf.get_mut(world, *entity) {
-                match (&prop, &op.value) {
-                    (
-                        TargetProp::Translation,
-                        vizij_api_core::Value::Transform { translation, .. },
-                    ) => {
-                        tf.translation = Vec3::new(translation[0], translation[1], translation[2]);
-                    }
-                    (TargetProp::Rotation, vizij_api_core::Value::Transform { rotation, .. }) => {
-                        tf.rotation =
-                            Quat::from_xyzw(rotation[0], rotation[1], rotation[2], rotation[3])
-                                .normalize();
-                    }
-                    (TargetProp::Scale, vizij_api_core::Value::Transform { scale, .. }) => {
-                        tf.scale = Vec3::new(scale[0], scale[1], scale[2]);
-                    }
-                    (TargetProp::Translation, vizij_api_core::Value::Vec3(v)) => {
-                        tf.translation = Vec3::new(v[0], v[1], v[2]);
-                    }
-                    (TargetProp::Rotation, vizij_api_core::Value::Quat(q)) => {
-                        tf.rotation = Quat::from_xyzw(q[0], q[1], q[2], q[3]).normalize();
-                    }
-                    (TargetProp::Scale, vizij_api_core::Value::Vec3(v)) => {
-                        tf.scale = Vec3::new(v[0], v[1], v[2]);
-                    }
-                    _ => {}
-                }
+                apply_target_prop(&mut tf, *prop, &op.value);
             }
         }
     }
@@ -251,32 +233,7 @@ pub fn apply_outputs_system(world: &mut World) {
     for (path_str, val) in non_typed.iter() {
         if let Some((entity, prop)) = index_map.get(path_str) {
             if let Ok(mut tf) = q_tf.get_mut(world, *entity) {
-                match (prop, val) {
-                    (
-                        TargetProp::Translation,
-                        vizij_api_core::Value::Transform { translation, .. },
-                    ) => {
-                        tf.translation = Vec3::new(translation[0], translation[1], translation[2]);
-                    }
-                    (TargetProp::Rotation, vizij_api_core::Value::Transform { rotation, .. }) => {
-                        tf.rotation =
-                            Quat::from_xyzw(rotation[0], rotation[1], rotation[2], rotation[3])
-                                .normalize();
-                    }
-                    (TargetProp::Scale, vizij_api_core::Value::Transform { scale, .. }) => {
-                        tf.scale = Vec3::new(scale[0], scale[1], scale[2]);
-                    }
-                    (TargetProp::Translation, vizij_api_core::Value::Vec3(v)) => {
-                        tf.translation = Vec3::new(v[0], v[1], v[2]);
-                    }
-                    (TargetProp::Rotation, vizij_api_core::Value::Quat(q)) => {
-                        tf.rotation = Quat::from_xyzw(q[0], q[1], q[2], q[3]).normalize();
-                    }
-                    (TargetProp::Scale, vizij_api_core::Value::Vec3(v)) => {
-                        tf.scale = Vec3::new(v[0], v[1], v[2]);
-                    }
-                    _ => {}
-                }
+                apply_target_prop(&mut tf, *prop, val);
             }
         }
     }

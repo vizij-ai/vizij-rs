@@ -2,8 +2,9 @@ use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criteri
 use hashbrown::HashMap;
 use serde_json::json;
 use std::time::Duration;
-use vizij_animation_core::{AnimationData, Keypoint, Track, Transitions};
-use vizij_api_core::{Shape, TypedPath, Value};
+use vizij_animation_core::{AnimationData, Keypoint, Track, TrackValue, Transitions};
+use vizij_api_core::value::float;
+use vizij_api_core::{Shape, TypedPath};
 use vizij_graph_core::types::{
     EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, InputDefault, NodeParams, NodeSpec,
     NodeType,
@@ -55,7 +56,7 @@ fn register_fixture_animations(mut orch: Orchestrator, fixture: &DemoFixture) ->
 
 fn apply_fixture_inputs(orch: &mut Orchestrator, fixture: &DemoFixture) {
     for input in fixture.initial_inputs() {
-        orch.set_input(&input.path, input.value.clone(), input.shape.clone())
+        orch.set_input_json(&input.path, input.value.clone(), input.shape.clone())
             .expect("set input from fixture");
     }
 }
@@ -66,7 +67,7 @@ fn constant_node(id: impl Into<String>, value: f32) -> NodeSpec {
         id: id.into(),
         kind: NodeType::Constant,
         params: NodeParams {
-            value: Some(Value::Float(value)),
+            value: Some(float(value)),
             ..Default::default()
         },
         output_shapes: HashMap::<String, Shape>::new(),
@@ -84,7 +85,7 @@ fn input_node(id: impl Into<String>, path: impl Into<String>, default: f32) -> N
                     .parse()
                     .expect("bench input path parses to TypedPath"),
             ),
-            value: Some(Value::Float(default)),
+            value: Some(float(default)),
             ..Default::default()
         },
         output_shapes: HashMap::new(),
@@ -217,9 +218,9 @@ fn synthetic_animation(track_count: usize, keyframes: usize, base_path: &str) ->
         for k in 0..keyframes {
             let t = k as f32 / last;
             let val = match i % 3 {
-                0 => Value::Float(k as f32),
-                1 => Value::Vec3([t, t * 0.5, t * 0.25]),
-                _ => Value::Quat([0.0, 0.0, t, 1.0]),
+                0 => TrackValue::Float(k as f32),
+                1 => TrackValue::Vec3([t, t * 0.5, t * 0.25]),
+                _ => TrackValue::Quat([0.0, 0.0, t, 1.0]),
             };
             points.push(Keypoint {
                 id: format!("k{k}"),
@@ -249,25 +250,21 @@ fn synthetic_animation(track_count: usize, keyframes: usize, base_path: &str) ->
 }
 
 fn animation_to_setup(anim: &AnimationData) -> serde_json::Value {
-    fn raw_value_json(v: &Value) -> serde_json::Value {
+    fn raw_value_json(v: &TrackValue) -> serde_json::Value {
         match v {
-            Value::Bool(b) => serde_json::Value::Bool(*b),
-            Value::Float(f) => {
+            TrackValue::Bool(b) => serde_json::Value::Bool(*b),
+            TrackValue::Float(f) => {
                 serde_json::Value::Number(serde_json::Number::from_f64(*f as f64).unwrap())
             }
-            Value::Vec2(v) => json!({ "x": v[0], "y": v[1] }),
-            Value::Vec3(v) => json!({ "x": v[0], "y": v[1], "z": v[2] }),
-            Value::Vec4(v) => json!({ "x": v[0], "y": v[1], "z": v[2], "w": v[3] }),
-            Value::Quat(q) => json!({ "x": q[0], "y": q[1], "z": q[2], "w": q[3] }),
-            Value::ColorRgba(c) => json!({ "r": c[0], "g": c[1], "b": c[2] }),
-            Value::Transform {
-                translation,
-                rotation,
-                scale,
-            } => json!({
-                "translation": { "x": translation[0], "y": translation[1], "z": translation[2] },
-                "rotation": { "x": rotation[0], "y": rotation[1], "z": rotation[2], "w": rotation[3] },
-                "scale": { "x": scale[0], "y": scale[1], "z": scale[2] }
+            TrackValue::Vec2(v) => json!({ "x": v[0], "y": v[1] }),
+            TrackValue::Vec3(v) => json!({ "x": v[0], "y": v[1], "z": v[2] }),
+            TrackValue::Vec4(v) => json!({ "x": v[0], "y": v[1], "z": v[2], "w": v[3] }),
+            TrackValue::Quat(q) => json!({ "x": q[0], "y": q[1], "z": q[2], "w": q[3] }),
+            TrackValue::ColorRgba(c) => json!({ "r": c[0], "g": c[1], "b": c[2] }),
+            TrackValue::Transform(t) => json!({
+                "translation": { "x": t.translation[0], "y": t.translation[1], "z": t.translation[2] },
+                "rotation": { "x": t.rotation[0], "y": t.rotation[1], "z": t.rotation[2], "w": t.rotation[3] },
+                "scale": { "x": t.scale[0], "y": t.scale[1], "z": t.scale[2] }
             }),
             _ => serde_json::Value::Number(serde_json::Number::from(0)),
         }

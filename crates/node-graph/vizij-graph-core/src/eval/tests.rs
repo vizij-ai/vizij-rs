@@ -7,7 +7,12 @@ use crate::types::{
 };
 use hashbrown::HashMap;
 use vizij_api_core::shape::Field;
+use vizij_api_core::value as vocab;
 use vizij_api_core::{Shape, ShapeId, TypedPath, Value, WriteBatch};
+
+fn expect_vec3(value: &Value) -> [f32; 3] {
+    vocab::as_vec3(value).unwrap_or_else(|| panic!("expected vec3, got {value:?}"))
+}
 
 macro_rules! graph_spec {
     ({ $($body:tt)* }) => {{
@@ -36,7 +41,7 @@ fn constant_node(id: &str, value: Value) -> NodeSpec {
 #[test]
 fn plan_cache_reuses_layouts_when_spec_version_matches() {
     let spec = graph_spec!({
-        nodes: vec![constant_node("a", Value::Float(1.0))],
+        nodes: vec![constant_node("a", Value::F32(1.0))],
         edges: vec![],
     });
 
@@ -74,7 +79,7 @@ fn plan_cache_reuses_layouts_when_spec_version_matches() {
 #[test]
 fn plan_cache_rebuilds_when_spec_version_changes() {
     let base = graph_spec!({
-        nodes: vec![constant_node("a", Value::Float(1.0))],
+        nodes: vec![constant_node("a", Value::F32(1.0))],
         edges: vec![],
     });
 
@@ -109,14 +114,14 @@ fn piecewise_remap_matches_linear_case() {
     defaults.insert(
         "input_breakpoints".to_string(),
         InputDefault {
-            value: Value::Vector(vec![0.0, 1.0]),
+            value: Value::ArrayF32(vec![0.0, 1.0]),
             shape: None,
         },
     );
     defaults.insert(
         "output_breakpoints".to_string(),
         InputDefault {
-            value: Value::Vector(vec![10.0, 20.0]),
+            value: Value::ArrayF32(vec![10.0, 20.0]),
             shape: None,
         },
     );
@@ -152,12 +157,12 @@ fn piecewise_remap_matches_linear_case() {
     let cases = [(0.0, 10.0), (0.5, 15.0), (1.0, 20.0)];
 
     for (input_value, expected) in cases {
-        rt.set_input(path.clone(), Value::Float(input_value), None);
+        rt.set_input(path.clone(), Value::F32(input_value), None);
         evaluate_all(&mut rt, &graph).expect("piecewise remap should evaluate");
         let outputs = rt.outputs.get("remap").expect("remap outputs present");
         let out_port = outputs.get("out").expect("out port present");
         match &out_port.value {
-            Value::Float(actual) => assert!(
+            Value::F32(actual) => assert!(
                 (actual - expected).abs() < 1e-6,
                 "expected {expected}, got {actual}"
             ),
@@ -172,14 +177,14 @@ fn piecewise_remap_handles_segments_and_extrapolation() {
     defaults.insert(
         "input_breakpoints".to_string(),
         InputDefault {
-            value: Value::Vector(vec![0.0, 1.0, 2.0, 3.0]),
+            value: Value::ArrayF32(vec![0.0, 1.0, 2.0, 3.0]),
             shape: None,
         },
     );
     defaults.insert(
         "output_breakpoints".to_string(),
         InputDefault {
-            value: Value::Vector(vec![0.0, 10.0, 15.0, 30.0]),
+            value: Value::ArrayF32(vec![0.0, 10.0, 15.0, 30.0]),
             shape: None,
         },
     );
@@ -222,12 +227,12 @@ fn piecewise_remap_handles_segments_and_extrapolation() {
     ];
 
     for (input_value, expected) in cases {
-        rt.set_input(path.clone(), Value::Float(input_value), None);
+        rt.set_input(path.clone(), Value::F32(input_value), None);
         evaluate_all(&mut rt, &graph).expect("piecewise remap should evaluate");
         let outputs = rt.outputs.get("remap").expect("remap outputs present");
         let out_port = outputs.get("out").expect("out port present");
         match &out_port.value {
-            Value::Float(actual) => assert!(
+            Value::F32(actual) => assert!(
                 (actual - expected).abs() < 1e-5,
                 "expected {expected}, got {actual}"
             ),
@@ -243,14 +248,14 @@ fn piecewise_remap_preserves_plateaus_with_duplicate_inputs() {
     defaults.insert(
         "input_breakpoints".to_string(),
         InputDefault {
-            value: Value::Vector(vec![0.0, 0.5, 0.5, 1.0]),
+            value: Value::ArrayF32(vec![0.0, 0.5, 0.5, 1.0]),
             shape: None,
         },
     );
     defaults.insert(
         "output_breakpoints".to_string(),
         InputDefault {
-            value: Value::Vector(vec![0.0, 0.5, 1.0, 2.0]),
+            value: Value::ArrayF32(vec![0.0, 0.5, 1.0, 2.0]),
             shape: None,
         },
     );
@@ -284,12 +289,12 @@ fn piecewise_remap_preserves_plateaus_with_duplicate_inputs() {
     let cases = [(0.25, 0.25), (0.5, 0.5), (0.75, 1.5)];
 
     for (input_value, expected) in cases {
-        rt.set_input(path.clone(), Value::Float(input_value), None);
+        rt.set_input(path.clone(), Value::F32(input_value), None);
         evaluate_all(&mut rt, &graph).expect("piecewise remap should evaluate");
         let outputs = rt.outputs.get("remap").expect("remap outputs present");
         let out_port = outputs.get("out").expect("out port present");
         match &out_port.value {
-            Value::Float(actual) => assert!(
+            Value::F32(actual) => assert!(
                 (actual - expected).abs() < 1e-6,
                 "expected {expected}, got {actual}"
             ),
@@ -304,14 +309,14 @@ fn piecewise_remap_allows_duplicate_inputs_with_different_outputs() {
     defaults.insert(
         "input_breakpoints".to_string(),
         InputDefault {
-            value: Value::Vector(vec![0.0, 0.5, 0.5, 1.0]),
+            value: Value::ArrayF32(vec![0.0, 0.5, 0.5, 1.0]),
             shape: None,
         },
     );
     defaults.insert(
         "output_breakpoints".to_string(),
         InputDefault {
-            value: Value::Vector(vec![0.0, 0.5, 0.75, 2.0]),
+            value: Value::ArrayF32(vec![0.0, 0.5, 0.75, 2.0]),
             shape: None,
         },
     );
@@ -345,12 +350,12 @@ fn piecewise_remap_allows_duplicate_inputs_with_different_outputs() {
     let cases = [(0.5, 0.5), (0.75, 1.375)];
 
     for (input_value, expected) in cases {
-        rt.set_input(path.clone(), Value::Float(input_value), None);
+        rt.set_input(path.clone(), Value::F32(input_value), None);
         evaluate_all(&mut rt, &graph).expect("duplicate breakpoints should evaluate");
         let outputs = rt.outputs.get("remap").expect("outputs present");
         let out_port = outputs.get("out").expect("out port present");
         match &out_port.value {
-            Value::Float(actual) => assert!(
+            Value::F32(actual) => assert!(
                 (actual - expected).abs() < 1e-6,
                 "expected {expected}, got {actual}"
             ),
@@ -365,14 +370,14 @@ fn piecewise_remap_validates_duplicate_breakpoints() {
     defaults.insert(
         "input_breakpoints".to_string(),
         InputDefault {
-            value: Value::Vector(vec![0.0, 0.5, 0.5, 1.0]),
+            value: Value::ArrayF32(vec![0.0, 0.5, 0.5, 1.0]),
             shape: None,
         },
     );
     defaults.insert(
         "output_breakpoints".to_string(),
         InputDefault {
-            value: Value::Vector(vec![0.0, 0.5, 0.5, 2.0]),
+            value: Value::ArrayF32(vec![0.0, 0.5, 0.5, 2.0]),
             shape: None,
         },
     );
@@ -403,24 +408,24 @@ fn piecewise_remap_validates_duplicate_breakpoints() {
     let mut rt = GraphRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");
 
-    rt.set_input(path.clone(), Value::Float(0.5), None);
+    rt.set_input(path.clone(), Value::F32(0.5), None);
     evaluate_all(&mut rt, &graph).expect("duplicate plateau should evaluate");
     let outputs = rt.outputs.get("remap").expect("outputs present");
     let out_port = outputs.get("out").expect("out port present");
     match &out_port.value {
-        Value::Float(actual) => assert!(
+        Value::F32(actual) => assert!(
             (actual - 0.5).abs() < 1e-6,
             "expected plateau value 0.5, got {actual}"
         ),
         other => panic!("expected float, got {:?}", other),
     }
 
-    rt.set_input(path, Value::Float(0.75), None);
+    rt.set_input(path, Value::F32(0.75), None);
     evaluate_all(&mut rt, &graph).expect("piecewise remap should evaluate");
     let outputs = rt.outputs.get("remap").expect("outputs present");
     let out_port = outputs.get("out").expect("out port present");
     match &out_port.value {
-        Value::Float(actual) => assert!(
+        Value::F32(actual) => assert!(
             (actual - 1.25).abs() < 1e-6,
             "expected interpolated value 1.25, got {actual}"
         ),
@@ -434,14 +439,14 @@ fn piecewise_remap_errors_when_inputs_decrease() {
     defaults.insert(
         "input_breakpoints".to_string(),
         InputDefault {
-            value: Value::Vector(vec![0.0, 0.6, 0.5, 1.0]),
+            value: Value::ArrayF32(vec![0.0, 0.6, 0.5, 1.0]),
             shape: None,
         },
     );
     defaults.insert(
         "output_breakpoints".to_string(),
         InputDefault {
-            value: Value::Vector(vec![0.0, 0.5, 0.75, 2.0]),
+            value: Value::ArrayF32(vec![0.0, 0.5, 0.75, 2.0]),
             shape: None,
         },
     );
@@ -473,7 +478,7 @@ fn piecewise_remap_errors_when_inputs_decrease() {
 
     let mut rt = GraphRuntime::default();
     let path = TypedPath::parse("demo/value").expect("typed path");
-    rt.set_input(path, Value::Float(0.5), None);
+    rt.set_input(path, Value::F32(0.5), None);
 
     let err = evaluate_all(&mut rt, &graph).expect_err("ordering mismatch should fail");
     assert!(
@@ -517,7 +522,7 @@ fn link_with_selector(
 
 #[test]
 fn it_should_respect_declared_shape() {
-    let mut node = constant_node("a", Value::Float(1.0));
+    let mut node = constant_node("a", Value::F32(1.0));
     node.output_shapes
         .insert("out".to_string(), Shape::new(ShapeId::Scalar));
 
@@ -535,7 +540,7 @@ fn it_should_respect_declared_shape() {
 
 #[test]
 fn it_should_error_when_shape_mismatches() {
-    let mut node = constant_node("a", Value::Float(1.0));
+    let mut node = constant_node("a", Value::F32(1.0));
     node.output_shapes
         .insert("out".to_string(), Shape::new(ShapeId::Vec3));
 
@@ -553,7 +558,7 @@ fn it_should_error_when_shape_mismatches() {
 fn abs_node_handles_negative_values() {
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("src", Value::Vec3([-1.0, 2.0, -3.0])),
+            constant_node("src", vocab::vec3([-1.0, 2.0, -3.0])),
             NodeSpec {
                 id: "abs".to_string(),
                 kind: NodeType::Abs,
@@ -570,18 +575,16 @@ fn abs_node_handles_negative_values() {
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &graph).expect("abs should evaluate");
     let outputs = rt.outputs.get("abs").expect("abs outputs present");
-    match outputs.get("out").map(|pv| pv.value.clone()) {
-        Some(Value::Vec3(values)) => assert_eq!(values, [1.0, 2.0, 3.0]),
-        other => panic!("expected vec3, got {:?}", other),
-    }
+    let value = &outputs.get("out").expect("out port present").value;
+    assert_eq!(expect_vec3(value), [1.0, 2.0, 3.0]);
 }
 
 #[test]
 fn modulo_node_handles_division() {
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("lhs", Value::Float(7.5)),
-            constant_node("rhs", Value::Float(2.0)),
+            constant_node("lhs", Value::F32(7.5)),
+            constant_node("rhs", Value::F32(2.0)),
             NodeSpec {
                 id: "mod".to_string(),
                 kind: NodeType::Modulo,
@@ -599,7 +602,7 @@ fn modulo_node_handles_division() {
     evaluate_all(&mut rt, &graph).expect("modulo should evaluate");
     let outputs = rt.outputs.get("mod").expect("mod outputs present");
     match outputs.get("out").map(|pv| pv.value.clone()) {
-        Some(Value::Float(result)) => assert!((result - 1.5).abs() < 1e-6),
+        Some(Value::F32(result)) => assert!((result - 1.5).abs() < 1e-6),
         other => panic!("expected float, got {:?}", other),
     }
 }
@@ -608,7 +611,7 @@ fn modulo_node_handles_division() {
 fn sqrt_node_handles_vectors() {
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("src", Value::Vector(vec![4.0, 9.0])),
+            constant_node("src", Value::ArrayF32(vec![4.0, 9.0])),
             NodeSpec {
                 id: "sqrt".to_string(),
                 kind: NodeType::Sqrt,
@@ -626,7 +629,7 @@ fn sqrt_node_handles_vectors() {
     evaluate_all(&mut rt, &graph).expect("sqrt should evaluate");
     let outputs = rt.outputs.get("sqrt").expect("sqrt outputs present");
     match outputs.get("out").map(|pv| pv.value.clone()) {
-        Some(Value::Vector(values)) => assert_eq!(values, vec![2.0, 3.0]),
+        Some(Value::ArrayF32(values)) => assert_eq!(values, vec![2.0, 3.0]),
         other => panic!("expected vector, got {:?}", other),
     }
 }
@@ -635,7 +638,7 @@ fn sqrt_node_handles_vectors() {
 fn sign_node_outputs_signum() {
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("src", Value::Vector(vec![-2.0, 0.0, 5.0])),
+            constant_node("src", Value::ArrayF32(vec![-2.0, 0.0, 5.0])),
             NodeSpec {
                 id: "sign".to_string(),
                 kind: NodeType::Sign,
@@ -653,7 +656,7 @@ fn sign_node_outputs_signum() {
     evaluate_all(&mut rt, &graph).expect("sign should evaluate");
     let outputs = rt.outputs.get("sign").expect("sign outputs present");
     match outputs.get("out").map(|pv| pv.value.clone()) {
-        Some(Value::Vector(values)) => assert_eq!(values, vec![-1.0, 0.0, 1.0]),
+        Some(Value::ArrayF32(values)) => assert_eq!(values, vec![-1.0, 0.0, 1.0]),
         other => panic!("expected vector, got {:?}", other),
     }
 }
@@ -663,9 +666,9 @@ fn min_max_nodes_select_expected_values() {
     let mut rt = GraphRuntime::default();
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("a", Value::Float(3.0)),
-            constant_node("b", Value::Float(-1.0)),
-            constant_node("c", Value::Float(5.0)),
+            constant_node("a", Value::F32(3.0)),
+            constant_node("b", Value::F32(-1.0)),
+            constant_node("c", Value::F32(5.0)),
             NodeSpec {
                 id: "minn".to_string(),
                 kind: NodeType::Min,
@@ -701,7 +704,7 @@ fn min_max_nodes_select_expected_values() {
         .and_then(|ports| ports.get("out"))
         .map(|pv| pv.value.clone())
     {
-        Some(Value::Float(v)) => v,
+        Some(Value::F32(v)) => v,
         other => panic!("expected float, got {:?}", other),
     };
     assert!((min_val + 1.0).abs() < 1e-6);
@@ -712,7 +715,7 @@ fn min_max_nodes_select_expected_values() {
         .and_then(|ports| ports.get("out"))
         .map(|pv| pv.value.clone())
     {
-        Some(Value::Float(v)) => v,
+        Some(Value::F32(v)) => v,
         other => panic!("expected float, got {:?}", other),
     };
     assert!((max_val - 5.0).abs() < 1e-6);
@@ -722,7 +725,7 @@ fn min_max_nodes_select_expected_values() {
 fn round_node_respects_modes() {
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("src", Value::Vector(vec![-1.2, 0.5, 2.8])),
+            constant_node("src", Value::ArrayF32(vec![-1.2, 0.5, 2.8])),
             NodeSpec {
                 id: "floor".to_string(),
                 kind: NodeType::Round,
@@ -769,7 +772,7 @@ fn round_node_respects_modes() {
         .and_then(|ports| ports.get("out"))
         .map(|pv| pv.value.clone())
     {
-        Some(Value::Vector(vals)) => vals,
+        Some(Value::ArrayF32(vals)) => vals,
         other => panic!("expected vector, got {:?}", other),
     };
     assert_eq!(floor_vals, vec![-2.0, 0.0, 2.0]);
@@ -780,7 +783,7 @@ fn round_node_respects_modes() {
         .and_then(|ports| ports.get("out"))
         .map(|pv| pv.value.clone())
     {
-        Some(Value::Vector(vals)) => vals,
+        Some(Value::ArrayF32(vals)) => vals,
         other => panic!("expected vector, got {:?}", other),
     };
     assert_eq!(ceil_vals, vec![-1.0, 1.0, 3.0]);
@@ -791,7 +794,7 @@ fn round_node_respects_modes() {
         .and_then(|ports| ports.get("out"))
         .map(|pv| pv.value.clone())
     {
-        Some(Value::Vector(vals)) => vals,
+        Some(Value::ArrayF32(vals)) => vals,
         other => panic!("expected vector, got {:?}", other),
     };
     assert_eq!(trunc_vals, vec![-1.0, 0.0, 2.0]);
@@ -803,7 +806,7 @@ fn round_node_respects_modes() {
 fn it_should_emit_write_for_output_nodes() {
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("src", Value::Float(2.0)),
+            constant_node("src", Value::F32(2.0)),
             NodeSpec {
                 id: "out".to_string(),
                 kind: NodeType::Output,
@@ -830,7 +833,7 @@ fn it_should_emit_write_for_output_nodes() {
         Some(ShapeId::Scalar)
     ));
     match op.value {
-        Value::Float(f) => assert_eq!(f, 2.0),
+        Value::F32(f) => assert_eq!(f, 2.0),
         _ => panic!("expected float write"),
     }
 }
@@ -840,7 +843,7 @@ fn writes_batch_json_roundtrip_from_graph() {
     // Build a trivial graph that emits a write.
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("src", Value::Vec3([1.0, 2.0, 3.0])),
+            constant_node("src", vocab::vec3([1.0, 2.0, 3.0])),
             NodeSpec {
                 id: "out".to_string(),
                 kind: NodeType::Output,
@@ -872,14 +875,14 @@ fn input_defaults_supply_missing_connections() {
     defaults.insert(
         "rhs".to_string(),
         InputDefault {
-            value: Value::Float(2.0),
+            value: Value::F32(2.0),
             shape: None,
         },
     );
 
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("numerator", Value::Float(10.0)),
+            constant_node("numerator", Value::F32(10.0)),
             NodeSpec {
                 id: "div".to_string(),
                 kind: NodeType::Divide,
@@ -898,7 +901,7 @@ fn input_defaults_supply_missing_connections() {
     let outputs = rt.outputs.get("div").expect("divide outputs present");
     let value = outputs.get("out").expect("out port").value.clone();
     match value {
-        Value::Float(f) => assert_eq!(f, 5.0),
+        Value::F32(f) => assert_eq!(f, 5.0),
         other => panic!("expected float result, got {:?}", other),
     }
 }
@@ -909,15 +912,15 @@ fn linked_inputs_override_defaults() {
     defaults.insert(
         "rhs".to_string(),
         InputDefault {
-            value: Value::Float(2.0),
+            value: Value::F32(2.0),
             shape: None,
         },
     );
 
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("numerator", Value::Float(10.0)),
-            constant_node("denominator", Value::Float(5.0)),
+            constant_node("numerator", Value::F32(10.0)),
+            constant_node("denominator", Value::F32(5.0)),
             NodeSpec {
                 id: "div".to_string(),
                 kind: NodeType::Divide,
@@ -938,7 +941,7 @@ fn linked_inputs_override_defaults() {
     evaluate_all(&mut rt, &graph).expect("graph should evaluate");
     let outputs = rt.outputs.get("div").expect("divide outputs present");
     match outputs.get("out").map(|port| &port.value) {
-        Some(Value::Float(f)) => assert_eq!(*f, 2.0),
+        Some(Value::F32(f)) => assert_eq!(*f, 2.0),
         other => panic!("expected float output, got {:?}", other),
     }
 }
@@ -949,15 +952,15 @@ fn defaults_apply_when_output_key_missing() {
     defaults.insert(
         "rhs".to_string(),
         InputDefault {
-            value: Value::Float(0.25),
+            value: Value::F32(0.25),
             shape: None,
         },
     );
 
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("numerator", Value::Float(1.0)),
-            constant_node("config", Value::Float(10.0)),
+            constant_node("numerator", Value::F32(1.0)),
+            constant_node("config", Value::F32(10.0)),
             NodeSpec {
                 id: "div".to_string(),
                 kind: NodeType::Divide,
@@ -978,7 +981,7 @@ fn defaults_apply_when_output_key_missing() {
     evaluate_all(&mut rt, &graph).expect("graph should evaluate");
     let outputs = rt.outputs.get("div").expect("divide outputs present");
     match outputs.get("out").map(|port| &port.value) {
-        Some(Value::Float(f)) => assert_eq!(*f, 4.0),
+        Some(Value::F32(f)) => assert_eq!(*f, 4.0),
         other => panic!("expected float output using default, got {:?}", other),
     }
 }
@@ -989,9 +992,9 @@ fn defaults_apply_when_output_key_missing() {
 fn join_respects_operand_order() {
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("a", Value::Vector(vec![1.0, 2.0])),
-            constant_node("b", Value::Vector(vec![3.0])),
-            constant_node("c", Value::Vector(vec![4.0, 5.0])),
+            constant_node("a", Value::ArrayF32(vec![1.0, 2.0])),
+            constant_node("b", Value::ArrayF32(vec![3.0])),
+            constant_node("c", Value::ArrayF32(vec![4.0, 5.0])),
             NodeSpec {
                 id: "join".to_string(),
                 kind: NodeType::Join,
@@ -1014,7 +1017,7 @@ fn join_respects_operand_order() {
     let outputs = rt.outputs.get("join").expect("join outputs present");
     let port = outputs.get("out").expect("out port present");
     match &port.value {
-        Value::Vector(vec) => assert_eq!(vec, &vec![1.0, 2.0, 3.0, 4.0, 5.0]),
+        Value::ArrayF32(vec) => assert_eq!(vec, &vec![1.0, 2.0, 3.0, 4.0, 5.0]),
         other => panic!("expected vector output, got {:?}", other),
     }
 }
@@ -1023,8 +1026,8 @@ fn join_respects_operand_order() {
 fn oscillator_broadcasts_vector_inputs() {
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("freq", Value::Vector(vec![1.0, 2.0, 3.0])),
-            constant_node("phase", Value::Float(0.0)),
+            constant_node("freq", Value::ArrayF32(vec![1.0, 2.0, 3.0])),
+            constant_node("phase", Value::F32(0.0)),
             NodeSpec {
                 id: "osc".to_string(),
                 kind: NodeType::Oscillator,
@@ -1055,7 +1058,7 @@ fn oscillator_broadcasts_vector_inputs() {
         .collect();
 
     match &port.value {
-        Value::Vector(vec) => {
+        Value::ArrayF32(vec) => {
             assert_eq!(vec.len(), expected.len());
             for (actual, expected) in vec.iter().zip(expected.iter()) {
                 assert!(
@@ -1072,7 +1075,7 @@ fn oscillator_broadcasts_vector_inputs() {
 
 #[test]
 fn it_should_infer_vector_length_hints() {
-    let node = constant_node("vec", Value::Vector(vec![1.0, 2.0, 3.0]));
+    let node = constant_node("vec", Value::ArrayF32(vec![1.0, 2.0, 3.0]));
     let spec = GraphSpec {
         nodes: vec![node],
         ..Default::default()
@@ -1092,7 +1095,7 @@ fn it_should_infer_vector_length_hints() {
 
 #[test]
 fn it_should_error_when_declared_output_missing() {
-    let mut node = constant_node("a", Value::Float(1.0));
+    let mut node = constant_node("a", Value::F32(1.0));
     node.output_shapes
         .insert("secondary".to_string(), Shape::new(ShapeId::Scalar));
 
@@ -1108,7 +1111,7 @@ fn it_should_error_when_declared_output_missing() {
 
 #[test]
 fn it_should_validate_vector_length_against_declared_shape() {
-    let mut node = constant_node("a", Value::Vector(vec![1.0, 2.0, 3.0]));
+    let mut node = constant_node("a", Value::ArrayF32(vec![1.0, 2.0, 3.0]));
     node.output_shapes.insert(
         "out".to_string(),
         Shape::new(ShapeId::Vector { len: Some(4) }),
@@ -1168,7 +1171,7 @@ fn input_node_emits_staged_value_with_declared_shape() {
     let mut rt = GraphRuntime::default();
     rt.set_input(
         typed_path,
-        Value::Vec3([1.0, 2.0, 3.0]),
+        vocab::vec3([1.0, 2.0, 3.0]),
         Some(Shape::new(ShapeId::Vec3)),
     );
 
@@ -1180,10 +1183,7 @@ fn input_node_emits_staged_value_with_declared_shape() {
         .and_then(|outputs| outputs.get("out"))
         .expect("input output present");
 
-    match &port.value {
-        Value::Vec3(arr) => assert_eq!(*arr, [1.0, 2.0, 3.0]),
-        other => panic!("expected Vec3, got {:?}", other),
-    }
+    assert_eq!(expect_vec3(&port.value), [1.0, 2.0, 3.0]);
     assert!(matches!(port.shape.id, ShapeId::Vec3));
 }
 
@@ -1217,7 +1217,7 @@ fn input_node_coerces_vector_to_declared_vec3() {
     // Staged value is a generic vector of the right length to coerce to Vec3.
     rt.set_input(
         typed_path,
-        Value::Vector(vec![9.0, 8.0, 7.0]),
+        Value::ArrayF32(vec![9.0, 8.0, 7.0]),
         Some(Shape::new(ShapeId::Vector { len: Some(3) })),
     );
 
@@ -1229,10 +1229,7 @@ fn input_node_coerces_vector_to_declared_vec3() {
         .and_then(|outputs| outputs.get("out"))
         .expect("input output present");
 
-    match &port.value {
-        Value::Vec3(arr) => assert_eq!(*arr, [9.0, 8.0, 7.0]),
-        other => panic!("expected Vec3 after coercion, got {:?}", other),
-    }
+    assert_eq!(expect_vec3(&port.value), [9.0, 8.0, 7.0]);
     assert!(matches!(port.shape.id, ShapeId::Vec3));
 }
 
@@ -1269,10 +1266,7 @@ fn input_node_missing_numeric_returns_null() {
         .and_then(|outputs| outputs.get("out"))
         .expect("input output present");
 
-    match &port.value {
-        Value::Vec3(arr) => assert!(arr.iter().all(|v| v.is_nan())),
-        other => panic!("expected Vec3 null, got {:?}", other),
-    }
+    assert!(expect_vec3(&port.value).iter().all(|v| v.is_nan()));
     assert!(matches!(port.shape.id, ShapeId::Vec3));
 }
 
@@ -1330,7 +1324,7 @@ fn input_node_requires_restaging_each_epoch() {
     let mut rt = GraphRuntime::default();
     rt.set_input(
         typed_path.clone(),
-        Value::Vec3([1.0, 2.0, 3.0]),
+        vocab::vec3([1.0, 2.0, 3.0]),
         Some(Shape::new(ShapeId::Vec3)),
     );
 
@@ -1340,10 +1334,7 @@ fn input_node_requires_restaging_each_epoch() {
         .get("input")
         .and_then(|outputs| outputs.get("out"))
         .expect("input output present");
-    match &first.value {
-        Value::Vec3(arr) => assert_eq!(*arr, [1.0, 2.0, 3.0]),
-        other => panic!("expected Vec3, got {:?}", other),
-    }
+    assert_eq!(expect_vec3(&first.value), [1.0, 2.0, 3.0]);
 
     evaluate_all(&mut rt, &graph).expect("second frame should evaluate");
     let second = rt
@@ -1351,21 +1342,19 @@ fn input_node_requires_restaging_each_epoch() {
         .get("input")
         .and_then(|outputs| outputs.get("out"))
         .expect("input output present");
-    match &second.value {
-        Value::Vec3(arr) => assert!(arr.iter().all(|v| v.is_nan())),
-        other => panic!("expected Vec3 null, got {:?}", other),
-    }
+    assert!(expect_vec3(&second.value).iter().all(|v| v.is_nan()));
 }
 
 #[test]
 fn selector_projects_record_field() {
-    let mut record = HashMap::new();
-    record.insert("translation".to_string(), Value::Vec3([3.0, 4.0, 0.0]));
-    record.insert("label".to_string(), Value::Text("ignored".to_string()));
+    let record = vocab::record([
+        ("translation", vocab::vec3([3.0, 4.0, 0.0])),
+        ("label", vocab::text("ignored")),
+    ]);
 
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("src", Value::Record(record)),
+            constant_node("src", record),
             NodeSpec {
                 id: "out".to_string(),
                 kind: NodeType::Output,
@@ -1394,10 +1383,7 @@ fn selector_projects_record_field() {
         .and_then(|outputs| outputs.get("out"))
         .expect("output node present");
 
-    match &port.value {
-        Value::Vec3(arr) => assert_eq!(*arr, [3.0, 4.0, 0.0]),
-        other => panic!("expected Vec3, got {:?}", other),
-    }
+    assert_eq!(expect_vec3(&port.value), [3.0, 4.0, 0.0]);
 }
 
 #[test]
@@ -1407,11 +1393,11 @@ fn selector_projects_transform_field_and_nested_index() {
         nodes: vec![
             constant_node(
                 "src",
-                Value::Transform {
+                vocab::transform(vocab::Transform {
                     translation: [10.0, 42.0, -1.0],
                     rotation: [0.0, 0.0, 0.0, 1.0],
                     scale: [1.0, 1.0, 1.0],
-                },
+                }),
             ),
             NodeSpec {
                 id: "out".to_string(),
@@ -1445,7 +1431,7 @@ fn selector_projects_transform_field_and_nested_index() {
         .expect("output node present");
 
     match &port.value {
-        Value::Float(f) => assert_eq!(*f, 42.0),
+        Value::F32(f) => assert_eq!(*f, 42.0),
         other => panic!("expected scalar, got {:?}", other),
     }
     assert!(matches!(port.shape.id, ShapeId::Scalar));
@@ -1456,7 +1442,7 @@ fn selector_index_out_of_bounds_errors() {
     // Select index 5 from a vec3; should error.
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("src", Value::Vec3([1.0, 2.0, 3.0])),
+            constant_node("src", vocab::vec3([1.0, 2.0, 3.0])),
             NodeSpec {
                 id: "out".to_string(),
                 kind: NodeType::Output,
@@ -1502,7 +1488,7 @@ fn spring_node_transitions_toward_new_target() {
     };
 
     let mut spec = GraphSpec {
-        nodes: vec![constant_node("target", Value::Float(0.0)), spring],
+        nodes: vec![constant_node("target", Value::F32(0.0)), spring],
         edges: vec![link("target", "spring", "in")],
         ..Default::default()
     }
@@ -1511,7 +1497,7 @@ fn spring_node_transitions_toward_new_target() {
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &spec).expect("initial evaluate");
 
-    spec.nodes[0].params.value = Some(Value::Float(10.0));
+    spec.nodes[0].params.value = Some(Value::F32(10.0));
 
     rt.dt = 1.0 / 60.0;
     rt.t += rt.dt;
@@ -1523,7 +1509,7 @@ fn spring_node_transitions_toward_new_target() {
         .map(|pv| pv.value.clone())
         .expect("spring output")
     {
-        Value::Float(f) => f,
+        Value::F32(f) => f,
         other => panic!("expected float, got {:?}", other),
     };
     assert!(
@@ -1544,7 +1530,7 @@ fn spring_node_transitions_toward_new_target() {
         .map(|pv| pv.value.clone())
         .expect("spring output")
     {
-        Value::Float(f) => f,
+        Value::F32(f) => f,
         other => panic!("expected float, got {:?}", other),
     };
     assert!(
@@ -1567,7 +1553,7 @@ fn damp_node_smooths_toward_target() {
     };
 
     let mut spec = GraphSpec {
-        nodes: vec![constant_node("target", Value::Float(0.0)), damp],
+        nodes: vec![constant_node("target", Value::F32(0.0)), damp],
         edges: vec![link("target", "damp", "in")],
         ..Default::default()
     }
@@ -1576,7 +1562,7 @@ fn damp_node_smooths_toward_target() {
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &spec).expect("initial evaluate");
 
-    spec.nodes[0].params.value = Some(Value::Float(1.0));
+    spec.nodes[0].params.value = Some(Value::F32(1.0));
     rt.dt = 0.1;
     rt.t += rt.dt;
     evaluate_all(&mut rt, &spec).expect("first step");
@@ -1588,7 +1574,7 @@ fn damp_node_smooths_toward_target() {
         .map(|pv| pv.value.clone())
         .expect("damp output")
     {
-        Value::Float(f) => f,
+        Value::F32(f) => f,
         other => panic!("expected float, got {:?}", other),
     };
     assert!(first > 0.0 && first < 1.0, "damp should move but not snap");
@@ -1606,7 +1592,7 @@ fn damp_node_smooths_toward_target() {
         .map(|pv| pv.value.clone())
         .expect("damp output")
     {
-        Value::Float(f) => f,
+        Value::F32(f) => f,
         other => panic!("expected float, got {:?}", other),
     };
     assert!(
@@ -1629,7 +1615,7 @@ fn slew_node_limits_rate_of_change() {
     };
 
     let mut spec = GraphSpec {
-        nodes: vec![constant_node("target", Value::Float(0.0)), slew],
+        nodes: vec![constant_node("target", Value::F32(0.0)), slew],
         edges: vec![link("target", "slew", "in")],
         ..Default::default()
     }
@@ -1638,7 +1624,7 @@ fn slew_node_limits_rate_of_change() {
     let mut rt = GraphRuntime::default();
     evaluate_all(&mut rt, &spec).expect("initial evaluate");
 
-    spec.nodes[0].params.value = Some(Value::Float(5.0));
+    spec.nodes[0].params.value = Some(Value::F32(5.0));
     rt.dt = 0.25;
     rt.t += rt.dt;
     evaluate_all(&mut rt, &spec).expect("slew step");
@@ -1650,7 +1636,7 @@ fn slew_node_limits_rate_of_change() {
         .map(|pv| pv.value.clone())
         .expect("slew output")
     {
-        Value::Float(f) => f,
+        Value::F32(f) => f,
         other => panic!("expected float, got {:?}", other),
     };
 
@@ -1672,7 +1658,7 @@ fn slew_node_limits_rate_of_change() {
         .map(|pv| pv.value.clone())
         .expect("slew output")
     {
-        Value::Float(f) => f,
+        Value::F32(f) => f,
         other => panic!("expected float, got {:?}", other),
     };
     assert!(
@@ -1738,7 +1724,7 @@ fn end_to_end_input_selector_scalar_math_output() {
     let graph = GraphSpec {
         nodes: vec![
             input_node,
-            constant_node("two", Value::Float(2.0)),
+            constant_node("two", Value::F32(2.0)),
             add_node,
             output_node,
         ],
@@ -1761,12 +1747,13 @@ fn end_to_end_input_selector_scalar_math_output() {
     .with_cache();
 
     // Stage record { translation: [1, 3, 5], label: "ok" } for the Input node.
-    let mut record = HashMap::new();
-    record.insert("translation".to_string(), Value::Vec3([1.0, 3.0, 5.0]));
-    record.insert("label".to_string(), Value::Text("ok".to_string()));
+    let record = vocab::record([
+        ("translation", vocab::vec3([1.0, 3.0, 5.0])),
+        ("label", vocab::text("ok")),
+    ]);
 
     let mut rt = GraphRuntime::default();
-    rt.set_input(typed_path, Value::Record(record), Some(declared));
+    rt.set_input(typed_path, record, Some(declared));
 
     evaluate_all(&mut rt, &graph).expect("end-to-end evaluation");
 
@@ -1787,7 +1774,7 @@ fn end_to_end_input_selector_scalar_math_output() {
         Some(ShapeId::Scalar)
     ));
     match op.value {
-        Value::Float(f) => assert!((f - 5.0).abs() < 1e-6),
+        Value::F32(f) => assert!((f - 5.0).abs() < 1e-6),
         ref other => panic!("expected scalar value, got {:?}", other),
     }
 }
@@ -1798,42 +1785,42 @@ fn centered_remap_handles_anchor_segments() {
     defaults.insert(
         "in_low".to_string(),
         InputDefault {
-            value: Value::Float(-1.0),
+            value: Value::F32(-1.0),
             shape: None,
         },
     );
     defaults.insert(
         "in_anchor".to_string(),
         InputDefault {
-            value: Value::Float(0.0),
+            value: Value::F32(0.0),
             shape: None,
         },
     );
     defaults.insert(
         "in_high".to_string(),
         InputDefault {
-            value: Value::Float(1.0),
+            value: Value::F32(1.0),
             shape: None,
         },
     );
     defaults.insert(
         "out_low".to_string(),
         InputDefault {
-            value: Value::Float(0.0),
+            value: Value::F32(0.0),
             shape: None,
         },
     );
     defaults.insert(
         "out_anchor".to_string(),
         InputDefault {
-            value: Value::Float(9.0),
+            value: Value::F32(9.0),
             shape: None,
         },
     );
     defaults.insert(
         "out_high".to_string(),
         InputDefault {
-            value: Value::Float(10.0),
+            value: Value::F32(10.0),
             shape: None,
         },
     );
@@ -1879,14 +1866,14 @@ fn centered_remap_handles_anchor_segments() {
     for (input_value, expected) in cases {
         rt.set_input(
             TypedPath::parse("demo/value").expect("typed path"),
-            Value::Float(input_value),
+            Value::F32(input_value),
             None,
         );
         evaluate_all(&mut rt, &graph).expect("centered remap should evaluate");
         let outputs = rt.outputs.get("remap").expect("remap outputs present");
         let out_port = outputs.get("out").expect("out port present");
         match &out_port.value {
-            Value::Float(actual) => {
+            Value::F32(actual) => {
                 assert!(
                     (actual - expected).abs() < 1e-6,
                     "expected {expected}, got {actual}"
@@ -1903,42 +1890,42 @@ fn centered_remap_supports_asymmetric_ranges_and_vectors() {
     defaults.insert(
         "in_low".to_string(),
         InputDefault {
-            value: Value::Float(0.0),
+            value: Value::F32(0.0),
             shape: None,
         },
     );
     defaults.insert(
         "in_anchor".to_string(),
         InputDefault {
-            value: Value::Float(0.5),
+            value: Value::F32(0.5),
             shape: None,
         },
     );
     defaults.insert(
         "in_high".to_string(),
         InputDefault {
-            value: Value::Float(1.0),
+            value: Value::F32(1.0),
             shape: None,
         },
     );
     defaults.insert(
         "out_low".to_string(),
         InputDefault {
-            value: Value::Float(1.0),
+            value: Value::F32(1.0),
             shape: None,
         },
     );
     defaults.insert(
         "out_anchor".to_string(),
         InputDefault {
-            value: Value::Float(3.0),
+            value: Value::F32(3.0),
             shape: None,
         },
     );
     defaults.insert(
         "out_high".to_string(),
         InputDefault {
-            value: Value::Float(6.0),
+            value: Value::F32(6.0),
             shape: None,
         },
     );
@@ -1975,12 +1962,12 @@ fn centered_remap_supports_asymmetric_ranges_and_vectors() {
     let cases = [(0.25, 2.0), (2.0, 12.0), (-1.0, -3.0)];
 
     for (input_value, expected) in cases {
-        rt.set_input(path.clone(), Value::Float(input_value), None);
+        rt.set_input(path.clone(), Value::F32(input_value), None);
         evaluate_all(&mut rt, &graph).expect("centered remap should evaluate");
         let outputs = rt.outputs.get("remap").expect("remap outputs present");
         let out_port = outputs.get("out").expect("out port present");
         match &out_port.value {
-            Value::Float(actual) => {
+            Value::F32(actual) => {
                 assert!(
                     (actual - expected).abs() < 1e-6,
                     "expected {expected}, got {actual}"
@@ -1993,23 +1980,19 @@ fn centered_remap_supports_asymmetric_ranges_and_vectors() {
     // Vector input is remapped component-wise.
     rt.set_input(
         path,
-        Value::Vec3([0.25, 0.5, 1.25]),
+        vocab::vec3([0.25, 0.5, 1.25]),
         Some(Shape::new(ShapeId::Vec3)),
     );
     evaluate_all(&mut rt, &graph).expect("centered remap should evaluate");
     let outputs = rt.outputs.get("remap").expect("remap outputs present");
     let out_port = outputs.get("out").expect("out port present");
-    match &out_port.value {
-        Value::Vec3(values) => {
-            let expected = [2.0, 3.0, 7.5];
-            for (actual, expected) in values.iter().zip(expected.iter()) {
-                assert!(
-                    (actual - expected).abs() < 1e-6,
-                    "expected {expected}, got {actual}"
-                );
-            }
-        }
-        other => panic!("expected vec3, got {:?}", other),
+    let values = expect_vec3(&out_port.value);
+    let expected = [2.0, 3.0, 7.5];
+    for (actual, expected) in values.iter().zip(expected.iter()) {
+        assert!(
+            (actual - expected).abs() < 1e-6,
+            "expected {expected}, got {actual}"
+        );
     }
 }
 
@@ -2019,9 +2002,9 @@ fn centered_remap_supports_asymmetric_ranges_and_vectors() {
 fn to_vector_packs_floats() {
     let spec = graph_spec!({
         nodes: vec![
-            constant_node("a", Value::Float(1.0)),
-            constant_node("b", Value::Float(2.0)),
-            constant_node("c", Value::Float(3.0)),
+            constant_node("a", Value::F32(1.0)),
+            constant_node("b", Value::F32(2.0)),
+            constant_node("c", Value::F32(3.0)),
             NodeSpec {
                 id: "tv".to_string(),
                 kind: NodeType::ToVector,
@@ -2044,7 +2027,7 @@ fn to_vector_packs_floats() {
         .and_then(|o| o.get("out"))
         .expect("out port");
     match &port.value {
-        Value::Vector(v) => assert_eq!(v, &vec![1.0, 2.0, 3.0]),
+        Value::ArrayF32(v) => assert_eq!(v, &vec![1.0, 2.0, 3.0]),
         other => panic!("expected Vector, got {:?}", other),
     }
 }
@@ -2053,7 +2036,7 @@ fn to_vector_packs_floats() {
 fn from_vector_unpacks_with_nan_padding() {
     let spec = graph_spec!({
         nodes: vec![
-            constant_node("src", Value::Vector(vec![10.0, 20.0, 30.0])),
+            constant_node("src", Value::ArrayF32(vec![10.0, 20.0, 30.0])),
             NodeSpec {
                 id: "fv".to_string(),
                 kind: NodeType::FromVector,
@@ -2119,10 +2102,10 @@ fn from_vector_unpacks_with_nan_padding() {
     ] {
         let port = fv_out.get(key).unwrap_or_else(|| panic!("missing {key}"));
         match (&port.value, expected) {
-            (Value::Float(f), Some(e)) => {
+            (Value::F32(f), Some(e)) => {
                 assert!((f - e).abs() < 1e-6, "{key}: expected {e}, got {f}")
             }
-            (Value::Float(f), None) => assert!(f.is_nan(), "{key}: expected NaN, got {f}"),
+            (Value::F32(f), None) => assert!(f.is_nan(), "{key}: expected NaN, got {f}"),
             (other, _) => panic!("{key}: expected Float, got {:?}", other),
         }
     }
@@ -2135,7 +2118,7 @@ fn from_vector_underscore_naming_convention() {
     // (formatVariadicPortId in the vizij-web frontend uses 0-based indices).
     let spec = graph_spec!({
         nodes: vec![
-            constant_node("src", Value::Vector(vec![10.0, 20.0, 30.0])),
+            constant_node("src", Value::ArrayF32(vec![10.0, 20.0, 30.0])),
             NodeSpec {
                 id: "fv".to_string(),
                 kind: NodeType::FromVector,
@@ -2183,7 +2166,7 @@ fn from_vector_underscore_naming_convention() {
     ] {
         let port = fv_out.get(key).unwrap_or_else(|| panic!("missing {key}"));
         match &port.value {
-            Value::Float(f) => {
+            Value::F32(f) => {
                 assert!(
                     (f - expected).abs() < 1e-6,
                     "{key}: expected {expected}, got {f}"
@@ -2207,14 +2190,14 @@ fn noise_nodes_are_deterministic_and_in_range() {
         defaults.insert(
             "x".to_string(),
             InputDefault {
-                value: Value::Float(1.5),
+                value: Value::F32(1.5),
                 shape: None,
             },
         );
         defaults.insert(
             "y".to_string(),
             InputDefault {
-                value: Value::Float(2.5),
+                value: Value::F32(2.5),
                 shape: None,
             },
         );
@@ -2245,7 +2228,7 @@ fn noise_nodes_are_deterministic_and_in_range() {
             .and_then(|o| o.get("out"))
             .map(|p| &p.value)
         {
-            Some(Value::Float(f)) => *f,
+            Some(Value::F32(f)) => *f,
             other => panic!("expected Float, got {:?}", other),
         };
 
@@ -2257,7 +2240,7 @@ fn noise_nodes_are_deterministic_and_in_range() {
             .and_then(|o| o.get("out"))
             .map(|p| &p.value)
         {
-            Some(Value::Float(f)) => *f,
+            Some(Value::F32(f)) => *f,
             other => panic!("expected Float, got {:?}", other),
         };
 

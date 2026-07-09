@@ -453,9 +453,13 @@ impl VizijOrchestrator {
 
     /// Set a blackboard input value (convenience).
     ///
-    /// `value_json` and `shape_json` should be JS objects compatible with the core Value/Shape JSON shapes.
-    /// `shape_json` may be `null`/`undefined` to omit explicit shape metadata. The write is stored
-    /// at the current orchestrator epoch with source `"host"`.
+    /// `value_json` is a JS object in Arora `Value` serde form (`{"f32": 1.0}`,
+    /// `{"bool": true}`, `{"str": "hi"}`, `{"struct": {...}}`, ...); legacy
+    /// payload forms (`{"vec3": [...]}`, `{"float": 1.0}`, bare primitives,
+    /// ...) are still accepted through the api-core normalizer. `shape_json`
+    /// matches the core Shape JSON and may be `null`/`undefined` to omit
+    /// explicit shape metadata. The write is stored at the current
+    /// orchestrator epoch with source `"host"`.
     #[wasm_bindgen(js_name = set_input)]
     pub fn set_input(
         &mut self,
@@ -476,13 +480,7 @@ impl VizijOrchestrator {
             };
         self.core
             .blackboard
-            .set(
-                path.to_string(),
-                value,
-                shape_opt,
-                self.core.epoch,
-                "host".to_string(),
-            )
+            .set_json(path, value, shape_opt, self.core.epoch, "host".to_string())
             .map_err(|e| JsError::new(&format!("blackboard set error: {}", e)))?;
         Ok(())
     }

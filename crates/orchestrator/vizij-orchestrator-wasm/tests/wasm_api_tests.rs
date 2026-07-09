@@ -42,7 +42,7 @@ fn register_graph_and_step_returns_frame() {
     // set a blackboard input
     let value = serde_json::json!({ "float": 0.5 });
     o.set_input(
-        "robot/x".into(),
+        "robot/x",
         swb::to_value(&value).unwrap(),
         JsValue::UNDEFINED,
     )

@@ -1,4 +1,5 @@
-use vizij_api_core::{TypedPath, Value};
+use vizij_api_core::value::as_float;
+use vizij_api_core::TypedPath;
 use vizij_orchestrator::{
     controllers::animation::AnimationControllerConfig, controllers::graph::GraphControllerConfig,
     controllers::graph::Subscriptions, Orchestrator, Schedule,
@@ -7,7 +8,7 @@ use vizij_orchestrator::{
 fn main() {
     let mut orchestrator = Orchestrator::new(Schedule::SinglePass);
 
-    let graph_spec_json = serde_json::json!({
+    let mut graph_spec_json = serde_json::json!({
         "nodes": [
             {
                 "id": "anim_input",
@@ -71,6 +72,8 @@ fn main() {
         ]
     });
 
+    vizij_api_core::json::normalize_graph_spec_value(&mut graph_spec_json)
+        .expect("normalize graph spec");
     let graph_spec: vizij_graph_core::types::GraphSpec =
         serde_json::from_value(graph_spec_json).expect("graph spec json");
     let subs = Subscriptions {
@@ -118,14 +121,10 @@ fn main() {
     });
 
     orchestrator
-        .set_input(
-            "demo/graph/gain",
-            serde_json::json!({ "type": "float", "data": 1.5 }),
-            None,
-        )
+        .set_input("demo/graph/gain", vizij_api_core::value::float(1.5), None)
         .unwrap();
     orchestrator
-        .set_input(
+        .set_input_json(
             "demo/graph/offset",
             serde_json::json!({ "type": "float", "data": 0.25 }),
             None,
@@ -141,9 +140,9 @@ fn main() {
 
     println!("\nBlackboard snapshot:");
     for (path, entry) in orchestrator.blackboard.iter() {
-        let value_desc = match &entry.value {
-            Value::Float(f) => format!("Float({f})"),
-            other => format!("{:?}", other),
+        let value_desc = match as_float(&entry.value) {
+            Some(f) => format!("Float({f})"),
+            None => format!("{:?}", entry.value),
         };
         println!("{} => {}", path, value_desc);
     }

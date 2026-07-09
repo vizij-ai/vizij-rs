@@ -1,11 +1,14 @@
 #![allow(dead_code)]
-//! Interpolation helpers:
+//! Interpolation helpers over POD [`TrackValue`]s:
 //! - step_value (step semantics)
 //! - linear_value (component-wise + quat NLERP)
 //! - bezier_value (cubic-bezier timing -> linear blend)
 //! - quaternion NLERP with shortest-arc normalization
+//!
+//! Step-only kinds (Bool/Text/Vector/NumericArray/Step) fall back to the
+//! left operand in every blend, so mismatched pairs are fail-soft.
 
-use vizij_api_core::Value;
+use crate::value::{TrackValue, Transform};
 
 #[inline]
 fn sub_vec4(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
@@ -131,98 +134,80 @@ fn normalize4_derivative(raw: [f32; 4], raw_dt: [f32; 4]) -> [f32; 4] {
 
 /// Step interpolation: choose left value.
 #[inline]
-pub fn step_value(a: &Value) -> Value {
+pub fn step_value(a: &TrackValue) -> TrackValue {
     a.clone()
 }
 
-/// Linear interpolation across Value kinds (Transform uses TRS with quat NLERP).
-pub fn linear_value(a: &Value, b: &Value, t: f32) -> Value {
+/// Linear interpolation across TrackValue kinds (Transform uses TRS with quat NLERP).
+pub fn linear_value(a: &TrackValue, b: &TrackValue, t: f32) -> TrackValue {
     match (a, b) {
-        (Value::Float(va), Value::Float(vb)) => Value::Float(lerp_f32(*va, *vb, t)),
-        (Value::Vec2(va), Value::Vec2(vb)) => Value::Vec2(lerp_vec2(*va, *vb, t)),
-        (Value::Vec3(va), Value::Vec3(vb)) => Value::Vec3(lerp_vec3(*va, *vb, t)),
-        (Value::Vec4(va), Value::Vec4(vb)) => Value::Vec4(lerp_vec4(*va, *vb, t)),
-        (Value::Quat(qa), Value::Quat(qb)) => Value::Quat(nlerp_quat(*qa, *qb, t)),
-        (Value::ColorRgba(ca), Value::ColorRgba(cb)) => Value::ColorRgba(lerp_vec4(*ca, *cb, t)),
-        (
-            Value::Transform {
-                translation: ta,
-                rotation: ra,
-                scale: sa,
-            },
-            Value::Transform {
-                translation: tb,
-                rotation: rb,
-                scale: sb,
-            },
-        ) => Value::Transform {
-            translation: lerp_vec3(*ta, *tb, t),
-            rotation: nlerp_quat(*ra, *rb, t),
-            scale: lerp_vec3(*sa, *sb, t),
-        },
-        // Fallback: if types mismatch, prefer left (fail-soft).
+        (TrackValue::Float(va), TrackValue::Float(vb)) => TrackValue::Float(lerp_f32(*va, *vb, t)),
+        (TrackValue::Vec2(va), TrackValue::Vec2(vb)) => TrackValue::Vec2(lerp_vec2(*va, *vb, t)),
+        (TrackValue::Vec3(va), TrackValue::Vec3(vb)) => TrackValue::Vec3(lerp_vec3(*va, *vb, t)),
+        (TrackValue::Vec4(va), TrackValue::Vec4(vb)) => TrackValue::Vec4(lerp_vec4(*va, *vb, t)),
+        (TrackValue::Quat(qa), TrackValue::Quat(qb)) => TrackValue::Quat(nlerp_quat(*qa, *qb, t)),
+        (TrackValue::ColorRgba(ca), TrackValue::ColorRgba(cb)) => {
+            TrackValue::ColorRgba(lerp_vec4(*ca, *cb, t))
+        }
+        (TrackValue::Transform(ta), TrackValue::Transform(tb)) => {
+            TrackValue::Transform(Transform {
+                translation: lerp_vec3(ta.translation, tb.translation, t),
+                rotation: nlerp_quat(ta.rotation, tb.rotation, t),
+                scale: lerp_vec3(ta.scale, tb.scale, t),
+            })
+        }
+        // Fallback: step-only kinds and mismatched pairs prefer left (fail-soft).
         _ => a.clone(),
     }
 }
 
-/// Linear interpolation derivative across Value kinds.
-pub fn linear_derivative(a: &Value, b: &Value, t: f32, dt_du: f32) -> Value {
+/// Linear interpolation derivative across TrackValue kinds.
+pub fn linear_derivative(a: &TrackValue, b: &TrackValue, t: f32, dt_du: f32) -> TrackValue {
     match (a, b) {
-        (Value::Float(va), Value::Float(vb)) => Value::Float((*vb - *va) * dt_du),
-        (Value::Vec2(va), Value::Vec2(vb)) => {
-            Value::Vec2([(vb[0] - va[0]) * dt_du, (vb[1] - va[1]) * dt_du])
+        (TrackValue::Float(va), TrackValue::Float(vb)) => TrackValue::Float((*vb - *va) * dt_du),
+        (TrackValue::Vec2(va), TrackValue::Vec2(vb)) => {
+            TrackValue::Vec2([(vb[0] - va[0]) * dt_du, (vb[1] - va[1]) * dt_du])
         }
-        (Value::Vec3(va), Value::Vec3(vb)) => Value::Vec3([
+        (TrackValue::Vec3(va), TrackValue::Vec3(vb)) => TrackValue::Vec3([
             (vb[0] - va[0]) * dt_du,
             (vb[1] - va[1]) * dt_du,
             (vb[2] - va[2]) * dt_du,
         ]),
-        (Value::Vec4(va), Value::Vec4(vb)) => Value::Vec4([
+        (TrackValue::Vec4(va), TrackValue::Vec4(vb)) => TrackValue::Vec4([
             (vb[0] - va[0]) * dt_du,
             (vb[1] - va[1]) * dt_du,
             (vb[2] - va[2]) * dt_du,
             (vb[3] - va[3]) * dt_du,
         ]),
-        (Value::Quat(qa), Value::Quat(qb)) => {
+        (TrackValue::Quat(qa), TrackValue::Quat(qb)) => {
             let (raw, raw_dt) = quat_derivative_components(*qa, *qb, t, dt_du);
-            Value::Quat(normalize4_derivative(raw, raw_dt))
+            TrackValue::Quat(normalize4_derivative(raw, raw_dt))
         }
-        (Value::ColorRgba(ca), Value::ColorRgba(cb)) => Value::ColorRgba([
+        (TrackValue::ColorRgba(ca), TrackValue::ColorRgba(cb)) => TrackValue::ColorRgba([
             (cb[0] - ca[0]) * dt_du,
             (cb[1] - ca[1]) * dt_du,
             (cb[2] - ca[2]) * dt_du,
             (cb[3] - ca[3]) * dt_du,
         ]),
-        (
-            Value::Transform {
-                translation: ta,
-                rotation: ra,
-                scale: sa,
-            },
-            Value::Transform {
-                translation: tb,
-                rotation: rb,
-                scale: sb,
-            },
-        ) => {
-            let pos = [
-                (tb[0] - ta[0]) * dt_du,
-                (tb[1] - ta[1]) * dt_du,
-                (tb[2] - ta[2]) * dt_du,
+        (TrackValue::Transform(ta), TrackValue::Transform(tb)) => {
+            let translation = [
+                (tb.translation[0] - ta.translation[0]) * dt_du,
+                (tb.translation[1] - ta.translation[1]) * dt_du,
+                (tb.translation[2] - ta.translation[2]) * dt_du,
             ];
             let scale = [
-                (sb[0] - sa[0]) * dt_du,
-                (sb[1] - sa[1]) * dt_du,
-                (sb[2] - sa[2]) * dt_du,
+                (tb.scale[0] - ta.scale[0]) * dt_du,
+                (tb.scale[1] - ta.scale[1]) * dt_du,
+                (tb.scale[2] - ta.scale[2]) * dt_du,
             ];
-            let (raw, raw_dt) = quat_derivative_components(*ra, *rb, t, dt_du);
-            Value::Transform {
-                translation: pos,
+            let (raw, raw_dt) = quat_derivative_components(ta.rotation, tb.rotation, t, dt_du);
+            TrackValue::Transform(Transform {
+                translation,
                 rotation: normalize4_derivative(raw, raw_dt),
                 scale,
-            }
+            })
         }
-        _ => Value::Float(0.0),
+        _ => TrackValue::Float(0.0),
     }
 }
 
@@ -262,10 +247,10 @@ fn bezier_ease_t(t: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
     cubic_bezier(0.0, y1, y2, 1.0, mid)
 }
 
-/// Bezier easing across Value kinds: compute eased t, then use linear blend.
+/// Bezier easing across TrackValue kinds: compute eased t, then use linear blend.
 /// Control points are (x1, y1, x2, y2).
 #[inline]
-pub fn bezier_value(a: &Value, b: &Value, t: f32, ctrl: [f32; 4]) -> Value {
+pub fn bezier_value(a: &TrackValue, b: &TrackValue, t: f32, ctrl: [f32; 4]) -> TrackValue {
     let eased = bezier_ease_t(t, ctrl[0], ctrl[1], ctrl[2], ctrl[3]);
     linear_value(a, b, eased)
 }
@@ -309,11 +294,11 @@ fn bezier_ease_with_derivative(t: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> (f
 }
 
 pub fn bezier_value_with_derivative(
-    a: &Value,
-    b: &Value,
+    a: &TrackValue,
+    b: &TrackValue,
     t: f32,
     ctrl: [f32; 4],
-) -> (Value, f32, f32) {
+) -> (TrackValue, f32, f32) {
     let (eased, deriv) = bezier_ease_with_derivative(t, ctrl[0], ctrl[1], ctrl[2], ctrl[3]);
     (linear_value(a, b, eased), eased, deriv)
 }

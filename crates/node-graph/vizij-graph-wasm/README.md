@@ -83,7 +83,7 @@ const graph = new Graph();
 const spec: GraphSpec = await normalizeGraphSpec(graphSamples.vectorPlayground);
 graph.loadGraph(spec);
 
-graph.stageInput("demo/path", { float: 1 });
+graph.stageInput("demo/path", { f32: 1 }); // legacy forms like { float: 1 } still normalize
 const result: EvalResult = graph.evalAll();
 console.log(result.nodes, result.writes);
 ```
@@ -96,7 +96,7 @@ import { init, createGraph, normalizeGraphSpec } from "@vizij/node-graph-wasm";
 await init();
 const normalized = await normalizeGraphSpec(spec);
 const graph = await createGraph(normalized);
-graph.stageInput("demo/path", { float: 1 });
+graph.stageInput("demo/path", { f32: 1 });
 console.log(graph.evalAll());
 ```
 
@@ -112,15 +112,15 @@ console.log(graph.evalAll());
 
 ## Key Details
 
-- **Normalisation** – Accepts shorthands like `{ vec3: [...] }`, auto-lowers node type names, rewrites `kind` → `type`, and upgrades simple numbers/bools/arrays into tagged `ValueJSON`.
-- **Staging** – `stage_input` mirrors `GraphRuntime::set_input`. Passing `undefined` (via the npm wrapper) removes staged entries safely.
-- **Evaluation Result** – `eval_all` returns `{ nodes: { [id]: { port: { value, shape } } }, writes: WriteOpJSON[] }`. Shapes mirror `vizij_api_core::Shape`.
+- **Normalisation** – Accepts legacy shorthands like `{ vec3: [...] }` and `{ type: "float", data: 1 }`, auto-lowers node type names, rewrites `kind` → `type`, and normalizes value payloads into Arora `Value` serde form (`{"f32": 1.0}`, `{"bool": true}`, `{"str": "hi"}`, `{"f32s": [...]}`, `{"struct": {...}}`, ...).
+- **Staging** – `stage_input` mirrors `GraphRuntime::set_input`; value payloads normalize through the same rules. Passing `undefined` (via the npm wrapper) removes staged entries safely.
+- **Evaluation Result** – `eval_all` returns `{ nodes: { [id]: { port: { value, shape } } }, writes: WriteOpJSON[] }`. Values are in Arora `Value` serde form; shapes mirror `vizij_api_core::Shape`.
   ```jsonc
   {
     "nodes": {
       "oscillator": {
         "out": {
-          "value": { "type": "float", "data": 0.707 },
+          "value": { "f32": 0.707 },
           "shape": { "id": "Scalar" }
         }
       }
@@ -128,7 +128,7 @@ console.log(graph.evalAll());
     "writes": [
       {
         "path": "demo/output/value",
-        "value": { "float": 0.707 },
+        "value": { "f32": 0.707 },
         "shape": { "id": "Scalar" }
       }
     ]
@@ -145,7 +145,7 @@ console.log(graph.evalAll());
 ## Troubleshooting
 
 - **Selector errors**: Messages like `selector index 5 out of bounds` indicate the selector chain projected past the available elements. Normalise the spec and double-check link selectors.
-- **`set_param` failures**: The binding validates node-specific types (`Float`, `Text`, tuple pairs). Use `normalize_graph_spec_json` or the npm wrapper helpers before calling `set_param`.
+- **`set_param` failures**: The binding validates node-specific types (floats, text, `[text, float]` pairs). Use `normalize_graph_spec_json` or the npm wrapper helpers before calling `set_param`.
 - **Empty `writes`**: Ensure your graph contains `Output` nodes with `params.path` assigned; internal nodes do not emit writes automatically.
 - **Streaming issues**: Serve the generated `.wasm` with `application/wasm` and prefer `wasm-pack build --release` to minimise payload size.
 

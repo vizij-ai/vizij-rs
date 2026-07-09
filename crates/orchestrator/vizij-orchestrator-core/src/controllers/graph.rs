@@ -9,7 +9,8 @@ use indexmap::IndexSet;
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
-use vizij_api_core::{TypedPath, Value, WriteBatch};
+use vizij_api_core::value::{float, vector};
+use vizij_api_core::{TypedPath, WriteBatch};
 use vizij_graph_core::eval::{evaluate_all, evaluate_all_cached, GraphRuntime};
 use vizij_graph_core::types::{GraphSpec, NodeType, Selector};
 
@@ -519,7 +520,7 @@ impl GraphControllerConfig {
                         id: weights_node_id.clone(),
                         kind: NodeType::Constant,
                         params: vizij_graph_core::types::NodeParams {
-                            value: Some(Value::Vector(vec![weight; bindings.len()])),
+                            value: Some(vector(vec![weight; bindings.len()])),
                             ..Default::default()
                         },
                         output_shapes: Default::default(),
@@ -661,7 +662,7 @@ impl GraphControllerConfig {
                             id: weight_input_id.clone(),
                             kind: NodeType::Input,
                             params: vizij_graph_core::types::NodeParams {
-                                value: Some(Value::Float(1.0)),
+                                value: Some(float(1.0)),
                                 path: Some(weight_path),
                                 ..Default::default()
                             },
@@ -927,7 +928,7 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::collections::HashSet;
-    use vizij_api_core::Value;
+    use vizij_api_core::value::as_float;
     use vizij_graph_core::eval::{evaluate_all, GraphRuntime};
     use vizij_graph_core::types::SelectorSegment;
 
@@ -1281,7 +1282,7 @@ mod tests {
         for input in &weight_inputs {
             assert_eq!(
                 input.params.value,
-                Some(Value::Float(1.0)),
+                Some(float(1.0)),
                 "weight inputs should default to 1.0"
             );
         }
@@ -1437,9 +1438,9 @@ mod tests {
         let mut writes = rt.writes.iter();
         let write = writes.next().expect("write present");
         assert_eq!(write.path.to_string(), "shared/value");
-        match &write.value {
-            Value::Float(v) => assert!((*v - 2.0).abs() < 1e-6),
-            other => panic!("expected float write, got {:?}", other),
+        match as_float(&write.value) {
+            Some(v) => assert!((v - 2.0).abs() < 1e-6),
+            None => panic!("expected float write, got {:?}", write.value),
         }
         assert!(writes.next().is_none(), "only one blended write expected");
     }
@@ -1497,9 +1498,9 @@ mod tests {
             .iter()
             .find(|w| w.path.to_string() == "result/value")
             .expect("blended consumer output present");
-        match &result_write.value {
-            Value::Float(v) => assert!((*v - 3.0).abs() < 1e-6),
-            other => panic!("expected float write, got {:?}", other),
+        match as_float(&result_write.value) {
+            Some(v) => assert!((v - 3.0).abs() < 1e-6),
+            None => panic!("expected float write, got {:?}", result_write.value),
         }
     }
 

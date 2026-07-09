@@ -65,12 +65,12 @@ Stage host inputs directly on `GraphRuntimeResource`. They become visible on the
 ```rust
 use bevy::prelude::*;
 use bevy_vizij_graph::GraphRuntimeResource;
-use vizij_api_core::{TypedPath, Value};
+use vizij_api_core::{value::float, TypedPath};
 
 fn stage_input(mut runtime: ResMut<GraphRuntimeResource>) {
     runtime.0.set_input(
         TypedPath::parse("demo/input/value").unwrap(),
-        Value::Float(0.5),
+        float(0.5),
         None,
     );
 }
@@ -83,13 +83,13 @@ Use the `SetNodeParam` event to mutate supported node params in the loaded `Grap
 ```rust
 use bevy::prelude::*;
 use bevy_vizij_graph::SetNodeParam;
-use vizij_api_core::Value;
+use vizij_api_core::value::float;
 
 fn tweak_gain(mut events: EventWriter<SetNodeParam>) {
     events.write(SetNodeParam {
         node: "gain".into(),
         key: "value".into(),
-        value: Value::Float(2.0),
+        value: float(2.0),
     });
 }
 ```
