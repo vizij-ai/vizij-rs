@@ -1,5 +1,14 @@
 # @vizij/animation-wasm
 
+## 0.4.0
+
+### Minor Changes
+
+- Values emitted by the engine (frame changes, baked tracks) are now in arora
+  serde form. Read them through `@vizij/value-json` accessors (which decode
+  both the new and the legacy forms); code that pattern-matched the raw JSON
+  shape must switch to the accessors.
+
 ## 0.3.8
 
 ### Patch Changes
