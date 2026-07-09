@@ -64,11 +64,77 @@ export type ValueJSON =
   | TupleVal
   | Transform
   | NormalizedValue
+  | AroraValueJSON
   | number
   | string
   | boolean;
 
 export type ValueInput = ValueJSON | number[];
+
+/**
+ * Arora serde forms — the JSON the Rust side (vizij-api-core over arora-types)
+ * emits. Values coming OUT of the wasm engines (frame changes, baked tracks,
+ * registry defaults) are in this form; every `valueAs*` accessor decodes it.
+ * Values going INTO the engines may stay in the legacy/normalized forms above —
+ * the Rust `normalize_value_json` accepts them all.
+ */
+export type AroraStructureField = { id: string; value: AroraValueJSON };
+export type AroraStructure = { id: string; fields: AroraStructureField[] };
+export type AroraEnumeration = { id: string; variant_id: string; value: AroraValueJSON };
+export type AroraKeyValueField = { id: string; name: string; value: AroraValueJSON | null };
+export type AroraKeyValue = { id: string; fields: { [name: string]: AroraKeyValueField } };
+
+export type AroraValueJSON =
+  | "unit"
+  | { bool: boolean }
+  | { u8: number }
+  | { u16: number }
+  | { u32: number }
+  | { u64: number }
+  | { i8: number }
+  | { i16: number }
+  | { i32: number }
+  | { i64: number }
+  | { f32: number }
+  | { f64: number }
+  | { str: string }
+  | { option: AroraValueJSON | null }
+  | { struct: AroraStructure }
+  | { enum: AroraEnumeration }
+  | { bools: boolean[] }
+  | { u8s: number[] }
+  | { u16s: number[] }
+  | { u32s: number[] }
+  | { u64s: number[] }
+  | { i8s: number[] }
+  | { i16s: number[] }
+  | { i32s: number[] }
+  | { i64s: number[] }
+  | { f32s: number[] }
+  | { f64s: number[] }
+  | { strs: string[] }
+  | { values: AroraValueJSON[] }
+  | { keyvalue: AroraKeyValue }
+  | { uuid: string };
+
+/**
+ * The vizij declared-type ids (vizij-api-core's `VEC2_TYPE` … `RECORD_TYPE`):
+ * the ASCII bytes of "vizij" in the leading bytes, a small offset in the tail.
+ * A structure whose `id` matches one of these decodes as the corresponding
+ * vizij kind; field ids follow the same scheme.
+ */
+export const VIZIJ_VEC2_TYPE = "76697a69-6a00-0000-0000-000000000002";
+export const VIZIJ_VEC3_TYPE = "76697a69-6a00-0000-0000-000000000003";
+export const VIZIJ_VEC4_TYPE = "76697a69-6a00-0000-0000-000000000004";
+export const VIZIJ_QUAT_TYPE = "76697a69-6a00-0000-0000-000000000010";
+export const VIZIJ_COLOR_RGBA_TYPE = "76697a69-6a00-0000-0000-000000000020";
+export const VIZIJ_TRANSFORM_TYPE = "76697a69-6a00-0000-0000-000000000030";
+export const VIZIJ_ENUM_TYPE = "76697a69-6a00-0000-0000-000000000040";
+export const VIZIJ_RECORD_TYPE = "76697a69-6a00-0000-0000-000000000050";
+
+const TRANSFORM_TRANSLATION_FIELD = "76697a69-6a00-0000-0000-000000300001";
+const TRANSFORM_ROTATION_FIELD = "76697a69-6a00-0000-0000-000000300002";
+const TRANSFORM_SCALE_FIELD = "76697a69-6a00-0000-0000-000000300003";
 
 const DEFAULT_VEC2: [number, number] = [0, 0];
 const DEFAULT_VEC3: [number, number, number] = [0, 0, 0];
@@ -443,6 +509,141 @@ function normalizedValueAsText(value: NormalizedValue): string | undefined {
     default:
       return undefined;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Arora serde decoding
+// ---------------------------------------------------------------------------
+
+const ARORA_SCALAR_TAGS = ["f32", "f64", "u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64"] as const;
+const ARORA_NUMERIC_ARRAY_TAGS = [
+  "f32s",
+  "f64s",
+  "u8s",
+  "u16s",
+  "u32s",
+  "u64s",
+  "i8s",
+  "i16s",
+  "i32s",
+  "i64s",
+] as const;
+
+/** The float-structure kinds, keyed by their vizij type id. */
+const ARORA_FLOAT_STRUCTS: {
+  [typeId: string]: { type: "vec2" | "vec3" | "vec4" | "quat" | "colorrgba"; arity: number };
+} = {
+  [VIZIJ_VEC2_TYPE]: { type: "vec2", arity: 2 },
+  [VIZIJ_VEC3_TYPE]: { type: "vec3", arity: 3 },
+  [VIZIJ_VEC4_TYPE]: { type: "vec4", arity: 4 },
+  [VIZIJ_QUAT_TYPE]: { type: "quat", arity: 4 },
+  [VIZIJ_COLOR_RGBA_TYPE]: { type: "colorrgba", arity: 4 },
+};
+
+function aroraStructureField(struct: AroraStructure, fieldId: string, position: number): AroraValueJSON | undefined {
+  const byId = struct.fields.find((f) => f.id === fieldId);
+  if (byId) return byId.value;
+  // Fields are emitted in declaration order; fall back to position for
+  // producers that composed the structure without the well-known field ids.
+  return struct.fields[position]?.value;
+}
+
+function aroraStructToNormalized(struct: AroraStructure): NormalizedValue | undefined {
+  if (!isRecord(struct) || !Array.isArray(struct.fields)) return undefined;
+  const floatStruct = ARORA_FLOAT_STRUCTS[struct.id];
+  if (floatStruct) {
+    const comps: number[] = [];
+    for (let i = 0; i < floatStruct.arity; i += 1) {
+      const field = struct.fields[i];
+      const num = field ? valueAsNumber(field.value as ValueJSON) : undefined;
+      comps.push(num ?? 0);
+    }
+    return { type: floatStruct.type, data: comps } as NormalizedValue;
+  }
+  if (struct.id === VIZIJ_TRANSFORM_TYPE) {
+    const translation = aroraStructureField(struct, TRANSFORM_TRANSLATION_FIELD, 0);
+    const rotation = aroraStructureField(struct, TRANSFORM_ROTATION_FIELD, 1);
+    const scale = aroraStructureField(struct, TRANSFORM_SCALE_FIELD, 2);
+    return {
+      type: "transform",
+      data: {
+        translation: (translation && valueAsVec3(translation as ValueJSON)) ?? DEFAULT_VEC3,
+        rotation: (rotation && valueAsQuat(rotation as ValueJSON)) ?? DEFAULT_QUAT,
+        scale: (scale && valueAsVec3(scale as ValueJSON)) ?? DEFAULT_SCALE,
+      },
+    };
+  }
+  return undefined;
+}
+
+/**
+ * Decode an arora-serde value into the normalized `{type, data}` form, or
+ * `undefined` when `value` is not arora-shaped (or has no vizij reading, e.g.
+ * `"unit"`, an unknown structure type). Enum variants decode with their
+ * `variant_id` as the tag — variant names are hashed one-way on the Rust side,
+ * so a UUID-named variant round-trips and a string-named one compares by id.
+ */
+export function fromAroraValueJSON(value: ValueJSON | undefined | null): NormalizedValue | undefined {
+  if (!isRecord(value) || Array.isArray(value)) return undefined;
+  const obj = value as Record<string, unknown>;
+
+  for (const tag of ARORA_SCALAR_TAGS) {
+    if (tag in obj) {
+      const num = toFiniteNumber(obj[tag]);
+      return num === undefined ? undefined : { type: "float", data: num };
+    }
+  }
+  if ("str" in obj && typeof obj.str === "string") {
+    return { type: "text", data: obj.str };
+  }
+  for (const tag of ARORA_NUMERIC_ARRAY_TAGS) {
+    if (tag in obj) {
+      const nums = coerceNumericArray(obj[tag]);
+      return nums ? { type: "vector", data: nums } : undefined;
+    }
+  }
+  if ("bools" in obj && Array.isArray(obj.bools)) {
+    return { type: "array", data: obj.bools.map((b) => ({ type: "bool", data: Boolean(b) })) };
+  }
+  if ("strs" in obj && Array.isArray(obj.strs)) {
+    return { type: "array", data: obj.strs.map((s) => ({ type: "text", data: String(s) })) };
+  }
+  if ("values" in obj && Array.isArray(obj.values)) {
+    const items: NormalizedValue[] = [];
+    for (const entry of obj.values) {
+      const decoded = fromAroraValueJSON(entry as ValueJSON);
+      if (decoded) items.push(decoded);
+    }
+    return { type: "array", data: items };
+  }
+  if ("struct" in obj && isRecord(obj.struct)) {
+    return aroraStructToNormalized(obj.struct as AroraStructure);
+  }
+  if ("enum" in obj && isRecord(obj.enum) && "variant_id" in (obj.enum as object)) {
+    const e = obj.enum as AroraEnumeration;
+    const payload = fromAroraValueJSON(e.value as ValueJSON) ?? { type: "text", data: EMPTY_STRING };
+    return { type: "enum", data: [e.variant_id, payload] };
+  }
+  if ("keyvalue" in obj && isRecord(obj.keyvalue)) {
+    const kv = obj.keyvalue as AroraKeyValue;
+    if (!isRecord(kv.fields)) return undefined;
+    const data: { [key: string]: NormalizedValue } = {};
+    for (const [name, field] of Object.entries(kv.fields)) {
+      const decoded = field && field.value != null ? fromAroraValueJSON(field.value as ValueJSON) : undefined;
+      if (decoded) data[name] = decoded;
+    }
+    return { type: "record", data };
+  }
+  if ("option" in obj) {
+    return obj.option == null ? undefined : fromAroraValueJSON(obj.option as ValueJSON);
+  }
+  if ("uuid" in obj && typeof obj.uuid === "string") {
+    return { type: "text", data: obj.uuid };
+  }
+  if ("bool" in obj && typeof obj.bool === "boolean" && Object.keys(obj).length === 1) {
+    return { type: "bool", data: obj.bool };
+  }
+  return undefined;
 }
 
 function legacyValueAsNumber(value: ValueJSON | undefined | null): number | undefined {
@@ -882,6 +1083,8 @@ export function valueAsNumber(value: ValueJSON | undefined | null): number | und
   if (isNormalizedValue(value)) {
     return normalizedValueAsNumber(value);
   }
+  const arora = fromAroraValueJSON(value);
+  if (arora) return normalizedValueAsNumber(arora);
   return legacyValueAsNumber(value);
 }
 
@@ -893,6 +1096,8 @@ export function valueAsNumericArray(
   if (isNormalizedValue(value)) {
     return normalizedValueAsNumericArray(value, fallback);
   }
+  const arora = fromAroraValueJSON(value);
+  if (arora) return normalizedValueAsNumericArray(arora, fallback);
   return legacyValueAsNumericArray(value, fallback);
 }
 
@@ -903,6 +1108,8 @@ export function valueAsTransform(
   if (isNormalizedValue(value)) {
     return normalizedValueAsTransform(value);
   }
+  const arora = fromAroraValueJSON(value);
+  if (arora) return normalizedValueAsTransform(arora);
   return legacyValueAsTransform(value);
 }
 
@@ -913,6 +1120,8 @@ export function valueAsVec3(
   if (isNormalizedValue(value)) {
     return normalizedValueAsVec3(value);
   }
+  const arora = fromAroraValueJSON(value);
+  if (arora) return normalizedValueAsVec3(arora);
   return legacyValueAsVec3(value);
 }
 
@@ -921,6 +1130,8 @@ export function valueAsVector(value: ValueJSON | undefined | null): number[] | u
   if (isNormalizedValue(value)) {
     return normalizedValueAsVector(value);
   }
+  const arora = fromAroraValueJSON(value);
+  if (arora) return normalizedValueAsVector(arora);
   return legacyValueAsVector(value);
 }
 
@@ -929,6 +1140,8 @@ export function valueAsBool(value: ValueJSON | undefined | null): boolean | unde
   if (isNormalizedValue(value)) {
     return normalizedValueAsBool(value);
   }
+  const arora = fromAroraValueJSON(value);
+  if (arora) return normalizedValueAsBool(arora);
   return legacyValueAsBool(value);
 }
 
@@ -939,6 +1152,8 @@ export function valueAsQuat(
   if (isNormalizedValue(value)) {
     return normalizedValueAsQuat(value);
   }
+  const arora = fromAroraValueJSON(value);
+  if (arora) return normalizedValueAsQuat(arora);
   return legacyValueAsQuat(value);
 }
 
@@ -949,6 +1164,8 @@ export function valueAsColorRgba(
   if (isNormalizedValue(value)) {
     return normalizedValueAsColorRgba(value);
   }
+  const arora = fromAroraValueJSON(value);
+  if (arora) return normalizedValueAsColorRgba(arora);
   return legacyValueAsColorRgba(value);
 }
 
@@ -957,5 +1174,7 @@ export function valueAsText(value: ValueJSON | undefined | null): string | undef
   if (isNormalizedValue(value)) {
     return normalizedValueAsText(value);
   }
+  const arora = fromAroraValueJSON(value);
+  if (arora) return normalizedValueAsText(arora);
   return legacyValueAsText(value);
 }

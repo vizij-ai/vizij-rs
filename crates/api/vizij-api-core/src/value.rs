@@ -560,4 +560,59 @@ mod tests {
         assert_eq!(kind(&foreign), VizijKind::Other);
         assert_eq!(as_vec2(&foreign), None);
     }
+
+    /// Pins the JSON wire form and the type-id strings that
+    /// `@vizij/value-json` (npm) hard-codes in its arora-serde decoder —
+    /// its `VIZIJ_*_TYPE` constants and `fromAroraValueJSON` tests must keep
+    /// matching these exactly.
+    #[test]
+    fn json_wire_form_matches_the_js_decoder() {
+        assert_eq!(VEC2_TYPE.to_string(), "76697a69-6a00-0000-0000-000000000002");
+        assert_eq!(VEC3_TYPE.to_string(), "76697a69-6a00-0000-0000-000000000003");
+        assert_eq!(VEC4_TYPE.to_string(), "76697a69-6a00-0000-0000-000000000004");
+        assert_eq!(QUAT_TYPE.to_string(), "76697a69-6a00-0000-0000-000000000010");
+        assert_eq!(
+            COLOR_RGBA_TYPE.to_string(),
+            "76697a69-6a00-0000-0000-000000000020"
+        );
+        assert_eq!(
+            TRANSFORM_TYPE.to_string(),
+            "76697a69-6a00-0000-0000-000000000030"
+        );
+        assert_eq!(ENUM_TYPE.to_string(), "76697a69-6a00-0000-0000-000000000040");
+        assert_eq!(RECORD_TYPE.to_string(), "76697a69-6a00-0000-0000-000000000050");
+        assert_eq!(
+            TRANSFORM_TRANSLATION.to_string(),
+            "76697a69-6a00-0000-0000-000000300001"
+        );
+        assert_eq!(
+            TRANSFORM_ROTATION.to_string(),
+            "76697a69-6a00-0000-0000-000000300002"
+        );
+        assert_eq!(
+            TRANSFORM_SCALE.to_string(),
+            "76697a69-6a00-0000-0000-000000300003"
+        );
+
+        assert_eq!(
+            serde_json::to_string(&float(1.5)).unwrap(),
+            r#"{"f32":1.5}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&bool_(true)).unwrap(),
+            r#"{"bool":true}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&text("hi")).unwrap(),
+            r#"{"str":"hi"}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&vector(vec![1.0, 2.0])).unwrap(),
+            r#"{"f32s":[1.0,2.0]}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&vec3([1.0, 2.0, 3.0])).unwrap(),
+            r#"{"struct":{"id":"76697a69-6a00-0000-0000-000000000003","fields":[{"id":"76697a69-6a00-0000-0000-000000030001","value":{"f32":1.0}},{"id":"76697a69-6a00-0000-0000-000000030002","value":{"f32":2.0}},{"id":"76697a69-6a00-0000-0000-000000030003","value":{"f32":3.0}}]}}"#
+        );
+    }
 }
