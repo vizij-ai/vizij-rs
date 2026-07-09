@@ -13,7 +13,9 @@
 //!   `{"record": {...}}`, `{"array"|"list"|"tuple": [...]}`);
 //! - tagged objects (`{"type": "vec3", "data": [1, 2, 3]}`);
 //! - raw component objects (`{"x": ..., "y": ...[, "z"[, "w"]]}` — two or
-//!   three components read as vec2/vec3, four as a quaternion);
+//!   three components read as vec2/vec3, four as a quaternion — and
+//!   `{"r": ..., "g": ..., "b": ...[, "a": ...]}`, read as a color with
+//!   alpha defaulting to 1);
 //! - canonical Arora serde, passed through unchanged.
 //!
 //! This normalizer is the single entry point for migrating persisted
@@ -227,6 +229,25 @@ fn parse_object(
                 }
             }
             _ => {}
+        }
+    }
+
+    // Raw color component objects: {r, g, b} and {r, g, b, a} (alpha
+    // defaults to 1).
+    if let (Some(r), Some(g), Some(b)) = (
+        obj.get("r").and_then(|x| x.as_f64()),
+        obj.get("g").and_then(|x| x.as_f64()),
+        obj.get("b").and_then(|x| x.as_f64()),
+    ) {
+        let a = obj.get("a").and_then(|x| x.as_f64());
+        let expected_len = if a.is_some() { 4 } else { 3 };
+        if obj.len() == expected_len {
+            return Ok(color_rgba([
+                r as f32,
+                g as f32,
+                b as f32,
+                a.unwrap_or(1.0) as f32,
+            ]));
         }
     }
 
@@ -998,6 +1019,22 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(as_transform(&t).unwrap().translation, [1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn raw_color_component_objects_parse() {
+        assert_eq!(
+            as_color_rgba(&parse_value(json!({ "r": 0.25, "g": 0.5, "b": 0.75 })).unwrap()),
+            Some([0.25, 0.5, 0.75, 1.0])
+        );
+        assert_eq!(
+            as_color_rgba(
+                &parse_value(json!({ "r": 0.25, "g": 0.5, "b": 0.75, "a": 0.5 })).unwrap()
+            ),
+            Some([0.25, 0.5, 0.75, 0.5])
+        );
+        // Extra keys make the payload ambiguous; it is not a color.
+        assert!(parse_value(json!({ "r": 1.0, "g": 1.0, "b": 1.0, "extra": 1.0 })).is_err());
     }
 
     #[test]

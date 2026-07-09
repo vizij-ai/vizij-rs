@@ -26,7 +26,7 @@ const registry: Registry = {
           "label": "Value",
           "doc": "Value to emit on the output port each tick.",
           "default_json": {
-            "float": 0.0
+            "f32": 0.0
           }
         }
       ]
@@ -53,7 +53,7 @@ const registry: Registry = {
           "label": "Value",
           "doc": "Initial slider position.",
           "default_json": {
-            "float": 0.0
+            "f32": 0.0
           }
         },
         {
@@ -62,7 +62,7 @@ const registry: Registry = {
           "label": "Min",
           "doc": "Lower bound for the slider value.",
           "default_json": {
-            "float": 0.0
+            "f32": 0.0
           }
         },
         {
@@ -71,7 +71,7 @@ const registry: Registry = {
           "label": "Max",
           "doc": "Upper bound for the slider value.",
           "default_json": {
-            "float": 1.0
+            "f32": 1.0
           }
         }
       ]
@@ -112,7 +112,7 @@ const registry: Registry = {
           "label": "X",
           "doc": "Initial X slider value.",
           "default_json": {
-            "float": 0.0
+            "f32": 0.0
           }
         },
         {
@@ -121,7 +121,7 @@ const registry: Registry = {
           "label": "Y",
           "doc": "Initial Y slider value.",
           "default_json": {
-            "float": 0.0
+            "f32": 0.0
           }
         },
         {
@@ -130,7 +130,7 @@ const registry: Registry = {
           "label": "Z",
           "doc": "Initial Z slider value.",
           "default_json": {
-            "float": 0.0
+            "f32": 0.0
           }
         }
       ]
@@ -500,7 +500,7 @@ const registry: Registry = {
           "label": "Mode",
           "doc": "Rounding mode: \"floor\", \"ceil\", or \"trunc\".",
           "default_json": {
-            "text": "floor"
+            "str": "floor"
           }
         }
       ]
@@ -659,7 +659,7 @@ const registry: Registry = {
           "label": "Stiffness",
           "doc": "Hooke's spring constant controlling acceleration toward the target.",
           "default_json": {
-            "float": 120.0
+            "f32": 120.0
           },
           "min": 0.0
         },
@@ -669,7 +669,7 @@ const registry: Registry = {
           "label": "Damping",
           "doc": "Velocity damping applied each step.",
           "default_json": {
-            "float": 20.0
+            "f32": 20.0
           },
           "min": 0.0
         },
@@ -679,7 +679,7 @@ const registry: Registry = {
           "label": "Mass",
           "doc": "Effective mass of the spring system.",
           "default_json": {
-            "float": 1.0
+            "f32": 1.0
           },
           "min": 0.0
         }
@@ -715,7 +715,7 @@ const registry: Registry = {
           "label": "Half-Life",
           "doc": "Seconds for the remaining error to halve.",
           "default_json": {
-            "float": 0.2
+            "f32": 0.2
           },
           "min": 0.0
         }
@@ -751,7 +751,7 @@ const registry: Registry = {
           "label": "Max Rate",
           "doc": "Maximum units per second the value may change.",
           "default_json": {
-            "float": 1.0
+            "f32": 1.0
           },
           "min": 0.0
         }
@@ -1307,7 +1307,7 @@ const registry: Registry = {
           "label": "Value",
           "doc": "Vector or numeric value to emit.",
           "default_json": {
-            "vector": []
+            "f32s": []
           }
         }
       ]
@@ -1609,7 +1609,7 @@ const registry: Registry = {
           "label": "Sizes",
           "doc": "Vector of sizes (floored to integers). Sum must equal input length; otherwise each part is NaNs of requested size.",
           "default_json": {
-            "vector": []
+            "f32s": []
           }
         }
       ]
@@ -1826,7 +1826,7 @@ const registry: Registry = {
           "label": "Seed",
           "doc": "Integer seed for deterministic noise generation.",
           "default_json": {
-            "float": 0.0
+            "f32": 0.0
           }
         },
         {
@@ -1835,7 +1835,7 @@ const registry: Registry = {
           "label": "Frequency",
           "doc": "Spatial frequency multiplier applied to coordinates.",
           "default_json": {
-            "float": 1.0
+            "f32": 1.0
           },
           "min": 0.0
         },
@@ -1845,7 +1845,7 @@ const registry: Registry = {
           "label": "Octaves",
           "doc": "Number of noise layers to sum for fBm (fractal Brownian motion).",
           "default_json": {
-            "float": 1.0
+            "f32": 1.0
           },
           "min": 1.0,
           "max": 16.0
@@ -1856,7 +1856,7 @@ const registry: Registry = {
           "label": "Lacunarity",
           "doc": "Frequency multiplier between successive octaves.",
           "default_json": {
-            "float": 2.0
+            "f32": 2.0
           }
         },
         {
@@ -1865,7 +1865,7 @@ const registry: Registry = {
           "label": "Persistence",
           "doc": "Amplitude multiplier between successive octaves.",
           "default_json": {
-            "float": 0.5
+            "f32": 0.5
           }
         }
       ]
@@ -1907,7 +1907,7 @@ const registry: Registry = {
           "label": "Seed",
           "doc": "Integer seed for deterministic noise generation.",
           "default_json": {
-            "float": 0.0
+            "f32": 0.0
           }
         },
         {
@@ -1916,7 +1916,7 @@ const registry: Registry = {
           "label": "Frequency",
           "doc": "Spatial frequency multiplier applied to coordinates.",
           "default_json": {
-            "float": 1.0
+            "f32": 1.0
           },
           "min": 0.0
         },
@@ -1926,7 +1926,7 @@ const registry: Registry = {
           "label": "Octaves",
           "doc": "Number of noise layers to sum for fBm (fractal Brownian motion).",
           "default_json": {
-            "float": 1.0
+            "f32": 1.0
           },
           "min": 1.0,
           "max": 16.0
@@ -1937,7 +1937,7 @@ const registry: Registry = {
           "label": "Lacunarity",
           "doc": "Frequency multiplier between successive octaves.",
           "default_json": {
-            "float": 2.0
+            "f32": 2.0
           }
         },
         {
@@ -1946,7 +1946,7 @@ const registry: Registry = {
           "label": "Persistence",
           "doc": "Amplitude multiplier between successive octaves.",
           "default_json": {
-            "float": 0.5
+            "f32": 0.5
           }
         }
       ]
@@ -1988,7 +1988,7 @@ const registry: Registry = {
           "label": "Seed",
           "doc": "Integer seed for deterministic noise generation.",
           "default_json": {
-            "float": 0.0
+            "f32": 0.0
           }
         },
         {
@@ -1997,7 +1997,7 @@ const registry: Registry = {
           "label": "Frequency",
           "doc": "Spatial frequency multiplier applied to coordinates.",
           "default_json": {
-            "float": 1.0
+            "f32": 1.0
           },
           "min": 0.0
         },
@@ -2007,7 +2007,7 @@ const registry: Registry = {
           "label": "Octaves",
           "doc": "Number of noise layers to sum for fBm (fractal Brownian motion).",
           "default_json": {
-            "float": 1.0
+            "f32": 1.0
           },
           "min": 1.0,
           "max": 16.0
@@ -2018,7 +2018,7 @@ const registry: Registry = {
           "label": "Lacunarity",
           "doc": "Frequency multiplier between successive octaves.",
           "default_json": {
-            "float": 2.0
+            "f32": 2.0
           }
         },
         {
@@ -2027,7 +2027,7 @@ const registry: Registry = {
           "label": "Persistence",
           "doc": "Amplitude multiplier between successive octaves.",
           "default_json": {
-            "float": 0.5
+            "f32": 0.5
           }
         }
       ]
@@ -2438,7 +2438,9 @@ const registry: Registry = {
           "ty": "any",
           "label": "Case Labels",
           "doc": "Array of string labels; entry i maps to variadic input operand_i.",
-          "default_json": []
+          "default_json": {
+            "strs": []
+          }
         }
       ]
     },
@@ -2539,7 +2541,7 @@ const registry: Registry = {
           "label": "URDF XML",
           "doc": "Robot URDF definition (string).",
           "default_json": {
-            "text": ""
+            "str": ""
           }
         },
         {
@@ -2548,7 +2550,7 @@ const registry: Registry = {
           "label": "Root Link",
           "doc": "Chain root link name.",
           "default_json": {
-            "text": "base_link"
+            "str": "base_link"
           }
         },
         {
@@ -2557,7 +2559,7 @@ const registry: Registry = {
           "label": "Tip Link",
           "doc": "Chain tip link name.",
           "default_json": {
-            "text": "tool0"
+            "str": "tool0"
           }
         },
         {
@@ -2566,7 +2568,7 @@ const registry: Registry = {
           "label": "Joint Weights",
           "doc": "Optional per-joint weights.",
           "default_json": {
-            "vector": []
+            "f32s": []
           }
         },
         {
@@ -2575,7 +2577,7 @@ const registry: Registry = {
           "label": "Max Iterations",
           "doc": "Solver iteration cap.",
           "default_json": {
-            "float": 100.0
+            "f32": 100.0
           }
         },
         {
@@ -2584,7 +2586,7 @@ const registry: Registry = {
           "label": "Position Tolerance",
           "doc": "Solver position tolerance (m).",
           "default_json": {
-            "float": 0.001
+            "f32": 0.001
           }
         }
       ]
@@ -2633,7 +2635,7 @@ const registry: Registry = {
           "label": "URDF XML",
           "doc": "Robot URDF definition (string).",
           "default_json": {
-            "text": ""
+            "str": ""
           }
         },
         {
@@ -2642,7 +2644,7 @@ const registry: Registry = {
           "label": "Root Link",
           "doc": "Chain root link name.",
           "default_json": {
-            "text": "base_link"
+            "str": "base_link"
           }
         },
         {
@@ -2651,7 +2653,7 @@ const registry: Registry = {
           "label": "Tip Link",
           "doc": "Chain tip link name.",
           "default_json": {
-            "text": "tool0"
+            "str": "tool0"
           }
         },
         {
@@ -2660,7 +2662,7 @@ const registry: Registry = {
           "label": "Joint Weights",
           "doc": "Optional per-joint weights.",
           "default_json": {
-            "vector": []
+            "f32s": []
           }
         },
         {
@@ -2669,7 +2671,7 @@ const registry: Registry = {
           "label": "Max Iterations",
           "doc": "Solver iteration cap.",
           "default_json": {
-            "float": 100.0
+            "f32": 100.0
           }
         },
         {
@@ -2678,7 +2680,7 @@ const registry: Registry = {
           "label": "Position Tolerance",
           "doc": "Solver position tolerance (m).",
           "default_json": {
-            "float": 0.001
+            "f32": 0.001
           }
         },
         {
@@ -2687,7 +2689,7 @@ const registry: Registry = {
           "label": "Rotation Tolerance",
           "doc": "Solver rotation tolerance (rad).",
           "default_json": {
-            "float": 0.001
+            "f32": 0.001
           }
         }
       ]
@@ -2736,7 +2738,7 @@ const registry: Registry = {
           "label": "URDF XML",
           "doc": "Robot URDF definition (string).",
           "default_json": {
-            "text": ""
+            "str": ""
           }
         },
         {
@@ -2745,7 +2747,7 @@ const registry: Registry = {
           "label": "Root Link",
           "doc": "Chain root link name.",
           "default_json": {
-            "text": "base_link"
+            "str": "base_link"
           }
         },
         {
@@ -2754,7 +2756,7 @@ const registry: Registry = {
           "label": "Tip Link",
           "doc": "Chain tip link name.",
           "default_json": {
-            "text": "tool0"
+            "str": "tool0"
           }
         },
         {
@@ -2763,7 +2765,7 @@ const registry: Registry = {
           "label": "Joint Defaults",
           "doc": "Fallback joint list [[name, angle], ...] when input misses entries.",
           "default_json": {
-            "list": []
+            "values": []
           }
         }
       ]
