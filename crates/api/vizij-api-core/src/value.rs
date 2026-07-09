@@ -567,10 +567,22 @@ mod tests {
     /// matching these exactly.
     #[test]
     fn json_wire_form_matches_the_js_decoder() {
-        assert_eq!(VEC2_TYPE.to_string(), "76697a69-6a00-0000-0000-000000000002");
-        assert_eq!(VEC3_TYPE.to_string(), "76697a69-6a00-0000-0000-000000000003");
-        assert_eq!(VEC4_TYPE.to_string(), "76697a69-6a00-0000-0000-000000000004");
-        assert_eq!(QUAT_TYPE.to_string(), "76697a69-6a00-0000-0000-000000000010");
+        assert_eq!(
+            VEC2_TYPE.to_string(),
+            "76697a69-6a00-0000-0000-000000000002"
+        );
+        assert_eq!(
+            VEC3_TYPE.to_string(),
+            "76697a69-6a00-0000-0000-000000000003"
+        );
+        assert_eq!(
+            VEC4_TYPE.to_string(),
+            "76697a69-6a00-0000-0000-000000000004"
+        );
+        assert_eq!(
+            QUAT_TYPE.to_string(),
+            "76697a69-6a00-0000-0000-000000000010"
+        );
         assert_eq!(
             COLOR_RGBA_TYPE.to_string(),
             "76697a69-6a00-0000-0000-000000000020"
@@ -579,8 +591,14 @@ mod tests {
             TRANSFORM_TYPE.to_string(),
             "76697a69-6a00-0000-0000-000000000030"
         );
-        assert_eq!(ENUM_TYPE.to_string(), "76697a69-6a00-0000-0000-000000000040");
-        assert_eq!(RECORD_TYPE.to_string(), "76697a69-6a00-0000-0000-000000000050");
+        assert_eq!(
+            ENUM_TYPE.to_string(),
+            "76697a69-6a00-0000-0000-000000000040"
+        );
+        assert_eq!(
+            RECORD_TYPE.to_string(),
+            "76697a69-6a00-0000-0000-000000000050"
+        );
         assert_eq!(
             TRANSFORM_TRANSLATION.to_string(),
             "76697a69-6a00-0000-0000-000000300001"
