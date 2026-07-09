@@ -1,26 +1,29 @@
 #![allow(dead_code)]
-//! Accumulation of per-target contributions and blending into final Values.
+//! Accumulation of per-target POD contributions and blending into final
+//! wire-form [`Value`]s.
+//!
+//! Contributions arrive as sampled [`TrackValue`]s; the accumulator keeps
+//! weighted component sums in plain arrays and encodes each blended result
+//! through the vocabulary constructors once, in [`AccumulatorWithDerivatives::finalize`].
 
 use std::collections::HashMap;
 
 use crate::interp::functions::nlerp_quat;
-use vizij_api_core::Value;
+use crate::value::{TrackValue, Transform, Value};
+use vizij_api_core::value as vocab;
 
+/// Numeric collection flavor: a `Vector` re-encodes as `ArrayF32`, an
+/// `Array` as an all-scalar `ArrayValue`.
 #[derive(Clone, Debug)]
 enum CollectionKind {
     Vector(usize),
     Array(usize),
-    List(usize),
-    Tuple(usize),
 }
 
 impl CollectionKind {
     fn len(&self) -> usize {
         match *self {
-            CollectionKind::Vector(len)
-            | CollectionKind::Array(len)
-            | CollectionKind::List(len)
-            | CollectionKind::Tuple(len) => len,
+            CollectionKind::Vector(len) | CollectionKind::Array(len) => len,
         }
     }
 
@@ -30,64 +33,26 @@ impl CollectionKind {
 
     fn build_value(&self, data: Vec<f32>) -> Value {
         match *self {
-            CollectionKind::Vector(_) => Value::Vector(data),
+            CollectionKind::Vector(_) => vocab::vector(data),
             CollectionKind::Array(len) => {
                 debug_assert_eq!(data.len(), len);
-                Value::Array(data.into_iter().map(Value::Float).collect())
-            }
-            CollectionKind::List(len) => {
-                debug_assert_eq!(data.len(), len);
-                Value::List(data.into_iter().map(Value::Float).collect())
-            }
-            CollectionKind::Tuple(len) => {
-                debug_assert_eq!(data.len(), len);
-                Value::Tuple(data.into_iter().map(Value::Float).collect())
+                vocab::array(data.into_iter().map(vocab::float).collect())
             }
         }
     }
 }
 
-fn numeric_collection_from_value(value: &Value) -> Option<(CollectionKind, Vec<f32>)> {
+fn numeric_collection_from_value(value: &TrackValue) -> Option<(CollectionKind, Vec<f32>)> {
     match value {
-        Value::Vector(values) => Some((CollectionKind::Vector(values.len()), values.clone())),
-        Value::Array(items) => {
-            let mut out = Vec::with_capacity(items.len());
-            for item in items {
-                if let Value::Float(v) = item {
-                    out.push(*v);
-                } else {
-                    return None;
-                }
-            }
-            Some((CollectionKind::Array(items.len()), out))
-        }
-        Value::List(items) => {
-            let mut out = Vec::with_capacity(items.len());
-            for item in items {
-                if let Value::Float(v) = item {
-                    out.push(*v);
-                } else {
-                    return None;
-                }
-            }
-            Some((CollectionKind::List(items.len()), out))
-        }
-        Value::Tuple(items) => {
-            let mut out = Vec::with_capacity(items.len());
-            for item in items {
-                if let Value::Float(v) = item {
-                    out.push(*v);
-                } else {
-                    return None;
-                }
-            }
-            Some((CollectionKind::Tuple(items.len()), out))
+        TrackValue::Vector(values) => Some((CollectionKind::Vector(values.len()), values.clone())),
+        TrackValue::NumericArray(values) => {
+            Some((CollectionKind::Array(values.len()), values.clone()))
         }
         _ => None,
     }
 }
 
-/// Accumulator entry storing weighted sums per Value kind.
+/// Accumulator entry storing weighted sums per value kind.
 /// For vectors/colors: store component-wise sum and total weight.
 /// For quaternions: store weighted sum vector of (x,y,z,w) then normalize at finalize.
 /// For transforms: separate TRS accumulators.
@@ -128,43 +93,43 @@ enum AccumEntry {
         sum: Vec<f32>,
         w: f32,
     },
-    /// Step-only kinds (Bool/Text): prefer last assignment, no blending
-    Step(Value),
+    /// Step-only kinds (Bool/Text/other): prefer last assignment, no blending
+    Step(TrackValue),
 }
 
 impl AccumEntry {
-    fn add_value(&mut self, v: &Value, w: f32) {
+    fn add_value(&mut self, v: &TrackValue, w: f32) {
         match (self, v) {
-            (AccumEntry::Scalar { sum, w: ww }, Value::Float(x)) => {
+            (AccumEntry::Scalar { sum, w: ww }, TrackValue::Float(x)) => {
                 *sum += x * w;
                 *ww += w;
             }
-            (AccumEntry::Vec2 { sum, w: ww }, Value::Vec2(a)) => {
+            (AccumEntry::Vec2 { sum, w: ww }, TrackValue::Vec2(a)) => {
                 sum[0] += a[0] * w;
                 sum[1] += a[1] * w;
                 *ww += w;
             }
-            (AccumEntry::Vec3 { sum, w: ww }, Value::Vec3(a)) => {
+            (AccumEntry::Vec3 { sum, w: ww }, TrackValue::Vec3(a)) => {
                 sum[0] += a[0] * w;
                 sum[1] += a[1] * w;
                 sum[2] += a[2] * w;
                 *ww += w;
             }
-            (AccumEntry::Vec4 { sum, w: ww }, Value::Vec4(a)) => {
+            (AccumEntry::Vec4 { sum, w: ww }, TrackValue::Vec4(a)) => {
                 sum[0] += a[0] * w;
                 sum[1] += a[1] * w;
                 sum[2] += a[2] * w;
                 sum[3] += a[3] * w;
                 *ww += w;
             }
-            (AccumEntry::Quat { sum, w: ww }, Value::Quat(q)) => {
+            (AccumEntry::Quat { sum, w: ww }, TrackValue::Quat(q)) => {
                 sum[0] += q[0] * w;
                 sum[1] += q[1] * w;
                 sum[2] += q[2] * w;
                 sum[3] += q[3] * w;
                 *ww += w;
             }
-            (AccumEntry::Color { sum, w: ww }, Value::ColorRgba(a)) => {
+            (AccumEntry::Color { sum, w: ww }, TrackValue::ColorRgba(a)) => {
                 sum[0] += a[0] * w;
                 sum[1] += a[1] * w;
                 sum[2] += a[2] * w;
@@ -178,43 +143,30 @@ impl AccumEntry {
                     s_sum,
                     w: ww,
                 },
-                Value::Transform {
-                    translation,
-                    rotation,
-                    scale,
-                },
+                TrackValue::Transform(t),
             ) => {
-                t_sum[0] += translation[0] * w;
-                t_sum[1] += translation[1] * w;
-                t_sum[2] += translation[2] * w;
+                t_sum[0] += t.translation[0] * w;
+                t_sum[1] += t.translation[1] * w;
+                t_sum[2] += t.translation[2] * w;
 
-                r_sum[0] += rotation[0] * w;
-                r_sum[1] += rotation[1] * w;
-                r_sum[2] += rotation[2] * w;
-                r_sum[3] += rotation[3] * w;
+                r_sum[0] += t.rotation[0] * w;
+                r_sum[1] += t.rotation[1] * w;
+                r_sum[2] += t.rotation[2] * w;
+                r_sum[3] += t.rotation[3] * w;
 
-                s_sum[0] += scale[0] * w;
-                s_sum[1] += scale[1] * w;
-                s_sum[2] += scale[2] * w;
+                s_sum[0] += t.scale[0] * w;
+                s_sum[1] += t.scale[1] * w;
+                s_sum[2] += t.scale[2] * w;
                 *ww += w;
             }
-            (AccumEntry::Step(last), Value::Bool(_)) => {
+            (
+                AccumEntry::Step(last),
+                TrackValue::Bool(_)
+                | TrackValue::Text(_)
+                | TrackValue::NumericArray(_)
+                | TrackValue::Step(_),
+            ) => {
                 *last = v.clone(); // prefer last/most-recent assignment
-            }
-            (AccumEntry::Step(last), Value::Text(_)) => {
-                *last = v.clone(); // prefer last/most-recent assignment
-            }
-            (AccumEntry::Step(last), Value::Record(_)) => {
-                *last = v.clone();
-            }
-            (AccumEntry::Step(last), Value::Array(_)) => {
-                *last = v.clone();
-            }
-            (AccumEntry::Step(last), Value::List(_)) => {
-                *last = v.clone();
-            }
-            (AccumEntry::Step(last), Value::Tuple(_)) => {
-                *last = v.clone();
             }
             (entry @ AccumEntry::Collection { .. }, other) => {
                 if let Some((incoming_kind, data)) = numeric_collection_from_value(other) {
@@ -243,65 +195,54 @@ impl AccumEntry {
         }
     }
 
-    fn from_value(v: &Value, w: f32) -> Self {
+    fn from_value(v: &TrackValue, w: f32) -> Self {
         match v {
-            Value::Float(x) => AccumEntry::Scalar { sum: *x * w, w },
-            Value::Vec2(a) => AccumEntry::Vec2 {
+            TrackValue::Float(x) => AccumEntry::Scalar { sum: *x * w, w },
+            TrackValue::Vec2(a) => AccumEntry::Vec2 {
                 sum: [a[0] * w, a[1] * w],
                 w,
             },
-            Value::Vec3(a) => AccumEntry::Vec3 {
+            TrackValue::Vec3(a) => AccumEntry::Vec3 {
                 sum: [a[0] * w, a[1] * w, a[2] * w],
                 w,
             },
-            Value::Vec4(a) => AccumEntry::Vec4 {
+            TrackValue::Vec4(a) => AccumEntry::Vec4 {
                 sum: [a[0] * w, a[1] * w, a[2] * w, a[3] * w],
                 w,
             },
-            Value::Quat(q) => AccumEntry::Quat {
+            TrackValue::Quat(q) => AccumEntry::Quat {
                 sum: [q[0] * w, q[1] * w, q[2] * w, q[3] * w],
                 w,
             },
-            Value::ColorRgba(c) => AccumEntry::Color {
+            TrackValue::ColorRgba(c) => AccumEntry::Color {
                 sum: [c[0] * w, c[1] * w, c[2] * w, c[3] * w],
                 w,
             },
-            Value::Transform {
-                translation,
-                rotation,
-                scale,
-            } => AccumEntry::Transform {
-                t_sum: [translation[0] * w, translation[1] * w, translation[2] * w],
-                r_sum: [
-                    rotation[0] * w,
-                    rotation[1] * w,
-                    rotation[2] * w,
-                    rotation[3] * w,
+            TrackValue::Transform(t) => AccumEntry::Transform {
+                t_sum: [
+                    t.translation[0] * w,
+                    t.translation[1] * w,
+                    t.translation[2] * w,
                 ],
-                s_sum: [scale[0] * w, scale[1] * w, scale[2] * w],
+                r_sum: [
+                    t.rotation[0] * w,
+                    t.rotation[1] * w,
+                    t.rotation[2] * w,
+                    t.rotation[3] * w,
+                ],
+                s_sum: [t.scale[0] * w, t.scale[1] * w, t.scale[2] * w],
                 w,
             },
-            Value::Text(s) => AccumEntry::Step(Value::Text(s.clone())),
-            Value::Bool(b) => AccumEntry::Step(Value::Bool(*b)),
-            other => {
-                if let Some((kind, mut data)) = numeric_collection_from_value(other) {
-                    for entry in data.iter_mut() {
-                        *entry *= w;
-                    }
-                    AccumEntry::Collection { kind, sum: data, w }
-                } else {
-                    match other {
-                        Value::Enum(tag, boxed) => {
-                            AccumEntry::Step(Value::Enum(tag.clone(), boxed.clone()))
-                        }
-                        Value::Record(map) => AccumEntry::Step(Value::Record(map.clone())),
-                        Value::Array(items) => AccumEntry::Step(Value::Array(items.clone())),
-                        Value::List(items) => AccumEntry::Step(Value::List(items.clone())),
-                        Value::Tuple(items) => AccumEntry::Step(Value::Tuple(items.clone())),
-                        Value::Vector(v) => AccumEntry::Step(Value::Vector(v.clone())),
-                        _ => unreachable!("Unhandled non-numeric variant in from_value"),
-                    }
+            TrackValue::Vector(_) | TrackValue::NumericArray(_) => {
+                let (kind, mut data) =
+                    numeric_collection_from_value(v).expect("numeric collection kinds");
+                for entry in data.iter_mut() {
+                    *entry *= w;
                 }
+                AccumEntry::Collection { kind, sum: data, w }
+            }
+            TrackValue::Bool(_) | TrackValue::Text(_) | TrackValue::Step(_) => {
+                AccumEntry::Step(v.clone())
             }
         }
     }
@@ -310,28 +251,28 @@ impl AccumEntry {
         match self {
             AccumEntry::Scalar { sum, w } => {
                 if w > 0.0 {
-                    Some(Value::Float(sum / w))
+                    Some(vocab::float(sum / w))
                 } else {
                     None
                 }
             }
             AccumEntry::Vec2 { sum, w } => {
                 if w > 0.0 {
-                    Some(Value::Vec2([sum[0] / w, sum[1] / w]))
+                    Some(vocab::vec2([sum[0] / w, sum[1] / w]))
                 } else {
                     None
                 }
             }
             AccumEntry::Vec3 { sum, w } => {
                 if w > 0.0 {
-                    Some(Value::Vec3([sum[0] / w, sum[1] / w, sum[2] / w]))
+                    Some(vocab::vec3([sum[0] / w, sum[1] / w, sum[2] / w]))
                 } else {
                     None
                 }
             }
             AccumEntry::Vec4 { sum, w } => {
                 if w > 0.0 {
-                    Some(Value::Vec4([
+                    Some(vocab::vec4([
                         sum[0] / w,
                         sum[1] / w,
                         sum[2] / w,
@@ -346,14 +287,14 @@ impl AccumEntry {
                     let q = [sum[0] / w, sum[1] / w, sum[2] / w, sum[3] / w];
                     // Normalize; for robustness, NLERP with identity if needed.
                     let blended = nlerp_quat(q, q, 0.0);
-                    Some(Value::Quat(blended))
+                    Some(vocab::quat(blended))
                 } else {
                     None
                 }
             }
             AccumEntry::Color { sum, w } => {
                 if w > 0.0 {
-                    Some(Value::ColorRgba([
+                    Some(vocab::color_rgba([
                         sum[0] / w,
                         sum[1] / w,
                         sum[2] / w,
@@ -374,11 +315,11 @@ impl AccumEntry {
                     let s = [s_sum[0] / w, s_sum[1] / w, s_sum[2] / w];
                     let r = [r_sum[0] / w, r_sum[1] / w, r_sum[2] / w, r_sum[3] / w];
                     let r_norm = nlerp_quat(r, r, 0.0);
-                    Some(Value::Transform {
+                    Some(vocab::transform(Transform {
                         translation: t,
                         rotation: r_norm,
                         scale: s,
-                    })
+                    }))
                 } else {
                     None
                 }
@@ -391,7 +332,7 @@ impl AccumEntry {
                     None
                 }
             }
-            AccumEntry::Step(v) => Some(v),
+            AccumEntry::Step(v) => Some(v.into()),
         }
     }
 }
@@ -410,7 +351,13 @@ impl AccumulatorWithDerivatives {
     }
 
     /// Add a weighted contribution to the accumulator.
-    pub fn add(&mut self, handle: &str, value: &Value, derivative: Option<&Value>, weight: f32) {
+    pub fn add(
+        &mut self,
+        handle: &str,
+        value: &TrackValue,
+        derivative: Option<&TrackValue>,
+        weight: f32,
+    ) {
         if weight <= 0.0 {
             return;
         }

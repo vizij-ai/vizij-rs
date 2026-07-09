@@ -9,9 +9,11 @@
 | Function | Description |
 |----------|-------------|
 | `validate_value_json(json)` | Parses a `Value` JSON string and returns `undefined` on success. Throws a JS error on failure. |
-| `value_to_js(json)` | Parses a `Value` JSON string and returns the serde-produced JS object. |
-| `validate_writebatch_json(json)` | Parses a `WriteBatch` JSON string and validates it. |
-| `writebatch_to_js(json)` | Parses a `WriteBatch` JSON string and returns the serde-produced JS object. |
+| `value_to_js(json)` | Parses a `Value` JSON string and returns the JS object in canonical Arora `Value` serde form. |
+| `validate_writebatch_json(json)` | Parses a `WriteBatch` JSON string (an array of `{ path, value, shape? }` objects) and validates it. |
+| `writebatch_to_js(json)` | Parses a `WriteBatch` JSON string and returns the JS object with values in canonical Arora serde form. |
+
+Values are exchanged in Arora `Value` serde form (externally tagged: `{"f32": 1}`, `{"bool": true}`, `{"str": "hi"}`, `{"f32s": [...]}`, `{"struct": {...}}`, ...). Ingress goes through the `vizij-api-core` normalizer, so legacy payload forms (`{"vec3": [0, 1, 2]}`, `{"type": "float", "data": 1}`, bare primitives, ...) are still accepted; outputs are always the canonical form.
 
 The helpers are stateless and safe to call repeatedly.
 
@@ -37,14 +39,15 @@ import init, {
 
 await init();
 
-validate_value_json('{"type":"vec3","data":[0,1,2]}');
-const value = value_to_js('{"vec3":[0,1,2]}');
+validate_value_json('{"f32": 1.5}');
+// Legacy forms normalize to the canonical Arora serde on ingress.
+const value = value_to_js('{"vec3":[0,1,2]}'); // -> { struct: { id: ..., fields: [...] } }
 
 validate_writebatch_json(
-  '{"writes":[{"path":"robot/Arm.joint","value":{"float":1}}]}'
+  '[{"path":"robot/Arm.joint","value":{"f32":1}}]'
 );
 const batch = writebatch_to_js(
-  '{"writes":[{"path":"robot/Arm.joint","value":{"float":1}}]}'
+  '[{"path":"robot/Arm.joint","value":{"float":1}}]' // legacy value form, still accepted
 );
 
 console.log(value, batch);

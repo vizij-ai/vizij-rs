@@ -80,38 +80,45 @@ impl Blackboard {
         }
     }
 
-    /// Set a value on the blackboard from JSON-like values.
+    /// Set a value at a path given as a string.
     ///
-    /// This convenience accepts JSON values (serde_json::Value) which are converted
-    /// into the workspace `vizij_api_core::Value` and `Shape` types. The `path` is
-    /// provided as a String and parsed into a `TypedPath`. Existing entries at the same
+    /// The `path` is parsed into a [`TypedPath`]; existing entries at the same
     /// path are overwritten.
     pub fn set(
         &mut self,
-        path: String,
+        path: &str,
+        value: Value,
+        shape: Option<Shape>,
+        epoch: u64,
+        source: String,
+    ) -> Result<()> {
+        let tp = TypedPath::parse(path).map_err(|e| anyhow!("typedpath parse error: {}", e))?;
+        let entry = BlackboardEntry::new(value, shape, epoch, source, 0);
+        self.inner.insert(tp, entry);
+        Ok(())
+    }
+
+    /// Set a value from JSON payloads: the value goes through the api-core
+    /// normalizer ([`json::parse_value`], accepting every payload form vizij
+    /// hosts have emitted) and the shape through plain serde. Existing entries
+    /// at the same path are overwritten.
+    pub fn set_json(
+        &mut self,
+        path: &str,
         value_json: serde_json::Value,
         shape_json: Option<serde_json::Value>,
         epoch: u64,
         source: String,
     ) -> Result<()> {
-        // Parse path
-        let tp = TypedPath::parse(&path).map_err(|e| anyhow!("typedpath parse error: {}", e))?;
-
-        // Convert JSON into Value
         let value: Value =
             json::parse_value(value_json).map_err(|e| anyhow!("value deserialize: {}", e))?;
-
-        // Optional shape
         let shape: Option<Shape> = match shape_json {
             Some(sj) => {
                 Some(serde_json::from_value(sj).map_err(|e| anyhow!("shape deserialize: {}", e))?)
             }
             None => None,
         };
-
-        let entry = BlackboardEntry::new(value, shape, epoch, source, 0);
-        self.inner.insert(tp, entry);
-        Ok(())
+        self.set(path, value, shape, epoch, source)
     }
 
     /// Directly set a value using typed API types.
@@ -202,22 +209,18 @@ impl Blackboard {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vizij_api_core::{Value, WriteBatch, WriteOp};
+    use vizij_api_core::value::{as_vec3, float, vec3};
+    use vizij_api_core::{WriteBatch, WriteOp};
 
     #[test]
     fn set_and_get_entry() {
         let mut bb = Blackboard::new();
         let path = TypedPath::parse("a/b.c").expect("parse path");
-        let entry = BlackboardEntry::new(Value::Vec3([1.0, 2.0, 3.0]), None, 1, "test".into(), 0);
+        let entry = BlackboardEntry::new(vec3([1.0, 2.0, 3.0]), None, 1, "test".into(), 0);
         bb.set_entry(path.clone(), entry);
 
         let got = bb.get("a/b.c").expect("entry missing");
-        match &got.value {
-            Value::Vec3(v) => {
-                assert_eq!(v, &[1.0, 2.0, 3.0]);
-            }
-            _ => panic!("unexpected value variant"),
-        }
+        assert_eq!(as_vec3(&got.value), Some([1.0, 2.0, 3.0]));
         assert_eq!(got.epoch, 1);
         assert_eq!(got.source, "test");
     }
@@ -227,12 +230,12 @@ mod tests {
         let mut bb = Blackboard::new();
         // initial
         let path = TypedPath::parse("x.y").unwrap();
-        let entry = BlackboardEntry::new(Value::Float(0.5), None, 1, "init".into(), 0);
+        let entry = BlackboardEntry::new(float(0.5), None, 1, "init".into(), 0);
         bb.set_entry(path.clone(), entry);
 
         // incoming batch overwrites
         let mut batch = WriteBatch::new();
-        batch.push(WriteOp::new(path.clone(), Value::Float(0.75)));
+        batch.push(WriteOp::new(path.clone(), float(0.75)));
 
         let conflicts = bb.apply_writebatch(batch, 2, "anim".into());
         assert_eq!(conflicts.len(), 1);

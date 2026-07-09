@@ -6,9 +6,9 @@ use wasm_bindgen_test::*;
 
 use serde_json::json;
 use vizij_animation_core::data::{AnimationData, Keypoint, Track};
-use vizij_animation_core::value::Value;
+use vizij_animation_core::value::TrackValue;
 
-// Minimal AnimationData JSON matching the new vizij-animation-core schema
+// Minimal AnimationData JSON matching the vizij-animation-core schema
 fn test_animation_json() -> JsValue {
     let track = Track {
         id: "t0".into(),
@@ -18,13 +18,13 @@ fn test_animation_json() -> JsValue {
             Keypoint {
                 id: "k0".into(),
                 stamp: 0.0,
-                value: Value::Scalar(0.0),
+                value: TrackValue::Float(0.0),
                 transitions: None,
             },
             Keypoint {
                 id: "k1".into(),
                 stamp: 1.0,
-                value: Value::Scalar(1.0),
+                value: TrackValue::Float(1.0),
                 transitions: None,
             },
         ],
@@ -143,7 +143,8 @@ fn update_with_derivatives_returns_optional_derivative() {
     for idx in 0..array.length() {
         let entry = array.get(idx);
         let derivative = js_sys::Reflect::get(&entry, &JsValue::from_str("derivative")).unwrap();
-        assert!(derivative.is_null() || derivative.is_object());
+        // Absent derivatives are omitted from the serialized change entirely.
+        assert!(derivative.is_undefined() || derivative.is_null() || derivative.is_object());
         if derivative.is_object() {
             found_object = true;
         }

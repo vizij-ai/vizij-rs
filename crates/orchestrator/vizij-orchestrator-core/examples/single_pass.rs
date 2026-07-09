@@ -1,5 +1,6 @@
 use serde_json::to_string_pretty;
-use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
+use vizij_api_core::value::vec3;
+use vizij_api_core::{TypedPath, WriteBatch, WriteOp};
 use vizij_graph_core::types::GraphSpec;
 use vizij_orchestrator::{
     AnimationControllerConfig, GraphControllerConfig, Orchestrator, Schedule, Subscriptions,
@@ -26,7 +27,7 @@ fn main() -> anyhow::Result<()> {
     // Inject a graph write for the graph to produce
     let tp = TypedPath::parse("robot/pos").unwrap();
     let mut wb = WriteBatch::new();
-    wb.push(WriteOp::new(tp.clone(), Value::Vec3([0.1, 0.2, 0.3])));
+    wb.push(WriteOp::new(tp.clone(), vec3([0.1, 0.2, 0.3])));
     orch.graphs.get_mut("g").unwrap().rt.writes = wb;
 
     // Step single frame

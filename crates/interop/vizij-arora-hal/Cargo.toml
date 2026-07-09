@@ -6,11 +6,12 @@ publish = false
 description = "Vizij rig presented as an Arora HAL (arora-hal)."
 
 [dependencies]
-arora-hal = "0.1"
+arora-hal = "2"
 arora-types = "1"
 async-trait = "0.1"
-vizij-arora = { path = "../vizij-arora" }
+futures-channel = "0.3"
 vizij-api-core = { path = "../../api/vizij-api-core" }
 
 [dev-dependencies]
+futures = "0.3"
 tokio = { version = "1", features = ["macros", "rt"] }

@@ -142,8 +142,9 @@ pub fn bake_animation_data_with_derivatives(
             };
             let (v, deriv) =
                 sample_track_with_derivative_epsilon(track, u, duration_s, derivative_epsilon);
-            values.push(v);
-            derivatives.push(deriv);
+            // Encode the POD samples into wire-form Values for the baked artifact.
+            values.push(v.into());
+            derivatives.push(deriv.map(Value::from));
         }
         tracks.push(BakedTrack {
             target_path: track.animatable_id.clone(),

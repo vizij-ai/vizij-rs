@@ -1,5 +1,6 @@
 use serde_json::to_string_pretty;
-use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
+use vizij_api_core::value::float;
+use vizij_api_core::{TypedPath, WriteBatch, WriteOp};
 use vizij_graph_core::types::GraphSpec;
 use vizij_orchestrator::{GraphControllerConfig, Orchestrator, Schedule, Subscriptions};
 
@@ -18,7 +19,7 @@ fn main() -> anyhow::Result<()> {
     // Inject a write into the graph runtime to simulate a node producing an output.
     let tp = TypedPath::parse("robot/Arm/Joint1.angle").unwrap();
     let mut batch = WriteBatch::new();
-    batch.push(WriteOp::new(tp.clone(), Value::Float(0.42)));
+    batch.push(WriteOp::new(tp.clone(), float(0.42)));
 
     // Place the batch into the controller runtime so evaluate() will return it.
     if let Some(g) = orch.graphs.get_mut("example-graph") {

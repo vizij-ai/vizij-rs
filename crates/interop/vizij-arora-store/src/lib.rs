@@ -2,11 +2,13 @@
 //! [`DataStore`](arora_types::data::DataStore).
 //!
 //! Arora's runtime can be spawned with a custom memory (`Arc<dyn DataStore>`),
-//! so this lets a Vizij `Blackboard` *be* that memory. The `DataStore` interface
-//! speaks the Arora `Value` vocabulary and string [`Key`]s; internally we store
-//! Vizij values keyed by `TypedPath`, bridging each way through
-//! [`vizij_arora`]. The Blackboard's richer provenance (epoch/source/shape) is
-//! kept Vizij-side; the `DataStore` view exposes just the values.
+//! so this lets a Vizij `Blackboard` *be* that memory. Vizij and Arora share
+//! one runtime value type ([`vizij_api_core::Value`] is
+//! `arora_types::value::Value`), so the `DataStore` view reads and writes the
+//! Blackboard's entries directly — the only translation is between string
+//! [`Key`]s and [`TypedPath`]s. The Blackboard's richer provenance
+//! (epoch/source/shape) is kept Vizij-side; the `DataStore` view exposes just
+//! the values.
 //!
 //! Like `SimpleDataStore`, this is cheaply cloneable — clones share one store —
 //! and change subscriptions are plain std channels.
@@ -17,9 +19,7 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 
 use arora_types::data::{DataError, DataStore, Key, Slot, State, StateChange, Subscription};
-use arora_types::value::Value as AValue;
-use vizij_api_core::TypedPath;
-use vizij_arora::{from_arora, to_arora};
+use vizij_api_core::{TypedPath, Value};
 use vizij_orchestrator::blackboard::{Blackboard, BlackboardEntry};
 
 /// Source label recorded on entries written through the Arora `DataStore` view.
@@ -75,35 +75,32 @@ impl BlackboardStore {
     }
 
     /// Read-only access to the underlying Vizij `Blackboard` (for Vizij-side
-    /// consumers that want the richer entries, not just the Arora value view).
+    /// consumers that want the richer entries, not just the value view).
     pub fn with_blackboard<R>(&self, f: impl FnOnce(&Blackboard) -> R) -> R {
         f(&self.inner.blackboard.read().unwrap())
     }
 }
 
-/// Read one Vizij entry as an Arora value (`None` if absent, unparsable, or
-/// not convertible).
-fn read_one(blackboard: &Blackboard, key: &Key) -> Option<AValue> {
+/// Read one entry's value (`None` if absent or the key is not a valid path).
+fn read_one(blackboard: &Blackboard, key: &Key) -> Option<Value> {
     let tp = TypedPath::parse(&key.path).ok()?;
-    let entry = blackboard.get_tp(&tp)?;
-    to_arora(&entry.value).ok()
+    Some(blackboard.get_tp(&tp)?.value.clone())
 }
 
 /// Apply one `(key, value)` to the blackboard at `epoch`. `None` clears the key.
 fn apply_one(
     blackboard: &mut Blackboard,
     key: &Key,
-    value: &Option<AValue>,
+    value: &Option<Value>,
     epoch: u64,
 ) -> Result<(), DataError> {
     match value {
-        Some(av) => {
+        Some(v) => {
             let tp = TypedPath::parse(&key.path)
                 .map_err(|e| DataError::Other(format!("{}: {e}", key.path)))?;
-            let vv = from_arora(av).map_err(|e| DataError::Other(format!("{}: {e}", key.path)))?;
             blackboard.set_entry(
                 tp,
-                BlackboardEntry::new(vv, None, epoch, SOURCE.to_string(), 0),
+                BlackboardEntry::new(v.clone(), None, epoch, SOURCE.to_string(), 0),
             );
         }
         None => {
@@ -114,7 +111,7 @@ fn apply_one(
 }
 
 impl DataStore for BlackboardStore {
-    fn read(&self, keys: &[Key]) -> Vec<Option<AValue>> {
+    fn read(&self, keys: &[Key]) -> Vec<Option<Value>> {
         let blackboard = self.inner.blackboard.read().unwrap();
         keys.iter().map(|k| read_one(&blackboard, k)).collect()
     }
@@ -138,10 +135,7 @@ impl DataStore for BlackboardStore {
         let blackboard = self.inner.blackboard.read().unwrap();
         let storage = blackboard
             .iter()
-            .filter_map(|(tp, entry)| {
-                let value = to_arora(&entry.value).ok()?;
-                Some((Key::new(tp.to_string()), Some(value)))
-            })
+            .map(|(tp, entry)| (Key::new(tp.to_string()), Some(entry.value.clone())))
             .collect();
         State { storage }
     }
@@ -168,12 +162,12 @@ struct BlackboardSlot {
 }
 
 impl Slot for BlackboardSlot {
-    fn get(&self) -> Option<AValue> {
+    fn get(&self) -> Option<Value> {
         let blackboard = self.inner.blackboard.read().unwrap();
         read_one(&blackboard, &self.key)
     }
 
-    fn set(&self, value: Option<AValue>) -> Result<(), DataError> {
+    fn set(&self, value: Option<Value>) -> Result<(), DataError> {
         let epoch = self.inner.next_epoch();
         {
             let mut blackboard = self.inner.blackboard.write().unwrap();
@@ -190,34 +184,31 @@ impl Slot for BlackboardSlot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vizij_api_core::Value as VValue;
-
-    fn av(v: VValue) -> AValue {
-        to_arora(&v).unwrap()
-    }
+    use vizij_api_core::value::{as_vec3, bool_, float, vec3};
 
     #[test]
     fn write_then_read_primitive_and_composite() {
         let store = BlackboardStore::new();
         store
-            .write(StateChange::set("rig/joint.angle", av(VValue::Float(1.5))))
+            .write(StateChange::set("rig/joint.angle", float(1.5)))
             .unwrap();
         assert_eq!(
             store.read(&[Key::from("rig/joint.angle")]),
-            vec![Some(AValue::F32(1.5))]
+            vec![Some(float(1.5))]
         );
 
-        // A Vizij composite stored as a Value::Structure, round-tripped.
-        let vec3 = av(VValue::Vec3([1.0, 2.0, 3.0]));
+        // A Vizij composite (a `Value::Structure` with a vizij type id),
+        // round-tripped.
+        let pos = vec3([1.0, 2.0, 3.0]);
         store
-            .write(StateChange::set("rig/pos", vec3.clone()))
+            .write(StateChange::set("rig/pos", pos.clone()))
             .unwrap();
-        assert_eq!(store.read(&[Key::from("rig/pos")]), vec![Some(vec3)]);
+        assert_eq!(store.read(&[Key::from("rig/pos")]), vec![Some(pos)]);
 
-        // Internally it is a Vizij Vec3 (not an opaque blob).
+        // The Blackboard entry holds the same value with provenance.
         store.with_blackboard(|bb| {
             let entry = bb.get("rig/pos").expect("entry");
-            assert!(matches!(entry.value, VValue::Vec3(_)));
+            assert_eq!(as_vec3(&entry.value), Some([1.0, 2.0, 3.0]));
             assert_eq!(entry.source, "arora");
         });
 
@@ -227,9 +218,7 @@ mod tests {
     #[test]
     fn unset_clears_the_key() {
         let store = BlackboardStore::new();
-        store
-            .write(StateChange::set("g", av(VValue::Bool(true))))
-            .unwrap();
+        store.write(StateChange::set("g", bool_(true))).unwrap();
         let mut change = StateChange::new();
         change.unset.insert(Key::from("g"));
         store.write(change).unwrap();
@@ -240,33 +229,25 @@ mod tests {
     fn slot_and_store_coincide() {
         let store = BlackboardStore::new();
         let slot = store.slot(&Key::from("x"));
-        slot.set(Some(av(VValue::Float(2.0)))).unwrap();
-        assert_eq!(store.read(&[Key::from("x")]), vec![Some(AValue::F32(2.0))]);
-        store
-            .write(StateChange::set("x", av(VValue::Float(3.0))))
-            .unwrap();
-        assert_eq!(slot.get(), Some(AValue::F32(3.0)));
+        slot.set(Some(float(2.0))).unwrap();
+        assert_eq!(store.read(&[Key::from("x")]), vec![Some(float(2.0))]);
+        store.write(StateChange::set("x", float(3.0))).unwrap();
+        assert_eq!(slot.get(), Some(float(3.0)));
     }
 
     #[test]
     fn subscribe_delivers_changes() {
         let store = BlackboardStore::new();
         let sub = store.subscribe();
-        store
-            .write(StateChange::set("k", av(VValue::Bool(true))))
-            .unwrap();
+        store.write(StateChange::set("k", bool_(true))).unwrap();
         assert!(sub.try_recv().expect("change").contains(&Key::from("k")));
     }
 
     #[test]
     fn snapshot_returns_all() {
         let store = BlackboardStore::new();
-        store
-            .write(StateChange::set("a", av(VValue::Float(1.0))))
-            .unwrap();
-        store
-            .write(StateChange::set("b", av(VValue::Float(2.0))))
-            .unwrap();
+        store.write(StateChange::set("a", float(1.0))).unwrap();
+        store.write(StateChange::set("b", float(2.0))).unwrap();
         assert_eq!(store.snapshot().storage.len(), 2);
     }
 
@@ -275,11 +256,8 @@ mod tests {
         let store = BlackboardStore::new();
         let other = store.clone();
         store
-            .write(StateChange::set("shared", av(VValue::Bool(true))))
+            .write(StateChange::set("shared", bool_(true)))
             .unwrap();
-        assert_eq!(
-            other.read(&[Key::from("shared")]),
-            vec![Some(AValue::Boolean(true))]
-        );
+        assert_eq!(other.read(&[Key::from("shared")]), vec![Some(bool_(true))]);
     }
 }

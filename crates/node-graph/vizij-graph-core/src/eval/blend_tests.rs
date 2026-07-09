@@ -5,9 +5,14 @@ use crate::types::{
     EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
 };
 use hashbrown::HashMap;
+use vizij_api_core::value as vocab;
 use vizij_api_core::Value;
 
 /// Very small helpers duplicated from tests.rs for local use
+fn expect_vec3(value: &Value) -> [f32; 3] {
+    vocab::as_vec3(value).unwrap_or_else(|| panic!("expected vec3, got {value:?}"))
+}
+
 fn constant_node(id: &str, value: Value) -> NodeSpec {
     NodeSpec {
         id: id.to_string(),
@@ -44,8 +49,8 @@ fn weighted_sum_vector_scalar_weight_broadcasts_and_outputs_descriptive_ports() 
     // values = [1,2,3], weight = 0.5 (scalar broadcast)
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("vals", Value::Vector(vec![1.0, 2.0, 3.0])),
-            constant_node("w", Value::Float(0.5)),
+            constant_node("vals", Value::ArrayF32(vec![1.0, 2.0, 3.0])),
+            constant_node("w", Value::F32(0.5)),
             NodeSpec {
                 id: "ws".to_string(),
                 kind: NodeType::WeightedSumVector,
@@ -69,13 +74,13 @@ fn weighted_sum_vector_scalar_weight_broadcasts_and_outputs_descriptive_ports() 
         .expect("sum present")
         .value
     {
-        Value::Float(f) => assert!((*f - 3.0).abs() < 1e-6),
+        Value::F32(f) => assert!((*f - 3.0).abs() < 1e-6),
         other => panic!("expected float sum, got {:?}", other),
     }
 
     // total_weight == 0.5 * 3 == 1.5
     match &outputs.get("total_weight").expect("total present").value {
-        Value::Float(f) => assert!((*f - 1.5).abs() < 1e-6),
+        Value::F32(f) => assert!((*f - 1.5).abs() < 1e-6),
         other => panic!("expected float total weight, got {:?}", other),
     }
 
@@ -85,13 +90,13 @@ fn weighted_sum_vector_scalar_weight_broadcasts_and_outputs_descriptive_ports() 
         .expect("max present")
         .value
     {
-        Value::Float(f) => assert!((*f - 0.5).abs() < 1e-6),
+        Value::F32(f) => assert!((*f - 0.5).abs() < 1e-6),
         other => panic!("expected float max weight, got {:?}", other),
     }
 
     // input_count == 3.0
     match &outputs.get("input_count").expect("count present").value {
-        Value::Float(f) => assert!((*f - 3.0).abs() < 1e-6),
+        Value::F32(f) => assert!((*f - 3.0).abs() < 1e-6),
         other => panic!("expected float count, got {:?}", other),
     }
 }
@@ -101,8 +106,8 @@ fn weighted_sum_vector_length_mismatch_returns_nans() {
     // values length 3, weights length 2 -> mismatch after broadcasting
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("vals", Value::Vector(vec![1.0, 2.0, 3.0])),
-            constant_node("w", Value::Vector(vec![0.5, 0.5])), // length 2
+            constant_node("vals", Value::ArrayF32(vec![1.0, 2.0, 3.0])),
+            constant_node("w", Value::ArrayF32(vec![0.5, 0.5])), // length 2
             NodeSpec {
                 id: "ws".to_string(),
                 kind: NodeType::WeightedSumVector,
@@ -126,11 +131,11 @@ fn weighted_sum_vector_length_mismatch_returns_nans() {
         .expect("sum present")
         .value
     {
-        Value::Float(f) => assert!(f.is_nan()),
+        Value::F32(f) => assert!(f.is_nan()),
         other => panic!("expected float sum NaN, got {:?}", other),
     }
     match &outputs.get("total_weight").expect("total present").value {
-        Value::Float(f) => assert!(f.is_nan()),
+        Value::F32(f) => assert!(f.is_nan()),
         other => panic!("expected float total NaN, got {:?}", other),
     }
 }
@@ -142,8 +147,8 @@ fn blend_weighted_average_computes_normalized_average() {
     // normalized average computed as sum / (total_weight / max) = 3 / (1.5/0.5) = 1.0
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("vals", Value::Vector(vec![1.0, 2.0, 3.0])),
-            constant_node("w", Value::Float(0.5)),
+            constant_node("vals", Value::ArrayF32(vec![1.0, 2.0, 3.0])),
+            constant_node("w", Value::F32(0.5)),
             NodeSpec {
                 id: "ws".to_string(),
                 kind: NodeType::WeightedSumVector,
@@ -175,7 +180,7 @@ fn blend_weighted_average_computes_normalized_average() {
     let outputs = rt.outputs.get("bavg").expect("bavg outputs present");
 
     match &outputs.get("out").expect("out present").value {
-        Value::Float(f) => assert!((*f - 1.0).abs() < 1e-6),
+        Value::F32(f) => assert!((*f - 1.0).abs() < 1e-6),
         other => panic!("expected float out, got {:?}", other),
     }
 }
@@ -185,8 +190,8 @@ fn blend_multiply_computes_product_of_terms() {
     // values [0.2,0.5], weight scalar 0.5 -> terms = (1-0.5)+v*0.5 -> 0.6 and 0.75 -> product 0.45
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("vals", Value::Vector(vec![0.2, 0.5])),
-            constant_node("w", Value::Float(0.5)),
+            constant_node("vals", Value::ArrayF32(vec![0.2, 0.5])),
+            constant_node("w", Value::F32(0.5)),
             NodeSpec {
                 id: "mult".to_string(),
                 kind: NodeType::BlendMultiply,
@@ -206,7 +211,7 @@ fn blend_multiply_computes_product_of_terms() {
     let outputs = rt.outputs.get("mult").expect("mult outputs present");
 
     match &outputs.get("out").expect("out present").value {
-        Value::Float(f) => assert!((*f - 0.45).abs() < 1e-6),
+        Value::F32(f) => assert!((*f - 0.45).abs() < 1e-6),
         other => panic!("expected float out, got {:?}", other),
     }
 }
@@ -216,8 +221,8 @@ fn blend_max_selects_value_of_highest_effective_weight() {
     // values [1,2,3], weights [0.1,0.9,0.2] -> best idx 1 => selected = 2.0 * 0.9 = 1.8
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("vals", Value::Vector(vec![1.0, 2.0, 3.0])),
-            constant_node("w", Value::Vector(vec![0.1, 0.9, 0.2])),
+            constant_node("vals", Value::ArrayF32(vec![1.0, 2.0, 3.0])),
+            constant_node("w", Value::ArrayF32(vec![0.1, 0.9, 0.2])),
             NodeSpec {
                 id: "max".to_string(),
                 kind: NodeType::BlendMax,
@@ -237,7 +242,7 @@ fn blend_max_selects_value_of_highest_effective_weight() {
     let outputs = rt.outputs.get("max").expect("max outputs present");
 
     match &outputs.get("out").expect("out present").value {
-        Value::Float(f) => assert!((*f - 1.8).abs() < 1e-6),
+        Value::F32(f) => assert!((*f - 1.8).abs() < 1e-6),
         other => panic!("expected float out, got {:?}", other),
     }
 }
@@ -264,17 +269,17 @@ fn blend_max_without_values_or_base_returns_nan() {
     let outputs = rt.outputs.get("max").expect("max outputs present");
 
     match &outputs.get("out").expect("out present").value {
-        Value::Float(f) => assert!(f.is_nan()),
+        Value::F32(f) => assert!(f.is_nan()),
         other => panic!("expected float out NaN, got {:?}", other),
     }
 }
 
 #[test]
 fn default_blend_matches_expected_vec3_output() {
-    let baseline = Value::Vec3([0.1, -0.05, 0.2]);
-    let offset = Value::Vec3([0.01, 0.02, -0.03]);
-    let target1 = Value::Vec3([0.5, -0.2, 0.1]);
-    let target2 = Value::Vec3([-0.3, 0.4, 0.25]);
+    let baseline = vocab::vec3([0.1, -0.05, 0.2]);
+    let offset = vocab::vec3([0.01, 0.02, -0.03]);
+    let target1 = vocab::vec3([0.5, -0.2, 0.1]);
+    let target2 = vocab::vec3([-0.3, 0.4, 0.25]);
     let w1 = 0.6f32;
     let w2 = 0.3f32;
 
@@ -284,8 +289,8 @@ fn default_blend_matches_expected_vec3_output() {
             constant_node("offset", offset.clone()),
             constant_node("t1", target1.clone()),
             constant_node("t2", target2.clone()),
-            constant_node("w1", Value::Float(w1)),
-            constant_node("w2", Value::Float(w2)),
+            constant_node("w1", Value::F32(w1)),
+            constant_node("w2", Value::F32(w2)),
             NodeSpec {
                 id: "weights".to_string(),
                 kind: NodeType::Join,
@@ -319,22 +324,10 @@ fn default_blend_matches_expected_vec3_output() {
 
     let expected_baseline_factor = (1.0 - (w1 + w2)).max(0.0);
     let expected = {
-        let b = match baseline {
-            Value::Vec3(arr) => arr,
-            _ => unreachable!(),
-        };
-        let o = match offset {
-            Value::Vec3(arr) => arr,
-            _ => unreachable!(),
-        };
-        let t1_arr = match target1 {
-            Value::Vec3(arr) => arr,
-            _ => unreachable!(),
-        };
-        let t2_arr = match target2 {
-            Value::Vec3(arr) => arr,
-            _ => unreachable!(),
-        };
+        let b = expect_vec3(&baseline);
+        let o = expect_vec3(&offset);
+        let t1_arr = expect_vec3(&target1);
+        let t2_arr = expect_vec3(&target2);
 
         let mut acc = [0.0f32; 3];
         for i in 0..3 {
@@ -345,13 +338,9 @@ fn default_blend_matches_expected_vec3_output() {
         acc
     };
 
-    match &outputs.get("out").expect("out present").value {
-        Value::Vec3(actual) => {
-            for i in 0..3 {
-                assert!((actual[i] - expected[i]).abs() < 1e-6);
-            }
-        }
-        other => panic!("expected vec3 out, got {:?}", other),
+    let actual = expect_vec3(&outputs.get("out").expect("out present").value);
+    for i in 0..3 {
+        assert!((actual[i] - expected[i]).abs() < 1e-6);
     }
 }
 
@@ -359,10 +348,10 @@ fn default_blend_matches_expected_vec3_output() {
 fn default_blend_emits_nan_value_when_weight_length_mismatch() {
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("baseline", Value::Vec3([0.0, 0.0, 0.0])),
-            constant_node("t1", Value::Vec3([1.0, 0.0, 0.0])),
-            constant_node("t2", Value::Vec3([0.0, 1.0, 0.0])),
-            constant_node("weights", Value::Vector(vec![0.5, 0.3, 0.2])),
+            constant_node("baseline", vocab::vec3([0.0, 0.0, 0.0])),
+            constant_node("t1", vocab::vec3([1.0, 0.0, 0.0])),
+            constant_node("t2", vocab::vec3([0.0, 1.0, 0.0])),
+            constant_node("weights", Value::ArrayF32(vec![0.5, 0.3, 0.2])),
             NodeSpec {
                 id: "blend".to_string(),
                 kind: NodeType::DefaultBlend,
@@ -384,10 +373,8 @@ fn default_blend_emits_nan_value_when_weight_length_mismatch() {
     evaluate_all(&mut rt, &graph).expect("default blend should evaluate");
     let outputs = rt.outputs.get("blend").expect("blend outputs present");
 
-    match &outputs.get("out").expect("out present").value {
-        Value::Vec3(arr) => assert!(arr.iter().all(|v| v.is_nan())),
-        other => panic!("expected vec3 out with NaNs, got {:?}", other),
-    }
+    let arr = expect_vec3(&outputs.get("out").expect("out present").value);
+    assert!(arr.iter().all(|v| v.is_nan()));
 }
 
 #[test]
@@ -400,10 +387,10 @@ fn case_node_routes_based_on_case_labels_param() {
 
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("sel", Value::Text("b".to_string())),
-            constant_node("c1", Value::Text("first".to_string())),
-            constant_node("c2", Value::Text("second".to_string())),
-            constant_node("d", Value::Text("fallback".to_string())),
+            constant_node("sel", Value::String("b".to_string())),
+            constant_node("c1", Value::String("first".to_string())),
+            constant_node("c2", Value::String("second".to_string())),
+            constant_node("d", Value::String("fallback".to_string())),
             NodeSpec {
                 id: "case".to_string(),
                 kind: NodeType::Case,
@@ -427,7 +414,7 @@ fn case_node_routes_based_on_case_labels_param() {
     let outputs = rt.outputs.get("case").expect("case outputs present");
 
     match &outputs.get("out").expect("out present").value {
-        Value::Text(s) => assert_eq!(s.as_str(), "second"),
+        Value::String(s) => assert_eq!(s.as_str(), "second"),
         other => panic!("expected text out, got {:?}", other),
     }
 }
@@ -441,9 +428,9 @@ fn case_node_without_default_emits_nan_when_no_match() {
 
     let graph = GraphSpec {
         nodes: vec![
-            constant_node("sel", Value::Text("z".to_string())),
-            constant_node("c1", Value::Float(1.0)),
-            constant_node("c2", Value::Float(2.0)),
+            constant_node("sel", Value::String("z".to_string())),
+            constant_node("c1", Value::F32(1.0)),
+            constant_node("c2", Value::F32(2.0)),
             NodeSpec {
                 id: "case".to_string(),
                 kind: NodeType::Case,
@@ -466,7 +453,7 @@ fn case_node_without_default_emits_nan_when_no_match() {
     let outputs = rt.outputs.get("case").expect("case outputs present");
 
     match &outputs.get("out").expect("out present").value {
-        Value::Float(f) => assert!(f.is_nan()),
+        Value::F32(f) => assert!(f.is_nan()),
         other => panic!("expected float NaN out, got {:?}", other),
     }
 }

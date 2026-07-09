@@ -4,8 +4,9 @@ use vizij_animation_core::{
     engine::{Engine, InstanceCfg},
     inputs::{Inputs, LoopMode, PlayerCommand},
     parse_stored_animation_json,
-    value::Value,
+    value::TrackValue,
 };
+use vizij_api_core::value::{as_float, as_quat, as_transform, as_vec3};
 
 fn approx(a: f32, b: f32, eps: f32) {
     assert!(
@@ -55,7 +56,7 @@ fn parity_scalar_ramp_values() {
         .expect("node.t")
         .value
         .clone();
-    if let Value::Float(s) = v0 {
+    if let Some(s) = as_float(&v0) {
         approx(s, 0.0, 1e-5);
     } else {
         panic!("expected Float");
@@ -73,7 +74,7 @@ fn parity_scalar_ramp_values() {
             .expect("node.t")
             .value
             .clone();
-        if let Value::Float(s) = v {
+        if let Some(s) = as_float(&v) {
             approx(s, t, 1e-5);
             assert!(
                 (s - (i as f32) / 10.0).abs() < 1e-5,
@@ -110,10 +111,12 @@ fn parity_const_vec3_values() {
         .expect("node/Transform.translation")
         .value
         .clone();
-    match v {
-        Value::Vec3(v3) => approx3(v3, [1.0, 2.0, 3.0], 1e-6),
-        Value::Transform { translation, .. } => approx3(translation, [1.0, 2.0, 3.0], 1e-6),
-        _ => panic!("expected Vec3 or Transform"),
+    if let Some(v3) = as_vec3(&v) {
+        approx3(v3, [1.0, 2.0, 3.0], 1e-6);
+    } else if let Some(t) = as_transform(&v) {
+        approx3(t.translation, [1.0, 2.0, 3.0], 1e-6);
+    } else {
+        panic!("expected Vec3 or Transform");
     }
 }
 
@@ -153,7 +156,7 @@ fn parity_window_and_seek() {
         .expect("node.t")
         .value
         .clone();
-    if let Value::Float(s) = v {
+    if let Some(s) = as_float(&v) {
         approx(s, 0.8, 1e-5);
     } else {
         panic!("expected Float");
@@ -177,7 +180,7 @@ fn parity_window_and_seek() {
         .expect("node.t")
         .value
         .clone();
-    if let Value::Float(s) = v2 {
+    if let Some(s) = as_float(&v2) {
         approx(s, 9.75, 1e-5);
     } else {
         panic!("expected Float");
@@ -216,7 +219,6 @@ fn parity_determinism_same_sequence() {
 #[test]
 fn parity_quat_layered_normalized() {
     use serde_json::json;
-    use vizij_animation_core::value::Value;
 
     // Build two constant quaternion tracks on the same target key
     let q0 = [0.0, 0.0, 0.0, 1.0];
@@ -230,13 +232,13 @@ fn parity_quat_layered_normalized() {
             Keypoint {
                 id: "k0".into(),
                 stamp: 0.0,
-                value: Value::Quat(q0),
+                value: TrackValue::Quat(q0),
                 transitions: None,
             },
             Keypoint {
                 id: "k1".into(),
                 stamp: 1.0,
-                value: Value::Quat(q0),
+                value: TrackValue::Quat(q0),
                 transitions: None,
             },
         ],
@@ -250,13 +252,13 @@ fn parity_quat_layered_normalized() {
             Keypoint {
                 id: "k0".into(),
                 stamp: 0.0,
-                value: Value::Quat(q1),
+                value: TrackValue::Quat(q1),
                 transitions: None,
             },
             Keypoint {
                 id: "k1".into(),
                 stamp: 1.0,
-                value: Value::Quat(q1),
+                value: TrackValue::Quat(q1),
                 transitions: None,
             },
         ],
@@ -307,7 +309,7 @@ fn parity_quat_layered_normalized() {
         .expect("node.rot")
         .value
         .clone();
-    if let Value::Quat(qb) = v {
+    if let Some(qb) = as_quat(&v) {
         approx(norm4(qb), 1.0, 1e-4);
     } else {
         panic!("expected Quat");

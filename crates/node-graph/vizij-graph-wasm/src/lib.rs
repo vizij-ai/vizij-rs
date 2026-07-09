@@ -7,6 +7,10 @@ use hashbrown::HashMap;
 use js_sys::{Float32Array, Uint32Array, JSON};
 use serde_wasm_bindgen as swb;
 use vizij_api_core::shape::ShapeId;
+use vizij_api_core::value::{
+    as_array, as_bool, as_float, as_quat, as_text, as_transform, as_vec2, as_vec3, as_vec4,
+    as_vector, float, kind, vector, VizijKind,
+};
 use vizij_api_core::{coercion, json, Shape, TypedPath, Value};
 use vizij_graph_core::types::RoundMode;
 use vizij_graph_core::{
@@ -56,7 +60,7 @@ mod tests {
         let normalized = json::normalize_graph_spec_json(input).expect("normalize");
         let nodes = normalized["nodes"].as_array().expect("nodes");
         let constant = nodes[0]["params"]["value"].clone();
-        assert_eq!(constant, serde_json::json!({ "type": "float", "data": 1 }));
+        assert_eq!(constant, serde_json::json!({ "f32": 1.0 }));
 
         let path = nodes[1]["params"]["path"].as_str().expect("path");
         assert_eq!(path, "robot/Arm.Joint");
@@ -625,7 +629,7 @@ impl WasmGraph {
             let outputs_json: HashMap<String, serde_json::Value> = outputs
                 .iter()
                 .map(|(key, port)| {
-                    let value_json = json::value_to_legacy_json(&port.value);
+                    let value_json = serde_json::to_value(&port.value).unwrap();
                     let shape_json = serde_json::to_value(&port.shape).unwrap();
                     (
                         key.clone(),
@@ -638,7 +642,7 @@ impl WasmGraph {
 
         let mut writes: Vec<serde_json::Value> = Vec::new();
         for op in self.runtime.writes.iter() {
-            let jv = json::value_to_legacy_json(&op.value);
+            let jv = serde_json::to_value(&op.value).unwrap();
             let shape_json = if let Some(shape) = &op.shape {
                 serde_json::to_value(shape).unwrap()
             } else {
@@ -700,7 +704,7 @@ impl WasmGraph {
                     None => true,
                 };
                 if changed {
-                    let value_json = json::value_to_legacy_json(&port.value);
+                    let value_json = serde_json::to_value(&port.value).unwrap();
                     let shape_json = serde_json::to_value(&port.shape).unwrap();
                     changed_ports.insert(
                         key.clone(),
@@ -730,7 +734,7 @@ impl WasmGraph {
 
         let mut writes: Vec<serde_json::Value> = Vec::new();
         for op in self.runtime.writes.iter() {
-            let jv = json::value_to_legacy_json(&op.value);
+            let jv = serde_json::to_value(&op.value).unwrap();
             let shape_json = if let Some(shape) = &op.shape {
                 serde_json::to_value(shape).unwrap()
             } else {
@@ -782,7 +786,7 @@ impl WasmGraph {
             .map_err(|e| JsValue::from_str(&format!("invalid path: {}", e)))?;
         let mut buf = vec![0.0f32; data.length() as usize];
         data.copy_to(&mut buf);
-        let value = Value::Vector(buf);
+        let value = vector(buf);
         let declared = Some(Shape::new(ShapeId::Vector { len: None }));
         // Path-based staging bypasses slot cache; no diffing here.
         self.runtime.set_input(typed_path, value, declared);
@@ -809,7 +813,7 @@ impl WasmGraph {
             let tp = TypedPath::parse(path)
                 .map_err(|e| JsValue::from_str(&format!("invalid path '{}': {}", path, e)))?;
             let val = values.get_index(i as u32);
-            let value = Value::Float(val);
+            let value = float(val);
             let declared = Some(Shape::new(ShapeId::Scalar));
             // Batch by path bypasses slot cache; no diffing here.
             self.runtime.set_input(tp, value, declared);
@@ -861,7 +865,7 @@ impl WasmGraph {
                 .get(*idx as usize)
                 .ok_or_else(|| JsValue::from_str("stage_inputs_indices: index out of bounds"))?;
             let val = values.get_index(i as u32);
-            let value = Value::Float(val);
+            let value = float(val);
             let declared = Some(Shape::new(ShapeId::Scalar));
             // Use path index as slot key for caching.
             self.stage_cached(*idx as usize, tp.clone(), value, declared)?;
@@ -924,7 +928,7 @@ impl WasmGraph {
                 .get(slot.path_idx as usize)
                 .ok_or_else(|| JsValue::from_str("stage_inputs_slots: path index out of bounds"))?;
             let val = values.get_index(i as u32);
-            let value = Value::Float(val);
+            let value = float(val);
             self.stage_cached(
                 slot.path_idx as usize,
                 tp.clone(),
@@ -955,24 +959,21 @@ impl WasmGraph {
     #[wasm_bindgen(js_name = "get_output_f32")]
     pub fn get_output_f32(&self, node_id: &str, output_key: &str) -> Option<Float32Array> {
         let port = self.runtime.outputs.get(node_id)?.get(output_key)?;
-        match &port.value {
-            Value::Float(f) => Some(Float32Array::from(&[*f][..])),
-            Value::Vector(v) => Some(Float32Array::from(v.as_slice())),
-            Value::Vec2(arr) => Some(Float32Array::from(arr.as_slice())),
-            Value::Vec3(arr) => Some(Float32Array::from(arr.as_slice())),
-            Value::Vec4(arr) => Some(Float32Array::from(arr.as_slice())),
-            Value::Quat(arr) => Some(Float32Array::from(arr.as_slice())),
-            Value::Transform {
-                translation,
-                rotation,
-                scale,
-            } => {
+        let value = &port.value;
+        match kind(value) {
+            VizijKind::Float => as_float(value).map(|f| Float32Array::from(&[f][..])),
+            VizijKind::Vector => as_vector(value).map(Float32Array::from),
+            VizijKind::Vec2 => as_vec2(value).map(|a| Float32Array::from(&a[..])),
+            VizijKind::Vec3 => as_vec3(value).map(|a| Float32Array::from(&a[..])),
+            VizijKind::Vec4 => as_vec4(value).map(|a| Float32Array::from(&a[..])),
+            VizijKind::Quat => as_quat(value).map(|a| Float32Array::from(&a[..])),
+            VizijKind::Transform => as_transform(value).map(|t| {
                 let mut tmp = Vec::with_capacity(10);
-                tmp.extend_from_slice(translation);
-                tmp.extend_from_slice(rotation);
-                tmp.extend_from_slice(scale);
-                Some(Float32Array::from(tmp.as_slice()))
-            }
+                tmp.extend_from_slice(&t.translation);
+                tmp.extend_from_slice(&t.rotation);
+                tmp.extend_from_slice(&t.scale);
+                Float32Array::from(tmp.as_slice())
+            }),
             _ => None,
         }
     }
@@ -984,20 +985,25 @@ impl WasmGraph {
             .map_err(|e| JsValue::from_str(&format!("get_outputs_batch nodes: {}", e)))?;
         let mut out = Vec::with_capacity(ids.len());
         for id in ids {
-            if let Some(port) = self.runtime.outputs.get(&id).and_then(|m| m.get("out")) {
-                match &port.value {
-                    Value::Float(f) => out.push(*f),
-                    Value::Vector(v) if !v.is_empty() => out.push(v[0]),
-                    Value::Vec2(v) => out.push(v[0]),
-                    Value::Vec3(v) => out.push(v[0]),
-                    Value::Vec4(v) => out.push(v[0]),
-                    Value::Quat(v) => out.push(v[0]),
-                    Value::Transform { translation, .. } => out.push(translation[0]),
-                    _ => out.push(f32::NAN),
-                }
-            } else {
-                out.push(f32::NAN);
-            }
+            let first = self
+                .runtime
+                .outputs
+                .get(&id)
+                .and_then(|m| m.get("out"))
+                .and_then(|port| {
+                    let value = &port.value;
+                    match kind(value) {
+                        VizijKind::Float => as_float(value),
+                        VizijKind::Vector => as_vector(value).and_then(|v| v.first().copied()),
+                        VizijKind::Vec2 => as_vec2(value).map(|a| a[0]),
+                        VizijKind::Vec3 => as_vec3(value).map(|a| a[0]),
+                        VizijKind::Vec4 => as_vec4(value).map(|a| a[0]),
+                        VizijKind::Quat => as_quat(value).map(|a| a[0]),
+                        VizijKind::Transform => as_transform(value).map(|t| t.translation[0]),
+                        _ => None,
+                    }
+                });
+            out.push(first.unwrap_or(f32::NAN));
         }
         Ok(Float32Array::from(out.as_slice()))
     }
@@ -1047,6 +1053,9 @@ impl WasmGraph {
     ///   `"nodes": { "[nodeId]": { "[outputKey]": { "value": ValueJSON, "shape": ShapeJSON } } },`
     ///   `"writes": [{ "path": string, "value": ValueJSON, "shape": ShapeJSON }, ...]`
     /// }
+    /// where `ValueJSON` is the Arora `Value` serde form (externally tagged:
+    /// `{"f32": 1.0}`, `{"bool": true}`, `{"str": "hi"}`, `{"f32s": [...]}`,
+    /// `{"struct": {...}}`, ...).
     #[wasm_bindgen]
     pub fn eval_all(&mut self) -> Result<String, JsValue> {
         let out_obj = self.eval_all_json()?;
@@ -1118,7 +1127,8 @@ impl WasmGraph {
         serde_json::to_string(&out_obj).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
-    /// Set a param on a node (e.g., key="value" with float/bool/vec3 JSON).
+    /// Set a param on a node (e.g., key="value" with a JSON payload in Arora
+    /// `Value` serde form or any legacy form the api-core normalizer accepts).
     ///
     /// Structural parameter edits invalidate the cached execution plan so the next evaluation
     /// rebuilds layouts safely. The current bridge treats `Split.sizes` as the main structural
@@ -1146,34 +1156,28 @@ impl WasmGraph {
 
     fn set_param_inner(&mut self, node_id: &str, key: &str, val: Value) -> Result<(), JsValue> {
         fn expect_float(node_id: &str, key: &str, v: &Value) -> Result<f32, JsValue> {
-            if let Value::Float(f) = v {
-                Ok(*f)
-            } else {
-                Err(JsValue::from_str(&format!(
-                    "set_param: node '{}' key '{}' expects Float",
+            as_float(v).ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "set_param: node '{}' key '{}' expects a float",
                     node_id, key
-                )))
-            }
+                ))
+            })
         }
         fn expect_bool(node_id: &str, key: &str, v: &Value) -> Result<bool, JsValue> {
-            if let Value::Bool(b) = v {
-                Ok(*b)
-            } else {
-                Err(JsValue::from_str(&format!(
-                    "set_param: node '{}' key '{}' expects Bool",
+            as_bool(v).ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "set_param: node '{}' key '{}' expects a boolean",
                     node_id, key
-                )))
-            }
+                ))
+            })
         }
         fn expect_text<'a>(node_id: &str, key: &str, v: &'a Value) -> Result<&'a str, JsValue> {
-            if let Value::Text(s) = v {
-                Ok(s.as_str())
-            } else {
-                Err(JsValue::from_str(&format!(
-                    "set_param: node '{}' key '{}' expects Text",
+            as_text(v).ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "set_param: node '{}' key '{}' expects text",
                     node_id, key
-                )))
-            }
+                ))
+            })
         }
         fn parse_u32(node_id: &str, key: &str, v: &Value) -> Result<u32, JsValue> {
             let f = expect_float(node_id, key, v)?;
@@ -1187,73 +1191,60 @@ impl WasmGraph {
             }
         }
         fn parse_pairs(node_id: &str, key: &str, v: &Value) -> Result<Vec<(String, f32)>, JsValue> {
-            let items: Vec<Value> = match v {
-                Value::List(xs) => xs.clone(),
-                Value::Array(xs) => xs.clone(),
-                _ => {
-                    return Err(JsValue::from_str(&format!(
-                        "set_param: node '{}' key '{}' expects Array/List of [Text, Float] tuples",
-                        node_id, key
-                    )))
-                }
-            };
+            let items = as_array(v).ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "set_param: node '{}' key '{}' expects a sequence of [text, float] pairs",
+                    node_id, key
+                ))
+            })?;
             let mut out = Vec::with_capacity(items.len());
             for item in items {
-                match item {
-                    Value::Tuple(elems) if elems.len() >= 2 => {
-                        let name = match &elems[0] {
-                            Value::Text(s) => s.clone(),
-                            _ => {
-                                return Err(JsValue::from_str(&format!(
-                                    "set_param: node '{}' key '{}' tuple[0] expects Text",
-                                    node_id, key
-                                )))
-                            }
-                        };
-                        let val = match &elems[1] {
-                            Value::Float(f) => *f,
-                            _ => {
-                                return Err(JsValue::from_str(&format!(
-                                    "set_param: node '{}' key '{}' tuple[1] expects Float",
-                                    node_id, key
-                                )))
-                            }
-                        };
-                        out.push((name, val));
-                    }
-                    _ => {
-                        return Err(JsValue::from_str(&format!(
-                        "set_param: node '{}' key '{}' expects Array/List of [Text, Float] tuples",
+                let elems = as_array(item)
+                    .filter(|elems| elems.len() >= 2)
+                    .ok_or_else(|| {
+                        JsValue::from_str(&format!(
+                        "set_param: node '{}' key '{}' expects a sequence of [text, float] pairs",
                         node_id, key
-                    )))
-                    }
-                }
+                    ))
+                    })?;
+                let name = as_text(&elems[0]).ok_or_else(|| {
+                    JsValue::from_str(&format!(
+                        "set_param: node '{}' key '{}' pair[0] expects text",
+                        node_id, key
+                    ))
+                })?;
+                let val = as_float(&elems[1]).ok_or_else(|| {
+                    JsValue::from_str(&format!(
+                        "set_param: node '{}' key '{}' pair[1] expects a float",
+                        node_id, key
+                    ))
+                })?;
+                out.push((name.to_string(), val));
             }
             Ok(out)
         }
 
         fn parse_string_list(node_id: &str, key: &str, v: &Value) -> Result<Vec<String>, JsValue> {
-            match v {
-                Value::List(items) | Value::Array(items) | Value::Tuple(items) => {
-                    let mut out = Vec::with_capacity(items.len());
-                    for item in items {
-                        if let Value::Text(s) = item {
-                            out.push(s.clone());
-                        } else {
-                            return Err(JsValue::from_str(&format!(
-                                "set_param: node '{}' key '{}' expects list of Text",
-                                node_id, key
-                            )));
-                        }
-                    }
-                    Ok(out)
+            if let Some(items) = as_array(v) {
+                let mut out = Vec::with_capacity(items.len());
+                for item in items {
+                    let s = as_text(item).ok_or_else(|| {
+                        JsValue::from_str(&format!(
+                            "set_param: node '{}' key '{}' expects a sequence of text",
+                            node_id, key
+                        ))
+                    })?;
+                    out.push(s.to_string());
                 }
-                Value::Text(s) => Ok(vec![s.clone()]),
-                _ => Err(JsValue::from_str(&format!(
-                    "set_param: node '{}' key '{}' expects Text or list of Text",
-                    node_id, key
-                ))),
+                return Ok(out);
             }
+            if let Some(s) = as_text(v) {
+                return Ok(vec![s.to_string()]);
+            }
+            Err(JsValue::from_str(&format!(
+                "set_param: node '{}' key '{}' expects text or a sequence of text",
+                node_id, key
+            )))
         }
         fn parse_round_mode(node_id: &str, key: &str, v: &Value) -> Result<RoundMode, JsValue> {
             let raw = expect_text(node_id, key, v)?;
@@ -1367,9 +1358,9 @@ impl WasmGraph {
                     node.params.record_keys = Some(parse_string_list(node_id, key, &val)?);
                 }
                 "keys" => {
-                    node.params.keys = match &val {
-                        Value::Text(s) => Some(s.clone()),
-                        _ => {
+                    node.params.keys = match as_text(&val) {
+                        Some(s) => Some(s.to_string()),
+                        None => {
                             return Err(JsValue::from_str(&format!(
                                 "set_param: node '{}' key 'keys' expects a string value",
                                 node_id

@@ -8,7 +8,7 @@ use wasm_bindgen_test::*;
 use serde_json::json;
 use vizij_animation_core::{
     data::{AnimationData, Keypoint, Track},
-    value::Value,
+    value::TrackValue,
 };
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -35,7 +35,7 @@ fn mk_bool_track(path: &str, keys: &[(f32, bool)]) -> Track {
         points.push(Keypoint {
             id: format!("k{i}"),
             stamp: *stamp,
-            value: Value::Bool(*v),
+            value: TrackValue::Bool(*v),
             transitions: None,
         });
     }
@@ -54,7 +54,7 @@ fn mk_text_track(path: &str, keys: &[(f32, &str)]) -> Track {
         points.push(Keypoint {
             id: format!("k{i}"),
             stamp: *stamp,
-            value: Value::Text((*s).to_string()),
+            value: TrackValue::Text((*s).to_string()),
             transitions: None,
         });
     }
@@ -99,27 +99,17 @@ fn wasm_bool_text_outputs_and_step() {
     let v_flag0 = get_change_value(&out0, "node.flag").expect("node.flag");
     let v_label0 = get_change_value(&out0, "node.label").expect("node.label");
 
-    // Check type tags and data
-    let typ_flag0 = Reflect::get(&v_flag0, &JsValue::from_str("type"))
-        .unwrap()
-        .as_string()
-        .unwrap();
-    let data_flag0 = Reflect::get(&v_flag0, &JsValue::from_str("data"))
+    // Values arrive in Arora serde form: { bool: ... } and { str: ... }.
+    let data_flag0 = Reflect::get(&v_flag0, &JsValue::from_str("bool"))
         .unwrap()
         .as_bool()
         .unwrap();
-    assert_eq!(typ_flag0, "Bool");
-    assert_eq!(data_flag0, false);
+    assert!(!data_flag0);
 
-    let typ_label0 = Reflect::get(&v_label0, &JsValue::from_str("type"))
+    let data_label0 = Reflect::get(&v_label0, &JsValue::from_str("str"))
         .unwrap()
         .as_string()
         .unwrap();
-    let data_label0 = Reflect::get(&v_label0, &JsValue::from_str("data"))
-        .unwrap()
-        .as_string()
-        .unwrap();
-    assert_eq!(typ_label0, "Text");
     assert_eq!(data_label0, "A".to_string());
 
     // Advance to 0.6s (u~=0.6) -> expect true / "B" due to step (hold left)
@@ -128,14 +118,14 @@ fn wasm_bool_text_outputs_and_step() {
     let v_flag1 = get_change_value(&out1, "node.flag").expect("node.flag");
     let v_label1 = get_change_value(&out1, "node.label").expect("node.label");
 
-    let data_flag1 = Reflect::get(&v_flag1, &JsValue::from_str("data"))
+    let data_flag1 = Reflect::get(&v_flag1, &JsValue::from_str("bool"))
         .unwrap()
         .as_bool()
         .unwrap();
-    let data_label1 = Reflect::get(&v_label1, &JsValue::from_str("data"))
+    let data_label1 = Reflect::get(&v_label1, &JsValue::from_str("str"))
         .unwrap()
         .as_string()
         .unwrap();
-    assert_eq!(data_flag1, true);
+    assert!(data_flag1);
     assert_eq!(data_label1, "B".to_string());
 }

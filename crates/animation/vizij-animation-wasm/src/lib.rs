@@ -2,6 +2,13 @@
 //!
 //! This module exposes the Rust animation runtime to JavaScript hosts, handling JSON/JsValue
 //! conversion for animation payloads, engine inputs, baking helpers, and target prebinding.
+//!
+//! Runtime values cross the JS boundary in Arora `Value` serde form
+//! (externally tagged: `{"f32": 1.0}`, `{"bool": true}`, `{"str": "hi"}`,
+//! `{"f32s": [...]}`, `{"struct": {...}}`, ...): outputs, write batches, and
+//! keypoint values in `AnimationData` payloads all use it. Stored-animation
+//! JSON (`load_stored_animation`) keeps its own richer keypoint shapes and is
+//! decoded by the core parser.
 
 use js_sys::{Function, JSON};
 use serde_wasm_bindgen as swb;
@@ -167,7 +174,8 @@ impl VizijAnimation {
         })
     }
 
-    /// Load core-format `AnimationData` JSON into the engine.
+    /// Load core-format `AnimationData` JSON into the engine. Keypoint values
+    /// use Arora `Value` serde form (e.g. `{"f32": 1.0}`).
     ///
     /// Returns the allocated animation id.
     #[wasm_bindgen(js_name = load_animation)]
@@ -283,7 +291,8 @@ impl VizijAnimation {
     /// Step the simulation and return a `{ nodes, writes }` object compatible with
     /// the node-graph wasm output shape.
     /// Returns an object with shape:
-    /// { nodes: Record<string, Record<string, ValueJSON>>, writes: Array<{ path: string, value: ValueJSON }> }.
+    /// { nodes: Record<string, Record<string, ValueJSON>>, writes: Array<{ path: string, value: ValueJSON }> }
+    /// where `ValueJSON` is the Arora `Value` serde form (e.g. `{"f32": 1.0}`).
     ///
     /// `nodes` is intentionally empty for animation outputs; only `writes` carries data here.
     #[wasm_bindgen(js_name = update_nodes_writes)]

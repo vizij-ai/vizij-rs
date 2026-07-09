@@ -1,6 +1,13 @@
 //! Helpers for flattening structured values into contiguous numeric buffers.
+//!
+//! This is the kernel seam for numeric node math: [`flatten_numeric`] decodes
+//! a [`Value`] once (through the vocabulary accessors) into a [`FlatValue`] —
+//! a plain `Vec<f32>` plus a [`ValueLayout`] — operators compute on the flat
+//! data, and [`ValueLayout::reconstruct`] re-encodes the result through the
+//! vocabulary constructors.
 
-use hashbrown::HashMap;
+use vizij_api_core::value as vocab;
+use vizij_api_core::value::VizijKind;
 use vizij_api_core::{Shape, Value};
 
 use super::shape_helpers::infer_shape;
@@ -32,11 +39,15 @@ impl PortValue {
 
 impl Default for PortValue {
     fn default() -> Self {
-        PortValue::new(Value::Float(0.0))
+        PortValue::new(vocab::float(0.0))
     }
 }
 
 /// Describes how a [`Value`] is laid out when flattened.
+///
+/// Sequences flatten to a single `Array` layout: the wire value is one
+/// sequence kind (`ArrayValue`), so any declared array/list/tuple distinction
+/// lives in the path's [`Shape`], not here.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ValueLayout {
     Scalar,
@@ -49,8 +60,6 @@ pub enum ValueLayout {
     Vector(usize),
     Record(Vec<(String, ValueLayout)>),
     Array(Vec<ValueLayout>),
-    List(Vec<ValueLayout>),
-    Tuple(Vec<ValueLayout>),
 }
 
 /// Numeric data flattened into row-major storage with an associated layout description.
@@ -75,9 +84,7 @@ impl ValueLayout {
             ValueLayout::Record(fields) => {
                 fields.iter().map(|(_, layout)| layout.scalar_len()).sum()
             }
-            ValueLayout::Array(items) | ValueLayout::List(items) | ValueLayout::Tuple(items) => {
-                items.iter().map(|layout| layout.scalar_len()).sum()
-            }
+            ValueLayout::Array(items) => items.iter().map(|layout| layout.scalar_len()).sum(),
         }
     }
 
@@ -88,76 +95,30 @@ impl ValueLayout {
     /// Reconstruct a structured [`Value`] from flattened scalar data.
     pub fn reconstruct(&self, data: &[f32]) -> Value {
         match self {
-            ValueLayout::Scalar => Value::Float(data.first().copied().unwrap_or(f32::NAN)),
-            ValueLayout::Vec2 => {
-                let mut arr = [0.0; 2];
-                for (i, slot) in arr.iter_mut().enumerate() {
-                    *slot = *data.get(i).unwrap_or(&f32::NAN);
-                }
-                Value::Vec2(arr)
-            }
-            ValueLayout::Vec3 => {
-                let mut arr = [0.0; 3];
-                for (i, slot) in arr.iter_mut().enumerate() {
-                    *slot = *data.get(i).unwrap_or(&f32::NAN);
-                }
-                Value::Vec3(arr)
-            }
-            ValueLayout::Vec4 => {
-                let mut arr = [0.0; 4];
-                for (i, slot) in arr.iter_mut().enumerate() {
-                    *slot = *data.get(i).unwrap_or(&f32::NAN);
-                }
-                Value::Vec4(arr)
-            }
-            ValueLayout::Quat => {
-                let mut arr = [0.0; 4];
-                for (i, slot) in arr.iter_mut().enumerate() {
-                    *slot = *data.get(i).unwrap_or(&f32::NAN);
-                }
-                Value::Quat(arr)
-            }
-            ValueLayout::ColorRgba => {
-                let mut arr = [0.0; 4];
-                for (i, slot) in arr.iter_mut().enumerate() {
-                    *slot = *data.get(i).unwrap_or(&f32::NAN);
-                }
-                Value::ColorRgba(arr)
-            }
-            ValueLayout::Transform => {
-                let mut translation = [0.0; 3];
-                let mut rotation = [0.0; 4];
-                let mut scale = [0.0; 3];
-                for (i, slot) in translation.iter_mut().enumerate() {
-                    *slot = *data.get(i).unwrap_or(&f32::NAN);
-                }
-                for (i, slot) in rotation.iter_mut().enumerate() {
-                    *slot = *data.get(3 + i).unwrap_or(&f32::NAN);
-                }
-                for (i, slot) in scale.iter_mut().enumerate() {
-                    *slot = *data.get(7 + i).unwrap_or(&f32::NAN);
-                }
-                Value::Transform {
-                    translation,
-                    rotation,
-                    scale,
-                }
-            }
+            ValueLayout::Scalar => vocab::float(data.first().copied().unwrap_or(f32::NAN)),
+            ValueLayout::Vec2 => vocab::vec2(read_array(data, 0)),
+            ValueLayout::Vec3 => vocab::vec3(read_array(data, 0)),
+            ValueLayout::Vec4 => vocab::vec4(read_array(data, 0)),
+            ValueLayout::Quat => vocab::quat(read_array(data, 0)),
+            ValueLayout::ColorRgba => vocab::color_rgba(read_array(data, 0)),
+            ValueLayout::Transform => vocab::transform(vocab::Transform {
+                translation: read_array(data, 0),
+                rotation: read_array(data, 3),
+                scale: read_array(data, 7),
+            }),
             ValueLayout::Vector(len) => {
                 let mut out = Vec::with_capacity(*len);
                 out.extend((0..*len).map(|i| *data.get(i).unwrap_or(&f32::NAN)));
-                Value::Vector(out)
+                vocab::vector(out)
             }
             ValueLayout::Record(fields) => {
-                let mut map = HashMap::new();
                 let mut offset = 0usize;
-                for (key, layout) in fields.iter() {
+                vocab::record(fields.iter().map(|(key, layout)| {
                     let len = layout.scalar_len();
                     let slice = &data[offset..offset + len];
                     offset += len;
-                    map.insert(key.clone(), layout.reconstruct(slice));
-                }
-                Value::Record(map)
+                    (key.as_str(), layout.reconstruct(slice))
+                }))
             }
             ValueLayout::Array(items) => {
                 let mut out = Vec::with_capacity(items.len());
@@ -168,29 +129,7 @@ impl ValueLayout {
                     offset += len;
                     out.push(layout.reconstruct(slice));
                 }
-                Value::Array(out)
-            }
-            ValueLayout::List(items) => {
-                let mut out = Vec::with_capacity(items.len());
-                let mut offset = 0usize;
-                for layout in items.iter() {
-                    let len = layout.scalar_len();
-                    let slice = &data[offset..offset + len];
-                    offset += len;
-                    out.push(layout.reconstruct(slice));
-                }
-                Value::List(out)
-            }
-            ValueLayout::Tuple(items) => {
-                let mut out = Vec::with_capacity(items.len());
-                let mut offset = 0usize;
-                for layout in items.iter() {
-                    let len = layout.scalar_len();
-                    let slice = &data[offset..offset + len];
-                    offset += len;
-                    out.push(layout.reconstruct(slice));
-                }
-                Value::Tuple(out)
+                vocab::array(out)
             }
         }
     }
@@ -202,67 +141,76 @@ impl ValueLayout {
     }
 }
 
+fn read_array<const N: usize>(data: &[f32], offset: usize) -> [f32; N] {
+    let mut arr = [f32::NAN; N];
+    for (i, slot) in arr.iter_mut().enumerate() {
+        if let Some(v) = data.get(offset + i) {
+            *slot = *v;
+        }
+    }
+    arr
+}
+
 /// Attempt to flatten a [`Value`] that contains only numeric content.
 pub fn flatten_numeric(value: &Value) -> Option<FlatValue> {
-    match value {
-        Value::Float(f) => Some(FlatValue {
+    match vocab::kind(value) {
+        VizijKind::Float => Some(FlatValue {
             layout: ValueLayout::Scalar,
-            data: vec![*f],
+            data: vec![vocab::as_float(value)?],
         }),
-        Value::Vec2(a) => Some(FlatValue {
+        VizijKind::Vec2 => Some(FlatValue {
             layout: ValueLayout::Vec2,
-            data: a.to_vec(),
+            data: vocab::as_vec2(value)?.to_vec(),
         }),
-        Value::Vec3(a) => Some(FlatValue {
+        VizijKind::Vec3 => Some(FlatValue {
             layout: ValueLayout::Vec3,
-            data: a.to_vec(),
+            data: vocab::as_vec3(value)?.to_vec(),
         }),
-        Value::Vec4(a) => Some(FlatValue {
+        VizijKind::Vec4 => Some(FlatValue {
             layout: ValueLayout::Vec4,
-            data: a.to_vec(),
+            data: vocab::as_vec4(value)?.to_vec(),
         }),
-        Value::Quat(a) => Some(FlatValue {
+        VizijKind::Quat => Some(FlatValue {
             layout: ValueLayout::Quat,
-            data: a.to_vec(),
+            data: vocab::as_quat(value)?.to_vec(),
         }),
-        Value::ColorRgba(a) => Some(FlatValue {
+        VizijKind::ColorRgba => Some(FlatValue {
             layout: ValueLayout::ColorRgba,
-            data: a.to_vec(),
+            data: vocab::as_color_rgba(value)?.to_vec(),
         }),
-        Value::Transform {
-            translation,
-            rotation,
-            scale,
-        } => {
+        VizijKind::Transform => {
+            let t = vocab::as_transform(value)?;
             let mut data = Vec::with_capacity(10);
-            data.extend_from_slice(translation);
-            data.extend_from_slice(rotation);
-            data.extend_from_slice(scale);
+            data.extend_from_slice(&t.translation);
+            data.extend_from_slice(&t.rotation);
+            data.extend_from_slice(&t.scale);
             Some(FlatValue {
                 layout: ValueLayout::Transform,
                 data,
             })
         }
-        Value::Vector(vec) => Some(FlatValue {
-            layout: ValueLayout::Vector(vec.len()),
-            data: vec.clone(),
+        VizijKind::Vector => Some(FlatValue {
+            layout: ValueLayout::Vector(vocab::as_vector(value)?.len()),
+            data: vocab::as_vector(value)?.to_vec(),
         }),
-        Value::Record(map) => {
-            let mut fields: Vec<_> = map.iter().collect();
-            fields.sort_by(|a, b| a.0.cmp(b.0));
-            let mut layouts = Vec::with_capacity(fields.len());
+        VizijKind::Record => {
+            // `as_record` yields entries sorted by name, keeping the flat
+            // ordering deterministic.
+            let entries = vocab::as_record(value)?;
+            let mut layouts = Vec::with_capacity(entries.len());
             let mut data = Vec::new();
-            for (key, val) in fields {
+            for (key, val) in entries {
                 let flat = flatten_numeric(val)?;
                 data.extend(&flat.data);
-                layouts.push((key.clone(), flat.layout));
+                layouts.push((key.to_string(), flat.layout));
             }
             Some(FlatValue {
                 layout: ValueLayout::Record(layouts),
                 data,
             })
         }
-        Value::Array(items) => {
+        VizijKind::Array => {
+            let items = vocab::as_array(value)?;
             let mut layouts = Vec::with_capacity(items.len());
             let mut data = Vec::new();
             for item in items.iter() {
@@ -272,32 +220,6 @@ pub fn flatten_numeric(value: &Value) -> Option<FlatValue> {
             }
             Some(FlatValue {
                 layout: ValueLayout::Array(layouts),
-                data,
-            })
-        }
-        Value::List(items) => {
-            let mut layouts = Vec::with_capacity(items.len());
-            let mut data = Vec::new();
-            for item in items.iter() {
-                let flat = flatten_numeric(item)?;
-                data.extend(&flat.data);
-                layouts.push(flat.layout);
-            }
-            Some(FlatValue {
-                layout: ValueLayout::List(layouts),
-                data,
-            })
-        }
-        Value::Tuple(items) => {
-            let mut layouts = Vec::with_capacity(items.len());
-            let mut data = Vec::new();
-            for item in items.iter() {
-                let flat = flatten_numeric(item)?;
-                data.extend(&flat.data);
-                layouts.push(flat.layout);
-            }
-            Some(FlatValue {
-                layout: ValueLayout::Tuple(layouts),
                 data,
             })
         }

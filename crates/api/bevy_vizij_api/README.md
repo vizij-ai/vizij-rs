@@ -45,7 +45,7 @@ use bevy_vizij_api::{
     register_transform_setters_for_entity,
     WriterRegistry,
 };
-use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
+use vizij_api_core::{value::vec3, TypedPath, WriteBatch, WriteOp};
 
 fn main() {
     App::new()
@@ -69,7 +69,7 @@ fn drive_transforms(mut world: World) {
 
     let mut batch = WriteBatch::new();
     let path = TypedPath::parse("robot/cube/Transform.translation").unwrap();
-    batch.push(WriteOp::new_with_shape(path, Value::vec3(0.0, 1.0, 0.0), None));
+    batch.push(WriteOp::new_with_shape(path, vec3([0.0, 1.0, 0.0]), None));
 
     apply_write_batch(&registry, &mut world, &batch);
 }
@@ -103,7 +103,7 @@ Add additional helpers by calling `WriterRegistry::register_setter` directly. Hi
 ### Error handling
 
 - Setters run inside `apply_write_batch` without automatic error bubbling. If application fails (missing component, type mismatch), log via `tracing::warn!` or your preferred logger and return early.
-- Use the `Value` helpers (`Value::vec3`, pattern matching) to coerce data; fall back gracefully when encountering unexpected shapes to keep the runtime robust.
+- Decode values through the vocabulary accessors (`vizij_api_core::value::as_vec3`, ...) or the Bevy decode helpers (`as_bevy_vec3`, `as_bevy_quat`, `as_bevy_transform`); fall back gracefully when encountering unexpected shapes to keep the runtime robust.
 - Reserve panics for truly exceptional situations—unexpected writes should be observable through logs rather than crashing the ECS schedule.
 
 ---

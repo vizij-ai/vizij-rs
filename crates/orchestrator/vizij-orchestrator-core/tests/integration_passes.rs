@@ -1,6 +1,7 @@
 use serde_json::{json, Value as JsonValue};
 use vizij_api_core::{
     json::{normalize_graph_spec_json_string, parse_value},
+    value::{as_float, as_quat, as_transform, as_vec2, as_vec3, as_vec4, as_vector, float},
     TypedPath, Value, WriteBatch, WriteOp,
 };
 use vizij_graph_core::eval::{evaluate_all, GraphRuntime};
@@ -28,7 +29,7 @@ fn single_pass_applies_graph_writes_and_merges() {
     // Prepare a write produced by the graph runtime and attach it
     let tp = TypedPath::parse("robot/x").unwrap();
     let mut batch = WriteBatch::new();
-    batch.push(WriteOp::new(tp.clone(), Value::Float(0.5)));
+    batch.push(WriteOp::new(tp.clone(), float(0.5)));
 
     // Inject the batch into the graph runtime writes so evaluate() will yield it
     let gc = orch.graphs.get_mut("g").expect("graph exists");
@@ -41,7 +42,7 @@ fn single_pass_applies_graph_writes_and_merges() {
     let found = frame
         .merged_writes
         .iter()
-        .any(|op| op.path.to_string() == tp.to_string() && op.value == Value::Float(0.5));
+        .any(|op| op.path.to_string() == tp.to_string() && op.value == float(0.5));
     assert!(found, "merged_writes must contain the graph write");
 
     // Blackboard should have the applied value
@@ -49,7 +50,7 @@ fn single_pass_applies_graph_writes_and_merges() {
         .blackboard
         .get(&tp.to_string())
         .expect("blackboard entry present");
-    assert_eq!(be.value, Value::Float(0.5));
+    assert_eq!(be.value, float(0.5));
 }
 
 #[test]
@@ -76,12 +77,12 @@ fn two_pass_applies_graph_then_anim_then_graph_writes_and_merges() {
     // Prepare writes for both graphs (they'll be consumed when evaluate() is called)
     let tp1 = TypedPath::parse("robot/a").unwrap();
     let mut b1 = WriteBatch::new();
-    b1.push(WriteOp::new(tp1.clone(), Value::Float(1.0)));
+    b1.push(WriteOp::new(tp1.clone(), float(1.0)));
     orch.graphs.get_mut("g1").unwrap().rt.writes = b1;
 
     let tp2 = TypedPath::parse("robot/b").unwrap();
     let mut b2 = WriteBatch::new();
-    b2.push(WriteOp::new(tp2.clone(), Value::Float(2.0)));
+    b2.push(WriteOp::new(tp2.clone(), float(2.0)));
     orch.graphs.get_mut("g2").unwrap().rt.writes = b2;
 
     // Step orchestrator
@@ -91,10 +92,10 @@ fn two_pass_applies_graph_then_anim_then_graph_writes_and_merges() {
     let mut found_a = false;
     let mut found_b = false;
     for op in frame.merged_writes.iter() {
-        if op.path.to_string() == tp1.to_string() && op.value == Value::Float(1.0) {
+        if op.path.to_string() == tp1.to_string() && op.value == float(1.0) {
             found_a = true;
         }
-        if op.path.to_string() == tp2.to_string() && op.value == Value::Float(2.0) {
+        if op.path.to_string() == tp2.to_string() && op.value == float(2.0) {
             found_b = true;
         }
     }
@@ -105,14 +106,14 @@ fn two_pass_applies_graph_then_anim_then_graph_writes_and_merges() {
 
     // Blackboard should have both entries applied
     let be_a = orch.blackboard.get(&tp1.to_string()).expect("entry a");
-    assert_eq!(be_a.value, Value::Float(1.0));
+    assert_eq!(be_a.value, float(1.0));
     let be_b = orch.blackboard.get(&tp2.to_string()).expect("entry b");
-    assert_eq!(be_b.value, Value::Float(2.0));
+    assert_eq!(be_b.value, float(2.0));
 }
 
 #[test]
 fn graph_uses_input_defaults_when_edge_missing() {
-    let graph_json = json!({
+    let mut graph_json = json!({
         "nodes": [
             {
                 "id": "source",
@@ -150,6 +151,7 @@ fn graph_uses_input_defaults_when_edge_missing() {
         ]
     });
 
+    vizij_api_core::json::normalize_graph_spec_value(&mut graph_json).expect("normalize spec");
     let spec: GraphSpec = serde_json::from_value(graph_json).expect("graph spec json");
     let subs = Subscriptions {
         inputs: vec![TypedPath::parse("demo/input/value").expect("typed path")],
@@ -165,7 +167,7 @@ fn graph_uses_input_defaults_when_edge_missing() {
 
     let mut orch = Orchestrator::new(Schedule::SinglePass).with_graph(cfg);
 
-    orch.set_input(
+    orch.set_input_json(
         "demo/input/value",
         json!({ "type": "float", "data": 1.5 }),
         None,
@@ -180,9 +182,14 @@ fn graph_uses_input_defaults_when_edge_missing() {
     );
 }
 
+fn graph_spec_from_json(mut spec_json: JsonValue) -> GraphSpec {
+    vizij_api_core::json::normalize_graph_spec_value(&mut spec_json).expect("normalize spec");
+    serde_json::from_value(spec_json).expect("graph spec json")
+}
+
 #[test]
 fn merged_graph_rewires_shared_output() {
-    let producer_spec: GraphSpec = serde_json::from_value(json!({
+    let producer_spec: GraphSpec = graph_spec_from_json(json!({
         "nodes": [
             {
                 "id": "const_one",
@@ -198,10 +205,9 @@ fn merged_graph_rewires_shared_output() {
         "edges": [
             { "from": { "node_id": "const_one" }, "to": { "node_id": "publish", "input": "in" } }
         ]
-    }))
-    .expect("producer graph");
+    }));
 
-    let consumer_spec: GraphSpec = serde_json::from_value(json!({
+    let consumer_spec: GraphSpec = graph_spec_from_json(json!({
         "nodes": [
             {
                 "id": "shared_input",
@@ -225,8 +231,7 @@ fn merged_graph_rewires_shared_output() {
             { "from": { "node_id": "shared_input" }, "to": { "node_id": "scale", "input": "operand_1" } },
             { "from": { "node_id": "scale" }, "to": { "node_id": "result", "input": "in" } }
         ]
-    }))
-    .expect("consumer graph");
+    }));
 
     let producer_cfg = GraphControllerConfig {
         id: "producer".into(),
@@ -319,7 +324,7 @@ fn merged_graph_final_overlap_still_errors_with_blend_strategy() {
 }
 #[test]
 fn merge_reports_conflicting_outputs() {
-    let spec_a: GraphSpec = serde_json::from_value(json!({
+    let spec_a: GraphSpec = graph_spec_from_json(json!({
         "nodes": [
             { "id": "const_a", "type": "constant", "params": { "value": { "type": "float", "data": 1.0 } } },
             { "id": "out_a", "type": "output", "params": { "path": "shared/value" } }
@@ -327,10 +332,9 @@ fn merge_reports_conflicting_outputs() {
         "edges": [
             { "from": { "node_id": "const_a" }, "to": { "node_id": "out_a", "input": "in" } }
         ]
-    }))
-    .expect("spec a");
+    }));
 
-    let spec_b: GraphSpec = serde_json::from_value(json!({
+    let spec_b: GraphSpec = graph_spec_from_json(json!({
         "nodes": [
             { "id": "const_b", "type": "constant", "params": { "value": { "type": "float", "data": 2.0 } } },
             { "id": "out_b", "type": "output", "params": { "path": "shared/value" } }
@@ -338,8 +342,7 @@ fn merge_reports_conflicting_outputs() {
         "edges": [
             { "from": { "node_id": "const_b" }, "to": { "node_id": "out_b", "input": "in" } }
         ]
-    }))
-    .expect("spec b");
+    }));
 
     let cfg_a = GraphControllerConfig {
         id: "a".into(),
@@ -440,15 +443,15 @@ fn merged_graph_parallel_blend_pipeline() {
         let actual = writes
             .get(path)
             .unwrap_or_else(|| panic!("expected final write for {}", path));
-        match actual {
-            Value::Float(v) => assert!(
+        match as_float(actual) {
+            Some(v) => assert!(
                 (v - value).abs() < 1e-6,
                 "expected {} -> {}, got {}",
                 path,
                 value,
                 v
             ),
-            other => panic!("expected float value for {}, got {:?}", path, other),
+            None => panic!("expected float value for {}, got {:?}", path, actual),
         }
     }
 
@@ -465,15 +468,15 @@ fn merged_graph_parallel_blend_pipeline() {
         let actual = writes
             .get(path)
             .unwrap_or_else(|| panic!("expected namespaced write for {}", path));
-        match actual {
-            Value::Float(v) => assert!(
+        match as_float(actual) {
+            Some(v) => assert!(
                 (v - value).abs() < 1e-6,
                 "expected {} -> {}, got {}",
                 path,
                 value,
                 v
             ),
-            other => panic!("expected float value for {}, got {:?}", path, other),
+            None => panic!("expected float value for {}, got {:?}", path, actual),
         }
     }
 
@@ -486,15 +489,15 @@ fn merged_graph_parallel_blend_pipeline() {
         let actual = writes
             .get(path)
             .unwrap_or_else(|| panic!("expected blend write for {}", path));
-        match actual {
-            Value::Float(v) => assert!(
+        match as_float(actual) {
+            Some(v) => assert!(
                 (v - value).abs() < 1e-6,
                 "expected {} -> {}, got {}",
                 path,
                 value,
                 v
             ),
-            other => panic!("expected float value for {}, got {:?}", path, other),
+            None => panic!("expected float value for {}, got {:?}", path, actual),
         }
     }
 }
@@ -561,10 +564,7 @@ fn read_scalar_write(batch: &WriteBatch, path: &str) -> f32 {
         .iter()
         .find(|w| w.path.to_string() == path)
         .unwrap_or_else(|| panic!("missing write for {path}"));
-    match op.value {
-        Value::Float(v) => v,
-        _ => panic!("expected float write for {path}"),
-    }
+    as_float(&op.value).unwrap_or_else(|| panic!("expected float write for {path}"))
 }
 
 fn find_write<'a>(batch: &'a WriteBatch, path: &str) -> &'a Value {
@@ -584,81 +584,74 @@ fn assert_write_matches(batch: &WriteBatch, path: &str, expected: &JsonValue) {
 
 fn assert_values_close(actual: &Value, expected: &Value, path: &str) {
     const EPS: f32 = 1e-3;
-    match (actual, expected) {
-        (Value::Float(a), Value::Float(b)) => assert!(
+
+    fn components_close(a: &[f32], b: &[f32], eps: f32) -> bool {
+        a.len() == b.len()
+            && a.iter()
+                .zip(b.iter())
+                .all(|(aa, bb)| (aa - bb).abs() <= eps)
+    }
+
+    /// Quaternions compare up to sign (q and -q are the same rotation).
+    fn quats_close(a: &[f32; 4], b: &[f32; 4], eps: f32) -> bool {
+        let direct = a
+            .iter()
+            .zip(b.iter())
+            .all(|(aa, bb)| (aa - bb).abs() <= eps);
+        let neg = a
+            .iter()
+            .zip(b.iter())
+            .all(|(aa, bb)| (aa + bb).abs() <= eps);
+        direct || neg
+    }
+
+    if let (Some(a), Some(b)) = (as_float(actual), as_float(expected)) {
+        assert!(
             (a - b).abs() <= EPS,
             "float mismatch for {path}: {a} vs {b}"
-        ),
-        (Value::Vec2(a), Value::Vec2(b)) => a
-            .iter()
-            .zip(b.iter())
-            .for_each(|(aa, bb)| assert!((aa - bb).abs() <= EPS, "vec2 mismatch for {path}")),
-        (Value::Vec3(a), Value::Vec3(b)) => a
-            .iter()
-            .zip(b.iter())
-            .for_each(|(aa, bb)| assert!((aa - bb).abs() <= EPS, "vec3 mismatch for {path}")),
-        (Value::Vec4(a), Value::Vec4(b)) => a
-            .iter()
-            .zip(b.iter())
-            .for_each(|(aa, bb)| assert!((aa - bb).abs() <= EPS, "vec4 mismatch for {path}")),
-        (Value::Quat(a), Value::Quat(b)) => {
-            let direct = a
-                .iter()
-                .zip(b.iter())
-                .all(|(aa, bb)| (aa - bb).abs() <= EPS);
-            let neg = a
-                .iter()
-                .zip(b.iter())
-                .all(|(aa, bb)| (aa + bb).abs() <= EPS);
-            assert!(
-                direct || neg,
-                "quat mismatch for {path}: actual={a:?} expected={b:?}"
-            );
-        }
-        (Value::Vector(a), Value::Vector(b)) => {
-            assert_eq!(a.len(), b.len(), "vector length mismatch for {path}");
-            a.iter()
-                .zip(b.iter())
-                .for_each(|(aa, bb)| assert!((aa - bb).abs() <= EPS, "vector mismatch for {path}"));
-        }
-        (
-            Value::Transform {
-                translation: at,
-                rotation: ar,
-                scale: as_,
-            },
-            Value::Transform {
-                translation: bt,
-                rotation: br,
-                scale: bs,
-            },
-        ) => {
-            at.iter().zip(bt.iter()).for_each(|(aa, bb)| {
-                assert!(
-                    (aa - bb).abs() <= EPS,
-                    "transform.translation mismatch for {path}"
-                )
-            });
-            let direct = ar
-                .iter()
-                .zip(br.iter())
-                .all(|(aa, bb)| (aa - bb).abs() <= EPS);
-            let neg = ar
-                .iter()
-                .zip(br.iter())
-                .all(|(aa, bb)| (aa + bb).abs() <= EPS);
-            assert!(
-                direct || neg,
-                "transform.rotation mismatch for {path}: actual={ar:?} expected={br:?}"
-            );
-            as_.iter().zip(bs.iter()).for_each(|(aa, bb)| {
-                assert!(
-                    (aa - bb).abs() <= EPS,
-                    "transform.scale mismatch for {path}"
-                )
-            });
-        }
-        _ => assert_eq!(actual, expected, "value mismatch for {path}"),
+        );
+    } else if let (Some(a), Some(b)) = (as_vec2(actual), as_vec2(expected)) {
+        assert!(
+            components_close(&a, &b, EPS),
+            "vec2 mismatch for {path}: actual={a:?} expected={b:?}"
+        );
+    } else if let (Some(a), Some(b)) = (as_vec3(actual), as_vec3(expected)) {
+        assert!(
+            components_close(&a, &b, EPS),
+            "vec3 mismatch for {path}: actual={a:?} expected={b:?}"
+        );
+    } else if let (Some(a), Some(b)) = (as_vec4(actual), as_vec4(expected)) {
+        assert!(
+            components_close(&a, &b, EPS),
+            "vec4 mismatch for {path}: actual={a:?} expected={b:?}"
+        );
+    } else if let (Some(a), Some(b)) = (as_quat(actual), as_quat(expected)) {
+        assert!(
+            quats_close(&a, &b, EPS),
+            "quat mismatch for {path}: actual={a:?} expected={b:?}"
+        );
+    } else if let (Some(a), Some(b)) = (as_vector(actual), as_vector(expected)) {
+        assert!(
+            components_close(a, b, EPS),
+            "vector mismatch for {path}: actual={a:?} expected={b:?}"
+        );
+    } else if let (Some(a), Some(b)) = (as_transform(actual), as_transform(expected)) {
+        assert!(
+            components_close(&a.translation, &b.translation, EPS),
+            "transform.translation mismatch for {path}"
+        );
+        assert!(
+            quats_close(&a.rotation, &b.rotation, EPS),
+            "transform.rotation mismatch for {path}: actual={:?} expected={:?}",
+            a.rotation,
+            b.rotation
+        );
+        assert!(
+            components_close(&a.scale, &b.scale, EPS),
+            "transform.scale mismatch for {path}"
+        );
+    } else {
+        assert_eq!(actual, expected, "value mismatch for {path}");
     }
 }
 
@@ -704,7 +697,7 @@ fn register_fixture_animations(mut orch: Orchestrator, fixture: &DemoFixture) ->
 
 fn apply_fixture_inputs(orch: &mut Orchestrator, fixture: &DemoFixture) {
     for input in fixture.initial_inputs() {
-        orch.set_input(&input.path, input.value.clone(), input.shape.clone())
+        orch.set_input_json(&input.path, input.value.clone(), input.shape.clone())
             .expect("set input from fixture");
     }
 }
@@ -732,8 +725,8 @@ fn mirror_writes_false_limits_blackboard() {
 
     let graph = orch.graphs.get_mut("test-graph").expect("graph registered");
     let mut batch = WriteBatch::new();
-    batch.push(WriteOp::new(tp_public.clone(), Value::Float(1.0)));
-    batch.push(WriteOp::new(tp_internal.clone(), Value::Float(2.0)));
+    batch.push(WriteOp::new(tp_public.clone(), float(1.0)));
+    batch.push(WriteOp::new(tp_internal.clone(), float(2.0)));
     graph.rt.writes = batch;
 
     let frame = orch.step(1.0 / 60.0).expect("step ok");
@@ -770,8 +763,8 @@ fn mirror_writes_true_mirrors_full_batch() {
 
     let graph = orch.graphs.get_mut("test-graph").expect("graph registered");
     let mut batch = WriteBatch::new();
-    batch.push(WriteOp::new(tp_public.clone(), Value::Float(1.0)));
-    batch.push(WriteOp::new(tp_internal.clone(), Value::Float(2.0)));
+    batch.push(WriteOp::new(tp_public.clone(), float(1.0)));
+    batch.push(WriteOp::new(tp_internal.clone(), float(2.0)));
     graph.rt.writes = batch;
 
     let frame = orch.step(1.0 / 60.0).expect("step ok");
@@ -788,13 +781,13 @@ fn mirror_writes_true_mirrors_full_batch() {
         .blackboard
         .get(&tp_public_str)
         .expect("public mirrored");
-    assert_eq!(public_entry.value, Value::Float(1.0));
+    assert_eq!(public_entry.value, float(1.0));
 
     let internal_entry = orch
         .blackboard
         .get(&tp_internal_str)
         .expect("internal mirrored when enabled");
-    assert_eq!(internal_entry.value, Value::Float(2.0));
+    assert_eq!(internal_entry.value, float(2.0));
 }
 
 #[test]
@@ -884,7 +877,7 @@ fn sine_driver_graph_controls_animation_seek() {
 
     for step in 0..=4 {
         let time = step as f32 * 0.5;
-        orch.set_input("driver/time.seconds", JsonValue::from(time), None)
+        orch.set_input_json("driver/time.seconds", JsonValue::from(time), None)
             .expect("set time");
         let frame = orch.step(0.5).expect("step ok");
         let writes = &frame.merged_writes;
@@ -912,23 +905,24 @@ fn blend_pose_pipeline_shared_fixture_executes() {
         }
 
         let rotation = find_write(&frame.merged_writes, "rig/root.rotation");
-        if let Value::Quat(_) = rotation {
-        } else {
-            panic!("rig/root.rotation should be quaternion, got {rotation:?}");
-        }
+        assert!(
+            as_quat(rotation).is_some(),
+            "rig/root.rotation should be quaternion, got {rotation:?}"
+        );
 
         let translation = find_write(&frame.merged_writes, "rig/root.translation");
-        match translation {
-            Value::Vec3(_) => {}
-            Value::Vector(v) => assert_eq!(v.len(), 3, "translation vector length"),
-            other => panic!("rig/root.translation should be vec3, got {other:?}"),
+        if as_vec3(translation).is_none() {
+            match as_vector(translation) {
+                Some(v) => assert_eq!(v.len(), 3, "translation vector length"),
+                None => panic!("rig/root.translation should be vec3, got {translation:?}"),
+            }
         }
 
         let transform = find_write(&frame.merged_writes, "rig/root.transform");
-        if let Value::Transform { .. } = transform {
-        } else {
-            panic!("rig/root.transform should be transform value, got {transform:?}");
-        }
+        assert!(
+            as_transform(transform).is_some(),
+            "rig/root.transform should be transform value, got {transform:?}"
+        );
     }
 }
 

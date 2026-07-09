@@ -20,13 +20,9 @@ fn get_scalar_by_key(outputs: JsValue, want_key: &str) -> Option<f64> {
             .as_string()?;
         if key == want_key {
             let val = Reflect::get(&ch, &JsValue::from_str("value")).ok()?;
-            let typ = Reflect::get(&val, &JsValue::from_str("type"))
-                .ok()?
-                .as_string()?;
-            if typ == "Scalar" {
-                let data = Reflect::get(&val, &JsValue::from_str("data")).ok()?;
-                return data.as_f64();
-            }
+            // Scalar values arrive in Arora serde form: { f32: number }.
+            let data = Reflect::get(&val, &JsValue::from_str("f32")).ok()?;
+            return data.as_f64();
         }
     }
     None

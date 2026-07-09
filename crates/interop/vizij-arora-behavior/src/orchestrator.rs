@@ -1,24 +1,25 @@
 //! [`OrchestratorBehavior`]: a whole Vizij orchestrator driven as one Arora
-//! [`Behavior`](arora_behavior::Behavior) (VIZ-38).
+//! [`BehaviorInterpreter`](arora_behavior::BehaviorInterpreter) (VIZ-38).
 //!
 //! The orchestrator coordinates several graph/animation controllers against its
 //! own blackboard and **merges** their writes each frame — the load-bearing
 //! piece (error / namespace / blend / add conflict strategies). Wrapping it
-//! whole as a single `Behavior` preserves that merge exactly:
+//! whole as a single interpreter preserves that merge exactly:
 //! [`Orchestrator::step`] runs the controllers and merges internally, and this
 //! adapter only moves values across the Arora store boundary — subscribed
-//! inputs in, merged writes out. Decomposing the orchestrator into per-controller
-//! behaviors is a later step; doing it this way first is the safe migration that
-//! cannot lose the merge semantics.
+//! inputs in, merged writes out, one shared `Value` type in both directions.
+//! Decomposing the orchestrator into per-controller interpreters is a later
+//! step; doing it this way first is the safe migration that cannot lose the
+//! merge semantics.
 
-use arora_behavior::{Behavior, BehaviorContext, BehaviorError, BehaviorStatus};
+use arora_behavior::{BehaviorContext, BehaviorError, BehaviorInterpreter, BehaviorStatus};
 use arora_types::data::{DataStore, Key, StateChange};
 use vizij_api_core::TypedPath;
 use vizij_orchestrator::Orchestrator;
 
-use crate::conv;
+use crate::golden_dt_seconds;
 
-/// A Vizij orchestrator as an Arora behavior.
+/// A Vizij orchestrator as an Arora behavior interpreter.
 pub struct OrchestratorBehavior {
     orchestrator: Orchestrator,
     /// Store paths staged into the orchestrator's blackboard before each step.
@@ -39,13 +40,14 @@ impl OrchestratorBehavior {
 
     /// Tick the orchestrator against `store` for `dt`: stage subscribed inputs,
     /// step (controllers run and their writes are merged), then publish the
-    /// merged writes. The inherent method behind the [`Behavior`] impl — handy
-    /// for driving an orchestrator directly and for tests.
+    /// merged writes. The inherent method behind the [`BehaviorInterpreter`]
+    /// impl — handy for driving an orchestrator directly and for tests.
     pub fn tick_store(&mut self, store: &dyn DataStore, dt: f32) -> Result<(), BehaviorError> {
         let delta = if dt.is_finite() { dt.max(0.0) } else { 0.0 };
 
         // Stage subscribed inputs from the store into the blackboard. The
-        // orchestrator's `set_input` takes JSON, so Arora value -> Vizij -> JSON.
+        // store and the blackboard speak the same `Value`, so each read goes
+        // in as-is.
         for tp in &self.inputs {
             let key = Key::new(tp.to_string());
             if let Some(value) = store
@@ -54,12 +56,8 @@ impl OrchestratorBehavior {
                 .next()
                 .flatten()
             {
-                let vizij = vizij_arora::from_arora(&value).map_err(conv)?;
-                let json = serde_json::to_value(&vizij).map_err(|e| BehaviorError {
-                    message: e.to_string(),
-                })?;
                 self.orchestrator
-                    .set_input(&tp.to_string(), json, None)
+                    .set_input(&tp.to_string(), value, None)
                     .map_err(|e| BehaviorError {
                         message: e.to_string(),
                     })?;
@@ -72,13 +70,12 @@ impl OrchestratorBehavior {
             message: e.to_string(),
         })?;
 
-        // Publish the merged writes to the Arora store (Vizij -> Arora).
+        // Publish the merged writes to the Arora store.
         let mut change = StateChange::new();
-        for op in frame.merged_writes.iter() {
-            let value = vizij_arora::to_arora(&op.value).map_err(conv)?;
+        for op in frame.merged_writes.into_vec() {
             change
                 .set
-                .insert(Key::new(op.path.to_string()), Some(value));
+                .insert(Key::new(op.path.to_string()), Some(op.value));
         }
         store.write(change).map_err(|e| BehaviorError {
             message: e.to_string(),
@@ -87,9 +84,10 @@ impl OrchestratorBehavior {
     }
 }
 
-impl Behavior for OrchestratorBehavior {
+impl BehaviorInterpreter for OrchestratorBehavior {
     fn tick(&mut self, ctx: &mut BehaviorContext) -> Result<BehaviorStatus, BehaviorError> {
-        self.tick_store(ctx.store, ctx.dt)?;
+        let dt = golden_dt_seconds(ctx.store);
+        self.tick_store(ctx.store, dt)?;
         // An orchestrator runs every frame.
         Ok(BehaviorStatus::Running)
     }
@@ -99,7 +97,8 @@ impl Behavior for OrchestratorBehavior {
 mod tests {
     use super::*;
     use arora_simple_data_store::SimpleDataStore;
-    use arora_types::value::Value as AValue;
+    use arora_types::value::Value;
+    use vizij_api_core::value::float;
     use vizij_graph_core::types::{
         EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
     };
@@ -113,7 +112,7 @@ mod tests {
                     id: "k".into(),
                     kind: NodeType::Constant,
                     params: NodeParams {
-                        value: Some(vizij_api_core::Value::Float(value)),
+                        value: Some(float(value)),
                         ..Default::default()
                     },
                     output_shapes: Default::default(),
@@ -152,7 +151,7 @@ mod tests {
         }
     }
 
-    fn read(store: &SimpleDataStore, path: &str) -> Option<AValue> {
+    fn read(store: &SimpleDataStore, path: &str) -> Option<Value> {
         store.read(&[Key::from(path)]).into_iter().next().flatten()
     }
 
@@ -165,6 +164,6 @@ mod tests {
 
         // One tick steps the orchestrator; its merged write lands in the store.
         behavior.tick_store(&store, 0.016).expect("tick");
-        assert_eq!(read(&store, "out/value"), Some(AValue::F32(2.0)));
+        assert_eq!(read(&store, "out/value"), Some(float(2.0)));
     }
 }

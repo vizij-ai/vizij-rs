@@ -14,7 +14,8 @@ use vizij_animation_core::{
     stored_animation::parse_stored_animation_json,
     Engine, InstanceCfg, LoopMode,
 };
-use vizij_api_core::{TypedPath, Value as ApiValue, WriteBatch};
+use vizij_api_core::value::{as_bool, as_float};
+use vizij_api_core::{TypedPath, WriteBatch};
 
 use crate::blackboard::Blackboard;
 
@@ -214,17 +215,17 @@ impl AnimationController {
                     "pause" => inputs.player_cmds.push(PlayerCommand::Pause { player }),
                     "stop" => inputs.player_cmds.push(PlayerCommand::Stop { player }),
                     "set_speed" => {
-                        if let ApiValue::Float(f) = &entry.value {
+                        if let Some(speed) = as_float(&entry.value) {
                             inputs
                                 .player_cmds
-                                .push(PlayerCommand::SetSpeed { player, speed: *f });
+                                .push(PlayerCommand::SetSpeed { player, speed });
                         }
                     }
                     "seek" => {
-                        if let ApiValue::Float(f) = &entry.value {
+                        if let Some(time) = as_float(&entry.value) {
                             inputs
                                 .player_cmds
-                                .push(PlayerCommand::Seek { player, time: *f });
+                                .push(PlayerCommand::Seek { player, time });
                         }
                     }
                     _ => {
@@ -246,26 +247,26 @@ impl AnimationController {
                     };
                     match field.as_str() {
                         "weight" => {
-                            if let ApiValue::Float(f) = &entry.value {
-                                upd.weight = Some(*f);
+                            if let Some(f) = as_float(&entry.value) {
+                                upd.weight = Some(f);
                                 inputs.instance_updates.push(upd);
                             }
                         }
                         "time_scale" => {
-                            if let ApiValue::Float(f) = &entry.value {
-                                upd.time_scale = Some(*f);
+                            if let Some(f) = as_float(&entry.value) {
+                                upd.time_scale = Some(f);
                                 inputs.instance_updates.push(upd);
                             }
                         }
                         "start_offset" => {
-                            if let ApiValue::Float(f) = &entry.value {
-                                upd.start_offset = Some(*f);
+                            if let Some(f) = as_float(&entry.value) {
+                                upd.start_offset = Some(f);
                                 inputs.instance_updates.push(upd);
                             }
                         }
                         "enabled" => {
-                            if let ApiValue::Bool(b) = &entry.value {
-                                upd.enabled = Some(*b);
+                            if let Some(b) = as_bool(&entry.value) {
+                                upd.enabled = Some(b);
                                 inputs.instance_updates.push(upd);
                             }
                         }
@@ -354,8 +355,8 @@ mod tests {
         let mut bb = Blackboard::new();
         // Player command: play
         bb.set(
-            "anim/player/0/cmd/play".to_string(),
-            serde_json::json!({"type":"float","data":0.0}),
+            "anim/player/0/cmd/play",
+            vizij_api_core::value::float(0.0),
             None,
             0,
             "test".into(),
@@ -364,8 +365,8 @@ mod tests {
 
         // Instance weight update
         bb.set(
-            "anim/player/0/instance/1/weight".to_string(),
-            serde_json::json!({"type":"float","data":0.75}),
+            "anim/player/0/instance/1/weight",
+            vizij_api_core::value::float(0.75),
             None,
             0,
             "test".into(),

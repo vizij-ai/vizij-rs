@@ -2,6 +2,7 @@
 
 use std::cmp::Ordering;
 
+use vizij_api_core::value as vocab;
 use vizij_api_core::Value;
 
 use super::eval_node::InputSlots;
@@ -51,7 +52,7 @@ where
     let mut acc = iter
         .next()
         .cloned()
-        .unwrap_or_else(|| Value::Float(f32::NAN));
+        .unwrap_or_else(|| vocab::float(f32::NAN));
     for v in iter {
         acc = binary_numeric(&acc, v, op);
     }

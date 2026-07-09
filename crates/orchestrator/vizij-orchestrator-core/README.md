@@ -30,11 +30,7 @@ let graph_cfg = GraphControllerConfig {
 };
 
 let mut orchestrator = Orchestrator::new(Schedule::SinglePass).with_graph(graph_cfg);
-orchestrator.set_input(
-    "demo/input/value",
-    serde_json::json!({ "type": "float", "data": 1.0 }),
-    None,
-)?;
+orchestrator.set_input("demo/input/value", vizij_api_core::value::float(1.0), None)?;
 
 let frame = orchestrator.step(1.0 / 60.0)?;
 println!("epoch {} merged writes: {:?}", frame.epoch, frame.merged_writes);

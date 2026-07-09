@@ -80,11 +80,7 @@ fn main() -> anyhow::Result<()> {
     let mut orchestrator = Orchestrator::new(Schedule::SinglePass)
         .with_graph(graph_cfg);
 
-    orchestrator.set_input(
-        "demo/gain",
-        serde_json::json!({ "type": "float", "data": 2.0 }),
-        None,
-    )?;
+    orchestrator.set_input("demo/gain", vizij_api_core::value::float(2.0), None)?;
 
     let frame = orchestrator.step(1.0 / 60.0)?;
     let out = frame.merged_writes.iter()
@@ -92,7 +88,7 @@ fn main() -> anyhow::Result<()> {
         .map(|op| op.value.clone())
         .unwrap();
 
-    println!("Output value: {:?}", out); // Value::Float(1.0)
+    println!("Output value: {:?}", out); // Value::F32(1.0)
     Ok(())
 }
 ```
@@ -108,17 +104,18 @@ fn main() -> anyhow::Result<()> {
 
 ```rust
 use vizij_orchestrator_core::{Blackboard, BlackboardEntry, Orchestrator, Schedule};
-use vizij_api_core::{TypedPath, Value, WriteBatch, WriteOp};
+use vizij_api_core::value::float;
+use vizij_api_core::{TypedPath, WriteBatch, WriteOp};
 
 let mut orch = Orchestrator::new(Schedule::SinglePass);
 let tp = TypedPath::parse("robot/arm.joint")?;
 
 // Manual staging
-orch.blackboard.set_entry(tp.clone(), BlackboardEntry::new(Value::Float(0.2)))?;
+orch.blackboard.set_entry(tp.clone(), BlackboardEntry::new(float(0.2)))?;
 
 // Apply a batch (e.g., from graph controller writes)
 let mut batch = WriteBatch::new();
-batch.push(WriteOp::new(tp.clone(), Value::Float(0.5)));
+batch.push(WriteOp::new(tp.clone(), float(0.5)));
 let conflicts = orch.blackboard.apply_writebatch(batch, orch.epoch, "graph:0".into());
 
 if !conflicts.is_empty() {

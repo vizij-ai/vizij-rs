@@ -64,7 +64,7 @@ mod tests {
     use crate::types::{
         EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeType,
     };
-    use vizij_api_core::Value;
+    use vizij_api_core::value::float;
     #[test]
     fn simple_topo() {
         let g = GraphSpec {
@@ -73,7 +73,7 @@ mod tests {
                     id: "a".into(),
                     kind: NodeType::Constant,
                     params: NodeParams {
-                        value: Some(Value::Float(1.0)),
+                        value: Some(float(1.0)),
                         ..Default::default()
                     },
                     output_shapes: Default::default(),

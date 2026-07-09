@@ -146,7 +146,7 @@ Instances are blended in insertion order. Adjust `weight`, `time_scale`, and `st
 - **AnimationData** – Internal representation with duration (seconds), track list, and optional metadata.
 - **StoredAnimation** – Distribution format expressed in milliseconds with normalised `stamp` keypoints (0..1). Each point contains optional `transitions.in/out` cubic-bezier control points.
 - **Track** – Couples a canonical target with keyframes and a value kind. Supports per-key interpolation overrides.
-- **Value Types** – Scalars, Vec2/Vec3/Vec4, Quaternion, Colour RGBA, Transform (TRS), Boolean, Text. Transform interpolation decomposes into TRS components.
+- **Value Types** – Scalars, Vec2/Vec3/Vec4, Quaternion, Colour RGBA, Transform (TRS), Boolean, Text. Keypoints hold these as POD `TrackValue`s, decoded once at load; `Outputs.changes` carry them as `vizij-api-core` `Value`s encoded at the output boundary. Transform interpolation decomposes into TRS components.
 
 ### Engine Components
 
@@ -178,7 +178,7 @@ Most projects can rely on `Config::default()`, but headless baking tools or orch
 ### Outputs & derivatives
 
 - `Outputs.changes[n]` and `OutputsWithDerivatives.changes[n]` reference the same sampled value ordering. When derivatives are requested, each `ChangeWithDerivative` carries the numeric derivative in the same slot as the value that produced it.
-- Derivatives are optional (`Option<Value>`). Non-numeric tracks (booleans, text) persist `None`, whereas numeric tracks use the same typed envelope as the primary value (`Float`, `Vec3`, etc.).
+- Derivatives are optional (`Option<Value>`). Non-numeric tracks (booleans, text) persist `None`, whereas numeric tracks use the same value encoding as the primary value (scalar, vec3, etc.).
 - Events are shared between both output structures; switching to derivatives does not drop instrumentation signals.
 
 ---

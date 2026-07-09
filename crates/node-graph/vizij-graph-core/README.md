@@ -58,7 +58,8 @@ Disable defaults with `--no-default-features` if you want a minimal build.
 ## Quick Start
 
 ```rust
-use vizij_api_core::{TypedPath, Value, Shape};
+use vizij_api_core::value::vec3;
+use vizij_api_core::{Shape, ShapeId, TypedPath};
 use vizij_graph_core::{evaluate_all, GraphRuntime};
 use vizij_graph_core::types::GraphSpec;
 
@@ -69,14 +70,14 @@ let mut runtime = GraphRuntime::default();
 // Stage an IK target for the next frame
 let target = TypedPath::parse("robot/arm/ik_target")?;
 runtime.advance_epoch();
-runtime.set_input(target, Value::vec3([0.1, 0.2, 0.3]), Some(Shape::vec3()));
+runtime.set_input(target, vec3([0.1, 0.2, 0.3]), Some(Shape::new(ShapeId::Vec3)));
 
-let result = evaluate_all(&mut runtime, &spec)?;
+evaluate_all(&mut runtime, &spec)?;
 
-for (node_id, outputs) in &result.nodes {
+for (node_id, outputs) in &runtime.outputs {
     println!("node {node_id}: {outputs:#?}");
 }
-for write in &result.writes {
+for write in runtime.writes.iter() {
     println!("write {:?} -> {:?}", write.path, write.value);
 }
 ```
@@ -131,8 +132,8 @@ for write in &result.writes {
 
 ### Shapes & Values
 
-- Values use `vizij_api_core::Value` (scalar, vector, quat, record, array, tuple, text, bool, etc.).
-- Shapes (`ShapeId`) describe numeric layouts and support inference.
+- Values are `vizij_api_core::Value` (Arora's `Value`, re-exported); the vizij composites (vec2/vec3/vec4/quat/color/transform) are built and read through the `vizij_api_core::value` constructors and accessors.
+- Shapes (`ShapeId`) describe numeric layouts and support inference. Sequences travel as one wire kind, so declared `Array`/`List`/`Tuple` shapes carry the distinction.
 - Declared shapes on node outputs guard against schema drift and provide better error messages.
 
 ### Parameter updates
@@ -140,7 +141,7 @@ for write in &result.writes {
 - `NodeParams` live on each `NodeSpec`. Mutate them before evaluation to tweak graph behaviour:
   ```rust
   if let Some(node) = spec.nodes.iter_mut().find(|n| n.id == "gain") {
-      node.params.value = Some(Value::Float(0.5));
+      node.params.value = Some(vizij_api_core::value::float(0.5));
   }
   evaluate_all(&mut runtime, &spec)?;
   ```

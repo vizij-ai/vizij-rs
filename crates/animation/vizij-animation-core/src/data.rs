@@ -1,11 +1,13 @@
 #![allow(dead_code)]
 //! Canonical animation data model (StoredAnimation).
-//! ValueKind/Value are defined in value.rs.
+//! Keyframe values are stored as POD [`TrackValue`]s (see value.rs), decoded
+//! once at parse/deserialization so sampling and blending never touch the
+//! dynamic `Value`.
 
 use serde::{Deserialize, Serialize};
 
 use crate::ids::AnimId;
-use vizij_api_core::Value;
+use crate::value::TrackValue;
 
 /// 2D vector used for transition control points (normalized 0..1 domain).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
@@ -32,7 +34,7 @@ pub struct Keypoint {
     pub id: String,
     /// Normalized time in `[0, 1]` within the clip duration.
     pub stamp: f32,
-    pub value: Value,
+    pub value: TrackValue,
     #[serde(default)]
     pub transitions: Option<Transitions>,
 }

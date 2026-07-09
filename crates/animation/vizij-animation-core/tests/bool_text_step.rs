@@ -5,8 +5,9 @@ use vizij_animation_core::{
     engine::{Engine, InstanceCfg},
     inputs::Inputs,
     sampling::sample_track,
-    value::Value,
+    value::TrackValue,
 };
+use vizij_api_core::value::{as_bool, as_text};
 
 fn mk_bool_track(path: &str, keys: &[(f32, bool)]) -> Track {
     let mut points = Vec::with_capacity(keys.len());
@@ -14,7 +15,7 @@ fn mk_bool_track(path: &str, keys: &[(f32, bool)]) -> Track {
         points.push(Keypoint {
             id: format!("k{i}"),
             stamp: *stamp,
-            value: Value::Bool(*v),
+            value: TrackValue::Bool(*v),
             transitions: None,
         });
     }
@@ -33,7 +34,7 @@ fn mk_text_track(path: &str, keys: &[(f32, &str)]) -> Track {
         points.push(Keypoint {
             id: format!("k{i}"),
             stamp: *stamp,
-            value: Value::Text((*s).to_string()),
+            value: TrackValue::Text((*s).to_string()),
             transitions: None,
         });
     }
@@ -66,20 +67,20 @@ fn step_sampling_for_bool_and_text_tracks() {
     // Check sampler directly (u is normalized 0..1)
     // At u=0.25 -> left of [0.0,0.5] so expect first key values
     match sample_track(&t_bool, 0.25) {
-        Value::Bool(b) => assert!(!b),
+        TrackValue::Bool(b) => assert!(!b),
         _ => panic!(),
     }
     match sample_track(&t_text, 0.25) {
-        Value::Text(s) => assert_eq!(s, "A"),
+        TrackValue::Text(s) => assert_eq!(s, "A"),
         _ => panic!(),
     }
     // At u=0.6 -> in segment [0.5,1.0], expect second key values due to step (hold left)
     match sample_track(&t_bool, 0.6) {
-        Value::Bool(b) => assert!(b),
+        TrackValue::Bool(b) => assert!(b),
         _ => panic!(),
     }
     match sample_track(&t_text, 0.6) {
-        Value::Text(s) => assert_eq!(s, "B"),
+        TrackValue::Text(s) => assert_eq!(s, "B"),
         _ => panic!(),
     }
 
@@ -106,14 +107,8 @@ fn step_sampling_for_bool_and_text_tracks() {
         .unwrap()
         .value
         .clone();
-    match flag0 {
-        Value::Bool(b) => assert!(!b),
-        _ => panic!(),
-    }
-    match label0 {
-        Value::Text(s) => assert_eq!(s, "A"),
-        _ => panic!(),
-    }
+    assert_eq!(as_bool(&flag0), Some(false));
+    assert_eq!(as_text(&label0), Some("A"));
 
     // Advance by 0.6s (engine maps seconds via duration_ms=1.0s) -> expect B/true
     let _ = eng.update(0.6, Inputs::default());
@@ -132,12 +127,6 @@ fn step_sampling_for_bool_and_text_tracks() {
         .unwrap()
         .value
         .clone();
-    match flag1 {
-        Value::Bool(b) => assert!(b),
-        _ => panic!(),
-    }
-    match label1 {
-        Value::Text(s) => assert_eq!(s, "B"),
-        _ => panic!(),
-    }
+    assert_eq!(as_bool(&flag1), Some(true));
+    assert_eq!(as_text(&label1), Some("B"));
 }

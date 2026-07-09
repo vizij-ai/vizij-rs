@@ -11,7 +11,7 @@ path = "src/lib.rs"
 crate-type = ["lib"]
 
 [dependencies]
-vizij-api-core = { version = "0.2.0", path = "../../api/vizij-api-core" }
+vizij-api-core = { version = "1.0.0", path = "../../api/vizij-api-core" }
 vizij-graph-core = { version = "0.3.0", path = "../../node-graph/vizij-graph-core" }
 vizij-animation-core = { version = "0.3.0", path = "../../animation/vizij-animation-core" }
 vizij-test-fixtures = { path = "../../test-fixtures/vizij-test-fixtures" }

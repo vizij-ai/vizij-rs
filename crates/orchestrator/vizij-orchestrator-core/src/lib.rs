@@ -15,7 +15,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use vizij_api_core::WriteBatch;
+use vizij_api_core::{Shape, Value, WriteBatch};
 
 pub use crate::blackboard::{Blackboard, BlackboardEntry, ConflictLog};
 pub use crate::controllers::{
@@ -129,18 +129,26 @@ impl Orchestrator {
     }
 
     /// Set a blackboard input value at a given typed path.
-    /// This is a convenience for tests and host integrations.
     ///
-    /// The path is parsed as a [`vizij_api_core::TypedPath`], values are normalized through the
-    /// JSON helpers, and any existing entry at the same path is overwritten.
-    pub fn set_input(
+    /// The path is parsed as a [`vizij_api_core::TypedPath`]; any existing entry at the same
+    /// path is overwritten.
+    pub fn set_input(&mut self, path: &str, value: Value, shape: Option<Shape>) -> Result<()> {
+        self.blackboard
+            .set(path, value, shape, self.epoch, "host".into())?;
+        Ok(())
+    }
+
+    /// Set a blackboard input from JSON payloads: the value runs through the
+    /// api-core normalizer ([`vizij_api_core::json::parse_value`]), the shape
+    /// through plain serde. A convenience for hosts and tests that hold JSON.
+    pub fn set_input_json(
         &mut self,
         path: &str,
         value: serde_json::Value,
         shape: Option<serde_json::Value>,
     ) -> Result<()> {
         self.blackboard
-            .set(path.into(), value, shape, self.epoch, "host".into())?;
+            .set_json(path, value, shape, self.epoch, "host".into())?;
         Ok(())
     }
 
@@ -185,7 +193,7 @@ mod tests {
                     id: format!("{id}::constant"),
                     kind: NodeType::Constant,
                     params: NodeParams {
-                        value: Some(vizij_api_core::Value::Float(value)),
+                        value: Some(vizij_api_core::value::float(value)),
                         ..Default::default()
                     },
                     output_shapes: Default::default(),

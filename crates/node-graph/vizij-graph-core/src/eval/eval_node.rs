@@ -5,6 +5,7 @@ use crate::eval::plan::{PlanCache, PortLayout};
 use crate::eval::variadic::collect_operand_ports;
 use crate::types::{NodeParams, NodeSpec, NodeType, RoundMode};
 use hashbrown::HashMap;
+use vizij_api_core::value as vocab;
 use vizij_api_core::{coercion, Shape, Value, WriteOp};
 
 use super::noise;
@@ -311,24 +312,24 @@ fn input_or_default(inputs: &InputSlots, key: &str) -> PortValue {
     inputs
         .get(key)
         .cloned()
-        .unwrap_or_else(|| PortValue::new(Value::Float(0.0)))
+        .unwrap_or_else(|| PortValue::new(vocab::float(0.0)))
 }
 
 fn eval_constant(params: &NodeParams, outputs: &mut OutputSlots) -> Result<(), String> {
-    single_output(outputs, params.value.clone().unwrap_or(Value::Float(0.0)))
+    single_output(outputs, params.value.clone().unwrap_or(vocab::float(0.0)))
 }
 
 fn eval_slider(params: &NodeParams, outputs: &mut OutputSlots) -> Result<(), String> {
     single_output(
         outputs,
-        Value::Float(params.value.as_ref().map(as_float).unwrap_or(0.0)),
+        vocab::float(params.value.as_ref().map(as_float).unwrap_or(0.0)),
     )
 }
 
 fn eval_multi_slider(params: &NodeParams, outputs: &mut OutputSlots) -> Result<(), String> {
-    keyed_output(outputs, "x", Value::Float(params.x.unwrap_or(0.0)))?;
-    keyed_output(outputs, "y", Value::Float(params.y.unwrap_or(0.0)))?;
-    keyed_output(outputs, "z", Value::Float(params.z.unwrap_or(0.0)))
+    keyed_output(outputs, "x", vocab::float(params.x.unwrap_or(0.0)))?;
+    keyed_output(outputs, "y", vocab::float(params.y.unwrap_or(0.0)))?;
+    keyed_output(outputs, "z", vocab::float(params.z.unwrap_or(0.0)))
 }
 
 fn eval_arithmetic(
@@ -342,7 +343,7 @@ fn eval_arithmetic(
                 .iter()
                 .map(|pv| pv.value.clone())
                 .collect();
-            let result = fold_numeric_variadic(&values, |x, y| x + y, Value::Float(0.0));
+            let result = fold_numeric_variadic(&values, |x, y| x + y, vocab::float(0.0));
             single_output(outputs, result)
         }
         NodeType::Multiply => {
@@ -350,7 +351,7 @@ fn eval_arithmetic(
                 .iter()
                 .map(|pv| pv.value.clone())
                 .collect();
-            let result = fold_numeric_variadic(&values, |x, y| x * y, Value::Float(1.0));
+            let result = fold_numeric_variadic(&values, |x, y| x * y, vocab::float(1.0));
             single_output(outputs, result)
         }
         NodeType::Subtract => {
@@ -443,7 +444,7 @@ fn eval_min_max(
         .iter()
         .map(|pv| pv.value.clone())
         .collect();
-    let empty = Value::Float(f32::NAN);
+    let empty = vocab::float(f32::NAN);
     let op = match kind {
         NodeType::Min => f32::min,
         NodeType::Max => f32::max,
@@ -484,7 +485,7 @@ fn eval_trig(
 }
 
 fn eval_time(rt: &GraphRuntime, outputs: &mut OutputSlots) -> Result<(), String> {
-    single_output(outputs, Value::Float(rt.t))
+    single_output(outputs, vocab::float(rt.t))
 }
 
 fn eval_oscillator(
@@ -540,7 +541,7 @@ fn eval_oscillator(
         (None, None) => {
             let f = as_float(&freq_value);
             let phase = as_float(&phase_value);
-            Value::Float((std::f32::consts::TAU * f * rt.t + phase).sin())
+            vocab::float((std::f32::consts::TAU * f * rt.t + phase).sin())
         }
     };
 
@@ -657,7 +658,7 @@ fn eval_stateful(
             }
             single_output(outputs, state.layout.reconstruct(&state.value))
         }
-        _ => single_output(outputs, Value::Float(f32::NAN)),
+        _ => single_output(outputs, vocab::float(f32::NAN)),
     }
 }
 
@@ -682,7 +683,7 @@ fn eval_logic(
         NodeType::Not => !as_bool(&input_or_default(inputs, "in").value),
         _ => unreachable!(),
     };
-    single_output(outputs, Value::Bool(value))
+    single_output(outputs, vocab::bool_(value))
 }
 
 fn eval_comparison(
@@ -699,7 +700,7 @@ fn eval_comparison(
         NodeType::NotEqual => (as_float(&lhs.value) - as_float(&rhs.value)).abs() > 1e-6,
         _ => unreachable!(),
     };
-    single_output(outputs, Value::Bool(value))
+    single_output(outputs, vocab::bool_(value))
 }
 
 fn eval_if(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
@@ -856,7 +857,7 @@ fn eval_piecewise_remap(
                 .collect();
             flat.layout.reconstruct(&data)
         }
-        None => Value::Float(f32::NAN),
+        None => vocab::float(f32::NAN),
     };
 
     single_output(outputs, remapped)
@@ -1024,7 +1025,7 @@ fn eval_vec3_cross(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(),
         }
         (Some(a_flat), _) => single_output(outputs, a_flat.layout.fill_with(f32::NAN)),
         (_, Some(b_flat)) => single_output(outputs, b_flat.layout.fill_with(f32::NAN)),
-        _ => single_output(outputs, Value::Vec3([f32::NAN, f32::NAN, f32::NAN])),
+        _ => single_output(outputs, vocab::vec3([f32::NAN; 3])),
     }
 }
 
@@ -1032,7 +1033,7 @@ fn eval_vector_constant(params: &NodeParams, outputs: &mut OutputSlots) -> Resul
     if let Some(value) = &params.value {
         single_output(outputs, value.clone())
     } else {
-        single_output(outputs, Value::Vector(Vec::new()))
+        single_output(outputs, vocab::vector(Vec::new()))
     }
 }
 
@@ -1082,7 +1083,7 @@ fn eval_vector_normalize(inputs: &InputSlots, outputs: &mut OutputSlots) -> Resu
             };
             single_output(outputs, flat.layout.reconstruct(&normalized))
         }
-        None => single_output(outputs, Value::Float(f32::NAN)),
+        None => single_output(outputs, vocab::float(f32::NAN)),
     }
 }
 
@@ -1093,11 +1094,11 @@ fn eval_vector_dot(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(),
         (Some(lhs), Some(rhs)) => match align_flattened(&lhs, &rhs) {
             Ok((_, da, db)) => {
                 let sum = da.iter().zip(db.iter()).map(|(x, y)| x * y).sum::<f32>();
-                single_output(outputs, Value::Float(sum))
+                single_output(outputs, vocab::float(sum))
             }
-            Err(_) => single_output(outputs, Value::Float(f32::NAN)),
+            Err(_) => single_output(outputs, vocab::float(f32::NAN)),
         },
-        _ => single_output(outputs, Value::Float(f32::NAN)),
+        _ => single_output(outputs, vocab::float(f32::NAN)),
     }
 }
 
@@ -1106,9 +1107,9 @@ fn eval_vector_length(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<
     match flatten_numeric(&value.value) {
         Some(flat) => {
             let len_sq: f32 = flat.data.iter().map(|x| x * x).sum();
-            single_output(outputs, Value::Float(len_sq.sqrt()))
+            single_output(outputs, vocab::float(len_sq.sqrt()))
         }
-        None => single_output(outputs, Value::Float(f32::NAN)),
+        None => single_output(outputs, vocab::float(f32::NAN)),
     }
 }
 
@@ -1119,12 +1120,12 @@ fn eval_vector_index(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(
         let i = index.floor() as isize;
         let len = flat.data.len() as isize;
         if i >= 0 && i < len {
-            single_output(outputs, Value::Float(flat.data[i as usize]))
+            single_output(outputs, vocab::float(flat.data[i as usize]))
         } else {
-            single_output(outputs, Value::Float(f32::NAN))
+            single_output(outputs, vocab::float(f32::NAN))
         }
     } else {
-        single_output(outputs, Value::Float(f32::NAN))
+        single_output(outputs, vocab::float(f32::NAN))
     }
 }
 
@@ -1135,7 +1136,7 @@ fn eval_join(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), Strin
             out.extend(flat.data);
         }
     }
-    single_output(outputs, Value::Vector(out))
+    single_output(outputs, vocab::vector(out))
 }
 
 fn eval_split(
@@ -1161,12 +1162,12 @@ fn eval_split(
         } else {
             vec![f32::NAN; sz]
         };
-        outputs.set_variadic("parts", i, PortValue::new(Value::Vector(value_vec)))?;
+        outputs.set_variadic("parts", i, PortValue::new(vocab::vector(value_vec)))?;
     }
 
     // If no sizes provided, emit a single empty part.
     if sizes_usize.is_empty() {
-        outputs.set_variadic("parts", 0, PortValue::new(Value::Vector(Vec::new())))?;
+        outputs.set_variadic("parts", 0, PortValue::new(vocab::vector(Vec::new())))?;
     }
 
     Ok(())
@@ -1175,7 +1176,7 @@ fn eval_split(
 fn eval_to_vector(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
     let operands = collect_operand_ports(inputs);
     let vec: Vec<f32> = operands.iter().map(|pv| as_float(&pv.value)).collect();
-    single_output(outputs, Value::Vector(vec))
+    single_output(outputs, vocab::vector(vec))
 }
 
 fn eval_from_vector(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
@@ -1187,7 +1188,7 @@ fn eval_from_vector(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<()
     if let Some(range) = outputs.layout.variadic_range("elements") {
         for i in 0..range.len {
             let val = data.get(i).copied().unwrap_or(f32::NAN);
-            outputs.set_variadic("elements", i, PortValue::new(Value::Float(val)))?;
+            outputs.set_variadic("elements", i, PortValue::new(vocab::float(val)))?;
         }
     }
 
@@ -1226,7 +1227,7 @@ fn eval_noise(
         persistence,
         base_fn,
     );
-    single_output(outputs, Value::Float(result.clamp(-1.0, 1.0)))
+    single_output(outputs, vocab::float(result.clamp(-1.0, 1.0)))
 }
 
 fn eval_vector_reducer(
@@ -1304,7 +1305,7 @@ fn eval_vector_reducer(
         }
         _ => f32::NAN,
     };
-    single_output(outputs, Value::Float(result))
+    single_output(outputs, vocab::float(result))
 }
 
 //
@@ -1349,7 +1350,7 @@ fn eval_default_blend(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<
                     None
                 }
             })
-            .unwrap_or(Value::Float(f32::NAN));
+            .unwrap_or(vocab::float(f32::NAN));
 
         return single_output(outputs, fallback_value);
     }
@@ -1365,7 +1366,7 @@ fn eval_default_blend(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<
         };
         total_weight_sum += weight;
 
-        let weight_value = Value::Float(weight);
+        let weight_value = vocab::float(weight);
         let weighted = binary_numeric(&port.value, &weight_value, |x, y| x * y);
 
         target_sum = Some(match target_sum {
@@ -1374,9 +1375,9 @@ fn eval_default_blend(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<
         });
     }
 
-    let targets_value = target_sum.unwrap_or_else(|| Value::Float(0.0));
+    let targets_value = target_sum.unwrap_or_else(|| vocab::float(0.0));
     let baseline_factor = (1.0 - total_weight_sum).max(0.0);
-    let baseline_weight = Value::Float(baseline_factor);
+    let baseline_weight = vocab::float(baseline_factor);
     let baseline_scaled = binary_numeric(&baseline_port.value, &baseline_weight, |x, y| x * y);
     let blended = binary_numeric(&targets_value, &baseline_scaled, |x, y| x + y);
     let final_value = binary_numeric(&blended, &offset_port.value, |x, y| x + y);
@@ -1415,7 +1416,7 @@ fn build_float_outputs(
     pairs: impl IntoIterator<Item = (String, f32)>,
 ) -> Result<(), String> {
     for (k, v) in pairs {
-        outputs.set_port(&k, PortValue::new(Value::Float(v)))?;
+        outputs.set_port(&k, PortValue::new(vocab::float(v)))?;
     }
     Ok(())
 }
@@ -1678,12 +1679,12 @@ fn eval_case(
     let case_ports = collect_operand_ports(inputs);
     let labels = params.case_labels.clone().unwrap_or_default();
 
-    // Compare selector (prefer Text comparison) against labels.
+    // Compare selector (prefer text comparison) against labels.
     if let Some(sel_val) = selector {
-        if let Value::Text(sel_s) = sel_val {
+        if let Some(sel_s) = vocab::as_text(&sel_val) {
             for (i, port) in case_ports.iter().enumerate() {
                 if let Some(label) = labels.get(i) {
-                    if sel_s == *label {
+                    if sel_s == label {
                         return single_output(outputs, port.value.clone());
                     }
                 }
@@ -1694,7 +1695,7 @@ fn eval_case(
                 if params.case_labels.is_some() {
                     // labels provided — compare selector to label string if possible
                     if let Some(label) = labels.get(i) {
-                        if let Value::Text(port_text) = &port.value {
+                        if let Some(port_text) = vocab::as_text(&port.value) {
                             if port_text == label {
                                 return single_output(outputs, port.value.clone());
                             }
@@ -1702,7 +1703,7 @@ fn eval_case(
                     }
                 } else {
                     // no labels — try index-based routing: if selector is numeric choose that index
-                    if let Value::Float(f) = sel_val {
+                    if let Some(f) = vocab::as_float(&sel_val) {
                         let idx = f.floor() as usize;
                         if idx == i {
                             return single_output(outputs, port.value.clone());
@@ -1717,7 +1718,7 @@ fn eval_case(
     if let Some(d) = default {
         single_output(outputs, d)
     } else {
-        single_output(outputs, Value::Float(f32::NAN))
+        single_output(outputs, vocab::float(f32::NAN))
     }
 }
 
@@ -1734,13 +1735,13 @@ fn eval_inverse_kinematics(inputs: &InputSlots, outputs: &mut OutputSlots) -> Re
     let dist_sq = wx * wx + wy * wy;
 
     let value = if dist_sq > (l1 + l2) * (l1 + l2) || dist_sq < (l1 - l2) * (l1 - l2) {
-        Value::Vec3([f32::NAN, f32::NAN, f32::NAN])
+        vocab::vec3([f32::NAN; 3])
     } else {
         let cos_angle2 = (dist_sq - l1 * l1 - l2 * l2) / (2.0 * l1 * l2);
         let angle2 = cos_angle2.acos();
         let angle1 = wy.atan2(wx) - (l2 * angle2.sin()).atan2(l1 + l2 * angle2.cos());
         let angle3 = theta - angle1 - angle2;
-        Value::Vec3([angle1, angle2, angle3])
+        vocab::vec3([angle1, angle2, angle3])
     };
 
     single_output(outputs, value)
@@ -1784,19 +1785,14 @@ fn eval_urdf_fk(
     apply_joint_positions(state, &joints)?;
 
     let (pos_arr, rot_arr) = tip_pose(state);
-    let position_value = Value::Vec3(pos_arr);
-    let rotation_value = Value::Quat(rot_arr);
-    let transform_value = match (&position_value, &rotation_value) {
-        (Value::Vec3(pos), Value::Quat(rot)) => Value::Transform {
-            translation: *pos,
-            rotation: *rot,
-            scale: [1.0, 1.0, 1.0],
-        },
-        _ => unreachable!(),
-    };
+    let transform_value = vocab::transform(vocab::Transform {
+        translation: pos_arr,
+        rotation: rot_arr,
+        scale: [1.0, 1.0, 1.0],
+    });
 
-    outputs.set_port("position", PortValue::new(position_value))?;
-    outputs.set_port("rotation", PortValue::new(rotation_value))?;
+    outputs.set_port("position", PortValue::new(vocab::vec3(pos_arr)))?;
+    outputs.set_port("rotation", PortValue::new(vocab::quat(rot_arr)))?;
     outputs.set_port("transform", PortValue::new(transform_value))
 }
 
@@ -1808,14 +1804,14 @@ fn eval_urdf_position(
     inputs: &InputSlots,
     outputs: &mut OutputSlots,
 ) -> Result<(), String> {
-    let target_pos = match input_or_default(inputs, "target_pos").value {
-        Value::Vec3(arr) => arr,
-        other => {
-            return Err(format!(
+    let target_pos = {
+        let port = input_or_default(inputs, "target_pos");
+        vocab::as_vec3(&port.value).ok_or_else(|| {
+            format!(
                 "UrdfIkPosition input 'target_pos' expects Vec3, received {:?}",
-                other.kind()
-            ));
-        }
+                vocab::kind(&port.value)
+            )
+        })?
     };
 
     let urdf_xml = params
@@ -1887,14 +1883,14 @@ fn eval_urdf_pose(
     inputs: &InputSlots,
     outputs: &mut OutputSlots,
 ) -> Result<(), String> {
-    let target_pos = match input_or_default(inputs, "target_pos").value {
-        Value::Vec3(arr) => arr,
-        other => {
-            return Err(format!(
+    let target_pos = {
+        let port = input_or_default(inputs, "target_pos");
+        vocab::as_vec3(&port.value).ok_or_else(|| {
+            format!(
                 "UrdfIkPose input 'target_pos' expects Vec3, received {:?}",
-                other.kind()
-            ));
-        }
+                vocab::kind(&port.value)
+            )
+        })?
     };
     let target_rot = {
         let port = input_or_default(inputs, "target_rot");
@@ -1992,7 +1988,12 @@ fn eval_build_record(
         map.insert(final_key, pv.value.clone());
     }
 
-    single_output(outputs, Value::Record(map))
+    single_output(outputs, record_from_map(&map))
+}
+
+/// Encode string-keyed entries as a record value.
+fn record_from_map(map: &HashMap<String, Value>) -> Value {
+    vocab::record(map.iter().map(|(k, v)| (k.as_str(), v.clone())))
 }
 
 fn eval_read_record(
@@ -2001,19 +2002,20 @@ fn eval_read_record(
     outputs: &mut OutputSlots,
 ) -> Result<(), String> {
     let input = input_or_default(inputs, "in");
-    let record = match &input.value {
-        Value::Record(m) => m.clone(),
-        _ => HashMap::new(),
-    };
+    let entries = vocab::as_record(&input.value).unwrap_or_default();
     let keys = params.record_keys.as_deref().unwrap_or(&[]);
 
     if let Some(range) = outputs.layout.variadic_range("field") {
         for i in 0..range.len {
             let key = keys.get(i).map(|k| k.as_str()).unwrap_or("");
             let value = if key.is_empty() {
-                Value::Float(0.0)
+                vocab::float(0.0)
             } else {
-                record.get(key).cloned().unwrap_or(Value::Float(0.0))
+                entries
+                    .iter()
+                    .find(|(name, _)| *name == key)
+                    .map(|(_, v)| (*v).clone())
+                    .unwrap_or(vocab::float(0.0))
             };
             outputs.set_variadic("field", i, PortValue::new(value))?;
         }
@@ -2026,22 +2028,22 @@ fn eval_switch_record(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<
     let switch_val = as_float(&input_or_default(inputs, "switch").value);
     let records = inputs.variadic("record");
     if records.is_empty() {
-        return single_output(outputs, Value::Record(HashMap::new()));
+        return single_output(outputs, vocab::record(Vec::<(&str, Value)>::new()));
     }
     let idx = (switch_val.floor() as isize).clamp(0, records.len() as isize - 1) as usize;
     single_output(outputs, records[idx].value.clone())
 }
 
 fn eval_merge_record(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
-    let mut merged = HashMap::new();
+    let mut merged: HashMap<String, Value> = HashMap::new();
     for pv in inputs.variadic("record") {
-        if let Value::Record(m) = &pv.value {
-            for (k, v) in m {
-                merged.insert(k.clone(), v.clone());
+        if let Some(entries) = vocab::as_record(&pv.value) {
+            for (k, v) in entries {
+                merged.insert(k.to_string(), v.clone());
             }
         }
     }
-    single_output(outputs, Value::Record(merged))
+    single_output(outputs, record_from_map(&merged))
 }
 
 fn eval_split_record(
@@ -2050,10 +2052,7 @@ fn eval_split_record(
     outputs: &mut OutputSlots,
 ) -> Result<(), String> {
     let input = input_or_default(inputs, "in");
-    let record = match &input.value {
-        Value::Record(m) => m.clone(),
-        _ => HashMap::new(),
-    };
+    let entries = vocab::as_record(&input.value).unwrap_or_default();
     let key_set: std::collections::HashSet<&str> = params
         .keys
         .as_deref()
@@ -2063,18 +2062,18 @@ fn eval_split_record(
         .filter(|s| !s.is_empty())
         .collect();
 
-    let mut included = HashMap::new();
-    let mut excluded = HashMap::new();
-    for (k, v) in &record {
-        if key_set.contains(k.as_str()) {
-            included.insert(k.clone(), v.clone());
+    let mut included = Vec::new();
+    let mut excluded = Vec::new();
+    for (k, v) in entries {
+        if key_set.contains(k) {
+            included.push((k, v.clone()));
         } else {
-            excluded.insert(k.clone(), v.clone());
+            excluded.push((k, v.clone()));
         }
     }
 
-    outputs.set("included", PortValue::new(Value::Record(included)))?;
-    outputs.set("excluded", PortValue::new(Value::Record(excluded)))?;
+    outputs.set("included", PortValue::new(vocab::record(included)))?;
+    outputs.set("excluded", PortValue::new(vocab::record(excluded)))?;
     Ok(())
 }
 
@@ -2085,18 +2084,12 @@ fn eval_math_record(
 ) -> Result<(), String> {
     let input = input_or_default(inputs, "in");
     let scalar = as_float(&input_or_default(inputs, "value").value);
-    let record = match &input.value {
-        Value::Record(m) => m.clone(),
-        _ => HashMap::new(),
-    };
-    let result: HashMap<String, Value> = record
+    let entries = vocab::as_record(&input.value).unwrap_or_default();
+    let result: Vec<(&str, Value)> = entries
         .into_iter()
-        .map(|(k, v)| {
-            let new_v = unary_numeric(&v, |x| op(x, scalar));
-            (k, new_v)
-        })
+        .map(|(k, v)| (k, unary_numeric(v, |x| op(x, scalar))))
         .collect();
-    single_output(outputs, Value::Record(result))
+    single_output(outputs, vocab::record(result))
 }
 
 fn eval_input_node(
@@ -2287,12 +2280,12 @@ pub fn read_inputs(
                 .and_then(|vec| vec.get(src.slot))
                 .cloned();
             base.or_else(|| binding.default.clone())
-                .unwrap_or_else(|| PortValue::new(Value::Float(0.0)))
+                .unwrap_or_else(|| PortValue::new(vocab::float(0.0)))
         } else {
             binding
                 .default
                 .clone()
-                .unwrap_or_else(|| PortValue::new(Value::Float(0.0)))
+                .unwrap_or_else(|| PortValue::new(vocab::float(0.0)))
         };
 
         let has_value = binding.source.is_some() || binding.default.is_some();

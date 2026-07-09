@@ -6,7 +6,8 @@
 
 use bevy::prelude::*;
 use hashbrown::HashMap;
-use vizij_api_core::Value;
+use vizij_api_core::value as vocab;
+use vizij_api_core::{Value, VizijKind};
 use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, NodeId, PortValue};
 
 /// Resource containing the currently active graph specification.
@@ -22,36 +23,38 @@ pub struct GraphOutputs(pub HashMap<NodeId, HashMap<String, PortValue>>);
 pub struct GraphRuntimeResource(pub GraphRuntime);
 
 /// Convert a Value into a coarse f32 scalar for node parameter assignment.
-/// Rules:
+/// The value is classified once against the vizij vocabulary and decoded
+/// through its accessors. Rules:
 /// - Float -> value
 /// - Bool -> 1.0 / 0.0
-/// - VecN / Vector -> first component (or 0.0 if missing)
-/// - Quat / ColorRgba / Transform -> first component (conservative)
-/// - Enum -> recurse into inner value
-/// - Text / others -> 0.0
+/// - Vec2/3/4 / Vector -> first component (or 0.0 if missing)
+/// - Quat / ColorRgba -> first component, Transform -> translation x (conservative)
+/// - Record -> first field by name, Array -> first item (recursing)
+/// - Enum -> recurse into the payload
+/// - Text / values outside the vocabulary -> 0.0
 fn value_to_f32(v: &Value) -> f32 {
-    match v {
-        Value::Float(f) => *f,
-        Value::Bool(b) => {
-            if *b {
-                1.0
-            } else {
-                0.0
-            }
+    match vocab::kind(v) {
+        VizijKind::Float => vocab::as_float(v).unwrap_or(0.0),
+        VizijKind::Bool => f32::from(vocab::as_bool(v) == Some(true)),
+        VizijKind::Vec2 => vocab::as_vec2(v).map_or(0.0, |a| a[0]),
+        VizijKind::Vec3 => vocab::as_vec3(v).map_or(0.0, |a| a[0]),
+        VizijKind::Vec4 => vocab::as_vec4(v).map_or(0.0, |a| a[0]),
+        VizijKind::Quat => vocab::as_quat(v).map_or(0.0, |a| a[0]),
+        VizijKind::ColorRgba => vocab::as_color_rgba(v).map_or(0.0, |a| a[0]),
+        VizijKind::Transform => vocab::as_transform(v).map_or(0.0, |t| t.translation[0]),
+        VizijKind::Vector => vocab::as_vector(v)
+            .and_then(|xs| xs.first().copied())
+            .unwrap_or(0.0),
+        VizijKind::Record => vocab::as_record(v)
+            .and_then(|fields| fields.first().map(|(_, val)| value_to_f32(val)))
+            .unwrap_or(0.0),
+        VizijKind::Array => vocab::as_array(v)
+            .and_then(|items| items.first().map(value_to_f32))
+            .unwrap_or(0.0),
+        VizijKind::Enum => {
+            vocab::as_enumeration(v).map_or(0.0, |(_, payload)| value_to_f32(payload))
         }
-        Value::Vec2(a) => a[0],
-        Value::Vec3(a) => a[0],
-        Value::Vec4(a) => a[0],
-        Value::Quat(a) => a[0],
-        Value::ColorRgba(a) => a[0],
-        Value::Transform { translation, .. } => translation[0],
-        Value::Vector(vec) => vec.first().copied().unwrap_or(0.0),
-        Value::Record(map) => map.values().next().map(value_to_f32).unwrap_or(0.0),
-        Value::Array(items) => items.first().map(value_to_f32).unwrap_or(0.0),
-        Value::List(items) => items.first().map(value_to_f32).unwrap_or(0.0),
-        Value::Tuple(items) => items.first().map(value_to_f32).unwrap_or(0.0),
-        Value::Enum(_, boxed) => value_to_f32(boxed.as_ref()),
-        Value::Text(_) => 0.0,
+        VizijKind::Text | VizijKind::Other => 0.0,
     }
 }
 
@@ -218,5 +221,53 @@ fn system_eval(world: &mut World) {
     } else {
         // In case it wasn't inserted for some reason, insert it now.
         world.insert_resource(GraphOutputs(snapshot));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn value_to_f32_decodes_the_vocabulary() {
+        assert_eq!(value_to_f32(&vocab::float(1.5)), 1.5);
+        assert_eq!(value_to_f32(&vocab::bool_(true)), 1.0);
+        assert_eq!(value_to_f32(&vocab::bool_(false)), 0.0);
+        assert_eq!(value_to_f32(&vocab::vec2([2.0, 9.0])), 2.0);
+        assert_eq!(value_to_f32(&vocab::vec3([3.0, 9.0, 9.0])), 3.0);
+        assert_eq!(value_to_f32(&vocab::vec4([4.0, 9.0, 9.0, 9.0])), 4.0);
+        assert_eq!(value_to_f32(&vocab::quat([0.5, 0.0, 0.0, 1.0])), 0.5);
+        assert_eq!(
+            value_to_f32(&vocab::color_rgba([0.25, 0.0, 0.0, 1.0])),
+            0.25
+        );
+        assert_eq!(
+            value_to_f32(&vocab::transform(vizij_api_core::Transform {
+                translation: [7.0, 0.0, 0.0],
+                rotation: [0.0, 0.0, 0.0, 1.0],
+                scale: [1.0, 1.0, 1.0],
+            })),
+            7.0
+        );
+        assert_eq!(value_to_f32(&vocab::vector(vec![6.0, 9.0])), 6.0);
+        assert_eq!(value_to_f32(&vocab::vector(vec![])), 0.0);
+        // Records read their first field by name order.
+        assert_eq!(
+            value_to_f32(&vocab::record([
+                ("b", vocab::float(9.0)),
+                ("a", vocab::float(8.0)),
+            ])),
+            8.0
+        );
+        assert_eq!(
+            value_to_f32(&vocab::array(vec![vocab::vec3([5.0, 0.0, 0.0])])),
+            5.0
+        );
+        assert_eq!(
+            value_to_f32(&vocab::enumeration("on", vocab::float(2.5))),
+            2.5
+        );
+        assert_eq!(value_to_f32(&vocab::text("nope")), 0.0);
+        assert_eq!(value_to_f32(&Value::U32(3)), 0.0);
     }
 }

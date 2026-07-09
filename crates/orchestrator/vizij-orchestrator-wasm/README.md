@@ -66,10 +66,12 @@ console.log("ABI version", abi_version());
 const orchestrator = new VizijOrchestrator({ schedule: "SinglePass" });
 const graphId = orchestrator.register_graph({ spec: { nodes: [], edges: [] } });
 
-orchestrator.set_input("demo/input/value", { float: 1.0 }, null);
+orchestrator.set_input("demo/input/value", { f32: 1.0 }, null);
 const frame = orchestrator.step(1 / 60);
 console.log(graphId, frame.merged_writes);
 ```
+
+Values cross the boundary in Arora `Value` serde form (`{"f32": 1.0}`, `{"bool": true}`, `{"str": "hi"}`, `{"struct": {...}}`, ...). `set_input` also accepts legacy payload forms (`{"float": 1.0}`, `{"vec3": [...]}`, bare primitives, ...) through the `vizij-api-core` normalizer; outputs such as `frame.merged_writes` always use the canonical form.
 
 Use `replace_graph` when the running graph changes structurally. `step_delta` is the incremental stepping variant used by the npm wrapper's diffed frame API.
 

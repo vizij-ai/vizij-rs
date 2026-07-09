@@ -9,6 +9,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 #[cfg(feature = "urdf_ik")]
 use std::hash::{Hash, Hasher};
+use vizij_api_core::value as vocab;
+use vizij_api_core::value::VizijKind;
 use vizij_api_core::{coercion, Value};
 
 #[cfg(feature = "urdf_ik")]
@@ -50,11 +52,12 @@ impl UrdfKinematicsState {
 
     /// Produce a record value mapping joint names to solved angles.
     pub fn solution_record(&self, joints: &[f32]) -> Value {
-        let mut map = HashMap::with_capacity(self.joint_names.len());
-        for (name, angle) in self.joint_names.iter().zip(joints.iter()) {
-            map.insert(name.clone(), Value::Float(*angle));
-        }
-        Value::Record(map)
+        vocab::record(
+            self.joint_names
+                .iter()
+                .zip(joints.iter())
+                .map(|(name, angle)| (name.as_str(), vocab::float(*angle))),
+        )
     }
 }
 
@@ -215,32 +218,34 @@ pub fn solve_position(
 
 #[cfg(feature = "urdf_ik")]
 fn scalar_from_value(value: &Value) -> Result<f32, String> {
-    match value {
-        Value::Float(f) => Ok(*f),
-        Value::Bool(b) => Ok(if *b { 1.0 } else { 0.0 }),
-        Value::Vec2(arr) => Ok(arr[0]),
-        Value::Vec3(arr) => Ok(arr[0]),
-        Value::Vec4(arr) => Ok(arr[0]),
-        Value::Quat(arr) => Ok(arr[0]),
-        Value::Vector(vec) => vec
-            .first()
-            .copied()
+    let mismatch = || format!("expected numeric scalar, received {:?}", vocab::kind(value));
+    match vocab::kind(value) {
+        VizijKind::Float => vocab::as_float(value).ok_or_else(mismatch),
+        VizijKind::Bool => Ok(if vocab::as_bool(value).unwrap_or(false) {
+            1.0
+        } else {
+            0.0
+        }),
+        VizijKind::Vec2 => Ok(vocab::as_vec2(value).ok_or_else(mismatch)?[0]),
+        VizijKind::Vec3 => Ok(vocab::as_vec3(value).ok_or_else(mismatch)?[0]),
+        VizijKind::Vec4 => Ok(vocab::as_vec4(value).ok_or_else(mismatch)?[0]),
+        VizijKind::Quat => Ok(vocab::as_quat(value).ok_or_else(mismatch)?[0]),
+        VizijKind::Vector => vocab::as_vector(value)
+            .and_then(|xs| xs.first().copied())
             .ok_or_else(|| "vector is empty".to_string()),
-        Value::Array(items) | Value::List(items) | Value::Tuple(items) => {
+        VizijKind::Array => {
+            let items = vocab::as_array(value).ok_or_else(mismatch)?;
             if items.len() == 1 {
                 scalar_from_value(&items[0])
             } else {
-                Err(format!(
-                    "expected numeric scalar, received {:?}",
-                    value.kind()
-                ))
+                Err(mismatch())
             }
         }
-        Value::Enum(_, inner) => scalar_from_value(inner),
-        _ => Err(format!(
-            "expected numeric scalar, received {:?}",
-            value.kind()
-        )),
+        VizijKind::Enum => {
+            let (_, payload) = vocab::as_enumeration(value).ok_or_else(mismatch)?;
+            scalar_from_value(payload)
+        }
+        _ => Err(mismatch()),
     }
 }
 
@@ -279,11 +284,13 @@ pub fn fetch_joint_vector(
         }
     }
 
-    match value {
-        Value::Record(map) => {
+    match vocab::kind(value) {
+        VizijKind::Record => {
+            let entries = vocab::as_record(value).unwrap_or_default();
+            let by_name: HashMap<&str, &Value> = entries.into_iter().collect();
             let mut result = Vec::with_capacity(expected);
             for joint in joint_names {
-                if let Some(entry) = map.get(joint) {
+                if let Some(entry) = by_name.get(joint.as_str()) {
                     result.push(scalar_from_value(entry)?);
                 } else if let Some(default_value) = default_map.get(joint.as_str()) {
                     result.push(*default_value);
@@ -293,7 +300,8 @@ pub fn fetch_joint_vector(
             }
             Ok(result)
         }
-        Value::Array(items) | Value::List(items) | Value::Tuple(items) => {
+        VizijKind::Array => {
+            let items = vocab::as_array(value).unwrap_or_default();
             let mut sequence = Vec::with_capacity(items.len());
             for item in items {
                 sequence.push(scalar_from_value(item)?);
@@ -305,8 +313,8 @@ pub fn fetch_joint_vector(
                 &default_map,
             ))
         }
-        other => {
-            let sequence = coercion::to_vector(other);
+        _ => {
+            let sequence = coercion::to_vector(value);
             Ok(align_sequence_with_defaults(
                 &sequence,
                 expected,
@@ -392,29 +400,35 @@ pub fn solve_pose(
 #[cfg(feature = "urdf_ik")]
 /// Extract the numeric components from a supported value type.
 pub fn vector_from_value(value: &Value, label: &str) -> Result<Vec<f32>, String> {
-    match value {
-        Value::Vector(vec) => Ok(vec.clone()),
-        Value::Vec2(arr) => Ok(arr.to_vec()),
-        Value::Vec3(arr) => Ok(arr.to_vec()),
-        Value::Vec4(arr) => Ok(arr.to_vec()),
-        Value::Quat(arr) => Ok(arr.to_vec()),
-        _ => Err(format!(
-            "{label} expects a numeric vector, received {:?}",
-            value.kind()
-        )),
+    if let Some(xs) = vocab::as_vector(value) {
+        return Ok(xs.to_vec());
     }
+    vocab::as_vec2(value)
+        .map(|a| a.to_vec())
+        .or_else(|| vocab::as_vec3(value).map(|a| a.to_vec()))
+        .or_else(|| vocab::as_vec4(value).map(|a| a.to_vec()))
+        .or_else(|| vocab::as_quat(value).map(|a| a.to_vec()))
+        .ok_or_else(|| {
+            format!(
+                "{label} expects a numeric vector, received {:?}",
+                vocab::kind(value)
+            )
+        })
 }
 
 #[cfg(feature = "urdf_ik")]
 /// Interpet a [`Value`] as a quaternion `[x, y, z, w]`.
 pub fn quat_from_value(value: &Value, label: &str) -> Result<[f32; 4], String> {
-    match value {
-        Value::Quat(arr) => Ok(*arr),
-        Value::Vec4(arr) => Ok(*arr),
-        Value::Vector(vec) if vec.len() == 4 => Ok([vec[0], vec[1], vec[2], vec[3]]),
-        _ => Err(format!(
-            "{label} expects a quaternion (x, y, z, w), received {:?}",
-            value.kind()
-        )),
-    }
+    vocab::as_quat(value)
+        .or_else(|| vocab::as_vec4(value))
+        .or_else(|| match vocab::as_vector(value) {
+            Some(xs) if xs.len() == 4 => Some([xs[0], xs[1], xs[2], xs[3]]),
+            _ => None,
+        })
+        .ok_or_else(|| {
+            format!(
+                "{label} expects a quaternion (x, y, z, w), received {:?}",
+                vocab::kind(value)
+            )
+        })
 }

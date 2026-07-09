@@ -1,11 +1,18 @@
 use serde_json::json;
-use vizij_api_core::{TypedPath, Value};
+use vizij_api_core::value::float;
+use vizij_api_core::TypedPath;
 use vizij_graph_core::types::GraphSpec;
 use vizij_orchestrator::{GraphControllerConfig, Orchestrator, Schedule, Subscriptions};
 
+fn graph_spec_from_json(mut spec_json: serde_json::Value) -> anyhow::Result<GraphSpec> {
+    vizij_api_core::json::normalize_graph_spec_value(&mut spec_json)
+        .map_err(|e| anyhow::anyhow!(e))?;
+    Ok(serde_json::from_value(spec_json)?)
+}
+
 fn main() -> anyhow::Result<()> {
     // Graph A: produce a constant value and expose it via an output node.
-    let producer_spec: GraphSpec = serde_json::from_value(json!({
+    let producer_spec: GraphSpec = graph_spec_from_json(json!({
         "nodes": [
             {
                 "id": "constant_one",
@@ -24,7 +31,7 @@ fn main() -> anyhow::Result<()> {
     }))?;
 
     // Graph B: consume the shared value, double it, and emit another output.
-    let consumer_spec: GraphSpec = serde_json::from_value(json!({
+    let consumer_spec: GraphSpec = graph_spec_from_json(json!({
         "nodes": [
             {
                 "id": "shared_input",
@@ -86,7 +93,7 @@ fn main() -> anyhow::Result<()> {
 
     if let Some(entry) = orch.blackboard.get(&shared_doubled_path.to_string()) {
         println!("Blackboard {} = {:?}", shared_doubled_path, entry.value);
-        assert_eq!(entry.value, Value::Float(2.0));
+        assert_eq!(entry.value, float(2.0));
     }
 
     Ok(())

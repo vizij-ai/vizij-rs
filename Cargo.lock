@@ -207,28 +207,30 @@ dependencies = [
 
 [[package]]
 name = "arora-behavior"
-version = "0.1.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fea09635fab78d2bb5381483a3f1487cff7be07e6000dae5f8b5cd892d66253"
+checksum = "e206aeb7da8e007e222f462742c6337c662fe8a7c8a6bb654bb6d9a22b076766"
 dependencies = [
  "arora-types",
 ]
 
 [[package]]
 name = "arora-hal"
-version = "0.1.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24a305d611741ac3ba50a5939a2ec977d2290d86bf30928f2d0477ddac5590df"
+checksum = "ac2fc5d4ee9c852d4f59af282cf42cbab2f4270c515861afeb442447b12cefd1"
 dependencies = [
  "arora-types",
  "async-trait",
+ "futures-channel",
+ "futures-core",
 ]
 
 [[package]]
 name = "arora-simple-data-store"
-version = "0.1.0"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d061192b2a7fba820ad189d411d85640d1a2fa159e30d7ebad6f4e388946849"
+checksum = "570213ccbc120696c0c988e0373683128b22ae97f91261ef8610ce8501d60c86"
 dependencies = [
  "arora-types",
 ]
@@ -2044,10 +2046,46 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 
 [[package]]
+name = "futures"
+version = "0.3.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65bc07b1a8bc7c85c5f2e110c476c7389b4554ba72af57d8445ea63a576b0876"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "futures-executor",
+ "futures-io",
+ "futures-sink",
+ "futures-task",
+ "futures-util",
+]
+
+[[package]]
+name = "futures-channel"
+version = "0.3.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2dff15bf788c671c1934e366d07e30c1814a8ef514e1af724a602e8a2fbe1b10"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+]
+
+[[package]]
 name = "futures-core"
 version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05f29059c0c2090612e8d742178b0580d2dc940c837851ad723096f87af6663e"
+
+[[package]]
+name = "futures-executor"
+version = "0.3.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e28d1d997f585e54aebc3f97d39e72338912123a67330d723fdbb564d646c9f"
+dependencies = [
+ "futures-core",
+ "futures-task",
+ "futures-util",
+]
 
 [[package]]
 name = "futures-io"
@@ -2066,6 +2104,47 @@ dependencies = [
  "futures-io",
  "parking",
  "pin-project-lite",
+]
+
+[[package]]
+name = "futures-macro"
+version = "0.3.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "162ee34ebcb7c64a8abebc059ce0fee27c2262618d7b60ed8faf72fef13c3650"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
+]
+
+[[package]]
+name = "futures-sink"
+version = "0.3.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c39754e157331b013978ec91992bde1ac089843443c49cbc7f46150b0fad0893"
+
+[[package]]
+name = "futures-task"
+version = "0.3.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "037711b3d59c33004d3856fbdc83b99d4ff37a24768fa1be9ce3538a1cde4393"
+
+[[package]]
+name = "futures-util"
+version = "0.3.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9fa08315bb612088cc391249efdc3bc77536f16c91f6cf495e6fbe85b20a4a81"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "futures-io",
+ "futures-macro",
+ "futures-sink",
+ "futures-task",
+ "memchr",
+ "pin-project-lite",
+ "pin-utils",
+ "slab",
 ]
 
 [[package]]
@@ -3344,6 +3423,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b3cff922bd51709b605d9ead9aa71031d81447142d828eb4a6eba76fe619f9b"
 
 [[package]]
+name = "pin-utils"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
+
+[[package]]
 name = "piper"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4266,12 +4351,14 @@ dependencies = [
 
 [[package]]
 name = "vizij-api-core"
-version = "0.2.0"
+version = "1.0.0"
 dependencies = [
+ "arora-types",
  "hashbrown 0.14.5",
  "serde",
  "serde_json",
  "thiserror",
+ "uuid",
 ]
 
 [[package]]
@@ -4289,10 +4376,7 @@ dependencies = [
 name = "vizij-arora"
 version = "0.0.0"
 dependencies = [
- "arora-types",
  "serde_json",
- "thiserror",
- "uuid",
  "vizij-api-core",
 ]
 
@@ -4305,7 +4389,6 @@ dependencies = [
  "arora-types",
  "serde_json",
  "vizij-api-core",
- "vizij-arora",
  "vizij-graph-core",
  "vizij-orchestrator-core",
 ]
@@ -4317,9 +4400,10 @@ dependencies = [
  "arora-hal",
  "arora-types",
  "async-trait",
+ "futures",
+ "futures-channel",
  "tokio",
  "vizij-api-core",
- "vizij-arora",
 ]
 
 [[package]]
@@ -4328,7 +4412,6 @@ version = "0.0.0"
 dependencies = [
  "arora-types",
  "vizij-api-core",
- "vizij-arora",
  "vizij-orchestrator-core",
 ]
 
