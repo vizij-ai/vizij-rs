@@ -1,5 +1,14 @@
 # @vizij/node-graph-wasm
 
+## 0.7.0
+
+### Minor Changes
+
+- Values emitted by graph evaluation and the node registry defaults are now in
+  arora serde form. Read them through `@vizij/value-json` accessors (which
+  decode both the new and the legacy forms); code that pattern-matched the raw
+  JSON shape must switch to the accessors.
+
 ## 0.6.1
 
 ### Patch Changes
