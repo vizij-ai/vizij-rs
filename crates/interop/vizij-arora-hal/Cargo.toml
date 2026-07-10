@@ -10,6 +10,7 @@ arora-hal = "2"
 arora-types = "1"
 async-trait = "0.1"
 futures-channel = "0.3"
+futures-core = "0.3"
 vizij-api-core = { path = "../../api/vizij-api-core" }
 
 [dev-dependencies]

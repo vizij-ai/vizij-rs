@@ -244,7 +244,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -255,7 +255,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -280,6 +280,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
 
 [[package]]
+name = "arora"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "706bdbb11748cfdba2ded0136a2046207d7a4c01f98985193f42382856b205dd"
+dependencies = [
+ "anyhow",
+ "arora-behavior",
+ "arora-behavior-tree",
+ "arora-bridge",
+ "arora-engine 2.0.0",
+ "arora-hal",
+ "arora-simple-data-store",
+ "arora-types",
+ "futures",
+ "log",
+ "uuid",
+]
+
+[[package]]
 name = "arora-behavior"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -288,6 +307,54 @@ dependencies = [
  "arora-types",
  "serde",
  "uuid",
+]
+
+[[package]]
+name = "arora-behavior-tree"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbf4b586610596f3c8e35bb434c876c328eef25400d43034ea791b95e15c0c4d"
+dependencies = [
+ "anyhow",
+ "arora-behavior",
+ "arora-behavior-tree-types",
+ "arora-buffers 1.0.0",
+ "arora-module-rust",
+ "arora-registry",
+ "arora-types",
+ "derive_more",
+ "lazy_static",
+ "quick-xml 0.40.1",
+ "semver",
+ "serde",
+ "serde_yaml",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "arora-behavior-tree-types"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f136a84a870d32ec032e4c4ed62d2dfd513b632e378741fb87a31f16104a2b29"
+dependencies = [
+ "arora-types",
+ "lazy_static",
+ "semver",
+ "uuid",
+]
+
+[[package]]
+name = "arora-bridge"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb09ffc7782bf4031d53d2282687d1c77881ed67e41e5fad459273945f6d564f"
+dependencies = [
+ "arora-types",
+ "async-trait",
+ "futures-channel",
+ "futures-core",
+ "futures-util",
 ]
 
 [[package]]
@@ -346,6 +413,33 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasmtime",
  "wasmtime-wasi",
+ "web-sys",
+]
+
+[[package]]
+name = "arora-engine"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad4c47d380640ff156d4a9d4938e621d0b34c4e69bfe480325e2a60e5fa11611"
+dependencies = [
+ "anyhow",
+ "arora-buffers 1.0.0",
+ "arora-types",
+ "async-trait",
+ "bytes",
+ "cbindgen 0.29.4",
+ "console_error_panic_hook",
+ "derive_more",
+ "getrandom 0.4.3",
+ "js-sys",
+ "lazy_static",
+ "rand 0.10.2",
+ "serde",
+ "serde-wasm-bindgen 0.6.5",
+ "serde_json",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 
@@ -462,6 +556,30 @@ dependencies = [
  "derive_more",
  "serde",
  "sha2",
+]
+
+[[package]]
+name = "arora-web"
+version = "5.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1bdb27546c8a1ddf653e8210823e8890cc2ece8a6ad5c3e47cccafb4d8dadc1c"
+dependencies = [
+ "arora",
+ "arora-behavior",
+ "arora-bridge",
+ "arora-engine 2.0.0",
+ "arora-hal",
+ "arora-simple-data-store",
+ "arora-types",
+ "console_error_panic_hook",
+ "getrandom 0.4.3",
+ "js-sys",
+ "serde",
+ "serde-wasm-bindgen 0.6.5",
+ "serde_json",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -3515,7 +3633,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi 0.5.2",
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4737,6 +4855,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "quick-xml"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2474bd2e5029e7ccb6abb2ba48cf2383a333851dedf495901544281590c7da7f"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5005,7 +5132,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5269,7 +5396,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52d1cfed4120b4d927bf7c0f86d2087a4a7d6027c906d9f9d525a80573b9be51"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5390,10 +5517,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.3",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5744,7 +5871,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "074515a3e6dc230bbbdcf35830fd71b67b55ae2ac22bc4ff69d89412fc84b830"
 dependencies = [
  "RustyXML",
- "quick-xml",
+ "quick-xml 0.36.2",
  "regex",
  "serde",
  "serde-xml-rs",
@@ -5822,7 +5949,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "arora-buffers 1.0.0",
- "arora-engine",
+ "arora-engine 0.1.0",
  "arora-module-core",
  "arora-module-rust",
  "arora-registry",
@@ -5906,6 +6033,7 @@ dependencies = [
  "async-trait",
  "futures",
  "futures-channel",
+ "futures-core",
  "tokio",
  "vizij-api-core",
 ]
@@ -5917,6 +6045,26 @@ dependencies = [
  "arora-types",
  "vizij-api-core",
  "vizij-orchestrator-core",
+]
+
+[[package]]
+name = "vizij-arora-web"
+version = "0.0.0"
+dependencies = [
+ "arora-bridge",
+ "arora-web",
+ "console_error_panic_hook",
+ "getrandom 0.4.3",
+ "serde-wasm-bindgen 0.6.5",
+ "serde_json",
+ "vizij-api-core",
+ "vizij-arora-behavior",
+ "vizij-arora-hal",
+ "vizij-arora-store",
+ "vizij-graph-core",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
