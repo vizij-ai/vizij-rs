@@ -474,12 +474,19 @@ mod tests {
         });
 
         let first = migrate_gltf_json(&mut root).expect("first pass");
-        assert_eq!(first.robot_defaults_changed, 1, "the web raw value migrates");
+        assert_eq!(
+            first.robot_defaults_changed, 1,
+            "the web raw value migrates"
+        );
 
         let bytes_after_first = serde_json::to_vec(&root).expect("serializes");
         let mut reparsed: Json = serde_json::from_slice(&bytes_after_first).expect("parses");
         let second = migrate_gltf_json(&mut reparsed).expect("second pass");
-        assert!(!second.changed(), "second pass must be a no-op: {}", second.summary());
+        assert!(
+            !second.changed(),
+            "second pass must be a no-op: {}",
+            second.summary()
+        );
 
         let bytes_after_second = serde_json::to_vec(&reparsed).expect("serializes");
         assert_eq!(
