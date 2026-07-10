@@ -31,9 +31,12 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace --all-features --bins --examples --tests -- -D warnings
+      # Test before lint: the build runs each crate's build script, emitting
+      # the generated sources (src/arora_generated.rs) that `cargo fmt --check`
+      # otherwise fails to resolve as modules.
       - run: cargo test --workspace --all-features
+      - run: cargo clippy --workspace --all-features --bins --examples --tests -- -D warnings
+      - run: cargo fmt --all -- --check
 
   wasm:
     runs-on: ubuntu-latest
