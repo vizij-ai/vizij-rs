@@ -15,7 +15,8 @@ crate-type = ["cdylib", "rlib"]
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # The published browser-runtime primitive: assembles arora's Runtime over an
 # injected HAL/bridge/store and exposes step() + the Value<->JSON store accessors.
-arora-web = "5"
+# 5.2.1 is the floor: the store accessors return plain JS objects from there.
+arora-web = "5.2.1"
 # The default Bridge: the in-process fake, all this device needs for now.
 arora-bridge = "3"
 
