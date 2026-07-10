@@ -1,0 +1,15 @@
+parent: 76697a69-6a00-0000-0000-000000000000
+name: TrackOutput
+fields:
+  76697a69-6a00-0000-0110-000000000001:
+    name: track_id
+    type: { type: primitive, value: { kind: string } }
+  76697a69-6a00-0000-0110-000000000002:
+    name: default_key
+    type: { type: primitive, value: { kind: string } }
+  76697a69-6a00-0000-0110-000000000003:
+    name: value
+    type:
+      type: frozenScalar
+      value:
+        reference: { id: 00000000-0000-0000-0000-00000000001b, version: "1.0.0" }

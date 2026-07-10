@@ -1,0 +1,18 @@
+parent: 76697a69-6a00-0000-0000-000000000000
+name: AnimTrack
+fields:
+  76697a69-6a00-0000-0101-000000000001:
+    name: id
+    type: { type: primitive, value: { kind: string } }
+  76697a69-6a00-0000-0101-000000000002:
+    name: name
+    type: { type: primitive, value: { kind: string } }
+  76697a69-6a00-0000-0101-000000000003:
+    name: animatable_id
+    type: { type: primitive, value: { kind: string } }
+  76697a69-6a00-0000-0101-000000000004:
+    name: points
+    type:
+      type: frozenArray
+      value:
+        reference: { id: 76697a69-6a00-0000-0000-000000000102, version: "1.0.0" }
