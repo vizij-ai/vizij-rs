@@ -1,0 +1,15 @@
+parent: 76697a69-6a00-0000-0000-000000000000
+name: AnimationClip
+fields:
+  76697a69-6a00-0000-0100-000000000001:
+    name: name
+    type: { type: primitive, value: { kind: string } }
+  76697a69-6a00-0000-0100-000000000002:
+    name: duration
+    type: { type: primitive, value: { kind: u32 } }
+  76697a69-6a00-0000-0100-000000000003:
+    name: tracks
+    type:
+      type: frozenArray
+      value:
+        reference: { id: 76697a69-6a00-0000-0000-000000000101, version: "1.0.0" }
