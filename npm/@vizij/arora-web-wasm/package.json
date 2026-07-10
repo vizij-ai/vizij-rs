@@ -1,6 +1,6 @@
 {
   "name": "@vizij/arora-web-wasm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Run a Vizij runtime in the browser as an Arora device: wasm bindings over arora-web's BrowserRuntime.",
   "license": "MIT",
   "repository": {

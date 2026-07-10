@@ -560,9 +560,9 @@ dependencies = [
 
 [[package]]
 name = "arora-web"
-version = "5.2.0"
+version = "5.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bdb27546c8a1ddf653e8210823e8890cc2ece8a6ad5c3e47cccafb4d8dadc1c"
+checksum = "e8ed94f5621090679343a16f8c25738e65d522219394d41b9c24bf881b3646c2"
 dependencies = [
  "arora",
  "arora-behavior",

@@ -34,30 +34,10 @@ interface WasmVizijArora {
   step(dt_ms: number): boolean;
   setValue(path: string, value_json: string): void;
   writeValues(values_json: string): void;
-  readValues(paths: string[]): unknown;
-  snapshot(): unknown;
-  drainChanges(): unknown;
+  readValues(paths: string[]): Record<string, ValueJSON | null>;
+  snapshot(): Record<string, ValueJSON>;
+  drainChanges(): Record<string, ValueJSON | null>;
   free(): void;
-}
-
-/**
- * The wasm side serializes its path→Value objects with serde-wasm-bindgen's
- * default map representation: JS `Map`s, nested. Convert them (deeply) to the
- * plain objects the `ValueJSON` vocabulary uses; plain objects pass through,
- * so a wasm module that already emits objects is a no-op.
- */
-function toPlain(value: unknown): unknown {
-  if (value instanceof Map) {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of value.entries()) {
-      out[String(k)] = toPlain(v);
-    }
-    return out;
-  }
-  if (Array.isArray(value)) {
-    return value.map(toPlain);
-  }
-  return value;
 }
 
 interface WasmBindings {
@@ -190,12 +170,12 @@ export class AroraDevice {
 
   /** Read store keys; absent keys map to `null`. */
   readValues(paths: string[]): Record<string, ValueJSON | null> {
-    return toPlain(this.inner.readValues(paths)) as Record<string, ValueJSON | null>;
+    return this.inner.readValues(paths);
   }
 
   /** Every key currently in the store. */
   snapshot(): Record<string, ValueJSON> {
-    return toPlain(this.inner.snapshot()) as Record<string, ValueJSON>;
+    return this.inner.snapshot();
   }
 
   /**
@@ -203,7 +183,7 @@ export class AroraDevice {
    * after `step` to feed a renderer.
    */
   drainChanges(): Record<string, ValueJSON | null> {
-    return toPlain(this.inner.drainChanges()) as Record<string, ValueJSON | null>;
+    return this.inner.drainChanges();
   }
 
   /** Release the wasm-side device. The instance is unusable afterwards. */
