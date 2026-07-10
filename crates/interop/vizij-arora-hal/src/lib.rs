@@ -5,16 +5,23 @@
 //! writes actuator targets (bone transforms, morph weights), the HAL applies
 //! them, and a renderer reads what to draw. This HAL is that boundary on the
 //! Rust side — it holds the GLB, accumulates the latest actuation `State`,
-//! and feeds [`updates`](arora_hal::Hal::updates) so a renderer knows what
+//! and feeds [`pose_updates`](RigHal::pose_updates) so a renderer knows what
 //! changed. Vizij and Arora share one runtime value type
 //! ([`vizij_api_core::Value`] is `arora_types::value::Value`), so
 //! [`RigHal::pose`] exposes that state to a Vizij renderer directly — the
 //! only translation is string [`Key`]s to [`TypedPath`]s; the actual
 //! bone/morph application stays in the renderer.
 //!
+//! The rig has **no sensors**: it applies targets instantly and measures
+//! nothing of its own, so [`Hal::updates`] — the runtime's *reading* feed —
+//! never yields. (Echoing applied targets back through it would make the
+//! runtime re-apply them as readings a frame later, overwriting anything
+//! fresher written to the store in between.) The echo of applied actuations
+//! lives on [`pose_updates`](RigHal::pose_updates), the renderer-side feed.
+//!
 //! Modelled on `arora-hal`'s `FakeHal`: cheaply cloneable, clones share state,
 //! writes apply synchronously (so [`try_send`](arora_hal::Hal::try_send) needs
-//! no internal task), and the update feed is an owned stream per subscriber.
+//! no internal task), and the pose feed is an owned stream per subscriber.
 
 use std::sync::{Arc, Mutex};
 
@@ -68,6 +75,17 @@ impl RigHal {
     /// Attach (or replace) the GLB model served by [`HalAssets::model_glb`].
     pub fn set_model_glb(&self, glb: Vec<u8>) {
         self.inner.lock().unwrap().model_glb = Some(glb);
+    }
+
+    /// A feed of applied actuation changes, for a Vizij renderer that wants
+    /// deltas instead of polling [`pose`](RigHal::pose). Each call yields an
+    /// independent, owned stream. This is deliberately **not**
+    /// [`Hal::updates`]: that seam is the runtime's sensor-reading feed, and
+    /// the rig has no sensors.
+    pub fn pose_updates(&self) -> UpdatesStream {
+        let (tx, rx) = futures_channel::mpsc::unbounded();
+        self.inner.lock().unwrap().subscribers.push(tx);
+        Box::pin(rx)
     }
 
     /// The current rig pose for a Vizij renderer: the accumulated actuation
@@ -126,10 +144,25 @@ impl Hal for RigHal {
         self.apply_write(changes);
     }
 
+    /// The rig reports no readings — see the module docs. Renderers wanting
+    /// the actuation echo subscribe to [`pose_updates`](RigHal::pose_updates).
     fn updates(&self) -> UpdatesStream {
-        let (tx, rx) = futures_channel::mpsc::unbounded();
-        self.inner.lock().unwrap().subscribers.push(tx);
-        Box::pin(rx)
+        Box::pin(NeverStream)
+    }
+}
+
+/// A stream that stays pending forever: the rig's (empty) sensor feed. Never
+/// ending matters — a finished [`UpdatesStream`] means the hardware is gone.
+struct NeverStream;
+
+impl futures_core::Stream for NeverStream {
+    type Item = StateChange;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<StateChange>> {
+        std::task::Poll::Pending
     }
 }
 
@@ -194,11 +227,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn updates_feed_sees_writes() {
+    async fn pose_feed_sees_writes_and_reading_feed_stays_silent() {
         let hal = RigHal::new();
-        let mut sub = hal.updates();
+        let mut pose_feed = hal.pose_updates();
+        let mut reading_feed = hal.updates();
         hal.write(StateChange::set("k", bool_(true))).await.unwrap();
-        assert!(drain(&mut sub).iter().any(|c| c.contains(&Key::from("k"))));
+        // The renderer's pose feed carries the applied actuation…
+        assert!(drain(&mut pose_feed)
+            .iter()
+            .any(|c| c.contains(&Key::from("k"))));
+        // …but the runtime's reading feed never echoes it back: the rig has no
+        // sensors, and an echo would clobber fresher store writes a frame later.
+        assert!(drain(&mut reading_feed).is_empty());
     }
 
     #[tokio::test]

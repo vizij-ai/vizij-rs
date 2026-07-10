@@ -15,6 +15,7 @@ members = [
   "crates/test-fixtures/vizij-test-fixtures",
   "crates/interop/vizij-arora",
   "crates/interop/vizij-animation-module",
+  "crates/interop/vizij-arora-web",
   "crates/interop/vizij-arora-store",
   "crates/interop/vizij-arora-hal",
   "crates/interop/vizij-arora-behavior",
