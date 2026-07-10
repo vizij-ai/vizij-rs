@@ -453,4 +453,38 @@ mod tests {
         assert!(message.contains("scenes[0]"), "{message}");
         assert!(message.contains("links"), "{message}");
     }
+
+    /// Migration is a fixed point: a second pass over already-canonical output
+    /// reports nothing to change, and re-serialization keeps every float —
+    /// including untouched ones — byte-stable. This is what the serde_json
+    /// `float_roundtrip` feature guarantees; without it the fast float parser
+    /// drifts by an ulp per parse/print cycle, so canonical `f32`-widened
+    /// payloads flipped forever and untouched glTF floats eroded on every run.
+    #[test]
+    fn migration_is_idempotent_including_float_round_trips() {
+        // Real offenders lifted from a face bundle: an f64-widened f32 payload
+        // and an untouched accessor bound with a wicked mantissa.
+        let mut root = json!({
+            "accessors": [{ "min": [-8.398046702495775e-10] }],
+            "nodes": [{
+                "extensions": { "RobotData": { "features": { "rot": { "value": {
+                    "default": { "x": 1.5106206774362366e-7, "y": -3.258413698858931e-7, "z": 18.08459091186523 }
+                }}}}}
+            }]
+        });
+
+        let first = migrate_gltf_json(&mut root).expect("first pass");
+        assert_eq!(first.robot_defaults_changed, 1, "the web raw value migrates");
+
+        let bytes_after_first = serde_json::to_vec(&root).expect("serializes");
+        let mut reparsed: Json = serde_json::from_slice(&bytes_after_first).expect("parses");
+        let second = migrate_gltf_json(&mut reparsed).expect("second pass");
+        assert!(!second.changed(), "second pass must be a no-op: {}", second.summary());
+
+        let bytes_after_second = serde_json::to_vec(&reparsed).expect("serializes");
+        assert_eq!(
+            bytes_after_first, bytes_after_second,
+            "parse + print must be byte-stable, untouched floats included"
+        );
+    }
 }
