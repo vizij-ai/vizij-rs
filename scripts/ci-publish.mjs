@@ -17,12 +17,45 @@ function run(command, args) {
   });
 }
 
+/**
+ * Wasm build target for each wasm wrapper package, for selective publishes.
+ * Non-wasm packages (value-json, wasm-loader, …) need no wasm build step.
+ */
+const WASM_TARGETS = {
+  "animation-wasm": "animation",
+  "node-graph-wasm": "graph",
+  "orchestrator-wasm": "orchestrator",
+  "arora-web-wasm": "arora-web",
+};
+
 async function main() {
+  // PUBLISH_PACKAGE (a name under @vizij/, e.g. "arora-web-wasm") publishes
+  // that one package: build only what it needs, then `pnpm publish` it.
+  // Without it, the full pipeline runs and `changeset publish` releases every
+  // package whose version is not on the registry yet.
+  const only = process.env.PUBLISH_PACKAGE?.trim();
   await applyWorkspaceManifestUpdates();
   try {
-    await run("pnpm", ["run", "build:wasm"]);
-    await run("pnpm", ["run", "build:shared"]);
-    await run("pnpm", ["changeset", "publish"]);
+    if (only) {
+      const target = WASM_TARGETS[only];
+      if (target) {
+        await run("pnpm", ["run", "build:wasm", "--", target]);
+      }
+      await run("pnpm", ["run", "build:shared"]);
+      await run("pnpm", ["--filter", `@vizij/${only}`, "run", "build"]);
+      await run("pnpm", [
+        "--filter",
+        `@vizij/${only}`,
+        "publish",
+        "--access",
+        "public",
+        "--no-git-checks",
+      ]);
+    } else {
+      await run("pnpm", ["run", "build:wasm"]);
+      await run("pnpm", ["run", "build:shared"]);
+      await run("pnpm", ["changeset", "publish"]);
+    }
   } finally {
     await restoreWorkspaceManifests();
   }

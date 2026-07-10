@@ -2,6 +2,13 @@ name: publish-npm
 
 on:
   workflow_dispatch:
+    inputs:
+      package:
+        description: >-
+          Publish only this package (name under @vizij/, e.g. arora-web-wasm).
+          Leave empty to publish everything the registry is missing.
+        required: false
+        type: string
   push:
     tags:
       - 'npm-pub-*'
@@ -86,8 +93,12 @@ jobs:
       - name: Publish npm packages
         # A manual dispatch means "publish whatever the registry is missing":
         # `changeset publish` keys on package.json versions, so it works even
-        # when the versions were bumped without changeset files.
+        # when the versions were bumped without changeset files. The optional
+        # `package` input narrows the run to one package (scoped build +
+        # pnpm publish of just that package).
         if: steps.version.outputs.has_changes == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          PUBLISH_PACKAGE: ${{ inputs.package }}
         run: pnpm ci:publish
 
       - name: Push release commit and tags
