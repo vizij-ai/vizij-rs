@@ -20,6 +20,7 @@ const bootstrapScripts = {
   "animation-wasm": "build:wasm:animation",
   "node-graph-wasm": "build:wasm:graph",
   "orchestrator-wasm": "build:wasm:orchestrator",
+  "arora-web-wasm": "build:wasm:arora-web",
 };
 
 async function ensurePkgExists(packageName, pkgSrc) {

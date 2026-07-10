@@ -1,0 +1,54 @@
+{
+  "name": "@vizij/arora-web-wasm",
+  "version": "0.1.0",
+  "description": "Run a Vizij runtime in the browser as an Arora device: wasm bindings over arora-web's BrowserRuntime.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vizij-ai/vizij-rs"
+  },
+  "homepage": "https://github.com/vizij-ai/vizij-rs",
+  "bugs": {
+    "url": "https://github.com/vizij-ai/vizij-rs/issues"
+  },
+  "keywords": [
+    "vizij",
+    "arora",
+    "wasm",
+    "webassembly"
+  ],
+  "type": "module",
+  "main": "dist/arora-web-wasm/src/index.js",
+  "module": "dist/arora-web-wasm/src/index.js",
+  "types": "dist/arora-web-wasm/src/index.d.ts",
+  "files": [
+    "dist/",
+    "pkg/",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/arora-web-wasm/src/index.js",
+      "types": "./dist/arora-web-wasm/src/index.d.ts"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node ../../../scripts/copy-wasm-pkg.mjs arora-web-wasm",
+    "test": "pnpm run build && node tests/smoke.mjs",
+    "prepack": "pnpm run build",
+    "prepublishOnly": "node -e \"const fs=require('fs');if(!fs.existsSync('pkg')){console.error('Missing pkg/. Run wasm-pack build.');process.exit(1);}\""
+  },
+  "dependencies": {
+    "@vizij/value-json": "workspace:*",
+    "@vizij/wasm-loader": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.12.7"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

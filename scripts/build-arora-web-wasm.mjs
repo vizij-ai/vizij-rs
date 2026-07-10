@@ -1,0 +1,13 @@
+import { execSync } from "node:child_process";
+import { resolve } from "node:path";
+import { writeFileSync } from "node:fs";
+
+const crate = resolve(process.cwd(), "crates/interop/vizij-arora-web");
+const outDir = resolve(process.cwd(), "npm/@vizij/arora-web-wasm/pkg");
+
+execSync(`wasm-pack build "${crate}" --target web --out-dir "${outDir}" --release`, {
+  stdio: "inherit",
+});
+
+// ensure root .npmignore exists and is empty
+writeFileSync(resolve(outDir, ".npmignore"), "");

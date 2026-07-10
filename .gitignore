@@ -5,20 +5,18 @@
 npm/@vizij/animation-wasm/pkg/
 npm/@vizij/node-graph-wasm/pkg/
 npm/@vizij/orchestrator-wasm/pkg/
+npm/@vizij/arora-web-wasm/pkg/
 
 # wrapper build output
 npm/@vizij/animation-wasm/dist/
 npm/@vizij/node-graph-wasm/dist/
 npm/@vizij/orchestrator-wasm/dist/
+npm/@vizij/arora-web-wasm/dist/
 npm/@vizij/value-json/dist/
 npm/@vizij/wasm-loader/dist/
 
 # local installs inside wrapper (if ever run there)
-npm/@vizij/animation-wasm/node_modules/
-npm/@vizij/node-graph-wasm/node_modules/
-npm/@vizij/orchestrator-wasm/node_modules/
-npm/@vizij/value-json/node_modules/
-npm/@vizij/wasm-loader/node_modules/
+npm/@vizij/*/node_modules/
 
 .release-tmp/
 
