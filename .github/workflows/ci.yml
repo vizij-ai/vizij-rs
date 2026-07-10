@@ -53,6 +53,8 @@ jobs:
         run: node scripts/build-graph-wasm.mjs
       - name: Build Orchestrator WASM into npm wrapper pkg/
         run: node scripts/build-orchestrator-wasm.mjs
+      - name: Build Arora-web WASM into npm wrapper pkg/
+        run: node scripts/build-arora-web-wasm.mjs
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -70,11 +72,13 @@ jobs:
           pnpm --filter @vizij/animation-wasm run build
           pnpm --filter @vizij/node-graph-wasm run build
           pnpm --filter @vizij/orchestrator-wasm run build
+          pnpm --filter @vizij/arora-web-wasm run build
       - name: Run wrapper tests
         run: |
           pnpm --filter @vizij/animation-wasm run test
           pnpm --filter @vizij/node-graph-wasm run test
           pnpm --filter @vizij/orchestrator-wasm run test
+          pnpm --filter @vizij/arora-web-wasm run test
 
   bench-smoke:
     runs-on: ubuntu-latest
