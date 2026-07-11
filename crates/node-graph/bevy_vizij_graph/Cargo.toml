@@ -16,9 +16,9 @@ bevy           = { workspace = true }
 serde          = { workspace = true }
 serde_json     = { workspace = true }
 hashbrown      = { workspace = true }
-vizij-graph-core = { path = "../vizij-graph-core", version = "1.0.0" }
-vizij-api-core = { version = "1.0.0", path = "../../api/vizij-api-core" }
-bevy_vizij_api = { version = "1.0.0", path = "../../api/bevy_vizij_api" }
+vizij-graph-core = { path = "../vizij-graph-core", version = "1" }
+vizij-api-core = { version = "1", path = "../../api/vizij-api-core" }
+bevy_vizij_api = { version = "1", path = "../../api/bevy_vizij_api" }
 
 [features]
 default = ["urdf_ik"]

@@ -16,7 +16,7 @@ crate-type = ["cdylib", "rlib"]
 # The published browser-runtime primitive: assembles arora's Runtime over an
 # injected HAL/bridge/store and exposes step() + the Value<->JSON store accessors.
 # 5.2.1 is the floor: the store accessors return plain JS objects from there.
-arora-web = "5.2.1"
+arora-web = "5.2"
 # The default Bridge: the in-process fake, all this device needs for now.
 arora-bridge = "3"
 

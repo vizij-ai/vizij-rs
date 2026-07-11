@@ -12,10 +12,10 @@ keywords    = ["vizij", "animation", "bevy", "plugin"]
 categories  = ["game-engines", "rendering", "wasm"]
 
 [dependencies]
-vizij-animation-core = { version = "1.0.0", path = "../vizij-animation-core" }
+vizij-animation-core = { version = "1", path = "../vizij-animation-core" }
 bevy                = { workspace = true }
-vizij-api-core      = { version = "1.0.0", path = "../../api/vizij-api-core" }
-bevy_vizij_api      = { version = "1.0.0", path = "../../api/bevy_vizij_api" }
+vizij-api-core      = { version = "1", path = "../../api/vizij-api-core" }
+bevy_vizij_api      = { version = "1", path = "../../api/bevy_vizij_api" }
 
 [dev-dependencies]
 serde_json = "1"

@@ -10,4 +10,4 @@ vizij-api-core = { path = "../../api/vizij-api-core" }
 # preserve_order keeps glTF JSON member order stable across the rewrite so
 # migrated files diff cleanly against their sources.
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
-thiserror = "1"
+thiserror = "2"

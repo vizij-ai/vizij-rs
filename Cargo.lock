@@ -118,6 +118,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloca"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5a7d05ea6aea7e9e64d25b9156ba2fee3fdd659e34e41063cd2fc7cd020d7f4"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -289,7 +298,7 @@ dependencies = [
  "arora-behavior",
  "arora-behavior-tree",
  "arora-bridge",
- "arora-engine 2.0.0",
+ "arora-engine",
  "arora-hal",
  "arora-simple-data-store",
  "arora-types",
@@ -318,7 +327,7 @@ dependencies = [
  "anyhow",
  "arora-behavior",
  "arora-behavior-tree-types",
- "arora-buffers 1.0.0",
+ "arora-buffers",
  "arora-module-rust",
  "arora-registry",
  "arora-types",
@@ -359,20 +368,6 @@ dependencies = [
 
 [[package]]
 name = "arora-buffers"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "504b36a67807b9615f68a4664fbae63df87e5d15ae2e2b616bf4202b3fd46858"
-dependencies = [
- "arora-types",
- "bytes",
- "cbindgen 0.20.0",
- "serde",
- "serde_yaml",
- "uuid",
-]
-
-[[package]]
-name = "arora-buffers"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14b4b702d632a2364765041f3ee4694d87acef920e5b1294bb3a0485978dc4e6"
@@ -387,12 +382,12 @@ dependencies = [
 
 [[package]]
 name = "arora-engine"
-version = "0.1.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2e1b4060b86bad406567749556b38c31292577d6fc5e9c5898ce0c1b4a7b4ef"
+checksum = "ad4c47d380640ff156d4a9d4938e621d0b34c4e69bfe480325e2a60e5fa11611"
 dependencies = [
  "anyhow",
- "arora-buffers 0.1.1",
+ "arora-buffers",
  "arora-types",
  "async-trait",
  "bytes",
@@ -405,7 +400,7 @@ dependencies = [
  "libloading 0.9.0",
  "rand 0.10.2",
  "serde",
- "serde-wasm-bindgen 0.6.5",
+ "serde-wasm-bindgen",
  "serde_json",
  "tempfile",
  "uuid",
@@ -413,33 +408,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasmtime",
  "wasmtime-wasi",
- "web-sys",
-]
-
-[[package]]
-name = "arora-engine"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad4c47d380640ff156d4a9d4938e621d0b34c4e69bfe480325e2a60e5fa11611"
-dependencies = [
- "anyhow",
- "arora-buffers 1.0.0",
- "arora-types",
- "async-trait",
- "bytes",
- "cbindgen 0.29.4",
- "console_error_panic_hook",
- "derive_more",
- "getrandom 0.4.3",
- "js-sys",
- "lazy_static",
- "rand 0.10.2",
- "serde",
- "serde-wasm-bindgen 0.6.5",
- "serde_json",
- "uuid",
- "wasm-bindgen",
- "wasm-bindgen-futures",
  "web-sys",
 ]
 
@@ -567,7 +535,7 @@ dependencies = [
  "arora",
  "arora-behavior",
  "arora-bridge",
- "arora-engine 2.0.0",
+ "arora-engine",
  "arora-hal",
  "arora-simple-data-store",
  "arora-types",
@@ -575,7 +543,7 @@ dependencies = [
  "getrandom 0.4.3",
  "js-sys",
  "serde",
- "serde-wasm-bindgen 0.6.5",
+ "serde-wasm-bindgen",
  "serde_json",
  "uuid",
  "wasm-bindgen",
@@ -1522,7 +1490,7 @@ name = "bevy_vizij_api"
 version = "1.0.0"
 dependencies = [
  "bevy",
- "hashbrown 0.14.5",
+ "hashbrown 0.17.1",
  "serde",
  "vizij-api-core",
 ]
@@ -1533,7 +1501,7 @@ version = "1.0.0"
 dependencies = [
  "bevy",
  "bevy_vizij_api",
- "hashbrown 0.14.5",
+ "hashbrown 0.17.1",
  "serde",
  "serde_json",
  "vizij-api-core",
@@ -2432,25 +2400,24 @@ dependencies = [
 
 [[package]]
 name = "criterion"
-version = "0.5.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2b12d017a929603d80db1831cd3a24082f8137ce19c69e6447f54f5fc8d692f"
+checksum = "950046b2aa2492f9a536f5f4f9a3de7b9e2476e575e05bd6c333371add4d98f3"
 dependencies = [
+ "alloca",
  "anes",
  "cast",
  "ciborium",
  "clap 4.5.53",
  "criterion-plot",
- "is-terminal",
- "itertools 0.10.5",
+ "itertools 0.13.0",
  "num-traits",
- "once_cell",
  "oorandom",
+ "page_size",
  "plotters",
  "rayon",
  "regex",
  "serde",
- "serde_derive",
  "serde_json",
  "tinytemplate",
  "walkdir",
@@ -2458,12 +2425,12 @@ dependencies = [
 
 [[package]]
 name = "criterion-plot"
-version = "0.5.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
+checksum = "d8d80a2f4f5b554395e47b5d8305bc3d27813bacb73493eb1001e8f76dae29ea"
 dependencies = [
  "cast",
- "itertools 0.10.5",
+ "itertools 0.13.0",
 ]
 
 [[package]]
@@ -3318,6 +3285,8 @@ version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
+ "allocator-api2",
+ "equivalent",
  "foldhash 0.2.0",
  "serde",
  "serde_core",
@@ -3626,30 +3595,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d98f6fed1fde3f8c21bc40a1abb88dd75e67924f9cffc3ef95607bad8017f8e2"
 
 [[package]]
-name = "is-terminal"
-version = "0.4.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
-dependencies = [
- "hermit-abi 0.5.2",
- "libc",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
-
-[[package]]
-name = "itertools"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
-dependencies = [
- "either",
-]
 
 [[package]]
 name = "itertools"
@@ -4572,6 +4521,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "page_size"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30d5b2194ed13191c1999ae0704b7839fb18384fa22e49b57eeaa97d79ce40da"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5214,17 +5173,6 @@ checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
 dependencies = [
  "serde_core",
  "serde_derive",
-]
-
-[[package]]
-name = "serde-wasm-bindgen"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3b143e2833c57ab9ad3ea280d21fd34e285a42837aeb0ee301f4f41890fa00e"
-dependencies = [
- "js-sys",
- "serde",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -5948,8 +5896,8 @@ name = "vizij-animation-module"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "arora-buffers 1.0.0",
- "arora-engine 0.1.0",
+ "arora-buffers",
+ "arora-engine",
  "arora-module-core",
  "arora-module-rust",
  "arora-registry",
@@ -5971,7 +5919,7 @@ dependencies = [
  "console_error_panic_hook",
  "js-sys",
  "serde",
- "serde-wasm-bindgen 0.6.5",
+ "serde-wasm-bindgen",
  "serde_json",
  "vizij-animation-core",
  "vizij-api-core",
@@ -5985,10 +5933,10 @@ name = "vizij-api-core"
 version = "1.0.0"
 dependencies = [
  "arora-types",
- "hashbrown 0.14.5",
+ "hashbrown 0.17.1",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "uuid",
 ]
 
@@ -5997,7 +5945,7 @@ name = "vizij-api-wasm"
 version = "1.0.0"
 dependencies = [
  "serde",
- "serde-wasm-bindgen 0.6.5",
+ "serde-wasm-bindgen",
  "serde_json",
  "vizij-api-core",
  "wasm-bindgen",
@@ -6055,7 +6003,7 @@ dependencies = [
  "arora-web",
  "console_error_panic_hook",
  "getrandom 0.4.3",
- "serde-wasm-bindgen 0.6.5",
+ "serde-wasm-bindgen",
  "serde_json",
  "vizij-api-core",
  "vizij-arora-behavior",
@@ -6072,7 +6020,7 @@ name = "vizij-glb-migrate"
 version = "0.1.1"
 dependencies = [
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "vizij-api-core",
 ]
 
@@ -6082,11 +6030,11 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "criterion",
- "hashbrown 0.14.5",
+ "hashbrown 0.17.1",
  "k",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "urdf-rs",
  "vizij-api-core",
  "vizij-test-fixtures",
@@ -6105,10 +6053,10 @@ name = "vizij-graph-wasm"
 version = "1.0.0"
 dependencies = [
  "console_error_panic_hook",
- "hashbrown 0.14.5",
+ "hashbrown 0.17.1",
  "js-sys",
  "serde",
- "serde-wasm-bindgen 0.6.5",
+ "serde-wasm-bindgen",
  "serde_json",
  "vizij-api-core",
  "vizij-graph-core",
@@ -6121,11 +6069,11 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "criterion",
- "hashbrown 0.14.5",
+ "hashbrown 0.17.1",
  "indexmap 2.14.0",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "vizij-animation-core",
  "vizij-api-core",
  "vizij-graph-core",
@@ -6140,7 +6088,7 @@ dependencies = [
  "console_error_panic_hook",
  "js-sys",
  "serde",
- "serde-wasm-bindgen 0.5.0",
+ "serde-wasm-bindgen",
  "serde_json",
  "vizij-animation-core",
  "vizij-api-core",
