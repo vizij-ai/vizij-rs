@@ -17,12 +17,12 @@ serde_json = { workspace = true }
 thiserror  = { workspace = true }
 hashbrown  = { workspace = true }
 anyhow     = { workspace = true }
-vizij-api-core = { version = "1.0.0", path = "../../api/vizij-api-core" }
+vizij-api-core = { version = "1", path = "../../api/vizij-api-core" }
 k = { version = "0.32", optional = true, default-features = false }
 urdf-rs = { version = "0.9", optional = true }
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.8"
 vizij-test-fixtures = { path = "../../test-fixtures/vizij-test-fixtures" }
 
 [[bench]]

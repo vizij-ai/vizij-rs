@@ -21,13 +21,13 @@ uuid = { version = "1", features = ["v4"] }
 [build-dependencies]
 anyhow = "1"
 arora-module-core = "0.2"
-arora-module-rust = "0.2.1"
+arora-module-rust = "0.2"
 arora-registry = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 [dev-dependencies]
 anyhow = "1"
-arora-engine = "0.1"
+arora-engine = "2"
 arora-types = "1"
 uuid = { version = "1", features = ["v4"] }
 serde_yaml = "0.9"
