@@ -11,6 +11,7 @@ arora-types = "1"
 vizij-api-core = { path = "../../api/vizij-api-core" }
 vizij-graph-core = { path = "../../node-graph/vizij-graph-core" }
 vizij-orchestrator-core = { path = "../../orchestrator/vizij-orchestrator-core" }
+uuid = "1"
 
 [dev-dependencies]
 arora-simple-data-store = "1"

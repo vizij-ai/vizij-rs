@@ -5967,6 +5967,7 @@ dependencies = [
  "arora-simple-data-store",
  "arora-types",
  "serde_json",
+ "uuid",
  "vizij-api-core",
  "vizij-graph-core",
  "vizij-orchestrator-core",
@@ -6036,6 +6037,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "urdf-rs",
+ "uuid",
  "vizij-api-core",
  "vizij-test-fixtures",
 ]

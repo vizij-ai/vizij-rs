@@ -19,12 +19,58 @@
 
 pub mod orchestrator;
 
+use std::collections::HashMap;
+
 use arora_behavior::{golden, BehaviorContext, BehaviorError, BehaviorInterpreter, BehaviorStatus};
+use arora_types::call::{Call, CallBridge};
 use arora_types::data::{DataStore, Key, StateChange};
-use arora_types::value::Value;
+use arora_types::value::{StructureField, Value};
+use uuid::Uuid;
 use vizij_api_core::TypedPath;
-use vizij_graph_core::eval::{evaluate_all, GraphRuntime};
+use vizij_graph_core::eval::{evaluate_all_with_functions, ExternalFunctions, GraphRuntime};
 use vizij_graph_core::types::GraphSpec;
+
+/// Adapts an Arora [`CallBridge`] to graph-core's [`ExternalFunctions`] host interface.
+///
+/// A graph `ExternalFunction` node carries only the function id it invokes. Arora's
+/// [`CallBridge::arora_call`] dispatches by *module* id — and the engine looks the module up
+/// directly, ignoring `Call::module_id` (see `arora-engine`'s `Engine::arora_call`). So this
+/// adapter must know which module each function lives in; it holds a `function -> module` map
+/// supplied at construction. The map is built from module-load summaries (arora-engine's
+/// `LoadedModule { id, function_ids }`); this crate does not own that plumbing.
+struct CallBridgeFunctions<'a> {
+    bridge: &'a mut dyn CallBridge,
+    /// function id -> module id, so a bare function handle can be dispatched to `arora_call`.
+    function_modules: &'a HashMap<Uuid, Uuid>,
+}
+
+impl<'a> ExternalFunctions for CallBridgeFunctions<'a> {
+    fn call(&mut self, function: Uuid, args: &[(Uuid, Value)]) -> Result<Value, String> {
+        let module_id = *self
+            .function_modules
+            .get(&function)
+            .ok_or_else(|| format!("no module registered for external function {function}"))?;
+        let args: Vec<StructureField> = args
+            .iter()
+            .map(|(id, value)| StructureField {
+                id: *id,
+                value: Box::new(value.clone()),
+            })
+            .collect();
+        let result = self
+            .bridge
+            .arora_call(
+                &module_id,
+                Call {
+                    module_id: Some(module_id),
+                    id: function,
+                    args,
+                },
+            )
+            .map_err(|e| format!("module call failed: {e}"))?;
+        Ok(result.ret)
+    }
+}
 
 /// A Vizij node graph as an Arora behavior interpreter.
 pub struct ProcessingGraph {
@@ -32,6 +78,10 @@ pub struct ProcessingGraph {
     rt: GraphRuntime,
     /// Store paths staged into the graph before each evaluation.
     inputs: Vec<TypedPath>,
+    /// function id -> module id, so `ExternalFunction` nodes can be dispatched through the
+    /// [`CallBridge`]. See [`CallBridgeFunctions`] for why this map is needed and where it
+    /// should come from.
+    function_modules: HashMap<Uuid, Uuid>,
 }
 
 impl ProcessingGraph {
@@ -41,14 +91,30 @@ impl ProcessingGraph {
             spec: spec.with_cache(),
             rt: GraphRuntime::default(),
             inputs,
+            function_modules: HashMap::new(),
         }
+    }
+
+    /// Set the `function id -> module id` map used to dispatch `ExternalFunction` nodes.
+    ///
+    /// Until this is populated, an `ExternalFunction` node errors with "no module registered".
+    pub fn set_function_modules(&mut self, function_modules: HashMap<Uuid, Uuid>) {
+        self.function_modules = function_modules;
     }
 
     /// Tick the graph against `store` for `dt`: read subscribed inputs, evaluate,
     /// write outputs. This is the inherent method behind the
     /// [`BehaviorInterpreter`] impl — handy for driving a graph directly and
     /// for tests.
-    pub fn tick_store(&mut self, store: &dyn DataStore, dt: f32) -> Result<(), BehaviorError> {
+    ///
+    /// `call_bridge` is the Arora host call interface; `ExternalFunction` nodes dispatch through
+    /// it, resolving each function to its module via the `function id -> module id` map.
+    pub fn tick_store(
+        &mut self,
+        store: &dyn DataStore,
+        call_bridge: &mut dyn CallBridge,
+        dt: f32,
+    ) -> Result<(), BehaviorError> {
         let delta = if dt.is_finite() { dt.max(0.0) } else { 0.0 };
         self.rt.dt = delta;
         self.rt.t += delta;
@@ -66,7 +132,12 @@ impl ProcessingGraph {
             }
         }
 
-        evaluate_all(&mut self.rt, &self.spec).map_err(|message| BehaviorError { message })?;
+        let mut functions = CallBridgeFunctions {
+            bridge: call_bridge,
+            function_modules: &self.function_modules,
+        };
+        evaluate_all_with_functions(&mut self.rt, &self.spec, &mut functions)
+            .map_err(|message| BehaviorError { message })?;
 
         // Write the graph's outputs back to the store.
         let writes = std::mem::take(&mut self.rt.writes);
@@ -86,7 +157,7 @@ impl ProcessingGraph {
 impl BehaviorInterpreter for ProcessingGraph {
     fn tick(&mut self, ctx: &mut BehaviorContext) -> Result<BehaviorStatus, BehaviorError> {
         let dt = golden_dt_seconds(ctx.store);
-        self.tick_store(ctx.store, dt)?;
+        self.tick_store(ctx.store, &mut *ctx.call_bridge, dt)?;
         // A node graph is continuous: tick it again next step.
         Ok(BehaviorStatus::Running)
     }
@@ -111,8 +182,30 @@ pub(crate) fn golden_dt_seconds(store: &dyn DataStore) -> f32 {
 mod tests {
     use super::*;
     use arora_simple_data_store::SimpleDataStore;
+    use arora_types::call::{Call, CallError, CallResult, Callable, CallableId};
     use serde_json::json;
+    use std::rc::Rc;
+    use uuid::Uuid;
     use vizij_api_core::value::{float, vec3};
+
+    /// A bridge the passthrough graphs never invoke (they contain no ExternalFunction nodes).
+    #[derive(Default)]
+    struct NoopBridge;
+
+    impl CallBridge for NoopBridge {
+        fn arora_call(&mut self, _module: &Uuid, _call: Call) -> Result<CallResult, CallError> {
+            unimplemented!("passthrough graphs make no external function calls")
+        }
+        fn arora_register_callable(&mut self, _callable: Rc<dyn Callable>) -> CallableId {
+            unimplemented!()
+        }
+        fn arora_unregister_callable(&mut self, _callable_id: &CallableId) {
+            unimplemented!()
+        }
+        fn arora_call_indirect(&mut self, _callable_id: &CallableId) -> Result<Value, CallError> {
+            unimplemented!()
+        }
+    }
 
     fn passthrough(input: &str, output: &str) -> GraphSpec {
         let mut spec = json!({
@@ -140,11 +233,13 @@ mod tests {
             vec![TypedPath::parse("sensor/x").unwrap()],
         );
 
+        let mut bridge = NoopBridge;
+
         // A scalar flows store -> graph -> store.
         store
             .write(StateChange::set("sensor/x", float(0.75)))
             .unwrap();
-        graph.tick_store(&store, 0.016).expect("tick");
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
         assert_eq!(read(&store, "actuator/y"), Some(float(0.75)));
 
         // A Vizij composite (`Value::Structure`) flows through unchanged too.
@@ -152,7 +247,7 @@ mod tests {
         store
             .write(StateChange::set("sensor/x", pos.clone()))
             .unwrap();
-        graph.tick_store(&store, 0.016).expect("tick");
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
         assert_eq!(read(&store, "actuator/y"), Some(pos));
     }
 

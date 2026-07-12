@@ -2670,6 +2670,34 @@ pub fn registry() -> Registry {
         params: vec![],
     });
 
+    // External function invocation (variadic args -> single result via host function interface)
+    nodes.push(NodeSignature {
+        type_id: ExternalFunction,
+        name: "External Function",
+        category: "Functions",
+        doc: "Invokes an external function (by opaque id) through the host-provided function \
+              interface, passing the variadic Args inputs zipped with the configured param_ids.",
+        inputs: vec![],
+        variadic_inputs: Some(VariadicSpec {
+            id: "args",
+            ty: PortType::Any,
+            label: "Arg",
+            doc: "Positional argument value bound to the matching entry in param_ids.",
+            min: 0,
+            max: None,
+            keyed: false,
+        }),
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "Value returned by the invoked external function.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
     Registry {
         version: "1.0.0",
         nodes,
