@@ -22,11 +22,22 @@ run_cmd() {
   "$@"
 }
 
+# The arora wasm modules emit their `src/arora_generated/` sources from a
+# build.rs. Until those exist, `cargo fmt --all` can't resolve `mod
+# arora_generated` and dies — which in a fresh checkout forces a manual build
+# before fmt/hooks work. Build them first so fmt and the hooks just work.
+# Extend the list if more generated-source modules are added.
+rust_codegen() {
+  run_cmd "generate module sources (build.rs)" cargo build -p vizij-animation-module
+}
+
 rust_fmt() {
+  rust_codegen
   run_cmd "cargo fmt --all" cargo fmt --all
 }
 
 rust_fmt_check() {
+  rust_codegen
   run_cmd "cargo fmt --all -- --check" cargo fmt --all -- --check
 }
 
