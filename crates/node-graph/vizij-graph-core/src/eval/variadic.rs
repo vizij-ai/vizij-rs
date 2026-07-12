@@ -2,8 +2,7 @@
 
 use std::cmp::Ordering;
 
-use vizij_api_core::value as vocab;
-use vizij_api_core::Value;
+use crate::graph_value::GraphValue;
 
 use super::eval_node::InputSlots;
 use super::numeric::binary_numeric;
@@ -36,23 +35,23 @@ pub fn compare_variadic_keys(a: &str, b: &str) -> Ordering {
 }
 
 /// Collect operand_* ports in stable slot order.
-pub fn collect_operand_ports<'a>(inputs: &'a InputSlots<'a>) -> Vec<&'a PortValue> {
+pub fn collect_operand_ports<'a, V: GraphValue>(
+    inputs: &'a InputSlots<'a, V>,
+) -> Vec<&'a PortValue<V>> {
     inputs.variadic("operand").iter().collect()
 }
 
 /// Fold a variadic collection of values with the provided numeric operator.
-pub fn fold_numeric_variadic<F>(values: &[Value], op: F, empty_fallback: Value) -> Value
+pub fn fold_numeric_variadic<V, F>(values: &[V], op: F, empty_fallback: V) -> V
 where
+    V: GraphValue,
     F: Fn(f32, f32) -> f32 + Copy,
 {
     if values.is_empty() {
         return empty_fallback;
     }
     let mut iter = values.iter();
-    let mut acc = iter
-        .next()
-        .cloned()
-        .unwrap_or_else(|| vocab::float(f32::NAN));
+    let mut acc = iter.next().cloned().unwrap_or_else(|| V::float(f32::NAN));
     for v in iter {
         acc = binary_numeric(&acc, v, op);
     }

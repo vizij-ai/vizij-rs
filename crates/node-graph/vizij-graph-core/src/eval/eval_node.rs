@@ -1,14 +1,14 @@
 //! Per-node evaluation logic for the Vizij graph runtime.
 
-use crate::eval::external::ExternalFunctions;
 use crate::eval::graph_runtime::{GraphRuntime, StagedInput};
+use crate::eval::node_function::NodeFunctions;
 use crate::eval::plan::{PlanCache, PortLayout};
 use crate::eval::variadic::collect_operand_ports;
+use crate::graph_value::{GraphValue, Transform};
 use crate::types::{NodeParams, NodeSpec, NodeType, RoundMode};
 use hashbrown::HashMap;
 use uuid::Uuid;
-use vizij_api_core::value as vocab;
-use vizij_api_core::{coercion, Shape, Value, WriteOp};
+use vizij_api_core::{Shape, WriteOp};
 
 use super::noise;
 use super::numeric::{as_bool, as_float, binary_numeric, unary_numeric};
@@ -24,14 +24,14 @@ use super::value_layout::{align_flattened, flatten_numeric, FlatValue, PortValue
 use super::variadic::fold_numeric_variadic;
 
 /// Read-only view of a node's inputs backed by slot-indexed storage.
-pub struct InputSlots<'a> {
-    slots: &'a [PortValue],
+pub struct InputSlots<'a, V: GraphValue = vizij_api_core::Value> {
+    slots: &'a [PortValue<V>],
     present: &'a [bool],
     layout: &'a PortLayout,
 }
 
-impl<'a> InputSlots<'a> {
-    pub fn new(slots: &'a [PortValue], present: &'a [bool], layout: &'a PortLayout) -> Self {
+impl<'a, V: GraphValue> InputSlots<'a, V> {
+    pub fn new(slots: &'a [PortValue<V>], present: &'a [bool], layout: &'a PortLayout) -> Self {
         InputSlots {
             slots,
             present,
@@ -40,7 +40,7 @@ impl<'a> InputSlots<'a> {
     }
 
     /// Fetch an input by name if present.
-    pub fn get(&self, name: &str) -> Option<&PortValue> {
+    pub fn get(&self, name: &str) -> Option<&PortValue<V>> {
         self.layout.slot(name).and_then(|idx| {
             if self.present.get(idx).copied().unwrap_or(false) {
                 self.slots.get(idx)
@@ -51,7 +51,7 @@ impl<'a> InputSlots<'a> {
     }
 
     /// Fetch an input by slot index.
-    pub fn get_slot(&self, slot: usize) -> Option<&PortValue> {
+    pub fn get_slot(&self, slot: usize) -> Option<&PortValue<V>> {
         if self.present.get(slot).copied().unwrap_or(false) {
             self.slots.get(slot)
         } else {
@@ -74,7 +74,7 @@ impl<'a> InputSlots<'a> {
     }
 
     /// Iterate over inputs in slot order.
-    pub fn iter(&self) -> impl Iterator<Item = (&str, &PortValue)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &PortValue<V>)> {
         self.layout
             .slots
             .iter()
@@ -83,7 +83,7 @@ impl<'a> InputSlots<'a> {
     }
 
     /// Slice a variadic group by name; returns an empty slice when the group is absent.
-    pub fn variadic(&self, group: &str) -> &[PortValue] {
+    pub fn variadic(&self, group: &str) -> &[PortValue<V>] {
         if let Some(range) = self.layout.variadic_range(group) {
             let end = range.start.saturating_add(range.len);
             if range.start <= self.slots.len() && end <= self.slots.len() {
@@ -95,21 +95,21 @@ impl<'a> InputSlots<'a> {
 }
 
 /// Mutable view of a node's outputs backed by slot-indexed storage.
-pub struct OutputSlots<'a> {
-    slots: &'a mut Vec<PortValue>,
+pub struct OutputSlots<'a, V: GraphValue = vizij_api_core::Value> {
+    slots: &'a mut Vec<PortValue<V>>,
     layout: &'a PortLayout,
 }
 
-impl<'a> OutputSlots<'a> {
-    pub fn new(slots: &'a mut Vec<PortValue>, layout: &'a PortLayout) -> Self {
+impl<'a, V: GraphValue> OutputSlots<'a, V> {
+    pub fn new(slots: &'a mut Vec<PortValue<V>>, layout: &'a PortLayout) -> Self {
         OutputSlots { slots, layout }
     }
 
-    pub fn as_slice(&self) -> &[PortValue] {
+    pub fn as_slice(&self) -> &[PortValue<V>] {
         self.slots.as_slice()
     }
 
-    pub fn as_mut_slice(&mut self) -> &mut [PortValue] {
+    pub fn as_mut_slice(&mut self) -> &mut [PortValue<V>] {
         self.slots.as_mut_slice()
     }
 
@@ -119,7 +119,7 @@ impl<'a> OutputSlots<'a> {
     }
 
     /// Write a port to a named slot.
-    pub fn set(&mut self, name: &str, port: PortValue) -> Result<(), String> {
+    pub fn set(&mut self, name: &str, port: PortValue<V>) -> Result<(), String> {
         let slot = self
             .layout
             .slot(name)
@@ -131,16 +131,21 @@ impl<'a> OutputSlots<'a> {
         Ok(())
     }
 
-    pub fn set_value(&mut self, name: &str, value: Value) -> Result<(), String> {
+    pub fn set_value(&mut self, name: &str, value: V) -> Result<(), String> {
         self.set(name, PortValue::new(value))
     }
 
-    pub fn set_port(&mut self, name: &str, port: PortValue) -> Result<(), String> {
+    pub fn set_port(&mut self, name: &str, port: PortValue<V>) -> Result<(), String> {
         self.set(name, port)
     }
 
     /// Write into a variadic group by index (0-based inside the group).
-    pub fn set_variadic(&mut self, group: &str, idx: usize, port: PortValue) -> Result<(), String> {
+    pub fn set_variadic(
+        &mut self,
+        group: &str,
+        idx: usize,
+        port: PortValue<V>,
+    ) -> Result<(), String> {
         let range = self
             .layout
             .variadic_range(group)
@@ -164,42 +169,50 @@ const PIECEWISE_BREAKPOINT_EPS: f32 = 1e-6;
 const PIECEWISE_OUTPUT_EPS: f32 = 1e-5;
 
 /// Write to a named output slot.
-fn keyed_output(outputs: &mut OutputSlots, key: &str, value: Value) -> Result<(), String> {
+fn keyed_output<V: GraphValue>(
+    outputs: &mut OutputSlots<V>,
+    key: &str,
+    value: V,
+) -> Result<(), String> {
     outputs.set_value(key, value)
 }
 
 /// Write a pre-shaped port value to a named output slot.
-fn keyed_port(outputs: &mut OutputSlots, key: &str, port: PortValue) -> Result<(), String> {
+fn keyed_port<V: GraphValue>(
+    outputs: &mut OutputSlots<V>,
+    key: &str,
+    port: PortValue<V>,
+) -> Result<(), String> {
     outputs.set_port(key, port)
 }
 
 /// Write to the default `out` slot.
-fn single_output(outputs: &mut OutputSlots, value: Value) -> Result<(), String> {
+fn single_output<V: GraphValue>(outputs: &mut OutputSlots<V>, value: V) -> Result<(), String> {
     keyed_output(outputs, "out", value)
 }
 
 /// Evaluate a single node, updating `rt` with new outputs and queued writes.
 ///
-/// This is the host-agnostic entry point; nodes that require an [`ExternalFunctions`] host
+/// This is the host-agnostic entry point; nodes that require an [`NodeFunctions`] host
 /// (currently only [`NodeType::ExternalFunction`]) will error when evaluated through this path.
 /// Use [`eval_node_inner`] with `Some(functions)` to enable them.
-pub fn eval_node(
-    rt: &mut GraphRuntime,
-    spec: &NodeSpec,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+pub fn eval_node<V: GraphValue>(
+    rt: &mut GraphRuntime<V>,
+    spec: &NodeSpec<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     eval_node_inner(rt, spec, inputs, outputs, None)
 }
 
-/// Evaluate a single node, optionally threading an [`ExternalFunctions`] host through to
+/// Evaluate a single node, optionally threading an [`NodeFunctions`] host through to
 /// `ExternalFunction` nodes.
-pub fn eval_node_inner(
-    rt: &mut GraphRuntime,
-    spec: &NodeSpec,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
-    functions: Option<&mut dyn ExternalFunctions>,
+pub fn eval_node_inner<V: GraphValue>(
+    rt: &mut GraphRuntime<V>,
+    spec: &NodeSpec<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+    functions: Option<&mut dyn NodeFunctions<V>>,
 ) -> Result<(), String> {
     evaluate_kind_inner(rt, spec, inputs, outputs, functions)?;
     enforce_output_shapes_slots(spec, outputs.layout, outputs.as_mut_slice())?;
@@ -221,12 +234,12 @@ pub fn eval_node_inner(
     Ok(())
 }
 
-fn evaluate_kind_inner(
-    rt: &mut GraphRuntime,
-    spec: &NodeSpec,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
-    functions: Option<&mut dyn ExternalFunctions>,
+fn evaluate_kind_inner<V: GraphValue>(
+    rt: &mut GraphRuntime<V>,
+    spec: &NodeSpec<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+    functions: Option<&mut dyn NodeFunctions<V>>,
 ) -> Result<(), String> {
     let params = &spec.params;
     match &spec.kind {
@@ -328,14 +341,15 @@ fn evaluate_kind_inner(
     }
 }
 
-fn eval_external_function(
-    params: &NodeParams,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
-    functions: Option<&mut dyn ExternalFunctions>,
+fn eval_external_function<V: GraphValue>(
+    params: &NodeParams<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+    functions: Option<&mut dyn NodeFunctions<V>>,
 ) -> Result<(), String> {
     let function = params
         .function
+        .as_deref()
         .ok_or_else(|| "ExternalFunction node requires a function id".to_string())?;
 
     let functions = functions.ok_or_else(|| {
@@ -345,7 +359,7 @@ fn eval_external_function(
 
     // Zip the configured param ids with the variadic `args` input ports, in slot order.
     let param_ids: &[Uuid] = params.param_ids.as_deref().unwrap_or(&[]);
-    let args: Vec<(Uuid, Value)> = param_ids
+    let args: Vec<(Uuid, V)> = param_ids
         .iter()
         .copied()
         .zip(inputs.variadic("args").iter().map(|pv| pv.value.clone()))
@@ -356,50 +370,59 @@ fn eval_external_function(
     outputs.set_value("out", ret)
 }
 
-fn input_or_default(inputs: &InputSlots, key: &str) -> PortValue {
+fn input_or_default<V: GraphValue>(inputs: &InputSlots<V>, key: &str) -> PortValue<V> {
     inputs
         .get(key)
         .cloned()
-        .unwrap_or_else(|| PortValue::new(vocab::float(0.0)))
+        .unwrap_or_else(|| PortValue::new(V::float(0.0)))
 }
 
-fn eval_constant(params: &NodeParams, outputs: &mut OutputSlots) -> Result<(), String> {
-    single_output(outputs, params.value.clone().unwrap_or(vocab::float(0.0)))
+fn eval_constant<V: GraphValue>(
+    params: &NodeParams<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
+    single_output(outputs, params.value.clone().unwrap_or(V::float(0.0)))
 }
 
-fn eval_slider(params: &NodeParams, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_slider<V: GraphValue>(
+    params: &NodeParams<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     single_output(
         outputs,
-        vocab::float(params.value.as_ref().map(as_float).unwrap_or(0.0)),
+        V::float(params.value.as_ref().map(as_float).unwrap_or(0.0)),
     )
 }
 
-fn eval_multi_slider(params: &NodeParams, outputs: &mut OutputSlots) -> Result<(), String> {
-    keyed_output(outputs, "x", vocab::float(params.x.unwrap_or(0.0)))?;
-    keyed_output(outputs, "y", vocab::float(params.y.unwrap_or(0.0)))?;
-    keyed_output(outputs, "z", vocab::float(params.z.unwrap_or(0.0)))
+fn eval_multi_slider<V: GraphValue>(
+    params: &NodeParams<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
+    keyed_output(outputs, "x", V::float(params.x.unwrap_or(0.0)))?;
+    keyed_output(outputs, "y", V::float(params.y.unwrap_or(0.0)))?;
+    keyed_output(outputs, "z", V::float(params.z.unwrap_or(0.0)))
 }
 
-fn eval_arithmetic(
+fn eval_arithmetic<V: GraphValue>(
     kind: &NodeType,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     match kind {
         NodeType::Add => {
-            let values: Vec<Value> = collect_operand_ports(inputs)
+            let values: Vec<V> = collect_operand_ports(inputs)
                 .iter()
                 .map(|pv| pv.value.clone())
                 .collect();
-            let result = fold_numeric_variadic(&values, |x, y| x + y, vocab::float(0.0));
+            let result = fold_numeric_variadic(&values, |x, y| x + y, V::float(0.0));
             single_output(outputs, result)
         }
         NodeType::Multiply => {
-            let values: Vec<Value> = collect_operand_ports(inputs)
+            let values: Vec<V> = collect_operand_ports(inputs)
                 .iter()
                 .map(|pv| pv.value.clone())
                 .collect();
-            let result = fold_numeric_variadic(&values, |x, y| x * y, vocab::float(1.0));
+            let result = fold_numeric_variadic(&values, |x, y| x * y, V::float(1.0));
             single_output(outputs, result)
         }
         NodeType::Subtract => {
@@ -458,10 +481,10 @@ fn eval_arithmetic(
     }
 }
 
-fn eval_unary_scalar(
+fn eval_unary_scalar<V: GraphValue>(
     kind: &NodeType,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let input = input_or_default(inputs, "in");
     match kind {
@@ -483,16 +506,16 @@ fn eval_unary_scalar(
     }
 }
 
-fn eval_min_max(
+fn eval_min_max<V: GraphValue>(
     kind: &NodeType,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
-    let values: Vec<Value> = collect_operand_ports(inputs)
+    let values: Vec<V> = collect_operand_ports(inputs)
         .iter()
         .map(|pv| pv.value.clone())
         .collect();
-    let empty = vocab::float(f32::NAN);
+    let empty = V::float(f32::NAN);
     let op = match kind {
         NodeType::Min => f32::min,
         NodeType::Max => f32::max,
@@ -502,10 +525,10 @@ fn eval_min_max(
     single_output(outputs, result)
 }
 
-fn eval_round(
-    params: &NodeParams,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+fn eval_round<V: GraphValue>(
+    params: &NodeParams<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let input = input_or_default(inputs, "in");
     let mode = params.round_mode.clone().unwrap_or_default();
@@ -517,10 +540,10 @@ fn eval_round(
     single_output(outputs, unary_numeric(&input.value, op))
 }
 
-fn eval_trig(
+fn eval_trig<V: GraphValue>(
     kind: &NodeType,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let input = input_or_default(inputs, "in");
     let op = match kind {
@@ -532,14 +555,17 @@ fn eval_trig(
     single_output(outputs, unary_numeric(&input.value, op))
 }
 
-fn eval_time(rt: &GraphRuntime, outputs: &mut OutputSlots) -> Result<(), String> {
-    single_output(outputs, vocab::float(rt.t))
+fn eval_time<V: GraphValue>(
+    rt: &GraphRuntime<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
+    single_output(outputs, V::float(rt.t))
 }
 
-fn eval_oscillator(
-    rt: &GraphRuntime,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+fn eval_oscillator<V: GraphValue>(
+    rt: &GraphRuntime<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let freq_port = input_or_default(inputs, "frequency");
     let phase_port = input_or_default(inputs, "phase");
@@ -589,19 +615,19 @@ fn eval_oscillator(
         (None, None) => {
             let f = as_float(&freq_value);
             let phase = as_float(&phase_value);
-            vocab::float((std::f32::consts::TAU * f * rt.t + phase).sin())
+            V::float((std::f32::consts::TAU * f * rt.t + phase).sin())
         }
     };
 
     single_output(outputs, value)
 }
-fn eval_stateful(
+fn eval_stateful<V: GraphValue>(
     kind: &NodeType,
-    rt: &mut GraphRuntime,
-    spec: &NodeSpec,
-    params: &NodeParams,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+    rt: &mut GraphRuntime<V>,
+    spec: &NodeSpec<V>,
+    params: &NodeParams<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let input = input_or_default(inputs, "in");
     match (kind, flatten_numeric(&input.value)) {
@@ -706,14 +732,14 @@ fn eval_stateful(
             }
             single_output(outputs, state.layout.reconstruct(&state.value))
         }
-        _ => single_output(outputs, vocab::float(f32::NAN)),
+        _ => single_output(outputs, V::float(f32::NAN)),
     }
 }
 
-fn eval_logic(
+fn eval_logic<V: GraphValue>(
     kind: &NodeType,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let value = match kind {
         NodeType::And => {
@@ -731,13 +757,13 @@ fn eval_logic(
         NodeType::Not => !as_bool(&input_or_default(inputs, "in").value),
         _ => unreachable!(),
     };
-    single_output(outputs, vocab::bool_(value))
+    single_output(outputs, V::bool_(value))
 }
 
-fn eval_comparison(
+fn eval_comparison<V: GraphValue>(
     kind: &NodeType,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let lhs = input_or_default(inputs, "lhs");
     let rhs = input_or_default(inputs, "rhs");
@@ -748,10 +774,13 @@ fn eval_comparison(
         NodeType::NotEqual => (as_float(&lhs.value) - as_float(&rhs.value)).abs() > 1e-6,
         _ => unreachable!(),
     };
-    single_output(outputs, vocab::bool_(value))
+    single_output(outputs, V::bool_(value))
 }
 
-fn eval_if(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_if<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let cond = as_bool(&input_or_default(inputs, "cond").value);
     let branch = if cond {
         input_or_default(inputs, "then")
@@ -761,7 +790,10 @@ fn eval_if(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String>
     single_output(outputs, branch.value)
 }
 
-fn eval_clamp(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_clamp<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let value = inputs
         .get("in")
         .ok_or_else(|| "Clamp requires 'in' input".to_string())?;
@@ -779,7 +811,10 @@ fn eval_clamp(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), Stri
     )
 }
 
-fn eval_remap(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_remap<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let value = inputs
         .get("in")
         .ok_or_else(|| "Remap requires 'in' input".to_string())?;
@@ -812,7 +847,10 @@ fn eval_remap(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), Stri
     )
 }
 
-fn eval_centered_remap(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_centered_remap<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let value = inputs
         .get("in")
         .ok_or_else(|| "CenteredRemap requires 'in' input".to_string())?;
@@ -865,10 +903,10 @@ fn eval_centered_remap(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result
     single_output(outputs, remapped)
 }
 
-fn eval_piecewise_remap(
-    params: &NodeParams,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+fn eval_piecewise_remap<V: GraphValue>(
+    params: &NodeParams<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let value_port = inputs
         .get("in")
@@ -905,7 +943,7 @@ fn eval_piecewise_remap(
                 .collect();
             flat.layout.reconstruct(&data)
         }
-        None => vocab::float(f32::NAN),
+        None => V::float(f32::NAN),
     };
 
     single_output(outputs, remapped)
@@ -1055,7 +1093,10 @@ fn approx_equal(a: f32, b: f32) -> bool {
     (a - b).abs() <= PIECEWISE_BREAKPOINT_EPS
 }
 
-fn eval_vec3_cross(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_vec3_cross<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let a = input_or_default(inputs, "a");
     let b = input_or_default(inputs, "b");
     match (flatten_numeric(&a.value), flatten_numeric(&b.value)) {
@@ -1073,22 +1114,25 @@ fn eval_vec3_cross(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(),
         }
         (Some(a_flat), _) => single_output(outputs, a_flat.layout.fill_with(f32::NAN)),
         (_, Some(b_flat)) => single_output(outputs, b_flat.layout.fill_with(f32::NAN)),
-        _ => single_output(outputs, vocab::vec3([f32::NAN; 3])),
+        _ => single_output(outputs, V::vec3([f32::NAN; 3])),
     }
 }
 
-fn eval_vector_constant(params: &NodeParams, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_vector_constant<V: GraphValue>(
+    params: &NodeParams<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     if let Some(value) = &params.value {
         single_output(outputs, value.clone())
     } else {
-        single_output(outputs, vocab::vector(Vec::new()))
+        single_output(outputs, V::vector(Vec::new()))
     }
 }
 
-fn eval_vector_arithmetic(
+fn eval_vector_arithmetic<V: GraphValue>(
     kind: &NodeType,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     match kind {
         NodeType::VectorAdd => {
@@ -1118,7 +1162,10 @@ fn eval_vector_arithmetic(
     }
 }
 
-fn eval_vector_normalize(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_vector_normalize<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let value = input_or_default(inputs, "in");
     match flatten_numeric(&value.value) {
         Some(flat) => {
@@ -1131,66 +1178,78 @@ fn eval_vector_normalize(inputs: &InputSlots, outputs: &mut OutputSlots) -> Resu
             };
             single_output(outputs, flat.layout.reconstruct(&normalized))
         }
-        None => single_output(outputs, vocab::float(f32::NAN)),
+        None => single_output(outputs, V::float(f32::NAN)),
     }
 }
 
-fn eval_vector_dot(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_vector_dot<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let a = input_or_default(inputs, "a");
     let b = input_or_default(inputs, "b");
     match (flatten_numeric(&a.value), flatten_numeric(&b.value)) {
         (Some(lhs), Some(rhs)) => match align_flattened(&lhs, &rhs) {
             Ok((_, da, db)) => {
                 let sum = da.iter().zip(db.iter()).map(|(x, y)| x * y).sum::<f32>();
-                single_output(outputs, vocab::float(sum))
+                single_output(outputs, V::float(sum))
             }
-            Err(_) => single_output(outputs, vocab::float(f32::NAN)),
+            Err(_) => single_output(outputs, V::float(f32::NAN)),
         },
-        _ => single_output(outputs, vocab::float(f32::NAN)),
+        _ => single_output(outputs, V::float(f32::NAN)),
     }
 }
 
-fn eval_vector_length(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_vector_length<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let value = input_or_default(inputs, "in");
     match flatten_numeric(&value.value) {
         Some(flat) => {
             let len_sq: f32 = flat.data.iter().map(|x| x * x).sum();
-            single_output(outputs, vocab::float(len_sq.sqrt()))
+            single_output(outputs, V::float(len_sq.sqrt()))
         }
-        None => single_output(outputs, vocab::float(f32::NAN)),
+        None => single_output(outputs, V::float(f32::NAN)),
     }
 }
 
-fn eval_vector_index(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_vector_index<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let value = input_or_default(inputs, "v");
     let index = as_float(&input_or_default(inputs, "index").value);
     if let Some(flat) = flatten_numeric(&value.value) {
         let i = index.floor() as isize;
         let len = flat.data.len() as isize;
         if i >= 0 && i < len {
-            single_output(outputs, vocab::float(flat.data[i as usize]))
+            single_output(outputs, V::float(flat.data[i as usize]))
         } else {
-            single_output(outputs, vocab::float(f32::NAN))
+            single_output(outputs, V::float(f32::NAN))
         }
     } else {
-        single_output(outputs, vocab::float(f32::NAN))
+        single_output(outputs, V::float(f32::NAN))
     }
 }
 
-fn eval_join(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_join<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let mut out: Vec<f32> = Vec::new();
     for port in collect_operand_ports(inputs) {
         if let Some(flat) = flatten_numeric(&port.value) {
             out.extend(flat.data);
         }
     }
-    single_output(outputs, vocab::vector(out))
+    single_output(outputs, V::vector(out))
 }
 
-fn eval_split(
-    params: &NodeParams,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+fn eval_split<V: GraphValue>(
+    params: &NodeParams<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let input = input_or_default(inputs, "in");
     let data = flatten_numeric(&input.value)
@@ -1210,24 +1269,30 @@ fn eval_split(
         } else {
             vec![f32::NAN; sz]
         };
-        outputs.set_variadic("parts", i, PortValue::new(vocab::vector(value_vec)))?;
+        outputs.set_variadic("parts", i, PortValue::new(V::vector(value_vec)))?;
     }
 
     // If no sizes provided, emit a single empty part.
     if sizes_usize.is_empty() {
-        outputs.set_variadic("parts", 0, PortValue::new(vocab::vector(Vec::new())))?;
+        outputs.set_variadic("parts", 0, PortValue::new(V::vector(Vec::new())))?;
     }
 
     Ok(())
 }
 
-fn eval_to_vector(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_to_vector<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let operands = collect_operand_ports(inputs);
     let vec: Vec<f32> = operands.iter().map(|pv| as_float(&pv.value)).collect();
-    single_output(outputs, vocab::vector(vec))
+    single_output(outputs, V::vector(vec))
 }
 
-fn eval_from_vector(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_from_vector<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let input = input_or_default(inputs, "in");
     let data = flatten_numeric(&input.value)
         .map(|f| f.data)
@@ -1236,18 +1301,18 @@ fn eval_from_vector(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<()
     if let Some(range) = outputs.layout.variadic_range("elements") {
         for i in 0..range.len {
             let val = data.get(i).copied().unwrap_or(f32::NAN);
-            outputs.set_variadic("elements", i, PortValue::new(vocab::float(val)))?;
+            outputs.set_variadic("elements", i, PortValue::new(V::float(val)))?;
         }
     }
 
     Ok(())
 }
 
-fn eval_noise(
+fn eval_noise<V: GraphValue>(
     kind: &NodeType,
-    params: &NodeParams,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+    params: &NodeParams<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let x = as_float(&input_or_default(inputs, "x").value);
     let y = as_float(&input_or_default(inputs, "y").value);
@@ -1275,13 +1340,13 @@ fn eval_noise(
         persistence,
         base_fn,
     );
-    single_output(outputs, vocab::float(result.clamp(-1.0, 1.0)))
+    single_output(outputs, V::float(result.clamp(-1.0, 1.0)))
 }
 
-fn eval_vector_reducer(
+fn eval_vector_reducer<V: GraphValue>(
     kind: &NodeType,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let mut data = flatten_numeric(&input_or_default(inputs, "in").value)
         .map(|f| f.data)
@@ -1353,24 +1418,27 @@ fn eval_vector_reducer(
         }
         _ => f32::NAN,
     };
-    single_output(outputs, vocab::float(result))
+    single_output(outputs, V::float(result))
 }
 
 //
 // Blend helpers
 //
 
-fn vec_port_to_vec(inputs: &InputSlots, key: &str) -> Vec<f32> {
+fn vec_port_to_vec<V: GraphValue>(inputs: &InputSlots<V>, key: &str) -> Vec<f32> {
     if !inputs.is_present(key) {
         return Vec::new();
     }
     inputs
         .get(key)
-        .map(|port| coercion::to_vector(&port.value))
+        .map(|port| V::to_vector(&port.value))
         .unwrap_or_default()
 }
 
-fn eval_default_blend(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_default_blend<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let baseline_port = input_or_default(inputs, "baseline");
     let offset_port = input_or_default(inputs, "offset");
 
@@ -1398,13 +1466,13 @@ fn eval_default_blend(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<
                     None
                 }
             })
-            .unwrap_or(vocab::float(f32::NAN));
+            .unwrap_or(V::float(f32::NAN));
 
         return single_output(outputs, fallback_value);
     }
 
     let mut total_weight_sum = 0.0f32;
-    let mut target_sum: Option<Value> = None;
+    let mut target_sum: Option<V> = None;
 
     for (idx, port) in target_ports.iter().enumerate() {
         let weight = if weights.is_empty() {
@@ -1414,7 +1482,7 @@ fn eval_default_blend(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<
         };
         total_weight_sum += weight;
 
-        let weight_value = vocab::float(weight);
+        let weight_value = V::float(weight);
         let weighted = binary_numeric(&port.value, &weight_value, |x, y| x * y);
 
         target_sum = Some(match target_sum {
@@ -1423,9 +1491,9 @@ fn eval_default_blend(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<
         });
     }
 
-    let targets_value = target_sum.unwrap_or_else(|| vocab::float(0.0));
+    let targets_value = target_sum.unwrap_or_else(|| V::float(0.0));
     let baseline_factor = (1.0 - total_weight_sum).max(0.0);
-    let baseline_weight = vocab::float(baseline_factor);
+    let baseline_weight = V::float(baseline_factor);
     let baseline_scaled = binary_numeric(&baseline_port.value, &baseline_weight, |x, y| x * y);
     let blended = binary_numeric(&targets_value, &baseline_scaled, |x, y| x + y);
     let final_value = binary_numeric(&blended, &offset_port.value, |x, y| x + y);
@@ -1433,7 +1501,7 @@ fn eval_default_blend(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<
     single_output(outputs, final_value)
 }
 
-fn float_port_opt(inputs: &InputSlots, key: &str) -> Option<f32> {
+fn float_port_opt<V: GraphValue>(inputs: &InputSlots<V>, key: &str) -> Option<f32> {
     inputs.get(key).map(|p| as_float(&p.value))
 }
 
@@ -1459,12 +1527,12 @@ fn compute_normalized_weighted_average(
     }
 }
 
-fn build_float_outputs(
-    outputs: &mut OutputSlots,
+fn build_float_outputs<V: GraphValue>(
+    outputs: &mut OutputSlots<V>,
     pairs: impl IntoIterator<Item = (String, f32)>,
 ) -> Result<(), String> {
     for (k, v) in pairs {
-        outputs.set_port(&k, PortValue::new(vocab::float(v)))?;
+        outputs.set_port(&k, PortValue::new(V::float(v)))?;
     }
     Ok(())
 }
@@ -1476,7 +1544,10 @@ fn build_float_outputs(
 /// - "total_weight": Σ(weight_i * mask_i)
 /// - "max_effective_weight": max(weight_i * mask_i) or 0.0 when no inputs
 /// - "input_count": number of values considered (as Float)
-fn eval_weighted_sum_vector(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_weighted_sum_vector<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let values = vec_port_to_vec(inputs, "values");
     // Broadcast single scalar weight to values length if provided.
     let mut weights = vec_port_to_vec(inputs, "weights");
@@ -1550,9 +1621,9 @@ fn eval_weighted_sum_vector(inputs: &InputSlots, outputs: &mut OutputSlots) -> R
 /// - "total_weight"
 /// - "max_effective_weight"
 /// - optional "fallback"
-fn eval_blend_weighted_average(
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+fn eval_blend_weighted_average<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let sum = as_float(&input_or_default(inputs, "total_weighted_sum").value);
     let total_weight = as_float(&input_or_default(inputs, "total_weight").value);
@@ -1574,7 +1645,10 @@ fn eval_blend_weighted_average(
 /// - "total_weighted_sum"
 /// - "total_weight"
 /// - optional "fallback"
-fn eval_blend_additive(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_blend_additive<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let sum = as_float(&input_or_default(inputs, "total_weighted_sum").value);
     let total_weight = as_float(&input_or_default(inputs, "total_weight").value);
     let fallback = float_port_opt(inputs, "fallback");
@@ -1590,7 +1664,10 @@ fn eval_blend_additive(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result
 
 /// Blend: multiplicative blending across values using weights and masks.
 /// Formula per-term: (1 - weight) + value * weight * mask
-fn eval_blend_multiply(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_blend_multiply<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let values = vec_port_to_vec(inputs, "values");
     let mut weights = vec_port_to_vec(inputs, "weights");
     if weights.is_empty() {
@@ -1621,9 +1698,9 @@ fn eval_blend_multiply(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result
 }
 
 /// Blend: weighted overlay between base and weighted sum using max_effective_weight as factor.
-fn eval_blend_weighted_overlay(
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+fn eval_blend_weighted_overlay<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let sum = as_float(&input_or_default(inputs, "total_weighted_sum").value);
     let max_w = as_float(&input_or_default(inputs, "max_effective_weight").value);
@@ -1638,9 +1715,9 @@ fn eval_blend_weighted_overlay(
 }
 
 /// Blend: weighted average overlay (applies averaged offset to base)
-fn eval_blend_weighted_average_overlay(
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+fn eval_blend_weighted_average_overlay<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let sum = as_float(&input_or_default(inputs, "total_weighted_sum").value);
     let total_weight = as_float(&input_or_default(inputs, "total_weight").value);
@@ -1658,7 +1735,10 @@ fn eval_blend_weighted_average_overlay(
 
 /// Blend: choose the value corresponding to the maximum effective weight (weight * mask).
 /// Returns selected_value * selected_effective_weight, or base/fallback when none valid.
-fn eval_blend_max(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_blend_max<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let values = vec_port_to_vec(inputs, "values");
     let mut weights = vec_port_to_vec(inputs, "weights");
     if weights.is_empty() {
@@ -1714,10 +1794,10 @@ fn eval_blend_max(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), 
     }
 }
 
-fn eval_case(
-    params: &NodeParams,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+fn eval_case<V: GraphValue>(
+    params: &NodeParams<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     // Collect selector and optional default
     let selector = inputs.get("selector").map(|p| p.value.clone());
@@ -1729,7 +1809,7 @@ fn eval_case(
 
     // Compare selector (prefer text comparison) against labels.
     if let Some(sel_val) = selector {
-        if let Some(sel_s) = vocab::as_text(&sel_val) {
+        if let Some(sel_s) = V::as_text(&sel_val) {
             for (i, port) in case_ports.iter().enumerate() {
                 if let Some(label) = labels.get(i) {
                     if sel_s == label {
@@ -1743,7 +1823,7 @@ fn eval_case(
                 if params.case_labels.is_some() {
                     // labels provided — compare selector to label string if possible
                     if let Some(label) = labels.get(i) {
-                        if let Some(port_text) = vocab::as_text(&port.value) {
+                        if let Some(port_text) = V::as_text(&port.value) {
                             if port_text == label {
                                 return single_output(outputs, port.value.clone());
                             }
@@ -1751,7 +1831,7 @@ fn eval_case(
                     }
                 } else {
                     // no labels — try index-based routing: if selector is numeric choose that index
-                    if let Some(f) = vocab::as_float(&sel_val) {
+                    if let Some(f) = V::as_float(&sel_val) {
                         let idx = f.floor() as usize;
                         if idx == i {
                             return single_output(outputs, port.value.clone());
@@ -1766,11 +1846,14 @@ fn eval_case(
     if let Some(d) = default {
         single_output(outputs, d)
     } else {
-        single_output(outputs, vocab::float(f32::NAN))
+        single_output(outputs, V::float(f32::NAN))
     }
 }
 
-fn eval_inverse_kinematics(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_inverse_kinematics<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let l1 = as_float(&input_or_default(inputs, "bone1").value);
     let l2 = as_float(&input_or_default(inputs, "bone2").value);
     let l3 = as_float(&input_or_default(inputs, "bone3").value);
@@ -1783,25 +1866,25 @@ fn eval_inverse_kinematics(inputs: &InputSlots, outputs: &mut OutputSlots) -> Re
     let dist_sq = wx * wx + wy * wy;
 
     let value = if dist_sq > (l1 + l2) * (l1 + l2) || dist_sq < (l1 - l2) * (l1 - l2) {
-        vocab::vec3([f32::NAN; 3])
+        V::vec3([f32::NAN; 3])
     } else {
         let cos_angle2 = (dist_sq - l1 * l1 - l2 * l2) / (2.0 * l1 * l2);
         let angle2 = cos_angle2.acos();
         let angle1 = wy.atan2(wx) - (l2 * angle2.sin()).atan2(l1 + l2 * angle2.cos());
         let angle3 = theta - angle1 - angle2;
-        vocab::vec3([angle1, angle2, angle3])
+        V::vec3([angle1, angle2, angle3])
     };
 
     single_output(outputs, value)
 }
 
 #[cfg(feature = "urdf_ik")]
-fn eval_urdf_fk(
-    rt: &mut GraphRuntime,
-    spec: &NodeSpec,
-    params: &NodeParams,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+fn eval_urdf_fk<V: GraphValue>(
+    rt: &mut GraphRuntime<V>,
+    spec: &NodeSpec<V>,
+    params: &NodeParams<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let joints_port = inputs
         .get("joints")
@@ -1833,31 +1916,31 @@ fn eval_urdf_fk(
     apply_joint_positions(state, &joints)?;
 
     let (pos_arr, rot_arr) = tip_pose(state);
-    let transform_value = vocab::transform(vocab::Transform {
+    let transform_value = V::transform(Transform {
         translation: pos_arr,
         rotation: rot_arr,
         scale: [1.0, 1.0, 1.0],
     });
 
-    outputs.set_port("position", PortValue::new(vocab::vec3(pos_arr)))?;
-    outputs.set_port("rotation", PortValue::new(vocab::quat(rot_arr)))?;
+    outputs.set_port("position", PortValue::new(V::vec3(pos_arr)))?;
+    outputs.set_port("rotation", PortValue::new(V::quat(rot_arr)))?;
     outputs.set_port("transform", PortValue::new(transform_value))
 }
 
 #[cfg(feature = "urdf_ik")]
-fn eval_urdf_position(
-    rt: &mut GraphRuntime,
-    spec: &NodeSpec,
-    params: &NodeParams,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+fn eval_urdf_position<V: GraphValue>(
+    rt: &mut GraphRuntime<V>,
+    spec: &NodeSpec<V>,
+    params: &NodeParams<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let target_pos = {
         let port = input_or_default(inputs, "target_pos");
-        vocab::as_vec3(&port.value).ok_or_else(|| {
+        V::as_vec3(&port.value).ok_or_else(|| {
             format!(
                 "UrdfIkPosition input 'target_pos' expects Vec3, received {:?}",
-                vocab::kind(&port.value)
+                V::kind(&port.value)
             )
         })?
     };
@@ -1924,19 +2007,19 @@ fn eval_urdf_position(
 }
 
 #[cfg(feature = "urdf_ik")]
-fn eval_urdf_pose(
-    rt: &mut GraphRuntime,
-    spec: &NodeSpec,
-    params: &NodeParams,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+fn eval_urdf_pose<V: GraphValue>(
+    rt: &mut GraphRuntime<V>,
+    spec: &NodeSpec<V>,
+    params: &NodeParams<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let target_pos = {
         let port = input_or_default(inputs, "target_pos");
-        vocab::as_vec3(&port.value).ok_or_else(|| {
+        V::as_vec3(&port.value).ok_or_else(|| {
             format!(
                 "UrdfIkPose input 'target_pos' expects Vec3, received {:?}",
-                vocab::kind(&port.value)
+                V::kind(&port.value)
             )
         })?
     };
@@ -2008,14 +2091,17 @@ fn eval_urdf_pose(
     single_output(outputs, state.solution_record(&solution))
 }
 
-fn eval_output(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_output<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     single_output(outputs, input_or_default(inputs, "in").value)
 }
 
-fn eval_build_record(
-    params: &NodeParams,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+fn eval_build_record<V: GraphValue>(
+    params: &NodeParams<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let slots = inputs.variadic("field");
     let keys = params.record_keys.as_deref().unwrap_or(&[]);
@@ -2040,30 +2126,30 @@ fn eval_build_record(
 }
 
 /// Encode string-keyed entries as a record value.
-fn record_from_map(map: &HashMap<String, Value>) -> Value {
-    vocab::record(map.iter().map(|(k, v)| (k.as_str(), v.clone())))
+fn record_from_map<V: GraphValue>(map: &HashMap<String, V>) -> V {
+    V::record(map.iter().map(|(k, v)| (k.as_str(), v.clone())))
 }
 
-fn eval_read_record(
-    params: &NodeParams,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+fn eval_read_record<V: GraphValue>(
+    params: &NodeParams<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let input = input_or_default(inputs, "in");
-    let entries = vocab::as_record(&input.value).unwrap_or_default();
+    let entries = V::as_record(&input.value).unwrap_or_default();
     let keys = params.record_keys.as_deref().unwrap_or(&[]);
 
     if let Some(range) = outputs.layout.variadic_range("field") {
         for i in 0..range.len {
             let key = keys.get(i).map(|k| k.as_str()).unwrap_or("");
             let value = if key.is_empty() {
-                vocab::float(0.0)
+                V::float(0.0)
             } else {
                 entries
                     .iter()
                     .find(|(name, _)| *name == key)
                     .map(|(_, v)| (*v).clone())
-                    .unwrap_or(vocab::float(0.0))
+                    .unwrap_or(V::float(0.0))
             };
             outputs.set_variadic("field", i, PortValue::new(value))?;
         }
@@ -2072,20 +2158,26 @@ fn eval_read_record(
     Ok(())
 }
 
-fn eval_switch_record(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
+fn eval_switch_record<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
     let switch_val = as_float(&input_or_default(inputs, "switch").value);
     let records = inputs.variadic("record");
     if records.is_empty() {
-        return single_output(outputs, vocab::record(Vec::<(&str, Value)>::new()));
+        return single_output(outputs, V::record(Vec::<(&str, V)>::new()));
     }
     let idx = (switch_val.floor() as isize).clamp(0, records.len() as isize - 1) as usize;
     single_output(outputs, records[idx].value.clone())
 }
 
-fn eval_merge_record(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(), String> {
-    let mut merged: HashMap<String, Value> = HashMap::new();
+fn eval_merge_record<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
+) -> Result<(), String> {
+    let mut merged: HashMap<String, V> = HashMap::new();
     for pv in inputs.variadic("record") {
-        if let Some(entries) = vocab::as_record(&pv.value) {
+        if let Some(entries) = V::as_record(&pv.value) {
             for (k, v) in entries {
                 merged.insert(k.to_string(), v.clone());
             }
@@ -2094,13 +2186,13 @@ fn eval_merge_record(inputs: &InputSlots, outputs: &mut OutputSlots) -> Result<(
     single_output(outputs, record_from_map(&merged))
 }
 
-fn eval_split_record(
-    params: &NodeParams,
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+fn eval_split_record<V: GraphValue>(
+    params: &NodeParams<V>,
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let input = input_or_default(inputs, "in");
-    let entries = vocab::as_record(&input.value).unwrap_or_default();
+    let entries = V::as_record(&input.value).unwrap_or_default();
     let key_set: std::collections::HashSet<&str> = params
         .keys
         .as_deref()
@@ -2120,30 +2212,30 @@ fn eval_split_record(
         }
     }
 
-    outputs.set("included", PortValue::new(vocab::record(included)))?;
-    outputs.set("excluded", PortValue::new(vocab::record(excluded)))?;
+    outputs.set("included", PortValue::new(V::record(included)))?;
+    outputs.set("excluded", PortValue::new(V::record(excluded)))?;
     Ok(())
 }
 
-fn eval_math_record(
-    inputs: &InputSlots,
-    outputs: &mut OutputSlots,
+fn eval_math_record<V: GraphValue>(
+    inputs: &InputSlots<V>,
+    outputs: &mut OutputSlots<V>,
     op: fn(f32, f32) -> f32,
 ) -> Result<(), String> {
     let input = input_or_default(inputs, "in");
     let scalar = as_float(&input_or_default(inputs, "value").value);
-    let entries = vocab::as_record(&input.value).unwrap_or_default();
-    let result: Vec<(&str, Value)> = entries
+    let entries = V::as_record(&input.value).unwrap_or_default();
+    let result: Vec<(&str, V)> = entries
         .into_iter()
         .map(|(k, v)| (k, unary_numeric(v, |x| op(x, scalar))))
         .collect();
-    single_output(outputs, vocab::record(result))
+    single_output(outputs, V::record(result))
 }
 
-fn eval_input_node(
-    rt: &GraphRuntime,
-    spec: &NodeSpec,
-    outputs: &mut OutputSlots,
+fn eval_input_node<V: GraphValue>(
+    rt: &GraphRuntime<V>,
+    spec: &NodeSpec<V>,
+    outputs: &mut OutputSlots<V>,
 ) -> Result<(), String> {
     let params = &spec.params;
     let path = params
@@ -2217,14 +2309,14 @@ fn eval_input_node(
     ))
 }
 
-fn align_input_to_declared(
+fn align_input_to_declared<V: GraphValue>(
     node_id: &str,
     path: &str,
     source: &str,
     declared: &Shape,
     staged_shape: Option<&Shape>,
-    value: Value,
-) -> Result<PortValue, String> {
+    value: V,
+) -> Result<PortValue<V>, String> {
     if let Some(shape) = staged_shape {
         if shape.id != declared.id && !is_numeric_like(&declared.id) {
             return Err(format!(
@@ -2255,10 +2347,10 @@ fn align_input_to_declared(
     ))
 }
 
-fn enforce_output_shapes_slots(
-    spec: &NodeSpec,
+fn enforce_output_shapes_slots<V: GraphValue>(
+    spec: &NodeSpec<V>,
     layout: &PortLayout,
-    outputs: &mut [PortValue],
+    outputs: &mut [PortValue<V>],
 ) -> Result<(), String> {
     if spec.output_shapes.is_empty() {
         return Ok(());
@@ -2292,7 +2384,10 @@ fn enforce_output_shapes_slots(
 }
 
 /// Materialize output map for external consumers/tests.
-pub fn materialize_outputs(layout: &PortLayout, slots: &[PortValue]) -> HashMap<String, PortValue> {
+pub fn materialize_outputs<V: GraphValue>(
+    layout: &PortLayout,
+    slots: &[PortValue<V>],
+) -> HashMap<String, PortValue<V>> {
     let mut map = HashMap::with_capacity(layout.slots.len());
     for (idx, name) in layout.slots.iter().enumerate() {
         if let Some(port) = slots.get(idx) {
@@ -2303,11 +2398,11 @@ pub fn materialize_outputs(layout: &PortLayout, slots: &[PortValue]) -> HashMap<
 }
 
 /// Gather the most recent outputs for each of the node's input connections, applying selectors.
-pub fn read_inputs(
-    rt: &GraphRuntime,
+pub fn read_inputs<V: GraphValue>(
+    rt: &GraphRuntime<V>,
     node_idx: usize,
-    plan: &PlanCache,
-) -> Result<(Vec<PortValue>, Vec<bool>), String> {
+    plan: &PlanCache<V>,
+) -> Result<(Vec<PortValue<V>>, Vec<bool>), String> {
     let layout = plan
         .layouts
         .get(node_idx)
@@ -2317,7 +2412,7 @@ pub fn read_inputs(
         .get(node_idx)
         .ok_or_else(|| format!("missing input bindings for node index {}", node_idx))?;
 
-    let mut resolved = vec![PortValue::default(); layout.inputs.slots.len()];
+    let mut resolved = vec![PortValue::<V>::default(); layout.inputs.slots.len()];
     let mut present = vec![false; layout.inputs.slots.len()];
 
     for (slot_idx, binding) in bindings.iter().enumerate() {
@@ -2328,12 +2423,12 @@ pub fn read_inputs(
                 .and_then(|vec| vec.get(src.slot))
                 .cloned();
             base.or_else(|| binding.default.clone())
-                .unwrap_or_else(|| PortValue::new(vocab::float(0.0)))
+                .unwrap_or_else(|| PortValue::new(V::float(0.0)))
         } else {
             binding
                 .default
                 .clone()
-                .unwrap_or_else(|| PortValue::new(vocab::float(0.0)))
+                .unwrap_or_else(|| PortValue::new(V::float(0.0)))
         };
 
         let has_value = binding.source.is_some() || binding.default.is_some();

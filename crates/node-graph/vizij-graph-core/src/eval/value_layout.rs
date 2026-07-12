@@ -1,49 +1,49 @@
 //! Helpers for flattening structured values into contiguous numeric buffers.
 //!
 //! This is the kernel seam for numeric node math: [`flatten_numeric`] decodes
-//! a [`Value`] once (through the vocabulary accessors) into a [`FlatValue`] —
+//! a value once (through the [`GraphValue`] accessors) into a [`FlatValue`] —
 //! a plain `Vec<f32>` plus a [`ValueLayout`] — operators compute on the flat
 //! data, and [`ValueLayout::reconstruct`] re-encodes the result through the
-//! vocabulary constructors.
+//! [`GraphValue`] constructors.
 
-use vizij_api_core::value as vocab;
-use vizij_api_core::value::VizijKind;
 use vizij_api_core::{Shape, Value};
+
+use crate::graph_value::{GraphValue, Transform, VizijKind};
 
 use super::shape_helpers::infer_shape;
 
 /// Evaluated output captured alongside its inferred shape.
 #[derive(Clone, Debug)]
-pub struct PortValue {
-    pub value: Value,
+pub struct PortValue<V: GraphValue = Value> {
+    pub value: V,
     pub shape: Shape,
 }
 
-impl PortValue {
-    /// Construct a `PortValue`, inferring the [`Shape`] from the [`Value`].
-    pub fn new(value: Value) -> Self {
+impl<V: GraphValue> PortValue<V> {
+    /// Construct a `PortValue`, inferring the [`Shape`] from the value.
+    pub fn new(value: V) -> Self {
         let shape = infer_shape(&value);
         PortValue { value, shape }
     }
 
     /// Construct a `PortValue` with an explicit [`Shape`], bypassing inference.
-    pub fn with_shape(value: Value, shape: Shape) -> Self {
+    pub fn with_shape(value: V, shape: Shape) -> Self {
         PortValue { value, shape }
     }
 
-    /// Overwrite the cached [`Shape`] while leaving the [`Value`] untouched.
+    /// Overwrite the cached [`Shape`] while leaving the value untouched.
     pub fn set_shape(&mut self, shape: Shape) {
         self.shape = shape;
     }
 }
 
-impl Default for PortValue {
+impl<V: GraphValue> Default for PortValue<V> {
     fn default() -> Self {
-        PortValue::new(vocab::float(0.0))
+        PortValue::new(V::float(0.0))
     }
 }
 
-/// Describes how a [`Value`] is laid out when flattened.
+/// Describes how a value is laid out when flattened.
 ///
 /// Sequences flatten to a single `Array` layout: the wire value is one
 /// sequence kind (`ArrayValue`), so any declared array/list/tuple distinction
@@ -92,16 +92,16 @@ impl ValueLayout {
         matches!(self, ValueLayout::Scalar)
     }
 
-    /// Reconstruct a structured [`Value`] from flattened scalar data.
-    pub fn reconstruct(&self, data: &[f32]) -> Value {
+    /// Reconstruct a structured value from flattened scalar data.
+    pub fn reconstruct<V: GraphValue>(&self, data: &[f32]) -> V {
         match self {
-            ValueLayout::Scalar => vocab::float(data.first().copied().unwrap_or(f32::NAN)),
-            ValueLayout::Vec2 => vocab::vec2(read_array(data, 0)),
-            ValueLayout::Vec3 => vocab::vec3(read_array(data, 0)),
-            ValueLayout::Vec4 => vocab::vec4(read_array(data, 0)),
-            ValueLayout::Quat => vocab::quat(read_array(data, 0)),
-            ValueLayout::ColorRgba => vocab::color_rgba(read_array(data, 0)),
-            ValueLayout::Transform => vocab::transform(vocab::Transform {
+            ValueLayout::Scalar => V::float(data.first().copied().unwrap_or(f32::NAN)),
+            ValueLayout::Vec2 => V::vec2(read_array(data, 0)),
+            ValueLayout::Vec3 => V::vec3(read_array(data, 0)),
+            ValueLayout::Vec4 => V::vec4(read_array(data, 0)),
+            ValueLayout::Quat => V::quat(read_array(data, 0)),
+            ValueLayout::ColorRgba => V::color_rgba(read_array(data, 0)),
+            ValueLayout::Transform => V::transform(Transform {
                 translation: read_array(data, 0),
                 rotation: read_array(data, 3),
                 scale: read_array(data, 7),
@@ -109,15 +109,15 @@ impl ValueLayout {
             ValueLayout::Vector(len) => {
                 let mut out = Vec::with_capacity(*len);
                 out.extend((0..*len).map(|i| *data.get(i).unwrap_or(&f32::NAN)));
-                vocab::vector(out)
+                V::vector(out)
             }
             ValueLayout::Record(fields) => {
                 let mut offset = 0usize;
-                vocab::record(fields.iter().map(|(key, layout)| {
+                V::record(fields.iter().map(|(key, layout)| {
                     let len = layout.scalar_len();
                     let slice = &data[offset..offset + len];
                     offset += len;
-                    (key.as_str(), layout.reconstruct(slice))
+                    (key.as_str(), layout.reconstruct::<V>(slice))
                 }))
             }
             ValueLayout::Array(items) => {
@@ -127,14 +127,14 @@ impl ValueLayout {
                     let len = layout.scalar_len();
                     let slice = &data[offset..offset + len];
                     offset += len;
-                    out.push(layout.reconstruct(slice));
+                    out.push(layout.reconstruct::<V>(slice));
                 }
-                vocab::array(out)
+                V::array(out)
             }
         }
     }
 
-    pub fn fill_with(&self, value: f32) -> Value {
+    pub fn fill_with<V: GraphValue>(&self, value: f32) -> V {
         let len = self.scalar_len();
         let data = vec![value; len];
         self.reconstruct(&data)
@@ -151,35 +151,35 @@ fn read_array<const N: usize>(data: &[f32], offset: usize) -> [f32; N] {
     arr
 }
 
-/// Attempt to flatten a [`Value`] that contains only numeric content.
-pub fn flatten_numeric(value: &Value) -> Option<FlatValue> {
-    match vocab::kind(value) {
+/// Attempt to flatten a value that contains only numeric content.
+pub fn flatten_numeric<V: GraphValue>(value: &V) -> Option<FlatValue> {
+    match value.kind() {
         VizijKind::Float => Some(FlatValue {
             layout: ValueLayout::Scalar,
-            data: vec![vocab::as_float(value)?],
+            data: vec![value.as_float()?],
         }),
         VizijKind::Vec2 => Some(FlatValue {
             layout: ValueLayout::Vec2,
-            data: vocab::as_vec2(value)?.to_vec(),
+            data: value.as_vec2()?.to_vec(),
         }),
         VizijKind::Vec3 => Some(FlatValue {
             layout: ValueLayout::Vec3,
-            data: vocab::as_vec3(value)?.to_vec(),
+            data: value.as_vec3()?.to_vec(),
         }),
         VizijKind::Vec4 => Some(FlatValue {
             layout: ValueLayout::Vec4,
-            data: vocab::as_vec4(value)?.to_vec(),
+            data: value.as_vec4()?.to_vec(),
         }),
         VizijKind::Quat => Some(FlatValue {
             layout: ValueLayout::Quat,
-            data: vocab::as_quat(value)?.to_vec(),
+            data: value.as_quat()?.to_vec(),
         }),
         VizijKind::ColorRgba => Some(FlatValue {
             layout: ValueLayout::ColorRgba,
-            data: vocab::as_color_rgba(value)?.to_vec(),
+            data: value.as_color_rgba()?.to_vec(),
         }),
         VizijKind::Transform => {
-            let t = vocab::as_transform(value)?;
+            let t = value.as_transform()?;
             let mut data = Vec::with_capacity(10);
             data.extend_from_slice(&t.translation);
             data.extend_from_slice(&t.rotation);
@@ -190,13 +190,13 @@ pub fn flatten_numeric(value: &Value) -> Option<FlatValue> {
             })
         }
         VizijKind::Vector => Some(FlatValue {
-            layout: ValueLayout::Vector(vocab::as_vector(value)?.len()),
-            data: vocab::as_vector(value)?.to_vec(),
+            layout: ValueLayout::Vector(value.as_vector()?.len()),
+            data: value.as_vector()?.to_vec(),
         }),
         VizijKind::Record => {
             // `as_record` yields entries sorted by name, keeping the flat
             // ordering deterministic.
-            let entries = vocab::as_record(value)?;
+            let entries = value.as_record()?;
             let mut layouts = Vec::with_capacity(entries.len());
             let mut data = Vec::new();
             for (key, val) in entries {
@@ -210,7 +210,7 @@ pub fn flatten_numeric(value: &Value) -> Option<FlatValue> {
             })
         }
         VizijKind::Array => {
-            let items = vocab::as_array(value)?;
+            let items = value.as_array()?;
             let mut layouts = Vec::with_capacity(items.len());
             let mut data = Vec::new();
             for item in items.iter() {

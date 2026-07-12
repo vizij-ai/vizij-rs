@@ -1,34 +1,34 @@
 //! Shape inference and validation helpers for node outputs.
 //!
-//! Values are classified through the vizij vocabulary ([`vocab::kind`] and
+//! Values are classified through the vizij vocabulary (`V::kind` and
 //! the `as_*` accessors); the [`ShapeId`] is declared metadata layered on
 //! top. Because the wire value has a single sequence kind (`ArrayValue`),
 //! the declared `Array`/`List`/`Tuple` shapes all validate against it — the
 //! distinction lives in the shape alone.
 
+use crate::graph_value::{GraphValue, Transform};
 use crate::types::{NodeSpec, SelectorSegment};
 use hashbrown::HashMap;
 use vizij_api_core::shape::Field;
-use vizij_api_core::value as vocab;
 use vizij_api_core::value::VizijKind;
-use vizij_api_core::{Shape, ShapeId, Value};
+use vizij_api_core::{Shape, ShapeId};
 
 use super::value_layout::{flatten_numeric, PortValue};
 
-/// Infer the [`Shape`] for a [`Value`].
-pub fn infer_shape(value: &Value) -> Shape {
+/// Infer the [`Shape`] for a value.
+pub fn infer_shape<V: GraphValue>(value: &V) -> Shape {
     Shape::new(infer_shape_id(value))
 }
 
-/// Infer the [`ShapeId`] for a [`Value`].
+/// Infer the [`ShapeId`] for a value.
 ///
 /// Sequences infer as `Array` when their items share one shape and as
 /// `Tuple` otherwise. Enumerations carry no variant name on the wire, so
 /// their inferred shape tags the variant with its id string. Values outside
 /// the vizij vocabulary (integers, unit, unknown structures, ...) infer as
 /// `Scalar`, matching their scalar numeric coercion.
-pub fn infer_shape_id(value: &Value) -> ShapeId {
-    match vocab::kind(value) {
+pub fn infer_shape_id<V: GraphValue>(value: &V) -> ShapeId {
+    match V::kind(value) {
         VizijKind::Float => ShapeId::Scalar,
         VizijKind::Bool => ShapeId::Bool,
         VizijKind::Text => ShapeId::Text,
@@ -39,14 +39,14 @@ pub fn infer_shape_id(value: &Value) -> ShapeId {
         VizijKind::ColorRgba => ShapeId::ColorRgba,
         VizijKind::Transform => ShapeId::Transform,
         VizijKind::Vector => {
-            let len = vocab::as_vector(value).map(<[f32]>::len).unwrap_or(0);
+            let len = V::as_vector(value).map(<[f32]>::len).unwrap_or(0);
             ShapeId::Vector {
                 len: if len == 0 { None } else { Some(len) },
             }
         }
         VizijKind::Record => {
             // `as_record` yields entries sorted by name.
-            let fields: Vec<Field> = vocab::as_record(value)
+            let fields: Vec<Field> = V::as_record(value)
                 .unwrap_or_default()
                 .into_iter()
                 .map(|(name, value)| Field {
@@ -57,7 +57,7 @@ pub fn infer_shape_id(value: &Value) -> ShapeId {
             ShapeId::Record(fields)
         }
         VizijKind::Array => {
-            let items = vocab::as_array(value).unwrap_or_default();
+            let items = V::as_array(value).unwrap_or_default();
             if let Some(first) = items.first() {
                 let first_shape = infer_shape_id(first);
                 let consistent = items.iter().all(|item| infer_shape_id(item) == first_shape);
@@ -70,7 +70,7 @@ pub fn infer_shape_id(value: &Value) -> ShapeId {
                 ShapeId::Array(Box::new(ShapeId::Scalar), 0)
             }
         }
-        VizijKind::Enum => match vocab::as_enumeration(value) {
+        VizijKind::Enum => match V::as_enumeration(value) {
             Some((variant, payload)) => {
                 ShapeId::Enum(vec![(variant.to_string(), infer_shape_id(payload))])
             }
@@ -82,9 +82,9 @@ pub fn infer_shape_id(value: &Value) -> ShapeId {
 
 /// Ensure outputs match their declared shapes, updating cached shapes in-place.
 #[allow(dead_code)]
-pub fn enforce_output_shapes(
+pub fn enforce_output_shapes<V: GraphValue>(
     spec: &NodeSpec,
-    outputs: &mut HashMap<String, PortValue>,
+    outputs: &mut HashMap<String, PortValue<V>>,
 ) -> Result<(), String> {
     if spec.output_shapes.is_empty() {
         return Ok(());
@@ -112,45 +112,45 @@ pub fn enforce_output_shapes(
 }
 
 /// Check whether `value` conforms to the expected `shape`.
-pub fn value_matches_shape(shape: &ShapeId, value: &Value) -> bool {
+pub fn value_matches_shape<V: GraphValue>(shape: &ShapeId, value: &V) -> bool {
     match shape {
-        ShapeId::Scalar => vocab::kind(value) == VizijKind::Float,
-        ShapeId::Bool => vocab::kind(value) == VizijKind::Bool,
-        ShapeId::Vec2 => vocab::kind(value) == VizijKind::Vec2,
-        ShapeId::Vec3 => vocab::kind(value) == VizijKind::Vec3,
-        ShapeId::Vec4 => vocab::kind(value) == VizijKind::Vec4,
-        ShapeId::Quat => vocab::kind(value) == VizijKind::Quat,
-        ShapeId::ColorRgba => vocab::kind(value) == VizijKind::ColorRgba,
-        ShapeId::Transform => vocab::kind(value) == VizijKind::Transform,
-        ShapeId::Text => vocab::kind(value) == VizijKind::Text,
-        ShapeId::Vector { len } => match vocab::as_vector(value) {
+        ShapeId::Scalar => V::kind(value) == VizijKind::Float,
+        ShapeId::Bool => V::kind(value) == VizijKind::Bool,
+        ShapeId::Vec2 => V::kind(value) == VizijKind::Vec2,
+        ShapeId::Vec3 => V::kind(value) == VizijKind::Vec3,
+        ShapeId::Vec4 => V::kind(value) == VizijKind::Vec4,
+        ShapeId::Quat => V::kind(value) == VizijKind::Quat,
+        ShapeId::ColorRgba => V::kind(value) == VizijKind::ColorRgba,
+        ShapeId::Transform => V::kind(value) == VizijKind::Transform,
+        ShapeId::Text => V::kind(value) == VizijKind::Text,
+        ShapeId::Vector { len } => match V::as_vector(value) {
             Some(items) => match len {
                 Some(expected) => items.len() == *expected,
                 None => true,
             },
             None => false,
         },
-        ShapeId::Record(fields) => match vocab::as_record(value) {
+        ShapeId::Record(fields) => match V::as_record(value) {
             Some(entries) => fields.iter().all(|field| {
                 entries
                     .iter()
                     .find(|(name, _)| *name == field.name)
-                    .map(|(_, v)| value_matches_shape(&field.shape, v))
+                    .map(|(_, v)| value_matches_shape(&field.shape, *v))
                     .unwrap_or(false)
             }),
             None => false,
         },
-        ShapeId::Array(inner, len) => match vocab::as_array(value) {
+        ShapeId::Array(inner, len) => match V::as_array(value) {
             Some(items) => {
                 items.len() == *len && items.iter().all(|item| value_matches_shape(inner, item))
             }
             None => false,
         },
-        ShapeId::List(inner) => match vocab::as_array(value) {
+        ShapeId::List(inner) => match V::as_array(value) {
             Some(items) => items.iter().all(|item| value_matches_shape(inner, item)),
             None => false,
         },
-        ShapeId::Tuple(entries) => match vocab::as_array(value) {
+        ShapeId::Tuple(entries) => match V::as_array(value) {
             Some(items) => {
                 items.len() == entries.len()
                     && items
@@ -161,12 +161,12 @@ pub fn value_matches_shape(shape: &ShapeId, value: &Value) -> bool {
             None => false,
         },
         // Enum shape tags are variant names (compared through
-        // [`vocab::variant_id`]); a tag equal to the id's string form is also
+        // `V::variant_id`); a tag equal to the id's string form is also
         // accepted, covering shapes inferred from values.
-        ShapeId::Enum(variants) => match vocab::as_enumeration(value) {
+        ShapeId::Enum(variants) => match V::as_enumeration(value) {
             Some((variant, payload)) => variants
                 .iter()
-                .find(|(tag, _)| vocab::variant_id(tag) == variant || variant.to_string() == *tag)
+                .find(|(tag, _)| V::variant_id(tag) == variant || variant.to_string() == *tag)
                 .is_some_and(|(_, shape)| value_matches_shape(shape, payload)),
             None => false,
         },
@@ -194,56 +194,54 @@ pub fn is_numeric_like(shape: &ShapeId) -> bool {
 }
 
 /// Produce a NaN-filled value matching the provided numeric-like shape.
-pub fn null_of_shape_numeric(shape: &ShapeId) -> Value {
+pub fn null_of_shape_numeric<V: GraphValue>(shape: &ShapeId) -> V {
     match shape {
-        ShapeId::Scalar => vocab::float(f32::NAN),
-        ShapeId::Vec2 => vocab::vec2([f32::NAN; 2]),
-        ShapeId::Vec3 => vocab::vec3([f32::NAN; 3]),
-        ShapeId::Vec4 => vocab::vec4([f32::NAN; 4]),
-        ShapeId::Quat => vocab::quat([f32::NAN; 4]),
-        ShapeId::ColorRgba => vocab::color_rgba([f32::NAN; 4]),
-        ShapeId::Transform => vocab::transform(vocab::Transform {
+        ShapeId::Scalar => V::float(f32::NAN),
+        ShapeId::Vec2 => V::vec2([f32::NAN; 2]),
+        ShapeId::Vec3 => V::vec3([f32::NAN; 3]),
+        ShapeId::Vec4 => V::vec4([f32::NAN; 4]),
+        ShapeId::Quat => V::quat([f32::NAN; 4]),
+        ShapeId::ColorRgba => V::color_rgba([f32::NAN; 4]),
+        ShapeId::Transform => V::transform(Transform {
             translation: [f32::NAN; 3],
             rotation: [f32::NAN; 4],
             scale: [f32::NAN; 3],
         }),
-        ShapeId::Vector { len } => vocab::vector(match len {
+        ShapeId::Vector { len } => V::vector(match len {
             Some(expected) => vec![f32::NAN; *expected],
             None => Vec::new(),
         }),
-        ShapeId::Record(fields) => vocab::record(
+        ShapeId::Record(fields) => V::record(
             fields
                 .iter()
                 .map(|field| (field.name.as_str(), null_of_shape_numeric(&field.shape))),
         ),
         ShapeId::Array(inner, len) => {
-            vocab::array((0..*len).map(|_| null_of_shape_numeric(inner)).collect())
+            V::array((0..*len).map(|_| null_of_shape_numeric(inner)).collect())
         }
         ShapeId::List(inner) => {
             // Length is unspecified; surface an empty sequence of the correct element type.
             let _ = inner;
-            vocab::array(Vec::new())
+            V::array(Vec::new())
         }
-        ShapeId::Tuple(entries) => {
-            vocab::array(entries.iter().map(null_of_shape_numeric).collect())
-        }
+        ShapeId::Tuple(entries) => V::array(entries.iter().map(null_of_shape_numeric).collect()),
         ShapeId::Enum(variants) => {
             if let Some((tag, variant_shape)) = variants.first() {
-                vocab::enumeration(tag, null_of_shape_numeric(variant_shape))
+                V::enumeration(tag, null_of_shape_numeric(variant_shape))
             } else {
-                vocab::enumeration("", vocab::float(f32::NAN))
+                V::enumeration("", V::float(f32::NAN))
             }
         }
-        _ => vocab::float(f32::NAN),
+        _ => V::float(f32::NAN),
     }
 }
 
 /// Apply selector segments to a value and optional shape metadata, returning the projected value.
-pub fn project_by_selector(
-    value: &Value,
+pub fn project_by_selector<V: GraphValue>(
+    value: &V,
     shape: Option<&ShapeId>,
     selector: &[SelectorSegment],
-) -> Result<(Value, Option<ShapeId>), String> {
+) -> Result<(V, Option<ShapeId>), String> {
     if selector.is_empty() {
         return Ok((value.clone(), shape.cloned()));
     }
@@ -254,8 +252,8 @@ pub fn project_by_selector(
     for segment in selector {
         match segment {
             SelectorSegment::Field(field) => {
-                let next_value = match vocab::kind(&current_value) {
-                    VizijKind::Record => vocab::as_record(&current_value)
+                let next_value = match V::kind(&current_value) {
+                    VizijKind::Record => V::as_record(&current_value)
                         .and_then(|entries| {
                             entries
                                 .iter()
@@ -264,7 +262,7 @@ pub fn project_by_selector(
                         })
                         .ok_or_else(|| format!("selector field '{}' missing in record", field))?,
                     VizijKind::Transform => {
-                        let t = vocab::as_transform(&current_value).ok_or_else(|| {
+                        let t = V::as_transform(&current_value).ok_or_else(|| {
                             format!("selector field '{}' invalid for transform", field)
                         })?;
                         transform_field_value(field, &t).ok_or_else(|| {
@@ -272,9 +270,9 @@ pub fn project_by_selector(
                         })?
                     }
                     VizijKind::Enum => {
-                        let (variant, payload) = vocab::as_enumeration(&current_value)
+                        let (variant, payload) = V::as_enumeration(&current_value)
                             .ok_or_else(|| format!("selector field '{}' invalid", field))?;
-                        if vocab::variant_id(field) == variant || variant.to_string() == *field {
+                        if V::variant_id(field) == variant || variant.to_string() == *field {
                             payload.clone()
                         } else {
                             return Err(format!(
@@ -313,39 +311,35 @@ pub fn project_by_selector(
             }
             SelectorSegment::Index(index) => {
                 let idx = *index;
-                let next_value = match vocab::kind(&current_value) {
-                    VizijKind::Vector => vocab::as_vector(&current_value)
+                let next_value = match V::kind(&current_value) {
+                    VizijKind::Vector => V::as_vector(&current_value)
                         .and_then(|items| items.get(idx).copied())
-                        .map(vocab::float)
+                        .map(V::float)
                         .ok_or_else(|| {
                             format!(
                                 "selector index {} out of bounds for vector of len {}",
                                 idx,
-                                vocab::as_vector(&current_value)
-                                    .map(<[f32]>::len)
-                                    .unwrap_or(0)
+                                V::as_vector(&current_value).map(<[f32]>::len).unwrap_or(0)
                             )
                         })?,
-                    VizijKind::Array => vocab::as_array(&current_value)
+                    VizijKind::Array => V::as_array(&current_value)
                         .and_then(|items| items.get(idx).cloned())
                         .ok_or_else(|| {
                             format!(
                                 "selector index {} out of bounds for array of len {}",
                                 idx,
-                                vocab::as_array(&current_value)
-                                    .map(<[Value]>::len)
-                                    .unwrap_or(0)
+                                V::as_array(&current_value).map(<[V]>::len).unwrap_or(0)
                             )
                         })?,
-                    VizijKind::Vec2 => component(vocab::as_vec2(&current_value), idx)
+                    VizijKind::Vec2 => component(V::as_vec2(&current_value), idx)
                         .ok_or_else(|| format!("selector index {} out of bounds for vec2", idx))?,
-                    VizijKind::Vec3 => component(vocab::as_vec3(&current_value), idx)
+                    VizijKind::Vec3 => component(V::as_vec3(&current_value), idx)
                         .ok_or_else(|| format!("selector index {} out of bounds for vec3", idx))?,
-                    VizijKind::Vec4 => component(vocab::as_vec4(&current_value), idx)
+                    VizijKind::Vec4 => component(V::as_vec4(&current_value), idx)
                         .ok_or_else(|| format!("selector index {} out of bounds for vec4", idx))?,
-                    VizijKind::Quat => component(vocab::as_quat(&current_value), idx)
+                    VizijKind::Quat => component(V::as_quat(&current_value), idx)
                         .ok_or_else(|| format!("selector index {} out of bounds for quat", idx))?,
-                    VizijKind::ColorRgba => component(vocab::as_color_rgba(&current_value), idx)
+                    VizijKind::ColorRgba => component(V::as_color_rgba(&current_value), idx)
                         .ok_or_else(|| format!("selector index {} out of bounds for color", idx))?,
                     _ => {
                         return Err(format!(
@@ -380,16 +374,16 @@ pub fn project_by_selector(
     Ok((current_value, current_shape))
 }
 
-fn component<const N: usize>(arr: Option<[f32; N]>, idx: usize) -> Option<Value> {
-    arr.and_then(|a| a.get(idx).copied()).map(vocab::float)
+fn component<const N: usize, V: GraphValue>(arr: Option<[f32; N]>, idx: usize) -> Option<V> {
+    arr.and_then(|a| a.get(idx).copied()).map(V::float)
 }
 
 /// Attempt to coerce a numeric value into a declared numeric-like shape.
-pub fn coerce_numeric_to_shape(target: &ShapeId, value: &Value) -> Option<Value> {
+pub fn coerce_numeric_to_shape<V: GraphValue>(target: &ShapeId, value: &V) -> Option<V> {
     let flat = flatten_numeric(value)?;
 
     match target {
-        ShapeId::Vector { len: None } => Some(vocab::vector(flat.data)),
+        ShapeId::Vector { len: None } => Some(V::vector(flat.data)),
         ShapeId::List(_) | ShapeId::Enum(_) => None,
         _ => {
             let mut offset = 0usize;
@@ -403,19 +397,23 @@ pub fn coerce_numeric_to_shape(target: &ShapeId, value: &Value) -> Option<Value>
     }
 }
 
-fn build_numeric_value(shape: &ShapeId, scalars: &[f32], offset: &mut usize) -> Option<Value> {
+fn build_numeric_value<V: GraphValue>(
+    shape: &ShapeId,
+    scalars: &[f32],
+    offset: &mut usize,
+) -> Option<V> {
     match shape {
-        ShapeId::Scalar => take_components::<1>(scalars, offset).map(|a| vocab::float(a[0])),
-        ShapeId::Vec2 => take_components::<2>(scalars, offset).map(vocab::vec2),
-        ShapeId::Vec3 => take_components::<3>(scalars, offset).map(vocab::vec3),
-        ShapeId::Vec4 => take_components::<4>(scalars, offset).map(vocab::vec4),
-        ShapeId::Quat => take_components::<4>(scalars, offset).map(vocab::quat),
-        ShapeId::ColorRgba => take_components::<4>(scalars, offset).map(vocab::color_rgba),
+        ShapeId::Scalar => take_components::<1>(scalars, offset).map(|a| V::float(a[0])),
+        ShapeId::Vec2 => take_components::<2>(scalars, offset).map(V::vec2),
+        ShapeId::Vec3 => take_components::<3>(scalars, offset).map(V::vec3),
+        ShapeId::Vec4 => take_components::<4>(scalars, offset).map(V::vec4),
+        ShapeId::Quat => take_components::<4>(scalars, offset).map(V::quat),
+        ShapeId::ColorRgba => take_components::<4>(scalars, offset).map(V::color_rgba),
         ShapeId::Transform => {
             let translation = take_components::<3>(scalars, offset)?;
             let rotation = take_components::<4>(scalars, offset)?;
             let scale = take_components::<3>(scalars, offset)?;
-            Some(vocab::transform(vocab::Transform {
+            Some(V::transform(Transform {
                 translation,
                 rotation,
                 scale,
@@ -429,7 +427,7 @@ fn build_numeric_value(shape: &ShapeId, scalars: &[f32], offset: &mut usize) -> 
                 vec.push(*scalars.get(*offset)?);
                 *offset += 1;
             }
-            Some(vocab::vector(vec))
+            Some(V::vector(vec))
         }
         ShapeId::Record(fields) => {
             let mut entries = Vec::with_capacity(fields.len());
@@ -437,21 +435,21 @@ fn build_numeric_value(shape: &ShapeId, scalars: &[f32], offset: &mut usize) -> 
                 let entry = build_numeric_value(&field.shape, scalars, offset)?;
                 entries.push((field.name.as_str(), entry));
             }
-            Some(vocab::record(entries))
+            Some(V::record(entries))
         }
         ShapeId::Array(inner, len) => {
             let mut items = Vec::with_capacity(*len);
             for _ in 0..*len {
                 items.push(build_numeric_value(inner, scalars, offset)?);
             }
-            Some(vocab::array(items))
+            Some(V::array(items))
         }
         ShapeId::Tuple(entries) => {
             let mut items = Vec::with_capacity(entries.len());
             for entry in entries {
                 items.push(build_numeric_value(entry, scalars, offset)?);
             }
-            Some(vocab::array(items))
+            Some(V::array(items))
         }
         ShapeId::List(_)
         | ShapeId::Vector { len: None }
@@ -470,11 +468,11 @@ fn take_components<const N: usize>(scalars: &[f32], offset: &mut usize) -> Optio
     Some(arr)
 }
 
-fn transform_field_value(field: &str, t: &vocab::Transform) -> Option<Value> {
+fn transform_field_value<V: GraphValue>(field: &str, t: &Transform) -> Option<V> {
     match field {
-        "translation" | "position" => Some(vocab::vec3(t.translation)),
-        "rotation" => Some(vocab::quat(t.rotation)),
-        "scale" => Some(vocab::vec3(t.scale)),
+        "translation" | "position" => Some(V::vec3(t.translation)),
+        "rotation" => Some(V::quat(t.rotation)),
+        "scale" => Some(V::vec3(t.scale)),
         _ => None,
     }
 }

@@ -13,12 +13,13 @@
 //!
 //! Integration code should primarily interact with [`GraphRuntime`] and [`evaluate_all`].
 
+use crate::graph_value::GraphValue;
 use crate::types::GraphSpec;
 use std::mem;
 
 pub mod eval_node;
-mod external;
 mod graph_runtime;
+mod node_function;
 mod noise;
 mod numeric;
 mod plan;
@@ -28,8 +29,8 @@ mod value_layout;
 mod variadic;
 
 pub use eval_node::eval_node;
-pub use external::ExternalFunctions;
 pub use graph_runtime::{GraphRuntime, StagedInput};
+pub use node_function::{NodeFunction, NodeFunctionRegistry, NodeFunctions};
 pub use plan::{fingerprint_spec, PlanCache};
 pub use value_layout::PortValue;
 
@@ -45,28 +46,31 @@ mod tests;
 /// The runtime is cleared before evaluation and is repopulated as nodes are visited in topological
 /// order. Any error propagated from an individual node halts evaluation.
 ///
-/// This path has no [`ExternalFunctions`] host, so any `ExternalFunction` node in `spec` errors.
-/// Use [`evaluate_all_with_functions`] to run graphs that invoke external functions.
-pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), String> {
+/// This path has no [`NodeFunctions`] host, so any `ExternalFunction` node in `spec` errors.
+/// Use [`evaluate_all_with_functions`] to run graphs that invoke node-functions.
+pub fn evaluate_all<V: GraphValue>(
+    rt: &mut GraphRuntime<V>,
+    spec: &GraphSpec<V>,
+) -> Result<(), String> {
     evaluate_all_inner(rt, spec, None)
 }
 
 /// Evaluate every node in `spec`, threading `functions` through to any `ExternalFunction` nodes.
 ///
 /// Behaves exactly like [`evaluate_all`] except that `ExternalFunction` nodes dispatch through
-/// `functions` (the host external-function interface) instead of erroring.
-pub fn evaluate_all_with_functions(
-    rt: &mut GraphRuntime,
-    spec: &GraphSpec,
-    functions: &mut dyn ExternalFunctions,
+/// `functions` (the host node-function interface) instead of erroring.
+pub fn evaluate_all_with_functions<V: GraphValue>(
+    rt: &mut GraphRuntime<V>,
+    spec: &GraphSpec<V>,
+    functions: &mut dyn NodeFunctions<V>,
 ) -> Result<(), String> {
     evaluate_all_inner(rt, spec, Some(functions))
 }
 
-fn evaluate_all_inner(
-    rt: &mut GraphRuntime,
-    spec: &GraphSpec,
-    functions: Option<&mut dyn ExternalFunctions>,
+fn evaluate_all_inner<V: GraphValue>(
+    rt: &mut GraphRuntime<V>,
+    spec: &GraphSpec<V>,
+    functions: Option<&mut dyn NodeFunctions<V>>,
 ) -> Result<(), String> {
     if spec.version > 0 {
         rt.plan.ensure_versioned(spec)?;
@@ -88,11 +92,11 @@ fn evaluate_all_inner(
 
 /// Walk `plan` in order, evaluating each node into `rt`, threading `functions` to
 /// `ExternalFunction` nodes.
-fn run_plan(
-    rt: &mut GraphRuntime,
-    spec: &GraphSpec,
-    plan: &PlanCache,
-    mut functions: Option<&mut dyn ExternalFunctions>,
+fn run_plan<V: GraphValue>(
+    rt: &mut GraphRuntime<V>,
+    spec: &GraphSpec<V>,
+    plan: &PlanCache<V>,
+    mut functions: Option<&mut dyn NodeFunctions<V>>,
 ) -> Result<(), String> {
     // Ensure output storage is sized/reset for the upcoming frame.
     if rt.outputs_vec.len() != spec.nodes.len() {
@@ -118,7 +122,7 @@ fn run_plan(
             outputs.clear();
             // Reborrow the optional host with a fresh, per-iteration lifetime so the mutable
             // borrow does not outlive a single node evaluation.
-            let functions_ref: Option<&mut dyn ExternalFunctions> = match functions {
+            let functions_ref: Option<&mut dyn NodeFunctions<V>> = match functions {
                 Some(ref mut f) => Some(&mut **f),
                 None => None,
             };
@@ -132,7 +136,7 @@ fn run_plan(
     Ok(())
 }
 
-fn resize_and_clear(bucket: &mut Vec<PortValue>) {
+fn resize_and_clear<V: GraphValue>(bucket: &mut Vec<PortValue<V>>) {
     // OutputSlots::set() grows the vector on demand, so clearing is sufficient here.
     bucket.clear();
 }
@@ -141,7 +145,10 @@ fn resize_and_clear(bucket: &mut Vec<PortValue>) {
 /// `spec` matches the cached plan; it returns an error if the layouts are missing or mis-sized.
 /// Intended for callers that manage plan invalidation themselves (e.g., WASM wrapper with
 /// immutable specs).
-pub fn evaluate_all_cached(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), String> {
+pub fn evaluate_all_cached<V: GraphValue>(
+    rt: &mut GraphRuntime<V>,
+    spec: &GraphSpec<V>,
+) -> Result<(), String> {
     if rt.plan.layouts.len() != spec.nodes.len() {
         return Err("plan cache not initialised for this spec".to_string());
     }

@@ -14,25 +14,28 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// One write of a value (with optional declared shape) to a typed path.
+///
+/// The value payload is generic over the runtime value type `V`, defaulting to
+/// [`Value`] so existing callers keep naming `WriteOp` unchanged.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct WriteOp {
+pub struct WriteOp<V = Value> {
     /// Destination typed path for the write.
     pub path: TypedPath,
     /// Value payload to write.
-    pub value: Value,
+    pub value: V,
     /// Optional explicit shape metadata carried with the write.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shape: Option<Shape>,
 }
 
-impl WriteOp {
+impl<V> WriteOp<V> {
     /// Construct a write op without explicit shape metadata.
-    pub fn new(path: TypedPath, value: Value) -> Self {
+    pub fn new(path: TypedPath, value: V) -> Self {
         Self::new_with_shape(path, value, None)
     }
 
     /// Construct a write op with optional explicit shape metadata.
-    pub fn new_with_shape(path: TypedPath, value: Value, shape: Option<Shape>) -> Self {
+    pub fn new_with_shape(path: TypedPath, value: V, shape: Option<Shape>) -> Self {
         Self { path, value, shape }
     }
 }
@@ -41,32 +44,38 @@ impl WriteOp {
 ///
 /// Batch order is preserved. Duplicate paths are allowed and are resolved later by the consumer
 /// that applies the batch.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct WriteBatch(pub Vec<WriteOp>);
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WriteBatch<V = Value>(pub Vec<WriteOp<V>>);
 
-impl WriteBatch {
+impl<V> Default for WriteBatch<V> {
+    fn default() -> Self {
+        WriteBatch(Vec::new())
+    }
+}
+
+impl<V> WriteBatch<V> {
     /// Construct an empty batch.
     pub fn new() -> Self {
         WriteBatch(Vec::new())
     }
 
     /// Append one write op to the batch.
-    pub fn push(&mut self, op: WriteOp) {
+    pub fn push(&mut self, op: WriteOp<V>) {
         self.0.push(op);
     }
 
     /// Extend the batch with multiple write ops in iteration order.
-    pub fn extend(&mut self, other: impl IntoIterator<Item = WriteOp>) {
+    pub fn extend(&mut self, other: impl IntoIterator<Item = WriteOp<V>>) {
         self.0.extend(other);
     }
 
     /// Consume the batch and return the underlying vector.
-    pub fn into_vec(self) -> Vec<WriteOp> {
+    pub fn into_vec(self) -> Vec<WriteOp<V>> {
         self.0
     }
 
     /// Iterate over the batch in append order.
-    pub fn iter(&self) -> impl Iterator<Item = &WriteOp> {
+    pub fn iter(&self) -> impl Iterator<Item = &WriteOp<V>> {
         self.0.iter()
     }
 
@@ -78,12 +87,12 @@ impl WriteBatch {
     /// Merge another batch in-place by appending it after the existing writes.
     ///
     /// This does not deduplicate or reconcile duplicate paths.
-    pub fn append(&mut self, mut other: WriteBatch) {
+    pub fn append(&mut self, mut other: WriteBatch<V>) {
         self.0.append(&mut other.0)
     }
 }
 
-impl fmt::Display for WriteOp {
+impl<V: Serialize> fmt::Display for WriteOp<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let val = serde_json::to_string(&self.value).map_err(|_| fmt::Error)?;
         if let Some(shape) = &self.shape {

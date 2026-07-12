@@ -1,5 +1,6 @@
 //! URDF inverse kinematics helpers gated behind the `urdf_ik` feature.
 
+use crate::graph_value::GraphValue;
 use hashbrown::HashMap;
 #[cfg(feature = "urdf_ik")]
 use k::InverseKinematicsSolver;
@@ -9,9 +10,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 #[cfg(feature = "urdf_ik")]
 use std::hash::{Hash, Hasher};
-use vizij_api_core::value as vocab;
 use vizij_api_core::value::VizijKind;
-use vizij_api_core::{coercion, Value};
 
 #[cfg(feature = "urdf_ik")]
 /// Cached state for URDF chains shared by IK and FK nodes.
@@ -51,12 +50,12 @@ impl UrdfKinematicsState {
     }
 
     /// Produce a record value mapping joint names to solved angles.
-    pub fn solution_record(&self, joints: &[f32]) -> Value {
-        vocab::record(
+    pub fn solution_record<V: GraphValue>(&self, joints: &[f32]) -> V {
+        V::record(
             self.joint_names
                 .iter()
                 .zip(joints.iter())
-                .map(|(name, angle)| (name.as_str(), vocab::float(*angle))),
+                .map(|(name, angle)| (name.as_str(), V::float(*angle))),
         )
     }
 }
@@ -217,24 +216,24 @@ pub fn solve_position(
 }
 
 #[cfg(feature = "urdf_ik")]
-fn scalar_from_value(value: &Value) -> Result<f32, String> {
-    let mismatch = || format!("expected numeric scalar, received {:?}", vocab::kind(value));
-    match vocab::kind(value) {
-        VizijKind::Float => vocab::as_float(value).ok_or_else(mismatch),
-        VizijKind::Bool => Ok(if vocab::as_bool(value).unwrap_or(false) {
+fn scalar_from_value<V: GraphValue>(value: &V) -> Result<f32, String> {
+    let mismatch = || format!("expected numeric scalar, received {:?}", V::kind(value));
+    match V::kind(value) {
+        VizijKind::Float => V::as_float(value).ok_or_else(mismatch),
+        VizijKind::Bool => Ok(if V::as_bool(value).unwrap_or(false) {
             1.0
         } else {
             0.0
         }),
-        VizijKind::Vec2 => Ok(vocab::as_vec2(value).ok_or_else(mismatch)?[0]),
-        VizijKind::Vec3 => Ok(vocab::as_vec3(value).ok_or_else(mismatch)?[0]),
-        VizijKind::Vec4 => Ok(vocab::as_vec4(value).ok_or_else(mismatch)?[0]),
-        VizijKind::Quat => Ok(vocab::as_quat(value).ok_or_else(mismatch)?[0]),
-        VizijKind::Vector => vocab::as_vector(value)
+        VizijKind::Vec2 => Ok(V::as_vec2(value).ok_or_else(mismatch)?[0]),
+        VizijKind::Vec3 => Ok(V::as_vec3(value).ok_or_else(mismatch)?[0]),
+        VizijKind::Vec4 => Ok(V::as_vec4(value).ok_or_else(mismatch)?[0]),
+        VizijKind::Quat => Ok(V::as_quat(value).ok_or_else(mismatch)?[0]),
+        VizijKind::Vector => V::as_vector(value)
             .and_then(|xs| xs.first().copied())
             .ok_or_else(|| "vector is empty".to_string()),
         VizijKind::Array => {
-            let items = vocab::as_array(value).ok_or_else(mismatch)?;
+            let items = V::as_array(value).ok_or_else(mismatch)?;
             if items.len() == 1 {
                 scalar_from_value(&items[0])
             } else {
@@ -242,7 +241,7 @@ fn scalar_from_value(value: &Value) -> Result<f32, String> {
             }
         }
         VizijKind::Enum => {
-            let (_, payload) = vocab::as_enumeration(value).ok_or_else(mismatch)?;
+            let (_, payload) = V::as_enumeration(value).ok_or_else(mismatch)?;
             scalar_from_value(payload)
         }
         _ => Err(mismatch()),
@@ -271,8 +270,8 @@ fn align_sequence_with_defaults(
 
 #[cfg(feature = "urdf_ik")]
 /// Coerce input joint data into a vector matching the chain joint order.
-pub fn fetch_joint_vector(
-    value: &Value,
+pub fn fetch_joint_vector<V: GraphValue>(
+    value: &V,
     expected: usize,
     defaults: Option<&[(String, f32)]>,
     joint_names: &[String],
@@ -284,14 +283,14 @@ pub fn fetch_joint_vector(
         }
     }
 
-    match vocab::kind(value) {
+    match V::kind(value) {
         VizijKind::Record => {
-            let entries = vocab::as_record(value).unwrap_or_default();
-            let by_name: HashMap<&str, &Value> = entries.into_iter().collect();
+            let entries = V::as_record(value).unwrap_or_default();
+            let by_name: HashMap<&str, &V> = entries.into_iter().collect();
             let mut result = Vec::with_capacity(expected);
             for joint in joint_names {
                 if let Some(entry) = by_name.get(joint.as_str()) {
-                    result.push(scalar_from_value(entry)?);
+                    result.push(scalar_from_value(*entry)?);
                 } else if let Some(default_value) = default_map.get(joint.as_str()) {
                     result.push(*default_value);
                 } else {
@@ -301,7 +300,7 @@ pub fn fetch_joint_vector(
             Ok(result)
         }
         VizijKind::Array => {
-            let items = vocab::as_array(value).unwrap_or_default();
+            let items = V::as_array(value).unwrap_or_default();
             let mut sequence = Vec::with_capacity(items.len());
             for item in items {
                 sequence.push(scalar_from_value(item)?);
@@ -314,7 +313,7 @@ pub fn fetch_joint_vector(
             ))
         }
         _ => {
-            let sequence = coercion::to_vector(value);
+            let sequence = V::to_vector(value);
             Ok(align_sequence_with_defaults(
                 &sequence,
                 expected,
@@ -399,36 +398,36 @@ pub fn solve_pose(
 
 #[cfg(feature = "urdf_ik")]
 /// Extract the numeric components from a supported value type.
-pub fn vector_from_value(value: &Value, label: &str) -> Result<Vec<f32>, String> {
-    if let Some(xs) = vocab::as_vector(value) {
+pub fn vector_from_value<V: GraphValue>(value: &V, label: &str) -> Result<Vec<f32>, String> {
+    if let Some(xs) = V::as_vector(value) {
         return Ok(xs.to_vec());
     }
-    vocab::as_vec2(value)
+    V::as_vec2(value)
         .map(|a| a.to_vec())
-        .or_else(|| vocab::as_vec3(value).map(|a| a.to_vec()))
-        .or_else(|| vocab::as_vec4(value).map(|a| a.to_vec()))
-        .or_else(|| vocab::as_quat(value).map(|a| a.to_vec()))
+        .or_else(|| V::as_vec3(value).map(|a| a.to_vec()))
+        .or_else(|| V::as_vec4(value).map(|a| a.to_vec()))
+        .or_else(|| V::as_quat(value).map(|a| a.to_vec()))
         .ok_or_else(|| {
             format!(
                 "{label} expects a numeric vector, received {:?}",
-                vocab::kind(value)
+                V::kind(value)
             )
         })
 }
 
 #[cfg(feature = "urdf_ik")]
-/// Interpet a [`Value`] as a quaternion `[x, y, z, w]`.
-pub fn quat_from_value(value: &Value, label: &str) -> Result<[f32; 4], String> {
-    vocab::as_quat(value)
-        .or_else(|| vocab::as_vec4(value))
-        .or_else(|| match vocab::as_vector(value) {
+/// Interpet a value as a quaternion `[x, y, z, w]`.
+pub fn quat_from_value<V: GraphValue>(value: &V, label: &str) -> Result<[f32; 4], String> {
+    V::as_quat(value)
+        .or_else(|| V::as_vec4(value))
+        .or_else(|| match V::as_vector(value) {
             Some(xs) if xs.len() == 4 => Some([xs[0], xs[1], xs[2], xs[3]]),
             _ => None,
         })
         .ok_or_else(|| {
             format!(
                 "{label} expects a quaternion (x, y, z, w), received {:?}",
-                vocab::kind(value)
+                V::kind(value)
             )
         })
 }

@@ -27,12 +27,13 @@ use arora_types::data::{DataStore, Key, StateChange};
 use arora_types::value::{StructureField, Value};
 use uuid::Uuid;
 use vizij_api_core::TypedPath;
-use vizij_graph_core::eval::{evaluate_all_with_functions, ExternalFunctions, GraphRuntime};
+use vizij_graph_core::eval::{evaluate_all_with_functions, GraphRuntime, NodeFunctions};
 use vizij_graph_core::types::GraphSpec;
 
-/// Adapts an Arora [`CallBridge`] to graph-core's [`ExternalFunctions`] host interface.
+/// Adapts an Arora [`CallBridge`] to graph-core's [`NodeFunctions`] host interface.
 ///
-/// A graph `ExternalFunction` node carries only the function id it invokes. Arora's
+/// A graph `ExternalFunction` node carries only an opaque string id for the function it invokes.
+/// This adapter treats that id as an Arora function UUID (its string form). Arora's
 /// [`CallBridge::arora_call`] dispatches by *module* id — and the engine looks the module up
 /// directly, ignoring `Call::module_id` (see `arora-engine`'s `Engine::arora_call`). So this
 /// adapter must know which module each function lives in; it holds a `function -> module` map
@@ -44,12 +45,14 @@ struct CallBridgeFunctions<'a> {
     function_modules: &'a HashMap<Uuid, Uuid>,
 }
 
-impl<'a> ExternalFunctions for CallBridgeFunctions<'a> {
-    fn call(&mut self, function: Uuid, args: &[(Uuid, Value)]) -> Result<Value, String> {
+impl<'a> NodeFunctions<Value> for CallBridgeFunctions<'a> {
+    fn call(&mut self, function: &str, args: &[(Uuid, Value)]) -> Result<Value, String> {
+        let function_id = Uuid::parse_str(function)
+            .map_err(|_| format!("external function id '{function}' is not a valid UUID"))?;
         let module_id = *self
             .function_modules
-            .get(&function)
-            .ok_or_else(|| format!("no module registered for external function {function}"))?;
+            .get(&function_id)
+            .ok_or_else(|| format!("no module registered for external function {function_id}"))?;
         let args: Vec<StructureField> = args
             .iter()
             .map(|(id, value)| StructureField {
@@ -63,7 +66,7 @@ impl<'a> ExternalFunctions for CallBridgeFunctions<'a> {
                 &module_id,
                 Call {
                     module_id: Some(module_id),
-                    id: function,
+                    id: function_id,
                     args,
                 },
             )

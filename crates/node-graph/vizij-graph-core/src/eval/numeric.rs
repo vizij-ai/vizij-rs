@@ -1,14 +1,13 @@
 //! Numeric helper utilities shared across node evaluators.
 
-use vizij_api_core::value as vocab;
-use vizij_api_core::value::VizijKind;
-use vizij_api_core::{coercion, Value};
+use crate::graph_value::{GraphValue, VizijKind};
 
 use super::value_layout::{align_flattened, flatten_numeric};
 
 /// Apply `op` pairwise to two numeric values, broadcasting scalars when possible.
-pub fn binary_numeric<F>(lhs: &Value, rhs: &Value, op: F) -> Value
+pub fn binary_numeric<V, F>(lhs: &V, rhs: &V, op: F) -> V
 where
+    V: GraphValue,
     F: Fn(f32, f32) -> f32 + Copy,
 {
     match (flatten_numeric(lhs), flatten_numeric(rhs)) {
@@ -21,13 +20,14 @@ where
         },
         (Some(a), None) => a.layout.fill_with(f32::NAN),
         (None, Some(b)) => b.layout.fill_with(f32::NAN),
-        (None, None) => vocab::float(f32::NAN),
+        (None, None) => V::float(f32::NAN),
     }
 }
 
 /// Apply `op` to every component of `input`.
-pub fn unary_numeric<F>(input: &Value, op: F) -> Value
+pub fn unary_numeric<V, F>(input: &V, op: F) -> V
 where
+    V: GraphValue,
     F: Fn(f32) -> f32 + Copy,
 {
     match flatten_numeric(input) {
@@ -35,20 +35,20 @@ where
             let data: Vec<f32> = flat.data.iter().map(|x| op(*x)).collect();
             flat.layout.reconstruct(&data)
         }
-        None => vocab::float(f32::NAN),
+        None => V::float(f32::NAN),
     }
 }
 
-/// Coerce a [`Value`] to a single `f32`.
-pub fn as_float(v: &Value) -> f32 {
-    coercion::to_float(v)
+/// Coerce a value to a single `f32`.
+pub fn as_float<V: GraphValue>(v: &V) -> f32 {
+    v.to_float()
 }
 
-/// Coerce a [`Value`] to a boolean, treating non-zero numeric entries as `true`.
-pub fn as_bool(v: &Value) -> bool {
-    match vocab::kind(v) {
-        VizijKind::Bool => vocab::as_bool(v).unwrap_or(false),
-        VizijKind::Text => vocab::as_text(v).is_some_and(|s| !s.is_empty()),
-        _ => coercion::to_vector(v).iter().any(|x| *x != 0.0),
+/// Coerce a value to a boolean, treating non-zero numeric entries as `true`.
+pub fn as_bool<V: GraphValue>(v: &V) -> bool {
+    match v.kind() {
+        VizijKind::Bool => v.as_bool().unwrap_or(false),
+        VizijKind::Text => v.as_text().is_some_and(|s| !s.is_empty()),
+        _ => v.to_vector().iter().any(|x| *x != 0.0),
     }
 }

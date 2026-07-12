@@ -3,6 +3,7 @@
 //! These structs are the serde-facing representation consumed by the evaluator, wasm bridge,
 //! fixture tooling, and orchestration layer.
 
+use crate::graph_value::GraphValue;
 use hashbrown::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -163,10 +164,11 @@ pub enum NodeType {
 ///
 /// Most fields are optional and ignored by node kinds that do not read them. This keeps the JSON
 /// surface forward-compatible while still allowing a single serde contract for all nodes.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct NodeParams {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound(serialize = "V: GraphValue", deserialize = "V: GraphValue"))]
+pub struct NodeParams<V: GraphValue = Value> {
     /// Literal value for constant-like nodes and inline defaults.
-    pub value: Option<Value>,
+    pub value: Option<V>,
     /// Frequency parameter used by oscillators and noise-style generators.
     pub frequency: Option<f32>,
     /// Phase offset used by oscillators.
@@ -279,17 +281,73 @@ pub struct NodeParams {
     #[serde(default)]
     pub path: Option<TypedPath>,
 
-    /// Opaque handle of the external function invoked by [`NodeType::ExternalFunction`].
+    /// Stable id of the node-function invoked by [`NodeType::ExternalFunction`].
     ///
     /// The graph attaches no meaning to this id beyond passing it to the host
-    /// [`ExternalFunctions`](crate::eval::ExternalFunctions); the host resolves and invokes it.
+    /// [`NodeFunctions`](crate::eval::NodeFunctions); the host resolves and invokes it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub function: Option<Uuid>,
+    pub function: Option<String>,
     /// Ordered arg-key handles matching the [`NodeType::ExternalFunction`] variadic `args` inputs.
     ///
     /// These are opaque to the graph; the host pairs each with the positional value in the call.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub param_ids: Option<Vec<Uuid>>,
+}
+
+impl<V: GraphValue> Default for NodeParams<V> {
+    fn default() -> Self {
+        NodeParams {
+            value: None,
+            frequency: None,
+            phase: None,
+            min: 0.0,
+            max: 0.0,
+            x: None,
+            y: None,
+            z: None,
+            in_min: None,
+            in_max: None,
+            out_min: None,
+            out_max: None,
+            round_mode: None,
+            clamp: None,
+            in_low: None,
+            in_anchor: None,
+            in_high: None,
+            out_low: None,
+            out_anchor: None,
+            out_high: None,
+            bone1: None,
+            bone2: None,
+            bone3: None,
+            urdf_xml: None,
+            root_link: None,
+            tip_link: None,
+            seed: None,
+            weights: None,
+            max_iters: None,
+            tol_pos: None,
+            tol_rot: None,
+            joint_defaults: None,
+            index: None,
+            sizes: None,
+            noise_seed: None,
+            octaves: None,
+            lacunarity: None,
+            persistence: None,
+            stiffness: None,
+            damping: None,
+            mass: None,
+            half_life: None,
+            max_rate: None,
+            case_labels: None,
+            record_keys: None,
+            keys: None,
+            path: None,
+            function: None,
+            param_ids: None,
+        }
+    }
 }
 
 /// Rounding strategy for [`NodeType::Round`].
@@ -307,7 +365,8 @@ pub enum RoundMode {
 
 /// Single node declaration within a [`GraphSpec`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NodeSpec {
+#[serde(bound(serialize = "V: GraphValue", deserialize = "V: GraphValue"))]
+pub struct NodeSpec<V: GraphValue = Value> {
     /// Unique node identifier referenced by edges and runtime outputs.
     pub id: NodeId,
     /// Accept either `"type"` (preferred) or legacy `"kind"` in incoming JSON.
@@ -315,20 +374,21 @@ pub struct NodeSpec {
     pub kind: NodeType,
     /// Parameter bag interpreted according to [`Self::kind`].
     #[serde(default)]
-    pub params: NodeParams,
+    pub params: NodeParams<V>,
     /// Optional declared output shapes keyed by port name.
     #[serde(default)]
     pub output_shapes: HashMap<String, Shape>,
     /// Inline default values used when an input port has no inbound edge.
     #[serde(default)]
-    pub input_defaults: HashMap<String, InputDefault>,
+    pub input_defaults: HashMap<String, InputDefault<V>>,
 }
 
 /// Serializable graph layout evaluated by the runtime and wasm hosts.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct GraphSpec {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound(serialize = "V: GraphValue", deserialize = "V: GraphValue"))]
+pub struct GraphSpec<V: GraphValue = Value> {
     /// Ordered node declarations. Their order is preserved in plan caches and output snapshots.
-    pub nodes: Vec<NodeSpec>,
+    pub nodes: Vec<NodeSpec<V>>,
     /// Directed edges connecting source outputs to target inputs.
     #[serde(default)]
     pub edges: Vec<EdgeSpec>,
@@ -341,12 +401,24 @@ pub struct GraphSpec {
     pub fingerprint: u64,
 }
 
+impl<V: GraphValue> Default for GraphSpec<V> {
+    fn default() -> Self {
+        GraphSpec {
+            nodes: Vec::new(),
+            edges: Vec::new(),
+            version: 0,
+            fingerprint: 0,
+        }
+    }
+}
+
 pub(crate) fn is_zero(v: &u64) -> bool {
     *v == 0
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InputConnection {
+#[serde(bound(serialize = "V: GraphValue", deserialize = "V: GraphValue"))]
+pub struct InputConnection<V: GraphValue = Value> {
     /// Upstream node id providing the value, or `None` when only an inline default is present.
     #[serde(default)]
     pub node_id: Option<NodeId>,
@@ -358,7 +430,7 @@ pub struct InputConnection {
     pub selector: Option<Selector>,
     /// Inline default value used when no source edge is wired.
     #[serde(rename = "default", default)]
-    pub default_value: Option<Value>,
+    pub default_value: Option<V>,
     /// Optional declared shape for [`Self::default_value`].
     #[serde(default)]
     pub default_shape: Option<Shape>,
@@ -368,7 +440,7 @@ fn default_output_key() -> String {
     "out".to_string()
 }
 
-impl Default for InputConnection {
+impl<V: GraphValue> Default for InputConnection<V> {
     fn default() -> Self {
         Self {
             node_id: None,
@@ -381,10 +453,11 @@ impl Default for InputConnection {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InputDefault {
+#[serde(bound(serialize = "V: GraphValue", deserialize = "V: GraphValue"))]
+pub struct InputDefault<V: GraphValue = Value> {
     /// Inline default value for an unconnected input port.
     #[serde(rename = "value")]
-    pub value: Value,
+    pub value: V,
     /// Optional declared shape paired with [`Self::value`].
     #[serde(default)]
     pub shape: Option<Shape>,
@@ -422,7 +495,7 @@ pub struct EdgeSpec {
     pub selector: Option<Selector>,
 }
 
-impl GraphSpec {
+impl<V: GraphValue> GraphSpec<V> {
     /// Recompute the structural fingerprint for this spec without mutating the version counter.
     pub fn recompute_fingerprint(&self) -> u64 {
         crate::eval::fingerprint_spec(self)
@@ -449,8 +522,8 @@ impl GraphSpec {
     /// target the same node/input pair.
     pub fn input_connections(
         &self,
-    ) -> Result<HashMap<NodeId, HashMap<String, InputConnection>>, String> {
-        let mut map: HashMap<NodeId, HashMap<String, InputConnection>> = HashMap::new();
+    ) -> Result<HashMap<NodeId, HashMap<String, InputConnection<V>>>, String> {
+        let mut map: HashMap<NodeId, HashMap<String, InputConnection<V>>> = HashMap::new();
         let known: HashSet<&NodeId> = self.nodes.iter().map(|n| &n.id).collect();
 
         for node in &self.nodes {

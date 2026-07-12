@@ -1,5 +1,6 @@
 //! Execution-plan construction and cache management for graph evaluation.
 
+use crate::graph_value::GraphValue;
 use crate::schema::{registry, NodeSignature};
 use crate::types::{
     GraphSpec, InputConnection, InputDefault, NodeSpec, NodeType, Selector, SelectorSegment,
@@ -7,6 +8,7 @@ use crate::types::{
 use hashbrown::{HashMap, HashSet};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
+use vizij_api_core::Value;
 
 use super::value_layout::PortValue;
 use super::variadic::{compare_variadic_keys, parse_variadic_key};
@@ -65,29 +67,42 @@ pub struct ResolvedInputSource {
 }
 
 #[derive(Clone, Debug)]
-pub struct InputBinding {
+pub struct InputBinding<V: GraphValue = Value> {
     pub source: Option<ResolvedInputSource>,
-    pub default: Option<PortValue>,
+    pub default: Option<PortValue<V>>,
 }
 
 /// Cached, topology-ready view of a [`GraphSpec`] for reuse across frames.
-#[derive(Debug, Default)]
-pub struct PlanCache {
+#[derive(Debug)]
+pub struct PlanCache<V: GraphValue = Value> {
     fingerprint: u64,
     version: u64,
     /// Node indices in topological order.
     pub order: Vec<usize>,
     /// Per-node input bindings keyed by slot index.
-    pub input_bindings: Vec<Vec<InputBinding>>,
+    pub input_bindings: Vec<Vec<InputBinding<V>>>,
     /// Precomputed input/output layouts for each node.
     pub layouts: Vec<NodeLayout>,
     /// Map from node id -> stable index into spec.nodes / outputs_vec.
     pub node_index: HashMap<String, usize>,
 }
 
-impl PlanCache {
+impl<V: GraphValue> Default for PlanCache<V> {
+    fn default() -> Self {
+        PlanCache {
+            fingerprint: 0,
+            version: 0,
+            order: Vec::new(),
+            input_bindings: Vec::new(),
+            layouts: Vec::new(),
+            node_index: HashMap::new(),
+        }
+    }
+}
+
+impl<V: GraphValue> PlanCache<V> {
     /// Ensure the cache matches the provided spec; rebuild on structural change.
-    pub fn ensure(&mut self, spec: &GraphSpec) -> Result<(), String> {
+    pub fn ensure(&mut self, spec: &GraphSpec<V>) -> Result<(), String> {
         if spec.version > 0 {
             self.ensure_versioned(spec)
         } else {
@@ -100,7 +115,7 @@ impl PlanCache {
     }
 
     /// Version-aware fast path: compare caller-managed version for O(1) steady-state checks.
-    pub fn ensure_versioned(&mut self, spec: &GraphSpec) -> Result<(), String> {
+    pub fn ensure_versioned(&mut self, spec: &GraphSpec<V>) -> Result<(), String> {
         debug_assert!(
             spec.version == 0 || spec.fingerprint == 0 || spec.fingerprint == fingerprint_spec(spec),
             "spec fingerprint does not match contents; caller likely forgot to bump version/fingerprint"
@@ -117,7 +132,12 @@ impl PlanCache {
         self.rebuild(spec, fp, spec.version)
     }
 
-    fn rebuild(&mut self, spec: &GraphSpec, fingerprint: u64, version: u64) -> Result<(), String> {
+    fn rebuild(
+        &mut self,
+        spec: &GraphSpec<V>,
+        fingerprint: u64,
+        version: u64,
+    ) -> Result<(), String> {
         let inputs_map = spec.input_connections()?;
         let order_ids = crate::topo::topo_order(&spec.nodes, &spec.edges)?;
         let node_index: HashMap<&str, usize> = spec
@@ -138,7 +158,7 @@ impl PlanCache {
 
         let signatures = signature_map();
         let referenced_outputs = gather_referenced_outputs(spec, &node_index);
-        let empty_connections: HashMap<String, InputConnection> = HashMap::new();
+        let empty_connections: HashMap<String, InputConnection<V>> = HashMap::new();
 
         let mut layouts = Vec::with_capacity(spec.nodes.len());
         for (idx, node) in spec.nodes.iter().enumerate() {
@@ -180,10 +200,10 @@ impl PlanCache {
     }
 }
 
-fn build_input_layout(
-    _node: &NodeSpec,
+fn build_input_layout<V: GraphValue>(
+    _node: &NodeSpec<V>,
     signature: Option<&NodeSignature>,
-    connections: &HashMap<String, InputConnection>,
+    connections: &HashMap<String, InputConnection<V>>,
 ) -> PortLayout {
     let mut layout = PortLayout::default();
 
@@ -228,8 +248,8 @@ fn build_input_layout(
     layout
 }
 
-fn build_output_layout(
-    node: &NodeSpec,
+fn build_output_layout<V: GraphValue>(
+    node: &NodeSpec<V>,
     signature: Option<&NodeSignature>,
     referenced: &HashSet<String>,
 ) -> PortLayout {
@@ -329,12 +349,12 @@ fn build_output_layout(
     layout
 }
 
-fn build_input_bindings(
+fn build_input_bindings<V: GraphValue>(
     node_idx: usize,
-    connections: &HashMap<String, InputConnection>,
+    connections: &HashMap<String, InputConnection<V>>,
     node_index: &HashMap<&str, usize>,
     layouts: &[NodeLayout],
-) -> Vec<InputBinding> {
+) -> Vec<InputBinding<V>> {
     let mut bindings = Vec::with_capacity(layouts[node_idx].inputs.slots.len());
     let input_layout = &layouts[node_idx].inputs;
 
@@ -368,7 +388,7 @@ fn build_input_bindings(
     bindings
 }
 
-fn connection_default_port(conn: &InputConnection) -> Option<PortValue> {
+fn connection_default_port<V: GraphValue>(conn: &InputConnection<V>) -> Option<PortValue<V>> {
     conn.default_value.as_ref().map(|value| {
         if let Some(shape) = &conn.default_shape {
             PortValue::with_shape(value.clone(), shape.clone())
@@ -378,8 +398,8 @@ fn connection_default_port(conn: &InputConnection) -> Option<PortValue> {
     })
 }
 
-fn gather_referenced_outputs(
-    spec: &GraphSpec,
+fn gather_referenced_outputs<V: GraphValue>(
+    spec: &GraphSpec<V>,
     node_index: &HashMap<&str, usize>,
 ) -> Vec<HashSet<String>> {
     let mut referenced = vec![HashSet::new(); spec.nodes.len()];
@@ -399,14 +419,14 @@ fn signature_map() -> HashMap<NodeType, NodeSignature> {
         .collect()
 }
 
-pub fn fingerprint_spec(spec: &GraphSpec) -> u64 {
+pub fn fingerprint_spec<V: GraphValue>(spec: &GraphSpec<V>) -> u64 {
     let mut hasher = DefaultHasher::new();
     hasher.write_usize(spec.nodes.len());
     for node in &spec.nodes {
         hasher.write(node.id.as_bytes());
         hasher.write_usize(node.input_defaults.len());
         // Sort defaults to ensure deterministic hashing.
-        let mut defaults: Vec<(&String, &InputDefault)> = node.input_defaults.iter().collect();
+        let mut defaults: Vec<(&String, &InputDefault<V>)> = node.input_defaults.iter().collect();
         defaults.sort_by(|a, b| a.0.cmp(b.0));
         for (k, default) in defaults {
             hasher.write(k.as_bytes());
@@ -469,7 +489,7 @@ pub fn fingerprint_spec(spec: &GraphSpec) -> u64 {
 
     // Include connection default values/shapes so plan cache rebuilds when they change.
     if let Ok(connections) = spec.input_connections() {
-        let mut entries: Vec<(String, String, InputConnection)> = Vec::new();
+        let mut entries: Vec<(String, String, InputConnection<V>)> = Vec::new();
         for (node_id, inputs) in connections {
             for (input_key, conn) in inputs {
                 entries.push((node_id.clone(), input_key.clone(), conn));

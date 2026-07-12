@@ -12,12 +12,12 @@ use vizij_api_core::Value;
 /// Records each `call` it receives and always returns Float(42.0).
 #[derive(Default)]
 struct RecordingFunctions {
-    calls: Vec<(Uuid, Vec<(Uuid, Value)>)>,
+    calls: Vec<(String, Vec<(Uuid, Value)>)>,
 }
 
-impl ExternalFunctions for RecordingFunctions {
-    fn call(&mut self, function: Uuid, args: &[(Uuid, Value)]) -> Result<Value, String> {
-        self.calls.push((function, args.to_vec()));
+impl NodeFunctions<Value> for RecordingFunctions {
+    fn call(&mut self, function: &str, args: &[(Uuid, Value)]) -> Result<Value, String> {
+        self.calls.push((function.to_string(), args.to_vec()));
         Ok(vocab::float(42.0))
     }
 }
@@ -57,7 +57,7 @@ fn external_function_graph(function_id: Uuid, param_id: Uuid) -> GraphSpec {
                 id: "call".to_string(),
                 kind: NodeType::ExternalFunction,
                 params: NodeParams {
-                    function: Some(function_id),
+                    function: Some(function_id.to_string()),
                     param_ids: Some(vec![param_id]),
                     ..Default::default()
                 },
@@ -96,8 +96,8 @@ fn external_function_dispatches_through_host_and_sets_output() {
 
     // The host received exactly one call with the configured id and zipped arg.
     assert_eq!(functions.calls.len(), 1, "expected a single invocation");
-    let (got_function, ref args) = functions.calls[0];
-    assert_eq!(got_function, function_id, "function id");
+    let (ref got_function, ref args) = functions.calls[0];
+    assert_eq!(*got_function, function_id.to_string(), "function id");
     assert_eq!(args.len(), 1, "expected one positional arg");
     assert_eq!(args[0].0, param_id, "arg key should match param_ids");
     match &args[0].1 {
