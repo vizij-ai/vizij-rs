@@ -17,14 +17,14 @@ jobs:
   rust:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install system dependencies (alsa/libudev dev for Bevy)
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -41,7 +41,7 @@ jobs:
   wasm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -56,7 +56,7 @@ jobs:
       - name: Build Arora-web WASM into npm wrapper pkg/
         run: node scripts/build-arora-web-wasm.mjs
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 24
       - name: Enable corepack (pnpm)
@@ -86,14 +86,14 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_bench_smoke == 'true'
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - name: Install wasm-pack
         run: cargo install wasm-pack
       - name: Build WASM into npm wrapper pkg/
         run: node scripts/build-wasm.mjs
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 24
       - name: Enable corepack (pnpm)
@@ -115,12 +115,12 @@ jobs:
   registry:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install system dependencies (alsa/libudev dev for Bevy)
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -128,7 +128,7 @@ jobs:
             target
           key: ${{ runner.os }}-registry-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 24
       - name: Verify node registry artifacts are updated
@@ -143,12 +143,12 @@ jobs:
   animation-module-boundary:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-wasip1
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
