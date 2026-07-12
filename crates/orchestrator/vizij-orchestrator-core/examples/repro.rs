@@ -74,7 +74,7 @@ fn main() {
 
     vizij_api_core::json::normalize_graph_spec_value(&mut graph_spec_json)
         .expect("normalize graph spec");
-    let graph_spec: vizij_graph_core::types::GraphSpec =
+    let graph_spec: vizij_graph_core::types::GraphSpec<vizij_api_core::Value> =
         serde_json::from_value(graph_spec_json).expect("graph spec json");
     let subs = Subscriptions {
         inputs: vec![

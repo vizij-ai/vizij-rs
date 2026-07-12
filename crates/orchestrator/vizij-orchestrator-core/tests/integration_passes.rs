@@ -21,7 +21,7 @@ fn single_pass_applies_graph_writes_and_merges() {
     // Register a graph controller with default subscriptions
     let cfg = GraphControllerConfig {
         id: "g".into(),
-        spec: GraphSpec::default().with_cache(),
+        spec: GraphSpec::<vizij_api_core::Value>::default().with_cache(),
         subs: Subscriptions::default(),
     };
     orch = orch.with_graph(cfg);
@@ -61,7 +61,7 @@ fn two_pass_applies_graph_then_anim_then_graph_writes_and_merges() {
     // Register a graph controller that will produce a write in pass1
     let cfg = GraphControllerConfig {
         id: "g1".into(),
-        spec: GraphSpec::default().with_cache(),
+        spec: GraphSpec::<vizij_api_core::Value>::default().with_cache(),
         subs: Subscriptions::default(),
     };
     orch = orch.with_graph(cfg);
@@ -69,7 +69,7 @@ fn two_pass_applies_graph_then_anim_then_graph_writes_and_merges() {
     // Register another graph controller that will produce a write in pass2
     let cfg2 = GraphControllerConfig {
         id: "g2".into(),
-        spec: GraphSpec::default().with_cache(),
+        spec: GraphSpec::<vizij_api_core::Value>::default().with_cache(),
         subs: Subscriptions::default(),
     };
     orch = orch.with_graph(cfg2);
@@ -152,7 +152,8 @@ fn graph_uses_input_defaults_when_edge_missing() {
     });
 
     vizij_api_core::json::normalize_graph_spec_value(&mut graph_json).expect("normalize spec");
-    let spec: GraphSpec = serde_json::from_value(graph_json).expect("graph spec json");
+    let spec: GraphSpec<vizij_api_core::Value> =
+        serde_json::from_value(graph_json).expect("graph spec json");
     let subs = Subscriptions {
         inputs: vec![TypedPath::parse("demo/input/value").expect("typed path")],
         outputs: vec![TypedPath::parse("demo/output/value").expect("typed path")],
@@ -182,14 +183,14 @@ fn graph_uses_input_defaults_when_edge_missing() {
     );
 }
 
-fn graph_spec_from_json(mut spec_json: JsonValue) -> GraphSpec {
+fn graph_spec_from_json(mut spec_json: JsonValue) -> GraphSpec<vizij_api_core::Value> {
     vizij_api_core::json::normalize_graph_spec_value(&mut spec_json).expect("normalize spec");
     serde_json::from_value(spec_json).expect("graph spec json")
 }
 
 #[test]
 fn merged_graph_rewires_shared_output() {
-    let producer_spec: GraphSpec = graph_spec_from_json(json!({
+    let producer_spec: GraphSpec<vizij_api_core::Value> = graph_spec_from_json(json!({
         "nodes": [
             {
                 "id": "const_one",
@@ -207,7 +208,7 @@ fn merged_graph_rewires_shared_output() {
         ]
     }));
 
-    let consumer_spec: GraphSpec = graph_spec_from_json(json!({
+    let consumer_spec: GraphSpec<vizij_api_core::Value> = graph_spec_from_json(json!({
         "nodes": [
             {
                 "id": "shared_input",
@@ -324,7 +325,7 @@ fn merged_graph_final_overlap_still_errors_with_blend_strategy() {
 }
 #[test]
 fn merge_reports_conflicting_outputs() {
-    let spec_a: GraphSpec = graph_spec_from_json(json!({
+    let spec_a: GraphSpec<vizij_api_core::Value> = graph_spec_from_json(json!({
         "nodes": [
             { "id": "const_a", "type": "constant", "params": { "value": { "type": "float", "data": 1.0 } } },
             { "id": "out_a", "type": "output", "params": { "path": "shared/value" } }
@@ -334,7 +335,7 @@ fn merge_reports_conflicting_outputs() {
         ]
     }));
 
-    let spec_b: GraphSpec = graph_spec_from_json(json!({
+    let spec_b: GraphSpec<vizij_api_core::Value> = graph_spec_from_json(json!({
         "nodes": [
             { "id": "const_b", "type": "constant", "params": { "value": { "type": "float", "data": 2.0 } } },
             { "id": "out_b", "type": "output", "params": { "path": "shared/value" } }
@@ -508,7 +509,8 @@ fn graph_fixture(name: &str) -> GraphControllerConfig {
     let spec_json = value.get("spec").cloned().expect("spec field");
     let normalized = normalize_graph_spec_json_string(&spec_json.to_string())
         .unwrap_or_else(|e| panic!("normalize graph spec failed: {e}"));
-    let spec: GraphSpec = serde_json::from_str(&normalized).expect("graph spec");
+    let spec: GraphSpec<vizij_api_core::Value> =
+        serde_json::from_str(&normalized).expect("graph spec");
     let subs_value = value.get("subs").cloned().unwrap_or_else(|| {
         json!({
             "inputs": [],
@@ -717,7 +719,7 @@ fn mirror_writes_false_limits_blackboard() {
 
     let cfg = GraphControllerConfig {
         id: "test-graph".into(),
-        spec: GraphSpec::default(),
+        spec: GraphSpec::<vizij_api_core::Value>::default(),
         subs,
     };
 
@@ -755,7 +757,7 @@ fn mirror_writes_true_mirrors_full_batch() {
 
     let cfg = GraphControllerConfig {
         id: "test-graph".into(),
-        spec: GraphSpec::default(),
+        spec: GraphSpec::<vizij_api_core::Value>::default(),
         subs,
     };
 

@@ -77,8 +77,8 @@ impl<'a> NodeFunctions<Value> for CallBridgeFunctions<'a> {
 
 /// A Vizij node graph as an Arora behavior interpreter.
 pub struct ProcessingGraph {
-    spec: GraphSpec,
-    rt: GraphRuntime,
+    spec: GraphSpec<Value>,
+    rt: GraphRuntime<Value>,
     /// Store paths staged into the graph before each evaluation.
     inputs: Vec<TypedPath>,
     /// function id -> module id, so `ExternalFunction` nodes can be dispatched through the
@@ -89,7 +89,7 @@ pub struct ProcessingGraph {
 
 impl ProcessingGraph {
     /// Wrap a graph spec plus the store paths it consumes as inputs.
-    pub fn from_spec(spec: GraphSpec, inputs: Vec<TypedPath>) -> Self {
+    pub fn from_spec(spec: GraphSpec<Value>, inputs: Vec<TypedPath>) -> Self {
         Self {
             spec: spec.with_cache(),
             rt: GraphRuntime::default(),
@@ -210,7 +210,7 @@ mod tests {
         }
     }
 
-    fn passthrough(input: &str, output: &str) -> GraphSpec {
+    fn passthrough(input: &str, output: &str) -> GraphSpec<Value> {
         let mut spec = json!({
             "nodes": [
                 { "id": "in",  "type": "input",  "params": { "path": input } },

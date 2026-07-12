@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
 use vizij_api_core::value::{float, vector};
-use vizij_api_core::{TypedPath, WriteBatch};
+use vizij_api_core::{TypedPath, Value, WriteBatch};
 use vizij_graph_core::eval::{evaluate_all, evaluate_all_cached, GraphRuntime};
 use vizij_graph_core::types::{GraphSpec, NodeType, Selector};
 
@@ -42,7 +42,7 @@ pub struct GraphControllerConfig {
     /// Controller id used for registration and diagnostics.
     pub id: String,
     /// Graph specification evaluated by the controller.
-    pub spec: GraphSpec,
+    pub spec: GraphSpec<Value>,
     /// Optional subscriptions to restrict staging/publishing.
     pub subs: Subscriptions,
 }
@@ -299,7 +299,7 @@ impl GraphControllerConfig {
         let mut removed_input_paths: HashSet<String> = HashSet::new();
 
         struct ResolutionContext<'a> {
-            merged_nodes: &'a mut Vec<vizij_graph_core::types::NodeSpec>,
+            merged_nodes: &'a mut Vec<vizij_graph_core::types::NodeSpec<Value>>,
             merged_edges: &'a mut Vec<vizij_graph_core::types::EdgeSpec>,
             merged_output_paths: &'a mut IndexSet<TypedPath>,
             inputs_to_remove: &'a mut HashSet<String>,
@@ -795,9 +795,9 @@ pub struct GraphController {
     /// Controller id used by the orchestrator registry.
     pub id: String,
     /// Current graph specification.
-    pub spec: GraphSpec,
+    pub spec: GraphSpec<Value>,
     /// Persistent graph runtime carrying staged inputs, plan cache, and node state.
-    pub rt: GraphRuntime,
+    pub rt: GraphRuntime<Value>,
     /// Subscription filters controlling staged inputs and published outputs.
     pub subs: Subscriptions,
     plan_ready: bool,
@@ -899,9 +899,9 @@ fn make_namespace(index: usize, id: &str) -> String {
 }
 
 fn find_node_mut<'a>(
-    nodes: &'a mut [vizij_graph_core::types::NodeSpec],
+    nodes: &'a mut [vizij_graph_core::types::NodeSpec<Value>],
     id: &str,
-) -> Option<&'a mut vizij_graph_core::types::NodeSpec> {
+) -> Option<&'a mut vizij_graph_core::types::NodeSpec<Value>> {
     nodes.iter_mut().find(|node| node.id == id)
 }
 
@@ -1150,7 +1150,7 @@ mod tests {
             "only one additive node expected"
         );
 
-        let output_nodes: Vec<&vizij_graph_core::types::NodeSpec> = merged
+        let output_nodes: Vec<&vizij_graph_core::types::NodeSpec<Value>> = merged
             .spec
             .nodes
             .iter()
@@ -1260,7 +1260,7 @@ mod tests {
             "weight join node should be present"
         );
 
-        let weight_inputs: Vec<&vizij_graph_core::types::NodeSpec> = merged
+        let weight_inputs: Vec<&vizij_graph_core::types::NodeSpec<Value>> = merged
             .spec
             .nodes
             .iter()

@@ -48,9 +48,10 @@ impl GraphFixture {
     pub fn controller_config(&self) -> GraphControllerConfig {
         let mut spec_value = self.spec.clone();
         normalize_graph_spec_value(&mut spec_value).expect("normalize graph spec");
-        let spec: GraphSpec = serde_json::from_value::<GraphSpec>(spec_value)
-            .unwrap_or_else(|e| panic!("graph spec json invalid: {e}"))
-            .with_cache();
+        let spec: GraphSpec<vizij_api_core::Value> =
+            serde_json::from_value::<GraphSpec<vizij_api_core::Value>>(spec_value)
+                .unwrap_or_else(|e| panic!("graph spec json invalid: {e}"))
+                .with_cache();
 
         let subs_json = &self.subs;
         let parse_paths = |key: &str| -> Vec<TypedPath> {

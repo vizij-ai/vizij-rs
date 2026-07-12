@@ -22,7 +22,7 @@ impl NodeFunctions<Value> for RecordingFunctions {
     }
 }
 
-fn constant_node(id: &str, value: Value) -> NodeSpec {
+fn constant_node(id: &str, value: Value) -> NodeSpec<Value> {
     NodeSpec {
         id: id.to_string(),
         kind: NodeType::Constant,
@@ -49,7 +49,7 @@ fn link(from: &str, to: &str, input: &str) -> EdgeSpec {
     }
 }
 
-fn external_function_graph(function_id: Uuid, param_id: Uuid) -> GraphSpec {
+fn external_function_graph(function_id: Uuid, param_id: Uuid) -> GraphSpec<Value> {
     GraphSpec {
         nodes: vec![
             constant_node("arg0", Value::F32(7.0)),

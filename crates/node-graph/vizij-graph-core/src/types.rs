@@ -7,7 +7,7 @@ use crate::graph_value::GraphValue;
 use hashbrown::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use vizij_api_core::{Shape, TypedPath, Value};
+use vizij_api_core::{Shape, TypedPath};
 
 /// Stable node identifier within a single [`GraphSpec`].
 pub type NodeId = String;
@@ -156,7 +156,7 @@ pub enum NodeType {
 
     // External function invocation
     /// Invokes an external function (resolved by opaque id) through the host-provided
-    /// [`ExternalFunctions`](crate::eval::ExternalFunctions) interface.
+    /// [`NodeFunctions`](crate::eval::NodeFunctions) interface.
     ExternalFunction,
 }
 
@@ -166,7 +166,7 @@ pub enum NodeType {
 /// surface forward-compatible while still allowing a single serde contract for all nodes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound(serialize = "V: GraphValue", deserialize = "V: GraphValue"))]
-pub struct NodeParams<V: GraphValue = Value> {
+pub struct NodeParams<V: GraphValue> {
     /// Literal value for constant-like nodes and inline defaults.
     pub value: Option<V>,
     /// Frequency parameter used by oscillators and noise-style generators.
@@ -366,7 +366,7 @@ pub enum RoundMode {
 /// Single node declaration within a [`GraphSpec`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound(serialize = "V: GraphValue", deserialize = "V: GraphValue"))]
-pub struct NodeSpec<V: GraphValue = Value> {
+pub struct NodeSpec<V: GraphValue> {
     /// Unique node identifier referenced by edges and runtime outputs.
     pub id: NodeId,
     /// Accept either `"type"` (preferred) or legacy `"kind"` in incoming JSON.
@@ -386,7 +386,7 @@ pub struct NodeSpec<V: GraphValue = Value> {
 /// Serializable graph layout evaluated by the runtime and wasm hosts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound(serialize = "V: GraphValue", deserialize = "V: GraphValue"))]
-pub struct GraphSpec<V: GraphValue = Value> {
+pub struct GraphSpec<V: GraphValue> {
     /// Ordered node declarations. Their order is preserved in plan caches and output snapshots.
     pub nodes: Vec<NodeSpec<V>>,
     /// Directed edges connecting source outputs to target inputs.
@@ -418,7 +418,7 @@ pub(crate) fn is_zero(v: &u64) -> bool {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound(serialize = "V: GraphValue", deserialize = "V: GraphValue"))]
-pub struct InputConnection<V: GraphValue = Value> {
+pub struct InputConnection<V: GraphValue> {
     /// Upstream node id providing the value, or `None` when only an inline default is present.
     #[serde(default)]
     pub node_id: Option<NodeId>,
@@ -454,7 +454,7 @@ impl<V: GraphValue> Default for InputConnection<V> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound(serialize = "V: GraphValue", deserialize = "V: GraphValue"))]
-pub struct InputDefault<V: GraphValue = Value> {
+pub struct InputDefault<V: GraphValue> {
     /// Inline default value for an unconnected input port.
     #[serde(rename = "value")]
     pub value: V,

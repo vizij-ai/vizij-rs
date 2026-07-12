@@ -83,7 +83,7 @@ pub fn infer_shape_id<V: GraphValue>(value: &V) -> ShapeId {
 /// Ensure outputs match their declared shapes, updating cached shapes in-place.
 #[allow(dead_code)]
 pub fn enforce_output_shapes<V: GraphValue>(
-    spec: &NodeSpec,
+    spec: &NodeSpec<V>,
     outputs: &mut HashMap<String, PortValue<V>>,
 ) -> Result<(), String> {
     if spec.output_shapes.is_empty() {

@@ -181,9 +181,10 @@ fn build_graph_controller_config(
 ) -> Result<GraphControllerConfig, String> {
     json::normalize_graph_spec_value(&mut graph.spec)
         .map_err(|e| format!("normalize graph spec error: {}", e))?;
-    let spec: GraphSpec = serde_json::from_value::<GraphSpec>(graph.spec)
-        .map_err(|e| format!("graph spec deserialize error: {}", e))?
-        .with_cache();
+    let spec: GraphSpec<vizij_api_core::Value> =
+        serde_json::from_value::<GraphSpec<vizij_api_core::Value>>(graph.spec)
+            .map_err(|e| format!("graph spec deserialize error: {}", e))?
+            .with_cache();
     let subs = map_graph_subscriptions(graph.subs)?;
     Ok(GraphControllerConfig {
         id: graph.id.unwrap_or(fallback_id),
@@ -279,8 +280,9 @@ impl VizijOrchestrator {
             .map_err(|e| JsError::new(&format!("normalize graph spec error: {}", e)))?;
 
         // Deserialize GraphSpec
-        let spec: vizij_graph_core::types::GraphSpec = serde_json::from_value(spec_val)
-            .map_err(|e| JsError::new(&format!("graph spec deserialize error: {}", e)))?;
+        let spec: vizij_graph_core::types::GraphSpec<vizij_api_core::Value> =
+            serde_json::from_value(spec_val)
+                .map_err(|e| JsError::new(&format!("graph spec deserialize error: {}", e)))?;
 
         let subs = map_graph_subscriptions(subs_val)
             .map_err(|e| JsError::new(&format!("graph subscriptions error: {e}")))?;
@@ -328,8 +330,9 @@ impl VizijOrchestrator {
         let mut spec_val = obj.spec;
         json::normalize_graph_spec_value(&mut spec_val)
             .map_err(|e| JsError::new(&format!("normalize graph spec error: {e}")))?;
-        let spec: vizij_graph_core::types::GraphSpec = serde_json::from_value(spec_val)
-            .map_err(|e| JsError::new(&format!("graph spec deserialize error: {e}")))?;
+        let spec: vizij_graph_core::types::GraphSpec<vizij_api_core::Value> =
+            serde_json::from_value(spec_val)
+                .map_err(|e| JsError::new(&format!("graph spec deserialize error: {e}")))?;
 
         let subs = map_graph_subscriptions(obj.subs)
             .map_err(|e| JsError::new(&format!("graph subscriptions error: {e}")))?;

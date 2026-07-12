@@ -324,14 +324,14 @@ mod tests {
 /// the wasm boundary when values are unchanged.
 #[wasm_bindgen]
 pub struct WasmGraph {
-    spec: GraphSpec,
+    spec: GraphSpec<Value>,
     t: f64,
-    runtime: GraphRuntime,
+    runtime: GraphRuntime<Value>,
     input_paths: Vec<TypedPath>,
     input_slots: Vec<Option<SlotStaging>>,
     plan_ready: bool,
     output_version: u64,
-    last_outputs: HashMap<String, HashMap<String, PortValue>>,
+    last_outputs: HashMap<String, HashMap<String, PortValue<Value>>>,
     last_outputs_version: u64,
     input_last_values: HashMap<usize, Value>,
     input_last_shapes: HashMap<usize, Option<Shape>>,
@@ -419,7 +419,7 @@ impl WasmGraph {
         let normalized = json::normalize_graph_spec_json(json_str)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         // Now deserialize into the typed GraphSpec
-        self.spec = serde_json::from_value::<GraphSpec>(normalized)
+        self.spec = serde_json::from_value::<GraphSpec<Value>>(normalized)
             .map_err(|e| JsValue::from_str(&e.to_string()))?
             .with_cache();
 
@@ -580,7 +580,7 @@ impl WasmGraph {
         Ok(())
     }
 
-    fn snapshot_outputs(&self) -> HashMap<String, HashMap<String, PortValue>> {
+    fn snapshot_outputs(&self) -> HashMap<String, HashMap<String, PortValue<Value>>> {
         self.runtime
             .outputs
             .iter()
@@ -603,7 +603,7 @@ impl WasmGraph {
 
     fn serialize_full_with_flag(
         &mut self,
-        snapshot: &HashMap<String, HashMap<String, PortValue>>,
+        snapshot: &HashMap<String, HashMap<String, PortValue<Value>>>,
     ) -> serde_json::Value {
         let mut obj = self.serialize_full_from_snapshot(snapshot);
         obj.as_object_mut()
@@ -622,7 +622,7 @@ impl WasmGraph {
 
     fn serialize_full_from_snapshot(
         &self,
-        snapshot: &HashMap<String, HashMap<String, PortValue>>,
+        snapshot: &HashMap<String, HashMap<String, PortValue<Value>>>,
     ) -> serde_json::Value {
         let mut nodes_map: HashMap<String, serde_json::Value> = HashMap::new();
         for (node_id, outputs) in snapshot.iter() {

@@ -6,6 +6,8 @@
 pub mod blend;
 /// Coercion helpers for adapting values across shape boundaries.
 pub mod coercion;
+
+pub mod graph_value;
 /// JSON normalization: legacy payload forms in, Arora `Value` serde out.
 pub mod json;
 /// Canonical shape descriptors used across Vizij crates and wasm bridges.
@@ -18,11 +20,12 @@ pub mod value;
 /// Batched write operations emitted by graphs and orchestrators.
 pub mod write_ops;
 
+/// The runtime value (Arora's), its vizij classifier, and the transform POD.
+pub use graph_value::GraphValue;
 /// Canonical shape descriptors and aliases exported for downstream hosts.
 pub use shape::{Shape, ShapeId};
 /// Parsed typed-path contract used for graph inputs, sinks, and blackboard lookups.
 pub use typed_path::TypedPath;
-/// The runtime value (Arora's), its vizij classifier, and the transform POD.
 pub use value::{kind, Transform, Value, VizijKind};
 /// Ordered write operations collected during a frame.
 pub use write_ops::{WriteBatch, WriteOp};

@@ -13,7 +13,7 @@ fn main() -> anyhow::Result<()> {
     // Add a graph controller (empty for this example)
     let gcfg = GraphControllerConfig {
         id: "g".into(),
-        spec: GraphSpec::default(),
+        spec: GraphSpec::<vizij_api_core::Value>::default(),
         subs: Subscriptions::default(),
     };
     orch = orch.with_graph(gcfg);

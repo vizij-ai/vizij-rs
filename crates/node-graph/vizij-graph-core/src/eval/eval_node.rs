@@ -24,7 +24,7 @@ use super::value_layout::{align_flattened, flatten_numeric, FlatValue, PortValue
 use super::variadic::fold_numeric_variadic;
 
 /// Read-only view of a node's inputs backed by slot-indexed storage.
-pub struct InputSlots<'a, V: GraphValue = vizij_api_core::Value> {
+pub struct InputSlots<'a, V: GraphValue> {
     slots: &'a [PortValue<V>],
     present: &'a [bool],
     layout: &'a PortLayout,
@@ -95,7 +95,7 @@ impl<'a, V: GraphValue> InputSlots<'a, V> {
 }
 
 /// Mutable view of a node's outputs backed by slot-indexed storage.
-pub struct OutputSlots<'a, V: GraphValue = vizij_api_core::Value> {
+pub struct OutputSlots<'a, V: GraphValue> {
     slots: &'a mut Vec<PortValue<V>>,
     layout: &'a PortLayout,
 }

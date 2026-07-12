@@ -11,7 +11,7 @@ fn main() -> anyhow::Result<()> {
     // Register a graph controller (empty GraphSpec for this minimal example).
     let cfg = GraphControllerConfig {
         id: "example-graph".into(),
-        spec: GraphSpec::default().with_cache(),
+        spec: GraphSpec::<vizij_api_core::Value>::default().with_cache(),
         subs: Subscriptions::default(),
     };
     orch = orch.with_graph(cfg);

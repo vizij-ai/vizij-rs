@@ -3,7 +3,7 @@
 use crate::graph_value::GraphValue;
 use crate::types::NodeId;
 use hashbrown::{hash_map::Entry, HashMap};
-use vizij_api_core::{Shape, TypedPath, Value, WriteBatch};
+use vizij_api_core::{Shape, TypedPath, WriteBatch};
 
 use super::plan::PlanCache;
 use super::urdfik::{build_chain_from_urdf, IkKey, UrdfKinematicsState};
@@ -106,7 +106,7 @@ pub enum NodeRuntimeState {
 
 /// Data staged by the host for consumption by [`NodeType::Input`](crate::types::NodeType::Input).
 #[derive(Debug, Clone)]
-pub struct StagedInput<V: GraphValue = Value> {
+pub struct StagedInput<V: GraphValue> {
     /// Incoming value for the staged epoch.
     pub value: V,
     /// Optional caller-declared shape used by hosts that preserve explicit shape metadata.
@@ -117,7 +117,7 @@ pub struct StagedInput<V: GraphValue = Value> {
 
 /// Runtime data shared by all node evaluations.
 #[derive(Debug)]
-pub struct GraphRuntime<V: GraphValue = Value> {
+pub struct GraphRuntime<V: GraphValue> {
     /// Current graph time in seconds.
     pub t: f32,
     /// Step delta in seconds for the active evaluation.

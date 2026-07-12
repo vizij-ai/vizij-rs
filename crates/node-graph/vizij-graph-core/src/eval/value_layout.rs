@@ -6,7 +6,7 @@
 //! data, and [`ValueLayout::reconstruct`] re-encodes the result through the
 //! [`GraphValue`] constructors.
 
-use vizij_api_core::{Shape, Value};
+use vizij_api_core::Shape;
 
 use crate::graph_value::{GraphValue, Transform, VizijKind};
 
@@ -14,7 +14,7 @@ use super::shape_helpers::infer_shape;
 
 /// Evaluated output captured alongside its inferred shape.
 #[derive(Clone, Debug)]
-pub struct PortValue<V: GraphValue = Value> {
+pub struct PortValue<V: GraphValue> {
     pub value: V,
     pub shape: Shape,
 }

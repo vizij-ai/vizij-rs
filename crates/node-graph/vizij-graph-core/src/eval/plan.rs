@@ -8,7 +8,6 @@ use crate::types::{
 use hashbrown::{HashMap, HashSet};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
-use vizij_api_core::Value;
 
 use super::value_layout::PortValue;
 use super::variadic::{compare_variadic_keys, parse_variadic_key};
@@ -67,14 +66,14 @@ pub struct ResolvedInputSource {
 }
 
 #[derive(Clone, Debug)]
-pub struct InputBinding<V: GraphValue = Value> {
+pub struct InputBinding<V: GraphValue> {
     pub source: Option<ResolvedInputSource>,
     pub default: Option<PortValue<V>>,
 }
 
 /// Cached, topology-ready view of a [`GraphSpec`] for reuse across frames.
 #[derive(Debug)]
-pub struct PlanCache<V: GraphValue = Value> {
+pub struct PlanCache<V: GraphValue> {
     fingerprint: u64,
     version: u64,
     /// Node indices in topological order.

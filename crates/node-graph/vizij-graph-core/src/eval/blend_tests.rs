@@ -13,7 +13,7 @@ fn expect_vec3(value: &Value) -> [f32; 3] {
     vocab::as_vec3(value).unwrap_or_else(|| panic!("expected vec3, got {value:?}"))
 }
 
-fn constant_node(id: &str, value: Value) -> NodeSpec {
+fn constant_node(id: &str, value: Value) -> NodeSpec<Value> {
     NodeSpec {
         id: id.to_string(),
         kind: NodeType::Constant,

@@ -12,15 +12,15 @@ use vizij_graph_core::{evaluate_all, GraphRuntime, GraphSpec, NodeId, PortValue}
 
 /// Resource containing the currently active graph specification.
 #[derive(Resource, Default, Clone)]
-pub struct GraphResource(pub GraphSpec);
+pub struct GraphResource(pub GraphSpec<Value>);
 
 /// Snapshot of the latest per-node outputs produced by evaluation.
 #[derive(Resource, Default, Clone)]
-pub struct GraphOutputs(pub HashMap<NodeId, HashMap<String, PortValue>>);
+pub struct GraphOutputs(pub HashMap<NodeId, HashMap<String, PortValue<Value>>>);
 
 /// Persistent runtime so stateful nodes (springs, dampers, etc.) can integrate across frames.
 #[derive(Resource, Default)]
-pub struct GraphRuntimeResource(pub GraphRuntime);
+pub struct GraphRuntimeResource(pub GraphRuntime<Value>);
 
 /// Convert a Value into a coarse f32 scalar for node parameter assignment.
 /// The value is classified once against the vizij vocabulary and decoded

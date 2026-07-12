@@ -25,7 +25,7 @@ macro_rules! graph_spec {
     }};
 }
 
-fn constant_node(id: &str, value: Value) -> NodeSpec {
+fn constant_node(id: &str, value: Value) -> NodeSpec<Value> {
     NodeSpec {
         id: id.to_string(),
         kind: NodeType::Constant,
@@ -1135,7 +1135,7 @@ fn it_should_reject_invalid_paths_during_deserialization() {
         "output_shapes": {}
     }"#;
 
-    let err = serde_json::from_str::<NodeSpec>(json)
+    let err = serde_json::from_str::<NodeSpec<Value>>(json)
         .expect_err("invalid typed path should fail to parse");
     assert!(err.to_string().contains("path"));
 }
@@ -1146,7 +1146,7 @@ fn it_should_reject_invalid_paths_during_deserialization() {
 fn input_node_emits_staged_value_with_declared_shape() {
     let typed_path = TypedPath::parse("sensor/imu.accel").expect("valid path");
 
-    let params: NodeParams = NodeParams {
+    let params: NodeParams<Value> = NodeParams {
         path: Some(typed_path.clone()),
         ..Default::default()
     };
@@ -1193,7 +1193,7 @@ fn input_node_coerces_vector_to_declared_vec3() {
     // The node should coerce the vector to a Vec3 value rather than erroring.
     let typed_path = TypedPath::parse("sensor/imu.accel").expect("valid path");
 
-    let params: NodeParams = NodeParams {
+    let params: NodeParams<Value> = NodeParams {
         path: Some(typed_path.clone()),
         ..Default::default()
     };
@@ -1237,7 +1237,7 @@ fn input_node_coerces_vector_to_declared_vec3() {
 fn input_node_missing_numeric_returns_null() {
     let typed_path = TypedPath::parse("sensor/imu.accel").expect("valid path");
 
-    let params: NodeParams = NodeParams {
+    let params: NodeParams<Value> = NodeParams {
         path: Some(typed_path.clone()),
         ..Default::default()
     };
@@ -1274,7 +1274,7 @@ fn input_node_missing_numeric_returns_null() {
 fn input_node_missing_non_numeric_errors() {
     let typed_path = TypedPath::parse("sensor/name").expect("valid path");
 
-    let params: NodeParams = NodeParams {
+    let params: NodeParams<Value> = NodeParams {
         path: Some(typed_path.clone()),
         ..Default::default()
     };
@@ -1302,7 +1302,7 @@ fn input_node_missing_non_numeric_errors() {
 fn input_node_requires_restaging_each_epoch() {
     let typed_path = TypedPath::parse("sensor/imu.accel").expect("valid path");
 
-    let params: NodeParams = NodeParams {
+    let params: NodeParams<Value> = NodeParams {
         path: Some(typed_path.clone()),
         ..Default::default()
     };

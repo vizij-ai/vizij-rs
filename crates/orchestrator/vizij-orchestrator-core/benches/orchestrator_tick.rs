@@ -188,7 +188,7 @@ fn orch_block(
     (nodes, edges, add, "operand_3".into(), clamp)
 }
 
-fn generated_graph(blocks: usize, base_path: &str) -> GraphSpec {
+fn generated_graph(blocks: usize, base_path: &str) -> GraphSpec<vizij_api_core::Value> {
     let mut nodes = Vec::new();
     let mut edges = Vec::new();
     let mut prev: Option<String> = None;
