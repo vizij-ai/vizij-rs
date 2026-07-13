@@ -27,13 +27,13 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: 24
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile

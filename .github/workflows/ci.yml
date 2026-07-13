@@ -55,12 +55,12 @@ jobs:
         run: node scripts/build-orchestrator-wasm.mjs
       - name: Build Arora-web WASM into npm wrapper pkg/
         run: node scripts/build-arora-web-wasm.mjs
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: 24
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
       - name: Install workspace dependencies
         run: pnpm install
       - name: Build shared packages
@@ -92,12 +92,12 @@ jobs:
         run: cargo install wasm-pack
       - name: Build WASM into npm wrapper pkg/
         run: node scripts/build-wasm.mjs
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: 24
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
       - name: Install workspace dependencies
         run: pnpm install
       - name: Build shared packages
@@ -127,12 +127,12 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-registry-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 24
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
       - name: Verify node registry artifacts are updated
         run: node scripts/verify-node-registry.mjs
 
