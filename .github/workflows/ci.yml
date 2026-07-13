@@ -59,8 +59,8 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: 24
-      - name: Enable corepack (pnpm)
-        run: corepack enable
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
       - name: Install workspace dependencies
         run: pnpm install
       - name: Build shared packages
@@ -96,8 +96,8 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: 24
-      - name: Enable corepack (pnpm)
-        run: corepack enable
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
       - name: Install workspace dependencies
         run: pnpm install
       - name: Build shared packages
@@ -131,6 +131,8 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: 24
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
       - name: Verify node registry artifacts are updated
         run: node scripts/verify-node-registry.mjs
 
