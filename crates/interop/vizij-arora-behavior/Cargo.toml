@@ -8,6 +8,7 @@ description = "Vizij node graph / orchestrator driven as Arora behavior interpre
 [dependencies]
 arora-behavior = "4"
 arora-types = "1"
+uuid = "1"
 vizij-api-core = { path = "../../api/vizij-api-core" }
 vizij-graph-core = { path = "../../node-graph/vizij-graph-core" }
 vizij-orchestrator-core = { path = "../../orchestrator/vizij-orchestrator-core" }

@@ -5,6 +5,7 @@
 
 use hashbrown::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 use vizij_api_core::{Shape, TypedPath, Value};
 
 /// Stable node identifier within a single [`GraphSpec`].
@@ -151,6 +152,11 @@ pub enum NodeType {
     Input,
     /// Writes a value to a host-visible typed path sink.
     Output,
+
+    // External function invocation
+    /// Invokes an external function (resolved by opaque id) through the host-provided
+    /// [`NodeFunctions`](crate::eval::NodeFunctions) interface.
+    ExternalFunction,
 }
 
 /// Node-construction parameters consumed selectively by different [`NodeType`] variants.
@@ -272,6 +278,18 @@ pub struct NodeParams {
     /// Example: `"robot1/Arm/Joint3.translation"`.
     #[serde(default)]
     pub path: Option<TypedPath>,
+
+    /// Stable id of the node-function invoked by [`NodeType::ExternalFunction`].
+    ///
+    /// The graph attaches no meaning to this id beyond passing it to the host
+    /// [`NodeFunctions`](crate::eval::NodeFunctions); the host resolves and invokes it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub function: Option<Uuid>,
+    /// Ordered arg-key handles matching the [`NodeType::ExternalFunction`] variadic `args` inputs.
+    ///
+    /// These are opaque to the graph; the host pairs each with the positional value in the call.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub param_ids: Option<Vec<Uuid>>,
 }
 
 /// Rounding strategy for [`NodeType::Round`].
