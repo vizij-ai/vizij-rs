@@ -3106,6 +3106,31 @@ const registry: Registry = {
         }
       ],
       "params": []
+    },
+    {
+      "type_id": "externalfunction",
+      "name": "External Function",
+      "category": "Functions",
+      "doc": "Invokes an external function (by opaque id) through the host-provided function interface, passing the variadic Args inputs zipped with the configured param_ids.",
+      "inputs": [],
+      "variadic_inputs": {
+        "id": "args",
+        "ty": "any",
+        "label": "Arg",
+        "doc": "Positional argument value bound to the matching entry in param_ids.",
+        "min": 0,
+        "keyed": false
+      },
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "any",
+          "label": "Out",
+          "doc": "Value returned by the invoked external function.",
+          "optional": false
+        }
+      ],
+      "params": []
     }
   ]
 };

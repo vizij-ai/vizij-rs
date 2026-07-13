@@ -18,6 +18,7 @@ thiserror  = { workspace = true }
 hashbrown  = { workspace = true }
 anyhow     = { workspace = true }
 vizij-api-core = { version = "1", path = "../../api/vizij-api-core" }
+uuid = { version = "1", features = ["serde"] }
 k = { version = "0.32", optional = true, default-features = false }
 urdf-rs = { version = "0.9", optional = true }
 

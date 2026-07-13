@@ -1,10 +1,12 @@
 //! Per-node evaluation logic for the Vizij graph runtime.
 
 use crate::eval::graph_runtime::{GraphRuntime, StagedInput};
+use crate::eval::node_function::NodeFunctions;
 use crate::eval::plan::{PlanCache, PortLayout};
 use crate::eval::variadic::collect_operand_ports;
 use crate::types::{NodeParams, NodeSpec, NodeType, RoundMode};
 use hashbrown::HashMap;
+use uuid::Uuid;
 use vizij_api_core::value as vocab;
 use vizij_api_core::{coercion, Shape, Value, WriteOp};
 
@@ -177,13 +179,29 @@ fn single_output(outputs: &mut OutputSlots, value: Value) -> Result<(), String> 
 }
 
 /// Evaluate a single node, updating `rt` with new outputs and queued writes.
+///
+/// This is the host-agnostic entry point; nodes that require a [`NodeFunctions`] host
+/// (currently only [`NodeType::ExternalFunction`]) will error when evaluated through this path.
+/// Use [`eval_node_inner`] with `Some(functions)` to enable them.
 pub fn eval_node(
     rt: &mut GraphRuntime,
     spec: &NodeSpec,
     inputs: &InputSlots,
     outputs: &mut OutputSlots,
 ) -> Result<(), String> {
-    evaluate_kind(rt, spec, inputs, outputs)?;
+    eval_node_inner(rt, spec, inputs, outputs, None)
+}
+
+/// Evaluate a single node, optionally threading a [`NodeFunctions`] host through to
+/// `ExternalFunction` nodes.
+pub fn eval_node_inner(
+    rt: &mut GraphRuntime,
+    spec: &NodeSpec,
+    inputs: &InputSlots,
+    outputs: &mut OutputSlots,
+    functions: Option<&mut dyn NodeFunctions>,
+) -> Result<(), String> {
+    evaluate_kind_inner(rt, spec, inputs, outputs, functions)?;
     enforce_output_shapes_slots(spec, outputs.layout, outputs.as_mut_slice())?;
 
     // Only explicit sink nodes (Output) publish external writes.
@@ -203,11 +221,12 @@ pub fn eval_node(
     Ok(())
 }
 
-fn evaluate_kind(
+fn evaluate_kind_inner(
     rt: &mut GraphRuntime,
     spec: &NodeSpec,
     inputs: &InputSlots,
     outputs: &mut OutputSlots,
+    functions: Option<&mut dyn NodeFunctions>,
 ) -> Result<(), String> {
     let params = &spec.params;
     match &spec.kind {
@@ -305,7 +324,36 @@ fn evaluate_kind(
         NodeType::MathSubRecord => eval_math_record(inputs, outputs, |a, b| a - b),
         NodeType::Input => eval_input_node(rt, spec, outputs),
         NodeType::Output => eval_output(inputs, outputs),
+        NodeType::ExternalFunction => eval_external_function(params, inputs, outputs, functions),
     }
+}
+
+fn eval_external_function(
+    params: &NodeParams,
+    inputs: &InputSlots,
+    outputs: &mut OutputSlots,
+    functions: Option<&mut dyn NodeFunctions>,
+) -> Result<(), String> {
+    let function = params
+        .function
+        .ok_or_else(|| "ExternalFunction node requires a function id".to_string())?;
+
+    let functions = functions.ok_or_else(|| {
+        "ExternalFunction node evaluated without a function host (graph run outside a host)"
+            .to_string()
+    })?;
+
+    // Zip the configured param ids with the variadic `args` input ports, in slot order.
+    let param_ids: &[Uuid] = params.param_ids.as_deref().unwrap_or(&[]);
+    let args: Vec<(Uuid, Value)> = param_ids
+        .iter()
+        .copied()
+        .zip(inputs.variadic("args").iter().map(|pv| pv.value.clone()))
+        .collect();
+
+    let ret = functions.call(function, &args)?;
+
+    outputs.set_value("out", ret)
 }
 
 fn input_or_default(inputs: &InputSlots, key: &str) -> PortValue {

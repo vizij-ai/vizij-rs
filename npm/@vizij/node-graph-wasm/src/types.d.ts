@@ -106,7 +106,8 @@ export type NodeType =
   | "mathdivrecord"
   | "mathsubrecord"
   | "input"
-  | "output";
+  | "output"
+  | "externalfunction";
 
 export type ShapeJSON =
   | { id: "Scalar"; meta?: Record<string, string> }

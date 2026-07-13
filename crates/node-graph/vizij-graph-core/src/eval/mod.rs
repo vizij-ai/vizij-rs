@@ -18,6 +18,7 @@ use std::mem;
 
 pub mod eval_node;
 mod graph_runtime;
+mod node_function;
 mod noise;
 mod numeric;
 mod plan;
@@ -28,11 +29,14 @@ mod variadic;
 
 pub use eval_node::eval_node;
 pub use graph_runtime::{GraphRuntime, StagedInput};
+pub use node_function::{NodeFunction, NodeFunctionRegistry, NodeFunctions};
 pub use plan::{fingerprint_spec, PlanCache};
 pub use value_layout::PortValue;
 
 #[cfg(test)]
 mod blend_tests;
+#[cfg(test)]
+mod external_function_tests;
 #[cfg(test)]
 mod tests;
 
@@ -40,7 +44,30 @@ mod tests;
 ///
 /// The runtime is cleared before evaluation and is repopulated as nodes are visited in topological
 /// order. Any error propagated from an individual node halts evaluation.
+///
+/// This path has no [`NodeFunctions`] host, so any `ExternalFunction` node in `spec` errors.
+/// Use [`evaluate_all_with_functions`] to run graphs that invoke node-functions.
 pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), String> {
+    evaluate_all_inner(rt, spec, None)
+}
+
+/// Evaluate every node in `spec`, threading `functions` through to any `ExternalFunction` nodes.
+///
+/// Behaves exactly like [`evaluate_all`] except that `ExternalFunction` nodes dispatch through
+/// `functions` (the host node-function interface) instead of erroring.
+pub fn evaluate_all_with_functions(
+    rt: &mut GraphRuntime,
+    spec: &GraphSpec,
+    functions: &mut dyn NodeFunctions,
+) -> Result<(), String> {
+    evaluate_all_inner(rt, spec, Some(functions))
+}
+
+fn evaluate_all_inner(
+    rt: &mut GraphRuntime,
+    spec: &GraphSpec,
+    mut functions: Option<&mut dyn NodeFunctions>,
+) -> Result<(), String> {
     if spec.version > 0 {
         rt.plan.ensure_versioned(spec)?;
     } else {
@@ -78,7 +105,13 @@ pub fn evaluate_all(rt: &mut GraphRuntime, spec: &GraphSpec) -> Result<(), Strin
                 let mut outputs =
                     eval_node::OutputSlots::new(&mut vec_out, &plan.layouts[idx].outputs);
                 outputs.clear();
-                eval_node::eval_node(rt, node, &inputs, &mut outputs)?;
+                // Reborrow the optional host with a fresh, per-iteration lifetime so the mutable
+                // borrow does not outlive a single node evaluation.
+                let functions_ref: Option<&mut dyn NodeFunctions> = match functions {
+                    Some(ref mut f) => Some(&mut **f),
+                    None => None,
+                };
+                eval_node::eval_node_inner(rt, node, &inputs, &mut outputs, functions_ref)?;
             }
 
             let compat = eval_node::materialize_outputs(&plan.layouts[idx].outputs, &vec_out);
