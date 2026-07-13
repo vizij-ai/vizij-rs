@@ -30,6 +30,11 @@ use vizij_api_core::TypedPath;
 use vizij_graph_core::eval::{evaluate_all_with_functions, GraphRuntime, NodeFunctions};
 use vizij_graph_core::types::GraphSpec;
 
+/// A Vizij node graph spec over the Arora [`Value`] — the concrete value this
+/// behavior binds `vizij-graph-core`'s value-generic spec to. Thin wrappers
+/// (e.g. `vizij-arora-web`) name this rather than re-picking the value type.
+pub type BehaviorGraphSpec = GraphSpec<Value>;
+
 /// Adapts an Arora [`CallBridge`] to graph-core's [`NodeFunctions`] host interface.
 ///
 /// A graph `ExternalFunction` node carries only an opaque string id for the function it invokes.

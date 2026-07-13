@@ -31,10 +31,10 @@ use std::time::Duration;
 use arora_bridge::FakeBridge;
 use arora_web::BrowserRuntime;
 use vizij_api_core::TypedPath;
-use vizij_arora_behavior::ProcessingGraph;
+use vizij_arora_behavior::{BehaviorGraphSpec as GraphSpec, ProcessingGraph};
 use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
-use vizij_graph_core::types::{GraphSpec, NodeType};
+use vizij_graph_core::types::NodeType;
 use wasm_bindgen::prelude::*;
 
 /// The store path the default proof graph reads from.
