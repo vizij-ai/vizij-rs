@@ -89,18 +89,21 @@ impl VizijArora {
             .step(Duration::from_secs_f64((dt_ms / 1000.0).max(0.0)))
     }
 
-    /// Write one key into the store. `value_json` is an Arora `Value` as JSON,
-    /// e.g. `{"f32": 0.75}`.
+    /// Write one key into the store. `value_json` is a value in any accepted
+    /// vizij payload form — the canonical Arora `Value` serde (`{"f32": 0.75}`)
+    /// or a vizij shorthand (`{"float": 0.75}`, `{"vec3": [1, 2, 3]}`, …) — which
+    /// is normalized to the canonical form the store deserializes.
     #[wasm_bindgen(js_name = setValue)]
     pub fn set_value(&self, path: &str, value_json: &str) -> Result<(), JsValue> {
-        self.inner.set_value(path, value_json)
+        self.inner.set_value(path, &normalize_value_str(value_json)?)
     }
 
     /// Write several keys at once, as one store change. `values_json` is a JSON
-    /// object mapping each key path to an Arora `Value`.
+    /// object mapping each key path to a value (canonical Arora `Value` serde or
+    /// a vizij shorthand — each is normalized to the canonical form).
     #[wasm_bindgen(js_name = writeValues)]
     pub fn write_values(&self, values_json: &str) -> Result<(), JsValue> {
-        self.inner.write_values(values_json)
+        self.inner.write_values(&normalize_values_map_str(values_json)?)
     }
 
     /// Read keys from the store. `paths` is a JS `string[]`; the result maps
@@ -132,6 +135,31 @@ fn parse_graph(json: &str) -> Result<GraphSpec, JsValue> {
     vizij_api_core::json::normalize_graph_spec_value(&mut spec)
         .map_err(|e| JsValue::from_str(&format!("normalize graph spec failed: {e}")))?;
     serde_json::from_value(spec).map_err(|e| JsValue::from_str(&format!("invalid graph spec: {e}")))
+}
+
+/// Normalize one value's JSON from any accepted vizij payload form (canonical
+/// Arora `Value` serde, or a vizij shorthand like `{"float": 0.5}` /
+/// `{"vec3": [1, 2, 3]}`) to the canonical form the store deserializes. Values
+/// the normalizer doesn't recognize are passed through unchanged.
+fn normalize_value_str(value_json: &str) -> Result<String, JsValue> {
+    let value: serde_json::Value = serde_json::from_str(value_json)
+        .map_err(|e| JsValue::from_str(&format!("value is not JSON: {e}")))?;
+    let normalized = vizij_api_core::json::normalize_value_json(value);
+    serde_json::to_string(&normalized)
+        .map_err(|e| JsValue::from_str(&format!("serialize value: {e}")))
+}
+
+/// Normalize every value in a `{path: value}` write batch to the canonical Arora
+/// `Value` serde (see [`normalize_value_str`]). Keys are left untouched.
+fn normalize_values_map_str(values_json: &str) -> Result<String, JsValue> {
+    let map: serde_json::Map<String, serde_json::Value> = serde_json::from_str(values_json)
+        .map_err(|e| JsValue::from_str(&format!("values are not a JSON object: {e}")))?;
+    let normalized: serde_json::Map<String, serde_json::Value> = map
+        .into_iter()
+        .map(|(path, value)| (path, vizij_api_core::json::normalize_value_json(value)))
+        .collect();
+    serde_json::to_string(&normalized)
+        .map_err(|e| JsValue::from_str(&format!("serialize values: {e}")))
 }
 
 /// The store paths the spec's `input` nodes read — what the graph subscribes
