@@ -62,5 +62,5 @@ There is no dedicated wasm-bindgen test suite in this crate yet. The cheapest ve
 ## Related Packages
 
 - [`vizij-api-core`](../vizij-api-core/README.md)
-- [`@vizij/value-json`](../../npm/@vizij/value-json/README.md)
+- [`@vizij/value-json`](../../../npm/@vizij/value-json/README.md)
 - The animation, graph, and orchestrator wasm stacks all depend on the same JSON contracts.
