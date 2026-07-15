@@ -221,8 +221,8 @@ The package test script runs the built Node test harness in `dist/animation-wasm
 
 ## Related Packages
 
-- [`vizij-animation-wasm`](../../crates/animation/vizij-animation-wasm/README.md) – Rust source of these bindings.
-- [`vizij-animation-core`](../../crates/animation/vizij-animation-core/README.md) – underlying engine logic.
+- [`vizij-animation-wasm`](../../../crates/animation/vizij-animation-wasm/README.md) – Rust source of these bindings.
+- [`vizij-animation-core`](../../../crates/animation/vizij-animation-core/README.md) – underlying engine logic.
 - [`@vizij/value-json`](../value-json/README.md) – canonical value helpers used internally.
 
 Need help or spotted an inconsistency? Open an issue—reliable bindings keep animation workflows smooth. 🎥

@@ -202,8 +202,8 @@ Benchmark ideas:
 
 ## Related Packages
 
-- [`vizij-graph-wasm`](../../vizij-graph-wasm/README.md): wasm-bindgen binding that exposes JSON-friendly APIs plus normalization helpers.
-- [`@vizij/node-graph-wasm`](../../../../npm/@vizij/node-graph-wasm/README.md): npm wrapper around the wasm build with ABI guards and utilities.
-- [`vizij-orchestrator-core`](../../../orchestrator/vizij-orchestrator-core/README.md): Coordinates graphs, animations, and a blackboard.
+- [`vizij-graph-wasm`](../vizij-graph-wasm/README.md): wasm-bindgen binding that exposes JSON-friendly APIs plus normalization helpers.
+- [`@vizij/node-graph-wasm`](../../../npm/@vizij/node-graph-wasm/README.md): npm wrapper around the wasm build with ABI guards and utilities.
+- [`vizij-orchestrator-core`](../../orchestrator/vizij-orchestrator-core/README.md): Coordinates graphs, animations, and a blackboard.
 
 Need help or spotted an inconsistency? Open an issue in the main Vizij repo or ping the runtime team—accurate docs keep our tooling reliable. 💡
