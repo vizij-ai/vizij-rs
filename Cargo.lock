@@ -144,9 +144,9 @@ checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
 
 [[package]]
 name = "arora"
-version = "7.0.0"
+version = "8.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "706bdbb11748cfdba2ded0136a2046207d7a4c01f98985193f42382856b205dd"
+checksum = "61981b1ca3827114996cbdce16f97dcf44f6bfb0fd0792139ec7cb025397002a"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -163,9 +163,9 @@ dependencies = [
 
 [[package]]
 name = "arora-behavior"
-version = "4.0.0"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bf1c8e6d8424e6ee27e123658d312131fb3ca71c00d1d9101c180ec07d394c1"
+checksum = "a59358d264db9a116904ade0d685a3ac7428691f157877e3414012038904e18b"
 dependencies = [
  "arora-types",
  "serde",
@@ -209,9 +209,9 @@ dependencies = [
 
 [[package]]
 name = "arora-bridge"
-version = "3.0.0"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb09ffc7782bf4031d53d2282687d1c77881ed67e41e5fad459273945f6d564f"
+checksum = "74ad91fff7a4be172b8ffdd2c188dd66c9073304310b92d35b6a5cadea014a16"
 dependencies = [
  "arora-types",
  "async-trait",
@@ -222,9 +222,9 @@ dependencies = [
 
 [[package]]
 name = "arora-buffers"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14b4b702d632a2364765041f3ee4694d87acef920e5b1294bb3a0485978dc4e6"
+checksum = "82708a96701c147829cd51ea405a1562c8f7f1fa86eb6b78a22470f4f5ecb796"
 dependencies = [
  "arora-types",
  "bytes",
@@ -236,9 +236,9 @@ dependencies = [
 
 [[package]]
 name = "arora-engine"
-version = "2.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad4c47d380640ff156d4a9d4938e621d0b34c4e69bfe480325e2a60e5fa11611"
+checksum = "4442590a7cc9cab4811f1c641a5081d7221e17a39d72b40a2c5729af286beb11"
 dependencies = [
  "anyhow",
  "arora-buffers",
@@ -267,9 +267,9 @@ dependencies = [
 
 [[package]]
 name = "arora-hal"
-version = "2.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac2fc5d4ee9c852d4f59af282cf42cbab2f4270c515861afeb442447b12cefd1"
+checksum = "0309f683585a6629d94abffd7b3ad21a7d91e3873efa374a75dfd2ea7b0d20b8"
 dependencies = [
  "arora-types",
  "async-trait",
@@ -326,9 +326,9 @@ dependencies = [
 
 [[package]]
 name = "arora-registry"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "159941dc2676cbdd3e58f4ee096309501858a715306e66606c37b76e342640cb"
+checksum = "de9477f2399b45395282152579752604b8b9ce4eb957b243c5d7f49716976695"
 dependencies = [
  "anyhow",
  "arora-types",
@@ -344,18 +344,18 @@ dependencies = [
 
 [[package]]
 name = "arora-simple-data-store"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "570213ccbc120696c0c988e0373683128b22ae97f91261ef8610ce8501d60c86"
+checksum = "1e6b1beaf5b408289a5b2269fdb447c19a488bb571fcc0d910f76f0ff145cc35"
 dependencies = [
  "arora-types",
 ]
 
 [[package]]
 name = "arora-types"
-version = "1.9.0"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69e707d1a281ca986f4945a8b18a8a4fd8a3e2868e0754454a8e48371216e65b"
+checksum = "dfadc34ee6f612d2f7047030c1a8628e78d10611e94dfdda8c4a69a2db52f644"
 dependencies = [
  "async-trait",
  "derive_more",
@@ -382,9 +382,9 @@ dependencies = [
 
 [[package]]
 name = "arora-web"
-version = "5.2.1"
+version = "5.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8ed94f5621090679343a16f8c25738e65d522219394d41b9c24bf881b3646c2"
+checksum = "d547ec3a5f0735b6f14d1a121374146e726a70dc4725411cecc9183d8b9b69e8"
 dependencies = [
  "arora",
  "arora-behavior",
