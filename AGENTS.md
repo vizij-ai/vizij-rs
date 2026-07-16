@@ -26,10 +26,10 @@ file summarises, it does not replace, those sources.
 
 ## Workspace Snapshot
 - **API stack**: Shared value/type/WriteBatch contracts (`crates/api`), plus
-  Bevy + wasm adapters reused across other stacks.
-- **Animation stack**: `vizij-animation-core`, `bevy_vizij_animation`,
+  wasm adapters reused across other stacks.
+- **Animation stack**: `vizij-animation-core`,
   `vizij-animation-wasm`, and npm `@vizij/animation-wasm`.
-- **Node graph stack**: `vizij-graph-core`, `bevy_vizij_graph`,
+- **Node graph stack**: `vizij-graph-core`,
   `vizij-graph-wasm`, and npm `@vizij/node-graph-wasm`.
 - **Orchestrator stack**: `vizij-orchestrator-core` runtime coordinating
   graphs/animations, `vizij-orchestrator-wasm`, and npm `@vizij/orchestrator-wasm`.

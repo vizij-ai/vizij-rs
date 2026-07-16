@@ -15,18 +15,15 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-echo "[1/4] Running vizij-animation-core tests (native)..."
+echo "[1/3] Running vizij-animation-core tests (native)..."
 cargo test -p vizij-animation-core
 
-echo "[2/4] Running bevy_vizij_animation tests (native)..."
-cargo test -p bevy_vizij_animation
-
-echo "[3/4] Ensuring wasm32 target is installed..."
+echo "[2/3] Ensuring wasm32 target is installed..."
 if ! rustup target list --installed | grep -q "wasm32-unknown-unknown"; then
   rustup target add wasm32-unknown-unknown
 fi
 
-echo "[4/4] Running vizij-animation-wasm tests (Node via wasm-pack)..."
+echo "[3/3] Running vizij-animation-wasm tests (Node via wasm-pack)..."
 cd "$ROOT_DIR/animation/vizij-animation-wasm"
 if command -v wasm-pack >/dev/null 2>&1; then
   wasm-pack test --node

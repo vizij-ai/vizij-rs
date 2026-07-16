@@ -1,11 +1,10 @@
 # Vizij RS Workspace
 
-> **Rust cores, Bevy plugins, and WASM bridges for Vizij’s real‑time animation platform.**
+> **Rust cores and WASM bridges for Vizij’s real‑time animation platform.**
 
 This repository contains the Rust source for Vizij’s animation, node graph, and orchestration stacks together with the tooling needed to surface them in web applications. Each domain ships as a trio of crates:
 
 - a **core crate** with deterministic runtime logic,
-- an optional **Bevy integration**,
 - and a **WASM binding** that is re-exported through `npm/@vizij/*-wasm`.
 
 What you read here should give you everything you need to build, test, and publish those artifacts.
@@ -33,15 +32,12 @@ vizij-rs/
 ├─ crates/
 │  ├─ api/
 │  │  ├─ vizij-api-core            # Shared Value/Shape/TypedPath types
-│  │  ├─ vizij-api-wasm            # wasm-bindgen helpers for Value/WriteBatch JSON
-│  │  └─ bevy_vizij_api            # Bevy utilities for applying WriteOps
+│  │  └─ vizij-api-wasm            # wasm-bindgen helpers for Value/WriteBatch JSON
 │  ├─ animation/
 │  │  ├─ vizij-animation-core      # Deterministic animation engine
-│  │  ├─ bevy_vizij_animation      # Bevy plugin wrapping the engine
 │  │  └─ vizij-animation-wasm      # wasm-bindgen binding
 │  ├─ node-graph/
 │  │  ├─ vizij-graph-core          # Data-flow node graph evaluator
-│  │  ├─ bevy_vizij_graph          # Bevy plugin
 │  │  ├─ vizij-graph-wasm          # wasm-bindgen binding
 │  │  └─ vizij-graph-registry-export # Registry export utility used by npm tooling
 │  ├─ orchestrator/
@@ -66,14 +62,14 @@ The major runtime crates and npm packages include dedicated READMEs with domain-
 
 ## Domain Stacks
 
-| Stack          | Core Crate               | Bevy Adapter              | WASM Binding               | npm wrapper                  |
-| -------------- | ------------------------ | ------------------------- | -------------------------- | ---------------------------- |
-| Animation      | `vizij-animation-core`   | `bevy_vizij_animation`    | `vizij-animation-wasm`     | `@vizij/animation-wasm`      |
-| Node graph     | `vizij-graph-core`       | `bevy_vizij_graph`        | `vizij-graph-wasm`         | `@vizij/node-graph-wasm`     |
-| Orchestrator   | `vizij-orchestrator-core`| (planned)                 | `vizij-orchestrator-wasm`  | `@vizij/orchestrator-wasm`   |
-| Test fixtures  | `vizij-test-fixtures`    | —                         | —                          | `@vizij/test-fixtures`       |
+| Stack          | Core Crate               | WASM Binding               | npm wrapper                  |
+| -------------- | ------------------------ | -------------------------- | ---------------------------- |
+| Animation      | `vizij-animation-core`   | `vizij-animation-wasm`     | `@vizij/animation-wasm`      |
+| Node graph     | `vizij-graph-core`       | `vizij-graph-wasm`         | `@vizij/node-graph-wasm`     |
+| Orchestrator   | `vizij-orchestrator-core`| `vizij-orchestrator-wasm`  | `@vizij/orchestrator-wasm`   |
+| Test fixtures  | `vizij-test-fixtures`    | —                          | `@vizij/test-fixtures`       |
 
-Shared API crates (`vizij-api-core`, `vizij-api-wasm`, `bevy_vizij_api`) provide the Value/Shape/TypedPath contract that keeps the stacks interoperable.
+Shared API crates (`vizij-api-core`, `vizij-api-wasm`) provide the Value/Shape/TypedPath contract that keeps the stacks interoperable.
 `vizij-test-fixtures` exposes the JSON assets defined under `fixtures/`, while `vizij-graph-registry-export` supports registry generation for the node-graph npm tooling.
 
 Each WASM crate exposes a stable `abi_version()` (currently `2`); the npm wrappers verify this at runtime and instruct you to rebuild if versions drift.

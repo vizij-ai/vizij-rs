@@ -32,7 +32,6 @@ const rustSections = [
     items: [
       ["vizij-api-core", "rust/vizij_api_core/"],
       ["vizij-api-wasm", "rust/vizij_api_wasm/"],
-      ["bevy_vizij_api", "rust/bevy_vizij_api/"]
     ]
   },
   {
@@ -40,7 +39,6 @@ const rustSections = [
     items: [
       ["vizij-animation-core", "rust/vizij_animation_core/"],
       ["vizij-animation-wasm", "rust/vizij_animation_wasm/"],
-      ["bevy_vizij_animation", "rust/bevy_vizij_animation/"]
     ]
   },
   {
@@ -48,7 +46,6 @@ const rustSections = [
     items: [
       ["vizij-graph-core", "rust/vizij_graph_core/"],
       ["vizij-graph-wasm", "rust/vizij_graph_wasm/"],
-      ["bevy_vizij_graph", "rust/bevy_vizij_graph/"]
     ]
   },
   {

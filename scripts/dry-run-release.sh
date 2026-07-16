@@ -22,8 +22,6 @@ cargo test --workspace
 #   vizij-animation-wasm
 #   vizij-graph-wasm
 #   vizij-orchestrator-wasm
-#   bevy_vizij_animation
-#   bevy_vizij_graph
 # )
 
 # for crate in "${CRATES[@]}"; do

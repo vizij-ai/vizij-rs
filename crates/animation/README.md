@@ -1,6 +1,6 @@
 # Vizij Animation Stack
 
-> Core engine, Bevy integration, and WebAssembly bindings for Vizij animation playback.
+> Core engine and WebAssembly bindings for Vizij animation playback.
 
 The `crates/animation` directory contains the Rust-side animation stack. The three crates here share the same animation data model and are usually changed together when playback, bindings, or wasm surfaces move.
 
@@ -8,8 +8,7 @@ The `crates/animation` directory contains the Rust-side animation stack. The thr
 
 | Crate | Purpose | Primary consumers |
 |-------|---------|-------------------|
-| [`vizij-animation-core`](vizij-animation-core/README.md) | Deterministic animation engine, parsing, playback, blending, baking. | Native hosts, orchestrator runtime, wasm binding, Bevy plugin. |
-| [`bevy_vizij_animation`](bevy_vizij_animation/README.md) | Bevy plugin that maps engine outputs onto ECS entities/components. | Bevy apps and tools. |
+| [`vizij-animation-core`](vizij-animation-core/README.md) | Deterministic animation engine, parsing, playback, blending, baking. | Native hosts, orchestrator runtime, wasm binding. |
 | [`vizij-animation-wasm`](vizij-animation-wasm/README.md) | `wasm-bindgen` bridge used by the npm wrapper. | [`@vizij/animation-wasm`](../../npm/@vizij/animation-wasm/README.md). |
 
 ## Typical Workflows
@@ -23,7 +22,6 @@ The `crates/animation` directory contains the Rust-side animation stack. The thr
 
 ### Bevy app
 
-1. Add `bevy_vizij_animation`.
 2. Insert `VizijAnimationPlugin`.
 3. Mark a hierarchy root with `VizijTargetRoot` and optional overrides with `VizijBindingHint`.
 4. Load animations through the shared `VizijEngine` resource and let the plugin drive fixed updates.
@@ -64,7 +62,6 @@ Run from the repository root.
 
 ```bash
 cargo test -p vizij-animation-core
-cargo test -p bevy_vizij_animation
 pnpm run build:wasm:animation
 pnpm --filter @vizij/animation-wasm test
 ```
@@ -84,6 +81,5 @@ If you change animation ABI or wrapper-visible behavior, rebuild the wasm packag
 ## Reference Links
 
 - [vizij-animation-core README](vizij-animation-core/README.md)
-- [bevy_vizij_animation README](bevy_vizij_animation/README.md)
 - [vizij-animation-wasm README](vizij-animation-wasm/README.md)
 - [@vizij/animation-wasm README](../../npm/@vizij/animation-wasm/README.md)

@@ -2,7 +2,7 @@
 
 > **Engine-agnostic animation runtime for Vizij – deterministic sampling, blending, and event emission in pure Rust.**
 
-`vizij-animation-core` parses Vizij animation assets, manages players and instances, samples tracks with cubic-bezier easing, and emits typed changes that downstream hosts can apply to rigs or renderers. It powers the Bevy plugin (`bevy_vizij_animation`) and the WebAssembly binding (`vizij-animation-wasm`).
+`vizij-animation-core` parses Vizij animation assets, manages players and instances, samples tracks with cubic-bezier easing, and emits typed changes that downstream hosts can apply to rigs or renderers. It powers the WebAssembly binding (`vizij-animation-wasm`).
 
 ---
 
@@ -47,7 +47,6 @@ cargo add vizij-animation-core
 
 The crate targets Rust 2021 and exposes no optional features. Companion crates provide additional environments:
 
-- `bevy_vizij_animation` – Bevy plugin built on this core.
 - `vizij-animation-wasm` – wasm-bindgen binding used in web applications.
 
 ---
@@ -210,7 +209,6 @@ pnpm run watch:wasm:animation     # continuous rebuild (requires cargo-watch)
 
 ## Related Packages
 
-- [`bevy_vizij_animation`](../../animation/bevy_vizij_animation/README.md) – Bevy plugin that wires this engine into ECS systems.
 - [`vizij-animation-wasm`](../vizij-animation-wasm/README.md) – wasm-bindgen binding used in web runtimes.
 - [`@vizij/animation-wasm`](../../../npm/@vizij/animation-wasm/README.md) – npm wrapper with loader utilities and ABI checks.
 - [`vizij-orchestrator-core`](../../orchestrator/vizij-orchestrator-core/README.md) – Coordinates animation and node graph controllers via a shared blackboard.
