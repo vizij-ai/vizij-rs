@@ -50,8 +50,10 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Install wasm32 target
-        run: rustup target add wasm32-unknown-unknown
+      - name: Install wasm32 targets
+        # unknown-unknown for the wasm-bindgen wrappers, wasip1 for the
+        # animation-module artifact (an Arora guest module).
+        run: rustup target add wasm32-unknown-unknown wasm32-wasip1
 
       - name: Install wasm-pack
         run: cargo install wasm-pack

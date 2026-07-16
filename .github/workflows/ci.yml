@@ -47,6 +47,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          # wasm32-wasip1 builds the animation-module artifact (an Arora guest
+          # module, not a wasm-bindgen wrapper).
+          targets: wasm32-wasip1
       - name: Install wasm-pack
         run: cargo install wasm-pack
       - name: Build WASM into npm wrapper pkg/
@@ -74,12 +77,14 @@ jobs:
           pnpm --filter @vizij/animation-wasm run build
           pnpm --filter @vizij/node-graph-wasm run build
           pnpm --filter @vizij/orchestrator-wasm run build
+          pnpm --filter @vizij/animation-module run build
           pnpm --filter @vizij/arora-web-wasm run build
       - name: Run wrapper tests
         run: |
           pnpm --filter @vizij/animation-wasm run test
           pnpm --filter @vizij/node-graph-wasm run test
           pnpm --filter @vizij/orchestrator-wasm run test
+          pnpm --filter @vizij/animation-module run test
           pnpm --filter @vizij/arora-web-wasm run test
 
   bench-smoke:

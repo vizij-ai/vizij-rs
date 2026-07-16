@@ -30,8 +30,33 @@ import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/brow
 /** A Vizij graph spec, as an object or already-serialized JSON. */
 export type GraphSpecInput = object | string;
 
+/**
+ * An Arora wasm module to load into the device's engine: its header as JSON
+ * plus its `.wasm` executable bytes — e.g. what `@vizij/animation-module`'s
+ * `loadAnimationModule()` returns.
+ */
+export interface DeviceModule {
+  headerJson: string;
+  wasmBytes: Uint8Array;
+}
+
+/**
+ * An Arora `Call`, as an object (or already-serialized JSON): the function
+ * `id`, optionally the `module_id` it lives in (inferred from the loaded
+ * modules when omitted), and `args` as `{ id, value }` pairs in the Arora
+ * `Value` vocabulary.
+ */
+export type DeviceCall = object | string;
+
+/** What a device call resolves to: the returned Arora `Value`. */
+export interface DeviceCallResult {
+  ret: unknown;
+  mutated?: unknown[];
+}
+
 interface WasmVizijArora {
   step(dt_ms: number): boolean;
+  call(call_json: string): Promise<string>;
   setValue(path: string, value_json: string): void;
   writeValues(values_json: string): void;
   readValues(paths: string[]): Record<string, ValueJSON | null>;
@@ -43,7 +68,7 @@ interface WasmVizijArora {
 interface WasmBindings {
   default: (input?: unknown) => Promise<unknown>;
   VizijArora: {
-    start(graph_json?: string): Promise<WasmVizijArora>;
+    start(graph_json?: string, modules?: DeviceModule[]): Promise<WasmVizijArora>;
   };
 }
 
@@ -154,6 +179,18 @@ export class AroraDevice {
     return this.inner.step(dtMs);
   }
 
+  /**
+   * Call a loaded module's function through the device. The call dispatches
+   * inside the device's **next** `step` — the same phase a remote bridge
+   * command executes in — so the returned promise resolves only after that
+   * step runs. Under a `requestAnimationFrame` loop just `await` it; a direct
+   * driver calls `step` in between.
+   */
+  call(call: DeviceCall): Promise<DeviceCallResult> {
+    const json = typeof call === "string" ? call : JSON.stringify(call);
+    return this.inner.call(json).then((result) => JSON.parse(result) as DeviceCallResult);
+  }
+
   /** Write one store key. Accepts any `ValueInput` shorthand. */
   setValue(path: string, value: ValueInput): void {
     this.inner.setValue(path, JSON.stringify(toValueJSON(value)));
@@ -198,17 +235,22 @@ export class AroraDevice {
  * `input` nodes' paths become the store keys it reads each tick. Omit `graph`
  * to get the built-in passthrough proof graph (`sensor/x` → `actuator/y`).
  *
+ * `modules` optionally loads Arora wasm modules into the device's engine;
+ * their functions are then reachable with `AroraDevice.call` and from the
+ * graph's `ExternalFunction` nodes.
+ *
  * Calls `init()` if it has not run yet.
  */
 export async function startDevice(
   graph?: GraphSpecInput,
   input?: InitInput,
+  modules?: DeviceModule[],
 ): Promise<AroraDevice> {
   await init(input);
   const bindings = bindingCache.current!;
   const graphJson =
     graph === undefined ? undefined : typeof graph === "string" ? graph : JSON.stringify(graph);
-  const inner = await bindings.VizijArora.start(graphJson);
+  const inner = await bindings.VizijArora.start(graphJson, modules);
   return new AroraDevice(inner);
 }
 

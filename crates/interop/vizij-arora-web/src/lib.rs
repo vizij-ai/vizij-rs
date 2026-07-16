@@ -270,7 +270,9 @@ fn parse_modules(modules: Option<js_sys::Array>) -> Result<Vec<(Header, Vec<u8>)
                     JsValue::from_str(&format!("modules[{i}].headerJson must be a string"))
                 })?;
             let header: Header = serde_json::from_str(&header_json).map_err(|e| {
-                JsValue::from_str(&format!("modules[{i}].headerJson is not a module header: {e}"))
+                JsValue::from_str(&format!(
+                    "modules[{i}].headerJson is not a module header: {e}"
+                ))
             })?;
             let bytes: js_sys::Uint8Array =
                 js_sys::Reflect::get(&entry, &JsValue::from_str("wasmBytes"))?
