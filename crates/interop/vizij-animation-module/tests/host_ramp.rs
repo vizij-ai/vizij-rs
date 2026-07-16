@@ -1,23 +1,14 @@
-//! Host-side end-to-end repro: load the built `.wasm` into an Arora engine, run
+//! Host-side end-to-end proof: load the built `.wasm` into an Arora engine, run
 //! the module's `load_animation` / `create_player` / `add_instance` / `step`
 //! exports over the real buffer ABI, and assert a one-track 0->1 ramp advances.
 //!
-//! STATUS: this reproduces an arora-buffers 0.2.0 wire-format discrepancy for
-//! arrays of structures across the `arora_call` boundary, so it currently traps
-//! in the guest during argument deserialization. The module itself is correct —
-//! its logic is verified natively in `src/lib.rs` `tests`.
-//!
-//! The gap: `arora-module-rust` 0.2.0 codegen serializes each array-of-struct
-//! element as a full self-describing value (`begin_structure`: element
-//! `TYPE_STRUCTURE` tag + 16-byte id) and reads it back with `check_type` — per
-//! its own comment ("Each element is serialized as a full value ..."). But
-//! `arora-buffers::serde_uuid` (the engine's generic `Value` codec, used by
-//! `CallBridge::arora_call` to marshal `Call` args and decode results) encodes
-//! `Value::ArrayStructure` elements raw (`begin_structure_raw`: no per-element
-//! tag/id). Both the clip input (`tracks`/`points`) and the `step` return
-//! (`[TrackOutput]`) are arrays of structs, so both directions mismarshal.
-//! Reconciling the two is a buffer wire-format change, gated on a design
-//! discussion (see report).
+//! What it proves is the `arora_call` boundary contract: arrays of structures
+//! marshal faithfully in both directions — the clip input (`tracks`/`points`)
+//! and the `step` return (`[TrackOutput]`) cross as `Value::ArrayStructure`,
+//! with `arora-module-rust` codegen and `arora-buffers::serde_uuid` (the
+//! engine's `Value` codec used by `CallBridge::arora_call`) agreeing on the raw
+//! element layout (ARORA-55, fixed in arora-module-rust 0.2.1). The module's
+//! own logic is verified natively in `src/lib.rs` `tests`.
 //!
 //! Ignored by default (also needs the wasm artifact pre-built — a nested
 //! `cargo build` would deadlock on the build lock). To reproduce:
