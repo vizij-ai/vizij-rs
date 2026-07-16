@@ -2,7 +2,7 @@
 //! Engine-agnostic animation runtime used across Vizij hosts.
 //!
 //! The crate owns the canonical animation data model, playback engine, interpolation and
-//! sampling helpers, output contracts, and baking utilities reused by Bevy adapters, wasm
+//! sampling helpers, output contracts, and baking utilities reused by wasm
 //! bindings, and the orchestrator.
 
 /// Accumulation helpers used while blending per-track samples.

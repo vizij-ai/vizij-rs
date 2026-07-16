@@ -1,15 +1,12 @@
 [workspace]
 members = [
   "crates/animation/vizij-animation-core",
-  "crates/animation/bevy_vizij_animation",
   "crates/animation/vizij-animation-wasm",
   "crates/node-graph/vizij-graph-core",
-  "crates/node-graph/bevy_vizij_graph",
   "crates/node-graph/vizij-graph-wasm",
   "crates/node-graph/vizij-graph-registry-export",
   "crates/api/vizij-api-core",
   "crates/api/vizij-api-wasm",
-  "crates/api/bevy_vizij_api",
   "crates/orchestrator/vizij-orchestrator-core",
   "crates/orchestrator/vizij-orchestrator-wasm",
   "crates/test-fixtures/vizij-test-fixtures",
@@ -34,7 +31,6 @@ hashbrown = { version = "0.17", features = ["serde"] }
 wasm-bindgen = "0.2.101"
 js-sys = "0.3"
 anyhow = "1"
-bevy = { version = "0.14.2" }
 serde-wasm-bindgen = "0.6"
 
 [profile.release]

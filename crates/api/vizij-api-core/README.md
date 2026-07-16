@@ -162,7 +162,6 @@ Modules include unit tests for the constructor/accessor round-trips, blending, c
 ## Related Packages
 
 - [`vizij-api-wasm`](../vizij-api-wasm/README.md) – wasm helpers that mirror the same normalisation logic for JavaScript.
-- [`bevy_vizij_api`](../bevy_vizij_api/README.md) – Bevy utilities built on top of this crate.
 - Engine stacks (`vizij-animation-core`, `vizij-graph-core`, `vizij-orchestrator-core`) all depend on these contracts.
 
 Questions or improvements? Open an issue—shared contracts are the backbone of Vizij interoperability. 🔗

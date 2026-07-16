@@ -146,7 +146,6 @@ for write in runtime.writes.iter() {
   evaluate_all(&mut runtime, &spec)?;
   ```
 - Shapes are checked during evaluation; incompatible updates surface as detailed `Err(String)` messages (`"set_param: node 'gain' key 'value' expects Float"` in wasm bindings).
-- High-level adapters (`vizij-graph-wasm::WasmGraph::set_param`, `bevy_vizij_graph` events) wrap the same pattern—normalise input JSON, update `NodeParams`, re-run `evaluate_all`.
 
 ### Cached outputs
 
@@ -205,7 +204,6 @@ Benchmark ideas:
 
 - [`vizij-graph-wasm`](../../vizij-graph-wasm/README.md): wasm-bindgen binding that exposes JSON-friendly APIs plus normalization helpers.
 - [`@vizij/node-graph-wasm`](../../../../npm/@vizij/node-graph-wasm/README.md): npm wrapper around the wasm build with ABI guards and utilities.
-- [`bevy_vizij_graph`](../../bevy_vizij_graph/README.md): Bevy plugin that drives this runtime inside ECS worlds.
 - [`vizij-orchestrator-core`](../../../orchestrator/vizij-orchestrator-core/README.md): Coordinates graphs, animations, and a blackboard.
 
 Need help or spotted an inconsistency? Open an issue in the main Vizij repo or ping the runtime team—accurate docs keep our tooling reliable. 💡

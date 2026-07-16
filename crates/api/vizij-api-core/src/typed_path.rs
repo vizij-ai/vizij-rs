@@ -9,7 +9,7 @@
 //!   "robot1/Camera0/Intrinsics.fx" -> namespaces=["robot1","Camera0"], target="Intrinsics", fields=["fx"]
 //!   "root/node" -> namespaces=["root"], target="node", fields=[]
 //!
-//! TypedPath is intentionally simple and string-based; adapters (e.g., Bevy) may
+//! TypedPath is intentionally simple and string-based; adapters may
 //! parse and resolve it into engine-specific bindings.
 //! There is no escaping syntax: `/` and `.` always act as separators, and whitespace inside any
 //! segment is rejected.

@@ -95,7 +95,8 @@ impl VizijArora {
     /// is normalized to the canonical form the store deserializes.
     #[wasm_bindgen(js_name = setValue)]
     pub fn set_value(&self, path: &str, value_json: &str) -> Result<(), JsValue> {
-        self.inner.set_value(path, &normalize_value_str(value_json)?)
+        self.inner
+            .set_value(path, &normalize_value_str(value_json)?)
     }
 
     /// Write several keys at once, as one store change. `values_json` is a JSON
@@ -103,7 +104,8 @@ impl VizijArora {
     /// a vizij shorthand — each is normalized to the canonical form).
     #[wasm_bindgen(js_name = writeValues)]
     pub fn write_values(&self, values_json: &str) -> Result<(), JsValue> {
-        self.inner.write_values(&normalize_values_map_str(values_json)?)
+        self.inner
+            .write_values(&normalize_values_map_str(values_json)?)
     }
 
     /// Read keys from the store. `paths` is a JS `string[]`; the result maps
