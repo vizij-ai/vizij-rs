@@ -15,10 +15,13 @@ crate-type = ["cdylib", "rlib"]
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # The published browser-runtime primitive: assembles arora's Runtime over an
 # injected HAL/bridge/store and exposes step() + the Value<->JSON store accessors.
-# 5.2.1 is the floor: the store accessors return plain JS objects from there.
-arora-web = "5.2"
-# The default Bridge: the in-process fake, all this device needs for now.
+# 5.3 is the floor: `BrowserRuntime::builder()` (with_module) arrives there.
+arora-web = "5.3"
+# The Bridge seam: the device's one bridge here is the in-process `JsBridge`,
+# feeding JS-issued commands (module calls) into the step sweep.
 arora-bridge = "3"
+# Call/Header/Value vocabulary crossing the JS boundary as JSON.
+arora-types = "1"
 
 # The interop crates that already implement the Arora traits over Vizij.
 vizij-arora-store = { path = "../vizij-arora-store" }
@@ -31,8 +34,14 @@ vizij-graph-core = { path = "../../node-graph/vizij-graph-core" }
 
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4"
+js-sys = { workspace = true }
 serde_json = { workspace = true }
 console_error_panic_hook = "0.1"
+# The Bridge trait's contract types: async methods (async-trait) and the
+# command/reply channels (futures-channel, the same crate arora-bridge uses).
+async-trait = "0.1"
+futures-channel = "0.3"
+uuid = "1"
 # uuid v4 on wasm needs a browser RNG (selects getrandom's wasm_js backend).
 getrandom = { version = "0.4", features = ["wasm_js"] }
 
