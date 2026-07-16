@@ -2936,11 +2936,16 @@ name = "vizij-arora-web"
 version = "0.0.0"
 dependencies = [
  "arora-bridge",
+ "arora-types",
  "arora-web",
+ "async-trait",
  "console_error_panic_hook",
+ "futures-channel",
  "getrandom 0.4.3",
+ "js-sys",
  "serde-wasm-bindgen",
  "serde_json",
+ "uuid",
  "vizij-api-core",
  "vizij-arora-behavior",
  "vizij-arora-hal",

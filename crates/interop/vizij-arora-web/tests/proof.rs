@@ -25,7 +25,7 @@ fn as_json(v: JsValue) -> Json {
 
 #[wasm_bindgen_test]
 async fn values_flow_js_store_tick_store_js() {
-    let mut rt = VizijArora::start(None).await.expect("runtime starts");
+    let mut rt = VizijArora::start(None, None).await.expect("runtime starts");
 
     // The graph's output key is absent before any tick runs.
     let before = as_json(rt.read_values(paths(&["actuator/y"])).unwrap());

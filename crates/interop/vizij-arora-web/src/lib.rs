@@ -9,16 +9,20 @@
 //! - the store is a [`BlackboardStore`] (a Vizij `Blackboard` as an Arora
 //!   `DataStore`);
 //! - the HAL is a [`RigHal`] (a Vizij rig as an Arora HAL);
-//! - the bridge is the in-process [`FakeBridge`];
+//! - the bridge is a [`JsBridge`], an in-process endpoint whose "remote" is the
+//!   embedding JavaScript — [`VizijArora::call`] feeds it;
 //! - the behavior is a [`ProcessingGraph`] (a Vizij node graph driven as the
 //!   device's `BehaviorInterpreter`), built from the caller's graph spec.
 //!
 //! JavaScript constructs it with [`VizijArora::start`] (passing a Vizij graph
-//! spec as JSON, in any accepted form — the spec normalizer runs here), drives
+//! spec as JSON, in any accepted form — the spec normalizer runs here, plus
+//! optionally the Arora wasm modules to load into the device's engine), drives
 //! it one tick at a time with [`VizijArora::step`] from `requestAnimationFrame`
 //! timestamps, and reads or writes keys on the injected store through the
 //! forwarded accessors. Values cross the JS boundary as JSON in the Arora
-//! `Value` vocabulary (e.g. `{"f32": 0.75}`).
+//! `Value` vocabulary (e.g. `{"f32": 0.75}`). Module functions are reached with
+//! [`VizijArora::call`], which dispatches through the device's step like any
+//! bridge command.
 //!
 //! This crate only carries content when built for `wasm32`; on the host it is
 //! an empty shim so it can participate in `cargo build`/`cargo test` on the
@@ -26,21 +30,71 @@
 
 #![cfg(target_arch = "wasm32")]
 
+use std::collections::HashMap;
 use std::time::Duration;
 
-use arora_bridge::FakeBridge;
+use arora_bridge::{
+    Bridge, BridgeCommand, BridgeOp, BridgeResult, DeviceInfo, Inbound, InboundStream,
+};
+use arora_types::call::Call;
+use arora_types::module::low::Header;
 use arora_web::BrowserRuntime;
+use async_trait::async_trait;
+use futures_channel::{mpsc, oneshot};
+use uuid::Uuid;
 use vizij_api_core::TypedPath;
 use vizij_arora_behavior::ProcessingGraph;
 use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 use vizij_graph_core::types::{GraphSpec, NodeType};
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 
 /// The store path the default proof graph reads from.
 const GRAPH_INPUT: &str = "sensor/x";
 /// The store path the default proof graph writes to.
 const GRAPH_OUTPUT: &str = "actuator/y";
+
+/// An in-process bridge endpoint whose "remote" is the embedding JavaScript.
+///
+/// Commands enqueued by [`VizijArora::call`] arrive on the device's inbound
+/// stream and dispatch during the next step's sweep — the same seam a remote
+/// (Studio) bridge command takes, so a JS call behaves exactly like a bridged
+/// one: it executes inside `step`, through the engine's `CallBridge`, and
+/// replies on its one-shot channel. Outbound state changes are dropped (this
+/// endpoint has no remote store).
+struct JsBridge {
+    /// Handed over (once) by [`Bridge::take_inbound`].
+    inbound: Option<mpsc::UnboundedReceiver<Inbound>>,
+}
+
+impl JsBridge {
+    /// The endpoint plus the sender JS-side methods enqueue commands on.
+    fn new() -> (Self, mpsc::UnboundedSender<Inbound>) {
+        let (tx, rx) = mpsc::unbounded();
+        (Self { inbound: Some(rx) }, tx)
+    }
+}
+
+#[async_trait]
+impl Bridge for JsBridge {
+    fn take_inbound(&mut self) -> InboundStream {
+        Box::pin(self.inbound.take().expect("inbound stream already taken"))
+    }
+
+    fn try_send(&mut self, _change: &arora_types::data::StateChange) {}
+
+    async fn get_device_info(&self) -> BridgeResult<Option<DeviceInfo>> {
+        Ok(None)
+    }
+
+    async fn update_device_info(
+        &self,
+        info: Option<DeviceInfo>,
+    ) -> BridgeResult<Option<DeviceInfo>> {
+        Ok(info)
+    }
+}
 
 /// A running Vizij-on-Arora device, JS-callable.
 ///
@@ -49,35 +103,104 @@ const GRAPH_OUTPUT: &str = "actuator/y";
 #[wasm_bindgen]
 pub struct VizijArora {
     inner: BrowserRuntime,
+    /// Where [`call`](Self::call) enqueues commands for the device's
+    /// [`JsBridge`]; the next step dispatches them.
+    commands: mpsc::UnboundedSender<Inbound>,
+    /// function id -> module id over every loaded module's exports, so a call
+    /// (or a graph `ExternalFunction` node) can name just the function.
+    function_modules: HashMap<Uuid, Uuid>,
 }
 
 #[wasm_bindgen]
 impl VizijArora {
     /// Start the device in the browser: inject a [`BlackboardStore`] +
-    /// [`RigHal`] + [`FakeBridge`] into a [`BrowserRuntime`] with a
+    /// [`RigHal`] + a [`JsBridge`] into a [`BrowserRuntime`] with a
     /// [`ProcessingGraph`] as its behavior.
     ///
     /// `graph_json` is a Vizij graph spec (any form the spec normalizer
     /// accepts); its `input` nodes' paths become the store keys the graph
     /// reads each tick. Pass nothing to get the passthrough proof graph
-    /// (`sensor/x` → `actuator/y`). Drive with [`step`](Self::step).
-    pub async fn start(graph_json: Option<String>) -> Result<VizijArora, JsValue> {
+    /// (`sensor/x` → `actuator/y`).
+    ///
+    /// `modules` optionally loads Arora wasm modules into the device's engine:
+    /// a JS array of `{ headerJson, wasmBytes }` (the module's header as JSON
+    /// and its `.wasm` bytes as a `Uint8Array`). Their functions are then
+    /// reachable with [`call`](Self::call) and from the graph's
+    /// `ExternalFunction` nodes. Drive with [`step`](Self::step).
+    pub async fn start(
+        graph_json: Option<String>,
+        modules: Option<js_sys::Array>,
+    ) -> Result<VizijArora, JsValue> {
         let spec = match graph_json {
             Some(json) => parse_graph(&json)?,
             None => parse_graph(&passthrough_json(GRAPH_INPUT, GRAPH_OUTPUT))?,
         };
+        let modules = parse_modules(modules)?;
+        let function_modules = function_modules(&modules);
+
         let inputs = input_paths(&spec);
-        let graph = ProcessingGraph::from_spec(spec, inputs);
+        let mut graph = ProcessingGraph::from_spec(spec, inputs);
+        graph.set_function_modules(function_modules.clone());
 
-        let inner = BrowserRuntime::start(
-            Box::new(RigHal::new()),
-            Box::new(FakeBridge::new()),
-            Box::new(BlackboardStore::new()),
-            Box::new(graph),
-        )
-        .await?;
+        let (bridge, commands) = JsBridge::new();
+        let mut builder = BrowserRuntime::builder()
+            .with_hal(Box::new(RigHal::new()))
+            .with_bridge(Box::new(bridge))
+            .with_data_store(Box::new(BlackboardStore::new()))
+            .with_behavior_interpreter(Box::new(graph));
+        for (header, wasm) in modules {
+            builder = builder.with_module(header, wasm);
+        }
+        let inner = builder.build()?;
 
-        Ok(VizijArora { inner })
+        Ok(VizijArora {
+            inner,
+            commands,
+            function_modules,
+        })
+    }
+
+    /// Call a loaded module's function through the device. `call_json` is an
+    /// Arora `Call` as JSON (`{ "id": <function uuid>, "args": [...] }`, args
+    /// and result in the Arora `Value` vocabulary); `module_id` may be omitted
+    /// when the function belongs to a module loaded at
+    /// [`start`](Self::start).
+    ///
+    /// The call dispatches inside the device's **next** [`step`](Self::step)
+    /// — the same phase a remote bridge command executes in — so the returned
+    /// promise (of the `CallResult` as JSON) resolves only after that step
+    /// runs. Under a `requestAnimationFrame` loop just `await` it; a direct
+    /// driver calls `step` in between.
+    pub fn call(&self, call_json: &str) -> Result<js_sys::Promise, JsValue> {
+        let mut call: Call = serde_json::from_str(call_json)
+            .map_err(|e| JsValue::from_str(&format!("invalid call json: {e}")))?;
+        if call.module_id.is_none() {
+            call.module_id = self.function_modules.get(&call.id).copied();
+        }
+        if call.module_id.is_none() {
+            return Err(JsValue::from_str(&format!(
+                "no loaded module exports function {}; pass module_id explicitly",
+                call.id
+            )));
+        }
+
+        let (reply, response) = oneshot::channel();
+        self.commands
+            .unbounded_send(Inbound::Command(BridgeCommand::new(
+                BridgeOp::Call(call),
+                reply,
+            )))
+            .map_err(|_| JsValue::from_str("the device no longer accepts commands"))?;
+
+        Ok(wasm_bindgen_futures::future_to_promise(async move {
+            let result = response
+                .await
+                .map_err(|_| JsValue::from_str("the device dropped the call unanswered"))?
+                .map_err(|e| JsValue::from_str(&e))?;
+            serde_json::to_string(&result)
+                .map(|json| JsValue::from_str(&json))
+                .map_err(|e| JsValue::from_str(&format!("serialize call result: {e}")))
+        }))
     }
 
     /// Advance the device one tick. `dt_ms` is the wall time elapsed since the
@@ -128,6 +251,51 @@ impl VizijArora {
     pub fn drain_changes(&self) -> Result<JsValue, JsValue> {
         self.inner.drain_changes()
     }
+}
+
+/// Decode the `modules` constructor argument: a JS array of
+/// `{ headerJson: string, wasmBytes: Uint8Array }` into `(Header, bytes)`
+/// pairs ready for `with_module`. `None` means no modules.
+fn parse_modules(modules: Option<js_sys::Array>) -> Result<Vec<(Header, Vec<u8>)>, JsValue> {
+    let Some(modules) = modules else {
+        return Ok(Vec::new());
+    };
+    modules
+        .iter()
+        .enumerate()
+        .map(|(i, entry)| {
+            let header_json = js_sys::Reflect::get(&entry, &JsValue::from_str("headerJson"))?
+                .as_string()
+                .ok_or_else(|| {
+                    JsValue::from_str(&format!("modules[{i}].headerJson must be a string"))
+                })?;
+            let header: Header = serde_json::from_str(&header_json).map_err(|e| {
+                JsValue::from_str(&format!("modules[{i}].headerJson is not a module header: {e}"))
+            })?;
+            let bytes: js_sys::Uint8Array =
+                js_sys::Reflect::get(&entry, &JsValue::from_str("wasmBytes"))?
+                    .dyn_into()
+                    .map_err(|_| {
+                        JsValue::from_str(&format!("modules[{i}].wasmBytes must be a Uint8Array"))
+                    })?;
+            Ok((header, bytes.to_vec()))
+        })
+        .collect()
+}
+
+/// function id -> module id over every module's exports — how a bare function
+/// reference (a JS call without `module_id`, a graph `ExternalFunction` node)
+/// is routed to `arora_call`'s by-module dispatch.
+fn function_modules(modules: &[(Header, Vec<u8>)]) -> HashMap<Uuid, Uuid> {
+    modules
+        .iter()
+        .flat_map(|(header, _)| {
+            header
+                .exports
+                .iter()
+                .map(move |export| (*export.id(), header.id))
+        })
+        .collect()
 }
 
 /// Normalize and deserialize a Vizij graph spec from JSON.
