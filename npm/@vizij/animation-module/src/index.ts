@@ -18,12 +18,17 @@ export { headerUrl, wasmUrl, type AnimationModule } from "./shared.js";
 
 /** Read the packaged artifact: the module's header (JSON) + wasm bytes. */
 export async function loadAnimationModule(): Promise<AnimationModule> {
-  // Read from filesystem paths (not the URL objects directly): passing a `URL`
-  // to `readFile` picks the single-arg `Promise<Buffer>` overload, which drops
-  // the "utf8" encoding and mistypes `headerJson` as bytes.
-  const [headerJson, wasm] = await Promise.all([
-    readFile(fileURLToPath(headerUrl), "utf8"),
+  // Read both parts as bytes (single-arg `readFile`, on filesystem paths rather
+  // than the URL objects) and decode the header as UTF-8 ourselves. Reading
+  // bytes instead of passing an encoding keeps one code path that types cleanly
+  // whether `node:fs/promises` resolves to the real `@types/node` overloads or
+  // the minimal node shims the sibling wasm packages declare.
+  const [headerBytes, wasmBytes] = await Promise.all([
+    readFile(fileURLToPath(headerUrl)),
     readFile(fileURLToPath(wasmUrl)),
   ]);
-  return { headerJson, wasmBytes: new Uint8Array(wasm) };
+  return {
+    headerJson: new TextDecoder().decode(headerBytes),
+    wasmBytes: new Uint8Array(wasmBytes),
+  };
 }
