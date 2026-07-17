@@ -11,12 +11,19 @@
  * ```
  */
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { headerUrl, wasmUrl, type AnimationModule } from "./shared.js";
 
 export { headerUrl, wasmUrl, type AnimationModule } from "./shared.js";
 
 /** Read the packaged artifact: the module's header (JSON) + wasm bytes. */
 export async function loadAnimationModule(): Promise<AnimationModule> {
-  const [headerJson, wasm] = await Promise.all([readFile(headerUrl, "utf8"), readFile(wasmUrl)]);
+  // Read from filesystem paths (not the URL objects directly): passing a `URL`
+  // to `readFile` picks the single-arg `Promise<Buffer>` overload, which drops
+  // the "utf8" encoding and mistypes `headerJson` as bytes.
+  const [headerJson, wasm] = await Promise.all([
+    readFile(fileURLToPath(headerUrl), "utf8"),
+    readFile(fileURLToPath(wasmUrl)),
+  ]);
   return { headerJson, wasmBytes: new Uint8Array(wasm) };
 }
