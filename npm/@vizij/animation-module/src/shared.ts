@@ -6,7 +6,14 @@ export interface AnimationModule {
   wasmBytes: Uint8Array;
 }
 
-/** URL of the packaged module header (JSON). */
+/**
+ * The module's Arora header (JSON), inlined at artifact-build time — loaders
+ * use it directly, with no asset fetch involved.
+ */
+export { headerJson } from "./header-json.generated.js";
+
+/** URL of the packaged module header (JSON), for tooling that wants the file
+ * itself; loaders use the inlined {@link headerJson} instead. */
 export const headerUrl = new URL("../artifact/header.json", import.meta.url);
 
 /** URL of the packaged module executable (`wasm32-wasip1`). */
