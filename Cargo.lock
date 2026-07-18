@@ -2928,7 +2928,6 @@ version = "0.0.0"
 dependencies = [
  "arora-types",
  "vizij-api-core",
- "vizij-orchestrator-core",
 ]
 
 [[package]]

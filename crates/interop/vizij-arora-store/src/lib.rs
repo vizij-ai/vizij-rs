@@ -19,8 +19,8 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 
 use arora_types::data::{DataError, DataStore, Key, Slot, State, StateChange, Subscription};
+use vizij_api_core::blackboard::{Blackboard, BlackboardEntry};
 use vizij_api_core::{TypedPath, Value};
-use vizij_orchestrator::blackboard::{Blackboard, BlackboardEntry};
 
 /// Source label recorded on entries written through the Arora `DataStore` view.
 const SOURCE: &str = "arora";

@@ -1,11 +1,25 @@
 //! Blackboard storage and conflict tracking for orchestrator frames.
 
-use anyhow::{anyhow, Result};
 use std::collections::HashMap;
+use std::fmt;
+
+/// Error from a blackboard JSON write: what failed to parse, as text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlackboardError(pub String);
+
+impl fmt::Display for BlackboardError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for BlackboardError {}
+
+type Result<T> = std::result::Result<T, BlackboardError>;
 
 use serde::{Deserialize, Serialize};
 
-use vizij_api_core::{json, Shape, TypedPath, Value, WriteBatch};
+use crate::{json, Shape, TypedPath, Value, WriteBatch};
 
 /// Single blackboard entry with provenance information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,7 +106,8 @@ impl Blackboard {
         epoch: u64,
         source: String,
     ) -> Result<()> {
-        let tp = TypedPath::parse(path).map_err(|e| anyhow!("typedpath parse error: {}", e))?;
+        let tp = TypedPath::parse(path)
+            .map_err(|e| BlackboardError(format!("typedpath parse error: {}", e)))?;
         let entry = BlackboardEntry::new(value, shape, epoch, source, 0);
         self.inner.insert(tp, entry);
         Ok(())
@@ -110,12 +125,13 @@ impl Blackboard {
         epoch: u64,
         source: String,
     ) -> Result<()> {
-        let value: Value =
-            json::parse_value(value_json).map_err(|e| anyhow!("value deserialize: {}", e))?;
+        let value: Value = json::parse_value(value_json)
+            .map_err(|e| BlackboardError(format!("value deserialize: {}", e)))?;
         let shape: Option<Shape> = match shape_json {
-            Some(sj) => {
-                Some(serde_json::from_value(sj).map_err(|e| anyhow!("shape deserialize: {}", e))?)
-            }
+            Some(sj) => Some(
+                serde_json::from_value(sj)
+                    .map_err(|e| BlackboardError(format!("shape deserialize: {}", e)))?,
+            ),
             None => None,
         };
         self.set(path, value, shape, epoch, source)
@@ -209,8 +225,8 @@ impl Blackboard {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vizij_api_core::value::{as_vec3, float, vec3};
-    use vizij_api_core::{WriteBatch, WriteOp};
+    use crate::value::{as_vec3, float, vec3};
+    use crate::{WriteBatch, WriteOp};
 
     #[test]
     fn set_and_get_entry() {

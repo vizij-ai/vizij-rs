@@ -7,5 +7,4 @@ description = "Vizij's Blackboard exposed as an Arora DataStore (arora-types)."
 
 [dependencies]
 vizij-api-core = { path = "../../api/vizij-api-core" }
-vizij-orchestrator-core = { path = "../../orchestrator/vizij-orchestrator-core" }
 arora-types = "1"

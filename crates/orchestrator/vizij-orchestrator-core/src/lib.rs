@@ -4,7 +4,10 @@
 //! runs them according to a configurable schedule, and returns merged writes plus conflict
 //! diagnostics for each frame.
 
-pub mod blackboard;
+// The blackboard lives in `vizij-api-core` (it is shared vocabulary, wrapped
+// by `vizij-arora-store` as an Arora `DataStore`); re-exported here so
+// `vizij_orchestrator::blackboard::…` paths keep working.
+pub use vizij_api_core::blackboard;
 pub mod controllers;
 pub mod diagnostics;
 pub mod fixtures;
