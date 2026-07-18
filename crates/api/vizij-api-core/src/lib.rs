@@ -3,6 +3,7 @@
 //! shared across Vizij runtimes.
 
 /// Blend helpers shared by animation and graph runtimes.
+pub mod blackboard;
 pub mod blend;
 /// Coercion helpers for adapting values across shape boundaries.
 pub mod coercion;
