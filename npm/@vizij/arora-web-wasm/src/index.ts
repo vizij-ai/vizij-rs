@@ -14,11 +14,14 @@
  *
  * await init();
  * const device = await startDevice(graphSpec);
+ * device.run(); // the device paces itself from here on
  * // each animation frame:
  * device.setValue("sensor/x", { f32: 0.75 });
- * device.step(dtMs);
  * const changes = device.drainChanges();
  * ```
+ *
+ * A host with its own clock skips `run()` and calls `device.step(dtMs)`
+ * per frame instead.
  */
 import { toValueJSON, type ValueJSON, type ValueInput } from "@vizij/value-json";
 import {
@@ -55,8 +58,10 @@ export interface DeviceCallResult {
 }
 
 interface WasmVizijArora {
-  step(dt_ms: number): boolean;
+  step(dt_ms: number): void;
+  run(period_ms?: number): Promise<never>;
   call(call_json: string): Promise<string>;
+  loadGraph(graph_json: string): Promise<string>;
   setValue(path: string, value_json: string): void;
   writeValues(values_json: string): void;
   readValues(paths: string[]): Record<string, ValueJSON | null>;
@@ -164,6 +169,7 @@ export function init(input?: InitInput): Promise<void> {
  */
 export class AroraDevice {
   private inner: WasmVizijArora;
+  private selfPaced = false;
 
   constructor(inner: WasmVizijArora) {
     this.inner = inner;
@@ -172,23 +178,56 @@ export class AroraDevice {
   /**
    * Advance the device one tick. `dtMs` is the wall time since the previous
    * step in milliseconds (the difference of two `requestAnimationFrame`
-   * timestamps). Returns `true` while the device is live; once it returns
-   * `false` the device is unregistered — stop stepping.
+   * timestamps). Unavailable once `run()` has taken the device — it paces
+   * itself from then on.
    */
-  step(dtMs: number): boolean {
-    return this.inner.step(dtMs);
+  step(dtMs: number): void {
+    this.inner.step(dtMs);
   }
 
   /**
-   * Call a loaded module's function through the device. The call dispatches
-   * inside the device's **next** `step` — the same phase a remote bridge
-   * command executes in — so the returned promise resolves only after that
-   * step runs. Under a `requestAnimationFrame` loop just `await` it; a direct
-   * driver calls `step` in between.
+   * Hand the device to its own loop, for good: a self-paced run at
+   * `periodMs` (default: the runtime's ~100 Hz) that owns the device until
+   * stepping fails — the returned promise only ever rejects, and `step()`
+   * is unavailable from then on. The rest of this surface keeps working
+   * while the device runs; it never touches the stepping device.
+   */
+  run(periodMs?: number): Promise<never> {
+    this.selfPaced = true;
+    return this.inner.run(periodMs);
+  }
+
+  /** Whether `run()` has taken the device (so `step()` is unavailable). */
+  get running(): boolean {
+    return this.selfPaced;
+  }
+
+  /**
+   * Call a loaded module's function through the device. The call is enqueued
+   * before this returns and dispatches inside the device's **next** step —
+   * the same phase a remote bridge command executes in — so the returned
+   * promise resolves only after that step runs. Under `run()` just `await`
+   * it; a direct driver calls `step` after issuing it.
    */
   call(call: DeviceCall): Promise<DeviceCallResult> {
     const json = typeof call === "string" ? call : JSON.stringify(call);
     return this.inner.call(json).then((result) => JSON.parse(result) as DeviceCallResult);
+  }
+
+  /**
+   * Replace the device's running graph **in place**: the spec reaches the
+   * interpreter as the engine's LOAD call, so the store, the loaded modules,
+   * and the device itself all survive the swap. Resolves once the new graph
+   * is installed; on a device not under `run()` a zero-dt step is taken so
+   * the swap lands without an external driver.
+   */
+  loadGraph(graph: GraphSpecInput): Promise<void> {
+    const json = typeof graph === "string" ? graph : JSON.stringify(graph);
+    const loaded = this.inner.loadGraph(json);
+    if (!this.selfPaced) {
+      this.inner.step(0);
+    }
+    return loaded.then(() => undefined);
   }
 
   /** Write one store key. Accepts any `ValueInput` shorthand. */
@@ -216,8 +255,9 @@ export class AroraDevice {
   }
 
   /**
-   * The keys that changed since the last call (`null` = cleared). Call right
-   * after `step` to feed a renderer.
+   * The keys that changed since the last call (`null` = cleared) — poll it to
+   * feed a renderer. The first drain returns the store's whole current state:
+   * the subscription opens on it, so no separate init snapshot is needed.
    */
   drainChanges(): Record<string, ValueJSON | null> {
     return this.inner.drainChanges();
