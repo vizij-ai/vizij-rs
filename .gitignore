@@ -5,13 +5,13 @@
 npm/@vizij/animation-wasm/pkg/
 npm/@vizij/node-graph-wasm/pkg/
 npm/@vizij/orchestrator-wasm/pkg/
-npm/@vizij/arora-web-wasm/pkg/
+npm/@vizij/runtime/pkg/
 
 # wrapper build output
 npm/@vizij/animation-wasm/dist/
 npm/@vizij/node-graph-wasm/dist/
 npm/@vizij/orchestrator-wasm/dist/
-npm/@vizij/arora-web-wasm/dist/
+npm/@vizij/runtime/dist/
 npm/@vizij/value-json/dist/
 npm/@vizij/wasm-loader/dist/
 

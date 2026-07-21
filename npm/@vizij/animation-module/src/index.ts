@@ -4,7 +4,7 @@
  * export condition reads the artifact from the package directory; browsers
  * (the `browser` condition) fetch it instead.
  *
- * Load it into a device with `@vizij/arora-web-wasm`:
+ * Load it into a device with `@vizij/runtime`:
  * ```ts
  * import { loadAnimationModule } from "@vizij/animation-module";
  * const device = await startDevice(graph, undefined, [await loadAnimationModule()]);

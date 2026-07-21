@@ -25,11 +25,11 @@ const WASM_TARGETS = {
   "animation-wasm": "animation",
   "node-graph-wasm": "graph",
   "orchestrator-wasm": "orchestrator",
-  "arora-web-wasm": "arora-web",
+  runtime: "arora-web",
 };
 
 async function main() {
-  // PUBLISH_PACKAGE (a name under @vizij/, e.g. "arora-web-wasm") publishes
+  // PUBLISH_PACKAGE (a name under @vizij/, e.g. "runtime") publishes
   // that one package: build only what it needs, then `pnpm publish` it.
   // Without it, the full pipeline runs and `changeset publish` releases every
   // package whose version is not on the registry yet.

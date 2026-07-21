@@ -7,7 +7,7 @@
 // host_ramp.rs) through the public JS surface.
 import assert from "node:assert/strict";
 import { loadAnimationModule } from "@vizij/animation-module";
-import { startDevice } from "../dist/arora-web-wasm/src/index.js";
+import { startDevice } from "../dist/runtime/src/index.js";
 
 // --- declared ids (module.yaml + the type records) ---------------------------
 const FN_LOAD = "76697a69-6a00-0000-0f00-000000000001";
@@ -151,4 +151,4 @@ assert.ok(
 );
 
 device.dispose();
-console.log("arora-web-wasm animation-module: ok");
+console.log("@vizij/runtime animation-module: ok");

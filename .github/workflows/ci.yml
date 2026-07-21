@@ -78,14 +78,14 @@ jobs:
           pnpm --filter @vizij/node-graph-wasm run build
           pnpm --filter @vizij/orchestrator-wasm run build
           pnpm --filter @vizij/animation-module run build
-          pnpm --filter @vizij/arora-web-wasm run build
+          pnpm --filter @vizij/runtime run build
       - name: Run wrapper tests
         run: |
           pnpm --filter @vizij/animation-wasm run test
           pnpm --filter @vizij/node-graph-wasm run test
           pnpm --filter @vizij/orchestrator-wasm run test
           pnpm --filter @vizij/animation-module run test
-          pnpm --filter @vizij/arora-web-wasm run test
+          pnpm --filter @vizij/runtime run test
 
   bench-smoke:
     runs-on: ubuntu-latest

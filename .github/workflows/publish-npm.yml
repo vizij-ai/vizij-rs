@@ -5,7 +5,7 @@ on:
     inputs:
       package:
         description: >-
-          Publish only this package (name under @vizij/, e.g. arora-web-wasm).
+          Publish only this package (name under @vizij/, e.g. runtime).
           Leave empty to publish everything the registry is missing.
         required: false
         type: string

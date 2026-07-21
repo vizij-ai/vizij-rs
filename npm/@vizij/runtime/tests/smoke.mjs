@@ -1,7 +1,7 @@
 // Values flow JS → device store → arora tick → store → JS, through the
 // published wrapper surface (dist/), exactly as a browser consumer uses it.
 import assert from "node:assert/strict";
-import { startDevice } from "../dist/arora-web-wasm/src/index.js";
+import { startDevice } from "../dist/runtime/src/index.js";
 
 const device = await startDevice(); // built-in passthrough graph: sensor/x -> actuator/y
 
@@ -62,5 +62,5 @@ assert.deepEqual(
 void rejected; // only ever rejects — when stepping fails, which this test never triggers
 
 device.dispose();
-console.log("arora-web-wasm smoke: ok");
+console.log("@vizij/runtime smoke: ok");
 process.exit(0); // the run() loop never returns; don't wait on its timers

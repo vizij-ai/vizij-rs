@@ -49,25 +49,6 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
-  npm/@vizij/arora-web-wasm:
-    dependencies:
-      '@vizij/value-json':
-        specifier: workspace:*
-        version: link:../value-json
-      '@vizij/wasm-loader':
-        specifier: workspace:*
-        version: link:../wasm-loader
-    devDependencies:
-      '@types/node':
-        specifier: ^20.12.7
-        version: 20.19.19
-      '@vizij/animation-module':
-        specifier: workspace:*
-        version: link:../animation-module
-      typescript:
-        specifier: ^5.5.0
-        version: 5.9.3
-
   npm/@vizij/node-graph-wasm:
     dependencies:
       '@vizij/value-json':
@@ -96,6 +77,25 @@ importers:
       '@types/node':
         specifier: ^20.12.7
         version: 20.19.19
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  npm/@vizij/runtime:
+    dependencies:
+      '@vizij/value-json':
+        specifier: workspace:*
+        version: link:../value-json
+      '@vizij/wasm-loader':
+        specifier: workspace:*
+        version: link:../wasm-loader
+    devDependencies:
+      '@types/node':
+        specifier: ^20.12.7
+        version: 20.19.19
+      '@vizij/animation-module':
+        specifier: workspace:*
+        version: link:../animation-module
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
