@@ -149,8 +149,22 @@ impl DataStore for BlackboardStore {
 
     fn subscribe(&self) -> Subscription {
         let (tx, rx) = channel();
-        self.inner.subscribers.lock().unwrap().push(tx);
+        // The current state, as the subscription's first change: a subscriber
+        // starts from the full picture and stays current from what follows.
+        // Taken while holding the subscriber list so a concurrent write lands
+        // either in this opening state or in a later change, never in neither.
+        let mut subscribers = self.inner.subscribers.lock().unwrap();
+        let mut initial = StateChange::new();
+        for (key, value) in self.snapshot().storage {
+            initial.set.insert(key, value);
+        }
+        let _ = tx.send(initial);
+        subscribers.push(tx);
         Subscription::new(rx)
+    }
+
+    fn clone_box(&self) -> Box<dyn DataStore> {
+        Box::new(self.clone())
     }
 }
 
@@ -239,8 +253,40 @@ mod tests {
     fn subscribe_delivers_changes() {
         let store = BlackboardStore::new();
         let sub = store.subscribe();
+        sub.try_recv().expect("opening state");
         store.write(StateChange::set("k", bool_(true))).unwrap();
         assert!(sub.try_recv().expect("change").contains(&Key::from("k")));
+    }
+
+    /// A subscription opens on everything the store already holds, so a
+    /// subscriber never has to read a snapshot separately and race the
+    /// changes that follow.
+    #[test]
+    fn subscribe_opens_on_the_current_state() {
+        let store = BlackboardStore::new();
+        store
+            .write(StateChange::set("already", bool_(true)))
+            .unwrap();
+
+        let sub = store.subscribe();
+        let opening = sub.try_recv().expect("opening state");
+        assert!(opening.contains(&Key::from("already")));
+
+        store
+            .write(StateChange::set("later", bool_(false)))
+            .unwrap();
+        assert!(sub
+            .try_recv()
+            .expect("change")
+            .contains(&Key::from("later")));
+    }
+
+    #[test]
+    fn clone_box_is_a_sibling_handle() {
+        let store = BlackboardStore::new();
+        let sibling = store.clone_box();
+        store.write(StateChange::set("k", float(1.0))).unwrap();
+        assert_eq!(sibling.read(&[Key::from("k")]), vec![Some(float(1.0))]);
     }
 
     #[test]

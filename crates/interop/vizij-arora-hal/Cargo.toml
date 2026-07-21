@@ -6,8 +6,8 @@ publish = false
 description = "Vizij rig presented as an Arora HAL (arora-hal)."
 
 [dependencies]
-arora-hal = "2"
-arora-types = "1"
+arora-hal = "3"
+arora-types = "2"
 async-trait = "0.1"
 futures-channel = "0.3"
 futures-core = "0.3"

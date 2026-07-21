@@ -6,13 +6,13 @@ publish = false
 description = "Vizij node graph / orchestrator driven as Arora behavior interpreters (ProcessingGraph, OrchestratorBehavior)."
 
 [dependencies]
-arora-behavior = "4"
-arora-types = "1"
+arora-behavior = "5"
+arora-types = "2"
+serde_json = { workspace = true }
 uuid = "1"
 vizij-api-core = { path = "../../api/vizij-api-core" }
 vizij-graph-core = { path = "../../node-graph/vizij-graph-core" }
 vizij-orchestrator-core = { path = "../../orchestrator/vizij-orchestrator-core" }
 
 [dev-dependencies]
-arora-simple-data-store = "1"
-serde_json = { workspace = true }
+arora-simple-data-store = "2"

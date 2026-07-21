@@ -10,34 +10,40 @@
 //! the runtime's golden store key ([`arora_behavior::golden::DT`], nanoseconds
 //! since the previous step), published before each tick.
 //!
-//! Queue one into an Arora runtime with
-//! `Runtime::queue_behavior(Box::new(pg))`; it then reads/writes the same
-//! blackboard the behavior tree and the bridge do.
+//! Inject one into an Arora device with
+//! `AroraBuilder::with_behavior_interpreter(Box::new(pg))`; it then
+//! reads/writes the same blackboard the bridge and the HAL do. Swapping the
+//! running graph does not rebuild the device: a [`spec_graph`] LOAD call
+//! reaches [`ProcessingGraph::load`] through the engine's interpreter module.
 //!
 //! [`orchestrator::OrchestratorBehavior`] wraps a whole Vizij orchestrator
 //! (many controllers + their merge) as one interpreter (VIZ-38).
+//!
+//! [`ProcessingGraph::load`]: arora_behavior::BehaviorInterpreter::load
 
 pub mod orchestrator;
+pub mod spec_graph;
 
 use std::collections::HashMap;
 
-use arora_behavior::{golden, BehaviorContext, BehaviorError, BehaviorInterpreter, BehaviorStatus};
+use arora_behavior::{
+    golden, BehaviorContext, BehaviorError, BehaviorInterpreter, BehaviorStatus, Graph,
+};
 use arora_types::call::{Call, CallBridge};
 use arora_types::data::{DataStore, Key, StateChange};
 use arora_types::value::{StructureField, Value};
 use uuid::Uuid;
 use vizij_api_core::TypedPath;
 use vizij_graph_core::eval::{evaluate_all_with_functions, GraphRuntime, NodeFunctions};
-use vizij_graph_core::types::GraphSpec;
+use vizij_graph_core::types::{GraphSpec, NodeType};
 
 /// Adapts an Arora [`CallBridge`] to graph-core's [`NodeFunctions`] host interface.
 ///
 /// A graph `ExternalFunction` node carries an opaque function [`Uuid`] for the function it invokes.
-/// Arora's [`CallBridge::arora_call`] dispatches by *module* id — and the engine looks the module
-/// up directly (see `arora-engine`'s `Engine::arora_call`). So this adapter must know which module
-/// each function lives in; it holds a `function -> module` map supplied at construction. The map is
-/// built from module-load summaries (arora-engine's `LoadedModule { id, function_ids }`); this
-/// crate does not own that plumbing.
+/// The engine routes a [`Call`] by its `module_id` and refuses one naming no module, so this
+/// adapter must know which module each function lives in; it holds a `function -> module` map
+/// supplied at construction. The map is built from module-load summaries (arora-engine's
+/// `LoadedModule { id, function_ids }`); this crate does not own that plumbing.
 struct CallBridgeFunctions<'a> {
     bridge: &'a mut dyn CallBridge,
     /// function id -> module id, so a bare function handle can be dispatched to `arora_call`.
@@ -59,14 +65,11 @@ impl NodeFunctions for CallBridgeFunctions<'_> {
             .collect();
         let result = self
             .bridge
-            .arora_call(
-                &module_id,
-                Call {
-                    module_id: Some(module_id),
-                    id: function,
-                    args,
-                },
-            )
+            .arora_call(Call {
+                module_id: Some(module_id),
+                id: function,
+                args,
+            })
             .map_err(|e| format!("module call failed: {e}"))?;
         Ok(result.ret)
     }
@@ -82,6 +85,26 @@ pub struct ProcessingGraph {
     /// [`CallBridge`]. See [`CallBridgeFunctions`] for why this map is needed and where it
     /// should come from.
     function_modules: HashMap<Uuid, Uuid>,
+}
+
+/// Normalize and deserialize a Vizij graph spec from JSON (any form the spec
+/// normalizer accepts).
+pub fn parse_spec(json: &str) -> Result<GraphSpec, String> {
+    let mut spec: serde_json::Value =
+        serde_json::from_str(json).map_err(|e| format!("graph spec is not JSON: {e}"))?;
+    vizij_api_core::json::normalize_graph_spec_value(&mut spec)
+        .map_err(|e| format!("normalize graph spec failed: {e}"))?;
+    serde_json::from_value(spec).map_err(|e| format!("invalid graph spec: {e}"))
+}
+
+/// The store paths the spec's `input` nodes read — what the graph subscribes
+/// to on the device's store.
+pub fn input_paths(spec: &GraphSpec) -> Vec<TypedPath> {
+    spec.nodes
+        .iter()
+        .filter(|node| matches!(node.kind, NodeType::Input))
+        .filter_map(|node| node.params.path.clone())
+        .collect()
 }
 
 impl ProcessingGraph {
@@ -161,6 +184,25 @@ impl BehaviorInterpreter for ProcessingGraph {
         // A node graph is continuous: tick it again next step.
         Ok(BehaviorStatus::Running)
     }
+
+    /// Replace the running Vizij graph in place — the interpreter module's
+    /// LOAD entry point, reached through the engine like any module call, so a
+    /// recompose never rebuilds the device (VIZ-57).
+    ///
+    /// `graph` must be a [`spec_graph`] carrier: the shared model's one-node
+    /// form whose literal input holds the Vizij spec JSON (see that module for
+    /// why the spec rides the shared model opaquely). The spec is parsed and
+    /// installed immediately with a fresh graph runtime; the store and the
+    /// `function -> module` map are untouched — the store belongs to the
+    /// device, and the loaded-module set is fixed at device build.
+    fn load(&mut self, graph: Graph) -> Result<(), BehaviorError> {
+        let json = spec_graph::decode(&graph).map_err(|message| BehaviorError { message })?;
+        let spec = parse_spec(&json).map_err(|message| BehaviorError { message })?;
+        self.inputs = input_paths(&spec);
+        self.spec = spec.with_cache();
+        self.rt = GraphRuntime::default();
+        Ok(())
+    }
 }
 
 /// The current step's `dt` in seconds, read from the runtime-maintained
@@ -185,7 +227,6 @@ mod tests {
     use arora_types::call::{Call, CallError, CallResult, Callable, CallableId};
     use serde_json::json;
     use std::rc::Rc;
-    use uuid::Uuid;
     use vizij_api_core::value::{float, vec3};
 
     /// A bridge the passthrough graphs never invoke (they contain no ExternalFunction nodes).
@@ -193,7 +234,7 @@ mod tests {
     struct NoopBridge;
 
     impl CallBridge for NoopBridge {
-        fn arora_call(&mut self, _module: &Uuid, _call: Call) -> Result<CallResult, CallError> {
+        fn arora_call(&mut self, _call: Call) -> Result<CallResult, CallError> {
             unimplemented!("passthrough graphs make no external function calls")
         }
         fn arora_register_callable(&mut self, _callable: Rc<dyn Callable>) -> CallableId {
@@ -249,6 +290,61 @@ mod tests {
             .unwrap();
         graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
         assert_eq!(read(&store, "actuator/y"), Some(pos));
+    }
+
+    /// The in-place load path: a spec-carrier graph swaps the running Vizij
+    /// graph without touching the store or the device around it.
+    #[test]
+    fn load_swaps_the_graph_in_place() {
+        let store = SimpleDataStore::new();
+        let mut graph = ProcessingGraph::from_spec(
+            passthrough("sensor/x", "actuator/y"),
+            vec![TypedPath::parse("sensor/x").unwrap()],
+        );
+        let mut bridge = NoopBridge;
+
+        store
+            .write(StateChange::set("sensor/x", float(0.5)))
+            .unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read(&store, "actuator/y"), Some(float(0.5)));
+
+        // Load a different passthrough; the next tick runs the new spec.
+        let json = serde_json::json!({
+            "nodes": [
+                { "id": "in",  "type": "input",  "params": { "path": "sensor/b" } },
+                { "id": "out", "type": "output", "params": { "path": "actuator/b" } }
+            ],
+            "edges": [
+                { "from": { "node_id": "in" }, "to": { "node_id": "out", "input": "in" } }
+            ]
+        })
+        .to_string();
+        graph
+            .load(spec_graph::encode(&json))
+            .expect("the carrier graph loads");
+
+        store
+            .write(StateChange::set("sensor/b", float(0.25)))
+            .unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read(&store, "actuator/b"), Some(float(0.25)));
+        // The old spec no longer runs…
+        store
+            .write(StateChange::set("sensor/x", float(0.9)))
+            .unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read(&store, "actuator/y"), Some(float(0.5)));
+        // …and the store around the swap was never reset.
+        assert_eq!(read(&store, "sensor/x"), Some(float(0.9)));
+    }
+
+    /// A non-carrier graph is refused: Vizij edition goes through the
+    /// spec-carrier load, not the shared model's structural form.
+    #[test]
+    fn load_rejects_a_non_carrier_graph() {
+        let mut graph = ProcessingGraph::from_spec(passthrough("a", "b"), vec![]);
+        assert!(graph.load(Graph::empty()).is_err());
     }
 
     #[test]

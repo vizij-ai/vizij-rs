@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-arora-types = "1"
+arora-types = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
