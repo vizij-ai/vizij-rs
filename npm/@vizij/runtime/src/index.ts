@@ -1,5 +1,5 @@
 /**
- * Stable ESM entrypoint for `@vizij/arora-web-wasm`.
+ * Stable ESM entrypoint for `@vizij/runtime`.
  *
  * Runs a Vizij runtime in the browser *as an Arora device*: the wasm module
  * (`crates/interop/vizij-arora-web`) assembles an `arora_web::BrowserRuntime`
@@ -10,7 +10,7 @@
  *
  * Typical use:
  * ```ts
- * import { init, startDevice } from "@vizij/arora-web-wasm";
+ * import { init, startDevice } from "@vizij/runtime";
  *
  * await init();
  * const device = await startDevice(graphSpec);
@@ -109,7 +109,7 @@ async function importWasmModule(): Promise<unknown> {
     wasmModulePromise = importStaticWasmModule().catch((err) => {
       if (typeof console !== "undefined" && typeof console.warn === "function") {
         console.warn(
-          "@vizij/arora-web-wasm: static wasm import failed, falling back to runtime URL import.",
+          "@vizij/runtime: static wasm import failed, falling back to runtime URL import.",
           err,
         );
       }

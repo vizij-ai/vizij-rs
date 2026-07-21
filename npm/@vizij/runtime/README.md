@@ -1,4 +1,4 @@
-# @vizij/arora-web-wasm
+# @vizij/runtime
 
 Run a Vizij runtime in the browser **as an Arora device**.
 
@@ -14,7 +14,7 @@ each tick and writes its outputs back, and JS talks to the same store.
 ## Use
 
 ```ts
-import { init, startDevice } from "@vizij/arora-web-wasm";
+import { init, startDevice } from "@vizij/runtime";
 
 await init();
 const device = await startDevice(graphSpec); // a Vizij graph spec (object or JSON)
@@ -42,6 +42,6 @@ Values cross the boundary in the normalized `ValueJSON` vocabulary from
 The `pkg/` wasm artifacts are produced by `wasm-pack` from the repository root:
 
 ```sh
-pnpm run build:wasm:arora-web   # wasm-pack build -> npm/@vizij/arora-web-wasm/pkg
-pnpm --filter @vizij/arora-web-wasm run build
+pnpm run build:wasm:arora-web   # wasm-pack build -> npm/@vizij/runtime/pkg
+pnpm --filter @vizij/runtime run build
 ```

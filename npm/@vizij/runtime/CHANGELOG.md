@@ -1,8 +1,25 @@
 # Changelog
 
-All notable changes to `@vizij/arora-web-wasm`. The format follows
+All notable changes to `@vizij/runtime`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
+
+## [1.0.0] - 2026-07-21
+
+### Changed
+
+- The package is `@vizij/runtime`. Earlier versions were published as
+  `@vizij/arora-web-wasm`.
+- `AroraDevice.run(periodMs?)` hands the device to its own self-paced loop,
+  for good: `step()` is unavailable from then on (the `running` getter
+  tells), and the returned promise only ever rejects — when stepping fails.
+- `AroraDevice.loadGraph(spec)` swaps the running graph in place: the store,
+  the loaded modules, and the device itself all survive. On a device not
+  under `run()` a zero-dt step is taken so the swap lands without an
+  external driver.
+- `step()` returns `void`; a failed step throws.
+- The first `drainChanges()` returns the store's whole current state: the
+  subscription opens on it, so no separate init snapshot is needed.
 
 ## [0.2.0] - 2026-07-16
 

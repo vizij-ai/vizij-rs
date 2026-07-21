@@ -1,5 +1,5 @@
 {
-  "name": "@vizij/arora-web-wasm",
+  "name": "@vizij/runtime",
   "version": "1.0.0",
   "description": "Run a Vizij runtime in the browser as an Arora device: wasm bindings over arora-web's BrowserRuntime.",
   "license": "MIT",
@@ -13,14 +13,15 @@
   },
   "keywords": [
     "vizij",
+    "runtime",
     "arora",
     "wasm",
     "webassembly"
   ],
   "type": "module",
-  "main": "dist/arora-web-wasm/src/index.js",
-  "module": "dist/arora-web-wasm/src/index.js",
-  "types": "dist/arora-web-wasm/src/index.d.ts",
+  "main": "dist/runtime/src/index.js",
+  "module": "dist/runtime/src/index.js",
+  "types": "dist/runtime/src/index.d.ts",
   "files": [
     "dist/",
     "pkg/",
@@ -28,13 +29,13 @@
   ],
   "exports": {
     ".": {
-      "import": "./dist/arora-web-wasm/src/index.js",
-      "types": "./dist/arora-web-wasm/src/index.d.ts"
+      "import": "./dist/runtime/src/index.js",
+      "types": "./dist/runtime/src/index.d.ts"
     }
   },
   "sideEffects": false,
   "scripts": {
-    "build": "tsc -p tsconfig.json && node ../../../scripts/copy-wasm-pkg.mjs arora-web-wasm",
+    "build": "tsc -p tsconfig.json && node ../../../scripts/copy-wasm-pkg.mjs runtime",
     "test": "pnpm run build && node tests/smoke.mjs && node tests/animation-module.mjs",
     "prepack": "pnpm run build",
     "prepublishOnly": "node -e \"const fs=require('fs');if(!fs.existsSync('pkg')){console.error('Missing pkg/. Run wasm-pack build.');process.exit(1);}\""

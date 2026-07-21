@@ -8,7 +8,7 @@
 //     runs the crate's build script, which emits it)
 //
 // The header ships as JSON because that is the form the browser loaders take
-// (`arora-web`'s `loadModule`, `@vizij/arora-web-wasm`'s `modules` option).
+// (`arora-web`'s `loadModule`, `@vizij/runtime`'s `modules` option).
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
