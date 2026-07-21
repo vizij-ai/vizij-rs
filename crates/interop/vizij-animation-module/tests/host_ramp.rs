@@ -154,9 +154,8 @@ fn ramp_advances_through_the_wasm_module() {
     let call = |engine: &mut _, fn_id: &str, args: Vec<StructureField>| -> Value {
         <_ as arora_types::call::CallBridge>::arora_call(
             engine,
-            &module,
             Call {
-                module_id: None,
+                module_id: Some(module),
                 id: u(fn_id),
                 args,
             },
