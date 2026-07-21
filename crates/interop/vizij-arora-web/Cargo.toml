@@ -3,25 +3,25 @@ name = "vizij-arora-web"
 version = "0.0.0"
 edition.workspace = true
 publish = false
-description = "Run a Vizij runtime in the browser as an Arora device: a thin wasm-bindgen cdylib over arora-web's BrowserRuntime, injected with a BlackboardStore + RigHal + a Vizij Behavior (VIZ-14)."
+description = "Run a Vizij runtime in the browser as an Arora device: a thin wasm-bindgen cdylib composing an arora::Arora over a BlackboardStore + RigHal + a Vizij graph behavior, wrapped with arora-web's AroraWeb (VIZ-14)."
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-# The whole crate is `wasm32`-only (arora-web's browser runtime is), so every
+# The whole crate is `wasm32`-only (arora-web's JS surface is), so every
 # dependency is gated to that target. On the host the crate is an empty shim with
 # no dependencies, so it still participates in a native `cargo build`/`cargo test`
-# without pulling the browser runtime into a host link.
+# without pulling the browser device into a host link.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-# The published browser-runtime primitive: assembles arora's Runtime over an
-# injected HAL/bridge/store and exposes step() + the Value<->JSON store accessors.
-# 5.3 is the floor: `BrowserRuntime::builder()` (with_module) arrives there.
-arora-web = "5.3"
-# The Bridge seam: the device's one bridge here is the in-process `JsBridge`,
-# feeding JS-issued commands (module calls) into the step sweep.
-arora-bridge = "3"
+# The device runtime: AroraBuilder composes the device over the injected
+# HAL/store/behavior seams; its LocalCaller dispatches in-process Calls.
+# `native` off: the browser's WebAssembly host executes modules, not wasmtime.
+arora = { version = "9", default-features = false }
+# The shared browser JS surface: AroraWeb (step/run/call + the Value<->JSON
+# store accessors) wraps the composed device.
+arora-web = "6"
 # Call/Header/Value vocabulary crossing the JS boundary as JSON.
-arora-types = "1"
+arora-types = "2"
 
 # The interop crates that already implement the Arora traits over Vizij.
 vizij-arora-store = { path = "../vizij-arora-store" }
@@ -30,17 +30,12 @@ vizij-arora-behavior = { path = "../vizij-arora-behavior" }
 
 # Vizij pieces the browser wrapper builds the injected behavior from.
 vizij-api-core = { path = "../../api/vizij-api-core" }
-vizij-graph-core = { path = "../../node-graph/vizij-graph-core" }
 
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4"
 js-sys = { workspace = true }
 serde_json = { workspace = true }
 console_error_panic_hook = "0.1"
-# The Bridge trait's contract types: async methods (async-trait) and the
-# command/reply channels (futures-channel, the same crate arora-bridge uses).
-async-trait = "0.1"
-futures-channel = "0.3"
 uuid = "1"
 # uuid v4 on wasm needs a browser RNG (selects getrandom's wasm_js backend).
 getrandom = { version = "0.4", features = ["wasm_js"] }
