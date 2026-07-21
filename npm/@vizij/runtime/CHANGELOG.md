@@ -4,6 +4,13 @@ All notable changes to `@vizij/runtime`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-07-21
+
+### Fixed
+
+- The published dependencies are resolved semver ranges. The 1.0.0 artifact
+  on npm carries unresolved `workspace:*` ranges and is not installable.
+
 ## [1.0.0] - 2026-07-21
 
 ### Changed
