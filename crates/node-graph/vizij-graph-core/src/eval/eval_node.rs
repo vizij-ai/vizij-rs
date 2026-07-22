@@ -8,7 +8,7 @@ use crate::types::{NodeParams, NodeSpec, NodeType, RoundMode};
 use hashbrown::HashMap;
 use uuid::Uuid;
 use vizij_api_core::value as vocab;
-use vizij_api_core::{coercion, Shape, Value, WriteOp};
+use vizij_api_core::{coercion, Shape, TypedPath, Value, WriteOp};
 
 use super::noise;
 use super::numeric::{as_bool, as_float, binary_numeric, unary_numeric};
@@ -216,7 +216,69 @@ pub fn eval_node_inner(
                     ));
                 }
             }
+        } else if let (Some(key_field), Some(value_field)) =
+            (spec.params.key_field, spec.params.value_field)
+        {
+            if let Some(slot) = outputs.layout.slot("out") {
+                if let Some(port) = outputs.as_slice().get(slot) {
+                    expand_keyed_batch(rt, &port.value, key_field, value_field)
+                        .map_err(|message| format!("node '{}': {message}", spec.id))?;
+                }
+            }
         }
+    }
+    Ok(())
+}
+
+/// Expand a keyed record batch into one write per record: how a **path-less**
+/// [`NodeType::Output`] applies a value that names its own keys (e.g. a module
+/// call's "what changed") onto them by default.
+///
+/// The batch is a `Value::ArrayStructure`; in every record, `key_field` holds
+/// the target path as a string and `value_field` the value to write. A record
+/// missing either (or keying on a non-string) is an **evaluation error** — a
+/// miswired batch, not data — while an empty batch simply writes nothing.
+/// Records repeating a key produce writes in batch order, and the per-tick
+/// flush keeps the last one; explicit combination of concurrent publishers is
+/// VIZ-76's ground (https://linear.app/semio-ai/issue/VIZ-76).
+fn expand_keyed_batch(
+    rt: &mut GraphRuntime,
+    batch: &Value,
+    key_field: Uuid,
+    value_field: Uuid,
+) -> Result<(), String> {
+    let Value::ArrayStructure { elements, .. } = batch else {
+        return Err(
+            "a path-less Output applies a keyed record batch (an array of structures); \
+             set `path` to write a single value"
+                .to_string(),
+        );
+    };
+    for (index, record) in elements.iter().enumerate() {
+        let mut key: Option<&str> = None;
+        let mut value: Option<&Value> = None;
+        for field in &record.fields {
+            if field.id == key_field {
+                key = match field.value.as_ref() {
+                    Value::String(s) => Some(s.as_str()),
+                    other => {
+                        return Err(format!(
+                            "record {index}: key field must be a string path, got {other:?}"
+                        ));
+                    }
+                };
+            } else if field.id == value_field {
+                value = Some(field.value.as_ref());
+            }
+        }
+        let (Some(key), Some(value)) = (key, value) else {
+            return Err(format!(
+                "record {index}: missing key field {key_field} or value field {value_field}"
+            ));
+        };
+        let path = TypedPath::parse(key)
+            .map_err(|e| format!("record {index}: key {key:?} is not a path: {e}"))?;
+        rt.writes.push(WriteOp::new(path, value.clone()));
     }
     Ok(())
 }

@@ -2804,7 +2804,7 @@ const registry: Registry = {
       "type_id": "output",
       "name": "Output",
       "category": "IO",
-      "doc": "Publishes In to the host path while passing the value through for downstream nodes.",
+      "doc": "Publishes In to the host path while passing the value through for downstream nodes. Without a path, In is a keyed record batch and each record writes to the path its key_field names (value from value_field) — records that name their own keys apply to them by default.",
       "inputs": [
         {
           "id": "in",
@@ -2829,6 +2829,18 @@ const registry: Registry = {
           "ty": "any",
           "label": "Path",
           "doc": "TypedPath string used when queuing external writes."
+        },
+        {
+          "id": "key_field",
+          "ty": "any",
+          "label": "Key Field",
+          "doc": "Path-less mode: record field id (UUID) holding each entry's target path."
+        },
+        {
+          "id": "value_field",
+          "ty": "any",
+          "label": "Value Field",
+          "doc": "Path-less mode: record field id (UUID) holding each entry's value."
         }
       ]
     },

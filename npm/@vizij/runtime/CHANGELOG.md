@@ -4,6 +4,18 @@ All notable changes to `@vizij/runtime`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-07-22
+
+### Added
+
+- Device graphs can apply a keyed record batch to the store by default: an
+  `output` node **without** `path` takes `key_field`/`value_field` params
+  (record field ids, UUIDs) and writes each record's value under the path
+  its key field names — e.g. an `externalfunction` module call's "what
+  changed" applied onto its own keys. An empty batch writes nothing; a
+  record missing either field is an evaluation error; a repeated key keeps
+  the batch's last entry in the tick's flush.
+
 ## [1.0.2] - 2026-07-22
 
 ### Changed

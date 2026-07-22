@@ -356,4 +356,52 @@ mod tests {
             .unwrap();
         assert!((golden_dt_seconds(&store) - 0.016).abs() < 1e-6);
     }
+
+    /// A path-less `output` applies a keyed record batch — the shape a module
+    /// call's "what changed" arrives in — onto the store keys the records
+    /// name, through the tick's single StateChange flush.
+    #[test]
+    fn pathless_output_applies_a_keyed_batch_to_the_store() {
+        const KEY_FIELD: &str = "76697a69-0000-0000-0000-00000000aaaa";
+        const VALUE_FIELD: &str = "76697a69-0000-0000-0000-00000000bbbb";
+        const RECORD_TYPE: &str = "76697a69-0000-0000-0000-00000000cccc";
+
+        let record = |key: &str, v: f32| {
+            json!({ "fields": [
+                { "id": KEY_FIELD, "value": { "str": key } },
+                { "id": VALUE_FIELD, "value": { "f32": v } },
+            ]})
+        };
+        let mut spec = json!({
+            "nodes": [
+                { "id": "src", "type": "constant", "params": { "value": {
+                    "structs": { "id": RECORD_TYPE, "elements": [
+                        record("anim/x", 0.25),
+                        record("anim/y", 0.5),
+                        // A repeated key: batch order is preserved into the
+                        // write set, and the StateChange flush (a map) keeps
+                        // the last entry. Explicit combination of concurrent
+                        // publishers is VIZ-76's ground.
+                        record("anim/x", 0.75),
+                    ]}
+                }}},
+                { "id": "sink", "type": "output", "params": {
+                    "key_field": KEY_FIELD, "value_field": VALUE_FIELD
+                }}
+            ],
+            "edges": [
+                { "from": { "node_id": "src" }, "to": { "node_id": "sink", "input": "in" } }
+            ]
+        });
+        vizij_api_core::json::normalize_graph_spec_value(&mut spec).expect("normalize");
+        let spec: GraphSpec = serde_json::from_value(spec).expect("graph spec");
+
+        let store = SimpleDataStore::new();
+        let mut graph = ProcessingGraph::from_spec(spec, vec![]);
+        let mut bridge = NoopBridge;
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+
+        assert_eq!(read(&store, "anim/x"), Some(float(0.75)));
+        assert_eq!(read(&store, "anim/y"), Some(float(0.5)));
+    }
 }

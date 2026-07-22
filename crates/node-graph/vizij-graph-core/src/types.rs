@@ -290,6 +290,16 @@ pub struct NodeParams {
     /// These are opaque to the graph; the host pairs each with the positional value in the call.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub param_ids: Option<Vec<Uuid>>,
+    /// Record field carrying each entry's **target path** in the keyed batch a
+    /// **path-less** [`NodeType::Output`] applies. With
+    /// [`value_field`](Self::value_field), it turns the node's input — a batch
+    /// of records naming their own keys (e.g. a module call's "what changed")
+    /// — into one write per record. Ignored when [`path`](Self::path) is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_field: Option<Uuid>,
+    /// Record field carrying each entry's value; see [`key_field`](Self::key_field).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value_field: Option<Uuid>,
 }
 
 /// Rounding strategy for [`NodeType::Round`].
