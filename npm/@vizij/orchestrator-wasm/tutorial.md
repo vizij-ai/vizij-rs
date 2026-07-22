@@ -243,7 +243,7 @@ pnpm run build:wasm:orchestrator   # from repo root (requires wasm-pack + Rust t
 
 - Explore the Rust tutorial (`crates/orchestrator/vizij-orchestrator-core/tutorial.md`) for deeper
   insight into schedules, blackboard internals, and testing strategies.
-- Combine the orchestrator with `@vizij/node-graph-wasm` to author graphs dynamically in the browser.
+- Combine the orchestrator with `@vizij/node-graph` to author graphs dynamically in the browser.
 - Feed `step()` or `stepDelta()` results into your own UI state layer or render loop.
 
 You now have a solid foundation for orchestrating complex Vizij graph + animation flows in

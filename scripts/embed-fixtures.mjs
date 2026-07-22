@@ -15,7 +15,7 @@ const packages = process.argv.slice(2);
 
 if (packages.length === 0) {
   console.error("Usage: node scripts/embed-fixtures.mjs <package> [package...]");
-  console.error("Example: node scripts/embed-fixtures.mjs animation node-graph-wasm");
+  console.error("Example: node scripts/embed-fixtures.mjs animation node-graph");
   process.exit(1);
 }
 

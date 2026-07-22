@@ -1,5 +1,5 @@
 {
-  "name": "@vizij/node-graph-wasm",
+  "name": "@vizij/node-graph",
   "version": "0.7.0",
   "description": "WASM bindings for Vizij node-graph core.",
   "license": "MIT",
@@ -18,9 +18,9 @@
     "webassembly"
   ],
   "type": "module",
-  "main": "dist/node-graph-wasm/src/index.js",
-  "module": "dist/node-graph-wasm/src/index.js",
-  "types": "dist/node-graph-wasm/src/index.d.ts",
+  "main": "dist/node-graph/src/index.js",
+  "module": "dist/node-graph/src/index.js",
+  "types": "dist/node-graph/src/index.d.ts",
   "files": [
     "dist/",
     "pkg/",
@@ -28,19 +28,19 @@
   ],
   "exports": {
     ".": {
-      "import": "./dist/node-graph-wasm/src/index.js",
-      "types": "./dist/node-graph-wasm/src/index.d.ts"
+      "import": "./dist/node-graph/src/index.js",
+      "types": "./dist/node-graph/src/index.d.ts"
     },
     "./metadata": {
-      "import": "./dist/node-graph-wasm/src/metadata/index.js",
-      "types": "./dist/node-graph-wasm/src/metadata/index.d.ts"
+      "import": "./dist/node-graph/src/metadata/index.js",
+      "types": "./dist/node-graph/src/metadata/index.d.ts"
     },
     "./metadata/registry.json": "./dist/src/metadata/registry.json"
   },
   "sideEffects": false,
   "scripts": {
-    "build": "node ../../../scripts/generate-node-registry.mjs && node ../../../scripts/embed-fixtures.mjs node-graph-wasm && tsc -p tsconfig.json && node ../../../scripts/copy-wasm-pkg.mjs node-graph-wasm",
-    "test": "pnpm run build && node dist/node-graph-wasm/tests/all.test.js",
+    "build": "node ../../../scripts/generate-node-registry.mjs && node ../../../scripts/embed-fixtures.mjs node-graph && tsc -p tsconfig.json && node ../../../scripts/copy-wasm-pkg.mjs node-graph",
+    "test": "pnpm run build && node dist/node-graph/tests/all.test.js",
     "prepack": "pnpm run build",
     "prepublishOnly": "node -e \"const fs=require('fs');if(!fs.existsSync('pkg')){console.error('Missing pkg/. Run wasm-pack build.');process.exit(1);}\""
   },

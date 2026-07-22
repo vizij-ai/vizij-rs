@@ -57,7 +57,7 @@ vizij-rs/
 ├─ npm/
 │  ├─ @vizij/animation-module      # vizij-animation-core built as an Arora wasm module (assets)
 │  ├─ @vizij/animation        # Stable ESM wrapper around `vizij-animation-wasm`
-│  ├─ @vizij/node-graph-wasm       # Wrapper around `vizij-graph-wasm`
+│  ├─ @vizij/node-graph       # Wrapper around `vizij-graph-wasm`
 │  ├─ @vizij/orchestrator-wasm     # Wrapper around `vizij-orchestrator-wasm`
 │  ├─ @vizij/runtime               # Browser Vizij runtime as an Arora device (wasm bindings)
 │  ├─ @vizij/test-fixtures         # Browser bundle of shared JSON fixtures
@@ -76,7 +76,7 @@ The major runtime crates and npm packages include dedicated READMEs with domain-
 | Stack          | Core Crate               | WASM Binding               | npm wrapper                  |
 | -------------- | ------------------------ | -------------------------- | ---------------------------- |
 | Animation      | `vizij-animation-core`   | `vizij-animation-wasm`     | `@vizij/animation`      |
-| Node graph     | `vizij-graph-core`       | `vizij-graph-wasm`         | `@vizij/node-graph-wasm`     |
+| Node graph     | `vizij-graph-core`       | `vizij-graph-wasm`         | `@vizij/node-graph`     |
 | Orchestrator   | `vizij-orchestrator-core`| `vizij-orchestrator-wasm`  | `@vizij/orchestrator-wasm`   |
 | Test fixtures  | `vizij-test-fixtures`    | —                          | `@vizij/test-fixtures`       |
 
@@ -182,7 +182,7 @@ pnpm run watch:wasm:orchestrator
 These scripts rebuild the WASM artefacts whenever source files change. For short-lived experiments you can still publish a global link via the `link:wasm:*` scripts, but the recommended flow is:
 
 1. Build the desired stack(s) here (`pnpm run build:wasm:graph` etc.).
-2. In `vizij-web`, run `pnpm run wasm:link` (or `WASM_PKGS="node-graph-wasm orchestrator-wasm" pnpm run wasm:link`) to point the workspace at these builds.
+2. In `vizij-web`, run `pnpm run wasm:link` (or `WASM_PKGS="node-graph orchestrator-wasm" pnpm run wasm:link`) to point the workspace at these builds.
 3. Use `pnpm run wasm:status` in `vizij-web` to confirm the resolution, and `pnpm run wasm:unlink` when you want to return to the published packages.
 
 This keeps the published versions as the default source of truth while still allowing synchronous iteration when necessary.
@@ -248,7 +248,7 @@ cargo test -p vizij-orchestrator-core
 The wrapper packages exercise their generated bindings through package-level test scripts:
 
 ```bash
-pnpm --filter "@vizij/node-graph-wasm" test
+pnpm --filter "@vizij/node-graph" test
 ```
 
 Fixtures live in `fixtures/` for repeatable scenario testing. Use them in integration tests or in downstream applications via `npm/@vizij/test-fixtures`.
@@ -346,7 +346,7 @@ Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wa
 - [vizij-orchestrator-core/README](crates/orchestrator/vizij-orchestrator-core/README.md)
 - [vizij-api-core/README](crates/api/vizij-api-core/README.md)
 - [vizij-test-fixtures/README](crates/test-fixtures/vizij-test-fixtures/README.md)
-- [@vizij/node-graph-wasm/README](npm/@vizij/node-graph-wasm/README.md)
+- [@vizij/node-graph/README](npm/@vizij/node-graph/README.md)
 - [@vizij/orchestrator-wasm/README](npm/@vizij/orchestrator-wasm/README.md)
 - [@vizij/animation/README](npm/@vizij/animation/README.md)
 - [@vizij/value-json/README](npm/@vizij/value-json/README.md)

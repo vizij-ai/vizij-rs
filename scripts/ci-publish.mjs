@@ -23,7 +23,7 @@ function run(command, args) {
  */
 const WASM_TARGETS = {
   animation: "animation",
-  "node-graph-wasm": "graph",
+  "node-graph": "graph",
   "orchestrator-wasm": "orchestrator",
   runtime: "arora-web",
 };

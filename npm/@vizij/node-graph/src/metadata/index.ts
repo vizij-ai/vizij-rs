@@ -1,5 +1,5 @@
 /**
- * Baked node-registry lookup helpers for `@vizij/node-graph-wasm`.
+ * Baked node-registry lookup helpers for `@vizij/node-graph`.
  *
  * These helpers wrap the generated registry payload so tooling can inspect node metadata
  * without calling into wasm at runtime.

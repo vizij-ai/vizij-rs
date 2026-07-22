@@ -8,7 +8,7 @@ import { spawn } from "node:child_process";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const repoRoot = resolve(__dirname, "..");
-const packageRoot = resolve(repoRoot, "npm", "@vizij", "node-graph-wasm");
+const packageRoot = resolve(repoRoot, "npm", "@vizij", "node-graph");
 const metadataSourceDir = join(packageRoot, "src", "metadata");
 const metadataDistDir = join(packageRoot, "dist", "src", "metadata");
 const metadataSourceJsonPath = join(metadataSourceDir, "registry.json");

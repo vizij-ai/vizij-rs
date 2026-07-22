@@ -1,5 +1,5 @@
 /**
- * Stable ESM entrypoint for `@vizij/node-graph-wasm`.
+ * Stable ESM entrypoint for `@vizij/node-graph`.
  *
  * The wrapper handles wasm initialization, ABI checks, graph normalization, staged inputs,
  * delta-friendly evaluation helpers, and access to the baked node registry metadata.
@@ -102,7 +102,7 @@ async function importWasmModule(): Promise<unknown> {
     wasmModulePromise = importStaticWasmModule().catch((err) => {
       if (typeof console !== "undefined" && typeof console.warn === "function") {
         console.warn(
-          "@vizij/node-graph-wasm: static wasm import failed, falling back to runtime URL import.",
+          "@vizij/node-graph: static wasm import failed, falling back to runtime URL import.",
           err
         );
       }
@@ -162,7 +162,7 @@ export type InitInput = LoaderInitInput;
  */
 export function abi_version(): number {
   if (!bindingCache.current) {
-    throw new Error("Call init() from @vizij/node-graph-wasm before reading abi_version().");
+    throw new Error("Call init() from @vizij/node-graph before reading abi_version().");
   }
   return Number(bindingCache.current.abi_version());
 }
@@ -191,7 +191,7 @@ export function init(input?: InitInput): Promise<void> {
 function ensureInited(): void {
   if (!_initPromise) {
     throw new Error(
-      "Call init() from @vizij/node-graph-wasm before creating Graph instances."
+      "Call init() from @vizij/node-graph before creating Graph instances."
     );
   }
   if (!bindingCache.current) {

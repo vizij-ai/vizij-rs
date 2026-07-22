@@ -38,7 +38,7 @@ NPM_PACKAGES=(
   value-json
   wasm-loader
   animation
-  node-graph-wasm
+  node-graph
   orchestrator-wasm
 )
 

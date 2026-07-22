@@ -1,5 +1,5 @@
 /**
- * Embedded node-graph fixture helpers for `@vizij/node-graph-wasm`.
+ * Embedded node-graph fixture helpers for `@vizij/node-graph`.
  *
  * These helpers read the generated bundle baked into the package so tests and demos can load
  * shared graph specs without reaching back into the workspace fixture files.

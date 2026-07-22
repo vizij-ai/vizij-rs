@@ -63,7 +63,7 @@ const npmSections = [
     title: "WASM Wrappers",
     items: [
       ["@vizij/animation", "npm/modules/animation_src.html"],
-      ["@vizij/node-graph-wasm", "npm/modules/node-graph-wasm_src.html"],
+      ["@vizij/node-graph", "npm/modules/node-graph_src.html"],
       ["@vizij/orchestrator-wasm", "npm/modules/orchestrator-wasm_src.html"]
     ]
   },

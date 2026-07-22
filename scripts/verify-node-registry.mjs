@@ -9,9 +9,9 @@ const __dirname = dirname(__filename);
 const repoRoot = resolve(__dirname, "..");
 
 const TRACKED_FILES = [
-  "npm/@vizij/node-graph-wasm/src/metadata/registry.json",
-  "npm/@vizij/node-graph-wasm/src/metadata/registry.ts",
-  "npm/@vizij/node-graph-wasm/dist/src/metadata/registry.json",
+  "npm/@vizij/node-graph/src/metadata/registry.json",
+  "npm/@vizij/node-graph/src/metadata/registry.ts",
+  "npm/@vizij/node-graph/dist/src/metadata/registry.json",
 ];
 
 async function run(command, args, options = {}) {
