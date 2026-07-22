@@ -1,26 +1,26 @@
 /**
  * Stable ESM entrypoint for `@vizij/runtime`.
  *
- * Runs a Vizij runtime in the browser *as an Arora device*: the wasm module
+ * Runs a Vizij runtime in the browser on an Arora engine: the wasm module
  * (`crates/interop/vizij-arora-web`) assembles an `arora_web::BrowserRuntime`
  * over a Vizij blackboard store, rig HAL, and the caller's node graph as the
- * device's behavior. This wrapper loads the wasm once and exposes the device
+ * runtime's behavior. This wrapper loads the wasm once and exposes the runtime
  * with idiomatic JS types: values cross the boundary in the normalized
  * `ValueJSON` vocabulary shared with the other Vizij packages.
  *
  * Typical use:
  * ```ts
- * import { init, startDevice } from "@vizij/runtime";
+ * import { init, startRuntime } from "@vizij/runtime";
  *
  * await init();
- * const device = await startDevice(graphSpec);
- * device.run(); // the device paces itself from here on
+ * const runtime = await startRuntime(graphSpec);
+ * runtime.run(); // the runtime paces itself from here on
  * // each animation frame:
- * device.setValue("sensor/x", { f32: 0.75 });
- * const changes = device.drainChanges();
+ * runtime.setValue("sensor/x", { f32: 0.75 });
+ * const changes = runtime.drainChanges();
  * ```
  *
- * A host with its own clock skips `run()` and calls `device.step(dtMs)`
+ * A host with its own clock skips `run()` and calls `runtime.step(dtMs)`
  * per frame instead.
  */
 import { toValueJSON, type ValueJSON, type ValueInput } from "@vizij/value-json";
@@ -34,11 +34,11 @@ import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/brow
 export type GraphSpecInput = object | string;
 
 /**
- * An Arora wasm module to load into the device's engine: its header as JSON
+ * An Arora wasm module to load into the runtime's engine: its header as JSON
  * plus its `.wasm` executable bytes — e.g. what `@vizij/animation-module`'s
  * `loadAnimationModule()` returns.
  */
-export interface DeviceModule {
+export interface RuntimeModule {
   headerJson: string;
   wasmBytes: Uint8Array;
 }
@@ -49,10 +49,10 @@ export interface DeviceModule {
  * modules when omitted), and `args` as `{ id, value }` pairs in the Arora
  * `Value` vocabulary.
  */
-export type DeviceCall = object | string;
+export type RuntimeCall = object | string;
 
-/** What a device call resolves to: the returned Arora `Value`. */
-export interface DeviceCallResult {
+/** What a runtime call resolves to: the returned Arora `Value`. */
+export interface RuntimeCallResult {
   ret: unknown;
   mutated?: unknown[];
 }
@@ -75,7 +75,7 @@ interface WasmVizijArora {
 interface WasmBindings {
   default: (input?: unknown) => Promise<unknown>;
   VizijArora: {
-    start(graph_json?: string, modules?: DeviceModule[]): Promise<WasmVizijArora>;
+    start(graph_json?: string, modules?: RuntimeModule[]): Promise<WasmVizijArora>;
   };
 }
 
@@ -155,7 +155,7 @@ let _initPromise: Promise<void> | null = null;
 
 /**
  * Initialize the wasm module once. The returned promise is memoized; await it
- * during startup before calling `startDevice`.
+ * during startup before calling `startRuntime`.
  */
 export function init(input?: InitInput): Promise<void> {
   if (_initPromise) return _initPromise;
@@ -166,10 +166,10 @@ export function init(input?: InitInput): Promise<void> {
 }
 
 /**
- * The running Vizij-on-Arora device. All methods talk to the device's shared
- * store; the graph installed at `startDevice` reads and writes the same keys.
+ * The running Vizij runtime. All methods talk to the runtime's shared
+ * store; the graph installed at `startRuntime` reads and writes the same keys.
  */
-export class AroraDevice {
+export class Runtime {
   private inner: WasmVizijArora;
   private selfPaced = false;
 
@@ -178,9 +178,9 @@ export class AroraDevice {
   }
 
   /**
-   * Advance the device one tick. `dtMs` is the wall time since the previous
+   * Advance the runtime one tick. `dtMs` is the wall time since the previous
    * step in milliseconds (the difference of two `requestAnimationFrame`
-   * timestamps). Unavailable once `run()` has taken the device — it paces
+   * timestamps). Unavailable once `run()` has taken the runtime — it paces
    * itself from then on.
    */
   step(dtMs: number): void {
@@ -188,10 +188,10 @@ export class AroraDevice {
   }
 
   /**
-   * Hand the device to its own loop, for good: a self-paced run at
+   * Hand the runtime to its own loop, for good: a self-paced run at
    * `periodMs` (default: the runtime's ~100 Hz). While it runs, `step()` is
    * unavailable and the rest of this surface keeps working; it never touches
-   * the stepping device. A failing behavior tick does **not** end the loop —
+   * the stepping runtime. A failing behavior tick does **not** end the loop —
    * it stands as `behaviorError` until a tick recovers; the returned promise
    * rejects only if the runtime itself fails.
    */
@@ -200,7 +200,7 @@ export class AroraDevice {
     return this.inner.run(periodMs);
   }
 
-  /** Whether `run()` has taken the device (so `step()` is unavailable). */
+  /** Whether `run()` has taken the runtime (so `step()` is unavailable). */
   get running(): boolean {
     return this.selfPaced;
   }
@@ -208,7 +208,7 @@ export class AroraDevice {
   /**
    * The behavior's standing error — the message of its latest failed tick,
    * `undefined` while the behavior is healthy or none is installed. A
-   * failing tick does not stop the device or its `run()` loop; the reading
+   * failing tick does not stop the runtime or its `run()` loop; the reading
    * stays available throughout.
    */
   get behaviorError(): string | undefined {
@@ -220,29 +220,29 @@ export class AroraDevice {
    * reading: a message when a distinct failure appears, `undefined` when a
    * tick recovers. Sequential awaits share one cursor, so no change is
    * missed between them; one await may be pending at a time. Rejects when
-   * the device is gone.
+   * the runtime is gone.
    */
   behaviorErrorChanged(): Promise<string | undefined> {
     return this.inner.behaviorErrorChanged();
   }
 
   /**
-   * Call a loaded module's function through the device. The call is enqueued
-   * before this returns and dispatches inside the device's **next** step —
+   * Call a loaded module's function through the runtime. The call is enqueued
+   * before this returns and dispatches inside the runtime's **next** step —
    * the same phase a remote bridge command executes in — so the returned
    * promise resolves only after that step runs. Under `run()` just `await`
    * it; a direct driver calls `step` after issuing it.
    */
-  call(call: DeviceCall): Promise<DeviceCallResult> {
+  call(call: RuntimeCall): Promise<RuntimeCallResult> {
     const json = typeof call === "string" ? call : JSON.stringify(call);
-    return this.inner.call(json).then((result) => JSON.parse(result) as DeviceCallResult);
+    return this.inner.call(json).then((result) => JSON.parse(result) as RuntimeCallResult);
   }
 
   /**
-   * Replace the device's running graph **in place**: the spec reaches the
+   * Replace the runtime's running graph **in place**: the spec reaches the
    * interpreter as the engine's LOAD call, so the store, the loaded modules,
-   * and the device itself all survive the swap. Resolves once the new graph
-   * is installed; on a device not under `run()` a zero-dt step is taken so
+   * and the runtime itself all survive the swap. Resolves once the new graph
+   * is installed; on a runtime not under `run()` a zero-dt step is taken so
    * the swap lands without an external driver.
    */
   loadGraph(graph: GraphSpecInput): Promise<void> {
@@ -287,35 +287,35 @@ export class AroraDevice {
     return this.inner.drainChanges();
   }
 
-  /** Release the wasm-side device. The instance is unusable afterwards. */
+  /** Release the wasm-side runtime. The instance is unusable afterwards. */
   dispose(): void {
     this.inner.free();
   }
 }
 
 /**
- * Boot the device in the browser, with `graph` (a Vizij graph spec, in any
+ * Boot the runtime in the browser, with `graph` (a Vizij graph spec, in any
  * form the spec normalizer accepts) installed as its behavior. The graph's
  * `input` nodes' paths become the store keys it reads each tick. Omit `graph`
  * to get the built-in passthrough proof graph (`sensor/x` → `actuator/y`).
  *
- * `modules` optionally loads Arora wasm modules into the device's engine;
- * their functions are then reachable with `AroraDevice.call` and from the
+ * `modules` optionally loads Arora wasm modules into the runtime's engine;
+ * their functions are then reachable with `Runtime.call` and from the
  * graph's `ExternalFunction` nodes.
  *
  * Calls `init()` if it has not run yet.
  */
-export async function startDevice(
+export async function startRuntime(
   graph?: GraphSpecInput,
   input?: InitInput,
-  modules?: DeviceModule[],
-): Promise<AroraDevice> {
+  modules?: RuntimeModule[],
+): Promise<Runtime> {
   await init(input);
   const bindings = bindingCache.current!;
   const graphJson =
     graph === undefined ? undefined : typeof graph === "string" ? graph : JSON.stringify(graph);
   const inner = await bindings.VizijArora.start(graphJson, modules);
-  return new AroraDevice(inner);
+  return new Runtime(inner);
 }
 
 export { toValueJSON } from "@vizij/value-json";
