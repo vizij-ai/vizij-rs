@@ -3,7 +3,6 @@
   "entryPoints": [
     "npm/@vizij/animation-wasm/src/index.ts",
     "npm/@vizij/node-graph-wasm/src/index.ts",
-    "npm/@vizij/orchestrator-wasm/src/index.ts",
     "npm/@vizij/value-json/src/index.ts",
     "npm/@vizij/test-fixtures/src/index.ts",
     "npm/@vizij/wasm-loader/src/index.ts",

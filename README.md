@@ -43,8 +43,7 @@ vizij-rs/
 │  │  ├─ vizij-graph-wasm          # wasm-bindgen binding
 │  │  └─ vizij-graph-registry-export # Registry export utility used by npm tooling
 │  ├─ orchestrator/
-│  │  ├─ vizij-orchestrator-core   # Blackboard + pass scheduling runtime
-│  │  └─ vizij-orchestrator-wasm   # wasm-bindgen binding
+│  │  └─ vizij-orchestrator-core   # Blackboard + pass scheduling runtime (workspace-private)
 │  ├─ interop/                     # Adapters that run the Vizij stacks on Arora seams
 │  │  ├─ vizij-arora               # Vizij↔Arora Value interop (identity + Shape.meta sidecar)
 │  │  ├─ vizij-arora-store         # Vizij Blackboard exposed as an Arora DataStore
@@ -58,7 +57,6 @@ vizij-rs/
 │  ├─ @vizij/animation-module      # vizij-animation-core built as an Arora wasm module (assets)
 │  ├─ @vizij/animation-wasm        # Stable ESM wrapper around `vizij-animation-wasm`
 │  ├─ @vizij/node-graph-wasm       # Wrapper around `vizij-graph-wasm`
-│  ├─ @vizij/orchestrator-wasm     # Wrapper around `vizij-orchestrator-wasm`
 │  ├─ @vizij/runtime               # Browser Vizij runtime as an Arora device (wasm bindings)
 │  ├─ @vizij/test-fixtures         # Browser bundle of shared JSON fixtures
 │  ├─ @vizij/value-json            # Shared JSON coercion helpers
@@ -77,7 +75,7 @@ The major runtime crates and npm packages include dedicated READMEs with domain-
 | -------------- | ------------------------ | -------------------------- | ---------------------------- |
 | Animation      | `vizij-animation-core`   | `vizij-animation-wasm`     | `@vizij/animation-wasm`      |
 | Node graph     | `vizij-graph-core`       | `vizij-graph-wasm`         | `@vizij/node-graph-wasm`     |
-| Orchestrator   | `vizij-orchestrator-core`| `vizij-orchestrator-wasm`  | `@vizij/orchestrator-wasm`   |
+| Orchestrator   | `vizij-orchestrator-core`| —                          | —                            |
 | Test fixtures  | `vizij-test-fixtures`    | —                          | `@vizij/test-fixtures`       |
 
 Shared API crates (`vizij-api-core`, `vizij-api-wasm`) provide the Value/Shape/TypedPath contract that keeps the stacks interoperable.
@@ -182,7 +180,7 @@ pnpm run watch:wasm:orchestrator
 These scripts rebuild the WASM artefacts whenever source files change. For short-lived experiments you can still publish a global link via the `link:wasm:*` scripts, but the recommended flow is:
 
 1. Build the desired stack(s) here (`pnpm run build:wasm:graph` etc.).
-2. In `vizij-web`, run `pnpm run wasm:link` (or `WASM_PKGS="node-graph-wasm orchestrator-wasm" pnpm run wasm:link`) to point the workspace at these builds.
+2. In `vizij-web`, run `pnpm run wasm:link` (or `WASM_PKGS="node-graph-wasm" pnpm run wasm:link`) to point the workspace at these builds.
 3. Use `pnpm run wasm:status` in `vizij-web` to confirm the resolution, and `pnpm run wasm:unlink` when you want to return to the published packages.
 
 This keeps the published versions as the default source of truth while still allowing synchronous iteration when necessary.
@@ -347,7 +345,6 @@ Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wa
 - [vizij-api-core/README](crates/api/vizij-api-core/README.md)
 - [vizij-test-fixtures/README](crates/test-fixtures/vizij-test-fixtures/README.md)
 - [@vizij/node-graph-wasm/README](npm/@vizij/node-graph-wasm/README.md)
-- [@vizij/orchestrator-wasm/README](npm/@vizij/orchestrator-wasm/README.md)
 - [@vizij/animation-wasm/README](npm/@vizij/animation-wasm/README.md)
 - [@vizij/value-json/README](npm/@vizij/value-json/README.md)
 - [@vizij/test-fixtures/README](npm/@vizij/test-fixtures/README.md)

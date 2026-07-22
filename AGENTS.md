@@ -32,7 +32,7 @@ file summarises, it does not replace, those sources.
 - **Node graph stack**: `vizij-graph-core`,
   `vizij-graph-wasm`, and npm `@vizij/node-graph-wasm`.
 - **Orchestrator stack**: `vizij-orchestrator-core` runtime coordinating
-  graphs/animations, `vizij-orchestrator-wasm`, and npm `@vizij/orchestrator-wasm`.
+  graphs/animations (a workspace-private crate consumed by the interop stack).
 - **Interop (Arora) stack**: `crates/interop/*` adapts the Vizij stacks onto
   Arora runtime seams — `vizij-arora` (Value interop), `vizij-arora-store`,
   `vizij-arora-hal`, `vizij-arora-behavior`, `vizij-arora-web` (npm
@@ -64,10 +64,8 @@ file summarises, it does not replace, those sources.
 |------|---------|
 | Build animation WASM pkg | `pnpm run build:wasm:animation` |
 | Build node-graph WASM pkg | `pnpm run build:wasm:graph` |
-| Build orchestrator WASM pkg | `pnpm run build:wasm:orchestrator` |
 | Watch animation WASM | `pnpm run watch:wasm:animation` *(needs `cargo-watch`)* |
 | Watch node-graph WASM | `pnpm run watch:wasm:graph` *(needs `cargo-watch`)* |
-| Watch orchestrator WASM | `pnpm run watch:wasm:orchestrator` *(needs `cargo-watch`)* |
 
 Install the watcher dependency once with `cargo install cargo-watch`.
 

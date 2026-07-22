@@ -3032,24 +3032,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vizij-orchestrator-wasm"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "console_error_panic_hook",
- "js-sys",
- "serde",
- "serde-wasm-bindgen",
- "serde_json",
- "vizij-animation-core",
- "vizij-api-core",
- "vizij-graph-core",
- "vizij-orchestrator-core",
- "wasm-bindgen",
- "wasm-bindgen-test",
-]
-
-[[package]]
 name = "vizij-test-fixtures"
 version = "0.0.0"
 dependencies = [

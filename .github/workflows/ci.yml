@@ -56,8 +56,6 @@ jobs:
         run: node scripts/build-animation-wasm.mjs
       - name: Build Graph WASM into npm wrapper pkg/
         run: node scripts/build-graph-wasm.mjs
-      - name: Build Orchestrator WASM into npm wrapper pkg/
-        run: node scripts/build-orchestrator-wasm.mjs
       - name: Build Arora-web WASM into npm wrapper pkg/
         run: node scripts/build-arora-web-wasm.mjs
       - name: Install pnpm
@@ -76,14 +74,12 @@ jobs:
         run: |
           pnpm --filter @vizij/animation-wasm run build
           pnpm --filter @vizij/node-graph-wasm run build
-          pnpm --filter @vizij/orchestrator-wasm run build
           pnpm --filter @vizij/animation-module run build
           pnpm --filter @vizij/runtime run build
       - name: Run wrapper tests
         run: |
           pnpm --filter @vizij/animation-wasm run test
           pnpm --filter @vizij/node-graph-wasm run test
-          pnpm --filter @vizij/orchestrator-wasm run test
           pnpm --filter @vizij/animation-module run test
           pnpm --filter @vizij/runtime run test
 
@@ -115,7 +111,6 @@ jobs:
         run: |
           pnpm --filter @vizij/animation-wasm run build
           pnpm --filter @vizij/node-graph-wasm run build
-          pnpm --filter @vizij/orchestrator-wasm run build
       - name: Run perf smoke (signatures + order-of-magnitude)
         run: pnpm run perf:smoke
 

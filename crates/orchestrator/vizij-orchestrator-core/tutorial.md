@@ -268,8 +268,7 @@ fn graph_pipeline_outputs_expected_value() {
 ## 11. Next Steps
 
 1. Browse `examples/` for more scenarios (`graph_only.rs`, `two_pass.rs`, etc.).
-2. Link with the wasm package (`@vizij/orchestrator-wasm`) to share graph specs across JS tooling.
-3. Add continuous testing (`cargo test -p vizij-orchestrator-core`, `cargo clippy`, `cargo fmt`) to
+2. Add continuous testing (`cargo test -p vizij-orchestrator-core`, `cargo clippy`, `cargo fmt`) to
    your project to catch regressions.
 
 With these pieces, you can orchestrate rich multi-controller workflows confidently. Happy building! 🚀
