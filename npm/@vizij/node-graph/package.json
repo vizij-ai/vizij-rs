@@ -1,6 +1,6 @@
 {
   "name": "@vizij/node-graph",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "WASM bindings for Vizij node-graph core.",
   "license": "MIT",
   "repository": {
