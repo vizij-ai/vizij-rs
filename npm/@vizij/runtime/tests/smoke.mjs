@@ -59,7 +59,34 @@ assert.deepEqual(
   { "actuator/b": { f32: 0.5 } },
   "the self-paced loop ticked the graph",
 );
-void rejected; // only ever rejects — when stepping fails, which this test never triggers
+void rejected; // rejects only if the runtime itself fails, which this test never triggers
+
+// Behavior errors stand, they don't stop the loop (arora 9.1): swap in a
+// graph whose input has no default and no staged value — ticks fail, the
+// error is observable, and the device keeps running.
+assert.equal(device.behaviorError, undefined, "healthy behavior reads undefined");
+const failed = device.behaviorErrorChanged();
+await device.loadGraph({
+  nodes: [
+    { id: "in", type: "input", params: { path: "sensor/missing" } },
+    { id: "out", type: "output", params: { path: "actuator/c" } },
+  ],
+  edges: [{ from: { node_id: "in" }, to: { node_id: "out", input: "in" } }],
+});
+assert.match(
+  String(await failed),
+  /missing staged value/,
+  "the failing tick's message stands as the behavior error",
+);
+const recovered = device.behaviorErrorChanged();
+device.setValue("sensor/missing", { f32: 0.125 });
+assert.equal(await recovered, undefined, "a recovering tick clears the error");
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.deepEqual(
+  device.readValues(["actuator/c"]),
+  { "actuator/c": { f32: 0.125 } },
+  "the run loop kept ticking through the failure",
+);
 
 device.dispose();
 console.log("@vizij/runtime smoke: ok");

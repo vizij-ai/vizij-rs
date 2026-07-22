@@ -60,6 +60,8 @@ export interface DeviceCallResult {
 interface WasmVizijArora {
   step(dt_ms: number): void;
   run(period_ms?: number): Promise<never>;
+  readonly behaviorError: string | undefined;
+  behaviorErrorChanged(): Promise<string | undefined>;
   call(call_json: string): Promise<string>;
   loadGraph(graph_json: string): Promise<string>;
   setValue(path: string, value_json: string): void;
@@ -187,10 +189,11 @@ export class AroraDevice {
 
   /**
    * Hand the device to its own loop, for good: a self-paced run at
-   * `periodMs` (default: the runtime's ~100 Hz) that owns the device until
-   * stepping fails — the returned promise only ever rejects, and `step()`
-   * is unavailable from then on. The rest of this surface keeps working
-   * while the device runs; it never touches the stepping device.
+   * `periodMs` (default: the runtime's ~100 Hz). While it runs, `step()` is
+   * unavailable and the rest of this surface keeps working; it never touches
+   * the stepping device. A failing behavior tick does **not** end the loop —
+   * it stands as `behaviorError` until a tick recovers; the returned promise
+   * rejects only if the runtime itself fails.
    */
   run(periodMs?: number): Promise<never> {
     this.selfPaced = true;
@@ -200,6 +203,27 @@ export class AroraDevice {
   /** Whether `run()` has taken the device (so `step()` is unavailable). */
   get running(): boolean {
     return this.selfPaced;
+  }
+
+  /**
+   * The behavior's standing error — the message of its latest failed tick,
+   * `undefined` while the behavior is healthy or none is installed. A
+   * failing tick does not stop the device or its `run()` loop; the reading
+   * stays available throughout.
+   */
+  get behaviorError(): string | undefined {
+    return this.inner.behaviorError;
+  }
+
+  /**
+   * Resolves on the next change of the standing behavior error, with the new
+   * reading: a message when a distinct failure appears, `undefined` when a
+   * tick recovers. Sequential awaits share one cursor, so no change is
+   * missed between them; one await may be pending at a time. Rejects when
+   * the device is gone.
+   */
+  behaviorErrorChanged(): Promise<string | undefined> {
+    return this.inner.behaviorErrorChanged();
   }
 
   /**
