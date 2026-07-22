@@ -11,7 +11,11 @@ This document covers all changes required across three layers:
 
 ## Why `Value::Record` and not `arora_schema::KeyValue`
 
-`arora_schema::KeyValue` is a type from a completely separate crate (`arora-schema`) that the vizij-rs node-graph stack has **zero dependency on** — `vizij-graph-core`, where the URDF IK nodes live, does not reference `arora` at all. (The `crates/interop/*` family does depend on Arora's runtime crates, but never on `arora-schema`, and the graph nodes stay independent of both.)
+> Historical note: `arora-schema` has since been retired from the Arora
+> workspace, so this is no longer a live alternative — the reasoning below is
+> kept for the record. The decision to use `Value::Record` stands.
+
+`arora_schema::KeyValue` was a type from a separate crate (`arora-schema`) that the vizij-rs node-graph stack had **zero dependency on** — `vizij-graph-core`, where the URDF IK nodes live, does not reference `arora-schema` at all. (The `crates/interop/*` family depends on Arora's runtime crates, but never on `arora-schema`, and the graph nodes stay independent of both.)
 
 Beyond the dependency issue, `arora_schema::KeyValue` is a heavier, schema-metadata type — every container and every field carries a `Uuid` for traceability, and its values are typed by arora's own `Value` enum (covering Rust primitives, structures, enumerations, etc.), not by vizij's animation-centric `vizij_api_core::Value`.
 
