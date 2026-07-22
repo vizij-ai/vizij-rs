@@ -1,5 +1,14 @@
 # @vizij/node-graph
 
+## 0.7.1
+
+### Patch Changes
+
+- Renamed to `@vizij/node-graph` from `@vizij/node-graph-wasm`: a bare-domain
+  npm name — the `-wasm` suffix described the Rust crate, not the npm package.
+  Same package and API; update your dependency. The old name is deprecated and
+  points here.
+
 ## 0.7.0
 
 ### Minor Changes

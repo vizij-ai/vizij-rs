@@ -1,5 +1,14 @@
 # @vizij/animation
 
+## 0.4.1
+
+### Patch Changes
+
+- Renamed to `@vizij/animation` from `@vizij/animation-wasm`: a bare-domain npm
+  name — the `-wasm` suffix described the Rust crate, not the npm package. Same
+  package and API; update your dependency. The old name is deprecated and points
+  here.
+
 ## 0.4.0
 
 ### Minor Changes
