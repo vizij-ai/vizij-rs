@@ -4,6 +4,17 @@ All notable changes to `@vizij/animation-module`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-07-22
+
+### Added
+
+- Baking on the module surface: `bake(anim, frame_rate?, start_time?, end_time?)`
+  and `bake_with_derivatives(...)`, returning the sampled result as a JSON string
+  (`vizij-animation-core`'s `export_baked_json` / `export_baked_with_derivatives_json`
+  shape). `frame_rate` defaults to 60 Hz, `start_time` to 0 s, and `end_time` to
+  the clip duration; an unloaded `anim` returns an empty string. Brings the
+  module to feature parity with the direct library for baking.
+
 ## [0.2.0] - 2026-07-22
 
 ### Added

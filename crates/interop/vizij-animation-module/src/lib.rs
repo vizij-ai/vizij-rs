@@ -41,9 +41,9 @@ use arora_generated::vizij::{
 };
 
 use vizij_animation_core::{
-    AnimId, AnimationData, Config, Engine, Inputs, InstId, InstanceCfg, InstanceUpdate,
-    Keypoint as CoreKeypoint, LoopMode, PlayerCommand, PlayerId, Track as CoreTrack, Transitions,
-    Vec2,
+    export_baked_json, export_baked_with_derivatives_json, AnimId, AnimationData, BakingConfig,
+    Config, Engine, Inputs, InstId, InstanceCfg, InstanceUpdate, Keypoint as CoreKeypoint,
+    LoopMode, PlayerCommand, PlayerId, Track as CoreTrack, Transitions, Vec2,
 };
 
 lazy_static::lazy_static! {
@@ -267,6 +267,75 @@ fn player_states() -> Vec<PlayerState> {
             speed: info.speed,
         })
         .collect()
+}
+
+// baking ---------------------------------------------------------------------
+
+/// Build a [`BakingConfig`] from the module's optional scalar arguments,
+/// falling back to the core defaults (frame rate 60 Hz, start 0 s, end = clip
+/// duration) for any argument left unset.
+fn baking_config(
+    frame_rate: Option<f32>,
+    start_time: Option<f32>,
+    end_time: Option<f32>,
+) -> BakingConfig {
+    let defaults = BakingConfig::default();
+    BakingConfig {
+        frame_rate: frame_rate.unwrap_or(defaults.frame_rate),
+        start_time: start_time.unwrap_or(defaults.start_time),
+        end_time: end_time.or(defaults.end_time),
+        derivative_epsilon: defaults.derivative_epsilon,
+    }
+}
+
+/// Bake animation `anim` to sampled per-track values over a fixed window and
+/// return the result as a JSON string (`vizij-animation-core`'s
+/// `export_baked_json` shape). `frame_rate` (Hz) defaults to 60, `start_time`
+/// (seconds) to 0, and `end_time` (seconds) to the clip duration. Returns an
+/// empty string if `anim` is not loaded.
+fn bake(
+    anim: Option<u32>,
+    frame_rate: Option<f32>,
+    start_time: Option<f32>,
+    end_time: Option<f32>,
+) -> String {
+    let Some(anim) = anim else {
+        return String::new();
+    };
+    let cfg = baking_config(frame_rate, start_time, end_time);
+    match ENGINE
+        .lock()
+        .expect("engine")
+        .bake_animation(AnimId(anim), &cfg)
+    {
+        Some(baked) => export_baked_json(&baked).to_string(),
+        None => String::new(),
+    }
+}
+
+/// Like [`bake`], but also samples per-frame derivatives; returns the combined
+/// values-and-derivatives JSON (`export_baked_with_derivatives_json` shape).
+/// Returns an empty string if `anim` is not loaded.
+fn bake_with_derivatives(
+    anim: Option<u32>,
+    frame_rate: Option<f32>,
+    start_time: Option<f32>,
+    end_time: Option<f32>,
+) -> String {
+    let Some(anim) = anim else {
+        return String::new();
+    };
+    let cfg = baking_config(frame_rate, start_time, end_time);
+    match ENGINE
+        .lock()
+        .expect("engine")
+        .bake_animation_with_derivatives(AnimId(anim), &cfg)
+    {
+        Some((baked, derivatives)) => {
+            export_baked_with_derivatives_json(&baked, &derivatives).to_string()
+        }
+        None => String::new(),
+    }
 }
 
 /// Advance the engine by `dt_ns` nanoseconds and return per-track outputs.
@@ -591,5 +660,38 @@ mod tests {
             value_of(&outputs, "mix/x").is_none(),
             "no instances, no output for the key"
         );
+    }
+
+    #[test]
+    fn bake_exports_sampled_tracks_as_json() {
+        let _serial = serial();
+        let anim = load_animation(Some(constant_clip("bake-me", "joint/x", 0.5)));
+
+        // A loaded clip bakes to a JSON object echoing the requested frame rate
+        // and carrying at least one track of sampled values.
+        let json = bake(Some(anim), Some(30.0), None, None);
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("baked JSON parses");
+        assert_eq!(parsed["frame_rate"].as_f64(), Some(30.0));
+        let tracks = parsed["tracks"].as_array().expect("tracks array");
+        assert!(!tracks.is_empty(), "at least one baked track");
+        assert!(
+            tracks[0].get("target_path").is_some(),
+            "track carries a path"
+        );
+        assert!(
+            tracks[0]["values"]
+                .as_array()
+                .is_some_and(|v| !v.is_empty()),
+            "track has sampled values"
+        );
+
+        // The derivatives variant wraps values + derivatives.
+        let deriv = bake_with_derivatives(Some(anim), Some(30.0), None, None);
+        let dparsed: serde_json::Value =
+            serde_json::from_str(&deriv).expect("derivative JSON parses");
+        assert!(dparsed.get("values").is_some() && dparsed.get("derivatives").is_some());
+
+        // An unloaded animation bakes to an empty string.
+        assert!(bake(Some(u32::MAX), None, None, None).is_empty());
     }
 }
