@@ -36,6 +36,10 @@ const KP_TYPE = "76697a69-6a00-0000-0000-000000000102";
 const KP_ID = "76697a69-6a00-0000-0102-000000000001";
 const KP_STAMP = "76697a69-6a00-0000-0102-000000000002";
 const KP_VALUE = "76697a69-6a00-0000-0102-000000000003";
+const KP_TRANSITIONS_IN = "76697a69-6a00-0000-0102-000000000004";
+const KP_TRANSITIONS_OUT = "76697a69-6a00-0000-0102-000000000005";
+
+const TRANSITION_HANDLE_TYPE = "76697a69-6a00-0000-0000-000000000103";
 
 const TO_TRACK_ID = "76697a69-6a00-0000-0110-000000000001";
 const TO_DEFAULT_KEY = "76697a69-6a00-0000-0110-000000000002";
@@ -43,11 +47,15 @@ const TO_VALUE = "76697a69-6a00-0000-0110-000000000003";
 
 // --- the ramp clip, in the Arora Value JSON vocabulary -----------------------
 const field = (id, value) => ({ id, value });
+// Empty timing-handle arrays select the engine's default ease.
+const noHandles = () => ({ structs: { id: TRANSITION_HANDLE_TYPE, elements: [] } });
 const keypoint = (id, stamp, v) => ({
   fields: [
     field(KP_ID, { str: id }),
     field(KP_STAMP, { f32: stamp }),
     field(KP_VALUE, { f32: v }),
+    field(KP_TRANSITIONS_IN, noHandles()),
+    field(KP_TRANSITIONS_OUT, noHandles()),
   ],
 });
 const clip = {

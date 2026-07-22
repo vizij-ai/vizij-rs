@@ -56,6 +56,10 @@ const KP_TYPE: &str = "76697a69-6a00-0000-0000-000000000102";
 const KP_ID: &str = "76697a69-6a00-0000-0102-000000000001";
 const KP_STAMP: &str = "76697a69-6a00-0000-0102-000000000002";
 const KP_VALUE: &str = "76697a69-6a00-0000-0102-000000000003";
+const KP_TRANSITIONS_IN: &str = "76697a69-6a00-0000-0102-000000000004";
+const KP_TRANSITIONS_OUT: &str = "76697a69-6a00-0000-0102-000000000005";
+
+const TRANSITION_HANDLE_TYPE: &str = "76697a69-6a00-0000-0000-000000000103";
 
 const TO_TRACK_ID: &str = "76697a69-6a00-0000-0110-000000000001";
 const TO_DEFAULT_KEY: &str = "76697a69-6a00-0000-0110-000000000002";
@@ -87,6 +91,21 @@ fn ramp_clip() -> Value {
             field(KP_ID, Value::String(id.into())),
             field(KP_STAMP, Value::F32(stamp)),
             field(KP_VALUE, Value::F32(v)),
+            // No authored timing handles: empty arrays select the default ease.
+            field(
+                KP_TRANSITIONS_IN,
+                Value::ArrayStructure {
+                    id: u(TRANSITION_HANDLE_TYPE),
+                    elements: vec![],
+                },
+            ),
+            field(
+                KP_TRANSITIONS_OUT,
+                Value::ArrayStructure {
+                    id: u(TRANSITION_HANDLE_TYPE),
+                    elements: vec![],
+                },
+            ),
         ],
     };
     let track = StructureWithoutId {

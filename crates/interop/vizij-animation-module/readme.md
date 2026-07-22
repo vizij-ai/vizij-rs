@@ -22,8 +22,10 @@ records under [`types/`](types), and the arora-module-authoring `rust` generator
 | --- | --- |
 | `AnimationClip` | `{ name: str, duration: u32, tracks: [AnimTrack] }` |
 | `AnimTrack` | `{ id: str, name: str, animatable_id: str, points: [Keypoint] }` |
-| `Keypoint` | `{ id: str, stamp: f32, value: <dynamic Value> }` |
+| `Keypoint` | `{ id: str, stamp: f32, value: <dynamic Value>, transitions_in: [TransitionHandle], transitions_out: [TransitionHandle] }` |
+| `TransitionHandle` | `{ x: f32, y: f32 }` — a cubic-bezier timing handle in normalized segment space; a keypoint carries zero or one per side (empty = the engine's default ease) |
 | `TrackOutput` | `{ track_id: str, default_key: str, value: <dynamic Value> }` |
+| `PlayerState` | `{ player: u32, state: str, time_ns: u64, duration_ns: u64, speed: f32 }` — `state` is `"playing" \| "paused" \| "stopped"` |
 
 A keyframe/output `value` is a **dynamic `Value`** (the `KEY_VALUE_ID` escape
 hatch), so Vizij composites (`Vec3`/`Quat`/`Transform`/`ColorRgba`) ride through
@@ -40,10 +42,16 @@ per-composite type is declared here; the runtime `Value` carries the identity.
   carrying the track's **default authored key** (`animatable_id`) plus its
   sampled value. The consumer decides the final store key: default = the
   authored key, overridable.
-
-  Player-command inputs (`Inputs`) are a future extension: a dynamic `Value`
-  cannot be a function parameter directly (only a struct field), so they would
-  arrive as a declared `AnimInputs` struct. Today the player plays by default.
+- Transport — `play(player)`, `pause(player)`, `stop(player)`,
+  `seek(player, time_ns)`, `set_speed(player, speed)`,
+  `set_loop(player, mode)` (`"once" | "loop" | "ping_pong"`), and
+  `set_weight(player, instance, weight)` buffer into the engine's **next**
+  `step`, in issue order — the same phase a device applies external calls in.
+  `remove_instance(player, instance)` is a structural edit, applied
+  immediately like `add_instance`.
+- `player_states() -> [PlayerState]` — playback feedback, one entry per
+  player. A **patch**: the vision is state changes as first-class,
+  combinable values the behavior conveys, not a second feedback channel.
 
 ## Building & testing
 
@@ -56,8 +64,7 @@ cargo build -p vizij-animation-module --target wasm32-wasip1
 ```
 
 The host-side end-to-end test (`tests/host_ramp.rs`) loads the built `.wasm`
-into a real Arora engine. It is currently a **repro** for an arora-buffers 0.2.0
-wire-format discrepancy for arrays of structures across the `arora_call`
-boundary (guest codegen writes full self-describing elements; the engine's
-generic `serde_uuid` codec writes raw elements). Reconciling the two is a buffer
-wire-format change and is gated on a design discussion.
+into a real Arora engine and proves the `arora_call` boundary. It is
+`#[ignore]`d because building the artifact from inside the test deadlocks the
+cargo build lock; pre-build it (the wasm command above), then run with
+`cargo test -p vizij-animation-module --test host_ramp -- --ignored`.
