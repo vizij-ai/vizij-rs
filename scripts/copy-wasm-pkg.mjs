@@ -17,7 +17,7 @@ if (packages.length === 0) {
 }
 
 const bootstrapScripts = {
-  "animation-wasm": "build:wasm:animation",
+  animation: "build:wasm:animation",
   "node-graph-wasm": "build:wasm:graph",
   "orchestrator-wasm": "build:wasm:orchestrator",
   runtime: "build:wasm:arora-web",

@@ -82,10 +82,10 @@ run_wasm_checks() {
   run_cmd "node scripts/build-orchestrator-wasm.mjs" node scripts/build-orchestrator-wasm.mjs
 
   (
-    cd npm/@vizij/animation-wasm
-    run_cmd "npm/@vizij/animation-wasm: npm ci" npm ci
-    run_cmd "npm/@vizij/animation-wasm: npm run build" npm run build
-    run_cmd "npm/@vizij/animation-wasm: npm pack --dry-run" npm pack --dry-run
+    cd npm/@vizij/animation
+    run_cmd "npm/@vizij/animation: npm ci" npm ci
+    run_cmd "npm/@vizij/animation: npm run build" npm run build
+    run_cmd "npm/@vizij/animation: npm pack --dry-run" npm pack --dry-run
   )
 
   (

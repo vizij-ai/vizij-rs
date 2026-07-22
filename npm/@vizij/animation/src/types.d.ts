@@ -1,7 +1,7 @@
 import type { NormalizedValue, ValueJSON as SharedValueJSON } from "@vizij/value-json";
 
 /**
- * Public TypeScript types for @vizij/animation-wasm
+ * Public TypeScript types for @vizij/animation
  * Mirrors vizij-animation-core JSON contracts exposed via wasm-bindgen.
  */
 

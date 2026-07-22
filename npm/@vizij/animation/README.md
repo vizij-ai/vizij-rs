@@ -1,4 +1,4 @@
-# @vizij/animation-wasm
+# @vizij/animation
 
 > **Vizij’s real-time animation engine for JavaScript and TypeScript.**
 
@@ -42,15 +42,15 @@ This package ships the official WebAssembly build of `vizij-animation-core` toge
 ## Installation
 
 ```bash
-npm install @vizij/animation-wasm
-# or pnpm add @vizij/animation-wasm
+npm install @vizij/animation
+# or pnpm add @vizij/animation
 ```
 
 For local development inside the Vizij workspace:
 
 ```bash
 pnpm run build:wasm:animation      # regenerate pkg/
-cd npm/@vizij/animation-wasm
+cd npm/@vizij/animation
 pnpm install
 pnpm run build
 ```
@@ -58,15 +58,15 @@ pnpm run build
 Link into `vizij-web` while iterating:
 
 ```bash
-(cd npm/@vizij/animation-wasm && pnpm link --global)
-(cd ../vizij-web && pnpm link @vizij/animation-wasm)
+(cd npm/@vizij/animation && pnpm link --global)
+(cd ../vizij-web && pnpm link @vizij/animation)
 ```
 
 ---
 
 ## Bundler Configuration
 
-`@vizij/animation-wasm` now mirrors the import strategy used by the orchestrator and node-graph packages: it tries a static ESM import first, then falls back to a runtime URL when necessary. Ensure your bundler is configured to emit the `.wasm` file. For Webpack/Next.js:
+`@vizij/animation` now mirrors the import strategy used by the orchestrator and node-graph packages: it tries a static ESM import first, then falls back to a runtime URL when necessary. Ensure your bundler is configured to emit the `.wasm` file. For Webpack/Next.js:
 
 ```js
 // next.config.js
@@ -125,7 +125,7 @@ All types (`StoredAnimation`, `Inputs`, `Outputs`, etc.) are exported from `src/
 ## Usage
 
 ```ts
-import { init, Engine } from "@vizij/animation-wasm";
+import { init, Engine } from "@vizij/animation";
 
 await init();
 
@@ -149,7 +149,7 @@ console.log(baked.values.tracks.length, baked.derivatives.tracks.length);
 Low-level binding usage (when you want direct access to the wasm-bindgen class without the `Engine` wrapper):
 
 ```ts
-import { init, VizijAnimation } from "@vizij/animation-wasm";
+import { init, VizijAnimation } from "@vizij/animation";
 
 await init();
 const raw = new VizijAnimation();
@@ -164,7 +164,7 @@ const outputs = raw.update_values(0.016, undefined);
 `init(input?: InitInput)` accepts anything understood by `@vizij/wasm-loader`: `URL`, `Response`, `ArrayBuffer`, `Uint8Array`, or a precompiled `WebAssembly.Module`.
 
 ```ts
-import { init } from "@vizij/animation-wasm";
+import { init } from "@vizij/animation";
 
 await init("https://cdn.example.com/vizij/vizij_animation_wasm_bg.wasm");
 ```
@@ -178,7 +178,7 @@ You can also pass a `URL`, `Response`, `ArrayBuffer`, `Uint8Array`, or `WebAssem
 The package re-exports helpers from `@vizij/test-fixtures`:
 
 ```ts
-import { loadAnimationFixture } from "@vizij/animation-wasm";
+import { loadAnimationFixture } from "@vizij/animation";
 
 const stored = await loadAnimationFixture("pose-quat-transform");
 engine.loadAnimation(stored, { format: "stored" });
@@ -200,8 +200,8 @@ Use `listAnimationFixtures()` to enumerate available fixtures at runtime.
 
 ## Bundler Notes
 
-- The package exposes an ESM entry (`dist/animation-wasm/src/index.js`) and loads the generated `pkg/` asset through `@vizij/wasm-loader`.
-- For Vite, add `optimizeDeps.exclude = ["@vizij/animation-wasm"]` to avoid pre-bundling the wasm artefact.
+- The package exposes an ESM entry (`dist/animation/src/index.js`) and loads the generated `pkg/` asset through `@vizij/wasm-loader`.
+- For Vite, add `optimizeDeps.exclude = ["@vizij/animation"]` to avoid pre-bundling the wasm artefact.
 - Webpack >=5 handles wasm automatically. Enable `experiments.asyncWebAssembly = true` if you are on an older configuration.
 - The package delegates loading to `@vizij/wasm-loader`, which memoises initialisation so multiple `init()` calls reuse the same module.
 
@@ -211,11 +211,11 @@ Use `listAnimationFixtures()` to enumerate available fixtures at runtime.
 
 ```bash
 pnpm run build:wasm:animation          # ensure pkg/ is fresh
-cd npm/@vizij/animation-wasm
+cd npm/@vizij/animation
 pnpm test
 ```
 
-The package test script runs the built Node test harness in `dist/animation-wasm/tests/all.test.js` after rebuilding the wrapper.
+The package test script runs the built Node test harness in `dist/animation/tests/all.test.js` after rebuilding the wrapper.
 
 ---
 

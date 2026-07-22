@@ -161,6 +161,6 @@ The package uses Node's built-in test runner (`node --test`) to cover coercion e
 ## Related Packages
 
 - [`vizij-api-core`](../../../crates/api/vizij-api-core/README.md) – Rust source of truth for Value/Shape types.
-- [`@vizij/node-graph-wasm`](../node-graph-wasm/README.md) • [`@vizij/orchestrator-wasm`](../orchestrator-wasm/README.md) • [`@vizij/animation-wasm`](../animation-wasm/README.md) – wrapper packages that rely on these helpers.
+- [`@vizij/node-graph-wasm`](../node-graph-wasm/README.md) • [`@vizij/orchestrator-wasm`](../orchestrator-wasm/README.md) • [`@vizij/animation`](../animation/README.md) – wrapper packages that rely on these helpers.
 
 Questions or improvements? Open an issue—aligned value handling keeps Vizij runtimes interoperable. 🔄

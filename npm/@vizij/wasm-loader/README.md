@@ -76,7 +76,7 @@ export async function init(input?: InitInput): Promise<void> {
 Consumers can override the init argument when hosting assets elsewhere:
 
 ```ts
-import { init } from "@vizij/animation-wasm";
+import { init } from "@vizij/animation";
 import { readFile } from "node:fs/promises";
 
 const bytes = await readFile("dist/animation_wasm_bg.wasm");
@@ -115,5 +115,5 @@ pnpm --filter @vizij/wasm-loader run build
 
 ## Related Packages
 
-- [`@vizij/animation-wasm`](../animation-wasm/README.md), [`@vizij/node-graph-wasm`](../node-graph-wasm/README.md), [`@vizij/orchestrator-wasm`](../orchestrator-wasm/README.md) – primary consumers of this loader.
+- [`@vizij/animation`](../animation/README.md), [`@vizij/node-graph-wasm`](../node-graph-wasm/README.md), [`@vizij/orchestrator-wasm`](../orchestrator-wasm/README.md) – primary consumers of this loader.
 - [`vizij-animation-wasm`](../../../crates/animation/vizij-animation-wasm/README.md) et al. – Rust crates that produce the wasm artefacts loaded through this helper.

@@ -149,10 +149,10 @@ async function loadGraphWasm() {
 
 async function loadAnimWasm() {
   try {
-    return await import("@vizij/animation-wasm");
+    return await import("@vizij/animation");
   } catch {
     const local = new URL(
-      "../npm/@vizij/animation-wasm/dist/animation-wasm/src/index.js",
+      "../npm/@vizij/animation/dist/animation/src/index.js",
       import.meta.url,
     );
     return await import(local);

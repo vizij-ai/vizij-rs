@@ -21,7 +21,7 @@ This workspace package mirrors the Rust crate `vizij-test-fixtures`, repackaging
 - Emits ESM (and d.ts) modules that expose fixture helpers per domain: `animations`, `nodeGraphs`, `orchestrations`.
 - Ships a copy of `fixtures/manifest.json` plus JSON payloads referenced by name.
 - Provides filesystem helpers (`fixturesRoot`, `resolveFixturePath`) for Node environments that need absolute paths (e.g., bundling, CLI tools).
-- Used heavily by the wasm npm packages (`@vizij/animation-wasm`, `@vizij/node-graph-wasm`, `@vizij/orchestrator-wasm`) to keep demos and tests deterministic.
+- Used heavily by the wasm npm packages (`@vizij/animation`, `@vizij/node-graph-wasm`, `@vizij/orchestrator-wasm`) to keep demos and tests deterministic.
 
 ---
 
@@ -105,4 +105,4 @@ This package does not currently define a standalone test script; coverage comes 
 ## Related Packages
 
 - [`vizij-test-fixtures`](../../../crates/test-fixtures/vizij-test-fixtures/README.md) – Rust crate exposing the same fixture catalogue.
-- [`@vizij/animation-wasm`](../animation-wasm/README.md) • [`@vizij/node-graph-wasm`](../node-graph-wasm/README.md) • [`@vizij/orchestrator-wasm`](../orchestrator-wasm/README.md) – wasm packages that re-export helpers from this bundle.
+- [`@vizij/animation`](../animation/README.md) • [`@vizij/node-graph-wasm`](../node-graph-wasm/README.md) • [`@vizij/orchestrator-wasm`](../orchestrator-wasm/README.md) – wasm packages that re-export helpers from this bundle.

@@ -1,5 +1,5 @@
 /**
- * Embedded animation fixture helpers for `@vizij/animation-wasm`.
+ * Embedded animation fixture helpers for `@vizij/animation`.
  *
  * The functions in this module read the generated fixture bundle shipped with the package so
  * browser and Node tests can load canonical animation payloads without reading the repo files.
