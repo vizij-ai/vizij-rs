@@ -2,7 +2,7 @@
 
 > **TypeScript definitions and helpers for Vizij’s Value/Shape ecosystem.**
 
-`@vizij/value-json` is the canonical TypeScript companion to `vizij-api-core`. It defines the accepted Vizij value union, offers coercion utilities, and keeps the animation, node graph, and orchestrator npm packages speaking the same JSON dialect. Install it whenever your tooling, UI, or Node service needs to produce or consume Vizij values.
+`@vizij/value-json` is the canonical TypeScript companion to `vizij-api-core`. It defines the accepted Vizij value union, offers coercion utilities, and keeps the animation and node graph npm packages speaking the same JSON dialect. Install it whenever your tooling, UI, or Node service needs to produce or consume Vizij values.
 
 ---
 
@@ -161,6 +161,6 @@ The package uses Node's built-in test runner (`node --test`) to cover coercion e
 ## Related Packages
 
 - [`vizij-api-core`](../../../crates/api/vizij-api-core/README.md) – Rust source of truth for Value/Shape types.
-- [`@vizij/node-graph-wasm`](../node-graph-wasm/README.md) • [`@vizij/orchestrator-wasm`](../orchestrator-wasm/README.md) • [`@vizij/animation-wasm`](../animation-wasm/README.md) – wrapper packages that rely on these helpers.
+- [`@vizij/node-graph-wasm`](../node-graph-wasm/README.md) • [`@vizij/animation-wasm`](../animation-wasm/README.md) – wrapper packages that rely on these helpers.
 
 Questions or improvements? Open an issue—aligned value handling keeps Vizij runtimes interoperable. 🔄

@@ -24,7 +24,6 @@ function run(command, args) {
 const WASM_TARGETS = {
   "animation-wasm": "animation",
   "node-graph-wasm": "graph",
-  "orchestrator-wasm": "orchestrator",
   runtime: "arora-web",
 };
 

@@ -2,7 +2,7 @@
 
 > Deterministic scheduling for Vizij graphs, animations, and shared blackboard state.
 
-`vizij-orchestrator-core` coordinates graph controllers and animation controllers against a shared blackboard. It stages inputs, runs configured passes, merges writes deterministically, and records conflicts for diagnostics. The crate is private to this workspace and is wrapped by `vizij-orchestrator-wasm`.
+`vizij-orchestrator-core` coordinates graph controllers and animation controllers against a shared blackboard. It stages inputs, runs configured passes, merges writes deterministically, and records conflicts for diagnostics. The crate is private to this workspace and is consumed by the interop stack (`vizij-arora-behavior`).
 
 ## Overview
 
@@ -82,4 +82,3 @@ cargo run -p vizij-orchestrator-core --example single_pass
 
 - [`vizij-graph-core`](../../node-graph/vizij-graph-core/README.md)
 - [`vizij-animation-core`](../../animation/vizij-animation-core/README.md)
-- [`vizij-orchestrator-wasm`](../vizij-orchestrator-wasm/README.md)
