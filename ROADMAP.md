@@ -21,16 +21,15 @@
 
 ### Animation Stack
 - Add native↔wasm parity tests to catch divergence before publishing.
-- Ship a minimal Bevy example app demonstrating animation playback.
 - Investigate profiling hooks (feature-flagged metrics) and faster watcher iterations.
 
 ### API Stack
 - Explore generating JSON/TypeScript schemas directly from `vizij-api-core`.
-- Provide derive macros or builders to reduce setter boilerplate in Bevy integrations.
+- Provide derive macros or builders to reduce setter boilerplate.
 - Investigate `no_std` support for constrained targets.
 
 ### Node Graph Stack
-- Add optional tracing/diagnostic events for Bevy consumers.
+- Add optional tracing/diagnostic events for downstream consumers.
 - Prototype incremental/streaming evaluation APIs in the wasm bridge.
 - Evaluate selector-heavy graphs and record benchmark results over time.
 

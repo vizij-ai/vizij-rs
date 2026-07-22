@@ -21,7 +21,7 @@
 
 ## Overview
 
-- Mirrors the canonical `{ type: "...", data: ... }` envelope emitted by Vizij engines and WASM runtimes.
+- Mirrors the canonical `{ type: "...", data: ... }` envelope and the Arora serde value forms emitted by current Vizij engines and WASM runtimes.
 - Accepts legacy `{ float: 1 }`, `{ vec3: [...] }` shapes for backwards compatibility while gently nudging you toward the normalised form.
 - Ships coercion helpers (`toValueJSON`, `valueAsNumber`, `valueAsTransform`, etc.) that front-ends and tooling can rely on.
 - Ensures discriminants stay lowercase so string comparisons remain consistent across ecosystems.
@@ -89,6 +89,8 @@ type ValueJSON = NormalizedValue | { float: number } | { vec3: [number, number, 
 - `ValueJSON` – accepts both normalized values and legacy aliases/primitives for input convenience.
 - `ValueInput` – alias for `ValueJSON | number[]`, used by staging helpers in other packages.
 - `NormalizedTransform` – `{ translation: [x,y,z], rotation: [x,y,z,w], scale: [x,y,z] }`.
+- `AroraValueJSON` – union describing Arora's serde value forms (the shape current Vizij runtimes emit); decode it with `fromAroraValueJSON`.
+- `VIZIJ_*_TYPE` – UUID type-id constants (`VIZIJ_VEC3_TYPE`, `VIZIJ_QUAT_TYPE`, `VIZIJ_TRANSFORM_TYPE`, …) that identify Vizij's Arora value types.
 
 ---
 
@@ -103,6 +105,7 @@ type ValueJSON = NormalizedValue | { float: number } | { vec3: [number, number, 
 | `valueAsVector(value)` | Returns a numeric array or `undefined` if coercion fails. |
 | `valueAsTransform(value)` | Returns a `[translation, rotation, scale]` tuple with defaults for missing components. |
 | `valueAsQuat`, `valueAsVec3`, `valueAsColorRgba`, `valueAsBool`, `valueAsText` | Convenience accessors for common types. |
+| `fromAroraValueJSON(value): NormalizedValue \| undefined` | Decodes an Arora serde value form (as emitted by current Vizij runtimes) into a canonical `NormalizedValue`. |
 
 All readers return `undefined` when coercion fails, letting callers handle optional values explicitly.
 

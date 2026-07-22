@@ -130,14 +130,11 @@ The package exports named graph samples and fixture loaders:
 ```ts
 import { loadNodeGraphBundle } from "@vizij/node-graph-wasm";
 
-const { spec, stage } = await loadNodeGraphBundle("urdf-ik-position");
+const { spec } = await loadNodeGraphBundle("urdf-ik-position");
 graph.loadGraph(spec);
-if (stage) {
-  for (const [path, payload] of Object.entries(stage)) {
-    graph.stageInput(path, payload.value, payload.shape);
-  }
-}
 ```
+
+`loadNodeGraphBundle` now returns only `{ spec }`; stage inputs are no longer bundled with fixtures and should be staged per usage site with `graph.stageInput(path, value, shape)`.
 
 ## Troubleshooting
 

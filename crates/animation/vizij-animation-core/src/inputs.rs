@@ -2,7 +2,7 @@
 //! Input contracts for the core engine.
 //!
 //! v1 keeps this minimal: per-player commands and per-instance updates. Adapters
-//! (web/Bevy) build and pass these into Engine::update() each fixed tick.
+//! (web and native hosts) build and pass these into Engine::update() each fixed tick.
 
 use serde::{Deserialize, Serialize};
 

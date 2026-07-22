@@ -2,7 +2,7 @@
 
 > **Deterministic data-flow evaluation for Vizij graphs – pure Rust with predictable staging, shapes, and side effects.**
 
-`vizij-graph-core` turns declarative `GraphSpec` documents into structured values and typed write operations. The crate powers Vizij’s node graph tooling, Bevy integrations, and WebAssembly bindings.
+`vizij-graph-core` turns declarative `GraphSpec` documents into structured values and typed write operations. The crate powers Vizij’s node graph tooling and WebAssembly bindings.
 
 ---
 

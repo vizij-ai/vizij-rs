@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Orchestrate testing suite:
 #  1) Core native tests
-#  2) Bevy adapter tests
+#  2) Ensure wasm32 target is installed
 #  3) WASM tests (Node) via wasm-bindgen-test
 #
 # Usage:

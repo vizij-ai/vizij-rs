@@ -3,7 +3,7 @@
 //!
 //! Outputs carry only the numeric/value changes for this tick, keyed by
 //! stable string TargetHandle, and a separate list of semantic events.
-//! Adapters (Bevy/WASM) apply changes to the host and transport events.
+//! Adapters (WASM and native hosts) apply changes to the host and transport events.
 
 use serde::{Deserialize, Serialize};
 

@@ -20,12 +20,6 @@ The `crates/animation` directory contains the Rust-side animation stack. The thr
 3. Create an `Engine`, register animations, create players/instances, and call `update_values(dt, inputs)` every frame.
 4. Apply `Outputs.changes` to your host and consume `Outputs.events` as needed.
 
-### Bevy app
-
-2. Insert `VizijAnimationPlugin`.
-3. Mark a hierarchy root with `VizijTargetRoot` and optional overrides with `VizijBindingHint`.
-4. Load animations through the shared `VizijEngine` resource and let the plugin drive fixed updates.
-
 ### JavaScript / TypeScript
 
 1. Build the wasm package with `pnpm run build:wasm:animation`.
