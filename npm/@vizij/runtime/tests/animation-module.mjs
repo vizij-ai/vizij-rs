@@ -1,13 +1,13 @@
-// The animation module runs inside the browser device (VIZ-61 Stage A):
-// the device is constructed WITH the module, JS sets up a one-track ramp
+// The animation module runs inside the browser runtime (VIZ-61 Stage A):
+// the runtime is constructed WITH the module, JS sets up a one-track ramp
 // through the call surface (load_animation / create_player / add_instance),
 // and a graph ExternalFunction node calls the module's step each tick,
-// landing the sampled outputs in the device store. Mirrors the Rust
+// landing the sampled outputs in the runtime store. Mirrors the Rust
 // host-side boundary proof (crates/interop/vizij-animation-module/tests/
 // host_ramp.rs) through the public JS surface.
 import assert from "node:assert/strict";
 import { loadAnimationModule } from "@vizij/animation-module";
-import { startDevice } from "../dist/runtime/src/index.js";
+import { startRuntime } from "../dist/runtime/src/index.js";
 
 // --- declared ids (module.yaml + the type records) ---------------------------
 const FN_LOAD = "76697a69-6a00-0000-0f00-000000000001";
@@ -110,29 +110,29 @@ const graph = {
 };
 
 // --- run ---------------------------------------------------------------------
-const device = await startDevice(graph, undefined, [await loadAnimationModule()]);
+const runtime = await startRuntime(graph, undefined, [await loadAnimationModule()]);
 
 // Setup through the call surface. Each call dispatches inside the next step.
 const pending = [
-  device.call({ id: FN_LOAD, args: [field(P_CLIP, clip)] }),
-  device.call({ id: FN_CREATE_PLAYER, args: [field(P_NAME, { str: "p" })] }),
+  runtime.call({ id: FN_LOAD, args: [field(P_CLIP, clip)] }),
+  runtime.call({ id: FN_CREATE_PLAYER, args: [field(P_NAME, { str: "p" })] }),
 ];
-device.step(0);
+runtime.step(0);
 const [anim, player] = await Promise.all(pending);
 assert.ok("u32" in anim.ret, "load_animation returns an animation id");
 assert.ok("u32" in player.ret, "create_player returns a player id");
 
-const pInstance = device.call({
+const pInstance = runtime.call({
   id: FN_ADD_INSTANCE,
   args: [field(P_PLAYER, player.ret), field(P_ANIM, anim.ret)],
 });
-device.step(0);
+runtime.step(0);
 assert.ok("u32" in (await pInstance).ret, "add_instance returns an instance id");
 
 // Two 0.25 s steps: each tick the graph feeds the golden dt into the module's
 // step and lands the sampled [TrackOutput] in the store.
 const firstTrack = () => {
-  const out = device.readValues(["anim/out"])["anim/out"];
+  const out = runtime.readValues(["anim/out"])["anim/out"];
   assert.ok(out && out.structs, "anim/out carries the step's [TrackOutput]");
   const track = Object.fromEntries(out.structs.elements[0].fields.map((f) => [f.id, f.value]));
   return {
@@ -142,12 +142,12 @@ const firstTrack = () => {
   };
 };
 
-device.step(250);
+runtime.step(250);
 const first = firstTrack();
 assert.equal(first.trackId, "t0");
 assert.equal(first.key, "node/x", "the track carries its authored key");
 
-device.step(250);
+runtime.step(250);
 const second = firstTrack();
 assert.ok(
   first.value > 0 && second.value > first.value,
@@ -158,5 +158,5 @@ assert.ok(
   `expected ~0.5 at the 0.5 s midpoint, got ${second.value}`,
 );
 
-device.dispose();
+runtime.dispose();
 console.log("@vizij/runtime animation-module: ok");
