@@ -2852,6 +2852,7 @@ dependencies = [
  "arora-types",
  "derive_more",
  "lazy_static",
+ "serde_json",
  "serde_yaml",
  "tokio",
  "uuid",

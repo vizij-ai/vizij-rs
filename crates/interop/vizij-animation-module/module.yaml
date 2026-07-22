@@ -163,6 +163,48 @@ exports:
     parameters: []
     ret: { kind: array, id: 76697a69-6a00-0000-0000-000000000111 }
 
+  # baking ---------------------------------------------------------------------
+  # Bake a loaded animation to sampled per-track values over a fixed window and
+  # return the result as a JSON string. `frame_rate` (Hz) defaults to 60,
+  # `start_time` (s) to 0, `end_time` (s) to the clip duration. Empty string when
+  # `anim` is not loaded. `bake_with_derivatives` additionally samples per-frame
+  # derivatives.
+  - type: function
+    id: 76697a69-6a00-0000-0f00-00000000000e
+    name: bake
+    parameters:
+      - id: 76697a69-6a00-0000-0f0e-000000000001
+        name: anim
+        type: { kind: scalar, id: u32 }
+      - id: 76697a69-6a00-0000-0f0e-000000000002
+        name: frame_rate
+        type: { kind: scalar, id: f32 }
+      - id: 76697a69-6a00-0000-0f0e-000000000003
+        name: start_time
+        type: { kind: scalar, id: f32 }
+      - id: 76697a69-6a00-0000-0f0e-000000000004
+        name: end_time
+        type: { kind: scalar, id: f32 }
+    ret: { kind: scalar, id: str }
+
+  - type: function
+    id: 76697a69-6a00-0000-0f00-00000000000f
+    name: bake_with_derivatives
+    parameters:
+      - id: 76697a69-6a00-0000-0f0f-000000000001
+        name: anim
+        type: { kind: scalar, id: u32 }
+      - id: 76697a69-6a00-0000-0f0f-000000000002
+        name: frame_rate
+        type: { kind: scalar, id: f32 }
+      - id: 76697a69-6a00-0000-0f0f-000000000003
+        name: start_time
+        type: { kind: scalar, id: f32 }
+      - id: 76697a69-6a00-0000-0f0f-000000000004
+        name: end_time
+        type: { kind: scalar, id: f32 }
+    ret: { kind: scalar, id: str }
+
 imports: []
 dependencies:
   - { id: 76697a69-6a00-0000-0000-000000000100, version: "1.1.0" }

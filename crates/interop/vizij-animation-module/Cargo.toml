@@ -30,5 +30,6 @@ anyhow = "1"
 arora-engine = "3"
 arora-types = "2"
 uuid = { version = "1", features = ["v4"] }
+serde_json = "1"
 serde_yaml = "0.9"
 vizij-arora = { path = "../vizij-arora" }
