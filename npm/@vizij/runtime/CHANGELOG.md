@@ -4,6 +4,25 @@ All notable changes to `@vizij/runtime`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-07-22
+
+### Changed
+
+- Built on arora 9.1 / arora-web 6.1: the self-paced loop yields to the JS
+  event loop even when a step overruns its period, so `run()` no longer
+  freezes the page under sustained load.
+- A failing behavior tick no longer ends `run()` (and no longer rejects its
+  promise): the failure stands as a readable error until a tick recovers,
+  and a failed run leaves the device usable.
+
+### Added
+
+- `AroraDevice.behaviorError` — the behavior's standing error: the message
+  of its latest failed tick, `undefined` while healthy.
+- `AroraDevice.behaviorErrorChanged()` — resolves on the next change of the
+  standing error (a message when a failure appears, `undefined` when a tick
+  recovers); sequential awaits share one cursor, so no change is missed.
+
 ## [1.0.1] - 2026-07-21
 
 ### Fixed

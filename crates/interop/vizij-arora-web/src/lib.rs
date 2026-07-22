@@ -131,13 +131,34 @@ impl VizijArora {
         self.inner.step(dt_ms)
     }
 
-    /// Hand the device to its own loop, for good: a self-paced run at
-    /// `period_ms` (default: the runtime's ~100 Hz) that owns the device
-    /// until stepping fails — the returned promise only ever rejects, and
-    /// [`step`](Self::step) is unavailable from then on. The rest of the
-    /// surface keeps working: it never touches the stepping device.
+    /// Hand the device to its own loop: a self-paced run at `period_ms`
+    /// (default: the runtime's ~100 Hz). While it runs, [`step`](Self::step)
+    /// is unavailable and the rest of the surface keeps working: it never
+    /// touches the stepping device. A failing behavior tick does **not** end
+    /// the loop — it stands as [`behavior_error`](Self::behavior_error) until
+    /// a tick recovers; the promise rejects only if the runtime itself fails,
+    /// and the device stays usable (steppable, runnable again) afterwards.
     pub fn run(&self, period_ms: Option<f64>) -> js_sys::Promise {
         self.inner.run(period_ms)
+    }
+
+    /// The behavior's standing error — the message of its latest failed
+    /// tick, `undefined` while the behavior is healthy or none is installed.
+    /// A failing tick does not stop the device or its [`run`](Self::run)
+    /// loop; the reading stays available throughout.
+    #[wasm_bindgen(getter, js_name = behaviorError)]
+    pub fn behavior_error(&self) -> Option<String> {
+        self.inner.behavior_error()
+    }
+
+    /// Resolves on the next change of the behavior's standing error, with
+    /// the new reading: a message when a distinct failure appears,
+    /// `undefined` when a tick recovers. Sequential awaits share one cursor,
+    /// so no change is missed between them; one await may be pending at a
+    /// time. Rejects when the device is gone.
+    #[wasm_bindgen(js_name = behaviorErrorChanged)]
+    pub fn behavior_error_changed(&self) -> js_sys::Promise {
+        self.inner.behavior_error_changed()
     }
 
     /// Call a loaded module's function through the device. `call_json` is an
@@ -182,17 +203,23 @@ impl VizijArora {
     /// Dispatch `call` through the in-process caller; the promise resolves to
     /// the `CallResult` as JSON after the step that applies it.
     ///
-    /// The caller's future enqueues the call on its first poll, and the
-    /// promise machinery first polls in a microtask — after the current JS
-    /// turn. Polling once here instead makes the call enqueued **before this
-    /// returns**, so a manual driver can dispatch and step in the same turn
-    /// (`device.loadGraph(spec); device.step(0);`).
+    /// `LocalCaller::call` enqueues the call synchronously inside `call()` —
+    /// its future is only the reply — but `call()` itself runs at the
+    /// composed future's first poll, and the promise machinery first polls in
+    /// a microtask, after the current JS turn. The one poll here runs it now,
+    /// so the call is enqueued **before this returns** and a manual driver
+    /// can dispatch and step in the same turn
+    /// (`device.loadGraph(spec); device.step(0);`). Parking on the throwaway
+    /// waker loses no wakeup: the reply channel re-registers its waker on
+    /// every poll.
     fn dispatch(&self, call: Call) -> js_sys::Promise {
         use std::future::Future;
         use std::task::{Context, Poll, Waker};
 
         let caller = self.caller.clone();
         let mut pending = Box::pin(async move { caller.call(call).await });
+        // Ready on the first poll = the device is gone (the enqueue failed);
+        // an applied call can only resolve through a later step.
         let first = pending
             .as_mut()
             .poll(&mut Context::from_waker(Waker::noop()));

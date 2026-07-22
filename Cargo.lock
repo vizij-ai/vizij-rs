@@ -144,9 +144,9 @@ checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
 
 [[package]]
 name = "arora"
-version = "9.0.0"
+version = "9.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bfac93a71d2cfa8b112f94d3ede8b8c0d34a7949bc776ed46536f371b3bde3a"
+checksum = "71e4c79483b039c338ca97bd6be293855c5f1f498777c33cf78a15d9292abb2e"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -385,19 +385,21 @@ dependencies = [
 
 [[package]]
 name = "arora-web"
-version = "6.0.0"
+version = "6.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76b917b59d4bb5a99bebb691a65f6c135b471ce81f5ee7557043b3cf5c12fc05"
+checksum = "54a8c392e81f09866153d837c2b93787aee955e810150126a07bbca6f839721c"
 dependencies = [
  "arora",
  "arora-engine",
  "arora-types",
  "console_error_panic_hook",
+ "futures",
  "getrandom 0.4.3",
  "js-sys",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "tokio",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
