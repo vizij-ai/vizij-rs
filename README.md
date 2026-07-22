@@ -56,7 +56,7 @@ vizij-rs/
 │     └─ vizij-test-fixtures       # Loads JSON fixtures referenced across stacks
 ├─ npm/
 │  ├─ @vizij/animation-module      # vizij-animation-core built as an Arora wasm module (assets)
-│  ├─ @vizij/animation-wasm        # Stable ESM wrapper around `vizij-animation-wasm`
+│  ├─ @vizij/animation        # Stable ESM wrapper around `vizij-animation-wasm`
 │  ├─ @vizij/node-graph-wasm       # Wrapper around `vizij-graph-wasm`
 │  ├─ @vizij/orchestrator-wasm     # Wrapper around `vizij-orchestrator-wasm`
 │  ├─ @vizij/runtime               # Browser Vizij runtime as an Arora device (wasm bindings)
@@ -75,7 +75,7 @@ The major runtime crates and npm packages include dedicated READMEs with domain-
 
 | Stack          | Core Crate               | WASM Binding               | npm wrapper                  |
 | -------------- | ------------------------ | -------------------------- | ---------------------------- |
-| Animation      | `vizij-animation-core`   | `vizij-animation-wasm`     | `@vizij/animation-wasm`      |
+| Animation      | `vizij-animation-core`   | `vizij-animation-wasm`     | `@vizij/animation`      |
 | Node graph     | `vizij-graph-core`       | `vizij-graph-wasm`         | `@vizij/node-graph-wasm`     |
 | Orchestrator   | `vizij-orchestrator-core`| `vizij-orchestrator-wasm`  | `@vizij/orchestrator-wasm`   |
 | Test fixtures  | `vizij-test-fixtures`    | —                          | `@vizij/test-fixtures`       |
@@ -348,7 +348,7 @@ Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wa
 - [vizij-test-fixtures/README](crates/test-fixtures/vizij-test-fixtures/README.md)
 - [@vizij/node-graph-wasm/README](npm/@vizij/node-graph-wasm/README.md)
 - [@vizij/orchestrator-wasm/README](npm/@vizij/orchestrator-wasm/README.md)
-- [@vizij/animation-wasm/README](npm/@vizij/animation-wasm/README.md)
+- [@vizij/animation/README](npm/@vizij/animation/README.md)
 - [@vizij/value-json/README](npm/@vizij/value-json/README.md)
 - [@vizij/test-fixtures/README](npm/@vizij/test-fixtures/README.md)
 - [@vizij/wasm-loader/README](npm/@vizij/wasm-loader/README.md)

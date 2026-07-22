@@ -37,7 +37,7 @@ pnpm run build:shared
 NPM_PACKAGES=(
   value-json
   wasm-loader
-  animation-wasm
+  animation
   node-graph-wasm
   orchestrator-wasm
 )

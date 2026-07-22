@@ -28,7 +28,7 @@ file summarises, it does not replace, those sources.
 - **API stack**: Shared value/type/WriteBatch contracts (`crates/api`), plus
   wasm adapters reused across other stacks.
 - **Animation stack**: `vizij-animation-core`,
-  `vizij-animation-wasm`, and npm `@vizij/animation-wasm`.
+  `vizij-animation-wasm`, and npm `@vizij/animation`.
 - **Node graph stack**: `vizij-graph-core`,
   `vizij-graph-wasm`, and npm `@vizij/node-graph-wasm`.
 - **Orchestrator stack**: `vizij-orchestrator-core` runtime coordinating

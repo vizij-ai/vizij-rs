@@ -1,4 +1,4 @@
-# @vizij/animation-wasm
+# @vizij/animation
 
 ## 0.4.0
 

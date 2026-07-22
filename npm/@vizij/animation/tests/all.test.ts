@@ -261,7 +261,7 @@ process.env.RUST_BACKTRACE = "1";
     await testLoadAnimationStateToggleFixture();
     await testLoadAnimationPoseQuatFixture();
     // eslint-disable-next-line no-console
-    console.log("@vizij/animation-wasm smoke tests passed");
+    console.log("@vizij/animation smoke tests passed");
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);

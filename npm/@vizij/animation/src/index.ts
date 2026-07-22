@@ -1,5 +1,5 @@
 /**
- * Stable ESM entrypoint for `@vizij/animation-wasm`.
+ * Stable ESM entrypoint for `@vizij/animation`.
  *
  * This wrapper initializes the wasm-bindgen package, enforces ABI compatibility, and exposes
  * an ergonomic `Engine` class plus the shared value helpers used by Vizij hosts.
@@ -79,7 +79,7 @@ export {
  */
 export function abi_version(): number {
   if (!bindingCache.current) {
-    throw new Error("Call init() from @vizij/animation-wasm before reading abi_version().");
+    throw new Error("Call init() from @vizij/animation before reading abi_version().");
   }
   return Number(bindingCache.current.abi_version());
 }
@@ -128,7 +128,7 @@ async function importWasmModule(): Promise<unknown> {
     wasmModulePromise = importStaticWasmModule().catch((err) => {
       if (typeof console !== "undefined" && typeof console.warn === "function") {
         console.warn(
-          "@vizij/animation-wasm: static wasm import failed, falling back to runtime URL import.",
+          "@vizij/animation: static wasm import failed, falling back to runtime URL import.",
           err
         );
       }
@@ -197,7 +197,7 @@ export function init(input?: InitInput): Promise<void> {
 function ensureInited(): void {
   if (!_initPromise) {
     throw new Error(
-      "Call init() from @vizij/animation-wasm before creating Engine or VizijAnimation."
+      "Call init() from @vizij/animation before creating Engine or VizijAnimation."
     );
   }
   if (!bindingCache.current) {
@@ -514,7 +514,7 @@ export const VizijAnimation: WasmAnimationCtor = new Proxy(
     construct(_target: () => void, args: any[]): object {
       ensureInited();
       if (!bindingCache.current) {
-        throw new Error("Call init() from @vizij/animation-wasm before constructing VizijAnimation.");
+        throw new Error("Call init() from @vizij/animation before constructing VizijAnimation.");
       }
       const Inner = bindingCache.current.VizijAnimation as unknown as WasmAnimationCtor;
       return new Inner(...(args as any[])) as object;

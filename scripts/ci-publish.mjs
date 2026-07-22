@@ -22,7 +22,7 @@ function run(command, args) {
  * Non-wasm packages (value-json, wasm-loader, …) need no wasm build step.
  */
 const WASM_TARGETS = {
-  "animation-wasm": "animation",
+  animation: "animation",
   "node-graph-wasm": "graph",
   "orchestrator-wasm": "orchestrator",
   runtime: "arora-web",

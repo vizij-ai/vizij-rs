@@ -2,7 +2,7 @@
 
 > **WebAssembly bridge for Vizij’s animation engine – use Vizij playback and baking APIs from JavaScript/TypeScript.**
 
-`vizij-animation-wasm` compiles `vizij-animation-core` to WASM and exposes bindings consumed by the npm package `@vizij/animation-wasm`.
+`vizij-animation-wasm` compiles `vizij-animation-core` to WASM and exposes bindings consumed by the npm package `@vizij/animation`.
 
 ---
 
@@ -36,7 +36,7 @@
 
 Runtime values (output changes, write batches, keypoint values in `AnimationData`) cross the boundary in Arora `Value` serde form (`{"f32": 1.0}`, `{"bool": true}`, `{"str": "hi"}`, `{"struct": {...}}`, ...).
 
-The npm wrapper (`@vizij/animation-wasm`) layers a higher-level `Engine` class on top of these bindings.
+The npm wrapper (`@vizij/animation`) layers a higher-level `Engine` class on top of these bindings.
 
 ---
 
@@ -51,11 +51,11 @@ Manual build:
 ```bash
 wasm-pack build crates/animation/vizij-animation-wasm \
   --target web \
-  --out-dir npm/@vizij/animation-wasm/pkg \
+  --out-dir npm/@vizij/animation/pkg \
   --release
 ```
 
-The workspace scripts emit the generated files directly into `npm/@vizij/animation-wasm/pkg/`, which is the source consumed by the npm wrapper.
+The workspace scripts emit the generated files directly into `npm/@vizij/animation/pkg/`, which is the source consumed by the npm wrapper.
 
 ---
 
@@ -64,7 +64,7 @@ The workspace scripts emit the generated files directly into `npm/@vizij/animati
 Via npm wrapper:
 
 ```ts
-import { init, Engine } from "@vizij/animation-wasm";
+import { init, Engine } from "@vizij/animation";
 
 await init();
 const eng = new Engine();
@@ -84,7 +84,7 @@ console.log(baked.values.tracks.length, baked.derivatives.tracks.length);
 Low-level binding through the npm wrapper's raw export:
 
 ```ts
-import { init, VizijAnimation, abi_version } from "@vizij/animation-wasm";
+import { init, VizijAnimation, abi_version } from "@vizij/animation";
 
 await init();
 console.log("ABI", abi_version());
@@ -99,7 +99,7 @@ console.log(result);
 ### Custom `.wasm` location
 
 ```ts
-import { init } from "@vizij/animation-wasm";
+import { init } from "@vizij/animation";
 
 // Host the wasm binary on your CDN:
 await init(new URL("https://cdn.example.com/vizij/animation_wasm_bg.wasm"));
@@ -140,7 +140,7 @@ cargo test -p vizij-animation-wasm
 
 # npm wrapper tests
 pnpm run build:wasm:animation
-cd npm/@vizij/animation-wasm
+cd npm/@vizij/animation
 pnpm test
 ```
 
@@ -151,6 +151,6 @@ The npm wrapper test suite compares WASM outputs against fixtures to ensure pari
 ## Related Packages
 
 - [`vizij-animation-core`](../vizij-animation-core/README.md) – underlying animation engine.
-- [`@vizij/animation-wasm`](../../../npm/@vizij/animation-wasm/README.md) – npm wrapper with ESM entry and TypeScript types.
+- [`@vizij/animation`](../../../npm/@vizij/animation/README.md) – npm wrapper with ESM entry and TypeScript types.
 
 Documentation improvements? Open an issue—consistent bindings keep Vizij animation accessible across platforms. 🎬

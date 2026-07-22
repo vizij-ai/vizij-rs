@@ -9,7 +9,7 @@ The `crates/animation` directory contains the Rust-side animation stack. The thr
 | Crate | Purpose | Primary consumers |
 |-------|---------|-------------------|
 | [`vizij-animation-core`](vizij-animation-core/README.md) | Deterministic animation engine, parsing, playback, blending, baking. | Native hosts, orchestrator runtime, wasm binding. |
-| [`vizij-animation-wasm`](vizij-animation-wasm/README.md) | `wasm-bindgen` bridge used by the npm wrapper. | [`@vizij/animation-wasm`](../../npm/@vizij/animation-wasm/README.md). |
+| [`vizij-animation-wasm`](vizij-animation-wasm/README.md) | `wasm-bindgen` bridge used by the npm wrapper. | [`@vizij/animation`](../../npm/@vizij/animation/README.md). |
 
 ## Typical Workflows
 
@@ -23,7 +23,7 @@ The `crates/animation` directory contains the Rust-side animation stack. The thr
 ### JavaScript / TypeScript
 
 1. Build the wasm package with `pnpm run build:wasm:animation`.
-2. Use the npm wrapper from [`npm/@vizij/animation-wasm`](../../npm/@vizij/animation-wasm/README.md).
+2. Use the npm wrapper from [`npm/@vizij/animation`](../../npm/@vizij/animation/README.md).
 3. Call `await init()` once, then work through the wrapper `Engine` class.
 
 ## Minimal Smoke Test
@@ -57,10 +57,10 @@ Run from the repository root.
 ```bash
 cargo test -p vizij-animation-core
 pnpm run build:wasm:animation
-pnpm --filter @vizij/animation-wasm test
+pnpm --filter @vizij/animation test
 ```
 
-`pnpm run build:wasm:animation` writes the wasm-bindgen output directly to `npm/@vizij/animation-wasm/pkg/`, which the npm wrapper copies into its published `dist/` layout during `pnpm --filter @vizij/animation-wasm build`.
+`pnpm run build:wasm:animation` writes the wasm-bindgen output directly to `npm/@vizij/animation/pkg/`, which the npm wrapper copies into its published `dist/` layout during `pnpm --filter @vizij/animation build`.
 
 ## Release Notes
 
@@ -76,4 +76,4 @@ If you change animation ABI or wrapper-visible behavior, rebuild the wasm packag
 
 - [vizij-animation-core README](vizij-animation-core/README.md)
 - [vizij-animation-wasm README](vizij-animation-wasm/README.md)
-- [@vizij/animation-wasm README](../../npm/@vizij/animation-wasm/README.md)
+- [@vizij/animation README](../../npm/@vizij/animation/README.md)

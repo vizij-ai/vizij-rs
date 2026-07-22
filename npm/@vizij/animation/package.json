@@ -1,5 +1,5 @@
 {
-  "name": "@vizij/animation-wasm",
+  "name": "@vizij/animation",
   "version": "0.4.0",
   "description": "WASM bindings for Vizij animation core.",
   "license": "MIT",
@@ -18,9 +18,9 @@
     "webassembly"
   ],
   "type": "module",
-  "main": "dist/animation-wasm/src/index.js",
-  "module": "dist/animation-wasm/src/index.js",
-  "types": "dist/animation-wasm/src/index.d.ts",
+  "main": "dist/animation/src/index.js",
+  "module": "dist/animation/src/index.js",
+  "types": "dist/animation/src/index.d.ts",
   "files": [
     "dist/",
     "pkg/",
@@ -28,14 +28,14 @@
   ],
   "exports": {
     ".": {
-      "import": "./dist/animation-wasm/src/index.js",
-      "types": "./dist/animation-wasm/src/index.d.ts"
+      "import": "./dist/animation/src/index.js",
+      "types": "./dist/animation/src/index.d.ts"
     }
   },
   "sideEffects": false,
   "scripts": {
-    "build": "node ../../../scripts/embed-fixtures.mjs animation-wasm && tsc -p tsconfig.json && node ../../../scripts/copy-wasm-pkg.mjs animation-wasm",
-    "test": "pnpm run build && node dist/animation-wasm/tests/all.test.js",
+    "build": "node ../../../scripts/embed-fixtures.mjs animation && tsc -p tsconfig.json && node ../../../scripts/copy-wasm-pkg.mjs animation",
+    "test": "pnpm run build && node dist/animation/tests/all.test.js",
     "prepack": "pnpm run build",
     "prepublishOnly": "node -e \"const fs=require('fs');if(!fs.existsSync('pkg')){console.error('Missing pkg/. Run wasm-pack build.');process.exit(1);}\""
   },
