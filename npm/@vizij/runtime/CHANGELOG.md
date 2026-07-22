@@ -4,6 +4,16 @@ All notable changes to `@vizij/runtime`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-07-22
+
+### Breaking
+
+- The client-facing API drops the "device"/"Arora" vocabulary for "runtime":
+  `startDevice` → `startRuntime`, the `AroraDevice` class → `Runtime`,
+  `DeviceModule` → `RuntimeModule`, `DeviceCall` → `RuntimeCall`,
+  `DeviceCallResult` → `RuntimeCallResult`. Behavior is unchanged; only the
+  names differ. Update imports and the class name at call sites.
+
 ## [1.1.0] - 2026-07-22
 
 ### Added
