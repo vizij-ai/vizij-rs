@@ -1,0 +1,9 @@
+parent: 76697a69-6a00-0000-0000-000000000000
+name: TransitionHandle
+fields:
+  76697a69-6a00-0000-0103-000000000001:
+    name: x
+    type: { type: primitive, value: { kind: f32 } }
+  76697a69-6a00-0000-0103-000000000002:
+    name: y
+    type: { type: primitive, value: { kind: f32 } }

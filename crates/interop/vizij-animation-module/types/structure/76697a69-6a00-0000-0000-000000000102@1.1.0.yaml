@@ -1,0 +1,40 @@
+parent: 76697a69-6a00-0000-0000-000000000000
+name: Keypoint
+fields:
+  76697a69-6a00-0000-0102-000000000001:
+    name: id
+    type:
+      type: primitive
+      value:
+        kind: string
+  76697a69-6a00-0000-0102-000000000002:
+    name: stamp
+    type:
+      type: primitive
+      value:
+        kind: f32
+  76697a69-6a00-0000-0102-000000000003:
+    name: value
+    type:
+      type: frozenScalar
+      value:
+        reference:
+          id: 00000000-0000-0000-0000-00000000001b
+          version: 1.0.0
+  # Cubic-bezier timing handles for the segments this keypoint bounds, in the
+  # normalized segment space the engine samples (x = time, y = value; linear
+  # timing = handles on the segment thirds). Zero or one element each: the
+  # empty array means "no authored handle here" and the engine uses its
+  # default ease.
+  76697a69-6a00-0000-0102-000000000004:
+    name: transitions_in
+    type:
+      type: frozenArray
+      value:
+        reference: { id: 76697a69-6a00-0000-0000-000000000103, version: "1.0.0" }
+  76697a69-6a00-0000-0102-000000000005:
+    name: transitions_out
+    type:
+      type: frozenArray
+      value:
+        reference: { id: 76697a69-6a00-0000-0000-000000000103, version: "1.0.0" }

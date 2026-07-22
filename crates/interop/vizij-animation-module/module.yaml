@@ -5,7 +5,7 @@ license: Proprietary
 name: vizij-animation
 version:
   major: 0
-  minor: 1
+  minor: 2
   patch: 0
 executor:
   name: wasm
@@ -42,10 +42,7 @@ exports:
     ret: { kind: scalar, id: u32 }
 
   # per-tick ----------------------------------------------------------------
-  # `dt_ns` is the runtime's `arora/dt` golden key (nanoseconds). Player-command
-  # inputs are a future extension: a dynamic `Value` cannot be a function
-  # parameter directly (only a struct field), so they would arrive as a declared
-  # `AnimInputs` struct. Today the player plays by default, so `dt_ns` suffices.
+  # `dt_ns` is the runtime's `arora/dt` golden key (nanoseconds).
   - type: function
     id: 76697a69-6a00-0000-0f00-000000000004
     name: step
@@ -55,8 +52,120 @@ exports:
         type: { kind: scalar, id: u64 }
     ret: { kind: array, id: 76697a69-6a00-0000-0000-000000000110 }
 
+  # transport -----------------------------------------------------------------
+  # Player commands buffer into the engine's next `step`: commands issued
+  # between two steps apply, in issue order, at the step that follows — the
+  # same phase a device applies external calls in. Each returns the id it was
+  # given (u32::MAX when an argument is missing or unparsable).
+  - type: function
+    id: 76697a69-6a00-0000-0f00-000000000005
+    name: play
+    parameters:
+      - id: 76697a69-6a00-0000-0f05-000000000001
+        name: player
+        type: { kind: scalar, id: u32 }
+    ret: { kind: scalar, id: u32 }
+
+  - type: function
+    id: 76697a69-6a00-0000-0f00-000000000006
+    name: pause
+    parameters:
+      - id: 76697a69-6a00-0000-0f06-000000000001
+        name: player
+        type: { kind: scalar, id: u32 }
+    ret: { kind: scalar, id: u32 }
+
+  - type: function
+    id: 76697a69-6a00-0000-0f00-000000000007
+    name: stop
+    parameters:
+      - id: 76697a69-6a00-0000-0f07-000000000001
+        name: player
+        type: { kind: scalar, id: u32 }
+    ret: { kind: scalar, id: u32 }
+
+  # `time_ns` is the target playhead in nanoseconds, the same base as `dt_ns`.
+  - type: function
+    id: 76697a69-6a00-0000-0f00-000000000008
+    name: seek
+    parameters:
+      - id: 76697a69-6a00-0000-0f08-000000000001
+        name: player
+        type: { kind: scalar, id: u32 }
+      - id: 76697a69-6a00-0000-0f08-000000000002
+        name: time_ns
+        type: { kind: scalar, id: u64 }
+    ret: { kind: scalar, id: u32 }
+
+  - type: function
+    id: 76697a69-6a00-0000-0f00-000000000009
+    name: set_speed
+    parameters:
+      - id: 76697a69-6a00-0000-0f09-000000000001
+        name: player
+        type: { kind: scalar, id: u32 }
+      - id: 76697a69-6a00-0000-0f09-000000000002
+        name: speed
+        type: { kind: scalar, id: f32 }
+    ret: { kind: scalar, id: u32 }
+
+  # `mode` is one of "once" | "loop" | "ping_pong".
+  - type: function
+    id: 76697a69-6a00-0000-0f00-00000000000a
+    name: set_loop
+    parameters:
+      - id: 76697a69-6a00-0000-0f0a-000000000001
+        name: player
+        type: { kind: scalar, id: u32 }
+      - id: 76697a69-6a00-0000-0f0a-000000000002
+        name: mode
+        type: { kind: scalar, id: str }
+    ret: { kind: scalar, id: u32 }
+
+  # Per-instance blend weight, applied at the next step like a command.
+  - type: function
+    id: 76697a69-6a00-0000-0f00-00000000000b
+    name: set_weight
+    parameters:
+      - id: 76697a69-6a00-0000-0f0b-000000000001
+        name: player
+        type: { kind: scalar, id: u32 }
+      - id: 76697a69-6a00-0000-0f0b-000000000002
+        name: instance
+        type: { kind: scalar, id: u32 }
+      - id: 76697a69-6a00-0000-0f0b-000000000003
+        name: weight
+        type: { kind: scalar, id: f32 }
+    ret: { kind: scalar, id: u32 }
+
+  # Structural edit, applied immediately (like `add_instance`). Returns 1 when
+  # the instance existed, 0 otherwise.
+  - type: function
+    id: 76697a69-6a00-0000-0f00-00000000000c
+    name: remove_instance
+    parameters:
+      - id: 76697a69-6a00-0000-0f0c-000000000001
+        name: player
+        type: { kind: scalar, id: u32 }
+      - id: 76697a69-6a00-0000-0f0c-000000000002
+        name: instance
+        type: { kind: scalar, id: u32 }
+    ret: { kind: scalar, id: u32 }
+
+  # feedback --------------------------------------------------------------------
+  # Playback feedback as a call, one PlayerState per player. This surface is a
+  # PATCH: the vision is state changes as first-class, combinable values the
+  # behavior conveys, not a second feedback channel — this call stands in until
+  # that lands.
+  - type: function
+    id: 76697a69-6a00-0000-0f00-00000000000d
+    name: player_states
+    parameters: []
+    ret: { kind: array, id: 76697a69-6a00-0000-0000-000000000111 }
+
 imports: []
 dependencies:
-  - { id: 76697a69-6a00-0000-0000-000000000100, version: "1.0.0" }
+  - { id: 76697a69-6a00-0000-0000-000000000100, version: "1.1.0" }
   - { id: 76697a69-6a00-0000-0000-000000000110, version: "1.0.0" }
+  - { id: 76697a69-6a00-0000-0000-000000000111, version: "1.0.0" }
 executable_mime: application/wasm
