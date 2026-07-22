@@ -1,6 +1,6 @@
 # vizij-animation-core — Agent Notes
 
-- **Purpose**: Deterministic animation engine powering Bevy, wasm, and orchestrator integrations.
+- **Purpose**: Deterministic animation engine powering wasm and orchestrator integrations.
 - **Hot spots**: `src/lib.rs` (engine API), `src/engine/`, `src/baking/`. Config tuning lives in `config.rs`.
 - **Tests**: `cargo test -p vizij-animation-core` (unit + integration). Use fixtures via `vizij_test_fixtures::animations`.
 - **Key dependencies**: `vizij-api-core` for values/paths; `vizij-test-fixtures` for sample assets.

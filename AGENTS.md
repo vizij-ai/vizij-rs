@@ -33,6 +33,10 @@ file summarises, it does not replace, those sources.
   `vizij-graph-wasm`, and npm `@vizij/node-graph-wasm`.
 - **Orchestrator stack**: `vizij-orchestrator-core` runtime coordinating
   graphs/animations, `vizij-orchestrator-wasm`, and npm `@vizij/orchestrator-wasm`.
+- **Interop (Arora) stack**: `crates/interop/*` adapts the Vizij stacks onto
+  Arora runtime seams — `vizij-arora` (Value interop), `vizij-arora-store`,
+  `vizij-arora-hal`, `vizij-arora-behavior`, `vizij-arora-web` (npm
+  `@vizij/runtime`), and `vizij-animation-module` (npm `@vizij/animation-module`).
 - **Test fixtures**: `vizij-test-fixtures` crate that exposes the shared JSON
   manifest, mirrored to npm `@vizij/test-fixtures` for browsers.
 - **Support packages**: npm `@vizij/value-json`, `@vizij/wasm-loader`, and
@@ -98,7 +102,7 @@ Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unkno
   inputs/outputs and enforces ABI version checks mirrored in the npm wrapper.
 - **Node graph**: `vizij-graph-core` evaluates deterministic data-flow graphs.
   Features like `urdf_ik` are enabled by default and surfaced through the wasm
-  build scripts. The Bevy adapter and wasm crate share JSON normalisation logic.
+  build scripts. The wasm crate handles JSON normalisation for JS consumers.
 - **Orchestrator**: `vizij-orchestrator-core` (`src/lib.rs`, `controllers/*`)
   coordinates animation engines and graph controllers. Check the crate README
   for scheduler semantics, blackboard conventions, and example entry points.

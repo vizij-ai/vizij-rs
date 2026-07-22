@@ -43,7 +43,7 @@ You will commonly pair it with the companion crates:
 ## 3. Hello Orchestrator
 
 ```rust
-use vizij_orchestrator_core::{
+use vizij_orchestrator::{
     controllers::{GraphControllerConfig, Subscriptions},
     Orchestrator, Schedule,
 };
@@ -103,7 +103,7 @@ fn main() -> anyhow::Result<()> {
 ## 4. Working with the Blackboard
 
 ```rust
-use vizij_orchestrator_core::{Blackboard, BlackboardEntry, Orchestrator, Schedule};
+use vizij_orchestrator::{Blackboard, BlackboardEntry, Orchestrator, Schedule};
 use vizij_api_core::value::float;
 use vizij_api_core::{TypedPath, WriteBatch, WriteOp};
 
@@ -142,7 +142,7 @@ Change schedules when creating the orchestrator or at runtime (if you rebuild co
 ## 6. Animations + Graphs
 
 ```rust
-use vizij_orchestrator_core::{
+use vizij_orchestrator::{
     controllers::{animation::AnimationControllerConfig, GraphControllerConfig, Subscriptions},
 };
 
@@ -172,7 +172,7 @@ Graph specs often form domains (IO graph, compute graph, etc.). Instead of stagi
 via the blackboard every frame, merge them into a single controller:
 
 ```rust
-use vizij_orchestrator_core::controllers::GraphControllerConfig;
+use vizij_orchestrator::controllers::GraphControllerConfig;
 
 let merged = GraphControllerConfig::merged_with_options(
     "graph:merged",

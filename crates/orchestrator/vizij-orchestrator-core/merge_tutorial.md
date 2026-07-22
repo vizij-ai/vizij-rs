@@ -47,7 +47,7 @@ Keep separate controllers when:
 `GraphMergeOptions` controls what happens when multiple graphs produce the same `TypedPath`.
 
 ```rust
-use vizij_orchestrator_core::{
+use vizij_orchestrator::{
     controllers::{GraphControllerConfig, GraphMergeOptions, OutputConflictStrategy},
     Orchestrator, Schedule,
 };
