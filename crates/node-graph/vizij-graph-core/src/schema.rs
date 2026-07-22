@@ -2349,7 +2349,10 @@ pub fn registry() -> Registry {
         type_id: Output,
         name: "Output",
         category: "IO",
-        doc: "Publishes In to the host path while passing the value through for downstream nodes.",
+        doc: "Publishes In to the host path while passing the value through for downstream nodes. \
+              Without a path, In is a keyed record batch and each record writes to the path its \
+              key_field names (value from value_field) — records that name their own keys apply \
+              to them by default.",
         inputs: vec![PortSpec {
             id: "in",
             ty: PortType::Any,
@@ -2366,15 +2369,35 @@ pub fn registry() -> Registry {
             optional: false,
         }],
         variadic_outputs: None,
-        params: vec![ParamSpec {
-            id: "path",
-            ty: ParamType::Any,
-            label: "Path",
-            doc: "TypedPath string used when queuing external writes.",
-            default_json: None,
-            min: None,
-            max: None,
-        }],
+        params: vec![
+            ParamSpec {
+                id: "path",
+                ty: ParamType::Any,
+                label: "Path",
+                doc: "TypedPath string used when queuing external writes.",
+                default_json: None,
+                min: None,
+                max: None,
+            },
+            ParamSpec {
+                id: "key_field",
+                ty: ParamType::Any,
+                label: "Key Field",
+                doc: "Path-less mode: record field id (UUID) holding each entry's target path.",
+                default_json: None,
+                min: None,
+                max: None,
+            },
+            ParamSpec {
+                id: "value_field",
+                ty: ParamType::Any,
+                label: "Value Field",
+                doc: "Path-less mode: record field id (UUID) holding each entry's value.",
+                default_json: None,
+                min: None,
+                max: None,
+            },
+        ],
     });
 
     // Records

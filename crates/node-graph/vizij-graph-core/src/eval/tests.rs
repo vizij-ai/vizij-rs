@@ -2252,3 +2252,197 @@ fn noise_nodes_are_deterministic_and_in_range() {
         );
     }
 }
+
+// --- path-less Output: keyed record batches ----------------------------------
+
+use uuid::Uuid;
+use vizij_api_core::value::{StructureField, StructureWithoutId};
+
+const KEY_FIELD: Uuid = Uuid::from_u128(0x11);
+const VALUE_FIELD: Uuid = Uuid::from_u128(0x22);
+
+fn record_field(id: Uuid, value: Value) -> StructureField {
+    StructureField {
+        id,
+        value: Box::new(value),
+    }
+}
+
+fn keyed_record(key: Value, value: Value) -> StructureWithoutId {
+    StructureWithoutId {
+        fields: vec![
+            record_field(KEY_FIELD, key),
+            record_field(VALUE_FIELD, value),
+        ],
+    }
+}
+
+fn keyed_batch(elements: Vec<StructureWithoutId>) -> Value {
+    Value::ArrayStructure {
+        id: Uuid::from_u128(0xBA7C4),
+        elements,
+    }
+}
+
+fn pathless_output_node(id: &str) -> NodeSpec {
+    NodeSpec {
+        id: id.to_string(),
+        kind: NodeType::Output,
+        params: NodeParams {
+            key_field: Some(KEY_FIELD),
+            value_field: Some(VALUE_FIELD),
+            ..Default::default()
+        },
+        output_shapes: HashMap::new(),
+        input_defaults: HashMap::new(),
+    }
+}
+
+#[test]
+fn pathless_output_expands_a_keyed_batch_into_per_key_writes() {
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node(
+                "src",
+                keyed_batch(vec![
+                    keyed_record(Value::String("anim/x".into()), Value::F32(0.25)),
+                    keyed_record(Value::String("anim/y".into()), Value::F32(0.75)),
+                ]),
+            ),
+            pathless_output_node("sink"),
+        ],
+        edges: vec![link("src", "sink", "in")],
+        ..Default::default()
+    }
+    .with_cache();
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("graph should evaluate");
+    let writes: Vec<_> = rt.writes.iter().collect();
+    assert_eq!(writes.len(), 2);
+    assert_eq!(writes[0].path.to_string(), "anim/x");
+    assert!(matches!(writes[0].value, Value::F32(v) if v == 0.25));
+    assert_eq!(writes[1].path.to_string(), "anim/y");
+    assert!(matches!(writes[1].value, Value::F32(v) if v == 0.75));
+}
+
+#[test]
+fn pathless_output_writes_nothing_for_an_empty_batch() {
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("src", keyed_batch(vec![])),
+            pathless_output_node("sink"),
+        ],
+        edges: vec![link("src", "sink", "in")],
+        ..Default::default()
+    }
+    .with_cache();
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("an empty batch is not an error");
+    assert_eq!(rt.writes.iter().count(), 0);
+}
+
+#[test]
+fn pathless_output_keeps_batch_order_for_a_repeated_key() {
+    // Batch order is preserved in the write set; the per-tick flush (a map)
+    // keeps the last write. Explicit combination is VIZ-76's ground.
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node(
+                "src",
+                keyed_batch(vec![
+                    keyed_record(Value::String("anim/x".into()), Value::F32(1.0)),
+                    keyed_record(Value::String("anim/x".into()), Value::F32(2.0)),
+                ]),
+            ),
+            pathless_output_node("sink"),
+        ],
+        edges: vec![link("src", "sink", "in")],
+        ..Default::default()
+    }
+    .with_cache();
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("graph should evaluate");
+    let writes: Vec<_> = rt.writes.iter().collect();
+    assert_eq!(writes.len(), 2);
+    assert!(matches!(writes[0].value, Value::F32(v) if v == 1.0));
+    assert!(matches!(writes[1].value, Value::F32(v) if v == 2.0));
+}
+
+#[test]
+fn pathless_output_errors_on_a_malformed_record() {
+    // A record without the declared value field is a miswired batch: loud.
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node(
+                "src",
+                keyed_batch(vec![StructureWithoutId {
+                    fields: vec![record_field(KEY_FIELD, Value::String("anim/x".into()))],
+                }]),
+            ),
+            pathless_output_node("sink"),
+        ],
+        edges: vec![link("src", "sink", "in")],
+        ..Default::default()
+    }
+    .with_cache();
+
+    let mut rt = GraphRuntime::default();
+    let err = evaluate_all(&mut rt, &graph).expect_err("a malformed record is an error");
+    assert!(err.contains("sink"), "error names the node: {err}");
+    assert!(err.contains("missing"), "error names the gap: {err}");
+}
+
+#[test]
+fn pathless_output_errors_on_a_non_batch_value() {
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("src", Value::F32(1.0)),
+            pathless_output_node("sink"),
+        ],
+        edges: vec![link("src", "sink", "in")],
+        ..Default::default()
+    }
+    .with_cache();
+
+    let mut rt = GraphRuntime::default();
+    let err = evaluate_all(&mut rt, &graph).expect_err("a scalar is not a record batch");
+    assert!(err.contains("record batch"), "error names the shape: {err}");
+}
+
+#[test]
+fn output_path_takes_precedence_over_key_fields() {
+    let batch = keyed_batch(vec![keyed_record(
+        Value::String("anim/x".into()),
+        Value::F32(0.5),
+    )]);
+    let graph = GraphSpec {
+        nodes: vec![
+            constant_node("src", batch.clone()),
+            NodeSpec {
+                id: "sink".to_string(),
+                kind: NodeType::Output,
+                params: NodeParams {
+                    path: Some(TypedPath::parse("whole/batch").expect("valid path")),
+                    key_field: Some(KEY_FIELD),
+                    value_field: Some(VALUE_FIELD),
+                    ..Default::default()
+                },
+                output_shapes: HashMap::new(),
+                input_defaults: HashMap::new(),
+            },
+        ],
+        edges: vec![link("src", "sink", "in")],
+        ..Default::default()
+    }
+    .with_cache();
+
+    let mut rt = GraphRuntime::default();
+    evaluate_all(&mut rt, &graph).expect("graph should evaluate");
+    let writes: Vec<_> = rt.writes.iter().collect();
+    assert_eq!(writes.len(), 1, "an explicit path writes the value whole");
+    assert_eq!(writes[0].path.to_string(), "whole/batch");
+    assert_eq!(writes[0].value, batch);
+}
