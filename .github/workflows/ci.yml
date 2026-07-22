@@ -75,14 +75,14 @@ jobs:
       - name: Build wasm wrapper packages
         run: |
           pnpm --filter @vizij/animation run build
-          pnpm --filter @vizij/node-graph-wasm run build
+          pnpm --filter @vizij/node-graph run build
           pnpm --filter @vizij/orchestrator-wasm run build
           pnpm --filter @vizij/animation-module run build
           pnpm --filter @vizij/runtime run build
       - name: Run wrapper tests
         run: |
           pnpm --filter @vizij/animation run test
-          pnpm --filter @vizij/node-graph-wasm run test
+          pnpm --filter @vizij/node-graph run test
           pnpm --filter @vizij/orchestrator-wasm run test
           pnpm --filter @vizij/animation-module run test
           pnpm --filter @vizij/runtime run test
@@ -114,7 +114,7 @@ jobs:
       - name: Build wasm wrapper packages
         run: |
           pnpm --filter @vizij/animation run build
-          pnpm --filter @vizij/node-graph-wasm run build
+          pnpm --filter @vizij/node-graph run build
           pnpm --filter @vizij/orchestrator-wasm run build
       - name: Run perf smoke (signatures + order-of-magnitude)
         run: pnpm run perf:smoke

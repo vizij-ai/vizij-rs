@@ -137,10 +137,10 @@ function buildHotPaths(entry, spec) {
 
 async function loadGraphWasm() {
   try {
-    return await import("@vizij/node-graph-wasm");
+    return await import("@vizij/node-graph");
   } catch {
     const local = new URL(
-      "../npm/@vizij/node-graph-wasm/dist/node-graph-wasm/src/index.js",
+      "../npm/@vizij/node-graph/dist/node-graph/src/index.js",
       import.meta.url,
     );
     return await import(local);

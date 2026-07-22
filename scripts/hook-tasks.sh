@@ -89,10 +89,10 @@ run_wasm_checks() {
   )
 
   (
-    cd npm/@vizij/node-graph-wasm
-    run_cmd "npm/@vizij/node-graph-wasm: npm ci" npm ci
-    run_cmd "npm/@vizij/node-graph-wasm: npm run build" npm run build
-    run_cmd "npm/@vizij/node-graph-wasm: npm pack --dry-run" npm pack --dry-run
+    cd npm/@vizij/node-graph
+    run_cmd "npm/@vizij/node-graph: npm ci" npm ci
+    run_cmd "npm/@vizij/node-graph: npm run build" npm run build
+    run_cmd "npm/@vizij/node-graph: npm pack --dry-run" npm pack --dry-run
   )
 
   (

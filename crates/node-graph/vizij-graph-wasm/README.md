@@ -2,7 +2,7 @@
 
 > **wasm-bindgen bridge for Vizij node graphs – load specs, stage inputs, and evaluate graphs from JavaScript.**
 
-`vizij-graph-wasm` compiles `vizij-graph-core` to WebAssembly and exposes a friendly API for TypeScript tooling. The npm wrapper `@vizij/node-graph-wasm` builds on this crate.
+`vizij-graph-wasm` compiles `vizij-graph-core` to WebAssembly and exposes a friendly API for TypeScript tooling. The npm wrapper `@vizij/node-graph` builds on this crate.
 
 ---
 
@@ -54,12 +54,12 @@ Manual build:
 ```bash
 wasm-pack build crates/node-graph/vizij-graph-wasm \
   --target web \
-  --out-dir npm/@vizij/node-graph-wasm/pkg \
+  --out-dir npm/@vizij/node-graph/pkg \
   --release \
   --features urdf_ik
 ```
 
-The workspace scripts emit the generated files directly into `npm/@vizij/node-graph-wasm/pkg/`, which is the source consumed by the npm wrapper.
+The workspace scripts emit the generated files directly into `npm/@vizij/node-graph/pkg/`, which is the source consumed by the npm wrapper.
 
 ---
 
@@ -75,7 +75,7 @@ import {
   graphSamples,
   type GraphSpec,
   type EvalResult,
-} from "@vizij/node-graph-wasm";
+} from "@vizij/node-graph";
 
 await init();
 
@@ -91,7 +91,7 @@ console.log(result.nodes, result.writes);
 Minimal JS usage through the public wrapper API:
 
 ```ts
-import { init, createGraph, normalizeGraphSpec } from "@vizij/node-graph-wasm";
+import { init, createGraph, normalizeGraphSpec } from "@vizij/node-graph";
 
 await init();
 const normalized = await normalizeGraphSpec(spec);
@@ -155,7 +155,7 @@ console.log(graph.evalAll());
 
 ```bash
 pnpm run build:wasm:graph      # ensure pkg/ is up to date
-cd npm/@vizij/node-graph-wasm
+cd npm/@vizij/node-graph
 pnpm test
 ```
 
@@ -170,6 +170,6 @@ cargo test -p vizij-graph-wasm
 ## Related Packages
 
 - [`vizij-graph-core`](../vizij-graph-core/README.md) – core evaluator used by this crate.
-- [`npm/@vizij/node-graph-wasm`](../../../npm/@vizij/node-graph-wasm/README.md) – npm package built from this binding.
+- [`npm/@vizij/node-graph`](../../../npm/@vizij/node-graph/README.md) – npm package built from this binding.
 
 Need assistance? Open an issue—predictable WASM bindings keep Vizij graphs portable. 🕸️

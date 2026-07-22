@@ -1,4 +1,4 @@
-# @vizij/node-graph-wasm
+# @vizij/node-graph
 
 > Vizij's node graph engine for JavaScript.
 
@@ -15,14 +15,14 @@ This package ships the WebAssembly build of `vizij-graph-core` together with a T
 ## Installation
 
 ```bash
-npm install @vizij/node-graph-wasm
+npm install @vizij/node-graph
 ```
 
 For local workspace development:
 
 ```bash
 pnpm run build:wasm:graph
-pnpm --filter @vizij/node-graph-wasm build
+pnpm --filter @vizij/node-graph build
 ```
 
 ## Core API
@@ -88,7 +88,7 @@ import {
   normalizeGraphSpec,
   graphSamples,
   valueAsNumber,
-} from "@vizij/node-graph-wasm";
+} from "@vizij/node-graph";
 
 await init();
 
@@ -128,7 +128,7 @@ Use `registerInputPaths` plus `prepareInputSlots` when you want to reuse slot in
 The package exports named graph samples and fixture loaders:
 
 ```ts
-import { loadNodeGraphBundle } from "@vizij/node-graph-wasm";
+import { loadNodeGraphBundle } from "@vizij/node-graph";
 
 const { spec } = await loadNodeGraphBundle("urdf-ik-position");
 graph.loadGraph(spec);
@@ -146,11 +146,11 @@ graph.loadGraph(spec);
 
 ```bash
 pnpm run build:wasm:graph
-pnpm --filter @vizij/node-graph-wasm test
+pnpm --filter @vizij/node-graph test
 cargo test -p vizij-graph-wasm
 ```
 
-The package test script rebuilds the wrapper and runs the compiled Node test bundle from `dist/node-graph-wasm/tests/all.test.js`.
+The package test script rebuilds the wrapper and runs the compiled Node test bundle from `dist/node-graph/tests/all.test.js`.
 
 ## Related Packages
 

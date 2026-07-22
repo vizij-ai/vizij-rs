@@ -1,4 +1,4 @@
-# @vizij/node-graph-wasm
+# @vizij/node-graph
 
 ## 0.7.0
 

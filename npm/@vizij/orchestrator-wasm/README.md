@@ -117,5 +117,5 @@ The package test script rebuilds the wrapper and runs the compiled Node test bun
 ## Related Packages
 
 - [`vizij-orchestrator-wasm`](../../../crates/orchestrator/vizij-orchestrator-wasm/README.md)
-- [`@vizij/node-graph-wasm`](../node-graph-wasm/README.md)
+- [`@vizij/node-graph`](../node-graph/README.md)
 - [`@vizij/value-json`](../value-json/README.md)

@@ -30,7 +30,7 @@ file summarises, it does not replace, those sources.
 - **Animation stack**: `vizij-animation-core`,
   `vizij-animation-wasm`, and npm `@vizij/animation`.
 - **Node graph stack**: `vizij-graph-core`,
-  `vizij-graph-wasm`, and npm `@vizij/node-graph-wasm`.
+  `vizij-graph-wasm`, and npm `@vizij/node-graph`.
 - **Orchestrator stack**: `vizij-orchestrator-core` runtime coordinating
   graphs/animations, `vizij-orchestrator-wasm`, and npm `@vizij/orchestrator-wasm`.
 - **Interop (Arora) stack**: `crates/interop/*` adapts the Vizij stacks onto

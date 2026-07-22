@@ -44,7 +44,7 @@ function pkgWasmUrl(): URL {
   const wasmPath = resolve(here, "../../../pkg/vizij_graph_wasm_bg.wasm");
   if (!existsSync(wasmPath)) {
     throw new Error(
-      "Missing pkg/vizij_graph_wasm_bg.wasm. Run:\n  wasm-pack build crates/node-graph/vizij-graph-wasm --target web --out-dir npm/@vizij/node-graph-wasm/pkg --release (from repo root vizij-rs/)"
+      "Missing pkg/vizij_graph_wasm_bg.wasm. Run:\n  wasm-pack build crates/node-graph/vizij-graph-wasm --target web --out-dir npm/@vizij/node-graph/pkg --release (from repo root vizij-rs/)"
     );
   }
   return pathToFileURL(wasmPath);
