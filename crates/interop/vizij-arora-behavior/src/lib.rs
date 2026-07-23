@@ -188,15 +188,29 @@ impl BehaviorInterpreter for ProcessingGraph {
     /// `graph` must be a [`spec_graph`] carrier: the shared model's one-node
     /// form whose literal input holds the Vizij spec JSON (see that module for
     /// why the spec rides the shared model opaquely). The spec is parsed and
-    /// installed immediately with a fresh graph runtime; the store and the
+    /// installed in place while the graph runtime is kept **warm**: nodes that
+    /// survive the swap keep their integration state (springs/dampers/URDF
+    /// chains) and the graph clock stays continuous, so a program starting or
+    /// stopping no longer restarts every stateful node. The store and the
     /// `function -> module` map are untouched — the store belongs to the
     /// device, and the loaded-module set is fixed at device build.
     fn load(&mut self, graph: Graph) -> Result<(), BehaviorError> {
         let json = spec_graph::decode(&graph).map_err(|message| BehaviorError { message })?;
-        let spec = parse_spec(&json).map_err(|message| BehaviorError { message })?;
+        let mut spec = parse_spec(&json).map_err(|message| BehaviorError { message })?;
         self.inputs = input_paths(&spec);
+        // Keep `self.rt` warm across the swap: `evaluate_all` garbage-collects
+        // state for nodes that disappear and grows storage for new ones, so no
+        // manual reset is needed and surviving nodes keep their state.
+        //
+        // Carry the version forward before re-caching. A freshly parsed spec
+        // restarts at version 0 (→ 1 after `with_cache`); left as-is that would
+        // collide with the previously installed spec's version and, since the
+        // eval path takes the version-keyed `PlanCache` fast path, serve the
+        // *old* plan for the new graph. Bumping from the current version keeps
+        // it strictly increasing so the plan always rebuilds for the new
+        // topology.
+        spec.version = self.spec.version;
         self.spec = spec.with_cache();
-        self.rt = GraphRuntime::default();
         Ok(())
     }
 }
@@ -341,6 +355,59 @@ mod tests {
     fn load_rejects_a_non_carrier_graph() {
         let mut graph = ProcessingGraph::from_spec(passthrough("a", "b"), vec![]);
         assert!(graph.load(Graph::empty()).is_err());
+    }
+
+    /// A load keeps the graph runtime warm: the graph clock (surfaced by a
+    /// `Time` node, which reads `rt.t`) stays continuous across a recompose
+    /// instead of restarting at zero. Guards the runtime-continuity behavior
+    /// and, with `load_swaps_the_graph_in_place`, the version-carry that keeps
+    /// the plan cache from serving the old plan for the new graph.
+    fn clock_graph_json(output: &str) -> serde_json::Value {
+        json!({
+            "nodes": [
+                { "id": "clock", "type": "time" },
+                { "id": "out", "type": "output", "params": { "path": output } }
+            ],
+            "edges": [
+                { "from": { "node_id": "clock" }, "to": { "node_id": "out", "input": "in" } }
+            ]
+        })
+    }
+
+    #[test]
+    fn load_keeps_the_graph_runtime_warm() {
+        let mut initial = clock_graph_json("clock/a");
+        vizij_api_core::json::normalize_graph_spec_value(&mut initial).expect("normalize");
+        let initial: GraphSpec = serde_json::from_value(initial).expect("graph spec");
+
+        let store = SimpleDataStore::new();
+        let mut graph = ProcessingGraph::from_spec(initial, vec![]);
+        let mut bridge = NoopBridge;
+
+        // Accumulate three frames of graph time (rt.t ~= 0.3).
+        for _ in 0..3 {
+            graph.tick_store(&store, &mut bridge, 0.1).expect("tick");
+        }
+        match read(&store, "clock/a") {
+            Some(Value::F32(t)) => {
+                assert!((t - 0.3).abs() < 1e-3, "clock/a = {t}, expected ~0.3")
+            }
+            other => panic!("expected F32, got {other:?}"),
+        }
+
+        // Recompose to a different clock graph. The runtime stays warm, so the
+        // clock keeps counting from ~0.3 rather than restarting at 0 — a reset
+        // runtime would show ~0.1 here.
+        graph
+            .load(spec_graph::encode(&clock_graph_json("clock/b").to_string()))
+            .expect("carrier graph loads");
+        graph.tick_store(&store, &mut bridge, 0.1).expect("tick");
+        match read(&store, "clock/b") {
+            Some(Value::F32(t)) => {
+                assert!(t > 0.35, "clock/b = {t}, expected warm continuation ~0.4")
+            }
+            other => panic!("expected F32, got {other:?}"),
+        }
     }
 
     #[test]
