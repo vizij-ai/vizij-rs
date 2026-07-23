@@ -37,7 +37,7 @@ per-composite type is declared here; the runtime `Value` carries the identity.
 - `load_animation(clip: AnimationClip) -> u32` — load a clip, return its `AnimId`.
 - `create_player(name: str) -> u32` — return a `PlayerId`.
 - `add_instance(player: u32, anim: u32) -> u32` — return an `InstId`.
-- `step(dt_ns: u64) -> [TrackOutput]` — advance by the `arora/dt` golden-key
+- `step(dt_ns: u64) -> [TrackOutput]` — advance by the `arora/dt` built-in key
   nanoseconds and return **per-track outputs keyed by track identity**, each
   carrying the track's **default authored key** (`animatable_id`) plus its
   sampled value. The consumer decides the final store key: default = the

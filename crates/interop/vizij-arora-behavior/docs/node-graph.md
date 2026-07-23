@@ -1,6 +1,6 @@
 # Vizij's node graph as an Arora behavior interpreter
 
-Vizij's node graph is a **behavior interpreter** in the Arora sense. Read Arora's **[how a behavior interpreter works](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-behavior/docs/interpreter-workflow.md)** first — it defines the `BehaviorInterpreter` contract (the `tick` / `apply` / `load` lifecycle, the `BehaviorContext` store, timing as golden store keys) that this page assumes. Here we cover what is *specific* to the node graph, and draw the parallel with the other reference interpreter, [`arora-behavior-tree`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-behavior-tree/docs/nodes.md).
+Vizij's node graph is a **behavior interpreter** in the Arora sense. Read Arora's **[how a behavior interpreter works](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-behavior/docs/interpreter-workflow.md)** first — it defines the `BehaviorInterpreter` contract (the `tick` / `apply` / `load` lifecycle, the `BehaviorContext` store, timing as built-in store keys) that this page assumes. Here we cover what is *specific* to the node graph, and draw the parallel with the other reference interpreter, [`arora-behavior-tree`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-behavior-tree/docs/nodes.md).
 
 The interpreter type is [`ProcessingGraph`](../src/lib.rs#L79), which implements `arora_behavior::BehaviorInterpreter` ([`lib.rs:180`](../src/lib.rs#L180)). The evaluation engine underneath it is the separate, host-agnostic [`vizij-graph-core`](../../../node-graph/vizij-graph-core/) crate. Vizij and Arora share **one runtime value type** (`vizij_api_core::Value` *is* `arora_types::value::Value`), so values cross the store and call boundaries with no conversion ([`vizij-arora/src/lib.rs:1-13`](../../vizij-arora/src/lib.rs#L1-L13)).
 
@@ -11,7 +11,7 @@ The interpreter's spine is `tick_store` ([`lib.rs:135-177`](../src/lib.rs#L135-L
 | Interpreter lifecycle | Vizij node graph |
 |---|---|
 | load | `load` decodes the spec and installs it with a fresh `GraphRuntime`; a recompose never rebuilds the device ([`lib.rs:198-205`](../src/lib.rs#L198-L205)) |
-| time update | `dt` is read from the golden `arora/dt` store key and advances the graph clock (`rt.t += dt`) ([`golden_dt_seconds`, `lib.rs:211-221`](../src/lib.rs#L211-L221)) |
+| time update | `dt` is read from the built-in `arora/dt` store key and advances the graph clock (`rt.t += dt`) ([`built_in_dt_seconds`, `lib.rs:211-221`](../src/lib.rs#L211-L221)) |
 | tick | stage subscribed inputs → `evaluate_all` → flush outputs; **always returns `BehaviorStatus::Running`** ([`lib.rs:181-186`](../src/lib.rs#L181-L186)) |
 | graph update | **not** incremental — `apply(GraphDiff)` is rejected; every edit is a whole-spec `load` (see [Editing](#editing-whole-spec-load-only)) |
 

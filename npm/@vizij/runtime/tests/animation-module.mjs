@@ -89,7 +89,7 @@ const clip = {
 };
 
 // --- the behavior: a graph whose ExternalFunction node steps the module ------
-// Each tick: read the runtime's golden dt (arora/dt, nanoseconds) from the
+// Each tick: read the runtime's built-in dt (arora/dt, nanoseconds) from the
 // store, call the module's step(dt) through the engine, and write the returned
 // [TrackOutput] to anim/out — the Stage-B shape (the graph drives the
 // animation module; no JS clip pipeline).
@@ -129,7 +129,7 @@ const pInstance = runtime.call({
 runtime.step(0);
 assert.ok("u32" in (await pInstance).ret, "add_instance returns an instance id");
 
-// Two 0.25 s steps: each tick the graph feeds the golden dt into the module's
+// Two 0.25 s steps: each tick the graph feeds the built-in dt into the module's
 // step and lands the sampled [TrackOutput] in the store.
 const firstTrack = () => {
   const out = runtime.readValues(["anim/out"])["anim/out"];

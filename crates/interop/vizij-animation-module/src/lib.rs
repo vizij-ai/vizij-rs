@@ -340,7 +340,7 @@ fn bake_with_derivatives(
 
 /// Advance the engine by `dt_ns` nanoseconds and return per-track outputs.
 ///
-/// `dt_ns` is the runtime's `arora/dt` golden key. The transport commands
+/// `dt_ns` is the runtime's `arora/dt` built-in key. The transport commands
 /// buffered since the previous step apply first, in issue order. Each output
 /// carries the track's authored key as `default_key` and its stable id as
 /// `track_id`; the value uses the vizij-arora `Value` encoding.
