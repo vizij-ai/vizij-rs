@@ -50,7 +50,7 @@ pub enum NumericArrayPolicy {
     AlwaysVector,
 }
 
-/// Errors produced while normalizing orchestrator graph JSON blobs.
+/// Errors produced while normalizing graph JSON blobs.
 #[derive(Debug, Error)]
 pub enum JsonError {
     #[error("graph json parse error: {0}")]

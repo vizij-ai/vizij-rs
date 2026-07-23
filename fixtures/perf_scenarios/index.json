@@ -63,16 +63,5 @@
       "warmup": 2,
       "samples": 10
     }
-  ],
-  "orchestrator": [
-    {
-      "id": "orchestrator-merged-blend",
-      "spec": "fixtures/perf_scenarios/orchestrator-merged-blend.json",
-      "sha256": "399e43c006bf8d4e86024eb3082bd94f678bdba77369b363b235d5f0e0bd8509",
-      "dt": 0.0166667,
-      "steps": 60,
-      "warmup": 5,
-      "samples": 8
-    }
   ]
 }

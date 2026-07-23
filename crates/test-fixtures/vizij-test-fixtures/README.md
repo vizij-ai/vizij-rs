@@ -49,4 +49,3 @@ When adding fixtures:
 - [`@vizij/test-fixtures`](../../../npm/@vizij/test-fixtures/README.md)
 - [`vizij-animation-core`](../../animation/vizij-animation-core/README.md)
 - [`vizij-graph-core`](../../node-graph/vizij-graph-core/README.md)
-- [`vizij-orchestrator-core`](../../orchestrator/vizij-orchestrator-core/README.md)

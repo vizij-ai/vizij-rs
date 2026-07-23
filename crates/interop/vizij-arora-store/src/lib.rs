@@ -63,7 +63,7 @@ impl BlackboardStore {
         Self::from_blackboard(Blackboard::new())
     }
 
-    /// Wrap an existing `Blackboard` (e.g. one an orchestrator already populated).
+    /// Wrap an existing `Blackboard` (e.g. one pre-populated elsewhere).
     pub fn from_blackboard(blackboard: Blackboard) -> Self {
         Self {
             inner: Arc::new(Inner {

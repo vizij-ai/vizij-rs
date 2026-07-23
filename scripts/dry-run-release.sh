@@ -13,7 +13,6 @@ cargo test --workspace
 # echo "Building WASM packages…"
 # node scripts/build-animation-wasm.mjs
 # node scripts/build-graph-wasm.mjs
-# node scripts/build-orchestrator-wasm.mjs
 
 # # 3. Dry‑run publishing of crates in dependency order
 # CRATES=(
@@ -21,7 +20,6 @@ cargo test --workspace
 #   vizij-graph-core
 #   vizij-animation-wasm
 #   vizij-graph-wasm
-#   vizij-orchestrator-wasm
 # )
 
 # for crate in "${CRATES[@]}"; do
@@ -39,7 +37,6 @@ NPM_PACKAGES=(
   wasm-loader
   animation
   node-graph
-  orchestrator-wasm
 )
 
 for pkg in "${NPM_PACKAGES[@]}"; do

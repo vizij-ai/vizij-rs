@@ -49,10 +49,8 @@ const rustSections = [
     ]
   },
   {
-    title: "Orchestrator & Fixtures",
+    title: "Fixtures",
     items: [
-      ["vizij-orchestrator-core", "rust/vizij_orchestrator/"],
-      ["vizij-orchestrator-wasm", "rust/vizij_orchestrator_wasm/"],
       ["vizij-test-fixtures", "rust/vizij_test_fixtures/"]
     ]
   }
@@ -63,8 +61,7 @@ const npmSections = [
     title: "WASM Wrappers",
     items: [
       ["@vizij/animation", "npm/modules/animation_src.html"],
-      ["@vizij/node-graph", "npm/modules/node-graph_src.html"],
-      ["@vizij/orchestrator-wasm", "npm/modules/orchestrator-wasm_src.html"]
+      ["@vizij/node-graph", "npm/modules/node-graph_src.html"]
     ]
   },
   {

@@ -211,6 +211,5 @@ pnpm run watch:wasm:animation     # continuous rebuild (requires cargo-watch)
 
 - [`vizij-animation-wasm`](../vizij-animation-wasm/README.md) – wasm-bindgen binding used in web runtimes.
 - [`@vizij/animation`](../../../npm/@vizij/animation/README.md) – npm wrapper with loader utilities and ABI checks.
-- [`vizij-orchestrator-core`](../../orchestrator/vizij-orchestrator-core/README.md) – Coordinates animation and node graph controllers via a shared blackboard.
 
 Questions or contributions? Please file an issue in the main Vizij repository—well-documented behaviour keeps animation playback predictable. 🎬

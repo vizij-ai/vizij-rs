@@ -7,11 +7,10 @@
 ## Current Focus (Next 1–2 Sprints)
 
 - Harden wasm distribution tooling:
-  - Add wasm-bindgen integration tests for the animation, graph, and orchestrator packages.
+  - Add wasm-bindgen integration tests for the animation and graph packages.
   - Script ABI/version bump checks so release candidates fail fast when glue and binaries drift.
 - Establish performance baselines:
   - Capture benchmark data for representative node graphs (including robotics workloads).
-  - Record orchestrator pass timings to feed future observability dashboards.
 - Improve developer ergonomics:
   - Prototype a shared `vizij` CLI for fixture sync, release prep, and local smoke tests.
 
@@ -32,15 +31,6 @@
 - Add optional tracing/diagnostic events for downstream consumers.
 - Prototype incremental/streaming evaluation APIs in the wasm bridge.
 - Evaluate selector-heavy graphs and record benchmark results over time.
-
-### Orchestrator Stack
-- Add tracing/metrics hooks around passes and controller evaluation.
-- Explore configurable animation path parsing and richer CLI smoke tests.
-- Expose incremental tick APIs or event streams for advanced hosts.
-
-- Provide automated snapshot tests that compare orchestrator frames against Rust outputs for a set of fixtures.
-- Explore exposing an event stream API that emits controller lifecycle events for UI visualisations.
-- Consider shipping TypeScript builder helpers for assembling `MergedGraphRegistrationConfig` programmatically.
 
 ---
 

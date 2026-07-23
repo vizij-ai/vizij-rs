@@ -21,7 +21,7 @@ Vizij runs on Arora: the store, the modules, the behaviors, and Studio all speak
 
 - Rust 2021 library over `arora-types` (plus `serde`, `serde_json`, `hashbrown`, `thiserror`, `uuid`).
 - Re-exports `arora_types::value::Value` and declares the vizij composite type ids (`vec2`/`vec3`/`vec4`/`quat`/`color-rgba`/`transform`) with constructors and accessors.
-- Defines `Shape` metadata shared by animation, graph, and orchestrator stacks.
+- Defines `Shape` metadata shared by animation and graph stacks.
 - Implements canonical `TypedPath` parsing/formatting for target identifiers.
 - Supplies `WriteOp` / `WriteBatch` helpers so engines can communicate deterministic side effects.
 - Ships JSON normalisation utilities that accept every historical payload form and produce Arora `Value` serde.
@@ -67,7 +67,7 @@ Mapping: `f32` -> `F32`, `bool` -> `Boolean`, text -> `String`, numeric vector -
 
 - `WriteOp` captures a single `{ path, value, shape? }` produced by an engine; it serialises with the path as a string and the value in Arora serde form.
 - `WriteBatch` is a thin wrapper around `Vec<WriteOp>` with append helpers and serde support.
-- Engines use `WriteBatch` to communicate external side effects to orchestrators or hosts.
+- Engines use `WriteBatch` to communicate external side effects to hosts.
 
 ### JSON Normalisation
 
@@ -162,6 +162,6 @@ Modules include unit tests for the constructor/accessor round-trips, blending, c
 ## Related Packages
 
 - [`vizij-api-wasm`](../vizij-api-wasm/README.md) – wasm helpers that mirror the same normalisation logic for JavaScript.
-- Engine stacks (`vizij-animation-core`, `vizij-graph-core`, `vizij-orchestrator-core`) all depend on these contracts.
+- Engine stacks (`vizij-animation-core`, `vizij-graph-core`) all depend on these contracts.
 
 Questions or improvements? Open an issue—shared contracts are the backbone of Vizij interoperability. 🔗
