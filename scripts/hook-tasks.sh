@@ -79,7 +79,6 @@ npm_test() {
 run_wasm_checks() {
   run_cmd "node scripts/build-animation-wasm.mjs" node scripts/build-animation-wasm.mjs
   run_cmd "node scripts/build-graph-wasm.mjs" node scripts/build-graph-wasm.mjs
-  run_cmd "node scripts/build-orchestrator-wasm.mjs" node scripts/build-orchestrator-wasm.mjs
 
   (
     cd npm/@vizij/animation
@@ -95,12 +94,6 @@ run_wasm_checks() {
     run_cmd "npm/@vizij/node-graph: npm pack --dry-run" npm pack --dry-run
   )
 
-  (
-    cd npm/@vizij/orchestrator-wasm
-    run_cmd "npm/@vizij/orchestrator-wasm: npm ci" npm ci
-    run_cmd "npm/@vizij/orchestrator-wasm: npm run build" npm run build
-    run_cmd "npm/@vizij/orchestrator-wasm: npm pack --dry-run" npm pack --dry-run
-  )
 }
 
 cmd_fmt_rust() {

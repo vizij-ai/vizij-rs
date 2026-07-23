@@ -10,7 +10,6 @@ const __dirname = dirname(__filename);
 const TARGETS = new Map([
   ["animation", "build-animation-wasm.mjs"],
   ["graph", "build-graph-wasm.mjs"],
-  ["orchestrator", "build-orchestrator-wasm.mjs"],
   ["arora-web", "build-arora-web-wasm.mjs"],
 ]);
 

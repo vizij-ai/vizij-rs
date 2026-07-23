@@ -2919,7 +2919,6 @@ dependencies = [
  "uuid",
  "vizij-api-core",
  "vizij-graph-core",
- "vizij-orchestrator-core",
 ]
 
 [[package]]
@@ -3013,41 +3012,6 @@ dependencies = [
  "vizij-api-core",
  "vizij-graph-core",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "vizij-orchestrator-core"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "criterion",
- "hashbrown 0.17.1",
- "indexmap 2.14.0",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "vizij-animation-core",
- "vizij-api-core",
- "vizij-graph-core",
- "vizij-test-fixtures",
-]
-
-[[package]]
-name = "vizij-orchestrator-wasm"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "console_error_panic_hook",
- "js-sys",
- "serde",
- "serde-wasm-bindgen",
- "serde_json",
- "vizij-animation-core",
- "vizij-api-core",
- "vizij-graph-core",
- "vizij-orchestrator-core",
- "wasm-bindgen",
- "wasm-bindgen-test",
 ]
 
 [[package]]

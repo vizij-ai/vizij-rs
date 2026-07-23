@@ -3,7 +3,7 @@ name = "vizij-arora-behavior"
 version = "0.0.0"
 edition.workspace = true
 publish = false
-description = "Vizij node graph / orchestrator driven as Arora behavior interpreters (ProcessingGraph, OrchestratorBehavior)."
+description = "A Vizij node graph driven as an Arora behavior interpreter (ProcessingGraph)."
 
 [dependencies]
 arora-behavior = "6"
@@ -12,7 +12,6 @@ serde_json = { workspace = true }
 uuid = "1"
 vizij-api-core = { path = "../../api/vizij-api-core" }
 vizij-graph-core = { path = "../../node-graph/vizij-graph-core" }
-vizij-orchestrator-core = { path = "../../orchestrator/vizij-orchestrator-core" }
 
 [dev-dependencies]
 arora-simple-data-store = "2"

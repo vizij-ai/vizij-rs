@@ -8,7 +8,7 @@ The `crates/animation` directory contains the Rust-side animation stack. The thr
 
 | Crate | Purpose | Primary consumers |
 |-------|---------|-------------------|
-| [`vizij-animation-core`](vizij-animation-core/README.md) | Deterministic animation engine, parsing, playback, blending, baking. | Native hosts, orchestrator runtime, wasm binding. |
+| [`vizij-animation-core`](vizij-animation-core/README.md) | Deterministic animation engine, parsing, playback, blending, baking. | Native hosts, the animation module, wasm binding. |
 | [`vizij-animation-wasm`](vizij-animation-wasm/README.md) | `wasm-bindgen` bridge used by the npm wrapper. | [`@vizij/animation`](../../npm/@vizij/animation/README.md). |
 
 ## Typical Workflows

@@ -28,10 +28,5 @@
     "signature": "2a54fe9753b90058d1617f50cb623af1b7c5282710d3368f38bf347f40fbb035",
     "median_us": 124.37557916664446,
     "tolerance_pct": 0.35
-  },
-  "orchestrator-merged-blend": {
-    "signature": "4358fc446d0b260f6d5bfdf1fc791c66e297e01af0e32c0f8b7b5fa834f8acd8",
-    "median_us": 10063.007524999997,
-    "tolerance_pct": 0.35
   }
 }

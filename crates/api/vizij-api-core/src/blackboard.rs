@@ -1,4 +1,4 @@
-//! Blackboard storage and conflict tracking for orchestrator frames.
+//! Blackboard storage and per-entry conflict tracking across writes.
 
 use std::collections::HashMap;
 use std::fmt;

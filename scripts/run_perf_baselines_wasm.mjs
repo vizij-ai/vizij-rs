@@ -42,7 +42,6 @@ const SMOKE_IDS = new Set([
   "graph-smoke",
   "graph-defaults-only",
   "animation-mixed-small",
-  "orchestrator-merged-blend",
 ]);
 
 function stableStringify(value) {
@@ -153,18 +152,6 @@ async function loadAnimWasm() {
   } catch {
     const local = new URL(
       "../npm/@vizij/animation/dist/animation/src/index.js",
-      import.meta.url,
-    );
-    return await import(local);
-  }
-}
-
-async function loadOrchWasm() {
-  try {
-    return await import("@vizij/orchestrator-wasm");
-  } catch {
-    const local = new URL(
-      "../npm/@vizij/orchestrator-wasm/dist/orchestrator-wasm/src/index.js",
       import.meta.url,
     );
     return await import(local);
@@ -303,134 +290,6 @@ function loadGraphSpecFromFile(relPath) {
   return { spec: asGraphSpec(parsed), sha: hashFile(full) };
 }
 
-async function runOrchestratorScenario(entry, abiInfo) {
-  const { spec: orchCfg, sha } = resolveSpec(entry);
-  const { init, Orchestrator, abi_version } = await loadOrchWasm();
-  await init();
-  const steps = entry.steps ?? 60;
-  const warmup = entry.warmup ?? 0;
-  const samples = entry.samples ?? 5;
-  const dt = entry.dt ?? DEFAULT_DT;
-
-  const graphs = (orchCfg.graphs ?? []).map((g) => {
-    const loaded = loadGraphSpecFromFile(g.spec);
-    const inputs = collectInputPaths(loaded.spec);
-    return {
-      id: g.id ?? g.spec,
-      ...loaded,
-      inputs,
-    };
-  });
-  const hotInputs = new Set(
-    orchCfg.hotInputs === "all-input-nodes"
-      ? graphs.flatMap((g) => g.inputs)
-      : [],
-  );
-
-  const anims = (orchCfg.animations ?? []).map((a) => {
-    const loaded = loadGraphSpecFromFile(a.spec);
-    return {
-      id: a.id ?? a.spec,
-      spec: loaded.spec,
-      sha: loaded.sha,
-      bind: a.bind ?? graphs[0]?.id ?? "graph",
-    };
-  });
-
-  const perSample = [];
-  let signature = "";
-
-  for (let s = 0; s < samples; s++) {
-    const orch = new Orchestrator({ schedule: orchCfg.schedule ?? "SinglePass" });
-    const stepFn =
-      typeof orch.stepDelta === "function"
-        ? (dt, token) => orch.stepDelta(dt, token)
-        : (dt) => orch.step(dt);
-    if (hotInputs.size && typeof orch.setHotInputs === "function") {
-      orch.setHotInputs([...hotInputs], { epsilon: 0 });
-    }
-
-    const graphCfgs = graphs.map((g) => ({
-      id: g.id,
-      spec: g.spec,
-      subs: g.inputs.length ? { inputs: g.inputs, mirrorWrites: false } : undefined,
-    }));
-
-    if (graphCfgs.length === 1) {
-      orch.registerGraph(graphCfgs[0]);
-    } else {
-      orch.registerMergedGraph({
-        id: "merged",
-        graphs: graphCfgs,
-        strategy: orchCfg.mergeStrategy ?? { outputs: "error", intermediate: "blend" },
-      });
-    }
-
-    anims.forEach((a, idx) => {
-      orch.registerAnimation({
-        id: a.id ?? `anim-${idx}`,
-        setup: {
-          animation: a.spec,
-          player: { name: a.id ?? `player-${idx}`, loop_mode: "loop" },
-          instance: { weight: 1, time_scale: 1 },
-        },
-      });
-    });
-
-    const inputPaths = [...hotInputs];
-    let frame = null;
-    let version = 0n;
-
-    for (let w = 0; w < warmup; w++) {
-      if (inputPaths.length && typeof orch.setInputsSmart === "function") {
-        const vals = new Float32Array(inputPaths.length).fill(w);
-        orch.setInputsSmart(inputPaths, vals);
-      }
-      frame = stepFn(dt, version);
-      if (frame?.version !== undefined) version = BigInt(frame.version);
-      else version = version + 1n;
-    }
-
-    const t0 = now();
-    for (let i = 0; i < steps; i++) {
-      if (inputPaths.length && typeof orch.setInputsSmart === "function") {
-        const vals = new Float32Array(inputPaths.length);
-        for (let j = 0; j < inputPaths.length; j++) {
-          vals[j] = (i % 7) + j * 0.01;
-        }
-        orch.setInputsSmart(inputPaths, vals);
-      }
-      frame = stepFn(dt, version);
-      if (frame?.version !== undefined) version = BigInt(frame.version);
-      else version = version + 1n;
-    }
-    const usPerStep = ((now() - t0) * 1000) / steps;
-    signature = hashValue({ frame, steps, dt });
-    perSample.push(usPerStep);
-  }
-
-  abiInfo.orchestrator = abi_version?.() ?? abiInfo.orchestrator ?? null;
-
-  const sigSha = hashValue({
-    orchestrator_spec: sha,
-    graph_shas: graphs.map((g) => g.sha),
-    anim_shas: anims.map((a) => a.sha),
-    signature,
-  });
-
-  return {
-    id: entry.id,
-    bench: "orchestrator_tick",
-    median_us: median(perSample),
-    signature: sigSha,
-    spec_sha: sha,
-    samples,
-    warmup,
-    steps,
-    dt,
-  };
-}
-
 function evaluateAgainstGolden(result) {
   const golden = goldens[result.id] ?? {};
   const tolerance = golden.tolerance_pct ?? DEFAULT_VARIANCE;
@@ -467,7 +326,7 @@ function appendRows(rows, abiInfo) {
   } catch {
     /* fall back to unknown */
   }
-  const abiString = `g${abiInfo.graph ?? "?"}-a${abiInfo.animation ?? "?"}-o${abiInfo.orchestrator ?? "?"}`;
+  const abiString = `g${abiInfo.graph ?? "?"}-a${abiInfo.animation ?? "?"}`;
   const buildType = process.env.VIZIJ_BUILD_TYPE ?? "release";
 
   const lines = rows
@@ -493,12 +352,11 @@ function selectScenarios() {
   return {
     graph: pick(meta.graph ?? []),
     animation: pick(meta.animation ?? []),
-    orchestrator: pick(meta.orchestrator ?? []),
   };
 }
 
 async function main() {
-  const abiInfo = { graph: null, animation: null, orchestrator: null };
+  const abiInfo = { graph: null, animation: null };
   const scenarios = selectScenarios();
   const results = [];
 
@@ -509,10 +367,6 @@ async function main() {
   for (const entry of scenarios.animation) {
     if (VERIFY_ONLY || SMOKE) console.log(`Running animation:${entry.id}`);
     results.push(await runAnimationScenario(entry, abiInfo));
-  }
-  for (const entry of scenarios.orchestrator) {
-    if (VERIFY_ONLY || SMOKE) console.log(`Running orchestrator:${entry.id}`);
-    results.push(await runOrchestratorScenario(entry, abiInfo));
   }
 
   if (UPDATE_GOLDEN) {

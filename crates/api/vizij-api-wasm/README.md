@@ -2,7 +2,7 @@
 
 > WebAssembly helpers for validating and converting Vizij `Value` and `WriteBatch` JSON.
 
-`vizij-api-wasm` is the smallest wasm crate in the workspace. It wraps `vizij-api-core` with `wasm-bindgen` so browser and Node tooling can reuse the Rust-side parsers without pulling in the animation, graph, or orchestrator runtimes.
+`vizij-api-wasm` is the smallest wasm crate in the workspace. It wraps `vizij-api-core` with `wasm-bindgen` so browser and Node tooling can reuse the Rust-side parsers without pulling in the animation or graph runtimes.
 
 ## Exports
 
@@ -63,4 +63,4 @@ There is no dedicated wasm-bindgen test suite in this crate yet. The cheapest ve
 
 - [`vizij-api-core`](../vizij-api-core/README.md)
 - [`@vizij/value-json`](../../../npm/@vizij/value-json/README.md)
-- The animation, graph, and orchestrator wasm stacks all depend on the same JSON contracts.
+- The animation and graph wasm stacks all depend on the same JSON contracts.

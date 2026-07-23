@@ -3,7 +3,7 @@
 //!
 //! The crate owns the canonical animation data model, playback engine, interpolation and
 //! sampling helpers, output contracts, and baking utilities reused by wasm
-//! bindings, and the orchestrator.
+//! bindings and the animation module.
 
 /// Accumulation helpers used while blending per-track samples.
 pub mod accumulate;

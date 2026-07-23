@@ -42,14 +42,11 @@ vizij-rs/
 │  │  ├─ vizij-graph-core          # Data-flow node graph evaluator
 │  │  ├─ vizij-graph-wasm          # wasm-bindgen binding
 │  │  └─ vizij-graph-registry-export # Registry export utility used by npm tooling
-│  ├─ orchestrator/
-│  │  ├─ vizij-orchestrator-core   # Blackboard + pass scheduling runtime
-│  │  └─ vizij-orchestrator-wasm   # wasm-bindgen binding
 │  ├─ interop/                     # Adapters that run the Vizij stacks on Arora seams
 │  │  ├─ vizij-arora               # Vizij↔Arora Value interop (identity + Shape.meta sidecar)
 │  │  ├─ vizij-arora-store         # Vizij Blackboard exposed as an Arora DataStore
 │  │  ├─ vizij-arora-hal           # Vizij rig presented as an Arora HAL
-│  │  ├─ vizij-arora-behavior      # Vizij graph/orchestrator as Arora behavior interpreters
+│  │  ├─ vizij-arora-behavior      # Vizij node graph as an Arora behavior interpreter
 │  │  ├─ vizij-arora-web           # Browser wasm cdylib: Vizij runtime as an Arora device
 │  │  └─ vizij-animation-module    # vizij-animation-core packaged as an Arora wasm module
 │  └─ test-fixtures/
@@ -58,12 +55,11 @@ vizij-rs/
 │  ├─ @vizij/animation-module      # vizij-animation-core built as an Arora wasm module (assets)
 │  ├─ @vizij/animation        # Stable ESM wrapper around `vizij-animation-wasm`
 │  ├─ @vizij/node-graph       # Wrapper around `vizij-graph-wasm`
-│  ├─ @vizij/orchestrator-wasm     # Wrapper around `vizij-orchestrator-wasm`
 │  ├─ @vizij/runtime               # Browser Vizij runtime as an Arora device (wasm bindings)
 │  ├─ @vizij/test-fixtures         # Browser bundle of shared JSON fixtures
 │  ├─ @vizij/value-json            # Shared JSON coercion helpers
 │  └─ @vizij/wasm-loader           # Loader that enforces ABI compatibility
-├─ fixtures/                       # Sample graphs, animations, orchestrations (+ manifest)
+├─ fixtures/                       # Sample graphs and animations (+ manifest)
 └─ scripts/                        # Build, watch, and release helpers
 ```
 
@@ -77,7 +73,6 @@ The major runtime crates and npm packages include dedicated READMEs with domain-
 | -------------- | ------------------------ | -------------------------- | ---------------------------- |
 | Animation      | `vizij-animation-core`   | `vizij-animation-wasm`     | `@vizij/animation`      |
 | Node graph     | `vizij-graph-core`       | `vizij-graph-wasm`         | `@vizij/node-graph`     |
-| Orchestrator   | `vizij-orchestrator-core`| `vizij-orchestrator-wasm`  | `@vizij/orchestrator-wasm`   |
 | Test fixtures  | `vizij-test-fixtures`    | —                          | `@vizij/test-fixtures`       |
 
 Shared API crates (`vizij-api-core`, `vizij-api-wasm`) provide the Value/Shape/TypedPath contract that keeps the stacks interoperable.
@@ -94,7 +89,7 @@ The `crates/interop/*` family adapts the Vizij stacks onto Arora runtime seams s
 | `vizij-arora`            | Vizij↔Arora `Value` interop: identity passthroughs + `Shape.meta` sidecar helpers. | — |
 | `vizij-arora-store`      | Vizij Blackboard exposed as an Arora `DataStore`.                      | — |
 | `vizij-arora-hal`        | Vizij rig presented as an Arora HAL.                                   | — |
-| `vizij-arora-behavior`   | Vizij node graph / orchestrator driven as Arora behavior interpreters. | — |
+| `vizij-arora-behavior`   | Vizij node graph driven as an Arora behavior interpreter.              | — |
 | `vizij-arora-web`        | Browser wasm cdylib composing a Vizij runtime as an Arora device.      | `@vizij/runtime` |
 | `vizij-animation-module` | `vizij-animation-core` packaged as an Arora wasm module.               | `@vizij/animation-module` |
 
@@ -164,7 +159,6 @@ This command runs the Rust workspace build, each WASM build, and the shared npm 
 ```bash
 pnpm run build:wasm:animation
 pnpm run build:wasm:graph
-pnpm run build:wasm:orchestrator
 ```
 
 Each script invokes the corresponding Node helper in `scripts/`, which runs `wasm-pack build --target web --release` for the matching crate and writes the generated JS + `.wasm` artifacts into the npm package's `pkg/` directory.
@@ -176,13 +170,12 @@ All WASM stacks expose watch scripts that rely on `cargo-watch`:
 ```bash
 pnpm run watch:wasm:graph
 pnpm run watch:wasm:animation
-pnpm run watch:wasm:orchestrator
 ```
 
 These scripts rebuild the WASM artefacts whenever source files change. For short-lived experiments you can still publish a global link via the `link:wasm:*` scripts, but the recommended flow is:
 
 1. Build the desired stack(s) here (`pnpm run build:wasm:graph` etc.).
-2. In `vizij-web`, run `pnpm run wasm:link` (or `WASM_PKGS="node-graph orchestrator-wasm" pnpm run wasm:link`) to point the workspace at these builds.
+2. In `vizij-web`, run `pnpm run wasm:link` (or `WASM_PKGS="node-graph" pnpm run wasm:link`) to point the workspace at these builds.
 3. Use `pnpm run wasm:status` in `vizij-web` to confirm the resolution, and `pnpm run wasm:unlink` when you want to return to the published packages.
 
 This keeps the published versions as the default source of truth while still allowing synchronous iteration when necessary.
@@ -242,7 +235,7 @@ Per-crate runs are equally useful:
 ```bash
 cargo test -p vizij-graph-core
 cargo test -p vizij-animation-core
-cargo test -p vizij-orchestrator-core
+cargo test -p vizij-graph-core
 ```
 
 The wrapper packages exercise their generated bindings through package-level test scripts:
@@ -264,7 +257,7 @@ Fixtures live in `fixtures/` for repeatable scenario testing. Use them in integr
 - CI smoke uses: `SMOKE=1 VERIFY_ONLY=1 pnpm run perf:smoke`
 - Update goldens intentionally: `UPDATE_GOLDEN=1 pnpm run perf:wasm`
 
-Scenarios cover: tiny smoke, defaults-only, kitchen mid (25 blocks), kitchen heavy (500 blocks), mixed animation (small/medium), and merged orchestrator blend. Each run records samples, warmup, steps, dt, ABI, build type, commit, and signatures.
+Scenarios cover: tiny smoke, defaults-only, kitchen mid (25 blocks), kitchen heavy (500 blocks), and mixed animation (small/medium). Each run records samples, warmup, steps, dt, ABI, build type, commit, and signatures.
 
 ---
 
@@ -318,10 +311,9 @@ Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wa
 ## Development Tips
 
 - **ABI mismatches**: If you see `ABI mismatch: expected 2` from a wasm wrapper, rebuild the Rust crate and rerun `pnpm run build:wasm:<stack>` to regenerate JS glue.
-- **Time-dependent nodes**: `vizij-orchestrator-core` now advances `GraphRuntime.t`/`dt` on each evaluation. Ensure any custom integrations do the same when you embed `GraphController` elsewhere.
+- **Time-dependent nodes**: the Vizij graph runtime advances `GraphRuntime.t`/`dt` on each evaluation. Ensure any custom integrations do the same when you drive a `GraphRuntime` elsewhere.
 - **URDF features**: Enable the `urdf_ik` feature on `vizij-graph-core` if you need robotics nodes in native builds (`cargo build -p vizij-graph-core --features urdf_ik`). The WASM package ships with the feature enabled by default.
-- **Diagnostics**: `vizij-orchestrator-core` captures conflict logs and per-pass timings inside `OrchestratorFrame`. Use these to debug controller order and merge behaviour before instrumenting downstream apps.
-- **Fixtures**: The `fixtures/` directory includes ready-to-use JSON files for graphs, animations, and orchestrations. They are mirrored into `npm/@vizij/test-fixtures` for web consumers.
+- **Fixtures**: The `fixtures/` directory includes ready-to-use JSON files for graphs and animations. They are mirrored into `npm/@vizij/test-fixtures` for web consumers.
 
 ---
 
@@ -343,11 +335,9 @@ Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wa
 
 - [vizij-animation-core/README](crates/animation/vizij-animation-core/README.md)
 - [vizij-graph-core/README](crates/node-graph/vizij-graph-core/README.md)
-- [vizij-orchestrator-core/README](crates/orchestrator/vizij-orchestrator-core/README.md)
 - [vizij-api-core/README](crates/api/vizij-api-core/README.md)
 - [vizij-test-fixtures/README](crates/test-fixtures/vizij-test-fixtures/README.md)
 - [@vizij/node-graph/README](npm/@vizij/node-graph/README.md)
-- [@vizij/orchestrator-wasm/README](npm/@vizij/orchestrator-wasm/README.md)
 - [@vizij/animation/README](npm/@vizij/animation/README.md)
 - [@vizij/value-json/README](npm/@vizij/value-json/README.md)
 - [@vizij/test-fixtures/README](npm/@vizij/test-fixtures/README.md)

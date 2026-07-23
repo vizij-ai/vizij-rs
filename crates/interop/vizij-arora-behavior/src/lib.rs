@@ -16,12 +16,8 @@
 //! running graph does not rebuild the device: a [`spec_graph`] LOAD call
 //! reaches [`ProcessingGraph::load`] through the engine's interpreter module.
 //!
-//! [`orchestrator::OrchestratorBehavior`] wraps a whole Vizij orchestrator
-//! (many controllers + their merge) as one interpreter (VIZ-38).
-//!
 //! [`ProcessingGraph::load`]: arora_behavior::BehaviorInterpreter::load
 
-pub mod orchestrator;
 pub mod spec_graph;
 
 use std::collections::HashMap;

@@ -66,7 +66,7 @@ Link into `vizij-web` while iterating:
 
 ## Bundler Configuration
 
-`@vizij/animation` now mirrors the import strategy used by the orchestrator and node-graph packages: it tries a static ESM import first, then falls back to a runtime URL when necessary. Ensure your bundler is configured to emit the `.wasm` file. For Webpack/Next.js:
+`@vizij/animation` now mirrors the import strategy used by the node-graph package: it tries a static ESM import first, then falls back to a runtime URL when necessary. Ensure your bundler is configured to emit the `.wasm` file. For Webpack/Next.js:
 
 ```js
 // next.config.js

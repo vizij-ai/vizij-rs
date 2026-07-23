@@ -100,6 +100,5 @@ ensure_table
 
 run_bench vizij-graph-core graph_eval
 run_bench vizij-animation-core animation_step
-run_bench vizij-orchestrator-core orchestrator_tick
 
 echo "Done. Results appended to $OUT"

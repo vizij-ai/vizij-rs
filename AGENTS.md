@@ -31,8 +31,6 @@ file summarises, it does not replace, those sources.
   `vizij-animation-wasm`, and npm `@vizij/animation`.
 - **Node graph stack**: `vizij-graph-core`,
   `vizij-graph-wasm`, and npm `@vizij/node-graph`.
-- **Orchestrator stack**: `vizij-orchestrator-core` runtime coordinating
-  graphs/animations, `vizij-orchestrator-wasm`, and npm `@vizij/orchestrator-wasm`.
 - **Interop (Arora) stack**: `crates/interop/*` adapts the Vizij stacks onto
   Arora runtime seams — `vizij-arora` (Value interop), `vizij-arora-store`,
   `vizij-arora-hal`, `vizij-arora-behavior`, `vizij-arora-web` (npm
@@ -54,8 +52,7 @@ file summarises, it does not replace, those sources.
 | Format everything | `cargo fmt --all` |
 | Lint with warnings as errors | `cargo clippy --all-targets --all-features -- -D warnings` |
 | Test full workspace | `cargo test --workspace` |
-| Test a single crate | `cargo test -p vizij-orchestrator-core` (replace crate name) |
-| Build orchestrator examples | `cargo build --manifest-path crates/orchestrator/vizij-orchestrator-core/Cargo.toml --examples` |
+| Test a single crate | `cargo test -p vizij-graph-core` (replace crate name) |
 | Build support crates | `pnpm run build:shared` |
 | Run wasm/npm tests | `pnpm run test` |
 
@@ -64,10 +61,8 @@ file summarises, it does not replace, those sources.
 |------|---------|
 | Build animation WASM pkg | `pnpm run build:wasm:animation` |
 | Build node-graph WASM pkg | `pnpm run build:wasm:graph` |
-| Build orchestrator WASM pkg | `pnpm run build:wasm:orchestrator` |
 | Watch animation WASM | `pnpm run watch:wasm:animation` *(needs `cargo-watch`)* |
 | Watch node-graph WASM | `pnpm run watch:wasm:graph` *(needs `cargo-watch`)* |
-| Watch orchestrator WASM | `pnpm run watch:wasm:orchestrator` *(needs `cargo-watch`)* |
 
 Install the watcher dependency once with `cargo install cargo-watch`.
 
@@ -103,10 +98,6 @@ Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unkno
 - **Node graph**: `vizij-graph-core` evaluates deterministic data-flow graphs.
   Features like `urdf_ik` are enabled by default and surfaced through the wasm
   build scripts. The wasm crate handles JSON normalisation for JS consumers.
-- **Orchestrator**: `vizij-orchestrator-core` (`src/lib.rs`, `controllers/*`)
-  coordinates animation engines and graph controllers. Check the crate README
-  for scheduler semantics, blackboard conventions, and example entry points.
-  The wasm crate mirrors the Rust API and serialises frames for JS consumers.
 - **Test fixtures**: `vizij-test-fixtures` maps names from `fixtures/manifest.json`
   to on-disk JSON assets and offers helpers to load them in tests. The npm
   package ships pre-bundled fixture JSON for browser scenarios.
@@ -119,7 +110,7 @@ Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unkno
 - Scope visibility with `pub(crate)` wherever possible and add Rustdoc comments
   for public APIs, including short usage snippets if the surface isn't obvious.
 - Co-locate unit tests in `#[cfg(test)]` modules; use crate-level `tests/`
-  folders for integration coverage (`vizij-orchestrator-core/tests` is a good
+  folders for integration coverage (`vizij-arora-web/tests` is a good
   example). Add wasm-bindgen tests when adjusting wasm surfaces.
 - Run fmt/clippy/tests (ideally via the git hooks) before shipping; call out any
   steps you skipped.

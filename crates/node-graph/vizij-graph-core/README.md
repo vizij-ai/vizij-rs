@@ -111,7 +111,7 @@ for write in runtime.writes.iter() {
 
 - Holds `t`/`dt`, per-node persistent state, staged inputs (`HashMap<TypedPath, StagedInput>`), and cached outputs.
 - `advance_epoch` bumps the staging epoch and evicts inputs not refreshed for the current frame.
-- Evaluation now updates `t`/`dt` when used via `vizij-orchestrator-core`; if you embed the runtime directly, set them yourself before calling `evaluate_all` if time-based nodes are involved.
+- Evaluation updates `t`/`dt` when driven by a host such as the Arora behavior interpreter (`vizij-arora-behavior`); if you embed the runtime directly, set them yourself before calling `evaluate_all` if time-based nodes are involved.
 - **Plan cache note:** `vizij-graph-core` caches a compiled execution plan (topological order + port layouts + resolved input bindings) inside `GraphRuntime`.
   - The plan cache is a *structural* cache. It exists to avoid repeating "planning" work when the graph layout is unchanged frame-to-frame.
   - For best steady-state performance, call `GraphSpec::with_cache()` on load and after any *structural* edit. This seeds/bumps `spec.version` and refreshes `spec.fingerprint`, enabling O(1) cache validation in `PlanCache::ensure_versioned()`.
@@ -162,7 +162,7 @@ for write in runtime.writes.iter() {
 
 - `Output` nodes enqueue writes automatically when `params.path` is set.
 - Writes include optional shapes so hosts can validate or coerce downstream.
-- Use hosts like `vizij-orchestrator-core` or your own glue to apply them.
+- Use hosts like the Arora behavior interpreter (`vizij-arora-behavior`) or your own glue to apply them.
 
 ### URDF Feature
 
@@ -204,6 +204,5 @@ Benchmark ideas:
 
 - [`vizij-graph-wasm`](../vizij-graph-wasm/README.md): wasm-bindgen binding that exposes JSON-friendly APIs plus normalization helpers.
 - [`@vizij/node-graph`](../../../npm/@vizij/node-graph/README.md): npm wrapper around the wasm build with ABI guards and utilities.
-- [`vizij-orchestrator-core`](../../orchestrator/vizij-orchestrator-core/README.md): Coordinates graphs, animations, and a blackboard.
 
 Need help or spotted an inconsistency? Open an issue in the main Vizij repo or ping the runtime team—accurate docs keep our tooling reliable. 💡

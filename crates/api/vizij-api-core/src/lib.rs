@@ -16,7 +16,7 @@ pub mod typed_path;
 /// The vizij value vocabulary: type ids, constructors, and accessors over
 /// `arora_types::value::Value`.
 pub mod value;
-/// Batched write operations emitted by graphs and orchestrators.
+/// Batched write operations emitted by graphs.
 pub mod write_ops;
 
 /// Canonical shape descriptors and aliases exported for downstream hosts.
