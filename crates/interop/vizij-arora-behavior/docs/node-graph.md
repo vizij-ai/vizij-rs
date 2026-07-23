@@ -2,7 +2,7 @@
 
 Vizij's node graph is a **behavior interpreter** in the Arora sense. Read Arora's **[how a behavior interpreter works](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-behavior/docs/interpreter-workflow.md)** first — it defines the `BehaviorInterpreter` contract (the `tick` / `apply` / `load` lifecycle, the `BehaviorContext` store, timing as built-in store keys) that this page assumes. Here we cover what is *specific* to the node graph, and draw the parallel with the other reference interpreter, [`arora-behavior-tree`](https://github.com/semio-ai/arora-sdk/blob/main/crates/arora-behavior-tree/docs/nodes.md).
 
-The interpreter type is [`ProcessingGraph`](../src/lib.rs#L79), which implements `arora_behavior::BehaviorInterpreter` ([`lib.rs:180`](../src/lib.rs#L180)). The evaluation engine underneath it is the separate, host-agnostic [`vizij-graph-core`](../../../node-graph/vizij-graph-core/) crate. Vizij and Arora share **one runtime value type** (`vizij_api_core::Value` *is* `arora_types::value::Value`), so values cross the store and call boundaries with no conversion ([`vizij-arora/src/lib.rs:1-13`](../../vizij-arora/src/lib.rs#L1-L13)).
+The interpreter type is [`ProcessingGraph`](../src/lib.rs#L75), which implements `arora_behavior::BehaviorInterpreter` ([`lib.rs:176`](../src/lib.rs#L176)). The evaluation engine underneath it is the separate, host-agnostic [`vizij-graph-core`](../../../node-graph/vizij-graph-core/) crate. Vizij and Arora share **one runtime value type** (`vizij_api_core::Value` *is* `arora_types::value::Value`), so values cross the store and call boundaries with no conversion ([`vizij-arora/src/lib.rs:1-13`](../../vizij-arora/src/lib.rs#L1-L13)).
 
 ## Lifecycle mapping
 
@@ -10,7 +10,7 @@ The interpreter's spine is `tick_store` ([`lib.rs:135-177`](../src/lib.rs#L135-L
 
 | Interpreter lifecycle | Vizij node graph |
 |---|---|
-| load | `load` decodes the spec and installs it with a fresh `GraphRuntime`; a recompose never rebuilds the device ([`lib.rs:198-205`](../src/lib.rs#L198-L205)) |
+| load | `load` decodes the spec and installs it in place, keeping the graph runtime **warm** — surviving nodes retain their integration state (springs/dampers/URDF) and the graph clock stays continuous; a recompose never rebuilds the device ([`lib.rs:197`](../src/lib.rs#L197)) |
 | time update | `dt` is read from the built-in `arora/dt` store key and advances the graph clock (`rt.t += dt`) ([`built_in_dt_seconds`, `lib.rs:211-221`](../src/lib.rs#L211-L221)) |
 | tick | stage subscribed inputs → `evaluate_all` → flush outputs; **always returns `BehaviorStatus::Running`** ([`lib.rs:181-186`](../src/lib.rs#L181-L186)) |
 | graph update | **not** incremental — `apply(GraphDiff)` is rejected; every edit is a whole-spec `load` (see [Editing](#editing-whole-spec-load-only)) |
@@ -52,7 +52,7 @@ flowchart LR
   flush -- "one write per tick" --> store
 ```
 
-- **Read (store → graph):** each subscribed input path (the graph's `Input` nodes, [`input_paths`, `lib.rs:102-108`](../src/lib.rs#L102-L108)) is read from the store and staged into the runtime ([`lib.rs:146-156`](../src/lib.rs#L146-L156)); an `Input` node then consumes it during evaluation ([`eval_input_node`, `eval_node.rs:2205`](../../../node-graph/vizij-graph-core/src/eval/eval_node.rs#L2205)).
+- **Read (store → graph):** each subscribed input path (the graph's `Input` nodes, [`input_paths`, `lib.rs:98-104`](../src/lib.rs#L98-L104)) is read from the store and staged into the runtime ([`lib.rs:142-152`](../src/lib.rs#L142-L152)); an `Input` node then consumes it during evaluation ([`eval_input_node`, `eval_node.rs:2205`](../../../node-graph/vizij-graph-core/src/eval/eval_node.rs#L2205)).
 - **Write (graph → store):** only sink `Output` nodes emit writes; they are collected during the sweep and drained into a **single `StateChange`** written once per tick ([`lib.rs:166-175`](../src/lib.rs#L166-L175)). A path-less `Output` with `key_field`/`value_field` expands an array-of-records into one write per record ([`eval_node.rs:244-284`](../../../node-graph/vizij-graph-core/src/eval/eval_node.rs#L244-L284)).
 
 This is the same store seam a behavior tree uses (read inputs, write outputs), but staged at the tick boundary rather than per-node — where the tree binds each `{var}` to a store `Slot` and reads/writes it mid-tick, the graph batches a read pass before and a write pass after evaluation. Round-trip test: [`graph_reads_and_writes_the_arora_store`](../src/lib.rs#L269-L293).
@@ -76,7 +76,9 @@ This is the UUID-keyed analogue of the behavior tree's module dispatch (a non-bu
 
 ## Editing: whole-spec load only
 
-Here the Vizij interpreter deliberately **diverges** from the tree. The tree supports incremental `apply(GraphDiff)` (re-lowering on the next tick); `ProcessingGraph` overrides only `load` and leaves `apply` at the trait default that errors ([`lib.rs:198-205`](../src/lib.rs#L198-L205)). The reason ([`spec_graph.rs:1-18`](../src/spec_graph.rs#L1-L18)): Vizij's authored model is a `vizij-graph-core` spec whose node vocabulary the shared model does not yet mirror structurally, so the spec rides the shared model **opaquely** — one carrier node bound to a `GRAPH_PROGRAM` function whose single input is fed the normalized spec JSON as a literal ([`encode`, `spec_graph.rs:37-54`](../src/spec_graph.rs#L37-L54)). Until a structural node-kind mapping exists, `GraphDiff` edition is rejected and every edit is a whole-spec `load`. In-place swap test: [`load_swaps_the_graph_in_place`](../src/lib.rs#L297-L340).
+Here the Vizij interpreter deliberately **diverges** from the tree. The tree supports incremental `apply(GraphDiff)` (re-lowering on the next tick); `ProcessingGraph` overrides only `load` and leaves `apply` at the trait default that errors ([`lib.rs:197`](../src/lib.rs#L197)). The reason ([`spec_graph.rs:1-18`](../src/spec_graph.rs#L1-L18)): Vizij's authored model is a `vizij-graph-core` spec whose node vocabulary the shared model does not yet mirror structurally, so the spec rides the shared model **opaquely** — one carrier node bound to a `GRAPH_PROGRAM` function whose single input is fed the normalized spec JSON as a literal ([`encode`, `spec_graph.rs:37-54`](../src/spec_graph.rs#L37-L54)). Until a structural node-kind mapping exists, `GraphDiff` edition is rejected and every edit is a whole-spec `load`. In-place swap test: [`load_swaps_the_graph_in_place`](../src/lib.rs#L308-L353).
+
+A whole-spec `load` still keeps the graph runtime **warm**: it swaps the spec but does not reset the `GraphRuntime`, so nodes that survive the swap keep their integration state (springs/dampers/URDF chains) and the graph clock stays continuous — a program starting or stopping restarts no stateful node. The version is carried forward before re-caching so the version-keyed `PlanCache` still rebuilds for the new topology (a fresh parse restarts at version 0, which would otherwise collide with the previous spec's version and serve the old plan). Continuity test: [`load_keeps_the_graph_runtime_warm`](../src/lib.rs#L378). Making the *edit* itself incremental (structural node-kind mapping + `apply(GraphDiff)`) is [VIZ-79](https://linear.app/semio-ai/issue/VIZ-79).
 
 (Structural changes *within* a running spec — reconnecting edges, adding nodes — are absorbed internally by the engine's `PlanCache`, invalidated by a version bump or content fingerprint; that is graph-core's own concern, separate from the Arora edit path.)
 
