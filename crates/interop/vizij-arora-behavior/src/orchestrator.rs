@@ -17,7 +17,7 @@ use arora_types::data::{DataStore, Key, StateChange};
 use vizij_api_core::TypedPath;
 use vizij_orchestrator::Orchestrator;
 
-use crate::golden_dt_seconds;
+use crate::built_in_dt_seconds;
 
 /// A Vizij orchestrator as an Arora behavior interpreter.
 pub struct OrchestratorBehavior {
@@ -86,7 +86,7 @@ impl OrchestratorBehavior {
 
 impl BehaviorInterpreter for OrchestratorBehavior {
     fn tick(&mut self, ctx: &mut BehaviorContext) -> Result<BehaviorStatus, BehaviorError> {
-        let dt = golden_dt_seconds(ctx.store);
+        let dt = built_in_dt_seconds(ctx.store);
         self.tick_store(ctx.store, dt)?;
         // An orchestrator runs every frame.
         Ok(BehaviorStatus::Running)

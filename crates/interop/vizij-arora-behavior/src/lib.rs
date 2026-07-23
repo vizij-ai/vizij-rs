@@ -7,7 +7,7 @@
 //! `arora_types::value::Value`), so values cross the store boundary directly.
 //! The tick always reports [`BehaviorStatus::Running`] — a node graph runs
 //! every frame, unlike a tree that runs to a terminal status. `dt` comes from
-//! the runtime's golden store key ([`arora_behavior::golden::DT`], nanoseconds
+//! the runtime's built-in store key ([`arora_behavior::built_in::DT`], nanoseconds
 //! since the previous step), published before each tick.
 //!
 //! Inject one into an Arora device with
@@ -27,7 +27,7 @@ pub mod spec_graph;
 use std::collections::HashMap;
 
 use arora_behavior::{
-    golden, BehaviorContext, BehaviorError, BehaviorInterpreter, BehaviorStatus, Graph,
+    built_in, BehaviorContext, BehaviorError, BehaviorInterpreter, BehaviorStatus, Graph,
 };
 use arora_types::call::{Call, CallBridge};
 use arora_types::data::{DataStore, Key, StateChange};
@@ -179,7 +179,7 @@ impl ProcessingGraph {
 
 impl BehaviorInterpreter for ProcessingGraph {
     fn tick(&mut self, ctx: &mut BehaviorContext) -> Result<BehaviorStatus, BehaviorError> {
-        let dt = golden_dt_seconds(ctx.store);
+        let dt = built_in_dt_seconds(ctx.store);
         self.tick_store(ctx.store, &mut *ctx.call_bridge, dt)?;
         // A node graph is continuous: tick it again next step.
         Ok(BehaviorStatus::Running)
@@ -206,11 +206,11 @@ impl BehaviorInterpreter for ProcessingGraph {
 }
 
 /// The current step's `dt` in seconds, read from the runtime-maintained
-/// golden key ([`golden::DT`], integer nanoseconds). `0.0` when the key is
+/// built-in key ([`built_in::DT`], integer nanoseconds). `0.0` when the key is
 /// absent or not the `U64` the runtime publishes.
-pub(crate) fn golden_dt_seconds(store: &dyn DataStore) -> f32 {
+pub(crate) fn built_in_dt_seconds(store: &dyn DataStore) -> f32 {
     match store
-        .read(&[Key::from(golden::DT)])
+        .read(&[Key::from(built_in::DT)])
         .into_iter()
         .next()
         .flatten()
@@ -348,13 +348,13 @@ mod tests {
     }
 
     #[test]
-    fn golden_dt_reads_the_runtime_clock() {
+    fn built_in_dt_reads_the_runtime_clock() {
         let store = SimpleDataStore::new();
-        assert_eq!(golden_dt_seconds(&store), 0.0);
+        assert_eq!(built_in_dt_seconds(&store), 0.0);
         store
-            .write(StateChange::set(golden::DT, Value::U64(16_000_000)))
+            .write(StateChange::set(built_in::DT, Value::U64(16_000_000)))
             .unwrap();
-        assert!((golden_dt_seconds(&store) - 0.016).abs() < 1e-6);
+        assert!((built_in_dt_seconds(&store) - 0.016).abs() < 1e-6);
     }
 
     /// A path-less `output` applies a keyed record batch — the shape a module
