@@ -146,7 +146,10 @@ fn node_meta_json(node: &NodeSpec) -> Result<Option<String>, String> {
         meta.insert("output_shapes".to_string(), json);
     }
     if !input_shapes.is_empty() {
-        meta.insert("input_shapes".to_string(), serde_json::Value::Object(input_shapes));
+        meta.insert(
+            "input_shapes".to_string(),
+            serde_json::Value::Object(input_shapes),
+        );
     }
     serde_json::to_string(&serde_json::Value::Object(meta))
         .map(Some)
@@ -204,9 +207,10 @@ fn encode_node(
         graph.variables.insert(slot, field);
         inputs.push(Io::new(slot));
         let literal = value_serde::to_value(&value).map_err(|e| format!("param to value: {e}"))?;
-        graph
-            .links
-            .push(Link::new(Port::new(nid, slot), LinkSource::Literal(literal)));
+        graph.links.push(Link::new(
+            Port::new(nid, slot),
+            LinkSource::Literal(literal),
+        ));
     }
 
     // Inline input defaults: a default value on an unconnected input, on the
@@ -433,7 +437,9 @@ pub fn decode(graph: &Graph) -> Result<GraphSpec, String> {
             serde_json::from_value(serde_json::Value::String(name(&node.function)?))
                 .map_err(|e| format!("rebuild node kind: {e}"))?;
 
-        let node_meta = meta_objs.remove(&node.id).unwrap_or(serde_json::Value::Null);
+        let node_meta = meta_objs
+            .remove(&node.id)
+            .unwrap_or(serde_json::Value::Null);
         let output_shapes = match node_meta.get("output_shapes") {
             Some(shapes) if !shapes.is_null() => serde_json::from_value(shapes.clone())
                 .map_err(|e| format!("rebuild output_shapes: {e}"))?,
@@ -648,9 +654,11 @@ mod tests {
 
         let graph = encode(&spec).expect("encode");
         // The metadata rides one reserved slot as a JSON string literal.
-        assert!(graph.links.iter().any(|l| l.target
-            == Port::new(node_id_uuid("n"), meta_slot())
-            && matches!(l.source, LinkSource::Literal(Value::String(_)))));
+        assert!(graph
+            .links
+            .iter()
+            .any(|l| l.target == Port::new(node_id_uuid("n"), meta_slot())
+                && matches!(l.source, LinkSource::Literal(Value::String(_)))));
 
         let decoded = decode(&graph).expect("decode");
         assert_eq!(canonical(&spec), canonical(&decoded));
