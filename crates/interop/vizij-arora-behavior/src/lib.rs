@@ -1,5 +1,5 @@
 //! [`ProcessingGraph`]: a Vizij node graph driven as an Arora
-//! [`BehaviorInterpreter`](arora_behavior::BehaviorInterpreter) (VIZ-34).
+//! [`BehaviorInterpreter`] (VIZ-34).
 //!
 //! Each tick it reads its subscribed input paths from the shared store,
 //! evaluates the graph for `dt`, and writes the graph's outputs back. Vizij
@@ -12,19 +12,24 @@
 //!
 //! Inject one into an Arora device with
 //! `AroraBuilder::with_behavior_interpreter(Box::new(pg))`; it then
-//! reads/writes the same blackboard the bridge and the HAL do. Swapping the
-//! running graph does not rebuild the device: a [`spec_graph`] LOAD call
-//! reaches [`ProcessingGraph::load`] through the engine's interpreter module.
+//! reads/writes the same blackboard the bridge and the HAL do. The running
+//! graph is the shared model's [`graph_codec`] form: it is swapped whole with a
+//! LOAD call ([`ProcessingGraph::load`]) or edited node-by-node with an EDIT
+//! call carrying a [`GraphDiff`] ([`ProcessingGraph::apply`]), both reaching the
+//! interpreter through the engine's interpreter module, so neither rebuilds the
+//! device.
 //!
 //! [`ProcessingGraph::load`]: arora_behavior::BehaviorInterpreter::load
+//! [`ProcessingGraph::apply`]: arora_behavior::BehaviorInterpreter::apply
 
 pub mod graph_codec;
-pub mod spec_graph;
 
 use std::collections::HashMap;
 
+use arora_behavior::graph::GraphDiff;
 use arora_behavior::{
-    built_in, BehaviorContext, BehaviorError, BehaviorInterpreter, BehaviorStatus, Graph,
+    built_in, interpreter_module, BehaviorContext, BehaviorError, BehaviorInterpreter,
+    BehaviorStatus, Graph,
 };
 use arora_types::call::{Call, CallBridge};
 use arora_types::data::{DataStore, Key, StateChange};
@@ -74,9 +79,20 @@ impl NodeFunctions for CallBridgeFunctions<'_> {
 
 /// A Vizij node graph as an Arora behavior interpreter.
 pub struct ProcessingGraph {
+    /// The retained shared-model graph — the editable source of truth. Edits
+    /// ([`load`](BehaviorInterpreter::load), [`apply`](BehaviorInterpreter::apply))
+    /// mutate this; the evaluator's [`spec`](Self::spec) is re-lowered from it
+    /// when [`dirty`](Self::dirty).
+    graph: Graph,
+    /// The lowered Vizij spec the evaluator runs — [`graph_codec::decode`] of
+    /// [`graph`](Self::graph), rebuilt on the next tick after an edit.
     spec: GraphSpec,
+    /// Whether [`graph`](Self::graph) changed since [`spec`](Self::spec) was
+    /// last lowered.
+    dirty: bool,
     rt: GraphRuntime,
-    /// Store paths staged into the graph before each evaluation.
+    /// Store paths staged into the graph before each evaluation. Derived from
+    /// the lowered spec's `input` nodes each time the graph is re-lowered.
     inputs: Vec<TypedPath>,
     /// function id -> module id, so `ExternalFunction` nodes can be dispatched through the
     /// [`CallBridge`]. See [`CallBridgeFunctions`] for why this map is needed and where it
@@ -94,6 +110,44 @@ pub fn parse_spec(json: &str) -> Result<GraphSpec, String> {
     serde_json::from_value(spec).map_err(|e| format!("invalid graph spec: {e}"))
 }
 
+/// Normalize and deserialize a [`graph_codec::GraphSpecDiff`] from JSON. The
+/// upserted nodes and edges are run through the same spec normalizer as
+/// [`parse_spec`] (they may use vizij shorthand value forms).
+pub fn parse_spec_diff(json: &str) -> Result<graph_codec::GraphSpecDiff, String> {
+    let mut value: serde_json::Value =
+        serde_json::from_str(json).map_err(|e| format!("graph edit is not JSON: {e}"))?;
+    if let Some(object) = value.as_object_mut() {
+        let empty = || serde_json::Value::Array(Vec::new());
+        let mut spec = serde_json::json!({
+            "nodes": object.get("upsert_nodes").cloned().unwrap_or_else(empty),
+            "edges": object.get("upsert_edges").cloned().unwrap_or_else(empty),
+        });
+        vizij_api_core::json::normalize_graph_spec_value(&mut spec)
+            .map_err(|e| format!("normalize graph edit failed: {e}"))?;
+        object.insert("upsert_nodes".to_string(), spec["nodes"].take());
+        object.insert("upsert_edges".to_string(), spec["edges"].take());
+    }
+    serde_json::from_value(value).map_err(|e| format!("invalid graph edit: {e}"))
+}
+
+/// Build the interpreter-module LOAD [`Call`] that installs `spec` as the
+/// running behavior (its [`graph_codec`] form). An embedder dispatches this
+/// (through an `arora::Caller` or `Arora::call`) to swap the Vizij graph in
+/// place — reaching [`ProcessingGraph::load`](BehaviorInterpreter::load).
+pub fn encode_load_call(spec: &GraphSpec) -> Result<Call, String> {
+    Ok(interpreter_module::encode_load(&graph_codec::encode(spec)?))
+}
+
+/// Build the interpreter-module EDIT [`Call`] that applies `diff` to the running
+/// behavior (as a [`graph_codec`] [`GraphDiff`]). An embedder dispatches this to
+/// edit the Vizij graph in place — reaching
+/// [`ProcessingGraph::apply`](BehaviorInterpreter::apply).
+pub fn encode_edit_call(diff: &graph_codec::GraphSpecDiff) -> Result<Call, String> {
+    Ok(interpreter_module::encode_edit(
+        &graph_codec::spec_diff_to_graph_diff(diff)?,
+    ))
+}
+
 /// The store paths the spec's `input` nodes read — what the graph subscribes
 /// to on the device's store.
 pub fn input_paths(spec: &GraphSpec) -> Vec<TypedPath> {
@@ -105,14 +159,39 @@ pub fn input_paths(spec: &GraphSpec) -> Vec<TypedPath> {
 }
 
 impl ProcessingGraph {
-    /// Wrap a graph spec plus the store paths it consumes as inputs.
-    pub fn from_spec(spec: GraphSpec, inputs: Vec<TypedPath>) -> Self {
-        Self {
-            spec: spec.with_cache(),
+    /// Build from a Vizij graph spec: encode it to the shared model's
+    /// [`graph_codec`] form (the retained, editable source of truth). Errors only
+    /// if the spec cannot be structurally encoded (it is total over valid specs).
+    /// The spec is lowered — and the input paths derived — at the first tick.
+    pub fn from_spec(spec: GraphSpec) -> Result<Self, String> {
+        Ok(Self {
+            graph: graph_codec::encode(&spec)?,
+            spec: GraphSpec::default(),
+            dirty: true,
             rt: GraphRuntime::default(),
-            inputs,
+            inputs: Vec::new(),
             function_modules: HashMap::new(),
-        }
+        })
+    }
+
+    /// Re-lower the evaluator's spec from the retained graph and refresh the
+    /// input paths, keeping the runtime warm and the plan-cache version
+    /// monotonic. Applied at the next tick after an edit, so a lowering problem
+    /// surfaces there (the store-carrying phase), per the [`BehaviorInterpreter`]
+    /// contract.
+    fn lower(&mut self) -> Result<(), BehaviorError> {
+        let mut spec =
+            graph_codec::decode(&self.graph).map_err(|message| BehaviorError { message })?;
+        self.inputs = input_paths(&spec);
+        // Carry the version forward before re-caching. A freshly decoded spec
+        // restarts at version 0 (→ 1 after `with_cache`); bumping from the
+        // current version keeps it strictly increasing, so the version-keyed
+        // `PlanCache` always rebuilds the plan for the new topology rather than
+        // serving the previous graph's plan.
+        spec.version = self.spec.version;
+        self.spec = spec.with_cache();
+        self.dirty = false;
+        Ok(())
     }
 
     /// Set the `function id -> module id` map used to dispatch `ExternalFunction` nodes.
@@ -135,6 +214,13 @@ impl ProcessingGraph {
         call_bridge: &mut dyn CallBridge,
         dt: f32,
     ) -> Result<(), BehaviorError> {
+        // An edit landed since the last lowering: rebuild the spec from the
+        // retained graph against this tick, so the edit (and any lowering
+        // problem it introduced) takes effect here.
+        if self.dirty {
+            self.lower()?;
+        }
+
         let delta = if dt.is_finite() { dt.max(0.0) } else { 0.0 };
         self.rt.dt = delta;
         self.rt.t += delta;
@@ -182,36 +268,35 @@ impl BehaviorInterpreter for ProcessingGraph {
         Ok(BehaviorStatus::Running)
     }
 
-    /// Replace the running Vizij graph in place — the interpreter module's
-    /// LOAD entry point, reached through the engine like any module call, so a
+    /// Replace the running Vizij graph in place — the interpreter module's LOAD
+    /// entry point, reached through the engine like any module call, so a
     /// recompose never rebuilds the device (VIZ-57).
     ///
-    /// `graph` must be a [`spec_graph`] carrier: the shared model's one-node
-    /// form whose literal input holds the Vizij spec JSON (see that module for
-    /// why the spec rides the shared model opaquely). The spec is parsed and
-    /// installed in place while the graph runtime is kept **warm**: nodes that
-    /// survive the swap keep their integration state (springs/dampers/URDF
-    /// chains) and the graph clock stays continuous, so a program starting or
-    /// stopping no longer restarts every stateful node. The store and the
-    /// `function -> module` map are untouched — the store belongs to the
-    /// device, and the loaded-module set is fixed at device build.
+    /// `graph` is the shared model's [`graph_codec`] form of the new Vizij graph.
+    /// It becomes the retained graph and lowers at the next tick, while the graph
+    /// runtime is kept **warm**: nodes that survive the swap keep their
+    /// integration state (springs/dampers/URDF chains) and the graph clock stays
+    /// continuous, so a program starting or stopping no longer restarts every
+    /// stateful node. The store and the `function -> module` map are untouched —
+    /// the store belongs to the device, and the loaded-module set is fixed at
+    /// device build.
     fn load(&mut self, graph: Graph) -> Result<(), BehaviorError> {
-        let json = spec_graph::decode(&graph).map_err(|message| BehaviorError { message })?;
-        let mut spec = parse_spec(&json).map_err(|message| BehaviorError { message })?;
-        self.inputs = input_paths(&spec);
-        // Keep `self.rt` warm across the swap: `evaluate_all` garbage-collects
-        // state for nodes that disappear and grows storage for new ones, so no
-        // manual reset is needed and surviving nodes keep their state.
-        //
-        // Carry the version forward before re-caching. A freshly parsed spec
-        // restarts at version 0 (→ 1 after `with_cache`); left as-is that would
-        // collide with the previously installed spec's version and, since the
-        // eval path takes the version-keyed `PlanCache` fast path, serve the
-        // *old* plan for the new graph. Bumping from the current version keeps
-        // it strictly increasing so the plan always rebuilds for the new
-        // topology.
-        spec.version = self.spec.version;
-        self.spec = spec.with_cache();
+        self.graph = graph;
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Edit the running Vizij graph — the interpreter module's EDIT entry point,
+    /// reached through the engine like LOAD. Applies the [`GraphDiff`] to the
+    /// retained graph (add/remove nodes and links) and re-lowers at the next
+    /// tick. Unedited nodes keep their id, so their runtime state survives the
+    /// edit — an add/remove of one node does not restart the rest. The store and
+    /// the `function -> module` map are untouched.
+    fn apply(&mut self, diff: GraphDiff) -> Result<(), BehaviorError> {
+        self.graph.apply(diff).map_err(|e| BehaviorError {
+            message: format!("graph diff: {e}"),
+        })?;
+        self.dirty = true;
         Ok(())
     }
 }
@@ -280,10 +365,8 @@ mod tests {
     #[test]
     fn graph_reads_and_writes_the_arora_store() {
         let store = SimpleDataStore::new();
-        let mut graph = ProcessingGraph::from_spec(
-            passthrough("sensor/x", "actuator/y"),
-            vec![TypedPath::parse("sensor/x").unwrap()],
-        );
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
 
         let mut bridge = NoopBridge;
 
@@ -308,10 +391,8 @@ mod tests {
     #[test]
     fn load_swaps_the_graph_in_place() {
         let store = SimpleDataStore::new();
-        let mut graph = ProcessingGraph::from_spec(
-            passthrough("sensor/x", "actuator/y"),
-            vec![TypedPath::parse("sensor/x").unwrap()],
-        );
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
         let mut bridge = NoopBridge;
 
         store
@@ -331,9 +412,10 @@ mod tests {
             ]
         })
         .to_string();
+        let spec = parse_spec(&json).expect("parse spec");
         graph
-            .load(spec_graph::encode(&json))
-            .expect("the carrier graph loads");
+            .load(graph_codec::encode(&spec).expect("encode"))
+            .expect("the structural graph loads");
 
         store
             .write(StateChange::set("sensor/b", float(0.25)))
@@ -350,12 +432,49 @@ mod tests {
         assert_eq!(read(&store, "sensor/x"), Some(float(0.9)));
     }
 
-    /// A non-carrier graph is refused: Vizij edition goes through the
-    /// spec-carrier load, not the shared model's structural form.
+    /// An `apply(GraphDiff)` edits the running graph in place: adding a node and
+    /// rewiring the sink to it changes what the next tick writes, without a
+    /// whole-graph reload. This is the EDIT path (VIZ-79) — Vizij edition now
+    /// goes through the shared model's structural form, not a spec carrier.
     #[test]
-    fn load_rejects_a_non_carrier_graph() {
-        let mut graph = ProcessingGraph::from_spec(passthrough("a", "b"), vec![]);
-        assert!(graph.load(Graph::empty()).is_err());
+    fn apply_edits_the_running_graph() {
+        let store = SimpleDataStore::new();
+        // in(sensor/x) -> out(actuator/y): the sink mirrors the sensor.
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        let mut bridge = NoopBridge;
+
+        store
+            .write(StateChange::set("sensor/x", float(0.1)))
+            .unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read(&store, "actuator/y"), Some(float(0.1)));
+
+        // Insert a constant `k = 0.5` and rewire the sink's input to it. The sink
+        // (`out`) is upserted, so its incident edge is included per the diff
+        // contract; the old `in -> out` edge is replaced by `k -> out`.
+        let diff = graph_codec::GraphSpecDiff {
+            upsert_nodes: serde_json::from_value(json!([
+                { "id": "k",   "type": "constant", "params": { "value": { "f32": 0.5 } } },
+                { "id": "out", "type": "output",   "params": { "path": "actuator/y" } }
+            ]))
+            .unwrap(),
+            upsert_edges: serde_json::from_value(json!([
+                { "from": { "node_id": "k", "output": "out" }, "to": { "node_id": "out", "input": "in" } }
+            ]))
+            .unwrap(),
+            ..Default::default()
+        };
+        graph
+            .apply(graph_codec::spec_diff_to_graph_diff(&diff).expect("translate"))
+            .expect("apply");
+
+        // The sink now writes the constant, not the sensor.
+        store
+            .write(StateChange::set("sensor/x", float(0.9)))
+            .unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read(&store, "actuator/y"), Some(float(0.5)));
     }
 
     /// A load keeps the graph runtime warm: the graph clock (surfaced by a
@@ -382,7 +501,7 @@ mod tests {
         let initial: GraphSpec = serde_json::from_value(initial).expect("graph spec");
 
         let store = SimpleDataStore::new();
-        let mut graph = ProcessingGraph::from_spec(initial, vec![]);
+        let mut graph = ProcessingGraph::from_spec(initial).expect("from_spec");
         let mut bridge = NoopBridge;
 
         // Accumulate three frames of graph time (rt.t ~= 0.3).
@@ -399,9 +518,10 @@ mod tests {
         // Recompose to a different clock graph. The runtime stays warm, so the
         // clock keeps counting from ~0.3 rather than restarting at 0 — a reset
         // runtime would show ~0.1 here.
+        let next = parse_spec(&clock_graph_json("clock/b").to_string()).expect("parse spec");
         graph
-            .load(spec_graph::encode(&clock_graph_json("clock/b").to_string()))
-            .expect("carrier graph loads");
+            .load(graph_codec::encode(&next).expect("encode"))
+            .expect("structural graph loads");
         graph.tick_store(&store, &mut bridge, 0.1).expect("tick");
         match read(&store, "clock/b") {
             Some(Value::F32(t)) => {
@@ -461,7 +581,7 @@ mod tests {
         let spec: GraphSpec = serde_json::from_value(spec).expect("graph spec");
 
         let store = SimpleDataStore::new();
-        let mut graph = ProcessingGraph::from_spec(spec, vec![]);
+        let mut graph = ProcessingGraph::from_spec(spec).expect("from_spec");
         let mut bridge = NoopBridge;
         graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
 

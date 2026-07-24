@@ -21,11 +21,11 @@
 //! because none of it touches the stepping device. Values cross the JS
 //! boundary as JSON in the Arora `Value` vocabulary (e.g. `{"f32": 0.75}`).
 //!
-//! Module functions are reached with [`call`](VizijArora::call), and the
-//! running graph is swapped **in place** with
-//! [`loadGraph`](VizijArora::load_graph) — both dispatch through the device's
-//! in-process [`arora::Caller`], applied at the next step like a remote's
-//! command, so neither requires rebuilding the device (VIZ-57).
+//! Module functions are reached with [`call`](VizijArora::call); the running
+//! graph is swapped whole with [`loadGraph`](VizijArora::load_graph) or edited
+//! node-by-node with [`applyGraphEdits`](VizijArora::apply_graph_edits) (VIZ-79).
+//! All dispatch through the device's in-process [`arora::Caller`], applied at
+//! the next step like a remote's command, so none rebuilds the device (VIZ-57).
 //!
 //! This crate only carries content when built for `wasm32`; on the host it is
 //! an empty shim so it can participate in `cargo build`/`cargo test` on the
@@ -40,7 +40,9 @@ use arora_types::call::Call;
 use arora_types::module::low::Header;
 use arora_web::AroraWeb;
 use uuid::Uuid;
-use vizij_arora_behavior::{input_paths, parse_spec, spec_graph, ProcessingGraph};
+use vizij_arora_behavior::{
+    encode_edit_call, encode_load_call, parse_spec, parse_spec_diff, ProcessingGraph,
+};
 use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 use wasm_bindgen::prelude::*;
@@ -100,8 +102,7 @@ impl VizijArora {
         let modules = parse_modules(modules)?;
         let function_modules = function_modules(&modules);
 
-        let inputs = input_paths(&spec);
-        let mut graph = ProcessingGraph::from_spec(spec, inputs);
+        let mut graph = ProcessingGraph::from_spec(spec).map_err(|e| JsValue::from_str(&e))?;
         graph.set_function_modules(function_modules.clone());
 
         let mut builder = Arora::builder()
@@ -188,16 +189,40 @@ impl VizijArora {
     }
 
     /// Replace the device's running Vizij graph **in place** (VIZ-57).
-    /// `graph_json` is a Vizij graph spec in any accepted form; it reaches
-    /// the device's interpreter as the engine's LOAD call (see
-    /// `vizij_arora_behavior::spec_graph`), so the store, the loaded modules,
-    /// and the device itself all survive the swap.
+    /// `graph_json` is a Vizij graph spec in any accepted form; it is encoded to
+    /// the shared model's structural form and reaches the device's interpreter
+    /// as the engine's LOAD call, so the store, the loaded modules, and the
+    /// device itself all survive the swap.
     ///
     /// Applied — like any call — at the next step; the promise resolves once
     /// the new graph is installed and rejects if the spec does not parse.
     #[wasm_bindgen(js_name = loadGraph)]
     pub fn load_graph(&self, graph_json: &str) -> js_sys::Promise {
-        self.dispatch(spec_graph::encode_load_call(graph_json))
+        let call = match parse_spec(graph_json).and_then(|spec| encode_load_call(&spec)) {
+            Ok(call) => call,
+            Err(e) => return js_sys::Promise::reject(&JsValue::from_str(&e)),
+        };
+        self.dispatch(call)
+    }
+
+    /// Edit the device's running Vizij graph **in place** (VIZ-79). `edits_json`
+    /// is a spec-level graph diff — `upsert_nodes`, `remove_nodes`,
+    /// `upsert_edges`, `remove_edges`, in the Vizij spec vocabulary — the editor
+    /// computes from its change. It reaches the interpreter as the engine's EDIT
+    /// call, applied at the next step, so unchanged nodes keep their runtime
+    /// state (the edit patches the graph rather than reloading it) and the
+    /// device survives.
+    ///
+    /// Every edge incident to an upserted node must be present in `upsert_edges`
+    /// (an upserted node is removed then re-added). The promise resolves once the
+    /// edit is applied and rejects if the diff does not parse.
+    #[wasm_bindgen(js_name = applyGraphEdits)]
+    pub fn apply_graph_edits(&self, edits_json: &str) -> js_sys::Promise {
+        let call = match parse_spec_diff(edits_json).and_then(|diff| encode_edit_call(&diff)) {
+            Ok(call) => call,
+            Err(e) => return js_sys::Promise::reject(&JsValue::from_str(&e)),
+        };
+        self.dispatch(call)
     }
 
     /// Dispatch `call` through the in-process caller; the promise resolves to

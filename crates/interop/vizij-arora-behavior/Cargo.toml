@@ -8,6 +8,7 @@ description = "A Vizij node graph driven as an Arora behavior interpreter (Proce
 [dependencies]
 arora-behavior = "7"
 arora-types = "2"
+serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = "1"
 vizij-api-core = { path = "../../api/vizij-api-core" }
