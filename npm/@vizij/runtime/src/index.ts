@@ -34,6 +34,13 @@ import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/brow
 export type GraphSpecInput = object | string;
 
 /**
+ * A spec-level graph edit — `{ upsert_nodes, remove_nodes, upsert_edges,
+ * remove_edges }` in the Vizij spec vocabulary, or a JSON string of the same.
+ * Every edge incident to an upserted node must appear in `upsert_edges`.
+ */
+export type GraphEditsInput = object | string;
+
+/**
  * An Arora wasm module to load into the runtime's engine: its header as JSON
  * plus its `.wasm` executable bytes — e.g. what `@vizij/animation-module`'s
  * `loadAnimationModule()` returns.
@@ -64,6 +71,7 @@ interface WasmVizijArora {
   behaviorErrorChanged(): Promise<string | undefined>;
   call(call_json: string): Promise<string>;
   loadGraph(graph_json: string): Promise<string>;
+  applyGraphEdits(edits_json: string): Promise<string>;
   setValue(path: string, value_json: string): void;
   writeValues(values_json: string): void;
   readValues(paths: string[]): Record<string, ValueJSON | null>;
@@ -252,6 +260,23 @@ export class Runtime {
       this.inner.step(0);
     }
     return loaded.then(() => undefined);
+  }
+
+  /**
+   * Edit the runtime's running graph **in place** (VIZ-79): `edits` is a
+   * spec-level graph diff (`upsert_nodes` / `remove_nodes` / `upsert_edges` /
+   * `remove_edges`) that reaches the interpreter as the engine's EDIT call.
+   * Unchanged nodes keep their runtime state, so the edit patches the graph
+   * rather than reloading it. Resolves once applied; on a runtime not under
+   * `run()` a zero-dt step lands it.
+   */
+  applyGraphEdits(edits: GraphEditsInput): Promise<void> {
+    const json = typeof edits === "string" ? edits : JSON.stringify(edits);
+    const applied = this.inner.applyGraphEdits(json);
+    if (!this.selfPaced) {
+      this.inner.step(0);
+    }
+    return applied.then(() => undefined);
   }
 
   /** Write one store key. Accepts any `ValueInput` shorthand. */

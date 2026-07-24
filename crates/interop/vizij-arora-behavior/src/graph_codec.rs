@@ -1,10 +1,11 @@
 //! Structural encoding of a Vizij graph spec as an Arora shared [`Graph`].
 //!
-//! Where [`spec_graph`](crate::spec_graph) rides the whole spec opaquely on one
-//! carrier node, this maps a [`GraphSpec`] **structurally**: one shared-model
-//! [`Node`] per Vizij node, so every node, edge, and parameter is individually
-//! addressable — the precondition for editing a Vizij graph through
-//! `apply(GraphDiff)` instead of re-loading the whole spec (VIZ-79).
+//! This maps a [`GraphSpec`] onto the shared model **structurally**: one
+//! shared-model [`Node`] per Vizij node, so every node, edge, and parameter is
+//! individually addressable — the precondition for editing a Vizij graph through
+//! `apply(GraphDiff)` instead of re-loading the whole spec (VIZ-79). It is the
+//! [`ProcessingGraph`](crate::ProcessingGraph)'s running representation: a graph
+//! is `encode`d on load and `decode`d back to a spec to evaluate.
 //!
 //! # Conventions
 //!
@@ -42,7 +43,7 @@
 //! [`output_shapes`](NodeSpec::output_shapes) and an input default's
 //! [`shape`](vizij_graph_core::types::InputDefault::shape) are declared *type*
 //! metadata, not values, so they have no per-value slot. They ride one reserved
-//! `Literal(JSON)` slot per node ([`meta_slot`]), present only when a node
+//! `Literal(JSON)` slot per node (`meta_slot`), present only when a node
 //! actually declares a shape (no real authored graph does — the runtime derives
 //! shapes — but the eval path honors them where present, so they must survive a
 //! round trip). This is the one carrier that is not a per-value slot.
@@ -53,12 +54,12 @@
 //! UUID-keyed `Structure` would need the type registry to resolve the name to a
 //! field id at encode time. That resolution is not done here yet — a `Field`
 //! selector only round-trips a string-keyed `KeyValue` record or an array index
-//! (see [`selector_to_key`]). Vizij's record selectors read `KeyValue`, so this
+//! (see `selector_to_key`). Vizij's record selectors read `KeyValue`, so this
 //! is correct for Vizij graphs today.
 
 use std::collections::{HashMap, HashSet};
 
-use arora_behavior::graph::{Io, Link, LinkSource, Node, Port};
+use arora_behavior::graph::{GraphDiff, Io, Link, LinkSource, Node, Port};
 use arora_behavior::Graph;
 use arora_types::data::Key;
 use arora_types::value::Value;
@@ -158,9 +159,9 @@ fn node_meta_json(node: &NodeSpec) -> Result<Option<String>, String> {
 
 /// Encode a Vizij [`GraphSpec`] as an Arora shared [`Graph`] (see module docs).
 ///
-/// Total over every valid spec — the whole-graph composition of [`encode_node`]
+/// Total over every valid spec — the whole-graph composition of `encode_node`
 /// (one shared node, its parameter/input-default/metadata literal slots) and
-/// [`encode_edge`] (one link, with a `Select` for a selector).
+/// `encode_edge` (one link, with a `Select` for a selector).
 pub fn encode(spec: &GraphSpec) -> Result<Graph, String> {
     let mut graph = Graph::empty();
 
@@ -479,6 +480,72 @@ pub fn decode(graph: &Graph) -> Result<GraphSpec, String> {
     })
 }
 
+/// A Vizij spec-level graph edit — the delta the editor computes and the wasm
+/// boundary hands to the device, translated to an [`arora_behavior::GraphDiff`]
+/// by [`spec_diff_to_graph_diff`].
+///
+/// An upserted node is **removed and re-added**, which clears any stale
+/// parameter/default links (e.g. a parameter the edit dropped). So **every edge
+/// incident to an upserted node must appear in `upsert_edges`** — otherwise the
+/// node removal drops it and it is not restored. The editor gathers those edges
+/// from the new spec; this keeps the translation context-free (it needs no view
+/// of the running graph).
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GraphSpecDiff {
+    /// Nodes to insert or replace (each removed then re-added).
+    #[serde(default)]
+    pub upsert_nodes: Vec<NodeSpec>,
+    /// Node ids to remove (with their incident links).
+    #[serde(default)]
+    pub remove_nodes: Vec<String>,
+    /// Edges to insert or replace, plus every edge incident to an upserted node.
+    #[serde(default)]
+    pub upsert_edges: Vec<EdgeSpec>,
+    /// Edge targets to unwire — the `(node_id, input)` an edge fed.
+    #[serde(default)]
+    pub remove_edges: Vec<EdgeInputEndpoint>,
+}
+
+/// Translate a Vizij [`GraphSpecDiff`] into an Arora [`GraphDiff`] using the same
+/// per-node/per-edge encoding as [`encode`]. Context-free: an upserted node is
+/// removed then re-added (see [`GraphSpecDiff`]), so the caller must include
+/// every edge incident to an upserted node in `upsert_edges`.
+pub fn spec_diff_to_graph_diff(diff: &GraphSpecDiff) -> Result<GraphDiff, String> {
+    // Encode the upserted nodes and edges into a scratch graph. Nodes first,
+    // edges after, so an edge's link replaces any inline-default link on the
+    // same input (the edge wins — as in `encode`).
+    let mut scratch = Graph::empty();
+    for node in &diff.upsert_nodes {
+        encode_node(&mut scratch, node, None)?;
+    }
+    for edge in &diff.upsert_edges {
+        encode_edge(&mut scratch, edge);
+    }
+
+    // Upserted nodes are removed then re-added; `Graph::apply` removes before it
+    // adds, so this clears each upserted node's stale links first.
+    let remove_nodes: Vec<Uuid> = diff
+        .remove_nodes
+        .iter()
+        .map(|id| node_id_uuid(id))
+        .chain(diff.upsert_nodes.iter().map(|node| node_id_uuid(&node.id)))
+        .collect();
+    let remove_links: Vec<Port> = diff
+        .remove_edges
+        .iter()
+        .map(|target| Port::new(node_id_uuid(&target.node_id), in_slot(&target.input)))
+        .collect();
+
+    Ok(GraphDiff {
+        add_nodes: scratch.nodes.into_values().collect(),
+        add_links: scratch.links,
+        remove_nodes,
+        remove_links,
+        variables: scratch.variables,
+        ..GraphDiff::default()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -662,6 +729,87 @@ mod tests {
 
         let decoded = decode(&graph).expect("decode");
         assert_eq!(canonical(&spec), canonical(&decoded));
+    }
+
+    /// A spec diff (change a param, add a node, keep the incident edge) applied
+    /// to an encoded graph decodes to the edited spec.
+    #[test]
+    fn a_spec_diff_edits_the_encoded_graph() {
+        let base: GraphSpec = serde_json::from_value(json!({
+            "nodes": [
+                { "id": "c",   "type": "constant", "params": { "value": { "f32": 1.0 } } },
+                { "id": "out", "type": "output",   "params": { "path": "a/b" } }
+            ],
+            "edges": [
+                { "from": { "node_id": "c", "output": "out" }, "to": { "node_id": "out", "input": "in" } }
+            ]
+        }))
+        .expect("base spec");
+        let mut graph = encode(&base).expect("encode base");
+
+        // Change `c`'s value and add a new constant `d`. `c` is upserted, so its
+        // incident edge is included (the `GraphSpecDiff` contract).
+        let diff = GraphSpecDiff {
+            upsert_nodes: serde_json::from_value(json!([
+                { "id": "c", "type": "constant", "params": { "value": { "f32": 2.0 } } },
+                { "id": "d", "type": "constant", "params": { "value": { "f32": 5.0 } } }
+            ]))
+            .unwrap(),
+            upsert_edges: serde_json::from_value(json!([
+                { "from": { "node_id": "c", "output": "out" }, "to": { "node_id": "out", "input": "in" } }
+            ]))
+            .unwrap(),
+            ..Default::default()
+        };
+        graph
+            .apply(spec_diff_to_graph_diff(&diff).expect("translate"))
+            .expect("apply");
+
+        let expected: GraphSpec = serde_json::from_value(json!({
+            "nodes": [
+                { "id": "c",   "type": "constant", "params": { "value": { "f32": 2.0 } } },
+                { "id": "d",   "type": "constant", "params": { "value": { "f32": 5.0 } } },
+                { "id": "out", "type": "output",   "params": { "path": "a/b" } }
+            ],
+            "edges": [
+                { "from": { "node_id": "c", "output": "out" }, "to": { "node_id": "out", "input": "in" } }
+            ]
+        }))
+        .expect("expected spec");
+        assert_eq!(
+            canonical(&expected),
+            canonical(&decode(&graph).expect("decode"))
+        );
+    }
+
+    /// A spec diff that removes a node drops the node and its edges.
+    #[test]
+    fn a_spec_diff_removes_a_node() {
+        let base: GraphSpec = serde_json::from_value(json!({
+            "nodes": [
+                { "id": "c",   "type": "constant", "params": { "value": { "f32": 1.0 } } },
+                { "id": "d",   "type": "constant", "params": { "value": { "f32": 5.0 } } },
+                { "id": "out", "type": "output",   "params": { "path": "a/b" } }
+            ],
+            "edges": [
+                { "from": { "node_id": "c", "output": "out" }, "to": { "node_id": "out", "input": "in" } }
+            ]
+        }))
+        .expect("base spec");
+        let mut graph = encode(&base).expect("encode base");
+
+        let diff = GraphSpecDiff {
+            remove_nodes: vec!["d".to_string()],
+            ..Default::default()
+        };
+        graph
+            .apply(spec_diff_to_graph_diff(&diff).expect("translate"))
+            .expect("apply");
+
+        let decoded = decode(&graph).expect("decode");
+        assert!(decoded.nodes.iter().all(|n| n.id != "d"));
+        assert_eq!(decoded.nodes.len(), 2);
+        assert_eq!(decoded.edges.len(), 1);
     }
 
     /// Every real authored fixture (`fixtures/node_graphs/*.json`) round-trips

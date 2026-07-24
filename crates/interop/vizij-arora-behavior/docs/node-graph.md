@@ -10,10 +10,10 @@ The interpreter's spine is `tick_store` ([`lib.rs:135-177`](../src/lib.rs#L135-L
 
 | Interpreter lifecycle | Vizij node graph |
 |---|---|
-| load | `load` decodes the spec and installs it in place, keeping the graph runtime **warm** — surviving nodes retain their integration state (springs/dampers/URDF) and the graph clock stays continuous; a recompose never rebuilds the device ([`lib.rs:197`](../src/lib.rs#L197)) |
-| time update | `dt` is read from the built-in `arora/dt` store key and advances the graph clock (`rt.t += dt`) ([`built_in_dt_seconds`, `lib.rs:211-221`](../src/lib.rs#L211-L221)) |
-| tick | stage subscribed inputs → `evaluate_all` → flush outputs; **always returns `BehaviorStatus::Running`** ([`lib.rs:181-186`](../src/lib.rs#L181-L186)) |
-| graph update | **not** incremental — `apply(GraphDiff)` is rejected; every edit is a whole-spec `load` (see [Editing](#editing-whole-spec-load-only)) |
+| load | `load` retains the new structural graph and re-lowers it to the spec on the next tick, keeping the graph runtime **warm** — surviving nodes retain their integration state (springs/dampers/URDF) and the graph clock stays continuous; a recompose never rebuilds the device ([`load`, `lib.rs`](../src/lib.rs)) |
+| time update | `dt` is read from the built-in `arora/dt` store key and advances the graph clock (`rt.t += dt`) ([`built_in_dt_seconds`, `lib.rs`](../src/lib.rs)) |
+| tick | if edited, re-lower the retained graph, then stage subscribed inputs → `evaluate_all` → flush outputs; **always returns `BehaviorStatus::Running`** ([`lib.rs`](../src/lib.rs)) |
+| graph update | `apply(GraphDiff)` edits the retained structural graph and re-lowers on the next tick — an unedited node keeps its id, so its runtime state survives (see [Editing](#editing-structural-load-or-graphdiff)) |
 
 The single most important contrast with a behavior tree: **a node graph is continuous.** It reports `Running` every frame ([`lib.rs:185`](../src/lib.rs#L185)), whereas a tree runs to a terminal status and reports `Done`. Timing is data for both — the graph reads `arora/dt` exactly as the tree does.
 
@@ -74,20 +74,23 @@ The Arora binding of that host is [`CallBridgeFunctions`](../src/lib.rs#L47-L76)
 
 This is the UUID-keyed analogue of the behavior tree's module dispatch (a non-built-in node id resolved through the engine): both go through `CallBridge::arora_call`; the graph routes by an explicit `function → module` map, the tree by a `function_index`. Dispatch test: [`external_function_dispatches_through_host_and_sets_output`](../../../node-graph/vizij-graph-core/src/eval/external_function_tests.rs#L75-L107).
 
-## Editing: whole-spec load only
+## Editing: structural load or GraphDiff
 
-Here the Vizij interpreter deliberately **diverges** from the tree. The tree supports incremental `apply(GraphDiff)` (re-lowering on the next tick); `ProcessingGraph` overrides only `load` and leaves `apply` at the trait default that errors ([`lib.rs:197`](../src/lib.rs#L197)). The reason ([`spec_graph.rs:1-18`](../src/spec_graph.rs#L1-L18)): Vizij's authored model is a `vizij-graph-core` spec whose node vocabulary the shared model does not yet mirror structurally, so the spec rides the shared model **opaquely** — one carrier node bound to a `GRAPH_PROGRAM` function whose single input is fed the normalized spec JSON as a literal ([`encode`, `spec_graph.rs:37-54`](../src/spec_graph.rs#L37-L54)). Until a structural node-kind mapping exists, `GraphDiff` edition is rejected and every edit is a whole-spec `load`. In-place swap test: [`load_swaps_the_graph_in_place`](../src/lib.rs#L308-L353).
+`ProcessingGraph` edits exactly like the behavior tree — a whole-graph `load` or an incremental `apply(GraphDiff)` — because it holds the shared model's **structural** graph (one shared `Node` per Vizij node — see [`graph_codec`](../src/graph_codec.rs)) as its editable source of truth, and lowers it to the `vizij-graph-core` spec it evaluates (`graph_codec::decode`) on the next tick after a change. This is [VIZ-79](https://linear.app/semio-ai/issue/VIZ-79): the earlier opaque spec-carrier — the whole spec rode one node as a literal, and `GraphDiff` edition was rejected — is gone.
 
-A whole-spec `load` still keeps the graph runtime **warm**: it swaps the spec but does not reset the `GraphRuntime`, so nodes that survive the swap keep their integration state (springs/dampers/URDF chains) and the graph clock stays continuous — a program starting or stopping restarts no stateful node. The version is carried forward before re-caching so the version-keyed `PlanCache` still rebuilds for the new topology (a fresh parse restarts at version 0, which would otherwise collide with the previous spec's version and serve the old plan). Continuity test: [`load_keeps_the_graph_runtime_warm`](../src/lib.rs#L378). Making the *edit* itself incremental (structural node-kind mapping + `apply(GraphDiff)`) is [VIZ-79](https://linear.app/semio-ai/issue/VIZ-79).
+- **load** installs a new structural graph whole.
+- **apply(GraphDiff)** adds/removes nodes and links on the retained graph. The wasm boundary takes a Vizij spec-level diff (`GraphSpecDiff`: `upsert_nodes` / `remove_nodes` / `upsert_edges` / `remove_edges`) and translates it to an `arora_behavior::GraphDiff` with the *same* per-node/per-edge encoders as `encode` (`graph_codec::spec_diff_to_graph_diff`); it reaches the interpreter as the engine's EDIT call. An upserted node is removed then re-added, so every edge incident to it rides along in `upsert_edges`.
 
-(Structural changes *within* a running spec — reconnecting edges, adding nodes — are absorbed internally by the engine's `PlanCache`, invalidated by a version bump or content fingerprint; that is graph-core's own concern, separate from the Arora edit path.)
+Both keep the graph runtime **warm**: neither resets the `GraphRuntime`, so nodes that survive keep their integration state (springs/dampers/URDF chains) and the graph clock stays continuous — a program starting or stopping restarts no stateful node, and an edit restarts only what it touched (an unedited node keeps its id, so `evaluate_all` keeps its state). The version is carried forward before re-caching so the version-keyed `PlanCache` rebuilds for the new topology (a fresh decode restarts at version 0, which would otherwise serve the previous plan). Tests: in-place swap ([`load_swaps_the_graph_in_place`](../src/lib.rs)), incremental edit ([`apply_edits_the_running_graph`](../src/lib.rs)), warm continuity ([`load_keeps_the_graph_runtime_warm`](../src/lib.rs)).
+
+(Structural changes *within* a running spec — reconnecting edges, adding nodes — are also absorbed by the engine's `PlanCache`, invalidated by the version bump; that is graph-core's own concern, separate from the Arora edit path.)
 
 ## Source map
 
 | Concept | File |
 |---|---|
 | `ProcessingGraph` (the interpreter), `tick_store`, `CallBridgeFunctions` | [`crates/interop/vizij-arora-behavior/src/lib.rs`](../src/lib.rs) |
-| Opaque spec carrier, `load` encoding, no-`GraphDiff` rationale | [`crates/interop/vizij-arora-behavior/src/spec_graph.rs`](../src/spec_graph.rs) |
+| Structural encoding (load/edit), `GraphSpecDiff` → `GraphDiff` | [`crates/interop/vizij-arora-behavior/src/graph_codec.rs`](../src/graph_codec.rs) |
 | Graph spec / node / edge types | [`crates/node-graph/vizij-graph-core/src/types.rs`](../../../node-graph/vizij-graph-core/src/types.rs) |
 | Per-node evaluation dispatch | [`crates/node-graph/vizij-graph-core/src/eval/eval_node.rs`](../../../node-graph/vizij-graph-core/src/eval/eval_node.rs) |
 | `NodeFunctions` host trait (module calls) | [`crates/node-graph/vizij-graph-core/src/eval/node_function.rs`](../../../node-graph/vizij-graph-core/src/eval/node_function.rs) |
