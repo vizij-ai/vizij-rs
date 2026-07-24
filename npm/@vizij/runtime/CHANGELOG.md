@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.0
+
+### Minor Changes
+
+- c435435: Add `Runtime.applyGraphEdits`: apply a spec-level graph diff (`upsert_nodes` / `remove_nodes` / `upsert_edges` / `remove_edges`) to the running graph in place (VIZ-79). An edit patches the graph — unchanged nodes keep their runtime state — instead of reloading the whole spec.
+
 All notable changes to `@vizij/runtime`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
@@ -74,7 +80,7 @@ All notable changes to `@vizij/runtime`. The format follows
 ### Added
 
 - Arora wasm modules load into the browser device: `startDevice(graph, init,
-  modules)` takes `{ headerJson, wasmBytes }` pairs (e.g. from
+modules)` takes `{ headerJson, wasmBytes }` pairs (e.g. from
   `@vizij/animation-module`) and loads them into the device's engine.
 - `AroraDevice.call(call)` calls a loaded module's function through the
   device: the call dispatches inside the next `step` — the same phase a
