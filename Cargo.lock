@@ -144,12 +144,12 @@ checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
 
 [[package]]
 name = "arora"
-version = "9.2.0"
+version = "9.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0f3c470df674d53e640a2d2a0f7df0b92795b630fbc0363e8a04b7582b7ce4c"
+checksum = "5a88ea1df31f5c1e5b9561ca50facd1305446a173c8d3e7fd6ef771532c4adb1"
 dependencies = [
  "anyhow",
- "arora-behavior 6.0.0",
+ "arora-behavior",
  "arora-behavior-tree",
  "arora-bridge",
  "arora-engine",
@@ -166,19 +166,9 @@ dependencies = [
 
 [[package]]
 name = "arora-behavior"
-version = "6.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2f5fd16c9440dc39b8a5f8011b716ad2e2c9ae9862795f225fb68bc5a02d3f0"
-dependencies = [
- "arora-types",
- "serde",
- "uuid",
-]
-
-[[package]]
-name = "arora-behavior"
 version = "7.0.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=feat%2Farora-72-edge-selectors#05e73c4a8d9ebace78c314a2f41e1a2a0ebfceb5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c3034f2d7c6ed0c8910e35fa51ce09f792360a8b347cfd8a2acb173f38168a2"
 dependencies = [
  "arora-types",
  "serde",
@@ -187,12 +177,12 @@ dependencies = [
 
 [[package]]
 name = "arora-behavior-tree"
-version = "6.1.0"
+version = "6.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0722c804aa532fff5fa8d159ddb4d2eec77a2e59cebf90196901a9047298e6f3"
+checksum = "a3f1a3b46807b282f36078fa17e5d67727d389a0c9f53bafe4b5a9ae4f382aa7"
 dependencies = [
  "anyhow",
- "arora-behavior 6.0.0",
+ "arora-behavior",
  "arora-behavior-tree-types",
  "arora-buffers",
  "arora-module-rust",
@@ -367,7 +357,8 @@ dependencies = [
 [[package]]
 name = "arora-types"
 version = "2.1.0"
-source = "git+https://github.com/semio-ai/arora-sdk?branch=feat%2Farora-72-edge-selectors#05e73c4a8d9ebace78c314a2f41e1a2a0ebfceb5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45e47b8c04f3e96958dcb1880736fe92ee8b69a42a363ab0011ad57941e3c22a"
 dependencies = [
  "async-trait",
  "derive_more",
@@ -2921,7 +2912,7 @@ dependencies = [
 name = "vizij-arora-behavior"
 version = "0.0.0"
 dependencies = [
- "arora-behavior 7.0.0",
+ "arora-behavior",
  "arora-simple-data-store",
  "arora-types",
  "serde_json",
