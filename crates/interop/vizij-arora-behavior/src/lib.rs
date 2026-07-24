@@ -19,6 +19,7 @@
 //! [`ProcessingGraph::load`]: arora_behavior::BehaviorInterpreter::load
 
 pub mod spec_graph;
+pub mod structural;
 
 use std::collections::HashMap;
 
