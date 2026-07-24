@@ -13,7 +13,9 @@
 //!
 //! - **kind → `Node.function`**: a stable per-kind id, `gen_uuid_from_str("vizij/graph/kind/<kind>")`.
 //! - **edge → [`Link`]**: `source = LinkSource::Port(from)`, `target = to`, with
-//!   port slots `gen_uuid_from_str("vizij/graph/{in,out}/<port>")`.
+//!   port slots `gen_uuid_from_str("vizij/graph/{in,out}/<port>")`. An edge
+//!   `selector` wraps the source in `LinkSource::Select { source, path }`, the
+//!   `Key` attribute path the runtime reads through [`Key::select`].
 //! - **each present [`NodeParams`] field → its own literal slot**: an input
 //!   [`Io`] at `gen_uuid_from_str("vizij/graph/param/<field>")` fed
 //!   `LinkSource::Literal(value)`. The field's value is carried through
@@ -28,19 +30,26 @@
 //!
 //! # Not yet mapped
 //!
-//! `NodeSpec::output_shapes`, `NodeSpec::input_defaults`, and an edge's
-//! `selector` have no shared-model home yet; [`encode`] returns an error rather
-//! than dropping them silently. Giving them structural homes (or an arora-sdk
-//! `Link.selector`) is part of VIZ-79.
+//! `NodeSpec::output_shapes` and `NodeSpec::input_defaults` have no shared-model
+//! home yet; [`encode`] returns an error rather than dropping them silently.
+//! Giving them structural homes is part of VIZ-79.
+//!
+//! Edge selectors *are* mapped (to `LinkSource::Select`), but a `Field` name
+//! rides verbatim: reading it against a UUID-keyed `Structure` would need the
+//! type registry to resolve the name to a field id at encode time. That
+//! resolution is not done here yet — a `Field` selector only round-trips a
+//! string-keyed `KeyValue` record or an array index (see [`selector_to_key`]).
 
 use std::collections::HashMap;
 
 use arora_behavior::graph::{Io, Link, LinkSource, Node, Port};
 use arora_behavior::Graph;
+use arora_types::data::Key;
 use arora_types::{gen_uuid_from_str, value_serde};
 use uuid::Uuid;
 use vizij_graph_core::types::{
     EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
+    Selector, SelectorSegment,
 };
 
 fn kind_function(kind: &NodeType) -> Result<(Uuid, String), String> {
@@ -81,7 +90,11 @@ fn present_params(params: &NodeParams) -> Result<Vec<(String, serde_json::Value)
     let json = serde_json::to_value(params).map_err(|e| format!("serialize node params: {e}"))?;
     let map = match json {
         serde_json::Value::Object(map) => map,
-        other => return Err(format!("node params did not serialize to an object: {other}")),
+        other => {
+            return Err(format!(
+                "node params did not serialize to an object: {other}"
+            ))
+        }
     };
     Ok(map.into_iter().filter(|(_, v)| !v.is_null()).collect())
 }
@@ -89,16 +102,22 @@ fn present_params(params: &NodeParams) -> Result<Vec<(String, serde_json::Value)
 /// Encode a Vizij [`GraphSpec`] as an Arora shared [`Graph`] (see module docs).
 ///
 /// Errors if the spec uses a feature with no shared-model home yet
-/// (`output_shapes`, `input_defaults`, or an edge `selector`).
+/// (`output_shapes` or `input_defaults`).
 pub fn encode(spec: &GraphSpec) -> Result<Graph, String> {
     let mut graph = Graph::empty();
 
     for node in &spec.nodes {
         if !node.output_shapes.is_empty() {
-            return Err(format!("node '{}' has output_shapes, not yet mapped", node.id));
+            return Err(format!(
+                "node '{}' has output_shapes, not yet mapped",
+                node.id
+            ));
         }
         if !node.input_defaults.is_empty() {
-            return Err(format!("node '{}' has input_defaults, not yet mapped", node.id));
+            return Err(format!(
+                "node '{}' has input_defaults, not yet mapped",
+                node.id
+            ));
         }
 
         let nid = node_id_uuid(&node.id);
@@ -114,9 +133,10 @@ pub fn encode(spec: &GraphSpec) -> Result<Graph, String> {
             inputs.push(Io::new(slot));
             let literal =
                 value_serde::to_value(&value).map_err(|e| format!("param to value: {e}"))?;
-            graph
-                .links
-                .push(Link::new(Port::new(nid, slot), LinkSource::Literal(literal)));
+            graph.links.push(Link::new(
+                Port::new(nid, slot),
+                LinkSource::Literal(literal),
+            ));
         }
 
         graph.nodes.insert(
@@ -131,9 +151,6 @@ pub fn encode(spec: &GraphSpec) -> Result<Graph, String> {
     }
 
     for edge in &spec.edges {
-        if edge.selector.is_some() {
-            return Err("edge selector is not yet mapped to the shared model".to_string());
-        }
         let from = node_id_uuid(&edge.from.node_id);
         let to = node_id_uuid(&edge.to.node_id);
         let src_slot = out_slot(&edge.from.output);
@@ -144,13 +161,50 @@ pub fn encode(spec: &GraphSpec) -> Result<Graph, String> {
         declare_io(&mut graph, from, src_slot, false);
         declare_io(&mut graph, to, dst_slot, true);
 
-        graph.links.push(Link::new(
-            Port::new(to, dst_slot),
-            LinkSource::Port(Port::new(from, src_slot)),
-        ));
+        // A selector on the edge reads a sub-path of the source output: wrap the
+        // `Port` source in a `Select` carrying the path.
+        let mut source = LinkSource::Port(Port::new(from, src_slot));
+        if let Some(selector) = &edge.selector {
+            source = LinkSource::Select {
+                source: Box::new(source),
+                path: selector_to_key(selector),
+            };
+        }
+        graph.links.push(Link::new(Port::new(to, dst_slot), source));
     }
 
     Ok(graph)
+}
+
+/// A Vizij edge [`Selector`] as an Arora [`Key`] attribute path. Each segment
+/// becomes an attribute; a leading dot makes the whole path attributes (a
+/// selector descends into a value, it does not name a store entity).
+///
+/// `Field` names ride verbatim (a `KeyValue` record is string-keyed, so the name
+/// *is* the key — see [`Key::select`]). Mapping a `Field` on a UUID-keyed
+/// `Structure` to its field id would need the type registry at encode time;
+/// that resolution is not done here yet (VIZ-79).
+fn selector_to_key(selector: &[SelectorSegment]) -> Key {
+    let attributes: Vec<String> = selector
+        .iter()
+        .map(|segment| match segment {
+            SelectorSegment::Field(name) => name.clone(),
+            SelectorSegment::Index(index) => index.to_string(),
+        })
+        .collect();
+    Key::new(format!(".{}", attributes.join(".")))
+}
+
+/// The inverse of [`selector_to_key`]: a numeric attribute is an `Index`, any
+/// other an `Field`.
+fn key_to_selector(path: &Key) -> Selector {
+    path.get_attributes()
+        .iter()
+        .map(|attribute| match attribute.parse::<usize>() {
+            Ok(index) => SelectorSegment::Index(index),
+            Err(_) => SelectorSegment::Field((*attribute).to_string()),
+        })
+        .collect()
 }
 
 /// Ensure `node` declares a slot `slot` in its inputs (`is_input`) or outputs.
@@ -210,6 +264,25 @@ pub fn decode(graph: &Graph) -> Result<GraphSpec, String> {
                         input: name(&target.port)?,
                     },
                     selector: None,
+                });
+            }
+            // A `Select` over a `Port` is an edge that reads a sub-path of the
+            // source output; recover the Vizij selector from its `Key` path.
+            LinkSource::Select { source, path } => {
+                let source = match source.as_ref() {
+                    LinkSource::Port(port) => port,
+                    _ => return Err("structural decode expects a Select over a Port".to_string()),
+                };
+                edges.push(EdgeSpec {
+                    from: EdgeOutputEndpoint {
+                        node_id: name(&source.node)?,
+                        output: name(&source.port)?,
+                    },
+                    to: EdgeInputEndpoint {
+                        node_id: name(&target.node)?,
+                        input: name(&target.port)?,
+                    },
+                    selector: Some(key_to_selector(path)),
                 });
             }
             LinkSource::Variable(_) => {
@@ -308,9 +381,9 @@ mod tests {
         assert!(literals >= 1, "at least the constant value param");
     }
 
-    /// The homeless features are refused rather than silently dropped.
+    /// An edge selector round-trips through `LinkSource::Select`.
     #[test]
-    fn encode_rejects_edge_selectors() {
+    fn edge_selector_round_trips_through_select() {
         let mut spec: GraphSpec = serde_json::from_value(json!({
             "nodes": [
                 { "id": "a", "type": "constant", "params": { "value": { "f32": 1.0 } } },
@@ -321,9 +394,21 @@ mod tests {
             ]
         }))
         .expect("valid spec");
-        spec.edges[0].selector = Some(vec![vizij_graph_core::types::SelectorSegment::Index(0)]);
+        spec.edges[0].selector = Some(vec![
+            SelectorSegment::Field("weights".into()),
+            SelectorSegment::Index(1),
+        ]);
 
-        assert!(encode(&spec).is_err());
+        let graph = encode(&spec).expect("encode");
+        // The edge source is a `Select` over the `Port`, carrying the path.
+        assert!(graph
+            .links
+            .iter()
+            .any(|link| matches!(link.source, LinkSource::Select { .. })));
+
+        // encode -> decode recovers the selector.
+        let decoded = decode(&graph).expect("decode");
+        assert_eq!(canonical(&spec), canonical(&decoded));
     }
 
     /// Compare two specs as order-independent node/edge sets via canonical JSON.

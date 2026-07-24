@@ -6,7 +6,7 @@ publish = false
 description = "A Vizij node graph driven as an Arora behavior interpreter (ProcessingGraph)."
 
 [dependencies]
-arora-behavior = "6"
+arora-behavior = "7"
 arora-types = "2"
 serde_json = { workspace = true }
 uuid = "1"

@@ -149,7 +149,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0f3c470df674d53e640a2d2a0f7df0b92795b630fbc0363e8a04b7582b7ce4c"
 dependencies = [
  "anyhow",
- "arora-behavior",
+ "arora-behavior 6.0.0",
  "arora-behavior-tree",
  "arora-bridge",
  "arora-engine",
@@ -176,13 +176,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "arora-behavior"
+version = "7.0.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=feat%2Farora-72-edge-selectors#05e73c4a8d9ebace78c314a2f41e1a2a0ebfceb5"
+dependencies = [
+ "arora-types",
+ "serde",
+ "uuid",
+]
+
+[[package]]
 name = "arora-behavior-tree"
 version = "6.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0722c804aa532fff5fa8d159ddb4d2eec77a2e59cebf90196901a9047298e6f3"
 dependencies = [
  "anyhow",
- "arora-behavior",
+ "arora-behavior 6.0.0",
  "arora-behavior-tree-types",
  "arora-buffers",
  "arora-module-rust",
@@ -356,9 +366,8 @@ dependencies = [
 
 [[package]]
 name = "arora-types"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "750822222b2135d4c174071e3c781126cea382fe742b170db370937e6c0bf23f"
+version = "2.1.0"
+source = "git+https://github.com/semio-ai/arora-sdk?branch=feat%2Farora-72-edge-selectors#05e73c4a8d9ebace78c314a2f41e1a2a0ebfceb5"
 dependencies = [
  "async-trait",
  "derive_more",
@@ -2263,7 +2272,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2532,7 +2541,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2912,7 +2921,7 @@ dependencies = [
 name = "vizij-arora-behavior"
 version = "0.0.0"
 dependencies = [
- "arora-behavior",
+ "arora-behavior 7.0.0",
  "arora-simple-data-store",
  "arora-types",
  "serde_json",
