@@ -31,14 +31,6 @@ js-sys = "0.3"
 anyhow = "1"
 serde-wasm-bindgen = "0.6"
 
-# TEMPORARY (VIZ-79 PR2): test against arora-behavior 7 / arora-types 2.1
-# (ARORA-72's `LinkSource::Select` + `Key::select`) before those are published.
-# Remove once semio-ai/arora-sdk#176 merges and publishes; then bump the pins to
-# the released versions.
-[patch.crates-io]
-arora-behavior = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/arora-72-edge-selectors" }
-arora-types = { git = "https://github.com/semio-ai/arora-sdk", branch = "feat/arora-72-edge-selectors" }
-
 [profile.release]
 opt-level = "s"
 lto = true
