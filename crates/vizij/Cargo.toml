@@ -1,0 +1,31 @@
+[package]
+name = "vizij"
+version = "0.1.0"
+edition = { workspace = true }
+publish = false
+description = "Vizij: the native app — an arora with a head. cargo run opens the Bevy view rendering a GLB face over a natively-run arora device."
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { version = "4", features = ["derive"] }
+log = "0.4"
+env_logger = "0.11"
+image = "0.25"
+uuid = { version = "1", features = ["serde"] }
+
+# The engine. Default features: gltf scene loading, winit windowing, png, etc.
+# Trimming the feature set (ros-viz-rs style) is a follow-up once the app is
+# proven; certainty over binary size for now.
+bevy = "0.18"
+
+# The device: an arora over the Vizij interop seams.
+arora = "9"
+arora-types = "2"
+vizij-api-core = { path = "../api/vizij-api-core" }
+vizij-graph-core = { path = "../node-graph/vizij-graph-core" }
+vizij-arora = { path = "../interop/vizij-arora" }
+vizij-arora-store = { path = "../interop/vizij-arora-store" }
+vizij-arora-hal = { path = "../interop/vizij-arora-hal" }
+vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
