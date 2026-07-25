@@ -56,9 +56,13 @@ web implementation and verified against the Quori and Toasty GLBs:
   `rootBounds`, single ambient light, transparent background, sRGB output with
   **no tonemapping**, double-sided materials, layering by translation-Z, an
   optional safe-area outline.
-- **Feed.** The view subscribes to the device store (`DataStore::subscribe` —
-  the native twin of `drainChanges`), drops `arora/*` built-ins, and applies
-  the rest. The step loop and the draw loop stay decoupled, exactly as on web.
+- **Feed.** The view reads the face HAL's actuation seam
+  (`RigHal::pose()`/`pose_updates()`) — the renderer *is* the hardware behind
+  the HAL, which is what that seam exists for. The web's store-draining
+  (`drainChanges` + `arora/*` filtering) is the boundary workaround, not the
+  contract. Window input (touch, focus, visibility) flows the other way as
+  honest sensors through `Hal::updates()`. The step loop and the draw loop
+  stay decoupled, exactly as on web.
 - **Bundle.** `VIZIJ_bundle` sits on the scene's glTF `extensions`: graphs
   (`rig`, `pose-driver`, `motiongraph` programs), pose config (neutral inputs,
   poses, groups), baked animation clips, and metadata (`faceId`,
@@ -104,9 +108,12 @@ crates only when a second consumer appears:
 - `host` — parse `VIZIJ_bundle`, compose rig + pose + program sources into the
   one graph the device runs (the native port of runtime-react's composition),
   load animation clips into the animation module, own the transport calls.
-- `world` — GLB → element tree + animatables table (the `RobotData` join).
-- `view` — Bevy systems: store subscription → property application, camera,
-  safe area.
+- `world` — GLB → the face HAL: element tree + animatables table (the
+  `RobotData` join), owned by the HAL as its self-description — the HAL
+  carries its own model (`HalAssets::model_glb`), so remote clients can ask
+  the device what it looks like.
+- `view` — Bevy systems: HAL pose feed → property application, camera,
+  safe area; window input published as HAL sensors.
 - `ui` — egui (via bevy_egui): open a GLB (path/URL), input sliders built from
   the graph's input constraints, pose weights, animation/program transport,
   bridge endpoints + status, background color. This is `demo-vizij-player`'s
@@ -144,10 +151,12 @@ mirror.
 ### D5 — Headless: frames into the data store
 
 `--headless` runs the same app without a window (ScheduleRunnerPlugin) and
-publishes rendered frames into the device store, where any bridge can carry
-them:
+publishes rendered frames as **HAL sensor readings**: the frame is the
+hardware's observation of itself, so it rides `Hal::updates()` — landing in
+the store and fanning out to every bridge through the normal sensor path, no
+bespoke store write:
 
-- path `view/frame`, value a record
+- key `view/frame`, value a record
   `{ width: u32, height: u32, format: text, data: ArrayU8 }` —
   `Value::ArrayU8` is already a first-class arora value;
 - `--frame-format png|raw` (PNG default: raw RGBA is heavy over a bridge)
@@ -165,6 +174,28 @@ The native app replaces standalone's substance: same runtime, better UI
 Standalone remains only as an installable wrapper while the native app's
 packaging (cargo-deb/RPM/Android, per ros-viz-rs) catches up — then it retires.
 No further investment.
+
+## Under discussion upstream (does not block v1)
+
+Two architecture threads are being debated for arora-sdk (see the
+[parts-model discussion](https://docs.google.com/document/d/1Is043T7lcMDu4zkPRUfvt7MTzU_AODFE8MPFtmzlAZM/edit));
+the face part is the same unit under every option on the table, so v1
+proceeds against today's `Hal` trait:
+
+- **Parts model.** HALs and modules converge at the manifest level: a part
+  declares `senses`/`actuates` keys next to its exported functions; the
+  runtime routes the sensor/actuation phases by key ownership and dispatches
+  calls to any part. Discrete initiation = functions (prompt-return); observable
+  state = keys — ROS services map to part functions, ROS actions to
+  start/cancel functions + status keys (the animation-module transport is the
+  shipped precedent).
+- **The rig line.** Whether the rig graph (semantic inputs → animatable UUIDs,
+  shipped in the GLB) stays composed into the device behavior (today's model)
+  or moves inside the face part as its *firmware* — a non-behavioral
+  signal-flow graph the part hosts and exposes `load_rig`/`edit_rig` functions
+  for, making the part's contract the semantic layer and the raw UUID channels
+  part-private. v1 keeps today's composition; the seam is isolated in `host`
+  so the move is mechanical if decided.
 
 ## Out of scope (v1)
 
