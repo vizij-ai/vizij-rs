@@ -15,6 +15,7 @@ members = [
   "crates/interop/vizij-arora-hal",
   "crates/interop/vizij-arora-behavior",
   "crates/tools/vizij-glb-migrate",
+  "crates/vizij",
 ]
 resolver = "2"
 
