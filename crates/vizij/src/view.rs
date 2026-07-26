@@ -95,7 +95,7 @@ impl Plugin for ViewPlugin {
 }
 
 fn setup_scene(mut commands: Commands, face: Res<Face>, asset_server: Res<AssetServer>) {
-    commands.spawn(SceneRoot(
+    commands.spawn(WorldAssetRoot(
         asset_server.load(GltfAssetLabel::Scene(0).from_asset(face.glb_path.clone())),
     ));
 }
@@ -147,6 +147,7 @@ fn index_scene(
     face: Res<Face>,
     options: Res<ViewOptions>,
     names: Query<(Entity, &Name)>,
+    parents: Query<&ChildOf>,
     children: Query<&Children>,
     meshes: Query<(Entity, &MeshMaterial3d<StandardMaterial>), With<Mesh3d>>,
     morphs: Query<Entity, With<MorphWeights>>,
@@ -156,10 +157,30 @@ fn index_scene(
     if index.ready {
         return;
     }
-    // Wait until every element's node has spawned.
+    // Wait until every element's node has spawned. Names can collide: the
+    // world spawner's own root carries the glTF *scene's* name, which
+    // exporters often also give a top-level *node* (Toasty's "Scene"). The
+    // element is always the innermost bearer, so on a collision keep the
+    // deepest entity.
+    let depth = |entity: Entity| {
+        let mut depth = 0usize;
+        let mut current = entity;
+        while let Ok(parent) = parents.get(current) {
+            depth += 1;
+            current = parent.parent();
+        }
+        depth
+    };
     let mut by_name: HashMap<&str, Entity> = HashMap::new();
     for (entity, name) in &names {
-        by_name.entry(name.as_str()).or_insert(entity);
+        by_name
+            .entry(name.as_str())
+            .and_modify(|kept| {
+                if depth(entity) > depth(*kept) {
+                    *kept = entity;
+                }
+            })
+            .or_insert(entity);
     }
     if !face
         .meta
@@ -289,8 +310,14 @@ fn apply_pose(
             FeatureKind::Rotation => {
                 if let (Ok(mut transform), Some(v)) = (transforms.get_mut(*entity), as_xyz(&value))
                 {
-                    // three.js euler order ZYX (intrinsic z, then y, then x).
-                    transform.rotation = Quat::from_euler(EulerRot::ZYX, v[2], v[1], v[0]);
+                    // three.js euler order ZYX: R = Rz·Ry·Rx, composed
+                    // explicitly — EulerRot naming conventions moved between
+                    // glam versions, this cannot. Validated pixel-wise against
+                    // the web renderer on Toasty, whose tilts are
+                    // order-sensitive.
+                    transform.rotation = Quat::from_rotation_z(v[2])
+                        * Quat::from_rotation_y(v[1])
+                        * Quat::from_rotation_x(v[0]);
                 }
             }
             FeatureKind::Scale => {
@@ -306,7 +333,7 @@ fn apply_pose(
                 if let (Ok(handle), Some([r, g, b])) =
                     (material_handles.get(*entity), as_rgb(&value))
                 {
-                    if let Some(mat) = materials.get_mut(&handle.0) {
+                    if let Some(mut mat) = materials.get_mut(&handle.0) {
                         let alpha = mat.base_color.alpha();
                         // Graph color components are linear working-space
                         // floats (three's `Color.setRGB` semantics), not sRGB.
@@ -317,7 +344,7 @@ fn apply_pose(
             }
             FeatureKind::Opacity => {
                 if let (Ok(handle), Some(o)) = (material_handles.get(*entity), as_f32(&value)) {
-                    if let Some(mat) = materials.get_mut(&handle.0) {
+                    if let Some(mut mat) = materials.get_mut(&handle.0) {
                         mat.base_color.set_alpha(o);
                         mat.alpha_mode = if o < 1.0 {
                             AlphaMode::Blend
