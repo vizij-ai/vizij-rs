@@ -16,9 +16,10 @@ image = "0.25"
 uuid = { version = "1", features = ["serde"] }
 
 # The engine. Default features: gltf scene loading, winit windowing, png, etc.
-# Trimming the feature set (ros-viz-rs style) is a follow-up once the app is
-# proven; certainty over binary size for now.
-bevy = "0.18"
+# 0.19 batches morph-target rendering — the faces' main workload. Trimming the
+# feature set (ros-viz-rs style) is a follow-up once the app is proven;
+# certainty over binary size for now.
+bevy = "0.19"
 
 # The device: an arora over the Vizij interop seams, serving the open local
 # bridge. The full operator flow (TUI front end) waits on an arora release
