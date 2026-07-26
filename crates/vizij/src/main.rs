@@ -50,17 +50,21 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
-    env_logger::init();
     let cli = Cli::parse();
+    // In window mode the arora operator flow owns logging (its front end —
+    // TUI or headless — installs the log sink); the snapshot harness keeps
+    // its own quiet logger.
+    if cli.snapshot.is_some() {
+        env_logger::init();
+    }
 
     let face_meta = meta::FaceMeta::from_glb_file(&cli.glb)?;
-    log::info!(
-        "loaded {}: {} elements, {} animatables, {} bundle graphs, rootBounds {:?}",
+    println!(
+        "vizij: {} — {} elements, {} animatables, {} bundle graphs",
         cli.glb.display(),
         face_meta.elements.len(),
         face_meta.animatables.len(),
         face_meta.bundle_graphs.len(),
-        face_meta.root_bounds,
     );
 
     // Compose the selected bundle graphs into the device's one behavior graph.
@@ -78,7 +82,12 @@ fn main() -> Result<()> {
         );
     }
     let composed = device::compose(&graphs)?;
-    let dev = device::start(&composed)?;
+    let mode = if cli.snapshot.is_some() {
+        device::Mode::Quiet
+    } else {
+        device::Mode::Operator
+    };
+    let dev = device::start(&composed, mode)?;
 
     let glb_path = cli
         .glb

@@ -1,5 +1,5 @@
 //! The arora device behind the view: `RigHal` + `BlackboardStore` + the
-//! face's composed graph as the behavior, stepped on a worker thread.
+//! face's composed graph as the behavior, run on a worker thread.
 
 use std::thread;
 use std::time::{Duration, Instant};
@@ -18,6 +18,19 @@ pub struct Device {
     #[allow(dead_code)]
     pub store: BlackboardStore,
     _thread: thread::JoinHandle<()>,
+}
+
+/// How the device fronts the operator.
+pub enum Mode {
+    /// The standard arora operator flow (`AroraBuilder::run`): the terminal UI
+    /// on an interactive terminal (headless front end otherwise), the open
+    /// local bridge auto-attached (`ws://127.0.0.1:9000`), logging owned by
+    /// the front end's sink.
+    Operator,
+    /// Build and step quietly: no bridge, no front end — the snapshot
+    /// harness, where the process' own logger stays in charge and a
+    /// port conflict with a running window instance cannot occur.
+    Quiet,
 }
 
 /// Compose bundle graphs into the one spec the device runs — the native
@@ -70,13 +83,13 @@ pub fn compose(graphs: &[(String, Json)]) -> Result<Json> {
 }
 
 /// Builds the arora (RigHal + BlackboardStore + ProcessingGraph over the
-/// composed spec) and steps it at ~100 Hz with measured dt.
+/// composed spec) and runs it on a worker thread.
 ///
 /// The `Arora` is constructed **inside** the worker thread — it is not `Send`
 /// (single-owner by design); only the spec JSON and the sibling rig/store
 /// handles cross the thread boundary. The spec is validated here first so
 /// composition errors surface to the caller, not in a log.
-pub fn start(composed_spec: &Json) -> Result<Device> {
+pub fn start(composed_spec: &Json, mode: Mode) -> Result<Device> {
     let spec_json = composed_spec.to_string();
     parse_spec(&spec_json).map_err(|e| anyhow!("composed spec does not parse: {e}"))?;
 
@@ -95,44 +108,46 @@ pub fn start(composed_spec: &Json) -> Result<Device> {
                 Ok(graph) => graph,
                 Err(e) => return log::error!("graph encode failed: {e}"),
             };
-
-            // The open local bridge, as any composed arora device serves it.
-            // The bridge owns its async internally, on this runtime — it must
-            // outlive the step loop. A failed bind (e.g. another vizij already
-            // serving :9000) degrades to an unreachable-but-rendering device.
-            let tokio_rt = match tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-            {
-                Ok(rt) => rt,
-                Err(e) => return log::error!("tokio runtime: {e}"),
-            };
-            let bridge = tokio_rt.block_on(local_ws_bridge());
-
-            let mut builder = arora::Arora::builder()
+            let builder = arora::Arora::builder()
                 .with_hal(Box::new(rig))
                 .with_data_store(Box::new(store))
                 .with_behavior_interpreter(Box::new(graph));
-            match bridge {
-                Ok(bridge) => builder = builder.with_bridge(bridge),
-                Err(e) => log::warn!("no local bridge: {e}"),
-            }
-            let mut arora = match builder.build() {
-                Ok(arora) => arora,
-                Err(e) => return log::error!("building the arora device: {e:?}"),
-            };
 
-            let period = Duration::from_millis(10);
-            let mut last = Instant::now();
-            loop {
-                let now = Instant::now();
-                let dt = now.duration_since(last);
-                last = now;
-                if let Err(e) = arora.step(dt) {
-                    log::error!("arora device stopped: {e:?}");
-                    break;
+            match mode {
+                Mode::Operator => {
+                    // Interim shape of the operator flow: the open local
+                    // bridge + the step loop. The full `AroraBuilder::run()`
+                    // (TUI/headless front end) is blocked upstream — it
+                    // sniffs argv[1] as a Groot file and chokes on `--glb`;
+                    // swap it in once the arora fix (no argv in the
+                    // composed-device entry) is released.
+                    let tokio_rt = match tokio::runtime::Builder::new_multi_thread()
+                        .enable_all()
+                        .build()
+                    {
+                        Ok(rt) => rt,
+                        Err(e) => return log::error!("tokio runtime: {e}"),
+                    };
+                    let builder = match tokio_rt.block_on(local_ws_bridge()) {
+                        Ok(bridge) => builder.with_bridge(bridge),
+                        Err(e) => {
+                            log::warn!("no local bridge: {e}");
+                            builder
+                        }
+                    };
+                    let mut arora = match builder.build() {
+                        Ok(arora) => arora,
+                        Err(e) => return log::error!("building the arora device: {e:?}"),
+                    };
+                    step_forever(&mut arora);
                 }
-                thread::sleep(period);
+                Mode::Quiet => {
+                    let mut arora = match builder.build() {
+                        Ok(arora) => arora,
+                        Err(e) => return log::error!("building the arora device: {e:?}"),
+                    };
+                    step_forever(&mut arora);
+                }
             }
         })?
     };
@@ -144,11 +159,28 @@ pub fn start(composed_spec: &Json) -> Result<Device> {
     })
 }
 
+/// The ~100 Hz step loop with measured dt.
+fn step_forever(arora: &mut arora::Arora) {
+    let period = Duration::from_millis(10);
+    let mut last = Instant::now();
+    loop {
+        let now = Instant::now();
+        let dt = now.duration_since(last);
+        last = now;
+        if let Err(e) = arora.step(dt) {
+            log::error!("arora device stopped: {e:?}");
+            break;
+        }
+        thread::sleep(period);
+    }
+}
+
 /// Build (and start serving) the open local bridge: the device serves
 /// `ws://127.0.0.1:9000`, any editor or app on the machine connects, no
 /// accounts. Mirrors arora's own default-bridge recipe (`arora::run`'s
 /// `local_ws_bridge`, which is crate-private); binds before spawning so an
-/// unusable address fails here.
+/// unusable address fails here — and the caller degrades to an
+/// unreachable-but-rendering device instead of dying.
 async fn local_ws_bridge() -> Result<Box<dyn arora_bridge::Bridge>, String> {
     use std::sync::Arc;
 
