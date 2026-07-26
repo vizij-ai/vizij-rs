@@ -21,7 +21,8 @@ uuid = { version = "1", features = ["serde"] }
 bevy = "0.18"
 
 # The device: an arora over the Vizij interop seams, serving the open local
-# bridge (ws://127.0.0.1:9000) like any composed arora device.
+# bridge. The full operator flow (TUI front end) waits on an arora release
+# where the composed-device entry stops reading argv.
 arora = "9"
 arora-bridge = "4"
 arora-bridge-ws = "4"
