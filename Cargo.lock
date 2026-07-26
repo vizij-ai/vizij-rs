@@ -7837,6 +7837,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arora",
+ "arora-bridge",
+ "arora-bridge-ws",
  "arora-types",
  "bevy",
  "clap 4.5.53",
@@ -7845,6 +7847,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
+ "tokio",
  "uuid",
  "vizij-api-core",
  "vizij-arora",

@@ -95,12 +95,29 @@ pub fn start(composed_spec: &Json) -> Result<Device> {
                 Ok(graph) => graph,
                 Err(e) => return log::error!("graph encode failed: {e}"),
             };
-            let mut arora = match arora::Arora::builder()
-                .with_hal(Box::new(rig))
-                .with_data_store(Box::new(store))
-                .with_behavior_interpreter(Box::new(graph))
+
+            // The open local bridge, as any composed arora device serves it.
+            // The bridge owns its async internally, on this runtime — it must
+            // outlive the step loop. A failed bind (e.g. another vizij already
+            // serving :9000) degrades to an unreachable-but-rendering device.
+            let tokio_rt = match tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
                 .build()
             {
+                Ok(rt) => rt,
+                Err(e) => return log::error!("tokio runtime: {e}"),
+            };
+            let bridge = tokio_rt.block_on(local_ws_bridge());
+
+            let mut builder = arora::Arora::builder()
+                .with_hal(Box::new(rig))
+                .with_data_store(Box::new(store))
+                .with_behavior_interpreter(Box::new(graph));
+            match bridge {
+                Ok(bridge) => builder = builder.with_bridge(bridge),
+                Err(e) => log::warn!("no local bridge: {e}"),
+            }
+            let mut arora = match builder.build() {
                 Ok(arora) => arora,
                 Err(e) => return log::error!("building the arora device: {e:?}"),
             };
@@ -125,4 +142,30 @@ pub fn start(composed_spec: &Json) -> Result<Device> {
         store,
         _thread: thread,
     })
+}
+
+/// Build (and start serving) the open local bridge: the device serves
+/// `ws://127.0.0.1:9000`, any editor or app on the machine connects, no
+/// accounts. Mirrors arora's own default-bridge recipe (`arora::run`'s
+/// `local_ws_bridge`, which is crate-private); binds before spawning so an
+/// unusable address fails here.
+async fn local_ws_bridge() -> Result<Box<dyn arora_bridge::Bridge>, String> {
+    use std::sync::Arc;
+
+    use arora_bridge_ws::bridge::WsBridge;
+    use arora_bridge_ws::{AroraWSServer, CancellationToken, ServerConfig};
+
+    let server = Arc::new(AroraWSServer::new(ServerConfig::default()));
+    let bridge = WsBridge::new(server.clone()).await;
+    let listener = server
+        .bind()
+        .await
+        .map_err(|e| format!("local bridge: {e}"))?;
+    tokio::spawn(async move {
+        if let Err(e) = server.run_on(listener, CancellationToken::new()).await {
+            log::error!("local bridge server stopped: {e:?}");
+        }
+    });
+    log::info!("serving the local bridge on ws://127.0.0.1:9000");
+    Ok(Box::new(bridge))
 }
