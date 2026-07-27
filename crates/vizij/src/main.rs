@@ -31,8 +31,9 @@ struct Cli {
     #[arg(long, default_value = "763x486")]
     size: String,
 
-    /// Background clear color, hex RRGGBB.
-    #[arg(long, default_value = "101114")]
+    /// Background clear color, hex RRGGBB. (The web comparison harness passes
+    /// 101114, the web page's own background.)
+    #[arg(long, default_value = "000000")]
     background: String,
 
     /// three.js-style ambient intensity (the web renderer uses π/2).
