@@ -6,6 +6,8 @@
 //! double-sided materials, opacity-driven alpha blending.
 
 use std::collections::HashMap;
+use std::sync::mpsc::Receiver;
+use std::sync::Mutex;
 
 use bevy::camera::{Projection, RenderTarget, ScalingMode};
 use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
@@ -15,6 +17,7 @@ use bevy::prelude::*;
 use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector};
 use vizij_api_core::Value;
 
+use crate::device::DeviceEvent;
 use crate::meta::{Binding, FaceMeta, FeatureKind};
 
 /// The face metadata, as a Bevy resource.
@@ -24,10 +27,26 @@ pub struct Face {
     pub glb_path: String,
 }
 
+/// The operator's runtime changes, drained each frame ([`DeviceEvent`]).
+/// Absent in snapshot mode.
+#[derive(Resource)]
+pub struct DeviceEvents(pub Mutex<Receiver<DeviceEvent>>);
+
 /// The device handles the view reads each frame.
 #[derive(Resource)]
 pub struct DeviceRes {
     pub rig: vizij_arora_hal::RigHal,
+}
+
+/// How the camera fits the face's authored rootBounds into the viewport.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, clap::ValueEnum)]
+pub enum Fit {
+    /// The whole bounds stay visible; the window's excess axis shows
+    /// background — the web renderer's behavior.
+    Contain,
+    /// The bounds fill the window; the excess axis is cropped — for a full
+    /// screen whose aspect ratio the face does not control.
+    Cover,
 }
 
 /// View options (CLI knobs while calibrating against the web renderer).
@@ -35,6 +54,8 @@ pub struct DeviceRes {
 pub struct ViewOptions {
     /// Background clear color.
     pub background: Color,
+    /// How the face fits the window.
+    pub fit: Fit,
     /// three.js-style ambient light intensity (the web uses π/2). Materials
     /// render unlit with their albedo scaled by `intensity/π` in linear space
     /// — exactly the web's ambient-Lambert pipeline (verified pixel-exact
@@ -90,7 +111,10 @@ impl Plugin for ViewPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<BindingIndex>()
             .add_systems(Startup, (setup_scene, setup_camera))
-            .add_systems(Update, (index_scene, apply_pose).chain());
+            .add_systems(
+                Update,
+                (apply_device_events, index_scene, apply_pose).chain(),
+            );
     }
 }
 
@@ -98,6 +122,88 @@ fn setup_scene(mut commands: Commands, face: Res<Face>, asset_server: Res<AssetS
     commands.spawn(WorldAssetRoot(
         asset_server.load(GltfAssetLabel::Scene(0).from_asset(face.glb_path.clone())),
     ));
+}
+
+/// Apply the operator's runtime changes: recolor the background, or swap the
+/// whole face — despawn the scene, load the new GLB, refit the camera, hand
+/// the pose feed over to the new device generation's rig, and let
+/// `index_scene` rebuild the joins once the new scene has spawned.
+#[allow(clippy::too_many_arguments)]
+fn apply_device_events(
+    events: Option<Res<DeviceEvents>>,
+    mut face: ResMut<Face>,
+    mut device: ResMut<DeviceRes>,
+    mut options: ResMut<ViewOptions>,
+    mut index: ResMut<BindingIndex>,
+    mut commands: Commands,
+    roots: Query<Entity, With<WorldAssetRoot>>,
+    mut cameras: Query<(&mut Camera, &mut Projection, &mut Transform), With<ViewCamera>>,
+    asset_server: Res<AssetServer>,
+) {
+    let Some(events) = events else { return };
+    let Ok(receiver) = events.0.lock() else {
+        return;
+    };
+    while let Ok(event) = receiver.try_recv() {
+        match event {
+            DeviceEvent::Background([r, g, b]) => {
+                options.background = Color::srgb_u8(r, g, b);
+                for (mut camera, _, _) in &mut cameras {
+                    camera.clear_color = ClearColorConfig::Custom(options.background);
+                }
+            }
+            DeviceEvent::FaceLoaded {
+                glb_path,
+                meta,
+                rig,
+            } => {
+                log::info!(
+                    "face swapped to {glb_path} ({} elements); reloading the scene",
+                    meta.elements.len()
+                );
+                for root in &roots {
+                    commands.entity(root).despawn();
+                }
+                commands.spawn(WorldAssetRoot(
+                    asset_server.load(GltfAssetLabel::Scene(0).from_asset(glb_path.clone())),
+                ));
+                let (scaling, transform) = camera_fit(&meta, options.fit);
+                for (_, mut projection, mut camera_transform) in &mut cameras {
+                    if let Projection::Orthographic(orthographic) = &mut *projection {
+                        orthographic.scaling_mode = scaling;
+                    }
+                    *camera_transform = transform;
+                }
+                *face = Face {
+                    meta: *meta,
+                    glb_path,
+                };
+                device.rig = rig;
+                *index = BindingIndex::default();
+            }
+        }
+    }
+}
+
+/// The camera placement for a face: orthographic fit to the authored
+/// rootBounds, centered on them. Contain keeps at least the bounds visible
+/// (the web computes zoom = min(w/bw, h/bh)); cover keeps at most.
+fn camera_fit(meta: &FaceMeta, fit: Fit) -> (ScalingMode, Transform) {
+    let (cx, cy, bw, bh) = meta.root_bounds.unwrap_or((0.0, 0.0, 5.0, 4.0));
+    let scaling = match fit {
+        Fit::Contain => ScalingMode::AutoMin {
+            min_width: bw,
+            min_height: bh,
+        },
+        Fit::Cover => ScalingMode::AutoMax {
+            max_width: bw,
+            max_height: bh,
+        },
+    };
+    (
+        scaling,
+        Transform::from_xyz(cx, cy, 100.0).looking_at(Vec3::new(cx, cy, 0.0), Vec3::Y),
+    )
 }
 
 fn setup_camera(
@@ -109,14 +215,9 @@ fn setup_camera(
     // Lighting is baked into the materials (see `ViewOptions::albedo_factor`);
     // no scene light is spawned.
 
-    // Orthographic fit to the authored rootBounds: keep at least the bounds
-    // visible (the web computes zoom = min(w/bw, h/bh)), centered on them.
-    let (cx, cy, bw, bh) = face.meta.root_bounds.unwrap_or((0.0, 0.0, 5.0, 4.0));
+    let (scaling, transform) = camera_fit(&face.meta, options.fit);
     let mut projection = OrthographicProjection::default_3d();
-    projection.scaling_mode = ScalingMode::AutoMin {
-        min_width: bw,
-        min_height: bh,
-    };
+    projection.scaling_mode = scaling;
 
     let mut camera = commands.spawn((
         Camera3d::default(),
@@ -125,7 +226,7 @@ fn setup_camera(
             ..default()
         },
         Projection::Orthographic(projection),
-        Transform::from_xyz(cx, cy, 100.0).looking_at(Vec3::new(cx, cy, 0.0), Vec3::Y),
+        transform,
         Tonemapping::None,
         DebandDither::Disabled,
         Msaa::Sample4,
