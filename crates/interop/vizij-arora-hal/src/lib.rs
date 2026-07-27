@@ -12,12 +12,14 @@
 //! only translation is string [`Key`]s to [`TypedPath`]s; the actual
 //! bone/morph application stays in the renderer.
 //!
-//! The rig has **no sensors**: it applies targets instantly and measures
-//! nothing of its own, so [`Hal::updates`] — the runtime's *reading* feed —
-//! never yields. (Echoing applied targets back through it would make the
-//! runtime re-apply them as readings a frame later, overwriting anything
-//! fresher written to the store in between.) The echo of applied actuations
-//! lives on [`pose_updates`](RigHal::pose_updates), the renderer-side feed.
+//! The rig itself measures nothing — it applies targets instantly — so the
+//! runtime's *reading* feed [`Hal::updates`] carries only what the host
+//! explicitly [`push_reading`](RigHal::push_reading)s: a genuine sensor such as
+//! the rendered frame (`view/frame`), which a renderer publishes each frame.
+//! Applied actuations are deliberately **not** echoed here — that would make
+//! the runtime re-apply them as readings a frame later, overwriting anything
+//! fresher written to the store in between — so their echo lives on
+//! [`pose_updates`](RigHal::pose_updates), the renderer-side feed, instead.
 //!
 //! Modelled on `arora-hal`'s `FakeHal`: cheaply cloneable, clones share state,
 //! writes apply synchronously (so [`try_send`](arora_hal::Hal::try_send) needs
@@ -37,17 +39,19 @@ struct Inner {
     model_glb: Option<Vec<u8>>,
     /// Latest actuation targets the rig has been driven to.
     state: State,
+    /// The actuation echo — [`RigHal::pose_updates`], renderer-side.
     subscribers: Vec<UnboundedSender<StateChange>>,
+    /// The runtime's sensor-reading feed — [`Hal::updates`], fed by
+    /// [`RigHal::push_reading`] (e.g. the rendered frame).
+    reading_subscribers: Vec<UnboundedSender<StateChange>>,
 }
 
-impl Inner {
-    fn notify(&mut self, change: &StateChange) {
-        if change.is_empty() {
-            return;
-        }
-        self.subscribers
-            .retain(|tx| tx.unbounded_send(change.clone()).is_ok());
+/// Fan a change out to a subscriber list, dropping any closed receiver.
+fn notify(subscribers: &mut Vec<UnboundedSender<StateChange>>, change: &StateChange) {
+    if change.is_empty() {
+        return;
     }
+    subscribers.retain(|tx| tx.unbounded_send(change.clone()).is_ok());
 }
 
 /// A Vizij rig as an Arora HAL. Clone to share the same rig.
@@ -113,7 +117,16 @@ impl RigHal {
         }
         let mut inner = self.inner.lock().unwrap();
         inner.state.apply(changes.clone());
-        inner.notify(changes);
+        notify(&mut inner.subscribers, changes);
+    }
+
+    /// Push a sensor reading into the runtime's [`Hal::updates`] feed — e.g. a
+    /// renderer publishing the rendered frame under `view/frame`. The runtime
+    /// lands it in the store and fans it to every bridge. This is the device
+    /// *reporting back*, the counterpart to the actuation the runtime writes.
+    pub fn push_reading(&self, reading: StateChange) {
+        let mut inner = self.inner.lock().unwrap();
+        notify(&mut inner.reading_subscribers, &reading);
     }
 }
 
@@ -144,25 +157,16 @@ impl Hal for RigHal {
         self.apply_write(changes);
     }
 
-    /// The rig reports no readings — see the module docs. Renderers wanting
-    /// the actuation echo subscribe to [`pose_updates`](RigHal::pose_updates).
+    /// The runtime's sensor-reading feed: whatever the host
+    /// [`push_reading`](RigHal::push_reading)s (e.g. the rendered frame). Each
+    /// call yields an independent, owned stream; a finished stream would mean the
+    /// hardware is gone, so this one stays open, yielding nothing until the first
+    /// reading. Actuation is echoed on [`pose_updates`](RigHal::pose_updates),
+    /// not here.
     fn updates(&self) -> UpdatesStream {
-        Box::pin(NeverStream)
-    }
-}
-
-/// A stream that stays pending forever: the rig's (empty) sensor feed. Never
-/// ending matters — a finished [`UpdatesStream`] means the hardware is gone.
-struct NeverStream;
-
-impl futures_core::Stream for NeverStream {
-    type Item = StateChange;
-
-    fn poll_next(
-        self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<StateChange>> {
-        std::task::Poll::Pending
+        let (tx, rx) = futures_channel::mpsc::unbounded();
+        self.inner.lock().unwrap().reading_subscribers.push(tx);
+        Box::pin(rx)
     }
 }
 
@@ -186,6 +190,24 @@ mod tests {
             out.push(change);
         }
         out
+    }
+
+    #[tokio::test]
+    async fn push_reading_reaches_the_updates_feed_but_actuation_does_not() {
+        let hal = RigHal::new();
+        let mut readings = hal.updates();
+
+        // A pushed reading (a frame, here a stand-in scalar) fans out to the feed.
+        hal.push_reading(StateChange::set("view/frame", float(1.0)));
+        let got = readings.next().await.unwrap();
+        assert_eq!(got.set.get(&Key::from("view/frame")), Some(&Some(float(1.0))));
+
+        // Actuation the runtime writes is echoed on pose_updates, not readings —
+        // so the reading feed stays empty after a write.
+        hal.write(StateChange::set("mouth/jaw.open", float(0.5)))
+            .await
+            .unwrap();
+        assert!(readings.next().now_or_never().is_none());
     }
 
     #[tokio::test]
