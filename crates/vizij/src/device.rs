@@ -73,6 +73,41 @@ pub struct FaceConfig {
     pub stage_neutral: bool,
 }
 
+/// The bridges the device serves beyond the always-on open local bridge — a
+/// build/CLI choice, constant for the process. Empty by default; the fields
+/// exist only for the bridge features that are compiled in.
+#[derive(Clone, Default)]
+pub struct BridgeConfig {
+    /// `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics.
+    #[cfg(feature = "ros2")]
+    pub ros2: Option<(String, u16)>,
+}
+
+/// Attach the device's bridges to `builder`: always the open local bridge
+/// (`ws://127.0.0.1:9000`, the one local editors and apps connect to), plus any
+/// the build/CLI adds. `run()` would attach the local bridge itself only if no
+/// bridge were injected, so once we add another bridge we attach the local one
+/// explicitly too. A bridge that fails to build is logged and skipped, not
+/// fatal. (A `--studio` arm belongs here next to the ROS 2 one — see the
+/// `studio` note in Cargo.toml.)
+#[cfg_attr(not(feature = "ros2"), allow(unused_variables))]
+async fn attach_bridges(
+    mut builder: arora::AroraBuilder,
+    bridges: &BridgeConfig,
+) -> arora::AroraBuilder {
+    match arora::local_ws_bridge().await {
+        Ok(bridge) => builder = builder.with_bridge(bridge),
+        Err(e) => log::error!("local bridge: {e:?}"),
+    }
+    #[cfg(feature = "ros2")]
+    if let Some((namespace, domain)) = &bridges.ros2 {
+        let config = arora_bridge_ros2::Ros2BridgeConfig::new(namespace.clone(), *domain);
+        builder = builder.with_bridge(Box::new(arora_bridge_ros2::Ros2Bridge::new(config).await));
+        log::info!("serving the ROS 2 bridge (namespace {namespace:?}, domain {domain})");
+    }
+    builder
+}
+
 /// Load a face for the device: parse the GLB's metadata, compose its bundle
 /// graphs (the base kinds plus the chosen program) into the one behavior graph,
 /// and validate it. Returns the canonicalized GLB path (what the view loads),
@@ -130,7 +165,12 @@ pub fn parse_rgb(hex: &str) -> Result<[u8; 3]> {
 /// (single-owner by design); only the spec JSON and the sibling rig/store
 /// handles cross the thread boundary. The face is loaded here first so
 /// composition errors surface to the caller, not in a log.
-pub fn start(glb: &Path, config: FaceConfig, mode: Mode) -> Result<Device> {
+pub fn start(
+    glb: &Path,
+    config: FaceConfig,
+    bridges: BridgeConfig,
+    mode: Mode,
+) -> Result<Device> {
     let (glb_path, meta, spec) = load_face(glb, &config)?;
     let rig = RigHal::new();
     let store = BlackboardStore::new();
@@ -145,7 +185,7 @@ pub fn start(glb: &Path, config: FaceConfig, mode: Mode) -> Result<Device> {
         thread::Builder::new()
             .name("arora".into())
             .spawn(move || match mode {
-                Mode::Operator => supervise(spec, meta, config, rig, store, events_tx),
+                Mode::Operator => supervise(spec, meta, config, bridges, rig, store, events_tx),
                 Mode::Quiet => {
                     if config.stage_neutral {
                         stage_neutral_pose(&store, &meta);
@@ -205,6 +245,7 @@ fn supervise(
     mut spec: String,
     mut meta: FaceMeta,
     config: FaceConfig,
+    bridges: BridgeConfig,
     rig: RigHal,
     store: BlackboardStore,
     events: Sender<DeviceEvent>,
@@ -271,8 +312,9 @@ fn supervise(
                     futures::future::pending::<()>().await
                 }
             };
+            let builder = attach_bridges(builder.with_frontend(frontend), &bridges).await;
             tokio::select! {
-                result = builder.with_frontend(frontend).run() => {
+                result = builder.run() => {
                     if let Err(e) = result {
                         log::error!("arora device stopped: {e:?}");
                     }

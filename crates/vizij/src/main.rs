@@ -6,6 +6,8 @@
 //! offscreen (no window) and writes a PNG instead — the comparison harness
 //! against the web renderer.
 
+#[cfg(feature = "ros2")]
+use anyhow::Context;
 use anyhow::{anyhow, Result};
 use bevy::prelude::*;
 use clap::Parser;
@@ -67,6 +69,12 @@ struct Cli {
     /// Don't stage the bundle's `neutralInputs` into the store at boot.
     #[arg(long)]
     no_stage_neutral: bool,
+
+    /// Expose the device's keys over ROS 2 topics: `--ros2 [namespace][:domain]`
+    /// (namespace empty and domain 0 by default). Composes with the local bridge.
+    #[cfg(feature = "ros2")]
+    #[arg(long, num_args = 0..=1, default_missing_value = "")]
+    ros2: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -105,7 +113,11 @@ fn main() -> Result<()> {
         program,
         stage_neutral: !cli.no_stage_neutral,
     };
-    let dev = device::start(&cli.glb, config, mode)?;
+    let bridges = device::BridgeConfig {
+        #[cfg(feature = "ros2")]
+        ros2: cli.ros2.as_deref().map(parse_ros2).transpose()?,
+    };
+    let dev = device::start(&cli.glb, config, bridges, mode)?;
     println!(
         "vizij: {} — {} elements, {} animatables, {} bundle graphs",
         dev.glb_path,
@@ -223,4 +235,17 @@ fn parse_size(size: &str) -> Result<(u32, u32)> {
         .split_once('x')
         .ok_or_else(|| anyhow!("--size must be WIDTHxHEIGHT"))?;
     Ok((w.parse()?, h.parse()?))
+}
+
+/// `--ros2` value `[namespace][:domain]` → (namespace, domain), each optional
+/// (empty namespace, domain 0 by default).
+#[cfg(feature = "ros2")]
+fn parse_ros2(spec: &str) -> Result<(String, u16)> {
+    let (namespace, domain) = spec.split_once(':').unwrap_or((spec, ""));
+    let domain = if domain.is_empty() {
+        0
+    } else {
+        domain.parse().context("--ros2 domain must be a number")?
+    };
+    Ok((namespace.to_string(), domain))
 }
