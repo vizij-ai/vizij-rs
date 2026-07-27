@@ -53,6 +53,20 @@ struct Cli {
     /// "rig,pose-driver". Default: rig + pose-driver.
     #[arg(long, default_value = "rig,pose-driver,pose")]
     graphs: String,
+
+    /// Autoplay this motiongraph program id instead of the bundle's own
+    /// `activeMotionGraphId`. Window mode plays the active program by default;
+    /// `--snapshot` stays on the neutral face unless a program is named.
+    #[arg(long)]
+    program: Option<String>,
+
+    /// Don't autoplay any program — hold the rig's authored/neutral pose.
+    #[arg(long)]
+    no_autoplay: bool,
+
+    /// Don't stage the bundle's `neutralInputs` into the store at boot.
+    #[arg(long)]
+    no_stage_neutral: bool,
 }
 
 fn main() -> Result<()> {
@@ -74,13 +88,30 @@ fn main() -> Result<()> {
     } else {
         device::Mode::Operator
     };
-    let dev = device::start(&cli.glb, wanted, mode)?;
+    // Which program plays: an explicit `--program` wins; `--no-autoplay` forces
+    // none; otherwise the window autoplays the bundle's active program while the
+    // snapshot stays on the deterministic neutral face.
+    let program = if cli.no_autoplay {
+        device::ProgramSelect::None
+    } else if let Some(id) = cli.program.clone() {
+        device::ProgramSelect::Id(id)
+    } else if cli.snapshot.is_some() {
+        device::ProgramSelect::None
+    } else {
+        device::ProgramSelect::Auto
+    };
+    let config = device::FaceConfig {
+        wanted,
+        program,
+        stage_neutral: !cli.no_stage_neutral,
+    };
+    let dev = device::start(&cli.glb, config, mode)?;
     println!(
         "vizij: {} — {} elements, {} animatables, {} bundle graphs",
         dev.glb_path,
         dev.meta.elements.len(),
         dev.meta.animatables.len(),
-        dev.meta.bundle_graphs.len(),
+        dev.meta.bundle.graphs.len(),
     );
 
     let [r, g, b] = device::parse_rgb(&cli.background)?;

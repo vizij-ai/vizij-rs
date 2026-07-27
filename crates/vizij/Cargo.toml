@@ -39,9 +39,13 @@ crossterm = "0.28"
 # through to `log` — into the terminal UI's pane or the snapshot harness's
 # env_logger.
 tracing = { version = "0.1", default-features = false, features = ["std", "log"] }
+# For staging neutral inputs into the store (`StateChange`/`Key`); the value
+# type is shared with vizij-api-core.
+arora-types = "2"
 vizij-api-core = { path = "../api/vizij-api-core" }
 vizij-graph-core = { path = "../node-graph/vizij-graph-core" }
 vizij-arora = { path = "../interop/vizij-arora" }
+vizij-arora-host = { path = "../interop/vizij-arora-host" }
 vizij-arora-store = { path = "../interop/vizij-arora-store" }
 vizij-arora-hal = { path = "../interop/vizij-arora-hal" }
 vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }

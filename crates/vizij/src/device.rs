@@ -8,10 +8,12 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
 use arora::tui::{commands_frontend, TuiCommand, TuiCommandEvent};
+use arora_types::data::{DataStore, Key, StateChange};
 use futures::StreamExt;
-use serde_json::{json, Value as Json};
+use vizij_api_core::value::float;
 use vizij_arora_behavior::{parse_spec, ProcessingGraph};
 use vizij_arora_hal::RigHal;
+pub use vizij_arora_host::ProgramSelect;
 use vizij_arora_store::BlackboardStore;
 
 use crate::meta::FaceMeta;
@@ -59,79 +61,53 @@ pub enum Mode {
     Quiet,
 }
 
-/// Compose bundle graphs into the one spec the device runs — the native
-/// equivalent of the web host's `composeGraphSpecs`. Node ids are namespaced
-/// per source (`{source}::{id}`) so sources cannot collide; **store paths stay
-/// shared** — that is the cross-source contract.
-///
-/// Each graph is normalized first (legacy input-connection forms become
-/// edges), so id rewriting sees the canonical `nodes`/`edges` shape.
-pub fn compose(graphs: &[(String, Json)]) -> Result<Json> {
-    let mut nodes = Vec::new();
-    let mut edges = Vec::new();
-    for (index, (kind, spec)) in graphs.iter().enumerate() {
-        let mut normalized = spec.clone();
-        vizij_api_core::json::normalize_graph_spec_value(&mut normalized)
-            .map_err(|e| anyhow!("graph {index} ({kind}) does not normalize: {e:?}"))?;
-        let prefix = format!("{kind}{index}::");
-        for node in normalized
-            .get("nodes")
-            .and_then(Json::as_array)
-            .into_iter()
-            .flatten()
-        {
-            let mut node = node.clone();
-            if let Some(id) = node.get("id").and_then(Json::as_str) {
-                node["id"] = json!(format!("{prefix}{id}"));
-            }
-            nodes.push(node);
-        }
-        for edge in normalized
-            .get("edges")
-            .and_then(Json::as_array)
-            .into_iter()
-            .flatten()
-        {
-            let mut edge = edge.clone();
-            for end in ["from", "to"] {
-                if let Some(id) = edge
-                    .get(end)
-                    .and_then(|e| e.get("node_id"))
-                    .and_then(Json::as_str)
-                {
-                    edge[end]["node_id"] = json!(format!("{prefix}{id}"));
-                }
-            }
-            edges.push(edge);
-        }
-    }
-    Ok(json!({ "nodes": nodes, "edges": edges }))
+/// How this app composes and stages a face — carried from the CLI through the
+/// supervisor into each generation and its reloads.
+#[derive(Clone)]
+pub struct FaceConfig {
+    /// Bundle graph kinds to compose into the base behavior (rig, pose-driver).
+    pub wanted: Vec<String>,
+    /// Which program to autoplay on top of the rig.
+    pub program: ProgramSelect,
+    /// Stage the bundle's neutral inputs into the store at boot.
+    pub stage_neutral: bool,
 }
 
-/// Load a face for the device: parse the GLB's metadata, compose the bundle
-/// graphs whose kind is in `wanted` into the device's one behavior graph, and
-/// validate it. Returns the canonicalized GLB path (what the view loads), the
-/// metadata, and the composed spec.
-pub fn load_face(glb: &Path, wanted: &[String]) -> Result<(String, FaceMeta, String)> {
+/// Load a face for the device: parse the GLB's metadata, compose its bundle
+/// graphs (the base kinds plus the chosen program) into the one behavior graph,
+/// and validate it. Returns the canonicalized GLB path (what the view loads),
+/// the metadata, and the composed spec.
+pub fn load_face(glb: &Path, config: &FaceConfig) -> Result<(String, FaceMeta, String)> {
     let canonical = glb
         .canonicalize()
         .with_context(|| format!("cannot resolve {}", glb.display()))?;
     let meta = FaceMeta::from_glb_file(&canonical)?;
-    let graphs: Vec<(String, Json)> = meta
-        .bundle_graphs
-        .iter()
-        .filter(|(kind, _)| wanted.iter().any(|w| w == kind))
-        .cloned()
-        .collect();
-    if graphs.is_empty() {
-        log::warn!(
-            "no bundle graphs matched {wanted:?} in {}; the face will hold its authored pose",
-            glb.display()
-        );
-    }
-    let spec = compose(&graphs)?.to_string();
+    let wanted: Vec<&str> = config.wanted.iter().map(String::as_str).collect();
+    let spec = meta.bundle.compose(&wanted, &config.program)?.to_string();
     parse_spec(&spec).map_err(|e| anyhow!("composed spec does not parse: {e}"))?;
     Ok((canonical.to_string_lossy().into_owned(), meta, spec))
+}
+
+/// Stage a face's neutral pose into the store before the first tick: the web's
+/// `stagePoseNeutral`, ported. The rig's input nodes read these store paths, so
+/// pre-seeding them holds the face at its authored neutral even where the
+/// inputs' own defaults don't (a no-op when the bundle carries no neutral
+/// config, or every input already defaults to its neutral).
+fn stage_neutral_pose(store: &BlackboardStore, meta: &FaceMeta) {
+    let writes = meta.bundle.neutral_stage_writes();
+    if writes.is_empty() {
+        return;
+    }
+    let mut change = StateChange::new();
+    for (path, value) in &writes {
+        change
+            .set
+            .insert(Key::from(path.as_str()), Some(float(*value)));
+    }
+    match store.write(change) {
+        Ok(()) => log::info!("staged {} neutral inputs", writes.len()),
+        Err(e) => log::warn!("neutral staging failed: {e:?}"),
+    }
 }
 
 /// `RRGGBB` hex (leading `#` allowed) to sRGB bytes.
@@ -154,8 +130,8 @@ pub fn parse_rgb(hex: &str) -> Result<[u8; 3]> {
 /// (single-owner by design); only the spec JSON and the sibling rig/store
 /// handles cross the thread boundary. The face is loaded here first so
 /// composition errors surface to the caller, not in a log.
-pub fn start(glb: &Path, wanted: Vec<String>, mode: Mode) -> Result<Device> {
-    let (glb_path, meta, spec) = load_face(glb, &wanted)?;
+pub fn start(glb: &Path, config: FaceConfig, mode: Mode) -> Result<Device> {
+    let (glb_path, meta, spec) = load_face(glb, &config)?;
     let rig = RigHal::new();
     let store = BlackboardStore::new();
     let (events_tx, events_rx) = std::sync::mpsc::channel();
@@ -163,11 +139,17 @@ pub fn start(glb: &Path, wanted: Vec<String>, mode: Mode) -> Result<Device> {
     let thread = {
         let rig = rig.clone();
         let store = store.clone();
+        // The supervisor stages and announces each generation from the meta; the
+        // view keeps its own copy for the initial face.
+        let meta = meta.clone();
         thread::Builder::new()
             .name("arora".into())
             .spawn(move || match mode {
-                Mode::Operator => supervise(spec, wanted, rig, store, events_tx),
+                Mode::Operator => supervise(spec, meta, config, rig, store, events_tx),
                 Mode::Quiet => {
+                    if config.stage_neutral {
+                        stage_neutral_pose(&store, &meta);
+                    }
                     let Some(builder) = builder_for(&spec, rig, store) else {
                         return;
                     };
@@ -221,7 +203,8 @@ fn builder_for(spec: &str, rig: RigHal, store: BlackboardStore) -> Option<arora:
 /// exits the process).
 fn supervise(
     mut spec: String,
-    wanted: Vec<String>,
+    mut meta: FaceMeta,
+    config: FaceConfig,
     rig: RigHal,
     store: BlackboardStore,
     events: Sender<DeviceEvent>,
@@ -237,7 +220,8 @@ fn supervise(
     // reload's face swap is announced only after the new front end is up, so
     // the view's swap (and everything it logs) lands in the live pane.
     let mut fresh = Some((rig, store));
-    let mut pending_face: Option<(String, FaceMeta)> = None;
+    // Set on a reload so the next generation announces the new face to the view.
+    let mut pending_glb: Option<String> = None;
     loop {
         let (rig, store) = fresh
             .take()
@@ -254,12 +238,15 @@ fn supervise(
                 prompt: Some("background RRGGBB".into()),
             },
         ]);
-        if let Some((glb_path, meta)) = pending_face.take() {
+        if let Some(glb_path) = pending_glb.take() {
             let _ = events.send(DeviceEvent::FaceLoaded {
                 glb_path,
-                meta: Box::new(meta),
+                meta: Box::new(meta.clone()),
                 rig: rig.clone(),
             });
+        }
+        if config.stage_neutral {
+            stage_neutral_pose(&store, &meta);
         }
         let Some(builder) = builder_for(&spec, rig, store) else {
             return;
@@ -269,7 +256,7 @@ fn supervise(
         tokio_rt.block_on(async {
             tokio::spawn(pump(
                 commands,
-                wanted.clone(),
+                config.clone(),
                 events.clone(),
                 reload_tx,
                 stop_tx,
@@ -293,11 +280,12 @@ fn supervise(
                 _ = stop => {}
             }
         });
-        let Ok((glb_path, meta, new_spec)) = reload_rx.try_recv() else {
+        let Ok((glb_path, new_meta, new_spec)) = reload_rx.try_recv() else {
             break;
         };
         spec = new_spec;
-        pending_face = Some((glb_path, meta));
+        meta = new_meta;
+        pending_glb = Some(glb_path);
     }
 }
 
@@ -307,14 +295,14 @@ fn supervise(
 /// rebuild — a bad path is an error in the log pane, not a dead device.
 async fn pump(
     mut commands: futures::channel::mpsc::UnboundedReceiver<TuiCommandEvent>,
-    wanted: Vec<String>,
+    config: FaceConfig,
     events: Sender<DeviceEvent>,
     reload: Sender<(String, FaceMeta, String)>,
     stop: futures::channel::oneshot::Sender<()>,
 ) {
     while let Some(event) = commands.next().await {
         match (event.key, event.input) {
-            ('g', Some(path)) => match load_face(Path::new(&path), &wanted) {
+            ('g', Some(path)) => match load_face(Path::new(&path), &config) {
                 Ok(loaded) => {
                     let _ = reload.send(loaded);
                     let _ = stop.send(());
