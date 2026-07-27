@@ -13,6 +13,7 @@ use std::path::Path;
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use serde_json::Value as Json;
+use vizij_arora_host::Bundle;
 
 /// What one animated feature drives on a scene element.
 #[derive(Debug, Clone, PartialEq)]
@@ -53,24 +54,20 @@ pub struct Element {
     pub morph_targets: Vec<String>,
 }
 
-/// The face metadata joined from `RobotData` + `VIZIJ_bundle`.
-#[derive(Debug)]
+/// The face metadata joined from `RobotData` + `VIZIJ_bundle`. The `RobotData`
+/// half (elements, animatables, bounds) drives the Bevy renderer; the bundle is
+/// the portable host glue shared with the browser runtime.
+#[derive(Debug, Clone)]
 pub struct FaceMeta {
     pub elements: Vec<Element>,
     /// animatable UUID (string form) → what it drives.
     pub animatables: HashMap<String, Binding>,
     /// Authored view bounds on the root element: (center_x, center_y, size_x, size_y).
     pub root_bounds: Option<(f32, f32, f32, f32)>,
-    /// Graph entries from the bundle: (kind, spec JSON).
-    pub bundle_graphs: Vec<(String, Json)>,
-    /// `poses.config.neutralInputs` — input id → neutral value; staged once
-    /// input staging lands (the rig inputs all carry defaults meanwhile).
-    #[allow(dead_code)]
-    pub neutral_inputs: HashMap<String, f64>,
-    /// Bundle metadata (faceId, activeMotionGraphId, …); read once program
-    /// autoplay lands.
-    #[allow(dead_code)]
-    pub metadata: Json,
+    /// The face's `VIZIJ_bundle` — its graphs, programs, and neutral pose. The
+    /// device composition and neutral staging are its methods
+    /// ([`Bundle::compose`], [`Bundle::neutral_stage_writes`]).
+    pub bundle: Bundle,
 }
 
 /// Raw `RobotData` feature entry (only what the app needs).
@@ -134,15 +131,9 @@ impl FaceMeta {
         let mut elements = Vec::new();
         let mut animatables = HashMap::new();
         let mut root_bounds = None;
-        let mut bundle: Option<&Json> = None;
 
         for node in nodes {
             let exts = node.get("extensions");
-            if bundle.is_none() {
-                if let Some(b) = exts.and_then(|e| e.get("VIZIJ_bundle")) {
-                    bundle = Some(b);
-                }
-            }
             let Some(rd) = exts.and_then(|e| e.get("RobotData")) else {
                 continue;
             };
@@ -199,42 +190,15 @@ impl FaceMeta {
             });
         }
 
-        let mut bundle_graphs = Vec::new();
-        let mut neutral_inputs = HashMap::new();
-        let mut metadata = Json::Null;
-        if let Some(bundle) = bundle {
-            if let Some(graphs) = bundle.get("graphs").and_then(Json::as_array) {
-                for entry in graphs {
-                    let kind = entry
-                        .get("kind")
-                        .and_then(Json::as_str)
-                        .unwrap_or("unknown")
-                        .to_string();
-                    if let Some(spec) = entry.get("spec") {
-                        bundle_graphs.push((kind, spec.clone()));
-                    }
-                }
-            }
-            if let Some(neutral) = bundle
-                .pointer("/poses/config/neutralInputs")
-                .and_then(Json::as_object)
-            {
-                for (k, v) in neutral {
-                    if let Some(n) = v.as_f64() {
-                        neutral_inputs.insert(k.clone(), n);
-                    }
-                }
-            }
-            metadata = bundle.get("metadata").cloned().unwrap_or(Json::Null);
-        }
+        // The `VIZIJ_bundle` half — graphs, programs, neutral pose — is the
+        // portable host glue, read (and composed/staged) by the shared crate.
+        let bundle = Bundle::from_gltf_json(gltf).unwrap_or_default();
 
         Ok(Self {
             elements,
             animatables,
             root_bounds,
-            bundle_graphs,
-            neutral_inputs,
-            metadata,
+            bundle,
         })
     }
 }
