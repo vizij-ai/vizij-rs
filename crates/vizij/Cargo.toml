@@ -23,10 +23,14 @@ bevy = "0.19"
 
 # The device: an arora over the Vizij interop seams, run through the standard
 # operator flow (terminal UI on an interactive terminal, the open local bridge
-# auto-attached). 9.5 is where the terminal UI takes application commands and
-# a run takes a shutdown — the seams behind the g/b controls and the GLB
-# reload's device rebuild.
-arora = "9.5"
+# auto-attached). 9.5 gave the TUI application commands and drop-cancellation
+# (the g/b controls, the GLB reload's rebuild); 9.6 makes `local_ws_bridge()`
+# public so the app composes the local bridge alongside the --ros2/--studio ones.
+arora = "9.6"
+# The ROS 2 bridge, attached under `--ros2` (feature `ros2`). Heavy (ros2-client
+# + a DDS/Zenoh backend), so opt-in; the Studio bridge rides arora's own
+# `studio-bridge` feature instead (`--studio`).
+arora-bridge-ros2 = { version = "3", optional = true }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 # The command pump's async plumbing: the TUI command stream and the per-run
 # stop signal.
@@ -49,3 +53,12 @@ vizij-arora-host = { path = "../interop/vizij-arora-host" }
 vizij-arora-store = { path = "../interop/vizij-arora-store" }
 vizij-arora-hal = { path = "../interop/vizij-arora-hal" }
 vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
+
+[features]
+default = []
+# `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics.
+ros2 = ["dep:arora-bridge-ros2"]
+# A `--studio` flag (arora's `studio-bridge`) is the intended companion, but
+# arora's Studio connector currently fails to build in this tree (a `firestore`
+# / gcloud version skew — the in-flight reqwest 0.12→0.13 alignment). It rejoins
+# once that lands; the compose seam (`attach_bridges`) already accommodates it.
