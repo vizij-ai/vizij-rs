@@ -23,10 +23,14 @@ bevy = "0.19"
 
 # The device: an arora over the Vizij interop seams, run through the standard
 # operator flow (terminal UI on an interactive terminal, the open local bridge
-# auto-attached). 9.4 is where the composed-device entry stops reading argv,
-# which the vizij CLI (`--glb`) needs.
-arora = "9.4"
+# auto-attached). 9.5 is where the terminal UI takes application commands and
+# a run takes a shutdown — the seams behind the g/b controls and the GLB
+# reload's device rebuild.
+arora = "9.5"
 tokio = { version = "1", features = ["rt-multi-thread"] }
+# The command pump's async plumbing: the TUI command stream and the per-run
+# stop signal.
+futures = "0.3"
 # Restores the terminal on the window-close exit path, where the device's
 # terminal UI (worker thread) never gets to unwind.
 crossterm = "0.28"

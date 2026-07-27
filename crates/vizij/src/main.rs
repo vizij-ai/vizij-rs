@@ -6,7 +6,7 @@
 //! offscreen (no window) and writes a PNG instead — the comparison harness
 //! against the web renderer.
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use bevy::prelude::*;
 use clap::Parser;
 
@@ -43,6 +43,11 @@ struct Cli {
     #[arg(long)]
     unlit: bool,
 
+    /// How the face fits the window: contain letterboxes (the web renderer's
+    /// behavior), cover fills the window and crops the excess axis.
+    #[arg(long, value_enum, default_value_t = view::Fit::Contain)]
+    fit: view::Fit,
+
     /// Compose only these bundle graph kinds (comma-separated), e.g. "rig" or
     /// "rig,pose-driver". Default: rig + pose-driver.
     #[arg(long, default_value = "rig,pose-driver,pose")]
@@ -58,74 +63,72 @@ fn main() -> Result<()> {
         env_logger::init();
     }
 
-    let face_meta = meta::FaceMeta::from_glb_file(&cli.glb)?;
-    println!(
-        "vizij: {} — {} elements, {} animatables, {} bundle graphs",
-        cli.glb.display(),
-        face_meta.elements.len(),
-        face_meta.animatables.len(),
-        face_meta.bundle_graphs.len(),
-    );
-
-    // Compose the selected bundle graphs into the device's one behavior graph.
-    let wanted: Vec<&str> = cli.graphs.split(',').map(str::trim).collect();
-    let graphs: Vec<(String, serde_json::Value)> = face_meta
-        .bundle_graphs
-        .iter()
-        .filter(|(kind, _)| wanted.contains(&kind.as_str()))
-        .cloned()
+    let wanted: Vec<String> = cli
+        .graphs
+        .split(',')
+        .map(|kind| kind.trim().to_string())
         .collect();
-    if graphs.is_empty() {
-        log::warn!(
-            "no bundle graphs matched {:?}; the face will hold its authored pose",
-            wanted
-        );
-    }
-    let composed = device::compose(&graphs)?;
     let mode = if cli.snapshot.is_some() {
         device::Mode::Quiet
     } else {
         device::Mode::Operator
     };
-    let dev = device::start(&composed, mode)?;
+    let dev = device::start(&cli.glb, wanted, mode)?;
+    println!(
+        "vizij: {} — {} elements, {} animatables, {} bundle graphs",
+        dev.glb_path,
+        dev.meta.elements.len(),
+        dev.meta.animatables.len(),
+        dev.meta.bundle_graphs.len(),
+    );
 
-    let glb_path = cli
-        .glb
-        .canonicalize()
-        .with_context(|| format!("cannot resolve {}", cli.glb.display()))?
-        .to_string_lossy()
-        .into_owned();
-
+    let [r, g, b] = device::parse_rgb(&cli.background)?;
     let options = view::ViewOptions {
-        background: parse_hex_color(&cli.background)?,
+        background: Color::srgb_u8(r, g, b),
+        fit: cli.fit,
         ambient: cli.ambient,
         unlit: cli.unlit,
     };
-    let face = view::Face {
-        meta: face_meta,
+    let device::Device {
+        rig,
+        meta,
         glb_path,
-    };
-    let device_res = view::DeviceRes {
-        rig: dev.rig.clone(),
-    };
+        events,
+        ..
+    } = dev;
+    let face = view::Face { meta, glb_path };
+    let device_res = view::DeviceRes { rig };
 
     match &cli.snapshot {
         Some(out) => run_snapshot(&cli, face, device_res, options, out),
-        None => run_window(face, device_res, options),
+        None => run_window(face, device_res, options, events),
     }
+}
+
+/// The window size the app opens at: the face's authored aspect at a 720px
+/// height, so it starts letterbox-free (resizes and full screen then follow
+/// the `--fit` policy).
+fn window_resolution(face: &view::Face) -> (u32, u32) {
+    let (_, _, bw, bh) = face.meta.root_bounds.unwrap_or((0.0, 0.0, 5.0, 4.0));
+    let height = 720.0_f32;
+    let width = (height * bw / bh).clamp(320.0, 1600.0);
+    (width.round() as u32, height as u32)
 }
 
 fn run_window(
     face: view::Face,
     device_res: view::DeviceRes,
     options: view::ViewOptions,
+    events: std::sync::mpsc::Receiver<device::DeviceEvent>,
 ) -> Result<()> {
+    let (width, height) = window_resolution(&face);
     App::new()
         .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         title: "Vizij".to_string(),
+                        resolution: (width, height).into(),
                         ..default()
                     }),
                     ..default()
@@ -139,6 +142,7 @@ fn run_window(
         .insert_resource(face)
         .insert_resource(device_res)
         .insert_resource(options)
+        .insert_resource(view::DeviceEvents(std::sync::Mutex::new(events)))
         .add_plugins(view::ViewPlugin)
         .run();
     // The device's terminal UI runs on the worker thread; returning from here
@@ -187,15 +191,4 @@ fn parse_size(size: &str) -> Result<(u32, u32)> {
         .split_once('x')
         .ok_or_else(|| anyhow!("--size must be WIDTHxHEIGHT"))?;
     Ok((w.parse()?, h.parse()?))
-}
-
-fn parse_hex_color(hex: &str) -> Result<Color> {
-    let hex = hex.trim_start_matches('#');
-    if hex.len() != 6 {
-        return Err(anyhow!("--background must be RRGGBB"));
-    }
-    let r = u8::from_str_radix(&hex[0..2], 16)?;
-    let g = u8::from_str_radix(&hex[2..4], 16)?;
-    let b = u8::from_str_radix(&hex[4..6], 16)?;
-    Ok(Color::srgb_u8(r, g, b))
 }
