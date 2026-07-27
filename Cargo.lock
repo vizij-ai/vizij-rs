@@ -355,9 +355,9 @@ dependencies = [
 
 [[package]]
 name = "arora"
-version = "9.4.0"
+version = "9.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7c6a2746d742f73e4411e8f29cf7773a1b501c9a46bbef6efab725b02b2ff96"
+checksum = "8fbeb2854d9319c4e3dfae57964b26a4d183ba9688ab46b72c1a43f8f76bb8ad"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -7931,6 +7931,7 @@ dependencies = [
  "clap 4.5.53",
  "crossterm",
  "env_logger",
+ "futures",
  "image",
  "log",
  "serde",
