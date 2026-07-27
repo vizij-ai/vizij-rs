@@ -355,9 +355,9 @@ dependencies = [
 
 [[package]]
 name = "arora"
-version = "9.3.0"
+version = "9.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a88ea1df31f5c1e5b9561ca50facd1305446a173c8d3e7fd6ef771532c4adb1"
+checksum = "d7c6a2746d742f73e4411e8f29cf7773a1b501c9a46bbef6efab725b02b2ff96"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -369,6 +369,7 @@ dependencies = [
  "arora-simple-data-store",
  "arora-types",
  "async-trait",
+ "clap 4.5.53",
  "env_filter 0.1.4",
  "env_logger",
  "futures",
@@ -7650,6 +7651,7 @@ version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
 dependencies = [
+ "log",
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
@@ -7925,17 +7927,16 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arora",
- "arora-bridge",
- "arora-bridge-ws",
- "arora-types",
  "bevy",
  "clap 4.5.53",
+ "crossterm",
  "env_logger",
  "image",
  "log",
  "serde",
  "serde_json",
  "tokio",
+ "tracing",
  "uuid",
  "vizij-api-core",
  "vizij-arora",
