@@ -115,12 +115,8 @@ pub fn start(composed_spec: &Json, mode: Mode) -> Result<Device> {
 
             match mode {
                 Mode::Operator => {
-                    // Interim shape of the operator flow: the open local
-                    // bridge + the step loop. The full `AroraBuilder::run()`
-                    // (TUI/headless front end) is blocked upstream — it
-                    // sniffs argv[1] as a Groot file and chokes on `--glb`;
-                    // swap it in once the arora fix (no argv in the
-                    // composed-device entry) is released.
+                    // `run` is async (bridge construction, the operator
+                    // flow); this thread hosts the runtime that drives it.
                     let tokio_rt = match tokio::runtime::Builder::new_multi_thread()
                         .enable_all()
                         .build()
@@ -128,18 +124,9 @@ pub fn start(composed_spec: &Json, mode: Mode) -> Result<Device> {
                         Ok(rt) => rt,
                         Err(e) => return log::error!("tokio runtime: {e}"),
                     };
-                    let builder = match tokio_rt.block_on(local_ws_bridge()) {
-                        Ok(bridge) => builder.with_bridge(bridge),
-                        Err(e) => {
-                            log::warn!("no local bridge: {e}");
-                            builder
-                        }
-                    };
-                    let mut arora = match builder.build() {
-                        Ok(arora) => arora,
-                        Err(e) => return log::error!("building the arora device: {e:?}"),
-                    };
-                    step_forever(&mut arora);
+                    if let Err(e) = tokio_rt.block_on(builder.run()) {
+                        log::error!("arora device stopped: {e:?}");
+                    }
                 }
                 Mode::Quiet => {
                     let mut arora = match builder.build() {
@@ -159,7 +146,8 @@ pub fn start(composed_spec: &Json, mode: Mode) -> Result<Device> {
     })
 }
 
-/// The ~100 Hz step loop with measured dt.
+/// The ~100 Hz step loop with measured dt — the quiet mode's drive; the
+/// operator flow's loop lives in `AroraBuilder::run`.
 fn step_forever(arora: &mut arora::Arora) {
     let period = Duration::from_millis(10);
     let mut last = Instant::now();
@@ -173,31 +161,4 @@ fn step_forever(arora: &mut arora::Arora) {
         }
         thread::sleep(period);
     }
-}
-
-/// Build (and start serving) the open local bridge: the device serves
-/// `ws://127.0.0.1:9000`, any editor or app on the machine connects, no
-/// accounts. Mirrors arora's own default-bridge recipe (`arora::run`'s
-/// `local_ws_bridge`, which is crate-private); binds before spawning so an
-/// unusable address fails here — and the caller degrades to an
-/// unreachable-but-rendering device instead of dying.
-async fn local_ws_bridge() -> Result<Box<dyn arora_bridge::Bridge>, String> {
-    use std::sync::Arc;
-
-    use arora_bridge_ws::bridge::WsBridge;
-    use arora_bridge_ws::{AroraWSServer, CancellationToken, ServerConfig};
-
-    let server = Arc::new(AroraWSServer::new(ServerConfig::default()));
-    let bridge = WsBridge::new(server.clone()).await;
-    let listener = server
-        .bind()
-        .await
-        .map_err(|e| format!("local bridge: {e}"))?;
-    tokio::spawn(async move {
-        if let Err(e) = server.run_on(listener, CancellationToken::new()).await {
-            log::error!("local bridge server stopped: {e:?}");
-        }
-    });
-    log::info!("serving the local bridge on ws://127.0.0.1:9000");
-    Ok(Box::new(bridge))
 }

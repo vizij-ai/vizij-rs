@@ -141,6 +141,16 @@ fn run_window(
         .insert_resource(options)
         .add_plugins(view::ViewPlugin)
         .run();
+    // The device's terminal UI runs on the worker thread; returning from here
+    // ends the process without unwinding that thread, which would leave the
+    // terminal in raw mode on the alternate screen. Undo its setup (arora's
+    // `restore_terminal` recipe) on the way out.
+    if std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+        use crossterm::event::DisableMouseCapture;
+        use crossterm::terminal::{disable_raw_mode, LeaveAlternateScreen};
+        let _ = disable_raw_mode();
+        let _ = crossterm::execute!(std::io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+    }
     Ok(())
 }
 
