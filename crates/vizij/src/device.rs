@@ -165,12 +165,7 @@ pub fn parse_rgb(hex: &str) -> Result<[u8; 3]> {
 /// (single-owner by design); only the spec JSON and the sibling rig/store
 /// handles cross the thread boundary. The face is loaded here first so
 /// composition errors surface to the caller, not in a log.
-pub fn start(
-    glb: &Path,
-    config: FaceConfig,
-    bridges: BridgeConfig,
-    mode: Mode,
-) -> Result<Device> {
+pub fn start(glb: &Path, config: FaceConfig, bridges: BridgeConfig, mode: Mode) -> Result<Device> {
     let (glb_path, meta, spec) = load_face(glb, &config)?;
     let rig = RigHal::new();
     let store = BlackboardStore::new();
