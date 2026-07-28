@@ -81,16 +81,20 @@ pub struct BridgeConfig {
     /// `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics.
     #[cfg(feature = "ros2")]
     pub ros2: Option<(String, u16)>,
+    /// `--studio`: attach the Semio Studio bridge (env-configured).
+    #[cfg(feature = "studio")]
+    pub studio: bool,
 }
 
 /// Attach the device's bridges to `builder`: always the open local bridge
 /// (`ws://127.0.0.1:9000`, the one local editors and apps connect to), plus any
 /// the build/CLI adds. `run()` would attach the local bridge itself only if no
 /// bridge were injected, so once we add another bridge we attach the local one
-/// explicitly too. A bridge that fails to build is logged and skipped, not
-/// fatal. (A `--studio` arm belongs here next to the ROS 2 one — see the
-/// `studio` note in Cargo.toml.)
-#[cfg_attr(not(feature = "ros2"), allow(unused_variables))]
+/// explicitly too. A bridge that fails to build is logged and skipped, not fatal.
+#[cfg_attr(
+    not(any(feature = "ros2", feature = "studio")),
+    allow(unused_variables)
+)]
 async fn attach_bridges(
     mut builder: arora::AroraBuilder,
     bridges: &BridgeConfig,
@@ -104,6 +108,13 @@ async fn attach_bridges(
         let config = arora_bridge_ros2::Ros2BridgeConfig::new(namespace.clone(), *domain);
         builder = builder.with_bridge(Box::new(arora_bridge_ros2::Ros2Bridge::new(config).await));
         log::info!("serving the ROS 2 bridge (namespace {namespace:?}, domain {domain})");
+    }
+    #[cfg(feature = "studio")]
+    if bridges.studio {
+        match arora::studio::connect().await {
+            Ok(bridge) => builder = builder.with_bridge(bridge),
+            Err(e) => log::error!("studio bridge: {e:?}"),
+        }
     }
     builder
 }

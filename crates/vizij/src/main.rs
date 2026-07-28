@@ -75,6 +75,12 @@ struct Cli {
     #[cfg(feature = "ros2")]
     #[arg(long, num_args = 0..=1, default_missing_value = "")]
     ros2: Option<String>,
+
+    /// Attach the Semio Studio bridge, configured from the environment
+    /// (`DEVICE_OWNERS`, …). Composes with the local bridge.
+    #[cfg(feature = "studio")]
+    #[arg(long)]
+    studio: bool,
 }
 
 fn main() -> Result<()> {
@@ -116,6 +122,8 @@ fn main() -> Result<()> {
     let bridges = device::BridgeConfig {
         #[cfg(feature = "ros2")]
         ros2: cli.ros2.as_deref().map(parse_ros2).transpose()?,
+        #[cfg(feature = "studio")]
+        studio: cli.studio,
     };
     let dev = device::start(&cli.glb, config, bridges, mode)?;
     println!(
