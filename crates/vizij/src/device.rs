@@ -16,6 +16,7 @@ use vizij_arora_hal::RigHal;
 pub use vizij_arora_host::ProgramSelect;
 use vizij_arora_store::BlackboardStore;
 
+use crate::animation;
 use crate::meta::FaceMeta;
 
 /// A running face device. Both handles share storage with the device's own
@@ -129,7 +130,13 @@ pub fn load_face(glb: &Path, config: &FaceConfig) -> Result<(String, FaceMeta, S
         .with_context(|| format!("cannot resolve {}", glb.display()))?;
     let meta = FaceMeta::from_glb_file(&canonical)?;
     let wanted: Vec<&str> = config.wanted.iter().map(String::as_str).collect();
-    let spec = meta.bundle.compose(&wanted, &config.program)?.to_string();
+    // `with_animations`: the device always loads the animation module (see
+    // `builder_for`), so the animation source it dispatches to is always
+    // composed — inert until a clip plays.
+    let spec = meta
+        .bundle
+        .compose(&wanted, &config.program, true)?
+        .to_string();
     parse_spec(&spec).map_err(|e| anyhow!("composed spec does not parse: {e}"))?;
     Ok((canonical.to_string_lossy().into_owned(), meta, spec))
 }
@@ -217,8 +224,10 @@ pub fn start(glb: &Path, config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
     })
 }
 
-/// The device builder over the Vizij seams; `None` (logged) when the spec
-/// does not encode.
+/// The device builder over the Vizij seams: the composed graph as the behavior,
+/// with the animation module loaded so the composed animation source's
+/// `ExternalFunction` nodes dispatch and its transport is callable. `None`
+/// (logged) when the spec does not encode or the baked-in module does not load.
 fn builder_for(spec: &str, rig: RigHal, store: BlackboardStore) -> Option<arora::AroraBuilder> {
     let spec = match parse_spec(spec) {
         Ok(spec) => spec,
@@ -227,18 +236,29 @@ fn builder_for(spec: &str, rig: RigHal, store: BlackboardStore) -> Option<arora:
             return None;
         }
     };
-    let graph = match ProcessingGraph::from_spec(spec) {
+    let (header, wasm) = match animation::load() {
+        Ok(module) => module,
+        Err(e) => {
+            log::error!("animation module: {e:?}");
+            return None;
+        }
+    };
+    let mut graph = match ProcessingGraph::from_spec(spec) {
         Ok(graph) => graph,
         Err(e) => {
             log::error!("graph encode failed: {e}");
             return None;
         }
     };
+    // Route the animation source's `step`/`player_states` handles (and any
+    // in-process transport call) to the module the engine loads below.
+    graph.set_function_modules(animation::function_modules(&header));
     Some(
         arora::Arora::builder()
             .with_hal(Box::new(rig))
             .with_data_store(Box::new(store))
-            .with_behavior_interpreter(Box::new(graph)),
+            .with_behavior_interpreter(Box::new(graph))
+            .with_module(header, wasm),
     )
 }
 
@@ -383,5 +403,41 @@ fn step_forever(arora: &mut arora::Arora) {
             break;
         }
         thread::sleep(period);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vizij_arora_host::{animations_source, compose_sources, ANIMATION_PLAYERS_PATH};
+
+    /// The composed animation source ticks the loaded module: `builder_for`
+    /// loads the baked-in wasm and wires `set_function_modules`, so the source's
+    /// `player_states` `ExternalFunction` dispatches and its output lands in the
+    /// store. A dispatch failure ("no module registered") would abort the graph
+    /// tick before any write, so the key's mere presence proves the module runs.
+    #[test]
+    fn animation_source_ticks_the_loaded_module() {
+        let spec = compose_sources(&[animations_source()])
+            .expect("compose the animation source")
+            .to_string();
+        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new())
+            .expect("build the device over the loaded animation module")
+            .build()
+            .expect("build arora");
+        for _ in 0..3 {
+            arora.step(Duration::from_millis(16)).expect("step");
+        }
+        let key = Key::from(ANIMATION_PLAYERS_PATH);
+        let players = arora
+            .store()
+            .read(std::slice::from_ref(&key))
+            .into_iter()
+            .next()
+            .flatten();
+        assert!(
+            players.is_some(),
+            "{ANIMATION_PLAYERS_PATH} absent — the animation module did not dispatch",
+        );
     }
 }

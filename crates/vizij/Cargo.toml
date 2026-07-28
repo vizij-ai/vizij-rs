@@ -54,6 +54,16 @@ vizij-arora-store = { path = "../interop/vizij-arora-store" }
 vizij-arora-hal = { path = "../interop/vizij-arora-hal" }
 vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
 
+# The animation module, baked into the binary two ways from one dependency:
+# `artifact = "cdylib"` builds it for `wasm32-wasip1` and hands the built
+# `.wasm` path through `CARGO_CDYLIB_FILE_VIZIJ_ANIMATION_MODULE` (what
+# `with_module` loads); `lib = true` also links it on the host so we read its
+# `MODULE_YAML` header const. This artifact dependency is why the workspace is
+# on nightly (`bindeps`, see rust-toolchain.toml).
+vizij-animation-module = { path = "../interop/vizij-animation-module", artifact = "cdylib", target = "wasm32-wasip1", lib = true }
+# Parses the module's YAML header into `arora_types::module::low::Header`.
+serde_yaml = "0.9"
+
 [features]
 default = []
 # `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics.

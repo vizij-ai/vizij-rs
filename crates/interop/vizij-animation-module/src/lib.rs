@@ -32,6 +32,14 @@
 #[allow(clippy::all, dead_code, unused)]
 mod arora_generated;
 
+/// The module's generated low-level header (`arora_types::module::low::Header`)
+/// as YAML — the module's id and its exported functions with their UUIDs. A
+/// native host that loads the built `.wasm` (via `AroraBuilder::with_module`)
+/// pairs it with this header; `serde_yaml::from_str::<Header>` parses it. Kept
+/// here so the header travels with the crate that defines it, rather than a
+/// host reaching across the tree for the generated file.
+pub const MODULE_YAML: &str = include_str!("arora_generated/module.yaml");
+
 use std::collections::HashMap;
 use std::sync::Mutex;
 
