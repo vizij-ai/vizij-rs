@@ -13,6 +13,7 @@ use bevy::prelude::*;
 use clap::Parser;
 
 mod device;
+mod frames;
 mod meta;
 mod snapshot;
 mod view;
@@ -55,6 +56,16 @@ struct Cli {
     /// "rig,pose-driver". Default: rig + pose-driver.
     #[arg(long, default_value = "rig,pose-driver,pose")]
     graphs: String,
+
+    /// Publish rendered frames into the store as HAL `view/frame` readings, at
+    /// this rate in Hz (decoupled from the step rate); 0 disables. Works with a
+    /// window or headless.
+    #[arg(long, default_value_t = 15.0)]
+    frame_rate: f32,
+
+    /// How published frames are encoded.
+    #[arg(long, value_enum, default_value_t = frames::FrameFormat::Png)]
+    frame_format: frames::FrameFormat,
 
     /// Autoplay this motiongraph program id instead of the bundle's own
     /// `activeMotionGraphId`. Window mode plays the active program by default;
@@ -151,9 +162,13 @@ fn main() -> Result<()> {
     let face = view::Face { meta, glb_path };
     let device_res = view::DeviceRes { rig };
 
+    let frame_config = frames::FrameConfig {
+        format: cli.frame_format,
+        rate_hz: cli.frame_rate,
+    };
     match &cli.snapshot {
         Some(out) => run_snapshot(&cli, face, device_res, options, out),
-        None => run_window(face, device_res, options, events),
+        None => run_window(face, device_res, options, events, frame_config),
     }
 }
 
@@ -172,31 +187,38 @@ fn run_window(
     device_res: view::DeviceRes,
     options: view::ViewOptions,
     events: std::sync::mpsc::Receiver<device::DeviceEvent>,
+    frame_config: frames::FrameConfig,
 ) -> Result<()> {
     let (width, height) = window_resolution(&face);
-    App::new()
-        .add_plugins(
-            DefaultPlugins
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        title: "Vizij".to_string(),
-                        resolution: (width, height).into(),
-                        ..default()
-                    }),
+    let mut app = App::new();
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "Vizij".to_string(),
+                    resolution: (width, height).into(),
                     ..default()
-                })
-                .set(bevy::asset::AssetPlugin {
-                    unapproved_path_mode: bevy::asset::UnapprovedPathMode::Allow,
-                    ..default()
-                })
-                .disable::<bevy::log::LogPlugin>(),
-        )
-        .insert_resource(face)
-        .insert_resource(device_res)
-        .insert_resource(options)
-        .insert_resource(view::DeviceEvents(std::sync::Mutex::new(events)))
-        .add_plugins(view::ViewPlugin)
-        .run();
+                }),
+                ..default()
+            })
+            .set(bevy::asset::AssetPlugin {
+                unapproved_path_mode: bevy::asset::UnapprovedPathMode::Allow,
+                ..default()
+            })
+            .disable::<bevy::log::LogPlugin>(),
+    )
+    .insert_resource(face)
+    .insert_resource(device_res)
+    .insert_resource(options)
+    .insert_resource(view::DeviceEvents(std::sync::Mutex::new(events)))
+    .add_plugins(view::ViewPlugin);
+    // Frame publishing works with a window too (not only headless): capture the
+    // window and push `view/frame` onto the device's reading feed.
+    if frame_config.rate_hz > 0.0 {
+        app.insert_resource(frame_config)
+            .add_plugins(frames::FramesPlugin);
+    }
+    app.run();
     // The device's terminal UI runs on the worker thread; returning from here
     // ends the process without unwinding that thread, which would leave the
     // terminal in raw mode on the alternate screen. Undo its setup (arora's

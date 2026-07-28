@@ -84,8 +84,9 @@ impl RigHal {
     /// A feed of applied actuation changes, for a Vizij renderer that wants
     /// deltas instead of polling [`pose`](RigHal::pose). Each call yields an
     /// independent, owned stream. This is deliberately **not**
-    /// [`Hal::updates`]: that seam is the runtime's sensor-reading feed, and
-    /// the rig has no sensors.
+    /// [`Hal::updates`]: that seam is the runtime's sensor-reading feed (what
+    /// [`push_reading`](RigHal::push_reading) fans out), a separate stream from
+    /// this actuation echo.
     pub fn pose_updates(&self) -> UpdatesStream {
         let (tx, rx) = futures_channel::mpsc::unbounded();
         self.inner.lock().unwrap().subscribers.push(tx);
@@ -200,7 +201,10 @@ mod tests {
         // A pushed reading (a frame, here a stand-in scalar) fans out to the feed.
         hal.push_reading(StateChange::set("view/frame", float(1.0)));
         let got = readings.next().await.unwrap();
-        assert_eq!(got.set.get(&Key::from("view/frame")), Some(&Some(float(1.0))));
+        assert_eq!(
+            got.set.get(&Key::from("view/frame")),
+            Some(&Some(float(1.0)))
+        );
 
         // Actuation the runtime writes is echoed on pose_updates, not readings —
         // so the reading feed stays empty after a write.
