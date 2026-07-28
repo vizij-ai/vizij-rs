@@ -1,0 +1,6 @@
+# Enable Cargo artifact dependencies (`bindeps`) workspace-wide: the `vizij`
+# native app depends on `vizij-animation-module` as a `wasm32-wasip1` `cdylib`
+# artifact and bakes the built `.wasm` into the binary. This is an unstable
+# feature (nightly — see `rust-toolchain.toml`).
+[unstable]
+bindeps = true

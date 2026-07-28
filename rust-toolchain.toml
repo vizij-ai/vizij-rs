@@ -1,0 +1,9 @@
+# The workspace builds on nightly: the `vizij` native app loads the animation
+# module through a Cargo **artifact dependency** (`artifact = "cdylib"`, target
+# `wasm32-wasip1`), which is the unstable `bindeps` feature — nightly-only, and
+# it applies workspace-wide (one artifact-dep member makes stable cargo refuse
+# to parse the whole workspace). Pinned for reproducibility; bump deliberately.
+[toolchain]
+channel = "nightly-2026-06-03"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-wasip1", "wasm32-unknown-unknown"]

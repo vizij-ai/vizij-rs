@@ -46,8 +46,11 @@ jobs:
         run: |
           git checkout -B "$RELEASE_BRANCH" "origin/$RELEASE_BRANCH"
 
-      - uses: dtolnay/rust-toolchain@stable
+      # Nightly workspace-wide: the vizij animation-module bindep (see
+      # rust-toolchain.toml).
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2026-06-03
           components: rustfmt, clippy
 
       - name: Install wasm32 targets

@@ -9,8 +9,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      # Nightly workspace-wide: the vizij animation-module bindep (see
+      # rust-toolchain.toml). Publishing a lib still resolves the whole
+      # workspace, so it needs the same toolchain.
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2026-06-03
           components: rustfmt, clippy
       - name: Set credentials
         run: |

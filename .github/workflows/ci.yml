@@ -15,6 +15,12 @@ concurrency:
   group: rs-ci-${{ github.ref }}
   cancel-in-progress: true
 
+# The workspace builds on nightly: the `vizij` native app loads the animation
+# module through a Cargo artifact dependency (`bindeps`, nightly-only), which
+# applies workspace-wide. Pinned to match rust-toolchain.toml; bump together.
+env:
+  NIGHTLY: nightly-2026-06-03
+
 jobs:
   rust:
     runs-on: ubuntu-latest
@@ -22,9 +28,12 @@ jobs:
       - uses: actions/checkout@v5
       - name: Install system dependencies (alsa/udev/wayland/xkb dev for Bevy)
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ env.NIGHTLY }}
           components: rustfmt, clippy
+          # The vizij animation-module bindep builds for wasm32-wasip1.
+          targets: wasm32-wasip1
       - name: Cache cargo
         uses: actions/cache@v5
         with:
@@ -44,8 +53,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ env.NIGHTLY }}
           components: rustfmt, clippy
           # wasm32-wasip1 builds the animation-module artifact (an Arora guest
           # module, not a wasm-bindgen wrapper).
@@ -90,7 +100,9 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.NIGHTLY }}
       - name: Install wasm-pack
         run: cargo install wasm-pack
       - name: Build WASM into npm wrapper pkg/
@@ -120,7 +132,9 @@ jobs:
       - uses: actions/checkout@v5
       - name: Install system dependencies (alsa/udev/wayland/xkb dev for Bevy)
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.NIGHTLY }}
       - name: Install pnpm
         uses: pnpm/action-setup@v4
       - name: Setup Node.js
@@ -140,8 +154,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ env.NIGHTLY }}
           targets: wasm32-wasip1
       - name: Cache cargo
         uses: actions/cache@v5
@@ -167,7 +182,9 @@ jobs:
       - uses: actions/checkout@v5
       - name: Install Bevy deps + lavapipe (software Vulkan)
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config mesa-vulkan-drivers vulkan-tools
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.NIGHTLY }}
       - name: Cache cargo
         uses: actions/cache@v5
         with:
