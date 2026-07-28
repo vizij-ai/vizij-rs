@@ -58,7 +58,7 @@ vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
 default = []
 # `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics.
 ros2 = ["dep:arora-bridge-ros2"]
-# A `--studio` flag (arora's `studio-bridge`) is the intended companion, but
-# arora's Studio connector currently fails to build in this tree (a `firestore`
-# / gcloud version skew — the in-flight reqwest 0.12→0.13 alignment). It rejoins
-# once that lands; the compose seam (`attach_bridges`) already accommodates it.
+# `--studio`: attach the Semio Studio bridge (arora's Zenoh + Firebase
+# connector), configured from the environment (DEVICE_OWNERS, …). Needs
+# arora-studio-bridge-client 6.1.0+ (firestore 0.50 / gcloud-sdk 0.30.2).
+studio = ["arora/studio-bridge"]
