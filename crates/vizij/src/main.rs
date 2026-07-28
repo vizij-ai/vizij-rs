@@ -30,7 +30,13 @@ struct Cli {
     #[arg(long)]
     snapshot: Option<std::path::PathBuf>,
 
-    /// Offscreen render size, WIDTHxHEIGHT.
+    /// Run windowless: render offscreen and stream frames (`--frame-rate`) into
+    /// the store instead of opening a window. The device still runs with its
+    /// bridges — the ROS4HRI route (face frames as a topic, no browser).
+    #[arg(long)]
+    headless: bool,
+
+    /// Offscreen render size, WIDTHxHEIGHT (`--snapshot` and `--headless`).
     #[arg(long, default_value = "763x486")]
     size: String,
 
@@ -166,9 +172,10 @@ fn main() -> Result<()> {
         format: cli.frame_format,
         rate_hz: cli.frame_rate,
     };
-    match &cli.snapshot {
-        Some(out) => run_snapshot(&cli, face, device_res, options, out),
-        None => run_window(face, device_res, options, events, frame_config),
+    match (&cli.snapshot, cli.headless) {
+        (Some(out), _) => run_snapshot(&cli, face, device_res, options, out),
+        (None, true) => run_headless(&cli.size, face, device_res, options, events, frame_config),
+        (None, false) => run_window(face, device_res, options, events, frame_config),
     }
 }
 
@@ -219,17 +226,80 @@ fn run_window(
             .add_plugins(frames::FramesPlugin);
     }
     app.run();
-    // The device's terminal UI runs on the worker thread; returning from here
-    // ends the process without unwinding that thread, which would leave the
-    // terminal in raw mode on the alternate screen. Undo its setup (arora's
-    // `restore_terminal` recipe) on the way out.
+    restore_terminal();
+    Ok(())
+}
+
+/// Render windowless and stream frames into the store — same view and device as
+/// the window, but a `ScheduleRunnerPlugin` loop drawing into an offscreen image
+/// the frame publisher captures, no winit. The device runs on its worker thread
+/// as usual (bridges attached), so frames fan out over every bridge.
+fn run_headless(
+    size: &str,
+    face: view::Face,
+    device_res: view::DeviceRes,
+    options: view::ViewOptions,
+    events: std::sync::mpsc::Receiver<device::DeviceEvent>,
+    frame_config: frames::FrameConfig,
+) -> Result<()> {
+    use bevy::app::ScheduleRunnerPlugin;
+    use bevy::render::render_resource::TextureUsages;
+
+    let (width, height) = parse_size(size)?;
+    let mut app = App::new();
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: None,
+                exit_condition: bevy::window::ExitCondition::DontExit,
+                ..default()
+            })
+            .set(bevy::asset::AssetPlugin {
+                unapproved_path_mode: bevy::asset::UnapprovedPathMode::Allow,
+                ..default()
+            })
+            .disable::<bevy::winit::WinitPlugin>()
+            .disable::<bevy::log::LogPlugin>(),
+    )
+    .add_plugins(ScheduleRunnerPlugin::run_loop(
+        std::time::Duration::from_secs_f64(1.0 / 60.0),
+    ))
+    .insert_resource(face)
+    .insert_resource(device_res)
+    .insert_resource(options)
+    .insert_resource(view::DeviceEvents(std::sync::Mutex::new(events)))
+    .add_plugins(view::ViewPlugin);
+
+    // The offscreen image the view camera renders into (COPY_SRC so the frame
+    // publisher's capture can read it back); its presence makes the camera
+    // target it instead of a window.
+    let mut target = Image::new_target_texture(width, height, snapshot::FORMAT, None);
+    target.texture_descriptor.usage |= TextureUsages::COPY_SRC;
+    let handle = app.world_mut().resource_mut::<Assets<Image>>().add(target);
+    app.insert_resource(view::OffscreenTarget(handle));
+
+    if frame_config.rate_hz > 0.0 {
+        app.insert_resource(frame_config)
+            .add_plugins(frames::FramesPlugin);
+    } else {
+        log::warn!("--headless with --frame-rate 0 renders but publishes nothing");
+    }
+    app.run();
+    restore_terminal();
+    Ok(())
+}
+
+/// The device's terminal UI runs on the worker thread; returning from a Bevy run
+/// ends the process without unwinding that thread, which would leave the terminal
+/// in raw mode on the alternate screen. Undo its setup (arora's `restore_terminal`
+/// recipe) on the way out.
+fn restore_terminal() {
     if std::io::IsTerminal::is_terminal(&std::io::stdout()) {
         use crossterm::event::DisableMouseCapture;
         use crossterm::terminal::{disable_raw_mode, LeaveAlternateScreen};
         let _ = disable_raw_mode();
         let _ = crossterm::execute!(std::io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
     }
-    Ok(())
 }
 
 fn run_snapshot(

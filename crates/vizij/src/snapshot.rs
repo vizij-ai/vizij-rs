@@ -24,8 +24,8 @@ use image::RgbaImage;
 use crate::view::OffscreenTarget;
 
 /// Matches `TextureFormat::bevy_default()` on desktop; keeps readback bytes in
-/// plain RGBA order.
-const FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
+/// plain RGBA order. Shared with the headless run's offscreen target.
+pub const FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
 
 /// Bounded wait for the async GPU readback (~2 s at 60 fps) so a missing GPU
 /// fails fast instead of hanging.

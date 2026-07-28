@@ -71,23 +71,30 @@ fn request_capture(
     commands.spawn(screenshot).observe(publish_frame);
 }
 
-/// Encode the captured frame and push it onto the rig's reading feed.
-fn publish_frame(event: On<ScreenshotCaptured>, device: Res<DeviceRes>, config: Res<FrameConfig>) {
-    let Some(reading) = frame_reading(&event.image, config.format) else {
+/// Encode the captured frame and push it onto the rig's reading feed. RGBA is
+/// taken as-is; BGRA is swizzled (window swapchains are commonly BGRA, offscreen
+/// targets RGBA); an unreadable format is skipped.
+fn publish_frame(
+    event: On<ScreenshotCaptured>,
+    device: Res<DeviceRes>,
+    config: Res<FrameConfig>,
+    mut announced: Local<bool>,
+) {
+    let image = &event.image;
+    let (width, height) = (image.width(), image.height());
+    let Some(rgba) = to_rgba8(image) else {
         return;
     };
+    if !std::mem::replace(&mut *announced, true) {
+        log::info!(
+            "publishing {FRAME_KEY} into the store ({width}x{height}, {:?})",
+            config.format
+        );
+    }
+    let reading = encode_frame(&rgba, width, height, config.format);
     device
         .rig
         .push_reading(StateChange::set(Key::from(FRAME_KEY), reading));
-}
-
-/// Build the `view/frame` value from a captured image, or `None` if its pixels
-/// aren't in a format we can read. RGBA is taken as-is; BGRA is swizzled (window
-/// swapchains are commonly BGRA, offscreen targets RGBA).
-fn frame_reading(image: &Image, format: FrameFormat) -> Option<Value> {
-    let (width, height) = (image.width(), image.height());
-    let rgba = to_rgba8(image)?;
-    Some(encode_frame(&rgba, width, height, format))
 }
 
 /// The image's pixels as row-major RGBA8, or `None` for an unsupported format.
@@ -157,7 +164,10 @@ mod tests {
         let value = encode_frame(&rgba, 1, 1, FrameFormat::Raw);
         assert_eq!(field(&value, "width"), Some(&Value::U32(1)));
         assert_eq!(field(&value, "height"), Some(&Value::U32(1)));
-        assert_eq!(field(&value, "format"), Some(&Value::String("rgba8".into())));
+        assert_eq!(
+            field(&value, "format"),
+            Some(&Value::String("rgba8".into()))
+        );
         assert_eq!(field(&value, "data"), Some(&Value::ArrayU8(rgba)));
     }
 
