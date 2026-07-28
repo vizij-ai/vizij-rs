@@ -155,3 +155,35 @@ jobs:
         run: cargo build -p vizij-animation-module --target wasm32-wasip1
       - name: Prove the arora_call boundary (host_ramp)
         run: cargo test -p vizij-animation-module --test host_ramp -- --ignored
+
+  # Visual regression: render Quori/Toasty on lavapipe (Mesa's software Vulkan —
+  # no GPU on the runner) and compare to committed references, keeping the
+  # web-comparison parity honest. The test is #[ignore]d (it renders), so the
+  # `rust` job's `cargo test` never runs it; here we pull the face GLBs from
+  # vizij-web and run it with --ignored.
+  snapshot-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Bevy deps + lavapipe (software Vulkan)
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config mesa-vulkan-drivers vulkan-tools
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-snapreg-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Fetch the face GLBs from vizij-web
+        run: |
+          mkdir -p fixtures
+          base="https://raw.githubusercontent.com/vizij-ai/vizij-web/main/apps/vizij-authoring/public/assets"
+          curl -fsSL "$base/Quori_Current_Extended.glb" -o fixtures/Quori_Current_Extended.glb
+          curl -fsSL "$base/Toasty_Current.glb" -o fixtures/Toasty_Current.glb
+      - name: Render Quori/Toasty on lavapipe and compare to references
+        env:
+          VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
+          WGPU_BACKEND: vulkan
+        run: cargo test -p vizij --test snapshot_regression -- --ignored --nocapture
