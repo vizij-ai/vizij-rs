@@ -112,6 +112,7 @@ impl NodeFunctions for CallBridgeFunctions<'_> {
 struct GraphRun {
     run_node: String,
     status_node: String,
+    args_node: String,
     status_key: Key,
 }
 
@@ -233,7 +234,11 @@ impl ProcessingGraph {
     /// removes structure, not state.
     fn prune_run(&mut self, run: &GraphRun) -> Result<(), BehaviorError> {
         let diff = graph_codec::GraphSpecDiff {
-            remove_nodes: vec![run.run_node.clone(), run.status_node.clone()],
+            remove_nodes: vec![
+                run.run_node.clone(),
+                run.status_node.clone(),
+                run.args_node.clone(),
+            ],
             ..graph_codec::GraphSpecDiff::default()
         };
         let diff = graph_codec::spec_diff_to_graph_diff(&diff)
@@ -450,20 +455,44 @@ impl BehaviorInterpreter for ProcessingGraph {
                 message: format!("the status key does not parse as a path: {e}"),
             })?;
 
+        let update_path =
+            TypedPath::parse(&format!("{prefix}/update")).map_err(|e| BehaviorError {
+                message: format!("the update key does not parse as a path: {e}"),
+            })?;
+
         let run_node = format!("task/{}/run", task.0);
         let status_node = format!("task/{}/status", task.0);
+        let args_node = format!("task/{}/args", task.0);
+        // The spawn-time argument bundle: a structure of the call's args, the
+        // default the args input serves until a live update lands on the run's
+        // update key.
+        let args_bundle = Value::Structure(Structure {
+            id: call.id,
+            fields: call.args.clone(),
+        });
         let diff = graph_codec::GraphSpecDiff {
             upsert_nodes: vec![
+                // The run's args source: an input on the update key, defaulting
+                // to the spawn-time bundle. A caller (the ROS bridge on a live
+                // goal) writes new args to the update key; the next tick stages
+                // them here and the run picks them up — no graph edit per update.
+                NodeSpec {
+                    id: args_node.clone(),
+                    kind: NodeType::Input,
+                    params: NodeParams {
+                        path: Some(update_path),
+                        value: Some(args_bundle),
+                        ..NodeParams::default()
+                    },
+                    output_shapes: Default::default(),
+                    input_defaults: Default::default(),
+                },
                 NodeSpec {
                     id: run_node.clone(),
                     kind: NodeType::TaskRun,
                     params: NodeParams {
                         module: call.module_id,
                         function: Some(call.id),
-                        value: Some(Value::Structure(Structure {
-                            id: call.id,
-                            fields: call.args.clone(),
-                        })),
                         ..NodeParams::default()
                     },
                     output_shapes: Default::default(),
@@ -480,17 +509,30 @@ impl BehaviorInterpreter for ProcessingGraph {
                     input_defaults: Default::default(),
                 },
             ],
-            upsert_edges: vec![EdgeSpec {
-                from: EdgeOutputEndpoint {
-                    node_id: run_node.clone(),
-                    output: "out".to_string(),
+            upsert_edges: vec![
+                EdgeSpec {
+                    from: EdgeOutputEndpoint {
+                        node_id: args_node.clone(),
+                        output: "out".to_string(),
+                    },
+                    to: EdgeInputEndpoint {
+                        node_id: run_node.clone(),
+                        input: "args".to_string(),
+                    },
+                    selector: None,
                 },
-                to: EdgeInputEndpoint {
-                    node_id: status_node.clone(),
-                    input: "in".to_string(),
+                EdgeSpec {
+                    from: EdgeOutputEndpoint {
+                        node_id: run_node.clone(),
+                        output: "out".to_string(),
+                    },
+                    to: EdgeInputEndpoint {
+                        node_id: status_node.clone(),
+                        input: "in".to_string(),
+                    },
+                    selector: None,
                 },
-                selector: None,
-            }],
+            ],
             ..graph_codec::GraphSpecDiff::default()
         };
         let diff = graph_codec::spec_diff_to_graph_diff(&diff)
@@ -500,6 +542,7 @@ impl BehaviorInterpreter for ProcessingGraph {
             GraphRun {
                 run_node,
                 status_node,
+                args_node,
                 status_key: status_key.clone(),
             },
         );
@@ -893,7 +936,8 @@ mod tests {
         let handle = graph
             .spawn(look_at(), RunPolicy::Concurrent)
             .expect("spawn");
-        assert_eq!(graph.graph().nodes.len(), nodes_before + 2);
+        // The fragment is three nodes: args input, taskrun leaf, status output.
+        assert_eq!(graph.graph().nodes.len(), nodes_before + 3);
         assert!(handle.status.path.starts_with("arora/tasks/"));
 
         let mut bridge = RunBridge::new(Vec::new());
@@ -999,5 +1043,51 @@ mod tests {
         assert_eq!(read_key(&store, &first.status), Some(task::running()));
         assert_eq!(read_key(&store, &second.status), Some(task::running()));
         assert_eq!(bridge.calls.len(), 2);
+    }
+
+    /// A live goal update reaches the running call: writing new args to the
+    /// run's update key makes the next tick invoke the call with them, with no
+    /// graph edit per update — the run's args ride an `input` on the update key
+    /// (ARORA-84).
+    #[test]
+    fn a_live_update_reaches_the_running_call() {
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        store
+            .write(StateChange::set("sensor/x", float(0.75)))
+            .unwrap();
+        let arg_id = Uuid::from_u128(0x7861);
+
+        let handle = graph
+            .spawn(look_at(), RunPolicy::Concurrent)
+            .expect("spawn");
+        let mut bridge = RunBridge::new(Vec::new());
+
+        // First tick: the run invokes with the spawn-time args (0.5).
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(
+            bridge.calls.last().expect("a call").args[0].value.as_ref(),
+            &float(0.5),
+        );
+
+        // The caller pushes a moving target: new args on the update key.
+        let update = Value::Structure(Structure {
+            id: look_at().id,
+            fields: vec![StructureField {
+                id: arg_id,
+                value: Box::new(float(0.9)),
+            }],
+        });
+        let mut change = StateChange::new();
+        change.set.insert(handle.update[0].clone(), Some(update));
+        store.write(change).unwrap();
+
+        // Next tick: the run invokes with the updated args (0.9) — no re-spawn.
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(
+            bridge.calls.last().expect("a call").args[0].value.as_ref(),
+            &float(0.9),
+        );
     }
 }

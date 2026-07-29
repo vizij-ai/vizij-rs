@@ -2726,10 +2726,19 @@ pub fn registry() -> Registry {
         type_id: TaskRun,
         name: "Task Run",
         category: "Functions",
-        doc: "Hosts one task run: invokes its module function (module, function and argument \
-              bundle are params) each evaluation and emits the run's behavior Status, latched \
-              once terminal. Grafted per spawned run by the interpreter.",
-        inputs: vec![],
+        doc: "Hosts one task run: invokes its module function (module and function are params) \
+              each evaluation and emits the run's behavior Status, latched once terminal. The \
+              argument bundle comes from the `args` input when wired (so a live goal update on \
+              the run's update key flows in each tick), else from the `value` param. Grafted per \
+              spawned run by the interpreter.",
+        inputs: vec![PortSpec {
+            id: "args",
+            ty: PortType::Any,
+            label: "Args",
+            doc: "The call's argument bundle (a structure of the call args). Overrides the \
+                  `value` param when present — how a live goal update reaches a running task.",
+            optional: true,
+        }],
         variadic_inputs: None,
         outputs: vec![PortSpec {
             id: "out",

@@ -4,6 +4,15 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-07-30
+
+### Added
+
+- `TaskRun` gains an optional `args` input: when wired it supplies the call's
+  argument bundle (overriding the `value` param), so a live goal update on a
+  running task's update key flows into the call each tick — the node-graph
+  side of ARORA-84.
+
 ## [1.1.0] - 2026-07-29
 
 ### Added
