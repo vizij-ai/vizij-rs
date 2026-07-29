@@ -26,7 +26,10 @@ bevy = "0.19"
 # auto-attached). 9.5 gave the TUI application commands and drop-cancellation
 # (the g/b controls, the GLB reload's rebuild); 9.6 makes `local_ws_bridge()`
 # public so the app composes the local bridge alongside the --ros2/--studio ones.
-arora = "9.6"
+# 9.7 adds `with_host_module`, which registers the animation module natively (a
+# `HostModule` of in-process functions) — no wasm guest, no bindep, so the
+# workspace stays on stable.
+arora = "9.7"
 # The ROS 2 bridge, attached under `--ros2` (feature `ros2`). Heavy (ros2-client
 # + a DDS/Zenoh backend), so opt-in; the Studio bridge rides arora's own
 # `studio-bridge` feature instead (`--studio`).
@@ -53,6 +56,11 @@ vizij-arora-host = { path = "../interop/vizij-arora-host" }
 vizij-arora-store = { path = "../interop/vizij-arora-store" }
 vizij-arora-hal = { path = "../interop/vizij-arora-hal" }
 vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
+
+# The animation module, linked natively: we register its functions as a host
+# module (`with_host_module`) rather than loading its wasm, so no artifact
+# dependency and no nightly. Its generated `Value` conversions marshal the calls.
+vizij-animation-module = { path = "../interop/vizij-animation-module" }
 
 [features]
 default = []

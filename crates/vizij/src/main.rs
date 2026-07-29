@@ -12,6 +12,7 @@ use anyhow::{anyhow, Result};
 use bevy::prelude::*;
 use clap::Parser;
 
+mod animation;
 mod device;
 mod frames;
 mod meta;

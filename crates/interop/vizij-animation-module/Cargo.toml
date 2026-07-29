@@ -27,7 +27,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 [dev-dependencies]
 anyhow = "1"
-arora-engine = "3"
+arora-engine = "4"
 arora-types = "2"
 uuid = { version = "1", features = ["v4"] }
 serde_json = "1"

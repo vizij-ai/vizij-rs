@@ -136,10 +136,21 @@ impl Bundle {
     }
 
     /// Compose the device's behavior: the base graphs whose kind is in `wanted`,
-    /// then the chosen program **last** — so it wins over the base graphs on any
-    /// store path they share (the web composes a playing program after the rig
-    /// for the same last-writer-wins reason). Returns the composed graph spec.
-    pub fn compose(&self, wanted: &[&str], select: &ProgramSelect) -> Result<Json> {
+    /// then the chosen program, then (when `with_animations`) the animation
+    /// source — each **last** wins over the earlier ones on any store path they
+    /// share (the web composes the same way, for the same last-writer-wins
+    /// reason). So a playing program overrides the base rig, and a playing clip
+    /// overrides both. Returns the composed graph spec.
+    ///
+    /// Pass `with_animations` when the device has the animation module loaded;
+    /// [`animations_source`] dispatches to it, so composing it without the module
+    /// would leave an `ExternalFunction` node with nothing to call.
+    pub fn compose(
+        &self,
+        wanted: &[&str],
+        select: &ProgramSelect,
+        with_animations: bool,
+    ) -> Result<Json> {
         let mut sources: Vec<(String, Json)> = self
             .graphs
             .iter()
@@ -149,6 +160,9 @@ impl Bundle {
         if let Some((id, spec)) = self.program(select) {
             log::info!("autoplaying program {id}");
             sources.push((format!("program::{id}"), spec.clone()));
+        }
+        if with_animations {
+            sources.push(animations_source());
         }
         compose_sources(&sources)
     }
@@ -170,6 +184,70 @@ impl Bundle {
             .filter_map(|(name, value)| map.get(name).map(|path| (path.clone(), *value as f32)))
             .collect()
     }
+}
+
+/// Source id of the animation source (see [`compose_sources`] for how source
+/// ids namespace node ids).
+pub const ANIMATIONS_SOURCE_ID: &str = "animations";
+
+/// Store path the animation source writes the module's per-tick `[PlayerState]`
+/// feedback to. A plain store key (not an `arora/` built-in), so it carries
+/// over a bridge and across a device restart like any other value.
+pub const ANIMATION_PLAYERS_PATH: &str = "vizij/animations/players";
+
+// The animation module's declared ids (mirror `module.yaml` / the web host's
+// `ANIMATION_MODULE_*`). The graph carries them as opaque handles: the
+// `ExternalFunction` nodes name the module functions, the `output` node the
+// `TrackOutput` fields it fans out by.
+const FN_STEP: &str = "76697a69-6a00-0000-0f00-000000000004";
+const FN_PLAYER_STATES: &str = "76697a69-6a00-0000-0f00-00000000000d";
+const PARAM_DT_NS: &str = "76697a69-6a00-0000-0f04-000000000001";
+const FIELD_OUTPUT_DEFAULT_KEY: &str = "76697a69-6a00-0000-0110-000000000002";
+const FIELD_OUTPUT_VALUE: &str = "76697a69-6a00-0000-0110-000000000003";
+
+/// The graph source that ticks the animation module **inside the device** (the
+/// native port of the web host's `animationsGraphSource`): an `ExternalFunction`
+/// node calls the module's `step` every tick, fed the runtime's built-in
+/// `arora/dt` (nanoseconds), and a path-less `output` node fans the returned
+/// `[TrackOutput]` batch onto the store keys each record names — its
+/// `default_key`, the final rig paths decided at clip load. A second
+/// `ExternalFunction` node writes `player_states()` to [`ANIMATION_PLAYERS_PATH`].
+///
+/// The source is inert until a clip plays: with no instances the module's `step`
+/// returns nothing, so the `output` writes nothing and the rig/program pose
+/// stands. Transport (load a clip, play/pause/seek/…) is driven through the
+/// module's exported functions — over a bridge, or in-process — not from here.
+pub fn animations_source() -> (String, Json) {
+    let spec = json!({
+        "nodes": [
+            { "id": "dt", "type": "input", "params": { "path": "arora/dt" } },
+            {
+                "id": "step",
+                "type": "externalfunction",
+                "params": { "function": FN_STEP, "param_ids": [PARAM_DT_NS] },
+            },
+            {
+                "id": "apply",
+                "type": "output",
+                "params": {
+                    "key_field": FIELD_OUTPUT_DEFAULT_KEY,
+                    "value_field": FIELD_OUTPUT_VALUE,
+                },
+            },
+            {
+                "id": "states",
+                "type": "externalfunction",
+                "params": { "function": FN_PLAYER_STATES, "param_ids": [] },
+            },
+            { "id": "states-out", "type": "output", "params": { "path": ANIMATION_PLAYERS_PATH } },
+        ],
+        "edges": [
+            { "from": { "node_id": "dt" }, "to": { "node_id": "step", "input": "args_0" } },
+            { "from": { "node_id": "step" }, "to": { "node_id": "apply", "input": "in" } },
+            { "from": { "node_id": "states" }, "to": { "node_id": "states-out", "input": "in" } },
+        ],
+    });
+    (ANIMATIONS_SOURCE_ID.to_string(), spec)
 }
 
 /// Union several Vizij graph specs into the one graph a device runs.
@@ -377,7 +455,7 @@ mod tests {
     fn compose_appends_the_active_program_last() {
         let b = Bundle::from_bundle_json(&bundle_json());
         let composed = b
-            .compose(&["rig", "pose-driver"], &ProgramSelect::Auto)
+            .compose(&["rig", "pose-driver"], &ProgramSelect::Auto, false)
             .unwrap();
         let ids: Vec<&str> = composed["nodes"]
             .as_array()
@@ -389,8 +467,26 @@ mod tests {
         assert_eq!(ids, vec!["rig::input_gaze_x", "program::prog.speaks::o"]);
 
         // No autoplay → base graphs only.
-        let base = b.compose(&["rig"], &ProgramSelect::None).unwrap();
+        let base = b.compose(&["rig"], &ProgramSelect::None, false).unwrap();
         assert_eq!(base["nodes"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn compose_appends_the_animation_source_last() {
+        let b = Bundle::from_bundle_json(&bundle_json());
+        let composed = b.compose(&["rig"], &ProgramSelect::None, true).unwrap();
+        let ids: Vec<String> = composed["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| n["id"].as_str().unwrap().to_string())
+            .collect();
+        // The rig source, then the animation source's nodes, namespaced by its
+        // source id — its `step`/`player_states` dispatch drives the module.
+        assert!(ids.contains(&"rig::input_gaze_x".to_string()));
+        assert!(ids.contains(&"animations::step".to_string()));
+        assert!(ids.contains(&"animations::apply".to_string()));
+        assert!(ids.contains(&"animations::states-out".to_string()));
     }
 
     #[test]
