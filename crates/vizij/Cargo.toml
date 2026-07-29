@@ -29,11 +29,11 @@ bevy = "0.19"
 # 9.7 adds `with_host_module`, which registers the animation module natively (a
 # `HostModule` of in-process functions) — no wasm guest, no bindep, so the
 # workspace stays on stable.
-arora = "9.7"
+arora = "9.10"
 # The ROS 2 bridge, attached under `--ros2` (feature `ros2`). Heavy (ros2-client
 # + a DDS/Zenoh backend), so opt-in; the Studio bridge rides arora's own
 # `studio-bridge` feature instead (`--studio`).
-arora-bridge-ros2 = { version = "3", optional = true }
+arora-bridge-ros2 = { version = "3.2", optional = true }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 # The command pump's async plumbing: the TUI command stream and the per-run
 # stop signal.
@@ -69,6 +69,12 @@ arora-behavior = "8"
 # The bundler, for the Quori integration test (grafts the standard-adaptation
 # sidecar into the demo GLB before driving it over the ROS4HRI keys).
 vizij-bundle = { path = "../tools/vizij-bundle" }
+# The Status enumeration ids the gaze signature marks its action shape with.
+arora-behavior-tree-types = "1"
+# The typed ROS 2 peer of the live action E2E (the semio-ai ros2-client fork;
+# the library imports as `ros2_client`).
+ros2-client = { package = "ros2-client-multi-rmw", version = "0.11.0", default-features = false, features = ["jazzy", "dds"] }
+rand = "0.9"
 
 [features]
 default = []
