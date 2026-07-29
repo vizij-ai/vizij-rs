@@ -29,10 +29,9 @@
 
 use arora_types::gen_uuid_from_str;
 use arora_types::keyvalue::{KeyValue, KeyValueField};
-use arora_types::value::{Enumeration, Structure};
 use uuid::Uuid;
 
-pub use arora_types::value::{StructureField, StructureWithoutId, Value};
+pub use arora_types::value::{Enumeration, Structure, StructureField, StructureWithoutId, Value};
 
 // ---- declared type / field ids ------------------------------------------------
 

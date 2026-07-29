@@ -157,6 +157,16 @@ pub enum NodeType {
     /// Invokes an external function (resolved by opaque id) through the host-provided
     /// [`NodeFunctions`](crate::eval::NodeFunctions) interface.
     ExternalFunction,
+    /// Hosts one task run: invokes a module function each evaluation and emits
+    /// the run's behavior [`Status`](crate::task) value on `out`, latched once
+    /// terminal.
+    ///
+    /// Unlike [`ExternalFunction`](Self::ExternalFunction), the call is fully
+    /// self-contained in the params — [`module`](NodeParams::module),
+    /// [`function`](NodeParams::function), and the argument bundle in
+    /// [`value`](NodeParams::value) — so a run grafts into a live graph without
+    /// argument-feeder wiring.
+    TaskRun,
 }
 
 /// Node-construction parameters consumed selectively by different [`NodeType`] variants.
@@ -300,6 +310,11 @@ pub struct NodeParams {
     /// Record field carrying each entry's value; see [`key_field`](Self::key_field).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value_field: Option<Uuid>,
+    /// Module the [`NodeType::TaskRun`] function is dispatched to, when the run
+    /// names one. `None` leaves resolution to the host's function→module map,
+    /// like an [`NodeType::ExternalFunction`] call.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub module: Option<Uuid>,
 }
 
 /// Rounding strategy for [`NodeType::Round`].

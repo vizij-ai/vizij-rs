@@ -4,10 +4,19 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.0] - 2026-07-29
 
 ### Added
 
+- `TaskRun` node: hosts one task run — a self-contained module call (module,
+  function, argument bundle as params) invoked each evaluation, emitting the
+  run's behavior `Status` and latching once terminal. Grafted per spawned run
+  by the interpreter.
+- `task` module: the behavior `Status` vocabulary on the value plane
+  (constructors, terminality, return coercion), ids from
+  `arora-behavior-tree-types`.
+- `NodeFunctions::call_module`: module-addressed dispatch with a default that
+  falls back to `call`, so registry-style hosts need no wiring.
 - `ExternalFunction` node plus the `NodeFunctions` call-bridge seam: a graph
   node can call out to host-provided functions.
 - The path-less `Output` node applies a keyed record batch to its keys: an

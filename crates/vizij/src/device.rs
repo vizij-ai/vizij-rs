@@ -433,4 +433,79 @@ mod tests {
             "{ANIMATION_PLAYERS_PATH} absent — the animation module did not dispatch",
         );
     }
+
+    /// A LookAt-style behavior spawned through the device: the SPAWN call
+    /// reaches the graph interpreter through the engine, the run grafts into
+    /// the running node graph and reports on its status key each step, and the
+    /// handle's stop call halts it — all in-process, no bridge involved.
+    #[test]
+    fn a_look_at_run_advances_and_halts_through_the_device() {
+        use arora_behavior::{interpreter_module, RunPolicy};
+        use arora_types::call::{Call, CallResult};
+        use arora_types::value::{StructureField, Value};
+        use uuid::Uuid;
+        use vizij_arora_behavior::task;
+
+        const GAZE_MODULE: Uuid = Uuid::from_u128(0x67617a65);
+        const LOOK_AT: Uuid = Uuid::from_u128(0x6c6f6f6b);
+        const TARGET: Uuid = Uuid::from_u128(0x74617267);
+
+        // A gaze skill that tracks indefinitely, like the real LookAt: every
+        // invocation steers toward its target and reports `Running`.
+        let gaze = arora::ModuleBuilder::new(GAZE_MODULE)
+            .function(LOOK_AT, |_call| {
+                Ok(CallResult {
+                    ret: task::running(),
+                    mutated: Vec::new(),
+                })
+            })
+            .build();
+
+        let mut arora = builder_for(
+            r#"{ "nodes": [], "edges": [] }"#,
+            RigHal::new(),
+            BlackboardStore::new(),
+        )
+        .expect("build the device")
+        .with_host_module(gaze)
+        .build()
+        .expect("build arora");
+
+        let look_at = Call {
+            module_id: Some(GAZE_MODULE),
+            id: LOOK_AT,
+            args: vec![StructureField {
+                id: TARGET,
+                value: Box::new(Value::F32(0.5)),
+            }],
+        };
+        let spawned = arora
+            .call(interpreter_module::encode_spawn(
+                &look_at,
+                RunPolicy::Concurrent,
+            ))
+            .expect("SPAWN dispatches through the engine");
+        let handle =
+            interpreter_module::decode_spawn_result(&spawned.ret).expect("a TaskHandle comes back");
+
+        let status = |arora: &arora::Arora| {
+            arora
+                .store()
+                .read(std::slice::from_ref(&handle.status))
+                .into_iter()
+                .next()
+                .flatten()
+        };
+
+        arora.step(Duration::from_millis(16)).expect("step");
+        assert_eq!(status(&arora), Some(task::running()));
+        arora.step(Duration::from_millis(16)).expect("step");
+        assert_eq!(status(&arora), Some(task::running()), "indefinite tracking");
+
+        arora
+            .call(handle.stop.clone())
+            .expect("the handle's stop call dispatches");
+        arora.step(Duration::from_millis(16)).expect("step");
+        assert_eq!(status(&arora), Some(task::failure()), "halted");
+    }
 }

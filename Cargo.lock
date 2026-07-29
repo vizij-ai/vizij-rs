@@ -385,9 +385,9 @@ dependencies = [
 
 [[package]]
 name = "arora"
-version = "9.7.0"
+version = "9.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "465ee4cfa78a49ff8e107d57425b2afd5105987fed282dfa0676015757c76af5"
+checksum = "e28ae967be614d0e53835a58fe1c11b6fa4ba434e29de781d8abf1841eec4300"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -429,9 +429,9 @@ dependencies = [
 
 [[package]]
 name = "arora-behavior-tree"
-version = "6.3.0"
+version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f001b96641fa9b941a2866125c5e0b9787cf3b865e922b54e0cf780e7d6b04d4"
+checksum = "4e765bed1cd96ecc8d160e45baecc7237a87953c918b3e956f6c4b0ec017512a"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -9788,7 +9788,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.3",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",
@@ -10369,7 +10369,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.3",
  "static_assertions",
 ]
 
@@ -10624,6 +10624,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arora",
+ "arora-behavior",
  "arora-bridge-ros2",
  "arora-types",
  "bevy",
@@ -10807,9 +10808,10 @@ dependencies = [
 
 [[package]]
 name = "vizij-graph-core"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "anyhow",
+ "arora-behavior-tree-types",
  "criterion",
  "hashbrown 0.17.1",
  "k",
@@ -11827,7 +11829,7 @@ version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0978bf7171b3d90bac376700cb56d606feb40f251a475a5d6634613564460b22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

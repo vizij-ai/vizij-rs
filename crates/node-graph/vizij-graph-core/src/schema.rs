@@ -2721,6 +2721,27 @@ pub fn registry() -> Registry {
         params: vec![],
     });
 
+    // Task-run hosting (self-contained module call emitting a latched Status)
+    nodes.push(NodeSignature {
+        type_id: TaskRun,
+        name: "Task Run",
+        category: "Functions",
+        doc: "Hosts one task run: invokes its module function (module, function and argument \
+              bundle are params) each evaluation and emits the run's behavior Status, latched \
+              once terminal. Grafted per spawned run by the interpreter.",
+        inputs: vec![],
+        variadic_inputs: None,
+        outputs: vec![PortSpec {
+            id: "out",
+            ty: PortType::Any,
+            label: "Out",
+            doc: "The run's behavior Status value; a terminal status is latched.",
+            optional: false,
+        }],
+        variadic_outputs: None,
+        params: vec![],
+    });
+
     Registry {
         version: "1.0.0",
         nodes,

@@ -62,6 +62,11 @@ vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
 # dependency and no nightly. Its generated `Value` conversions marshal the calls.
 vizij-animation-module = { path = "../interop/vizij-animation-module" }
 
+[dev-dependencies]
+# The interpreter-module SPAWN/HALT codecs and RunPolicy the device test
+# drives the graph interpreter with.
+arora-behavior = "8"
+
 [features]
 default = []
 # `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics.

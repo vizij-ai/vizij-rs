@@ -32,6 +32,21 @@ pub trait NodeFunction {
 pub trait NodeFunctions {
     /// Invoke the function identified by `function` with `args`.
     fn call(&mut self, function: Uuid, args: &[(Uuid, Value)]) -> Result<Value, String>;
+
+    /// Invoke `function` addressed to `module` with `args` — how a
+    /// [`TaskRun`](crate::types::NodeType::TaskRun) node dispatches its
+    /// self-contained call. A host that routes by module honours `module`; the
+    /// default ignores it and resolves the function like [`call`](Self::call),
+    /// so registry-style hosts need no extra wiring.
+    fn call_module(
+        &mut self,
+        module: Option<Uuid>,
+        function: Uuid,
+        args: &[(Uuid, Value)],
+    ) -> Result<Value, String> {
+        let _ = module;
+        self.call(function, args)
+    }
 }
 
 /// A registry of [`NodeFunction`]s keyed by their stable id.
