@@ -34,6 +34,17 @@ import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/brow
 export type GraphSpecInput = object | string;
 
 /**
+ * A standard profile Vizij ships — a composable graph that makes a face
+ * respond to an external standard's keys (e.g. ROS4HRI). Listed by
+ * {@link standardProfiles}; its graph is fetched with {@link standardProfile}.
+ */
+export interface StandardProfile {
+  id: string;
+  title: string;
+  description: string;
+}
+
+/**
  * A spec-level graph edit — `{ upsert_nodes, remove_nodes, upsert_edges,
  * remove_edges }` in the Vizij spec vocabulary, or a JSON string of the same.
  * Every edge incident to an upserted node must appear in `upsert_edges`.
@@ -85,6 +96,8 @@ interface WasmBindings {
   VizijArora: {
     start(graph_json?: string, modules?: RuntimeModule[]): Promise<WasmVizijArora>;
   };
+  standardProfiles(): StandardProfile[];
+  standardProfile(id: string, rig_prefix: string): object | null;
 }
 
 const bindingCache: { current: WasmBindings | null } = { current: null };
@@ -341,6 +354,31 @@ export async function startRuntime(
     graph === undefined ? undefined : typeof graph === "string" ? graph : JSON.stringify(graph);
   const inner = await bindings.VizijArora.start(graphJson, modules);
   return new Runtime(inner);
+}
+
+/**
+ * The standard profiles Vizij ships (ROS4HRI, …) — the introspectable list an
+ * authoring app offers so a user can pick which standards a face opts into.
+ * Calls {@link init} if it has not run yet.
+ */
+export async function standardProfiles(input?: InitInput): Promise<StandardProfile[]> {
+  await init(input);
+  return bindingCache.current!.standardProfiles();
+}
+
+/**
+ * A standard profile's graph as a spec object, ready to compose into a running
+ * runtime or embed into a face GLB. `rigPrefix` (e.g. `"rig/quori_latest/"`) is
+ * prepended to the control paths the profile writes; omit it for the
+ * unprefixed graph. `null` for an unknown id (see {@link standardProfiles}).
+ */
+export async function standardProfile(
+  id: string,
+  rigPrefix = "",
+  input?: InitInput,
+): Promise<object | null> {
+  await init(input);
+  return bindingCache.current!.standardProfile(id, rigPrefix);
 }
 
 export { toValueJSON } from "@vizij/value-json";

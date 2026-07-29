@@ -66,6 +66,9 @@ vizij-animation-module = { path = "../interop/vizij-animation-module" }
 # The interpreter-module SPAWN/HALT codecs and RunPolicy the device test
 # drives the graph interpreter with.
 arora-behavior = "8"
+# The bundler, for the Quori integration test (grafts the standard-adaptation
+# sidecar into the demo GLB before driving it over the ROS4HRI keys).
+vizij-bundle = { path = "../tools/vizij-bundle" }
 
 [features]
 default = []

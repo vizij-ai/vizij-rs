@@ -16,6 +16,10 @@
 //! This is only the logic both hosts would otherwise write twice, once in Rust
 //! and once in TypeScript.
 
+pub mod profiles;
+pub mod ros4hri;
+pub mod standard;
+
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
@@ -45,6 +49,9 @@ pub struct Bundle {
     pub active_program_id: Option<String>,
     /// `poses.config.neutralInputs` — input name → neutral value.
     pub neutral_inputs: HashMap<String, f64>,
+    /// `metadata.faceId` — the rig's namespace (its input paths live under
+    /// `rig/<faceId>/`).
+    pub face_id: Option<String>,
 }
 
 impl Bundle {
@@ -117,12 +124,28 @@ impl Bundle {
             }
         }
 
+        let face_id = metadata
+            .and_then(|m| m.get("faceId"))
+            .and_then(Json::as_str)
+            .map(str::to_string);
+
         Bundle {
             graphs,
             programs,
             active_program_id,
             neutral_inputs,
+            face_id,
         }
+    }
+
+    /// The prefix of this face's rig input paths — `rig/<faceId>/`, or empty
+    /// when the bundle declares no face id. Standard profiles prepend it to
+    /// the control paths they write.
+    pub fn rig_prefix(&self) -> String {
+        self.face_id
+            .as_deref()
+            .map(|id| format!("rig/{id}/"))
+            .unwrap_or_default()
     }
 
     /// The `(id, spec)` of the program `select` names, if any.
@@ -136,11 +159,13 @@ impl Bundle {
     }
 
     /// Compose the device's behavior: the base graphs whose kind is in `wanted`,
+    /// then the given standard `profiles` (e.g. [`ros4hri::ros4hri_source`]),
     /// then the chosen program, then (when `with_animations`) the animation
     /// source — each **last** wins over the earlier ones on any store path they
     /// share (the web composes the same way, for the same last-writer-wins
-    /// reason). So a playing program overrides the base rig, and a playing clip
-    /// overrides both. Returns the composed graph spec.
+    /// reason). So a profile overrides the base rig's resting writes, a playing
+    /// program overrides the profile, and a playing clip overrides everything.
+    /// Returns the composed graph spec.
     ///
     /// Pass `with_animations` when the device has the animation module loaded;
     /// [`animations_source`] dispatches to it, so composing it without the module
@@ -150,6 +175,7 @@ impl Bundle {
         wanted: &[&str],
         select: &ProgramSelect,
         with_animations: bool,
+        profiles: &[(String, Json)],
     ) -> Result<Json> {
         let mut sources: Vec<(String, Json)> = self
             .graphs
@@ -157,6 +183,7 @@ impl Bundle {
             .filter(|(kind, _)| wanted.contains(&kind.as_str()))
             .map(|(kind, spec)| (kind.clone(), spec.clone()))
             .collect();
+        sources.extend_from_slice(profiles);
         if let Some((id, spec)) = self.program(select) {
             log::info!("autoplaying program {id}");
             sources.push((format!("program::{id}"), spec.clone()));
@@ -455,7 +482,7 @@ mod tests {
     fn compose_appends_the_active_program_last() {
         let b = Bundle::from_bundle_json(&bundle_json());
         let composed = b
-            .compose(&["rig", "pose-driver"], &ProgramSelect::Auto, false)
+            .compose(&["rig", "pose-driver"], &ProgramSelect::Auto, false, &[])
             .unwrap();
         let ids: Vec<&str> = composed["nodes"]
             .as_array()
@@ -467,14 +494,59 @@ mod tests {
         assert_eq!(ids, vec!["rig::input_gaze_x", "program::prog.speaks::o"]);
 
         // No autoplay → base graphs only.
-        let base = b.compose(&["rig"], &ProgramSelect::None, false).unwrap();
+        let base = b
+            .compose(&["rig"], &ProgramSelect::None, false, &[])
+            .unwrap();
         assert_eq!(base["nodes"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn compose_inserts_profiles_between_base_and_program() {
+        let b = Bundle::from_bundle_json(&bundle_json());
+        let composed = b
+            .compose(
+                &["rig"],
+                &ProgramSelect::Auto,
+                false,
+                &[ros4hri::ros4hri_source("rig/f/")],
+            )
+            .unwrap();
+        let ids: Vec<&str> = composed["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| n["id"].as_str().unwrap())
+            .collect();
+        // Base rig first, profile in the middle, program last (a playing
+        // program out-writes the profile on shared paths).
+        let rig = ids
+            .iter()
+            .position(|id| *id == "rig::input_gaze_x")
+            .unwrap();
+        let profile = ids.iter().position(|id| *id == "ros4hri::in-name").unwrap();
+        let program = ids
+            .iter()
+            .position(|id| *id == "program::prog.speaks::o")
+            .unwrap();
+        assert!(rig < profile && profile < program);
+
+        // Without profiles the composition is untouched — the opt-in default.
+        let bare = b
+            .compose(&["rig"], &ProgramSelect::Auto, false, &[])
+            .unwrap();
+        assert!(!bare["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["id"].as_str().unwrap().starts_with("ros4hri::")));
     }
 
     #[test]
     fn compose_appends_the_animation_source_last() {
         let b = Bundle::from_bundle_json(&bundle_json());
-        let composed = b.compose(&["rig"], &ProgramSelect::None, true).unwrap();
+        let composed = b
+            .compose(&["rig"], &ProgramSelect::None, true, &[])
+            .unwrap();
         let ids: Vec<String> = composed["nodes"]
             .as_array()
             .unwrap()

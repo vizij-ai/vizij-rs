@@ -10646,6 +10646,7 @@ dependencies = [
  "vizij-arora-hal",
  "vizij-arora-host",
  "vizij-arora-store",
+ "vizij-bundle",
  "vizij-graph-core",
 ]
 
@@ -10791,10 +10792,21 @@ dependencies = [
  "vizij-api-core",
  "vizij-arora-behavior",
  "vizij-arora-hal",
+ "vizij-arora-host",
  "vizij-arora-store",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
+]
+
+[[package]]
+name = "vizij-bundle"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "vizij-arora-host",
+ "vizij-glb-migrate",
 ]
 
 [[package]]

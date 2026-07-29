@@ -187,3 +187,7 @@ jobs:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
           WGPU_BACKEND: vulkan
         run: cargo test -p vizij --test snapshot_regression -- --ignored --nocapture
+      - name: Drive the adapted Quori over the ROS4HRI mapping
+        env:
+          VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
+        run: cargo test -p vizij --bin vizij ros4hri_drives_the_adapted_quori -- --nocapture

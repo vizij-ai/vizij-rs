@@ -373,6 +373,33 @@ fn normalize_values_map_str(values_json: &str) -> Result<String, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("serialize values: {e}")))
 }
 
+/// The standard profiles Vizij ships (ROS4HRI, …) as a JS array of
+/// `{ id, title, description }` — the introspectable list an authoring app
+/// offers for opt-in.
+#[wasm_bindgen(js_name = standardProfiles)]
+pub fn standard_profiles() -> Result<JsValue, JsValue> {
+    let list = vizij_arora_host::profiles::standard_profiles_json();
+    let json =
+        serde_json::to_string(&list).map_err(|e| JsValue::from_str(&format!("profiles: {e}")))?;
+    js_sys::JSON::parse(&json)
+}
+
+/// A standard profile's graph as a JS object, ready to compose or embed —
+/// with `rigPrefix` (e.g. `rig/quori_latest/`) prepended to the control paths
+/// it writes; pass an empty string for the unprefixed graph. `null` for an
+/// unknown id (see [`standard_profiles`]).
+#[wasm_bindgen(js_name = standardProfile)]
+pub fn standard_profile(id: &str, rig_prefix: &str) -> Result<JsValue, JsValue> {
+    match vizij_arora_host::profiles::standard_profile_source(id, rig_prefix) {
+        Some((_, spec)) => {
+            let json = serde_json::to_string(&spec)
+                .map_err(|e| JsValue::from_str(&format!("profile {id}: {e}")))?;
+            js_sys::JSON::parse(&json)
+        }
+        None => Ok(JsValue::NULL),
+    }
+}
+
 /// The passthrough proof graph (`input` path → `output` path), as spec JSON.
 fn passthrough_json(input: &str, output: &str) -> String {
     serde_json::json!({
