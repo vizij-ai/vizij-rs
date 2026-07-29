@@ -3143,6 +3143,23 @@ const registry: Registry = {
         }
       ],
       "params": []
+    },
+    {
+      "type_id": "taskrun",
+      "name": "Task Run",
+      "category": "Functions",
+      "doc": "Hosts one task run: invokes its module function (module, function and argument bundle are params) each evaluation and emits the run's behavior Status, latched once terminal. Grafted per spawned run by the interpreter.",
+      "inputs": [],
+      "outputs": [
+        {
+          "id": "out",
+          "ty": "any",
+          "label": "Out",
+          "doc": "The run's behavior Status value; a terminal status is latched.",
+          "optional": false
+        }
+      ],
+      "params": []
     }
   ]
 };

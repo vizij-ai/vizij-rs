@@ -29,15 +29,18 @@ use std::collections::HashMap;
 use arora_behavior::graph::GraphDiff;
 use arora_behavior::{
     built_in, interpreter_module, BehaviorContext, BehaviorError, BehaviorInterpreter,
-    BehaviorStatus, Graph,
+    BehaviorStatus, Graph, RunPolicy, TaskHandle, TaskId,
 };
 use arora_types::call::{Call, CallBridge};
 use arora_types::data::{DataStore, Key, StateChange};
-use arora_types::value::{StructureField, Value};
+use arora_types::value::{Structure, StructureField, Value};
 use uuid::Uuid;
 use vizij_api_core::TypedPath;
 use vizij_graph_core::eval::{evaluate_all_with_functions, GraphRuntime, NodeFunctions};
-use vizij_graph_core::types::{GraphSpec, NodeType};
+pub use vizij_graph_core::task;
+use vizij_graph_core::types::{
+    EdgeInputEndpoint, EdgeOutputEndpoint, EdgeSpec, GraphSpec, NodeParams, NodeSpec, NodeType,
+};
 
 /// Adapts an Arora [`CallBridge`] to graph-core's [`NodeFunctions`] host interface.
 ///
@@ -52,12 +55,13 @@ struct CallBridgeFunctions<'a> {
     function_modules: &'a HashMap<Uuid, Uuid>,
 }
 
-impl NodeFunctions for CallBridgeFunctions<'_> {
-    fn call(&mut self, function: Uuid, args: &[(Uuid, Value)]) -> Result<Value, String> {
-        let module_id = *self
-            .function_modules
-            .get(&function)
-            .ok_or_else(|| format!("no module registered for external function {function}"))?;
+impl CallBridgeFunctions<'_> {
+    fn dispatch(
+        &mut self,
+        module_id: Uuid,
+        function: Uuid,
+        args: &[(Uuid, Value)],
+    ) -> Result<Value, String> {
         let args: Vec<StructureField> = args
             .iter()
             .map(|(id, value)| StructureField {
@@ -75,6 +79,40 @@ impl NodeFunctions for CallBridgeFunctions<'_> {
             .map_err(|e| format!("module call failed: {e}"))?;
         Ok(result.ret)
     }
+}
+
+impl NodeFunctions for CallBridgeFunctions<'_> {
+    fn call(&mut self, function: Uuid, args: &[(Uuid, Value)]) -> Result<Value, String> {
+        let module_id = *self
+            .function_modules
+            .get(&function)
+            .ok_or_else(|| format!("no module registered for external function {function}"))?;
+        self.dispatch(module_id, function, args)
+    }
+
+    /// A task-run call names its module itself, so it dispatches without a
+    /// `function -> module` entry; one falls back to the map like any other
+    /// external function.
+    fn call_module(
+        &mut self,
+        module: Option<Uuid>,
+        function: Uuid,
+        args: &[(Uuid, Value)],
+    ) -> Result<Value, String> {
+        match module {
+            Some(module_id) => self.dispatch(module_id, function, args),
+            None => self.call(function, args),
+        }
+    }
+}
+
+/// The handle-side index of one live run: where its fragment lives in the
+/// graph and which status key it reports on. The run itself is graph
+/// structure — these are the coordinates for pruning and sweeping it.
+struct GraphRun {
+    run_node: String,
+    status_node: String,
+    status_key: Key,
 }
 
 /// A Vizij node graph as an Arora behavior interpreter.
@@ -98,6 +136,13 @@ pub struct ProcessingGraph {
     /// [`CallBridge`]. See [`CallBridgeFunctions`] for why this map is needed and where it
     /// should come from.
     function_modules: HashMap<Uuid, Uuid>,
+    /// Live task runs by the identity their [`TaskHandle`] carries. Each run is
+    /// a grafted fragment in [`graph`](Self::graph); this index holds its
+    /// pruning coordinates and status key.
+    runs: HashMap<TaskId, GraphRun>,
+    /// Halts requested since the last tick; applied by the next tick, which
+    /// owns the store.
+    pending_halts: Vec<TaskId>,
 }
 
 /// Normalize and deserialize a Vizij graph spec from JSON (any form the spec
@@ -171,7 +216,78 @@ impl ProcessingGraph {
             rt: GraphRuntime::default(),
             inputs: Vec::new(),
             function_modules: HashMap::new(),
+            runs: HashMap::new(),
+            pending_halts: Vec::new(),
         })
+    }
+
+    /// The retained shared-model graph — the editable source of truth,
+    /// including any live task-run fragments. What a LOAD replaces, an EDIT
+    /// edits, and an introspector reads.
+    pub fn graph(&self) -> &Graph {
+        &self.graph
+    }
+
+    /// Remove a run's fragment from the retained graph; takes effect at the
+    /// next lowering. The run's status key keeps its last value — pruning
+    /// removes structure, not state.
+    fn prune_run(&mut self, run: &GraphRun) -> Result<(), BehaviorError> {
+        let diff = graph_codec::GraphSpecDiff {
+            remove_nodes: vec![run.run_node.clone(), run.status_node.clone()],
+            ..graph_codec::GraphSpecDiff::default()
+        };
+        let diff = graph_codec::spec_diff_to_graph_diff(&diff)
+            .map_err(|message| BehaviorError { message })?;
+        self.graph.apply(diff).map_err(|e| BehaviorError {
+            message: format!("prune run: {e}"),
+        })?;
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Apply the halts requested since the last tick: write `Status::Failure`
+    /// to each halted run's status key and prune its fragment. A halt naming
+    /// an unknown or finished run was already served — nothing to do.
+    fn process_halts(&mut self, store: &dyn DataStore) -> Result<(), BehaviorError> {
+        for task in std::mem::take(&mut self.pending_halts) {
+            let Some(run) = self.runs.remove(&task) else {
+                continue;
+            };
+            let mut change = StateChange::new();
+            change
+                .set
+                .insert(run.status_key.clone(), Some(task::failure()));
+            store.write(change).map_err(|e| BehaviorError {
+                message: e.to_string(),
+            })?;
+            self.prune_run(&run)?;
+        }
+        Ok(())
+    }
+
+    /// Prune every run whose status key holds a terminal status. The latched
+    /// task-run node would never fire again anyway; sweeping returns the graph
+    /// to runs-that-are-live structure.
+    fn sweep_terminal_runs(&mut self, store: &dyn DataStore) -> Result<(), BehaviorError> {
+        let ended: Vec<TaskId> = self
+            .runs
+            .iter()
+            .filter(|(_, run)| {
+                store
+                    .read(std::slice::from_ref(&run.status_key))
+                    .into_iter()
+                    .next()
+                    .flatten()
+                    .is_some_and(|status| task::is_terminal(&status))
+            })
+            .map(|(task, _)| *task)
+            .collect();
+        for task in ended {
+            if let Some(run) = self.runs.remove(&task) {
+                self.prune_run(&run)?;
+            }
+        }
+        Ok(())
     }
 
     /// Re-lower the evaluator's spec from the retained graph and refresh the
@@ -214,6 +330,10 @@ impl ProcessingGraph {
         call_bridge: &mut dyn CallBridge,
         dt: f32,
     ) -> Result<(), BehaviorError> {
+        // Halts requested since the last tick: write each halted run's
+        // terminal status and prune its fragment — this phase owns the store.
+        self.process_halts(store)?;
+
         // An edit landed since the last lowering: rebuild the spec from the
         // retained graph against this tick, so the edit (and any lowering
         // problem it introduced) takes effect here.
@@ -256,6 +376,10 @@ impl ProcessingGraph {
         store.write(change).map_err(|e| BehaviorError {
             message: e.to_string(),
         })?;
+
+        // A run whose status just went terminal is done; its fragment leaves
+        // the graph.
+        self.sweep_terminal_runs(store)?;
         Ok(())
     }
 }
@@ -297,6 +421,114 @@ impl BehaviorInterpreter for ProcessingGraph {
             message: format!("graph diff: {e}"),
         })?;
         self.dirty = true;
+        Ok(())
+    }
+
+    /// Spawn `call` as a concurrent task run — the interpreter module's SPAWN
+    /// entry point. The run grafts into the running graph as a two-node
+    /// fragment: a [`NodeType::TaskRun`] node carrying the whole call in its
+    /// params (module, function, args bundle) over an [`NodeType::Output`] on
+    /// the run's status key. The graph's ordinary evaluation then advances the
+    /// run once per tick and the Output convention publishes its `Status` —
+    /// the run is structure, introspectable through [`graph`](Self::graph)
+    /// like everything else, and pruned when it ends.
+    fn spawn(&mut self, call: Call, policy: RunPolicy) -> Result<TaskHandle, BehaviorError> {
+        // v1 runs every task concurrently — the graph's ordinary semantics
+        // (overlapping actuation writes are last-write-wins). Richer
+        // `RunPolicy` arbitration lands as visible graph structure later; the
+        // policy is accepted and treated as `Concurrent` until then.
+        let _ = policy;
+        let task = TaskId(Uuid::new_v4());
+        let module = call
+            .module_id
+            .map(|m| m.to_string())
+            .unwrap_or_else(|| "none".to_string());
+        let prefix = format!("arora/tasks/{module}/{}/{}", call.id, task.0);
+        let status_key = Key::from(format!("{prefix}/status"));
+        let status_path =
+            TypedPath::parse(&format!("{prefix}/status")).map_err(|e| BehaviorError {
+                message: format!("the status key does not parse as a path: {e}"),
+            })?;
+
+        let run_node = format!("task/{}/run", task.0);
+        let status_node = format!("task/{}/status", task.0);
+        let diff = graph_codec::GraphSpecDiff {
+            upsert_nodes: vec![
+                NodeSpec {
+                    id: run_node.clone(),
+                    kind: NodeType::TaskRun,
+                    params: NodeParams {
+                        module: call.module_id,
+                        function: Some(call.id),
+                        value: Some(Value::Structure(Structure {
+                            id: call.id,
+                            fields: call.args.clone(),
+                        })),
+                        ..NodeParams::default()
+                    },
+                    output_shapes: Default::default(),
+                    input_defaults: Default::default(),
+                },
+                NodeSpec {
+                    id: status_node.clone(),
+                    kind: NodeType::Output,
+                    params: NodeParams {
+                        path: Some(status_path),
+                        ..NodeParams::default()
+                    },
+                    output_shapes: Default::default(),
+                    input_defaults: Default::default(),
+                },
+            ],
+            upsert_edges: vec![EdgeSpec {
+                from: EdgeOutputEndpoint {
+                    node_id: run_node.clone(),
+                    output: "out".to_string(),
+                },
+                to: EdgeInputEndpoint {
+                    node_id: status_node.clone(),
+                    input: "in".to_string(),
+                },
+                selector: None,
+            }],
+            ..graph_codec::GraphSpecDiff::default()
+        };
+        let diff = graph_codec::spec_diff_to_graph_diff(&diff)
+            .map_err(|message| BehaviorError { message })?;
+        self.runs.insert(
+            task,
+            GraphRun {
+                run_node,
+                status_node,
+                status_key: status_key.clone(),
+            },
+        );
+        self.graph
+            .apply(diff)
+            .map_err(|e| BehaviorError {
+                message: format!("graft run: {e}"),
+            })
+            .inspect_err(|_| {
+                self.runs.remove(&task);
+            })?;
+        self.dirty = true;
+
+        Ok(TaskHandle {
+            id: task,
+            stop: interpreter_module::encode_halt(task),
+            status: status_key,
+            feedback: vec![Key::from(format!("{prefix}/feedback"))],
+            result: vec![Key::from(format!("{prefix}/result"))],
+            update: vec![Key::from(format!("{prefix}/update"))],
+        })
+    }
+
+    /// Halt a run — the interpreter module's HALT entry point. Applied on the
+    /// next tick, which owns the store: the run's terminal status is written
+    /// and its fragment pruned. Idempotent — halting an unknown or finished
+    /// run is a clean no-op.
+    fn halt(&mut self, task: TaskId) -> Result<(), BehaviorError> {
+        self.pending_halts.push(task);
         Ok(())
     }
 }
@@ -587,5 +819,185 @@ mod tests {
 
         assert_eq!(read(&store, "anim/x"), Some(float(0.75)));
         assert_eq!(read(&store, "anim/y"), Some(float(0.5)));
+    }
+
+    /// A bridge scripting the spawned function: serves each call from a queue
+    /// of return values (an empty queue keeps serving `Running`) and records
+    /// every call.
+    struct RunBridge {
+        responses: std::collections::VecDeque<Value>,
+        calls: Vec<Call>,
+    }
+
+    impl RunBridge {
+        fn new(responses: Vec<Value>) -> Self {
+            Self {
+                responses: responses.into(),
+                calls: Vec::new(),
+            }
+        }
+    }
+
+    impl CallBridge for RunBridge {
+        fn arora_call(&mut self, call: Call) -> Result<CallResult, CallError> {
+            self.calls.push(call);
+            let ret = self.responses.pop_front().unwrap_or_else(task::running);
+            Ok(CallResult {
+                ret,
+                mutated: Vec::new(),
+            })
+        }
+        fn arora_register_callable(&mut self, _callable: Rc<dyn Callable>) -> CallableId {
+            unimplemented!()
+        }
+        fn arora_unregister_callable(&mut self, _callable_id: &CallableId) {
+            unimplemented!()
+        }
+        fn arora_call_indirect(&mut self, _callable_id: &CallableId) -> Result<Value, CallError> {
+            unimplemented!()
+        }
+    }
+
+    fn look_at() -> Call {
+        Call {
+            module_id: Some(Uuid::from_u128(0x6761)),
+            id: Uuid::from_u128(0x6c61),
+            args: vec![StructureField {
+                id: Uuid::from_u128(0x7861),
+                value: Box::new(float(0.5)),
+            }],
+        }
+    }
+
+    fn read_key(store: &SimpleDataStore, key: &Key) -> Option<Value> {
+        store
+            .read(std::slice::from_ref(key))
+            .into_iter()
+            .next()
+            .flatten()
+    }
+
+    /// SPAWN grafts a run as graph structure: the fragment is visible through
+    /// `graph()` before it ever ticks, ordinary evaluation advances it once per
+    /// tick, and its `Status` lands on the handle's status key.
+    #[test]
+    fn spawn_grafts_a_run_that_reports_on_its_status_key() {
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        store
+            .write(StateChange::set("sensor/x", float(0.75)))
+            .unwrap();
+        let nodes_before = graph.graph().nodes.len();
+
+        let handle = graph
+            .spawn(look_at(), RunPolicy::Concurrent)
+            .expect("spawn");
+        assert_eq!(graph.graph().nodes.len(), nodes_before + 2);
+        assert!(handle.status.path.starts_with("arora/tasks/"));
+
+        let mut bridge = RunBridge::new(Vec::new());
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read_key(&store, &handle.status), Some(task::running()));
+
+        // The spawned call reached its module intact.
+        assert_eq!(bridge.calls.len(), 1);
+        assert_eq!(bridge.calls[0].module_id, look_at().module_id);
+        assert_eq!(bridge.calls[0].id, look_at().id);
+        assert_eq!(bridge.calls[0].args, look_at().args);
+
+        // A run outlives the tick that started it.
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(bridge.calls.len(), 2);
+    }
+
+    /// A run returning a terminal status is swept out of the graph and its
+    /// function is never invoked again; the status key keeps the terminal
+    /// value.
+    #[test]
+    fn a_terminal_run_is_swept_and_never_invoked_again() {
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        store
+            .write(StateChange::set("sensor/x", float(0.75)))
+            .unwrap();
+        let nodes_before = graph.graph().nodes.len();
+
+        let handle = graph
+            .spawn(look_at(), RunPolicy::Concurrent)
+            .expect("spawn");
+        let mut bridge = RunBridge::new(vec![task::success()]);
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+
+        assert_eq!(read_key(&store, &handle.status), Some(task::success()));
+        assert_eq!(graph.graph().nodes.len(), nodes_before);
+
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(bridge.calls.len(), 1);
+        assert_eq!(read_key(&store, &handle.status), Some(task::success()));
+    }
+
+    /// HALT writes `Failure` and prunes on the next tick — which owns the
+    /// store — and is idempotent at every stage.
+    #[test]
+    fn halt_fails_the_run_and_prunes_its_fragment() {
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        store
+            .write(StateChange::set("sensor/x", float(0.75)))
+            .unwrap();
+        let nodes_before = graph.graph().nodes.len();
+
+        let handle = graph
+            .spawn(look_at(), RunPolicy::Concurrent)
+            .expect("spawn");
+        let mut bridge = RunBridge::new(Vec::new());
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read_key(&store, &handle.status), Some(task::running()));
+
+        graph.halt(handle.id).expect("halt");
+        graph.halt(handle.id).expect("halting twice is a no-op");
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+
+        assert_eq!(read_key(&store, &handle.status), Some(task::failure()));
+        assert_eq!(graph.graph().nodes.len(), nodes_before);
+        assert_eq!(bridge.calls.len(), 1);
+
+        graph
+            .halt(handle.id)
+            .expect("halting a finished run is a no-op");
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read_key(&store, &handle.status), Some(task::failure()));
+    }
+
+    /// Runs coexist: the main graph keeps flowing and concurrent runs demux on
+    /// their own status keys.
+    #[test]
+    fn runs_coexist_with_the_main_graph_and_each_other() {
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        store
+            .write(StateChange::set("sensor/x", float(0.75)))
+            .unwrap();
+
+        let first = graph
+            .spawn(look_at(), RunPolicy::Concurrent)
+            .expect("spawn");
+        let second = graph
+            .spawn(look_at(), RunPolicy::Concurrent)
+            .expect("spawn");
+        assert_ne!(first.status.path, second.status.path);
+
+        let mut bridge = RunBridge::new(Vec::new());
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+
+        assert_eq!(read(&store, "actuator/y"), Some(float(0.75)));
+        assert_eq!(read_key(&store, &first.status), Some(task::running()));
+        assert_eq!(read_key(&store, &second.status), Some(task::running()));
+        assert_eq!(bridge.calls.len(), 2);
     }
 }

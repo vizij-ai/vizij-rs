@@ -5,6 +5,7 @@
 
 pub mod eval;
 pub mod schema;
+pub mod task;
 pub mod topo;
 pub mod types;
 

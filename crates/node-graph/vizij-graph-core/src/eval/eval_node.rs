@@ -387,7 +387,57 @@ fn evaluate_kind_inner(
         NodeType::Input => eval_input_node(rt, spec, outputs),
         NodeType::Output => eval_output(inputs, outputs),
         NodeType::ExternalFunction => eval_external_function(params, inputs, outputs, functions),
+        NodeType::TaskRun => eval_task_run(rt, spec, outputs, functions),
     }
+}
+
+fn eval_task_run(
+    rt: &mut GraphRuntime,
+    spec: &NodeSpec,
+    outputs: &mut OutputSlots,
+    functions: Option<&mut dyn NodeFunctions>,
+) -> Result<(), String> {
+    use super::graph_runtime::{NodeRuntimeState, TaskRunState};
+
+    // A terminal run is latched: its function is not invoked again; the node
+    // keeps emitting the terminal status until its fragment is pruned.
+    if let Some(NodeRuntimeState::TaskRun(state)) = rt.node_states.get(&spec.id) {
+        if let Some(latched) = state.latched.clone() {
+            return single_output(outputs, latched);
+        }
+    }
+
+    let function = spec
+        .params
+        .function
+        .ok_or_else(|| "TaskRun node requires a function id".to_string())?;
+    let functions = functions.ok_or_else(|| {
+        "TaskRun node evaluated without a function host (graph run outside a host)".to_string()
+    })?;
+
+    // The argument bundle: one structure whose fields are the call's args.
+    let args: Vec<(Uuid, Value)> = match &spec.params.value {
+        Some(Value::Structure(bundle)) => bundle
+            .fields
+            .iter()
+            .map(|field| (field.id, (*field.value).clone()))
+            .collect(),
+        None => Vec::new(),
+        Some(_) => {
+            return Err("a TaskRun argument bundle is a structure of call args".to_string());
+        }
+    };
+
+    let status = crate::task::coerce(functions.call_module(spec.params.module, function, &args)?);
+    if crate::task::is_terminal(&status) {
+        rt.node_states.insert(
+            spec.id.clone(),
+            NodeRuntimeState::TaskRun(TaskRunState {
+                latched: Some(status.clone()),
+            }),
+        );
+    }
+    single_output(outputs, status)
 }
 
 fn eval_external_function(

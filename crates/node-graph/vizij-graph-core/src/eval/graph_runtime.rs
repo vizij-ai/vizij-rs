@@ -101,6 +101,16 @@ pub enum NodeRuntimeState {
     Slew(SlewState),
     #[cfg(feature = "urdf_ik")]
     UrdfKinematics(UrdfKinematicsState),
+    TaskRun(TaskRunState),
+}
+
+/// State of a [`TaskRun`](crate::types::NodeType::TaskRun) node's hosted run.
+#[derive(Debug, Default)]
+pub struct TaskRunState {
+    /// The terminal status value the run latched on, once it has ended. A
+    /// latched run's function is not invoked again; the node keeps emitting
+    /// this value until its fragment is pruned.
+    pub latched: Option<Value>,
 }
 
 /// Data staged by the host for consumption by [`NodeType::Input`](crate::types::NodeType::Input).
