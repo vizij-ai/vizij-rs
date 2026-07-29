@@ -32,13 +32,46 @@
 #[allow(clippy::all, dead_code, unused)]
 mod arora_generated;
 
+// The typed boundary structs (ARORA-55 codegen) and their `Value` conversions,
+// re-exported so a native host can marshal calls the same way the wasm glue
+// does — decode an argument with `TryFrom<Value>`, encode a result with
+// `Into<Value>` — instead of hand-writing the field UUIDs.
+pub use arora_generated::vizij::{
+    anim_track::AnimTrack, animation_clip::AnimationClip, keypoint::Keypoint,
+    player_state::PlayerState, track_output::TrackOutput, transition_handle::TransitionHandle,
+};
+
+/// The module's id and its exported function ids (mirror `module.yaml`), so a
+/// native host can register these functions as a module under the same ids the
+/// wasm module exports — a graph `ExternalFunction` node then dispatches to
+/// either identically.
+pub mod ids {
+    use uuid::Uuid;
+    pub const MODULE: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0d00_000000000000);
+    pub const LOAD_ANIMATION: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0f00_000000000001);
+    pub const CREATE_PLAYER: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0f00_000000000002);
+    pub const ADD_INSTANCE: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0f00_000000000003);
+    pub const STEP: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0f00_000000000004);
+    pub const PLAY: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0f00_000000000005);
+    pub const PAUSE: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0f00_000000000006);
+    pub const STOP: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0f00_000000000007);
+    pub const SEEK: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0f00_000000000008);
+    pub const SET_SPEED: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0f00_000000000009);
+    pub const SET_LOOP: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0f00_00000000000a);
+    pub const SET_WEIGHT: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0f00_00000000000b);
+    pub const REMOVE_INSTANCE: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0f00_00000000000c);
+    pub const PLAYER_STATES: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0f00_00000000000d);
+    /// The `[TrackOutput]` / `[PlayerState]` element struct type ids, for the
+    /// `ArrayStructure` a step / player_states result wraps them in.
+    pub const TRACK_OUTPUT_TYPE: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0000_000000000110);
+    pub const PLAYER_STATE_TYPE: Uuid = Uuid::from_u128(0x76697a69_6a00_0000_0000_000000000111);
+}
+
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use arora_generated::vizij::{
-    animation_clip::AnimationClip, keypoint::Keypoint as GenKeypoint, player_state::PlayerState,
-    track_output::TrackOutput,
-};
+// `AnimationClip`, `PlayerState`, `TrackOutput` come from the `pub use` above.
+use arora_generated::vizij::keypoint::Keypoint as GenKeypoint;
 
 use vizij_animation_core::{
     export_baked_json, export_baked_with_derivatives_json, AnimId, AnimationData, BakingConfig,
@@ -61,7 +94,7 @@ lazy_static::lazy_static! {
 ///
 /// The keyframe `value`s arrive as raw Arora `Value`s (vizij-arora encoding) and
 /// are converted back to Vizij values for the core model.
-fn load_animation(clip: Option<AnimationClip>) -> u32 {
+pub fn load_animation(clip: Option<AnimationClip>) -> u32 {
     let Some(clip) = clip else {
         return u32::MAX;
     };
@@ -95,7 +128,7 @@ fn load_animation(clip: Option<AnimationClip>) -> u32 {
 }
 
 /// Create a player and return its `PlayerId`.
-fn create_player(name: Option<String>) -> u32 {
+pub fn create_player(name: Option<String>) -> u32 {
     ENGINE
         .lock()
         .expect("engine")
@@ -104,7 +137,7 @@ fn create_player(name: Option<String>) -> u32 {
 }
 
 /// Attach an animation instance to a player and return its `InstId`.
-fn add_instance(player: Option<u32>, anim: Option<u32>) -> u32 {
+pub fn add_instance(player: Option<u32>, anim: Option<u32>) -> u32 {
     let (Some(player), Some(anim)) = (player, anim) else {
         return u32::MAX;
     };
@@ -126,7 +159,7 @@ fn buffer_command(player: u32, command: PlayerCommand) -> u32 {
 }
 
 /// Resume or start playback. Applied at the next `step`.
-fn play(player: Option<u32>) -> u32 {
+pub fn play(player: Option<u32>) -> u32 {
     let Some(player) = player else {
         return u32::MAX;
     };
@@ -139,7 +172,7 @@ fn play(player: Option<u32>) -> u32 {
 }
 
 /// Hold the playhead where it is. Applied at the next `step`.
-fn pause(player: Option<u32>) -> u32 {
+pub fn pause(player: Option<u32>) -> u32 {
     let Some(player) = player else {
         return u32::MAX;
     };
@@ -152,7 +185,7 @@ fn pause(player: Option<u32>) -> u32 {
 }
 
 /// Stop playback and reset to the window start. Applied at the next `step`.
-fn stop(player: Option<u32>) -> u32 {
+pub fn stop(player: Option<u32>) -> u32 {
     let Some(player) = player else {
         return u32::MAX;
     };
@@ -166,7 +199,7 @@ fn stop(player: Option<u32>) -> u32 {
 
 /// Move the playhead to `time_ns` (nanoseconds, the `dt_ns` time base).
 /// Applied at the next `step`.
-fn seek(player: Option<u32>, time_ns: Option<u64>) -> u32 {
+pub fn seek(player: Option<u32>, time_ns: Option<u64>) -> u32 {
     let (Some(player), Some(time_ns)) = (player, time_ns) else {
         return u32::MAX;
     };
@@ -180,7 +213,7 @@ fn seek(player: Option<u32>, time_ns: Option<u64>) -> u32 {
 }
 
 /// Set the playback speed multiplier. Applied at the next `step`.
-fn set_speed(player: Option<u32>, speed: Option<f32>) -> u32 {
+pub fn set_speed(player: Option<u32>, speed: Option<f32>) -> u32 {
     let (Some(player), Some(speed)) = (player, speed) else {
         return u32::MAX;
     };
@@ -195,7 +228,7 @@ fn set_speed(player: Option<u32>, speed: Option<f32>) -> u32 {
 
 /// Set how player time maps into clip time: `"once"`, `"loop"`, or
 /// `"ping_pong"`. Applied at the next `step`.
-fn set_loop(player: Option<u32>, mode: Option<String>) -> u32 {
+pub fn set_loop(player: Option<u32>, mode: Option<String>) -> u32 {
     let (Some(player), Some(mode)) = (player, mode) else {
         return u32::MAX;
     };
@@ -216,7 +249,7 @@ fn set_loop(player: Option<u32>, mode: Option<String>) -> u32 {
 
 /// Set an instance's blend weight (weights normalize across a player's
 /// instances). Applied at the next `step`. Returns the echoed instance id.
-fn set_weight(player: Option<u32>, instance: Option<u32>, weight: Option<f32>) -> u32 {
+pub fn set_weight(player: Option<u32>, instance: Option<u32>, weight: Option<f32>) -> u32 {
     let (Some(player), Some(instance), Some(weight)) = (player, instance, weight) else {
         return u32::MAX;
     };
@@ -237,7 +270,7 @@ fn set_weight(player: Option<u32>, instance: Option<u32>, weight: Option<f32>) -
 
 /// Detach an instance from its player, immediately (a structural edit, like
 /// `add_instance`). Returns 1 when the instance existed, 0 otherwise.
-fn remove_instance(player: Option<u32>, instance: Option<u32>) -> u32 {
+pub fn remove_instance(player: Option<u32>, instance: Option<u32>) -> u32 {
     let (Some(player), Some(instance)) = (player, instance) else {
         return u32::MAX;
     };
@@ -250,7 +283,7 @@ fn remove_instance(player: Option<u32>, instance: Option<u32>) -> u32 {
 /// One `PlayerState` per player: the engine's derived playback state, the
 /// playhead and full length in nanoseconds (the `dt_ns` time base), and the
 /// speed multiplier.
-fn player_states() -> Vec<PlayerState> {
+pub fn player_states() -> Vec<PlayerState> {
     let engine = ENGINE.lock().expect("engine");
     engine
         .list_players()
@@ -293,7 +326,7 @@ fn baking_config(
 /// `export_baked_json` shape). `frame_rate` (Hz) defaults to 60, `start_time`
 /// (seconds) to 0, and `end_time` (seconds) to the clip duration. Returns an
 /// empty string if `anim` is not loaded.
-fn bake(
+pub fn bake(
     anim: Option<u32>,
     frame_rate: Option<f32>,
     start_time: Option<f32>,
@@ -316,7 +349,7 @@ fn bake(
 /// Like [`bake`], but also samples per-frame derivatives; returns the combined
 /// values-and-derivatives JSON (`export_baked_with_derivatives_json` shape).
 /// Returns an empty string if `anim` is not loaded.
-fn bake_with_derivatives(
+pub fn bake_with_derivatives(
     anim: Option<u32>,
     frame_rate: Option<f32>,
     start_time: Option<f32>,
@@ -344,7 +377,7 @@ fn bake_with_derivatives(
 /// buffered since the previous step apply first, in issue order. Each output
 /// carries the track's authored key as `default_key` and its stable id as
 /// `track_id`; the value uses the vizij-arora `Value` encoding.
-fn step(dt_ns: Option<u64>) -> Vec<TrackOutput> {
+pub fn step(dt_ns: Option<u64>) -> Vec<TrackOutput> {
     let dt = dt_ns.unwrap_or(0) as f64 / 1e9;
     let inputs = std::mem::take(&mut *PENDING.lock().expect("pending inputs"));
 
