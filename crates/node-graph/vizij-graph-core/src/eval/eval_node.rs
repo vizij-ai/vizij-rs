@@ -387,13 +387,14 @@ fn evaluate_kind_inner(
         NodeType::Input => eval_input_node(rt, spec, outputs),
         NodeType::Output => eval_output(inputs, outputs),
         NodeType::ExternalFunction => eval_external_function(params, inputs, outputs, functions),
-        NodeType::TaskRun => eval_task_run(rt, spec, outputs, functions),
+        NodeType::TaskRun => eval_task_run(rt, spec, inputs, outputs, functions),
     }
 }
 
 fn eval_task_run(
     rt: &mut GraphRuntime,
     spec: &NodeSpec,
+    inputs: &InputSlots,
     outputs: &mut OutputSlots,
     functions: Option<&mut dyn NodeFunctions>,
 ) -> Result<(), String> {
@@ -415,8 +416,15 @@ fn eval_task_run(
         "TaskRun node evaluated without a function host (graph run outside a host)".to_string()
     })?;
 
-    // The argument bundle: one structure whose fields are the call's args.
-    let args: Vec<(Uuid, Value)> = match &spec.params.value {
+    // The argument bundle is one structure whose fields are the call's args.
+    // It comes from the `args` input when wired — how a live goal update on the
+    // run's update key reaches the call each tick — falling back to the `value`
+    // param, which the interpreter seeds with the spawn-time args.
+    let bundle = inputs
+        .get("args")
+        .map(|port| &port.value)
+        .or(spec.params.value.as_ref());
+    let args: Vec<(Uuid, Value)> = match bundle {
         Some(Value::Structure(bundle)) => bundle
             .fields
             .iter()
