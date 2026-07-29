@@ -385,16 +385,16 @@ dependencies = [
 
 [[package]]
 name = "arora"
-version = "9.9.0"
+version = "9.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e28ae967be614d0e53835a58fe1c11b6fa4ba434e29de781d8abf1841eec4300"
+checksum = "e2876a5b088b105c8008d86225352c9518dc3d6d4ee14615d6709d6b150317fd"
 dependencies = [
  "anyhow",
  "arora-behavior",
  "arora-behavior-tree",
  "arora-bridge",
  "arora-bridge-ws",
- "arora-engine 4.0.0",
+ "arora-engine 4.1.0",
  "arora-hal",
  "arora-simple-data-store",
  "arora-studio-bridge-client",
@@ -478,11 +478,13 @@ dependencies = [
 
 [[package]]
 name = "arora-bridge-ros2"
-version = "3.1.0"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7efc0bc42a2cc0081f2a9028f2fa6f061a02fe80afb34104a4e4fb0afe5fbd1"
+checksum = "d1f687abdfbe5037b3758d336296950799f5c94a6f734a45309ad72bd268e0da"
 dependencies = [
+ "arora-behavior-tree-types",
  "arora-bridge",
+ "arora-msgs-ros2",
  "arora-types",
  "async-trait",
  "futures",
@@ -515,9 +517,9 @@ dependencies = [
 
 [[package]]
 name = "arora-buffers"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8eaa641c4ef4139cde554ca709690f05e8214b4379e8d2245a67c2159b3a8076"
+checksum = "89ce00d45413fbb68ac324475a7fd495d5da1983cdec98d3d7e11ac60f47524b"
 dependencies = [
  "arora-types",
  "bytes",
@@ -556,9 +558,9 @@ dependencies = [
 
 [[package]]
 name = "arora-engine"
-version = "4.0.0"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d129b70d3fca9b3f4168badfafd839a24b23c4f5d74d76a3ddb81ecc897ae7c7"
+checksum = "cd685c0799d615dd23d5931cf8e4548058f980f1af1f0a9c0ed99101c3f2ae70"
 dependencies = [
  "anyhow",
  "arora-buffers",
@@ -645,6 +647,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "arora-msgs-ros2"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6833cfbcd415843d6b5477fa32219ea2731a7c8dc1cc5d6270c64e49b1b23425"
+dependencies = [
+ "arora-types",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde-big-array",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "arora-registry"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -703,9 +720,9 @@ dependencies = [
 
 [[package]]
 name = "arora-types"
-version = "2.3.0"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12e17cc7d475627aa6275487e9029633fca4eee4b0ed4956667faa4c18763fe7"
+checksum = "b3f5838774ed426d8670c2dbfdf37a8560bc671248b44999a0c326be9b7d18b4"
 dependencies = [
  "arora-types-derive",
  "async-trait",
@@ -8573,9 +8590,9 @@ dependencies = [
 
 [[package]]
 name = "ros2-client-multi-rmw"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03956b245d11777d1bd8c9cfe007a34b1bf6bfed0ff132cb5d26fc728d8fbfd2"
+checksum = "fd046a2d7fabf807d119dc2315e020e9d4e5a69e827a6c71990f6ebfb5751adc"
 dependencies = [
  "async-channel",
  "bstr",
@@ -9037,6 +9054,15 @@ checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
 dependencies = [
  "serde_core",
  "serde_derive",
+]
+
+[[package]]
+name = "serde-big-array"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -10625,6 +10651,7 @@ dependencies = [
  "anyhow",
  "arora",
  "arora-behavior",
+ "arora-behavior-tree-types",
  "arora-bridge-ros2",
  "arora-types",
  "bevy",
@@ -10634,6 +10661,8 @@ dependencies = [
  "futures",
  "image",
  "log",
+ "rand 0.9.5",
+ "ros2-client-multi-rmw",
  "serde",
  "serde_json",
  "tokio",
@@ -10667,7 +10696,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "arora-buffers",
- "arora-engine 4.0.0",
+ "arora-engine 4.1.0",
  "arora-module-core",
  "arora-module-rust",
  "arora-registry",
@@ -11841,7 +11870,7 @@ version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0978bf7171b3d90bac376700cb56d606feb40f251a475a5d6634613564460b22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

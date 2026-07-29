@@ -241,7 +241,11 @@ pub fn start(glb: &Path, config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
 /// with the animation module loaded so the composed animation source's
 /// `ExternalFunction` nodes dispatch and its transport is callable. `None`
 /// (logged) when the spec does not encode or the baked-in module does not load.
-fn builder_for(spec: &str, rig: RigHal, store: BlackboardStore) -> Option<arora::AroraBuilder> {
+pub(crate) fn builder_for(
+    spec: &str,
+    rig: RigHal,
+    store: BlackboardStore,
+) -> Option<arora::AroraBuilder> {
     let spec = match parse_spec(spec) {
         Ok(spec) => spec,
         Err(e) => {
