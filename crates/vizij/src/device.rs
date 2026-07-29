@@ -72,6 +72,10 @@ pub struct FaceConfig {
     pub program: ProgramSelect,
     /// Stage the bundle's neutral inputs into the store at boot.
     pub stage_neutral: bool,
+    /// Compose the built-in ROS4HRI profile (`standard/ros4hri/*` keys drive
+    /// the face's standard controls). On by default in the binary, opt-out
+    /// via `--no-ros4hri`.
+    pub ros4hri: bool,
 }
 
 /// The bridges the device serves beyond the always-on open local bridge — a
@@ -130,12 +134,21 @@ pub fn load_face(glb: &Path, config: &FaceConfig) -> Result<(String, FaceMeta, S
         .with_context(|| format!("cannot resolve {}", glb.display()))?;
     let meta = FaceMeta::from_glb_file(&canonical)?;
     let wanted: Vec<&str> = config.wanted.iter().map(String::as_str).collect();
+    // The standard profiles this face composes: ROS4HRI unless opted out. The
+    // profile writes the face's namespaced standard controls, so it takes the
+    // bundle's rig prefix.
+    let mut profiles = Vec::new();
+    if config.ros4hri {
+        profiles.push(vizij_arora_host::ros4hri::ros4hri_source(
+            &meta.bundle.rig_prefix(),
+        ));
+    }
     // `with_animations`: the device always loads the animation module (see
     // `builder_for`), so the animation source it dispatches to is always
     // composed — inert until a clip plays.
     let spec = meta
         .bundle
-        .compose(&wanted, &config.program, true)?
+        .compose(&wanted, &config.program, true, &profiles)?
         .to_string();
     parse_spec(&spec).map_err(|e| anyhow!("composed spec does not parse: {e}"))?;
     Ok((canonical.to_string_lossy().into_owned(), meta, spec))
@@ -507,5 +520,223 @@ mod tests {
             .expect("the handle's stop call dispatches");
         arora.step(Duration::from_millis(16)).expect("step");
         assert_eq!(status(&arora), Some(task::failure()), "halted");
+    }
+
+    use vizij_api_core::value::{as_float, text, vec3, Value};
+    use vizij_arora_host::ros4hri::{self, ros4hri_source};
+    use vizij_arora_host::standard;
+
+    /// A device running only the ROS4HRI profile (unprefixed controls) — the
+    /// headless harness for the profile's mapping math: stage `standard/
+    /// ros4hri/*` keys, tick, read `standard/vizij/*` controls back.
+    fn ros4hri_device() -> arora::Arora {
+        let spec = compose_sources(&[ros4hri_source("")])
+            .expect("compose the ros4hri profile")
+            .to_string();
+        builder_for(&spec, RigHal::new(), BlackboardStore::new())
+            .expect("build the device over the profile")
+            .build()
+            .expect("build arora")
+    }
+
+    fn stage(arora: &arora::Arora, path: &str, value: Value) {
+        let mut change = StateChange::new();
+        change.set.insert(Key::from(path), Some(value));
+        arora.store().write(change).expect("stage");
+    }
+
+    fn read_f32(arora: &arora::Arora, path: &str) -> f32 {
+        let key = Key::from(path);
+        let value = arora
+            .store()
+            .read(std::slice::from_ref(&key))
+            .into_iter()
+            .next()
+            .flatten()
+            .unwrap_or_else(|| panic!("{path} absent"));
+        as_float(&value).unwrap_or_else(|| panic!("{path} not a float"))
+    }
+
+    /// Settle the ~200 ms smoothers: 2 s of 16 ms ticks.
+    fn settle(arora: &mut arora::Arora) {
+        for _ in 0..125 {
+            arora.step(Duration::from_millis(16)).expect("step");
+        }
+    }
+
+    #[test]
+    fn ros4hri_profile_rests_neutral() {
+        let mut arora = ros4hri_device();
+        settle(&mut arora);
+        assert!(read_f32(&arora, &standard::expression_path("neutral")) > 0.95);
+        assert!(read_f32(&arora, &standard::expression_path("happy")) < 0.01);
+        assert!(read_f32(&arora, &standard::expression_path("skeptical")) < 0.01);
+        // Eyes at their default forward target: centered.
+        assert!(read_f32(&arora, standard::LEFT_EYE_POS_X).abs() < 0.01);
+    }
+
+    #[test]
+    fn ros4hri_expression_name_one_hots() {
+        let mut arora = ros4hri_device();
+        stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("happy"));
+        settle(&mut arora);
+        assert!(read_f32(&arora, &standard::expression_path("happy")) > 0.95);
+        assert!(read_f32(&arora, &standard::expression_path("neutral")) < 0.01);
+        assert!(read_f32(&arora, &standard::expression_path("sad")) < 0.01);
+    }
+
+    #[test]
+    fn ros4hri_valence_arousal_blends_anchors() {
+        let mut arora = ros4hri_device();
+        stage(&arora, ros4hri::EXPRESSION_VALENCE_KEY, float(0.8));
+        stage(&arora, ros4hri::EXPRESSION_AROUSAL_KEY, float(0.4));
+        settle(&mut arora);
+        // The happy anchor sits at (0.8, 0.4): dominant, blended with its
+        // positive-affect neighbors, nothing negative.
+        let happy = read_f32(&arora, &standard::expression_path("happy"));
+        assert!(happy > 0.4, "happy = {happy}");
+        assert!(read_f32(&arora, &standard::expression_path("angry")) < 0.01);
+        assert!(read_f32(&arora, &standard::expression_path("neutral")) < 0.05);
+    }
+
+    #[test]
+    fn ros4hri_gaze_maps_eyes_with_vergence() {
+        let mut arora = ros4hri_device();
+        stage(&arora, ros4hri::GAZE_TARGET_KEY, vec3([1.0, 0.3, 0.2]));
+        settle(&mut arora);
+        let left_x = read_f32(&arora, standard::LEFT_EYE_POS_X);
+        let right_x = read_f32(&arora, standard::RIGHT_EYE_POS_X);
+        let left_y = read_f32(&arora, standard::LEFT_EYE_POS_Y);
+        // atan(0.33)/0.78 ≈ 0.41 (left, verged outward), atan(0.27)/0.78 ≈ 0.34.
+        assert!((0.35..=0.46).contains(&left_x), "left_x = {left_x}");
+        assert!((0.29..=0.40).contains(&right_x), "right_x = {right_x}");
+        assert!(left_x > right_x, "vergence: {left_x} <= {right_x}");
+        // atan(0.2)/0.78 ≈ 0.25.
+        assert!((0.20..=0.31).contains(&left_y), "left_y = {left_y}");
+
+        // Targets at or behind the face plane recenter the eyes.
+        stage(&arora, ros4hri::GAZE_TARGET_KEY, vec3([0.05, 0.5, 0.0]));
+        settle(&mut arora);
+        assert!(read_f32(&arora, standard::LEFT_EYE_POS_X).abs() < 0.01);
+    }
+
+    #[test]
+    fn ros4hri_action_units_route_to_muscles() {
+        let mut arora = ros4hri_device();
+        stage(&arora, &ros4hri::au_key(12), float(1.0));
+        stage(&arora, &ros4hri::au_key(26), float(0.8));
+        settle(&mut arora);
+        // AU 12 (lip corner puller) drives the lateralized smile pair.
+        assert!(read_f32(&arora, &standard::face_path("mouth_smile_left")) > 0.95);
+        assert!(read_f32(&arora, &standard::face_path("mouth_smile_right")) > 0.95);
+        assert!(read_f32(&arora, &standard::face_path("mouth_frown_left")) < 0.01);
+        // AU 26 (jaw drop) drives the muscle control and the de-facto mouth morph.
+        let jaw = read_f32(&arora, &standard::face_path("jaw_open"));
+        assert!((0.75..=0.85).contains(&jaw), "jaw = {jaw}");
+        let defacto = read_f32(&arora, "standard/vizij/mouth/morph/jaw_open");
+        assert!((0.75..=0.85).contains(&defacto), "de-facto jaw = {defacto}");
+    }
+
+    #[test]
+    fn ros4hri_visemes_pass_through() {
+        let mut arora = ros4hri_device();
+        stage(&arora, &ros4hri::viseme_key("aa"), float(1.0));
+        settle(&mut arora);
+        assert!(read_f32(&arora, &standard::viseme_path("aa")) > 0.95);
+        assert!(read_f32(&arora, &standard::viseme_path("oh")) < 0.01);
+    }
+
+    #[test]
+    fn ros4hri_blink_pulses_and_commanded_close_wins() {
+        let mut arora = ros4hri_device();
+        // Over 10 s the jittered 8 s cycle blinks at least once; between
+        // blinks the lids rest open.
+        let mut min_lid = f32::MAX;
+        let mut max_lid = f32::MIN;
+        for _ in 0..625 {
+            arora.step(Duration::from_millis(16)).expect("step");
+            let lid = read_f32(&arora, standard::LEFT_EYE_TOP_EYELID_POS_Y);
+            min_lid = min_lid.min(lid);
+            max_lid = max_lid.max(lid);
+        }
+        assert!(max_lid > 0.5, "no blink in 10 s (max lid {max_lid})");
+        assert!(min_lid < 0.05, "lids never rest open (min lid {min_lid})");
+
+        // Commanded eyes-closed holds the lids shut and inhibits the pulse.
+        stage(&arora, &ros4hri::au_key(43), float(1.0));
+        settle(&mut arora);
+        for _ in 0..300 {
+            arora.step(Duration::from_millis(16)).expect("step");
+            let lid = read_f32(&arora, standard::LEFT_EYE_TOP_EYELID_POS_Y);
+            assert!(lid > 0.9, "lid opened while commanded closed ({lid})");
+        }
+    }
+
+    /// End-to-end over the real demo face: graft Quori's standard-adaptation
+    /// sidecar into `Quori_Current_Extended.glb` with the bundler, compose the
+    /// ROS4HRI profile, and drive the ROS4HRI keys through to Quori's pose
+    /// plane. Needs the GLB: set `VIZIJ_FIXTURES` to a directory holding it
+    /// (the snapshot-regression convention); skipped otherwise.
+    #[test]
+    fn ros4hri_drives_the_adapted_quori() {
+        let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
+            eprintln!("VIZIJ_FIXTURES unset — skipping the Quori integration test");
+            return;
+        };
+        let glb = std::path::Path::new(&fixtures).join("Quori_Current_Extended.glb");
+        let bytes = std::fs::read(&glb).expect("read the Quori GLB");
+
+        // The bundler grafts the committed adaptation sidecar into the bundle.
+        let sidecar = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../fixtures/faces/quori/standard-adaptation.json"
+        );
+        let spec = vizij_bundle::from_sidecar(
+            &std::fs::read_to_string(sidecar).expect("read the adaptation sidecar"),
+        )
+        .expect("parse the adaptation sidecar");
+        let mut face = vizij_bundle::Face::parse(&bytes).expect("parse the Quori GLB");
+        face.add_graph("standard-adaptation", "quori_standard_adaptation", spec)
+            .expect("graft the adaptation");
+        let adapted = face.to_bytes().expect("repack the GLB");
+        let cov = vizij_bundle::coverage(&vizij_bundle::Face::parse(&adapted).unwrap());
+        assert!(cov.level >= 2, "adapted Quori below L2 (L{})", cov.level);
+
+        let dir = std::env::temp_dir().join("vizij-ros4hri-quori");
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("Quori_Current_Extended_adapted.glb");
+        std::fs::write(&path, &adapted).expect("write the adapted GLB");
+
+        // Compose like the binary's defaults: standard graphs + the ROS4HRI
+        // profile, no autoplay (the idle program would contend on gaze paths).
+        let config = FaceConfig {
+            wanted: ["rig", "pose-driver", "pose", "standard-adaptation"]
+                .map(String::from)
+                .to_vec(),
+            program: ProgramSelect::None,
+            stage_neutral: true,
+            ros4hri: true,
+        };
+        let (_, meta, spec) = load_face(&path, &config).expect("load the adapted face");
+        let store = BlackboardStore::new();
+        stage_neutral_pose(&store, &meta);
+        let mut arora = builder_for(&spec, RigHal::new(), store)
+            .expect("build the device")
+            .build()
+            .expect("build arora");
+
+        // A ROS4HRI expression command reaches Quori's emotion-pose plane.
+        stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("happy"));
+        settle(&mut arora);
+        let waist = read_f32(&arora, "rig/quori_latest/standard/vizij/expression/happy");
+        assert!(waist > 0.95, "profile output missing (happy = {waist})");
+        let pose = read_f32(&arora, "rig/quori_latest/poses/pose_d_happy_d.weight");
+        assert!(pose > 0.95, "adaptation output missing (pose = {pose})");
+
+        // A viseme command reaches the letter-pose plane.
+        stage(&arora, &ros4hri::viseme_key("aa"), float(1.0));
+        settle(&mut arora);
+        let mouth = read_f32(&arora, "rig/quori_latest/poses/pose_a.weight");
+        assert!(mouth > 0.95, "viseme mapping missing (pose_a = {mouth})");
     }
 }

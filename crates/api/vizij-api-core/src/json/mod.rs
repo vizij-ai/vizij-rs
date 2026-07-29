@@ -601,6 +601,15 @@ pub fn normalize_graph_spec_value(root: &mut JsonValue) -> Result<(), JsonError>
                 );
                 let mut operand_aliases: HashMap<String, String> = HashMap::new();
                 let mut next_operand_index: usize = 1;
+                // A variadic node's FIXED ports must survive operand aliasing
+                // — only the case values are operands; `selector`/`default`
+                // keep their meaning (aliasing them would silence the node
+                // into its no-match NaN).
+                if node_type == "case" {
+                    for fixed in ["selector", "default"] {
+                        operand_aliases.insert(fixed.to_string(), fixed.to_string());
+                    }
+                }
 
                 let mut input_defaults_map =
                     if let Some(existing_defaults) = node_map.remove("input_defaults") {
@@ -1246,5 +1255,31 @@ mod tests {
         let err = normalize_graph_spec_value(&mut root)
             .expect_err("legacy links field should be rejected");
         assert!(matches!(err, JsonError::LegacyLinksField));
+    }
+
+    #[test]
+    fn case_edges_keep_their_fixed_ports() {
+        let mut root = json!({
+            "nodes": [
+                { "id": "sel", "type": "constant", "params": { "value": "x" } },
+                { "id": "v", "type": "constant", "params": { "value": 1.0 } },
+                { "id": "d", "type": "constant", "params": { "value": 0.0 } },
+                { "id": "c", "type": "case", "params": { "case_labels": ["x"] } },
+            ],
+            "edges": [
+                { "from": { "node_id": "sel" }, "to": { "node_id": "c", "input": "selector" } },
+                { "from": { "node_id": "v" }, "to": { "node_id": "c", "input": "operand_0" } },
+                { "from": { "node_id": "d" }, "to": { "node_id": "c", "input": "default" } },
+            ],
+        });
+        normalize_graph_spec_value(&mut root).expect("normalize");
+        let inputs: Vec<&str> = root["edges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["to"]["input"].as_str().unwrap())
+            .collect();
+        // The fixed ports survive; only genuine operands are operands.
+        assert_eq!(inputs, ["selector", "operand_0", "default"]);
     }
 }

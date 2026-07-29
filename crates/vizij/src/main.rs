@@ -60,8 +60,9 @@ struct Cli {
     fit: view::Fit,
 
     /// Compose only these bundle graph kinds (comma-separated), e.g. "rig" or
-    /// "rig,pose-driver". Default: rig + pose-driver.
-    #[arg(long, default_value = "rig,pose-driver,pose")]
+    /// "rig,pose-driver". Default: rig + pose-driver + the face's standard
+    /// adaptation graphs.
+    #[arg(long, default_value = "rig,pose-driver,pose,standard-adaptation")]
     graphs: String,
 
     /// Publish rendered frames into the store as HAL `view/frame` readings, at
@@ -87,6 +88,12 @@ struct Cli {
     /// Don't stage the bundle's `neutralInputs` into the store at boot.
     #[arg(long)]
     no_stage_neutral: bool,
+
+    /// Don't compose the built-in ROS4HRI profile (on by default: the
+    /// `standard/ros4hri/*` keys — expression, gaze, action units, visemes —
+    /// drive the face's standard controls, with idle blink and smoothing).
+    #[arg(long)]
+    no_ros4hri: bool,
 
     /// Expose the device's keys over ROS 2 topics: `--ros2 [namespace][:domain]`
     /// (namespace empty and domain 0 by default). Composes with the local bridge.
@@ -136,6 +143,7 @@ fn main() -> Result<()> {
         wanted,
         program,
         stage_neutral: !cli.no_stage_neutral,
+        ros4hri: !cli.no_ros4hri,
     };
     let bridges = device::BridgeConfig {
         #[cfg(feature = "ros2")]

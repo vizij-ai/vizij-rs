@@ -30,6 +30,9 @@ vizij-arora-behavior = { path = "../vizij-arora-behavior" }
 
 # Vizij pieces the browser wrapper builds the injected behavior from.
 vizij-api-core = { path = "../../api/vizij-api-core" }
+# The portable host glue: the standard-profile registry (ROS4HRI, …) this
+# crate re-exports to JS as graph objects for the authoring app.
+vizij-arora-host = { path = "../vizij-arora-host" }
 
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4"
