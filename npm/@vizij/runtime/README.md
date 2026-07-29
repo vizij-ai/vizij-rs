@@ -33,6 +33,25 @@ A host with its own clock skips `run()` and calls `runtime.step(dtMs)` per
 frame instead (e.g. from `requestAnimationFrame` timestamps); `step()`
 becomes unavailable once `run()` has taken the runtime.
 
+### Standard profiles
+
+Vizij ships built-in standard profiles — graphs that map an external face
+standard onto Vizij's own (currently the [ROS4HRI face
+standard](https://github.com/vizij-ai/vizij-rs/blob/main/docs/ros4hri.md)). An
+authoring app can list them and embed one into a face:
+
+```ts
+import { standardProfiles, standardProfile } from "@vizij/runtime";
+
+standardProfiles();                       // [{ id, title, description }] — the menu
+const graph = standardProfile("ros4hri", "rig/<faceId>/"); // the profile graph as an object
+```
+
+`standardProfiles()` is the introspectable list of what a face may opt into.
+`standardProfile(id, rigPrefix)` returns the profile's node-graph (its output
+paths prefixed for the target face), ready to compose into a graph spec or embed
+into a GLB via the bundle tool.
+
 Values cross the boundary in the normalized `ValueJSON` vocabulary from
 [`@vizij/value-json`](https://www.npmjs.com/package/@vizij/value-json);
 `setValue`/`writeValues` accept its `ValueInput` shorthands.

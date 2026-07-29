@@ -33,6 +33,36 @@ cargo run -p vizij -- --glb face.glb --snapshot out.png --size 763x760
   `WinitPlugin` disabled, `ScheduleRunnerPlugin`, camera → `RenderTarget`
   image, `gpu_readback` → PNG.
 
+## Flags
+
+`cargo run -p vizij -- --glb <face.glb>` plus:
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--glb <path>` | required | the face GLB (embedded `RobotData` + `VIZIJ_bundle`) |
+| `--graphs <kinds>` | `rig,pose-driver,pose,standard-adaptation` | compose only these bundle graph kinds |
+| `--no-ros4hri` | off (profile **on**) | drop the built-in [ROS4HRI](../../docs/ros4hri.md) profile |
+| `--program <id>` | bundle's active program | autoplay this motiongraph program |
+| `--no-autoplay` | off | hold the rig's authored/neutral pose |
+| `--no-stage-neutral` | off | don't stage the bundle's `neutralInputs` at boot |
+| `--snapshot <png>` | — | render one frame offscreen and exit (no window) |
+| `--headless` | off | run windowless, streaming frames into the store |
+| `--size WxH` | `763x486` | offscreen render size (`--snapshot` / `--headless`) |
+| `--frame-rate <hz>` | `15` | publish rendered frames as HAL `view/frame` readings; 0 disables |
+| `--frame-format <fmt>` | `png` | encoding of published frames |
+| `--background <rrggbb>` | `000000` | clear color |
+| `--ambient <f>` | `π/2` | three.js-style ambient intensity |
+| `--unlit` | off | render materials unlit (albedo passthrough) |
+| `--fit <contain\|cover>` | `contain` | how the face fits the window |
+
+The ROS 2 and Studio bridges are build features (they compose with arora's local
+WS bridge):
+
+| Flag | Feature | Effect |
+|---|---|---|
+| `--ros2 [namespace][:domain]` | `ros2` | expose the device's keys over ROS 2 topics |
+| `--studio` | `studio` | attach the Semio Studio bridge (configured from the environment) |
+
 ## Lighting model
 
 The web renders `MeshStandardMaterial` under a single `ambientLight(π/2)`,
@@ -66,10 +96,10 @@ vizij-web (`apps/vizij-authoring/e2e/`, headed — headless Chromium does not
 composite the WebGL canvas), loading the `quori:latest` / `toasty:basic`
 presets.
 
-## Not yet here (VIZ-47 stages)
+## Not yet here
 
-Animation module loading (clip transport), egui panels (inputs, transport,
-bridges), bridge flags (`--ros2`, `--studio`; arora's local WS bridge attaches
-when the device runs via `Arora::run`), `--headless` frames-to-store
-(`view/frame` as `ArrayU8`), and packaging. See
-`docs/proposal-vizij-native-app.md`.
+The native app is otherwise complete (VIZ-47): the animation module + clip
+transport, the ROS 2 / Studio bridge flags, and `--headless` frames-to-store all
+landed. The egui inspector panels (VIZ-82) were dropped — the operator surface is
+the arora TUI + the store — and packaging (a distributable bundle) is still open.
+See `docs/proposal-vizij-native-app.md`.
