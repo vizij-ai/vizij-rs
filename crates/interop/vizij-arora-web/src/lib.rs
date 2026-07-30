@@ -400,6 +400,74 @@ pub fn standard_profile(id: &str, rig_prefix: &str) -> Result<JsValue, JsValue> 
     }
 }
 
+/// The composed behavior graph of a face bundle — the composition the native
+/// `vizij` app deploys: the bundle's base graphs, its embedded standard
+/// profiles (each suppressing the built-in of the same id — an embedded copy
+/// is the author's pinned override), the built-in ROS4HRI profile unless
+/// opted out, then the selected program. The returned spec is ready for
+/// [`startRuntime`]'s graph slot or [`loadGraph`](VizijArora::load_graph),
+/// so an exported GLB can be deployed and verified without the native app.
+///
+/// `gltf_json` is the GLB's glTF JSON document (its `VIZIJ_bundle` read from
+/// the root or a node extension). `options_json`, all fields optional:
+/// - `graphs`: base kinds to compose — default `rig`, `pose-driver`, `pose`,
+///   `standard-adaptation` (the native default);
+/// - `program`: `"auto"` (default), `"none"`, or a program id;
+/// - `ros4hri`: offer the built-in ROS4HRI profile — default `true`;
+/// - `animations`: compose the animation source — default `false`, because it
+///   dispatches to the animation module and belongs only in a device that
+///   loads that module.
+#[wasm_bindgen(js_name = composeFace)]
+pub fn compose_face(gltf_json: &str, options_json: Option<String>) -> Result<JsValue, JsValue> {
+    use vizij_arora_host::{ros4hri, Bundle, ProgramSelect};
+
+    let gltf: serde_json::Value = serde_json::from_str(gltf_json)
+        .map_err(|e| JsValue::from_str(&format!("glTF JSON: {e}")))?;
+    let bundle = Bundle::from_gltf_json(&gltf)
+        .ok_or_else(|| JsValue::from_str("the document carries no VIZIJ_bundle"))?;
+
+    let options: serde_json::Value = match options_json.as_deref() {
+        None | Some("") => serde_json::Value::Null,
+        Some(json) => serde_json::from_str(json)
+            .map_err(|e| JsValue::from_str(&format!("options JSON: {e}")))?,
+    };
+    let wanted: Vec<String> = match options.get("graphs").and_then(serde_json::Value::as_array) {
+        Some(kinds) => kinds
+            .iter()
+            .filter_map(serde_json::Value::as_str)
+            .map(str::to_string)
+            .collect(),
+        None => ["rig", "pose-driver", "pose", "standard-adaptation"]
+            .map(str::to_string)
+            .to_vec(),
+    };
+    let wanted: Vec<&str> = wanted.iter().map(String::as_str).collect();
+    let program = match options.get("program").and_then(serde_json::Value::as_str) {
+        None | Some("auto") => ProgramSelect::Auto,
+        Some("none") => ProgramSelect::None,
+        Some(id) => ProgramSelect::Id(id.to_string()),
+    };
+    let mut profiles = Vec::new();
+    if options
+        .get("ros4hri")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(true)
+    {
+        profiles.push(ros4hri::ros4hri_source(&bundle.rig_prefix()));
+    }
+    let with_animations = options
+        .get("animations")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+
+    let spec = bundle
+        .compose(&wanted, &program, with_animations, &profiles)
+        .map_err(|e| JsValue::from_str(&format!("compose: {e}")))?;
+    let json = serde_json::to_string(&spec)
+        .map_err(|e| JsValue::from_str(&format!("composed spec: {e}")))?;
+    js_sys::JSON::parse(&json)
+}
+
 /// The passthrough proof graph (`input` path → `output` path), as spec JSON.
 fn passthrough_json(input: &str, output: &str) -> String {
     serde_json::json!({
