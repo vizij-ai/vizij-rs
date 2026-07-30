@@ -98,6 +98,7 @@ interface WasmBindings {
   };
   standardProfiles(): StandardProfile[];
   standardProfile(id: string, rig_prefix: string): object | null;
+  composeFace(gltf_json: string, options_json?: string): object;
 }
 
 const bindingCache: { current: WasmBindings | null } = { current: null };
@@ -379,6 +380,44 @@ export async function standardProfile(
 ): Promise<object | null> {
   await init(input);
   return bindingCache.current!.standardProfile(id, rigPrefix);
+}
+
+/** Options for {@link composeFace}; every field falls back to the native
+ * `vizij` app's deploy default. */
+export interface ComposeFaceOptions {
+  /** Base bundle graph kinds to compose. Default: `rig`, `pose-driver`,
+   * `pose`, `standard-adaptation`. */
+  graphs?: string[];
+  /** `"auto"` (the bundle's active program — default), `"none"`, or a
+   * program id. */
+  program?: string;
+  /** Offer the built-in ROS4HRI profile (an embedded copy still wins).
+   * Default `true`. */
+  ros4hri?: boolean;
+  /** Compose the animation source — only for a device that loads the
+   * animation module. Default `false`. */
+  animations?: boolean;
+}
+
+/**
+ * The composed behavior graph of a face bundle — the composition the native
+ * `vizij` app deploys: the bundle's base graphs, its embedded standard
+ * profiles (each suppressing the built-in of the same id — an embedded copy
+ * is the author's pinned override), the built-in ROS4HRI profile unless opted
+ * out, then the selected program. `gltf` is the GLB's glTF JSON document. The
+ * returned spec feeds {@link startRuntime} or {@link Runtime.loadGraph}, so an
+ * exported GLB can be deployed and verified without the native app.
+ */
+export async function composeFace(
+  gltf: object,
+  options?: ComposeFaceOptions,
+  input?: InitInput,
+): Promise<object> {
+  await init(input);
+  return bindingCache.current!.composeFace(
+    JSON.stringify(gltf),
+    options ? JSON.stringify(options) : undefined,
+  );
 }
 
 export { toValueJSON } from "@vizij/value-json";
