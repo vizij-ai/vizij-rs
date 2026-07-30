@@ -42,6 +42,12 @@ pub enum ProgramSelect {
 pub struct Bundle {
     /// Graph entries, `(kind, spec)` — `rig`, `pose-driver`, `motiongraph`, ….
     pub graphs: Vec<(String, Json)>,
+    /// Standard profiles embedded in the face, `(profile id, spec)` — the
+    /// `standard-profile` graph entries (ids `standard::<profile>`, prefix
+    /// stripped). An embedded copy is the author's pinned override of the
+    /// shipped mapping: [`compose`](Bundle::compose) loads it and suppresses
+    /// the built-in profile of the same id.
+    pub standard_profiles: Vec<(String, Json)>,
     /// The motiongraph programs, `(id, spec)` — the graphs the face can play on
     /// top of its rig (e.g. Quori's "Speaks").
     pub programs: Vec<(String, Json)>,
@@ -88,6 +94,7 @@ impl Bundle {
 
         let mut graphs = Vec::new();
         let mut programs = Vec::new();
+        let mut standard_profiles = Vec::new();
         for entry in bundle
             .get("graphs")
             .and_then(Json::as_array)
@@ -103,11 +110,19 @@ impl Bundle {
                 continue;
             };
             // Motiongraphs are the playable programs, addressed by id; the base
-            // graphs (rig, pose-driver) compose by kind.
+            // graphs (rig, pose-driver) compose by kind. Embedded standard
+            // profiles are held apart, by profile id — they compose always and
+            // suppress their built-in (see `compose`), never selected by kind.
             if kind == "motiongraph" {
                 if let Some(id) = entry.get("id").and_then(Json::as_str) {
                     programs.push((id.to_string(), spec.clone()));
                 }
+            }
+            if kind == "standard-profile" {
+                let id = entry.get("id").and_then(Json::as_str).unwrap_or_default();
+                let profile_id = id.strip_prefix("standard::").unwrap_or(id);
+                standard_profiles.push((profile_id.to_string(), spec.clone()));
+                continue;
             }
             graphs.push((kind, spec.clone()));
         }
@@ -131,6 +146,7 @@ impl Bundle {
 
         Bundle {
             graphs,
+            standard_profiles,
             programs,
             active_program_id,
             neutral_inputs,
@@ -159,13 +175,19 @@ impl Bundle {
     }
 
     /// Compose the device's behavior: the base graphs whose kind is in `wanted`,
-    /// then the given standard `profiles` (e.g. [`ros4hri::ros4hri_source`]),
-    /// then the chosen program, then (when `with_animations`) the animation
-    /// source — each **last** wins over the earlier ones on any store path they
-    /// share (the web composes the same way, for the same last-writer-wins
-    /// reason). So a profile overrides the base rig's resting writes, a playing
-    /// program overrides the profile, and a playing clip overrides everything.
-    /// Returns the composed graph spec.
+    /// then the standard profiles, then the chosen program, then (when
+    /// `with_animations`) the animation source — each **last** wins over the
+    /// earlier ones on any store path they share (the web composes the same
+    /// way, for the same last-writer-wins reason). So a profile overrides the
+    /// base rig's resting writes, a playing program overrides the profile, and
+    /// a playing clip overrides everything. Returns the composed graph spec.
+    ///
+    /// Profiles come from two places: the face's own embedded copies
+    /// ([`standard_profiles`](Bundle::standard_profiles)), always composed,
+    /// and the built-in `profiles` the host passes (e.g.
+    /// [`ros4hri::ros4hri_source`]) — skipped for any id the face embeds,
+    /// because an embedded copy is the author's pinned override of the shipped
+    /// mapping.
     ///
     /// Pass `with_animations` when the device has the animation module loaded;
     /// [`animations_source`] dispatches to it, so composing it without the module
@@ -183,7 +205,19 @@ impl Bundle {
             .filter(|(kind, _)| wanted.contains(&kind.as_str()))
             .map(|(kind, spec)| (kind.clone(), spec.clone()))
             .collect();
-        sources.extend_from_slice(profiles);
+        // The face's own embedded profiles compose unconditionally, and each
+        // suppresses the built-in profile of the same id: an embedded copy is
+        // the author's pinned override of the shipped mapping.
+        for (id, spec) in &self.standard_profiles {
+            sources.push((format!("standard::{id}"), spec.clone()));
+        }
+        for (id, spec) in profiles {
+            if self.standard_profiles.iter().any(|(e, _)| e == id) {
+                log::info!("embedded standard profile {id} overrides the built-in");
+                continue;
+            }
+            sources.push((id.clone(), spec.clone()));
+        }
         if let Some((id, spec)) = self.program(select) {
             log::info!("autoplaying program {id}");
             sources.push((format!("program::{id}"), spec.clone()));
@@ -539,6 +573,66 @@ mod tests {
             .unwrap()
             .iter()
             .any(|n| n["id"].as_str().unwrap().starts_with("ros4hri::")));
+    }
+
+    /// `bundle_json()` with an embedded copy of a `ros4hri` standard profile:
+    /// one input node under the graph id VIZ-92 pins (`standard::ros4hri`).
+    fn bundle_json_with_embedded_ros4hri() -> Json {
+        let mut bundle = bundle_json();
+        bundle["graphs"].as_array_mut().unwrap().push(json!({
+            "id": "standard::ros4hri",
+            "kind": "standard-profile",
+            "spec": graph(
+                json!([{ "id": "mine", "type": "input",
+                         "params": { "path": "standard/ros4hri/expression/valence" } }]),
+                json!([]),
+            ),
+        }));
+        bundle
+    }
+
+    #[test]
+    fn bundle_reads_embedded_standard_profiles() {
+        let b = Bundle::from_bundle_json(&bundle_json_with_embedded_ros4hri());
+        // The entry lands under its bare profile id (`standard::` stripped)…
+        assert_eq!(b.standard_profiles.len(), 1);
+        assert_eq!(b.standard_profiles[0].0, "ros4hri");
+        // …and is held apart from the kind-selectable base graphs.
+        assert!(b.graphs.iter().all(|(kind, _)| kind != "standard-profile"));
+    }
+
+    #[test]
+    fn embedded_profile_composes_and_suppresses_its_built_in() {
+        let b = Bundle::from_bundle_json(&bundle_json_with_embedded_ros4hri());
+        let other_builtin = (
+            "gaze_only".to_string(),
+            graph(
+                json!([{ "id": "g", "type": "input",
+                         "params": { "path": "standard/gaze_only/target" } }]),
+                json!([]),
+            ),
+        );
+        let composed = b
+            .compose(
+                &["rig"],
+                &ProgramSelect::None,
+                false,
+                &[ros4hri::ros4hri_source("rig/f/"), other_builtin],
+            )
+            .unwrap();
+        let ids: Vec<&str> = composed["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| n["id"].as_str().unwrap())
+            .collect();
+        // The embedded copy composes under its stable graph id…
+        assert!(ids.contains(&"standard::ros4hri::mine"));
+        // …the built-in of the same id is not composed at all…
+        assert!(ids.iter().all(|id| !id.starts_with("ros4hri::")));
+        // …and built-ins the face does not embed are untouched (the
+        // suppression is per profile id, not a global kill switch).
+        assert!(ids.contains(&"gaze_only::g"));
     }
 
     #[test]

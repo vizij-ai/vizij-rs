@@ -81,6 +81,11 @@ performance overrides it (last-writer-wins).
 - **From a library** it is opt-in: `vizij_arora_host::ros4hri::ros4hri_source(rig_prefix)`
   returns the composable graph source, or embed it into a face GLB so it travels
   with the asset (see below).
+- **A face that embeds its own copy** (`standard::ros4hri`, see below) runs
+  that copy instead: the embedded profile is the author's pinned override of
+  the shipped mapping, always composed, and the built-in of the same id is not
+  composed for that face. Other profiles are unaffected — the suppression is
+  per profile id.
 
 ## Embedding and editing the profile
 
