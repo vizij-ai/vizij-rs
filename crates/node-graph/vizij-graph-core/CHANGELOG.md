@@ -4,6 +4,16 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-07-30
+
+### Changed
+
+- The behavior `Status` ids the `task` module speaks now come from
+  `arora-behavior` (where `Status` moved, ARORA-82) instead of
+  `arora-behavior-tree-types` — the node graph no longer depends on a
+  behavior-*tree* crate for the cross-interpreter run-status contract. Same
+  ids, same wire form.
+
 ## [1.2.0] - 2026-07-30
 
 ### Added
