@@ -568,6 +568,55 @@ mod tests {
         }
     }
 
+    /// A face that embeds its own modified `ros4hri` copy runs that copy
+    /// INSTEAD of the built-in — VIZ-92's precedence: an embedded profile is
+    /// the author's pinned override of the shipped mapping. The embedded graph
+    /// here maps valence verbatim onto the happy weight (no smoothing, no
+    /// blending, name ignored), which the built-in never produces.
+    #[test]
+    fn embedded_profile_wins_over_the_built_in() {
+        let bundle = vizij_arora_host::Bundle::from_bundle_json(&serde_json::json!({
+            "graphs": [{
+                "id": "standard::ros4hri",
+                "kind": "standard-profile",
+                "spec": {
+                    "nodes": [
+                        { "id": "v", "type": "input",
+                          "params": { "path": ros4hri::EXPRESSION_VALENCE_KEY, "value": 0.0 } },
+                        { "id": "o", "type": "output",
+                          "params": { "path": standard::expression_path("happy") } },
+                    ],
+                    "edges": [
+                        { "from": { "node_id": "v" }, "to": { "node_id": "o", "input": "in" } },
+                    ],
+                },
+            }]
+        }));
+        let spec = bundle
+            .compose(
+                &["rig"],
+                &vizij_arora_host::ProgramSelect::None,
+                false,
+                &[ros4hri_source("")],
+            )
+            .expect("compose the face with its embedded profile")
+            .to_string();
+        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new())
+            .expect("build the device over the composed face")
+            .build()
+            .expect("build arora");
+        // The built-in would one-hot "sad" (happy ≈ 0, smoothed); the embedded
+        // verbatim mapping ignores the name and rides valence straight through.
+        stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("sad"));
+        stage(&arora, ros4hri::EXPRESSION_VALENCE_KEY, float(0.8));
+        settle(&mut arora);
+        let happy = read_f32(&arora, &standard::expression_path("happy"));
+        assert!(
+            (happy - 0.8).abs() < 1e-6,
+            "embedded mapping must win verbatim, got happy={happy}"
+        );
+    }
+
     #[test]
     fn ros4hri_profile_rests_neutral() {
         let mut arora = ros4hri_device();
