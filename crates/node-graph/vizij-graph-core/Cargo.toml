@@ -1,6 +1,6 @@
 [package]
 name        = "vizij-graph-core"
-version = "1.2.0"
+version = "1.3.0"
 edition     = "2021"
 license     = "MIT OR Apache-2.0"
 description = "Core node‑graph engine used by Vizij."
@@ -19,8 +19,8 @@ hashbrown  = { workspace = true }
 anyhow     = { workspace = true }
 vizij-api-core = { version = "1", path = "../../api/vizij-api-core" }
 # Declares the behavior `Status` enumeration (type + variant ids) a task run
-# speaks; types only, no interpreter.
-arora-behavior-tree-types = "1"
+# speaks — the cross-interpreter run-status contract.
+arora-behavior = "8.4"
 uuid = { version = "1", features = ["serde"] }
 k = { version = "0.32", optional = true, default-features = false }
 urdf-rs = { version = "0.9", optional = true }

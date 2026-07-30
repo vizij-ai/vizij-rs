@@ -4,12 +4,13 @@
 //! A run's lifecycle travels as the behavior `Status` enumeration — `Running` /
 //! `Success` / `Failure` over unit payloads — the value an interpreter writes to
 //! a run's status key and the one the ROS action plane maps to a goal status.
-//! The type and variant ids come from `arora-behavior-tree-types`, the crate
-//! declaring the enumeration, so the encoding cannot drift from the rest of the
-//! Arora ecosystem. The graph core only constructs these values and recognizes
-//! terminality; it never interprets the payloads.
+//! The type and variant ids come from `arora-behavior`, the crate declaring the
+//! enumeration (`Status` is the cross-interpreter run-status contract), so the
+//! encoding cannot drift from the rest of the Arora ecosystem. The graph core
+//! only constructs these values and recognizes terminality; it never interprets
+//! the payloads.
 
-use arora_behavior_tree_types::{
+use arora_behavior::{
     STATUS_ENUMERATION_ID, STATUS_FAILURE_VARIANT_ID, STATUS_RUNNING_VARIANT_ID,
     STATUS_SUCCESS_VARIANT_ID,
 };
