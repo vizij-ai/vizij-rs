@@ -19,6 +19,7 @@ use vizij_arora_store::BlackboardStore;
 use crate::animation;
 use crate::gaze;
 use crate::meta::FaceMeta;
+use crate::tts;
 
 /// A running face device. Both handles share storage with the device's own
 /// (they are sibling clones), so the view reads the rig and the store live.
@@ -282,7 +283,10 @@ pub(crate) fn builder_for(
             .with_data_store(Box::new(store))
             .with_behavior_interpreter(Box::new(graph))
             .with_host_module(animation::host_module())
-            .with_host_module(gaze::host_module()),
+            .with_host_module(gaze::host_module())
+            // The TTS module: the described `say` action (poll-on-tick, viseme
+            // out-param), synthesized through the Vizij TTS provider.
+            .with_host_module(tts::host_module()),
     )
 }
 

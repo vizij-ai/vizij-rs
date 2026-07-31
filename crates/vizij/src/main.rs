@@ -20,6 +20,7 @@ mod meta;
 #[cfg(all(test, feature = "ros2"))]
 mod ros2_tests;
 mod snapshot;
+mod tts;
 mod view;
 
 /// Vizij: render a GLB face natively over an arora device.
