@@ -12,6 +12,13 @@ fn main() {
     }
     let install =
         env::var("DEP_PIPER_INSTALL_DIR").expect("vizij-piper exports DEP_PIPER_INSTALL_DIR");
+    // Linux: emit old-style DT_RPATH (not DT_RUNPATH). RUNPATH is not searched
+    // for TRANSITIVE dependencies — libpiper.so's own libonnxruntime.so.1 needs
+    // the executable's path to be visible down the load chain (macOS dyld does
+    // this by default).
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        println!("cargo:rustc-link-arg=-Wl,--disable-new-dtags");
+    }
     println!("cargo:rustc-link-arg=-Wl,-rpath,{install}");
     println!("cargo:rustc-link-arg=-Wl,-rpath,{install}/lib");
 }

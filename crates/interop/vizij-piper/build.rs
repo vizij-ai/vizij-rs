@@ -48,6 +48,11 @@ fn main() {
     );
     println!("cargo:rustc-link-lib=dylib=piper");
     println!("cargo:rustc-link-lib=dylib=onnxruntime");
+    // Linux: old-style DT_RPATH (transitive) — RUNPATH would not be searched
+    // when libpiper.so resolves its own libonnxruntime dependency.
+    if target_os == "linux" {
+        println!("cargo:rustc-link-arg=-Wl,--disable-new-dtags");
+    }
     println!("cargo:rustc-link-arg=-Wl,-rpath,{}", install.display());
     println!(
         "cargo:rustc-link-arg=-Wl,-rpath,{}",
