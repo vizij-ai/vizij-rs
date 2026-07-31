@@ -8,6 +8,10 @@ description = "Piper TTS with phoneme alignments, self-provisioning: the build d
 # GPL-affected. The vizij app only links it behind its opt-in `tts-piper`
 # feature, keeping default builds GPL-free.
 license = "GPL-3.0-or-later"
+# The `links` key opens the DEP_PIPER_* metadata channel: consumers read
+# DEP_PIPER_INSTALL_DIR in their own build script to add the dylib rpath
+# (rustc-link-arg does not propagate across crates).
+links = "piper"
 
 [build-dependencies]
 bindgen = "0.69"
