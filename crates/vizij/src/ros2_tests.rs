@@ -154,6 +154,7 @@ async fn the_look_at_skill_serves_the_standard_contract_on_the_vizij_device() {
         r#"{ "nodes": [], "edges": [] }"#,
         RigHal::new(),
         store.clone(),
+        &[],
     )
     .expect("build the device")
     .with_host_module(speak_module())

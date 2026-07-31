@@ -45,6 +45,21 @@ export interface StandardProfile {
 }
 
 /**
+ * A skill Vizij ships — a spawnable task-run behavior (a graph fragment the
+ * device grafts per goal), served to ROS as a standard action (e.g. the
+ * look_at gaze skill behind `/skill/look_at`). Listed by {@link skills}; its
+ * canonical fragment is fetched with {@link skillSource}.
+ */
+export interface Skill {
+  id: string;
+  title: string;
+  description: string;
+  /** The skill's parameter names, in declared order — the fragment's
+   * `task/<param>` inputs and the described signature's arguments. */
+  parameters: string[];
+}
+
+/**
  * A spec-level graph edit — `{ upsert_nodes, remove_nodes, upsert_edges,
  * remove_edges }` in the Vizij spec vocabulary, or a JSON string of the same.
  * Every edge incident to an upserted node must appear in `upsert_edges`.
@@ -98,6 +113,8 @@ interface WasmBindings {
   };
   standardProfiles(): StandardProfile[];
   standardProfile(id: string, rig_prefix: string): object | null;
+  skills(): Skill[];
+  skillSource(id: string): object | null;
   composeFace(gltf_json: string, options_json?: string): object;
 }
 
@@ -380,6 +397,28 @@ export async function standardProfile(
 ): Promise<object | null> {
   await init(input);
   return bindingCache.current!.standardProfile(id, rigPrefix);
+}
+
+/**
+ * The skills Vizij ships (the look_at gaze skill, …) — the introspectable
+ * list an authoring app's Skills menu and a device's actions view offer.
+ * Calls {@link init} if it has not run yet.
+ */
+export async function skills(input?: InitInput): Promise<Skill[]> {
+  await init(input);
+  return bindingCache.current!.skills();
+}
+
+/**
+ * A skill's canonical fragment graph as a spec object, ready to embed into a
+ * face GLB as its `skill::<id>` override of the shipped behavior. Skill
+ * fragments are face-independent by construction (their placeholder `task/*`
+ * paths are rewritten per run), so there is no rig prefix to apply or strip.
+ * `null` for an unknown id (see {@link skills}).
+ */
+export async function skillSource(id: string, input?: InitInput): Promise<object | null> {
+  await init(input);
+  return bindingCache.current!.skillSource(id);
 }
 
 /** Options for {@link composeFace}; every field falls back to the native

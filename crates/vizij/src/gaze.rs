@@ -35,11 +35,37 @@ pub fn look_at_id() -> Uuid {
 /// The look_at task fragment, parsed from the shipped asset — what the
 /// device's interpreter grafts per goal.
 pub fn look_at_fragment() -> TaskFragment {
-    let parameters: HashMap<Uuid, String> = skills::LOOK_AT_PARAMS
+    TaskFragment::parse(skills::LOOK_AT_JSON, look_at_parameters())
+        .expect("the shipped look_at asset parses")
+}
+
+/// The look_at fragment the device registers, honoring the face's pinned
+/// override: a bundle-embedded `skill::look_at` fragment replaces the shipped
+/// behavior (the `standard::<id>` precedence, applied to the skill plane). An
+/// embedded fragment that does not hold the task contract is refused loudly
+/// and the built-in serves.
+pub fn look_at_fragment_from(embedded: &[(String, serde_json::Value)]) -> TaskFragment {
+    if let Some((_, spec)) = embedded
+        .iter()
+        .find(|(id, _)| id == skills::LOOK_AT_FUNCTION)
+    {
+        match TaskFragment::parse(&spec.to_string(), look_at_parameters()) {
+            Ok(fragment) => {
+                log::info!("look_at: the face's embedded skill fragment overrides the built-in");
+                return fragment;
+            }
+            Err(e) => log::warn!("embedded look_at fragment refused ({e}); the built-in serves"),
+        }
+    }
+    look_at_fragment()
+}
+
+/// The parameter `id → name` map shared by the fragment and the signature.
+fn look_at_parameters() -> HashMap<Uuid, String> {
+    skills::LOOK_AT_PARAMS
         .iter()
         .map(|name| (gen_uuid_from_str(name), name.to_string()))
-        .collect();
-    TaskFragment::parse(skills::LOOK_AT_JSON, parameters).expect("the shipped look_at asset parses")
+        .collect()
 }
 
 /// The described look_at signature: `(policy, target, frame)` returning the

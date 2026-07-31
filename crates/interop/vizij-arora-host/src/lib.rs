@@ -50,6 +50,12 @@ pub struct Bundle {
     /// shipped mapping: [`compose`](Bundle::compose) loads it and suppresses
     /// the built-in profile of the same id.
     pub standard_profiles: Vec<(String, Json)>,
+    /// Skill fragments embedded in the face, `(skill id, spec)` — the `skill`
+    /// graph entries (ids `skill::<function>`, prefix stripped). An embedded
+    /// copy is the author's pinned override of the shipped behavior: the
+    /// device registers it as the function's task fragment instead of the
+    /// built-in. Never composed — a fragment grafts per run.
+    pub skills: Vec<(String, Json)>,
     /// The motiongraph programs, `(id, spec)` — the graphs the face can play on
     /// top of its rig (e.g. Quori's "Speaks").
     pub programs: Vec<(String, Json)>,
@@ -97,6 +103,7 @@ impl Bundle {
         let mut graphs = Vec::new();
         let mut programs = Vec::new();
         let mut standard_profiles = Vec::new();
+        let mut skills = Vec::new();
         for entry in bundle
             .get("graphs")
             .and_then(Json::as_array)
@@ -126,6 +133,15 @@ impl Bundle {
                 standard_profiles.push((profile_id.to_string(), spec.clone()));
                 continue;
             }
+            // Embedded skill fragments are held apart by skill id: they never
+            // compose (a fragment grafts per run) — the device registers them
+            // as task fragments, overriding the built-in of the same id.
+            if kind == skills::SKILL_KIND {
+                let id = entry.get("id").and_then(Json::as_str).unwrap_or_default();
+                let skill_id = id.strip_prefix("skill::").unwrap_or(id);
+                skills.push((skill_id.to_string(), spec.clone()));
+                continue;
+            }
             graphs.push((kind, spec.clone()));
         }
 
@@ -149,6 +165,7 @@ impl Bundle {
         Bundle {
             graphs,
             standard_profiles,
+            skills,
             programs,
             active_program_id,
             neutral_inputs,
