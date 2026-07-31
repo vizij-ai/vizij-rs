@@ -164,7 +164,36 @@ fn build_libpiper(cache: &Path) -> PathBuf {
         .current_dir(cache)
         .arg("--install")
         .arg(&build));
+    ensure_soname_links(&install.join("lib"));
     install
+}
+
+/// The onnxruntime prebuilt installs `libX.so.1.22.0` without the `libX.so.1`
+/// SONAME symlink libpiper's DT_NEEDED references — the loader then fails even
+/// with a correct rpath. Create any missing `libX.so.<major>` links (no-op on
+/// macOS, whose dylib naming is complete).
+fn ensure_soname_links(lib_dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(lib_dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy().into_owned();
+        // libfoo.so.MAJOR.MINOR.PATCH -> libfoo.so.MAJOR
+        let Some(so_pos) = name.find(".so.") else {
+            continue;
+        };
+        let version = &name[so_pos + 4..];
+        let mut parts = version.split('.');
+        let (Some(major), Some(_minor)) = (parts.next(), parts.next()) else {
+            continue; // already a major-only name
+        };
+        let link = lib_dir.join(format!("{}.so.{major}", &name[..so_pos]));
+        if !link.exists() {
+            std::os::unix::fs::symlink(entry.path(), &link)
+                .expect("create the SONAME symlink");
+        }
+    }
 }
 
 /// Download the default voice (model + config) and patch the model for
