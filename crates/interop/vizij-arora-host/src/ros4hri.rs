@@ -32,6 +32,7 @@
 
 use serde_json::{json, Value as Json};
 
+use crate::graph_builder::GraphBuilder;
 use crate::standard::{self, EXPRESSION_NAMES, FACE_CONTROLS, VISEME_SHAPES};
 
 /// Source id of the composed profile (node ids get `ros4hri::` prefixes).
@@ -45,6 +46,7 @@ pub const EXPRESSION_NAME_KEY: &str = "standard/ros4hri/expression/name";
 pub const EXPRESSION_VALENCE_KEY: &str = "standard/ros4hri/expression/valence";
 pub const EXPRESSION_AROUSAL_KEY: &str = "standard/ros4hri/expression/arousal";
 pub const GAZE_TARGET_KEY: &str = "standard/ros4hri/gaze/target";
+pub const GAZE_FRAME_KEY: &str = "standard/ros4hri/gaze/frame";
 
 /// The key carrying a FACS action-unit intensity, [0, 1].
 pub fn au_key(code: u8) -> String {
@@ -100,106 +102,26 @@ const HALF_IOD: f64 = 0.03;
 /// The incumbent's gaze normalization: ±0.78 rad maps to ±1.
 const GAZE_RANGE_RAD: f64 = 0.78;
 
-/// Incrementally builds the profile's node/edge lists.
-struct GraphBuilder {
-    nodes: Vec<Json>,
-    edges: Vec<Json>,
-    scratch: u32,
-}
-
-impl GraphBuilder {
-    fn new() -> Self {
-        Self {
-            nodes: Vec::new(),
-            edges: Vec::new(),
-            scratch: 0,
-        }
-    }
-
-    fn node(&mut self, id: &str, ty: &str, params: Json) -> String {
-        self.nodes
-            .push(json!({ "id": id, "type": ty, "params": params }));
-        id.to_string()
-    }
-
-    fn edge(&mut self, from: &str, to: &str, input: &str) {
-        self.edges
-            .push(json!({ "from": { "node_id": from }, "to": { "node_id": to, "input": input } }));
-    }
-
-    /// A fresh constant node holding `value`.
-    fn constant(&mut self, value: f64) -> String {
-        self.scratch += 1;
-        let id = format!("c{}", self.scratch);
-        self.node(&id, "constant", json!({ "value": value }))
-    }
-
-    /// A scratch node wired from `inputs` (port name → source node).
-    fn op(&mut self, ty: &str, params: Json, inputs: &[(&str, &str)]) -> String {
-        self.scratch += 1;
-        let id = format!("n{}", self.scratch);
-        self.node(&id, ty, params);
-        for (port, from) in inputs {
-            self.edge(from, &id, port);
-        }
-        id
-    }
-
-    fn sub(&mut self, lhs: &str, rhs: &str) -> String {
-        self.op("subtract", json!({}), &[("lhs", lhs), ("rhs", rhs)])
-    }
-    fn mul(&mut self, a: &str, b: &str) -> String {
-        self.op("multiply", json!({}), &[("operand_0", a), ("operand_1", b)])
-    }
-    fn div(&mut self, lhs: &str, rhs: &str) -> String {
-        self.op("divide", json!({}), &[("lhs", lhs), ("rhs", rhs)])
-    }
-    fn add2(&mut self, a: &str, b: &str) -> String {
-        self.op("add", json!({}), &[("operand_0", a), ("operand_1", b)])
-    }
-    fn max2(&mut self, a: &str, b: &str) -> String {
-        self.op("max", json!({}), &[("operand_0", a), ("operand_1", b)])
-    }
-
-    /// ~200 ms exponential smoothing.
-    fn damp(&mut self, from: &str) -> String {
-        self.op("damp", json!({ "half_life": HALF_LIFE }), &[("in", from)])
-    }
-
-    /// An input node reading `path`, defaulting to `value` until staged.
-    fn input(&mut self, id: &str, path: &str, value: Json) -> String {
-        self.node(id, "input", json!({ "path": path, "value": value }))
-    }
-
-    /// An output node writing `path`.
-    fn output(&mut self, from: &str, path: String) {
-        self.scratch += 1;
-        let id = format!("o{}", self.scratch);
-        self.node(&id, "output", json!({ "path": path }));
-        self.edge(from, &id, "in");
-    }
-
-    /// `atan(num / den)` via the rational approximation `r / (1 + 0.28 r²)`
-    /// (≤1 % error inside the clamped gaze range), normalized by the
-    /// incumbent's ±0.78 rad → ±1 and clamped.
-    fn gaze_angle(&mut self, num: &str, den: &str) -> String {
-        let r = self.div(num, den);
-        let r2 = self.mul(&r, &r);
-        let k = self.constant(0.28);
-        let kr2 = self.mul(&r2, &k);
-        let one = self.constant(1.0);
-        let d = self.add2(&kr2, &one);
-        let atan = self.div(&r, &d);
-        let range = self.constant(GAZE_RANGE_RAD);
-        let norm = self.div(&atan, &range);
-        let lo = self.constant(-1.0);
-        let hi = self.constant(1.0);
-        self.op(
-            "clamp",
-            json!({}),
-            &[("in", &norm), ("min", &lo), ("max", &hi)],
-        )
-    }
+/// `atan(num / den)` via the rational approximation `r / (1 + 0.28 r²)`
+/// (≤1 % error inside the clamped gaze range), normalized by the
+/// incumbent's ±0.78 rad → ±1 and clamped.
+fn gaze_angle(g: &mut GraphBuilder, num: &str, den: &str) -> String {
+    let r = g.div(num, den);
+    let r2 = g.mul(&r, &r);
+    let k = g.constant(0.28);
+    let kr2 = g.mul(&r2, &k);
+    let one = g.constant(1.0);
+    let d = g.add2(&kr2, &one);
+    let atan = g.div(&r, &d);
+    let range = g.constant(GAZE_RANGE_RAD);
+    let norm = g.div(&atan, &range);
+    let lo = g.constant(-1.0);
+    let hi = g.constant(1.0);
+    g.op(
+        "clamp",
+        json!({}),
+        &[("in", &norm), ("min", &lo), ("max", &hi)],
+    )
 }
 
 /// The composable ROS4HRI profile source: the canonical profile asset
@@ -334,7 +256,7 @@ fn build(rig_prefix: &str) -> (String, Json) {
         };
         let blended = g.mul(&no_name, &va);
         let w = g.add2(&named, &blended);
-        let smooth = g.damp(&w);
+        let smooth = g.damp(&w, HALF_LIFE);
         if *expr == "asleep" {
             asleep_weight = Some(smooth.clone());
         }
@@ -362,9 +284,9 @@ fn build(rig_prefix: &str) -> (String, Json) {
     let iod = g.constant(HALF_IOD);
     let y_left = g.add2(&gy, &iod);
     let y_right = g.sub(&gy, &iod);
-    let yaw_l = g.gaze_angle(&y_left, &gx);
-    let yaw_r = g.gaze_angle(&y_right, &gx);
-    let pitch = g.gaze_angle(&gz, &gx);
+    let yaw_l = gaze_angle(g, &y_left, &gx);
+    let yaw_r = gaze_angle(g, &y_right, &gx);
+    let pitch = gaze_angle(g, &gz, &gx);
 
     for (angle, path_x, path_y) in [
         (&yaw_l, standard::LEFT_EYE_POS_X, standard::LEFT_EYE_POS_Y),
@@ -380,8 +302,8 @@ fn build(rig_prefix: &str) -> (String, Json) {
             json!({}),
             &[("cond", &valid), ("then", &pitch), ("else", &zero)],
         );
-        let sx = g.damp(&gated_x);
-        let sy = g.damp(&gated_y);
+        let sx = g.damp(&gated_x, HALF_LIFE);
+        let sy = g.damp(&gated_y, HALF_LIFE);
         g.output(&sx, out(path_x.to_string()));
         g.output(&sy, out(path_y.to_string()));
     }
@@ -394,7 +316,7 @@ fn build(rig_prefix: &str) -> (String, Json) {
     for code in au_codes {
         let input_id = format!("in-au-{code}");
         let raw = g.input(&input_id, &au_key(code), json!(0.0));
-        let smooth = g.damp(&raw);
+        let smooth = g.damp(&raw, HALF_LIFE);
         if code == 43 {
             eyes_closed = smooth.clone();
         }
@@ -415,7 +337,7 @@ fn build(rig_prefix: &str) -> (String, Json) {
     for shape in VISEME_SHAPES {
         let input_id = format!("in-vis-{shape}");
         let raw = g.input(&input_id, &viseme_key(shape), json!(0.0));
-        let smooth = g.damp(&raw);
+        let smooth = g.damp(&raw, HALF_LIFE);
         g.output(&smooth, out(standard::viseme_path(shape)));
     }
 

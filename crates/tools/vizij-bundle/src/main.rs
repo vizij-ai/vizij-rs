@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::{anyhow, bail, Context, Result};
-use vizij_arora_host::{profiles, ros4hri};
+use vizij_arora_host::{profiles, ros4hri, skills};
 
 struct Args {
     command: String,
@@ -47,7 +47,8 @@ const USAGE: &str = "usage: vizij-bundle <command> …
   add-standard   <face.glb> --standard <profile> -o <out.glb>
   validate       <face.glb> [--min-level <0-3>]
   profiles
-  export-profile <profile> [-o <file.json>]";
+  export-profile <profile> [-o <file.json>]
+  export-skill   <skill>   [-o <file.json>]";
 
 fn parse_args() -> Result<Args> {
     let mut args = std::env::args().skip(1);
@@ -112,6 +113,23 @@ fn run_assets(args: &Args) -> Result<Option<ExitCode>> {
             let spec = match id {
                 "ros4hri" => ros4hri::generate(),
                 _ => unreachable!("registered profiles have generators"),
+            };
+            let text = vizij_bundle::to_sidecar(&spec)?;
+            match &args.output {
+                Some(path) => std::fs::write(path, text)
+                    .with_context(|| format!("write {}", path.display()))?,
+                None => print!("{text}"),
+            }
+            Ok(Some(ExitCode::SUCCESS))
+        }
+        "export-skill" => {
+            let id = args
+                .target
+                .as_deref()
+                .ok_or_else(|| anyhow!("export-skill needs a skill id\n{USAGE}"))?;
+            let spec = match id {
+                "look_at" => skills::generate_look_at(),
+                _ => return Err(anyhow!("unknown skill {id}")),
             };
             let text = vizij_bundle::to_sidecar(&spec)?;
             match &args.output {

@@ -17,6 +17,8 @@ pub use vizij_arora_host::ProgramSelect;
 use vizij_arora_store::BlackboardStore;
 
 use crate::animation;
+use crate::gaze;
+use crate::tts;
 use crate::meta::FaceMeta;
 
 /// A running face device. Both handles share storage with the device's own
@@ -110,7 +112,11 @@ async fn attach_bridges(
     }
     #[cfg(feature = "ros2")]
     if let Some((namespace, domain)) = &bridges.ros2 {
-        let config = arora_bridge_ros2::Ros2BridgeConfig::new(namespace.clone(), *domain);
+        // The ROS4HRI exposure profile: typed face topics fanning onto the
+        // standard keys, and the `/skill/look_at` action bound to the gaze
+        // skill the device describes.
+        let config = arora_bridge_ros2::Ros2BridgeConfig::new(namespace.clone(), *domain)
+            .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
         builder = builder.with_bridge(Box::new(arora_bridge_ros2::Ros2Bridge::new(config).await));
         log::info!("serving the ROS 2 bridge (namespace {namespace:?}, domain {domain})");
     }
@@ -263,12 +269,17 @@ pub(crate) fn builder_for(
     // Route the animation source's `step`/`player_states` handles (and any
     // in-process transport call) to the host module registered below.
     graph.set_function_modules(animation::function_modules());
+    // The gaze skill: the described contract rides the gaze module; the
+    // behavior is the shipped fragment the interpreter grafts per goal.
+    graph.set_task_fragment(gaze::look_at_id(), gaze::look_at_fragment());
     Some(
         arora::Arora::builder()
             .with_hal(Box::new(rig))
             .with_data_store(Box::new(store))
             .with_behavior_interpreter(Box::new(graph))
-            .with_host_module(animation::host_module()),
+            .with_host_module(animation::host_module())
+            .with_host_module(gaze::host_module())
+            .with_host_module(tts::host_module()),
     )
 }
 
@@ -524,6 +535,88 @@ mod tests {
             .expect("the handle's stop call dispatches");
         arora.step(Duration::from_millis(16)).expect("step");
         assert_eq!(status(&arora), Some(task::failure()), "halted");
+    }
+
+    /// The production gaze skill through the device: SPAWN on the described
+    /// `look_at` grafts the shipped fragment (`builder_for` registers it) —
+    /// asset content, no module call — so the goal target lands on the
+    /// standard gaze surface and the run reports `Running` until halted.
+    #[test]
+    fn the_gaze_skill_runs_the_shipped_fragment_through_the_device() {
+        use arora_behavior::{interpreter_module, RunPolicy};
+        use arora_types::call::Call;
+        use arora_types::gen_uuid_from_str;
+        use arora_types::value::StructureField;
+        use vizij_arora_behavior::task;
+
+        use crate::gaze;
+
+        let mut arora = builder_for(
+            r#"{ "nodes": [], "edges": [] }"#,
+            RigHal::new(),
+            BlackboardStore::new(),
+        )
+        .expect("build the device")
+        .build()
+        .expect("build arora");
+
+        let look_at = Call {
+            module_id: Some(gaze::module_id()),
+            id: gaze::look_at_id(),
+            args: vec![
+                StructureField {
+                    id: gen_uuid_from_str("policy"),
+                    value: Box::new(Value::String(String::new())),
+                },
+                StructureField {
+                    id: gen_uuid_from_str("target"),
+                    value: Box::new(Value::ArrayF32(vec![1.0, 2.0, 3.0])),
+                },
+                StructureField {
+                    id: gen_uuid_from_str("frame"),
+                    value: Box::new(Value::String("sellion_link".to_string())),
+                },
+            ],
+        };
+        let spawned = arora
+            .call(interpreter_module::encode_spawn(
+                &look_at,
+                RunPolicy::Concurrent,
+            ))
+            .expect("SPAWN dispatches through the engine");
+        let handle =
+            interpreter_module::decode_spawn_result(&spawned.ret).expect("a TaskHandle comes back");
+
+        let read = |arora: &arora::Arora, key: &arora_types::data::Key| {
+            arora
+                .store()
+                .read(std::slice::from_ref(key))
+                .into_iter()
+                .next()
+                .flatten()
+        };
+
+        arora.step(Duration::from_millis(16)).expect("step");
+        assert_eq!(
+            read(&arora, &Key::from(ros4hri::GAZE_TARGET_KEY)),
+            Some(Value::ArrayF32(vec![1.0, 2.0, 3.0])),
+            "the fragment writes the goal onto the gaze surface"
+        );
+        assert_eq!(
+            read(&arora, &Key::from(ros4hri::GAZE_FRAME_KEY)),
+            Some(Value::String("sellion_link".to_string())),
+        );
+        assert_eq!(read(&arora, &handle.status), Some(task::running()));
+
+        arora
+            .call(handle.stop.clone())
+            .expect("the handle's stop call dispatches");
+        arora.step(Duration::from_millis(16)).expect("step");
+        assert_eq!(
+            read(&arora, &handle.status),
+            Some(task::failure()),
+            "halted"
+        );
     }
 
     use vizij_api_core::value::{as_float, text, vec3, Value};
