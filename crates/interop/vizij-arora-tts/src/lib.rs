@@ -1,17 +1,80 @@
-//! The device's text-to-speech module: `say(text, voice) -> Status`.
+//! Vizij's text-to-speech as an Arora host module.
+//!
+//! The **contract** — `say(text, voice) -> Status` with a mutable `viseme`
+//! out-parameter — is shared by every provider: same function id, parameter
+//! ids, and signature, so a behavior references `say` without caring which
+//! provider a build registered. This crate ships the contract and the **cloud
+//! provider** (the Vizij TTS cloud function — AWS Polly behind an HTTP
+//! endpoint, no credentials in the app; `API_URL` overrides the deployment).
+//! A sibling provider (e.g. the local Piper one) implements the same
+//! contract with its own module id.
 //!
 //! A poll-on-tick action (the arora-sdk `docs/async-functions.md` contract):
-//! it synthesizes speech through the Vizij TTS provider — the same cloud
-//! function the web demo (`@vizij/speech-react`) uses — plays the audio, and
-//! streams the current viseme. It returns `Running` while speaking and `Success`
-//! at the end; the heavy work runs off the tick thread and the closure only
-//! polls it, exactly like arora-sdk's `polly::say`.
-//!
-//! The module *produces* the current viseme (as the `viseme` out-parameter). It
-//! does **not** map it to face poses — the vocabulary, the destination key, and
-//! the crossfade dynamics belong to the action/graph layer, not here.
+//! [`say`] is re-invoked each tick while `Running`; synthesis + playback run
+//! off the tick thread, and the closure only polls. The module *produces*
+//! the current viseme (AWS Polly viseme codes); mapping it to face poses is
+//! the caller's job. [`SILENCE_VISEME`] is written at rest.
+
+use arora_engine::module::{HostModule, ModuleBuilder};
 
 use std::collections::HashMap;
+
+use arora_behavior_tree_types::STATUS_ENUMERATION_ID;
+use arora_types::record::module::frozen::{Function, Parameter};
+use arora_types::record::ty::{FrozenScalar, FrozenTy, PrimitiveKind};
+use arora_types::record::{FrozenReference, Version};
+use uuid::{uuid, Uuid};
+
+/// The rest token, written whenever nothing is speaking (both vocabularies).
+pub const SILENCE_VISEME: &str = "sil";
+
+/// The `say` function's id — identical across providers.
+pub fn say_id() -> Uuid {
+    uuid!("77bf2798-e7ce-47c6-a45c-3c2e9ba1837d")
+}
+
+pub fn text_param_id() -> Uuid {
+    uuid!("881dc182-d4ba-4ea0-9e81-f4eddab6f669")
+}
+pub fn voice_param_id() -> Uuid {
+    uuid!("f56ca142-db46-4c58-bc44-7896c4b54d5c")
+}
+pub fn viseme_param_id() -> Uuid {
+    uuid!("a1fbf58b-bf66-44a6-a503-9d9078ee5755")
+}
+
+/// `say(text, voice) -> Status`, with a mutable `viseme` out-parameter. The
+/// `Status` return is the task-run marker a bridge exposes as an action.
+pub fn say_signature() -> Function {
+    let mut parameters = HashMap::new();
+    let mut parameter_ordering = Vec::new();
+    for (id, name, kind, mutable) in [
+        (text_param_id(), "text", PrimitiveKind::String, false),
+        (voice_param_id(), "voice", PrimitiveKind::String, false),
+        (viseme_param_id(), "viseme", PrimitiveKind::String, true),
+    ] {
+        parameter_ordering.push(id);
+        parameters.insert(
+            id,
+            Parameter {
+                name: name.to_string(),
+                ty: FrozenTy::from(kind),
+                mutable,
+            },
+        );
+    }
+    Function {
+        parameters,
+        parameter_ordering,
+        return_ty: FrozenTy::FrozenScalar(FrozenScalar {
+            reference: FrozenReference {
+                id: STATUS_ENUMERATION_ID,
+                version: Version::parse("1.0.0").expect("a valid version"),
+            },
+        }),
+    }
+}
+
 use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::pin::Pin;
@@ -19,16 +82,10 @@ use std::sync::{Arc, LazyLock, Mutex};
 use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
 
-use arora::{HostModule, ModuleBuilder};
 use arora_types::call::{Call, CallError, CallResult};
 use arora_types::value::{StructureField, Value};
 use serde::{Deserialize, Serialize};
-use uuid::{uuid, Uuid};
 use vizij_graph_core::task;
-
-use crate::tts_api::{
-    say_id, say_signature, text_param_id, viseme_param_id, voice_param_id, SILENCE_VISEME,
-};
 
 /// Default provider: the same Vizij TTS cloud function the web demo
 /// (`@vizij/speech-react`'s `fetchVisemeData`) calls — AWS Polly behind an HTTP
@@ -100,7 +157,7 @@ pub fn host_module() -> HostModule {
 
 /// Speak `text` in `voice`, streaming the current viseme. Re-invoked each tick
 /// while `Running`; keeps its state in [`RUNS`], keyed by content.
-pub(crate) fn say(call: Call) -> Result<CallResult, CallError> {
+pub fn say(call: Call) -> Result<CallResult, CallError> {
     let text = match arg_string(&call, text_param_id()) {
         Some(text) => text,
         None => return Ok(status_only(task::failure())),

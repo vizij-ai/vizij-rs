@@ -28,7 +28,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: |
           set -euo pipefail
-          crates="vizij-api-core vizij-graph-core vizij-arora-host vizij-arora-behavior"
+          crates="vizij-api-core vizij-graph-core vizij-arora-host vizij-arora-behavior vizij-arora-tts"
           for crate in $crates; do
             version=$(cargo metadata --format-version 1 --no-deps \
               | jq -r ".packages[] | select(.name==\"$crate\") | .version")

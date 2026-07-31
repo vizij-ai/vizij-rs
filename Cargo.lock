@@ -10980,7 +10980,6 @@ dependencies = [
  "image",
  "log",
  "rand 0.9.5",
- "reqwest",
  "rodio 0.20.1",
  "ros2-client-multi-rmw 0.11.0",
  "serde",
@@ -10995,6 +10994,7 @@ dependencies = [
  "vizij-arora-hal",
  "vizij-arora-host",
  "vizij-arora-store",
+ "vizij-arora-tts",
  "vizij-bundle",
  "vizij-graph-core",
  "vizij-piper",
@@ -11129,6 +11129,22 @@ version = "0.0.0"
 dependencies = [
  "arora-types",
  "vizij-api-core",
+]
+
+[[package]]
+name = "vizij-arora-tts"
+version = "1.0.0"
+dependencies = [
+ "arora-behavior-tree-types",
+ "arora-engine 4.1.0",
+ "arora-types",
+ "log",
+ "reqwest",
+ "rodio 0.20.1",
+ "serde",
+ "tokio",
+ "uuid",
+ "vizij-graph-core",
 ]
 
 [[package]]

@@ -13,12 +13,10 @@
 // exercises their call surface.
 #![allow(dead_code)]
 
-#[path = "../src/tts_api.rs"]
-mod tts_api;
+use vizij_arora_tts as tts_api;
 
 #[cfg(not(feature = "tts-piper"))]
-#[path = "../src/tts.rs"]
-mod provider;
+use vizij_arora_tts as provider;
 #[cfg(feature = "tts-piper")]
 #[path = "../src/tts_piper.rs"]
 mod provider;
