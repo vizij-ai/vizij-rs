@@ -400,6 +400,34 @@ pub fn standard_profile(id: &str, rig_prefix: &str) -> Result<JsValue, JsValue> 
     }
 }
 
+/// The skills Vizij ships (the look_at gaze skill, …) as a JS array of
+/// `{ id, title, description, parameters }` — the introspectable list an
+/// authoring app's Skills menu and a device's actions view offer.
+#[wasm_bindgen(js_name = skills)]
+pub fn skills() -> Result<JsValue, JsValue> {
+    let list = vizij_arora_host::skills::skills_json();
+    let json =
+        serde_json::to_string(&list).map_err(|e| JsValue::from_str(&format!("skills: {e}")))?;
+    js_sys::JSON::parse(&json)
+}
+
+/// A skill's canonical fragment graph as a JS object, ready to embed as the
+/// face's `skill::<id>` override. Face-independent by construction (its
+/// placeholder `task/*` paths are rewritten per run at graft time), so unlike
+/// a profile it takes no rig prefix. `null` for an unknown id (see
+/// [`skills`]).
+#[wasm_bindgen(js_name = skillSource)]
+pub fn skill_source(id: &str) -> Result<JsValue, JsValue> {
+    match vizij_arora_host::skills::skill_source(id) {
+        Some(spec) => {
+            let json = serde_json::to_string(&spec)
+                .map_err(|e| JsValue::from_str(&format!("skill {id}: {e}")))?;
+            js_sys::JSON::parse(&json)
+        }
+        None => Ok(JsValue::NULL),
+    }
+}
+
 /// The composed behavior graph of a face bundle — the composition the native
 /// `vizij` app deploys: the bundle's base graphs, its embedded standard
 /// profiles (each suppressing the built-in of the same id — an embedded copy

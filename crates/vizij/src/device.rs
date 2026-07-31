@@ -221,7 +221,7 @@ pub fn start(glb: &Path, config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
                     if config.stage_neutral {
                         stage_neutral_pose(&store, &meta);
                     }
-                    let Some(builder) = builder_for(&spec, rig, store) else {
+                    let Some(builder) = builder_for(&spec, rig, store, &meta.bundle.skills) else {
                         return;
                     };
                     match builder.build() {
@@ -250,6 +250,7 @@ pub(crate) fn builder_for(
     spec: &str,
     rig: RigHal,
     store: BlackboardStore,
+    embedded_skills: &[(String, serde_json::Value)],
 ) -> Option<arora::AroraBuilder> {
     let spec = match parse_spec(spec) {
         Ok(spec) => spec,
@@ -269,8 +270,12 @@ pub(crate) fn builder_for(
     // in-process transport call) to the host module registered below.
     graph.set_function_modules(animation::function_modules());
     // The gaze skill: the described contract rides the gaze module; the
-    // behavior is the shipped fragment the interpreter grafts per goal.
-    graph.set_task_fragment(gaze::look_at_id(), gaze::look_at_fragment());
+    // behavior is the shipped fragment the interpreter grafts per goal — or
+    // the face's embedded override.
+    graph.set_task_fragment(
+        gaze::look_at_id(),
+        gaze::look_at_fragment_from(embedded_skills),
+    );
     Some(
         arora::Arora::builder()
             .with_hal(Box::new(rig))
@@ -334,7 +339,7 @@ fn supervise(
         if config.stage_neutral {
             stage_neutral_pose(&store, &meta);
         }
-        let Some(builder) = builder_for(&spec, rig, store) else {
+        let Some(builder) = builder_for(&spec, rig, store, &meta.bundle.skills) else {
             return;
         };
         let (stop_tx, stop_rx) = futures::channel::oneshot::channel();
@@ -440,7 +445,7 @@ mod tests {
         let spec = compose_sources(&[animations_source()])
             .expect("compose the animation source")
             .to_string();
-        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new())
+        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[])
             .expect("build the device over the loaded animation module")
             .build()
             .expect("build arora");
@@ -491,6 +496,7 @@ mod tests {
             r#"{ "nodes": [], "edges": [] }"#,
             RigHal::new(),
             BlackboardStore::new(),
+            &[],
         )
         .expect("build the device")
         .with_host_module(gaze)
@@ -553,6 +559,7 @@ mod tests {
             r#"{ "nodes": [], "edges": [] }"#,
             RigHal::new(),
             BlackboardStore::new(),
+            &[],
         )
         .expect("build the device")
         .build()
@@ -617,6 +624,73 @@ mod tests {
         );
     }
 
+    /// A face's bundle-embedded `skill::look_at` fragment overrides the
+    /// shipped behavior — the `standard::<id>` precedence, applied to the
+    /// skill plane. The override here redirects the gaze write to a marker
+    /// key, proving the embedded copy (not the built-in) serves the run.
+    #[test]
+    fn the_face_embedded_skill_fragment_overrides_the_built_in() {
+        use arora_behavior::{interpreter_module, RunPolicy};
+        use arora_types::call::Call;
+        use arora_types::gen_uuid_from_str;
+        use arora_types::value::StructureField;
+        use vizij_arora_host::skills;
+
+        use crate::gaze;
+
+        let edited =
+            skills::LOOK_AT_JSON.replace(ros4hri::GAZE_TARGET_KEY, "test/edited/gaze/target");
+        let embedded = vec![(
+            "look_at".to_string(),
+            serde_json::from_str(&edited).expect("the edited fragment parses"),
+        )];
+
+        let mut arora = builder_for(
+            r#"{ "nodes": [], "edges": [] }"#,
+            RigHal::new(),
+            BlackboardStore::new(),
+            &embedded,
+        )
+        .expect("build the device")
+        .build()
+        .expect("build arora");
+
+        let look_at = Call {
+            module_id: Some(gaze::module_id()),
+            id: gaze::look_at_id(),
+            args: vec![StructureField {
+                id: gen_uuid_from_str("target"),
+                value: Box::new(Value::ArrayF32(vec![7.0, 8.0, 9.0])),
+            }],
+        };
+        arora
+            .call(interpreter_module::encode_spawn(
+                &look_at,
+                RunPolicy::Concurrent,
+            ))
+            .expect("SPAWN dispatches through the engine");
+        arora.step(Duration::from_millis(16)).expect("step");
+
+        let read = |key: &str| {
+            arora
+                .store()
+                .read(std::slice::from_ref(&Key::from(key)))
+                .into_iter()
+                .next()
+                .flatten()
+        };
+        assert_eq!(
+            read("test/edited/gaze/target"),
+            Some(Value::ArrayF32(vec![7.0, 8.0, 9.0])),
+            "the embedded fragment's redirected write serves"
+        );
+        assert_eq!(
+            read(ros4hri::GAZE_TARGET_KEY),
+            None,
+            "the built-in fragment's write does not"
+        );
+    }
+
     use vizij_api_core::value::{as_float, text, vec3, Value};
     use vizij_arora_host::ros4hri::{self, ros4hri_source};
     use vizij_arora_host::standard;
@@ -628,7 +702,7 @@ mod tests {
         let spec = compose_sources(&[ros4hri_source("")])
             .expect("compose the ros4hri profile")
             .to_string();
-        builder_for(&spec, RigHal::new(), BlackboardStore::new())
+        builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[])
             .expect("build the device over the profile")
             .build()
             .expect("build arora")
@@ -692,7 +766,7 @@ mod tests {
             )
             .expect("compose the face with its embedded profile")
             .to_string();
-        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new())
+        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[])
             .expect("build the device over the composed face")
             .build()
             .expect("build arora");
@@ -864,7 +938,7 @@ mod tests {
         let (_, meta, spec) = load_face(&path, &config).expect("load the adapted face");
         let store = BlackboardStore::new();
         stage_neutral_pose(&store, &meta);
-        let mut arora = builder_for(&spec, RigHal::new(), store)
+        let mut arora = builder_for(&spec, RigHal::new(), store, &[])
             .expect("build the device")
             .build()
             .expect("build arora");

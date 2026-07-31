@@ -213,6 +213,74 @@ pub fn look_at_source() -> Json {
     serde_json::from_str(LOOK_AT_JSON).expect("skills/look_at.json parses")
 }
 
+/// The bundle graph kind under which a skill fragment embeds in a GLB — the
+/// override a face ships of a built-in skill's behavior.
+pub const SKILL_KIND: &str = "skill";
+
+/// A skill in the shipped registry: its identity, the contract's parameter
+/// names, and the fragment asset behind it.
+pub struct Skill {
+    /// Registry id — the described function name, also the id everywhere a
+    /// user opts in (bundle graph ids, npm lookups).
+    pub id: &'static str,
+    pub title: &'static str,
+    pub description: &'static str,
+    /// The described signature's parameter names, in declared order — the
+    /// fragment's `task/<param>` inputs.
+    pub parameters: &'static [&'static str],
+    /// The canonical fragment asset, verbatim JSON.
+    pub asset_json: &'static str,
+}
+
+/// Every skill Vizij ships.
+pub const SKILLS: [Skill; 1] = [Skill {
+    id: LOOK_AT_FUNCTION,
+    title: "Look At",
+    description: "The ROS4HRI gaze skill (interaction_skills/LookAt on /skill/look_at): \
+                  tracks a target on the standard gaze surface until cancelled, holds a \
+                  glance/reset fixation then succeeds, and answers ROS_ENOTSUP for the \
+                  social/random policies.",
+    parameters: &LOOK_AT_PARAMS,
+    asset_json: LOOK_AT_JSON,
+}];
+
+/// Look a skill up by id.
+pub fn skill(id: &str) -> Option<&'static Skill> {
+    SKILLS.iter().find(|s| s.id == id)
+}
+
+/// The bundle graph id under which `skill_id` embeds in a GLB — stable, so
+/// re-adding replaces rather than duplicates.
+pub fn embedded_graph_id(skill_id: &str) -> String {
+    format!("skill::{skill_id}")
+}
+
+/// A skill's canonical fragment as JSON — face-independent by construction
+/// (placeholder `task/*` paths), so unlike a profile source it takes no rig
+/// prefix. `None` for an unknown id.
+pub fn skill_source(id: &str) -> Option<Json> {
+    let skill = skill(id)?;
+    serde_json::from_str(skill.asset_json).ok()
+}
+
+/// The registry as JSON — what CLIs print and the web runtime serves for
+/// pickers (authoring's Skills menu, the standalone's actions view).
+pub fn skills_json() -> Json {
+    Json::Array(
+        SKILLS
+            .iter()
+            .map(|s| {
+                json!({
+                    "id": s.id,
+                    "title": s.title,
+                    "description": s.description,
+                    "parameters": s.parameters,
+                })
+            })
+            .collect(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -229,6 +297,17 @@ mod tests {
             generate_look_at(),
             "skills/look_at.json is stale"
         );
+    }
+
+    #[test]
+    fn registry_lists_look_at() {
+        let listed = skills_json();
+        assert_eq!(listed[0]["id"], "look_at");
+        assert_eq!(listed[0]["parameters"][1], "target");
+        assert!(skill("look_at").is_some());
+        assert!(skill("nope").is_none());
+        assert_eq!(embedded_graph_id("look_at"), "skill::look_at");
+        assert_eq!(skill_source("look_at"), Some(look_at_source()));
     }
 
     /// The fragment holds the placeholder contract the interpreter grafts
