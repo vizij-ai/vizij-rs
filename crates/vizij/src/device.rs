@@ -18,7 +18,6 @@ use vizij_arora_store::BlackboardStore;
 
 use crate::animation;
 use crate::gaze;
-use crate::tts;
 use crate::meta::FaceMeta;
 
 /// A running face device. Both handles share storage with the device's own
@@ -278,8 +277,7 @@ pub(crate) fn builder_for(
             .with_data_store(Box::new(store))
             .with_behavior_interpreter(Box::new(graph))
             .with_host_module(animation::host_module())
-            .with_host_module(gaze::host_module())
-            .with_host_module(tts::host_module()),
+            .with_host_module(gaze::host_module()),
     )
 }
 
