@@ -35,9 +35,9 @@ arora = "9.10"
 # `studio-bridge` feature instead (`--studio`). 5 adds the skill plane the
 # ros4hri exposure profile binds `/skill/look_at` through.
 arora-bridge-ros2 = { version = "5", optional = true }
-# The Status enumeration ids the gaze contract marks its action shape with.
+# The Status enumeration ids the gaze and tts contracts mark their action shapes with.
 arora-behavior-tree-types = "1"
-tokio = { version = "1", features = ["rt-multi-thread"] }
+tokio = { version = "1", features = ["rt-multi-thread", "time"] }
 # The command pump's async plumbing: the TUI command stream and the per-run
 # stop signal.
 futures = "0.3"
@@ -64,6 +64,11 @@ vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
 # module (`with_host_module`) rather than loading its wasm, so no artifact
 # dependency and no nightly. Its generated `Value` conversions marshal the calls.
 vizij-animation-module = { path = "../interop/vizij-animation-module" }
+
+# The TTS module (`tts.rs`): `reqwest` reaches the Vizij TTS provider over HTTP;
+# `soloud` plays the audio whose playhead the viseme cursor follows.
+reqwest = { version = "0.13", features = ["json"] }
+soloud = "1"
 
 [dev-dependencies]
 # The interpreter-module SPAWN/HALT codecs and RunPolicy the device test
