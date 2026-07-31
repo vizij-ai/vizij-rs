@@ -23,6 +23,10 @@ A window opens with the face — alive, not a picture. By default the app:
   face performs it, whatever its rig;
 - composes the **[ROS4HRI](docs/ros4hri.md) profile**, so the face understands
   the ROS4HRI face vocabulary out of the box (`--no-ros4hri` opts out);
+- registers the **`say` speech action** — by default the AWS-backed cloud
+  provider (zero setup, no credentials in the app); build with
+  `--features tts-piper` to speak fully locally through Piper instead — see
+  [Speech (TTS)](#speech-tts);
 - serves arora's local WebSocket bridge for live control and inspection.
 
 ### On a ROS 2 robot
