@@ -20,44 +20,27 @@ use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
 
 use arora::{HostModule, ModuleBuilder};
-use arora_behavior_tree_types::STATUS_ENUMERATION_ID;
 use arora_types::call::{Call, CallError, CallResult};
 use arora_types::gen_uuid_from_str;
-use arora_types::record::module::frozen::{Function, Parameter};
-use arora_types::record::ty::{FrozenScalar, FrozenTy, PrimitiveKind};
-use arora_types::record::{FrozenReference, Version};
 use arora_types::value::{StructureField, Value};
 use serde::{Deserialize, Serialize};
 use soloud::*;
 use uuid::Uuid;
 use vizij_graph_core::task;
 
+use crate::tts_api::{
+    say_id, say_signature, text_param_id, viseme_param_id, voice_param_id, SILENCE_VISEME,
+};
+
 /// Default provider: the same Vizij TTS cloud function the web demo
 /// (`@vizij/speech-react`'s `fetchVisemeData`) calls — AWS Polly behind an HTTP
 /// endpoint, so the module needs no credentials. Overridable via `API_URL`.
 const DEFAULT_API_BASE: &str = "https://us-central1-semio-vizij.cloudfunctions.net/api";
 const DEFAULT_VOICE: &str = "Ruth";
-/// The rest / silence viseme (AWS Polly viseme set), written when nothing speaks.
-const SILENCE_VISEME: &str = "sil";
 
 /// The tts module's id on the device.
 pub fn module_id() -> Uuid {
     gen_uuid_from_str("tts-module")
-}
-
-/// The `say` function's id.
-pub fn say_id() -> Uuid {
-    gen_uuid_from_str("say")
-}
-
-fn text_param_id() -> Uuid {
-    gen_uuid_from_str("say.text")
-}
-fn voice_param_id() -> Uuid {
-    gen_uuid_from_str("say.voice")
-}
-fn viseme_param_id() -> Uuid {
-    gen_uuid_from_str("say.viseme")
 }
 
 /// A handle for spawning: reuse the ambient runtime if one is active, otherwise a
@@ -115,38 +98,6 @@ pub fn host_module() -> HostModule {
     ModuleBuilder::new(module_id())
         .described_function(say_id(), "say", say_signature(), say)
         .build()
-}
-
-/// `say(text, voice) -> Status`, with a mutable `viseme` out-parameter. The
-/// `Status` return is the task-run marker a bridge exposes as an action.
-fn say_signature() -> Function {
-    let mut parameters = HashMap::new();
-    let mut parameter_ordering = Vec::new();
-    for (id, name, kind, mutable) in [
-        (text_param_id(), "text", PrimitiveKind::String, false),
-        (voice_param_id(), "voice", PrimitiveKind::String, false),
-        (viseme_param_id(), "viseme", PrimitiveKind::String, true),
-    ] {
-        parameter_ordering.push(id);
-        parameters.insert(
-            id,
-            Parameter {
-                name: name.to_string(),
-                ty: FrozenTy::from(kind),
-                mutable,
-            },
-        );
-    }
-    Function {
-        parameters,
-        parameter_ordering,
-        return_ty: FrozenTy::FrozenScalar(FrozenScalar {
-            reference: FrozenReference {
-                id: STATUS_ENUMERATION_ID,
-                version: Version::parse("1.0.0").expect("a valid version"),
-            },
-        }),
-    }
 }
 
 /// Speak `text` in `voice`, streaming the current viseme. Re-invoked each tick
