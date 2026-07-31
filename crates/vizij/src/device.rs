@@ -19,7 +19,10 @@ use vizij_arora_store::BlackboardStore;
 use crate::animation;
 use crate::gaze;
 use crate::meta::FaceMeta;
+#[cfg(not(feature = "tts-piper"))]
 use crate::tts;
+#[cfg(feature = "tts-piper")]
+use crate::tts_piper;
 
 /// A running face device. Both handles share storage with the device's own
 /// (they are sibling clones), so the view reads the rig and the store live.
@@ -277,17 +280,20 @@ pub(crate) fn builder_for(
         gaze::look_at_id(),
         gaze::look_at_fragment_from(embedded_skills),
     );
-    Some(
-        arora::Arora::builder()
-            .with_hal(Box::new(rig))
-            .with_data_store(Box::new(store))
-            .with_behavior_interpreter(Box::new(graph))
-            .with_host_module(animation::host_module())
-            .with_host_module(gaze::host_module())
-            // The TTS module: the described `say` action (poll-on-tick, viseme
-            // out-param), synthesized through the Vizij TTS provider.
-            .with_host_module(tts::host_module()),
-    )
+    let builder = arora::Arora::builder()
+        .with_hal(Box::new(rig))
+        .with_data_store(Box::new(store))
+        .with_behavior_interpreter(Box::new(graph))
+        .with_host_module(animation::host_module())
+        .with_host_module(gaze::host_module());
+    // The TTS module: the described `say` action (poll-on-tick, viseme
+    // out-param). One provider per build, same contract (`tts_api`): the cloud
+    // provider by default, the local Piper provider under `tts-piper`.
+    #[cfg(not(feature = "tts-piper"))]
+    let builder = builder.with_host_module(tts::host_module());
+    #[cfg(feature = "tts-piper")]
+    let builder = builder.with_host_module(tts_piper::host_module());
+    Some(builder)
 }
 
 /// The operator flow, generation by generation: each `g` (load GLB) stops the

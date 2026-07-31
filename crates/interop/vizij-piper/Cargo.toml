@@ -1,0 +1,13 @@
+[package]
+name = "vizij-piper"
+version = "0.0.0"
+edition = { workspace = true }
+publish = false
+description = "Piper TTS with phoneme alignments, self-provisioning: the build downloads and patches the default voice and builds libpiper, so a consumer needs no configuration."
+# libpiper and espeak-ng are GPLv3: enabling this crate makes the linking binary
+# GPL-affected. The vizij app only links it behind its opt-in `tts-piper`
+# feature, keeping default builds GPL-free.
+license = "GPL-3.0-or-later"
+
+[build-dependencies]
+bindgen = "0.69"

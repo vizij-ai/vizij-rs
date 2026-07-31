@@ -65,10 +65,14 @@ vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
 # dependency and no nightly. Its generated `Value` conversions marshal the calls.
 vizij-animation-module = { path = "../interop/vizij-animation-module" }
 
-# The TTS module (`tts.rs`): `reqwest` reaches the Vizij TTS provider over HTTP;
-# `soloud` plays the audio whose playhead the viseme cursor follows.
+# The TTS modules: `reqwest` reaches the Vizij TTS cloud provider over HTTP;
+# `soloud` plays the audio whose playhead the viseme cursor follows (both
+# providers). `vizij-piper` is the local provider (feature `tts-piper`); its
+# build self-provisions libpiper and a patched default voice, so no
+# configuration is needed — note it links GPLv3 code into the binary.
 reqwest = { version = "0.13", features = ["json"] }
 soloud = "1"
+vizij-piper = { path = "../interop/vizij-piper", optional = true }
 
 [dev-dependencies]
 # The interpreter-module SPAWN/HALT codecs and RunPolicy the device test
@@ -90,3 +94,7 @@ ros2 = ["dep:arora-bridge-ros2"]
 # connector), configured from the environment (DEVICE_OWNERS, …). Needs
 # arora-studio-bridge-client 6.1.0+ (firestore 0.50 / gcloud-sdk 0.30.2).
 studio = ["arora/studio-bridge"]
+# Swap the TTS provider: the local Piper module (`tts_piper.rs`) instead of the
+# cloud module (`tts.rs`). Same `say` contract; fully offline at run time; the
+# first build downloads and prepares everything it needs.
+tts-piper = ["dep:vizij-piper"]
