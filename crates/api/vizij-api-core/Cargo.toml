@@ -2,7 +2,10 @@
 name = "vizij-api-core"
 version = "1.0.0"
 edition = "2021"
-publish = false
+license = "MIT OR Apache-2.0"
+description = "Vizij's shared Value/Shape/TypedPath contract, kept interoperable across the animation and node-graph stacks."
+repository = "https://github.com/vizij-ai/vizij-rs"
+readme = "README.md"
 
 [dependencies]
 arora-types = "2"

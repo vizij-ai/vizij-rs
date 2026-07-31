@@ -22,6 +22,7 @@
 //! [`ProcessingGraph::load`]: arora_behavior::BehaviorInterpreter::load
 //! [`ProcessingGraph::apply`]: arora_behavior::BehaviorInterpreter::apply
 
+pub mod gaze;
 pub mod graph_codec;
 
 use std::collections::HashMap;

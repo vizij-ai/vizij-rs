@@ -1,21 +1,24 @@
 [package]
 name = "vizij-arora-behavior"
-version = "0.0.0"
+version = "1.0.0"
 edition.workspace = true
-publish = false
+license = "MIT OR Apache-2.0"
 description = "A Vizij node graph driven as an Arora behavior interpreter (ProcessingGraph)."
+repository = "https://github.com/vizij-ai/vizij-rs"
 
 [dependencies]
 arora-behavior = "8"
+# Declares the `Status` enumeration id the gaze contract's signature returns.
+arora-behavior-tree-types = "1"
 arora-types = "2"
+log = "0.4"
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = "1"
-vizij-api-core = { path = "../../api/vizij-api-core" }
-vizij-graph-core = { path = "../../node-graph/vizij-graph-core" }
+vizij-api-core = { version = "1", path = "../../api/vizij-api-core" }
+vizij-graph-core = { version = "1", path = "../../node-graph/vizij-graph-core" }
+# The skill fragments (the gaze contract grafts the shipped look_at asset).
+vizij-arora-host = { version = "1", path = "../vizij-arora-host" }
 
 [dev-dependencies]
 arora-simple-data-store = "2"
-# The real skill fragments, so the graft path is proven against the shipped
-# look_at asset rather than a synthetic one.
-vizij-arora-host = { path = "../vizij-arora-host" }
