@@ -23,7 +23,6 @@ use arora::{HostModule, ModuleBuilder};
 use arora_types::call::{Call, CallError, CallResult};
 use arora_types::value::{StructureField, Value};
 use serde::{Deserialize, Serialize};
-use soloud::*;
 use uuid::{uuid, Uuid};
 use vizij_graph_core::task;
 
@@ -151,44 +150,71 @@ fn spawn_say(text: String, voice: String) -> Run {
     let handle = TOKIO_HANDLE.spawn(async move {
         let base = std::env::var("API_URL").unwrap_or_else(|_| DEFAULT_API_BASE.to_string());
         let (audio, marks) = match synthesize(&base, &voice, &text).await {
-            Some(pair) => pair,
-            None => return task::failure(),
-        };
-
-        // Play the whole utterance; advance the current viseme by the playhead.
-        let sl = match Soloud::default() {
-            Ok(sl) => sl,
-            Err(_) => return task::failure(),
-        };
-        let mut wav = audio::WavStream::default();
-        if wav.load_mem(&audio).is_err() {
-            return task::failure();
-        }
-        let start = Instant::now();
-        sl.play(&wav);
-        let mut next = 0usize;
-        while sl.voice_count() > 0 {
-            let elapsed = start.elapsed().as_millis() as u64;
-            while next < marks.len() && marks[next].time <= elapsed {
-                if let Ok(mut cur) = viseme_task.lock() {
-                    *cur = marks[next].value.clone();
-                }
-                next += 1;
+            Ok(pair) => pair,
+            Err(e) => {
+                log::error!("tts: synthesis failed: {e}");
+                return task::failure();
             }
-            tokio::time::sleep(Duration::from_millis(15)).await;
+        };
+        // Playback blocks and rodio's stream is thread-bound, so it runs on
+        // the blocking pool; this task just awaits the outcome.
+        match tokio::task::spawn_blocking(move || play(audio, marks, viseme_task)).await {
+            Ok(status) => status,
+            Err(_join_error) => task::failure(),
         }
-        if let Ok(mut cur) = viseme_task.lock() {
-            *cur = SILENCE_VISEME.to_string();
-        }
-        task::success()
     });
     Run { handle, viseme }
 }
 
+/// Play the mp3 whole, advancing the shared viseme cell at the playhead.
+fn play(audio: Vec<u8>, marks: Vec<SpeechMark>, viseme: Arc<Mutex<String>>) -> Value {
+    let (_stream, handle) = match rodio::OutputStream::try_default() {
+        Ok(pair) => pair,
+        Err(e) => {
+            log::error!("tts: audio output init failed: {e}");
+            return task::failure();
+        }
+    };
+    let sink = match rodio::Sink::try_new(&handle) {
+        Ok(sink) => sink,
+        Err(e) => {
+            log::error!("tts: audio sink failed: {e}");
+            return task::failure();
+        }
+    };
+    let source = match rodio::Decoder::new(std::io::Cursor::new(audio)) {
+        Ok(source) => source,
+        Err(e) => {
+            log::error!("tts: audio decode failed: {e}");
+            return task::failure();
+        }
+    };
+    let start = Instant::now();
+    sink.append(source);
+    let mut next = 0usize;
+    while !sink.empty() {
+        let elapsed = start.elapsed().as_millis() as u64;
+        while next < marks.len() && marks[next].time <= elapsed {
+            if let Ok(mut cur) = viseme.lock() {
+                *cur = marks[next].value.clone();
+            }
+            next += 1;
+        }
+        std::thread::sleep(Duration::from_millis(15));
+    }
+    if let Ok(mut cur) = viseme.lock() {
+        *cur = SILENCE_VISEME.to_string();
+    }
+    task::success()
+}
+
 /// Fetch audio (mp3) + the viseme timeline from the TTS provider — the same two
-/// endpoints the web demo's `fetchVisemeData` uses. `None` on any transport or
-/// decode error.
-async fn synthesize(base: &str, voice: &str, text: &str) -> Option<(Vec<u8>, Vec<SpeechMark>)> {
+/// endpoints the web demo's `fetchVisemeData` uses.
+async fn synthesize(
+    base: &str,
+    voice: &str,
+    text: &str,
+) -> Result<(Vec<u8>, Vec<SpeechMark>), String> {
     let client = reqwest::Client::new();
     let body = TtsRequest { voice, text };
     let audio = client
@@ -196,26 +222,26 @@ async fn synthesize(base: &str, voice: &str, text: &str) -> Option<(Vec<u8>, Vec
         .json(&body)
         .send()
         .await
-        .ok()?
+        .map_err(|e| format!("get-audio: {e}"))?
         .error_for_status()
-        .ok()?
+        .map_err(|e| format!("get-audio: {e}"))?
         .bytes()
         .await
-        .ok()?
+        .map_err(|e| format!("get-audio body: {e}"))?
         .to_vec();
     let marks = client
         .post(format!("{base}/tts/get-visemes"))
         .json(&body)
         .send()
         .await
-        .ok()?
+        .map_err(|e| format!("get-visemes: {e}"))?
         .error_for_status()
-        .ok()?
+        .map_err(|e| format!("get-visemes: {e}"))?
         .json::<VisemeResponse>()
         .await
-        .ok()?
+        .map_err(|e| format!("get-visemes decode: {e}"))?
         .visemes;
-    Some((audio, marks))
+    Ok((audio, marks))
 }
 
 /// A result carrying only the status (no viseme output).
