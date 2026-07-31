@@ -53,6 +53,10 @@ fn main() {
         "cargo:rustc-link-arg=-Wl,-rpath,{}",
         install.join("lib").display()
     );
+    // Exported over the DEP_PIPER_* channel (`links = "piper"`): the link-args
+    // above cover only THIS crate's artifacts, so a consumer binary must add
+    // the rpath itself — from DEP_PIPER_INSTALL_DIR in its own build script.
+    println!("cargo:install_dir={}", install.display());
 
     // Baked-in defaults the library falls back to when the env vars are unset.
     println!(
