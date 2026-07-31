@@ -163,11 +163,9 @@ fn say(call: Call) -> Result<CallResult, CallError> {
         Err(_) => return Ok(status_only(task::failure())),
     };
 
-    // First tick: spawn synthesis + playback off the tick thread.
-    if !runs.contains_key(&key) {
-        runs.insert(key, spawn_say(text, voice));
-    }
-    let run = runs.get_mut(&key).expect("just inserted");
+    // First tick: spawn synthesis + playback off the tick thread. Later ticks
+    // find the run and fall through to the poll.
+    let run = runs.entry(key).or_insert_with(|| spawn_say(text, voice));
 
     // The viseme at the playhead, advanced by the playback task.
     let current = run
