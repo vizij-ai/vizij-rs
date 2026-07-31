@@ -85,102 +85,15 @@ The rest of this README covers developing in the workspace itself.
 
 ## Table of Contents
 
-1. [Workspace Layout](#workspace-layout)
-2. [Domain Stacks](#domain-stacks)
-3. [Toolchain & Requirements](#toolchain--requirements)
-4. [Setup](#setup)
-5. [Common Workflows](#common-workflows)
-6. [Testing](#testing)
-7. [Publishing & Versioning](#publishing--versioning)
+1. [Toolchain & Requirements](#toolchain--requirements)
+2. [Setup](#setup)
+3. [Common Workflows](#common-workflows)
+4. [Testing](#testing)
+5. [Publishing & Versioning](#publishing--versioning)
+6. [Workspace Layout](#workspace-layout)
+7. [Domain Stacks](#domain-stacks)
 8. [Development Tips](#development-tips)
 9. [Reference Documentation](#reference-documentation)
-
----
-
-## Workspace Layout
-
-```
-vizij-rs/
-├─ crates/
-│  ├─ api/
-│  │  ├─ vizij-api-core            # Shared Value/Shape/TypedPath types
-│  │  └─ vizij-api-wasm            # wasm-bindgen helpers for Value/WriteBatch JSON
-│  ├─ animation/
-│  │  ├─ vizij-animation-core      # Deterministic animation engine
-│  │  └─ vizij-animation-wasm      # wasm-bindgen binding
-│  ├─ node-graph/
-│  │  ├─ vizij-graph-core          # Data-flow node graph evaluator
-│  │  ├─ vizij-graph-wasm          # wasm-bindgen binding
-│  │  └─ vizij-graph-registry-export # Registry export utility used by npm tooling
-│  ├─ interop/                     # Adapters that run the Vizij stacks on Arora seams
-│  │  ├─ vizij-arora               # Vizij↔Arora Value interop (identity + Shape.meta sidecar)
-│  │  ├─ vizij-arora-store         # Vizij Blackboard exposed as an Arora DataStore
-│  │  ├─ vizij-arora-hal           # Vizij rig presented as an Arora HAL
-│  │  ├─ vizij-arora-behavior      # Vizij node graph as an Arora behavior interpreter
-│  │  ├─ vizij-arora-host          # Bundle composition, face standard & ROS4HRI profile, skills
-│  │  ├─ vizij-arora-web           # Browser wasm cdylib: Vizij runtime as an Arora device
-│  │  └─ vizij-animation-module    # vizij-animation-core packaged as an Arora wasm module
-│  ├─ tools/
-│  │  └─ vizij-bundle              # Face-GLB bundle tool: inspect/pack/validate, embed standard profiles
-│  ├─ vizij                        # The native app: cargo run shows a face, running an arora
-│  └─ test-fixtures/
-│     └─ vizij-test-fixtures       # Loads JSON fixtures referenced across stacks
-├─ npm/
-│  ├─ @vizij/animation-module      # vizij-animation-core built as an Arora wasm module (assets)
-│  ├─ @vizij/animation             # Stable ESM wrapper around `vizij-animation-wasm`
-│  ├─ @vizij/node-graph            # Wrapper around `vizij-graph-wasm`
-│  ├─ @vizij/runtime               # Browser Vizij runtime as an Arora device (wasm bindings)
-│  ├─ @vizij/test-fixtures         # Browser bundle of shared JSON fixtures
-│  ├─ @vizij/value-json            # Shared JSON coercion helpers
-│  └─ @vizij/wasm-loader           # Loader that enforces ABI compatibility
-├─ fixtures/                       # Sample graphs and animations (+ manifest)
-└─ scripts/                        # Build, watch, and release helpers
-```
-
-The major runtime crates and npm packages include dedicated READMEs with domain-specific guidance; the top-level README focuses on cross-cutting processes.
-
----
-
-## Domain Stacks
-
-Each domain ships as a **core crate** with deterministic runtime logic plus a
-**WASM binding** re-exported through the matching `npm/@vizij/*` wrapper
-package.
-
-| Stack          | Core Crate               | WASM Binding               | npm wrapper                  |
-| -------------- | ------------------------ | -------------------------- | ---------------------------- |
-| Animation      | `vizij-animation-core`   | `vizij-animation-wasm`     | `@vizij/animation`      |
-| Node graph     | `vizij-graph-core`       | `vizij-graph-wasm`         | `@vizij/node-graph`     |
-| Test fixtures  | `vizij-test-fixtures`    | —                          | `@vizij/test-fixtures`       |
-
-Shared API crates (`vizij-api-core`, `vizij-api-wasm`) provide the Value/Shape/TypedPath contract that keeps the stacks interoperable.
-`vizij-test-fixtures` exposes the JSON assets defined under `fixtures/`, while `vizij-graph-registry-export` supports registry generation for the node-graph npm tooling.
-
-Each WASM crate exposes a stable `abi_version()` (currently `2`); the npm wrappers verify this at runtime and instruct you to rebuild if versions drift.
-
-### Interop (Arora)
-
-The `crates/interop/*` family adapts the Vizij stacks onto Arora runtime seams so a Vizij runtime can run as an Arora device (browser or native). These crates are internal to the workspace; only the wasm-facing ones ship an npm package.
-
-| Crate | Purpose | npm package |
-| ------------------------ | ---------------------------------------------------------------------- | -------------------------- |
-| `vizij-arora`            | Vizij↔Arora `Value` interop: identity passthroughs + `Shape.meta` sidecar helpers. | — |
-| `vizij-arora-store`      | Vizij Blackboard exposed as an Arora `DataStore`.                      | — |
-| `vizij-arora-hal`        | Vizij rig presented as an Arora HAL.                                   | — |
-| `vizij-arora-behavior`   | Vizij node graph driven as an Arora behavior interpreter.              | — |
-| `vizij-arora-host`       | Composes a face's bundle graphs; hosts the [face standard](docs/face-standard.md) vocabulary, the [ROS4HRI](docs/ros4hri.md) profile, and the skills registry. | — |
-| `vizij-arora-web`        | Browser wasm cdylib composing a Vizij runtime as an Arora device.      | `@vizij/runtime` |
-| `vizij-animation-module` | `vizij-animation-core` packaged as an Arora wasm module.               | `@vizij/animation-module` |
-
-### Support Packages
-
-| Package | Purpose |
-|---------|---------|
-| `@vizij/value-json` | TypeScript helpers that normalise Value/Shape payloads to match `vizij-api-core`. |
-| `@vizij/test-fixtures` | Workspace package that bundles the shared fixture manifest + JSON for browsers and Node tooling. |
-| `@vizij/wasm-loader` | Shared loader that caches wasm-bindgen modules, resolves `file://` URLs, and enforces ABI checks. |
-
-These packages build quickly (`pnpm run build:shared`) and should be rebuilt whenever fixtures or API contracts change.
 
 ---
 
@@ -383,6 +296,93 @@ Each domain stack keeps the Rust crate, WASM crate, and npm wrapper versions in 
 5. After the workflow finishes, pull your feature branch so you have the auto-generated release commit locally.
 
 Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wasm bundling, npm pack contents) before pushing real releases.
+
+---
+
+## Workspace Layout
+
+```
+vizij-rs/
+├─ crates/
+│  ├─ api/
+│  │  ├─ vizij-api-core            # Shared Value/Shape/TypedPath types
+│  │  └─ vizij-api-wasm            # wasm-bindgen helpers for Value/WriteBatch JSON
+│  ├─ animation/
+│  │  ├─ vizij-animation-core      # Deterministic animation engine
+│  │  └─ vizij-animation-wasm      # wasm-bindgen binding
+│  ├─ node-graph/
+│  │  ├─ vizij-graph-core          # Data-flow node graph evaluator
+│  │  ├─ vizij-graph-wasm          # wasm-bindgen binding
+│  │  └─ vizij-graph-registry-export # Registry export utility used by npm tooling
+│  ├─ interop/                     # Adapters that run the Vizij stacks on Arora seams
+│  │  ├─ vizij-arora               # Vizij↔Arora Value interop (identity + Shape.meta sidecar)
+│  │  ├─ vizij-arora-store         # Vizij Blackboard exposed as an Arora DataStore
+│  │  ├─ vizij-arora-hal           # Vizij rig presented as an Arora HAL
+│  │  ├─ vizij-arora-behavior      # Vizij node graph as an Arora behavior interpreter
+│  │  ├─ vizij-arora-host          # Bundle composition, face standard & ROS4HRI profile, skills
+│  │  ├─ vizij-arora-web           # Browser wasm cdylib: Vizij runtime as an Arora device
+│  │  └─ vizij-animation-module    # vizij-animation-core packaged as an Arora wasm module
+│  ├─ tools/
+│  │  └─ vizij-bundle              # Face-GLB bundle tool: inspect/pack/validate, embed standard profiles
+│  ├─ vizij                        # The native app: cargo run shows a face, running an arora
+│  └─ test-fixtures/
+│     └─ vizij-test-fixtures       # Loads JSON fixtures referenced across stacks
+├─ npm/
+│  ├─ @vizij/animation-module      # vizij-animation-core built as an Arora wasm module (assets)
+│  ├─ @vizij/animation             # Stable ESM wrapper around `vizij-animation-wasm`
+│  ├─ @vizij/node-graph            # Wrapper around `vizij-graph-wasm`
+│  ├─ @vizij/runtime               # Browser Vizij runtime as an Arora device (wasm bindings)
+│  ├─ @vizij/test-fixtures         # Browser bundle of shared JSON fixtures
+│  ├─ @vizij/value-json            # Shared JSON coercion helpers
+│  └─ @vizij/wasm-loader           # Loader that enforces ABI compatibility
+├─ fixtures/                       # Sample graphs and animations (+ manifest)
+└─ scripts/                        # Build, watch, and release helpers
+```
+
+The major runtime crates and npm packages include dedicated READMEs with domain-specific guidance; the top-level README focuses on cross-cutting processes.
+
+---
+
+## Domain Stacks
+
+Each domain ships as a **core crate** with deterministic runtime logic plus a
+**WASM binding** re-exported through the matching `npm/@vizij/*` wrapper
+package.
+
+| Stack          | Core Crate               | WASM Binding               | npm wrapper                  |
+| -------------- | ------------------------ | -------------------------- | ---------------------------- |
+| Animation      | `vizij-animation-core`   | `vizij-animation-wasm`     | `@vizij/animation`      |
+| Node graph     | `vizij-graph-core`       | `vizij-graph-wasm`         | `@vizij/node-graph`     |
+| Test fixtures  | `vizij-test-fixtures`    | —                          | `@vizij/test-fixtures`       |
+
+Shared API crates (`vizij-api-core`, `vizij-api-wasm`) provide the Value/Shape/TypedPath contract that keeps the stacks interoperable.
+`vizij-test-fixtures` exposes the JSON assets defined under `fixtures/`, while `vizij-graph-registry-export` supports registry generation for the node-graph npm tooling.
+
+Each WASM crate exposes a stable `abi_version()` (currently `2`); the npm wrappers verify this at runtime and instruct you to rebuild if versions drift.
+
+### Interop (Arora)
+
+The `crates/interop/*` family adapts the Vizij stacks onto Arora runtime seams so a Vizij runtime can run as an Arora device (browser or native). These crates are internal to the workspace; only the wasm-facing ones ship an npm package.
+
+| Crate | Purpose | npm package |
+| ------------------------ | ---------------------------------------------------------------------- | -------------------------- |
+| `vizij-arora`            | Vizij↔Arora `Value` interop: identity passthroughs + `Shape.meta` sidecar helpers. | — |
+| `vizij-arora-store`      | Vizij Blackboard exposed as an Arora `DataStore`.                      | — |
+| `vizij-arora-hal`        | Vizij rig presented as an Arora HAL.                                   | — |
+| `vizij-arora-behavior`   | Vizij node graph driven as an Arora behavior interpreter.              | — |
+| `vizij-arora-host`       | Composes a face's bundle graphs; hosts the [face standard](docs/face-standard.md) vocabulary, the [ROS4HRI](docs/ros4hri.md) profile, and the skills registry. | — |
+| `vizij-arora-web`        | Browser wasm cdylib composing a Vizij runtime as an Arora device.      | `@vizij/runtime` |
+| `vizij-animation-module` | `vizij-animation-core` packaged as an Arora wasm module.               | `@vizij/animation-module` |
+
+### Support Packages
+
+| Package | Purpose |
+|---------|---------|
+| `@vizij/value-json` | TypeScript helpers that normalise Value/Shape payloads to match `vizij-api-core`. |
+| `@vizij/test-fixtures` | Workspace package that bundles the shared fixture manifest + JSON for browsers and Node tooling. |
+| `@vizij/wasm-loader` | Shared loader that caches wasm-bindgen modules, resolves `file://` URLs, and enforces ABI checks. |
+
+These packages build quickly (`pnpm run build:shared`) and should be rebuilt whenever fixtures or API contracts change.
 
 ---
 
