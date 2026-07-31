@@ -1,15 +1,85 @@
-# Vizij RS Workspace
+# Vizij
 
-> **Rust cores and WASM bridges for Vizij’s real‑time animation platform.**
+> **Give your robot a face.** Vizij renders and drives expressive, animated
+> faces — as a native app, in the browser, or headless on a robot — from one
+> portable face asset.
 
-This repository contains the Rust source for Vizij’s animation, node graph, and orchestration stacks together with the tooling needed to surface them in web applications. Each domain ships as a trio of crates:
+The heart of this repository is the **`vizij` app**: point it at a face GLB and
+it runs the face as a live device — rendering it, executing its behavior
+graphs, and serving its control surfaces.
 
-- a **core crate** with deterministic runtime logic,
-- and a **WASM binding** that is re-exported through the matching `npm/@vizij/*` wrapper package.
+## Run it
 
-A separate `crates/interop/*` family adapts these stacks onto [Arora](#interop-arora) runtime seams.
+```bash
+cargo run -p vizij -- --glb path/to/face.glb
+```
 
-What you read here should give you everything you need to build, test, and publish those artifacts.
+A window opens with the face — alive, not a picture. By default the app:
+
+- executes the face's own graphs from the embedded `VIZIJ_bundle` (rig, pose
+  drivers, programs — the authored idle program autoplays);
+- exposes the **[face standard](docs/face-standard.md)** vocabulary: write a
+  `standard/vizij/*` control (gaze, expressions, visemes, FACS muscles) and the
+  face performs it, whatever its rig;
+- composes the **[ROS4HRI](docs/ros4hri.md) profile**, so the face understands
+  the ROS4HRI face vocabulary out of the box (`--no-ros4hri` opts out);
+- serves arora's local WebSocket bridge for live control and inspection.
+
+### On a ROS 2 robot
+
+Build with the `ros2` feature and attach the bridge:
+
+```bash
+cargo run -p vizij --features ros2 -- --glb path/to/face.glb --ros2
+```
+
+The device joins the ROS graph as a drop-in ROS4HRI face renderer:
+
+- **typed topic endpoints** — `/robot_face/{expression,look_at,tts}` and
+  `/expressive_face/{look_at,speech}` land on the face's `standard/ros4hri/*`
+  keys;
+- **the `/skill/look_at` action** (`interaction_skills/LookAt`) — goal-driven
+  gaze with tracking, glances, reset, priorities, and standard error codes;
+- **every store key as a data topic** under `/<namespace>/keys/<path>`.
+
+[ROS4HRI support](docs/ros4hri.md) documents the full contract;
+[the app README](crates/vizij/README.md) documents every flag.
+
+### Headless
+
+```bash
+cargo run -p vizij -- --glb path/to/face.glb --snapshot out.png --size 763x760
+cargo run -p vizij -- --glb path/to/face.glb --headless
+```
+
+One frame rendered offscreen to PNG, or a windowless device streaming rendered
+frames into the store — same behavior, no display.
+
+## What it supports
+
+| Capability | Where it's documented |
+|---|---|
+| The face-standard control vocabulary (gaze & lids, expressions, visemes, FACS muscle tier) | [face standard](docs/face-standard.md) |
+| ROS4HRI: typed face topics **and** the `/skill/look_at` gaze action | [ROS4HRI support](docs/ros4hri.md) |
+| Skills: goal-driven behaviors shipped as editable graph fragments, overridable per face | [ROS4HRI support](docs/ros4hri.md#the-look_at-skill) |
+| Animation clips + node-graph programs from the face's `VIZIJ_bundle` | [the app README](crates/vizij/README.md) |
+| Bridges: local WebSocket (always on), ROS 2 (`--ros2`), Semio Studio (`--studio`) | [the app README](crates/vizij/README.md) |
+| Headless rendering: one-shot snapshots or frames-to-store | [the app README](crates/vizij/README.md) |
+| Face assets as GLB bundles: inspect, pack, validate coverage (L0–L3) | [`vizij-bundle`](crates/tools/vizij-bundle/README.md) |
+
+## Find your use case
+
+| I want to… | Start here |
+|---|---|
+| Show a face on a robot, drive it from ROS 2 | the [`vizij` app](crates/vizij/README.md) + [ROS4HRI support](docs/ros4hri.md) |
+| Author or edit a face (design, rig, animate, program) | the **authoring app** in [vizij-web](https://github.com/vizij-ai/vizij-web) (`apps/vizij-authoring`) |
+| Show a face on a desktop, kiosk, or Android tablet | **[vizij-standalone](https://github.com/vizij-ai/vizij-web/tree/main/apps/vizij-standalone)** (vizij-web) |
+| Embed a live face in my own web app | [`@vizij/runtime`](npm/@vizij/runtime/README.md) (the browser device) + the React packages in [vizij-web](https://github.com/vizij-ai/vizij-web) |
+| Pilot faces from [Semio Studio](https://studio.semio.ai) | the `--studio` flag ([app README](crates/vizij/README.md)) or the standalone's studio-bridge build |
+| Pack, validate, or embed profiles into face assets | [`vizij-bundle`](crates/tools/vizij-bundle/README.md) |
+| Use the animation or node-graph engine on its own | [vizij-animation-core](crates/animation/vizij-animation-core/README.md) / [vizij-graph-core](crates/node-graph/vizij-graph-core/README.md), or their [npm wrappers](#domain-stacks) |
+
+The rest of this README covers developing in the workspace itself.
 
 ---
 
@@ -17,14 +87,13 @@ What you read here should give you everything you need to build, test, and publi
 
 1. [Workspace Layout](#workspace-layout)
 2. [Domain Stacks](#domain-stacks)
-3. [Face Standard & ROS4HRI](#face-standard--ros4hri)
-4. [Toolchain & Requirements](#toolchain--requirements)
-5. [Setup](#setup)
-6. [Common Workflows](#common-workflows)
-7. [Testing](#testing)
-8. [Publishing & Versioning](#publishing--versioning)
-9. [Development Tips](#development-tips)
-10. [Reference Documentation](#reference-documentation)
+3. [Toolchain & Requirements](#toolchain--requirements)
+4. [Setup](#setup)
+5. [Common Workflows](#common-workflows)
+6. [Testing](#testing)
+7. [Publishing & Versioning](#publishing--versioning)
+8. [Development Tips](#development-tips)
+9. [Reference Documentation](#reference-documentation)
 
 ---
 
@@ -48,7 +117,7 @@ vizij-rs/
 │  │  ├─ vizij-arora-store         # Vizij Blackboard exposed as an Arora DataStore
 │  │  ├─ vizij-arora-hal           # Vizij rig presented as an Arora HAL
 │  │  ├─ vizij-arora-behavior      # Vizij node graph as an Arora behavior interpreter
-│  │  ├─ vizij-arora-host          # Bundle composition + the face standard & ROS4HRI profile
+│  │  ├─ vizij-arora-host          # Bundle composition, face standard & ROS4HRI profile, skills
 │  │  ├─ vizij-arora-web           # Browser wasm cdylib: Vizij runtime as an Arora device
 │  │  └─ vizij-animation-module    # vizij-animation-core packaged as an Arora wasm module
 │  ├─ tools/
@@ -58,8 +127,8 @@ vizij-rs/
 │     └─ vizij-test-fixtures       # Loads JSON fixtures referenced across stacks
 ├─ npm/
 │  ├─ @vizij/animation-module      # vizij-animation-core built as an Arora wasm module (assets)
-│  ├─ @vizij/animation        # Stable ESM wrapper around `vizij-animation-wasm`
-│  ├─ @vizij/node-graph       # Wrapper around `vizij-graph-wasm`
+│  ├─ @vizij/animation             # Stable ESM wrapper around `vizij-animation-wasm`
+│  ├─ @vizij/node-graph            # Wrapper around `vizij-graph-wasm`
 │  ├─ @vizij/runtime               # Browser Vizij runtime as an Arora device (wasm bindings)
 │  ├─ @vizij/test-fixtures         # Browser bundle of shared JSON fixtures
 │  ├─ @vizij/value-json            # Shared JSON coercion helpers
@@ -73,6 +142,10 @@ The major runtime crates and npm packages include dedicated READMEs with domain-
 ---
 
 ## Domain Stacks
+
+Each domain ships as a **core crate** with deterministic runtime logic plus a
+**WASM binding** re-exported through the matching `npm/@vizij/*` wrapper
+package.
 
 | Stack          | Core Crate               | WASM Binding               | npm wrapper                  |
 | -------------- | ------------------------ | -------------------------- | ---------------------------- |
@@ -95,7 +168,7 @@ The `crates/interop/*` family adapts the Vizij stacks onto Arora runtime seams s
 | `vizij-arora-store`      | Vizij Blackboard exposed as an Arora `DataStore`.                      | — |
 | `vizij-arora-hal`        | Vizij rig presented as an Arora HAL.                                   | — |
 | `vizij-arora-behavior`   | Vizij node graph driven as an Arora behavior interpreter.              | — |
-| `vizij-arora-host`       | Composes a face's bundle graphs; hosts the [face standard](docs/face-standard.md) vocabulary and the [ROS4HRI](docs/ros4hri.md) profile. | — |
+| `vizij-arora-host`       | Composes a face's bundle graphs; hosts the [face standard](docs/face-standard.md) vocabulary, the [ROS4HRI](docs/ros4hri.md) profile, and the skills registry. | — |
 | `vizij-arora-web`        | Browser wasm cdylib composing a Vizij runtime as an Arora device.      | `@vizij/runtime` |
 | `vizij-animation-module` | `vizij-animation-core` packaged as an Arora wasm module.               | `@vizij/animation-module` |
 
@@ -108,32 +181,6 @@ The `crates/interop/*` family adapts the Vizij stacks onto Arora runtime seams s
 | `@vizij/wasm-loader` | Shared loader that caches wasm-bindgen modules, resolves `file://` URLs, and enforces ABI checks. |
 
 These packages build quickly (`pnpm run build:shared`) and should be rebuilt whenever fixtures or API contracts change.
-
----
-
-## Face Standard & ROS4HRI
-
-Vizij faces are driven through a **named-control vocabulary on the store**, the
-`standard/vizij/*` [face standard](docs/face-standard.md): gaze & lids,
-expressions and visemes, and a fine muscle tier (one control per FACS action
-unit / ARKit blendshape). A caller writes a control; the face's own graphs turn
-it into the motion of its particular rig — so the same command drives any face.
-
-On top of it, Vizij ships a built-in **[ROS4HRI](docs/ros4hri.md) profile**: a
-graph mapping ROS4HRI's face vocabulary (`hri_msgs/Expression`,
-`FacialActionUnits`, gaze, plus a viseme extension) onto the standard. It is
-on by default in the `vizij` binary (`--no-ros4hri` opts out) and opt-in for
-library callers. The profile is a canonical, editable asset
-(`crates/interop/vizij-arora-host/profiles/ros4hri.json`) that
-[`vizij-bundle`](crates/tools/vizij-bundle/README.md) can embed into a face GLB
-and [`@vizij/runtime`](npm/@vizij/runtime/README.md) serves to authoring apps.
-
-- **[Face standard](docs/face-standard.md)** — the control vocabulary (the three
-  tiers, the expression/viseme/muscle tables).
-- **[ROS4HRI support](docs/ros4hri.md)** — the profile, its `standard/ros4hri/*`
-  key contract, and how to enable and embed it.
-- **[`vizij-bundle`](crates/tools/vizij-bundle/README.md)** — inspect, pack,
-  `validate` coverage (L0–L3), and `add-standard` a profile into a face.
 
 ---
 
@@ -267,7 +314,6 @@ Per-crate runs are equally useful:
 ```bash
 cargo test -p vizij-graph-core
 cargo test -p vizij-animation-core
-cargo test -p vizij-graph-core
 ```
 
 The wrapper packages exercise their generated bindings through package-level test scripts:
@@ -365,13 +411,13 @@ Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wa
 
 ### Crate & Package Guides
 
+- [vizij/README](crates/vizij/README.md) — the native app (the `vizij` binary)
+- [Face standard](docs/face-standard.md) & [ROS4HRI support](docs/ros4hri.md)
+- [vizij-bundle/README](crates/tools/vizij-bundle/README.md) — the face-GLB bundle tool
 - [vizij-animation-core/README](crates/animation/vizij-animation-core/README.md)
 - [vizij-graph-core/README](crates/node-graph/vizij-graph-core/README.md)
 - [vizij-api-core/README](crates/api/vizij-api-core/README.md)
 - [vizij-test-fixtures/README](crates/test-fixtures/vizij-test-fixtures/README.md)
-- [vizij/README](crates/vizij/README.md) — the native app (the `vizij` binary)
-- [vizij-bundle/README](crates/tools/vizij-bundle/README.md) — the face-GLB bundle tool
-- [Face standard](docs/face-standard.md) & [ROS4HRI support](docs/ros4hri.md)
 - [@vizij/node-graph/README](npm/@vizij/node-graph/README.md)
 - [@vizij/animation/README](npm/@vizij/animation/README.md)
 - [@vizij/value-json/README](npm/@vizij/value-json/README.md)

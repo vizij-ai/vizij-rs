@@ -60,8 +60,21 @@ WS bridge):
 
 | Flag | Feature | Effect |
 |---|---|---|
-| `--ros2 [namespace][:domain]` | `ros2` | expose the device's keys over ROS 2 topics |
+| `--ros2 [namespace][:domain]` | `ros2` | join the ROS graph as a ROS4HRI face (see below) |
 | `--studio` | `studio` | attach the Semio Studio bridge (configured from the environment) |
+
+`--ros2` attaches [`arora-bridge-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-bridge-ros2)
+with its ROS4HRI exposure preset:
+
+- the typed face topics — `/robot_face/{expression,look_at,tts}` and
+  `/expressive_face/{look_at,speech}` — routed onto the profile's
+  `standard/ros4hri/*` keys;
+- the **`/skill/look_at`** action server (`interaction_skills/LookAt`):
+  track / glance / reset policies, priority preemption, standard error codes;
+- every store key as a data topic under `/<namespace>/keys/<path>`.
+
+[ROS4HRI support](../../docs/ros4hri.md) documents the key contract, the
+per-channel behavior, and the skill's semantics.
 
 ## Lighting model
 
