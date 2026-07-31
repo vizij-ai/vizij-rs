@@ -10909,11 +10909,13 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-behavior"
-version = "0.0.0"
+version = "1.0.0"
 dependencies = [
  "arora-behavior",
+ "arora-behavior-tree-types",
  "arora-simple-data-store",
  "arora-types",
+ "log",
  "serde",
  "serde_json",
  "uuid",
@@ -10938,7 +10940,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-host"
-version = "0.0.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "arora-behavior",

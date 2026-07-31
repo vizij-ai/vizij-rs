@@ -1,8 +1,10 @@
 name: publish-crates
+
+# Publishes the publishable Rust crates to crates.io, in dependency order,
+# skipping any crate whose current version is already on the index — so a run
+# is always safe to repeat.
 on:
-  push:
-    tags:
-      - 'crates/*@*'
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -10,14 +12,25 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - name: Set credentials
+      - name: Publish (ordered, skip-if-published)
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          mkdir -p ~/.cargo
-          cat > ~/.cargo/credentials <<EOF
-          [registry]
-          token = "${{ secrets.CARGO_REGISTRY_TOKEN }}"
-          EOF
-      - name: Publish crates
-        run: cargo workspaces publish --from-git --yes --no-verify
+          set -euo pipefail
+          crates="vizij-api-core vizij-graph-core vizij-arora-host vizij-arora-behavior"
+          for crate in $crates; do
+            version=$(cargo metadata --format-version 1 --no-deps \
+              | jq -r ".packages[] | select(.name==\"$crate\") | .version")
+            if curl -fsS "https://crates.io/api/v1/crates/$crate/$version" >/dev/null 2>&1; then
+              echo "$crate@$version already published — skipping"
+              continue
+            fi
+            echo "publishing $crate@$version"
+            cargo publish -p "$crate"
+            # The next crate's publish verifies against the index; wait until
+            # this one is visible there.
+            until curl -fsS "https://crates.io/api/v1/crates/$crate/$version" >/dev/null 2>&1; do
+              echo "waiting for $crate@$version to appear on the index…"
+              sleep 10
+            done
+          done
