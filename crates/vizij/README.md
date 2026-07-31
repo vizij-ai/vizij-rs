@@ -76,6 +76,53 @@ with its ROS4HRI exposure preset:
 [ROS4HRI support](../../docs/ros4hri.md) documents the key contract, the
 per-channel behavior, and the skill's semantics.
 
+## Speech (TTS)
+
+The device registers a **`say(text, voice) → Status`** action that synthesizes
+speech, plays it (rodio — pure Rust, nothing to install), and streams the
+viseme at the audio playhead (a mutable out-parameter) — the face's lipsync
+source. Two interchangeable providers share that one contract; a build carries
+exactly one. Try either from the command line:
+
+```bash
+cargo run -p vizij --example say -- "Hello, world!"
+cargo run -p vizij --features tts-piper --example say -- "Hello, world!"  # local Piper
+```
+
+**Piper — local, no credentials (`tts-piper`):**
+
+```bash
+cargo run -p vizij --features tts-piper -- --glb path/to/face.glb
+```
+
+The first build is the whole setup: `vizij-piper`'s build script provisions
+everything itself — cmake-builds libpiper (espeak-ng + onnxruntime) from a
+pinned commit and downloads + alignment-patches the default voice
+(`en_US-lessac-medium`) — cached in `~/.cache/vizij-piper` (override:
+`VIZIJ_PIPER_CACHE`), so it survives `cargo clean` and only needs the network
+once. Build-time prerequisite: `cmake` and a C++ toolchain; runtime: nothing.
+Pick another Piper voice at run time with `PIPER_VOICE` / `PIPER_VOICE_CONFIG`
+(and `PIPER_ESPEAK_DATA` for a custom espeak data dir); the `voice` call
+parameter is ignored by this provider. The viseme stream carries espeak-ng
+phonemes. Note: this feature links GPLv3 code (libpiper/espeak-ng); default
+builds stay GPL-free. Windows is not supported yet.
+
+**AWS — the cloud provider (default build):** with no feature flag, `say` calls
+the Vizij TTS cloud function — AWS Polly behind an HTTP endpoint — so there is
+nothing to set up and **no AWS credentials in the app**. The `voice` parameter
+names a Polly voice (default `Ruth`), and the viseme stream carries Polly
+viseme codes. To use your own deployment (your AWS account), host the two
+endpoints `POST /tts/get-audio` and `POST /tts/get-visemes` (body
+`{"voice", "text"}`, returning the audio bytes and the Polly viseme speech
+marks) and point the app at it with the `API_URL` environment variable.
+
+**Sending text to it:** `say` is a described device method — behaviors (a
+face's programs or spawned task runs) call it like any module function, and
+bridges list it over `DescribeMethods` (its `Status` return is the action
+shape). The ROS4HRI `/robot_face/tts` topic already lands text on the
+`standard/ros4hri/speech/text` key; routing that key into `say` — and the
+viseme stream onto the face — is the lipsync track, in progress.
+
 ## Lighting model
 
 The web renders `MeshStandardMaterial` under a single `ambientLight(π/2)`,
