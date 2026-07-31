@@ -81,8 +81,10 @@ per-channel behavior, and the skill's semantics.
 The device registers a **`say(text, voice) → Status`** action that synthesizes
 speech, plays it (rodio — pure Rust, nothing to install), and streams the
 viseme at the audio playhead (a mutable out-parameter) — the face's lipsync
-source. Two interchangeable providers share that one contract; a build carries
-exactly one. Try either from the command line:
+source. The contract and the cloud provider ship as the
+[`vizij-arora-tts`](https://crates.io/crates/vizij-arora-tts) crate — the same
+module the vizij-web standalone registers; the Piper provider implements the
+contract here, behind its feature. A build carries exactly one provider. Try either from the command line:
 
 ```bash
 cargo run -p vizij --example say -- "Hello, world!"
