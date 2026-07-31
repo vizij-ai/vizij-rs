@@ -479,9 +479,9 @@ dependencies = [
 
 [[package]]
 name = "arora-bridge-ros2"
-version = "3.2.0"
+version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1f687abdfbe5037b3758d336296950799f5c94a6f734a45309ad72bd268e0da"
+checksum = "cacc94fb7b58235535651cfd8100ff89ea9073a9cb8804124d41fa08173142ab"
 dependencies = [
  "arora-behavior-tree-types",
  "arora-bridge",
@@ -490,7 +490,7 @@ dependencies = [
  "async-trait",
  "futures",
  "log",
- "ros2-client-multi-rmw",
+ "ros2-client-multi-rmw 0.12.0",
  "serde",
  "serde_json",
  "tokio",
@@ -649,9 +649,9 @@ dependencies = [
 
 [[package]]
 name = "arora-msgs-ros2"
-version = "0.1.0"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6833cfbcd415843d6b5477fa32219ea2731a7c8dc1cc5d6270c64e49b1b23425"
+checksum = "a1833ed79fe0375bce005c8dc3f66d1a18433c050a72de34bd122e973a8083fc"
 dependencies = [
  "arora-types",
  "proc-macro2",
@@ -8621,6 +8621,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "ros2-client-multi-rmw"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7c88980573e47852ffc5f152dbb1cc63ba7536f19f3da4dac9931f416bbba55"
+dependencies = [
+ "async-channel",
+ "bstr",
+ "bytes",
+ "cdr-encoding-size",
+ "chrono",
+ "clap 4.5.53",
+ "futures",
+ "itertools 0.14.0",
+ "lazy_static",
+ "libc",
+ "log",
+ "mio 0.6.23",
+ "mio-extras",
+ "nom 8.0.0",
+ "pin-utils",
+ "rustdds",
+ "serde",
+ "serde_repr",
+ "sha2",
+ "tracing",
+ "uuid",
+ "widestring",
+ "xxhash-rust",
+]
+
+[[package]]
 name = "rsa"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9815,7 +9846,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.3",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",
@@ -10396,7 +10427,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.3",
  "static_assertions",
 ]
 
@@ -10663,7 +10694,7 @@ dependencies = [
  "image",
  "log",
  "rand 0.9.5",
- "ros2-client-multi-rmw",
+ "ros2-client-multi-rmw 0.11.0",
  "serde",
  "serde_json",
  "tokio",
@@ -10771,6 +10802,7 @@ dependencies = [
  "serde_json",
  "uuid",
  "vizij-api-core",
+ "vizij-arora-host",
  "vizij-graph-core",
 ]
 
@@ -10793,8 +10825,10 @@ name = "vizij-arora-host"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "arora-behavior",
  "log",
  "serde_json",
+ "uuid",
  "vizij-api-core",
 ]
 
