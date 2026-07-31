@@ -25,10 +25,9 @@ use std::time::{Duration, Instant};
 
 use arora::{HostModule, ModuleBuilder};
 use arora_types::call::{Call, CallError, CallResult};
-use arora_types::gen_uuid_from_str;
 use arora_types::value::{StructureField, Value};
 use soloud::*;
-use uuid::Uuid;
+use uuid::{uuid, Uuid};
 use vizij_graph_core::task;
 use vizij_piper::{PhonemeEvent, Synthesizer};
 
@@ -39,7 +38,7 @@ use crate::tts_api::{
 /// The Piper tts module's id on the device — distinct from the cloud module so
 /// DescribeMethods shows which provider this build carries.
 pub fn module_id() -> Uuid {
-    gen_uuid_from_str("tts-piper-module")
+    uuid!("31ca2243-5719-4862-aa57-c30d27cab62e")
 }
 
 /// A handle for spawning: reuse the ambient runtime if one is active, otherwise a

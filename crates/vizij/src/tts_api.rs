@@ -14,28 +14,27 @@
 use std::collections::HashMap;
 
 use arora_behavior_tree_types::STATUS_ENUMERATION_ID;
-use arora_types::gen_uuid_from_str;
 use arora_types::record::module::frozen::{Function, Parameter};
 use arora_types::record::ty::{FrozenScalar, FrozenTy, PrimitiveKind};
 use arora_types::record::{FrozenReference, Version};
-use uuid::Uuid;
+use uuid::{uuid, Uuid};
 
 /// The rest token, written whenever nothing is speaking (both vocabularies).
 pub const SILENCE_VISEME: &str = "sil";
 
 /// The `say` function's id — identical across providers.
 pub fn say_id() -> Uuid {
-    gen_uuid_from_str("say")
+    uuid!("77bf2798-e7ce-47c6-a45c-3c2e9ba1837d")
 }
 
 pub fn text_param_id() -> Uuid {
-    gen_uuid_from_str("say.text")
+    uuid!("881dc182-d4ba-4ea0-9e81-f4eddab6f669")
 }
 pub fn voice_param_id() -> Uuid {
-    gen_uuid_from_str("say.voice")
+    uuid!("f56ca142-db46-4c58-bc44-7896c4b54d5c")
 }
 pub fn viseme_param_id() -> Uuid {
-    gen_uuid_from_str("say.viseme")
+    uuid!("a1fbf58b-bf66-44a6-a503-9d9078ee5755")
 }
 
 /// `say(text, voice) -> Status`, with a mutable `viseme` out-parameter. The
