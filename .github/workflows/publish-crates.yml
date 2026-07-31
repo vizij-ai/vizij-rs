@@ -32,7 +32,7 @@ jobs:
           for crate in $crates; do
             version=$(cargo metadata --format-version 1 --no-deps \
               | jq -r ".packages[] | select(.name==\"$crate\") | .version")
-            if curl -fsS "https://crates.io/api/v1/crates/$crate/$version" >/dev/null 2>&1; then
+            if curl -fsS -A "vizij-rs publish-crates (github.com/vizij-ai/vizij-rs)" "https://crates.io/api/v1/crates/$crate/$version" >/dev/null 2>&1; then
               echo "$crate@$version already published — skipping"
               continue
             fi
@@ -40,7 +40,7 @@ jobs:
             cargo publish -p "$crate"
             # The next crate's publish verifies against the index; wait until
             # this one is visible there.
-            until curl -fsS "https://crates.io/api/v1/crates/$crate/$version" >/dev/null 2>&1; do
+            until curl -fsS -A "vizij-rs publish-crates (github.com/vizij-ai/vizij-rs)" "https://crates.io/api/v1/crates/$crate/$version" >/dev/null 2>&1; do
               echo "waiting for $crate@$version to appear on the index…"
               sleep 10
             done
