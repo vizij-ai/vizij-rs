@@ -101,7 +101,7 @@ pub fn host_module() -> HostModule {
 
 /// Speak `text` in `voice`, streaming the current viseme. Re-invoked each tick
 /// while `Running`; keeps its state in [`RUNS`], keyed by content.
-fn say(call: Call) -> Result<CallResult, CallError> {
+pub(crate) fn say(call: Call) -> Result<CallResult, CallError> {
     let text = match arg_string(&call, text_param_id()) {
         Some(text) => text,
         None => return Ok(status_only(task::failure())),

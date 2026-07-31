@@ -64,7 +64,12 @@ frames into the store — same behavior, no display.
 The device registers a **`say(text, voice) → Status`** action that synthesizes
 speech, plays it, and streams the viseme at the audio playhead (a mutable
 out-parameter) — the face's lipsync source. Two interchangeable providers share
-that one contract; a build carries exactly one.
+that one contract; a build carries exactly one. Hear it directly:
+
+```bash
+cargo run -p vizij --example say -- "Hello, world!"
+cargo run -p vizij --features tts-piper --example say -- "Hello, world!"  # local Piper
+```
 
 **Piper — local, no credentials (`tts-piper`):**
 
