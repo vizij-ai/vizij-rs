@@ -30,6 +30,8 @@ use arora_types::value::{StructureField, Value};
 use vizij_graph_core::task;
 
 fn main() {
+    // Surface the providers' log::error!/warn! diagnostics on the console.
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let text: String = std::env::args().skip(1).collect::<Vec<_>>().join(" ");
     let text = if text.is_empty() {
         "Hello, world!".to_string()
@@ -62,10 +64,13 @@ fn main() {
             }
         }
         if result.ret != task::running() {
-            if result.ret == task::success() {
-                println!("done");
-            } else {
-                println!("failed");
+            let ok = result.ret == task::success();
+            println!("{}", if ok { "done" } else { "failed" });
+            // Tear the voice down deliberately: leaving libpiper to C++
+            // static-destruction order aborts at exit.
+            #[cfg(feature = "tts-piper")]
+            provider::shutdown();
+            if !ok {
                 std::process::exit(1);
             }
             break;

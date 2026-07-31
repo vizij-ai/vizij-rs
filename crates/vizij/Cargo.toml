@@ -66,12 +66,13 @@ vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
 vizij-animation-module = { path = "../interop/vizij-animation-module" }
 
 # The TTS modules: `reqwest` reaches the Vizij TTS cloud provider over HTTP;
-# `soloud` plays the audio whose playhead the viseme cursor follows (both
-# providers). `vizij-piper` is the local provider (feature `tts-piper`); its
-# build self-provisions libpiper and a patched default voice, so no
-# configuration is needed — note it links GPLv3 code into the binary.
+# `rodio` (pure Rust, nothing to install) plays the audio whose playhead the
+# viseme cursor follows (both providers). `vizij-piper` is the local provider
+# (feature `tts-piper`); its build self-provisions libpiper and a patched
+# default voice, so no configuration is needed — note it links GPLv3 code
+# into the binary.
 reqwest = { version = "0.13", features = ["json"] }
-soloud = "1"
+rodio = "0.20"
 vizij-piper = { path = "../interop/vizij-piper", optional = true }
 
 [dev-dependencies]
