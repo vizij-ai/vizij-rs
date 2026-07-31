@@ -21,11 +21,10 @@ use std::time::{Duration, Instant};
 
 use arora::{HostModule, ModuleBuilder};
 use arora_types::call::{Call, CallError, CallResult};
-use arora_types::gen_uuid_from_str;
 use arora_types::value::{StructureField, Value};
 use serde::{Deserialize, Serialize};
 use soloud::*;
-use uuid::Uuid;
+use uuid::{uuid, Uuid};
 use vizij_graph_core::task;
 
 use crate::tts_api::{
@@ -40,7 +39,7 @@ const DEFAULT_VOICE: &str = "Ruth";
 
 /// The tts module's id on the device.
 pub fn module_id() -> Uuid {
-    gen_uuid_from_str("tts-module")
+    uuid!("4f6f0b0a-62cb-4a1f-ab0d-08f283485091")
 }
 
 /// A handle for spawning: reuse the ambient runtime if one is active, otherwise a
