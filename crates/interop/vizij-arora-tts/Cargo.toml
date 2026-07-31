@@ -1,0 +1,24 @@
+[package]
+name = "vizij-arora-tts"
+version = "1.0.0"
+edition.workspace = true
+license = "MIT OR Apache-2.0"
+description = "Vizij's text-to-speech as an Arora host module: say(text, voice) -> Status with a streaming viseme out-parameter, over the Vizij TTS cloud provider. The contract (ids, signature) is shared by every provider."
+repository = "https://github.com/vizij-ai/vizij-rs"
+
+[dependencies]
+# The host-module seam only — no engine features, so the crate rides the
+# executor-free arora slice on every target.
+arora-engine = { version = "4.1", default-features = false }
+# The `Status` ids the say signature's action shape carries.
+arora-behavior-tree-types = "1"
+arora-types = "2"
+log = "0.4"
+reqwest = { version = "0.13", features = ["json"] }
+# Pure-Rust playback (cpal + symphonia): nothing to install.
+rodio = "0.20"
+serde = { workspace = true }
+tokio = { version = "1", features = ["rt-multi-thread", "time"] }
+uuid = "1"
+# task::{running, success, failure} — the run-status values.
+vizij-graph-core = { version = "1", path = "../../node-graph/vizij-graph-core" }

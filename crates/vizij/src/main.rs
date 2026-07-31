@@ -22,9 +22,6 @@ mod ros2_tests;
 mod snapshot;
 // The TTS provider modules share one contract (`tts_api`); the `tts-piper`
 // feature swaps which provider this build registers.
-#[cfg(not(feature = "tts-piper"))]
-mod tts;
-mod tts_api;
 #[cfg(feature = "tts-piper")]
 mod tts_piper;
 mod view;

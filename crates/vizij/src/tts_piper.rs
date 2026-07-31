@@ -1,6 +1,6 @@
 //! The Piper TTS provider: `say(text, voice) -> Status`, fully local.
 //!
-//! Same contract as the cloud provider ([`crate::tts_api`]) — a drop-in swap
+//! Same contract as the cloud provider ([`vizij_arora_tts`]) — a drop-in swap
 //! selected by the `tts-piper` build feature. No network and no credentials at
 //! run time: the `vizij-piper` build provisions libpiper and a patched default
 //! voice, so a plain `cargo build --features tts-piper` is the whole setup.
@@ -30,7 +30,7 @@ use uuid::{uuid, Uuid};
 use vizij_graph_core::task;
 use vizij_piper::{PhonemeEvent, Synthesizer};
 
-use crate::tts_api::{
+use vizij_arora_tts::{
     say_id, say_signature, text_param_id, viseme_param_id, voice_param_id, SILENCE_VISEME,
 };
 

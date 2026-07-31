@@ -19,10 +19,10 @@ use vizij_arora_store::BlackboardStore;
 use crate::animation;
 use crate::gaze;
 use crate::meta::FaceMeta;
-#[cfg(not(feature = "tts-piper"))]
-use crate::tts;
 #[cfg(feature = "tts-piper")]
 use crate::tts_piper;
+#[cfg(not(feature = "tts-piper"))]
+use vizij_arora_tts as tts;
 
 /// A running face device. Both handles share storage with the device's own
 /// (they are sibling clones), so the view reads the rig and the store live.
