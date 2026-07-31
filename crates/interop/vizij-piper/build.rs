@@ -164,8 +164,56 @@ fn build_libpiper(cache: &Path) -> PathBuf {
         .current_dir(cache)
         .arg("--install")
         .arg(&build));
-    ensure_soname_links(&install.join("lib"));
+    // Guarantee the onnxruntime shared libraries are staged: on some platforms
+    // libpiper's install step does not carry its prebuilt onnxruntime along —
+    // pull any missing ones over from the build tree.
+    copy_missing_onnxruntime(&build, &install.join("lib"));
+    for dir in ["", "lib", "lib64"] {
+        ensure_soname_links(&install.join(dir));
+    }
+    // CI-only layout dump: cargo:warning always prints, so a loader failure in
+    // the workflow log comes with the install layout it failed against.
+    if env::var("CI").is_ok() {
+        for dir in ["", "lib", "lib64"] {
+            if let Ok(entries) = std::fs::read_dir(install.join(dir)) {
+                for entry in entries.flatten() {
+                    println!(
+                        "cargo:warning=piper install: {dir}/{}",
+                        entry.file_name().to_string_lossy()
+                    );
+                }
+            }
+        }
+    }
     install
+}
+
+/// Copy every `libonnxruntime*` shared object found in the build tree into the
+/// install's lib dir, unless a file of that name is already staged.
+fn copy_missing_onnxruntime(build: &Path, lib_dir: &Path) {
+    std::fs::create_dir_all(lib_dir).expect("create the install lib dir");
+    let mut stack = vec![build.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            let name = entry.file_name();
+            let name = name.to_string_lossy().into_owned();
+            if !name.starts_with("libonnxruntime") {
+                continue;
+            }
+            let dest = lib_dir.join(&name);
+            if !dest.exists() {
+                std::fs::copy(&path, &dest).expect("stage an onnxruntime library");
+            }
+        }
+    }
 }
 
 /// The onnxruntime prebuilt installs `libX.so.1.22.0` without the `libX.so.1`
@@ -174,7 +222,7 @@ fn build_libpiper(cache: &Path) -> PathBuf {
 /// macOS, whose dylib naming is complete).
 fn ensure_soname_links(lib_dir: &Path) {
     let Ok(entries) = std::fs::read_dir(lib_dir) else {
-        return;
+        return; // the layout varies by platform; absent dirs are fine
     };
     for entry in entries.flatten() {
         let name = entry.file_name();
