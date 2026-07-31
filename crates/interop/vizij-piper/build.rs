@@ -243,8 +243,7 @@ fn ensure_soname_links(lib_dir: &Path) {
         };
         let link = lib_dir.join(format!("{}.so.{major}", &name[..so_pos]));
         if !link.exists() {
-            std::os::unix::fs::symlink(entry.path(), &link)
-                .expect("create the SONAME symlink");
+            std::os::unix::fs::symlink(entry.path(), &link).expect("create the SONAME symlink");
         }
     }
 }
