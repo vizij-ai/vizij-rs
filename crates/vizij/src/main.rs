@@ -15,6 +15,7 @@ use clap::Parser;
 mod animation;
 mod device;
 mod frames;
+mod gaze;
 mod meta;
 #[cfg(all(test, feature = "ros2"))]
 mod ros2_tests;

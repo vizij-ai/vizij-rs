@@ -110,10 +110,50 @@ impl NodeFunctions for CallBridgeFunctions<'_> {
 /// graph and which status key it reports on. The run itself is graph
 /// structure — these are the coordinates for pruning and sweeping it.
 struct GraphRun {
-    run_node: String,
-    status_node: String,
-    args_node: String,
+    /// Every node the run grafted, removed together when it ends.
+    nodes: Vec<String>,
     status_key: Key,
+}
+
+/// A spawnable skill fragment: the implementation of a task-run function as
+/// graph content. When one is registered for a function
+/// ([`ProcessingGraph::set_task_fragment`]), SPAWN grafts a copy of it
+/// instead of the generic module-call wrapper — the behavior is data,
+/// introspectable and editable like the rest of the graph, not host code.
+///
+/// The fragment speaks a placeholder-path convention, rewritten to the run's
+/// key prefix at graft time: an `output` on `task/status` (required) reports
+/// the run's `Status`; `task/result` and `task/feedback` land on the handle's
+/// result and feedback keys; every other `task/<name>` input is a parameter,
+/// its spawn-time argument staged as the input's default and live-updatable
+/// through the run's update key of the same name.
+#[derive(Clone)]
+pub struct TaskFragment {
+    spec: GraphSpec,
+    /// The function's parameters: id → the placeholder input name each feeds.
+    parameters: HashMap<Uuid, String>,
+}
+
+impl TaskFragment {
+    /// Parse a fragment from its asset JSON and the `parameter id → input
+    /// name` map of the function it implements. Refused when the spec does
+    /// not parse or declares no `task/status` output — a fragment that
+    /// cannot report its lifecycle is not a task.
+    pub fn parse(json: &str, parameters: HashMap<Uuid, String>) -> Result<Self, String> {
+        let spec = parse_spec(json)?;
+        let reports_status = spec.nodes.iter().any(|node| {
+            matches!(node.kind, NodeType::Output)
+                && node
+                    .params
+                    .path
+                    .as_ref()
+                    .is_some_and(|path| path.to_string() == "task/status")
+        });
+        if !reports_status {
+            return Err("a task fragment must declare an output on task/status".to_string());
+        }
+        Ok(Self { spec, parameters })
+    }
 }
 
 /// A Vizij node graph as an Arora behavior interpreter.
@@ -141,6 +181,9 @@ pub struct ProcessingGraph {
     /// a grafted fragment in [`graph`](Self::graph); this index holds its
     /// pruning coordinates and status key.
     runs: HashMap<TaskId, GraphRun>,
+    /// Registered skill fragments by function id: what SPAWN grafts for these
+    /// functions instead of the generic module-call wrapper.
+    fragments: HashMap<Uuid, TaskFragment>,
     /// Halts requested since the last tick; applied by the next tick, which
     /// owns the store.
     pending_halts: Vec<TaskId>,
@@ -218,8 +261,16 @@ impl ProcessingGraph {
             inputs: Vec::new(),
             function_modules: HashMap::new(),
             runs: HashMap::new(),
+            fragments: HashMap::new(),
             pending_halts: Vec::new(),
         })
+    }
+
+    /// Register the skill fragment SPAWN grafts for `function` — asset
+    /// content implementing the method, in place of the generic module-call
+    /// wrapper.
+    pub fn set_task_fragment(&mut self, function: Uuid, fragment: TaskFragment) {
+        self.fragments.insert(function, fragment);
     }
 
     /// The retained shared-model graph — the editable source of truth,
@@ -234,11 +285,7 @@ impl ProcessingGraph {
     /// removes structure, not state.
     fn prune_run(&mut self, run: &GraphRun) -> Result<(), BehaviorError> {
         let diff = graph_codec::GraphSpecDiff {
-            remove_nodes: vec![
-                run.run_node.clone(),
-                run.status_node.clone(),
-                run.args_node.clone(),
-            ],
+            remove_nodes: run.nodes.clone(),
             ..graph_codec::GraphSpecDiff::default()
         };
         let diff = graph_codec::spec_diff_to_graph_diff(&diff)
@@ -389,6 +436,176 @@ impl ProcessingGraph {
     }
 }
 
+/// The generic run graft: an input on the run's update key (defaulting to
+/// the spawn-time argument bundle) feeding a [`NodeType::TaskRun`] node that
+/// calls the module function each tick, over an [`NodeType::Output`] on the
+/// run's status key. Returns the diff, the grafted node ids, and the run's
+/// update keys.
+fn wrapper_graft(
+    task: TaskId,
+    prefix: &str,
+    call: &Call,
+) -> Result<(graph_codec::GraphSpecDiff, Vec<String>, Vec<Key>), BehaviorError> {
+    let status_path = TypedPath::parse(&format!("{prefix}/status")).map_err(|e| BehaviorError {
+        message: format!("the status key does not parse as a path: {e}"),
+    })?;
+    let update_path = TypedPath::parse(&format!("{prefix}/update")).map_err(|e| BehaviorError {
+        message: format!("the update key does not parse as a path: {e}"),
+    })?;
+
+    let run_node = format!("task/{}/run", task.0);
+    let status_node = format!("task/{}/status", task.0);
+    let args_node = format!("task/{}/args", task.0);
+    // The spawn-time argument bundle: a structure of the call's args, the
+    // default the args input serves until a live update lands on the run's
+    // update key.
+    let args_bundle = Value::Structure(Structure {
+        id: call.id,
+        fields: call.args.clone(),
+    });
+    let diff = graph_codec::GraphSpecDiff {
+        upsert_nodes: vec![
+            // The run's args source: an input on the update key, defaulting
+            // to the spawn-time bundle. A caller (the ROS bridge on a live
+            // goal) writes new args to the update key; the next tick stages
+            // them here and the run picks them up — no graph edit per update.
+            NodeSpec {
+                id: args_node.clone(),
+                kind: NodeType::Input,
+                params: NodeParams {
+                    path: Some(update_path),
+                    value: Some(args_bundle),
+                    ..NodeParams::default()
+                },
+                output_shapes: Default::default(),
+                input_defaults: Default::default(),
+            },
+            NodeSpec {
+                id: run_node.clone(),
+                kind: NodeType::TaskRun,
+                params: NodeParams {
+                    module: call.module_id,
+                    function: Some(call.id),
+                    ..NodeParams::default()
+                },
+                output_shapes: Default::default(),
+                input_defaults: Default::default(),
+            },
+            NodeSpec {
+                id: status_node.clone(),
+                kind: NodeType::Output,
+                params: NodeParams {
+                    path: Some(status_path),
+                    ..NodeParams::default()
+                },
+                output_shapes: Default::default(),
+                input_defaults: Default::default(),
+            },
+        ],
+        upsert_edges: vec![
+            EdgeSpec {
+                from: EdgeOutputEndpoint {
+                    node_id: args_node.clone(),
+                    output: "out".to_string(),
+                },
+                to: EdgeInputEndpoint {
+                    node_id: run_node.clone(),
+                    input: "args".to_string(),
+                },
+                selector: None,
+            },
+            EdgeSpec {
+                from: EdgeOutputEndpoint {
+                    node_id: run_node.clone(),
+                    output: "out".to_string(),
+                },
+                to: EdgeInputEndpoint {
+                    node_id: status_node.clone(),
+                    input: "in".to_string(),
+                },
+                selector: None,
+            },
+        ],
+        ..graph_codec::GraphSpecDiff::default()
+    };
+    Ok((
+        diff,
+        vec![args_node, run_node, status_node],
+        vec![Key::from(format!("{prefix}/update"))],
+    ))
+}
+
+/// The skill graft: a copy of the registered [`TaskFragment`], node ids
+/// namespaced under `task/<run id>/`, placeholder `task/…` paths rewritten to
+/// the run's key prefix, and each parameter input's default replaced by the
+/// spawn-time argument it names. Returns the diff, the grafted node ids, and
+/// the run's per-parameter update keys.
+fn fragment_graft(
+    fragment: &TaskFragment,
+    task: TaskId,
+    prefix: &str,
+    call: &Call,
+) -> Result<(graph_codec::GraphSpecDiff, Vec<String>, Vec<Key>), BehaviorError> {
+    // The spawn-time arguments by the placeholder input name each feeds.
+    let mut arguments: HashMap<&str, &Value> = HashMap::new();
+    for argument in &call.args {
+        if let Some(name) = fragment.parameters.get(&argument.id) {
+            arguments.insert(name.as_str(), argument.value.as_ref());
+        }
+    }
+    let grafted_id = |id: &str| format!("task/{}/{}", task.0, id);
+
+    let mut upsert_nodes = Vec::with_capacity(fragment.spec.nodes.len());
+    for node in &fragment.spec.nodes {
+        let mut node = node.clone();
+        if let Some(path) = &node.params.path {
+            let path = path.to_string();
+            if let Some(placeholder) = path.strip_prefix("task/") {
+                let run_path = format!("{prefix}/{placeholder}");
+                node.params.path =
+                    Some(TypedPath::parse(&run_path).map_err(|e| BehaviorError {
+                        message: format!("'{run_path}' does not parse as a path: {e}"),
+                    })?);
+                if matches!(node.kind, NodeType::Input) {
+                    if let Some(value) = arguments.get(placeholder) {
+                        node.params.value = Some((*value).clone());
+                    }
+                }
+            }
+        }
+        node.id = grafted_id(&node.id);
+        upsert_nodes.push(node);
+    }
+    let upsert_edges = fragment
+        .spec
+        .edges
+        .iter()
+        .map(|edge| {
+            let mut edge = edge.clone();
+            edge.from.node_id = grafted_id(&edge.from.node_id);
+            edge.to.node_id = grafted_id(&edge.to.node_id);
+            edge
+        })
+        .collect();
+
+    let nodes: Vec<String> = upsert_nodes.iter().map(|node| node.id.clone()).collect();
+    let mut names: Vec<&String> = fragment.parameters.values().collect();
+    names.sort();
+    let update = names
+        .into_iter()
+        .map(|name| Key::from(format!("{prefix}/{name}")))
+        .collect();
+    Ok((
+        graph_codec::GraphSpecDiff {
+            upsert_nodes,
+            upsert_edges,
+            ..graph_codec::GraphSpecDiff::default()
+        },
+        nodes,
+        update,
+    ))
+}
+
 impl BehaviorInterpreter for ProcessingGraph {
     fn tick(&mut self, ctx: &mut BehaviorContext) -> Result<BehaviorStatus, BehaviorError> {
         let dt = built_in_dt_seconds(ctx.store);
@@ -430,13 +647,15 @@ impl BehaviorInterpreter for ProcessingGraph {
     }
 
     /// Spawn `call` as a concurrent task run — the interpreter module's SPAWN
-    /// entry point. The run grafts into the running graph as a two-node
-    /// fragment: a [`NodeType::TaskRun`] node carrying the whole call in its
-    /// params (module, function, args bundle) over an [`NodeType::Output`] on
-    /// the run's status key. The graph's ordinary evaluation then advances the
-    /// run once per tick and the Output convention publishes its `Status` —
-    /// the run is structure, introspectable through [`graph`](Self::graph)
-    /// like everything else, and pruned when it ends.
+    /// entry point. The run grafts into the running graph: a registered
+    /// [`TaskFragment`] verbatim (its placeholder paths rewritten to the
+    /// run's key prefix, its parameter inputs defaulted from the spawn-time
+    /// arguments), or the generic two-node wrapper — a [`NodeType::TaskRun`]
+    /// node carrying the whole call over an [`NodeType::Output`] on the run's
+    /// status key. The graph's ordinary evaluation then advances the run once
+    /// per tick and the Output convention publishes its `Status` — the run is
+    /// structure, introspectable through [`graph`](Self::graph) like
+    /// everything else, and pruned when it ends.
     fn spawn(&mut self, call: Call, policy: RunPolicy) -> Result<TaskHandle, BehaviorError> {
         // v1 runs every task concurrently — the graph's ordinary semantics
         // (overlapping actuation writes are last-write-wins). Richer
@@ -450,99 +669,17 @@ impl BehaviorInterpreter for ProcessingGraph {
             .unwrap_or_else(|| "none".to_string());
         let prefix = format!("arora/tasks/{module}/{}/{}", call.id, task.0);
         let status_key = Key::from(format!("{prefix}/status"));
-        let status_path =
-            TypedPath::parse(&format!("{prefix}/status")).map_err(|e| BehaviorError {
-                message: format!("the status key does not parse as a path: {e}"),
-            })?;
 
-        let update_path =
-            TypedPath::parse(&format!("{prefix}/update")).map_err(|e| BehaviorError {
-                message: format!("the update key does not parse as a path: {e}"),
-            })?;
-
-        let run_node = format!("task/{}/run", task.0);
-        let status_node = format!("task/{}/status", task.0);
-        let args_node = format!("task/{}/args", task.0);
-        // The spawn-time argument bundle: a structure of the call's args, the
-        // default the args input serves until a live update lands on the run's
-        // update key.
-        let args_bundle = Value::Structure(Structure {
-            id: call.id,
-            fields: call.args.clone(),
-        });
-        let diff = graph_codec::GraphSpecDiff {
-            upsert_nodes: vec![
-                // The run's args source: an input on the update key, defaulting
-                // to the spawn-time bundle. A caller (the ROS bridge on a live
-                // goal) writes new args to the update key; the next tick stages
-                // them here and the run picks them up — no graph edit per update.
-                NodeSpec {
-                    id: args_node.clone(),
-                    kind: NodeType::Input,
-                    params: NodeParams {
-                        path: Some(update_path),
-                        value: Some(args_bundle),
-                        ..NodeParams::default()
-                    },
-                    output_shapes: Default::default(),
-                    input_defaults: Default::default(),
-                },
-                NodeSpec {
-                    id: run_node.clone(),
-                    kind: NodeType::TaskRun,
-                    params: NodeParams {
-                        module: call.module_id,
-                        function: Some(call.id),
-                        ..NodeParams::default()
-                    },
-                    output_shapes: Default::default(),
-                    input_defaults: Default::default(),
-                },
-                NodeSpec {
-                    id: status_node.clone(),
-                    kind: NodeType::Output,
-                    params: NodeParams {
-                        path: Some(status_path),
-                        ..NodeParams::default()
-                    },
-                    output_shapes: Default::default(),
-                    input_defaults: Default::default(),
-                },
-            ],
-            upsert_edges: vec![
-                EdgeSpec {
-                    from: EdgeOutputEndpoint {
-                        node_id: args_node.clone(),
-                        output: "out".to_string(),
-                    },
-                    to: EdgeInputEndpoint {
-                        node_id: run_node.clone(),
-                        input: "args".to_string(),
-                    },
-                    selector: None,
-                },
-                EdgeSpec {
-                    from: EdgeOutputEndpoint {
-                        node_id: run_node.clone(),
-                        output: "out".to_string(),
-                    },
-                    to: EdgeInputEndpoint {
-                        node_id: status_node.clone(),
-                        input: "in".to_string(),
-                    },
-                    selector: None,
-                },
-            ],
-            ..graph_codec::GraphSpecDiff::default()
+        let (diff, nodes, update) = match self.fragments.get(&call.id) {
+            Some(fragment) => fragment_graft(fragment, task, &prefix, &call)?,
+            None => wrapper_graft(task, &prefix, &call)?,
         };
         let diff = graph_codec::spec_diff_to_graph_diff(&diff)
             .map_err(|message| BehaviorError { message })?;
         self.runs.insert(
             task,
             GraphRun {
-                run_node,
-                status_node,
-                args_node,
+                nodes,
                 status_key: status_key.clone(),
             },
         );
@@ -562,7 +699,7 @@ impl BehaviorInterpreter for ProcessingGraph {
             status: status_key,
             feedback: vec![Key::from(format!("{prefix}/feedback"))],
             result: vec![Key::from(format!("{prefix}/result"))],
-            update: vec![Key::from(format!("{prefix}/update"))],
+            update,
         })
     }
 
@@ -1089,5 +1226,120 @@ mod tests {
             bridge.calls.last().expect("a call").args[0].value.as_ref(),
             &float(0.9),
         );
+    }
+
+    /// The skill path: a registered fragment — the real look_at asset from
+    /// `vizij-arora-host` — implements the spawned run as graph content, no
+    /// module call anywhere. Tracking writes the gaze surface, steers on a
+    /// live parameter update, and runs until halted; a glance settles to
+    /// Success; an unsupported policy fails with the `std_skills` ENOTSUP
+    /// errno on the result key.
+    #[test]
+    fn a_registered_fragment_implements_the_spawned_run() {
+        use arora_types::gen_uuid_from_str;
+        use vizij_arora_host::skills;
+
+        let parameters: HashMap<Uuid, String> = skills::LOOK_AT_PARAMS
+            .iter()
+            .map(|name| (gen_uuid_from_str(name), name.to_string()))
+            .collect();
+        let fragment =
+            TaskFragment::parse(skills::LOOK_AT_JSON, parameters).expect("the asset parses");
+
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        graph.set_task_fragment(gen_uuid_from_str("look_at"), fragment);
+        let mut bridge = NoopBridge;
+        store
+            .write(StateChange::set("sensor/x", float(0.75)))
+            .unwrap();
+
+        let look_at = |policy: &str, target: [f32; 3], frame: &str| Call {
+            module_id: Some(gen_uuid_from_str("gaze-module")),
+            id: gen_uuid_from_str("look_at"),
+            args: vec![
+                StructureField {
+                    id: gen_uuid_from_str("policy"),
+                    value: Box::new(Value::String(policy.to_string())),
+                },
+                StructureField {
+                    id: gen_uuid_from_str("target"),
+                    value: Box::new(Value::ArrayF32(target.to_vec())),
+                },
+                StructureField {
+                    id: gen_uuid_from_str("frame"),
+                    value: Box::new(Value::String(frame.to_string())),
+                },
+            ],
+        };
+
+        // Tracking: the goal lands on the gaze surface and the run stays
+        // Running — the halt is the exit. The handle's update keys are per
+        // parameter.
+        let handle = graph
+            .spawn(
+                look_at("", [1.0, 2.0, 3.0], "sellion_link"),
+                RunPolicy::Concurrent,
+            )
+            .expect("spawn");
+        let target_key = handle
+            .update
+            .iter()
+            .find(|key| key.path.ends_with("/target"))
+            .expect("a target update key")
+            .clone();
+        graph.tick_store(&store, &mut bridge, 0.05).expect("tick");
+        assert_eq!(
+            read(&store, "standard/ros4hri/gaze/target"),
+            Some(Value::ArrayF32(vec![1.0, 2.0, 3.0])),
+        );
+        assert_eq!(
+            read(&store, "standard/ros4hri/gaze/frame"),
+            Some(Value::String("sellion_link".to_string())),
+        );
+        assert_eq!(read_key(&store, &handle.status), Some(task::running()));
+
+        // A live update on the parameter key steers the running fragment.
+        let mut change = StateChange::new();
+        change
+            .set
+            .insert(target_key, Some(Value::ArrayF32(vec![4.0, 5.0, 6.0])));
+        store.write(change).unwrap();
+        graph.tick_store(&store, &mut bridge, 0.05).expect("tick");
+        assert_eq!(
+            read(&store, "standard/ros4hri/gaze/target"),
+            Some(Value::ArrayF32(vec![4.0, 5.0, 6.0])),
+        );
+
+        // The halt ends the run as Failure (the cancel semantics) and prunes
+        // the whole grafted fragment.
+        graph.halt(handle.id).expect("halt");
+        graph.tick_store(&store, &mut bridge, 0.05).expect("tick");
+        assert_eq!(read_key(&store, &handle.status), Some(task::failure()));
+
+        // A glance holds its fixation, then succeeds on its own.
+        let handle = graph
+            .spawn(
+                look_at("glance", [0.5, 0.0, 0.5], ""),
+                RunPolicy::Concurrent,
+            )
+            .expect("spawn");
+        for _ in 0..6 {
+            graph.tick_store(&store, &mut bridge, 0.2).expect("tick");
+        }
+        assert_eq!(read_key(&store, &handle.status), Some(task::success()));
+
+        // An unsupported policy fails with the ENOTSUP errno on the result
+        // key — the value the ROS action plane answers verbatim.
+        let handle = graph
+            .spawn(
+                look_at("social", [0.0, 0.0, 0.0], ""),
+                RunPolicy::Concurrent,
+            )
+            .expect("spawn");
+        graph.tick_store(&store, &mut bridge, 0.05).expect("tick");
+        assert_eq!(read_key(&store, &handle.status), Some(task::failure()));
+        assert_eq!(read_key(&store, &handle.result[0]), Some(Value::U8(134)));
     }
 }

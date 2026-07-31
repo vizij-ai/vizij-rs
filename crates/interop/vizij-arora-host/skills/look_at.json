@@ -1,0 +1,551 @@
+{
+  "nodes": [
+    {
+      "id": "in-policy",
+      "type": "input",
+      "params": {
+        "path": "task/policy",
+        "value": ""
+      }
+    },
+    {
+      "id": "in-target",
+      "type": "input",
+      "params": {
+        "path": "task/target",
+        "value": {
+          "x": 10.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      }
+    },
+    {
+      "id": "in-frame",
+      "type": "input",
+      "params": {
+        "path": "task/frame",
+        "value": ""
+      }
+    },
+    {
+      "id": "rest-target",
+      "type": "constant",
+      "params": {
+        "value": {
+          "x": 10.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      }
+    },
+    {
+      "id": "face-frame",
+      "type": "constant",
+      "params": {
+        "value": ""
+      }
+    },
+    {
+      "id": "n1",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "reset"
+        ]
+      }
+    },
+    {
+      "id": "o2",
+      "type": "output",
+      "params": {
+        "path": "standard/ros4hri/gaze/target"
+      }
+    },
+    {
+      "id": "n3",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "reset"
+        ]
+      }
+    },
+    {
+      "id": "o4",
+      "type": "output",
+      "params": {
+        "path": "standard/ros4hri/gaze/frame"
+      }
+    },
+    {
+      "id": "clock",
+      "type": "time",
+      "params": {}
+    },
+    {
+      "id": "in-start",
+      "type": "input",
+      "params": {
+        "path": "task/start",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "c5",
+      "type": "constant",
+      "params": {
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n6",
+      "type": "greaterthan",
+      "params": {}
+    },
+    {
+      "id": "n7",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "o8",
+      "type": "output",
+      "params": {
+        "path": "task/start"
+      }
+    },
+    {
+      "id": "n9",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "c10",
+      "type": "constant",
+      "params": {
+        "value": 0.6
+      }
+    },
+    {
+      "id": "n11",
+      "type": "greaterthan",
+      "params": {}
+    },
+    {
+      "id": "st-running",
+      "type": "constant",
+      "params": {
+        "value": {
+          "enum": {
+            "id": "325a5767-e344-4532-860e-0749bcf2e428",
+            "variant_id": "acd79ec6-0c44-401a-82f8-5da5422d3eec",
+            "value": "unit"
+          }
+        }
+      }
+    },
+    {
+      "id": "st-success",
+      "type": "constant",
+      "params": {
+        "value": {
+          "enum": {
+            "id": "325a5767-e344-4532-860e-0749bcf2e428",
+            "variant_id": "766e9e9a-446d-4e46-83e6-14b7ca101169",
+            "value": "unit"
+          }
+        }
+      }
+    },
+    {
+      "id": "st-failure",
+      "type": "constant",
+      "params": {
+        "value": {
+          "enum": {
+            "id": "325a5767-e344-4532-860e-0749bcf2e428",
+            "variant_id": "2468f46c-bb60-425c-9a4d-9ad326ccc7e2",
+            "value": "unit"
+          }
+        }
+      }
+    },
+    {
+      "id": "n12",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "n13",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "",
+          "track",
+          "glance",
+          "reset"
+        ]
+      }
+    },
+    {
+      "id": "o14",
+      "type": "output",
+      "params": {
+        "path": "task/status"
+      }
+    },
+    {
+      "id": "no-errno",
+      "type": "constant",
+      "params": {
+        "value": ""
+      }
+    },
+    {
+      "id": "errno-enotsup",
+      "type": "constant",
+      "params": {
+        "value": {
+          "u8": 134
+        }
+      }
+    },
+    {
+      "id": "n15",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "",
+          "track",
+          "glance",
+          "reset"
+        ]
+      }
+    },
+    {
+      "id": "o16",
+      "type": "output",
+      "params": {
+        "path": "task/result"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node_id": "in-policy"
+      },
+      "to": {
+        "node_id": "n1",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "rest-target"
+      },
+      "to": {
+        "node_id": "n1",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-target"
+      },
+      "to": {
+        "node_id": "n1",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n1"
+      },
+      "to": {
+        "node_id": "o2",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-policy"
+      },
+      "to": {
+        "node_id": "n3",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "face-frame"
+      },
+      "to": {
+        "node_id": "n3",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-frame"
+      },
+      "to": {
+        "node_id": "n3",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n3"
+      },
+      "to": {
+        "node_id": "o4",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-start"
+      },
+      "to": {
+        "node_id": "n6",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c5"
+      },
+      "to": {
+        "node_id": "n6",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n6"
+      },
+      "to": {
+        "node_id": "n7",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-start"
+      },
+      "to": {
+        "node_id": "n7",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "clock"
+      },
+      "to": {
+        "node_id": "n7",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n7"
+      },
+      "to": {
+        "node_id": "o8",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "clock"
+      },
+      "to": {
+        "node_id": "n9",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n7"
+      },
+      "to": {
+        "node_id": "n9",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n9"
+      },
+      "to": {
+        "node_id": "n11",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c10"
+      },
+      "to": {
+        "node_id": "n11",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n11"
+      },
+      "to": {
+        "node_id": "n12",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "st-success"
+      },
+      "to": {
+        "node_id": "n12",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "st-running"
+      },
+      "to": {
+        "node_id": "n12",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-policy"
+      },
+      "to": {
+        "node_id": "n13",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "st-running"
+      },
+      "to": {
+        "node_id": "n13",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "st-running"
+      },
+      "to": {
+        "node_id": "n13",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n12"
+      },
+      "to": {
+        "node_id": "n13",
+        "input": "operand_2"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n12"
+      },
+      "to": {
+        "node_id": "n13",
+        "input": "operand_3"
+      }
+    },
+    {
+      "from": {
+        "node_id": "st-failure"
+      },
+      "to": {
+        "node_id": "n13",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n13"
+      },
+      "to": {
+        "node_id": "o14",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-policy"
+      },
+      "to": {
+        "node_id": "n15",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "no-errno"
+      },
+      "to": {
+        "node_id": "n15",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "no-errno"
+      },
+      "to": {
+        "node_id": "n15",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "no-errno"
+      },
+      "to": {
+        "node_id": "n15",
+        "input": "operand_2"
+      }
+    },
+    {
+      "from": {
+        "node_id": "no-errno"
+      },
+      "to": {
+        "node_id": "n15",
+        "input": "operand_3"
+      }
+    },
+    {
+      "from": {
+        "node_id": "errno-enotsup"
+      },
+      "to": {
+        "node_id": "n15",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n15"
+      },
+      "to": {
+        "node_id": "o16",
+        "input": "in"
+      }
+    }
+  ]
+}

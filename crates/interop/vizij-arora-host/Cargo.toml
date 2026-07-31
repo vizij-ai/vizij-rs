@@ -10,3 +10,7 @@ vizij-api-core = { path = "../../api/vizij-api-core" }
 anyhow = { workspace = true }
 serde_json = { workspace = true }
 log = "0.4"
+# The behavior `Status` ids the skill fragments' status constants carry —
+# from the crate declaring the enumeration, so the encoding cannot drift.
+arora-behavior = "8"
+uuid = "1"

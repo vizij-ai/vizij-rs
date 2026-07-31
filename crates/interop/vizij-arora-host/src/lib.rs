@@ -16,8 +16,10 @@
 //! This is only the logic both hosts would otherwise write twice, once in Rust
 //! and once in TypeScript.
 
+mod graph_builder;
 pub mod profiles;
 pub mod ros4hri;
+pub mod skills;
 pub mod standard;
 
 use std::collections::HashMap;

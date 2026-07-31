@@ -16,3 +16,6 @@ vizij-graph-core = { path = "../../node-graph/vizij-graph-core" }
 
 [dev-dependencies]
 arora-simple-data-store = "2"
+# The real skill fragments, so the graft path is proven against the shipped
+# look_at asset rather than a synthetic one.
+vizij-arora-host = { path = "../vizij-arora-host" }
