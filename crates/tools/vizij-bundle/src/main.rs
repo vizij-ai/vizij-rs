@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::{anyhow, bail, Context, Result};
-use vizij_arora_host::{profiles, ros4hri, skills};
+use vizij_arora_host::{keyset, profiles, ros4hri, skills};
 
 struct Args {
     command: String,
@@ -36,6 +36,7 @@ struct Args {
     kind: Option<String>,
     id: Option<String>,
     standard: Option<String>,
+    side: Option<String>,
     min_level: u8,
 }
 
@@ -47,6 +48,9 @@ const USAGE: &str = "usage: vizij-bundle <command> …
   add-standard   <face.glb> --standard <profile> -o <out.glb>
   validate       <face.glb> [--min-level <0-3>]
   profiles
+  keysets
+  export-keyset  <keyset>  [-o <file.json>]
+  surface        <graph.json> --side <input|output> --id <id> [-o <file.json>]
   export-profile <profile> [-o <file.json>]
   export-skill   <skill>   [-o <file.json>]";
 
@@ -60,6 +64,7 @@ fn parse_args() -> Result<Args> {
     let mut kind = None;
     let mut id = None;
     let mut standard = None;
+    let mut side = None;
     let mut min_level = 0;
     while let Some(arg) = args.next() {
         let mut value = |name: &str| {
@@ -73,6 +78,7 @@ fn parse_args() -> Result<Args> {
             "--kind" => kind = Some(value("--kind")?),
             "--id" => id = Some(value("--id")?),
             "--standard" => standard = Some(value("--standard")?),
+            "--side" => side = Some(value("--side")?),
             "--min-level" => min_level = value("--min-level")?.parse().context("--min-level")?,
             "-h" | "--help" => bail!("{USAGE}"),
             _ if target.is_none() => target = Some(arg),
@@ -88,8 +94,22 @@ fn parse_args() -> Result<Args> {
         kind,
         id,
         standard,
+        side,
         min_level,
     })
+}
+
+/// Write a JSON payload to `output`, or to stdout when it is absent — the
+/// shape every export command shares.
+fn emit(payload: &serde_json::Value, output: &Option<PathBuf>) -> Result<()> {
+    let text = vizij_bundle::to_sidecar(payload)?;
+    match output {
+        Some(path) => {
+            std::fs::write(path, text).with_context(|| format!("write {}", path.display()))?
+        }
+        None => print!("{text}"),
+    }
+    Ok(())
 }
 
 /// The commands that work on shipped assets rather than a GLB.
@@ -100,6 +120,46 @@ fn run_assets(args: &Args) -> Result<Option<ExitCode>> {
                 "{}",
                 vizij_bundle::to_sidecar(&profiles::standard_profiles_json())?
             );
+            Ok(Some(ExitCode::SUCCESS))
+        }
+        "keysets" => {
+            println!("{}", vizij_bundle::to_sidecar(&keyset::keysets_json())?);
+            Ok(Some(ExitCode::SUCCESS))
+        }
+        "export-keyset" => {
+            let id = args
+                .target
+                .as_deref()
+                .ok_or_else(|| anyhow!("export-keyset needs a keyset id\n{USAGE}"))?;
+            // Regenerate from the generator, mirroring `export-profile`: this
+            // is how the committed asset is refreshed when the vocabulary
+            // behind it moves, and the drift test then holds them equal.
+            let set = match id {
+                "vizij-face" => keyset::vizij_face_keyset(),
+                "ros4hri" => keyset::ros4hri_keyset(),
+                _ => bail!("unknown keyset {id} (see `vizij-bundle keysets`)"),
+            };
+            emit(&serde_json::to_value(&set)?, &args.output)?;
+            Ok(Some(ExitCode::SUCCESS))
+        }
+        // A mapping graph already names both profiles it touches: its `input`
+        // nodes are the set it consumes, its `output` nodes the set it
+        // produces. This lifts either side out as a key set, which is how an
+        // existing mapping is reconciled against a declared profile.
+        "surface" => {
+            let path = args
+                .target
+                .as_deref()
+                .ok_or_else(|| anyhow!("surface needs a graph spec path\n{USAGE}"))?;
+            let side = args.side.as_deref().unwrap_or("input");
+            if side != "input" && side != "output" {
+                bail!("--side expects input or output, got {side}");
+            }
+            let text = std::fs::read_to_string(path).with_context(|| format!("read {path}"))?;
+            let spec: serde_json::Value =
+                serde_json::from_str(&text).with_context(|| format!("parse {path}"))?;
+            let set = vizij_bundle::surface_of(&spec, side, args.id.as_deref().unwrap_or(side));
+            emit(&serde_json::to_value(&set)?, &args.output)?;
             Ok(Some(ExitCode::SUCCESS))
         }
         "export-profile" => {

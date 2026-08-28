@@ -9,7 +9,7 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{json, Map, Value as Json};
-use vizij_arora_host::{profiles, standard};
+use vizij_arora_host::{keyset, profiles, standard};
 use vizij_glb_migrate::glb::Glb;
 
 /// A GLB with its parsed JSON chunk, ready for bundle surgery.
@@ -475,5 +475,57 @@ mod tests {
         let cov = coverage(&Face::parse(&face_bytes(&refs)).unwrap());
         assert_eq!(cov.level, 2);
         assert_eq!(cov.face_id.as_deref(), Some("test_face"));
+    }
+}
+
+/// Lift a key set out of a mapping graph: its `input` nodes are the profile it
+/// consumes, its `output` nodes the profile it produces.
+///
+/// This is the bootstrap direction — how an existing mapping is reconciled
+/// against a declared profile, and how a face's own adaptation reports the
+/// surface it actually implements. It is deliberately *not* the source of
+/// truth: a mapping only touches the part of a profile it needs, so a surface
+/// lifted this way can be a strict subset of the profile it claims (ROS4HRI
+/// reaches 33 of the standard's 35 muscle controls). Compare, do not replace.
+pub fn surface_of(spec: &Json, side: &str, id: &str) -> keyset::KeySet {
+    let mut keys: Vec<keyset::KeyDef> = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for node in spec.get("nodes").and_then(Json::as_array).into_iter().flatten() {
+        if node.get("type").and_then(Json::as_str) != Some(side) {
+            continue;
+        }
+        let Some(path) = node.pointer("/params/path").and_then(Json::as_str) else {
+            continue;
+        };
+        if !seen.insert(path.to_string()) {
+            continue;
+        }
+        // The declared default types the key: a string default means a string
+        // key, anything numeric a float, and an absent one leaves it open.
+        let default = node.pointer("/params/value");
+        let value_type = match default {
+            Some(v) if v.is_string() => Some("str".to_string()),
+            Some(v) if v.is_boolean() => Some("bool".to_string()),
+            Some(v) if v.is_number() => Some("f32".to_string()),
+            _ => None,
+        };
+        keys.push(keyset::KeyDef {
+            path: path.to_string(),
+            kind: Some(side.to_string()),
+            value_type,
+            min: None,
+            max: None,
+            default_value: None,
+            meta: None,
+        });
+    }
+    keys.sort_by(|a, b| a.path.cmp(&b.path));
+    keyset::KeySet {
+        id: id.to_string(),
+        version: "v1".to_string(),
+        title: format!("{id} ({side} surface)"),
+        description: format!("The {side} surface lifted from a mapping graph — the paths it \
+                              actually touches, which may be a subset of the profile it claims."),
+        keys,
     }
 }
