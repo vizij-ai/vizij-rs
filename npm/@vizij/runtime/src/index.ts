@@ -45,6 +45,47 @@ export interface StandardProfile {
 }
 
 /**
+ * One path in a profile, with its type and constraints. The shape is arora's
+ * `KeyInfo`, so a profile round-trips through the same descriptor the WS
+ * registry and the standalone app already speak.
+ */
+export interface ProfileKey {
+  path: string;
+  kind?: string;
+  value_type?: string;
+  min?: number;
+  max?: number;
+  default_value?: unknown;
+  /** Standard metadata: the FACS action unit, ARKit blendshape, and tier. */
+  meta?: { au?: number; arkit?: string; tier?: string };
+}
+
+/**
+ * A profile — a set of paths and their types, the vocabulary half of a
+ * standard. Listed by {@link profiles}; fetched in full with {@link profile}.
+ *
+ * Distinct from {@link StandardProfile}, which describes a *mapping*: the graph
+ * that carries one profile's values onto another's.
+ */
+export interface Profile {
+  id: string;
+  version: string;
+  title: string;
+  description: string;
+  keys: ProfileKey[];
+}
+
+/** A profile as listed by {@link profiles} — the summary, without the keys. */
+export interface ProfileSummary {
+  id: string;
+  version: string;
+  title: string;
+  description: string;
+  /** How many paths the profile defines. */
+  keys: number;
+}
+
+/**
  * A skill Vizij ships — a spawnable task-run behavior (a graph fragment the
  * device grafts per goal), served to ROS as a standard action (e.g. the
  * look_at gaze skill behind `/skill/look_at`). Listed by {@link skills}; its
@@ -113,6 +154,8 @@ interface WasmBindings {
   };
   standardProfiles(): StandardProfile[];
   standardProfile(id: string, rig_prefix: string): object | null;
+  profiles(): ProfileSummary[];
+  profile(id: string, rig_prefix: string): Profile | null;
   skills(): Skill[];
   skillSource(id: string): object | null;
   composeFace(gltf_json: string, options_json?: string): object;
@@ -390,6 +433,31 @@ export async function standardProfiles(input?: InitInput): Promise<StandardProfi
  * prepended to the control paths the profile writes; omit it for the
  * unprefixed graph. `null` for an unknown id (see {@link standardProfiles}).
  */
+/**
+ * The profiles Vizij ships — a *profile* being a set of paths and their types,
+ * the vocabulary a face's graphs are authored against. The list an authoring
+ * app's import picker offers. Calls {@link init} if it has not run yet.
+ */
+export async function profiles(input?: InitInput): Promise<ProfileSummary[]> {
+  await init(input);
+  return bindingCache.current!.profiles();
+}
+
+/**
+ * One profile in full — every path it defines, with type, range, default and
+ * standard metadata. `rigPrefix` (e.g. `"rig/quori_latest/"`) is prepended to
+ * every path so the result addresses one face's store; omit it for the
+ * portable form. `null` for an unknown id (see {@link profiles}).
+ */
+export async function profile(
+  id: string,
+  rigPrefix = "",
+  input?: InitInput,
+): Promise<Profile | null> {
+  await init(input);
+  return bindingCache.current!.profile(id, rigPrefix);
+}
+
 export async function standardProfile(
   id: string,
   rigPrefix = "",

@@ -49,6 +49,7 @@ const USAGE: &str = "usage: vizij-bundle <command> …
   validate       <face.glb> [--min-level <0-3>]
   profiles
   export-profile <profile> [-o <file.json>]
+  add-profile    <face.glb> --profile <id> -o <out.glb>
   mappings
   export-mapping <mapping> [-o <file.json>]
   surface        <graph.json> --side <input|output> --id <id> [-o <file.json>]
@@ -77,7 +78,7 @@ fn parse_args() -> Result<Args> {
             "--graph" => graph = Some(PathBuf::from(value("--graph")?)),
             "--kind" => kind = Some(value("--kind")?),
             "--id" => id = Some(value("--id")?),
-            "--standard" => standard = Some(value("--standard")?),
+            "--standard" | "--profile" => standard = Some(value("--standard")?),
             "--side" => side = Some(value("--side")?),
             "--min-level" => min_level = value("--min-level")?.parse().context("--min-level")?,
             "-h" | "--help" => bail!("{USAGE}"),
@@ -275,6 +276,22 @@ fn run() -> Result<ExitCode> {
             let out = args
                 .output
                 .ok_or_else(|| anyhow!("add-standard needs -o\n{USAGE}"))?;
+            std::fs::write(&out, face.to_bytes()?)
+                .with_context(|| format!("write {}", out.display()))?;
+        }
+        // Declare a profile on the face: the vocabulary its graphs are
+        // authored against travels with the asset, so a reader knows which set
+        // of names and types to hold the face to.
+        "add-profile" => {
+            let id = args
+                .standard
+                .ok_or_else(|| anyhow!("add-profile needs --profile <id>\n{USAGE}"))?;
+            let declared = profile::profile(&id)
+                .ok_or_else(|| anyhow!("unknown profile {id} (see `vizij-bundle profiles`)"))?;
+            face.add_profile(&declared)?;
+            let out = args
+                .output
+                .ok_or_else(|| anyhow!("add-profile needs -o\n{USAGE}"))?;
             std::fs::write(&out, face.to_bytes()?)
                 .with_context(|| format!("write {}", out.display()))?;
         }

@@ -400,6 +400,45 @@ pub fn standard_profile(id: &str, rig_prefix: &str) -> Result<JsValue, JsValue> 
     }
 }
 
+/// The profiles Vizij ships as a JS array of `{ id, version, title,
+/// description, keys }` — where a *profile* is a set of paths and their types,
+/// the vocabulary half of a standard. The introspectable list an authoring
+/// app's import picker offers.
+///
+/// Distinct from [`standard_profiles`], which lists the *mappings* that carry
+/// one profile's values onto another's.
+#[wasm_bindgen(js_name = profiles)]
+pub fn profiles() -> Result<JsValue, JsValue> {
+    let list = vizij_arora_host::profile::profiles_json();
+    let json =
+        serde_json::to_string(&list).map_err(|e| JsValue::from_str(&format!("profiles: {e}")))?;
+    js_sys::JSON::parse(&json)
+}
+
+/// One shipped profile in full — every path it defines, with its type, range,
+/// default, and standard metadata. `null` for an unknown id (see
+/// [`profiles`]).
+///
+/// `rigPrefix` (e.g. `rig/quori_latest/`) is prepended to every path, so the
+/// result addresses one face's store; pass an empty string for the portable
+/// form the registry ships.
+#[wasm_bindgen(js_name = profile)]
+pub fn profile(id: &str, rig_prefix: &str) -> Result<JsValue, JsValue> {
+    match vizij_arora_host::profile::profile(id) {
+        Some(mut set) => {
+            if !rig_prefix.is_empty() {
+                for key in &mut set.keys {
+                    key.path = format!("{rig_prefix}{}", key.path);
+                }
+            }
+            let json = serde_json::to_string(&set)
+                .map_err(|e| JsValue::from_str(&format!("profile {id}: {e}")))?;
+            js_sys::JSON::parse(&json)
+        }
+        None => Ok(JsValue::NULL),
+    }
+}
+
 /// The skills Vizij ships (the look_at gaze skill, …) as a JS array of
 /// `{ id, title, description, parameters }` — the introspectable list an
 /// authoring app's Skills menu and a device's actions view offer.

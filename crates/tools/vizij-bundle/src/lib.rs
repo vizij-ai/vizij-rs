@@ -72,6 +72,47 @@ impl Face {
         Ok(())
     }
 
+    /// Declare a profile on the face: the vocabulary its graphs are authored
+    /// against, written to the bundle's top-level `profiles` array.
+    ///
+    /// A profile is names and types, not a graph, so it sits beside `graphs`
+    /// rather than inside it — the same way an author's imported inputs travel
+    /// with the file. Replaces the entry with the same id if present, appends
+    /// otherwise, so re-importing updates in place.
+    pub fn add_profile(&mut self, profile: &vizij_arora_host::profile::Profile) -> Result<()> {
+        let entry = serde_json::to_value(profile).context("serialize the profile")?;
+        let bundle = self
+            .bundle_mut()
+            .ok_or_else(|| anyhow!("the GLB carries no VIZIJ_bundle"))?;
+        let map = bundle
+            .as_object_mut()
+            .ok_or_else(|| anyhow!("the VIZIJ_bundle is not an object"))?;
+        let profiles = map
+            .entry("profiles")
+            .or_insert_with(|| Json::Array(Vec::new()))
+            .as_array_mut()
+            .ok_or_else(|| anyhow!("the bundle's `profiles` is not an array"))?;
+        match profiles
+            .iter()
+            .position(|p| p.get("id") == entry.get("id"))
+        {
+            Some(i) => profiles[i] = entry,
+            None => profiles.push(entry),
+        }
+        Ok(())
+    }
+
+    /// Every profile the face declares, in bundle order.
+    pub fn profiles(&self) -> Vec<vizij_arora_host::profile::Profile> {
+        self.bundle()
+            .and_then(|b| b.get("profiles"))
+            .and_then(Json::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| serde_json::from_value(entry.clone()).ok())
+            .collect()
+    }
+
     /// Graft one graph entry `{kind, id, spec}` into the bundle: replaces the
     /// entry with the same `id` if present, appends otherwise.
     pub fn add_graph(&mut self, kind: &str, id: &str, spec: Json) -> Result<()> {
@@ -306,8 +347,16 @@ pub fn inspect(face: &Face) -> Json {
             })
         })
         .collect();
+    // The profiles the face declares — id, version, and how many keys each
+    // brings — so `inspect` answers "what vocabulary is this authored against?"
+    let profiles: Vec<Json> = face
+        .profiles()
+        .iter()
+        .map(|p| json!({ "id": p.id, "version": p.version, "keys": p.keys.len() }))
+        .collect();
     json!({
         "faceId": face.bundle().and_then(|b| b.pointer("/metadata/faceId")),
+        "profiles": profiles,
         "graphs": graphs,
         "inputs": face.input_paths(),
         "animatables": morphs,
@@ -401,6 +450,36 @@ mod tests {
         let packed = face.to_bytes().unwrap();
         let reparsed = Face::parse(&packed).unwrap();
         assert_eq!(count(&reparsed), 2);
+    }
+
+    /// A declared profile travels with the face like any other authored
+    /// input: written to the bundle, replaced in place on re-import, and
+    /// intact across a GLB round-trip.
+    #[test]
+    fn add_profile_declares_the_vocabulary_on_the_face() {
+        let bytes = face_bytes(&["rig/test_face/x"]);
+        let mut face = Face::parse(&bytes).unwrap();
+        assert!(face.profiles().is_empty());
+
+        let vizij = vizij_arora_host::profile::profile("vizij-face").unwrap();
+        let ros = vizij_arora_host::profile::profile("ros4hri").unwrap();
+        face.add_profile(&vizij).unwrap();
+        face.add_profile(&ros).unwrap();
+        assert_eq!(
+            face.profiles().iter().map(|p| p.id.clone()).collect::<Vec<_>>(),
+            ["vizij-face", "ros4hri"]
+        );
+
+        // Re-importing the same profile updates in place rather than stacking.
+        face.add_profile(&vizij).unwrap();
+        assert_eq!(face.profiles().len(), 2);
+
+        // It survives the GLB round-trip, keys and all.
+        let packed = face.to_bytes().unwrap();
+        let reparsed = Face::parse(&packed).unwrap();
+        let declared = reparsed.profiles();
+        assert_eq!(declared.len(), 2);
+        assert_eq!(declared[0].keys.len(), vizij.keys.len());
     }
 
     #[test]
