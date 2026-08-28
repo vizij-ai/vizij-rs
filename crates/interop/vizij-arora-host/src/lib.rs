@@ -60,6 +60,12 @@ pub struct Bundle {
     /// The motiongraph programs, `(id, spec)` — the graphs the face can play on
     /// top of its rig (e.g. Quori's "Speaks").
     pub programs: Vec<(String, Json)>,
+    /// The profiles this face declares it speaks — the vocabularies its graphs
+    /// are authored against, carried in the bundle's top-level `profiles`
+    /// array. A profile is names and types, not a graph, so it sits beside
+    /// `graphs` rather than inside it. Declaring them is what lets a coverage
+    /// check know which vocabulary to hold the face to.
+    pub profiles: Vec<profile::Profile>,
     /// `metadata.activeMotionGraphId` (or the first `activeMotionGraphIds`).
     pub active_program_id: Option<String>,
     /// `poses.config.neutralInputs` — input name → neutral value.
@@ -146,6 +152,17 @@ impl Bundle {
             graphs.push((kind, spec.clone()));
         }
 
+        // Profiles are declared data, not graphs — a malformed entry is
+        // skipped rather than failing the whole bundle, so an older reader
+        // meeting a newer profile shape still loads the face.
+        let profiles: Vec<profile::Profile> = bundle
+            .get("profiles")
+            .and_then(Json::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| serde_json::from_value(entry.clone()).ok())
+            .collect();
+
         let mut neutral_inputs = HashMap::new();
         if let Some(neutral) = bundle
             .pointer("/poses/config/neutralInputs")
@@ -168,6 +185,7 @@ impl Bundle {
             standard_profiles,
             skills,
             programs,
+            profiles,
             active_program_id,
             neutral_inputs,
             face_id,
