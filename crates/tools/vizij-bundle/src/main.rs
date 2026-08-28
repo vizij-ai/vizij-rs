@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::{anyhow, bail, Context, Result};
-use vizij_arora_host::{keyset, profiles, ros4hri, skills};
+use vizij_arora_host::{mappings, profile, ros4hri, skills};
 
 struct Args {
     command: String,
@@ -48,10 +48,10 @@ const USAGE: &str = "usage: vizij-bundle <command> …
   add-standard   <face.glb> --standard <profile> -o <out.glb>
   validate       <face.glb> [--min-level <0-3>]
   profiles
-  keysets
-  export-keyset  <keyset>  [-o <file.json>]
-  surface        <graph.json> --side <input|output> --id <id> [-o <file.json>]
   export-profile <profile> [-o <file.json>]
+  mappings
+  export-mapping <mapping> [-o <file.json>]
+  surface        <graph.json> --side <input|output> --id <id> [-o <file.json>]
   export-skill   <skill>   [-o <file.json>]";
 
 fn parse_args() -> Result<Args> {
@@ -115,29 +115,29 @@ fn emit(payload: &serde_json::Value, output: &Option<PathBuf>) -> Result<()> {
 /// The commands that work on shipped assets rather than a GLB.
 fn run_assets(args: &Args) -> Result<Option<ExitCode>> {
     match args.command.as_str() {
-        "profiles" => {
+        "mappings" => {
             println!(
                 "{}",
-                vizij_bundle::to_sidecar(&profiles::standard_profiles_json())?
+                vizij_bundle::to_sidecar(&mappings::standard_mappings_json())?
             );
             Ok(Some(ExitCode::SUCCESS))
         }
-        "keysets" => {
-            println!("{}", vizij_bundle::to_sidecar(&keyset::keysets_json())?);
+        "profiles" => {
+            println!("{}", vizij_bundle::to_sidecar(&profile::profiles_json())?);
             Ok(Some(ExitCode::SUCCESS))
         }
-        "export-keyset" => {
+        "export-profile" => {
             let id = args
                 .target
                 .as_deref()
-                .ok_or_else(|| anyhow!("export-keyset needs a keyset id\n{USAGE}"))?;
+                .ok_or_else(|| anyhow!("export-profile needs a profile id\n{USAGE}"))?;
             // Regenerate from the generator, mirroring `export-profile`: this
             // is how the committed asset is refreshed when the vocabulary
             // behind it moves, and the drift test then holds them equal.
             let set = match id {
-                "vizij-face" => keyset::vizij_face_keyset(),
-                "ros4hri" => keyset::ros4hri_keyset(),
-                _ => bail!("unknown keyset {id} (see `vizij-bundle keysets`)"),
+                "vizij-face" => profile::vizij_face_profile(),
+                "ros4hri" => profile::ros4hri_profile(),
+                _ => bail!("unknown profile {id} (see `vizij-bundle profiles`)"),
             };
             emit(&serde_json::to_value(&set)?, &args.output)?;
             Ok(Some(ExitCode::SUCCESS))
@@ -162,13 +162,13 @@ fn run_assets(args: &Args) -> Result<Option<ExitCode>> {
             emit(&serde_json::to_value(&set)?, &args.output)?;
             Ok(Some(ExitCode::SUCCESS))
         }
-        "export-profile" => {
+        "export-mapping" => {
             let id = args
                 .target
                 .as_deref()
-                .ok_or_else(|| anyhow!("export-profile needs a profile id\n{USAGE}"))?;
-            profiles::standard_profile(id)
-                .ok_or_else(|| anyhow!("unknown profile {id} (see `vizij-bundle profiles`)"))?;
+                .ok_or_else(|| anyhow!("export-mapping needs a mapping id\n{USAGE}"))?;
+            mappings::standard_mapping(id)
+                .ok_or_else(|| anyhow!("unknown mapping {id} (see `vizij-bundle mappings`)"))?;
             // One generator today; the registry keys which one to run.
             let spec = match id {
                 "ros4hri" => ros4hri::generate(),

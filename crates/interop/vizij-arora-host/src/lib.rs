@@ -17,8 +17,8 @@
 //! and once in TypeScript.
 
 mod graph_builder;
-pub mod keyset;
-pub mod profiles;
+pub mod mappings;
+pub mod profile;
 pub mod ros4hri;
 pub mod skills;
 pub mod standard;

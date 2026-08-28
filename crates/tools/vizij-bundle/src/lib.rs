@@ -9,7 +9,7 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{json, Map, Value as Json};
-use vizij_arora_host::{keyset, profiles, standard};
+use vizij_arora_host::{mappings, profile, standard};
 use vizij_glb_migrate::glb::Glb;
 
 /// A GLB with its parsed JSON chunk, ready for bundle surgery.
@@ -109,11 +109,11 @@ impl Face {
     /// duplicates — the embedded copy stays updatable. Errors on an unknown
     /// profile id.
     pub fn add_standard_profile(&mut self, profile_id: &str) -> Result<()> {
-        let (_, spec) = profiles::standard_profile_source(profile_id, &self.rig_prefix())
+        let (_, spec) = mappings::standard_mapping_source(profile_id, &self.rig_prefix())
             .ok_or_else(|| anyhow!("unknown standard profile {profile_id}"))?;
         self.add_graph(
-            profiles::STANDARD_PROFILE_KIND,
-            &profiles::embedded_graph_id(profile_id),
+            mappings::STANDARD_MAPPING_KIND,
+            &mappings::embedded_graph_id(profile_id),
             spec,
         )
     }
@@ -487,8 +487,8 @@ mod tests {
 /// truth: a mapping only touches the part of a profile it needs, so a surface
 /// lifted this way can be a strict subset of the profile it claims (ROS4HRI
 /// reaches 33 of the standard's 35 muscle controls). Compare, do not replace.
-pub fn surface_of(spec: &Json, side: &str, id: &str) -> keyset::KeySet {
-    let mut keys: Vec<keyset::KeyDef> = Vec::new();
+pub fn surface_of(spec: &Json, side: &str, id: &str) -> profile::Profile {
+    let mut keys: Vec<profile::ProfileKey> = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
     for node in spec.get("nodes").and_then(Json::as_array).into_iter().flatten() {
         if node.get("type").and_then(Json::as_str) != Some(side) {
@@ -509,7 +509,7 @@ pub fn surface_of(spec: &Json, side: &str, id: &str) -> keyset::KeySet {
             Some(v) if v.is_number() => Some("f32".to_string()),
             _ => None,
         };
-        keys.push(keyset::KeyDef {
+        keys.push(profile::ProfileKey {
             path: path.to_string(),
             kind: Some(side.to_string()),
             value_type,
@@ -520,7 +520,7 @@ pub fn surface_of(spec: &Json, side: &str, id: &str) -> keyset::KeySet {
         });
     }
     keys.sort_by(|a, b| a.path.cmp(&b.path));
-    keyset::KeySet {
+    profile::Profile {
         id: id.to_string(),
         version: "v1".to_string(),
         title: format!("{id} ({side} surface)"),

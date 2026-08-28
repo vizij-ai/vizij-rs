@@ -125,11 +125,11 @@ fn gaze_angle(g: &mut GraphBuilder, num: &str, den: &str) -> String {
 }
 
 /// The composable ROS4HRI profile source: the canonical profile asset
-/// ([`PROFILE_JSON`]) with `rig_prefix` applied. The prefix is prepended to
+/// ([`MAPPING_JSON`]) with `rig_prefix` applied. The prefix is prepended to
 /// every written control path (faces namespace their rig inputs, e.g.
 /// `rig/quori_latest/`); pass `""` for unprefixed controls.
 pub fn ros4hri_source(rig_prefix: &str) -> (String, Json) {
-    let mut spec: Json = serde_json::from_str(PROFILE_JSON).expect("profiles/ros4hri.json parses");
+    let mut spec: Json = serde_json::from_str(MAPPING_JSON).expect("mappings/ros4hri.json parses");
     apply_rig_prefix(&mut spec, rig_prefix);
     (ROS4HRI_SOURCE_ID.to_string(), spec)
 }
@@ -138,7 +138,7 @@ pub fn ros4hri_source(rig_prefix: &str) -> (String, Json) {
 /// what the bundler embeds into GLBs and what the web runtime serves; edit it
 /// by regenerating (`vizij-bundle export-profile ros4hri`) — a test keeps it
 /// in sync with [`generate`].
-pub const PROFILE_JSON: &str = include_str!("../profiles/ros4hri.json");
+pub const MAPPING_JSON: &str = include_str!("../mappings/ros4hri.json");
 
 /// Regenerate the profile graph from first principles, unprefixed — the
 /// export path behind the canonical asset.
@@ -404,8 +404,8 @@ mod tests {
     /// `vizij-bundle export-profile ros4hri -o crates/interop/vizij-arora-host/profiles/ros4hri.json`.
     #[test]
     fn committed_asset_matches_the_generator() {
-        let committed: Json = serde_json::from_str(PROFILE_JSON).expect("asset parses");
-        assert_eq!(committed, generate(), "profiles/ros4hri.json is stale");
+        let committed: Json = serde_json::from_str(MAPPING_JSON).expect("asset parses");
+        assert_eq!(committed, generate(), "mappings/ros4hri.json is stale");
     }
 
     #[test]

@@ -142,7 +142,7 @@ performance overrides it (last-writer-wins).
 ## Embedding and editing the profile
 
 The profile graph is a canonical JSON asset,
-[`profiles/ros4hri.json`](../crates/interop/vizij-arora-host/profiles/ros4hri.json).
+[`mappings/ros4hri.json`](../crates/interop/vizij-arora-host/mappings/ros4hri.json).
 Rust reads it (and regenerates it from the node-graph builder; a test fails if
 the committed file drifts), so it is programmatically available *and* separately
 editable and exportable.

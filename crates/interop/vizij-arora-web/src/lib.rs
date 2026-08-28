@@ -378,7 +378,7 @@ fn normalize_values_map_str(values_json: &str) -> Result<String, JsValue> {
 /// offers for opt-in.
 #[wasm_bindgen(js_name = standardProfiles)]
 pub fn standard_profiles() -> Result<JsValue, JsValue> {
-    let list = vizij_arora_host::profiles::standard_profiles_json();
+    let list = vizij_arora_host::mappings::standard_mappings_json();
     let json =
         serde_json::to_string(&list).map_err(|e| JsValue::from_str(&format!("profiles: {e}")))?;
     js_sys::JSON::parse(&json)
@@ -390,7 +390,7 @@ pub fn standard_profiles() -> Result<JsValue, JsValue> {
 /// unknown id (see [`standard_profiles`]).
 #[wasm_bindgen(js_name = standardProfile)]
 pub fn standard_profile(id: &str, rig_prefix: &str) -> Result<JsValue, JsValue> {
-    match vizij_arora_host::profiles::standard_profile_source(id, rig_prefix) {
+    match vizij_arora_host::mappings::standard_mapping_source(id, rig_prefix) {
         Some((_, spec)) => {
             let json = serde_json::to_string(&spec)
                 .map_err(|e| JsValue::from_str(&format!("profile {id}: {e}")))?;
