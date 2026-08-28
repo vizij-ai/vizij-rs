@@ -15,7 +15,10 @@ vizij-bundle add-graph      face.glb --graph adaptation.json \
 vizij-bundle add-standard   face.glb --standard ros4hri -o out.glb
 vizij-bundle validate       face.glb [--min-level 2]
 vizij-bundle profiles
-vizij-bundle export-profile ros4hri -o ros4hri.json
+vizij-bundle export-profile vizij-face -o vizij-face.json
+vizij-bundle mappings
+vizij-bundle export-mapping ros4hri -o ros4hri.json
+vizij-bundle surface       adaptation.json --side output --id my_face
 ```
 
 - **inspect** — face summary as JSON: id, graphs, the input surface (store
@@ -39,7 +42,20 @@ vizij-bundle export-profile ros4hri -o ros4hri.json
   into a CI gate.
 - **profiles** — list the standard profiles Vizij ships, as JSON — the
   introspectable menu of what a face may opt into.
-- **export-profile** — regenerate a profile's canonical asset (the file
-  `crates/interop/vizij-arora-host/profiles/<id>.json` that Rust embeds and the
+- **profiles** — the profiles Vizij ships, as JSON: a *profile* is a set of
+  paths and their types (`vizij-face`, 81 keys; `ros4hri`, 40). It is the
+  vocabulary half of a standard.
+- **mappings** — the standard mappings Vizij ships. A *mapping* is a graph that
+  carries one profile's values onto another's; the chain a face runs is
+  profiles mapped to profiles mapped to profiles, ending at the face's own
+  pose profile.
+- **surface** — lift a profile back out of a mapping graph: its `input` nodes
+  are the profile it consumes, its `output` nodes the one it produces. Use it
+  to reconcile a mapping against a declared profile, or to read off the profile
+  a face's own adaptation implements. A bootstrap, not a source of truth — a
+  mapping only touches the part of a profile it needs.
+- **export-profile** — regenerate a profile's canonical asset.
+- **export-mapping** — regenerate a mapping's canonical asset (the file
+  `crates/interop/vizij-arora-host/mappings/<id>.json` that Rust embeds and the
   web runtime serves). Run this after editing the profile's generator; a test
   fails if the committed asset drifts from it.

@@ -1,20 +1,21 @@
-//! Key sets: a profile's **names and types**, as data.
+//! Profiles: the **names and types** a standard defines, as data.
 //!
-//! A profile has two halves. This module owns the first — the set of typed
-//! store paths a profile defines — and the graph assets in [`crate::profiles`]
-//! own the second, the *mappings* that carry one profile's keys onto
-//! another's. Splitting them is what makes the chain checkable: a mapping's
-//! input paths can be validated against the key set it claims to consume,
-//! rather than being the only record of what that profile contains.
+//! A standard has two halves, and this module owns the first. A *profile* is
+//! the set of typed store paths a standard defines — its vocabulary. A
+//! *mapping* ([`crate::mappings`]) is the graph that carries one profile's
+//! keys onto another's. Keeping them apart is what makes the chain checkable:
+//! a mapping's input paths can be validated against the profile it claims to
+//! consume, instead of being the only surviving record of what that profile
+//! contains.
 //!
 //! The serialized shape is `arora-bridge-ws`'s `KeyInfo` — `{ path, kind,
-//! value_type, min, max, default_value }` — so a key set round-trips through
-//! the same descriptor the WS registry and the standalone app already speak. A
-//! key set is that list plus an id and a version.
+//! value_type, min, max, default_value }` — so a profile round-trips through
+//! the same descriptor the WS registry and the standalone app already speak.
+//! A profile is that list plus an id, a version, and a description.
 //!
-//! Like the profile graphs, the committed JSON is generated from the
-//! constants and a test fails when the two drift. That direction inverts
-//! later: the asset becomes the definition and the constants read it.
+//! Like the mapping assets, the committed JSON is generated from the constants
+//! and a test fails when the two drift. That direction inverts later: the
+//! asset becomes the definition and the constants read it.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as Json};
@@ -36,9 +37,9 @@ pub struct KeyMeta {
     pub tier: Option<String>,
 }
 
-/// One typed path in a key set — `KeyInfo` plus optional standard metadata.
+/// One typed path in a profile — `KeyInfo` plus optional standard metadata.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct KeyDef {
+pub struct ProfileKey {
     pub path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
@@ -54,10 +55,10 @@ pub struct KeyDef {
     pub meta: Option<KeyMeta>,
 }
 
-impl KeyDef {
+impl ProfileKey {
     /// A weight in `[0, 1]` resting at zero — the shape of most face controls.
     fn weight(path: String) -> Self {
-        KeyDef {
+        ProfileKey {
             path,
             kind: Some("input".into()),
             value_type: Some("f32".into()),
@@ -70,9 +71,9 @@ impl KeyDef {
 
     /// A bipolar control in `[-1, 1]` resting at zero.
     fn bipolar(path: &str) -> Self {
-        KeyDef {
+        ProfileKey {
             min: Some(-1.0),
-            ..KeyDef::weight(path.to_string())
+            ..ProfileKey::weight(path.to_string())
         }
     }
 
@@ -82,19 +83,19 @@ impl KeyDef {
     }
 }
 
-/// A profile's key set: its identity and every typed path it defines.
+/// A profile's profile: its identity and every typed path it defines.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct KeySet {
+pub struct Profile {
     pub id: String,
     pub version: String,
     pub title: String,
     pub description: String,
-    pub keys: Vec<KeyDef>,
+    pub keys: Vec<ProfileKey>,
 }
 
 // --- The Vizij face standard ------------------------------------------------
 
-/// The `vizij-face` key set: the standard's own vocabulary — gaze and lids,
+/// The `vizij-face` profile: the standard's own vocabulary — gaze and lids,
 /// the named expressions, the visemes, and the muscle tier — generated from
 /// [`crate::standard`].
 ///
@@ -103,11 +104,11 @@ pub struct KeySet {
 /// `jaw_right` have no FACS code, so its action-unit channel cannot express
 /// them); that difference is only computable because this set is declared
 /// independently.
-pub fn vizij_face_keyset() -> KeySet {
+pub fn vizij_face_profile() -> Profile {
     let mut keys = Vec::new();
 
     let gaze = |path: &str, tier: &str| {
-        KeyDef::bipolar(path).with_meta(KeyMeta {
+        ProfileKey::bipolar(path).with_meta(KeyMeta {
             tier: Some(tier.into()),
             ..KeyMeta::default()
         })
@@ -121,7 +122,7 @@ pub fn vizij_face_keyset() -> KeySet {
         standard::LEFT_EYE_TOP_EYELID_POS_Y,
         standard::RIGHT_EYE_TOP_EYELID_POS_Y,
     ] {
-        keys.push(KeyDef::weight(path.to_string()).with_meta(KeyMeta {
+        keys.push(ProfileKey::weight(path.to_string()).with_meta(KeyMeta {
             tier: Some("gaze".into()),
             ..KeyMeta::default()
         }));
@@ -129,7 +130,7 @@ pub fn vizij_face_keyset() -> KeySet {
 
     for name in EXPRESSION_NAMES {
         keys.push(
-            KeyDef::weight(standard::expression_path(name)).with_meta(KeyMeta {
+            ProfileKey::weight(standard::expression_path(name)).with_meta(KeyMeta {
                 tier: Some("expression".into()),
                 ..KeyMeta::default()
             }),
@@ -138,7 +139,7 @@ pub fn vizij_face_keyset() -> KeySet {
 
     for shape in VISEME_SHAPES {
         keys.push(
-            KeyDef::weight(standard::viseme_path(shape)).with_meta(KeyMeta {
+            ProfileKey::weight(standard::viseme_path(shape)).with_meta(KeyMeta {
                 tier: Some("viseme".into()),
                 ..KeyMeta::default()
             }),
@@ -147,7 +148,7 @@ pub fn vizij_face_keyset() -> KeySet {
 
     for control in FACE_CONTROLS.iter() {
         keys.push(
-            KeyDef::weight(standard::face_path(control.name)).with_meta(KeyMeta {
+            ProfileKey::weight(standard::face_path(control.name)).with_meta(KeyMeta {
                 au: control.au,
                 arkit: Some(control.arkit.to_string()),
                 tier: Some("muscle".into()),
@@ -155,7 +156,7 @@ pub fn vizij_face_keyset() -> KeySet {
         );
     }
 
-    KeySet {
+    Profile {
         id: "vizij-face".into(),
         version: "v1".into(),
         title: "Vizij face standard".into(),
@@ -169,37 +170,37 @@ pub fn vizij_face_keyset() -> KeySet {
 
 // --- ROS4HRI ----------------------------------------------------------------
 
-/// The `ros4hri` key set: what a ROS bridge writes and the ROS4HRI mapping
+/// The `ros4hri` profile: what a ROS bridge writes and the ROS4HRI mapping
 /// reads. Generated from [`crate::ros4hri`]'s key contract.
 ///
 /// Note that the shipped ROS 2 exposure preset writes only the expression and
 /// gaze keys — the action-unit and viseme keys are part of the contract and
 /// have no topic feeding them. Declaring the set is what makes that visible.
-pub fn ros4hri_keyset() -> KeySet {
+pub fn ros4hri_profile() -> Profile {
     let mut keys = vec![
-        KeyDef {
+        ProfileKey {
             kind: Some("input".into()),
             value_type: Some("str".into()),
             min: None,
             max: None,
             default_value: Some(json!({ "str": "" })),
-            ..KeyDef::weight(ros4hri::EXPRESSION_NAME_KEY.to_string())
+            ..ProfileKey::weight(ros4hri::EXPRESSION_NAME_KEY.to_string())
         },
-        KeyDef::bipolar(ros4hri::EXPRESSION_VALENCE_KEY),
-        KeyDef::bipolar(ros4hri::EXPRESSION_AROUSAL_KEY),
-        KeyDef {
+        ProfileKey::bipolar(ros4hri::EXPRESSION_VALENCE_KEY),
+        ProfileKey::bipolar(ros4hri::EXPRESSION_AROUSAL_KEY),
+        ProfileKey {
             value_type: Some("value".into()),
             min: None,
             max: None,
             default_value: None,
-            ..KeyDef::weight(ros4hri::GAZE_TARGET_KEY.to_string())
+            ..ProfileKey::weight(ros4hri::GAZE_TARGET_KEY.to_string())
         },
-        KeyDef {
+        ProfileKey {
             value_type: Some("str".into()),
             min: None,
             max: None,
             default_value: Some(json!({ "str": "" })),
-            ..KeyDef::weight(ros4hri::GAZE_FRAME_KEY.to_string())
+            ..ProfileKey::weight(ros4hri::GAZE_FRAME_KEY.to_string())
         },
     ];
 
@@ -210,7 +211,7 @@ pub fn ros4hri_keyset() -> KeySet {
     au_codes.dedup();
     for code in au_codes {
         keys.push(
-            KeyDef::weight(ros4hri::au_key(code)).with_meta(KeyMeta {
+            ProfileKey::weight(ros4hri::au_key(code)).with_meta(KeyMeta {
                 au: Some(code),
                 ..KeyMeta::default()
             }),
@@ -218,10 +219,10 @@ pub fn ros4hri_keyset() -> KeySet {
     }
 
     for shape in VISEME_SHAPES {
-        keys.push(KeyDef::weight(ros4hri::viseme_key(shape)));
+        keys.push(ProfileKey::weight(ros4hri::viseme_key(shape)));
     }
 
-    KeySet {
+    Profile {
         id: "ros4hri".into(),
         version: "v1".into(),
         title: "ROS4HRI face command".into(),
@@ -236,29 +237,29 @@ pub fn ros4hri_keyset() -> KeySet {
 // --- The registry -----------------------------------------------------------
 
 /// The committed `vizij-face` asset.
-pub const VIZIJ_FACE_JSON: &str = include_str!("../keysets/vizij-face.json");
+pub const VIZIJ_FACE_JSON: &str = include_str!("../profiles/vizij-face.json");
 /// The committed `ros4hri` asset.
-pub const ROS4HRI_JSON: &str = include_str!("../keysets/ros4hri.json");
+pub const ROS4HRI_JSON: &str = include_str!("../profiles/ros4hri.json");
 
-/// Every key set Vizij ships, as `(id, asset json)`.
-pub const KEYSETS: [(&str, &str); 2] = [
+/// Every profile Vizij ships, as `(id, asset json)`.
+pub const PROFILES: [(&str, &str); 2] = [
     ("vizij-face", VIZIJ_FACE_JSON),
     ("ros4hri", ROS4HRI_JSON),
 ];
 
-/// A shipped key set by id, parsed. `None` for an unknown id.
-pub fn keyset(id: &str) -> Option<KeySet> {
-    let (_, json) = KEYSETS.iter().find(|(known, _)| *known == id)?;
+/// A shipped profile by id, parsed. `None` for an unknown id.
+pub fn profile(id: &str) -> Option<Profile> {
+    let (_, json) = PROFILES.iter().find(|(known, _)| *known == id)?;
     serde_json::from_str(json).ok()
 }
 
 /// The registry as JSON — id, version, title, description and key count per
 /// entry. What a CLI prints and an authoring picker lists.
-pub fn keysets_json() -> Json {
+pub fn profiles_json() -> Json {
     Json::Array(
-        KEYSETS
+        PROFILES
             .iter()
-            .filter_map(|(id, _)| keyset(id))
+            .filter_map(|(id, _)| profile(id))
             .map(|set| {
                 json!({
                     "id": set.id,
@@ -272,8 +273,8 @@ pub fn keysets_json() -> Json {
     )
 }
 
-/// Every path a key set defines — the cheap form for coverage checks.
-pub fn paths(set: &KeySet) -> Vec<&str> {
+/// Every path a profile defines — the cheap form for coverage checks.
+pub fn paths(set: &Profile) -> Vec<&str> {
     set.keys.iter().map(|k| k.path.as_str()).collect()
 }
 
@@ -284,18 +285,18 @@ mod tests {
     /// The committed assets must equal what the generators produce, or the
     /// files on disk quietly stop describing the code that ships.
     #[test]
-    fn committed_keysets_match_the_generators() {
-        let vizij: KeySet = serde_json::from_str(VIZIJ_FACE_JSON).expect("vizij-face parses");
-        assert_eq!(vizij, vizij_face_keyset(), "keysets/vizij-face.json is stale");
-        let ros: KeySet = serde_json::from_str(ROS4HRI_JSON).expect("ros4hri parses");
-        assert_eq!(ros, ros4hri_keyset(), "keysets/ros4hri.json is stale");
+    fn committed_profiles_match_the_generators() {
+        let vizij: Profile = serde_json::from_str(VIZIJ_FACE_JSON).expect("vizij-face parses");
+        assert_eq!(vizij, vizij_face_profile(), "profiles/vizij-face.json is stale");
+        let ros: Profile = serde_json::from_str(ROS4HRI_JSON).expect("ros4hri parses");
+        assert_eq!(ros, ros4hri_profile(), "profiles/ros4hri.json is stale");
     }
 
     /// The counts are the standard's contract, so they are worth pinning
     /// independently of the generator that produces them.
     #[test]
     fn the_vizij_face_set_covers_every_tier_in_full() {
-        let set = vizij_face_keyset();
+        let set = vizij_face_profile();
         let tier = |name: &str| {
             set.keys
                 .iter()
@@ -314,8 +315,8 @@ mod tests {
     /// FACS code — which is exactly why ROS4HRI cannot reach them.
     #[test]
     fn muscle_controls_carry_their_arkit_and_au_metadata() {
-        let set = vizij_face_keyset();
-        let muscle: Vec<&KeyDef> = set
+        let set = vizij_face_profile();
+        let muscle: Vec<&ProfileKey> = set
             .keys
             .iter()
             .filter(|k| k.meta.as_ref().and_then(|m| m.tier.as_deref()) == Some("muscle"))
@@ -336,18 +337,18 @@ mod tests {
     /// distinct action unit, and one per viseme shape.
     #[test]
     fn the_ros4hri_set_matches_its_key_contract() {
-        let set = ros4hri_keyset();
+        let set = ros4hri_profile();
         assert_eq!(set.keys.len(), 5 + 20 + 15);
         assert!(paths(&set).contains(&ros4hri::EXPRESSION_NAME_KEY));
         assert!(paths(&set).contains(&"standard/ros4hri/viseme/sil"));
     }
 
     #[test]
-    fn the_registry_lists_both_sets() {
-        let listed = keysets_json();
+    fn the_registry_lists_both_profiles() {
+        let listed = profiles_json();
         assert_eq!(listed[0]["id"], "vizij-face");
         assert_eq!(listed[1]["id"], "ros4hri");
-        assert!(keyset("vizij-face").is_some());
-        assert!(keyset("nope").is_none());
+        assert!(profile("vizij-face").is_some());
+        assert!(profile("nope").is_none());
     }
 }
