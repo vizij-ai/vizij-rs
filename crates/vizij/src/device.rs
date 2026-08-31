@@ -108,7 +108,10 @@ pub struct BridgeConfig {
 async fn attach_bridges(
     mut builder: arora::AroraBuilder,
     bridges: &BridgeConfig,
+    data_inputs: &[(String, arora_types::value::Type)],
 ) -> arora::AroraBuilder {
+    #[cfg(not(feature = "ros2"))]
+    let _ = data_inputs;
     match arora::local_ws_bridge().await {
         Ok(bridge) => builder = builder.with_bridge(bridge),
         Err(e) => log::error!("local bridge: {e:?}"),
@@ -118,10 +121,21 @@ async fn attach_bridges(
         // The ROS4HRI exposure profile: typed face topics fanning onto the
         // standard keys, and the `/skill/look_at` action bound to the gaze
         // skill the device describes.
-        let config = arora_bridge_ros2::Ros2BridgeConfig::new(namespace.clone(), *domain)
+        let mut config = arora_bridge_ros2::Ros2BridgeConfig::new(namespace.clone(), *domain)
             .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
+        // The face's free inputs — what nothing in the composed graph writes —
+        // are the keys a remote may drive, each subscribed as the std_msgs type
+        // of its kind (`ros2 topic info -v` shows it).
+        for (path, ty) in data_inputs {
+            config = config.with_input(path.clone(), ty.clone());
+        }
         builder = builder.with_bridge(Box::new(arora_bridge_ros2::Ros2Bridge::new(config).await));
-        log::info!("serving the ROS 2 bridge (namespace {namespace:?}, domain {domain})");
+        log::info!(
+            "serving the ROS 2 bridge (namespace {namespace:?}, domain {domain}): {} input keys \
+             subscribed under /{namespace}/keys/<path>, plus the ROS4HRI typed topics and the \
+             /skill/look_at action",
+            data_inputs.len()
+        );
     }
     #[cfg(feature = "studio")]
     if bridges.studio {
@@ -131,6 +145,60 @@ async fn attach_bridges(
         }
     }
     builder
+}
+
+/// The composed graph's free inputs — input paths no graph in the composition
+/// writes (the ones a remote may drive) — with the ROS-facing type of each:
+/// the input's default value decides (string → String, bool → Boolean,
+/// anything numeric or absent → F64); vector-valued inputs stay out (they
+/// travel as typed topics, e.g. the gaze target). Built-in keys stay out.
+pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
+    use arora_types::value::Type;
+    let Ok(spec) = serde_json::from_str::<serde_json::Value>(spec) else {
+        return Vec::new();
+    };
+    let nodes = spec
+        .get("nodes")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let path_of = |node: &serde_json::Value| {
+        node.get("params")
+            .and_then(|p| p.get("path"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    };
+    let kind_of = |node: &serde_json::Value| {
+        node.get("type")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_ascii_lowercase)
+            .unwrap_or_default()
+    };
+    let written: std::collections::HashSet<String> = nodes
+        .iter()
+        .filter(|n| kind_of(n) == "output")
+        .filter_map(path_of)
+        .collect();
+    let mut seen = std::collections::HashSet::new();
+    let mut inputs = Vec::new();
+    for node in nodes.iter().filter(|n| kind_of(n) == "input") {
+        let Some(path) = path_of(node) else { continue };
+        if written.contains(&path)
+            || path.starts_with(arora_behavior::built_in::PREFIX)
+            || !seen.insert(path.clone())
+        {
+            continue;
+        }
+        let ty = match node.get("params").and_then(|p| p.get("value")) {
+            Some(serde_json::Value::String(_)) => Type::String,
+            Some(serde_json::Value::Bool(_)) => Type::Boolean,
+            Some(serde_json::Value::Array(_)) | Some(serde_json::Value::Object(_)) => continue,
+            _ => Type::F64,
+        };
+        inputs.push((path, ty));
+    }
+    inputs.sort_by(|a, b| a.0.cmp(&b.0));
+    inputs
 }
 
 /// Load a face for the device: parse the GLB's metadata, compose its bundle
@@ -372,7 +440,12 @@ fn supervise(
                     futures::future::pending::<()>().await
                 }
             };
-            let builder = attach_bridges(builder.with_frontend(frontend), &bridges).await;
+            let builder = attach_bridges(
+                builder.with_frontend(frontend),
+                &bridges,
+                &free_inputs(&spec),
+            )
+            .await;
             tokio::select! {
                 result = builder.run() => {
                     if let Err(e) = result {
@@ -442,6 +515,30 @@ fn step_forever(arora: &mut arora::Arora) {
 
 #[cfg(test)]
 mod tests {
+    /// The free inputs are the composed graph's unwritten input paths, typed by
+    /// their defaults; written inputs, built-ins, and vector inputs stay out.
+    #[test]
+    fn free_inputs_are_the_unwritten_typed_input_paths() {
+        use arora_types::value::Type;
+        let spec = r#"{"nodes": [
+            {"id": "a", "type": "input",  "params": {"path": "face/mouth/open"}},
+            {"id": "b", "type": "input",  "params": {"path": "standard/ros4hri/expression/name", "value": ""}},
+            {"id": "c", "type": "input",  "params": {"path": "flags/awake", "value": true}},
+            {"id": "d", "type": "input",  "params": {"path": "gaze/target", "value": [1.0, 0.0, 0.0]}},
+            {"id": "e", "type": "input",  "params": {"path": "internal/wired"}},
+            {"id": "f", "type": "output", "params": {"path": "internal/wired"}},
+            {"id": "g", "type": "input",  "params": {"path": "arora/dt"}}
+        ], "edges": []}"#;
+        assert_eq!(
+            super::free_inputs(spec),
+            vec![
+                ("face/mouth/open".to_string(), Type::F64),
+                ("flags/awake".to_string(), Type::Boolean),
+                ("standard/ros4hri/expression/name".to_string(), Type::String),
+            ]
+        );
+    }
+
     use super::*;
     use vizij_arora_host::{animations_source, compose_sources, ANIMATION_PLAYERS_PATH};
 

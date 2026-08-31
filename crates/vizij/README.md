@@ -71,9 +71,13 @@ with its ROS4HRI exposure preset:
   `standard/ros4hri/*` keys;
 - the **`/skill/look_at`** action server (`interaction_skills/LookAt`):
   track / glance / reset policies, priority preemption, standard error codes;
-- every store key **published** as a data topic under `/<namespace>/keys/<path>`
-  (outbound; the app declares no data-topic inputs — the inbound surface is
-  the typed ROS4HRI topics and the action).
+- data topics under `/<namespace>/keys/<path>`: every store key **published**,
+  and the face's **free inputs** — input paths no graph in the composition
+  writes — **subscribed** as `std_msgs` (`Float64` for numeric controls,
+  `String`/`Bool` by the input's default; `ros2 topic info -v` shows each).
+  Keys a graph writes every step (the ROS4HRI profile's `standard/vizij/*`
+  outputs, the autoplaying program's outputs) are not inputs: drive them
+  through the ROS4HRI topics or the program's own inputs.
 
 [ROS4HRI support](../../docs/ros4hri.md) documents the key contract, the
 per-channel behavior, and the skill's semantics.

@@ -44,8 +44,9 @@ The device joins the ROS graph as a drop-in ROS4HRI face renderer:
   keys;
 - **the `/skill/look_at` action** (`interaction_skills/LookAt`) — goal-driven
   gaze with tracking, glances, reset, priorities, and standard error codes;
-- **every store key published as a data topic** under `/<namespace>/keys/<path>`
-  (outbound; the inbound surface is the typed topics and the action).
+- **data topics** under `/<namespace>/keys/<path>` — every store key published,
+  and the face's free inputs (what no graph writes) subscribed as `std_msgs`
+  (`Float64` for numeric controls; `ros2 topic info -v` shows each type).
 
 [ROS4HRI support](docs/ros4hri.md) documents the full contract;
 [the app README](crates/vizij/README.md) documents every flag.

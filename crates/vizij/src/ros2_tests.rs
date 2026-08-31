@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
-use crate::device::builder_for;
+use crate::device::{builder_for, free_inputs};
 
 // The typed client's view of `interaction_skills/LookAt` — local mirrors of
 // the standard messages (`ros2_client::Message` is a foreign marker trait).
@@ -342,5 +342,97 @@ async fn the_look_at_skill_serves_the_standard_contract_on_the_vizij_device() {
         result = tokio::time::timeout(Duration::from_secs(60), client_flow) => {
             result.expect("the skill lifecycle timed out");
         }
+    }
+}
+
+/// The face's free inputs are ROS 2 data-topic inputs: a peer publishing the
+/// input's `std_msgs` type on `/{ns}/keys/<path>` lands the value in the
+/// device's store — what a remote drives directly (everything a graph writes
+/// each step is not an input, by construction).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "DDS multicast SPDP discovery is unreliable on macOS loopback (rustdds has no \
+              unicast-peer/interface config); this runs on Linux CI. To run locally, ensure an \
+              active multicast-capable interface and use --ignored."
+)]
+async fn a_free_input_takes_a_published_data_topic() {
+    use arora_bridge_ros2::conversions::topic_name;
+    use arora_bridge_ros2::msg_types::{self, MessageType};
+    use ros2_client::DEFAULT_PUBLISHER_QOS;
+
+    let _ = env_logger::builder()
+        .parse_filters("warn")
+        .is_test(true)
+        .try_init();
+    let domain_id: u16 = rand::rng().random_range(1..=200);
+
+    // A face whose composed graph reads one free input.
+    let spec = r#"{ "nodes": [
+        {"id": "in", "type": "input", "params": {"path": "face/mouth/open"}}
+    ], "edges": [] }"#;
+    let inputs = free_inputs(spec);
+    assert_eq!(inputs.len(), 1, "the input is free (nothing writes it)");
+    let mut config = arora_bridge_ros2::Ros2BridgeConfig::new("robot", domain_id)
+        .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
+    for (path, ty) in &inputs {
+        config = config.with_input(path.clone(), ty.clone());
+    }
+    let bridge = arora_bridge_ros2::Ros2Bridge::new(config).await;
+
+    let store = BlackboardStore::new();
+    let mut arora = builder_for(spec, RigHal::new(), store.clone(), &[])
+        .expect("build the device")
+        .with_bridge(Box::new(bridge))
+        .build()
+        .expect("build arora");
+
+    let device = async {
+        loop {
+            arora.step(Duration::from_millis(16)).expect("step");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    };
+    tokio::pin!(device);
+
+    let publisher_flow = async {
+        let (_ctx, mut node) = create_test_node(domain_id, "data_pub");
+        tokio::spawn(node.spinner().expect("a spinner").spin());
+        let topic = Name::parse(&topic_name("robot", "face/mouth/open")).expect("a valid topic");
+        let pub_topic = node
+            .create_topic(
+                &topic,
+                msg_types::Float64::message_type_name(),
+                &DEFAULT_PUBLISHER_QOS,
+            )
+            .expect("create topic");
+        let publisher = node
+            .create_publisher::<msg_types::Float64>(&pub_topic, None)
+            .expect("create publisher");
+        tokio::time::timeout(
+            Duration::from_secs(30),
+            publisher.wait_for_subscription(&node),
+        )
+        .await
+        .expect("the device subscribes the free input");
+        loop {
+            let _ = publisher
+                .async_publish(msg_types::Float64 { data: 0.75 })
+                .await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            let value = store
+                .read(&[Key::from("face/mouth/open")])
+                .into_iter()
+                .next()
+                .flatten();
+            if value == Some(Value::F64(0.75)) {
+                return;
+            }
+        }
+    };
+
+    tokio::select! {
+        _ = &mut device => unreachable!("the device loop never ends"),
+        _ = tokio::time::timeout(Duration::from_secs(40), publisher_flow) => {}
     }
 }
