@@ -71,7 +71,9 @@ with its ROS4HRI exposure preset:
   `standard/ros4hri/*` keys;
 - the **`/skill/look_at`** action server (`interaction_skills/LookAt`):
   track / glance / reset policies, priority preemption, standard error codes;
-- every store key as a data topic under `/<namespace>/keys/<path>`.
+- every store key **published** as a data topic under `/<namespace>/keys/<path>`
+  (outbound; the app declares no data-topic inputs — the inbound surface is
+  the typed ROS4HRI topics and the action).
 
 [ROS4HRI support](../../docs/ros4hri.md) documents the key contract, the
 per-channel behavior, and the skill's semantics.
