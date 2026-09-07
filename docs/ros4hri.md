@@ -92,6 +92,66 @@ serves it); this table summarizes it.
 All continuous channels pass through a ~200 ms exponential smoother — the
 incumbent ROS4HRI face's dynamics.
 
+## Driving a key from ROS 2
+
+With the bridge attached (`vizij --ros2 <namespace>`), every `standard/ros4hri/*`
+key the profile reads and nothing in the composition writes is a **free
+input**, subscribed at `/<namespace>/keys/<path>` as the `std_msgs` type of
+its default value (`Float64` for the weights). The keys are **device-global**:
+the profile prefixes only what it *writes* (`rig/<faceId>/standard/vizij/…`),
+never what it reads, so the topic carries no face id. The store keeps the last
+value, so one message holds a shape until the next one.
+
+Open the mouth on the `aa` viseme shape and hold it, then release it (the
+device runs as `vizij --ros2 quori`; `--once` waits for the device's
+subscription to match, then sends one message):
+
+```bash
+ros2 topic pub --once /quori/keys/standard/ros4hri/viseme/aa \
+  std_msgs/msg/Float64 "{data: 1.0}"
+ros2 topic pub --once /quori/keys/standard/ros4hri/viseme/aa \
+  std_msgs/msg/Float64 "{data: 0.0}"
+```
+
+What happens on the device: the profile's exponential smoother (half-life
+0.14 s — a ≈200 ms time constant) carries the weight to
+`rig/<faceId>/standard/vizij/viseme/aa`, and the face's own
+`standard-adaptation` graph maps that onto its pose plane (Quori:
+`rig/quori_latest/poses/pose_a.weight`, which the bundled pose-driver turns
+into the jaw and lip controls). A face without an adaptation graph has no
+viseme tier and the weight goes nowhere — `vizij-bundle validate` reports it.
+
+Watch it land: the device publishes every key it writes on the same plane,
+so the face's controls and, headless, its rendered frames are topics too:
+
+```bash
+ros2 topic echo /quori/keys/rig/quori_latest/pose/control/propsrig_mouth_jawud_value
+ros2 topic hz /quori/keys/view/frame
+```
+
+Scalar keys publish as the `std_msgs` type of their value (the face's
+controls are `Float32`). The frame (`--headless --frame-rate 2`) is a record,
+so it rides the bridge's non-scalar fallback: a `std_msgs/String` carrying
+the value's canonical JSON — a `keyvalue` whose `width`, `height`, `format`
+(`"png"`) and `data` fields hold the PNG bytes under `u8s`.
+
+### With rmw_zenoh
+
+The `ros2-zenoh` build feature swaps the bridge's RMW backend for the
+rmw_zenoh-compatible one. Like rmw_zenoh itself it needs a running router and
+reads the same environment: point the device at the router and it joins the
+ROS graph of every rmw_zenoh node connected there.
+
+```bash
+# the ROS side (any host, e.g. a container with port 7447 published)
+export RMW_IMPLEMENTATION=rmw_zenoh_cpp
+ros2 run rmw_zenoh_cpp rmw_zenohd &
+
+# the device
+ZENOH_CONFIG_OVERRIDE='mode="client";connect/endpoints=["tcp/127.0.0.1:7447"]' \
+  vizij --glb face.glb --headless --ros2 quori --frame-rate 2
+```
+
 ## The `look_at` skill
 
 With the ROS 2 bridge attached, the device serves ROS4HRI's gaze skill as a

@@ -6,7 +6,7 @@
 //! offscreen (no window) and writes a PNG instead — the comparison harness
 //! against the web renderer.
 
-#[cfg(feature = "ros2")]
+#[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
 use anyhow::Context;
 use anyhow::{anyhow, Result};
 use bevy::prelude::*;
@@ -19,7 +19,7 @@ mod gaze;
 #[cfg(test)]
 mod memory_tests;
 mod meta;
-#[cfg(all(test, feature = "ros2"))]
+#[cfg(all(test, feature = "ros2-dds"))]
 mod ros2_tests;
 mod snapshot;
 // The TTS provider modules share one contract (`tts_api`); the `tts-piper`
@@ -106,7 +106,7 @@ struct Cli {
 
     /// Expose the device's keys over ROS 2 topics: `--ros2 [namespace][:domain]`
     /// (namespace empty and domain 0 by default). Composes with the local bridge.
-    #[cfg(feature = "ros2")]
+    #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
     #[arg(long, num_args = 0..=1, default_missing_value = "")]
     ros2: Option<String>,
 
@@ -155,7 +155,7 @@ fn main() -> Result<()> {
         ros4hri: !cli.no_ros4hri,
     };
     let bridges = device::BridgeConfig {
-        #[cfg(feature = "ros2")]
+        #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
         ros2: cli.ros2.as_deref().map(parse_ros2).transpose()?,
         #[cfg(feature = "studio")]
         studio: cli.studio,
@@ -357,7 +357,7 @@ fn parse_size(size: &str) -> Result<(u32, u32)> {
 
 /// `--ros2` value `[namespace][:domain]` → (namespace, domain), each optional
 /// (empty namespace, domain 0 by default).
-#[cfg(feature = "ros2")]
+#[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
 fn parse_ros2(spec: &str) -> Result<(String, u16)> {
     let (namespace, domain) = spec.split_once(':').unwrap_or((spec, ""));
     let domain = if domain.is_empty() {
