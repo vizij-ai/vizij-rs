@@ -69,6 +69,8 @@ with its ROS4HRI exposure preset:
 - the typed face topics — `/robot_face/{expression,look_at,tts}` and
   `/expressive_face/{look_at,speech}` — routed onto the profile's
   `standard/ros4hri/*` keys;
+- the **`/<namespace>/actions/{play_viseme,say}`** action servers, synthesized
+  from the viseme players' signatures ([skills](../../docs/skills.md));
 - the **`/skill/look_at`** action server (`interaction_skills/LookAt`):
   track / glance / reset policies, priority preemption, standard error codes;
 - data topics under `/<namespace>/keys/<path>`: every store key **published**,
@@ -138,11 +140,12 @@ marks) and point the app at it with the `API_URL` environment variable.
 **Sending text to it:** `say` is a described device method — a behavior
 calls it like any module function, and a bridge spawns it as a task run
 (bridges list it over `DescribeMethods`; its `Status` return is the action
-shape). Spawned, the run is the say skill's: the lips follow the speech and
-the run's feedback is the current viseme. `play_viseme(shape, weight)` plays
-one shape the same way without speech. The ROS4HRI `/robot_face/tts` topic
-lands text on the `standard/ros4hri/speech/text` key, which nothing routes
-into `say` yet.
+shape, and `--ros2` serves it as the `/<namespace>/actions/say` action).
+Spawned, the run is the say skill's: the lips follow the speech and the
+run's feedback is the current viseme. `play_viseme(shape, weight)` plays one
+shape the same way without speech. The ROS4HRI `/robot_face/tts` topic lands
+text on the `standard/ros4hri/speech/text` key, which nothing routes into
+`say` yet.
 
 ## Lighting model
 

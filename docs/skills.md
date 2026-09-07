@@ -54,10 +54,16 @@ status is the call's, once the lips have settled after the utterance. See
 A skill is a described device method, so a behavior calls it like any
 module function, and a bridge spawns it as a task run (the interpreter
 module's SPAWN, `arora-behavior`'s `TaskHandle` coming back with the run's
-status, feedback, result and update keys). On ROS 2, the ROS4HRI exposure
-preset binds `look_at` to the standard `/skill/look_at` action; the viseme
-players are reachable through the device's call plane (the local WebSocket
-bridge, a behavior) — a ROS binding for them is not part of ROS4HRI.
+status, feedback, result and update keys). On ROS 2 every skill is an
+action server: the ROS4HRI exposure preset binds `look_at` to the standard
+`/skill/look_at` (`interaction_skills/action/LookAt`), and the bridge
+synthesizes one action per described skill from its signature —
+`/<namespace>/actions/play_viseme` (`arora/action/play_viseme`, goal
+`shape`, `weight`) and `/<namespace>/actions/say` (`arora/action/say`, goal
+`text`, `voice`), discovered over DDS and rmw_zenoh alike. Their `arora`
+interfaces are synthesized, not a ROS package, so a client needs the
+definitions to send a goal; `ros2 action info -t` shows them, `ros2 action
+send_goal` cannot build the goal without the package.
 
 ## In code and on the web
 
