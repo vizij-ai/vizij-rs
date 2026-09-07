@@ -6,8 +6,9 @@
 //! ```
 //!
 //! Drives the build's `say` provider exactly as the device does — one call per
-//! tick, `Running` until playback ends — printing the viseme/phoneme stream as
-//! it advances.
+//! tick, `Running` until playback ends — printing the viseme stream (the face
+//! standard's shapes) as it advances. On the device the say skill's run does
+//! the same and drives the lips from it.
 
 // The provider modules are compiled in whole via #[path]; the example only
 // exercises their call surface.

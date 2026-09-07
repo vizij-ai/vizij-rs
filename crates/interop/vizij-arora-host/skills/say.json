@@ -1,0 +1,2536 @@
+{
+  "nodes": [
+    {
+      "id": "in-args",
+      "type": "input",
+      "params": {
+        "path": "task/update",
+        "value": null
+      }
+    },
+    {
+      "id": "say",
+      "type": "taskrun",
+      "params": {
+        "function": "77bf2798-e7ce-47c6-a45c-3c2e9ba1837d"
+      }
+    },
+    {
+      "id": "viseme",
+      "type": "readrecord",
+      "params": {
+        "record_keys": [
+          "a1fbf58b-bf66-44a6-a503-9d9078ee5755"
+        ]
+      }
+    },
+    {
+      "id": "c1",
+      "type": "constant",
+      "params": {
+        "value": 1.0
+      }
+    },
+    {
+      "id": "c2",
+      "type": "constant",
+      "params": {
+        "value": 0.0
+      }
+    },
+    {
+      "id": "in-dt",
+      "type": "input",
+      "params": {
+        "path": "arora/dt",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "c3",
+      "type": "constant",
+      "params": {
+        "value": 1000000000.0
+      }
+    },
+    {
+      "id": "n4",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "c5",
+      "type": "constant",
+      "params": {
+        "value": 0.03
+      }
+    },
+    {
+      "id": "n6",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "c7",
+      "type": "constant",
+      "params": {
+        "value": 0.5
+      }
+    },
+    {
+      "id": "n8",
+      "type": "power",
+      "params": {}
+    },
+    {
+      "id": "c9",
+      "type": "constant",
+      "params": {
+        "value": 1.0
+      }
+    },
+    {
+      "id": "n10",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "o11",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/sil"
+      }
+    },
+    {
+      "id": "sel-PP",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "PP"
+        ]
+      }
+    },
+    {
+      "id": "prev-PP",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/PP",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n12",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n13",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n14",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o15",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/PP"
+      }
+    },
+    {
+      "id": "sel-FF",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "FF"
+        ]
+      }
+    },
+    {
+      "id": "prev-FF",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/FF",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n16",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n17",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n18",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o19",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/FF"
+      }
+    },
+    {
+      "id": "n20",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-TH",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "TH"
+        ]
+      }
+    },
+    {
+      "id": "prev-TH",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/TH",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n21",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n22",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n23",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o24",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/TH"
+      }
+    },
+    {
+      "id": "n25",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-DD",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "DD"
+        ]
+      }
+    },
+    {
+      "id": "prev-DD",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/DD",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n26",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n27",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n28",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o29",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/DD"
+      }
+    },
+    {
+      "id": "n30",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-kk",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "kk"
+        ]
+      }
+    },
+    {
+      "id": "prev-kk",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/kk",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n31",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n32",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n33",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o34",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/kk"
+      }
+    },
+    {
+      "id": "n35",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-CH",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "CH"
+        ]
+      }
+    },
+    {
+      "id": "prev-CH",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/CH",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n36",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n37",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n38",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o39",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/CH"
+      }
+    },
+    {
+      "id": "n40",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-SS",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "SS"
+        ]
+      }
+    },
+    {
+      "id": "prev-SS",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/SS",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n41",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n42",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n43",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o44",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/SS"
+      }
+    },
+    {
+      "id": "n45",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-nn",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "nn"
+        ]
+      }
+    },
+    {
+      "id": "prev-nn",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/nn",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n46",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n47",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n48",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o49",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/nn"
+      }
+    },
+    {
+      "id": "n50",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-RR",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "RR"
+        ]
+      }
+    },
+    {
+      "id": "prev-RR",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/RR",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n51",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n52",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n53",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o54",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/RR"
+      }
+    },
+    {
+      "id": "n55",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-aa",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "aa"
+        ]
+      }
+    },
+    {
+      "id": "prev-aa",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/aa",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n56",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n57",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n58",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o59",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/aa"
+      }
+    },
+    {
+      "id": "n60",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-E",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "prev-E",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/E",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n61",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n62",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n63",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o64",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/E"
+      }
+    },
+    {
+      "id": "n65",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-ih",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "ih"
+        ]
+      }
+    },
+    {
+      "id": "prev-ih",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/ih",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n66",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n67",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n68",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o69",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/ih"
+      }
+    },
+    {
+      "id": "n70",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-oh",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "oh"
+        ]
+      }
+    },
+    {
+      "id": "prev-oh",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/oh",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n71",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n72",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n73",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o74",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/oh"
+      }
+    },
+    {
+      "id": "n75",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-ou",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "ou"
+        ]
+      }
+    },
+    {
+      "id": "prev-ou",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/ou",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n76",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n77",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n78",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o79",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/ou"
+      }
+    },
+    {
+      "id": "n80",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "c81",
+      "type": "constant",
+      "params": {
+        "value": 0.02
+      }
+    },
+    {
+      "id": "n82",
+      "type": "lessthan",
+      "params": {}
+    },
+    {
+      "id": "n83",
+      "type": "greaterthan",
+      "params": {}
+    },
+    {
+      "id": "t84",
+      "type": "constant",
+      "params": {
+        "value": "sil"
+      }
+    },
+    {
+      "id": "current",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "o85",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme"
+      }
+    },
+    {
+      "id": "o86",
+      "type": "output",
+      "params": {
+        "path": "task/feedback"
+      }
+    },
+    {
+      "id": "ended",
+      "type": "and",
+      "params": {}
+    },
+    {
+      "id": "st-running",
+      "type": "constant",
+      "params": {
+        "value": {
+          "enum": {
+            "id": "325a5767-e344-4532-860e-0749bcf2e428",
+            "variant_id": "acd79ec6-0c44-401a-82f8-5da5422d3eec",
+            "value": "unit"
+          }
+        }
+      }
+    },
+    {
+      "id": "lifecycle",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "o87",
+      "type": "output",
+      "params": {
+        "path": "task/status"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node_id": "in-args"
+      },
+      "to": {
+        "node_id": "say",
+        "input": "args"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say",
+        "output": "mutated"
+      },
+      "to": {
+        "node_id": "viseme",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-dt"
+      },
+      "to": {
+        "node_id": "n4",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c3"
+      },
+      "to": {
+        "node_id": "n4",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n4"
+      },
+      "to": {
+        "node_id": "n6",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c5"
+      },
+      "to": {
+        "node_id": "n6",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c7"
+      },
+      "to": {
+        "node_id": "n8",
+        "input": "base"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n6"
+      },
+      "to": {
+        "node_id": "n8",
+        "input": "exp"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c9"
+      },
+      "to": {
+        "node_id": "n10",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n8"
+      },
+      "to": {
+        "node_id": "n10",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "o11",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "sel-PP",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "sel-PP",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "sel-PP",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-PP"
+      },
+      "to": {
+        "node_id": "n12",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-PP"
+      },
+      "to": {
+        "node_id": "n12",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n12"
+      },
+      "to": {
+        "node_id": "n13",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n10"
+      },
+      "to": {
+        "node_id": "n13",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-PP"
+      },
+      "to": {
+        "node_id": "n14",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n13"
+      },
+      "to": {
+        "node_id": "n14",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n14"
+      },
+      "to": {
+        "node_id": "o15",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "sel-FF",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "sel-FF",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "sel-FF",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-FF"
+      },
+      "to": {
+        "node_id": "n16",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-FF"
+      },
+      "to": {
+        "node_id": "n16",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n16"
+      },
+      "to": {
+        "node_id": "n17",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n10"
+      },
+      "to": {
+        "node_id": "n17",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-FF"
+      },
+      "to": {
+        "node_id": "n18",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "n18",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n18"
+      },
+      "to": {
+        "node_id": "o19",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n14"
+      },
+      "to": {
+        "node_id": "n20",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n18"
+      },
+      "to": {
+        "node_id": "n20",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "sel-TH",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "sel-TH",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "sel-TH",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-TH"
+      },
+      "to": {
+        "node_id": "n21",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-TH"
+      },
+      "to": {
+        "node_id": "n21",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n21"
+      },
+      "to": {
+        "node_id": "n22",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n10"
+      },
+      "to": {
+        "node_id": "n22",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-TH"
+      },
+      "to": {
+        "node_id": "n23",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n22"
+      },
+      "to": {
+        "node_id": "n23",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n23"
+      },
+      "to": {
+        "node_id": "o24",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n20"
+      },
+      "to": {
+        "node_id": "n25",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n23"
+      },
+      "to": {
+        "node_id": "n25",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "sel-DD",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "sel-DD",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "sel-DD",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-DD"
+      },
+      "to": {
+        "node_id": "n26",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-DD"
+      },
+      "to": {
+        "node_id": "n26",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n26"
+      },
+      "to": {
+        "node_id": "n27",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n10"
+      },
+      "to": {
+        "node_id": "n27",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-DD"
+      },
+      "to": {
+        "node_id": "n28",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n27"
+      },
+      "to": {
+        "node_id": "n28",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n28"
+      },
+      "to": {
+        "node_id": "o29",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n25"
+      },
+      "to": {
+        "node_id": "n30",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n28"
+      },
+      "to": {
+        "node_id": "n30",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "sel-kk",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "sel-kk",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "sel-kk",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-kk"
+      },
+      "to": {
+        "node_id": "n31",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-kk"
+      },
+      "to": {
+        "node_id": "n31",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n31"
+      },
+      "to": {
+        "node_id": "n32",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n10"
+      },
+      "to": {
+        "node_id": "n32",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-kk"
+      },
+      "to": {
+        "node_id": "n33",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n32"
+      },
+      "to": {
+        "node_id": "n33",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n33"
+      },
+      "to": {
+        "node_id": "o34",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n30"
+      },
+      "to": {
+        "node_id": "n35",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n33"
+      },
+      "to": {
+        "node_id": "n35",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "sel-CH",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "sel-CH",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "sel-CH",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-CH"
+      },
+      "to": {
+        "node_id": "n36",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-CH"
+      },
+      "to": {
+        "node_id": "n36",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n36"
+      },
+      "to": {
+        "node_id": "n37",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n10"
+      },
+      "to": {
+        "node_id": "n37",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-CH"
+      },
+      "to": {
+        "node_id": "n38",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n37"
+      },
+      "to": {
+        "node_id": "n38",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n38"
+      },
+      "to": {
+        "node_id": "o39",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n35"
+      },
+      "to": {
+        "node_id": "n40",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n38"
+      },
+      "to": {
+        "node_id": "n40",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "sel-SS",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "sel-SS",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "sel-SS",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-SS"
+      },
+      "to": {
+        "node_id": "n41",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-SS"
+      },
+      "to": {
+        "node_id": "n41",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n41"
+      },
+      "to": {
+        "node_id": "n42",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n10"
+      },
+      "to": {
+        "node_id": "n42",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-SS"
+      },
+      "to": {
+        "node_id": "n43",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n42"
+      },
+      "to": {
+        "node_id": "n43",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n43"
+      },
+      "to": {
+        "node_id": "o44",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n40"
+      },
+      "to": {
+        "node_id": "n45",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n43"
+      },
+      "to": {
+        "node_id": "n45",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "sel-nn",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "sel-nn",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "sel-nn",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-nn"
+      },
+      "to": {
+        "node_id": "n46",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-nn"
+      },
+      "to": {
+        "node_id": "n46",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n46"
+      },
+      "to": {
+        "node_id": "n47",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n10"
+      },
+      "to": {
+        "node_id": "n47",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-nn"
+      },
+      "to": {
+        "node_id": "n48",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n47"
+      },
+      "to": {
+        "node_id": "n48",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n48"
+      },
+      "to": {
+        "node_id": "o49",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n45"
+      },
+      "to": {
+        "node_id": "n50",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n48"
+      },
+      "to": {
+        "node_id": "n50",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "sel-RR",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "sel-RR",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "sel-RR",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-RR"
+      },
+      "to": {
+        "node_id": "n51",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-RR"
+      },
+      "to": {
+        "node_id": "n51",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n51"
+      },
+      "to": {
+        "node_id": "n52",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n10"
+      },
+      "to": {
+        "node_id": "n52",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-RR"
+      },
+      "to": {
+        "node_id": "n53",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n52"
+      },
+      "to": {
+        "node_id": "n53",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n53"
+      },
+      "to": {
+        "node_id": "o54",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n50"
+      },
+      "to": {
+        "node_id": "n55",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n53"
+      },
+      "to": {
+        "node_id": "n55",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "sel-aa",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "sel-aa",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "sel-aa",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-aa"
+      },
+      "to": {
+        "node_id": "n56",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-aa"
+      },
+      "to": {
+        "node_id": "n56",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n56"
+      },
+      "to": {
+        "node_id": "n57",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n10"
+      },
+      "to": {
+        "node_id": "n57",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-aa"
+      },
+      "to": {
+        "node_id": "n58",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n57"
+      },
+      "to": {
+        "node_id": "n58",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n58"
+      },
+      "to": {
+        "node_id": "o59",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n55"
+      },
+      "to": {
+        "node_id": "n60",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n58"
+      },
+      "to": {
+        "node_id": "n60",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "sel-E",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "sel-E",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "sel-E",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-E"
+      },
+      "to": {
+        "node_id": "n61",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-E"
+      },
+      "to": {
+        "node_id": "n61",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n61"
+      },
+      "to": {
+        "node_id": "n62",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n10"
+      },
+      "to": {
+        "node_id": "n62",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-E"
+      },
+      "to": {
+        "node_id": "n63",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n62"
+      },
+      "to": {
+        "node_id": "n63",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n63"
+      },
+      "to": {
+        "node_id": "o64",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n60"
+      },
+      "to": {
+        "node_id": "n65",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n63"
+      },
+      "to": {
+        "node_id": "n65",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "sel-ih",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "sel-ih",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "sel-ih",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-ih"
+      },
+      "to": {
+        "node_id": "n66",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-ih"
+      },
+      "to": {
+        "node_id": "n66",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n66"
+      },
+      "to": {
+        "node_id": "n67",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n10"
+      },
+      "to": {
+        "node_id": "n67",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-ih"
+      },
+      "to": {
+        "node_id": "n68",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n67"
+      },
+      "to": {
+        "node_id": "n68",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n68"
+      },
+      "to": {
+        "node_id": "o69",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n65"
+      },
+      "to": {
+        "node_id": "n70",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n68"
+      },
+      "to": {
+        "node_id": "n70",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "sel-oh",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "sel-oh",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "sel-oh",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-oh"
+      },
+      "to": {
+        "node_id": "n71",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-oh"
+      },
+      "to": {
+        "node_id": "n71",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n71"
+      },
+      "to": {
+        "node_id": "n72",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n10"
+      },
+      "to": {
+        "node_id": "n72",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-oh"
+      },
+      "to": {
+        "node_id": "n73",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n72"
+      },
+      "to": {
+        "node_id": "n73",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n73"
+      },
+      "to": {
+        "node_id": "o74",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n70"
+      },
+      "to": {
+        "node_id": "n75",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n73"
+      },
+      "to": {
+        "node_id": "n75",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "sel-ou",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "sel-ou",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "sel-ou",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-ou"
+      },
+      "to": {
+        "node_id": "n76",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-ou"
+      },
+      "to": {
+        "node_id": "n76",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n76"
+      },
+      "to": {
+        "node_id": "n77",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n10"
+      },
+      "to": {
+        "node_id": "n77",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-ou"
+      },
+      "to": {
+        "node_id": "n78",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n77"
+      },
+      "to": {
+        "node_id": "n78",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n78"
+      },
+      "to": {
+        "node_id": "o79",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n75"
+      },
+      "to": {
+        "node_id": "n80",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n78"
+      },
+      "to": {
+        "node_id": "n80",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n80"
+      },
+      "to": {
+        "node_id": "n82",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c81"
+      },
+      "to": {
+        "node_id": "n82",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "n83",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "n83",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n83"
+      },
+      "to": {
+        "node_id": "current",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "current",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "t84"
+      },
+      "to": {
+        "node_id": "current",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "current"
+      },
+      "to": {
+        "node_id": "o85",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "current"
+      },
+      "to": {
+        "node_id": "o86",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say",
+        "output": "done"
+      },
+      "to": {
+        "node_id": "ended",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n82"
+      },
+      "to": {
+        "node_id": "ended",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "ended"
+      },
+      "to": {
+        "node_id": "lifecycle",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say"
+      },
+      "to": {
+        "node_id": "lifecycle",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "st-running"
+      },
+      "to": {
+        "node_id": "lifecycle",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "lifecycle"
+      },
+      "to": {
+        "node_id": "o87",
+        "input": "in"
+      }
+    }
+  ]
+}

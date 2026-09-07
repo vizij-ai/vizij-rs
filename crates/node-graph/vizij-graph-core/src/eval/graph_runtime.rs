@@ -111,6 +111,10 @@ pub struct TaskRunState {
     /// latched run's function is not invoked again; the node keeps emitting
     /// this value until its fragment is pruned.
     pub latched: Option<Value>,
+    /// The out-parameter record of the last invocation — what the node keeps
+    /// emitting on `mutated` once latched (the function's final word, e.g. a
+    /// rest token).
+    pub outputs: Option<Value>,
 }
 
 /// Data staged by the host for consumption by [`NodeType::Input`](crate::types::NodeType::Input).

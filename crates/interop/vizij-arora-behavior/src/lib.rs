@@ -24,6 +24,8 @@
 
 pub mod gaze;
 pub mod graph_codec;
+pub mod speech;
+pub mod viseme;
 
 use std::collections::HashMap;
 
@@ -32,7 +34,7 @@ use arora_behavior::{
     built_in, interpreter_module, BehaviorContext, BehaviorError, BehaviorInterpreter,
     BehaviorStatus, Graph, RunPolicy, TaskHandle, TaskId,
 };
-use arora_types::call::{Call, CallBridge};
+use arora_types::call::{Call, CallBridge, CallResult};
 use arora_types::data::{DataStore, Key, StateChange};
 use arora_types::value::{Structure, StructureField, Value};
 use uuid::Uuid;
@@ -63,6 +65,16 @@ impl CallBridgeFunctions<'_> {
         function: Uuid,
         args: &[(Uuid, Value)],
     ) -> Result<Value, String> {
+        Ok(self.dispatch_full(module_id, function, args)?.ret)
+    }
+
+    /// The call's whole result: its return value and its mutable parameters.
+    fn dispatch_full(
+        &mut self,
+        module_id: Uuid,
+        function: Uuid,
+        args: &[(Uuid, Value)],
+    ) -> Result<CallResult, String> {
         let args: Vec<StructureField> = args
             .iter()
             .map(|(id, value)| StructureField {
@@ -70,15 +82,13 @@ impl CallBridgeFunctions<'_> {
                 value: Box::new(value.clone()),
             })
             .collect();
-        let result = self
-            .bridge
+        self.bridge
             .arora_call(Call {
                 module_id: Some(module_id),
                 id: function,
                 args,
             })
-            .map_err(|e| format!("module call failed: {e}"))?;
-        Ok(result.ret)
+            .map_err(|e| format!("module call failed: {e}"))
     }
 }
 
@@ -89,6 +99,30 @@ impl NodeFunctions for CallBridgeFunctions<'_> {
             .get(&function)
             .ok_or_else(|| format!("no module registered for external function {function}"))?;
         self.dispatch(module_id, function, args)
+    }
+
+    /// The call's return value with its mutable parameters after the call —
+    /// what a `say` run's fragment reads the streamed viseme from.
+    fn call_module_with_outputs(
+        &mut self,
+        module: Option<Uuid>,
+        function: Uuid,
+        args: &[(Uuid, Value)],
+    ) -> Result<(Value, Vec<(Uuid, Value)>), String> {
+        let module_id = match module {
+            Some(module_id) => module_id,
+            None => *self
+                .function_modules
+                .get(&function)
+                .ok_or_else(|| format!("no module registered for external function {function}"))?,
+        };
+        let result = self.dispatch_full(module_id, function, args)?;
+        let mutated = result
+            .mutated
+            .into_iter()
+            .map(|field| (field.id, *field.value))
+            .collect();
+        Ok((result.ret, mutated))
     }
 
     /// A task-run call names its module itself, so it dispatches without a
@@ -111,6 +145,8 @@ impl NodeFunctions for CallBridgeFunctions<'_> {
 /// graph and which status key it reports on. The run itself is graph
 /// structure — these are the coordinates for pruning and sweeping it.
 struct GraphRun {
+    /// The function the run implements — what an exclusive spawn halts by.
+    function: Uuid,
     /// Every node the run grafted, removed together when it ends.
     nodes: Vec<String>,
     status_key: Key,
@@ -130,9 +166,13 @@ struct GraphRun {
 /// through the run's update key of the same name.
 #[derive(Clone)]
 pub struct TaskFragment {
-    spec: GraphSpec,
+    pub(crate) spec: GraphSpec,
     /// The function's parameters: id → the placeholder input name each feeds.
     parameters: HashMap<Uuid, String>,
+    /// Whether a new run of the function takes over from the one before it:
+    /// spawning halts every live run of the same function first, so the
+    /// newest run is the only one writing (a viseme player's lips).
+    exclusive: bool,
 }
 
 impl TaskFragment {
@@ -153,7 +193,35 @@ impl TaskFragment {
         if !reports_status {
             return Err("a task fragment must declare an output on task/status".to_string());
         }
-        Ok(Self { spec, parameters })
+        Ok(Self {
+            spec,
+            parameters,
+            exclusive: false,
+        })
+    }
+
+    /// Make new runs of the function take over: spawning one halts every
+    /// live run of the same function first (the halted runs end as
+    /// preempted), so the newest run alone writes — for a player whose
+    /// writes must not compete with an earlier call's.
+    pub fn exclusive(mut self) -> Self {
+        self.exclusive = true;
+        self
+    }
+
+    /// [`parse`](Self::parse), with the face's rig prefix applied to the
+    /// standard controls the fragment writes (`standard/vizij/…` outputs) —
+    /// a fragment is authored against the bare standard, and a face
+    /// namespaces its controls under its rig.
+    pub fn parse_with_rig_prefix(
+        json: &str,
+        rig_prefix: &str,
+        parameters: HashMap<Uuid, String>,
+    ) -> Result<Self, String> {
+        let mut spec: serde_json::Value =
+            serde_json::from_str(json).map_err(|e| format!("fragment json: {e}"))?;
+        vizij_arora_host::standard::prefix_controls(&mut spec, rig_prefix);
+        Self::parse(&spec.to_string(), parameters)
     }
 }
 
@@ -538,9 +606,11 @@ fn wrapper_graft(
 
 /// The skill graft: a copy of the registered [`TaskFragment`], node ids
 /// namespaced under `task/<run id>/`, placeholder `task/…` paths rewritten to
-/// the run's key prefix, and each parameter input's default replaced by the
-/// spawn-time argument it names. Returns the diff, the grafted node ids, and
-/// the run's per-parameter update keys.
+/// the run's key prefix, each parameter input's default replaced by the
+/// spawn-time argument it names, and a `task/update` input's default by the
+/// whole argument bundle (how a fragment hosts the run's own module call).
+/// Returns the diff, the grafted node ids, and the run's update keys: one
+/// per parameter, plus the bundle's.
 fn fragment_graft(
     fragment: &TaskFragment,
     task: TaskId,
@@ -555,6 +625,10 @@ fn fragment_graft(
         }
     }
     let grafted_id = |id: &str| format!("task/{}/{}", task.0, id);
+    let args_bundle = Value::Structure(Structure {
+        id: call.id,
+        fields: call.args.clone(),
+    });
 
     let mut upsert_nodes = Vec::with_capacity(fragment.spec.nodes.len());
     for node in &fragment.spec.nodes {
@@ -568,7 +642,9 @@ fn fragment_graft(
                         message: format!("'{run_path}' does not parse as a path: {e}"),
                     })?);
                 if matches!(node.kind, NodeType::Input) {
-                    if let Some(value) = arguments.get(placeholder) {
+                    if placeholder == "update" {
+                        node.params.value = Some(args_bundle.clone());
+                    } else if let Some(value) = arguments.get(placeholder) {
                         node.params.value = Some((*value).clone());
                     }
                 }
@@ -595,6 +671,7 @@ fn fragment_graft(
     let update = names
         .into_iter()
         .map(|name| Key::from(format!("{prefix}/{name}")))
+        .chain(std::iter::once(Key::from(format!("{prefix}/update"))))
         .collect();
     Ok((
         graph_codec::GraphSpecDiff {
@@ -672,7 +749,22 @@ impl BehaviorInterpreter for ProcessingGraph {
         let status_key = Key::from(format!("{prefix}/status"));
 
         let (diff, nodes, update) = match self.fragments.get(&call.id) {
-            Some(fragment) => fragment_graft(fragment, task, &prefix, &call)?,
+            Some(fragment) => {
+                // An exclusive function's live runs yield to the new one:
+                // halted on the next tick, which prunes them with their
+                // terminal status written — the run that takes over is then
+                // the only writer.
+                if fragment.exclusive {
+                    let live: Vec<TaskId> = self
+                        .runs
+                        .iter()
+                        .filter(|(_, run)| run.function == call.id)
+                        .map(|(id, _)| *id)
+                        .collect();
+                    self.pending_halts.extend(live);
+                }
+                fragment_graft(fragment, task, &prefix, &call)?
+            }
             None => wrapper_graft(task, &prefix, &call)?,
         };
         let diff = graph_codec::spec_diff_to_graph_diff(&diff)
@@ -680,6 +772,7 @@ impl BehaviorInterpreter for ProcessingGraph {
         self.runs.insert(
             task,
             GraphRun {
+                function: call.id,
                 nodes,
                 status_key: status_key.clone(),
             },

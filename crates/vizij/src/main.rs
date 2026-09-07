@@ -25,6 +25,7 @@ mod snapshot;
 #[cfg(feature = "tts-piper")]
 mod tts_piper;
 mod view;
+mod viseme;
 
 /// Vizij: render a GLB face natively over an arora device.
 #[derive(Parser, Debug)]
@@ -97,7 +98,7 @@ struct Cli {
     no_stage_neutral: bool,
 
     /// Don't compose the built-in ROS4HRI profile (on by default: the
-    /// `standard/ros4hri/*` keys — expression, gaze, action units, visemes —
+    /// `standard/ros4hri/*` keys — expression, gaze, action units —
     /// drive the face's standard controls, with idle blink and smoothing).
     #[arg(long)]
     no_ros4hri: bool,

@@ -16,6 +16,7 @@ vizij-bundle add-standard   face.glb --standard ros4hri -o out.glb
 vizij-bundle validate       face.glb [--min-level 2]
 vizij-bundle profiles
 vizij-bundle export-profile ros4hri -o ros4hri.json
+vizij-bundle export-skill   play_viseme -o play_viseme.json
 ```
 
 - **inspect** — face summary as JSON: id, graphs, the input surface (store
@@ -43,3 +44,6 @@ vizij-bundle export-profile ros4hri -o ros4hri.json
   `crates/interop/vizij-arora-host/profiles/<id>.json` that Rust embeds and the
   web runtime serves). Run this after editing the profile's generator; a test
   fails if the committed asset drifts from it.
+- **export-skill** — the same for a skill fragment (`look_at`, `play_viseme`,
+  `say`): the file `crates/interop/vizij-arora-host/skills/<id>.json` the
+  device grafts per run and the web runtime serves as `skillSource(id)`.

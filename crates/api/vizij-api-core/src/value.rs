@@ -152,7 +152,18 @@ pub enum VizijKind {
 /// Classify a value against the vizij vocabulary.
 pub fn kind(value: &Value) -> VizijKind {
     match value {
-        Value::F32(_) | Value::F64(_) => VizijKind::Float,
+        // The graph has one scalar kind; an integer from the store (the
+        // runtime's `dt`, a frame's dimensions) is a number to its arithmetic.
+        Value::F32(_)
+        | Value::F64(_)
+        | Value::U8(_)
+        | Value::U16(_)
+        | Value::U32(_)
+        | Value::U64(_)
+        | Value::I8(_)
+        | Value::I16(_)
+        | Value::I32(_)
+        | Value::I64(_) => VizijKind::Float,
         Value::Boolean(_) => VizijKind::Bool,
         Value::String(_) => VizijKind::Text,
         Value::ArrayF32(_) => VizijKind::Vector,
@@ -293,11 +304,21 @@ fn structure(id: Uuid, fields: Vec<(Uuid, Value)>) -> Value {
 
 // ---- accessors --------------------------------------------------------------------
 
-/// Read a scalar float (`F32`, or `F64` narrowed to `f32`).
+/// Read a scalar number as a float: `F32`, `F64` narrowed to `f32`, or any
+/// integer widened — the store carries integers too (the runtime's `dt` in
+/// nanoseconds, a frame's dimensions), and arithmetic on them is arithmetic.
 pub fn as_float(value: &Value) -> Option<f32> {
     match value {
         Value::F32(f) => Some(*f),
         Value::F64(f) => Some(*f as f32),
+        Value::U8(n) => Some(*n as f32),
+        Value::U16(n) => Some(*n as f32),
+        Value::U32(n) => Some(*n as f32),
+        Value::U64(n) => Some(*n as f32),
+        Value::I8(n) => Some(*n as f32),
+        Value::I16(n) => Some(*n as f32),
+        Value::I32(n) => Some(*n as f32),
+        Value::I64(n) => Some(*n as f32),
         _ => None,
     }
 }
@@ -549,7 +570,10 @@ mod tests {
         assert_eq!(kind(&record([])), VizijKind::Record);
         assert_eq!(kind(&array(vec![])), VizijKind::Array);
         assert_eq!(kind(&enumeration("v", float(0.0))), VizijKind::Enum);
-        assert_eq!(kind(&Value::U32(3)), VizijKind::Other);
+        // Integers are scalars to the graph, like the runtime's `dt`.
+        assert_eq!(kind(&Value::U32(3)), VizijKind::Float);
+        assert_eq!(kind(&Value::U64(16_000_000)), VizijKind::Float);
+        assert_eq!(as_float(&Value::U64(16_000_000)), Some(16_000_000.0));
         assert_eq!(kind(&Value::Unit), VizijKind::Other);
         // Unknown structure ids are outside the vocabulary.
         let foreign = Value::Structure(Structure {

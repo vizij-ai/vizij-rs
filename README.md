@@ -23,10 +23,12 @@ A window opens with the face — alive, not a picture. By default the app:
   face performs it, whatever its rig;
 - composes the **[ROS4HRI](docs/ros4hri.md) profile**, so the face understands
   the ROS4HRI face vocabulary out of the box (`--no-ros4hri` opts out);
-- registers the **`say` speech action** — by default the AWS-backed cloud
-  provider (zero setup, no credentials in the app); build with
-  `--features tts-piper` to speak fully locally through Piper instead — see
-  [Speech (TTS)](crates/vizij/README.md#speech-tts);
+- registers the **`say` speech skill** — text-to-speech with the lips driven
+  from the visemes it streams; by default the AWS-backed cloud provider (zero
+  setup, no credentials in the app), or build with `--features tts-piper` to
+  speak fully locally through Piper — and the **`play_viseme` skill**, one
+  viseme shape through its envelope; see [Speech (TTS)](crates/vizij/README.md#speech-tts)
+  and [Skills](docs/skills.md);
 - serves arora's local WebSocket bridge for live control and inspection.
 
 ### On a ROS 2 robot
@@ -63,9 +65,9 @@ frames into the store — same behavior, no display.
 
 ### Speech (TTS)
 
-The device registers a **`say(text, voice) → Status`** action that synthesizes
-speech, plays it, and streams the viseme at the audio playhead — the face's
-lipsync source. Hear it directly:
+The device registers a **`say(text, voice) → Status`** skill that synthesizes
+speech, plays it, and drives the face's lips from the viseme at the audio
+playhead. Hear the provider directly:
 
 ```bash
 cargo run -p vizij --example say -- "Hello, world!"
@@ -82,8 +84,8 @@ your own AWS-backed deployment, and where text enters — is in
 |---|---|
 | The face-standard control vocabulary (gaze & lids, expressions, visemes, FACS muscle tier) | [face standard](docs/face-standard.md) |
 | ROS4HRI: typed face topics **and** the `/skill/look_at` gaze action | [ROS4HRI support](docs/ros4hri.md) |
-| Skills: goal-driven behaviors shipped as editable graph fragments, overridable per face | [ROS4HRI support](docs/ros4hri.md#the-look_at-skill) |
-| Speech: the `say` action with live visemes — local Piper or the AWS-backed cloud provider | [Speech (TTS)](crates/vizij/README.md#speech-tts) |
+| Skills: goal-driven behaviors shipped as editable graph fragments, overridable per face — gaze, and the two viseme players | [Skills](docs/skills.md) |
+| Speech: the `say` skill, lips driven live — local Piper or the AWS-backed cloud provider | [Speech (TTS)](crates/vizij/README.md#speech-tts) |
 | Animation clips + node-graph programs from the face's `VIZIJ_bundle` | [the app README](crates/vizij/README.md) |
 | Bridges: local WebSocket (always on), ROS 2 (`--ros2`), Semio Studio (`--studio`) | [the app README](crates/vizij/README.md) |
 | Headless rendering: one-shot snapshots or frames-to-store | [the app README](crates/vizij/README.md) |

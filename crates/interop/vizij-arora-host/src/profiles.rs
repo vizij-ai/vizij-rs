@@ -27,7 +27,7 @@ pub const STANDARD_PROFILES: [StandardProfile; 1] = [StandardProfile {
     title: "ROS4HRI",
     description: "Drives the standard face controls from the standard/ros4hri/* keys: \
                   expression names and valence/arousal, gaze targets with vergence, FACS \
-                  action units, visemes, idle blink, and the incumbent's ~200 ms smoothing.",
+                  action units, idle blink, and the incumbent's ~200 ms smoothing.",
     asset_json: ros4hri::PROFILE_JSON,
 }];
 

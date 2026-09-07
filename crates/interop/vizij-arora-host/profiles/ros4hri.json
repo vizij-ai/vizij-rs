@@ -3584,361 +3584,31 @@
       }
     },
     {
-      "id": "in-vis-sil",
-      "type": "input",
-      "params": {
-        "path": "standard/ros4hri/viseme/sil",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "n582",
-      "type": "damp",
-      "params": {
-        "half_life": 0.14
-      }
-    },
-    {
-      "id": "o583",
-      "type": "output",
-      "params": {
-        "path": "standard/vizij/viseme/sil"
-      }
-    },
-    {
-      "id": "in-vis-PP",
-      "type": "input",
-      "params": {
-        "path": "standard/ros4hri/viseme/PP",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "n584",
-      "type": "damp",
-      "params": {
-        "half_life": 0.14
-      }
-    },
-    {
-      "id": "o585",
-      "type": "output",
-      "params": {
-        "path": "standard/vizij/viseme/PP"
-      }
-    },
-    {
-      "id": "in-vis-FF",
-      "type": "input",
-      "params": {
-        "path": "standard/ros4hri/viseme/FF",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "n586",
-      "type": "damp",
-      "params": {
-        "half_life": 0.14
-      }
-    },
-    {
-      "id": "o587",
-      "type": "output",
-      "params": {
-        "path": "standard/vizij/viseme/FF"
-      }
-    },
-    {
-      "id": "in-vis-TH",
-      "type": "input",
-      "params": {
-        "path": "standard/ros4hri/viseme/TH",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "n588",
-      "type": "damp",
-      "params": {
-        "half_life": 0.14
-      }
-    },
-    {
-      "id": "o589",
-      "type": "output",
-      "params": {
-        "path": "standard/vizij/viseme/TH"
-      }
-    },
-    {
-      "id": "in-vis-DD",
-      "type": "input",
-      "params": {
-        "path": "standard/ros4hri/viseme/DD",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "n590",
-      "type": "damp",
-      "params": {
-        "half_life": 0.14
-      }
-    },
-    {
-      "id": "o591",
-      "type": "output",
-      "params": {
-        "path": "standard/vizij/viseme/DD"
-      }
-    },
-    {
-      "id": "in-vis-kk",
-      "type": "input",
-      "params": {
-        "path": "standard/ros4hri/viseme/kk",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "n592",
-      "type": "damp",
-      "params": {
-        "half_life": 0.14
-      }
-    },
-    {
-      "id": "o593",
-      "type": "output",
-      "params": {
-        "path": "standard/vizij/viseme/kk"
-      }
-    },
-    {
-      "id": "in-vis-CH",
-      "type": "input",
-      "params": {
-        "path": "standard/ros4hri/viseme/CH",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "n594",
-      "type": "damp",
-      "params": {
-        "half_life": 0.14
-      }
-    },
-    {
-      "id": "o595",
-      "type": "output",
-      "params": {
-        "path": "standard/vizij/viseme/CH"
-      }
-    },
-    {
-      "id": "in-vis-SS",
-      "type": "input",
-      "params": {
-        "path": "standard/ros4hri/viseme/SS",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "n596",
-      "type": "damp",
-      "params": {
-        "half_life": 0.14
-      }
-    },
-    {
-      "id": "o597",
-      "type": "output",
-      "params": {
-        "path": "standard/vizij/viseme/SS"
-      }
-    },
-    {
-      "id": "in-vis-nn",
-      "type": "input",
-      "params": {
-        "path": "standard/ros4hri/viseme/nn",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "n598",
-      "type": "damp",
-      "params": {
-        "half_life": 0.14
-      }
-    },
-    {
-      "id": "o599",
-      "type": "output",
-      "params": {
-        "path": "standard/vizij/viseme/nn"
-      }
-    },
-    {
-      "id": "in-vis-RR",
-      "type": "input",
-      "params": {
-        "path": "standard/ros4hri/viseme/RR",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "n600",
-      "type": "damp",
-      "params": {
-        "half_life": 0.14
-      }
-    },
-    {
-      "id": "o601",
-      "type": "output",
-      "params": {
-        "path": "standard/vizij/viseme/RR"
-      }
-    },
-    {
-      "id": "in-vis-aa",
-      "type": "input",
-      "params": {
-        "path": "standard/ros4hri/viseme/aa",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "n602",
-      "type": "damp",
-      "params": {
-        "half_life": 0.14
-      }
-    },
-    {
-      "id": "o603",
-      "type": "output",
-      "params": {
-        "path": "standard/vizij/viseme/aa"
-      }
-    },
-    {
-      "id": "in-vis-E",
-      "type": "input",
-      "params": {
-        "path": "standard/ros4hri/viseme/E",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "n604",
-      "type": "damp",
-      "params": {
-        "half_life": 0.14
-      }
-    },
-    {
-      "id": "o605",
-      "type": "output",
-      "params": {
-        "path": "standard/vizij/viseme/E"
-      }
-    },
-    {
-      "id": "in-vis-ih",
-      "type": "input",
-      "params": {
-        "path": "standard/ros4hri/viseme/ih",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "n606",
-      "type": "damp",
-      "params": {
-        "half_life": 0.14
-      }
-    },
-    {
-      "id": "o607",
-      "type": "output",
-      "params": {
-        "path": "standard/vizij/viseme/ih"
-      }
-    },
-    {
-      "id": "in-vis-oh",
-      "type": "input",
-      "params": {
-        "path": "standard/ros4hri/viseme/oh",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "n608",
-      "type": "damp",
-      "params": {
-        "half_life": 0.14
-      }
-    },
-    {
-      "id": "o609",
-      "type": "output",
-      "params": {
-        "path": "standard/vizij/viseme/oh"
-      }
-    },
-    {
-      "id": "in-vis-ou",
-      "type": "input",
-      "params": {
-        "path": "standard/ros4hri/viseme/ou",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "n610",
-      "type": "damp",
-      "params": {
-        "half_life": 0.14
-      }
-    },
-    {
-      "id": "o611",
-      "type": "output",
-      "params": {
-        "path": "standard/vizij/viseme/ou"
-      }
-    },
-    {
       "id": "blink-time",
       "type": "time",
       "params": {}
     },
     {
-      "id": "c612",
+      "id": "c582",
       "type": "constant",
       "params": {
         "value": 8.0
       }
     },
     {
-      "id": "n613",
+      "id": "n583",
       "type": "divide",
       "params": {}
     },
     {
-      "id": "n614",
+      "id": "n584",
       "type": "round",
       "params": {
         "round_mode": "floor"
       }
     },
     {
-      "id": "n615",
+      "id": "n585",
       "type": "simplenoise",
       "params": {
         "noise_seed": 7.0,
@@ -3947,105 +3617,105 @@
       }
     },
     {
-      "id": "c616",
+      "id": "c586",
       "type": "constant",
       "params": {
         "value": 2.0
       }
     },
     {
-      "id": "n617",
+      "id": "n587",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n618",
+      "id": "n588",
       "type": "add",
       "params": {}
     },
     {
-      "id": "n619",
+      "id": "n589",
       "type": "modulo",
       "params": {}
     },
     {
-      "id": "c620",
+      "id": "c590",
       "type": "constant",
       "params": {
         "value": 0.2
       }
     },
     {
-      "id": "n621",
+      "id": "n591",
       "type": "divide",
       "params": {}
     },
     {
-      "id": "c622",
+      "id": "c592",
       "type": "constant",
       "params": {
         "value": 4.0
       }
     },
     {
-      "id": "n623",
+      "id": "n593",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n624",
+      "id": "n594",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n625",
+      "id": "n595",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n626",
+      "id": "n596",
       "type": "lessthan",
       "params": {}
     },
     {
-      "id": "n627",
+      "id": "n597",
       "type": "if",
       "params": {}
     },
     {
-      "id": "n628",
+      "id": "n598",
       "type": "clamp",
       "params": {}
     },
     {
-      "id": "n629",
+      "id": "n599",
       "type": "max",
       "params": {}
     },
     {
-      "id": "n630",
+      "id": "n600",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n631",
+      "id": "n601",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n632",
+      "id": "n602",
       "type": "max",
       "params": {}
     },
     {
-      "id": "o633",
+      "id": "o603",
       "type": "output",
       "params": {
         "path": "standard/vizij/left_eye_top_eyelid/pos/y"
       }
     },
     {
-      "id": "o634",
+      "id": "o604",
       "type": "output",
       "params": {
         "path": "standard/vizij/right_eye_top_eyelid/pos/y"
@@ -12632,25 +12302,25 @@
     },
     {
       "from": {
-        "node_id": "in-vis-sil"
+        "node_id": "blink-time"
       },
       "to": {
-        "node_id": "n582",
-        "input": "in"
+        "node_id": "n583",
+        "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "n582"
+        "node_id": "c582"
       },
       "to": {
-        "node_id": "o583",
-        "input": "in"
+        "node_id": "n583",
+        "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "in-vis-PP"
+        "node_id": "n583"
       },
       "to": {
         "node_id": "n584",
@@ -12662,35 +12332,53 @@
         "node_id": "n584"
       },
       "to": {
-        "node_id": "o585",
-        "input": "in"
+        "node_id": "n585",
+        "input": "x"
       }
     },
     {
       "from": {
-        "node_id": "in-vis-FF"
+        "node_id": "c1"
       },
       "to": {
-        "node_id": "n586",
-        "input": "in"
+        "node_id": "n585",
+        "input": "y"
       }
     },
     {
       "from": {
-        "node_id": "n586"
+        "node_id": "n585"
       },
       "to": {
-        "node_id": "o587",
-        "input": "in"
+        "node_id": "n587",
+        "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "in-vis-TH"
+        "node_id": "c586"
+      },
+      "to": {
+        "node_id": "n587",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink-time"
       },
       "to": {
         "node_id": "n588",
-        "input": "in"
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n587"
+      },
+      "to": {
+        "node_id": "n588",
+        "input": "operand_1"
       }
     },
     {
@@ -12698,53 +12386,80 @@
         "node_id": "n588"
       },
       "to": {
-        "node_id": "o589",
-        "input": "in"
+        "node_id": "n589",
+        "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "in-vis-DD"
+        "node_id": "c582"
       },
       "to": {
-        "node_id": "n590",
-        "input": "in"
+        "node_id": "n589",
+        "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n590"
+        "node_id": "n589"
       },
       "to": {
-        "node_id": "o591",
-        "input": "in"
+        "node_id": "n591",
+        "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "in-vis-kk"
+        "node_id": "c590"
       },
       "to": {
-        "node_id": "n592",
-        "input": "in"
+        "node_id": "n591",
+        "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n592"
+        "node_id": "c592"
       },
       "to": {
-        "node_id": "o593",
-        "input": "in"
+        "node_id": "n593",
+        "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "in-vis-CH"
+        "node_id": "n591"
+      },
+      "to": {
+        "node_id": "n593",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
       },
       "to": {
         "node_id": "n594",
-        "input": "in"
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n591"
+      },
+      "to": {
+        "node_id": "n594",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n593"
+      },
+      "to": {
+        "node_id": "n595",
+        "input": "operand_0"
       }
     },
     {
@@ -12752,17 +12467,26 @@
         "node_id": "n594"
       },
       "to": {
-        "node_id": "o595",
-        "input": "in"
+        "node_id": "n595",
+        "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "in-vis-SS"
+        "node_id": "n591"
       },
       "to": {
         "node_id": "n596",
-        "input": "in"
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "n596",
+        "input": "rhs"
       }
     },
     {
@@ -12770,13 +12494,31 @@
         "node_id": "n596"
       },
       "to": {
-        "node_id": "o597",
-        "input": "in"
+        "node_id": "n597",
+        "input": "cond"
       }
     },
     {
       "from": {
-        "node_id": "in-vis-nn"
+        "node_id": "n595"
+      },
+      "to": {
+        "node_id": "n597",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "n597",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n597"
       },
       "to": {
         "node_id": "n598",
@@ -12785,20 +12527,65 @@
     },
     {
       "from": {
-        "node_id": "n598"
+        "node_id": "c1"
       },
       "to": {
-        "node_id": "o599",
-        "input": "in"
+        "node_id": "n598",
+        "input": "min"
       }
     },
     {
       "from": {
-        "node_id": "in-vis-RR"
+        "node_id": "c2"
+      },
+      "to": {
+        "node_id": "n598",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n579"
+      },
+      "to": {
+        "node_id": "n599",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n443"
+      },
+      "to": {
+        "node_id": "n599",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c2"
       },
       "to": {
         "node_id": "n600",
-        "input": "in"
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n599"
+      },
+      "to": {
+        "node_id": "n600",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n598"
+      },
+      "to": {
+        "node_id": "n601",
+        "input": "operand_0"
       }
     },
     {
@@ -12806,17 +12593,26 @@
         "node_id": "n600"
       },
       "to": {
-        "node_id": "o601",
-        "input": "in"
+        "node_id": "n601",
+        "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "in-vis-aa"
+        "node_id": "n601"
       },
       "to": {
         "node_id": "n602",
-        "input": "in"
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n599"
+      },
+      "to": {
+        "node_id": "n602",
+        "input": "operand_1"
       }
     },
     {
@@ -12830,406 +12626,10 @@
     },
     {
       "from": {
-        "node_id": "in-vis-E"
+        "node_id": "n602"
       },
       "to": {
-        "node_id": "n604",
-        "input": "in"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n604"
-      },
-      "to": {
-        "node_id": "o605",
-        "input": "in"
-      }
-    },
-    {
-      "from": {
-        "node_id": "in-vis-ih"
-      },
-      "to": {
-        "node_id": "n606",
-        "input": "in"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n606"
-      },
-      "to": {
-        "node_id": "o607",
-        "input": "in"
-      }
-    },
-    {
-      "from": {
-        "node_id": "in-vis-oh"
-      },
-      "to": {
-        "node_id": "n608",
-        "input": "in"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n608"
-      },
-      "to": {
-        "node_id": "o609",
-        "input": "in"
-      }
-    },
-    {
-      "from": {
-        "node_id": "in-vis-ou"
-      },
-      "to": {
-        "node_id": "n610",
-        "input": "in"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n610"
-      },
-      "to": {
-        "node_id": "o611",
-        "input": "in"
-      }
-    },
-    {
-      "from": {
-        "node_id": "blink-time"
-      },
-      "to": {
-        "node_id": "n613",
-        "input": "lhs"
-      }
-    },
-    {
-      "from": {
-        "node_id": "c612"
-      },
-      "to": {
-        "node_id": "n613",
-        "input": "rhs"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n613"
-      },
-      "to": {
-        "node_id": "n614",
-        "input": "in"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n614"
-      },
-      "to": {
-        "node_id": "n615",
-        "input": "x"
-      }
-    },
-    {
-      "from": {
-        "node_id": "c1"
-      },
-      "to": {
-        "node_id": "n615",
-        "input": "y"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n615"
-      },
-      "to": {
-        "node_id": "n617",
-        "input": "operand_0"
-      }
-    },
-    {
-      "from": {
-        "node_id": "c616"
-      },
-      "to": {
-        "node_id": "n617",
-        "input": "operand_1"
-      }
-    },
-    {
-      "from": {
-        "node_id": "blink-time"
-      },
-      "to": {
-        "node_id": "n618",
-        "input": "operand_0"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n617"
-      },
-      "to": {
-        "node_id": "n618",
-        "input": "operand_1"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n618"
-      },
-      "to": {
-        "node_id": "n619",
-        "input": "lhs"
-      }
-    },
-    {
-      "from": {
-        "node_id": "c612"
-      },
-      "to": {
-        "node_id": "n619",
-        "input": "rhs"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n619"
-      },
-      "to": {
-        "node_id": "n621",
-        "input": "lhs"
-      }
-    },
-    {
-      "from": {
-        "node_id": "c620"
-      },
-      "to": {
-        "node_id": "n621",
-        "input": "rhs"
-      }
-    },
-    {
-      "from": {
-        "node_id": "c622"
-      },
-      "to": {
-        "node_id": "n623",
-        "input": "operand_0"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n621"
-      },
-      "to": {
-        "node_id": "n623",
-        "input": "operand_1"
-      }
-    },
-    {
-      "from": {
-        "node_id": "c2"
-      },
-      "to": {
-        "node_id": "n624",
-        "input": "lhs"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n621"
-      },
-      "to": {
-        "node_id": "n624",
-        "input": "rhs"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n623"
-      },
-      "to": {
-        "node_id": "n625",
-        "input": "operand_0"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n624"
-      },
-      "to": {
-        "node_id": "n625",
-        "input": "operand_1"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n621"
-      },
-      "to": {
-        "node_id": "n626",
-        "input": "lhs"
-      }
-    },
-    {
-      "from": {
-        "node_id": "c2"
-      },
-      "to": {
-        "node_id": "n626",
-        "input": "rhs"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n626"
-      },
-      "to": {
-        "node_id": "n627",
-        "input": "cond"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n625"
-      },
-      "to": {
-        "node_id": "n627",
-        "input": "then"
-      }
-    },
-    {
-      "from": {
-        "node_id": "c1"
-      },
-      "to": {
-        "node_id": "n627",
-        "input": "else"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n627"
-      },
-      "to": {
-        "node_id": "n628",
-        "input": "in"
-      }
-    },
-    {
-      "from": {
-        "node_id": "c1"
-      },
-      "to": {
-        "node_id": "n628",
-        "input": "min"
-      }
-    },
-    {
-      "from": {
-        "node_id": "c2"
-      },
-      "to": {
-        "node_id": "n628",
-        "input": "max"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n579"
-      },
-      "to": {
-        "node_id": "n629",
-        "input": "operand_0"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n443"
-      },
-      "to": {
-        "node_id": "n629",
-        "input": "operand_1"
-      }
-    },
-    {
-      "from": {
-        "node_id": "c2"
-      },
-      "to": {
-        "node_id": "n630",
-        "input": "lhs"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n629"
-      },
-      "to": {
-        "node_id": "n630",
-        "input": "rhs"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n628"
-      },
-      "to": {
-        "node_id": "n631",
-        "input": "operand_0"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n630"
-      },
-      "to": {
-        "node_id": "n631",
-        "input": "operand_1"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n631"
-      },
-      "to": {
-        "node_id": "n632",
-        "input": "operand_0"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n629"
-      },
-      "to": {
-        "node_id": "n632",
-        "input": "operand_1"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n632"
-      },
-      "to": {
-        "node_id": "o633",
-        "input": "in"
-      }
-    },
-    {
-      "from": {
-        "node_id": "n632"
-      },
-      "to": {
-        "node_id": "o634",
+        "node_id": "o604",
         "input": "in"
       }
     }

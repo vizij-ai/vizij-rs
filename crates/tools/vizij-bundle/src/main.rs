@@ -129,6 +129,8 @@ fn run_assets(args: &Args) -> Result<Option<ExitCode>> {
                 .ok_or_else(|| anyhow!("export-skill needs a skill id\n{USAGE}"))?;
             let spec = match id {
                 "look_at" => skills::generate_look_at(),
+                "play_viseme" => skills::generate_play_viseme(),
+                "say" => skills::generate_say(),
                 _ => return Err(anyhow!("unknown skill {id}")),
             };
             let text = vizij_bundle::to_sidecar(&spec)?;

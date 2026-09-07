@@ -71,7 +71,7 @@ vizij-animation-module = { path = "../interop/vizij-animation-module" }
 # standalone). `rodio` plays the Piper provider's audio; `vizij-piper` is the
 # local provider (feature `tts-piper`) — its build self-provisions libpiper
 # and a patched default voice; note it links GPLv3 code into the binary.
-vizij-arora-tts = { version = "1", path = "../interop/vizij-arora-tts" }
+vizij-arora-tts = { version = "2", path = "../interop/vizij-arora-tts" }
 rodio = "0.20"
 vizij-piper = { path = "../interop/vizij-piper", optional = true }
 

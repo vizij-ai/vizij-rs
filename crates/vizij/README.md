@@ -92,11 +92,14 @@ semantics.
 
 ## Speech (TTS)
 
-The device registers a **`say(text, voice) → Status`** action that synthesizes
-speech, plays it (rodio — pure Rust, nothing to install), and streams the
-viseme at the audio playhead (a mutable out-parameter) — the face's lipsync
-source. Two interchangeable providers share that one contract; a build carries
-exactly one. Try either from the command line:
+The device registers a **`say(text, voice) → Status`** provider that
+synthesizes speech, plays it (rodio — pure Rust, nothing to install), and
+streams the viseme at the audio playhead through a mutable out-parameter, as
+one of the [face standard](../../docs/face-standard.md#visemes)'s shapes. The
+**say skill** ([skills](../../docs/skills.md)) hosts that call in a run and
+drives the face's lips from the stream. Two interchangeable providers share
+the one contract; a build carries exactly one. Try either from the command
+line:
 
 ```bash
 cargo run -p vizij --example say -- "Hello, world!"
@@ -117,25 +120,29 @@ pinned commit and downloads + alignment-patches the default voice
 once. Build-time prerequisite: `cmake` and a C++ toolchain; runtime: nothing.
 Pick another Piper voice at run time with `PIPER_VOICE` / `PIPER_VOICE_CONFIG`
 (and `PIPER_ESPEAK_DATA` for a custom espeak data dir); the `voice` call
-parameter is ignored by this provider. The viseme stream carries espeak-ng
-phonemes. Note: this feature links GPLv3 code (libpiper/espeak-ng); default
-builds stay GPL-free. Windows is not supported yet.
+parameter is ignored by this provider. The viseme stream is espeak-ng's
+phonemes mapped to the standard shapes by articulation. Note: this feature
+links GPLv3 code (libpiper/espeak-ng); default builds stay GPL-free. Windows
+is not supported yet.
 
 **AWS — the cloud provider (default build):** with no feature flag, `say` calls
 the Vizij TTS cloud function — AWS Polly behind an HTTP endpoint — so there is
 nothing to set up and **no AWS credentials in the app**. The `voice` parameter
-names a Polly voice (default `Ruth`), and the viseme stream carries Polly
-viseme codes. To use your own deployment (your AWS account), host the two
+names a Polly voice (default `Ruth`), and the viseme stream is Polly's viseme
+codes mapped to the standard shapes. To use your own deployment (your AWS
+account), host the two
 endpoints `POST /tts/get-audio` and `POST /tts/get-visemes` (body
 `{"voice", "text"}`, returning the audio bytes and the Polly viseme speech
 marks) and point the app at it with the `API_URL` environment variable.
 
-**Sending text to it:** `say` is a described device method — behaviors (a
-face's programs or spawned task runs) call it like any module function, and
-bridges list it over `DescribeMethods` (its `Status` return is the action
-shape). The ROS4HRI `/robot_face/tts` topic already lands text on the
-`standard/ros4hri/speech/text` key; routing that key into `say` — and the
-viseme stream onto the face — is the lipsync track, in progress.
+**Sending text to it:** `say` is a described device method — a behavior
+calls it like any module function, and a bridge spawns it as a task run
+(bridges list it over `DescribeMethods`; its `Status` return is the action
+shape). Spawned, the run is the say skill's: the lips follow the speech and
+the run's feedback is the current viseme. `play_viseme(shape, weight)` plays
+one shape the same way without speech. The ROS4HRI `/robot_face/tts` topic
+lands text on the `standard/ros4hri/speech/text` key, which nothing routes
+into `say` yet.
 
 ## Lighting model
 

@@ -1,0 +1,2865 @@
+{
+  "nodes": [
+    {
+      "id": "in-shape",
+      "type": "input",
+      "params": {
+        "path": "task/shape",
+        "value": "sil"
+      }
+    },
+    {
+      "id": "in-weight",
+      "type": "input",
+      "params": {
+        "path": "task/weight",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "clock",
+      "type": "time",
+      "params": {}
+    },
+    {
+      "id": "in-start",
+      "type": "input",
+      "params": {
+        "path": "task/start",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "c1",
+      "type": "constant",
+      "params": {
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n2",
+      "type": "greaterthan",
+      "params": {}
+    },
+    {
+      "id": "n3",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "o4",
+      "type": "output",
+      "params": {
+        "path": "task/start"
+      }
+    },
+    {
+      "id": "n5",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "c6",
+      "type": "constant",
+      "params": {
+        "value": 0.0
+      }
+    },
+    {
+      "id": "c7",
+      "type": "constant",
+      "params": {
+        "value": 1.0
+      }
+    },
+    {
+      "id": "c8",
+      "type": "constant",
+      "params": {
+        "value": 0.08
+      }
+    },
+    {
+      "id": "c9",
+      "type": "constant",
+      "params": {
+        "value": 0.15
+      }
+    },
+    {
+      "id": "c10",
+      "type": "constant",
+      "params": {
+        "value": 0.48
+      }
+    },
+    {
+      "id": "n11",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "n12",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "n13",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n14",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "n15",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "n16",
+      "type": "min",
+      "params": {}
+    },
+    {
+      "id": "n17",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "c18",
+      "type": "constant",
+      "params": {
+        "value": 0.0
+      }
+    },
+    {
+      "id": "in-dt",
+      "type": "input",
+      "params": {
+        "path": "arora/dt",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "c19",
+      "type": "constant",
+      "params": {
+        "value": 1000000000.0
+      }
+    },
+    {
+      "id": "n20",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "c21",
+      "type": "constant",
+      "params": {
+        "value": 0.03
+      }
+    },
+    {
+      "id": "n22",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "c23",
+      "type": "constant",
+      "params": {
+        "value": 0.5
+      }
+    },
+    {
+      "id": "n24",
+      "type": "power",
+      "params": {}
+    },
+    {
+      "id": "c25",
+      "type": "constant",
+      "params": {
+        "value": 1.0
+      }
+    },
+    {
+      "id": "n26",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "o27",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/sil"
+      }
+    },
+    {
+      "id": "sel-PP",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "PP"
+        ]
+      }
+    },
+    {
+      "id": "prev-PP",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/PP",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n28",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n29",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n30",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o31",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/PP"
+      }
+    },
+    {
+      "id": "sel-FF",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "FF"
+        ]
+      }
+    },
+    {
+      "id": "prev-FF",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/FF",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n32",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n33",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n34",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o35",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/FF"
+      }
+    },
+    {
+      "id": "n36",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-TH",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "TH"
+        ]
+      }
+    },
+    {
+      "id": "prev-TH",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/TH",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n37",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n38",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n39",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o40",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/TH"
+      }
+    },
+    {
+      "id": "n41",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-DD",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "DD"
+        ]
+      }
+    },
+    {
+      "id": "prev-DD",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/DD",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n42",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n43",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n44",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o45",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/DD"
+      }
+    },
+    {
+      "id": "n46",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-kk",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "kk"
+        ]
+      }
+    },
+    {
+      "id": "prev-kk",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/kk",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n47",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n48",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n49",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o50",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/kk"
+      }
+    },
+    {
+      "id": "n51",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-CH",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "CH"
+        ]
+      }
+    },
+    {
+      "id": "prev-CH",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/CH",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n52",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n53",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n54",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o55",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/CH"
+      }
+    },
+    {
+      "id": "n56",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-SS",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "SS"
+        ]
+      }
+    },
+    {
+      "id": "prev-SS",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/SS",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n57",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n58",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n59",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o60",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/SS"
+      }
+    },
+    {
+      "id": "n61",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-nn",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "nn"
+        ]
+      }
+    },
+    {
+      "id": "prev-nn",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/nn",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n62",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n63",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n64",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o65",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/nn"
+      }
+    },
+    {
+      "id": "n66",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-RR",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "RR"
+        ]
+      }
+    },
+    {
+      "id": "prev-RR",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/RR",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n67",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n68",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n69",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o70",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/RR"
+      }
+    },
+    {
+      "id": "n71",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-aa",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "aa"
+        ]
+      }
+    },
+    {
+      "id": "prev-aa",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/aa",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n72",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n73",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n74",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o75",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/aa"
+      }
+    },
+    {
+      "id": "n76",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-E",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "prev-E",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/E",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n77",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n78",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n79",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o80",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/E"
+      }
+    },
+    {
+      "id": "n81",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-ih",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "ih"
+        ]
+      }
+    },
+    {
+      "id": "prev-ih",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/ih",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n82",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n83",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n84",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o85",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/ih"
+      }
+    },
+    {
+      "id": "n86",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-oh",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "oh"
+        ]
+      }
+    },
+    {
+      "id": "prev-oh",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/oh",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n87",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n88",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n89",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o90",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/oh"
+      }
+    },
+    {
+      "id": "n91",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "sel-ou",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "ou"
+        ]
+      }
+    },
+    {
+      "id": "prev-ou",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/ou",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n92",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "n93",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "n94",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "o95",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/ou"
+      }
+    },
+    {
+      "id": "n96",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "c97",
+      "type": "constant",
+      "params": {
+        "value": 0.02
+      }
+    },
+    {
+      "id": "n98",
+      "type": "lessthan",
+      "params": {}
+    },
+    {
+      "id": "n99",
+      "type": "greaterthan",
+      "params": {}
+    },
+    {
+      "id": "t100",
+      "type": "constant",
+      "params": {
+        "value": "sil"
+      }
+    },
+    {
+      "id": "current",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "o101",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme"
+      }
+    },
+    {
+      "id": "o102",
+      "type": "output",
+      "params": {
+        "path": "task/feedback"
+      }
+    },
+    {
+      "id": "n103",
+      "type": "greaterthan",
+      "params": {}
+    },
+    {
+      "id": "n104",
+      "type": "and",
+      "params": {}
+    },
+    {
+      "id": "st-running",
+      "type": "constant",
+      "params": {
+        "value": {
+          "enum": {
+            "id": "325a5767-e344-4532-860e-0749bcf2e428",
+            "variant_id": "acd79ec6-0c44-401a-82f8-5da5422d3eec",
+            "value": "unit"
+          }
+        }
+      }
+    },
+    {
+      "id": "st-success",
+      "type": "constant",
+      "params": {
+        "value": {
+          "enum": {
+            "id": "325a5767-e344-4532-860e-0749bcf2e428",
+            "variant_id": "766e9e9a-446d-4e46-83e6-14b7ca101169",
+            "value": "unit"
+          }
+        }
+      }
+    },
+    {
+      "id": "n105",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "o106",
+      "type": "output",
+      "params": {
+        "path": "task/status"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node_id": "in-start"
+      },
+      "to": {
+        "node_id": "n2",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "n2",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n2"
+      },
+      "to": {
+        "node_id": "n3",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-start"
+      },
+      "to": {
+        "node_id": "n3",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "clock"
+      },
+      "to": {
+        "node_id": "n3",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n3"
+      },
+      "to": {
+        "node_id": "o4",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "clock"
+      },
+      "to": {
+        "node_id": "n5",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n3"
+      },
+      "to": {
+        "node_id": "n5",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n5"
+      },
+      "to": {
+        "node_id": "n11",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c8"
+      },
+      "to": {
+        "node_id": "n11",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n11"
+      },
+      "to": {
+        "node_id": "n12",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c6"
+      },
+      "to": {
+        "node_id": "n12",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c7"
+      },
+      "to": {
+        "node_id": "n12",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c10"
+      },
+      "to": {
+        "node_id": "n13",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n5"
+      },
+      "to": {
+        "node_id": "n13",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n13"
+      },
+      "to": {
+        "node_id": "n14",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c9"
+      },
+      "to": {
+        "node_id": "n14",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n14"
+      },
+      "to": {
+        "node_id": "n15",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c6"
+      },
+      "to": {
+        "node_id": "n15",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c7"
+      },
+      "to": {
+        "node_id": "n15",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n12"
+      },
+      "to": {
+        "node_id": "n16",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n15"
+      },
+      "to": {
+        "node_id": "n16",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-weight"
+      },
+      "to": {
+        "node_id": "n17",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n16"
+      },
+      "to": {
+        "node_id": "n17",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-dt"
+      },
+      "to": {
+        "node_id": "n20",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c19"
+      },
+      "to": {
+        "node_id": "n20",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n20"
+      },
+      "to": {
+        "node_id": "n22",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c21"
+      },
+      "to": {
+        "node_id": "n22",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c23"
+      },
+      "to": {
+        "node_id": "n24",
+        "input": "base"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n22"
+      },
+      "to": {
+        "node_id": "n24",
+        "input": "exp"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c25"
+      },
+      "to": {
+        "node_id": "n26",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n24"
+      },
+      "to": {
+        "node_id": "n26",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "o27",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-shape",
+        "output": "out"
+      },
+      "to": {
+        "node_id": "sel-PP",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "sel-PP",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "sel-PP",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-PP"
+      },
+      "to": {
+        "node_id": "n28",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-PP"
+      },
+      "to": {
+        "node_id": "n28",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n28"
+      },
+      "to": {
+        "node_id": "n29",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n26"
+      },
+      "to": {
+        "node_id": "n29",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-PP"
+      },
+      "to": {
+        "node_id": "n30",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n29"
+      },
+      "to": {
+        "node_id": "n30",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n30"
+      },
+      "to": {
+        "node_id": "o31",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-shape",
+        "output": "out"
+      },
+      "to": {
+        "node_id": "sel-FF",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "sel-FF",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "sel-FF",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-FF"
+      },
+      "to": {
+        "node_id": "n32",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-FF"
+      },
+      "to": {
+        "node_id": "n32",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n32"
+      },
+      "to": {
+        "node_id": "n33",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n26"
+      },
+      "to": {
+        "node_id": "n33",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-FF"
+      },
+      "to": {
+        "node_id": "n34",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n33"
+      },
+      "to": {
+        "node_id": "n34",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n34"
+      },
+      "to": {
+        "node_id": "o35",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n30"
+      },
+      "to": {
+        "node_id": "n36",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n34"
+      },
+      "to": {
+        "node_id": "n36",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-shape",
+        "output": "out"
+      },
+      "to": {
+        "node_id": "sel-TH",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "sel-TH",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "sel-TH",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-TH"
+      },
+      "to": {
+        "node_id": "n37",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-TH"
+      },
+      "to": {
+        "node_id": "n37",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n37"
+      },
+      "to": {
+        "node_id": "n38",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n26"
+      },
+      "to": {
+        "node_id": "n38",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-TH"
+      },
+      "to": {
+        "node_id": "n39",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n38"
+      },
+      "to": {
+        "node_id": "n39",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n39"
+      },
+      "to": {
+        "node_id": "o40",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n36"
+      },
+      "to": {
+        "node_id": "n41",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n39"
+      },
+      "to": {
+        "node_id": "n41",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-shape",
+        "output": "out"
+      },
+      "to": {
+        "node_id": "sel-DD",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "sel-DD",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "sel-DD",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-DD"
+      },
+      "to": {
+        "node_id": "n42",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-DD"
+      },
+      "to": {
+        "node_id": "n42",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n42"
+      },
+      "to": {
+        "node_id": "n43",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n26"
+      },
+      "to": {
+        "node_id": "n43",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-DD"
+      },
+      "to": {
+        "node_id": "n44",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n43"
+      },
+      "to": {
+        "node_id": "n44",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n44"
+      },
+      "to": {
+        "node_id": "o45",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n41"
+      },
+      "to": {
+        "node_id": "n46",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n44"
+      },
+      "to": {
+        "node_id": "n46",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-shape",
+        "output": "out"
+      },
+      "to": {
+        "node_id": "sel-kk",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "sel-kk",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "sel-kk",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-kk"
+      },
+      "to": {
+        "node_id": "n47",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-kk"
+      },
+      "to": {
+        "node_id": "n47",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n47"
+      },
+      "to": {
+        "node_id": "n48",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n26"
+      },
+      "to": {
+        "node_id": "n48",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-kk"
+      },
+      "to": {
+        "node_id": "n49",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n48"
+      },
+      "to": {
+        "node_id": "n49",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n49"
+      },
+      "to": {
+        "node_id": "o50",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n46"
+      },
+      "to": {
+        "node_id": "n51",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n49"
+      },
+      "to": {
+        "node_id": "n51",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-shape",
+        "output": "out"
+      },
+      "to": {
+        "node_id": "sel-CH",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "sel-CH",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "sel-CH",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-CH"
+      },
+      "to": {
+        "node_id": "n52",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-CH"
+      },
+      "to": {
+        "node_id": "n52",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n52"
+      },
+      "to": {
+        "node_id": "n53",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n26"
+      },
+      "to": {
+        "node_id": "n53",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-CH"
+      },
+      "to": {
+        "node_id": "n54",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n53"
+      },
+      "to": {
+        "node_id": "n54",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n54"
+      },
+      "to": {
+        "node_id": "o55",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n51"
+      },
+      "to": {
+        "node_id": "n56",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n54"
+      },
+      "to": {
+        "node_id": "n56",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-shape",
+        "output": "out"
+      },
+      "to": {
+        "node_id": "sel-SS",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "sel-SS",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "sel-SS",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-SS"
+      },
+      "to": {
+        "node_id": "n57",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-SS"
+      },
+      "to": {
+        "node_id": "n57",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n57"
+      },
+      "to": {
+        "node_id": "n58",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n26"
+      },
+      "to": {
+        "node_id": "n58",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-SS"
+      },
+      "to": {
+        "node_id": "n59",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n58"
+      },
+      "to": {
+        "node_id": "n59",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n59"
+      },
+      "to": {
+        "node_id": "o60",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n56"
+      },
+      "to": {
+        "node_id": "n61",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n59"
+      },
+      "to": {
+        "node_id": "n61",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-shape",
+        "output": "out"
+      },
+      "to": {
+        "node_id": "sel-nn",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "sel-nn",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "sel-nn",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-nn"
+      },
+      "to": {
+        "node_id": "n62",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-nn"
+      },
+      "to": {
+        "node_id": "n62",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n62"
+      },
+      "to": {
+        "node_id": "n63",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n26"
+      },
+      "to": {
+        "node_id": "n63",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-nn"
+      },
+      "to": {
+        "node_id": "n64",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n63"
+      },
+      "to": {
+        "node_id": "n64",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n64"
+      },
+      "to": {
+        "node_id": "o65",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n61"
+      },
+      "to": {
+        "node_id": "n66",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n64"
+      },
+      "to": {
+        "node_id": "n66",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-shape",
+        "output": "out"
+      },
+      "to": {
+        "node_id": "sel-RR",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "sel-RR",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "sel-RR",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-RR"
+      },
+      "to": {
+        "node_id": "n67",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-RR"
+      },
+      "to": {
+        "node_id": "n67",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n67"
+      },
+      "to": {
+        "node_id": "n68",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n26"
+      },
+      "to": {
+        "node_id": "n68",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-RR"
+      },
+      "to": {
+        "node_id": "n69",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n68"
+      },
+      "to": {
+        "node_id": "n69",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n69"
+      },
+      "to": {
+        "node_id": "o70",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n66"
+      },
+      "to": {
+        "node_id": "n71",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n69"
+      },
+      "to": {
+        "node_id": "n71",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-shape",
+        "output": "out"
+      },
+      "to": {
+        "node_id": "sel-aa",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "sel-aa",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "sel-aa",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-aa"
+      },
+      "to": {
+        "node_id": "n72",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-aa"
+      },
+      "to": {
+        "node_id": "n72",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n72"
+      },
+      "to": {
+        "node_id": "n73",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n26"
+      },
+      "to": {
+        "node_id": "n73",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-aa"
+      },
+      "to": {
+        "node_id": "n74",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n73"
+      },
+      "to": {
+        "node_id": "n74",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n74"
+      },
+      "to": {
+        "node_id": "o75",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n71"
+      },
+      "to": {
+        "node_id": "n76",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n74"
+      },
+      "to": {
+        "node_id": "n76",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-shape",
+        "output": "out"
+      },
+      "to": {
+        "node_id": "sel-E",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "sel-E",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "sel-E",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-E"
+      },
+      "to": {
+        "node_id": "n77",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-E"
+      },
+      "to": {
+        "node_id": "n77",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n77"
+      },
+      "to": {
+        "node_id": "n78",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n26"
+      },
+      "to": {
+        "node_id": "n78",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-E"
+      },
+      "to": {
+        "node_id": "n79",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n78"
+      },
+      "to": {
+        "node_id": "n79",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n79"
+      },
+      "to": {
+        "node_id": "o80",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n76"
+      },
+      "to": {
+        "node_id": "n81",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n79"
+      },
+      "to": {
+        "node_id": "n81",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-shape",
+        "output": "out"
+      },
+      "to": {
+        "node_id": "sel-ih",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "sel-ih",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "sel-ih",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-ih"
+      },
+      "to": {
+        "node_id": "n82",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-ih"
+      },
+      "to": {
+        "node_id": "n82",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n82"
+      },
+      "to": {
+        "node_id": "n83",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n26"
+      },
+      "to": {
+        "node_id": "n83",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-ih"
+      },
+      "to": {
+        "node_id": "n84",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n83"
+      },
+      "to": {
+        "node_id": "n84",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n84"
+      },
+      "to": {
+        "node_id": "o85",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n81"
+      },
+      "to": {
+        "node_id": "n86",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n84"
+      },
+      "to": {
+        "node_id": "n86",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-shape",
+        "output": "out"
+      },
+      "to": {
+        "node_id": "sel-oh",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "sel-oh",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "sel-oh",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-oh"
+      },
+      "to": {
+        "node_id": "n87",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-oh"
+      },
+      "to": {
+        "node_id": "n87",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n87"
+      },
+      "to": {
+        "node_id": "n88",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n26"
+      },
+      "to": {
+        "node_id": "n88",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-oh"
+      },
+      "to": {
+        "node_id": "n89",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n88"
+      },
+      "to": {
+        "node_id": "n89",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n89"
+      },
+      "to": {
+        "node_id": "o90",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n86"
+      },
+      "to": {
+        "node_id": "n91",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n89"
+      },
+      "to": {
+        "node_id": "n91",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-shape",
+        "output": "out"
+      },
+      "to": {
+        "node_id": "sel-ou",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "sel-ou",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "sel-ou",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "sel-ou"
+      },
+      "to": {
+        "node_id": "n92",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-ou"
+      },
+      "to": {
+        "node_id": "n92",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n92"
+      },
+      "to": {
+        "node_id": "n93",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n26"
+      },
+      "to": {
+        "node_id": "n93",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "prev-ou"
+      },
+      "to": {
+        "node_id": "n94",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n93"
+      },
+      "to": {
+        "node_id": "n94",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n94"
+      },
+      "to": {
+        "node_id": "o95",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n91"
+      },
+      "to": {
+        "node_id": "n96",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n94"
+      },
+      "to": {
+        "node_id": "n96",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n96"
+      },
+      "to": {
+        "node_id": "n98",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c97"
+      },
+      "to": {
+        "node_id": "n98",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n17"
+      },
+      "to": {
+        "node_id": "n99",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c18"
+      },
+      "to": {
+        "node_id": "n99",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n99"
+      },
+      "to": {
+        "node_id": "current",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in-shape",
+        "output": "out"
+      },
+      "to": {
+        "node_id": "current",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "t100"
+      },
+      "to": {
+        "node_id": "current",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "current"
+      },
+      "to": {
+        "node_id": "o101",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "current"
+      },
+      "to": {
+        "node_id": "o102",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n5"
+      },
+      "to": {
+        "node_id": "n103",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c10"
+      },
+      "to": {
+        "node_id": "n103",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n103"
+      },
+      "to": {
+        "node_id": "n104",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n98"
+      },
+      "to": {
+        "node_id": "n104",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n104"
+      },
+      "to": {
+        "node_id": "n105",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "st-success"
+      },
+      "to": {
+        "node_id": "n105",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "st-running"
+      },
+      "to": {
+        "node_id": "n105",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "n105"
+      },
+      "to": {
+        "node_id": "o106",
+        "input": "in"
+      }
+    }
+  ]
+}

@@ -32,6 +32,21 @@ impl GraphBuilder {
             .push(json!({ "from": { "node_id": from }, "to": { "node_id": to, "input": input } }));
     }
 
+    /// An edge from a named output port of `from` (the default port is `out`).
+    pub(crate) fn edge_from(&mut self, from: &str, output: &str, to: &str, input: &str) {
+        self.edges.push(json!({
+            "from": { "node_id": from, "output": output },
+            "to": { "node_id": to, "input": input }
+        }));
+    }
+
+    /// A fresh constant node holding the text `value`.
+    pub(crate) fn text(&mut self, value: &str) -> String {
+        self.scratch += 1;
+        let id = format!("t{}", self.scratch);
+        self.node(&id, "constant", json!({ "value": value }))
+    }
+
     /// A fresh constant node holding `value`.
     pub(crate) fn constant(&mut self, value: f64) -> String {
         self.scratch += 1;
@@ -64,6 +79,9 @@ impl GraphBuilder {
     }
     pub(crate) fn max2(&mut self, a: &str, b: &str) -> String {
         self.op("max", json!({}), &[("operand_0", a), ("operand_1", b)])
+    }
+    pub(crate) fn min2(&mut self, a: &str, b: &str) -> String {
+        self.op("min", json!({}), &[("operand_0", a), ("operand_1", b)])
     }
 
     /// Exponential smoothing with the given half-life (seconds).
