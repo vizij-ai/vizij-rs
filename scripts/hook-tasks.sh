@@ -41,19 +41,42 @@ rust_fmt_check() {
   run_cmd "cargo fmt --all -- --check" cargo fmt --all -- --check
 }
 
+# The feature combinations the workspace is checked under. Every crate but
+# `vizij` takes `--all-features`; `vizij` cannot, because its ROS 2 bridge
+# backends (`ros2-dds` / `ros2-zenoh`) are compile-time exclusive, so it gets
+# one pass per backend. The Zenoh pass covers the bins only: examples and
+# the live ROS tests link the `ros2-client` dev dependency, which is DDS. `studio` and
+# `tts-piper` are CI-only (see .github/workflows/ci.yml): they pull the
+# Firebase/gcloud stack and a cmake build of libpiper plus a voice download,
+# which a pre-commit hook must not require of every commit.
+VIZIJ_FEATURES_DDS="ros2-dds"
+VIZIJ_FEATURES_ZENOH="ros2-zenoh"
+
 rust_clippy() {
   # Skip benches in automated flows; still cover libs/bins/examples/tests
-  run_cmd "cargo clippy --workspace --all-features --bins --examples --tests -- -D warnings" \
-    cargo clippy --workspace --all-features --bins --examples --tests -- -D warnings
+  run_cmd "cargo clippy --workspace --all-features --exclude vizij --bins --examples --tests -- -D warnings" \
+    cargo clippy --workspace --all-features --exclude vizij --bins --examples --tests -- -D warnings
+  run_cmd "cargo clippy -p vizij --features $VIZIJ_FEATURES_DDS --bins --examples --tests -- -D warnings" \
+    cargo clippy -p vizij --features "$VIZIJ_FEATURES_DDS" --bins --examples --tests -- -D warnings
+  run_cmd "cargo clippy -p vizij --features $VIZIJ_FEATURES_ZENOH --bins -- -D warnings" \
+    cargo clippy -p vizij --features "$VIZIJ_FEATURES_ZENOH" --bins -- -D warnings
 }
 
 rust_build() {
-  run_cmd "cargo build --all-features --all-targets" cargo build --all-features --all-targets
+  run_cmd "cargo build --workspace --all-features --exclude vizij --all-targets" \
+    cargo build --workspace --all-features --exclude vizij --all-targets
+  run_cmd "cargo build -p vizij --features $VIZIJ_FEATURES_DDS --all-targets" \
+    cargo build -p vizij --features "$VIZIJ_FEATURES_DDS" --all-targets
+  run_cmd "cargo build -p vizij --features $VIZIJ_FEATURES_ZENOH --bins" \
+    cargo build -p vizij --features "$VIZIJ_FEATURES_ZENOH" --bins
 }
 
 rust_test() {
   # Avoid compiling/running benches to keep hook/CI fast
-  run_cmd "cargo test --workspace --all-features" cargo test --workspace --all-features
+  run_cmd "cargo test --workspace --all-features --exclude vizij" \
+    cargo test --workspace --all-features --exclude vizij
+  run_cmd "cargo test -p vizij --features $VIZIJ_FEATURES_DDS" \
+    cargo test -p vizij --features "$VIZIJ_FEATURES_DDS"
 }
 
 rust_clean() {
@@ -220,8 +243,8 @@ Commands:
   fmt-rust          Format the Rust workspace
   fmt-rust-check    Check Rust formatting without writing changes
   lint-rust         Run clippy with warnings as errors
-  build-rust        Build all Rust targets with --all-features
-  test-rust         Run the Rust test suite with --all-features
+  build-rust        Build all Rust targets (all features; vizij per ROS 2 backend)
+  test-rust         Run the Rust test suite (all features; vizij under DDS)
   clean-rust        Clean Rust build artifacts
   lint-npm          Run lint across JS/TS packages (if lint scripts exist)
   clean-npm         Run pnpm clean scripts

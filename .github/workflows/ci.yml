@@ -36,8 +36,17 @@ jobs:
       # Test before lint: the build runs each crate's build script, emitting
       # the generated sources (src/arora_generated.rs) that `cargo fmt --check`
       # otherwise fails to resolve as modules.
-      - run: cargo test --workspace --all-features
-      - run: cargo clippy --workspace --all-features --bins --examples --tests -- -D warnings
+      # Every crate but `vizij` takes `--all-features`; `vizij` cannot, because
+      # its ROS 2 bridge backends (`ros2-dds` / `ros2-zenoh`) are compile-time
+      # exclusive, so it gets one pass per backend. The Zenoh pass covers the
+      # bins only: examples and the live ROS tests link the `ros2-client` dev
+      # dependency, which is DDS. (`scripts/hook-tasks.sh` runs the same
+      # passes locally, without `studio` and `tts-piper`.)
+      - run: cargo test --workspace --all-features --exclude vizij
+      - run: cargo test -p vizij --features ros2-dds,studio,tts-piper
+      - run: cargo clippy --workspace --all-features --exclude vizij --bins --examples --tests -- -D warnings
+      - run: cargo clippy -p vizij --features ros2-dds,studio,tts-piper --bins --examples --tests -- -D warnings
+      - run: cargo clippy -p vizij --features ros2-zenoh --bins -- -D warnings
       - run: cargo fmt --all -- --check
 
   wasm:
