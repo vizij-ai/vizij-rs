@@ -34,7 +34,7 @@ arora = "9.10"
 # + a DDS/Zenoh backend), so opt-in; the Studio bridge rides arora's own
 # `studio-bridge` feature instead (`--studio`). 5 adds the skill plane the
 # ros4hri exposure profile binds `/skill/look_at` through.
-arora-bridge-ros2 = { version = "5", optional = true }
+arora-bridge-ros2 = { version = "5", optional = true, default-features = false }
 # The Status enumeration ids the gaze and tts contracts mark their action shapes with.
 arora-behavior-tree-types = "1"
 # The built-in key prefix the ROS 2 input declaration leaves out.
@@ -86,8 +86,17 @@ rand = "0.9"
 
 [features]
 default = []
-# `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics.
-ros2 = ["dep:arora-bridge-ros2"]
+# `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics,
+# over one RMW backend per build — the bridge's `dds` / `zenoh` features are
+# mutually exclusive, exposed here under the bridge's consumer convention:
+# `ros2-dds` (ROS 2's default RMW; `ros2` is its alias) or `ros2-zenoh`
+# (rmw_zenoh-compatible; needs a running router, `ros2 run rmw_zenoh_cpp
+# rmw_zenohd`, reached through `ZENOH_CONFIG_OVERRIDE` /
+# `ZENOH_SESSION_CONFIG_URI` exactly as rmw_zenoh itself). The live ROS tests
+# are DDS (the `ros2-client` dev dependency), so they run under `ros2-dds`.
+ros2 = ["ros2-dds"]
+ros2-dds = ["dep:arora-bridge-ros2", "arora-bridge-ros2/dds"]
+ros2-zenoh = ["dep:arora-bridge-ros2", "arora-bridge-ros2/zenoh"]
 # `--studio`: attach the Semio Studio bridge (arora's Zenoh + Firebase
 # connector), configured from the environment (DEVICE_OWNERS, …). Needs
 # arora-studio-bridge-client 6.1.0+ (firestore 0.50 / gcloud-sdk 0.30.2).

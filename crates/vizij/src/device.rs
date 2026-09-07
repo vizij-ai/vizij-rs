@@ -10,7 +10,7 @@ use anyhow::{anyhow, Context, Result};
 use arora::tui::{commands_frontend, TuiCommand, TuiCommandEvent};
 use arora_types::data::{DataStore, Key, StateChange};
 use futures::StreamExt;
-use vizij_api_core::value::float;
+use vizij_api_core::value::{float, Value};
 use vizij_arora_behavior::{parse_spec, ProcessingGraph};
 use vizij_arora_hal::RigHal;
 pub use vizij_arora_host::ProgramSelect;
@@ -89,7 +89,7 @@ pub struct FaceConfig {
 #[derive(Clone, Default)]
 pub struct BridgeConfig {
     /// `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics.
-    #[cfg(feature = "ros2")]
+    #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
     pub ros2: Option<(String, u16)>,
     /// `--studio`: attach the Semio Studio bridge (env-configured).
     #[cfg(feature = "studio")]
@@ -102,7 +102,7 @@ pub struct BridgeConfig {
 /// bridge were injected, so once we add another bridge we attach the local one
 /// explicitly too. A bridge that fails to build is logged and skipped, not fatal.
 #[cfg_attr(
-    not(any(feature = "ros2", feature = "studio")),
+    not(any(feature = "ros2-dds", feature = "ros2-zenoh", feature = "studio")),
     allow(unused_variables)
 )]
 async fn attach_bridges(
@@ -110,13 +110,13 @@ async fn attach_bridges(
     bridges: &BridgeConfig,
     data_inputs: &[(String, arora_types::value::Type)],
 ) -> arora::AroraBuilder {
-    #[cfg(not(feature = "ros2"))]
+    #[cfg(not(any(feature = "ros2-dds", feature = "ros2-zenoh")))]
     let _ = data_inputs;
     match arora::local_ws_bridge().await {
         Ok(bridge) => builder = builder.with_bridge(bridge),
         Err(e) => log::error!("local bridge: {e:?}"),
     }
-    #[cfg(feature = "ros2")]
+    #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
     if let Some((namespace, domain)) = &bridges.ros2 {
         // The ROS4HRI exposure profile: typed face topics fanning onto the
         // standard keys, and the `/skill/look_at` action bound to the gaze
@@ -152,6 +152,11 @@ async fn attach_bridges(
 /// the input's default value decides (string → String, bool → Boolean,
 /// anything numeric or absent → F64); vector-valued inputs stay out (they
 /// travel as typed topics, e.g. the gaze target). Built-in keys stay out.
+///
+/// Defaults are read through the API's value parser: composition normalizes
+/// every source, so a default reaches here in its canonical serialized form
+/// (`{"f32": 0.0}`, `{"str": ""}`), not as the bare JSON literal an author
+/// wrote.
 pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
     use arora_types::value::Type;
     let Ok(spec) = serde_json::from_str::<serde_json::Value>(spec) else {
@@ -189,11 +194,14 @@ pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
         {
             continue;
         }
-        let ty = match node.get("params").and_then(|p| p.get("value")) {
-            Some(serde_json::Value::String(_)) => Type::String,
-            Some(serde_json::Value::Bool(_)) => Type::Boolean,
-            Some(serde_json::Value::Array(_)) | Some(serde_json::Value::Object(_)) => continue,
-            _ => Type::F64,
+        let ty = match node.get("params").and_then(|p| p.get("value")).cloned() {
+            None | Some(serde_json::Value::Null) => Type::F64,
+            Some(json) => match vizij_api_core::json::parse_value(json) {
+                Ok(Value::String(_)) => Type::String,
+                Ok(Value::Boolean(_)) => Type::Boolean,
+                Ok(value) if vizij_api_core::value::as_float(&value).is_some() => Type::F64,
+                _ => continue,
+            },
         };
         inputs.push((path, ty));
     }
@@ -531,6 +539,32 @@ mod tests {
         ], "edges": []}"#;
         assert_eq!(
             super::free_inputs(spec),
+            vec![
+                ("face/mouth/open".to_string(), Type::F64),
+                ("flags/awake".to_string(), Type::Boolean),
+                ("standard/ros4hri/expression/name".to_string(), Type::String),
+            ]
+        );
+    }
+
+    /// The same inputs after composition: `compose_sources` normalizes every
+    /// source, so defaults arrive in their canonical serialized form.
+    #[test]
+    fn free_inputs_read_normalized_defaults() {
+        use arora_types::value::Type;
+        let spec = serde_json::json!({"nodes": [
+            {"id": "a", "type": "input",  "params": {"path": "face/mouth/open", "value": 0.0}},
+            {"id": "b", "type": "input",  "params": {"path": "standard/ros4hri/expression/name", "value": ""}},
+            {"id": "c", "type": "input",  "params": {"path": "flags/awake", "value": true}},
+            {"id": "d", "type": "input",  "params": {"path": "gaze/target", "value": {"x": 1.0, "y": 0.0, "z": 0.0}}}
+        ], "edges": []});
+        let composed = compose_sources(&[("src".to_string(), spec)]).unwrap();
+        assert_eq!(
+            composed["nodes"][0]["params"]["value"],
+            serde_json::json!({"f32": 0.0})
+        );
+        assert_eq!(
+            super::free_inputs(&composed.to_string()),
             vec![
                 ("face/mouth/open".to_string(), Type::F64),
                 ("flags/awake".to_string(), Type::Boolean),

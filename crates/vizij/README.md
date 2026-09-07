@@ -60,7 +60,7 @@ WS bridge):
 
 | Flag | Feature | Effect |
 |---|---|---|
-| `--ros2 [namespace][:domain]` | `ros2` | join the ROS graph as a ROS4HRI face (see below) |
+| `--ros2 [namespace][:domain]` | `ros2-dds` (alias `ros2`) or `ros2-zenoh` | join the ROS graph as a ROS4HRI face (see below) |
 | `--studio` | `studio` | attach the Semio Studio bridge (configured from the environment) |
 
 `--ros2` attaches [`arora-bridge-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-bridge-ros2)
@@ -79,8 +79,16 @@ with its ROS4HRI exposure preset:
   outputs, the autoplaying program's outputs) are not inputs: drive them
   through the ROS4HRI topics or the program's own inputs.
 
+The two RMW backends are mutually exclusive per build. `ros2-dds` speaks
+DDS, ROS 2's default (`ros2` is its alias). `ros2-zenoh` speaks rmw_zenoh's
+protocol and, like rmw_zenoh, needs a running router (`ros2 run rmw_zenoh_cpp
+rmw_zenohd`), reached through the same environment rmw_zenoh reads —
+`ZENOH_CONFIG_OVERRIDE='mode="client";connect/endpoints=["tcp/127.0.0.1:7447"]'`
+or a full `ZENOH_SESSION_CONFIG_URI`. The live ROS tests run under `ros2-dds`.
+
 [ROS4HRI support](../../docs/ros4hri.md) documents the key contract, the
-per-channel behavior, and the skill's semantics.
+per-channel behavior, how to drive a key from a ROS 2 shell, and the skill's
+semantics.
 
 ## Speech (TTS)
 
