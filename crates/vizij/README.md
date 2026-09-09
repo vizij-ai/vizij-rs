@@ -24,8 +24,9 @@ cargo run -p vizij -- --glb face.glb --snapshot out.png --size 763x760
   ~100 Hz on a worker thread. The `Arora` is built inside that thread — it is
   single-owner by design and not `Send`.
 - **`view`** renders the web renderer's scene model: Z-up, faces in the XY
-  plane layered along Z, orthographic camera fit to the authored `rootBounds`,
-  sRGB output, no tonemapping, double-sided materials, opacity-driven alpha,
+  plane layered along Z, orthographic camera fit to the authored `rootBounds`
+  (`--fit` picks how, `--zoom` magnifies on top), sRGB output, no tonemapping,
+  double-sided materials, opacity-driven alpha,
   morph-target influences. Each frame it reads the device's actuation state
   from the HAL seam (`RigHal::pose()`) and applies it: transforms (euler ZYX),
   material color/opacity, morphs.
@@ -53,7 +54,8 @@ cargo run -p vizij -- --glb face.glb --snapshot out.png --size 763x760
 | `--background <rrggbb>` | `000000` | clear color |
 | `--ambient <f>` | `π/2` | three.js-style ambient intensity |
 | `--unlit` | off | render materials unlit (albedo passthrough) |
-| `--fit <contain\|cover>` | `contain` | how the face fits the window |
+| `--fit <contain\|cover\|stretch>` | `contain` | how the face fits the window: letterbox, crop the excess axis, or distort to the window's aspect |
+| `--zoom <f>` / `<fx>x<fy>` | `1` | magnify the fitted face — one factor for both axes, or width x height; below 1 shrinks it |
 
 The ROS 2 and Studio bridges are build features (they compose with arora's local
 WS bridge):
