@@ -239,9 +239,8 @@ is a diff of the behavior.
   authoring app to embed.
 - **Reconcile it against the profiles** with `vizij-bundle surface`: the
   mapping reads 39 of the profile's 40 keys (`gaze/frame` belongs to the
-  `look_at` skill) and writes 80 of the face standard's 81 (`jaw_left` and
-  `jaw_right` have no FACS code) plus the de-facto
-  `standard/vizij/mouth/morph/jaw_open`.
+  `look_at` skill) and writes 80 of the face standard's 82 (`jaw_left` and
+  `jaw_right` have no FACS code).
 
 ## Progressive compliance
 
