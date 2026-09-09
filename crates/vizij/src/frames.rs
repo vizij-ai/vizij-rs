@@ -104,7 +104,7 @@ fn to_rgba8(image: &Image) -> Option<Vec<u8>> {
         TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => Some(data.clone()),
         TextureFormat::Bgra8Unorm | TextureFormat::Bgra8UnormSrgb => {
             let mut out = data.clone();
-            for px in out.chunks_exact_mut(4) {
+            for px in out.as_chunks_mut::<4>().0 {
                 px.swap(0, 2);
             }
             Some(out)
