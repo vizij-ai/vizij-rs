@@ -1,5 +1,6 @@
 //! The Vizij face-bundle toolkit: read and rewrite the `VIZIJ_bundle` a face
-//! GLB carries, and validate a face's coverage of the Vizij standard.
+//! GLB carries, and validate a face's coverage of the Vizij standard — the
+//! `vizij-face` profile.
 //!
 //! The GLB is a build artifact; the bundle JSON is the reviewable source of
 //! truth. `unpack` extracts it as a sidecar, `pack` writes it back, and
@@ -9,7 +10,7 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{json, Map, Value as Json};
-use vizij_arora_host::{mappings, profile, standard};
+use vizij_arora_host::{mappings, profile};
 use vizij_glb_migrate::glb::Glb;
 
 /// A GLB with its parsed JSON chunk, ready for bundle surgery.
@@ -72,14 +73,15 @@ impl Face {
         Ok(())
     }
 
-    /// Declare a profile on the face: the vocabulary its graphs are authored
-    /// against, written to the bundle's top-level `profiles` array.
+    /// Declare a profile on the face: the interface its graphs are authored
+    /// against, written to the bundle's top-level `profiles` array in its
+    /// portable (unprefixed) form.
     ///
-    /// A profile is names and types, not a graph, so it sits beside `graphs`
+    /// A profile is an interface, not a graph, so it sits beside `graphs`
     /// rather than inside it — the same way an author's imported inputs travel
     /// with the file. Replaces the entry with the same id if present, appends
     /// otherwise, so re-importing updates in place.
-    pub fn add_profile(&mut self, profile: &vizij_arora_host::profile::Profile) -> Result<()> {
+    pub fn add_profile(&mut self, profile: &profile::Profile) -> Result<()> {
         let entry = serde_json::to_value(profile).context("serialize the profile")?;
         let bundle = self
             .bundle_mut()
@@ -92,24 +94,28 @@ impl Face {
             .or_insert_with(|| Json::Array(Vec::new()))
             .as_array_mut()
             .ok_or_else(|| anyhow!("the bundle's `profiles` is not an array"))?;
-        match profiles
-            .iter()
-            .position(|p| p.get("id") == entry.get("id"))
-        {
+        match profiles.iter().position(|p| p.get("id") == entry.get("id")) {
             Some(i) => profiles[i] = entry,
             None => profiles.push(entry),
         }
         Ok(())
     }
 
-    /// Every profile the face declares, in bundle order.
-    pub fn profiles(&self) -> Vec<vizij_arora_host::profile::Profile> {
+    /// Every profile the face declares, in bundle order. Unlike the runtime
+    /// reader, the tool fails on a malformed entry: a face being inspected or
+    /// rewritten should not silently lose a declaration.
+    pub fn profiles(&self) -> Result<Vec<profile::Profile>> {
         self.bundle()
             .and_then(|b| b.get("profiles"))
             .and_then(Json::as_array)
             .into_iter()
             .flatten()
-            .filter_map(|entry| serde_json::from_value(entry.clone()).ok())
+            .map(|entry| {
+                serde_json::from_value(entry.clone()).with_context(|| {
+                    let id = entry.get("id").and_then(Json::as_str).unwrap_or("?");
+                    format!("the bundle's profile {id:?} is malformed")
+                })
+            })
             .collect()
     }
 
@@ -144,17 +150,17 @@ impl Face {
             .unwrap_or_default()
     }
 
-    /// Embed a shipped standard profile (e.g. `ros4hri`) into the face: its
+    /// Embed a shipped standard mapping (e.g. `ros4hri`) into the face: its
     /// control paths get this face's rig prefix, and it grafts under a stable
-    /// id (`standard::<profile>`) so re-embedding replaces rather than
+    /// id (`standard::<mapping>`) so re-embedding replaces rather than
     /// duplicates — the embedded copy stays updatable. Errors on an unknown
-    /// profile id.
-    pub fn add_standard_profile(&mut self, profile_id: &str) -> Result<()> {
-        let (_, spec) = mappings::standard_mapping_source(profile_id, &self.rig_prefix())
-            .ok_or_else(|| anyhow!("unknown standard profile {profile_id}"))?;
+    /// mapping id.
+    pub fn add_standard_mapping(&mut self, mapping_id: &str) -> Result<()> {
+        let (_, spec) = mappings::standard_mapping_source(mapping_id, &self.rig_prefix())
+            .ok_or_else(|| anyhow!("unknown standard mapping {mapping_id}"))?;
         self.add_graph(
             mappings::STANDARD_MAPPING_KIND,
-            &mappings::embedded_graph_id(profile_id),
+            &mappings::embedded_graph_id(mapping_id),
             spec,
         )
     }
@@ -198,66 +204,57 @@ impl Face {
 
 /// One tier of the standard-coverage report.
 pub struct TierCoverage {
-    pub tier: &'static str,
+    pub tier: String,
     pub covered: Vec<String>,
     pub missing: Vec<String>,
 }
 
-/// A face's coverage of the Vizij standard: which control paths of each tier
-/// its graphs listen on. `level` is the highest tier the face fully covers,
-/// in the standard's progression — L0 gaze & lids, L1 expressions, L2
-/// visemes, L3 the muscle tier (half is enough there: faces rig the muscles
-/// they have).
+/// A face's coverage of the Vizij standard: which paths of each tier of the
+/// `vizij-face` profile its graphs listen on. `level` is the highest tier the
+/// face fully covers, in the profile's progression — L0 gaze & lids, L1
+/// expressions, L2 visemes, L3 the muscle tier (half is enough there: faces
+/// rig the muscles they have).
 pub struct Coverage {
     pub face_id: Option<String>,
     pub level: u8,
     pub tiers: Vec<TierCoverage>,
 }
 
-/// Compute a face's standard coverage from its input surface.
+/// Compute a face's standard coverage from its input surface, tier by tier of
+/// the `vizij-face` profile.
 pub fn coverage(face: &Face) -> Coverage {
     let inputs = face.input_paths();
     let has = |path: &str| inputs.iter().any(|p| p == path);
-    let split = |paths: Vec<String>| -> (Vec<String>, Vec<String>) {
-        paths.into_iter().partition(|p| has(p))
-    };
 
-    let gaze_paths = vec![
-        standard::LEFT_EYE_POS_X.to_string(),
-        standard::LEFT_EYE_POS_Y.to_string(),
-        standard::RIGHT_EYE_POS_X.to_string(),
-        standard::RIGHT_EYE_POS_Y.to_string(),
-        standard::LEFT_EYE_TOP_EYELID_POS_Y.to_string(),
-        standard::RIGHT_EYE_TOP_EYELID_POS_Y.to_string(),
-    ];
-    let expression_paths: Vec<String> = standard::EXPRESSION_NAMES
-        .iter()
-        .map(|n| standard::expression_path(n))
-        .collect();
-    let viseme_paths: Vec<String> = standard::VISEME_SHAPES
-        .iter()
-        .map(|s| standard::viseme_path(s))
-        .collect();
-    let muscle_paths: Vec<String> = standard::FACE_CONTROLS
-        .iter()
-        .map(|c| standard::face_path(c.name))
-        .collect();
-
-    let (g_cov, g_miss) = split(gaze_paths);
-    let (e_cov, e_miss) = split(expression_paths);
-    let (v_cov, v_miss) = split(viseme_paths);
-    let (m_cov, m_miss) = split(muscle_paths);
-
-    let mut level = 0;
-    let l0 = g_miss.is_empty();
-    if l0 && e_miss.is_empty() {
-        level = 1;
-        if v_miss.is_empty() {
-            level = 2;
-            if m_cov.len() >= m_miss.len() {
-                level = 3;
+    let standard = profile::vizij_face_profile();
+    let tiers: Vec<TierCoverage> = standard
+        .tiers()
+        .into_iter()
+        .map(|tier| {
+            let (covered, missing) = standard
+                .keys
+                .iter()
+                .filter(|k| k.tier() == Some(tier))
+                .map(|k| k.path.clone())
+                .partition(|p| has(p));
+            TierCoverage {
+                tier: tier.to_string(),
+                covered,
+                missing,
             }
+        })
+        .collect();
+
+    // Each level requires every tier before it in full, and its own tier in
+    // full — or, for the muscle tier, at least half.
+    let mut level = 0;
+    for (i, tier) in tiers.iter().enumerate() {
+        let full = tier.missing.is_empty();
+        let enough = tier.tier == "muscle" && tier.covered.len() >= tier.missing.len();
+        if !(full || enough) {
+            break;
         }
+        level = i as u8;
     }
 
     Coverage {
@@ -267,28 +264,7 @@ pub fn coverage(face: &Face) -> Coverage {
             .and_then(Json::as_str)
             .map(str::to_string),
         level,
-        tiers: vec![
-            TierCoverage {
-                tier: "gaze",
-                covered: g_cov,
-                missing: g_miss,
-            },
-            TierCoverage {
-                tier: "expression",
-                covered: e_cov,
-                missing: e_miss,
-            },
-            TierCoverage {
-                tier: "viseme",
-                covered: v_cov,
-                missing: v_miss,
-            },
-            TierCoverage {
-                tier: "muscle",
-                covered: m_cov,
-                missing: m_miss,
-            },
-        ],
+        tiers,
     }
 }
 
@@ -298,7 +274,7 @@ impl Coverage {
         let mut tiers = Map::new();
         for t in &self.tiers {
             tiers.insert(
-                t.tier.to_string(),
+                t.tier.clone(),
                 json!({
                     "covered": t.covered.len(),
                     "of": t.covered.len() + t.missing.len(),
@@ -315,7 +291,7 @@ impl Coverage {
 }
 
 /// A compact inspection summary of a face GLB (the `inspect` output).
-pub fn inspect(face: &Face) -> Json {
+pub fn inspect(face: &Face) -> Result<Json> {
     let morphs: Vec<Json> = face
         .gltf
         .get("nodes")
@@ -347,20 +323,23 @@ pub fn inspect(face: &Face) -> Json {
             })
         })
         .collect();
-    // The profiles the face declares — id, version, and how many keys each
-    // brings — so `inspect` answers "what vocabulary is this authored against?"
+    // The profiles the face declares — id, version, scope, and how many keys
+    // each brings — so `inspect` answers "which interfaces is this face
+    // authored against?"
     let profiles: Vec<Json> = face
-        .profiles()
+        .profiles()?
         .iter()
-        .map(|p| json!({ "id": p.id, "version": p.version, "keys": p.keys.len() }))
+        .map(
+            |p| json!({ "id": p.id, "version": p.version, "scope": p.scope, "keys": p.keys.len() }),
+        )
         .collect();
-    json!({
+    Ok(json!({
         "faceId": face.bundle().and_then(|b| b.pointer("/metadata/faceId")),
         "profiles": profiles,
         "graphs": graphs,
         "inputs": face.input_paths(),
         "animatables": morphs,
-    })
+    }))
 }
 
 /// Pretty-print JSON with a trailing newline — the sidecar format (stable,
@@ -382,6 +361,7 @@ pub fn from_sidecar(text: &str) -> Result<Json> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vizij_arora_host::standard;
 
     /// A minimal GLB carrying a bundle with one rig graph.
     fn face_bytes(input_paths: &[&str]) -> Vec<u8> {
@@ -456,44 +436,63 @@ mod tests {
     /// input: written to the bundle, replaced in place on re-import, and
     /// intact across a GLB round-trip.
     #[test]
-    fn add_profile_declares_the_vocabulary_on_the_face() {
+    fn add_profile_declares_the_interface_on_the_face() {
         let bytes = face_bytes(&["rig/test_face/x"]);
         let mut face = Face::parse(&bytes).unwrap();
-        assert!(face.profiles().is_empty());
+        assert!(face.profiles().unwrap().is_empty());
 
-        let vizij = vizij_arora_host::profile::profile("vizij-face").unwrap();
-        let ros = vizij_arora_host::profile::profile("ros4hri").unwrap();
+        let vizij = profile::profile("vizij-face").unwrap();
+        let ros = profile::profile("ros4hri").unwrap();
         face.add_profile(&vizij).unwrap();
         face.add_profile(&ros).unwrap();
-        assert_eq!(
-            face.profiles().iter().map(|p| p.id.clone()).collect::<Vec<_>>(),
-            ["vizij-face", "ros4hri"]
-        );
+        let ids = |f: &Face| {
+            f.profiles()
+                .unwrap()
+                .iter()
+                .map(|p| p.id.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(ids(&face), ["vizij-face", "ros4hri"]);
 
         // Re-importing the same profile updates in place rather than stacking.
         face.add_profile(&vizij).unwrap();
-        assert_eq!(face.profiles().len(), 2);
+        assert_eq!(ids(&face).len(), 2);
 
         // It survives the GLB round-trip, keys and all.
         let packed = face.to_bytes().unwrap();
         let reparsed = Face::parse(&packed).unwrap();
-        let declared = reparsed.profiles();
+        let declared = reparsed.profiles().unwrap();
         assert_eq!(declared.len(), 2);
-        assert_eq!(declared[0].keys.len(), vizij.keys.len());
+        assert_eq!(declared[0], vizij);
+        assert_eq!(
+            inspect(&reparsed).unwrap()["profiles"][1]["scope"],
+            "device"
+        );
+    }
+
+    /// A malformed declaration is an error for the tool, not a silent drop.
+    #[test]
+    fn a_malformed_profile_fails_the_tool() {
+        let bytes = face_bytes(&["rig/test_face/x"]);
+        let mut face = Face::parse(&bytes).unwrap();
+        let bundle = face.bundle_mut().unwrap();
+        bundle["profiles"] = json!([{ "id": "broken", "keys": "not a list" }]);
+        let err = face.profiles().unwrap_err().to_string();
+        assert!(err.contains("broken"), "{err}");
     }
 
     #[test]
-    fn add_standard_embeds_a_prefixed_updatable_profile() {
+    fn add_standard_embeds_a_prefixed_updatable_mapping() {
         let bytes = face_bytes(&["rig/test_face/x"]);
         let mut face = Face::parse(&bytes).unwrap();
-        face.add_standard_profile("ros4hri").unwrap();
-        assert!(face.add_standard_profile("nope").is_err());
+        face.add_standard_mapping("ros4hri").unwrap();
+        assert!(face.add_standard_mapping("nope").is_err());
 
         let graphs = face.bundle().unwrap()["graphs"].as_array().unwrap();
         let embedded = graphs
             .iter()
             .find(|g| g["id"] == "standard::ros4hri")
-            .expect("the profile embedded");
+            .expect("the mapping embedded");
         assert_eq!(embedded["kind"], "standard-profile");
         // Its outputs carry this face's rig prefix.
         let prefixed = embedded["spec"]["nodes"]
@@ -506,11 +505,11 @@ mod tests {
                     .as_str()
                     .is_some_and(|p| p.starts_with("rig/test_face/standard/vizij/"))
             });
-        assert!(prefixed, "profile outputs are not rig-prefixed");
+        assert!(prefixed, "mapping outputs are not rig-prefixed");
 
         // Re-embedding replaces rather than duplicates — the copy is updatable.
         let before = graphs.len();
-        face.add_standard_profile("ros4hri").unwrap();
+        face.add_standard_mapping("ros4hri").unwrap();
         assert_eq!(
             face.bundle().unwrap()["graphs"].as_array().unwrap().len(),
             before
@@ -554,57 +553,5 @@ mod tests {
         let cov = coverage(&Face::parse(&face_bytes(&refs)).unwrap());
         assert_eq!(cov.level, 2);
         assert_eq!(cov.face_id.as_deref(), Some("test_face"));
-    }
-}
-
-/// Lift a key set out of a mapping graph: its `input` nodes are the profile it
-/// consumes, its `output` nodes the profile it produces.
-///
-/// This is the bootstrap direction — how an existing mapping is reconciled
-/// against a declared profile, and how a face's own adaptation reports the
-/// surface it actually implements. It is deliberately *not* the source of
-/// truth: a mapping only touches the part of a profile it needs, so a surface
-/// lifted this way can be a strict subset of the profile it claims (ROS4HRI
-/// reaches 33 of the standard's 35 muscle controls). Compare, do not replace.
-pub fn surface_of(spec: &Json, side: &str, id: &str) -> profile::Profile {
-    let mut keys: Vec<profile::ProfileKey> = Vec::new();
-    let mut seen = std::collections::BTreeSet::new();
-    for node in spec.get("nodes").and_then(Json::as_array).into_iter().flatten() {
-        if node.get("type").and_then(Json::as_str) != Some(side) {
-            continue;
-        }
-        let Some(path) = node.pointer("/params/path").and_then(Json::as_str) else {
-            continue;
-        };
-        if !seen.insert(path.to_string()) {
-            continue;
-        }
-        // The declared default types the key: a string default means a string
-        // key, anything numeric a float, and an absent one leaves it open.
-        let default = node.pointer("/params/value");
-        let value_type = match default {
-            Some(v) if v.is_string() => Some("str".to_string()),
-            Some(v) if v.is_boolean() => Some("bool".to_string()),
-            Some(v) if v.is_number() => Some("f32".to_string()),
-            _ => None,
-        };
-        keys.push(profile::ProfileKey {
-            path: path.to_string(),
-            kind: Some(side.to_string()),
-            value_type,
-            min: None,
-            max: None,
-            default_value: None,
-            meta: None,
-        });
-    }
-    keys.sort_by(|a, b| a.path.cmp(&b.path));
-    profile::Profile {
-        id: id.to_string(),
-        version: "v1".to_string(),
-        title: format!("{id} ({side} surface)"),
-        description: format!("The {side} surface lifted from a mapping graph — the paths it \
-                              actually touches, which may be a subset of the profile it claims."),
-        keys,
     }
 }

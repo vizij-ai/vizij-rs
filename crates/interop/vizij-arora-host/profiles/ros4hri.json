@@ -2,7 +2,8 @@
   "id": "ros4hri",
   "version": "v1",
   "title": "ROS4HRI face command",
-  "description": "The ROS4HRI face-command surface: expression name with valence and arousal, a gaze target and its frame, FACS action-unit intensities, and viseme weights (a Vizij extension).",
+  "description": "The ROS4HRI face-command interface: expression name with valence and arousal, a gaze target and its frame, FACS action-unit intensities, and viseme weights (a Vizij extension).",
+  "scope": "device",
   "keys": [
     {
       "path": "standard/ros4hri/expression/name",
@@ -35,7 +36,7 @@
     {
       "path": "standard/ros4hri/gaze/target",
       "kind": "input",
-      "value_type": "value"
+      "value_type": "struct"
     },
     {
       "path": "standard/ros4hri/gaze/frame",

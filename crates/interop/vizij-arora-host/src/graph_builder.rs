@@ -1,5 +1,5 @@
 //! A small JSON graph-spec builder shared by the crate's generated assets
-//! (the ROS4HRI profile, the skill fragments): node/edge lists in the exact
+//! (the ROS4HRI mapping, the skill fragments): node/edge lists in the exact
 //! form `normalize_graph_spec_value` accepts, with scratch ids for the
 //! anonymous math in between.
 

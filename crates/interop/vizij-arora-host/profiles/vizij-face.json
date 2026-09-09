@@ -2,7 +2,8 @@
   "id": "vizij-face",
   "version": "v1",
   "title": "Vizij face standard",
-  "description": "The portable face vocabulary: gaze and lids, 25 named expressions, 15 visemes, and 35 muscle controls keyed to FACS action units and ARKit blendshapes.",
+  "description": "The portable face interface: gaze and lids, 25 named expressions, 15 visemes, and 35 muscle controls keyed to FACS action units and ARKit blendshapes.",
+  "scope": "face",
   "keys": [
     {
       "path": "standard/vizij/left_eye/pos/x",

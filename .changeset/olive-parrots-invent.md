@@ -2,8 +2,10 @@
 "@vizij/runtime": minor
 ---
 
-Expose the profile registry to JS: `profiles()` lists the shipped profiles (`{ id, version, title, description, keys }` — currently `vizij-face` with 81 paths and `ros4hri` with 40) and `profile(id, rigPrefix)` returns one in full, every path with its type, range, default, and standard metadata (FACS action unit, ARKit blendshape, tier), with the face's rig prefix applied.
+Profiles and mappings are two things, and the API now says so.
 
-A *profile* is a set of paths and their types — the vocabulary half of a standard. It is distinct from `standardProfile(id, rigPrefix)`, which returns a *mapping*: the graph that carries one profile's values onto another's. The two are separate exports rather than a rename, so nothing that consumes `standardProfile` moves.
+A **profile** is an interface: the set of store paths one party exposes to another, each with its type, range, and default. `profiles()` lists the shipped ones (`{ id, version, title, description, scope, keys }` — currently `vizij-face`, 81 paths, and `ros4hri`, 40) and `profile(id, rigPrefix)` returns one in full, every path with its arora type, range, default, and standard metadata (FACS action unit, ARKit blendshape, tier). `scope` says where the paths live: a `face` profile is addressed to one face with its rig prefix, a `device` profile is absolute and ignores the prefix.
 
-The API an authoring app's profile import consumes: pick a profile, get its paths already addressed to the open face, and declare it on the GLB (`bundle.profiles`) so the vocabulary a face is authored against travels with the asset.
+A **mapping** is a graph that implements one profile in terms of another. `mappings()` and `mapping(id, rigPrefix)` are the renamed `standardProfiles()` / `standardProfile(id, rigPrefix)`, which stay as deprecated aliases (with `StandardProfile` aliasing `Mapping`); nothing that consumes them moves.
+
+This is the API an authoring app's profile import consumes: pick a profile, get its paths already addressed to the open face, and declare it on the GLB (`bundle.profiles`) so the interface a face is authored against travels with the asset.

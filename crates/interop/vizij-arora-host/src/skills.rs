@@ -61,7 +61,7 @@ pub const LOOK_AT_JSON: &str = include_str!("../skills/look_at.json");
 /// - empty policy or `track`: write the goal target (and frame) onto the
 ///   ROS4HRI gaze keys and stay `Running` — tracking ends when the goal is
 ///   cancelled or replaced (the halt is the exit);
-/// - `glance` / `reset`: write the target (`reset` recenters on the profile's
+/// - `glance` / `reset`: write the target (`reset` recenters on the mapping's
 ///   far-ahead rest), hold the fixation for [`SETTLE_SECONDS`], then
 ///   `Success`;
 /// - anything else (`social`, `random`, `auto`, unknown): `Failure`, with
@@ -88,10 +88,10 @@ pub fn generate_look_at() -> Json {
     );
     let frame = g.input("in-frame", "task/frame", json!(""));
 
-    // Gaze: `reset` recenters on the profile's far-ahead rest target (the
+    // Gaze: `reset` recenters on the mapping's far-ahead rest target (the
     // unverged straight-ahead), every other policy tracks the goal. The
     // written keys are the same standard surface the topic plane feeds — the
-    // ROS4HRI profile turns them into eye pose.
+    // ROS4HRI mapping turns them into eye pose.
     let rest = g.node(
         "rest-target",
         "constant",
@@ -256,7 +256,7 @@ pub fn embedded_graph_id(skill_id: &str) -> String {
 }
 
 /// A skill's canonical fragment as JSON — face-independent by construction
-/// (placeholder `task/*` paths), so unlike a profile source it takes no rig
+/// (placeholder `task/*` paths), so unlike a mapping source it takes no rig
 /// prefix. `None` for an unknown id.
 pub fn skill_source(id: &str) -> Option<Json> {
     let skill = skill(id)?;

@@ -5,7 +5,8 @@
 //! - [`compose_sources`] unions several graph sources into the one graph a
 //!   device runs (the rig, the pose-driver, a playing program, …).
 //! - [`Bundle`] reads the face's `VIZIJ_bundle`: its graphs, its motiongraph
-//!   programs, the program to autoplay, and the neutral-pose config.
+//!   programs, the profiles it declares, the program to autoplay, and the
+//!   neutral-pose config.
 //! - [`ProgramSelect`] picks which program plays; [`Bundle::compose`] composes
 //!   the base graphs plus that program.
 //! - [`Bundle::neutral_stage_writes`] resolves the neutral inputs to the store
@@ -45,12 +46,13 @@ pub enum ProgramSelect {
 pub struct Bundle {
     /// Graph entries, `(kind, spec)` — `rig`, `pose-driver`, `motiongraph`, ….
     pub graphs: Vec<(String, Json)>,
-    /// Standard profiles embedded in the face, `(profile id, spec)` — the
-    /// `standard-profile` graph entries (ids `standard::<profile>`, prefix
-    /// stripped). An embedded copy is the author's pinned override of the
-    /// shipped mapping: [`compose`](Bundle::compose) loads it and suppresses
-    /// the built-in profile of the same id.
-    pub standard_profiles: Vec<(String, Json)>,
+    /// Standard mappings embedded in the face, `(mapping id, spec)` — the
+    /// [`STANDARD_MAPPING_KIND`](mappings::STANDARD_MAPPING_KIND) graph
+    /// entries (ids `standard::<mapping>`, prefix stripped). An embedded copy
+    /// is the author's pinned override of the shipped mapping:
+    /// [`compose`](Bundle::compose) loads it and suppresses the built-in
+    /// mapping of the same id.
+    pub standard_mappings: Vec<(String, Json)>,
     /// Skill fragments embedded in the face, `(skill id, spec)` — the `skill`
     /// graph entries (ids `skill::<function>`, prefix stripped). An embedded
     /// copy is the author's pinned override of the shipped behavior: the
@@ -60,11 +62,11 @@ pub struct Bundle {
     /// The motiongraph programs, `(id, spec)` — the graphs the face can play on
     /// top of its rig (e.g. Quori's "Speaks").
     pub programs: Vec<(String, Json)>,
-    /// The profiles this face declares it speaks — the vocabularies its graphs
-    /// are authored against, carried in the bundle's top-level `profiles`
-    /// array. A profile is names and types, not a graph, so it sits beside
-    /// `graphs` rather than inside it. Declaring them is what lets a coverage
-    /// check know which vocabulary to hold the face to.
+    /// The profiles this face declares it implements — the interfaces its
+    /// graphs are authored against, carried in the bundle's top-level
+    /// `profiles` array. A profile is an interface, not a graph, so it sits
+    /// beside `graphs` rather than inside it. Declaring them is what lets a
+    /// coverage check know which interface to hold the face to.
     pub profiles: Vec<profile::Profile>,
     /// `metadata.activeMotionGraphId` (or the first `activeMotionGraphIds`).
     pub active_program_id: Option<String>,
@@ -109,7 +111,7 @@ impl Bundle {
 
         let mut graphs = Vec::new();
         let mut programs = Vec::new();
-        let mut standard_profiles = Vec::new();
+        let mut standard_mappings = Vec::new();
         let mut skills = Vec::new();
         for entry in bundle
             .get("graphs")
@@ -127,17 +129,17 @@ impl Bundle {
             };
             // Motiongraphs are the playable programs, addressed by id; the base
             // graphs (rig, pose-driver) compose by kind. Embedded standard
-            // profiles are held apart, by profile id — they compose always and
+            // mappings are held apart, by mapping id — they compose always and
             // suppress their built-in (see `compose`), never selected by kind.
             if kind == "motiongraph" {
                 if let Some(id) = entry.get("id").and_then(Json::as_str) {
                     programs.push((id.to_string(), spec.clone()));
                 }
             }
-            if kind == "standard-profile" {
+            if kind == mappings::STANDARD_MAPPING_KIND {
                 let id = entry.get("id").and_then(Json::as_str).unwrap_or_default();
-                let profile_id = id.strip_prefix("standard::").unwrap_or(id);
-                standard_profiles.push((profile_id.to_string(), spec.clone()));
+                let mapping_id = id.strip_prefix("standard::").unwrap_or(id);
+                standard_mappings.push((mapping_id.to_string(), spec.clone()));
                 continue;
             }
             // Embedded skill fragments are held apart by skill id: they never
@@ -153,14 +155,21 @@ impl Bundle {
         }
 
         // Profiles are declared data, not graphs — a malformed entry is
-        // skipped rather than failing the whole bundle, so an older reader
-        // meeting a newer profile shape still loads the face.
+        // warned and skipped rather than failing the whole bundle, so an older
+        // reader meeting a newer profile shape still loads the face.
         let profiles: Vec<profile::Profile> = bundle
             .get("profiles")
             .and_then(Json::as_array)
             .into_iter()
             .flatten()
-            .filter_map(|entry| serde_json::from_value(entry.clone()).ok())
+            .filter_map(|entry| match serde_json::from_value(entry.clone()) {
+                Ok(profile) => Some(profile),
+                Err(e) => {
+                    let id = entry.get("id").and_then(Json::as_str).unwrap_or("?");
+                    log::warn!("skipping the bundle's malformed profile {id:?}: {e}");
+                    None
+                }
+            })
             .collect();
 
         let mut neutral_inputs = HashMap::new();
@@ -182,7 +191,7 @@ impl Bundle {
 
         Bundle {
             graphs,
-            standard_profiles,
+            standard_mappings,
             skills,
             programs,
             profiles,
@@ -193,8 +202,9 @@ impl Bundle {
     }
 
     /// The prefix of this face's rig input paths — `rig/<faceId>/`, or empty
-    /// when the bundle declares no face id. Standard profiles prepend it to
-    /// the control paths they write.
+    /// when the bundle declares no face id. Standard mappings prepend it to
+    /// the control paths they write, and a face-scoped profile to every path
+    /// it declares.
     pub fn rig_prefix(&self) -> String {
         self.face_id
             .as_deref()
@@ -213,16 +223,16 @@ impl Bundle {
     }
 
     /// Compose the device's behavior: the base graphs whose kind is in `wanted`,
-    /// then the standard profiles, then the chosen program, then (when
+    /// then the standard mappings, then the chosen program, then (when
     /// `with_animations`) the animation source — each **last** wins over the
     /// earlier ones on any store path they share (the web composes the same
-    /// way, for the same last-writer-wins reason). So a profile overrides the
-    /// base rig's resting writes, a playing program overrides the profile, and
+    /// way, for the same last-writer-wins reason). So a mapping overrides the
+    /// base rig's resting writes, a playing program overrides the mapping, and
     /// a playing clip overrides everything. Returns the composed graph spec.
     ///
-    /// Profiles come from two places: the face's own embedded copies
-    /// ([`standard_profiles`](Bundle::standard_profiles)), always composed,
-    /// and the built-in `profiles` the host passes (e.g.
+    /// Mappings come from two places: the face's own embedded copies
+    /// ([`standard_mappings`](Bundle::standard_mappings)), always composed,
+    /// and the built-in `mappings` the host passes (e.g.
     /// [`ros4hri::ros4hri_source`]) — skipped for any id the face embeds,
     /// because an embedded copy is the author's pinned override of the shipped
     /// mapping.
@@ -235,7 +245,7 @@ impl Bundle {
         wanted: &[&str],
         select: &ProgramSelect,
         with_animations: bool,
-        profiles: &[(String, Json)],
+        mappings: &[(String, Json)],
     ) -> Result<Json> {
         let mut sources: Vec<(String, Json)> = self
             .graphs
@@ -243,15 +253,15 @@ impl Bundle {
             .filter(|(kind, _)| wanted.contains(&kind.as_str()))
             .map(|(kind, spec)| (kind.clone(), spec.clone()))
             .collect();
-        // The face's own embedded profiles compose unconditionally, and each
-        // suppresses the built-in profile of the same id: an embedded copy is
+        // The face's own embedded mappings compose unconditionally, and each
+        // suppresses the built-in mapping of the same id: an embedded copy is
         // the author's pinned override of the shipped mapping.
-        for (id, spec) in &self.standard_profiles {
-            sources.push((format!("standard::{id}"), spec.clone()));
+        for (id, spec) in &self.standard_mappings {
+            sources.push((mappings::embedded_graph_id(id), spec.clone()));
         }
-        for (id, spec) in profiles {
-            if self.standard_profiles.iter().any(|(e, _)| e == id) {
-                log::info!("embedded standard profile {id} overrides the built-in");
+        for (id, spec) in mappings {
+            if self.standard_mappings.iter().any(|(e, _)| e == id) {
+                log::info!("embedded standard mapping {id} overrides the built-in");
                 continue;
             }
             sources.push((id.clone(), spec.clone()));
@@ -573,7 +583,7 @@ mod tests {
     }
 
     #[test]
-    fn compose_inserts_profiles_between_base_and_program() {
+    fn compose_inserts_mappings_between_base_and_program() {
         let b = Bundle::from_bundle_json(&bundle_json());
         let composed = b
             .compose(
@@ -589,20 +599,20 @@ mod tests {
             .iter()
             .map(|n| n["id"].as_str().unwrap())
             .collect();
-        // Base rig first, profile in the middle, program last (a playing
-        // program out-writes the profile on shared paths).
+        // Base rig first, mapping in the middle, program last (a playing
+        // program out-writes the mapping on shared paths).
         let rig = ids
             .iter()
             .position(|id| *id == "rig::input_gaze_x")
             .unwrap();
-        let profile = ids.iter().position(|id| *id == "ros4hri::in-name").unwrap();
+        let mapping = ids.iter().position(|id| *id == "ros4hri::in-name").unwrap();
         let program = ids
             .iter()
             .position(|id| *id == "program::prog.speaks::o")
             .unwrap();
-        assert!(rig < profile && profile < program);
+        assert!(rig < mapping && mapping < program);
 
-        // Without profiles the composition is untouched — the opt-in default.
+        // Without mappings the composition is untouched — the opt-in default.
         let bare = b
             .compose(&["rig"], &ProgramSelect::Auto, false, &[])
             .unwrap();
@@ -613,13 +623,13 @@ mod tests {
             .any(|n| n["id"].as_str().unwrap().starts_with("ros4hri::")));
     }
 
-    /// `bundle_json()` with an embedded copy of a `ros4hri` standard profile:
+    /// `bundle_json()` with an embedded copy of the `ros4hri` standard mapping:
     /// one input node under the graph id VIZ-92 pins (`standard::ros4hri`).
     fn bundle_json_with_embedded_ros4hri() -> Json {
         let mut bundle = bundle_json();
         bundle["graphs"].as_array_mut().unwrap().push(json!({
             "id": "standard::ros4hri",
-            "kind": "standard-profile",
+            "kind": mappings::STANDARD_MAPPING_KIND,
             "spec": graph(
                 json!([{ "id": "mine", "type": "input",
                          "params": { "path": "standard/ros4hri/expression/valence" } }]),
@@ -630,17 +640,20 @@ mod tests {
     }
 
     #[test]
-    fn bundle_reads_embedded_standard_profiles() {
+    fn bundle_reads_embedded_standard_mappings() {
         let b = Bundle::from_bundle_json(&bundle_json_with_embedded_ros4hri());
-        // The entry lands under its bare profile id (`standard::` stripped)…
-        assert_eq!(b.standard_profiles.len(), 1);
-        assert_eq!(b.standard_profiles[0].0, "ros4hri");
+        // The entry lands under its bare mapping id (`standard::` stripped)…
+        assert_eq!(b.standard_mappings.len(), 1);
+        assert_eq!(b.standard_mappings[0].0, "ros4hri");
         // …and is held apart from the kind-selectable base graphs.
-        assert!(b.graphs.iter().all(|(kind, _)| kind != "standard-profile"));
+        assert!(b
+            .graphs
+            .iter()
+            .all(|(kind, _)| kind != mappings::STANDARD_MAPPING_KIND));
     }
 
     #[test]
-    fn embedded_profile_composes_and_suppresses_its_built_in() {
+    fn embedded_mapping_composes_and_suppresses_its_built_in() {
         let b = Bundle::from_bundle_json(&bundle_json_with_embedded_ros4hri());
         let other_builtin = (
             "gaze_only".to_string(),
@@ -669,8 +682,23 @@ mod tests {
         // …the built-in of the same id is not composed at all…
         assert!(ids.iter().all(|id| !id.starts_with("ros4hri::")));
         // …and built-ins the face does not embed are untouched (the
-        // suppression is per profile id, not a global kill switch).
+        // suppression is per mapping id, not a global kill switch).
         assert!(ids.contains(&"gaze_only::g"));
+    }
+
+    /// A declared profile is read back typed; a malformed entry is dropped
+    /// without taking the well-formed ones — or the face — with it.
+    #[test]
+    fn bundle_reads_declared_profiles_and_skips_malformed_ones() {
+        let mut bundle = bundle_json();
+        bundle["profiles"] = json!([
+            serde_json::to_value(profile::ros4hri_profile()).unwrap(),
+            { "id": "broken", "keys": "not a list" },
+        ]);
+        let b = Bundle::from_bundle_json(&bundle);
+        assert_eq!(b.profiles.len(), 1);
+        assert_eq!(b.profiles[0].id, "ros4hri");
+        assert_eq!(b.profiles[0].scope, profile::Scope::Device);
     }
 
     #[test]

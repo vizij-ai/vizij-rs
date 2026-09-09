@@ -1,5 +1,5 @@
 // An exported face GLB deploys through composeFace: the bundle's embedded
-// (here: modified) standard profile composes and wins over the built-in —
+// (here: modified) standard mapping composes and wins over the built-in —
 // the VIZ-92 precedence, proven on the wasm runtime anywhere Node runs.
 import assert from "node:assert/strict";
 import { composeFace, startRuntime } from "../dist/runtime/src/index.js";
@@ -7,7 +7,7 @@ import { composeFace, startRuntime } from "../dist/runtime/src/index.js";
 // A modified ros4hri copy: valence rides verbatim onto the happy weight (no
 // smoothing, no blending, name ignored) — a mapping the built-in never
 // produces.
-const modifiedProfile = {
+const modifiedMapping = {
   nodes: [
     {
       id: "v",
@@ -32,7 +32,7 @@ const gltf = {
             {
               id: "standard::ros4hri",
               kind: "standard-profile",
-              spec: modifiedProfile,
+              spec: modifiedMapping,
             },
           ],
         },
@@ -45,7 +45,7 @@ const spec = await composeFace(gltf, { program: "none" });
 const ids = spec.nodes.map((node) => node.id);
 assert.ok(
   ids.some((id) => id.startsWith("standard::ros4hri::")),
-  "the embedded profile composes under its stable id",
+  "the embedded mapping composes under its stable id",
 );
 assert.ok(
   !ids.some((id) => id.startsWith("ros4hri::")),
