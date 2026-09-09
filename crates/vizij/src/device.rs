@@ -94,6 +94,12 @@ pub struct BridgeConfig {
     /// `--studio`: attach the Semio Studio bridge (env-configured).
     #[cfg(feature = "studio")]
     pub studio: bool,
+    /// The format the view will publish `view/frame` in, when it publishes one
+    /// at all. It decides the ROS message the key is declared as, so it has to
+    /// be the format the view actually encodes with — a mismatch would have the
+    /// bridge encode a frame against the wrong message.
+    #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
+    pub frames: Option<crate::frames::FrameFormat>,
 }
 
 /// Attach the device's bridges to `builder`: always the open local bridge
@@ -129,12 +135,29 @@ async fn attach_bridges(
         for (path, ty) in data_inputs {
             config = config.with_input(path.clone(), ty.clone());
         }
+        // The rendered face is already a `sensor_msgs` image value, so declaring
+        // its type is all the bridge needs to publish it as the real message on
+        // the ROS4HRI image topic instead of the JSON fallback.
+        let frame = bridges
+            .frames
+            .map(vizij_arora_host::frames::FrameFormat::from);
+        if let Some(frame) = frame {
+            config = config.with_typed_output_on(
+                crate::frames::FRAME_KEY,
+                frame.ros_type(),
+                frame.topic(),
+            );
+        }
         builder = builder.with_bridge(Box::new(arora_bridge_ros2::Ros2Bridge::new(config).await));
         log::info!(
             "serving the ROS 2 bridge (namespace {namespace:?}, domain {domain}): {} input keys \
-             subscribed under /{namespace}/keys/<path>, plus the ROS4HRI typed topics and the \
-             /skill/look_at action",
-            data_inputs.len()
+             subscribed under /{namespace}/keys/<path>, plus the ROS4HRI typed topics, the \
+             /skill/look_at action{}",
+            data_inputs.len(),
+            match frame {
+                Some(frame) => format!(" and the face image on {}", frame.topic()),
+                None => String::new(),
+            }
         );
     }
     #[cfg(feature = "studio")]

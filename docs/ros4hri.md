@@ -126,14 +126,19 @@ so the face's controls and, headless, its rendered frames are topics too:
 
 ```bash
 ros2 topic echo /quori/keys/rig/quori_latest/pose/control/propsrig_mouth_jawud_value
-ros2 topic hz /quori/keys/view/frame
+ros2 topic hz /robot_face/image_raw/compressed
 ```
 
 Scalar keys publish as the `std_msgs` type of their value (the face's
-controls are `Float32`). The frame (`--headless --frame-rate 2`) is a record,
-so it rides the bridge's non-scalar fallback: a `std_msgs/String` carrying
-the value's canonical JSON — a `keyvalue` whose `width`, `height`, `format`
-(`"png"`) and `data` fields hold the PNG bytes under `u8s`.
+controls are `Float32`).
+
+The rendered frame (`--headless --frame-rate 2`) is a `sensor_msgs` image on
+its own topic rather than under `/keys/`, because the value the view writes is
+already that message: `--frame-format png` publishes a
+`sensor_msgs/CompressedImage` on `/robot_face/image_raw/compressed`, and
+`--frame-format raw` a `sensor_msgs/Image` on `/robot_face/image_raw`. The
+names are `image_transport`'s, so `rqt_image_view` and the rest of the ROS
+image tooling display the face without a republisher.
 
 ### With rmw_zenoh
 

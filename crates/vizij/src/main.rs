@@ -154,11 +154,17 @@ fn main() -> Result<()> {
         stage_neutral: !cli.no_stage_neutral,
         ros4hri: !cli.no_ros4hri,
     };
+    let frame_config = frames::FrameConfig {
+        format: cli.frame_format,
+        rate_hz: cli.frame_rate,
+    };
     let bridges = device::BridgeConfig {
         #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
         ros2: cli.ros2.as_deref().map(parse_ros2).transpose()?,
         #[cfg(feature = "studio")]
         studio: cli.studio,
+        #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
+        frames: frame_config.publishes().then_some(frame_config.format),
     };
     let dev = device::start(&cli.glb, config, bridges, mode)?;
     println!(
@@ -186,10 +192,6 @@ fn main() -> Result<()> {
     let face = view::Face { meta, glb_path };
     let device_res = view::DeviceRes { rig };
 
-    let frame_config = frames::FrameConfig {
-        format: cli.frame_format,
-        rate_hz: cli.frame_rate,
-    };
     match (&cli.snapshot, cli.headless) {
         (Some(out), _) => run_snapshot(&cli, face, device_res, options, out),
         (None, true) => run_headless(&cli.size, face, device_res, options, events, frame_config),
@@ -239,7 +241,7 @@ fn run_window(
     .add_plugins(view::ViewPlugin);
     // Frame publishing works with a window too (not only headless): capture the
     // window and push `view/frame` onto the device's reading feed.
-    if frame_config.rate_hz > 0.0 {
+    if frame_config.publishes() {
         app.insert_resource(frame_config)
             .add_plugins(frames::FramesPlugin);
     }
@@ -296,7 +298,7 @@ fn run_headless(
     let handle = app.world_mut().resource_mut::<Assets<Image>>().add(target);
     app.insert_resource(view::OffscreenTarget(handle));
 
-    if frame_config.rate_hz > 0.0 {
+    if frame_config.publishes() {
         app.insert_resource(frame_config)
             .add_plugins(frames::FramesPlugin);
     } else {

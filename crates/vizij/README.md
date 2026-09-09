@@ -49,7 +49,7 @@ cargo run -p vizij -- --glb face.glb --snapshot out.png --size 763x760
 | `--headless` | off | run windowless, streaming frames into the store |
 | `--size WxH` | `763x486` | offscreen render size (`--snapshot` / `--headless`) |
 | `--frame-rate <hz>` | `15` | publish rendered frames as HAL `view/frame` readings; 0 disables |
-| `--frame-format <fmt>` | `png` | encoding of published frames |
+| `--frame-format <fmt>` | `png` | encoding of published frames: `png` a `sensor_msgs/CompressedImage`, `raw` a `sensor_msgs/Image` |
 | `--background <rrggbb>` | `000000` | clear color |
 | `--ambient <f>` | `π/2` | three.js-style ambient intensity |
 | `--unlit` | off | render materials unlit (albedo passthrough) |
@@ -186,9 +186,10 @@ and a rising one in the second puts the retention on the ROS 2 path rather than
 the device.
 
 The second is `#[ignore]`d and fails when run: RustDDS retains every large
-sample it publishes, so a face streaming frames over the DDS backend grows by
-several times what it has already delivered ([VIZ-118]). The Zenoh backend does
-not. Run it with `--ignored` to re-measure.
+sample it publishes, so a face streaming frames over the DDS backend grows in
+step with what it has already delivered — 21 MB kept against 20 MB delivered
+over a 20 s window, with the peer reading every frame back ([VIZ-118]). The
+Zenoh backend does not. Run it with `--ignored` to re-measure.
 
 [VIZ-118]: https://linear.app/semio-ai/issue/VIZ-118
 
