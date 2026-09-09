@@ -190,6 +190,25 @@ cmd_pre_commit() {
   log_step "OK"
 }
 
+# A push is a claim about commits, but the checks below run over the working
+# tree. A dirty tree makes their verdict meaningless in both directions: an
+# uncommitted change can fail a sound branch, and an uncommitted fix can pass a
+# broken one. So the tree has to be clean, and saying which files are in the way
+# is more useful than a verdict about code nobody is pushing. Untracked files do
+# not count — nothing compiles a file no tracked file declares, and blocking on
+# a stray scratch file only teaches everyone to reach for SKIP_GIT_HOOKS.
+require_clean_worktree() {
+  local dirty
+  dirty="$(git status --porcelain --untracked-files=no)"
+  if [[ -z "$dirty" ]]; then
+    return 0
+  fi
+  log_step "the working tree carries uncommitted changes, so these checks would not be about the commits being pushed:"
+  printf '%s\n' "$dirty"
+  log_step "commit them, or park them for the push: git stash push -m <why> && git push && git stash pop"
+  return 1
+}
+
 cmd_pre_push() {
   set_label "pre-push"
 
@@ -197,6 +216,8 @@ cmd_pre_push() {
     log_step "SKIP_GIT_HOOKS=1 -> skipping checks"
     return 0
   fi
+
+  require_clean_worktree
 
   rust_fmt_check
   rust_clippy
