@@ -605,7 +605,10 @@ mod tests {
             .iter()
             .position(|id| *id == "rig::input_gaze_x")
             .unwrap();
-        let mapping = ids.iter().position(|id| *id == "ros4hri::in-name").unwrap();
+        let mapping = ids
+            .iter()
+            .position(|id| *id == "ros4hri::in/expression/name")
+            .unwrap();
         let program = ids
             .iter()
             .position(|id| *id == "program::prog.speaks::o")
