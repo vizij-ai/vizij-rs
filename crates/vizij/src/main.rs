@@ -16,6 +16,8 @@ mod animation;
 mod device;
 mod frames;
 mod gaze;
+#[cfg(test)]
+mod memory_tests;
 mod meta;
 #[cfg(all(test, feature = "ros2-dds"))]
 mod ros2_tests;
@@ -97,7 +99,7 @@ struct Cli {
     #[arg(long)]
     no_stage_neutral: bool,
 
-    /// Don't compose the built-in ROS4HRI profile (on by default: the
+    /// Don't compose the built-in ROS4HRI mapping (on by default: the
     /// `standard/ros4hri/*` keys — expression, gaze, action units —
     /// drive the face's standard controls, with idle blink and smoothing).
     #[arg(long)]

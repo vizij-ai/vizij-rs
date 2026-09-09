@@ -1,8 +1,10 @@
-//! The built-in ROS4HRI profile: a composable graph source mapping the
-//! `standard/ros4hri/*` store keys (what a ROS bridge writes from the ROS4HRI
-//! topics) onto the [`crate::standard`] face controls.
+//! The built-in ROS4HRI mapping: a composable graph source implementing the
+//! `ros4hri` profile — the `standard/ros4hri/*` store keys a ROS bridge writes
+//! from the ROS4HRI topics — in terms of the `vizij-face` profile, the
+//! [`crate::standard`] face controls. Both interfaces are declared as data in
+//! [`crate::profile`]; this module is the operation between them.
 //!
-//! The profile is asset-independent by construction — it only writes standard
+//! The mapping is asset-independent by construction — it only writes standard
 //! control paths; what an expression or a viseme *looks like* stays with the
 //! face (its rig and adaptation graphs). Per channel:
 //!
@@ -33,10 +35,10 @@ use serde_json::{json, Value as Json};
 use crate::graph_builder::GraphBuilder;
 use crate::standard::{self, EXPRESSION_NAMES, FACE_CONTROLS};
 
-/// Source id of the composed profile (node ids get `ros4hri::` prefixes).
+/// Source id of the composed mapping (node ids get `ros4hri::` prefixes).
 pub const ROS4HRI_SOURCE_ID: &str = "ros4hri";
 
-/// Prefix of every key the profile consumes.
+/// Prefix of every key the mapping consumes.
 pub const ROS4HRI_PREFIX: &str = "standard/ros4hri";
 
 /// Input keys, as a ROS bridge writes them.
@@ -95,194 +97,234 @@ const HALF_IOD: f64 = 0.03;
 /// The incumbent's gaze normalization: ±0.78 rad maps to ±1.
 const GAZE_RANGE_RAD: f64 = 0.78;
 
-/// `atan(num / den)` via the rational approximation `r / (1 + 0.28 r²)`
-/// (≤1 % error inside the clamped gaze range), normalized by the
-/// incumbent's ±0.78 rad → ±1 and clamped.
-fn gaze_angle(g: &mut GraphBuilder, num: &str, den: &str) -> String {
-    let r = g.div(num, den);
-    let r2 = g.mul(&r, &r);
-    let k = g.constant(0.28);
-    let kr2 = g.mul(&r2, &k);
-    let one = g.constant(1.0);
-    let d = g.add2(&kr2, &one);
-    let atan = g.div(&r, &d);
-    let range = g.constant(GAZE_RANGE_RAD);
-    let norm = g.div(&atan, &range);
-    let lo = g.constant(-1.0);
-    let hi = g.constant(1.0);
-    g.op(
-        "clamp",
-        json!({}),
-        &[("in", &norm), ("min", &lo), ("max", &hi)],
-    )
-}
-
-/// The composable ROS4HRI profile source: the canonical profile asset
-/// ([`PROFILE_JSON`]) with `rig_prefix` applied. The prefix is prepended to
+/// The composable ROS4HRI mapping source: the canonical mapping asset
+/// ([`MAPPING_JSON`]) with `rig_prefix` applied. The prefix is prepended to
 /// every written control path (faces namespace their rig inputs, e.g.
 /// `rig/quori_latest/`); pass `""` for unprefixed controls.
 pub fn ros4hri_source(rig_prefix: &str) -> (String, Json) {
-    let mut spec: Json = serde_json::from_str(PROFILE_JSON).expect("profiles/ros4hri.json parses");
+    let mut spec: Json = serde_json::from_str(MAPPING_JSON).expect("mappings/ros4hri.json parses");
     apply_rig_prefix(&mut spec, rig_prefix);
     (ROS4HRI_SOURCE_ID.to_string(), spec)
 }
 
-/// The canonical profile asset, verbatim: the graph as data. This file is
+/// The canonical mapping asset, verbatim: the graph as data. This file is
 /// what the bundler embeds into GLBs and what the web runtime serves; edit it
-/// by regenerating (`vizij-bundle export-profile ros4hri`) — a test keeps it
+/// by regenerating (`vizij-bundle export-mapping ros4hri`) — a test keeps it
 /// in sync with [`generate`].
-pub const PROFILE_JSON: &str = include_str!("../profiles/ros4hri.json");
+pub const MAPPING_JSON: &str = include_str!("../mappings/ros4hri.json");
 
-/// Regenerate the profile graph from first principles, unprefixed — the
+/// Regenerate the mapping graph from first principles, unprefixed — the
 /// export path behind the canonical asset.
 pub fn generate() -> Json {
     build("").1
 }
 
-/// Prepend `rig_prefix` to every control the profile writes (its `output`
-/// nodes, all standard controls). Input paths — the `standard/ros4hri/*` keys
-/// a bridge writes — are device-global and stay untouched.
+/// Prepend `rig_prefix` to every path the mapping writes (its `output`
+/// nodes) — the face-scoped `vizij-face` profile. Input paths — the
+/// device-scoped `ros4hri` profile a bridge writes — stay untouched.
 pub fn apply_rig_prefix(spec: &mut Json, rig_prefix: &str) {
     standard::prefix_controls(spec, rig_prefix);
 }
 
+/// `atan(num / den)` under `prefix`, via the rational approximation
+/// `r / (1 + 0.28 r²)` (≤1 % error inside the clamped gaze range), normalized
+/// by the incumbent's ±0.78 rad → ±1 and clamped.
+fn gaze_angle(g: &mut GraphBuilder, prefix: &str, num: &str, den: &str) -> String {
+    let id = |step: &str| format!("{prefix}/{step}");
+    let ratio = g.div(&id("ratio"), num, den);
+    let ratio2 = g.mul(&id("ratio2"), &ratio, &ratio);
+    let k = g.constant(0.28);
+    let correction = g.mul(&id("correction"), &ratio2, &k);
+    let one = g.constant(1.0);
+    let denominator = g.add(&id("denominator"), &correction, &one);
+    let atan = g.div(&id("atan"), &ratio, &denominator);
+    let range = g.constant(GAZE_RANGE_RAD);
+    let normalized = g.div(&id("normalized"), &atan, &range);
+    g.clamp(&id("angle"), &normalized, -1.0, 1.0)
+}
+
+/// The mapping, section by section. Node ids are hierarchical — `in/…` the
+/// consumed profile, `out/…` the produced one, and `expression/…`,
+/// `gaze/…`, `au/…`, `blink/…` the channel that computes each
+/// output — so the asset reads by channel and every node says what it holds.
 fn build(rig_prefix: &str) -> (String, Json) {
     let g = &mut GraphBuilder::new();
     let out = |path: String| format!("{rig_prefix}{path}");
-
-    // --- Expression: name one-hot, else valence/arousal circumplex blend ---
-    let name = g.input("in-name", EXPRESSION_NAME_KEY, json!(""));
-    let valence = g.input("in-valence", EXPRESSION_VALENCE_KEY, json!(0.0));
-    let arousal = g.input("in-arousal", EXPRESSION_AROUSAL_KEY, json!(0.0));
+    // Output node ids name the standard control they write, prefix dropped.
+    let out_id = |path: &str| {
+        format!(
+            "out/{}",
+            path.strip_prefix(standard::VIZIJ_PREFIX)
+                .and_then(|p| p.strip_prefix('/'))
+                .unwrap_or(path)
+        )
+    };
 
     let zero = g.constant(0.0);
     let one = g.constant(1.0);
 
-    // 1 when a name is commanded, 0 while the name key is empty.
-    let has_name = g.op(
-        "case",
-        json!({ "case_labels": [""] }),
-        &[("selector", &name), ("operand_0", &zero), ("default", &one)],
-    );
-    let no_name = g.sub(&one, &has_name);
+    // --- Expression: a commanded name one-hots; otherwise valence/arousal
+    // blend the named weights by proximity to each expression's circumplex
+    // anchor. ------------------------------------------------------------
+    let name = g.input("in/expression/name", EXPRESSION_NAME_KEY, json!(""));
+    let valence = g.input("in/expression/valence", EXPRESSION_VALENCE_KEY, json!(0.0));
+    let arousal = g.input("in/expression/arousal", EXPRESSION_AROUSAL_KEY, json!(0.0));
 
-    // Raw circumplex weight per anchor: max(0, 1 − dist² / R²).
-    let radius_sq = g.constant(ANCHOR_RADIUS * ANCHOR_RADIUS);
-    let raw: Vec<String> = EXPRESSION_ANCHORS
+    // The commanded affect as a point (valence, arousal) on the circumplex.
+    let affect = g.op(
+        "expression/affect",
+        "join",
+        json!({}),
+        &[("operand_0", &valence), ("operand_1", &arousal)],
+    );
+    // Dead zone: near-zero affect rests exactly neutral instead of a blend of
+    // every origin-adjacent anchor; commanded affect fades the blend in over
+    // the first 0.15 of circumplex magnitude.
+    let magnitude2 = g.op(
+        "expression/affect/magnitude2",
+        "vectordot",
+        json!({}),
+        &[("a", &affect), ("b", &affect)],
+    );
+    let active = g.remap(
+        "expression/affect/active",
+        &magnitude2,
+        (0.0, 0.15 * 0.15),
+        (0.0, 1.0),
+    );
+    let rest = g.sub("expression/affect/rest", &one, &active);
+
+    // Per anchor, the raw kernel weight max(0, 1 − dist² / R²).
+    let kernels: Vec<String> = EXPRESSION_NAMES
         .iter()
-        .map(|(av, aa)| {
-            let cv = g.constant(*av);
-            let ca = g.constant(*aa);
-            let dv = g.sub(&valence, &cv);
-            let da = g.sub(&arousal, &ca);
-            let dv2 = g.mul(&dv, &dv);
-            let da2 = g.mul(&da, &da);
-            let d2 = g.add2(&dv2, &da2);
-            let frac = g.div(&d2, &radius_sq);
-            let w = g.sub(&one, &frac);
-            g.max2(&w, &zero)
+        .zip(EXPRESSION_ANCHORS)
+        .map(|(expr, (av, aa))| {
+            let id = |step: &str| format!("expression/{expr}/{step}");
+            let anchor = g.vector_constant(&id("anchor"), &[av, aa]);
+            let offset = g.op(
+                &id("offset"),
+                "vectorsubtract",
+                json!({}),
+                &[("a", &affect), ("b", &anchor)],
+            );
+            let distance2 = g.op(
+                &id("distance2"),
+                "vectordot",
+                json!({}),
+                &[("a", &offset), ("b", &offset)],
+            );
+            g.remap(
+                &id("kernel"),
+                &distance2,
+                (0.0, ANCHOR_RADIUS * ANCHOR_RADIUS),
+                (1.0, 0.0),
+            )
         })
         .collect();
     // Normalize so the blend sums to 1 (ε floors the empty-neighborhood case).
     let sum = {
-        let ports: Vec<String> = (0..raw.len()).map(|i| format!("operand_{i}")).collect();
+        let ports: Vec<String> = (0..kernels.len()).map(|i| format!("operand_{i}")).collect();
         let refs: Vec<(&str, &str)> = ports
             .iter()
-            .zip(&raw)
-            .map(|(p, f)| (p.as_str(), f.as_str()))
+            .zip(&kernels)
+            .map(|(p, k)| (p.as_str(), k.as_str()))
             .collect();
-        g.op("add", json!({}), &refs)
+        g.op("expression/kernel/sum", "add", json!({}), &refs)
     };
     let eps = g.constant(1e-6);
-    let denom = g.max2(&sum, &eps);
-
-    // Dead zone: near-zero valence/arousal rests exactly neutral instead of a
-    // blend of every origin-adjacent anchor; commanded affect fades the blend
-    // in over the first 0.15 of circumplex magnitude.
-    let va_active = {
-        let v2 = g.mul(&valence, &valence);
-        let a2 = g.mul(&arousal, &arousal);
-        let mag2 = g.add2(&v2, &a2);
-        let dz2 = g.constant(0.15 * 0.15);
-        let ratio = g.div(&mag2, &dz2);
-        let lo = g.constant(0.0);
-        let hi = g.constant(1.0);
-        g.op(
-            "clamp",
-            json!({}),
-            &[("in", &ratio), ("min", &lo), ("max", &hi)],
-        )
-    };
-    let va_rest = g.sub(&one, &va_active);
+    let denominator = g.max("expression/kernel/denominator", &sum, &eps);
 
     let mut asleep_weight = None;
-    for (i, expr) in EXPRESSION_NAMES.iter().enumerate() {
-        // One-hot from the commanded name.
-        let onehot = g.op(
-            "case",
-            json!({ "case_labels": [expr] }),
-            &[("selector", &name), ("operand_0", &one), ("default", &zero)],
-        );
-        let named = g.mul(&has_name, &onehot);
-        let va_n = g.div(&raw[i], &denom);
-        let va = g.mul(&va_active, &va_n);
-        let va = if *expr == "neutral" {
-            g.add2(&va, &va_rest)
+    for (expr, kernel) in EXPRESSION_NAMES.iter().zip(&kernels) {
+        let id = |step: &str| format!("expression/{expr}/{step}");
+        let share = g.div(&id("share"), kernel, &denominator);
+        let blend = if *expr == "neutral" {
+            // Neutral also absorbs the dead zone's rest share.
+            let affect_blend = g.mul(&id("affect_blend"), &active, &share);
+            g.add(&id("blend"), &affect_blend, &rest)
         } else {
-            va
+            g.mul(&id("blend"), &active, &share)
         };
-        let blended = g.mul(&no_name, &va);
-        let w = g.add2(&named, &blended);
-        let smooth = g.damp(&w, HALF_LIFE);
+        // The commanded name selects: this expression → 1, no name → the
+        // blend, another name → 0.
+        let weight = g.op(
+            &id("weight"),
+            "case",
+            json!({ "case_labels": [expr, ""] }),
+            &[
+                ("selector", &name),
+                ("operand_0", &one),
+                ("operand_1", &blend),
+                ("default", &zero),
+            ],
+        );
+        let smooth = g.damp(&id("smooth"), &weight, HALF_LIFE);
         if *expr == "asleep" {
             asleep_weight = Some(smooth.clone());
         }
-        g.output(&smooth, out(standard::expression_path(expr)));
+        let path = standard::expression_path(expr);
+        g.output(&out_id(&path), &smooth, out(path));
     }
 
     // --- Gaze: target vec3 → per-eye positions with vergence ---------------
     // The resting target sits far ahead so the unverged eyes read straight.
     let target = g.input(
-        "in-gaze",
+        "in/gaze/target",
         GAZE_TARGET_KEY,
         json!({ "x": 10.0, "y": 0.0, "z": 0.0 }),
     );
-    let (c0, c1, c2) = (g.constant(0.0), g.constant(1.0), g.constant(2.0));
-    let gx = g.op("vectorindex", json!({}), &[("v", &target), ("index", &c0)]);
-    let gy = g.op("vectorindex", json!({}), &[("v", &target), ("index", &c1)]);
-    let gz = g.op("vectorindex", json!({}), &[("v", &target), ("index", &c2)]);
+    let axis = |g: &mut GraphBuilder, name: &str, index: f64| {
+        let index = g.constant(index);
+        g.op(
+            &format!("gaze/{name}"),
+            "vectorindex",
+            json!({}),
+            &[("v", &target), ("index", &index)],
+        )
+    };
+    let gx = axis(g, "x", 0.0);
+    let gy = axis(g, "y", 1.0);
+    let gz = axis(g, "z", 2.0);
 
     // Targets at or behind the face plane recenter the eyes (the incumbent
     // drops them; a pure graph cannot hold the previous pose, so it holds
     // center — a noted deviation).
     let min_x = g.constant(0.1);
-    let valid = g.op("greaterthan", json!({}), &[("lhs", &gx), ("rhs", &min_x)]);
+    let valid = g.op(
+        "gaze/valid",
+        "greaterthan",
+        json!({}),
+        &[("lhs", &gx), ("rhs", &min_x)],
+    );
 
     let iod = g.constant(HALF_IOD);
-    let y_left = g.add2(&gy, &iod);
-    let y_right = g.sub(&gy, &iod);
-    let yaw_l = gaze_angle(g, &y_left, &gx);
-    let yaw_r = gaze_angle(g, &y_right, &gx);
-    let pitch = gaze_angle(g, &gz, &gx);
+    let y_left = g.add("gaze/left/y", &gy, &iod);
+    let y_right = g.sub("gaze/right/y", &gy, &iod);
+    let yaw_left = gaze_angle(g, "gaze/left/yaw", &y_left, &gx);
+    let yaw_right = gaze_angle(g, "gaze/right/yaw", &y_right, &gx);
+    let pitch = gaze_angle(g, "gaze/pitch", &gz, &gx);
 
-    for (angle, path_x, path_y) in [
-        (&yaw_l, standard::LEFT_EYE_POS_X, standard::LEFT_EYE_POS_Y),
-        (&yaw_r, standard::RIGHT_EYE_POS_X, standard::RIGHT_EYE_POS_Y),
+    for (eye, yaw, path_x, path_y) in [
+        (
+            "left",
+            &yaw_left,
+            standard::LEFT_EYE_POS_X,
+            standard::LEFT_EYE_POS_Y,
+        ),
+        (
+            "right",
+            &yaw_right,
+            standard::RIGHT_EYE_POS_X,
+            standard::RIGHT_EYE_POS_Y,
+        ),
     ] {
-        let gated_x = g.op(
-            "if",
-            json!({}),
-            &[("cond", &valid), ("then", angle), ("else", &zero)],
-        );
-        let gated_y = g.op(
-            "if",
-            json!({}),
-            &[("cond", &valid), ("then", &pitch), ("else", &zero)],
-        );
-        let sx = g.damp(&gated_x, HALF_LIFE);
-        let sy = g.damp(&gated_y, HALF_LIFE);
-        g.output(&sx, out(path_x.to_string()));
-        g.output(&sy, out(path_y.to_string()));
+        let id = |step: &str| format!("gaze/{eye}/{step}");
+        let gated_x = g.select(&id("x/gated"), &valid, yaw, &zero);
+        let gated_y = g.select(&id("y/gated"), &valid, &pitch, &zero);
+        let smooth_x = g.damp(&id("x/smooth"), &gated_x, HALF_LIFE);
+        let smooth_y = g.damp(&id("y/smooth"), &gated_y, HALF_LIFE);
+        g.output(&out_id(path_x), &smooth_x, out(path_x.to_string()));
+        g.output(&out_id(path_y), &smooth_y, out(path_y.to_string()));
     }
 
     // --- Action units → muscle-tier controls -------------------------------
@@ -291,67 +333,77 @@ fn build(rig_prefix: &str) -> (String, Json) {
     au_codes.dedup();
     let mut eyes_closed = String::new();
     for code in au_codes {
-        let input_id = format!("in-au-{code}");
-        let raw = g.input(&input_id, &au_key(code), json!(0.0));
-        let smooth = g.damp(&raw, HALF_LIFE);
+        let raw = g.input(&format!("in/au/{code}"), &au_key(code), json!(0.0));
+        let smooth = g.damp(&format!("au/{code}/smooth"), &raw, HALF_LIFE);
         if code == 43 {
             eyes_closed = smooth.clone();
         }
         for control in standard::controls_for_au(code) {
-            g.output(&smooth, out(standard::face_path(control.name)));
+            let path = standard::face_path(control.name);
+            g.output(&out_id(&path), &smooth, out(path));
         }
         // Jaw-open also drives the de-facto mouth control every current face
         // implements, so the AU channel moves faces without a muscle tier.
         if code == 26 {
-            g.output(
-                &smooth,
-                out("standard/vizij/mouth/morph/jaw_open".to_string()),
-            );
+            let path = "standard/vizij/mouth/morph/jaw_open".to_string();
+            g.output(&out_id(&path), &smooth, out(path));
         }
     }
 
     // --- Blink: jittered idle pulse, inhibited when lids are commanded -----
-    let t = g.node("blink-time", "time", json!({}));
+    let t = g.node("blink/time", "time", json!({}));
     let period = g.constant(BLINK_PERIOD);
-    let cycle = g.div(&t, &period);
-    let cycle_floor = g.op("round", json!({ "round_mode": "floor" }), &[("in", &cycle)]);
+    let cycle = g.div("blink/cycle", &t, &period);
+    let cycle_index = g.op(
+        "blink/cycle/index",
+        "round",
+        json!({ "round_mode": "floor" }),
+        &[("in", &cycle)],
+    );
     // Deterministic per-cycle jitter shifts the blink ±2 s within its cycle.
     let jitter = g.op(
+        "blink/jitter",
         "simplenoise",
         json!({ "noise_seed": 7.0, "frequency": 1.0, "octaves": 1.0 }),
-        &[("x", &cycle_floor), ("y", &zero)],
+        &[("x", &cycle_index), ("y", &zero)],
     );
     let two = g.constant(2.0);
-    let shift = g.mul(&jitter, &two);
-    let shifted = g.add2(&t, &shift);
-    let phase = g.op("modulo", json!({}), &[("lhs", &shifted), ("rhs", &period)]);
+    let shift = g.mul("blink/shift", &jitter, &two);
+    let shifted = g.add("blink/shifted_time", &t, &shift);
+    let phase = g.op(
+        "blink/phase",
+        "modulo",
+        json!({}),
+        &[("lhs", &shifted), ("rhs", &period)],
+    );
     // Parabolic pulse 4u(1−u) over the first BLINK_WIDTH seconds of the cycle.
     let width = g.constant(BLINK_WIDTH);
-    let u = g.div(&phase, &width);
+    let progress = g.div("blink/progress", &phase, &width);
     let four = g.constant(4.0);
-    let a = g.mul(&four, &u);
-    let b = g.sub(&one, &u);
-    let parabola = g.mul(&a, &b);
-    let in_window = g.op("lessthan", json!({}), &[("lhs", &u), ("rhs", &one)]);
-    let pulse = g.op(
-        "if",
+    let rise = g.mul("blink/pulse/rise", &four, &progress);
+    let fall = g.sub("blink/pulse/fall", &one, &progress);
+    let parabola = g.mul("blink/pulse/parabola", &rise, &fall);
+    let in_window = g.op(
+        "blink/pulse/in_window",
+        "lessthan",
         json!({}),
-        &[("cond", &in_window), ("then", &parabola), ("else", &zero)],
+        &[("lhs", &progress), ("rhs", &one)],
     );
-    let pulse = g.op(
-        "clamp",
-        json!({}),
-        &[("in", &pulse), ("min", &zero), ("max", &one)],
-    );
+    let gated = g.select("blink/pulse/gated", &in_window, &parabola, &zero);
+    let pulse = g.clamp("blink/pulse", &gated, 0.0, 1.0);
     // Inhibit while the eyes are commanded closed or the face is asleep.
     let asleep = asleep_weight.expect("asleep is in EXPRESSION_NAMES");
-    let commanded = g.max2(&eyes_closed, &asleep);
-    let open_share = g.sub(&one, &commanded);
-    let blink = g.mul(&pulse, &open_share);
+    let commanded = g.max("blink/commanded", &eyes_closed, &asleep);
+    let open_share = g.sub("blink/open_share", &one, &commanded);
+    let idle = g.mul("blink/idle", &pulse, &open_share);
     // Lids follow the strongest closer: the blink pulse or the commanded close.
-    let lid = g.max2(&blink, &commanded);
-    g.output(&lid, out(standard::LEFT_EYE_TOP_EYELID_POS_Y.to_string()));
-    g.output(&lid, out(standard::RIGHT_EYE_TOP_EYELID_POS_Y.to_string()));
+    let lid = g.max("blink/lid", &idle, &commanded);
+    for path in [
+        standard::LEFT_EYE_TOP_EYELID_POS_Y,
+        standard::RIGHT_EYE_TOP_EYELID_POS_Y,
+    ] {
+        g.output(&out_id(path), &lid, out(path.to_string()));
+    }
 
     (
         ROS4HRI_SOURCE_ID.to_string(),
@@ -368,13 +420,13 @@ mod tests {
     }
 
     /// The committed asset must equal what the generator produces — otherwise
-    /// `export-profile` was not re-run after editing the builder, and the file
+    /// `export-mapping` was not re-run after editing the builder, and the file
     /// the bundler and web runtime serve is stale. Regenerate with
-    /// `vizij-bundle export-profile ros4hri -o crates/interop/vizij-arora-host/profiles/ros4hri.json`.
+    /// `vizij-bundle export-mapping ros4hri -o crates/interop/vizij-arora-host/mappings/ros4hri.json`.
     #[test]
     fn committed_asset_matches_the_generator() {
-        let committed: Json = serde_json::from_str(PROFILE_JSON).expect("asset parses");
-        assert_eq!(committed, generate(), "profiles/ros4hri.json is stale");
+        let committed: Json = serde_json::from_str(MAPPING_JSON).expect("asset parses");
+        assert_eq!(committed, generate(), "mappings/ros4hri.json is stale");
     }
 
     #[test]

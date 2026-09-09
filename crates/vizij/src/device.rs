@@ -79,7 +79,7 @@ pub struct FaceConfig {
     pub program: ProgramSelect,
     /// Stage the bundle's neutral inputs into the store at boot.
     pub stage_neutral: bool,
-    /// Compose the built-in ROS4HRI profile (`standard/ros4hri/*` keys drive
+    /// Compose the built-in ROS4HRI mapping (`standard/ros4hri/*` keys drive
     /// the face's standard controls). On by default in the binary, opt-out
     /// via `--no-ros4hri`.
     pub ros4hri: bool,
@@ -221,12 +221,12 @@ pub fn load_face(glb: &Path, config: &FaceConfig) -> Result<(String, FaceMeta, S
         .with_context(|| format!("cannot resolve {}", glb.display()))?;
     let meta = FaceMeta::from_glb_file(&canonical)?;
     let wanted: Vec<&str> = config.wanted.iter().map(String::as_str).collect();
-    // The standard profiles this face composes: ROS4HRI unless opted out. The
-    // profile writes the face's namespaced standard controls, so it takes the
+    // The standard mappings this face composes: ROS4HRI unless opted out. The
+    // mapping writes the face's namespaced standard controls, so it takes the
     // bundle's rig prefix.
-    let mut profiles = Vec::new();
+    let mut mappings = Vec::new();
     if config.ros4hri {
-        profiles.push(vizij_arora_host::ros4hri::ros4hri_source(
+        mappings.push(vizij_arora_host::ros4hri::ros4hri_source(
             &meta.bundle.rig_prefix(),
         ));
     }
@@ -235,7 +235,7 @@ pub fn load_face(glb: &Path, config: &FaceConfig) -> Result<(String, FaceMeta, S
     // composed — inert until a clip plays.
     let spec = meta
         .bundle
-        .compose(&wanted, &config.program, true, &profiles)?
+        .compose(&wanted, &config.program, true, &mappings)?
         .to_string();
     parse_spec(&spec).map_err(|e| anyhow!("composed spec does not parse: {e}"))?;
     Ok((canonical.to_string_lossy().into_owned(), meta, spec))
@@ -889,15 +889,15 @@ mod tests {
     use vizij_arora_host::ros4hri::{self, ros4hri_source};
     use vizij_arora_host::standard;
 
-    /// A device running only the ROS4HRI profile (unprefixed controls) — the
-    /// headless harness for the profile's mapping math: stage `standard/
+    /// A device running only the ROS4HRI mapping (unprefixed controls) — the
+    /// headless harness for the mapping's math: stage `standard/
     /// ros4hri/*` keys, tick, read `standard/vizij/*` controls back.
     fn ros4hri_device() -> arora::Arora {
         let spec = compose_sources(&[ros4hri_source("")])
-            .expect("compose the ros4hri profile")
+            .expect("compose the ros4hri mapping")
             .to_string();
         builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[])
-            .expect("build the device over the profile")
+            .expect("build the device over the mapping")
             .build()
             .expect("build arora")
     }
@@ -928,12 +928,12 @@ mod tests {
     }
 
     /// A face that embeds its own modified `ros4hri` copy runs that copy
-    /// INSTEAD of the built-in — VIZ-92's precedence: an embedded profile is
+    /// INSTEAD of the built-in — VIZ-92's precedence: an embedded mapping is
     /// the author's pinned override of the shipped mapping. The embedded graph
     /// here maps valence verbatim onto the happy weight (no smoothing, no
     /// blending, name ignored), which the built-in never produces.
     #[test]
-    fn embedded_profile_wins_over_the_built_in() {
+    fn embedded_mapping_wins_over_the_built_in() {
         let bundle = vizij_arora_host::Bundle::from_bundle_json(&serde_json::json!({
             "graphs": [{
                 "id": "standard::ros4hri",
@@ -958,7 +958,7 @@ mod tests {
                 false,
                 &[ros4hri_source("")],
             )
-            .expect("compose the face with its embedded profile")
+            .expect("compose the face with its embedded mapping")
             .to_string();
         let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[])
             .expect("build the device over the composed face")
@@ -977,7 +977,7 @@ mod tests {
     }
 
     #[test]
-    fn ros4hri_profile_rests_neutral() {
+    fn ros4hri_mapping_rests_neutral() {
         let mut arora = ros4hri_device();
         settle(&mut arora);
         assert!(read_f32(&arora, &standard::expression_path("neutral")) > 0.95);
@@ -1315,7 +1315,7 @@ mod tests {
 
     /// End-to-end over the real demo face: graft Quori's standard-adaptation
     /// sidecar into `Quori_Current_Extended.glb` with the bundler, compose the
-    /// ROS4HRI profile, and drive the ROS4HRI keys through to Quori's pose
+    /// ROS4HRI mapping, and drive the ROS4HRI keys through to Quori's pose
     /// plane. Needs the GLB: set `VIZIJ_FIXTURES` to a directory holding it
     /// (the snapshot-regression convention); skipped otherwise.
     #[test]
@@ -1349,7 +1349,7 @@ mod tests {
         std::fs::write(&path, &adapted).expect("write the adapted GLB");
 
         // Compose like the binary's defaults: standard graphs + the ROS4HRI
-        // profile, no autoplay (the idle program would contend on gaze paths).
+        // mapping, no autoplay (the idle program would contend on gaze paths).
         let config = FaceConfig {
             wanted: ["rig", "pose-driver", "pose", "standard-adaptation"]
                 .map(String::from)
@@ -1370,7 +1370,7 @@ mod tests {
         stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("happy"));
         settle(&mut arora);
         let waist = read_f32(&arora, "rig/quori_latest/standard/vizij/expression/happy");
-        assert!(waist > 0.95, "profile output missing (happy = {waist})");
+        assert!(waist > 0.95, "mapping output missing (happy = {waist})");
         let pose = read_f32(&arora, "rig/quori_latest/poses/pose_d_happy_d.weight");
         assert!(pose > 0.95, "adaptation output missing (pose = {pose})");
 

@@ -373,26 +373,58 @@ fn normalize_values_map_str(values_json: &str) -> Result<String, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("serialize values: {e}")))
 }
 
-/// The standard profiles Vizij ships (ROS4HRI, …) as a JS array of
+/// The standard mappings Vizij ships (ROS4HRI, …) as a JS array of
 /// `{ id, title, description }` — the introspectable list an authoring app
-/// offers for opt-in.
-#[wasm_bindgen(js_name = standardProfiles)]
-pub fn standard_profiles() -> Result<JsValue, JsValue> {
-    let list = vizij_arora_host::profiles::standard_profiles_json();
+/// offers for opt-in. A *mapping* is a graph that implements one profile in
+/// terms of another; the profiles themselves are listed by [`profiles`].
+#[wasm_bindgen(js_name = mappings)]
+pub fn mappings() -> Result<JsValue, JsValue> {
+    let list = vizij_arora_host::mappings::standard_mappings_json();
+    let json =
+        serde_json::to_string(&list).map_err(|e| JsValue::from_str(&format!("mappings: {e}")))?;
+    js_sys::JSON::parse(&json)
+}
+
+/// A standard mapping's graph as a JS object, ready to compose or embed —
+/// its written control paths prefixed with `rig_prefix` (e.g.
+/// `rig/quori_latest/`; empty for the unprefixed graph). `null` for an
+/// unknown id (see [`mappings`]).
+#[wasm_bindgen(js_name = mapping)]
+pub fn mapping(id: &str, rig_prefix: &str) -> Result<JsValue, JsValue> {
+    match vizij_arora_host::mappings::standard_mapping_source(id, rig_prefix) {
+        Some((_, spec)) => {
+            let json = serde_json::to_string(&spec)
+                .map_err(|e| JsValue::from_str(&format!("mapping {id}: {e}")))?;
+            js_sys::JSON::parse(&json)
+        }
+        None => Ok(JsValue::NULL),
+    }
+}
+
+/// The profiles Vizij ships as a JS array of `{ id, version, title,
+/// description, scope, keys }` — where a *profile* is an interface: the set
+/// of store paths and their types one party exposes to another. The
+/// introspectable list an authoring app's import picker offers.
+#[wasm_bindgen(js_name = profiles)]
+pub fn profiles() -> Result<JsValue, JsValue> {
+    let list = vizij_arora_host::profile::profiles_json();
     let json =
         serde_json::to_string(&list).map_err(|e| JsValue::from_str(&format!("profiles: {e}")))?;
     js_sys::JSON::parse(&json)
 }
 
-/// A standard profile's graph as a JS object, ready to compose or embed —
-/// with `rigPrefix` (e.g. `rig/quori_latest/`) prepended to the control paths
-/// it writes; pass an empty string for the unprefixed graph. `null` for an
-/// unknown id (see [`standard_profiles`]).
-#[wasm_bindgen(js_name = standardProfile)]
-pub fn standard_profile(id: &str, rig_prefix: &str) -> Result<JsValue, JsValue> {
-    match vizij_arora_host::profiles::standard_profile_source(id, rig_prefix) {
-        Some((_, spec)) => {
-            let json = serde_json::to_string(&spec)
+/// One shipped profile in full — every path it declares, with its type,
+/// range, default, and standard metadata. `null` for an unknown id (see
+/// [`profiles`]).
+///
+/// `rig_prefix` (e.g. `rig/quori_latest/`) addresses a face-scoped profile
+/// to one face's store; a device-scoped profile is returned as is, whatever
+/// the prefix. Pass an empty string for the portable form the registry ships.
+#[wasm_bindgen(js_name = profile)]
+pub fn profile(id: &str, rig_prefix: &str) -> Result<JsValue, JsValue> {
+    match vizij_arora_host::profile::profile(id) {
+        Some(declared) => {
+            let json = serde_json::to_string(&declared.with_rig_prefix(rig_prefix))
                 .map_err(|e| JsValue::from_str(&format!("profile {id}: {e}")))?;
             js_sys::JSON::parse(&json)
         }
@@ -414,7 +446,7 @@ pub fn skills() -> Result<JsValue, JsValue> {
 /// A skill's canonical fragment graph as a JS object, ready to embed as the
 /// face's `skill::<id>` override. Face-independent by construction (its
 /// placeholder `task/*` paths are rewritten per run at graft time), so unlike
-/// a profile it takes no rig prefix. `null` for an unknown id (see
+/// a mapping it takes no rig prefix. `null` for an unknown id (see
 /// [`skills`]).
 #[wasm_bindgen(js_name = skillSource)]
 pub fn skill_source(id: &str) -> Result<JsValue, JsValue> {
@@ -430,8 +462,8 @@ pub fn skill_source(id: &str) -> Result<JsValue, JsValue> {
 
 /// The composed behavior graph of a face bundle — the composition the native
 /// `vizij` app deploys: the bundle's base graphs, its embedded standard
-/// profiles (each suppressing the built-in of the same id — an embedded copy
-/// is the author's pinned override), the built-in ROS4HRI profile unless
+/// mappings (each suppressing the built-in of the same id — an embedded copy
+/// is the author's pinned override), the built-in ROS4HRI mapping unless
 /// opted out, then the selected program. The returned spec is ready for
 /// [`startRuntime`]'s graph slot or [`loadGraph`](VizijArora::load_graph),
 /// so an exported GLB can be deployed and verified without the native app.
@@ -441,7 +473,7 @@ pub fn skill_source(id: &str) -> Result<JsValue, JsValue> {
 /// - `graphs`: base kinds to compose — default `rig`, `pose-driver`, `pose`,
 ///   `standard-adaptation` (the native default);
 /// - `program`: `"auto"` (default), `"none"`, or a program id;
-/// - `ros4hri`: offer the built-in ROS4HRI profile — default `true`;
+/// - `ros4hri`: compose the built-in ROS4HRI mapping — default `true`;
 /// - `animations`: compose the animation source — default `false`, because it
 ///   dispatches to the animation module and belongs only in a device that
 ///   loads that module.
@@ -475,13 +507,13 @@ pub fn compose_face(gltf_json: &str, options_json: Option<String>) -> Result<JsV
         Some("none") => ProgramSelect::None,
         Some(id) => ProgramSelect::Id(id.to_string()),
     };
-    let mut profiles = Vec::new();
+    let mut mappings = Vec::new();
     if options
         .get("ros4hri")
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(true)
     {
-        profiles.push(ros4hri::ros4hri_source(&bundle.rig_prefix()));
+        mappings.push(ros4hri::ros4hri_source(&bundle.rig_prefix()));
     }
     let with_animations = options
         .get("animations")
@@ -489,7 +521,7 @@ pub fn compose_face(gltf_json: &str, options_json: Option<String>) -> Result<JsV
         .unwrap_or(false);
 
     let spec = bundle
-        .compose(&wanted, &program, with_animations, &profiles)
+        .compose(&wanted, &program, with_animations, &mappings)
         .map_err(|e| JsValue::from_str(&format!("compose: {e}")))?;
     let json = serde_json::to_string(&spec)
         .map_err(|e| JsValue::from_str(&format!("composed spec: {e}")))?;

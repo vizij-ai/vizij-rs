@@ -21,7 +21,7 @@ A window opens with the face — alive, not a picture. By default the app:
 - exposes the **[face standard](docs/face-standard.md)** vocabulary: write a
   `standard/vizij/*` control (gaze, expressions, visemes, FACS muscles) and the
   face performs it, whatever its rig;
-- composes the **[ROS4HRI](docs/ros4hri.md) profile**, so the face understands
+- composes the **[ROS4HRI](docs/ros4hri.md) mapping**, so the face understands
   the ROS4HRI face vocabulary out of the box (`--no-ros4hri` opts out);
 - registers the **`say` speech skill** — text-to-speech with the lips driven
   from the visemes it streams; by default the AWS-backed cloud provider (zero
@@ -100,7 +100,7 @@ your own AWS-backed deployment, and where text enters — is in
 | Show a face on a desktop, kiosk, or Android tablet | **[vizij-standalone](https://github.com/vizij-ai/vizij-web/tree/main/apps/vizij-standalone)** (vizij-web) |
 | Embed a live face in my own web app | [`@vizij/runtime`](npm/@vizij/runtime/README.md) (the browser device) + the React packages in [vizij-web](https://github.com/vizij-ai/vizij-web) |
 | Pilot faces from [Semio Studio](https://studio.semio.ai) | the `--studio` flag ([app README](crates/vizij/README.md)) or the standalone's studio-bridge build |
-| Pack, validate, or embed profiles into face assets | [`vizij-bundle`](crates/tools/vizij-bundle/README.md) |
+| Pack, validate, or embed profiles and mappings into face assets | [`vizij-bundle`](crates/tools/vizij-bundle/README.md) — the model: [profiles and mappings](docs/profiles-and-mappings.md) |
 | Use the animation or node-graph engine on its own | [vizij-animation-core](crates/animation/vizij-animation-core/README.md) / [vizij-graph-core](crates/node-graph/vizij-graph-core/README.md), or their [npm wrappers](#domain-stacks) |
 
 The rest of this README covers developing in the workspace itself.
@@ -343,11 +343,11 @@ vizij-rs/
 │  │  ├─ vizij-arora-store         # Vizij Blackboard exposed as an Arora DataStore
 │  │  ├─ vizij-arora-hal           # Vizij rig presented as an Arora HAL
 │  │  ├─ vizij-arora-behavior      # Vizij node graph as an Arora behavior interpreter
-│  │  ├─ vizij-arora-host          # Bundle composition, face standard & ROS4HRI profile, skills
+│  │  ├─ vizij-arora-host          # Bundle composition, face standard, profiles & mappings (ROS4HRI), skills
 │  │  ├─ vizij-arora-web           # Browser wasm cdylib: Vizij runtime as an Arora device
 │  │  └─ vizij-animation-module    # vizij-animation-core packaged as an Arora wasm module
 │  ├─ tools/
-│  │  └─ vizij-bundle              # Face-GLB bundle tool: inspect/pack/validate, embed standard profiles
+│  │  └─ vizij-bundle              # Face-GLB bundle tool: inspect/pack/validate, declare profiles, embed mappings
 │  ├─ vizij                        # The native app: cargo run shows a face, running an arora
 │  └─ test-fixtures/
 │     └─ vizij-test-fixtures       # Loads JSON fixtures referenced across stacks
@@ -394,7 +394,7 @@ The `crates/interop/*` family adapts the Vizij stacks onto Arora runtime seams s
 | `vizij-arora-store`      | Vizij Blackboard exposed as an Arora `DataStore`.                      | — |
 | `vizij-arora-hal`        | Vizij rig presented as an Arora HAL.                                   | — |
 | `vizij-arora-behavior`   | Vizij node graph driven as an Arora behavior interpreter.              | — |
-| `vizij-arora-host`       | Composes a face's bundle graphs; hosts the [face standard](docs/face-standard.md) vocabulary, the [ROS4HRI](docs/ros4hri.md) profile, and the skills registry. | — |
+| `vizij-arora-host`       | Composes a face's bundle graphs; hosts the [face standard](docs/face-standard.md) vocabulary, the [profiles and mappings](docs/profiles-and-mappings.md) registries (incl. [ROS4HRI](docs/ros4hri.md)), and the skills registry. | — |
 | `vizij-arora-web`        | Browser wasm cdylib composing a Vizij runtime as an Arora device.      | `@vizij/runtime` |
 | `vizij-animation-module` | `vizij-animation-core` packaged as an Arora wasm module.               | `@vizij/animation-module` |
 

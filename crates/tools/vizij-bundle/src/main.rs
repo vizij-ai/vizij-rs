@@ -9,26 +9,35 @@
 //! - `add-graph <glb> --graph <spec.json> --kind <kind> --id <id> -o <out.glb>`
 //!   — graft one graph (e.g. a face's `standard-adaptation`) into the bundle,
 //!   replacing any entry with the same id.
-//! - `add-standard <glb> --standard <profile> -o <out.glb>` — embed a shipped
-//!   standard profile (see `profiles`) into the face: the profile's control
+//! - `add-standard <glb> --standard <mapping> -o <out.glb>` — embed a shipped
+//!   standard mapping (see `mappings`) into the face: the mapping's control
 //!   paths get the face's rig prefix, and re-adding replaces, so the embedded
 //!   copy is updatable.
+//! - `add-profile <glb> --profile <id> -o <out.glb>` — declare a shipped
+//!   profile on the face: the interface its graphs are authored against.
 //! - `validate <glb>` — standard-coverage report (tiers, level, missing
 //!   paths) as JSON; exits 1 below `--min-level`.
-//! - `profiles` — list the standard profiles Vizij ships, as JSON.
-//! - `export-profile <profile> [-o <file.json>]` — regenerate a profile's
-//!   canonical asset from its generator (stdout without `-o`).
+//! - `profiles` / `export-profile <id> [-o <file.json>]` — list the profiles
+//!   Vizij ships / regenerate one's canonical asset from its generator.
+//! - `mappings` / `export-mapping <id> [-o <file.json>]` — the same for the
+//!   standard mappings.
+//! - `surface <graph.json> --side <input|output> [--scope <device|face>]
+//!   --id <id>` — lift the profile a mapping graph consumes or produces.
+//! - `export-skill <skill> [-o <file.json>]` — regenerate a skill fragment.
+//!
+//! Every export writes to stdout without `-o`.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::{anyhow, bail, Context, Result};
-use vizij_arora_host::{profiles, ros4hri, skills};
+use vizij_arora_host::profile::{Scope, Side};
+use vizij_arora_host::{mappings, profile, skills};
 
 struct Args {
     command: String,
-    /// The positional argument: a GLB path, or a profile id for
-    /// `export-profile`.
+    /// The positional argument: a GLB path, a graph spec path, or a registry
+    /// id for the export commands.
     target: Option<String>,
     output: Option<PathBuf>,
     bundle: Option<PathBuf>,
@@ -36,6 +45,9 @@ struct Args {
     kind: Option<String>,
     id: Option<String>,
     standard: Option<String>,
+    profile: Option<String>,
+    side: Side,
+    scope: Scope,
     min_level: u8,
 }
 
@@ -44,10 +56,14 @@ const USAGE: &str = "usage: vizij-bundle <command> …
   unpack         <face.glb> -o <bundle.json>
   pack           <face.glb> --bundle <bundle.json> -o <out.glb>
   add-graph      <face.glb> --graph <spec.json> --kind <kind> --id <id> -o <out.glb>
-  add-standard   <face.glb> --standard <profile> -o <out.glb>
+  add-standard   <face.glb> --standard <mapping> -o <out.glb>
+  add-profile    <face.glb> --profile <id> -o <out.glb>
   validate       <face.glb> [--min-level <0-3>]
   profiles
   export-profile <profile> [-o <file.json>]
+  mappings
+  export-mapping <mapping> [-o <file.json>]
+  surface        <graph.json> --side <input|output> [--scope <device|face>] --id <id> [-o <file.json>]
   export-skill   <skill>   [-o <file.json>]";
 
 fn parse_args() -> Result<Args> {
@@ -60,6 +76,9 @@ fn parse_args() -> Result<Args> {
     let mut kind = None;
     let mut id = None;
     let mut standard = None;
+    let mut profile = None;
+    let mut side = Side::Input;
+    let mut scope = Scope::Device;
     let mut min_level = 0;
     while let Some(arg) = args.next() {
         let mut value = |name: &str| {
@@ -73,6 +92,19 @@ fn parse_args() -> Result<Args> {
             "--kind" => kind = Some(value("--kind")?),
             "--id" => id = Some(value("--id")?),
             "--standard" => standard = Some(value("--standard")?),
+            "--profile" => profile = Some(value("--profile")?),
+            "--side" => {
+                side = value("--side")?
+                    .parse()
+                    .map_err(|e| anyhow!("--side {e}"))?
+            }
+            "--scope" => {
+                scope = match value("--scope")?.as_str() {
+                    "device" => Scope::Device,
+                    "face" => Scope::Face,
+                    other => bail!("--scope expects device or face, got {other}"),
+                }
+            }
             "--min-level" => min_level = value("--min-level")?.parse().context("--min-level")?,
             "-h" | "--help" => bail!("{USAGE}"),
             _ if target.is_none() => target = Some(arg),
@@ -88,61 +120,77 @@ fn parse_args() -> Result<Args> {
         kind,
         id,
         standard,
+        profile,
+        side,
+        scope,
         min_level,
     })
 }
 
+/// Write a JSON payload to `output`, or to stdout when it is absent — the
+/// shape every export command shares.
+fn emit(payload: &serde_json::Value, output: &Option<PathBuf>) -> Result<()> {
+    let text = vizij_bundle::to_sidecar(payload)?;
+    match output {
+        Some(path) => {
+            std::fs::write(path, text).with_context(|| format!("write {}", path.display()))?
+        }
+        None => print!("{text}"),
+    }
+    Ok(())
+}
+
 /// The commands that work on shipped assets rather than a GLB.
 fn run_assets(args: &Args) -> Result<Option<ExitCode>> {
+    let target = |what: &str| {
+        args.target
+            .as_deref()
+            .ok_or_else(|| anyhow!("{} needs {what}\n{USAGE}", args.command))
+    };
     match args.command.as_str() {
-        "profiles" => {
-            println!(
-                "{}",
-                vizij_bundle::to_sidecar(&profiles::standard_profiles_json())?
-            );
-            Ok(Some(ExitCode::SUCCESS))
-        }
+        "profiles" => emit(&profile::profiles_json(), &None)?,
+        "mappings" => emit(&mappings::standard_mappings_json(), &None)?,
+        // Regenerate from the registry's generator: this is how a committed
+        // asset is refreshed when the code behind it moves, and the drift
+        // test then holds the two equal.
         "export-profile" => {
-            let id = args
-                .target
-                .as_deref()
-                .ok_or_else(|| anyhow!("export-profile needs a profile id\n{USAGE}"))?;
-            profiles::standard_profile(id)
+            let id = target("a profile id")?;
+            let entry = profile::shipped(id)
                 .ok_or_else(|| anyhow!("unknown profile {id} (see `vizij-bundle profiles`)"))?;
-            // One generator today; the registry keys which one to run.
-            let spec = match id {
-                "ros4hri" => ros4hri::generate(),
-                _ => unreachable!("registered profiles have generators"),
-            };
-            let text = vizij_bundle::to_sidecar(&spec)?;
-            match &args.output {
-                Some(path) => std::fs::write(path, text)
-                    .with_context(|| format!("write {}", path.display()))?,
-                None => print!("{text}"),
-            }
-            Ok(Some(ExitCode::SUCCESS))
+            emit(&serde_json::to_value((entry.generate)())?, &args.output)?;
+        }
+        "export-mapping" => {
+            let id = target("a mapping id")?;
+            let entry = mappings::standard_mapping(id)
+                .ok_or_else(|| anyhow!("unknown mapping {id} (see `vizij-bundle mappings`)"))?;
+            emit(&(entry.generate)(), &args.output)?;
         }
         "export-skill" => {
-            let id = args
-                .target
-                .as_deref()
-                .ok_or_else(|| anyhow!("export-skill needs a skill id\n{USAGE}"))?;
+            let id = target("a skill id")?;
             let spec = match id {
                 "look_at" => skills::generate_look_at(),
                 "play_viseme" => skills::generate_play_viseme(),
                 "say" => skills::generate_say(),
-                _ => return Err(anyhow!("unknown skill {id}")),
+                _ => bail!("unknown skill {id}"),
             };
-            let text = vizij_bundle::to_sidecar(&spec)?;
-            match &args.output {
-                Some(path) => std::fs::write(path, text)
-                    .with_context(|| format!("write {}", path.display()))?,
-                None => print!("{text}"),
-            }
-            Ok(Some(ExitCode::SUCCESS))
+            emit(&spec, &args.output)?;
         }
-        _ => Ok(None),
+        // A mapping graph already names both profiles it touches: its `input`
+        // nodes are the interface it consumes, its `output` nodes the one it
+        // produces. Lifting either side out is how an existing mapping is
+        // reconciled against a declared profile.
+        "surface" => {
+            let path = target("a graph spec path")?;
+            let text = std::fs::read_to_string(path).with_context(|| format!("read {path}"))?;
+            let spec: serde_json::Value =
+                serde_json::from_str(&text).with_context(|| format!("parse {path}"))?;
+            let id = args.id.as_deref().unwrap_or("surface");
+            let lifted = profile::surface(&spec, args.side, id, args.scope);
+            emit(&serde_json::to_value(&lifted)?, &args.output)?;
+        }
+        _ => return Ok(None),
     }
+    Ok(Some(ExitCode::SUCCESS))
 }
 
 fn run() -> Result<ExitCode> {
@@ -160,12 +208,7 @@ fn run() -> Result<ExitCode> {
     let mut face = vizij_bundle::Face::parse(&bytes)?;
 
     match args.command.as_str() {
-        "inspect" => {
-            println!(
-                "{}",
-                vizij_bundle::to_sidecar(&vizij_bundle::inspect(&face))?
-            );
-        }
+        "inspect" => emit(&vizij_bundle::inspect(&face)?, &None)?,
         "unpack" => {
             let bundle = face
                 .bundle()
@@ -213,16 +256,32 @@ fn run() -> Result<ExitCode> {
             let id = args
                 .standard
                 .ok_or_else(|| anyhow!("add-standard needs --standard\n{USAGE}"))?;
-            face.add_standard_profile(&id)?;
+            face.add_standard_mapping(&id)?;
             let out = args
                 .output
                 .ok_or_else(|| anyhow!("add-standard needs -o\n{USAGE}"))?;
             std::fs::write(&out, face.to_bytes()?)
                 .with_context(|| format!("write {}", out.display()))?;
         }
+        // Declare a profile on the face: the interface its graphs are
+        // authored against travels with the asset, so a reader knows which
+        // interface to hold the face to.
+        "add-profile" => {
+            let id = args
+                .profile
+                .ok_or_else(|| anyhow!("add-profile needs --profile <id>\n{USAGE}"))?;
+            let declared = profile::profile(&id)
+                .ok_or_else(|| anyhow!("unknown profile {id} (see `vizij-bundle profiles`)"))?;
+            face.add_profile(&declared)?;
+            let out = args
+                .output
+                .ok_or_else(|| anyhow!("add-profile needs -o\n{USAGE}"))?;
+            std::fs::write(&out, face.to_bytes()?)
+                .with_context(|| format!("write {}", out.display()))?;
+        }
         "validate" => {
             let coverage = vizij_bundle::coverage(&face);
-            println!("{}", vizij_bundle::to_sidecar(&coverage.to_json())?);
+            emit(&coverage.to_json(), &None)?;
             if coverage.level < args.min_level {
                 eprintln!(
                     "coverage L{} is below the required L{}",

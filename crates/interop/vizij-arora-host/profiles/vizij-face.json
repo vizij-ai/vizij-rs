@@ -1,0 +1,1130 @@
+{
+  "id": "vizij-face",
+  "version": "v1",
+  "title": "Vizij face standard",
+  "description": "The portable face interface: gaze and lids, 25 named expressions, 15 visemes, and 35 muscle controls keyed to FACS action units and ARKit blendshapes.",
+  "scope": "face",
+  "keys": [
+    {
+      "path": "standard/vizij/left_eye/pos/x",
+      "kind": "input",
+      "value_type": "f32",
+      "min": -1.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "gaze"
+      }
+    },
+    {
+      "path": "standard/vizij/left_eye/pos/y",
+      "kind": "input",
+      "value_type": "f32",
+      "min": -1.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "gaze"
+      }
+    },
+    {
+      "path": "standard/vizij/right_eye/pos/x",
+      "kind": "input",
+      "value_type": "f32",
+      "min": -1.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "gaze"
+      }
+    },
+    {
+      "path": "standard/vizij/right_eye/pos/y",
+      "kind": "input",
+      "value_type": "f32",
+      "min": -1.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "gaze"
+      }
+    },
+    {
+      "path": "standard/vizij/left_eye_top_eyelid/pos/y",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "gaze"
+      }
+    },
+    {
+      "path": "standard/vizij/right_eye_top_eyelid/pos/y",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "gaze"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/neutral",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/angry",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/sad",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/happy",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/surprised",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/disgusted",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/scared",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/pleading",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/vulnerable",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/despaired",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/guilty",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/disappointed",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/embarrassed",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/horrified",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/skeptical",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/annoyed",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/furious",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/suspicious",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/rejected",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/bored",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/tired",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/asleep",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/confused",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/amazed",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/excited",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme/sil",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "viseme"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme/PP",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "viseme"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme/FF",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "viseme"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme/TH",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "viseme"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme/DD",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "viseme"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme/kk",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "viseme"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme/CH",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "viseme"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme/SS",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "viseme"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme/nn",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "viseme"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme/RR",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "viseme"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme/aa",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "viseme"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme/E",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "viseme"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme/ih",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "viseme"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme/oh",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "viseme"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme/ou",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "viseme"
+      }
+    },
+    {
+      "path": "standard/vizij/face/brow_inner_up",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 1,
+        "arkit": "browInnerUp",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/brow_outer_up_left",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 2,
+        "arkit": "browOuterUpLeft",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/brow_outer_up_right",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 2,
+        "arkit": "browOuterUpRight",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/brow_down_left",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 4,
+        "arkit": "browDownLeft",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/brow_down_right",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 4,
+        "arkit": "browDownRight",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/eye_wide_left",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 5,
+        "arkit": "eyeWideLeft",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/eye_wide_right",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 5,
+        "arkit": "eyeWideRight",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/eye_squint_left",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 7,
+        "arkit": "eyeSquintLeft",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/eye_squint_right",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 7,
+        "arkit": "eyeSquintRight",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/eye_closed_left",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 43,
+        "arkit": "eyeBlinkLeft",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/eye_closed_right",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 43,
+        "arkit": "eyeBlinkRight",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/cheek_raise_left",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 6,
+        "arkit": "cheekSquintLeft",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/cheek_raise_right",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 6,
+        "arkit": "cheekSquintRight",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/cheek_puff",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 34,
+        "arkit": "cheekPuff",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/nose_sneer_left",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 9,
+        "arkit": "noseSneerLeft",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/nose_sneer_right",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 9,
+        "arkit": "noseSneerRight",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/jaw_open",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 26,
+        "arkit": "jawOpen",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/jaw_left",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "arkit": "jawLeft",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/jaw_right",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "arkit": "jawRight",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/jaw_forward",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 29,
+        "arkit": "jawForward",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/mouth_smile_left",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 12,
+        "arkit": "mouthSmileLeft",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/mouth_smile_right",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 12,
+        "arkit": "mouthSmileRight",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/mouth_frown_left",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 15,
+        "arkit": "mouthFrownLeft",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/mouth_frown_right",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 15,
+        "arkit": "mouthFrownRight",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/mouth_press_left",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 24,
+        "arkit": "mouthPressLeft",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/mouth_press_right",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 24,
+        "arkit": "mouthPressRight",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/mouth_pucker",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 18,
+        "arkit": "mouthPucker",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/mouth_funnel",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 22,
+        "arkit": "mouthFunnel",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/mouth_stretch_left",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 20,
+        "arkit": "mouthStretchLeft",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/mouth_stretch_right",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 20,
+        "arkit": "mouthStretchRight",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/mouth_upper_up_left",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 10,
+        "arkit": "mouthUpperUpLeft",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/mouth_upper_up_right",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 10,
+        "arkit": "mouthUpperUpRight",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/mouth_lower_down_left",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 16,
+        "arkit": "mouthLowerDownLeft",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/mouth_lower_down_right",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 16,
+        "arkit": "mouthLowerDownRight",
+        "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/face/tongue_out",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "au": 19,
+        "arkit": "tongueOut",
+        "tier": "muscle"
+      }
+    }
+  ]
+}

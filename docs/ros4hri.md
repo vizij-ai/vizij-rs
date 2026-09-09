@@ -1,15 +1,18 @@
 # ROS4HRI support
 
 Vizij ships official support for [ROS4HRI](https://wiki.ros.org/hri), the ROS 2
-human-robot-interaction standard, as a **built-in profile**: a graph that maps
-the ROS4HRI face vocabulary onto the [Vizij face standard](face-standard.md), so
-a ROS4HRI face command drives any compliant Vizij face.
+human-robot-interaction standard, as a **profile and a mapping** (see
+[profiles and mappings](profiles-and-mappings.md)): the `ros4hri` profile
+declares the face-command interface — the `standard/ros4hri/*` keys and their
+types — and the ROS4HRI mapping is the graph that implements it in terms of
+the [Vizij face standard](face-standard.md), so a ROS4HRI face command drives
+any compliant Vizij face.
 
 Support spans both ROS4HRI planes:
 
 - **Topics** — the face-command vocabulary (expressions, action units, gaze)
-  lands on the profile's `standard/ros4hri/*` keys through typed topic
-  endpoints.
+  lands on the `ros4hri` profile's `standard/ros4hri/*` keys through typed
+  topic endpoints.
 - **The skill plane** — the device serves ROS4HRI's gaze skill as a native
   ROS 2 action server, [`/skill/look_at`](#the-look_at-skill)
   (`interaction_skills/LookAt` — the standard's only action; `set_expression`
@@ -18,21 +21,22 @@ Support spans both ROS4HRI planes:
 ## How it fits together
 
 ```
-ROS4HRI topics ──(typed bridge endpoints)──▶ standard/ros4hri/* store keys
+ROS4HRI topics ──(typed bridge endpoints)──▶ standard/ros4hri/* store keys   (the ros4hri profile)
                                                     │
-                                             ros4hri profile graph
+                                             the ros4hri mapping graph
                                                     │
-                                             standard/vizij/* controls
+                                             standard/vizij/* controls        (the vizij-face profile)
                                                     │
                                              the face's own rig graph ──▶ morphs / bones
 
 /skill/look_at action ──(bridge skill plane)──▶ look_at task run ──▶ standard/ros4hri/gaze/* keys
 ```
 
-The profile is one layer in that chain: it reads the `standard/ros4hri/*` keys a
-bridge writes and produces `standard/vizij/*` controls. It is
-asset-independent — it only writes standard control paths; what an expression or
-a viseme *looks like* stays with the face.
+The mapping is one layer in that chain: it consumes the `ros4hri` profile — the
+`standard/ros4hri/*` keys a bridge writes — and produces the `vizij-face`
+profile, the `standard/vizij/*` controls. It is asset-independent — it only
+writes standard control paths; what an expression or a viseme *looks like*
+stays with the face.
 
 > **The ROS side lives in
 > [`arora-bridge-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-bridge-ros2),
@@ -45,11 +49,15 @@ a viseme *looks like* stays with the face.
 > typed ROS 2 messages in
 > [`arora-msgs-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-msgs-ros2).
 > Without a bridge, drive the keys directly (any behavior or test can write
-> them) — the profile behaves identically regardless of who writes them.
+> them) — the mapping behaves identically regardless of who writes them.
 
 ## The `standard/ros4hri/*` key contract
 
-What a bridge (or a test) writes:
+The `ros4hri` profile — what a bridge (or a test) writes. Device-scoped: one
+instance per device, shared by every face. The typed declaration is
+[`profiles/ros4hri.json`](../crates/interop/vizij-arora-host/profiles/ros4hri.json)
+(`vizij-bundle profiles` lists it, `@vizij/runtime`'s `profile("ros4hri")`
+serves it); this table summarizes it.
 
 | Key | Type | ROS4HRI source | Meaning |
 |---|---|---|---|
@@ -57,6 +65,7 @@ What a bridge (or a test) writes:
 | `standard/ros4hri/expression/valence` | f32 `[-1,1]` | `hri_msgs/Expression.valence` | blends named weights by circumplex proximity when no name is set |
 | `standard/ros4hri/expression/arousal` | f32 `[-1,1]` | `hri_msgs/Expression.arousal` | as above |
 | `standard/ros4hri/gaze/target` | vec3 (m) | a look-at point (face frame: x forward, y left, z up) | per-eye gaze with vergence |
+| `standard/ros4hri/gaze/frame` | string | the look-at point's frame id | consumed by the `look_at` skill, not the mapping |
 | `standard/ros4hri/au/<code>` | f32 `[0,1]` | `hri_msgs/FacialActionUnits` | FACS action-unit intensity → muscle controls |
 | `standard/ros4hri/speech/text` | string | `/robot_face/tts`, `/expressive_face/speech` | the utterance to lip-sync — **nothing consumes it yet** (see Lips below) |
 
@@ -73,7 +82,7 @@ What a bridge (or a test) writes:
   ([`FACE_CONTROLS`](face-standard.md#muscle-tier)); the eyes-closed unit also
   drives the eyelids, and jaw-open additionally drives the de-facto
   `mouth/morph/jaw_open` control.
-- **Lips** — not the profile's: ROS4HRI defines no viseme channel, and the
+- **Lips** — not the mapping's: ROS4HRI defines no viseme channel, and the
   face's lipsync is the viseme players' ([skills](skills.md): `play_viseme`,
   `say`), which write the face standard's viseme weights themselves. The
   standard's lipsync input is a *text* topic, so `speech/text` is a
@@ -91,10 +100,10 @@ incumbent ROS4HRI face's dynamics.
 ## Driving a key from ROS 2
 
 With the bridge attached (`vizij --ros2 <namespace>`), every `standard/ros4hri/*`
-key the profile reads and nothing in the composition writes is a **free
+key the mapping reads and nothing in the composition writes is a **free
 input**, subscribed at `/<namespace>/keys/<path>` as the `std_msgs` type of
 its default value (`Float64` for the weights). The keys are **device-global**:
-the profile prefixes only what it *writes* (`rig/<faceId>/standard/vizij/…`),
+the mapping prefixes only what it *writes* (`rig/<faceId>/standard/vizij/…`),
 never what it reads, so the topic carries no face id. The store keeps the last
 value, so one message holds a shape until the next one.
 
@@ -109,7 +118,7 @@ ros2 topic pub --once /quori/keys/standard/ros4hri/au/26 \
   std_msgs/msg/Float64 "{data: 0.0}"
 ```
 
-What happens on the device: the profile's exponential smoother (half-life
+What happens on the device: the mapping's exponential smoother (half-life
 0.14 s — a ≈200 ms time constant) carries the intensity to the muscle-tier
 control `rig/<faceId>/standard/vizij/face/jaw_open` (and to the de-facto
 `mouth/morph/jaw_open`), and the face's own graphs map that onto its rig. A
@@ -191,16 +200,16 @@ Semantics, per the standard:
 The behavior itself is not compiled in — it is a **graph fragment asset**
 ([`skills/look_at.json`](../crates/interop/vizij-arora-host/skills/look_at.json)
 in `vizij-arora-host`), grafted into the device's graph per run. Like the
-profile, it is canonical JSON: regenerable (`vizij-bundle export-skill
+mapping, it is canonical JSON: regenerable (`vizij-bundle export-skill
 look_at`), drift-tested, and **overridable per face** — a face GLB embedding a
 `skill::look_at` graph entry runs its own copy instead of the built-in.
 [`@vizij/runtime`](../npm/@vizij/runtime/README.md) exposes the registry
 (`skills()`, `skillSource(id)`), and the vizij-web authoring app embeds and
 edits skill fragments from **File → Skills**.
 
-## Enabling it
+## Enabling the mapping
 
-The profile composes between a face's own graphs and any playing program, so a
+The mapping composes between a face's own graphs and any playing program, so a
 performance overrides it (last-writer-wins).
 
 - **From the `vizij` binary** it is **on by default**; opt out with
@@ -209,41 +218,61 @@ performance overrides it (last-writer-wins).
   returns the composable graph source, or embed it into a face GLB so it travels
   with the asset (see below).
 - **A face that embeds its own copy** (`standard::ros4hri`, see below) runs
-  that copy instead: the embedded profile is the author's pinned override of
-  the shipped mapping, always composed, and the built-in of the same id is not
-  composed for that face. Other profiles are unaffected — the suppression is
-  per profile id.
+  that copy instead: the embedded mapping is the author's pinned override of
+  the shipped one, always composed, and the built-in of the same id is not
+  composed for that face. Other mappings are unaffected — the suppression is
+  per mapping id.
 
-## Embedding and editing the profile
+## Embedding and editing the mapping
 
-The profile graph is a canonical JSON asset,
-[`profiles/ros4hri.json`](../crates/interop/vizij-arora-host/profiles/ros4hri.json).
+The mapping graph is a canonical JSON asset,
+[`mappings/ros4hri.json`](../crates/interop/vizij-arora-host/mappings/ros4hri.json).
 Rust reads it (and regenerates it from the node-graph builder; a test fails if
 the committed file drifts), so it is programmatically available *and* separately
 editable and exportable.
 
+The asset reads by channel. Node ids are hierarchical: `in/…` are the
+`ros4hri` profile's keys it consumes, `out/…` the `vizij-face` controls it
+produces (named by control, `out/expression/happy`, `out/left_eye/pos/x`),
+and `expression/…`, `gaze/…`, `au/…`, `viseme/…`, `blink/…` the computation
+of each channel — `expression/happy/kernel` is the circumplex weight of the
+happy anchor, `gaze/left/yaw/atan` the left eye's yaw before normalization,
+`blink/pulse` the idle pulse. Scalar constants are shared and named for their
+value (`const/0.28`). Every node's id says what it holds; a diff of the asset
+is a diff of the behavior.
+
 - **Bundle it into a face** with
   [`vizij-bundle`](../crates/tools/vizij-bundle/README.md):
   `vizij-bundle add-standard face.glb --standard ros4hri -o out.glb` grafts the
-  profile under a stable id (`standard::ros4hri`), re-runnable to update in
-  place.
+  mapping under a stable id (`standard::ros4hri`), re-runnable to update in
+  place. (The entry's `kind` is still spelled `standard-profile` on disk — see
+  [profiles and mappings](profiles-and-mappings.md#mappings).)
 - **From the web** the same asset is served by
-  [`@vizij/runtime`](../npm/@vizij/runtime/README.md): `standardProfiles()`
-  lists the shipped profiles (the introspectable menu of what a face may opt
-  into), and `standardProfile("ros4hri", rigPrefix)` returns the profile graph
-  as an object for an authoring app to embed.
+  [`@vizij/runtime`](../npm/@vizij/runtime/README.md): `mappings()` lists the
+  shipped mappings (the introspectable menu of what a face may opt into), and
+  `mapping("ros4hri", rigPrefix)` returns the graph as an object for an
+  authoring app to embed.
+- **Reconcile it against the profiles** with `vizij-bundle surface`: the
+  mapping reads 24 of the profile's 25 keys (`gaze/frame` belongs to the
+  `look_at` skill) and writes 64 of the face standard's 81 (`jaw_left` and
+  `jaw_right` have no FACS code, and the 15 viseme weights belong to the
+  players) plus the de-facto `standard/vizij/mouth/morph/jaw_open`.
 
 ## Progressive compliance
 
-A face implements the standard tiers it covers, and the profile degrades to
+A face implements the standard tiers it covers, and the mapping degrades to
 them: gaze & lids (L0), expressions (L1), visemes (L2), muscle/AU (L3).
-`vizij-bundle validate --min-level <n>` reports and gates a face's coverage.
+`vizij-bundle validate --min-level <n>` reports and gates a face's coverage of
+the `vizij-face` profile.
 
 ## See also
 
-- [The Vizij face standard](face-standard.md) — the target vocabulary.
+- [Profiles and mappings](profiles-and-mappings.md) — the model this page
+  instantiates.
+- [The Vizij face standard](face-standard.md) — the `vizij-face` profile the
+  mapping produces.
 - [`vizij-bundle`](../crates/tools/vizij-bundle/README.md) — bundle, validate,
-  and export profiles.
+  and export profiles and mappings.
 - [`arora-bridge-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-bridge-ros2) —
   the bridge serving the typed endpoints and the skill plane
   (`ExposureProfile`, `ActionBinding`).

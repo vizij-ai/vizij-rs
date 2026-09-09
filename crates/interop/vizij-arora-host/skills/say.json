@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "id": "in-args",
+      "id": "in/args",
       "type": "input",
       "params": {
         "path": "task/update",
@@ -9,14 +9,14 @@
       }
     },
     {
-      "id": "say",
+      "id": "say/call",
       "type": "taskrun",
       "params": {
         "function": "77bf2798-e7ce-47c6-a45c-3c2e9ba1837d"
       }
     },
     {
-      "id": "viseme",
+      "id": "say/viseme",
       "type": "readrecord",
       "params": {
         "record_keys": [
@@ -25,21 +25,21 @@
       }
     },
     {
-      "id": "c1",
+      "id": "const/1",
       "type": "constant",
       "params": {
         "value": 1.0
       }
     },
     {
-      "id": "c2",
+      "id": "const/0",
       "type": "constant",
       "params": {
         "value": 0.0
       }
     },
     {
-      "id": "in-dt",
+      "id": "in/dt",
       "type": "input",
       "params": {
         "path": "arora/dt",
@@ -47,62 +47,55 @@
       }
     },
     {
-      "id": "c3",
+      "id": "const/1000000000",
       "type": "constant",
       "params": {
         "value": 1000000000.0
       }
     },
     {
-      "id": "n4",
+      "id": "crossfade/dt",
       "type": "divide",
       "params": {}
     },
     {
-      "id": "c5",
+      "id": "const/0.03",
       "type": "constant",
       "params": {
         "value": 0.03
       }
     },
     {
-      "id": "n6",
+      "id": "crossfade/half_lives",
       "type": "divide",
       "params": {}
     },
     {
-      "id": "c7",
+      "id": "const/0.5",
       "type": "constant",
       "params": {
         "value": 0.5
       }
     },
     {
-      "id": "n8",
+      "id": "crossfade/decay",
       "type": "power",
       "params": {}
     },
     {
-      "id": "c9",
-      "type": "constant",
-      "params": {
-        "value": 1.0
-      }
-    },
-    {
-      "id": "n10",
+      "id": "crossfade/gain",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "o11",
+      "id": "out/viseme/sil",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme/sil"
       }
     },
     {
-      "id": "sel-PP",
+      "id": "viseme/PP/target",
       "type": "case",
       "params": {
         "case_labels": [
@@ -111,7 +104,7 @@
       }
     },
     {
-      "id": "prev-PP",
+      "id": "in/viseme/PP",
       "type": "input",
       "params": {
         "path": "standard/vizij/viseme/PP",
@@ -119,29 +112,29 @@
       }
     },
     {
-      "id": "n12",
+      "id": "viseme/PP/toward",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n13",
+      "id": "viseme/PP/step",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n14",
+      "id": "viseme/PP/weight",
       "type": "add",
       "params": {}
     },
     {
-      "id": "o15",
+      "id": "out/viseme/PP",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme/PP"
       }
     },
     {
-      "id": "sel-FF",
+      "id": "viseme/FF/target",
       "type": "case",
       "params": {
         "case_labels": [
@@ -150,7 +143,7 @@
       }
     },
     {
-      "id": "prev-FF",
+      "id": "in/viseme/FF",
       "type": "input",
       "params": {
         "path": "standard/vizij/viseme/FF",
@@ -158,34 +151,34 @@
       }
     },
     {
-      "id": "n16",
+      "id": "viseme/FF/toward",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n17",
+      "id": "viseme/FF/step",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n18",
+      "id": "viseme/FF/weight",
       "type": "add",
       "params": {}
     },
     {
-      "id": "o19",
+      "id": "out/viseme/FF",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme/FF"
       }
     },
     {
-      "id": "n20",
+      "id": "viseme/loudest/FF",
       "type": "max",
       "params": {}
     },
     {
-      "id": "sel-TH",
+      "id": "viseme/TH/target",
       "type": "case",
       "params": {
         "case_labels": [
@@ -194,7 +187,7 @@
       }
     },
     {
-      "id": "prev-TH",
+      "id": "in/viseme/TH",
       "type": "input",
       "params": {
         "path": "standard/vizij/viseme/TH",
@@ -202,34 +195,34 @@
       }
     },
     {
-      "id": "n21",
+      "id": "viseme/TH/toward",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n22",
+      "id": "viseme/TH/step",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n23",
+      "id": "viseme/TH/weight",
       "type": "add",
       "params": {}
     },
     {
-      "id": "o24",
+      "id": "out/viseme/TH",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme/TH"
       }
     },
     {
-      "id": "n25",
+      "id": "viseme/loudest/TH",
       "type": "max",
       "params": {}
     },
     {
-      "id": "sel-DD",
+      "id": "viseme/DD/target",
       "type": "case",
       "params": {
         "case_labels": [
@@ -238,7 +231,7 @@
       }
     },
     {
-      "id": "prev-DD",
+      "id": "in/viseme/DD",
       "type": "input",
       "params": {
         "path": "standard/vizij/viseme/DD",
@@ -246,34 +239,34 @@
       }
     },
     {
-      "id": "n26",
+      "id": "viseme/DD/toward",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n27",
+      "id": "viseme/DD/step",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n28",
+      "id": "viseme/DD/weight",
       "type": "add",
       "params": {}
     },
     {
-      "id": "o29",
+      "id": "out/viseme/DD",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme/DD"
       }
     },
     {
-      "id": "n30",
+      "id": "viseme/loudest/DD",
       "type": "max",
       "params": {}
     },
     {
-      "id": "sel-kk",
+      "id": "viseme/kk/target",
       "type": "case",
       "params": {
         "case_labels": [
@@ -282,7 +275,7 @@
       }
     },
     {
-      "id": "prev-kk",
+      "id": "in/viseme/kk",
       "type": "input",
       "params": {
         "path": "standard/vizij/viseme/kk",
@@ -290,34 +283,34 @@
       }
     },
     {
-      "id": "n31",
+      "id": "viseme/kk/toward",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n32",
+      "id": "viseme/kk/step",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n33",
+      "id": "viseme/kk/weight",
       "type": "add",
       "params": {}
     },
     {
-      "id": "o34",
+      "id": "out/viseme/kk",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme/kk"
       }
     },
     {
-      "id": "n35",
+      "id": "viseme/loudest/kk",
       "type": "max",
       "params": {}
     },
     {
-      "id": "sel-CH",
+      "id": "viseme/CH/target",
       "type": "case",
       "params": {
         "case_labels": [
@@ -326,7 +319,7 @@
       }
     },
     {
-      "id": "prev-CH",
+      "id": "in/viseme/CH",
       "type": "input",
       "params": {
         "path": "standard/vizij/viseme/CH",
@@ -334,34 +327,34 @@
       }
     },
     {
-      "id": "n36",
+      "id": "viseme/CH/toward",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n37",
+      "id": "viseme/CH/step",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n38",
+      "id": "viseme/CH/weight",
       "type": "add",
       "params": {}
     },
     {
-      "id": "o39",
+      "id": "out/viseme/CH",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme/CH"
       }
     },
     {
-      "id": "n40",
+      "id": "viseme/loudest/CH",
       "type": "max",
       "params": {}
     },
     {
-      "id": "sel-SS",
+      "id": "viseme/SS/target",
       "type": "case",
       "params": {
         "case_labels": [
@@ -370,7 +363,7 @@
       }
     },
     {
-      "id": "prev-SS",
+      "id": "in/viseme/SS",
       "type": "input",
       "params": {
         "path": "standard/vizij/viseme/SS",
@@ -378,34 +371,34 @@
       }
     },
     {
-      "id": "n41",
+      "id": "viseme/SS/toward",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n42",
+      "id": "viseme/SS/step",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n43",
+      "id": "viseme/SS/weight",
       "type": "add",
       "params": {}
     },
     {
-      "id": "o44",
+      "id": "out/viseme/SS",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme/SS"
       }
     },
     {
-      "id": "n45",
+      "id": "viseme/loudest/SS",
       "type": "max",
       "params": {}
     },
     {
-      "id": "sel-nn",
+      "id": "viseme/nn/target",
       "type": "case",
       "params": {
         "case_labels": [
@@ -414,7 +407,7 @@
       }
     },
     {
-      "id": "prev-nn",
+      "id": "in/viseme/nn",
       "type": "input",
       "params": {
         "path": "standard/vizij/viseme/nn",
@@ -422,34 +415,34 @@
       }
     },
     {
-      "id": "n46",
+      "id": "viseme/nn/toward",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n47",
+      "id": "viseme/nn/step",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n48",
+      "id": "viseme/nn/weight",
       "type": "add",
       "params": {}
     },
     {
-      "id": "o49",
+      "id": "out/viseme/nn",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme/nn"
       }
     },
     {
-      "id": "n50",
+      "id": "viseme/loudest/nn",
       "type": "max",
       "params": {}
     },
     {
-      "id": "sel-RR",
+      "id": "viseme/RR/target",
       "type": "case",
       "params": {
         "case_labels": [
@@ -458,7 +451,7 @@
       }
     },
     {
-      "id": "prev-RR",
+      "id": "in/viseme/RR",
       "type": "input",
       "params": {
         "path": "standard/vizij/viseme/RR",
@@ -466,34 +459,34 @@
       }
     },
     {
-      "id": "n51",
+      "id": "viseme/RR/toward",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n52",
+      "id": "viseme/RR/step",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n53",
+      "id": "viseme/RR/weight",
       "type": "add",
       "params": {}
     },
     {
-      "id": "o54",
+      "id": "out/viseme/RR",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme/RR"
       }
     },
     {
-      "id": "n55",
+      "id": "viseme/loudest/RR",
       "type": "max",
       "params": {}
     },
     {
-      "id": "sel-aa",
+      "id": "viseme/aa/target",
       "type": "case",
       "params": {
         "case_labels": [
@@ -502,7 +495,7 @@
       }
     },
     {
-      "id": "prev-aa",
+      "id": "in/viseme/aa",
       "type": "input",
       "params": {
         "path": "standard/vizij/viseme/aa",
@@ -510,34 +503,34 @@
       }
     },
     {
-      "id": "n56",
+      "id": "viseme/aa/toward",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n57",
+      "id": "viseme/aa/step",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n58",
+      "id": "viseme/aa/weight",
       "type": "add",
       "params": {}
     },
     {
-      "id": "o59",
+      "id": "out/viseme/aa",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme/aa"
       }
     },
     {
-      "id": "n60",
+      "id": "viseme/loudest/aa",
       "type": "max",
       "params": {}
     },
     {
-      "id": "sel-E",
+      "id": "viseme/E/target",
       "type": "case",
       "params": {
         "case_labels": [
@@ -546,7 +539,7 @@
       }
     },
     {
-      "id": "prev-E",
+      "id": "in/viseme/E",
       "type": "input",
       "params": {
         "path": "standard/vizij/viseme/E",
@@ -554,34 +547,34 @@
       }
     },
     {
-      "id": "n61",
+      "id": "viseme/E/toward",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n62",
+      "id": "viseme/E/step",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n63",
+      "id": "viseme/E/weight",
       "type": "add",
       "params": {}
     },
     {
-      "id": "o64",
+      "id": "out/viseme/E",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme/E"
       }
     },
     {
-      "id": "n65",
+      "id": "viseme/loudest/E",
       "type": "max",
       "params": {}
     },
     {
-      "id": "sel-ih",
+      "id": "viseme/ih/target",
       "type": "case",
       "params": {
         "case_labels": [
@@ -590,7 +583,7 @@
       }
     },
     {
-      "id": "prev-ih",
+      "id": "in/viseme/ih",
       "type": "input",
       "params": {
         "path": "standard/vizij/viseme/ih",
@@ -598,34 +591,34 @@
       }
     },
     {
-      "id": "n66",
+      "id": "viseme/ih/toward",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n67",
+      "id": "viseme/ih/step",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n68",
+      "id": "viseme/ih/weight",
       "type": "add",
       "params": {}
     },
     {
-      "id": "o69",
+      "id": "out/viseme/ih",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme/ih"
       }
     },
     {
-      "id": "n70",
+      "id": "viseme/loudest/ih",
       "type": "max",
       "params": {}
     },
     {
-      "id": "sel-oh",
+      "id": "viseme/oh/target",
       "type": "case",
       "params": {
         "case_labels": [
@@ -634,7 +627,7 @@
       }
     },
     {
-      "id": "prev-oh",
+      "id": "in/viseme/oh",
       "type": "input",
       "params": {
         "path": "standard/vizij/viseme/oh",
@@ -642,34 +635,34 @@
       }
     },
     {
-      "id": "n71",
+      "id": "viseme/oh/toward",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n72",
+      "id": "viseme/oh/step",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n73",
+      "id": "viseme/oh/weight",
       "type": "add",
       "params": {}
     },
     {
-      "id": "o74",
+      "id": "out/viseme/oh",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme/oh"
       }
     },
     {
-      "id": "n75",
+      "id": "viseme/loudest/oh",
       "type": "max",
       "params": {}
     },
     {
-      "id": "sel-ou",
+      "id": "viseme/ou/target",
       "type": "case",
       "params": {
         "case_labels": [
@@ -678,7 +671,7 @@
       }
     },
     {
-      "id": "prev-ou",
+      "id": "in/viseme/ou",
       "type": "input",
       "params": {
         "path": "standard/vizij/viseme/ou",
@@ -686,82 +679,82 @@
       }
     },
     {
-      "id": "n76",
+      "id": "viseme/ou/toward",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "n77",
+      "id": "viseme/ou/step",
       "type": "multiply",
       "params": {}
     },
     {
-      "id": "n78",
+      "id": "viseme/ou/weight",
       "type": "add",
       "params": {}
     },
     {
-      "id": "o79",
+      "id": "out/viseme/ou",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme/ou"
       }
     },
     {
-      "id": "n80",
+      "id": "viseme/loudest/ou",
       "type": "max",
       "params": {}
     },
     {
-      "id": "c81",
+      "id": "const/0.02",
       "type": "constant",
       "params": {
         "value": 0.02
       }
     },
     {
-      "id": "n82",
+      "id": "viseme/settled",
       "type": "lessthan",
       "params": {}
     },
     {
-      "id": "n83",
+      "id": "viseme/driven",
       "type": "greaterthan",
       "params": {}
     },
     {
-      "id": "t84",
+      "id": "const/sil",
       "type": "constant",
       "params": {
         "value": "sil"
       }
     },
     {
-      "id": "current",
+      "id": "viseme/current",
       "type": "if",
       "params": {}
     },
     {
-      "id": "o85",
+      "id": "out/viseme/state",
       "type": "output",
       "params": {
         "path": "standard/vizij/viseme"
       }
     },
     {
-      "id": "o86",
+      "id": "out/feedback",
       "type": "output",
       "params": {
         "path": "task/feedback"
       }
     },
     {
-      "id": "ended",
+      "id": "lifecycle/ended",
       "type": "and",
       "params": {}
     },
     {
-      "id": "st-running",
+      "id": "lifecycle/running",
       "type": "constant",
       "params": {
         "value": {
@@ -774,12 +767,12 @@
       }
     },
     {
-      "id": "lifecycle",
+      "id": "lifecycle/status",
       "type": "if",
       "params": {}
     },
     {
-      "id": "o87",
+      "id": "out/status",
       "type": "output",
       "params": {
         "path": "task/status"
@@ -789,1746 +782,1746 @@
   "edges": [
     {
       "from": {
-        "node_id": "in-args"
+        "node_id": "in/args"
       },
       "to": {
-        "node_id": "say",
+        "node_id": "say/call",
         "input": "args"
       }
     },
     {
       "from": {
-        "node_id": "say",
+        "node_id": "say/call",
         "output": "mutated"
       },
       "to": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "in-dt"
+        "node_id": "in/dt"
       },
       "to": {
-        "node_id": "n4",
+        "node_id": "crossfade/dt",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "c3"
+        "node_id": "const/1000000000"
       },
       "to": {
-        "node_id": "n4",
+        "node_id": "crossfade/dt",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n4"
+        "node_id": "crossfade/dt"
       },
       "to": {
-        "node_id": "n6",
+        "node_id": "crossfade/half_lives",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "c5"
+        "node_id": "const/0.03"
       },
       "to": {
-        "node_id": "n6",
+        "node_id": "crossfade/half_lives",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "c7"
+        "node_id": "const/0.5"
       },
       "to": {
-        "node_id": "n8",
+        "node_id": "crossfade/decay",
         "input": "base"
       }
     },
     {
       "from": {
-        "node_id": "n6"
+        "node_id": "crossfade/half_lives"
       },
       "to": {
-        "node_id": "n8",
+        "node_id": "crossfade/decay",
         "input": "exp"
       }
     },
     {
       "from": {
-        "node_id": "c9"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "n10",
+        "node_id": "crossfade/gain",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "n8"
+        "node_id": "crossfade/decay"
       },
       "to": {
-        "node_id": "n10",
+        "node_id": "crossfade/gain",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "o11",
+        "node_id": "out/viseme/sil",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "output": "field_0"
       },
       "to": {
-        "node_id": "sel-PP",
+        "node_id": "viseme/PP/target",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "c1"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "sel-PP",
+        "node_id": "viseme/PP/target",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "sel-PP",
+        "node_id": "viseme/PP/target",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "sel-PP"
+        "node_id": "viseme/PP/target"
       },
       "to": {
-        "node_id": "n12",
+        "node_id": "viseme/PP/toward",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "prev-PP"
+        "node_id": "in/viseme/PP"
       },
       "to": {
-        "node_id": "n12",
+        "node_id": "viseme/PP/toward",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n12"
+        "node_id": "viseme/PP/toward"
       },
       "to": {
-        "node_id": "n13",
+        "node_id": "viseme/PP/step",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n10"
+        "node_id": "crossfade/gain"
       },
       "to": {
-        "node_id": "n13",
+        "node_id": "viseme/PP/step",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "prev-PP"
+        "node_id": "in/viseme/PP"
       },
       "to": {
-        "node_id": "n14",
+        "node_id": "viseme/PP/weight",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n13"
+        "node_id": "viseme/PP/step"
       },
       "to": {
-        "node_id": "n14",
+        "node_id": "viseme/PP/weight",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n14"
+        "node_id": "viseme/PP/weight"
       },
       "to": {
-        "node_id": "o15",
+        "node_id": "out/viseme/PP",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "output": "field_0"
       },
       "to": {
-        "node_id": "sel-FF",
+        "node_id": "viseme/FF/target",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "c1"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "sel-FF",
+        "node_id": "viseme/FF/target",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "sel-FF",
+        "node_id": "viseme/FF/target",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "sel-FF"
+        "node_id": "viseme/FF/target"
       },
       "to": {
-        "node_id": "n16",
+        "node_id": "viseme/FF/toward",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "prev-FF"
+        "node_id": "in/viseme/FF"
       },
       "to": {
-        "node_id": "n16",
+        "node_id": "viseme/FF/toward",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n16"
+        "node_id": "viseme/FF/toward"
       },
       "to": {
-        "node_id": "n17",
+        "node_id": "viseme/FF/step",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n10"
+        "node_id": "crossfade/gain"
       },
       "to": {
-        "node_id": "n17",
+        "node_id": "viseme/FF/step",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "prev-FF"
+        "node_id": "in/viseme/FF"
       },
       "to": {
-        "node_id": "n18",
+        "node_id": "viseme/FF/weight",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n17"
+        "node_id": "viseme/FF/step"
       },
       "to": {
-        "node_id": "n18",
+        "node_id": "viseme/FF/weight",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n18"
+        "node_id": "viseme/FF/weight"
       },
       "to": {
-        "node_id": "o19",
+        "node_id": "out/viseme/FF",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "n14"
+        "node_id": "viseme/PP/weight"
       },
       "to": {
-        "node_id": "n20",
+        "node_id": "viseme/loudest/FF",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n18"
+        "node_id": "viseme/FF/weight"
       },
       "to": {
-        "node_id": "n20",
+        "node_id": "viseme/loudest/FF",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "output": "field_0"
       },
       "to": {
-        "node_id": "sel-TH",
+        "node_id": "viseme/TH/target",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "c1"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "sel-TH",
+        "node_id": "viseme/TH/target",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "sel-TH",
+        "node_id": "viseme/TH/target",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "sel-TH"
+        "node_id": "viseme/TH/target"
       },
       "to": {
-        "node_id": "n21",
+        "node_id": "viseme/TH/toward",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "prev-TH"
+        "node_id": "in/viseme/TH"
       },
       "to": {
-        "node_id": "n21",
+        "node_id": "viseme/TH/toward",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n21"
+        "node_id": "viseme/TH/toward"
       },
       "to": {
-        "node_id": "n22",
+        "node_id": "viseme/TH/step",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n10"
+        "node_id": "crossfade/gain"
       },
       "to": {
-        "node_id": "n22",
+        "node_id": "viseme/TH/step",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "prev-TH"
+        "node_id": "in/viseme/TH"
       },
       "to": {
-        "node_id": "n23",
+        "node_id": "viseme/TH/weight",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n22"
+        "node_id": "viseme/TH/step"
       },
       "to": {
-        "node_id": "n23",
+        "node_id": "viseme/TH/weight",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n23"
+        "node_id": "viseme/TH/weight"
       },
       "to": {
-        "node_id": "o24",
+        "node_id": "out/viseme/TH",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "n20"
+        "node_id": "viseme/loudest/FF"
       },
       "to": {
-        "node_id": "n25",
+        "node_id": "viseme/loudest/TH",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n23"
+        "node_id": "viseme/TH/weight"
       },
       "to": {
-        "node_id": "n25",
+        "node_id": "viseme/loudest/TH",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "output": "field_0"
       },
       "to": {
-        "node_id": "sel-DD",
+        "node_id": "viseme/DD/target",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "c1"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "sel-DD",
+        "node_id": "viseme/DD/target",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "sel-DD",
+        "node_id": "viseme/DD/target",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "sel-DD"
+        "node_id": "viseme/DD/target"
       },
       "to": {
-        "node_id": "n26",
+        "node_id": "viseme/DD/toward",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "prev-DD"
+        "node_id": "in/viseme/DD"
       },
       "to": {
-        "node_id": "n26",
+        "node_id": "viseme/DD/toward",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n26"
+        "node_id": "viseme/DD/toward"
       },
       "to": {
-        "node_id": "n27",
+        "node_id": "viseme/DD/step",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n10"
+        "node_id": "crossfade/gain"
       },
       "to": {
-        "node_id": "n27",
+        "node_id": "viseme/DD/step",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "prev-DD"
+        "node_id": "in/viseme/DD"
       },
       "to": {
-        "node_id": "n28",
+        "node_id": "viseme/DD/weight",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n27"
+        "node_id": "viseme/DD/step"
       },
       "to": {
-        "node_id": "n28",
+        "node_id": "viseme/DD/weight",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n28"
+        "node_id": "viseme/DD/weight"
       },
       "to": {
-        "node_id": "o29",
+        "node_id": "out/viseme/DD",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "n25"
+        "node_id": "viseme/loudest/TH"
       },
       "to": {
-        "node_id": "n30",
+        "node_id": "viseme/loudest/DD",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n28"
+        "node_id": "viseme/DD/weight"
       },
       "to": {
-        "node_id": "n30",
+        "node_id": "viseme/loudest/DD",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "output": "field_0"
       },
       "to": {
-        "node_id": "sel-kk",
+        "node_id": "viseme/kk/target",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "c1"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "sel-kk",
+        "node_id": "viseme/kk/target",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "sel-kk",
+        "node_id": "viseme/kk/target",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "sel-kk"
+        "node_id": "viseme/kk/target"
       },
       "to": {
-        "node_id": "n31",
+        "node_id": "viseme/kk/toward",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "prev-kk"
+        "node_id": "in/viseme/kk"
       },
       "to": {
-        "node_id": "n31",
+        "node_id": "viseme/kk/toward",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n31"
+        "node_id": "viseme/kk/toward"
       },
       "to": {
-        "node_id": "n32",
+        "node_id": "viseme/kk/step",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n10"
+        "node_id": "crossfade/gain"
       },
       "to": {
-        "node_id": "n32",
+        "node_id": "viseme/kk/step",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "prev-kk"
+        "node_id": "in/viseme/kk"
       },
       "to": {
-        "node_id": "n33",
+        "node_id": "viseme/kk/weight",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n32"
+        "node_id": "viseme/kk/step"
       },
       "to": {
-        "node_id": "n33",
+        "node_id": "viseme/kk/weight",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n33"
+        "node_id": "viseme/kk/weight"
       },
       "to": {
-        "node_id": "o34",
+        "node_id": "out/viseme/kk",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "n30"
+        "node_id": "viseme/loudest/DD"
       },
       "to": {
-        "node_id": "n35",
+        "node_id": "viseme/loudest/kk",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n33"
+        "node_id": "viseme/kk/weight"
       },
       "to": {
-        "node_id": "n35",
+        "node_id": "viseme/loudest/kk",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "output": "field_0"
       },
       "to": {
-        "node_id": "sel-CH",
+        "node_id": "viseme/CH/target",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "c1"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "sel-CH",
+        "node_id": "viseme/CH/target",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "sel-CH",
+        "node_id": "viseme/CH/target",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "sel-CH"
+        "node_id": "viseme/CH/target"
       },
       "to": {
-        "node_id": "n36",
+        "node_id": "viseme/CH/toward",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "prev-CH"
+        "node_id": "in/viseme/CH"
       },
       "to": {
-        "node_id": "n36",
+        "node_id": "viseme/CH/toward",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n36"
+        "node_id": "viseme/CH/toward"
       },
       "to": {
-        "node_id": "n37",
+        "node_id": "viseme/CH/step",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n10"
+        "node_id": "crossfade/gain"
       },
       "to": {
-        "node_id": "n37",
+        "node_id": "viseme/CH/step",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "prev-CH"
+        "node_id": "in/viseme/CH"
       },
       "to": {
-        "node_id": "n38",
+        "node_id": "viseme/CH/weight",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n37"
+        "node_id": "viseme/CH/step"
       },
       "to": {
-        "node_id": "n38",
+        "node_id": "viseme/CH/weight",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n38"
+        "node_id": "viseme/CH/weight"
       },
       "to": {
-        "node_id": "o39",
+        "node_id": "out/viseme/CH",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "n35"
+        "node_id": "viseme/loudest/kk"
       },
       "to": {
-        "node_id": "n40",
+        "node_id": "viseme/loudest/CH",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n38"
+        "node_id": "viseme/CH/weight"
       },
       "to": {
-        "node_id": "n40",
+        "node_id": "viseme/loudest/CH",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "output": "field_0"
       },
       "to": {
-        "node_id": "sel-SS",
+        "node_id": "viseme/SS/target",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "c1"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "sel-SS",
+        "node_id": "viseme/SS/target",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "sel-SS",
+        "node_id": "viseme/SS/target",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "sel-SS"
+        "node_id": "viseme/SS/target"
       },
       "to": {
-        "node_id": "n41",
+        "node_id": "viseme/SS/toward",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "prev-SS"
+        "node_id": "in/viseme/SS"
       },
       "to": {
-        "node_id": "n41",
+        "node_id": "viseme/SS/toward",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n41"
+        "node_id": "viseme/SS/toward"
       },
       "to": {
-        "node_id": "n42",
+        "node_id": "viseme/SS/step",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n10"
+        "node_id": "crossfade/gain"
       },
       "to": {
-        "node_id": "n42",
+        "node_id": "viseme/SS/step",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "prev-SS"
+        "node_id": "in/viseme/SS"
       },
       "to": {
-        "node_id": "n43",
+        "node_id": "viseme/SS/weight",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n42"
+        "node_id": "viseme/SS/step"
       },
       "to": {
-        "node_id": "n43",
+        "node_id": "viseme/SS/weight",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n43"
+        "node_id": "viseme/SS/weight"
       },
       "to": {
-        "node_id": "o44",
+        "node_id": "out/viseme/SS",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "n40"
+        "node_id": "viseme/loudest/CH"
       },
       "to": {
-        "node_id": "n45",
+        "node_id": "viseme/loudest/SS",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n43"
+        "node_id": "viseme/SS/weight"
       },
       "to": {
-        "node_id": "n45",
+        "node_id": "viseme/loudest/SS",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "output": "field_0"
       },
       "to": {
-        "node_id": "sel-nn",
+        "node_id": "viseme/nn/target",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "c1"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "sel-nn",
+        "node_id": "viseme/nn/target",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "sel-nn",
+        "node_id": "viseme/nn/target",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "sel-nn"
+        "node_id": "viseme/nn/target"
       },
       "to": {
-        "node_id": "n46",
+        "node_id": "viseme/nn/toward",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "prev-nn"
+        "node_id": "in/viseme/nn"
       },
       "to": {
-        "node_id": "n46",
+        "node_id": "viseme/nn/toward",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n46"
+        "node_id": "viseme/nn/toward"
       },
       "to": {
-        "node_id": "n47",
+        "node_id": "viseme/nn/step",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n10"
+        "node_id": "crossfade/gain"
       },
       "to": {
-        "node_id": "n47",
+        "node_id": "viseme/nn/step",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "prev-nn"
+        "node_id": "in/viseme/nn"
       },
       "to": {
-        "node_id": "n48",
+        "node_id": "viseme/nn/weight",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n47"
+        "node_id": "viseme/nn/step"
       },
       "to": {
-        "node_id": "n48",
+        "node_id": "viseme/nn/weight",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n48"
+        "node_id": "viseme/nn/weight"
       },
       "to": {
-        "node_id": "o49",
+        "node_id": "out/viseme/nn",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "n45"
+        "node_id": "viseme/loudest/SS"
       },
       "to": {
-        "node_id": "n50",
+        "node_id": "viseme/loudest/nn",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n48"
+        "node_id": "viseme/nn/weight"
       },
       "to": {
-        "node_id": "n50",
+        "node_id": "viseme/loudest/nn",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "output": "field_0"
       },
       "to": {
-        "node_id": "sel-RR",
+        "node_id": "viseme/RR/target",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "c1"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "sel-RR",
+        "node_id": "viseme/RR/target",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "sel-RR",
+        "node_id": "viseme/RR/target",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "sel-RR"
+        "node_id": "viseme/RR/target"
       },
       "to": {
-        "node_id": "n51",
+        "node_id": "viseme/RR/toward",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "prev-RR"
+        "node_id": "in/viseme/RR"
       },
       "to": {
-        "node_id": "n51",
+        "node_id": "viseme/RR/toward",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n51"
+        "node_id": "viseme/RR/toward"
       },
       "to": {
-        "node_id": "n52",
+        "node_id": "viseme/RR/step",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n10"
+        "node_id": "crossfade/gain"
       },
       "to": {
-        "node_id": "n52",
+        "node_id": "viseme/RR/step",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "prev-RR"
+        "node_id": "in/viseme/RR"
       },
       "to": {
-        "node_id": "n53",
+        "node_id": "viseme/RR/weight",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n52"
+        "node_id": "viseme/RR/step"
       },
       "to": {
-        "node_id": "n53",
+        "node_id": "viseme/RR/weight",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n53"
+        "node_id": "viseme/RR/weight"
       },
       "to": {
-        "node_id": "o54",
+        "node_id": "out/viseme/RR",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "n50"
+        "node_id": "viseme/loudest/nn"
       },
       "to": {
-        "node_id": "n55",
+        "node_id": "viseme/loudest/RR",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n53"
+        "node_id": "viseme/RR/weight"
       },
       "to": {
-        "node_id": "n55",
+        "node_id": "viseme/loudest/RR",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "output": "field_0"
       },
       "to": {
-        "node_id": "sel-aa",
+        "node_id": "viseme/aa/target",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "c1"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "sel-aa",
+        "node_id": "viseme/aa/target",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "sel-aa",
+        "node_id": "viseme/aa/target",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "sel-aa"
+        "node_id": "viseme/aa/target"
       },
       "to": {
-        "node_id": "n56",
+        "node_id": "viseme/aa/toward",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "prev-aa"
+        "node_id": "in/viseme/aa"
       },
       "to": {
-        "node_id": "n56",
+        "node_id": "viseme/aa/toward",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n56"
+        "node_id": "viseme/aa/toward"
       },
       "to": {
-        "node_id": "n57",
+        "node_id": "viseme/aa/step",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n10"
+        "node_id": "crossfade/gain"
       },
       "to": {
-        "node_id": "n57",
+        "node_id": "viseme/aa/step",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "prev-aa"
+        "node_id": "in/viseme/aa"
       },
       "to": {
-        "node_id": "n58",
+        "node_id": "viseme/aa/weight",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n57"
+        "node_id": "viseme/aa/step"
       },
       "to": {
-        "node_id": "n58",
+        "node_id": "viseme/aa/weight",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n58"
+        "node_id": "viseme/aa/weight"
       },
       "to": {
-        "node_id": "o59",
+        "node_id": "out/viseme/aa",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "n55"
+        "node_id": "viseme/loudest/RR"
       },
       "to": {
-        "node_id": "n60",
+        "node_id": "viseme/loudest/aa",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n58"
+        "node_id": "viseme/aa/weight"
       },
       "to": {
-        "node_id": "n60",
+        "node_id": "viseme/loudest/aa",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "output": "field_0"
       },
       "to": {
-        "node_id": "sel-E",
+        "node_id": "viseme/E/target",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "c1"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "sel-E",
+        "node_id": "viseme/E/target",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "sel-E",
+        "node_id": "viseme/E/target",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "sel-E"
+        "node_id": "viseme/E/target"
       },
       "to": {
-        "node_id": "n61",
+        "node_id": "viseme/E/toward",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "prev-E"
+        "node_id": "in/viseme/E"
       },
       "to": {
-        "node_id": "n61",
+        "node_id": "viseme/E/toward",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n61"
+        "node_id": "viseme/E/toward"
       },
       "to": {
-        "node_id": "n62",
+        "node_id": "viseme/E/step",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n10"
+        "node_id": "crossfade/gain"
       },
       "to": {
-        "node_id": "n62",
+        "node_id": "viseme/E/step",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "prev-E"
+        "node_id": "in/viseme/E"
       },
       "to": {
-        "node_id": "n63",
+        "node_id": "viseme/E/weight",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n62"
+        "node_id": "viseme/E/step"
       },
       "to": {
-        "node_id": "n63",
+        "node_id": "viseme/E/weight",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n63"
+        "node_id": "viseme/E/weight"
       },
       "to": {
-        "node_id": "o64",
+        "node_id": "out/viseme/E",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "n60"
+        "node_id": "viseme/loudest/aa"
       },
       "to": {
-        "node_id": "n65",
+        "node_id": "viseme/loudest/E",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n63"
+        "node_id": "viseme/E/weight"
       },
       "to": {
-        "node_id": "n65",
+        "node_id": "viseme/loudest/E",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "output": "field_0"
       },
       "to": {
-        "node_id": "sel-ih",
+        "node_id": "viseme/ih/target",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "c1"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "sel-ih",
+        "node_id": "viseme/ih/target",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "sel-ih",
+        "node_id": "viseme/ih/target",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "sel-ih"
+        "node_id": "viseme/ih/target"
       },
       "to": {
-        "node_id": "n66",
+        "node_id": "viseme/ih/toward",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "prev-ih"
+        "node_id": "in/viseme/ih"
       },
       "to": {
-        "node_id": "n66",
+        "node_id": "viseme/ih/toward",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n66"
+        "node_id": "viseme/ih/toward"
       },
       "to": {
-        "node_id": "n67",
+        "node_id": "viseme/ih/step",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n10"
+        "node_id": "crossfade/gain"
       },
       "to": {
-        "node_id": "n67",
+        "node_id": "viseme/ih/step",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "prev-ih"
+        "node_id": "in/viseme/ih"
       },
       "to": {
-        "node_id": "n68",
+        "node_id": "viseme/ih/weight",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n67"
+        "node_id": "viseme/ih/step"
       },
       "to": {
-        "node_id": "n68",
+        "node_id": "viseme/ih/weight",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n68"
+        "node_id": "viseme/ih/weight"
       },
       "to": {
-        "node_id": "o69",
+        "node_id": "out/viseme/ih",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "n65"
+        "node_id": "viseme/loudest/E"
       },
       "to": {
-        "node_id": "n70",
+        "node_id": "viseme/loudest/ih",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n68"
+        "node_id": "viseme/ih/weight"
       },
       "to": {
-        "node_id": "n70",
+        "node_id": "viseme/loudest/ih",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "output": "field_0"
       },
       "to": {
-        "node_id": "sel-oh",
+        "node_id": "viseme/oh/target",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "c1"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "sel-oh",
+        "node_id": "viseme/oh/target",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "sel-oh",
+        "node_id": "viseme/oh/target",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "sel-oh"
+        "node_id": "viseme/oh/target"
       },
       "to": {
-        "node_id": "n71",
+        "node_id": "viseme/oh/toward",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "prev-oh"
+        "node_id": "in/viseme/oh"
       },
       "to": {
-        "node_id": "n71",
+        "node_id": "viseme/oh/toward",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n71"
+        "node_id": "viseme/oh/toward"
       },
       "to": {
-        "node_id": "n72",
+        "node_id": "viseme/oh/step",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n10"
+        "node_id": "crossfade/gain"
       },
       "to": {
-        "node_id": "n72",
+        "node_id": "viseme/oh/step",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "prev-oh"
+        "node_id": "in/viseme/oh"
       },
       "to": {
-        "node_id": "n73",
+        "node_id": "viseme/oh/weight",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n72"
+        "node_id": "viseme/oh/step"
       },
       "to": {
-        "node_id": "n73",
+        "node_id": "viseme/oh/weight",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n73"
+        "node_id": "viseme/oh/weight"
       },
       "to": {
-        "node_id": "o74",
+        "node_id": "out/viseme/oh",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "n70"
+        "node_id": "viseme/loudest/ih"
       },
       "to": {
-        "node_id": "n75",
+        "node_id": "viseme/loudest/oh",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n73"
+        "node_id": "viseme/oh/weight"
       },
       "to": {
-        "node_id": "n75",
+        "node_id": "viseme/loudest/oh",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "output": "field_0"
       },
       "to": {
-        "node_id": "sel-ou",
+        "node_id": "viseme/ou/target",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "c1"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "sel-ou",
+        "node_id": "viseme/ou/target",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "sel-ou",
+        "node_id": "viseme/ou/target",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "sel-ou"
+        "node_id": "viseme/ou/target"
       },
       "to": {
-        "node_id": "n76",
+        "node_id": "viseme/ou/toward",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "prev-ou"
+        "node_id": "in/viseme/ou"
       },
       "to": {
-        "node_id": "n76",
+        "node_id": "viseme/ou/toward",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n76"
+        "node_id": "viseme/ou/toward"
       },
       "to": {
-        "node_id": "n77",
+        "node_id": "viseme/ou/step",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n10"
+        "node_id": "crossfade/gain"
       },
       "to": {
-        "node_id": "n77",
+        "node_id": "viseme/ou/step",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "prev-ou"
+        "node_id": "in/viseme/ou"
       },
       "to": {
-        "node_id": "n78",
+        "node_id": "viseme/ou/weight",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n77"
+        "node_id": "viseme/ou/step"
       },
       "to": {
-        "node_id": "n78",
+        "node_id": "viseme/ou/weight",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n78"
+        "node_id": "viseme/ou/weight"
       },
       "to": {
-        "node_id": "o79",
+        "node_id": "out/viseme/ou",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "n75"
+        "node_id": "viseme/loudest/oh"
       },
       "to": {
-        "node_id": "n80",
+        "node_id": "viseme/loudest/ou",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "n78"
+        "node_id": "viseme/ou/weight"
       },
       "to": {
-        "node_id": "n80",
+        "node_id": "viseme/loudest/ou",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n80"
+        "node_id": "viseme/loudest/ou"
       },
       "to": {
-        "node_id": "n82",
+        "node_id": "viseme/settled",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "c81"
+        "node_id": "const/0.02"
       },
       "to": {
-        "node_id": "n82",
+        "node_id": "viseme/settled",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "c1"
+        "node_id": "const/1"
       },
       "to": {
-        "node_id": "n83",
+        "node_id": "viseme/driven",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "c2"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "n83",
+        "node_id": "viseme/driven",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n83"
+        "node_id": "viseme/driven"
       },
       "to": {
-        "node_id": "current",
+        "node_id": "viseme/current",
         "input": "cond"
       }
     },
     {
       "from": {
-        "node_id": "viseme",
+        "node_id": "say/viseme",
         "output": "field_0"
       },
       "to": {
-        "node_id": "current",
+        "node_id": "viseme/current",
         "input": "then"
       }
     },
     {
       "from": {
-        "node_id": "t84"
+        "node_id": "const/sil"
       },
       "to": {
-        "node_id": "current",
+        "node_id": "viseme/current",
         "input": "else"
       }
     },
     {
       "from": {
-        "node_id": "current"
+        "node_id": "viseme/current"
       },
       "to": {
-        "node_id": "o85",
+        "node_id": "out/viseme/state",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "current"
+        "node_id": "viseme/current"
       },
       "to": {
-        "node_id": "o86",
+        "node_id": "out/feedback",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "say",
+        "node_id": "say/call",
         "output": "done"
       },
       "to": {
-        "node_id": "ended",
+        "node_id": "lifecycle/ended",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "n82"
+        "node_id": "viseme/settled"
       },
       "to": {
-        "node_id": "ended",
+        "node_id": "lifecycle/ended",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "ended"
+        "node_id": "lifecycle/ended"
       },
       "to": {
-        "node_id": "lifecycle",
+        "node_id": "lifecycle/status",
         "input": "cond"
       }
     },
     {
       "from": {
-        "node_id": "say"
+        "node_id": "say/call"
       },
       "to": {
-        "node_id": "lifecycle",
+        "node_id": "lifecycle/status",
         "input": "then"
       }
     },
     {
       "from": {
-        "node_id": "st-running"
+        "node_id": "lifecycle/running"
       },
       "to": {
-        "node_id": "lifecycle",
+        "node_id": "lifecycle/status",
         "input": "else"
       }
     },
     {
       "from": {
-        "node_id": "lifecycle"
+        "node_id": "lifecycle/status"
       },
       "to": {
-        "node_id": "o87",
+        "node_id": "out/status",
         "input": "in"
       }
     }

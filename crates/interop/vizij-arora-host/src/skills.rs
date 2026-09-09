@@ -124,7 +124,7 @@ const VISEME_REST: f64 = 0.02;
 /// - empty policy or `track`: write the goal target (and frame) onto the
 ///   ROS4HRI gaze keys and stay `Running` — tracking ends when the goal is
 ///   cancelled or replaced (the halt is the exit);
-/// - `glance` / `reset`: write the target (`reset` recenters on the profile's
+/// - `glance` / `reset`: write the target (`reset` recenters on the mapping's
 ///   far-ahead rest), hold the fixation for [`SETTLE_SECONDS`], then
 ///   `Success`;
 /// - anything else (`social`, `random`, `auto`, unknown): `Failure`, with
@@ -143,25 +143,26 @@ pub fn generate_look_at() -> Json {
 
     // The method's parameters, staged from the run's keys (the spawn-time
     // arguments become these inputs' defaults at graft time).
-    let policy = g.input("in-policy", "task/policy", json!(""));
+    let policy = g.input("in/policy", "task/policy", json!(""));
     let target = g.input(
-        "in-target",
+        "in/target",
         "task/target",
         json!({ "x": 10.0, "y": 0.0, "z": 0.0 }),
     );
-    let frame = g.input("in-frame", "task/frame", json!(""));
+    let frame = g.input("in/frame", "task/frame", json!(""));
 
-    // Gaze: `reset` recenters on the profile's far-ahead rest target (the
+    // Gaze: `reset` recenters on the mapping's far-ahead rest target (the
     // unverged straight-ahead), every other policy tracks the goal. The
     // written keys are the same standard surface the topic plane feeds — the
-    // ROS4HRI profile turns them into eye pose.
+    // ROS4HRI mapping turns them into eye pose.
     let rest = g.node(
-        "rest-target",
+        "gaze/rest_target",
         "constant",
         json!({ "value": { "x": 10.0, "y": 0.0, "z": 0.0 } }),
     );
-    let face_frame = g.node("face-frame", "constant", json!({ "value": "" }));
+    let face_frame = g.node("gaze/face_frame", "constant", json!({ "value": "" }));
     let gaze = g.op(
+        "gaze/target",
         "case",
         json!({ "case_labels": ["reset"] }),
         &[
@@ -170,8 +171,9 @@ pub fn generate_look_at() -> Json {
             ("default", &target),
         ],
     );
-    g.output(&gaze, GAZE_TARGET_KEY.to_string());
+    g.output("out/gaze/target", &gaze, GAZE_TARGET_KEY.to_string());
     let gaze_frame = g.op(
+        "gaze/frame",
         "case",
         json!({ "case_labels": ["reset"] }),
         &[
@@ -180,28 +182,26 @@ pub fn generate_look_at() -> Json {
             ("default", &frame),
         ],
     );
-    g.output(&gaze_frame, GAZE_FRAME_KEY.to_string());
+    g.output("out/gaze/frame", &gaze_frame, GAZE_FRAME_KEY.to_string());
 
     // The fixation clock: the graph clock, latched through the store on the
     // run's first tick (`task/start` reads back what it wrote), so elapsed
     // time is measured from the spawn.
     let now = g.node("clock", "time", json!({}));
-    let start_in = g.input("in-start", "task/start", json!(0.0));
+    let start_in = g.input("in/start", "task/start", json!(0.0));
     let zero = g.constant(0.0);
     let started = g.op(
+        "fixation/started",
         "greaterthan",
         json!({}),
         &[("lhs", &start_in), ("rhs", &zero)],
     );
-    let start = g.op(
-        "if",
-        json!({}),
-        &[("cond", &started), ("then", &start_in), ("else", &now)],
-    );
-    g.output(&start, "task/start".to_string());
-    let elapsed = g.sub(&now, &start);
+    let start = g.select("fixation/start", &started, &start_in, &now);
+    g.output("out/start", &start, "task/start".to_string());
+    let elapsed = g.sub("fixation/elapsed", &now, &start);
     let dwell = g.constant(SETTLE_SECONDS);
     let settled = g.op(
+        "fixation/settled",
         "greaterthan",
         json!({}),
         &[("lhs", &elapsed), ("rhs", &dwell)],
@@ -210,26 +210,23 @@ pub fn generate_look_at() -> Json {
     // The lifecycle: tracking runs until halted; a fixation succeeds once
     // settled; unimplemented policies fail.
     let running = g.node(
-        "st-running",
+        "status/running",
         "constant",
         json!({ "value": status(STATUS_RUNNING_VARIANT_ID) }),
     );
     let success = g.node(
-        "st-success",
+        "status/success",
         "constant",
         json!({ "value": status(STATUS_SUCCESS_VARIANT_ID) }),
     );
     let failure = g.node(
-        "st-failure",
+        "status/failure",
         "constant",
         json!({ "value": status(STATUS_FAILURE_VARIANT_ID) }),
     );
-    let fixation = g.op(
-        "if",
-        json!({}),
-        &[("cond", &settled), ("then", &success), ("else", &running)],
-    );
+    let fixation = g.select("fixation/status", &settled, &success, &running);
     let lifecycle = g.op(
+        "status",
         "case",
         json!({ "case_labels": ["", "track", "glance", "reset"] }),
         &[
@@ -241,19 +238,20 @@ pub fn generate_look_at() -> Json {
             ("default", &failure),
         ],
     );
-    g.output(&lifecycle, "task/status".to_string());
+    g.output("out/status", &lifecycle, "task/status".to_string());
 
     // The errno: unsupported policies answer ROS_ENOTSUP. On every
     // implemented path the run stays silent — an empty text the action plane
     // ignores, so the goal's lifecycle decides the errno (success, cancel,
     // preemption).
-    let silent = g.node("no-errno", "constant", json!({ "value": "" }));
+    let silent = g.node("errno/silent", "constant", json!({ "value": "" }));
     let enotsup = g.node(
-        "errno-enotsup",
+        "errno/enotsup",
         "constant",
         json!({ "value": { "u8": ROS_ENOTSUP } }),
     );
     let errno = g.op(
+        "errno",
         "case",
         json!({ "case_labels": ["", "track", "glance", "reset"] }),
         &[
@@ -265,7 +263,7 @@ pub fn generate_look_at() -> Json {
             ("default", &enotsup),
         ],
     );
-    g.output(&errno, "task/result".to_string());
+    g.output("out/result", &errno, "task/result".to_string());
 
     json!({ "nodes": g.nodes, "edges": g.edges })
 }
@@ -285,23 +283,32 @@ fn viseme_driver(g: &mut GraphBuilder, shape: (&str, &str), envelope: &str) -> S
     let zero = g.constant(0.0);
     // The crossfade's per-step gain, 1 - 0.5^(dt / half-life), from the
     // step's duration.
-    let dt_ns = g.input("in-dt", DT_KEY, json!(0.0));
+    let dt_ns = g.input("in/dt", DT_KEY, json!(0.0));
     let ns_per_s = g.constant(1e9);
-    let dt = g.div(&dt_ns, &ns_per_s);
+    let dt = g.div("crossfade/dt", &dt_ns, &ns_per_s);
     let half_life = g.constant(VISEME_CROSSFADE_HALF_LIFE);
-    let half_lives = g.div(&dt, &half_life);
+    let half_lives = g.div("crossfade/half_lives", &dt, &half_life);
     let half = g.constant(0.5);
-    let decay = g.op("power", json!({}), &[("base", &half), ("exp", &half_lives)]);
+    let decay = g.op(
+        "crossfade/decay",
+        "power",
+        json!({}),
+        &[("base", &half), ("exp", &half_lives)],
+    );
     let one = g.constant(1.0);
-    let gain = g.sub(&one, &decay);
+    let gain = g.sub("crossfade/gain", &one, &decay);
     let mut loudest: Option<String> = None;
     for name in VISEME_SHAPES {
         if name == SILENCE_VISEME {
-            g.output(&zero, standard::viseme_path(name));
+            g.output(
+                &format!("out/viseme/{name}"),
+                &zero,
+                standard::viseme_path(name),
+            );
             continue;
         }
         let select = g.node(
-            &format!("sel-{name}"),
+            &format!("viseme/{name}/target"),
             "case",
             json!({ "case_labels": [name] }),
         );
@@ -314,36 +321,46 @@ fn viseme_driver(g: &mut GraphBuilder, shape: (&str, &str), envelope: &str) -> S
         // — a run taking over never snaps, and one ending leaves nothing
         // mid-fade behind.
         let previous = g.input(
-            &format!("prev-{name}"),
+            &format!("in/viseme/{name}"),
             &standard::viseme_path(name),
             json!(0.0),
         );
-        let toward = g.sub(&select, &previous);
-        let step = g.mul(&toward, &gain);
-        let weight = g.add2(&previous, &step);
-        g.output(&weight, standard::viseme_path(name));
+        let toward = g.sub(&format!("viseme/{name}/toward"), &select, &previous);
+        let step = g.mul(&format!("viseme/{name}/step"), &toward, &gain);
+        let weight = g.add(&format!("viseme/{name}/weight"), &previous, &step);
+        g.output(
+            &format!("out/viseme/{name}"),
+            &weight,
+            standard::viseme_path(name),
+        );
         loudest = Some(match loudest {
-            Some(so_far) => g.max2(&so_far, &weight),
+            Some(so_far) => g.max(&format!("viseme/loudest/{name}"), &so_far, &weight),
             None => weight,
         });
     }
     let loudest = loudest.expect("the standard has shapes");
-    let rest = g.constant(VISEME_REST);
-    let settled = g.op("lessthan", json!({}), &[("lhs", &loudest), ("rhs", &rest)]);
+    let at_rest = g.constant(VISEME_REST);
+    let settled = g.op(
+        "viseme/settled",
+        "lessthan",
+        json!({}),
+        &[("lhs", &loudest), ("rhs", &at_rest)],
+    );
     // The state: the shape while the envelope drives it (a driven `sil` is
     // rest already), `sil` otherwise.
     let driven = g.op(
+        "viseme/driven",
         "greaterthan",
         json!({}),
         &[("lhs", envelope), ("rhs", &zero)],
     );
-    let rest = g.text(SILENCE_VISEME);
-    let current = g.node("current", "if", json!({}));
+    let silence = g.text(SILENCE_VISEME);
+    let current = g.node("viseme/current", "if", json!({}));
     g.edge(&driven, &current, "cond");
     g.edge_from(shape_node, shape_port, &current, "then");
-    g.edge(&rest, &current, "else");
-    g.output(&current, standard::VISEME.to_string());
-    g.output(&current, "task/feedback".to_string());
+    g.edge(&silence, &current, "else");
+    g.output("out/viseme/state", &current, standard::VISEME.to_string());
+    g.output("out/feedback", &current, "task/feedback".to_string());
     settled
 }
 
@@ -352,20 +369,17 @@ fn viseme_driver(g: &mut GraphBuilder, shape: (&str, &str), envelope: &str) -> S
 /// the spawn. Returns the elapsed-seconds node.
 fn elapsed_since_spawn(g: &mut GraphBuilder) -> String {
     let now = g.node("clock", "time", json!({}));
-    let start_in = g.input("in-start", "task/start", json!(0.0));
+    let start_in = g.input("in/start", "task/start", json!(0.0));
     let zero = g.constant(0.0);
     let started = g.op(
+        "envelope/started",
         "greaterthan",
         json!({}),
         &[("lhs", &start_in), ("rhs", &zero)],
     );
-    let start = g.op(
-        "if",
-        json!({}),
-        &[("cond", &started), ("then", &start_in), ("else", &now)],
-    );
-    g.output(&start, "task/start".to_string());
-    g.sub(&now, &start)
+    let start = g.select("envelope/start", &started, &start_in, &now);
+    g.output("out/start", &start, "task/start".to_string());
+    g.sub("envelope/elapsed", &now, &start)
 }
 
 /// A behavior `Status` constant node.
@@ -389,49 +403,41 @@ fn status_node(g: &mut GraphBuilder, id: &str, variant: Uuid) -> String {
 /// the envelope: grafted later, it writes last.
 pub fn generate_play_viseme() -> Json {
     let g = &mut GraphBuilder::new();
-    let shape = g.input("in-shape", "task/shape", json!(SILENCE_VISEME));
-    let weight = g.input("in-weight", "task/weight", json!(1.0));
+    let shape = g.input("in/shape", "task/shape", json!(SILENCE_VISEME));
+    let weight = g.input("in/weight", "task/weight", json!(1.0));
 
     let elapsed = elapsed_since_spawn(g);
-    let zero = g.constant(0.0);
-    let one = g.constant(1.0);
     let attack = g.constant(VISEME_ATTACK);
     let release = g.constant(VISEME_RELEASE);
     let total = g.constant(VISEME_ATTACK + VISEME_HOLD + VISEME_RELEASE);
     // The envelope: min(ramp in, ramp out), each clamped to [0, 1].
-    let rising = g.div(&elapsed, &attack);
-    let rise = g.op(
-        "clamp",
-        json!({}),
-        &[("in", &rising), ("min", &zero), ("max", &one)],
-    );
-    let remaining = g.sub(&total, &elapsed);
-    let falling = g.div(&remaining, &release);
-    let fall = g.op(
-        "clamp",
-        json!({}),
-        &[("in", &falling), ("min", &zero), ("max", &one)],
-    );
-    let gate = g.min2(&rise, &fall);
-    let envelope = g.mul(&weight, &gate);
+    let rising = g.div("envelope/rising", &elapsed, &attack);
+    let rise = g.clamp("envelope/rise", &rising, 0.0, 1.0);
+    let remaining = g.sub("envelope/remaining", &total, &elapsed);
+    let falling = g.div("envelope/falling", &remaining, &release);
+    let fall = g.clamp("envelope/fall", &falling, 0.0, 1.0);
+    let gate = g.min("envelope/gate", &rise, &fall);
+    let envelope = g.mul("envelope/weighted", &weight, &gate);
     let settled = viseme_driver(g, (&shape, "out"), &envelope);
 
     // The lifecycle: running until the envelope has closed and the lips
     // have settled.
     let closed = g.op(
+        "lifecycle/closed",
         "greaterthan",
         json!({}),
         &[("lhs", &elapsed), ("rhs", &total)],
     );
-    let ended = g.op("and", json!({}), &[("lhs", &closed), ("rhs", &settled)]);
-    let running = status_node(g, "st-running", STATUS_RUNNING_VARIANT_ID);
-    let success = status_node(g, "st-success", STATUS_SUCCESS_VARIANT_ID);
-    let lifecycle = g.op(
-        "if",
+    let ended = g.op(
+        "lifecycle/ended",
+        "and",
         json!({}),
-        &[("cond", &ended), ("then", &success), ("else", &running)],
+        &[("lhs", &closed), ("rhs", &settled)],
     );
-    g.output(&lifecycle, "task/status".to_string());
+    let running = status_node(g, "lifecycle/running", STATUS_RUNNING_VARIANT_ID);
+    let success = status_node(g, "lifecycle/success", STATUS_SUCCESS_VARIANT_ID);
+    let lifecycle = g.select("lifecycle/status", &ended, &success, &running);
+    g.output("out/status", &lifecycle, "task/status".to_string());
 
     json!({ "nodes": g.nodes, "edges": g.edges })
 }
@@ -447,28 +453,32 @@ pub fn generate_play_viseme() -> Json {
 /// call has ended and the lips have settled; until then it is running.
 pub fn generate_say() -> Json {
     let g = &mut GraphBuilder::new();
-    let args = g.input("in-args", "task/update", Json::Null);
-    let run = g.node("say", "taskrun", json!({ "function": SAY_ID.to_string() }));
+    let args = g.input("in/args", "task/update", Json::Null);
+    let run = g.node(
+        "say/call",
+        "taskrun",
+        json!({ "function": SAY_ID.to_string() }),
+    );
     g.edge(&args, &run, "args");
 
     let viseme = g.node(
-        "viseme",
+        "say/viseme",
         "readrecord",
         json!({ "record_keys": [SAY_VISEME_PARAM_ID.to_string()] }),
     );
     g.edge_from(&run, "mutated", &viseme, "in");
-    let one = g.constant(1.0);
-    let settled = viseme_driver(g, (&viseme, "field_0"), &one);
+    let full = g.constant(1.0);
+    let settled = viseme_driver(g, (&viseme, "field_0"), &full);
 
-    let ended = g.node("ended", "and", json!({}));
+    let ended = g.node("lifecycle/ended", "and", json!({}));
     g.edge_from(&run, "done", &ended, "lhs");
     g.edge(&settled, &ended, "rhs");
-    let running = status_node(g, "st-running", STATUS_RUNNING_VARIANT_ID);
-    let lifecycle = g.node("lifecycle", "if", json!({}));
+    let running = status_node(g, "lifecycle/running", STATUS_RUNNING_VARIANT_ID);
+    let lifecycle = g.node("lifecycle/status", "if", json!({}));
     g.edge(&ended, &lifecycle, "cond");
     g.edge(&run, &lifecycle, "then");
     g.edge(&running, &lifecycle, "else");
-    g.output(&lifecycle, "task/status".to_string());
+    g.output("out/status", &lifecycle, "task/status".to_string());
 
     json!({ "nodes": g.nodes, "edges": g.edges })
 }
@@ -552,7 +562,7 @@ pub fn embedded_graph_id(skill_id: &str) -> String {
 }
 
 /// A skill's canonical fragment as JSON — face-independent by construction
-/// (placeholder `task/*` paths), so unlike a profile source it takes no rig
+/// (placeholder `task/*` paths), so unlike a mapping source it takes no rig
 /// prefix. `None` for an unknown id.
 pub fn skill_source(id: &str) -> Option<Json> {
     let skill = skill(id)?;

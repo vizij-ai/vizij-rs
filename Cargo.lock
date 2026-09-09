@@ -502,7 +502,7 @@ dependencies = [
  "async-trait",
  "futures",
  "log",
- "ros2-client-multi-rmw 0.12.0",
+ "ros2-client-multi-rmw",
  "serde",
  "serde_json",
  "tokio",
@@ -2651,6 +2651,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bindgen"
 version = "0.69.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3039,6 +3048,21 @@ dependencies = [
  "jobserver",
  "libc",
  "shlex 2.0.1",
+]
+
+[[package]]
+name = "cdr-encoding"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73f0cdb643d85bb03b1b786ab8d332747f386f0a25b19367d559b437f44f1e46"
+dependencies = [
+ "byteorder",
+ "log",
+ "paste",
+ "serde",
+ "serde_repr",
+ "static_assertions",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -8801,44 +8825,15 @@ dependencies = [
 
 [[package]]
 name = "ros2-client-multi-rmw"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd046a2d7fabf807d119dc2315e020e9d4e5a69e827a6c71990f6ebfb5751adc"
-dependencies = [
- "async-channel",
- "bstr",
- "bytes",
- "cdr-encoding-size",
- "chrono",
- "clap 4.5.53",
- "futures",
- "itertools 0.14.0",
- "lazy_static",
- "libc",
- "log",
- "mio 0.6.23",
- "mio-extras",
- "nom 8.0.0",
- "pin-utils",
- "rustdds",
- "serde",
- "serde_repr",
- "sha2",
- "tracing",
- "uuid",
- "widestring",
- "xxhash-rust",
-]
-
-[[package]]
-name = "ros2-client-multi-rmw"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7c88980573e47852ffc5f152dbb1cc63ba7536f19f3da4dac9931f416bbba55"
 dependencies = [
  "async-channel",
  "bstr",
+ "byteorder",
  "bytes",
+ "cdr-encoding 0.10.2",
  "cdr-encoding-size",
  "chrono",
  "clap 4.5.53",
@@ -8859,6 +8854,8 @@ dependencies = [
  "uuid",
  "widestring",
  "xxhash-rust",
+ "zenoh",
+ "zenoh-ext",
 ]
 
 [[package]]
@@ -8928,7 +8925,7 @@ dependencies = [
  "bit-vec 0.8.0",
  "byteorder",
  "bytes",
- "cdr-encoding",
+ "cdr-encoding 0.11.0",
  "cdr-encoding-size",
  "chrono",
  "enumflags2",
@@ -10981,7 +10978,7 @@ dependencies = [
  "log",
  "rand 0.9.5",
  "rodio 0.20.1",
- "ros2-client-multi-rmw 0.11.0",
+ "ros2-client-multi-rmw",
  "serde",
  "serde_json",
  "tokio",
@@ -11051,7 +11048,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-api-core"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "arora-types",
  "hashbrown 0.17.1",
@@ -11082,7 +11079,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-behavior"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
@@ -11113,11 +11110,13 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-host"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "arora-behavior",
+ "arora-types",
  "log",
+ "serde",
  "serde_json",
  "uuid",
  "vizij-api-core",
@@ -11133,9 +11132,8 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-tts"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
- "arora-behavior-tree-types",
  "arora-engine 4.1.0",
  "arora-types",
  "log",
@@ -11144,6 +11142,7 @@ dependencies = [
  "serde",
  "tokio",
  "uuid",
+ "vizij-arora-behavior",
  "vizij-graph-core",
 ]
 
@@ -11191,7 +11190,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-graph-core"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -13042,6 +13041,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serde_yaml",
+ "toml 0.9.12+spec-1.1.0",
  "tracing",
  "uhlc",
  "validated_struct",
@@ -13077,6 +13077,26 @@ dependencies = [
  "rand_chacha 0.3.1",
  "sha3",
  "zenoh-result",
+]
+
+[[package]]
+name = "zenoh-ext"
+version = "1.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e4de171bff459816b1ca9e6657c4ae9783d2c1fc569e1721a380521425e897d"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "flume",
+ "futures",
+ "leb128",
+ "serde",
+ "tokio",
+ "tracing",
+ "uhlc",
+ "zenoh",
+ "zenoh-macros",
+ "zenoh-util",
 ]
 
 [[package]]

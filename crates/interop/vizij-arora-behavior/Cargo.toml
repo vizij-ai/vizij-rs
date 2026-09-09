@@ -18,7 +18,7 @@ uuid = "1"
 vizij-api-core = { version = "1", path = "../../api/vizij-api-core" }
 vizij-graph-core = { version = "1", path = "../../node-graph/vizij-graph-core" }
 # The skill fragments (the gaze contract grafts the shipped look_at asset).
-vizij-arora-host = { version = "1", path = "../vizij-arora-host" }
+vizij-arora-host = { version = "2", path = "../vizij-arora-host" }
 
 [dev-dependencies]
 arora-simple-data-store = "2"
