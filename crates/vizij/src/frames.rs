@@ -19,7 +19,7 @@ use arora_types::value::Value;
 use crate::view::{DeviceRes, OffscreenTarget};
 
 /// The store key the rendered frame is published under.
-const FRAME_KEY: &str = "view/frame";
+pub(crate) const FRAME_KEY: &str = "view/frame";
 
 /// How a published frame's pixels are encoded.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, clap::ValueEnum)]
@@ -115,7 +115,7 @@ fn to_rgba8(image: &Image) -> Option<Vec<u8>> {
 
 /// The frame as a `view/frame` value: `{ width, height, format, data }`, a
 /// string-keyed record so a bridge consumer reads it without a schema.
-fn encode_frame(rgba: &[u8], width: u32, height: u32, format: FrameFormat) -> Value {
+pub(crate) fn encode_frame(rgba: &[u8], width: u32, height: u32, format: FrameFormat) -> Value {
     let (encoded, format_name) = match format {
         FrameFormat::Raw => (rgba.to_vec(), "rgba8"),
         FrameFormat::Png => (encode_png(rgba, width, height), "png"),
