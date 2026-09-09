@@ -28,6 +28,16 @@ pub const FRAME_KEY: &str = "view/frame";
 /// The `header.frame_id` every frame carries: the face is its own frame.
 pub const FRAME_ID: &str = "robot_face";
 
+/// The `format` a PNG frame declares, in the shape `CompressedImage` specifies:
+/// `ORIG_PIXFMT; CODEC compressed [COMPRESSED_PIXFMT]`. The pattern is what
+/// matters — a `format` that does not match it, `"png"` included, is defined to
+/// be read as a **bgr8 JPEG**, so the codec name alone silently mis-describes
+/// the buffer. The message lists only `[bgr8, rgb8, bgr16, rgb16]` as png
+/// compressed pixel formats and our frames keep their alpha, so the compressed
+/// format states what the buffer is rather than the nearest listed value; a PNG
+/// carries its own colour type, so a decoder reads the truth either way.
+pub const PNG_FORMAT: &str = "rgba8; png compressed rgba8";
+
 /// How a published frame's pixels are encoded — and, with it, which ROS image
 /// message and topic the frame rides.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -62,7 +72,7 @@ impl FrameFormat {
 pub fn raw_frame(width: u32, height: u32, rgba: Vec<u8>, stamp: SystemTime) -> Value {
     static TYPE: OnceLock<(low::Type, TypeRegistry)> = OnceLock::new();
     let (ty, registry) = TYPE.get_or_init(Image::arora_type_with_registry);
-    seed(
+    seed_around_pixels(
         &Image {
             header: header(stamp),
             height,
@@ -70,8 +80,9 @@ pub fn raw_frame(width: u32, height: u32, rgba: Vec<u8>, stamp: SystemTime) -> V
             encoding: "rgba8".to_string(),
             is_bigendian: 0,
             step: width * 4,
-            data: rgba,
+            data: Vec::new(),
         },
+        rgba,
         ty,
         registry,
     )
@@ -82,12 +93,13 @@ pub fn raw_frame(width: u32, height: u32, rgba: Vec<u8>, stamp: SystemTime) -> V
 pub fn compressed_frame(format: &str, data: Vec<u8>, stamp: SystemTime) -> Value {
     static TYPE: OnceLock<(low::Type, TypeRegistry)> = OnceLock::new();
     let (ty, registry) = TYPE.get_or_init(CompressedImage::arora_type_with_registry);
-    seed(
+    seed_around_pixels(
         &CompressedImage {
             header: header(stamp),
             format: format.to_string(),
-            data,
+            data: Vec::new(),
         },
+        data,
         ty,
         registry,
     )
@@ -104,10 +116,35 @@ fn header(stamp: SystemTime) -> Header {
     }
 }
 
-fn seed<T: Serialize>(message: &T, ty: &low::Type, registry: &TypeRegistry) -> Value {
+/// Seed `message` — whose payload field must be left **empty** — and drop
+/// `pixels` into that field afterwards.
+///
+/// Serde sees a `Vec<u8>` as a sequence, and the seeding bridge materialises one
+/// `Value` per element before packing them back into an `ArrayU8`. A `Value` is
+/// 72 bytes, so a full-size frame costs ~110 MB of transient allocation and
+/// ~430 ms — per frame, on the thread that just rendered it. The pixels are the
+/// one field whose shape is known here without asking serde, so they bypass it
+/// and the message around them stays a handful of scalars.
+fn seed_around_pixels<T: Serialize>(
+    message: &T,
+    pixels: Vec<u8>,
+    ty: &low::Type,
+    registry: &TypeRegistry,
+) -> Value {
     // The message is a plain struct of the registry's own types: seeding it
     // cannot fail short of a codegen/derive mismatch, which the tests catch.
-    to_value_seeded(message, ty, registry).expect("a ROS image message seeds as its own type")
+    let mut value =
+        to_value_seeded(message, ty, registry).expect("a ROS image message seeds as its own type");
+    let Value::Structure(structure) = &mut value else {
+        panic!("a ROS image message seeds as a structure");
+    };
+    let payload = structure
+        .fields
+        .iter_mut()
+        .find(|field| matches!(*field.value, Value::ArrayU8(_)))
+        .expect("a ROS image message has one uint8[] payload field");
+    *payload.value = Value::ArrayU8(pixels);
+    value
 }
 
 #[cfg(test)]
