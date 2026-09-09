@@ -11,6 +11,24 @@ if ! command -v cargo >/dev/null 2>&1; then
   exit 0
 fi
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Which tree the checks are about.
+#
+# git invokes a hook from the root of the working tree it is acting on, and
+# exports GIT_DIR (and friends) pointing at that tree's git directory. This
+# script lives in the main checkout and `core.hooksPath` is an absolute path
+# into it, so deriving the root from the script's own location aims the checks
+# at whatever the main checkout happens to be holding — a different branch,
+# whenever the commit or push comes from a `git worktree`.
+#
+# The inherited environment has to go with it. Left set, GIT_DIR makes every
+# later git command read the *pushing* tree's index against the *main*
+# checkout's files, so `git status` reports dozens of modifications to files
+# nobody touched, and the clean-tree check can never pass from a worktree.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_QUARANTINE_PATH
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "$REPO_ROOT" ]]; then
+  echo "[pre-commit] no working tree to check; skipping checks"
+  exit 0
+fi
 cd "$REPO_ROOT"
 pnpm run hook:pre-commit
