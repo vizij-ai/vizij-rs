@@ -185,7 +185,7 @@ impl Profile {
 /// [`crate::standard`].
 ///
 /// This is the full standard, not the subset any one mapping happens to reach.
-/// The ROS4HRI mapping covers 33 of the 35 muscle controls (`jaw_left` and
+/// The ROS4HRI mapping covers 34 of the 36 muscle-tier keys (`jaw_left` and
 /// `jaw_right` have no FACS code, so its action-unit channel cannot express
 /// them); that difference is only computable because this set is declared
 /// independently.
@@ -222,14 +222,24 @@ pub fn vizij_face_profile() -> Profile {
             }),
         );
     }
+    // The de-facto jaw-open path: the same muscle as `face/jaw_open`, under
+    // the name every current face implements.
+    keys.push(
+        ProfileKey::weight(standard::MOUTH_JAW_OPEN).with_meta(KeyMeta {
+            au: Some(26),
+            arkit: Some("jawOpen".into()),
+            tier: Some("muscle".into()),
+        }),
+    );
 
     Profile {
         id: "vizij-face".into(),
         version: "v1".into(),
         title: "Vizij face standard".into(),
         description: "The portable face interface: gaze and lids, 25 named expressions, \
-                      15 visemes, and 35 muscle controls keyed to FACS action units and \
-                      ARKit blendshapes."
+                      15 visemes, and 36 muscle controls keyed to FACS action units and \
+                      ARKit blendshapes (35 named per FACS/ARKit, plus the de-facto \
+                      jaw-open path)."
             .into(),
         scope: Scope::Face,
         keys,
@@ -464,13 +474,13 @@ mod tests {
         assert_eq!(tier("gaze"), 6);
         assert_eq!(tier("expression"), 25);
         assert_eq!(tier("viseme"), 15);
-        assert_eq!(tier("muscle"), 35);
-        assert_eq!(face.keys.len(), 81);
+        assert_eq!(tier("muscle"), 36);
+        assert_eq!(face.keys.len(), 82);
         assert_eq!(face.tiers(), ["gaze", "expression", "viseme", "muscle"]);
         assert_eq!(face.scope, Scope::Face);
     }
 
-    /// Every muscle control carries the ARKit name it corresponds to; the AU
+    /// Every muscle-tier key carries the ARKit name it corresponds to; the AU
     /// code is optional because two of them (`jaw_left`, `jaw_right`) have no
     /// FACS code — which is exactly why ROS4HRI cannot reach them.
     #[test]
@@ -539,8 +549,8 @@ mod tests {
 
     /// The shipped mapping reads the whole `ros4hri` profile but `gaze/frame`
     /// (the look_at skill consumes it) and writes the whole `vizij-face`
-    /// profile but the two AU-less jaw controls — plus one path no profile
-    /// declares.
+    /// profile but the two AU-less jaw controls — and nothing the profile
+    /// does not declare.
     #[test]
     fn surface_reconciles_the_ros4hri_mapping_against_the_profiles() {
         let spec: Json = serde_json::from_str(ros4hri::MAPPING_JSON).unwrap();
@@ -580,6 +590,6 @@ mod tests {
             .into_iter()
             .filter(|p| !declared.paths().contains(p))
             .collect();
-        assert_eq!(undeclared, ["standard/vizij/mouth/morph/jaw_open"]);
+        assert!(undeclared.is_empty(), "undeclared outputs: {undeclared:?}");
     }
 }

@@ -198,6 +198,12 @@ pub fn face_path(control: &str) -> String {
     format!("{VIZIJ_PREFIX}/face/{control}")
 }
 
+/// The jaw-open control at the path every current face implements — the
+/// same muscle as `face/jaw_open` (AU 26, ARKit `jawOpen`), kept under its
+/// de-facto name so a face rigged before the muscle tier existed still
+/// opens its mouth. Part of the muscle tier.
+pub const MOUTH_JAW_OPEN: &str = "standard/vizij/mouth/morph/jaw_open";
+
 /// The face controls expressing a FACS action unit — the lateralized pair
 /// where the control splits left/right, a single control otherwise, empty for
 /// codes the muscle tier does not express (visibility codes, head and eye

@@ -18,14 +18,14 @@ const listed = await profiles();
 assert.deepEqual(
   listed.map((p) => [p.id, p.scope, p.keys]),
   [
-    ["vizij-face", "face", 81],
+    ["vizij-face", "face", 82],
     ["ros4hri", "device", 25],
   ],
 );
 
 // A face-scoped profile is addressed to the face: every path takes the prefix.
 const face = await profile("vizij-face", "rig/quori/");
-assert.equal(face.keys.length, 81);
+assert.equal(face.keys.length, 82);
 assert.ok(face.keys.every((k) => k.path.startsWith("rig/quori/standard/vizij/")));
 const jaw = face.keys.find((k) => k.path.endsWith("/face/jaw_open"));
 assert.deepEqual(jaw.meta, { au: 26, arkit: "jawOpen", tier: "muscle" });

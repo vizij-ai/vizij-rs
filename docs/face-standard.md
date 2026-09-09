@@ -11,7 +11,7 @@ module](../crates/interop/vizij-arora-host/src/standard.rs), which is the
 authoritative source; this page mirrors it. As data, the same vocabulary is
 the **`vizij-face` profile**
 ([`profiles/vizij-face.json`](../crates/interop/vizij-arora-host/profiles/vizij-face.json)):
-an interface of 81 typed paths, face-scoped — every face carries its own copy
+an interface of 82 typed paths, face-scoped — every face carries its own copy
 under its rig prefix — with each key's tier, FACS action unit, and ARKit
 blendshape as metadata. See [profiles and mappings](profiles-and-mappings.md).
 
@@ -123,6 +123,10 @@ movement — owned by the gaze tier) have none.
 | | | | `jaw_forward` | 29 | jawForward |
 
 AU 45 (blink) aliases AU 43 (eyes closed) — both command the eyelid controls.
+
+One more muscle-tier path, `standard/vizij/mouth/morph/jaw_open`, is the same
+muscle as `jaw_open` (AU 26, ARKit `jawOpen`) under the de-facto name every
+current face implements; the ROS4HRI mapping drives both.
 
 ## Reaching the vocabulary in code
 
