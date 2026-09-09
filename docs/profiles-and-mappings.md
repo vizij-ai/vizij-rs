@@ -83,6 +83,13 @@ generated from a builder and drift-tested like a profile. Its `input` nodes
 read the profile it consumes; its `output` nodes write the profile it
 produces. Vizij ships one, [ROS4HRI](ros4hri.md).
 
+The assets are written for readers as much as for the runtime: node ids are
+hierarchical and say what each node holds — `in/<key>` and `out/<control>`
+for the two profiles, `<channel>/<item>/<step>` for the computation between
+them, `const/<value>` for shared constants — so a mapping can be reviewed
+channel by channel and diffed meaningfully (see [the ROS4HRI
+mapping](ros4hri.md#embedding-and-editing-the-mapping)).
+
 A mapping composes into a face's behavior between the face's own graphs and
 any playing program, last writer wins. A face may **embed** a mapping
 (`vizij-bundle add-standard`) as its pinned copy, which then replaces the

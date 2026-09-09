@@ -156,6 +156,16 @@ Rust reads it (and regenerates it from the node-graph builder; a test fails if
 the committed file drifts), so it is programmatically available *and* separately
 editable and exportable.
 
+The asset reads by channel. Node ids are hierarchical: `in/…` are the
+`ros4hri` profile's keys it consumes, `out/…` the `vizij-face` controls it
+produces (named by control, `out/expression/happy`, `out/left_eye/pos/x`),
+and `expression/…`, `gaze/…`, `au/…`, `viseme/…`, `blink/…` the computation
+of each channel — `expression/happy/kernel` is the circumplex weight of the
+happy anchor, `gaze/left/yaw/atan` the left eye's yaw before normalization,
+`blink/pulse` the idle pulse. Scalar constants are shared and named for their
+value (`const/0.28`). Every node's id says what it holds; a diff of the asset
+is a diff of the behavior.
+
 - **Bundle it into a face** with
   [`vizij-bundle`](../crates/tools/vizij-bundle/README.md):
   `vizij-bundle add-standard face.glb --standard ros4hri -o out.glb` grafts the

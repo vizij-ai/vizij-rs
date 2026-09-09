@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "id": "in-policy",
+      "id": "in/policy",
       "type": "input",
       "params": {
         "path": "task/policy",
@@ -9,7 +9,7 @@
       }
     },
     {
-      "id": "in-target",
+      "id": "in/target",
       "type": "input",
       "params": {
         "path": "task/target",
@@ -21,7 +21,7 @@
       }
     },
     {
-      "id": "in-frame",
+      "id": "in/frame",
       "type": "input",
       "params": {
         "path": "task/frame",
@@ -29,7 +29,7 @@
       }
     },
     {
-      "id": "rest-target",
+      "id": "gaze/rest_target",
       "type": "constant",
       "params": {
         "value": {
@@ -40,14 +40,14 @@
       }
     },
     {
-      "id": "face-frame",
+      "id": "gaze/face_frame",
       "type": "constant",
       "params": {
         "value": ""
       }
     },
     {
-      "id": "n1",
+      "id": "gaze/target",
       "type": "case",
       "params": {
         "case_labels": [
@@ -56,14 +56,14 @@
       }
     },
     {
-      "id": "o2",
+      "id": "out/gaze/target",
       "type": "output",
       "params": {
         "path": "standard/ros4hri/gaze/target"
       }
     },
     {
-      "id": "n3",
+      "id": "gaze/frame",
       "type": "case",
       "params": {
         "case_labels": [
@@ -72,7 +72,7 @@
       }
     },
     {
-      "id": "o4",
+      "id": "out/gaze/frame",
       "type": "output",
       "params": {
         "path": "standard/ros4hri/gaze/frame"
@@ -84,7 +84,7 @@
       "params": {}
     },
     {
-      "id": "in-start",
+      "id": "in/start",
       "type": "input",
       "params": {
         "path": "task/start",
@@ -92,48 +92,48 @@
       }
     },
     {
-      "id": "c5",
+      "id": "const/0",
       "type": "constant",
       "params": {
         "value": 0.0
       }
     },
     {
-      "id": "n6",
+      "id": "fixation/started",
       "type": "greaterthan",
       "params": {}
     },
     {
-      "id": "n7",
+      "id": "fixation/start",
       "type": "if",
       "params": {}
     },
     {
-      "id": "o8",
+      "id": "out/start",
       "type": "output",
       "params": {
         "path": "task/start"
       }
     },
     {
-      "id": "n9",
+      "id": "fixation/elapsed",
       "type": "subtract",
       "params": {}
     },
     {
-      "id": "c10",
+      "id": "const/0.6",
       "type": "constant",
       "params": {
         "value": 0.6
       }
     },
     {
-      "id": "n11",
+      "id": "fixation/settled",
       "type": "greaterthan",
       "params": {}
     },
     {
-      "id": "st-running",
+      "id": "status/running",
       "type": "constant",
       "params": {
         "value": {
@@ -146,7 +146,7 @@
       }
     },
     {
-      "id": "st-success",
+      "id": "status/success",
       "type": "constant",
       "params": {
         "value": {
@@ -159,7 +159,7 @@
       }
     },
     {
-      "id": "st-failure",
+      "id": "status/failure",
       "type": "constant",
       "params": {
         "value": {
@@ -172,12 +172,12 @@
       }
     },
     {
-      "id": "n12",
+      "id": "fixation/status",
       "type": "if",
       "params": {}
     },
     {
-      "id": "n13",
+      "id": "status",
       "type": "case",
       "params": {
         "case_labels": [
@@ -189,21 +189,21 @@
       }
     },
     {
-      "id": "o14",
+      "id": "out/status",
       "type": "output",
       "params": {
         "path": "task/status"
       }
     },
     {
-      "id": "no-errno",
+      "id": "errno/silent",
       "type": "constant",
       "params": {
         "value": ""
       }
     },
     {
-      "id": "errno-enotsup",
+      "id": "errno/enotsup",
       "type": "constant",
       "params": {
         "value": {
@@ -212,7 +212,7 @@
       }
     },
     {
-      "id": "n15",
+      "id": "errno",
       "type": "case",
       "params": {
         "case_labels": [
@@ -224,7 +224,7 @@
       }
     },
     {
-      "id": "o16",
+      "id": "out/result",
       "type": "output",
       "params": {
         "path": "task/result"
@@ -234,109 +234,109 @@
   "edges": [
     {
       "from": {
-        "node_id": "in-policy"
+        "node_id": "in/policy"
       },
       "to": {
-        "node_id": "n1",
+        "node_id": "gaze/target",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "rest-target"
+        "node_id": "gaze/rest_target"
       },
       "to": {
-        "node_id": "n1",
+        "node_id": "gaze/target",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "in-target"
+        "node_id": "in/target"
       },
       "to": {
-        "node_id": "n1",
+        "node_id": "gaze/target",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "n1"
+        "node_id": "gaze/target"
       },
       "to": {
-        "node_id": "o2",
+        "node_id": "out/gaze/target",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "in-policy"
+        "node_id": "in/policy"
       },
       "to": {
-        "node_id": "n3",
+        "node_id": "gaze/frame",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "face-frame"
+        "node_id": "gaze/face_frame"
       },
       "to": {
-        "node_id": "n3",
+        "node_id": "gaze/frame",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "in-frame"
+        "node_id": "in/frame"
       },
       "to": {
-        "node_id": "n3",
+        "node_id": "gaze/frame",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "n3"
+        "node_id": "gaze/frame"
       },
       "to": {
-        "node_id": "o4",
+        "node_id": "out/gaze/frame",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "in-start"
+        "node_id": "in/start"
       },
       "to": {
-        "node_id": "n6",
+        "node_id": "fixation/started",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "c5"
+        "node_id": "const/0"
       },
       "to": {
-        "node_id": "n6",
+        "node_id": "fixation/started",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n6"
+        "node_id": "fixation/started"
       },
       "to": {
-        "node_id": "n7",
+        "node_id": "fixation/start",
         "input": "cond"
       }
     },
     {
       "from": {
-        "node_id": "in-start"
+        "node_id": "in/start"
       },
       "to": {
-        "node_id": "n7",
+        "node_id": "fixation/start",
         "input": "then"
       }
     },
@@ -345,16 +345,16 @@
         "node_id": "clock"
       },
       "to": {
-        "node_id": "n7",
+        "node_id": "fixation/start",
         "input": "else"
       }
     },
     {
       "from": {
-        "node_id": "n7"
+        "node_id": "fixation/start"
       },
       "to": {
-        "node_id": "o8",
+        "node_id": "out/start",
         "input": "in"
       }
     },
@@ -363,187 +363,187 @@
         "node_id": "clock"
       },
       "to": {
-        "node_id": "n9",
+        "node_id": "fixation/elapsed",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "n7"
+        "node_id": "fixation/start"
       },
       "to": {
-        "node_id": "n9",
+        "node_id": "fixation/elapsed",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n9"
+        "node_id": "fixation/elapsed"
       },
       "to": {
-        "node_id": "n11",
+        "node_id": "fixation/settled",
         "input": "lhs"
       }
     },
     {
       "from": {
-        "node_id": "c10"
+        "node_id": "const/0.6"
       },
       "to": {
-        "node_id": "n11",
+        "node_id": "fixation/settled",
         "input": "rhs"
       }
     },
     {
       "from": {
-        "node_id": "n11"
+        "node_id": "fixation/settled"
       },
       "to": {
-        "node_id": "n12",
+        "node_id": "fixation/status",
         "input": "cond"
       }
     },
     {
       "from": {
-        "node_id": "st-success"
+        "node_id": "status/success"
       },
       "to": {
-        "node_id": "n12",
+        "node_id": "fixation/status",
         "input": "then"
       }
     },
     {
       "from": {
-        "node_id": "st-running"
+        "node_id": "status/running"
       },
       "to": {
-        "node_id": "n12",
+        "node_id": "fixation/status",
         "input": "else"
       }
     },
     {
       "from": {
-        "node_id": "in-policy"
+        "node_id": "in/policy"
       },
       "to": {
-        "node_id": "n13",
+        "node_id": "status",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "st-running"
+        "node_id": "status/running"
       },
       "to": {
-        "node_id": "n13",
+        "node_id": "status",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "st-running"
+        "node_id": "status/running"
       },
       "to": {
-        "node_id": "n13",
+        "node_id": "status",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "n12"
+        "node_id": "fixation/status"
       },
       "to": {
-        "node_id": "n13",
+        "node_id": "status",
         "input": "operand_2"
       }
     },
     {
       "from": {
-        "node_id": "n12"
+        "node_id": "fixation/status"
       },
       "to": {
-        "node_id": "n13",
+        "node_id": "status",
         "input": "operand_3"
       }
     },
     {
       "from": {
-        "node_id": "st-failure"
+        "node_id": "status/failure"
       },
       "to": {
-        "node_id": "n13",
+        "node_id": "status",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "n13"
+        "node_id": "status"
       },
       "to": {
-        "node_id": "o14",
+        "node_id": "out/status",
         "input": "in"
       }
     },
     {
       "from": {
-        "node_id": "in-policy"
+        "node_id": "in/policy"
       },
       "to": {
-        "node_id": "n15",
+        "node_id": "errno",
         "input": "selector"
       }
     },
     {
       "from": {
-        "node_id": "no-errno"
+        "node_id": "errno/silent"
       },
       "to": {
-        "node_id": "n15",
+        "node_id": "errno",
         "input": "operand_0"
       }
     },
     {
       "from": {
-        "node_id": "no-errno"
+        "node_id": "errno/silent"
       },
       "to": {
-        "node_id": "n15",
+        "node_id": "errno",
         "input": "operand_1"
       }
     },
     {
       "from": {
-        "node_id": "no-errno"
+        "node_id": "errno/silent"
       },
       "to": {
-        "node_id": "n15",
+        "node_id": "errno",
         "input": "operand_2"
       }
     },
     {
       "from": {
-        "node_id": "no-errno"
+        "node_id": "errno/silent"
       },
       "to": {
-        "node_id": "n15",
+        "node_id": "errno",
         "input": "operand_3"
       }
     },
     {
       "from": {
-        "node_id": "errno-enotsup"
+        "node_id": "errno/enotsup"
       },
       "to": {
-        "node_id": "n15",
+        "node_id": "errno",
         "input": "default"
       }
     },
     {
       "from": {
-        "node_id": "n15"
+        "node_id": "errno"
       },
       "to": {
-        "node_id": "o16",
+        "node_id": "out/result",
         "input": "in"
       }
     }
