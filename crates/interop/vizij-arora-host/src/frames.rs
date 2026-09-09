@@ -23,7 +23,7 @@ use arora_types::AroraType;
 use serde::Serialize;
 
 /// The store key the rendered frame is published under.
-pub const FRAME_KEY: &str = "view/frame";
+pub const FRAME_KEY: &str = "display/face";
 
 /// The `header.frame_id` every frame carries: the face is its own frame.
 pub const FRAME_ID: &str = "robot_face";

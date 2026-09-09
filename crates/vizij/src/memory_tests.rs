@@ -179,7 +179,7 @@ pub(crate) const FAN_OUT: usize = 16;
 pub(crate) const STEP: Duration = Duration::from_millis(16);
 
 /// The device alone — no bridge — under the heaviest thing that crosses its
-/// seams: the view's raw frame feed landing in the store as a `view/frame`
+/// seams: the view's raw frame feed landing in the store as a `display/face`
 /// reading, while the graph writes its keys every step.
 ///
 /// The control for the live-ROS leak test: a rising floor here is the device

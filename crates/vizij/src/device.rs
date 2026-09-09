@@ -94,7 +94,7 @@ pub struct BridgeConfig {
     /// `--studio`: attach the Semio Studio bridge (env-configured).
     #[cfg(feature = "studio")]
     pub studio: bool,
-    /// The format the view will publish `view/frame` in, when it publishes one
+    /// The format the view will publish `display/face` in, when it publishes one
     /// at all. It decides the ROS message the key is declared as, so it has to
     /// be the format the view actually encodes with — a mismatch would have the
     /// bridge encode a frame against the wrong message.

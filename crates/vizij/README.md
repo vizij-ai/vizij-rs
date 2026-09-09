@@ -49,7 +49,7 @@ cargo run -p vizij -- --glb face.glb --snapshot out.png --size 763x760
 | `--snapshot <png>` | — | render one frame offscreen and exit (no window) |
 | `--headless` | off | run windowless, streaming frames into the store |
 | `--size WxH` | `763x486` | offscreen render size (`--snapshot` / `--headless`) |
-| `--frame-rate <hz>` | `15` | publish rendered frames as HAL `view/frame` readings; 0 disables |
+| `--frame-rate <hz>` | `15` | publish rendered frames as HAL `display/face` readings; 0 disables |
 | `--frame-format <fmt>` | `png` | encoding of published frames: `png` a `sensor_msgs/CompressedImage`, `raw` a `sensor_msgs/Image` |
 | `--background <rrggbb>` | `000000` | clear color |
 | `--ambient <f>` | `π/2` | three.js-style ambient intensity |
