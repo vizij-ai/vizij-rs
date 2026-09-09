@@ -149,7 +149,7 @@ Two consequences worth knowing:
   or turn one of them off with `--frame-rate 0`.
 * **The frame is a ROS message, not a self-describing record.** Its fields are
   the registry's ids, so a consumer needs the `sensor_msgs` definition to read
-  it — every ROS tool has it, and nothing else reads `view/frame` today. A
+  it — every ROS tool has it, and nothing else reads `display/face` today. A
   `CompressedImage` also carries no width or height; the dimensions are inside
   the PNG.
 

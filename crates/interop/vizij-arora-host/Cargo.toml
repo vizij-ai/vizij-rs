@@ -26,4 +26,4 @@ arora-msgs-ros2 = { version = "1", optional = true }
 
 [features]
 default = []
-frames = ["dep:arora-msgs-ros2"]
+publish-frames = ["dep:arora-msgs-ros2"]

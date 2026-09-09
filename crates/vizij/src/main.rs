@@ -74,7 +74,7 @@ struct Cli {
     #[arg(long, default_value = "rig,pose-driver,pose,standard-adaptation")]
     graphs: String,
 
-    /// Publish rendered frames into the store as HAL `view/frame` readings, at
+    /// Publish rendered frames into the store as HAL `display/face` readings, at
     /// this rate in Hz (decoupled from the step rate); 0 disables. Works with a
     /// window or headless.
     #[arg(long, default_value_t = 15.0)]
@@ -240,7 +240,7 @@ fn run_window(
     .insert_resource(view::DeviceEvents(std::sync::Mutex::new(events)))
     .add_plugins(view::ViewPlugin);
     // Frame publishing works with a window too (not only headless): capture the
-    // window and push `view/frame` onto the device's reading feed.
+    // window and push `display/face` onto the device's reading feed.
     if frame_config.publishes() {
         app.insert_resource(frame_config)
             .add_plugins(frames::FramesPlugin);
