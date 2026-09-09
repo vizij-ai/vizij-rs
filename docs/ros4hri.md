@@ -140,6 +140,19 @@ already that message: `--frame-format png` publishes a
 names are `image_transport`'s, so `rqt_image_view` and the rest of the ROS
 image tooling display the face without a republisher.
 
+Two consequences worth knowing:
+
+* **The image topic is absolute, so `--ros2 <namespace>` does not move it.**
+  That is the point of a well-known ROS4HRI name — a consumer finds the face
+  without being told where it is — but it means two faces on one ROS graph
+  publish to the same topic. Run them on separate domains (`--ros2 :<domain>`),
+  or turn one of them off with `--frame-rate 0`.
+* **The frame is a ROS message, not a self-describing record.** Its fields are
+  the registry's ids, so a consumer needs the `sensor_msgs` definition to read
+  it — every ROS tool has it, and nothing else reads `view/frame` today. A
+  `CompressedImage` also carries no width or height; the dimensions are inside
+  the PNG.
+
 ### With rmw_zenoh
 
 The `ros2-zenoh` build feature swaps the bridge's RMW backend for the

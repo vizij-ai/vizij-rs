@@ -125,7 +125,7 @@ pub(crate) async fn feed_frames(
     assert!(
         payload > 0,
         "a {side}x{side} {format:?} frame measured no payload — payload_bytes no longer finds the \
-         frame's buffer in {frame:?}"
+         buffer in the frame's value shape"
     );
     let period = Duration::from_secs_f32(1.0 / rate_hz);
     loop {

@@ -149,7 +149,9 @@ pub(crate) fn encode_frame(rgba: &[u8], width: u32, height: u32, format: FrameFo
     let stamp = SystemTime::now();
     match format {
         FrameFormat::Raw => host::raw_frame(width, height, rgba.to_vec(), stamp),
-        FrameFormat::Png => host::compressed_frame("png", encode_png(rgba, width, height), stamp),
+        FrameFormat::Png => {
+            host::compressed_frame(host::PNG_FORMAT, encode_png(rgba, width, height), stamp)
+        }
     }
 }
 
@@ -195,7 +197,7 @@ mod tests {
         let value = encode_frame(&rgba, 2, 1, FrameFormat::Png);
         let frame: CompressedImage =
             from_value(value).expect("a png frame is a sensor_msgs/CompressedImage");
-        assert_eq!(frame.format, "png");
+        assert_eq!(frame.format, "rgba8; png compressed rgba8");
         assert_eq!(
             &frame.data[..8],
             &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]
@@ -207,17 +209,22 @@ mod tests {
 
     /// The declared ROS type has to be the one the value actually is, or the
     /// bridge encodes a frame against the wrong message.
+    /// The declared ROS type and topic have to be the ones the value actually
+    /// is and rides. Asserting they merely *differ* would survive swapping
+    /// them, which is precisely the mistake that breaks `image_transport`
+    /// consumers: a `CompressedImage` announced on the raw-transport name.
     #[test]
-    fn each_format_declares_the_message_it_encodes() {
+    fn each_format_declares_the_message_and_topic_it_encodes() {
         use host::FrameFormat as Ros;
         assert_eq!(Ros::from(FrameFormat::Raw).ros_type(), "sensor_msgs/Image");
+        assert_eq!(Ros::from(FrameFormat::Raw).topic(), "/robot_face/image_raw");
         assert_eq!(
             Ros::from(FrameFormat::Png).ros_type(),
             "sensor_msgs/CompressedImage"
         );
-        assert_ne!(
-            Ros::from(FrameFormat::Raw).topic(),
-            Ros::from(FrameFormat::Png).topic()
+        assert_eq!(
+            Ros::from(FrameFormat::Png).topic(),
+            "/robot_face/image_raw/compressed"
         );
     }
 }
