@@ -49,6 +49,29 @@ Polly's viseme codes, the Piper provider maps espeak-ng phonemes. The run's
 status is the call's, once the lips have settled after the utterance. See
 [Speech (TTS)](../crates/vizij/README.md#speech-tts) for the providers.
 
+## Who plays the visemes
+
+A player is called, never subscribed to: some producer decides what the mouth
+does. `say` is its own producer — the run's provider streams the visemes of
+the speech it synthesizes. For anything else, the caller supplies them: a
+behavior, an action client, or a phoneme aligner calling `play_viseme` once
+per shape.
+
+Two producers exist outside the players and neither reaches them:
+
+- **The ROS4HRI lipsync topic.** `/robot_face/tts` and
+  `/expressive_face/speech` land their text on `standard/ros4hri/speech/text`
+  ([ROS4HRI support](ros4hri.md#the-standardros4hri-key-contract)); nothing
+  routes it into a `say` run, so the text moves no mouth.
+- **The web.** vizij-web runs its own lipsync in JS, against the face's pose
+  weights directly (`rig/<faceId>/poses/<poseId>.weight`) rather than the
+  standard's viseme surface — `@vizij/speech-react`'s Polly speech-mark cursor
+  in vizij-standalone, a phoneme aligner in the agent-face tutorial, each with
+  its own crossfade. The skills registry
+  ([`@vizij/runtime`](../npm/@vizij/runtime/README.md)) serves the fragments to
+  the web, but the standalone app does not yet register the viseme module or
+  the players, so the two platforms lip-sync by different means.
+
 ## Calling a skill
 
 A skill is a described device method, so a behavior calls it like any

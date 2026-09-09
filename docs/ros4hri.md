@@ -7,9 +7,9 @@ a ROS4HRI face command drives any compliant Vizij face.
 
 Support spans both ROS4HRI planes:
 
-- **Topics** — the face-command vocabulary (expressions, action units, gaze,
-  and — as a Vizij extension — visemes) lands on the profile's
-  `standard/ros4hri/*` keys through typed topic endpoints.
+- **Topics** — the face-command vocabulary (expressions, action units, gaze)
+  lands on the profile's `standard/ros4hri/*` keys through typed topic
+  endpoints.
 - **The skill plane** — the device serves ROS4HRI's gaze skill as a native
   ROS 2 action server, [`/skill/look_at`](#the-look_at-skill)
   (`interaction_skills/LookAt` — the standard's only action; `set_expression`
@@ -58,6 +58,7 @@ What a bridge (or a test) writes:
 | `standard/ros4hri/expression/arousal` | f32 `[-1,1]` | `hri_msgs/Expression.arousal` | as above |
 | `standard/ros4hri/gaze/target` | vec3 (m) | a look-at point (face frame: x forward, y left, z up) | per-eye gaze with vergence |
 | `standard/ros4hri/au/<code>` | f32 `[0,1]` | `hri_msgs/FacialActionUnits` | FACS action-unit intensity → muscle controls |
+| `standard/ros4hri/speech/text` | string | `/robot_face/tts`, `/expressive_face/speech` | the utterance to lip-sync — **nothing consumes it yet** (see Lips below) |
 
 ## Per-channel behaviour
 
@@ -74,7 +75,12 @@ What a bridge (or a test) writes:
   `mouth/morph/jaw_open` control.
 - **Lips** — not the profile's: ROS4HRI defines no viseme channel, and the
   face's lipsync is the viseme players' ([skills](skills.md): `play_viseme`,
-  `say`), which write the face standard's viseme weights themselves.
+  `say`), which write the face standard's viseme weights themselves. The
+  standard's lipsync input is a *text* topic, so `speech/text` is a
+  speech-synthesis request, not a face command: turning it into lip motion
+  means spawning a `say` run for the text. Nothing does that today — the key
+  is written and never read, so publishing on `/robot_face/tts` moves no
+  mouth.
 - **Blink** — an idle generator (≈8 s cycle, deterministically jittered, 0.2 s
   parabolic pulse) drives the eyelids, inhibited while the eyes are commanded
   closed or the face is asleep.
