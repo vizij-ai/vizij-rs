@@ -41,7 +41,7 @@ cargo run -p vizij -- --glb face.glb --snapshot out.png --size 763x760
 |---|---|---|
 | `--glb <path>` | required | the face GLB (embedded `RobotData` + `VIZIJ_bundle`) |
 | `--graphs <kinds>` | `rig,pose-driver,pose,standard-adaptation` | compose only these bundle graph kinds |
-| `--no-ros4hri` | off (profile **on**) | drop the built-in [ROS4HRI](../../docs/ros4hri.md) profile |
+| `--no-ros4hri` | off (mapping **on**) | drop the built-in [ROS4HRI](../../docs/ros4hri.md) mapping |
 | `--program <id>` | bundle's active program | autoplay this motiongraph program |
 | `--no-autoplay` | off | hold the rig's authored/neutral pose |
 | `--no-stage-neutral` | off | don't stage the bundle's `neutralInputs` at boot |
@@ -67,7 +67,7 @@ WS bridge):
 with its ROS4HRI exposure preset:
 
 - the typed face topics — `/robot_face/{expression,look_at,tts}` and
-  `/expressive_face/{look_at,speech}` — routed onto the profile's
+  `/expressive_face/{look_at,speech}` — routed onto the `ros4hri` profile's
   `standard/ros4hri/*` keys;
 - the **`/skill/look_at`** action server (`interaction_skills/LookAt`):
   track / glance / reset policies, priority preemption, standard error codes;
