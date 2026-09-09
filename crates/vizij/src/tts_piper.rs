@@ -30,14 +30,13 @@ use vizij_graph_core::task;
 use vizij_piper::{PhonemeEvent, Synthesizer};
 
 use vizij_arora_tts::{
-    say_id, say_signature, text_param_id, viseme_param_id, voice_param_id, SILENCE_VISEME,
+    say_signature, SAY_ID, SAY_TEXT_PARAM_ID, SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID,
+    SILENCE_VISEME,
 };
 
 /// The Piper tts module's id on the device — distinct from the cloud module so
 /// DescribeMethods shows which provider this build carries.
-pub fn module_id() -> Uuid {
-    uuid!("31ca2243-5719-4862-aa57-c30d27cab62e")
-}
+pub const MODULE_ID: Uuid = uuid!("31ca2243-5719-4862-aa57-c30d27cab62e");
 
 /// A handle for spawning: reuse the ambient runtime if one is active, otherwise a
 /// dedicated one. Only a `Handle` is needed.
@@ -72,19 +71,19 @@ struct Run {
 /// The Piper tts module: the described `say` action — the same signature the
 /// cloud provider describes, discoverable over `DescribeMethods`.
 pub fn host_module() -> HostModule {
-    ModuleBuilder::new(module_id())
-        .described_function(say_id(), "say", say_signature(), say)
+    ModuleBuilder::new(MODULE_ID)
+        .described_function(SAY_ID, "say", say_signature(), say)
         .build()
 }
 
 /// Speak `text`, streaming the phoneme at the playhead. Re-invoked each tick
 /// while `Running`; keeps its state in [`RUNS`], keyed by content.
 pub(crate) fn say(call: Call) -> Result<CallResult, CallError> {
-    let text = match arg_string(&call, text_param_id()) {
+    let text = match arg_string(&call, SAY_TEXT_PARAM_ID) {
         Some(text) => text,
         None => return Ok(status_only(task::failure())),
     };
-    if let Some(voice) = arg_string(&call, voice_param_id()) {
+    if let Some(voice) = arg_string(&call, SAY_VOICE_PARAM_ID) {
         if !voice.is_empty() {
             log::debug!(
                 "tts-piper: the voice parameter ({voice}) is ignored — \
@@ -274,7 +273,7 @@ fn with_viseme(status: Value, viseme: &str) -> CallResult {
     CallResult {
         ret: status,
         mutated: vec![StructureField {
-            id: viseme_param_id(),
+            id: SAY_VISEME_PARAM_ID,
             value: Box::new(Value::String(viseme.to_string())),
         }],
     }

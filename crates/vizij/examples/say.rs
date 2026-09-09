@@ -40,7 +40,7 @@ fn main() {
     println!("saying: {text}");
 
     let call = Call {
-        module_id: Some(provider::module_id()),
+        module_id: Some(provider::MODULE_ID),
         id: tts_api::SAY_ID,
         args: vec![StructureField {
             id: tts_api::SAY_TEXT_PARAM_ID,

@@ -417,11 +417,11 @@ fn rig_prefix_of(spec: &str) -> String {
 fn tts_module_id() -> uuid::Uuid {
     #[cfg(not(feature = "tts-piper"))]
     {
-        tts::module_id()
+        tts::MODULE_ID
     }
     #[cfg(feature = "tts-piper")]
     {
-        tts_piper::module_id()
+        tts_piper::MODULE_ID
     }
 }
 

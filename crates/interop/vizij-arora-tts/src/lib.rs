@@ -75,9 +75,7 @@ const DEFAULT_API_BASE: &str = "https://us-central1-semio-vizij.cloudfunctions.n
 const DEFAULT_VOICE: &str = "Ruth";
 
 /// The tts module's id on the device.
-pub fn module_id() -> Uuid {
-    uuid!("4f6f0b0a-62cb-4a1f-ab0d-08f283485091")
-}
+pub const MODULE_ID: Uuid = uuid!("4f6f0b0a-62cb-4a1f-ab0d-08f283485091");
 
 /// A handle for spawning: reuse the ambient runtime if one is active, otherwise a
 /// dedicated one. Only a `Handle` is needed.
@@ -131,7 +129,7 @@ struct VisemeResponse {
 /// The tts module: the described `say` action, discoverable over `DescribeMethods`
 /// and — via its `Status` return — exposable as a ROS 2 action by a bridge.
 pub fn host_module() -> HostModule {
-    ModuleBuilder::new(module_id())
+    ModuleBuilder::new(MODULE_ID)
         .described_function(SAY_ID, "say", say_signature(), say)
         .build()
 }
