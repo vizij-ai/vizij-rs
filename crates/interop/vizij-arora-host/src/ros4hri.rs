@@ -1,8 +1,10 @@
-//! The built-in ROS4HRI profile: a composable graph source mapping the
-//! `standard/ros4hri/*` store keys (what a ROS bridge writes from the ROS4HRI
-//! topics) onto the [`crate::standard`] face controls.
+//! The built-in ROS4HRI mapping: a composable graph source implementing the
+//! `ros4hri` profile — the `standard/ros4hri/*` store keys a ROS bridge writes
+//! from the ROS4HRI topics — in terms of the `vizij-face` profile, the
+//! [`crate::standard`] face controls. Both interfaces are declared as data in
+//! [`crate::profile`]; this module is the operation between them.
 //!
-//! The profile is asset-independent by construction — it only writes standard
+//! The mapping is asset-independent by construction — it only writes standard
 //! control paths; what an expression or a viseme *looks like* stays with the
 //! face (its rig and adaptation graphs). Per channel:
 //!
@@ -35,10 +37,10 @@ use serde_json::{json, Value as Json};
 use crate::graph_builder::GraphBuilder;
 use crate::standard::{self, EXPRESSION_NAMES, FACE_CONTROLS, VISEME_SHAPES};
 
-/// Source id of the composed profile (node ids get `ros4hri::` prefixes).
+/// Source id of the composed mapping (node ids get `ros4hri::` prefixes).
 pub const ROS4HRI_SOURCE_ID: &str = "ros4hri";
 
-/// Prefix of every key the profile consumes.
+/// Prefix of every key the mapping consumes.
 pub const ROS4HRI_PREFIX: &str = "standard/ros4hri";
 
 /// Input keys, as a ROS bridge writes them.
@@ -124,7 +126,7 @@ fn gaze_angle(g: &mut GraphBuilder, num: &str, den: &str) -> String {
     )
 }
 
-/// The composable ROS4HRI profile source: the canonical profile asset
+/// The composable ROS4HRI mapping source: the canonical mapping asset
 /// ([`MAPPING_JSON`]) with `rig_prefix` applied. The prefix is prepended to
 /// every written control path (faces namespace their rig inputs, e.g.
 /// `rig/quori_latest/`); pass `""` for unprefixed controls.
@@ -134,21 +136,21 @@ pub fn ros4hri_source(rig_prefix: &str) -> (String, Json) {
     (ROS4HRI_SOURCE_ID.to_string(), spec)
 }
 
-/// The canonical profile asset, verbatim: the graph as data. This file is
+/// The canonical mapping asset, verbatim: the graph as data. This file is
 /// what the bundler embeds into GLBs and what the web runtime serves; edit it
-/// by regenerating (`vizij-bundle export-profile ros4hri`) — a test keeps it
+/// by regenerating (`vizij-bundle export-mapping ros4hri`) — a test keeps it
 /// in sync with [`generate`].
 pub const MAPPING_JSON: &str = include_str!("../mappings/ros4hri.json");
 
-/// Regenerate the profile graph from first principles, unprefixed — the
+/// Regenerate the mapping graph from first principles, unprefixed — the
 /// export path behind the canonical asset.
 pub fn generate() -> Json {
     build("").1
 }
 
-/// Prepend `rig_prefix` to every path the profile writes (its `output`
-/// nodes). Input paths — the `standard/ros4hri/*` keys a bridge writes — are
-/// device-global and stay untouched.
+/// Prepend `rig_prefix` to every path the mapping writes (its `output`
+/// nodes) — the face-scoped `vizij-face` profile. Input paths — the
+/// device-scoped `ros4hri` profile a bridge writes — stay untouched.
 pub fn apply_rig_prefix(spec: &mut Json, rig_prefix: &str) {
     if rig_prefix.is_empty() {
         return;
@@ -399,9 +401,9 @@ mod tests {
     }
 
     /// The committed asset must equal what the generator produces — otherwise
-    /// `export-profile` was not re-run after editing the builder, and the file
+    /// `export-mapping` was not re-run after editing the builder, and the file
     /// the bundler and web runtime serve is stale. Regenerate with
-    /// `vizij-bundle export-profile ros4hri -o crates/interop/vizij-arora-host/profiles/ros4hri.json`.
+    /// `vizij-bundle export-mapping ros4hri -o crates/interop/vizij-arora-host/mappings/ros4hri.json`.
     #[test]
     fn committed_asset_matches_the_generator() {
         let committed: Json = serde_json::from_str(MAPPING_JSON).expect("asset parses");

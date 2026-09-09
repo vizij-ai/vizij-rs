@@ -502,7 +502,7 @@ dependencies = [
  "async-trait",
  "futures",
  "log",
- "ros2-client-multi-rmw 0.12.0",
+ "ros2-client-multi-rmw",
  "serde",
  "serde_json",
  "tokio",
@@ -8801,37 +8801,6 @@ dependencies = [
 
 [[package]]
 name = "ros2-client-multi-rmw"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd046a2d7fabf807d119dc2315e020e9d4e5a69e827a6c71990f6ebfb5751adc"
-dependencies = [
- "async-channel",
- "bstr",
- "bytes",
- "cdr-encoding-size",
- "chrono",
- "clap 4.5.53",
- "futures",
- "itertools 0.14.0",
- "lazy_static",
- "libc",
- "log",
- "mio 0.6.23",
- "mio-extras",
- "nom 8.0.0",
- "pin-utils",
- "rustdds",
- "serde",
- "serde_repr",
- "sha2",
- "tracing",
- "uuid",
- "widestring",
- "xxhash-rust",
-]
-
-[[package]]
-name = "ros2-client-multi-rmw"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7c88980573e47852ffc5f152dbb1cc63ba7536f19f3da4dac9931f416bbba55"
@@ -10981,7 +10950,7 @@ dependencies = [
  "log",
  "rand 0.9.5",
  "rodio 0.20.1",
- "ros2-client-multi-rmw 0.11.0",
+ "ros2-client-multi-rmw",
  "serde",
  "serde_json",
  "tokio",
@@ -11082,7 +11051,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-behavior"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
@@ -11113,10 +11082,11 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-host"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "arora-behavior",
+ "arora-types",
  "log",
  "serde",
  "serde_json",
