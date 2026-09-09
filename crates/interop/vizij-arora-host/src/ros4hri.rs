@@ -368,7 +368,7 @@ fn build(rig_prefix: &str) -> (String, Json) {
         // Jaw-open also drives the de-facto mouth control every current face
         // implements, so the AU channel moves faces without a muscle tier.
         if code == 26 {
-            let path = "standard/vizij/mouth/morph/jaw_open".to_string();
+            let path = standard::MOUTH_JAW_OPEN.to_string();
             g.output(&out_id(&path), &smooth, out(path));
         }
     }

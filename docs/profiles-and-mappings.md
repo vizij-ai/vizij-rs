@@ -63,7 +63,7 @@ Vizij ships two:
 
 | profile | scope | keys | declared by |
 |---|---|---|---|
-| `vizij-face` | face | 81 — gaze & lids, 25 expressions, 15 visemes, 35 muscle controls | the [face standard](face-standard.md) |
+| `vizij-face` | face | 82 — gaze & lids, 25 expressions, 15 visemes, 36 muscle-tier controls | the [face standard](face-standard.md) |
 | `ros4hri` | device | 40 — expression name/valence/arousal, gaze target and frame, 20 action units, 15 visemes | the [ROS4HRI key contract](ros4hri.md#the-standardros4hri-key-contract) |
 
 Both are generated from the Rust constants
@@ -118,12 +118,9 @@ the declared profiles, the shipped ROS4HRI mapping shows:
 | profile | declares | mapping touches | |
 |---|---|---|---|
 | `ros4hri` | 40 | 39 | `gaze/frame` is consumed by the `look_at` skill, not the mapping |
-| `vizij-face` | 81 | 80 | `jaw_left` / `jaw_right` have no FACS code, so the action-unit channel cannot reach them |
+| `vizij-face` | 82 | 80 | `jaw_left` / `jaw_right` have no FACS code, so the action-unit channel cannot reach them |
 
-And one path no profile declares: the mapping writes
-`standard/vizij/mouth/morph/jaw_open`, the de-facto mouth control every
-current face implements. It stays until the standard either adopts it or the
-mapping stops writing it.
+Every path the mapping writes is declared.
 
 A lifted surface is a bootstrap, never the source of truth: a mapping only
 touches the part of a profile it needs, so the surface can be a strict subset
