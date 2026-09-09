@@ -164,6 +164,27 @@ vizij-web (`apps/vizij-authoring/e2e/`, headed — headless Chromium does not
 composite the WebGL canvas), loading the `quori:latest` / `toasty:basic`
 presets.
 
+## Memory
+
+`memory_tests` wraps the allocator and measures the process' **heap floor** —
+the lowest live-byte reading in a window — before and after a stretch of
+traffic, so anything the device keeps shows up as a rising floor while
+transient allocation does not. Two tests bracket the seams:
+`the_device_alone_keeps_a_flat_heap_under_a_frame_feed` runs the device with no
+bridge under the view's frame feed, and `the_device_keeps_a_flat_heap_in_a_ros_graph`
+(in `ros2_tests`, live DDS) runs the same device in a ROS graph with a peer
+driving its free input and reading its frames back. A flat floor in the first
+and a rising one in the second puts the retention on the ROS 2 path rather than
+the device.
+
+The second is `#[ignore]`d and fails when run: RustDDS retains every large
+sample it publishes, so a face streaming frames over the DDS backend grows by
+several times what it has already delivered ([VIZ-118]). The Zenoh backend does
+not. Run it with `--ignored` to re-measure.
+
+[VIZ-118]: https://linear.app/semio-ai/issue/VIZ-118
+
+
 ## Not yet here
 
 The native app is otherwise complete (VIZ-47): the animation module + clip

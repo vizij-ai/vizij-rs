@@ -16,6 +16,8 @@ mod animation;
 mod device;
 mod frames;
 mod gaze;
+#[cfg(test)]
+mod memory_tests;
 mod meta;
 #[cfg(all(test, feature = "ros2"))]
 mod ros2_tests;

@@ -436,3 +436,191 @@ async fn a_free_input_takes_a_published_data_topic() {
         _ = tokio::time::timeout(Duration::from_secs(40), publisher_flow) => {}
     }
 }
+
+/// Does a device in a ROS graph retain? The whole chain runs — the ROS4HRI
+/// profile's typed topics and skill action, a data topic per store key, the
+/// view's frame feed riding the same seam — while a peer drives the face's free
+/// input and reads a published key back, and the process' heap floor is
+/// compared across twenty seconds of that traffic.
+///
+/// The heap floor is the leak question asked directly (see
+/// [`crate::memory_tests`]); the bridge-less control there,
+/// `the_device_alone_keeps_a_flat_heap_under_a_frame_feed`, discriminates
+/// between the device retaining and the ROS 2 path retaining.
+///
+/// The peer reads the frames back, and the assertion on that comes first: a
+/// graph that never formed, or a writer nobody is draining, would leave the
+/// heap flat for reasons that have nothing to do with retention — and would
+/// equally explain a rising one. Only a run where the frames demonstrably
+/// arrived says anything about memory.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+// Unlike its siblings this is `#[ignore]`d on every platform, and not because of
+// the macOS DDS caveat — the frame topic delivers here perfectly well. It is
+// ignored because it takes 35 s and because it currently **fails by design**:
+// what it measures, RustDDS retaining every large sample it publishes, is real
+// and unfixed (VIZ-118). Run it with `--ignored` to re-measure; a green run is
+// the news.
+#[ignore = "a 35 s live-DDS diagnostic that fails until the RustDDS per-sample retention \
+            is fixed (VIZ-118); run it with --ignored"]
+async fn the_device_keeps_a_flat_heap_in_a_ros_graph() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use arora_bridge_ros2::conversions::topic_name;
+    use arora_bridge_ros2::msg_types::{self, MessageType};
+    use ros2_client::{DEFAULT_PUBLISHER_QOS, DEFAULT_SUBSCRIPTION_QOS};
+
+    use crate::frames::FrameFormat;
+    use crate::memory_tests::{fan_out_spec, feed_frames, heap_floor, KEPT_BUDGET, STEP};
+
+    let _ = env_logger::builder()
+        .parse_filters("warn")
+        .is_test(true)
+        .try_init();
+    let domain_id: u16 = rand::rng().random_range(1..=200);
+
+    // The device a running vizij is: the face's graph writing every actuated
+    // key each step, its free input subscribed, and the ROS4HRI profile.
+    let spec = fan_out_spec();
+    let mut config = arora_bridge_ros2::Ros2BridgeConfig::new("robot", domain_id)
+        .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
+    for (path, ty) in free_inputs(&spec) {
+        config = config.with_input(path, ty);
+    }
+    let bridge = arora_bridge_ros2::Ros2Bridge::new(config).await;
+
+    let rig = RigHal::new();
+    let store = BlackboardStore::new();
+    let mut arora = builder_for(&spec, rig.clone(), store.clone(), &[])
+        .expect("build the device")
+        .with_bridge(Box::new(bridge))
+        .build()
+        .expect("build arora");
+
+    let device = async {
+        loop {
+            arora.step(STEP).expect("step");
+            tokio::time::sleep(STEP).await;
+        }
+    };
+    tokio::pin!(device);
+
+    // The view's frame feed at the app's own defaults (PNG, 15 Hz), a third of
+    // the default render's side: the fattest value the bridge carries.
+    let carried = AtomicUsize::new(0);
+    let frames = feed_frames(rig.clone(), 256, FrameFormat::Png, 15.0, &carried);
+    tokio::pin!(frames);
+
+    // The peer: it drives the face's free input and reads a published key back.
+    let read_back = AtomicUsize::new(0);
+    let subscribed = AtomicUsize::new(0);
+    let peer = async {
+        let (_ctx, mut node) = create_test_node(domain_id, "leak_peer");
+        tokio::spawn(node.spinner().expect("a spinner").spin());
+
+        let in_name =
+            Name::parse(&topic_name("robot", "face/mouth/open")).expect("a valid topic name");
+        let in_topic = node
+            .create_topic(
+                &in_name,
+                msg_types::Float64::message_type_name(),
+                &DEFAULT_PUBLISHER_QOS,
+            )
+            .expect("create the input topic");
+        let publisher = node
+            .create_publisher::<msg_types::Float64>(&in_topic, None)
+            .expect("create the publisher");
+
+        // The peer reads the frame back. `view/frame` rides the scalar plane's
+        // JSON fallback as a `std_msgs/String`, so its published type is fixed;
+        // a numeric rig key's is not (the plane pins a key's ROS type to the
+        // first value it sees, and the graph's F32 outputs and an inbound
+        // `std_msgs/Float64` are not the same type), which is why reading one
+        // of those measures the bridge's type pinning rather than delivery.
+        let out_name = Name::parse(&topic_name("robot", "view/frame")).expect("a valid topic name");
+        let out_topic = node
+            .create_topic(
+                &out_name,
+                msg_types::String::message_type_name(),
+                &DEFAULT_SUBSCRIPTION_QOS,
+            )
+            .expect("create the output topic");
+        let subscription = node
+            .create_subscription::<msg_types::String>(&out_topic, None)
+            .expect("create the subscription");
+
+        tokio::time::timeout(
+            Duration::from_secs(30),
+            publisher.wait_for_subscription(&node),
+        )
+        .await
+        .expect("the device subscribes the free input");
+        subscribed.store(1, Ordering::Relaxed);
+
+        let drive = async {
+            let mut open = 0.0f64;
+            loop {
+                open = (open + 0.01) % 1.0;
+                let _ = publisher
+                    .async_publish(msg_types::Float64 { data: open })
+                    .await;
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        };
+        let read = async {
+            while subscription.async_take().await.is_ok() {
+                read_back.fetch_add(1, Ordering::Relaxed);
+            }
+        };
+        tokio::join!(drive, read);
+    };
+    tokio::pin!(peer);
+
+    let measure = async {
+        // Warm-up: discovery, the publisher created lazily per key, the
+        // subscriptions — allocated once and then held, which is not a leak.
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        let before = heap_floor().await;
+        let carried_before = carried.load(Ordering::Relaxed);
+        tokio::time::sleep(Duration::from_secs(20)).await;
+        let after = heap_floor().await;
+        (
+            before,
+            after,
+            carried.load(Ordering::Relaxed) - carried_before,
+        )
+    };
+    tokio::pin!(measure);
+
+    let (before, after, carried) = tokio::select! {
+        _ = &mut device => unreachable!("the device loop never returns"),
+        _ = &mut frames => unreachable!("the frame feed never returns"),
+        _ = &mut peer => unreachable!("the peer never returns"),
+        measured = &mut measure => measured,
+    };
+
+    let growth = after.saturating_sub(before);
+    eprintln!(
+        "[ros] heap floor {before} -> {after} bytes ({growth} kept) while {carried} bytes of \
+         frames crossed the bridge; {} messages read back",
+        read_back.load(Ordering::Relaxed)
+    );
+    // The traffic first: a ROS graph that never formed would leave the heap
+    // flat for reasons that have nothing to do with retention.
+    assert_eq!(
+        subscribed.load(Ordering::Relaxed),
+        1,
+        "the device never subscribed the free input — it was never in the ROS graph"
+    );
+    assert!(
+        read_back.load(Ordering::Relaxed) > 0,
+        "the peer read no frame back — the outbound plane never delivered, so a flat heap here \
+         would mean nothing"
+    );
+    assert!(
+        growth < carried / KEPT_BUDGET,
+        "the device's heap floor rose {growth} bytes while {carried} bytes of frames crossed the \
+         bridge, with {} of them read back by the peer — something on the ROS 2 path is keeping \
+         what it has already delivered",
+        read_back.load(Ordering::Relaxed)
+    );
+}
