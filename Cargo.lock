@@ -11173,6 +11173,7 @@ dependencies = [
  "vizij-bundle",
  "vizij-graph-core",
  "vizij-piper",
+ "vizij-render-core",
 ]
 
 [[package]]
@@ -11413,6 +11414,19 @@ name = "vizij-piper"
 version = "0.0.0"
 dependencies = [
  "bindgen 0.69.5",
+]
+
+[[package]]
+name = "vizij-render-core"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bevy",
+ "clap 4.6.6",
+ "log",
+ "serde",
+ "serde_json",
+ "vizij-api-core",
 ]
 
 [[package]]

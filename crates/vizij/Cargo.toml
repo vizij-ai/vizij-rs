@@ -59,6 +59,10 @@ tracing = { version = "0.1", default-features = false, features = ["std", "log"]
 # type is shared with vizij-api-core.
 arora-types = "2"
 vizij-api-core = { path = "../api/vizij-api-core" }
+# The renderer: the GLB render metadata, the Bevy scene join, and pose
+# application from a values feed. `cli` derives clap's ValueEnum on `Fit`,
+# which this app exposes as `--fit`.
+vizij-render-core = { path = "../render/vizij-render-core", features = ["cli"] }
 vizij-graph-core = { path = "../node-graph/vizij-graph-core" }
 vizij-arora = { path = "../interop/vizij-arora" }
 # `frames`: the rendered face as its `sensor_msgs` image value, the shape the

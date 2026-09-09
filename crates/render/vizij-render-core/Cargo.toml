@@ -1,0 +1,39 @@
+[package]
+name = "vizij-render-core"
+version = "0.0.0"
+edition = { workspace = true }
+publish = false
+description = "The Vizij render boundary: GLB face metadata, the Bevy scene join, and pose application from a values feed."
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = "0.4"
+
+# The values vocabulary the feed speaks. Shared with arora-types, so a host
+# can hand this crate an arora store's values without converting.
+vizij-api-core = { path = "../../api/vizij-api-core" }
+
+# Trimmed to what the face render uses: the 3d render stack (which brings
+# gltf, pbr, morph targets and the core pipeline), scene spawning, png
+# textures, and windowing. Deliberately without `default_platform` — that
+# collection adds gamepads, clipboard, fonts, x11/wayland and pins the web
+# backend to webgl2, none of which the render path needs. A host that wants
+# those declares them itself; cargo unions the features.
+bevy = { version = "0.19", default-features = false, features = [
+  "default_app",
+  "3d_bevy_render",
+  "scene",
+  "png",
+  "bevy_winit",
+  "std",
+] }
+
+# `Fit` is a CLI knob for hosts that expose one.
+clap = { version = "4", features = ["derive"], optional = true }
+
+[features]
+default = []
+# Derive `clap::ValueEnum` on the public option enums.
+cli = ["dep:clap"]

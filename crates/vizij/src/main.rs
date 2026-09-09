@@ -220,7 +220,10 @@ fn main() -> Result<()> {
         events,
         ..
     } = dev;
-    let face = view::Face { meta, glb_path };
+    let face = view::Face {
+        meta: meta.render,
+        glb_path,
+    };
     let device_res = view::DeviceRes { rig };
 
     match (&cli.snapshot, cli.headless) {
@@ -266,6 +269,7 @@ fn run_window(
             .disable::<bevy::log::LogPlugin>(),
     )
     .insert_resource(face)
+    .insert_resource(view::pose_feed(&device_res.rig))
     .insert_resource(device_res)
     .insert_resource(options)
     .insert_resource(view::DeviceEvents(std::sync::Mutex::new(events)))
@@ -316,6 +320,7 @@ fn run_headless(
         std::time::Duration::from_secs_f64(1.0 / 60.0),
     ))
     .insert_resource(face)
+    .insert_resource(view::pose_feed(&device_res.rig))
     .insert_resource(device_res)
     .insert_resource(options)
     .insert_resource(view::DeviceEvents(std::sync::Mutex::new(events)))
@@ -367,6 +372,7 @@ fn run_snapshot(
     let mut app = App::new();
     app.add_plugins(snapshot::SnapshotPlugin { width, height })
         .insert_resource(face)
+        .insert_resource(view::pose_feed(&device_res.rig))
         .insert_resource(device_res)
         .insert_resource(options)
         .add_plugins(view::ViewPlugin);

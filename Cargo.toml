@@ -6,6 +6,7 @@ members = [
   "crates/node-graph/vizij-graph-wasm",
   "crates/node-graph/vizij-graph-registry-export",
   "crates/api/vizij-api-core",
+  "crates/render/vizij-render-core",
   "crates/api/vizij-api-wasm",
   "crates/test-fixtures/vizij-test-fixtures",
   "crates/interop/vizij-arora",
