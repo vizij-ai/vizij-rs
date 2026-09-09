@@ -21,22 +21,12 @@ use vizij_arora_host::skills;
 
 use crate::TaskFragment;
 
-pub use vizij_arora_host::skills::SILENCE_VISEME;
-
-/// The `say` function's id — identical across providers.
-pub fn say_id() -> Uuid {
-    skills::SAY_ID
-}
-
-pub fn text_param_id() -> Uuid {
-    skills::SAY_TEXT_PARAM_ID
-}
-pub fn voice_param_id() -> Uuid {
-    skills::SAY_VOICE_PARAM_ID
-}
-pub fn viseme_param_id() -> Uuid {
-    skills::SAY_VISEME_PARAM_ID
-}
+/// The `say` function's id and those of its parameters — identical across
+/// providers, which is what lets a provider crate implement the call without
+/// depending on the skill that hosts it.
+pub use vizij_arora_host::skills::{
+    SAY_ID, SAY_TEXT_PARAM_ID, SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID, SILENCE_VISEME,
+};
 
 /// `say(text, voice) -> Status`, with a mutable `viseme` out-parameter. The
 /// `Status` return is the task-run marker a bridge exposes as an action.
@@ -44,9 +34,9 @@ pub fn say_signature() -> Function {
     let mut parameters = HashMap::new();
     let mut parameter_ordering = Vec::new();
     for (id, name, kind, mutable) in [
-        (text_param_id(), "text", PrimitiveKind::String, false),
-        (voice_param_id(), "voice", PrimitiveKind::String, false),
-        (viseme_param_id(), "viseme", PrimitiveKind::String, true),
+        (SAY_TEXT_PARAM_ID, "text", PrimitiveKind::String, false),
+        (SAY_VOICE_PARAM_ID, "voice", PrimitiveKind::String, false),
+        (SAY_VISEME_PARAM_ID, "viseme", PrimitiveKind::String, true),
     ] {
         parameter_ordering.push(id);
         parameters.insert(
@@ -72,10 +62,10 @@ pub fn say_signature() -> Function {
 
 /// The parameter `id → name` map the fragment serves as `task/<name>`
 /// inputs: the call's inputs, not its `viseme` output.
-pub fn say_parameters() -> HashMap<Uuid, String> {
+fn say_parameters() -> HashMap<Uuid, String> {
     HashMap::from([
-        (text_param_id(), "text".to_string()),
-        (voice_param_id(), "voice".to_string()),
+        (SAY_TEXT_PARAM_ID, "text".to_string()),
+        (SAY_VOICE_PARAM_ID, "voice".to_string()),
     ])
 }
 
@@ -118,7 +108,7 @@ mod tests {
         let nodes = spec["nodes"].as_array().unwrap();
         assert!(nodes
             .iter()
-            .any(|n| n["params"]["function"] == say_id().to_string()));
+            .any(|n| n["params"]["function"] == SAY_ID.to_string()));
         let outputs: Vec<&str> = nodes
             .iter()
             .filter(|n| n["kind"] == "output" || n["type"] == "output")
@@ -133,9 +123,9 @@ mod tests {
     #[test]
     fn the_signature_streams_the_viseme_as_an_out_parameter() {
         let signature = say_signature();
-        let viseme = &signature.parameters[&viseme_param_id()];
+        let viseme = &signature.parameters[&SAY_VISEME_PARAM_ID];
         assert!(viseme.mutable);
         assert_eq!(viseme.name, "viseme");
-        assert!(!signature.parameters[&text_param_id()].mutable);
+        assert!(!signature.parameters[&SAY_TEXT_PARAM_ID].mutable);
     }
 }

@@ -21,15 +21,12 @@ use vizij_arora_host::skills;
 
 use crate::TaskFragment;
 
-/// The viseme module's id on the device.
-pub fn module_id() -> Uuid {
-    gen_uuid_from_str("viseme-module")
-}
+/// The viseme module's id on the device — where the `play_viseme` call is
+/// registered.
+pub const MODULE_ID: Uuid = uuid::uuid!("57f4918d-227d-463e-8996-ac242f275990");
 
-/// The play_viseme function's id.
-pub fn play_viseme_id() -> Uuid {
-    gen_uuid_from_str(skills::PLAY_VISEME_FUNCTION)
-}
+/// The `play_viseme` function's id.
+pub const PLAY_VISEME_ID: Uuid = uuid::uuid!("43747a8e-2f6c-42ae-9d14-d440c2195b2f");
 
 /// The play_viseme task fragment, parsed from the shipped asset with the
 /// face's rig prefix on the controls it writes — what the device's

@@ -353,7 +353,7 @@ pub(crate) fn builder_for(
     // in-process transport call) to the host module registered below, and the
     // say skill's hosted `say` call to this build's text-to-speech provider.
     let mut function_modules = animation::function_modules();
-    function_modules.insert(speech::say_id(), tts_module_id());
+    function_modules.insert(speech::SAY_ID, tts_module_id());
     graph.set_function_modules(function_modules);
     // The skills: each described contract rides its host module; the
     // behavior is the shipped fragment the interpreter grafts per run — or
@@ -364,11 +364,11 @@ pub(crate) fn builder_for(
         gaze::look_at_fragment_from(embedded_skills),
     );
     graph.set_task_fragment(
-        viseme::play_viseme_id(),
+        viseme::PLAY_VISEME_ID,
         viseme::play_viseme_fragment_from(embedded_skills, &rig_prefix),
     );
     graph.set_task_fragment(
-        speech::say_id(),
+        speech::SAY_ID,
         speech::say_fragment_from(embedded_skills, &rig_prefix),
     );
     let builder = arora::Arora::builder()
@@ -1087,8 +1087,8 @@ mod tests {
             value: Box::new(value),
         };
         arora_types::call::Call {
-            module_id: Some(viseme::module_id()),
-            id: viseme::play_viseme_id(),
+            module_id: Some(viseme::MODULE_ID),
+            id: viseme::PLAY_VISEME_ID,
             args: vec![
                 arg("shape", Value::String(shape.to_string())),
                 arg("weight", Value::F32(weight)),
@@ -1190,7 +1190,7 @@ mod tests {
         let script = calls.clone();
         let provider = arora::ModuleBuilder::new(PROVIDER)
             .described_function(
-                speech::say_id(),
+                speech::SAY_ID,
                 "say",
                 speech::say_signature(),
                 move |_call| {
@@ -1204,7 +1204,7 @@ mod tests {
                     Ok(CallResult {
                         ret: status,
                         mutated: vec![StructureField {
-                            id: speech::viseme_param_id(),
+                            id: speech::SAY_VISEME_PARAM_ID,
                             value: Box::new(Value::String(viseme.to_string())),
                         }],
                     })
@@ -1219,8 +1219,8 @@ mod tests {
             .to_string();
         let mut graph =
             ProcessingGraph::from_spec(parse_spec(&spec).expect("parse")).expect("encode");
-        graph.set_function_modules(HashMap::from([(speech::say_id(), PROVIDER)]));
-        graph.set_task_fragment(speech::say_id(), speech::say_fragment(""));
+        graph.set_function_modules(HashMap::from([(speech::SAY_ID, PROVIDER)]));
+        graph.set_task_fragment(speech::SAY_ID, speech::say_fragment(""));
         let mut arora = arora::Arora::builder()
             .with_data_store(Box::new(BlackboardStore::new()))
             .with_behavior_interpreter(Box::new(graph))
@@ -1230,14 +1230,14 @@ mod tests {
 
         let say = arora_types::call::Call {
             module_id: Some(PROVIDER),
-            id: speech::say_id(),
+            id: speech::SAY_ID,
             args: vec![
                 StructureField {
-                    id: speech::text_param_id(),
+                    id: speech::SAY_TEXT_PARAM_ID,
                     value: Box::new(Value::String("hello".to_string())),
                 },
                 StructureField {
-                    id: speech::voice_param_id(),
+                    id: speech::SAY_VOICE_PARAM_ID,
                     value: Box::new(Value::String(String::new())),
                 },
             ],

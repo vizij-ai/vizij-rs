@@ -13,9 +13,9 @@ use vizij_arora_host::skills;
 /// the fragment (a misconfiguration) — it fails the run rather than
 /// pretending to move the lips.
 pub fn host_module() -> HostModule {
-    ModuleBuilder::new(module_id())
+    ModuleBuilder::new(MODULE_ID)
         .described_function(
-            play_viseme_id(),
+            PLAY_VISEME_ID,
             skills::PLAY_VISEME_FUNCTION,
             play_viseme_signature(),
             |_call| {

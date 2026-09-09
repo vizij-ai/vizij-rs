@@ -26,7 +26,8 @@ use std::collections::HashMap;
 use uuid::{uuid, Uuid};
 
 pub use vizij_arora_behavior::speech::{
-    say_id, say_signature, text_param_id, viseme_param_id, voice_param_id, SILENCE_VISEME,
+    say_signature, SAY_ID, SAY_TEXT_PARAM_ID, SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID,
+    SILENCE_VISEME,
 };
 
 /// The face-standard shape for a Polly viseme code (the AWS Polly viseme
@@ -131,18 +132,18 @@ struct VisemeResponse {
 /// and — via its `Status` return — exposable as a ROS 2 action by a bridge.
 pub fn host_module() -> HostModule {
     ModuleBuilder::new(module_id())
-        .described_function(say_id(), "say", say_signature(), say)
+        .described_function(SAY_ID, "say", say_signature(), say)
         .build()
 }
 
 /// Speak `text` in `voice`, streaming the current viseme. Re-invoked each tick
 /// while `Running`; keeps its state in [`RUNS`], keyed by content.
 pub fn say(call: Call) -> Result<CallResult, CallError> {
-    let text = match arg_string(&call, text_param_id()) {
+    let text = match arg_string(&call, SAY_TEXT_PARAM_ID) {
         Some(text) => text,
         None => return Ok(status_only(task::failure())),
     };
-    let voice = arg_string(&call, voice_param_id()).unwrap_or_else(|| DEFAULT_VOICE.to_string());
+    let voice = arg_string(&call, SAY_VOICE_PARAM_ID).unwrap_or_else(|| DEFAULT_VOICE.to_string());
     let key = utterance_key(&text, &voice);
     let mut runs = match RUNS.lock() {
         Ok(runs) => runs,
@@ -294,7 +295,7 @@ fn with_viseme(status: Value, viseme: &str) -> CallResult {
     CallResult {
         ret: status,
         mutated: vec![StructureField {
-            id: viseme_param_id(),
+            id: SAY_VISEME_PARAM_ID,
             value: Box::new(Value::String(viseme.to_string())),
         }],
     }

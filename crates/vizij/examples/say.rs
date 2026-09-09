@@ -41,9 +41,9 @@ fn main() {
 
     let call = Call {
         module_id: Some(provider::module_id()),
-        id: tts_api::say_id(),
+        id: tts_api::SAY_ID,
         args: vec![StructureField {
-            id: tts_api::text_param_id(),
+            id: tts_api::SAY_TEXT_PARAM_ID,
             value: Box::new(Value::String(text)),
         }],
     };
@@ -53,7 +53,7 @@ fn main() {
     loop {
         let result = provider::say(call.clone()).expect("say reports failure as a status");
         for field in &result.mutated {
-            if field.id == tts_api::viseme_param_id() {
+            if field.id == tts_api::SAY_VISEME_PARAM_ID {
                 if let Value::String(viseme) = field.value.as_ref() {
                     if *viseme != last {
                         println!("viseme: {viseme}");
