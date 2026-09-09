@@ -33,28 +33,33 @@ A host with its own clock skips `run()` and calls `runtime.step(dtMs)` per
 frame instead (e.g. from `requestAnimationFrame` timestamps); `step()`
 becomes unavailable once `run()` has taken the runtime.
 
-### Standard profiles
+### Profiles and mappings
 
-Vizij ships built-in standard profiles — graphs that map an external face
-standard onto Vizij's own (currently the [ROS4HRI face
-standard](https://github.com/vizij-ai/vizij-rs/blob/main/docs/ros4hri.md)). An
-authoring app can list them and embed one into a face:
+A **profile** is an interface: the set of store paths one party exposes to
+another, each with its type, range, and default. A **mapping** is a graph that
+implements one profile in terms of another — Vizij ships one, the [ROS4HRI
+mapping](https://github.com/vizij-ai/vizij-rs/blob/main/docs/ros4hri.md),
+which consumes the `ros4hri` profile and produces the `vizij-face` profile.
+The model is laid out in
+[profiles and mappings](https://github.com/vizij-ai/vizij-rs/blob/main/docs/profiles-and-mappings.md).
 
 ```ts
-import { standardProfiles, standardProfile } from "@vizij/runtime";
+import { profiles, profile, mappings, mapping } from "@vizij/runtime";
 
-standardProfiles();                       // [{ id, title, description }] — the menu
-const graph = standardProfile("ros4hri", "rig/<faceId>/"); // the profile graph as an object
+profiles();                               // [{ id, version, title, description, scope, keys }]
+const face = profile("vizij-face", "rig/<faceId>/"); // every path, typed, addressed to the face
+const ros = profile("ros4hri");           // device-scoped: absolute paths, no prefix
+
+mappings();                               // [{ id, title, description }] — the opt-in menu
+const graph = mapping("ros4hri", "rig/<faceId>/"); // the mapping graph as an object
 ```
 
-`standardProfiles()` is the introspectable list of what a face may opt into.
-`standardProfile(id, rigPrefix)` returns the profile's node-graph (its output
-paths prefixed for the target face), ready to compose into a graph spec or embed
-into a GLB via the bundle tool.
-
-Values cross the boundary in the normalized `ValueJSON` vocabulary from
-[`@vizij/value-json`](https://www.npmjs.com/package/@vizij/value-json);
-`setValue`/`writeValues` accept its `ValueInput` shorthands.
+`profile(id, rigPrefix)` prefixes only a `face`-scoped profile; a `device`
+profile such as `ros4hri` comes back unchanged. `mapping(id, rigPrefix)`
+returns the mapping's node-graph with its written control paths prefixed for
+the target face, ready to compose into a graph spec or embed into a GLB via the
+bundle tool. `standardProfiles()` / `standardProfile()` remain as deprecated
+aliases of `mappings()` / `mapping()`.
 
 ## Build
 

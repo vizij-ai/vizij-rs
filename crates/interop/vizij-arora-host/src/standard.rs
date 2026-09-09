@@ -2,8 +2,10 @@
 //!
 //! Faces are driven through named controls on the store, under the
 //! `standard/vizij/` prefix. The vocabulary has three tiers, from coarse to
-//! fine; a face implements what it implements, and standard profiles (like the
-//! ROS4HRI one) degrade to the tiers a face covers:
+//! fine; a face implements what it implements, and standard mappings (like the
+//! ROS4HRI one) degrade to the tiers a face covers. The same vocabulary is
+//! declared as data — the `vizij-face` profile in [`crate::profile`] — and a
+//! test holds the two equal:
 //!
 //! - **Gaze & lids** — per-eye position and eyelid controls.
 //! - **Semantic** — one weight per named expression and per viseme shape. The

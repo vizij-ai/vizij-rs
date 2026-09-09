@@ -1,6 +1,6 @@
 [package]
 name = "vizij-arora-behavior"
-version = "1.0.0"
+version = "1.0.1"
 edition.workspace = true
 license = "MIT OR Apache-2.0"
 description = "A Vizij node graph driven as an Arora behavior interpreter (ProcessingGraph)."
@@ -18,7 +18,7 @@ uuid = "1"
 vizij-api-core = { version = "1", path = "../../api/vizij-api-core" }
 vizij-graph-core = { version = "1", path = "../../node-graph/vizij-graph-core" }
 # The skill fragments (the gaze contract grafts the shipped look_at asset).
-vizij-arora-host = { version = "1", path = "../vizij-arora-host" }
+vizij-arora-host = { version = "2", path = "../vizij-arora-host" }
 
 [dev-dependencies]
 arora-simple-data-store = "2"

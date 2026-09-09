@@ -1,0 +1,9306 @@
+{
+  "nodes": [
+    {
+      "id": "const/0",
+      "type": "constant",
+      "params": {
+        "value": 0.0
+      }
+    },
+    {
+      "id": "const/1",
+      "type": "constant",
+      "params": {
+        "value": 1.0
+      }
+    },
+    {
+      "id": "in/expression/name",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/expression/name",
+        "value": ""
+      }
+    },
+    {
+      "id": "in/expression/valence",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/expression/valence",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "in/expression/arousal",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/expression/arousal",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "expression/affect",
+      "type": "join",
+      "params": {}
+    },
+    {
+      "id": "expression/affect/magnitude2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "const/0.0225",
+      "type": "constant",
+      "params": {
+        "value": 0.0225
+      }
+    },
+    {
+      "id": "expression/affect/active",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/affect/rest",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "expression/neutral/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/neutral/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/neutral/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "const/0.36",
+      "type": "constant",
+      "params": {
+        "value": 0.36
+      }
+    },
+    {
+      "id": "expression/neutral/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/angry/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.7,
+            0.7
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/angry/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/angry/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/angry/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/sad/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.7,
+            -0.4
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/sad/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/sad/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/sad/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/happy/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            0.8,
+            0.4
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/happy/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/happy/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/happy/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/surprised/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            0.1,
+            0.8
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/surprised/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/surprised/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/surprised/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/disgusted/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.7,
+            0.4
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/disgusted/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/disgusted/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/disgusted/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/scared/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.7,
+            0.8
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/scared/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/scared/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/scared/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/pleading/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.3,
+            0.3
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/pleading/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/pleading/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/pleading/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/vulnerable/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.4,
+            -0.15
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/vulnerable/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/vulnerable/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/vulnerable/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/despaired/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.8,
+            -0.5
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/despaired/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/despaired/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/despaired/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/guilty/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.5,
+            -0.35
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/guilty/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/guilty/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/guilty/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/disappointed/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.5,
+            -0.25
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/disappointed/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/disappointed/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/disappointed/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/embarrassed/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.35,
+            0.2
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/embarrassed/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/embarrassed/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/embarrassed/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/horrified/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.8,
+            0.8
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/horrified/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/horrified/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/horrified/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/skeptical/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.3,
+            0.1
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/skeptical/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/skeptical/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/skeptical/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/annoyed/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.5,
+            0.4
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/annoyed/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/annoyed/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/annoyed/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/furious/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.8,
+            0.9
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/furious/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/furious/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/furious/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/suspicious/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.4,
+            0.25
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/suspicious/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/suspicious/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/suspicious/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/rejected/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.6,
+            -0.3
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/rejected/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/rejected/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/rejected/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/bored/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.35,
+            -0.55
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/bored/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/bored/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/bored/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/tired/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.15,
+            -0.7
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/tired/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/tired/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/tired/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/asleep/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            0.0,
+            -0.95
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/asleep/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/asleep/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/asleep/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/confused/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            -0.25,
+            0.35
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/confused/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/confused/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/confused/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/amazed/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            0.5,
+            0.7
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/amazed/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/amazed/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/amazed/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/excited/anchor",
+      "type": "constant",
+      "params": {
+        "value": {
+          "f32s": [
+            0.7,
+            0.8
+          ]
+        }
+      }
+    },
+    {
+      "id": "expression/excited/offset",
+      "type": "vectorsubtract",
+      "params": {}
+    },
+    {
+      "id": "expression/excited/distance2",
+      "type": "vectordot",
+      "params": {}
+    },
+    {
+      "id": "expression/excited/kernel",
+      "type": "remap",
+      "params": {}
+    },
+    {
+      "id": "expression/kernel/sum",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "const/0.000001",
+      "type": "constant",
+      "params": {
+        "value": 1e-6
+      }
+    },
+    {
+      "id": "expression/kernel/denominator",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "expression/neutral/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/neutral/affect_blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/neutral/blend",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "expression/neutral/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "neutral",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/neutral/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/neutral",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/neutral"
+      }
+    },
+    {
+      "id": "expression/angry/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/angry/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/angry/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "angry",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/angry/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/angry",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/angry"
+      }
+    },
+    {
+      "id": "expression/sad/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/sad/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/sad/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "sad",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/sad/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/sad",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/sad"
+      }
+    },
+    {
+      "id": "expression/happy/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/happy/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/happy/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "happy",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/happy/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/happy",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/happy"
+      }
+    },
+    {
+      "id": "expression/surprised/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/surprised/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/surprised/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "surprised",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/surprised/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/surprised",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/surprised"
+      }
+    },
+    {
+      "id": "expression/disgusted/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/disgusted/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/disgusted/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "disgusted",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/disgusted/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/disgusted",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/disgusted"
+      }
+    },
+    {
+      "id": "expression/scared/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/scared/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/scared/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "scared",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/scared/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/scared",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/scared"
+      }
+    },
+    {
+      "id": "expression/pleading/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/pleading/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/pleading/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "pleading",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/pleading/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/pleading",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/pleading"
+      }
+    },
+    {
+      "id": "expression/vulnerable/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/vulnerable/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/vulnerable/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "vulnerable",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/vulnerable/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/vulnerable",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/vulnerable"
+      }
+    },
+    {
+      "id": "expression/despaired/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/despaired/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/despaired/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "despaired",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/despaired/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/despaired",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/despaired"
+      }
+    },
+    {
+      "id": "expression/guilty/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/guilty/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/guilty/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "guilty",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/guilty/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/guilty",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/guilty"
+      }
+    },
+    {
+      "id": "expression/disappointed/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/disappointed/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/disappointed/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "disappointed",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/disappointed/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/disappointed",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/disappointed"
+      }
+    },
+    {
+      "id": "expression/embarrassed/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/embarrassed/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/embarrassed/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "embarrassed",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/embarrassed/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/embarrassed",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/embarrassed"
+      }
+    },
+    {
+      "id": "expression/horrified/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/horrified/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/horrified/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "horrified",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/horrified/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/horrified",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/horrified"
+      }
+    },
+    {
+      "id": "expression/skeptical/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/skeptical/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/skeptical/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "skeptical",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/skeptical/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/skeptical",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/skeptical"
+      }
+    },
+    {
+      "id": "expression/annoyed/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/annoyed/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/annoyed/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "annoyed",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/annoyed/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/annoyed",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/annoyed"
+      }
+    },
+    {
+      "id": "expression/furious/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/furious/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/furious/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "furious",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/furious/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/furious",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/furious"
+      }
+    },
+    {
+      "id": "expression/suspicious/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/suspicious/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/suspicious/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "suspicious",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/suspicious/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/suspicious",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/suspicious"
+      }
+    },
+    {
+      "id": "expression/rejected/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/rejected/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/rejected/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "rejected",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/rejected/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/rejected",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/rejected"
+      }
+    },
+    {
+      "id": "expression/bored/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/bored/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/bored/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "bored",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/bored/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/bored",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/bored"
+      }
+    },
+    {
+      "id": "expression/tired/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/tired/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/tired/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "tired",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/tired/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/tired",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/tired"
+      }
+    },
+    {
+      "id": "expression/asleep/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/asleep/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/asleep/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "asleep",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/asleep/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/asleep",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/asleep"
+      }
+    },
+    {
+      "id": "expression/confused/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/confused/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/confused/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "confused",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/confused/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/confused",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/confused"
+      }
+    },
+    {
+      "id": "expression/amazed/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/amazed/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/amazed/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "amazed",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/amazed/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/amazed",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/amazed"
+      }
+    },
+    {
+      "id": "expression/excited/share",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "expression/excited/blend",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "expression/excited/weight",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "excited",
+          ""
+        ]
+      }
+    },
+    {
+      "id": "expression/excited/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/expression/excited",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/expression/excited"
+      }
+    },
+    {
+      "id": "in/gaze/target",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/gaze/target",
+        "value": {
+          "x": 10.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      }
+    },
+    {
+      "id": "gaze/x",
+      "type": "vectorindex",
+      "params": {}
+    },
+    {
+      "id": "gaze/y",
+      "type": "vectorindex",
+      "params": {}
+    },
+    {
+      "id": "const/2",
+      "type": "constant",
+      "params": {
+        "value": 2.0
+      }
+    },
+    {
+      "id": "gaze/z",
+      "type": "vectorindex",
+      "params": {}
+    },
+    {
+      "id": "const/0.1",
+      "type": "constant",
+      "params": {
+        "value": 0.1
+      }
+    },
+    {
+      "id": "gaze/valid",
+      "type": "greaterthan",
+      "params": {}
+    },
+    {
+      "id": "const/0.03",
+      "type": "constant",
+      "params": {
+        "value": 0.03
+      }
+    },
+    {
+      "id": "gaze/left/y",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "gaze/right/y",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "gaze/left/yaw/ratio",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "gaze/left/yaw/ratio2",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "const/0.28",
+      "type": "constant",
+      "params": {
+        "value": 0.28
+      }
+    },
+    {
+      "id": "gaze/left/yaw/correction",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "gaze/left/yaw/denominator",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "gaze/left/yaw/atan",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "const/0.78",
+      "type": "constant",
+      "params": {
+        "value": 0.78
+      }
+    },
+    {
+      "id": "gaze/left/yaw/normalized",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "const/-1",
+      "type": "constant",
+      "params": {
+        "value": -1.0
+      }
+    },
+    {
+      "id": "gaze/left/yaw/angle",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "gaze/right/yaw/ratio",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "gaze/right/yaw/ratio2",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "gaze/right/yaw/correction",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "gaze/right/yaw/denominator",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "gaze/right/yaw/atan",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "gaze/right/yaw/normalized",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "gaze/right/yaw/angle",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "gaze/pitch/ratio",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "gaze/pitch/ratio2",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "gaze/pitch/correction",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "gaze/pitch/denominator",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "gaze/pitch/atan",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "gaze/pitch/normalized",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "gaze/pitch/angle",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "gaze/left/x/gated",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "gaze/left/y/gated",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "gaze/left/x/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "gaze/left/y/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/left_eye/pos/x",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/left_eye/pos/x"
+      }
+    },
+    {
+      "id": "out/left_eye/pos/y",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/left_eye/pos/y"
+      }
+    },
+    {
+      "id": "gaze/right/x/gated",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "gaze/right/y/gated",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "gaze/right/x/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "gaze/right/y/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/right_eye/pos/x",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/right_eye/pos/x"
+      }
+    },
+    {
+      "id": "out/right_eye/pos/y",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/right_eye/pos/y"
+      }
+    },
+    {
+      "id": "in/au/1",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/1",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/1/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/brow_inner_up",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/brow_inner_up"
+      }
+    },
+    {
+      "id": "in/au/2",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/2",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/2/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/brow_outer_up_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/brow_outer_up_left"
+      }
+    },
+    {
+      "id": "out/face/brow_outer_up_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/brow_outer_up_right"
+      }
+    },
+    {
+      "id": "in/au/4",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/4",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/4/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/brow_down_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/brow_down_left"
+      }
+    },
+    {
+      "id": "out/face/brow_down_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/brow_down_right"
+      }
+    },
+    {
+      "id": "in/au/5",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/5",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/5/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/eye_wide_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/eye_wide_left"
+      }
+    },
+    {
+      "id": "out/face/eye_wide_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/eye_wide_right"
+      }
+    },
+    {
+      "id": "in/au/6",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/6",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/6/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/cheek_raise_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/cheek_raise_left"
+      }
+    },
+    {
+      "id": "out/face/cheek_raise_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/cheek_raise_right"
+      }
+    },
+    {
+      "id": "in/au/7",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/7",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/7/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/eye_squint_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/eye_squint_left"
+      }
+    },
+    {
+      "id": "out/face/eye_squint_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/eye_squint_right"
+      }
+    },
+    {
+      "id": "in/au/9",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/9",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/9/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/nose_sneer_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/nose_sneer_left"
+      }
+    },
+    {
+      "id": "out/face/nose_sneer_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/nose_sneer_right"
+      }
+    },
+    {
+      "id": "in/au/10",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/10",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/10/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/mouth_upper_up_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_upper_up_left"
+      }
+    },
+    {
+      "id": "out/face/mouth_upper_up_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_upper_up_right"
+      }
+    },
+    {
+      "id": "in/au/12",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/12",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/12/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/mouth_smile_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_smile_left"
+      }
+    },
+    {
+      "id": "out/face/mouth_smile_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_smile_right"
+      }
+    },
+    {
+      "id": "in/au/15",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/15",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/15/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/mouth_frown_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_frown_left"
+      }
+    },
+    {
+      "id": "out/face/mouth_frown_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_frown_right"
+      }
+    },
+    {
+      "id": "in/au/16",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/16",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/16/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/mouth_lower_down_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_lower_down_left"
+      }
+    },
+    {
+      "id": "out/face/mouth_lower_down_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_lower_down_right"
+      }
+    },
+    {
+      "id": "in/au/18",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/18",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/18/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/mouth_pucker",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_pucker"
+      }
+    },
+    {
+      "id": "in/au/19",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/19",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/19/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/tongue_out",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/tongue_out"
+      }
+    },
+    {
+      "id": "in/au/20",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/20",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/20/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/mouth_stretch_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_stretch_left"
+      }
+    },
+    {
+      "id": "out/face/mouth_stretch_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_stretch_right"
+      }
+    },
+    {
+      "id": "in/au/22",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/22",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/22/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/mouth_funnel",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_funnel"
+      }
+    },
+    {
+      "id": "in/au/24",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/24",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/24/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/mouth_press_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_press_left"
+      }
+    },
+    {
+      "id": "out/face/mouth_press_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/mouth_press_right"
+      }
+    },
+    {
+      "id": "in/au/26",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/26",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/26/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/jaw_open",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/jaw_open"
+      }
+    },
+    {
+      "id": "out/mouth/morph/jaw_open",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/mouth/morph/jaw_open"
+      }
+    },
+    {
+      "id": "in/au/29",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/29",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/29/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/jaw_forward",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/jaw_forward"
+      }
+    },
+    {
+      "id": "in/au/34",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/34",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/34/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/cheek_puff",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/cheek_puff"
+      }
+    },
+    {
+      "id": "in/au/43",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/au/43",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "au/43/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/face/eye_closed_left",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/eye_closed_left"
+      }
+    },
+    {
+      "id": "out/face/eye_closed_right",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/face/eye_closed_right"
+      }
+    },
+    {
+      "id": "in/viseme/sil",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/sil",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/sil/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/viseme/sil",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/sil"
+      }
+    },
+    {
+      "id": "in/viseme/PP",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/PP",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/PP/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/viseme/PP",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/PP"
+      }
+    },
+    {
+      "id": "in/viseme/FF",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/FF",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/FF/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/viseme/FF",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/FF"
+      }
+    },
+    {
+      "id": "in/viseme/TH",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/TH",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/TH/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/viseme/TH",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/TH"
+      }
+    },
+    {
+      "id": "in/viseme/DD",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/DD",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/DD/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/viseme/DD",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/DD"
+      }
+    },
+    {
+      "id": "in/viseme/kk",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/kk",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/kk/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/viseme/kk",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/kk"
+      }
+    },
+    {
+      "id": "in/viseme/CH",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/CH",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/CH/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/viseme/CH",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/CH"
+      }
+    },
+    {
+      "id": "in/viseme/SS",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/SS",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/SS/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/viseme/SS",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/SS"
+      }
+    },
+    {
+      "id": "in/viseme/nn",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/nn",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/nn/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/viseme/nn",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/nn"
+      }
+    },
+    {
+      "id": "in/viseme/RR",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/RR",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/RR/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/viseme/RR",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/RR"
+      }
+    },
+    {
+      "id": "in/viseme/aa",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/aa",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/aa/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/viseme/aa",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/aa"
+      }
+    },
+    {
+      "id": "in/viseme/E",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/E",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/E/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/viseme/E",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/E"
+      }
+    },
+    {
+      "id": "in/viseme/ih",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/ih",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/ih/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/viseme/ih",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/ih"
+      }
+    },
+    {
+      "id": "in/viseme/oh",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/oh",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/oh/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/viseme/oh",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/oh"
+      }
+    },
+    {
+      "id": "in/viseme/ou",
+      "type": "input",
+      "params": {
+        "path": "standard/ros4hri/viseme/ou",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/ou/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 0.14
+      }
+    },
+    {
+      "id": "out/viseme/ou",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/ou"
+      }
+    },
+    {
+      "id": "blink/time",
+      "type": "time",
+      "params": {}
+    },
+    {
+      "id": "const/8",
+      "type": "constant",
+      "params": {
+        "value": 8.0
+      }
+    },
+    {
+      "id": "blink/cycle",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "blink/cycle/index",
+      "type": "round",
+      "params": {
+        "round_mode": "floor"
+      }
+    },
+    {
+      "id": "blink/jitter",
+      "type": "simplenoise",
+      "params": {
+        "noise_seed": 7.0,
+        "frequency": 1.0,
+        "octaves": 1.0
+      }
+    },
+    {
+      "id": "blink/shift",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "blink/shifted_time",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "blink/phase",
+      "type": "modulo",
+      "params": {}
+    },
+    {
+      "id": "const/0.2",
+      "type": "constant",
+      "params": {
+        "value": 0.2
+      }
+    },
+    {
+      "id": "blink/progress",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "const/4",
+      "type": "constant",
+      "params": {
+        "value": 4.0
+      }
+    },
+    {
+      "id": "blink/pulse/rise",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "blink/pulse/fall",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "blink/pulse/parabola",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "blink/pulse/in_window",
+      "type": "lessthan",
+      "params": {}
+    },
+    {
+      "id": "blink/pulse/gated",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "blink/pulse",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "blink/commanded",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "blink/open_share",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "blink/idle",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "blink/lid",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "out/left_eye_top_eyelid/pos/y",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/left_eye_top_eyelid/pos/y"
+      }
+    },
+    {
+      "id": "out/right_eye_top_eyelid/pos/y",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/right_eye_top_eyelid/pos/y"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node_id": "in/expression/valence"
+      },
+      "to": {
+        "node_id": "expression/affect",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/arousal"
+      },
+      "to": {
+        "node_id": "expression/affect",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/affect/magnitude2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/affect/magnitude2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/magnitude2"
+      },
+      "to": {
+        "node_id": "expression/affect/active",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/affect/active",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.0225"
+      },
+      "to": {
+        "node_id": "expression/affect/active",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/affect/active",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/affect/active",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/affect/rest",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/affect/rest",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/neutral/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/neutral/anchor"
+      },
+      "to": {
+        "node_id": "expression/neutral/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/neutral/offset"
+      },
+      "to": {
+        "node_id": "expression/neutral/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/neutral/offset"
+      },
+      "to": {
+        "node_id": "expression/neutral/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/neutral/distance2"
+      },
+      "to": {
+        "node_id": "expression/neutral/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/neutral/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/neutral/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/neutral/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/neutral/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/angry/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/angry/anchor"
+      },
+      "to": {
+        "node_id": "expression/angry/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/angry/offset"
+      },
+      "to": {
+        "node_id": "expression/angry/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/angry/offset"
+      },
+      "to": {
+        "node_id": "expression/angry/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/angry/distance2"
+      },
+      "to": {
+        "node_id": "expression/angry/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/angry/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/angry/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/angry/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/angry/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/sad/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sad/anchor"
+      },
+      "to": {
+        "node_id": "expression/sad/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sad/offset"
+      },
+      "to": {
+        "node_id": "expression/sad/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sad/offset"
+      },
+      "to": {
+        "node_id": "expression/sad/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sad/distance2"
+      },
+      "to": {
+        "node_id": "expression/sad/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/sad/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/sad/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/sad/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/sad/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/happy/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/happy/anchor"
+      },
+      "to": {
+        "node_id": "expression/happy/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/happy/offset"
+      },
+      "to": {
+        "node_id": "expression/happy/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/happy/offset"
+      },
+      "to": {
+        "node_id": "expression/happy/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/happy/distance2"
+      },
+      "to": {
+        "node_id": "expression/happy/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/happy/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/happy/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/happy/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/happy/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/surprised/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/surprised/anchor"
+      },
+      "to": {
+        "node_id": "expression/surprised/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/surprised/offset"
+      },
+      "to": {
+        "node_id": "expression/surprised/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/surprised/offset"
+      },
+      "to": {
+        "node_id": "expression/surprised/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/surprised/distance2"
+      },
+      "to": {
+        "node_id": "expression/surprised/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/surprised/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/surprised/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/surprised/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/surprised/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/disgusted/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disgusted/anchor"
+      },
+      "to": {
+        "node_id": "expression/disgusted/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disgusted/offset"
+      },
+      "to": {
+        "node_id": "expression/disgusted/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disgusted/offset"
+      },
+      "to": {
+        "node_id": "expression/disgusted/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disgusted/distance2"
+      },
+      "to": {
+        "node_id": "expression/disgusted/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/disgusted/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/disgusted/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/disgusted/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/disgusted/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/scared/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/scared/anchor"
+      },
+      "to": {
+        "node_id": "expression/scared/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/scared/offset"
+      },
+      "to": {
+        "node_id": "expression/scared/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/scared/offset"
+      },
+      "to": {
+        "node_id": "expression/scared/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/scared/distance2"
+      },
+      "to": {
+        "node_id": "expression/scared/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/scared/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/scared/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/scared/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/scared/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/pleading/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/pleading/anchor"
+      },
+      "to": {
+        "node_id": "expression/pleading/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/pleading/offset"
+      },
+      "to": {
+        "node_id": "expression/pleading/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/pleading/offset"
+      },
+      "to": {
+        "node_id": "expression/pleading/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/pleading/distance2"
+      },
+      "to": {
+        "node_id": "expression/pleading/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/pleading/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/pleading/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/pleading/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/pleading/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/vulnerable/anchor"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/vulnerable/offset"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/vulnerable/offset"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/vulnerable/distance2"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/despaired/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/despaired/anchor"
+      },
+      "to": {
+        "node_id": "expression/despaired/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/despaired/offset"
+      },
+      "to": {
+        "node_id": "expression/despaired/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/despaired/offset"
+      },
+      "to": {
+        "node_id": "expression/despaired/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/despaired/distance2"
+      },
+      "to": {
+        "node_id": "expression/despaired/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/despaired/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/despaired/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/despaired/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/despaired/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/guilty/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/guilty/anchor"
+      },
+      "to": {
+        "node_id": "expression/guilty/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/guilty/offset"
+      },
+      "to": {
+        "node_id": "expression/guilty/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/guilty/offset"
+      },
+      "to": {
+        "node_id": "expression/guilty/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/guilty/distance2"
+      },
+      "to": {
+        "node_id": "expression/guilty/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/guilty/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/guilty/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/guilty/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/guilty/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/disappointed/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disappointed/anchor"
+      },
+      "to": {
+        "node_id": "expression/disappointed/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disappointed/offset"
+      },
+      "to": {
+        "node_id": "expression/disappointed/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disappointed/offset"
+      },
+      "to": {
+        "node_id": "expression/disappointed/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disappointed/distance2"
+      },
+      "to": {
+        "node_id": "expression/disappointed/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/disappointed/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/disappointed/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/disappointed/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/disappointed/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/embarrassed/anchor"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/embarrassed/offset"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/embarrassed/offset"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/embarrassed/distance2"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/horrified/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/horrified/anchor"
+      },
+      "to": {
+        "node_id": "expression/horrified/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/horrified/offset"
+      },
+      "to": {
+        "node_id": "expression/horrified/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/horrified/offset"
+      },
+      "to": {
+        "node_id": "expression/horrified/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/horrified/distance2"
+      },
+      "to": {
+        "node_id": "expression/horrified/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/horrified/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/horrified/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/horrified/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/horrified/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/skeptical/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/skeptical/anchor"
+      },
+      "to": {
+        "node_id": "expression/skeptical/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/skeptical/offset"
+      },
+      "to": {
+        "node_id": "expression/skeptical/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/skeptical/offset"
+      },
+      "to": {
+        "node_id": "expression/skeptical/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/skeptical/distance2"
+      },
+      "to": {
+        "node_id": "expression/skeptical/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/skeptical/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/skeptical/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/skeptical/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/skeptical/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/annoyed/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/annoyed/anchor"
+      },
+      "to": {
+        "node_id": "expression/annoyed/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/annoyed/offset"
+      },
+      "to": {
+        "node_id": "expression/annoyed/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/annoyed/offset"
+      },
+      "to": {
+        "node_id": "expression/annoyed/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/annoyed/distance2"
+      },
+      "to": {
+        "node_id": "expression/annoyed/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/annoyed/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/annoyed/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/annoyed/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/annoyed/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/furious/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/furious/anchor"
+      },
+      "to": {
+        "node_id": "expression/furious/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/furious/offset"
+      },
+      "to": {
+        "node_id": "expression/furious/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/furious/offset"
+      },
+      "to": {
+        "node_id": "expression/furious/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/furious/distance2"
+      },
+      "to": {
+        "node_id": "expression/furious/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/furious/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/furious/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/furious/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/furious/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/suspicious/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/suspicious/anchor"
+      },
+      "to": {
+        "node_id": "expression/suspicious/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/suspicious/offset"
+      },
+      "to": {
+        "node_id": "expression/suspicious/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/suspicious/offset"
+      },
+      "to": {
+        "node_id": "expression/suspicious/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/suspicious/distance2"
+      },
+      "to": {
+        "node_id": "expression/suspicious/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/suspicious/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/suspicious/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/suspicious/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/suspicious/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/rejected/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/rejected/anchor"
+      },
+      "to": {
+        "node_id": "expression/rejected/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/rejected/offset"
+      },
+      "to": {
+        "node_id": "expression/rejected/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/rejected/offset"
+      },
+      "to": {
+        "node_id": "expression/rejected/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/rejected/distance2"
+      },
+      "to": {
+        "node_id": "expression/rejected/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/rejected/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/rejected/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/rejected/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/rejected/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/bored/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/bored/anchor"
+      },
+      "to": {
+        "node_id": "expression/bored/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/bored/offset"
+      },
+      "to": {
+        "node_id": "expression/bored/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/bored/offset"
+      },
+      "to": {
+        "node_id": "expression/bored/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/bored/distance2"
+      },
+      "to": {
+        "node_id": "expression/bored/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/bored/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/bored/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/bored/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/bored/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/tired/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/tired/anchor"
+      },
+      "to": {
+        "node_id": "expression/tired/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/tired/offset"
+      },
+      "to": {
+        "node_id": "expression/tired/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/tired/offset"
+      },
+      "to": {
+        "node_id": "expression/tired/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/tired/distance2"
+      },
+      "to": {
+        "node_id": "expression/tired/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/tired/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/tired/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/tired/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/tired/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/asleep/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/asleep/anchor"
+      },
+      "to": {
+        "node_id": "expression/asleep/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/asleep/offset"
+      },
+      "to": {
+        "node_id": "expression/asleep/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/asleep/offset"
+      },
+      "to": {
+        "node_id": "expression/asleep/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/asleep/distance2"
+      },
+      "to": {
+        "node_id": "expression/asleep/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/asleep/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/asleep/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/asleep/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/asleep/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/confused/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/confused/anchor"
+      },
+      "to": {
+        "node_id": "expression/confused/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/confused/offset"
+      },
+      "to": {
+        "node_id": "expression/confused/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/confused/offset"
+      },
+      "to": {
+        "node_id": "expression/confused/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/confused/distance2"
+      },
+      "to": {
+        "node_id": "expression/confused/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/confused/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/confused/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/confused/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/confused/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/amazed/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/amazed/anchor"
+      },
+      "to": {
+        "node_id": "expression/amazed/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/amazed/offset"
+      },
+      "to": {
+        "node_id": "expression/amazed/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/amazed/offset"
+      },
+      "to": {
+        "node_id": "expression/amazed/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/amazed/distance2"
+      },
+      "to": {
+        "node_id": "expression/amazed/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/amazed/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/amazed/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/amazed/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/amazed/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect"
+      },
+      "to": {
+        "node_id": "expression/excited/offset",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/excited/anchor"
+      },
+      "to": {
+        "node_id": "expression/excited/offset",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/excited/offset"
+      },
+      "to": {
+        "node_id": "expression/excited/distance2",
+        "input": "a"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/excited/offset"
+      },
+      "to": {
+        "node_id": "expression/excited/distance2",
+        "input": "b"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/excited/distance2"
+      },
+      "to": {
+        "node_id": "expression/excited/kernel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/excited/kernel",
+        "input": "in_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.36"
+      },
+      "to": {
+        "node_id": "expression/excited/kernel",
+        "input": "in_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/excited/kernel",
+        "input": "out_min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/excited/kernel",
+        "input": "out_max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/neutral/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/angry/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sad/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_2"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/happy/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_3"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/surprised/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_4"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disgusted/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_5"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/scared/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_6"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/pleading/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_7"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/vulnerable/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_8"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/despaired/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_9"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/guilty/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_10"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disappointed/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_11"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/embarrassed/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_12"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/horrified/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_13"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/skeptical/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_14"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/annoyed/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_15"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/furious/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_16"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/suspicious/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_17"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/rejected/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_18"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/bored/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_19"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/tired/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_20"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/asleep/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_21"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/confused/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_22"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/amazed/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_23"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/excited/kernel"
+      },
+      "to": {
+        "node_id": "expression/kernel/sum",
+        "input": "operand_24"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/sum"
+      },
+      "to": {
+        "node_id": "expression/kernel/denominator",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.000001"
+      },
+      "to": {
+        "node_id": "expression/kernel/denominator",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/neutral/kernel"
+      },
+      "to": {
+        "node_id": "expression/neutral/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/neutral/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/neutral/affect_blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/neutral/share"
+      },
+      "to": {
+        "node_id": "expression/neutral/affect_blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/neutral/affect_blend"
+      },
+      "to": {
+        "node_id": "expression/neutral/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/rest"
+      },
+      "to": {
+        "node_id": "expression/neutral/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/neutral/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/neutral/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/neutral/blend"
+      },
+      "to": {
+        "node_id": "expression/neutral/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/neutral/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/neutral/weight"
+      },
+      "to": {
+        "node_id": "expression/neutral/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/neutral/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/neutral",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/angry/kernel"
+      },
+      "to": {
+        "node_id": "expression/angry/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/angry/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/angry/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/angry/share"
+      },
+      "to": {
+        "node_id": "expression/angry/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/angry/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/angry/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/angry/blend"
+      },
+      "to": {
+        "node_id": "expression/angry/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/angry/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/angry/weight"
+      },
+      "to": {
+        "node_id": "expression/angry/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/angry/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/angry",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sad/kernel"
+      },
+      "to": {
+        "node_id": "expression/sad/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/sad/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/sad/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sad/share"
+      },
+      "to": {
+        "node_id": "expression/sad/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/sad/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/sad/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sad/blend"
+      },
+      "to": {
+        "node_id": "expression/sad/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/sad/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sad/weight"
+      },
+      "to": {
+        "node_id": "expression/sad/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/sad/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/sad",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/happy/kernel"
+      },
+      "to": {
+        "node_id": "expression/happy/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/happy/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/happy/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/happy/share"
+      },
+      "to": {
+        "node_id": "expression/happy/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/happy/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/happy/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/happy/blend"
+      },
+      "to": {
+        "node_id": "expression/happy/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/happy/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/happy/weight"
+      },
+      "to": {
+        "node_id": "expression/happy/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/happy/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/happy",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/surprised/kernel"
+      },
+      "to": {
+        "node_id": "expression/surprised/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/surprised/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/surprised/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/surprised/share"
+      },
+      "to": {
+        "node_id": "expression/surprised/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/surprised/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/surprised/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/surprised/blend"
+      },
+      "to": {
+        "node_id": "expression/surprised/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/surprised/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/surprised/weight"
+      },
+      "to": {
+        "node_id": "expression/surprised/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/surprised/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/surprised",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disgusted/kernel"
+      },
+      "to": {
+        "node_id": "expression/disgusted/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/disgusted/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/disgusted/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disgusted/share"
+      },
+      "to": {
+        "node_id": "expression/disgusted/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/disgusted/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/disgusted/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disgusted/blend"
+      },
+      "to": {
+        "node_id": "expression/disgusted/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/disgusted/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disgusted/weight"
+      },
+      "to": {
+        "node_id": "expression/disgusted/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disgusted/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/disgusted",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/scared/kernel"
+      },
+      "to": {
+        "node_id": "expression/scared/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/scared/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/scared/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/scared/share"
+      },
+      "to": {
+        "node_id": "expression/scared/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/scared/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/scared/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/scared/blend"
+      },
+      "to": {
+        "node_id": "expression/scared/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/scared/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/scared/weight"
+      },
+      "to": {
+        "node_id": "expression/scared/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/scared/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/scared",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/pleading/kernel"
+      },
+      "to": {
+        "node_id": "expression/pleading/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/pleading/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/pleading/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/pleading/share"
+      },
+      "to": {
+        "node_id": "expression/pleading/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/pleading/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/pleading/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/pleading/blend"
+      },
+      "to": {
+        "node_id": "expression/pleading/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/pleading/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/pleading/weight"
+      },
+      "to": {
+        "node_id": "expression/pleading/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/pleading/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/pleading",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/vulnerable/kernel"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/vulnerable/share"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/vulnerable/blend"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/vulnerable/weight"
+      },
+      "to": {
+        "node_id": "expression/vulnerable/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/vulnerable/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/vulnerable",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/despaired/kernel"
+      },
+      "to": {
+        "node_id": "expression/despaired/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/despaired/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/despaired/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/despaired/share"
+      },
+      "to": {
+        "node_id": "expression/despaired/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/despaired/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/despaired/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/despaired/blend"
+      },
+      "to": {
+        "node_id": "expression/despaired/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/despaired/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/despaired/weight"
+      },
+      "to": {
+        "node_id": "expression/despaired/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/despaired/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/despaired",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/guilty/kernel"
+      },
+      "to": {
+        "node_id": "expression/guilty/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/guilty/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/guilty/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/guilty/share"
+      },
+      "to": {
+        "node_id": "expression/guilty/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/guilty/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/guilty/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/guilty/blend"
+      },
+      "to": {
+        "node_id": "expression/guilty/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/guilty/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/guilty/weight"
+      },
+      "to": {
+        "node_id": "expression/guilty/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/guilty/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/guilty",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disappointed/kernel"
+      },
+      "to": {
+        "node_id": "expression/disappointed/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/disappointed/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/disappointed/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disappointed/share"
+      },
+      "to": {
+        "node_id": "expression/disappointed/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/disappointed/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/disappointed/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disappointed/blend"
+      },
+      "to": {
+        "node_id": "expression/disappointed/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/disappointed/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disappointed/weight"
+      },
+      "to": {
+        "node_id": "expression/disappointed/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/disappointed/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/disappointed",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/embarrassed/kernel"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/embarrassed/share"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/embarrassed/blend"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/embarrassed/weight"
+      },
+      "to": {
+        "node_id": "expression/embarrassed/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/embarrassed/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/embarrassed",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/horrified/kernel"
+      },
+      "to": {
+        "node_id": "expression/horrified/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/horrified/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/horrified/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/horrified/share"
+      },
+      "to": {
+        "node_id": "expression/horrified/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/horrified/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/horrified/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/horrified/blend"
+      },
+      "to": {
+        "node_id": "expression/horrified/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/horrified/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/horrified/weight"
+      },
+      "to": {
+        "node_id": "expression/horrified/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/horrified/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/horrified",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/skeptical/kernel"
+      },
+      "to": {
+        "node_id": "expression/skeptical/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/skeptical/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/skeptical/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/skeptical/share"
+      },
+      "to": {
+        "node_id": "expression/skeptical/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/skeptical/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/skeptical/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/skeptical/blend"
+      },
+      "to": {
+        "node_id": "expression/skeptical/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/skeptical/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/skeptical/weight"
+      },
+      "to": {
+        "node_id": "expression/skeptical/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/skeptical/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/skeptical",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/annoyed/kernel"
+      },
+      "to": {
+        "node_id": "expression/annoyed/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/annoyed/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/annoyed/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/annoyed/share"
+      },
+      "to": {
+        "node_id": "expression/annoyed/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/annoyed/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/annoyed/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/annoyed/blend"
+      },
+      "to": {
+        "node_id": "expression/annoyed/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/annoyed/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/annoyed/weight"
+      },
+      "to": {
+        "node_id": "expression/annoyed/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/annoyed/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/annoyed",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/furious/kernel"
+      },
+      "to": {
+        "node_id": "expression/furious/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/furious/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/furious/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/furious/share"
+      },
+      "to": {
+        "node_id": "expression/furious/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/furious/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/furious/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/furious/blend"
+      },
+      "to": {
+        "node_id": "expression/furious/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/furious/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/furious/weight"
+      },
+      "to": {
+        "node_id": "expression/furious/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/furious/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/furious",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/suspicious/kernel"
+      },
+      "to": {
+        "node_id": "expression/suspicious/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/suspicious/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/suspicious/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/suspicious/share"
+      },
+      "to": {
+        "node_id": "expression/suspicious/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/suspicious/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/suspicious/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/suspicious/blend"
+      },
+      "to": {
+        "node_id": "expression/suspicious/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/suspicious/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/suspicious/weight"
+      },
+      "to": {
+        "node_id": "expression/suspicious/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/suspicious/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/suspicious",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/rejected/kernel"
+      },
+      "to": {
+        "node_id": "expression/rejected/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/rejected/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/rejected/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/rejected/share"
+      },
+      "to": {
+        "node_id": "expression/rejected/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/rejected/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/rejected/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/rejected/blend"
+      },
+      "to": {
+        "node_id": "expression/rejected/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/rejected/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/rejected/weight"
+      },
+      "to": {
+        "node_id": "expression/rejected/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/rejected/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/rejected",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/bored/kernel"
+      },
+      "to": {
+        "node_id": "expression/bored/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/bored/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/bored/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/bored/share"
+      },
+      "to": {
+        "node_id": "expression/bored/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/bored/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/bored/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/bored/blend"
+      },
+      "to": {
+        "node_id": "expression/bored/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/bored/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/bored/weight"
+      },
+      "to": {
+        "node_id": "expression/bored/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/bored/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/bored",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/tired/kernel"
+      },
+      "to": {
+        "node_id": "expression/tired/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/tired/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/tired/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/tired/share"
+      },
+      "to": {
+        "node_id": "expression/tired/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/tired/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/tired/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/tired/blend"
+      },
+      "to": {
+        "node_id": "expression/tired/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/tired/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/tired/weight"
+      },
+      "to": {
+        "node_id": "expression/tired/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/tired/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/tired",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/asleep/kernel"
+      },
+      "to": {
+        "node_id": "expression/asleep/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/asleep/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/asleep/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/asleep/share"
+      },
+      "to": {
+        "node_id": "expression/asleep/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/asleep/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/asleep/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/asleep/blend"
+      },
+      "to": {
+        "node_id": "expression/asleep/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/asleep/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/asleep/weight"
+      },
+      "to": {
+        "node_id": "expression/asleep/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/asleep/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/asleep",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/confused/kernel"
+      },
+      "to": {
+        "node_id": "expression/confused/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/confused/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/confused/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/confused/share"
+      },
+      "to": {
+        "node_id": "expression/confused/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/confused/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/confused/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/confused/blend"
+      },
+      "to": {
+        "node_id": "expression/confused/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/confused/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/confused/weight"
+      },
+      "to": {
+        "node_id": "expression/confused/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/confused/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/confused",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/amazed/kernel"
+      },
+      "to": {
+        "node_id": "expression/amazed/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/amazed/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/amazed/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/amazed/share"
+      },
+      "to": {
+        "node_id": "expression/amazed/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/amazed/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/amazed/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/amazed/blend"
+      },
+      "to": {
+        "node_id": "expression/amazed/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/amazed/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/amazed/weight"
+      },
+      "to": {
+        "node_id": "expression/amazed/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/amazed/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/amazed",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/excited/kernel"
+      },
+      "to": {
+        "node_id": "expression/excited/share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/kernel/denominator"
+      },
+      "to": {
+        "node_id": "expression/excited/share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/affect/active"
+      },
+      "to": {
+        "node_id": "expression/excited/blend",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/excited/share"
+      },
+      "to": {
+        "node_id": "expression/excited/blend",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/expression/name"
+      },
+      "to": {
+        "node_id": "expression/excited/weight",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/excited/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/excited/blend"
+      },
+      "to": {
+        "node_id": "expression/excited/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/excited/weight",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/excited/weight"
+      },
+      "to": {
+        "node_id": "expression/excited/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/excited/smooth"
+      },
+      "to": {
+        "node_id": "out/expression/excited",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/gaze/target"
+      },
+      "to": {
+        "node_id": "gaze/x",
+        "input": "v"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "gaze/x",
+        "input": "index"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/gaze/target"
+      },
+      "to": {
+        "node_id": "gaze/y",
+        "input": "v"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "gaze/y",
+        "input": "index"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/gaze/target"
+      },
+      "to": {
+        "node_id": "gaze/z",
+        "input": "v"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/2"
+      },
+      "to": {
+        "node_id": "gaze/z",
+        "input": "index"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/x"
+      },
+      "to": {
+        "node_id": "gaze/valid",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.1"
+      },
+      "to": {
+        "node_id": "gaze/valid",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/y"
+      },
+      "to": {
+        "node_id": "gaze/left/y",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.03"
+      },
+      "to": {
+        "node_id": "gaze/left/y",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/y"
+      },
+      "to": {
+        "node_id": "gaze/right/y",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.03"
+      },
+      "to": {
+        "node_id": "gaze/right/y",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/left/y"
+      },
+      "to": {
+        "node_id": "gaze/left/yaw/ratio",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/x"
+      },
+      "to": {
+        "node_id": "gaze/left/yaw/ratio",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/left/yaw/ratio"
+      },
+      "to": {
+        "node_id": "gaze/left/yaw/ratio2",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/left/yaw/ratio"
+      },
+      "to": {
+        "node_id": "gaze/left/yaw/ratio2",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/left/yaw/ratio2"
+      },
+      "to": {
+        "node_id": "gaze/left/yaw/correction",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.28"
+      },
+      "to": {
+        "node_id": "gaze/left/yaw/correction",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/left/yaw/correction"
+      },
+      "to": {
+        "node_id": "gaze/left/yaw/denominator",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "gaze/left/yaw/denominator",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/left/yaw/ratio"
+      },
+      "to": {
+        "node_id": "gaze/left/yaw/atan",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/left/yaw/denominator"
+      },
+      "to": {
+        "node_id": "gaze/left/yaw/atan",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/left/yaw/atan"
+      },
+      "to": {
+        "node_id": "gaze/left/yaw/normalized",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.78"
+      },
+      "to": {
+        "node_id": "gaze/left/yaw/normalized",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/left/yaw/normalized"
+      },
+      "to": {
+        "node_id": "gaze/left/yaw/angle",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/-1"
+      },
+      "to": {
+        "node_id": "gaze/left/yaw/angle",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "gaze/left/yaw/angle",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/right/y"
+      },
+      "to": {
+        "node_id": "gaze/right/yaw/ratio",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/x"
+      },
+      "to": {
+        "node_id": "gaze/right/yaw/ratio",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/right/yaw/ratio"
+      },
+      "to": {
+        "node_id": "gaze/right/yaw/ratio2",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/right/yaw/ratio"
+      },
+      "to": {
+        "node_id": "gaze/right/yaw/ratio2",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/right/yaw/ratio2"
+      },
+      "to": {
+        "node_id": "gaze/right/yaw/correction",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.28"
+      },
+      "to": {
+        "node_id": "gaze/right/yaw/correction",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/right/yaw/correction"
+      },
+      "to": {
+        "node_id": "gaze/right/yaw/denominator",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "gaze/right/yaw/denominator",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/right/yaw/ratio"
+      },
+      "to": {
+        "node_id": "gaze/right/yaw/atan",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/right/yaw/denominator"
+      },
+      "to": {
+        "node_id": "gaze/right/yaw/atan",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/right/yaw/atan"
+      },
+      "to": {
+        "node_id": "gaze/right/yaw/normalized",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.78"
+      },
+      "to": {
+        "node_id": "gaze/right/yaw/normalized",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/right/yaw/normalized"
+      },
+      "to": {
+        "node_id": "gaze/right/yaw/angle",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/-1"
+      },
+      "to": {
+        "node_id": "gaze/right/yaw/angle",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "gaze/right/yaw/angle",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/z"
+      },
+      "to": {
+        "node_id": "gaze/pitch/ratio",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/x"
+      },
+      "to": {
+        "node_id": "gaze/pitch/ratio",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/pitch/ratio"
+      },
+      "to": {
+        "node_id": "gaze/pitch/ratio2",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/pitch/ratio"
+      },
+      "to": {
+        "node_id": "gaze/pitch/ratio2",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/pitch/ratio2"
+      },
+      "to": {
+        "node_id": "gaze/pitch/correction",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.28"
+      },
+      "to": {
+        "node_id": "gaze/pitch/correction",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/pitch/correction"
+      },
+      "to": {
+        "node_id": "gaze/pitch/denominator",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "gaze/pitch/denominator",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/pitch/ratio"
+      },
+      "to": {
+        "node_id": "gaze/pitch/atan",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/pitch/denominator"
+      },
+      "to": {
+        "node_id": "gaze/pitch/atan",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/pitch/atan"
+      },
+      "to": {
+        "node_id": "gaze/pitch/normalized",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.78"
+      },
+      "to": {
+        "node_id": "gaze/pitch/normalized",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/pitch/normalized"
+      },
+      "to": {
+        "node_id": "gaze/pitch/angle",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/-1"
+      },
+      "to": {
+        "node_id": "gaze/pitch/angle",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "gaze/pitch/angle",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/valid"
+      },
+      "to": {
+        "node_id": "gaze/left/x/gated",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/left/yaw/angle"
+      },
+      "to": {
+        "node_id": "gaze/left/x/gated",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "gaze/left/x/gated",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/valid"
+      },
+      "to": {
+        "node_id": "gaze/left/y/gated",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/pitch/angle"
+      },
+      "to": {
+        "node_id": "gaze/left/y/gated",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "gaze/left/y/gated",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/left/x/gated"
+      },
+      "to": {
+        "node_id": "gaze/left/x/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/left/y/gated"
+      },
+      "to": {
+        "node_id": "gaze/left/y/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/left/x/smooth"
+      },
+      "to": {
+        "node_id": "out/left_eye/pos/x",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/left/y/smooth"
+      },
+      "to": {
+        "node_id": "out/left_eye/pos/y",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/valid"
+      },
+      "to": {
+        "node_id": "gaze/right/x/gated",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/right/yaw/angle"
+      },
+      "to": {
+        "node_id": "gaze/right/x/gated",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "gaze/right/x/gated",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/valid"
+      },
+      "to": {
+        "node_id": "gaze/right/y/gated",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/pitch/angle"
+      },
+      "to": {
+        "node_id": "gaze/right/y/gated",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "gaze/right/y/gated",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/right/x/gated"
+      },
+      "to": {
+        "node_id": "gaze/right/x/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/right/y/gated"
+      },
+      "to": {
+        "node_id": "gaze/right/y/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/right/x/smooth"
+      },
+      "to": {
+        "node_id": "out/right_eye/pos/x",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/right/y/smooth"
+      },
+      "to": {
+        "node_id": "out/right_eye/pos/y",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/1"
+      },
+      "to": {
+        "node_id": "au/1/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/1/smooth"
+      },
+      "to": {
+        "node_id": "out/face/brow_inner_up",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/2"
+      },
+      "to": {
+        "node_id": "au/2/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/2/smooth"
+      },
+      "to": {
+        "node_id": "out/face/brow_outer_up_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/2/smooth"
+      },
+      "to": {
+        "node_id": "out/face/brow_outer_up_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/4"
+      },
+      "to": {
+        "node_id": "au/4/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/4/smooth"
+      },
+      "to": {
+        "node_id": "out/face/brow_down_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/4/smooth"
+      },
+      "to": {
+        "node_id": "out/face/brow_down_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/5"
+      },
+      "to": {
+        "node_id": "au/5/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/5/smooth"
+      },
+      "to": {
+        "node_id": "out/face/eye_wide_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/5/smooth"
+      },
+      "to": {
+        "node_id": "out/face/eye_wide_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/6"
+      },
+      "to": {
+        "node_id": "au/6/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/6/smooth"
+      },
+      "to": {
+        "node_id": "out/face/cheek_raise_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/6/smooth"
+      },
+      "to": {
+        "node_id": "out/face/cheek_raise_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/7"
+      },
+      "to": {
+        "node_id": "au/7/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/7/smooth"
+      },
+      "to": {
+        "node_id": "out/face/eye_squint_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/7/smooth"
+      },
+      "to": {
+        "node_id": "out/face/eye_squint_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/9"
+      },
+      "to": {
+        "node_id": "au/9/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/9/smooth"
+      },
+      "to": {
+        "node_id": "out/face/nose_sneer_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/9/smooth"
+      },
+      "to": {
+        "node_id": "out/face/nose_sneer_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/10"
+      },
+      "to": {
+        "node_id": "au/10/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/10/smooth"
+      },
+      "to": {
+        "node_id": "out/face/mouth_upper_up_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/10/smooth"
+      },
+      "to": {
+        "node_id": "out/face/mouth_upper_up_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/12"
+      },
+      "to": {
+        "node_id": "au/12/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/12/smooth"
+      },
+      "to": {
+        "node_id": "out/face/mouth_smile_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/12/smooth"
+      },
+      "to": {
+        "node_id": "out/face/mouth_smile_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/15"
+      },
+      "to": {
+        "node_id": "au/15/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/15/smooth"
+      },
+      "to": {
+        "node_id": "out/face/mouth_frown_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/15/smooth"
+      },
+      "to": {
+        "node_id": "out/face/mouth_frown_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/16"
+      },
+      "to": {
+        "node_id": "au/16/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/16/smooth"
+      },
+      "to": {
+        "node_id": "out/face/mouth_lower_down_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/16/smooth"
+      },
+      "to": {
+        "node_id": "out/face/mouth_lower_down_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/18"
+      },
+      "to": {
+        "node_id": "au/18/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/18/smooth"
+      },
+      "to": {
+        "node_id": "out/face/mouth_pucker",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/19"
+      },
+      "to": {
+        "node_id": "au/19/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/19/smooth"
+      },
+      "to": {
+        "node_id": "out/face/tongue_out",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/20"
+      },
+      "to": {
+        "node_id": "au/20/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/20/smooth"
+      },
+      "to": {
+        "node_id": "out/face/mouth_stretch_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/20/smooth"
+      },
+      "to": {
+        "node_id": "out/face/mouth_stretch_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/22"
+      },
+      "to": {
+        "node_id": "au/22/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/22/smooth"
+      },
+      "to": {
+        "node_id": "out/face/mouth_funnel",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/24"
+      },
+      "to": {
+        "node_id": "au/24/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/24/smooth"
+      },
+      "to": {
+        "node_id": "out/face/mouth_press_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/24/smooth"
+      },
+      "to": {
+        "node_id": "out/face/mouth_press_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/26"
+      },
+      "to": {
+        "node_id": "au/26/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/26/smooth"
+      },
+      "to": {
+        "node_id": "out/face/jaw_open",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/26/smooth"
+      },
+      "to": {
+        "node_id": "out/mouth/morph/jaw_open",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/29"
+      },
+      "to": {
+        "node_id": "au/29/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/29/smooth"
+      },
+      "to": {
+        "node_id": "out/face/jaw_forward",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/34"
+      },
+      "to": {
+        "node_id": "au/34/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/34/smooth"
+      },
+      "to": {
+        "node_id": "out/face/cheek_puff",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/au/43"
+      },
+      "to": {
+        "node_id": "au/43/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/43/smooth"
+      },
+      "to": {
+        "node_id": "out/face/eye_closed_left",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/43/smooth"
+      },
+      "to": {
+        "node_id": "out/face/eye_closed_right",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/sil"
+      },
+      "to": {
+        "node_id": "viseme/sil/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/sil/smooth"
+      },
+      "to": {
+        "node_id": "out/viseme/sil",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/PP"
+      },
+      "to": {
+        "node_id": "viseme/PP/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/PP/smooth"
+      },
+      "to": {
+        "node_id": "out/viseme/PP",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/FF"
+      },
+      "to": {
+        "node_id": "viseme/FF/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/FF/smooth"
+      },
+      "to": {
+        "node_id": "out/viseme/FF",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/TH"
+      },
+      "to": {
+        "node_id": "viseme/TH/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/TH/smooth"
+      },
+      "to": {
+        "node_id": "out/viseme/TH",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/DD"
+      },
+      "to": {
+        "node_id": "viseme/DD/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/DD/smooth"
+      },
+      "to": {
+        "node_id": "out/viseme/DD",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/kk"
+      },
+      "to": {
+        "node_id": "viseme/kk/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/kk/smooth"
+      },
+      "to": {
+        "node_id": "out/viseme/kk",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/CH"
+      },
+      "to": {
+        "node_id": "viseme/CH/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/CH/smooth"
+      },
+      "to": {
+        "node_id": "out/viseme/CH",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/SS"
+      },
+      "to": {
+        "node_id": "viseme/SS/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/SS/smooth"
+      },
+      "to": {
+        "node_id": "out/viseme/SS",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/nn"
+      },
+      "to": {
+        "node_id": "viseme/nn/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/nn/smooth"
+      },
+      "to": {
+        "node_id": "out/viseme/nn",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/RR"
+      },
+      "to": {
+        "node_id": "viseme/RR/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/RR/smooth"
+      },
+      "to": {
+        "node_id": "out/viseme/RR",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/aa"
+      },
+      "to": {
+        "node_id": "viseme/aa/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/aa/smooth"
+      },
+      "to": {
+        "node_id": "out/viseme/aa",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/E"
+      },
+      "to": {
+        "node_id": "viseme/E/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/E/smooth"
+      },
+      "to": {
+        "node_id": "out/viseme/E",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/ih"
+      },
+      "to": {
+        "node_id": "viseme/ih/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ih/smooth"
+      },
+      "to": {
+        "node_id": "out/viseme/ih",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/oh"
+      },
+      "to": {
+        "node_id": "viseme/oh/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/oh/smooth"
+      },
+      "to": {
+        "node_id": "out/viseme/oh",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/ou"
+      },
+      "to": {
+        "node_id": "viseme/ou/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ou/smooth"
+      },
+      "to": {
+        "node_id": "out/viseme/ou",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/time"
+      },
+      "to": {
+        "node_id": "blink/cycle",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/8"
+      },
+      "to": {
+        "node_id": "blink/cycle",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/cycle"
+      },
+      "to": {
+        "node_id": "blink/cycle/index",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/cycle/index"
+      },
+      "to": {
+        "node_id": "blink/jitter",
+        "input": "x"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "blink/jitter",
+        "input": "y"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/jitter"
+      },
+      "to": {
+        "node_id": "blink/shift",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/2"
+      },
+      "to": {
+        "node_id": "blink/shift",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/time"
+      },
+      "to": {
+        "node_id": "blink/shifted_time",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/shift"
+      },
+      "to": {
+        "node_id": "blink/shifted_time",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/shifted_time"
+      },
+      "to": {
+        "node_id": "blink/phase",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/8"
+      },
+      "to": {
+        "node_id": "blink/phase",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/phase"
+      },
+      "to": {
+        "node_id": "blink/progress",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.2"
+      },
+      "to": {
+        "node_id": "blink/progress",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/4"
+      },
+      "to": {
+        "node_id": "blink/pulse/rise",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/progress"
+      },
+      "to": {
+        "node_id": "blink/pulse/rise",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "blink/pulse/fall",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/progress"
+      },
+      "to": {
+        "node_id": "blink/pulse/fall",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/pulse/rise"
+      },
+      "to": {
+        "node_id": "blink/pulse/parabola",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/pulse/fall"
+      },
+      "to": {
+        "node_id": "blink/pulse/parabola",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/progress"
+      },
+      "to": {
+        "node_id": "blink/pulse/in_window",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "blink/pulse/in_window",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/pulse/in_window"
+      },
+      "to": {
+        "node_id": "blink/pulse/gated",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/pulse/parabola"
+      },
+      "to": {
+        "node_id": "blink/pulse/gated",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "blink/pulse/gated",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/pulse/gated"
+      },
+      "to": {
+        "node_id": "blink/pulse",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "blink/pulse",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "blink/pulse",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "au/43/smooth"
+      },
+      "to": {
+        "node_id": "blink/commanded",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "expression/asleep/smooth"
+      },
+      "to": {
+        "node_id": "blink/commanded",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "blink/open_share",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/commanded"
+      },
+      "to": {
+        "node_id": "blink/open_share",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/pulse"
+      },
+      "to": {
+        "node_id": "blink/idle",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/open_share"
+      },
+      "to": {
+        "node_id": "blink/idle",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/idle"
+      },
+      "to": {
+        "node_id": "blink/lid",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/commanded"
+      },
+      "to": {
+        "node_id": "blink/lid",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/lid"
+      },
+      "to": {
+        "node_id": "out/left_eye_top_eyelid/pos/y",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "blink/lid"
+      },
+      "to": {
+        "node_id": "out/right_eye_top_eyelid/pos/y",
+        "input": "in"
+      }
+    }
+  ]
+}

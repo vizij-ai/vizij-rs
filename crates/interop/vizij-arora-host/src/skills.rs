@@ -61,7 +61,7 @@ pub const LOOK_AT_JSON: &str = include_str!("../skills/look_at.json");
 /// - empty policy or `track`: write the goal target (and frame) onto the
 ///   ROS4HRI gaze keys and stay `Running` — tracking ends when the goal is
 ///   cancelled or replaced (the halt is the exit);
-/// - `glance` / `reset`: write the target (`reset` recenters on the profile's
+/// - `glance` / `reset`: write the target (`reset` recenters on the mapping's
 ///   far-ahead rest), hold the fixation for [`SETTLE_SECONDS`], then
 ///   `Success`;
 /// - anything else (`social`, `random`, `auto`, unknown): `Failure`, with
@@ -80,25 +80,26 @@ pub fn generate_look_at() -> Json {
 
     // The method's parameters, staged from the run's keys (the spawn-time
     // arguments become these inputs' defaults at graft time).
-    let policy = g.input("in-policy", "task/policy", json!(""));
+    let policy = g.input("in/policy", "task/policy", json!(""));
     let target = g.input(
-        "in-target",
+        "in/target",
         "task/target",
         json!({ "x": 10.0, "y": 0.0, "z": 0.0 }),
     );
-    let frame = g.input("in-frame", "task/frame", json!(""));
+    let frame = g.input("in/frame", "task/frame", json!(""));
 
-    // Gaze: `reset` recenters on the profile's far-ahead rest target (the
+    // Gaze: `reset` recenters on the mapping's far-ahead rest target (the
     // unverged straight-ahead), every other policy tracks the goal. The
     // written keys are the same standard surface the topic plane feeds — the
-    // ROS4HRI profile turns them into eye pose.
+    // ROS4HRI mapping turns them into eye pose.
     let rest = g.node(
-        "rest-target",
+        "gaze/rest_target",
         "constant",
         json!({ "value": { "x": 10.0, "y": 0.0, "z": 0.0 } }),
     );
-    let face_frame = g.node("face-frame", "constant", json!({ "value": "" }));
+    let face_frame = g.node("gaze/face_frame", "constant", json!({ "value": "" }));
     let gaze = g.op(
+        "gaze/target",
         "case",
         json!({ "case_labels": ["reset"] }),
         &[
@@ -107,8 +108,9 @@ pub fn generate_look_at() -> Json {
             ("default", &target),
         ],
     );
-    g.output(&gaze, GAZE_TARGET_KEY.to_string());
+    g.output("out/gaze/target", &gaze, GAZE_TARGET_KEY.to_string());
     let gaze_frame = g.op(
+        "gaze/frame",
         "case",
         json!({ "case_labels": ["reset"] }),
         &[
@@ -117,28 +119,26 @@ pub fn generate_look_at() -> Json {
             ("default", &frame),
         ],
     );
-    g.output(&gaze_frame, GAZE_FRAME_KEY.to_string());
+    g.output("out/gaze/frame", &gaze_frame, GAZE_FRAME_KEY.to_string());
 
     // The fixation clock: the graph clock, latched through the store on the
     // run's first tick (`task/start` reads back what it wrote), so elapsed
     // time is measured from the spawn.
     let now = g.node("clock", "time", json!({}));
-    let start_in = g.input("in-start", "task/start", json!(0.0));
+    let start_in = g.input("in/start", "task/start", json!(0.0));
     let zero = g.constant(0.0);
     let started = g.op(
+        "fixation/started",
         "greaterthan",
         json!({}),
         &[("lhs", &start_in), ("rhs", &zero)],
     );
-    let start = g.op(
-        "if",
-        json!({}),
-        &[("cond", &started), ("then", &start_in), ("else", &now)],
-    );
-    g.output(&start, "task/start".to_string());
-    let elapsed = g.sub(&now, &start);
+    let start = g.select("fixation/start", &started, &start_in, &now);
+    g.output("out/start", &start, "task/start".to_string());
+    let elapsed = g.sub("fixation/elapsed", &now, &start);
     let dwell = g.constant(SETTLE_SECONDS);
     let settled = g.op(
+        "fixation/settled",
         "greaterthan",
         json!({}),
         &[("lhs", &elapsed), ("rhs", &dwell)],
@@ -147,26 +147,23 @@ pub fn generate_look_at() -> Json {
     // The lifecycle: tracking runs until halted; a fixation succeeds once
     // settled; unimplemented policies fail.
     let running = g.node(
-        "st-running",
+        "status/running",
         "constant",
         json!({ "value": status(STATUS_RUNNING_VARIANT_ID) }),
     );
     let success = g.node(
-        "st-success",
+        "status/success",
         "constant",
         json!({ "value": status(STATUS_SUCCESS_VARIANT_ID) }),
     );
     let failure = g.node(
-        "st-failure",
+        "status/failure",
         "constant",
         json!({ "value": status(STATUS_FAILURE_VARIANT_ID) }),
     );
-    let fixation = g.op(
-        "if",
-        json!({}),
-        &[("cond", &settled), ("then", &success), ("else", &running)],
-    );
+    let fixation = g.select("fixation/status", &settled, &success, &running);
     let lifecycle = g.op(
+        "status",
         "case",
         json!({ "case_labels": ["", "track", "glance", "reset"] }),
         &[
@@ -178,19 +175,20 @@ pub fn generate_look_at() -> Json {
             ("default", &failure),
         ],
     );
-    g.output(&lifecycle, "task/status".to_string());
+    g.output("out/status", &lifecycle, "task/status".to_string());
 
     // The errno: unsupported policies answer ROS_ENOTSUP. On every
     // implemented path the run stays silent — an empty text the action plane
     // ignores, so the goal's lifecycle decides the errno (success, cancel,
     // preemption).
-    let silent = g.node("no-errno", "constant", json!({ "value": "" }));
+    let silent = g.node("errno/silent", "constant", json!({ "value": "" }));
     let enotsup = g.node(
-        "errno-enotsup",
+        "errno/enotsup",
         "constant",
         json!({ "value": { "u8": ROS_ENOTSUP } }),
     );
     let errno = g.op(
+        "errno",
         "case",
         json!({ "case_labels": ["", "track", "glance", "reset"] }),
         &[
@@ -202,7 +200,7 @@ pub fn generate_look_at() -> Json {
             ("default", &enotsup),
         ],
     );
-    g.output(&errno, "task/result".to_string());
+    g.output("out/result", &errno, "task/result".to_string());
 
     json!({ "nodes": g.nodes, "edges": g.edges })
 }
@@ -256,7 +254,7 @@ pub fn embedded_graph_id(skill_id: &str) -> String {
 }
 
 /// A skill's canonical fragment as JSON — face-independent by construction
-/// (placeholder `task/*` paths), so unlike a profile source it takes no rig
+/// (placeholder `task/*` paths), so unlike a mapping source it takes no rig
 /// prefix. `None` for an unknown id.
 pub fn skill_source(id: &str) -> Option<Json> {
     let skill = skill(id)?;

@@ -8,14 +8,19 @@ command drives any face and any face can be swapped under the same command.
 
 The controls live in [`vizij-arora-host`'s `standard`
 module](../crates/interop/vizij-arora-host/src/standard.rs), which is the
-authoritative source; this page mirrors it.
+authoritative source; this page mirrors it. As data, the same vocabulary is
+the **`vizij-face` profile**
+([`profiles/vizij-face.json`](../crates/interop/vizij-arora-host/profiles/vizij-face.json)):
+an interface of 81 typed paths, face-scoped — every face carries its own copy
+under its rig prefix — with each key's tier, FACS action unit, and ARKit
+blendshape as metadata. See [profiles and mappings](profiles-and-mappings.md).
 
 Everything is an `f32` weight in `[0, 1]` unless stated otherwise.
 
 ## Three tiers
 
 The vocabulary runs coarse to fine. A face implements what it implements, and a
-standard profile (like [ROS4HRI](ros4hri.md)) degrades to the tiers a face
+standard mapping (like [ROS4HRI](ros4hri.md)) degrades to the tiers a face
 covers.
 
 1. **Gaze & lids** — where the eyes point and how open they are.
@@ -34,8 +39,8 @@ covers.
 | `standard/vizij/left_eye_top_eyelid/pos/y` | `[0, 1]` | 0 open, 1 closed |
 | `standard/vizij/right_eye_top_eyelid/pos/y` | `[0, 1]` | 0 open, 1 closed |
 
-Per-eye positions (rather than a single gaze vector) let a profile command
-vergence; the ROS4HRI profile computes them from a face-frame target.
+Per-eye positions (rather than a single gaze vector) let a mapping command
+vergence; the ROS4HRI mapping computes them from a face-frame target.
 
 ## Semantic tier
 
@@ -115,8 +120,11 @@ than hand-format strings.
 
 ## See also
 
-- [The ROS4HRI profile](ros4hri.md) — the built-in mapping that fills this
-  vocabulary from ROS4HRI's topics.
+- [Profiles and mappings](profiles-and-mappings.md) — what a profile is, and
+  how a mapping implements one in terms of another.
+- [ROS4HRI](ros4hri.md) — the built-in mapping that fills this vocabulary from
+  ROS4HRI's topics.
 - [`vizij-bundle`](../crates/tools/vizij-bundle/README.md) — the tool that
-  reports which tiers a face covers (`validate`) and embeds a standard profile
-  into a face GLB (`add-standard`).
+  reports which tiers a face covers (`validate`), declares a profile on a face
+  GLB (`add-profile`), and embeds a standard mapping into it
+  (`add-standard`).

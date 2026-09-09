@@ -34,14 +34,71 @@ import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/brow
 export type GraphSpecInput = object | string;
 
 /**
- * A standard profile Vizij ships — a composable graph that makes a face
- * respond to an external standard's keys (e.g. ROS4HRI). Listed by
- * {@link standardProfiles}; its graph is fetched with {@link standardProfile}.
+ * A standard mapping Vizij ships — a graph that implements one profile in
+ * terms of another, so a face responds to an external face standard (e.g.
+ * ROS4HRI's keys onto Vizij's own controls). Listed by {@link mappings}; its
+ * graph is fetched with {@link mapping}.
  */
-export interface StandardProfile {
+export interface Mapping {
   id: string;
   title: string;
   description: string;
+}
+
+/** @deprecated Renamed {@link Mapping}: the graph was never a profile. */
+export type StandardProfile = Mapping;
+
+/**
+ * One path in a profile, with its type and constraints. The shape is arora's
+ * `KeyInfo` — `value_type` an arora type name (`f32`, `str`, `struct`, …),
+ * `default_value` an arora value (`{ f32: 0 }`) — so a profile round-trips
+ * through the same descriptor the WS registry and the standalone app speak.
+ */
+export interface ProfileKey {
+  path: string;
+  /** The key's role for the party implementing the profile: `input` for a key a caller commands. */
+  kind?: string;
+  value_type?: string;
+  min?: number;
+  max?: number;
+  default_value?: unknown;
+  /** Standard metadata: the FACS action unit, ARKit blendshape, and tier. */
+  meta?: { au?: number; arkit?: string; tier?: string };
+}
+
+/**
+ * Where a profile's paths live: `device` — absolute, one instance per device
+ * (`standard/ros4hri/*`); `face` — relative to one face, addressed with its
+ * rig prefix (`rig/<faceId>/`).
+ */
+export type ProfileScope = "device" | "face";
+
+/**
+ * A profile — an interface: the set of store paths one party exposes to
+ * another, each with its type, range, and default. Listed by
+ * {@link profiles}; fetched in full with {@link profile}.
+ *
+ * Distinct from a {@link Mapping}, the graph that implements one profile in
+ * terms of another.
+ */
+export interface Profile {
+  id: string;
+  version: string;
+  title: string;
+  description: string;
+  scope: ProfileScope;
+  keys: ProfileKey[];
+}
+
+/** A profile as listed by {@link profiles} — the summary, without the keys. */
+export interface ProfileSummary {
+  id: string;
+  version: string;
+  title: string;
+  description: string;
+  scope: ProfileScope;
+  /** How many paths the profile declares. */
+  keys: number;
 }
 
 /**
@@ -111,8 +168,10 @@ interface WasmBindings {
   VizijArora: {
     start(graph_json?: string, modules?: RuntimeModule[]): Promise<WasmVizijArora>;
   };
-  standardProfiles(): StandardProfile[];
-  standardProfile(id: string, rig_prefix: string): object | null;
+  mappings(): Mapping[];
+  mapping(id: string, rig_prefix: string): object | null;
+  profiles(): ProfileSummary[];
+  profile(id: string, rig_prefix: string): Profile | null;
   skills(): Skill[];
   skillSource(id: string): object | null;
   composeFace(gltf_json: string, options_json?: string): object;
@@ -375,28 +434,61 @@ export async function startRuntime(
 }
 
 /**
- * The standard profiles Vizij ships (ROS4HRI, …) — the introspectable list an
- * authoring app offers so a user can pick which standards a face opts into.
- * Calls {@link init} if it has not run yet.
+ * The standard mappings Vizij ships (ROS4HRI, …) — the introspectable list an
+ * authoring app offers for opt-in. Calls {@link init} if it has not run yet.
  */
-export async function standardProfiles(input?: InitInput): Promise<StandardProfile[]> {
+export async function mappings(input?: InitInput): Promise<Mapping[]> {
   await init(input);
-  return bindingCache.current!.standardProfiles();
+  return bindingCache.current!.mappings();
 }
 
 /**
- * A standard profile's graph as a spec object, ready to compose into a running
- * runtime or embed into a face GLB. `rigPrefix` (e.g. `"rig/quori_latest/"`) is
- * prepended to the control paths the profile writes; omit it for the
- * unprefixed graph. `null` for an unknown id (see {@link standardProfiles}).
+ * A standard mapping's graph as a spec object, ready to compose into a
+ * running device's graph or to embed into a face GLB. `rigPrefix` (e.g.
+ * `"rig/quori_latest/"`) is prepended to the control paths the mapping
+ * writes; omit it for the unprefixed graph. `null` for an unknown id (see
+ * {@link mappings}).
  */
-export async function standardProfile(
+export async function mapping(
   id: string,
   rigPrefix = "",
   input?: InitInput,
 ): Promise<object | null> {
   await init(input);
-  return bindingCache.current!.standardProfile(id, rigPrefix);
+  return bindingCache.current!.mapping(id, rigPrefix);
+}
+
+/** @deprecated Renamed {@link mappings}: the graphs it lists are mappings, not profiles. */
+export const standardProfiles = mappings;
+
+/** @deprecated Renamed {@link mapping}: the graph it returns is a mapping, not a profile. */
+export const standardProfile = mapping;
+
+/**
+ * The profiles Vizij ships — a *profile* being an interface, the set of store
+ * paths and their types a face's graphs are authored against. The list an
+ * authoring app's import picker offers. Calls {@link init} if it has not run
+ * yet.
+ */
+export async function profiles(input?: InitInput): Promise<ProfileSummary[]> {
+  await init(input);
+  return bindingCache.current!.profiles();
+}
+
+/**
+ * One profile in full — every path it declares, with type, range, default and
+ * standard metadata. `rigPrefix` (e.g. `"rig/quori_latest/"`) addresses a
+ * face-scoped profile to one face's store; a device-scoped profile comes back
+ * as is. Omit it for the portable form. `null` for an unknown id (see
+ * {@link profiles}).
+ */
+export async function profile(
+  id: string,
+  rigPrefix = "",
+  input?: InitInput,
+): Promise<Profile | null> {
+  await init(input);
+  return bindingCache.current!.profile(id, rigPrefix);
 }
 
 /**
@@ -430,7 +522,7 @@ export interface ComposeFaceOptions {
   /** `"auto"` (the bundle's active program — default), `"none"`, or a
    * program id. */
   program?: string;
-  /** Offer the built-in ROS4HRI profile (an embedded copy still wins).
+  /** Compose the built-in ROS4HRI mapping (an embedded copy still wins).
    * Default `true`. */
   ros4hri?: boolean;
   /** Compose the animation source — only for a device that loads the
@@ -441,8 +533,8 @@ export interface ComposeFaceOptions {
 /**
  * The composed behavior graph of a face bundle — the composition the native
  * `vizij` app deploys: the bundle's base graphs, its embedded standard
- * profiles (each suppressing the built-in of the same id — an embedded copy
- * is the author's pinned override), the built-in ROS4HRI profile unless opted
+ * mappings (each suppressing the built-in of the same id — an embedded copy
+ * is the author's pinned override), the built-in ROS4HRI mapping unless opted
  * out, then the selected program. `gltf` is the GLB's glTF JSON document. The
  * returned spec feeds {@link startRuntime} or {@link Runtime.loadGraph}, so an
  * exported GLB can be deployed and verified without the native app.

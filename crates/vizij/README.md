@@ -41,7 +41,7 @@ cargo run -p vizij -- --glb face.glb --snapshot out.png --size 763x760
 |---|---|---|
 | `--glb <path>` | required | the face GLB (embedded `RobotData` + `VIZIJ_bundle`) |
 | `--graphs <kinds>` | `rig,pose-driver,pose,standard-adaptation` | compose only these bundle graph kinds |
-| `--no-ros4hri` | off (profile **on**) | drop the built-in [ROS4HRI](../../docs/ros4hri.md) profile |
+| `--no-ros4hri` | off (mapping **on**) | drop the built-in [ROS4HRI](../../docs/ros4hri.md) mapping |
 | `--program <id>` | bundle's active program | autoplay this motiongraph program |
 | `--no-autoplay` | off | hold the rig's authored/neutral pose |
 | `--no-stage-neutral` | off | don't stage the bundle's `neutralInputs` at boot |
@@ -67,7 +67,7 @@ WS bridge):
 with its ROS4HRI exposure preset:
 
 - the typed face topics — `/robot_face/{expression,look_at,tts}` and
-  `/expressive_face/{look_at,speech}` — routed onto the profile's
+  `/expressive_face/{look_at,speech}` — routed onto the `ros4hri` profile's
   `standard/ros4hri/*` keys;
 - the **`/skill/look_at`** action server (`interaction_skills/LookAt`):
   track / glance / reset policies, priority preemption, standard error codes;
@@ -95,8 +95,10 @@ semantics.
 The device registers a **`say(text, voice) → Status`** action that synthesizes
 speech, plays it (rodio — pure Rust, nothing to install), and streams the
 viseme at the audio playhead (a mutable out-parameter) — the face's lipsync
-source. Two interchangeable providers share that one contract; a build carries
-exactly one. Try either from the command line:
+source. The contract and the cloud provider ship as the
+[`vizij-arora-tts`](https://crates.io/crates/vizij-arora-tts) crate — the same
+module the vizij-web standalone registers; the Piper provider implements the
+contract here, behind its feature. A build carries exactly one provider. Try either from the command line:
 
 ```bash
 cargo run -p vizij --example say -- "Hello, world!"
@@ -169,6 +171,27 @@ Web references are captured with the scratch Playwright spec in
 vizij-web (`apps/vizij-authoring/e2e/`, headed — headless Chromium does not
 composite the WebGL canvas), loading the `quori:latest` / `toasty:basic`
 presets.
+
+## Memory
+
+`memory_tests` wraps the allocator and measures the process' **heap floor** —
+the lowest live-byte reading in a window — before and after a stretch of
+traffic, so anything the device keeps shows up as a rising floor while
+transient allocation does not. Two tests bracket the seams:
+`the_device_alone_keeps_a_flat_heap_under_a_frame_feed` runs the device with no
+bridge under the view's frame feed, and `the_device_keeps_a_flat_heap_in_a_ros_graph`
+(in `ros2_tests`, live DDS) runs the same device in a ROS graph with a peer
+driving its free input and reading its frames back. A flat floor in the first
+and a rising one in the second puts the retention on the ROS 2 path rather than
+the device.
+
+The second is `#[ignore]`d and fails when run: RustDDS retains every large
+sample it publishes, so a face streaming frames over the DDS backend grows by
+several times what it has already delivered ([VIZ-118]). The Zenoh backend does
+not. Run it with `--ignored` to re-measure.
+
+[VIZ-118]: https://linear.app/semio-ai/issue/VIZ-118
+
 
 ## Not yet here
 
