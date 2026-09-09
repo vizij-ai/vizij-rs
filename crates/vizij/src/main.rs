@@ -64,9 +64,17 @@ struct Cli {
     unlit: bool,
 
     /// How the face fits the window: contain letterboxes (the web renderer's
-    /// behavior), cover fills the window and crops the excess axis.
+    /// behavior), cover fills the window and crops the excess axis, stretch
+    /// fills it on both axes, distorting the face to the window's aspect.
     #[arg(long, value_enum, default_value_t = view::Fit::Contain)]
     fit: view::Fit,
+
+    /// Magnify the fitted face: one factor for both axes (`1.5`) or one per
+    /// axis, width x height (`1.5x1.2`). Applies on top of `--fit`, about the
+    /// face's center: above 1 enlarges past the fit (cropping the excess),
+    /// below 1 shrinks it inside the window.
+    #[arg(long, default_value = "1", value_parser = parse_zoom)]
+    zoom: Vec2,
 
     /// Compose only these bundle graph kinds (comma-separated), e.g. "rig" or
     /// "rig,pose-driver". Default: rig + pose-driver + the face's standard
@@ -173,6 +181,7 @@ fn main() -> Result<()> {
     let options = view::ViewOptions {
         background: Color::srgb_u8(r, g, b),
         fit: cli.fit,
+        zoom: cli.zoom,
         ambient: cli.ambient,
         unlit: cli.unlit,
     };
@@ -355,6 +364,26 @@ fn parse_size(size: &str) -> Result<(u32, u32)> {
     Ok((w.parse()?, h.parse()?))
 }
 
+/// `--zoom` value: one positive factor for both axes, or `<x>x<y>`, one per
+/// axis (width, then height).
+fn parse_zoom(spec: &str) -> Result<Vec2> {
+    let factor = |s: &str| -> Result<f32> {
+        let f: f32 = s
+            .trim()
+            .parse()
+            .map_err(|_| anyhow!("--zoom factors must be numbers, got {s:?}"))?;
+        if f.is_finite() && f > 0.0 {
+            Ok(f)
+        } else {
+            Err(anyhow!("--zoom factors must be positive, got {s}"))
+        }
+    };
+    Ok(match spec.split_once('x') {
+        Some((x, y)) => Vec2::new(factor(x)?, factor(y)?),
+        None => Vec2::splat(factor(spec)?),
+    })
+}
+
 /// `--ros2` value `[namespace][:domain]` → (namespace, domain), each optional
 /// (empty namespace, domain 0 by default).
 #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
@@ -366,4 +395,26 @@ fn parse_ros2(spec: &str) -> Result<(String, u16)> {
         domain.parse().context("--ros2 domain must be a number")?
     };
     Ok((namespace.to_string(), domain))
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+
+    #[test]
+    fn a_single_zoom_factor_applies_to_both_axes() {
+        assert_eq!(parse_zoom("1.5").unwrap(), Vec2::splat(1.5));
+    }
+
+    #[test]
+    fn a_zoom_pair_is_width_then_height() {
+        assert_eq!(parse_zoom("2x0.5").unwrap(), Vec2::new(2.0, 0.5));
+    }
+
+    #[test]
+    fn zoom_rejects_non_positive_and_malformed_factors() {
+        for bad in ["0", "-1", "nan", "inf", "2x", "x2", "2x0", "big", "1x2x3"] {
+            assert!(parse_zoom(bad).is_err(), "{bad:?} should be rejected");
+        }
+    }
 }
