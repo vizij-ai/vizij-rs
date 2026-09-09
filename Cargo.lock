@@ -491,9 +491,9 @@ dependencies = [
 
 [[package]]
 name = "arora-bridge-ros2"
-version = "5.0.0"
+version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cacc94fb7b58235535651cfd8100ff89ea9073a9cb8804124d41fa08173142ab"
+checksum = "314b8b1654c8100509ea976c2daf41890597f887a63bed8796fbdcb5af376b0f"
 dependencies = [
  "arora-behavior-tree-types",
  "arora-bridge",
@@ -733,9 +733,9 @@ dependencies = [
 
 [[package]]
 name = "arora-types"
-version = "2.4.0"
+version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3f5838774ed426d8670c2dbfdf37a8560bc671248b44999a0c326be9b7d18b4"
+checksum = "2491177064427d29fb44a2d86097b59e8f04eb09f2c12d74b8c7e220c2d8a893"
 dependencies = [
  "arora-types-derive",
  "async-trait",
@@ -10968,6 +10968,7 @@ dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
  "arora-bridge-ros2",
+ "arora-msgs-ros2",
  "arora-types",
  "bevy",
  "clap 4.5.53",
@@ -11114,6 +11115,7 @@ version = "2.1.0"
 dependencies = [
  "anyhow",
  "arora-behavior",
+ "arora-msgs-ros2",
  "arora-types",
  "log",
  "serde",

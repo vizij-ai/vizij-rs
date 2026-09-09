@@ -4,38 +4,69 @@
 //! one is set (headless), otherwise the window — via Bevy's screenshot API, so
 //! the pixel-calibrated view camera is never touched. The captured frame is
 //! encoded (`--frame-format`) and pushed onto the rig HAL's reading feed under
-//! `view/frame`; the runtime lands it in the store and fans it to every bridge
+//! [`FRAME_KEY`]; the runtime lands it in the store and fans it to every bridge
 //! (the ROS4HRI route — face frames as a topic, no browser).
+//!
+//! The value is the ROS image message itself — `sensor_msgs/Image` for raw
+//! pixels, `sensor_msgs/CompressedImage` for an encoded frame — built by
+//! [`vizij_arora_host::frames`], the shape both hosts share. A ROS 2 bridge
+//! declaring the key as that type publishes the frame with no conversion and no
+//! schema lookup, which is what keeps a frame off the JSON fallback: a
+//! 300 KB PNG would otherwise ride as a `std_msgs/String`.
 
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured};
 
+use std::time::SystemTime;
+
 use arora_types::data::{Key, StateChange};
-use arora_types::keyvalue::{KeyValue, KeyValueField};
 use arora_types::value::Value;
+use vizij_arora_host::frames as host;
 
 use crate::view::{DeviceRes, OffscreenTarget};
 
-/// The store key the rendered frame is published under.
-pub(crate) const FRAME_KEY: &str = "view/frame";
+pub(crate) use vizij_arora_host::frames::FRAME_KEY;
 
-/// How a published frame's pixels are encoded.
+/// How a published frame's pixels are encoded — and, with it, which ROS image
+/// message and topic the frame rides.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, clap::ValueEnum)]
 pub enum FrameFormat {
-    /// PNG — compact enough to travel over a bridge (the default).
+    /// PNG — compact enough to travel over a bridge (the default); a
+    /// `sensor_msgs/CompressedImage`.
     Png,
-    /// Raw RGBA8, row-major, no padding — heavy, but decode-free.
+    /// Raw RGBA8, row-major, no padding — heavy, but decode-free; a
+    /// `sensor_msgs/Image`.
     Raw,
+}
+
+/// The CLI enum is this crate's; the ROS message name and topic a format
+/// implies belong to the shared definition, so a bridge asks that one.
+impl From<FrameFormat> for host::FrameFormat {
+    fn from(format: FrameFormat) -> Self {
+        match format {
+            FrameFormat::Png => host::FrameFormat::Png,
+            FrameFormat::Raw => host::FrameFormat::Raw,
+        }
+    }
 }
 
 /// How the view publishes frames (`--frame-format`, `--frame-rate`).
 #[derive(Resource, Clone)]
 pub struct FrameConfig {
     pub format: FrameFormat,
-    /// Publish rate in Hz, decoupled from the render/step rate.
+    /// Publish rate in Hz, decoupled from the render/step rate. At or below
+    /// zero the view captures nothing and the key is never written.
     pub rate_hz: f32,
+}
+
+impl FrameConfig {
+    /// Whether the view will write [`FRAME_KEY`] at all — what decides both
+    /// whether the capture system runs and whether a bridge declares the key.
+    pub fn publishes(&self) -> bool {
+        self.rate_hz > 0.0
+    }
 }
 
 pub struct FramesPlugin;
@@ -113,23 +144,13 @@ fn to_rgba8(image: &Image) -> Option<Vec<u8>> {
     }
 }
 
-/// The frame as a `view/frame` value: `{ width, height, format, data }`, a
-/// string-keyed record so a bridge consumer reads it without a schema.
+/// The frame as the ROS image message its format names, stamped now.
 pub(crate) fn encode_frame(rgba: &[u8], width: u32, height: u32, format: FrameFormat) -> Value {
-    let (encoded, format_name) = match format {
-        FrameFormat::Raw => (rgba.to_vec(), "rgba8"),
-        FrameFormat::Png => (encode_png(rgba, width, height), "png"),
-    };
-    let mut kv = KeyValue::new();
-    for field in [
-        KeyValueField::new("width", Value::U32(width)),
-        KeyValueField::new("height", Value::U32(height)),
-        KeyValueField::new("format", Value::String(format_name.to_string())),
-        KeyValueField::new("data", Value::ArrayU8(encoded)),
-    ] {
-        kv.fields.insert(field.name.clone(), field);
+    let stamp = SystemTime::now();
+    match format {
+        FrameFormat::Raw => host::raw_frame(width, height, rgba.to_vec(), stamp),
+        FrameFormat::Png => host::compressed_frame("png", encode_png(rgba, width, height), stamp),
     }
-    Value::KeyValue(kv)
 }
 
 /// PNG-encode RGBA8 pixels; on failure (never expected for valid dimensions),
@@ -150,38 +171,53 @@ fn encode_png(rgba: &[u8], width: u32, height: u32) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arora_msgs_ros2::sensor_msgs::{CompressedImage, Image};
+    use arora_types::value_serde::bridge::from_value;
 
-    fn field<'a>(value: &'a Value, name: &str) -> Option<&'a Value> {
-        match value {
-            Value::KeyValue(kv) => kv.fields.get(name).and_then(|f| f.value.as_deref()),
-            _ => None,
-        }
+    /// What the view contributes to a frame is the pixels: the swizzle that
+    /// makes a BGRA swapchain readback RGBA, and the PNG encoding. Both tests
+    /// read the message back as its Rust struct, so a field landing in the
+    /// wrong place fails here rather than at a ROS subscriber.
+    #[test]
+    fn a_raw_frame_carries_the_pixels_as_a_sensor_msgs_image() {
+        let rgba = vec![10, 20, 30, 255, 40, 50, 60, 255];
+        let value = encode_frame(&rgba, 2, 1, FrameFormat::Raw);
+        let frame: Image = from_value(value).expect("a raw frame is a sensor_msgs/Image");
+        assert_eq!((frame.width, frame.height), (2, 1));
+        assert_eq!(frame.encoding, "rgba8");
+        assert_eq!(frame.step, 8, "one row of 2 RGBA pixels");
+        assert_eq!(frame.data, rgba);
     }
 
     #[test]
-    fn raw_frame_carries_the_pixels_verbatim() {
-        let rgba = vec![10, 20, 30, 255];
-        let value = encode_frame(&rgba, 1, 1, FrameFormat::Raw);
-        assert_eq!(field(&value, "width"), Some(&Value::U32(1)));
-        assert_eq!(field(&value, "height"), Some(&Value::U32(1)));
-        assert_eq!(
-            field(&value, "format"),
-            Some(&Value::String("rgba8".into()))
-        );
-        assert_eq!(field(&value, "data"), Some(&Value::ArrayU8(rgba)));
-    }
-
-    #[test]
-    fn png_frame_is_a_decodable_png() {
+    fn a_png_frame_is_a_decodable_sensor_msgs_compressed_image() {
         let rgba = vec![10, 20, 30, 255, 40, 50, 60, 255];
         let value = encode_frame(&rgba, 2, 1, FrameFormat::Png);
-        assert_eq!(field(&value, "format"), Some(&Value::String("png".into())));
-        let Some(Value::ArrayU8(png)) = field(&value, "data") else {
-            panic!("data is not ArrayU8");
-        };
-        assert_eq!(&png[..8], &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
-        let decoded = image::load_from_memory(png).unwrap().to_rgba8();
+        let frame: CompressedImage =
+            from_value(value).expect("a png frame is a sensor_msgs/CompressedImage");
+        assert_eq!(frame.format, "png");
+        assert_eq!(
+            &frame.data[..8],
+            &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]
+        );
+        let decoded = image::load_from_memory(&frame.data).unwrap().to_rgba8();
         assert_eq!(decoded.dimensions(), (2, 1));
         assert_eq!(decoded.into_raw(), rgba);
+    }
+
+    /// The declared ROS type has to be the one the value actually is, or the
+    /// bridge encodes a frame against the wrong message.
+    #[test]
+    fn each_format_declares_the_message_it_encodes() {
+        use host::FrameFormat as Ros;
+        assert_eq!(Ros::from(FrameFormat::Raw).ros_type(), "sensor_msgs/Image");
+        assert_eq!(
+            Ros::from(FrameFormat::Png).ros_type(),
+            "sensor_msgs/CompressedImage"
+        );
+        assert_ne!(
+            Ros::from(FrameFormat::Raw).topic(),
+            Ros::from(FrameFormat::Png).topic()
+        );
     }
 }

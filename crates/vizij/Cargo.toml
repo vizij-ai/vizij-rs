@@ -32,9 +32,11 @@ bevy = "0.19"
 arora = "9.10"
 # The ROS 2 bridge, attached under `--ros2` (feature `ros2`). Heavy (ros2-client
 # + a DDS/Zenoh backend), so opt-in; the Studio bridge rides arora's own
-# `studio-bridge` feature instead (`--studio`). 5 adds the skill plane the
-# ros4hri exposure profile binds `/skill/look_at` through.
-arora-bridge-ros2 = { version = "5", optional = true, default-features = false }
+# `studio-bridge` feature instead (`--studio`). 6 carries the skill plane the
+# ros4hri exposure profile binds `/skill/look_at` through, and publishes only
+# the latest value per key, so a slow ROS reader costs bounded memory here
+# rather than an unbounded queue.
+arora-bridge-ros2 = { version = "6", optional = true, default-features = false }
 # The Status enumeration ids the gaze and tts contracts mark their action shapes with.
 arora-behavior-tree-types = "1"
 # The built-in key prefix the ROS 2 input declaration leaves out.
@@ -57,7 +59,9 @@ arora-types = "2"
 vizij-api-core = { path = "../api/vizij-api-core" }
 vizij-graph-core = { path = "../node-graph/vizij-graph-core" }
 vizij-arora = { path = "../interop/vizij-arora" }
-vizij-arora-host = { path = "../interop/vizij-arora-host" }
+# `frames`: the rendered face as its `sensor_msgs` image value, the shape the
+# browser runtime would build too if it published frames.
+vizij-arora-host = { path = "../interop/vizij-arora-host", features = ["frames"] }
 vizij-arora-store = { path = "../interop/vizij-arora-store" }
 vizij-arora-hal = { path = "../interop/vizij-arora-hal" }
 vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
@@ -76,6 +80,9 @@ rodio = "0.20"
 vizij-piper = { path = "../interop/vizij-piper", optional = true }
 
 [dev-dependencies]
+# The image messages a published frame is read back as, so a field landing in
+# the wrong place fails in a unit test rather than at a ROS subscriber.
+arora-msgs-ros2 = "1"
 # The bundler, for the Quori integration test (grafts the standard-adaptation
 # sidecar into the demo GLB before driving it over the ROS4HRI keys).
 vizij-bundle = { path = "../tools/vizij-bundle" }
