@@ -91,6 +91,12 @@ pub const SAY_VISEME_PARAM_ID: Uuid = uuid::uuid!("a1fbf58b-bf66-44a6-a503-9d907
 /// `sil` shape of [`VISEME_SHAPES`].
 pub const SILENCE_VISEME: &str = "sil";
 
+/// The fields of a viseme player's feedback record: the shape being made and
+/// how hard it is driven, `[0, 1]` — the names ROS4HRI's `Say` feedback
+/// carries them under, as Vizij extends it.
+pub const FEEDBACK_VISEME: &str = "viseme";
+pub const FEEDBACK_INTENSITY: &str = "intensity";
+
 /// The canonical say fragment asset; regenerate with
 /// `vizij-bundle export-skill say`.
 pub const SAY_JSON: &str = include_str!("../skills/say.json");
@@ -360,7 +366,18 @@ fn viseme_driver(g: &mut GraphBuilder, shape: (&str, &str), envelope: &str) -> S
     g.edge_from(shape_node, shape_port, &current, "then");
     g.edge(&silence, &current, "else");
     g.output("out/viseme/state", &current, standard::VISEME.to_string());
-    g.output("out/feedback", &current, "task/feedback".to_string());
+    // The run's feedback pairs the shape with how hard it is driven — the
+    // pair a client needs to mirror the lips, and the shape of ROS4HRI's
+    // `Say` feedback as Vizij extends it.
+    let intensity = g.select("viseme/intensity", &driven, envelope, &zero);
+    let report = g.node(
+        "viseme/report",
+        "buildrecord",
+        json!({ "record_keys": [FEEDBACK_VISEME, FEEDBACK_INTENSITY] }),
+    );
+    g.edge(&current, &report, "field_0");
+    g.edge(&intensity, &report, "field_1");
+    g.output("out/feedback", &report, "task/feedback".to_string());
     settled
 }
 

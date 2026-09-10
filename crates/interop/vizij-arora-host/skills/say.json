@@ -742,6 +742,21 @@
       }
     },
     {
+      "id": "viseme/intensity",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "viseme/report",
+      "type": "buildrecord",
+      "params": {
+        "record_keys": [
+          "viseme",
+          "intensity"
+        ]
+      }
+    },
+    {
       "id": "out/feedback",
       "type": "output",
       "params": {
@@ -2463,7 +2478,52 @@
     },
     {
       "from": {
+        "node_id": "viseme/driven"
+      },
+      "to": {
+        "node_id": "viseme/intensity",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/intensity",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/intensity",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
         "node_id": "viseme/current"
+      },
+      "to": {
+        "node_id": "viseme/report",
+        "input": "field_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/intensity"
+      },
+      "to": {
+        "node_id": "viseme/report",
+        "input": "field_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/report"
       },
       "to": {
         "node_id": "out/feedback",

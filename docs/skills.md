@@ -31,8 +31,11 @@ other shape to zero, each through a smoother (30 ms half-life) whose state is
 the face's own weight, read back from the store. So whichever run writes a
 shape continues its fade from where the last one left it — a run taking over
 never snaps, and a run ending leaves nothing mid-fade. A run reports the
-current shape as its `task/feedback` and ends only once the lips have settled
-(every weight under 2 %), because a run's writes stop with its fragment.
+current shape and how hard it is driven as its `task/feedback` — a record
+`{viseme, intensity}`, the pair a client needs to mirror the lips, and the
+fields ROS4HRI's `Say` feedback carries them under as Vizij extends it — and
+ends only once the lips have settled (every weight under 2 %), because a run's
+writes stop with its fragment.
 
 **`play_viseme(shape, weight)`** plays `shape` at `weight`: 80 ms in, a 250 ms
 hold, 150 ms out — about half a second, a spoken viseme's span with room to
@@ -80,13 +83,17 @@ module's SPAWN, `arora-behavior`'s `TaskHandle` coming back with the run's
 status, feedback, result and update keys). On ROS 2 every skill is an
 action server: the ROS4HRI exposure preset binds `look_at` to the standard
 `/skill/look_at` (`interaction_skills/action/LookAt`), and the bridge
-synthesizes one action per described skill from its signature —
-`/<namespace>/actions/play_viseme` (`arora/action/play_viseme`, goal
-`shape`, `weight`) and `/<namespace>/actions/say` (`arora/action/say`, goal
-`text`, `voice`), discovered over DDS and rmw_zenoh alike. Their `arora`
-interfaces are synthesized, not a ROS package, so a client needs the
-definitions to send a goal; `ros2 action info -t` shows them, `ros2 action
-send_goal` cannot build the goal without the package.
+binds `say` to ROS4HRI's speech skill, `/skill/say`
+(`communication_skills/action/Say`): the goal's `input` is the utterance, and
+the feedback carries the run's `{viseme, intensity}` in the fields Vizij adds
+to the standard's `Say` feedback — a lipsync stream any client built from
+that definition reads. Both skills are exposed under the ROS4HRI exposure
+profile only. The bridge also synthesizes one action per described skill from
+its signature — `/<namespace>/actions/play_viseme` (`arora/action/play_viseme`,
+goal `shape`, `weight`) and `/<namespace>/actions/say` (`arora/action/say`,
+goal `text`, `voice`) — discovered over DDS and rmw_zenoh alike, but their
+`arora` interfaces are not a ROS package, so a client cannot build their goals
+until the definitions are generated for it.
 
 ## In code and on the web
 

@@ -1049,6 +1049,32 @@ mod tests {
         assert!((0.75..=0.85).contains(&defacto), "de-facto jaw = {defacto}");
     }
 
+    /// The shape a viseme player's feedback record names.
+    fn fed_back_viseme(arora: &arora::Arora, path: &str) -> Option<String> {
+        match read_value(arora, path)? {
+            Value::KeyValue(report) => match report.get_field("viseme")?.value.as_deref()? {
+                Value::String(shape) => Some(shape.clone()),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// How hard the feedback record says its shape is driven.
+    fn fed_back_intensity(arora: &arora::Arora, path: &str) -> f32 {
+        let Some(Value::KeyValue(report)) = read_value(arora, path) else {
+            return 0.0;
+        };
+        match report
+            .get_field("intensity")
+            .and_then(|f| f.value.as_deref())
+        {
+            Some(Value::F32(x)) => *x,
+            Some(Value::F64(x)) => *x as f32,
+            _ => 0.0,
+        }
+    }
+
     fn read_value(arora: &arora::Arora, path: &str) -> Option<Value> {
         arora
             .store()
@@ -1121,9 +1147,11 @@ mod tests {
         assert!(read_f32(&arora, &standard::viseme_path("oh")) < 0.01);
         assert_eq!(read_value(&arora, standard::VISEME), Some(text("aa")));
         assert_eq!(
-            read_value(&arora, &handle.feedback[0].path),
-            Some(text("aa"))
+            fed_back_viseme(&arora, &handle.feedback[0].path).as_deref(),
+            Some("aa")
         );
+        let intensity = fed_back_intensity(&arora, &handle.feedback[0].path);
+        assert!(intensity > 0.8, "intensity = {intensity} after the attack");
         assert_eq!(
             read_value(&arora, &handle.status.path),
             Some(task::running())
@@ -1248,8 +1276,8 @@ mod tests {
         assert_eq!(*calls.lock().unwrap(), 2, "one provider call per tick");
         assert_eq!(read_value(&arora, standard::VISEME), Some(text("PP")));
         assert_eq!(
-            read_value(&arora, &handle.feedback[0].path),
-            Some(text("PP"))
+            fed_back_viseme(&arora, &handle.feedback[0].path).as_deref(),
+            Some("PP")
         );
         let pp = read_f32(&arora, &standard::viseme_path("PP"));
         assert!(pp > 0.3, "PP = {pp} rising");
