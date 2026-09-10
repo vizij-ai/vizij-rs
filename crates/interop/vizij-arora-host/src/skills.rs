@@ -480,21 +480,19 @@ pub fn generate_play_viseme() -> Json {
 pub fn generate_say() -> Json {
     let g = &mut GraphBuilder::new();
     let args = g.input("in/args", "task/update", Json::Null);
+    // The run's first keyed `mutated` slot is the provider's viseme parameter.
     let run = g.node(
         "say/call",
         "taskrun",
-        json!({ "function": SAY_ID.to_string() }),
+        json!({
+            "function": SAY_ID.to_string(),
+            "record_keys": [SAY_VISEME_PARAM_ID.to_string()]
+        }),
     );
     g.edge(&args, &run, "args");
 
-    let viseme = g.node(
-        "say/viseme",
-        "readrecord",
-        json!({ "record_keys": [SAY_VISEME_PARAM_ID.to_string()] }),
-    );
-    g.edge_from(&run, "mutated", &viseme, "in");
     let full = g.constant(1.0);
-    let settled = viseme_driver(g, (&viseme, "field_0"), &full);
+    let settled = viseme_driver(g, (&run, "mutated_0"), &full);
 
     let ended = g.node("lifecycle/ended", "and", json!({}));
     g.edge_from(&run, "done", &ended, "lhs");

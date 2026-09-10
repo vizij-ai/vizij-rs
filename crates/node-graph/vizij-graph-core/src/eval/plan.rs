@@ -286,7 +286,7 @@ fn build_output_layout(
             // Node-type-specific param-based minimum count.
             let min_from_params = match node.kind {
                 NodeType::Split => node.params.sizes.as_ref().map(|v| v.len()).unwrap_or(0),
-                NodeType::ReadRecord => node
+                NodeType::ReadRecord | NodeType::TaskRun => node
                     .params
                     .record_keys
                     .as_ref()

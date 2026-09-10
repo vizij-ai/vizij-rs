@@ -273,7 +273,8 @@ pub struct NodeParams {
     #[serde(default)]
     pub case_labels: Option<Vec<String>>,
 
-    // For BuildRecord/ReadRecord – one key string per variadic slot, in slot order
+    // For BuildRecord/ReadRecord/TaskRun – one key string per variadic slot, in
+    // slot order (a TaskRun key is the id of the out-parameter the slot carries)
     #[serde(default)]
     pub record_keys: Option<Vec<String>>,
 
