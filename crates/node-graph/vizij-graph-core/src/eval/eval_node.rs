@@ -401,12 +401,12 @@ fn eval_task_run(
     use super::graph_runtime::{NodeRuntimeState, TaskRunState};
 
     // A terminal run is latched: its function is not invoked again; the node
-    // keeps emitting the terminal status (and the last out-parameter record)
-    // until its fragment is pruned.
+    // keeps emitting the terminal status (and the last out-parameters) until
+    // its fragment is pruned.
     if let Some(NodeRuntimeState::TaskRun(state)) = rt.node_states.get(&spec.id) {
         if let Some(latched) = state.latched.clone() {
             let mutated = state.outputs.clone().unwrap_or_else(|| vocab::record([]));
-            keyed_output(outputs, "mutated", mutated)?;
+            out_parameter_ports(&spec.params, outputs, &mutated)?;
             keyed_output(outputs, "done", vocab::bool_(true))?;
             return single_output(outputs, latched);
         }
@@ -443,9 +443,8 @@ fn eval_task_run(
     let (status, out_parameters) =
         functions.call_module_with_outputs(spec.params.module, function, &args)?;
     let status = crate::task::coerce(status);
-    // The out parameters as a record keyed by parameter id — the fragment
-    // reads the one it routes (a `read_record` on the id) without the node
-    // knowing the function's signature.
+    // The out parameters, kept as one record keyed by parameter id (the
+    // latched state) and emitted one per keyed `mutated` slot.
     let ids: Vec<String> = out_parameters
         .iter()
         .map(|(id, _)| id.to_string())
@@ -465,9 +464,40 @@ fn eval_task_run(
             }),
         );
     }
-    keyed_output(outputs, "mutated", mutated)?;
+    out_parameter_ports(&spec.params, outputs, &mutated)?;
     keyed_output(outputs, "done", vocab::bool_(done))?;
     single_output(outputs, status)
+}
+
+/// The call's out-parameters on the node's keyed variadic `mutated` outputs:
+/// slot `i` carries the parameter whose id is `record_keys[i]`, so a fragment
+/// wires the parameter it routes without the node knowing the function's
+/// signature. A slot whose parameter the call did not set, or whose key is
+/// empty, reads 0.0 — the same fallback as `read_record`.
+fn out_parameter_ports(
+    params: &NodeParams,
+    outputs: &mut OutputSlots,
+    mutated: &Value,
+) -> Result<(), String> {
+    let Some(range) = outputs.layout.variadic_range("mutated") else {
+        return Ok(());
+    };
+    let entries = vocab::as_record(mutated).unwrap_or_default();
+    let keys = params.record_keys.as_deref().unwrap_or(&[]);
+    for i in 0..range.len {
+        let key = keys.get(i).map(String::as_str).unwrap_or("");
+        let value = if key.is_empty() {
+            vocab::float(0.0)
+        } else {
+            entries
+                .iter()
+                .find(|(name, _)| *name == key)
+                .map(|(_, v)| (*v).clone())
+                .unwrap_or(vocab::float(0.0))
+        };
+        outputs.set_variadic("mutated", i, PortValue::new(value))?;
+    }
+    Ok(())
 }
 
 fn eval_external_function(

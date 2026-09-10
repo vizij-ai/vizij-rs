@@ -142,6 +142,8 @@ fn task_run_graph() -> GraphSpec {
             kind: NodeType::TaskRun,
             params: NodeParams {
                 function: Some(Uuid::from_u128(0x2222)),
+                // The out-parameter the graph routes: one keyed `mutated` slot.
+                record_keys: Some(vec![Uuid::from_u128(0x4444).to_string()]),
                 ..Default::default()
             },
             output_shapes: HashMap::new(),
@@ -153,15 +155,12 @@ fn task_run_graph() -> GraphSpec {
     .with_cache()
 }
 
-fn mutated_field(rt: &GraphRuntime, id: Uuid) -> Option<Value> {
-    let port = rt
-        .outputs
+/// The out-parameter on its keyed slot — `mutated_0` is the first key.
+fn mutated_field(rt: &GraphRuntime, _id: Uuid) -> Option<Value> {
+    rt.outputs
         .get("run")
-        .and_then(|ports| ports.get("mutated"))?;
-    vocab::as_record(&port.value)?
-        .into_iter()
-        .find(|(name, _)| *name == id.to_string())
-        .map(|(_, value)| value.clone())
+        .and_then(|ports| ports.get("mutated_0"))
+        .map(|port| port.value.clone())
 }
 
 #[test]

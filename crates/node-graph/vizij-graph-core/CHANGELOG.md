@@ -4,6 +4,17 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-09-10
+
+### Added
+
+- `TaskRun` exposes the call's mutable (out) parameters as keyed variadic
+  `mutated` outputs — one slot per parameter id listed in `record_keys`, the
+  shape `ReadRecord` already has — and a `done` output, true once the run's
+  status is terminal (and latched). A fragment wires the out-parameter it
+  routes directly, without knowing the function's signature.
+- Integer values count as scalars to the arithmetic nodes.
+
 ## [1.3.0] - 2026-07-30
 
 ### Changed

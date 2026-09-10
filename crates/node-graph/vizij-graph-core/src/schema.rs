@@ -2729,8 +2729,9 @@ pub fn registry() -> Registry {
         doc: "Hosts one task run: invokes its module function (module and function are params) \
               each evaluation and emits the run's behavior Status, latched once terminal. The \
               argument bundle comes from the `args` input when wired (so a live goal update on \
-              the run's update key flows in each tick), else from the `value` param. Grafted per \
-              spawned run by the interpreter.",
+              the run's update key flows in each tick), else from the `value` param. The call's \
+              mutable (out) parameters are the keyed `mutated` outputs, one per key in \
+              params.record_keys (a parameter id). Grafted per spawned run by the interpreter.",
         inputs: vec![PortSpec {
             id: "args",
             ty: PortType::Any,
@@ -2749,15 +2750,6 @@ pub fn registry() -> Registry {
                 optional: false,
             },
             PortSpec {
-                id: "mutated",
-                ty: PortType::Any,
-                label: "Mutated",
-                doc: "The call's mutable (out) parameters after the invocation, as a record keyed \
-                      by parameter id — read one with a `read_record` on that id. Latched with \
-                      the status.",
-                optional: true,
-            },
-            PortSpec {
                 id: "done",
                 ty: PortType::Bool,
                 label: "Done",
@@ -2766,7 +2758,16 @@ pub fn registry() -> Registry {
                 optional: true,
             },
         ],
-        variadic_outputs: None,
+        variadic_outputs: Some(VariadicSpec {
+            id: "mutated",
+            ty: PortType::Any,
+            label: "Mutated",
+            doc: "One of the call's mutable (out) parameters after the invocation: the one whose \
+                  id is the slot's key in params.record_keys. Latched with the status.",
+            min: 0,
+            max: None,
+            keyed: true,
+        }),
         params: vec![],
     });
 
