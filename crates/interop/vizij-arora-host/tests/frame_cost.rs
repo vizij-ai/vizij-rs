@@ -52,15 +52,15 @@ const HEIGHT: u32 = 486;
 fn a_frame_costs_about_one_copy_of_its_payload() {
     // The type and registry are built once behind a `OnceLock`; warm both so
     // that allocation is not charged to a frame.
-    let _ = vizij_arora_host::frames::raw_frame(1, 1, vec![0; 4], UNIX_EPOCH);
-    let _ = vizij_arora_host::frames::compressed_frame("png", vec![0; 4], UNIX_EPOCH);
+    let _ = vizij_arora_host::frames::raw_frame(1, 1, vec![0; 4], UNIX_EPOCH, "probe");
+    let _ = vizij_arora_host::frames::compressed_frame("png", vec![0; 4], UNIX_EPOCH, "probe");
 
     // The caller's buffer is one copy; the message around it is a handful of
     // scalars. Four leaves room for an allocator's rounding without leaving
     // room for a `Value` per byte, which would be ~72x.
     let pixels = vec![7u8; (WIDTH * HEIGHT * 4) as usize];
     let raw = peak_while(|| {
-        vizij_arora_host::frames::raw_frame(WIDTH, HEIGHT, pixels.clone(), UNIX_EPOCH)
+        vizij_arora_host::frames::raw_frame(WIDTH, HEIGHT, pixels.clone(), UNIX_EPOCH, "probe")
     });
     assert!(
         raw < pixels.len() * 4,
@@ -71,7 +71,7 @@ fn a_frame_costs_about_one_copy_of_its_payload() {
 
     let encoded = vec![7u8; 417_746];
     let compressed = peak_while(|| {
-        vizij_arora_host::frames::compressed_frame("png", encoded.clone(), UNIX_EPOCH)
+        vizij_arora_host::frames::compressed_frame("png", encoded.clone(), UNIX_EPOCH, "probe")
     });
     assert!(
         compressed < encoded.len() * 4,
