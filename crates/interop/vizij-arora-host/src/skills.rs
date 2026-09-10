@@ -368,8 +368,17 @@ fn viseme_driver(g: &mut GraphBuilder, shape: (&str, &str), envelope: &str) -> S
     g.output("out/viseme/state", &current, standard::VISEME.to_string());
     // The run's feedback pairs the shape with how hard it is driven — the
     // pair a client needs to mirror the lips, and the shape of ROS4HRI's
-    // `Say` feedback as Vizij extends it.
-    let intensity = g.select("viseme/intensity", &driven, envelope, &zero);
+    // `Say` feedback as Vizij extends it. Rest reports zero: `sil` is the
+    // absence of a shape, whatever the envelope holds. (A `case` on the
+    // text — `equal` compares numbers.)
+    let intensity = g.node(
+        "viseme/intensity",
+        "case",
+        json!({ "case_labels": [SILENCE_VISEME] }),
+    );
+    g.edge(&current, &intensity, "selector");
+    g.edge(&zero, &intensity, "operand_0");
+    g.edge(envelope, &intensity, "default");
     let report = g.node(
         "viseme/report",
         "buildrecord",

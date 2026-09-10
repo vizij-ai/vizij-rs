@@ -826,8 +826,12 @@
     },
     {
       "id": "viseme/intensity",
-      "type": "if",
-      "params": {}
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "sil"
+        ]
+      }
     },
     {
       "id": "viseme/report",
@@ -2776,20 +2780,11 @@
     },
     {
       "from": {
-        "node_id": "viseme/driven"
+        "node_id": "viseme/current"
       },
       "to": {
         "node_id": "viseme/intensity",
-        "input": "cond"
-      }
-    },
-    {
-      "from": {
-        "node_id": "envelope/weighted"
-      },
-      "to": {
-        "node_id": "viseme/intensity",
-        "input": "then"
+        "input": "selector"
       }
     },
     {
@@ -2798,7 +2793,16 @@
       },
       "to": {
         "node_id": "viseme/intensity",
-        "input": "else"
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "envelope/weighted"
+      },
+      "to": {
+        "node_id": "viseme/intensity",
+        "input": "default"
       }
     },
     {

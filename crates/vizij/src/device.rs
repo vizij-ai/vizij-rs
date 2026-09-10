@@ -121,8 +121,9 @@ async fn attach_bridges(
     #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
     if let Some((namespace, domain)) = &bridges.ros2 {
         // The ROS4HRI exposure profile: typed face topics fanning onto the
-        // standard keys, and the `/skill/look_at` action bound to the gaze
-        // skill the device describes.
+        // standard keys, and the standard skills — `/skill/look_at`,
+        // `/skill/say` — bound to the gaze and speech skills the device
+        // describes.
         let mut config = arora_bridge_ros2::Ros2BridgeConfig::new(namespace.clone(), *domain)
             .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
         // The face's free inputs — what nothing in the composed graph writes —
@@ -135,7 +136,7 @@ async fn attach_bridges(
         log::info!(
             "serving the ROS 2 bridge (namespace {namespace:?}, domain {domain}): {} input keys \
              subscribed under /{namespace}/keys/<path>, plus the ROS4HRI typed topics and the \
-             /skill/look_at action",
+             /skill/look_at and /skill/say actions",
             data_inputs.len()
         );
     }
