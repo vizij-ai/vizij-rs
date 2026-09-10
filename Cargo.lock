@@ -491,9 +491,9 @@ dependencies = [
 
 [[package]]
 name = "arora-bridge-ros2"
-version = "6.0.0"
+version = "6.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "314b8b1654c8100509ea976c2daf41890597f887a63bed8796fbdcb5af376b0f"
+checksum = "86c21032b4538180967524bb51f6d04bb990ba3d46bb8d2fc34715e7f237fcbc"
 dependencies = [
  "arora-behavior-tree-types",
  "arora-bridge",
@@ -668,6 +668,7 @@ dependencies = [
  "arora-types",
  "proc-macro2",
  "quote",
+ "ros2-client-multi-rmw",
  "serde",
  "serde-big-array",
  "serde_json",
@@ -5551,7 +5552,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.57.0",
 ]
 
 [[package]]
@@ -8119,7 +8120,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.12.1",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -8825,9 +8826,9 @@ dependencies = [
 
 [[package]]
 name = "ros2-client-multi-rmw"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7c88980573e47852ffc5f152dbb1cc63ba7536f19f3da4dac9931f416bbba55"
+checksum = "507526b5e82441bf7b9b810eaa53acd3226cf27ad1426dc5b079fbfea9e81994"
 dependencies = [
  "async-channel",
  "bstr",
