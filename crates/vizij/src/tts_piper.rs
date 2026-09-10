@@ -5,11 +5,10 @@
 //! run time: the `vizij-piper` build provisions libpiper and a patched default
 //! voice, so a plain `cargo build --features tts-piper` is the whole setup.
 //!
-//! The `viseme` out-parameter carries the espeak-ng **phoneme** at the audio
-//! playhead (this provider's vocabulary; the cloud provider emits AWS Polly
-//! viseme codes). Markers and punctuation — BOS `^`, EOS `$`, stress marks,
-//! `.`/`,` — normalize to the shared rest token `sil`; real phonemes pass
-//! through raw for the caller to map.
+//! The `viseme` out-parameter carries the face-standard shape at the audio
+//! playhead, the espeak-ng **phoneme** there mapped by [`phoneme_shape`];
+//! markers and punctuation — BOS `^`, EOS `$`, stress marks, `.`/`,` — are
+//! the rest token `sil`.
 //!
 //! Piper's voice is chosen at build/run time (`PIPER_VOICE`); the `voice`
 //! call parameter names Polly voices and is ignored here (logged), keeping
@@ -31,14 +30,13 @@ use vizij_graph_core::task;
 use vizij_piper::{PhonemeEvent, Synthesizer};
 
 use vizij_arora_tts::{
-    say_id, say_signature, text_param_id, viseme_param_id, voice_param_id, SILENCE_VISEME,
+    say_signature, SAY_ID, SAY_TEXT_PARAM_ID, SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID,
+    SILENCE_VISEME,
 };
 
 /// The Piper tts module's id on the device — distinct from the cloud module so
 /// DescribeMethods shows which provider this build carries.
-pub fn module_id() -> Uuid {
-    uuid!("31ca2243-5719-4862-aa57-c30d27cab62e")
-}
+pub const MODULE_ID: Uuid = uuid!("31ca2243-5719-4862-aa57-c30d27cab62e");
 
 /// A handle for spawning: reuse the ambient runtime if one is active, otherwise a
 /// dedicated one. Only a `Handle` is needed.
@@ -73,19 +71,19 @@ struct Run {
 /// The Piper tts module: the described `say` action — the same signature the
 /// cloud provider describes, discoverable over `DescribeMethods`.
 pub fn host_module() -> HostModule {
-    ModuleBuilder::new(module_id())
-        .described_function(say_id(), "say", say_signature(), say)
+    ModuleBuilder::new(MODULE_ID)
+        .described_function(SAY_ID, "say", say_signature(), say)
         .build()
 }
 
 /// Speak `text`, streaming the phoneme at the playhead. Re-invoked each tick
 /// while `Running`; keeps its state in [`RUNS`], keyed by content.
 pub(crate) fn say(call: Call) -> Result<CallResult, CallError> {
-    let text = match arg_string(&call, text_param_id()) {
+    let text = match arg_string(&call, SAY_TEXT_PARAM_ID) {
         Some(text) => text,
         None => return Ok(status_only(task::failure())),
     };
-    if let Some(voice) = arg_string(&call, voice_param_id()) {
+    if let Some(voice) = arg_string(&call, SAY_VOICE_PARAM_ID) {
         if !voice.is_empty() {
             log::debug!(
                 "tts-piper: the voice parameter ({voice}) is ignored — \
@@ -223,14 +221,42 @@ pub(crate) fn shutdown() {
     }
 }
 
-/// The out-param token for an event: real phonemes pass through raw; markers,
-/// stress and punctuation pseudo-phonemes become the rest token.
+/// The out-param token for an event: the phoneme's shape; markers, stress
+/// and punctuation pseudo-phonemes are the rest token.
 fn cursor_token(event: &PhonemeEvent) -> String {
-    match event.phoneme.as_str() {
-        "" | " " | "^" | "$" | "_" | "." | "," | ";" | ":" | "!" | "?" | "ˈ" | "ˌ" | "ː" => {
-            SILENCE_VISEME.to_string()
-        }
-        phoneme => phoneme.to_string(),
+    phoneme_shape(&event.phoneme).to_string()
+}
+
+/// The face-standard shape for an espeak-ng phoneme (IPA symbols, possibly
+/// with a length or stress mark, e.g. `oʊ`, `ɜː`, `tʃ`). A mouth-shape
+/// approximation by articulation: bilabials to `PP`, labiodentals to `FF`,
+/// dentals to `TH`, alveolar stops to `DD`, velars to `kk`, postalveolars to
+/// `CH`, sibilants to `SS`, nasals and laterals to `nn`, rhotics to `RR`,
+/// then the vowels by openness and rounding. Anything else — markers,
+/// punctuation, an unknown symbol — is the rest token.
+pub(crate) fn phoneme_shape(phoneme: &str) -> &'static str {
+    let phoneme = phoneme.trim_matches(|c: char| matches!(c, 'ˈ' | 'ˌ' | 'ː' | '.' | ' '));
+    let mut chars = phoneme.chars();
+    let (Some(first), second) = (chars.next(), chars.next()) else {
+        return SILENCE_VISEME;
+    };
+    match (first, second) {
+        ('t', Some('ʃ')) | ('d', Some('ʒ')) => "CH",
+        ('p' | 'b' | 'm', _) => "PP",
+        ('f' | 'v', _) => "FF",
+        ('θ' | 'ð', _) => "TH",
+        ('t' | 'd' | 'ɾ', _) => "DD",
+        ('k' | 'g' | 'ɡ', _) => "kk",
+        ('ʃ' | 'ʒ', _) => "CH",
+        ('s' | 'z', _) => "SS",
+        ('n' | 'ŋ' | 'l' | 'ɫ', _) => "nn",
+        ('r' | 'ɹ' | 'ɻ', _) => "RR",
+        ('a' | 'ɑ' | 'ʌ' | 'æ' | 'ɐ', _) => "aa",
+        ('e' | 'ɛ' | 'ɜ', _) => "E",
+        ('i' | 'ɪ' | 'ɨ' | 'j' | 'ə' | 'ɚ' | 'h', _) => "ih",
+        ('o' | 'ɔ' | 'ɒ', _) => "oh",
+        ('u' | 'ʊ' | 'ʉ' | 'w', _) => "ou",
+        _ => SILENCE_VISEME,
     }
 }
 
@@ -247,7 +273,7 @@ fn with_viseme(status: Value, viseme: &str) -> CallResult {
     CallResult {
         ret: status,
         mutated: vec![StructureField {
-            id: viseme_param_id(),
+            id: SAY_VISEME_PARAM_ID,
             value: Box::new(Value::String(viseme.to_string())),
         }],
     }
@@ -270,4 +296,20 @@ fn utterance_key(text: &str) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     text.hash(&mut h);
     h.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::phoneme_shape;
+
+    #[test]
+    fn phonemes_map_to_the_standard_shapes() {
+        assert_eq!(phoneme_shape("tʃ"), "CH");
+        assert_eq!(phoneme_shape("t"), "DD");
+        assert_eq!(phoneme_shape("oʊ"), "oh");
+        assert_eq!(phoneme_shape("ɜː"), "E");
+        assert_eq!(phoneme_shape("ˈaɪ"), "aa");
+        assert_eq!(phoneme_shape("^"), "sil");
+        assert_eq!(phoneme_shape(""), "sil");
+    }
 }

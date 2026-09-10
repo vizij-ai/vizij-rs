@@ -1,0 +1,2593 @@
+{
+  "nodes": [
+    {
+      "id": "in/args",
+      "type": "input",
+      "params": {
+        "path": "task/update",
+        "value": null
+      }
+    },
+    {
+      "id": "say/call",
+      "type": "taskrun",
+      "params": {
+        "function": "77bf2798-e7ce-47c6-a45c-3c2e9ba1837d"
+      }
+    },
+    {
+      "id": "say/viseme",
+      "type": "readrecord",
+      "params": {
+        "record_keys": [
+          "a1fbf58b-bf66-44a6-a503-9d9078ee5755"
+        ]
+      }
+    },
+    {
+      "id": "const/1",
+      "type": "constant",
+      "params": {
+        "value": 1.0
+      }
+    },
+    {
+      "id": "const/0",
+      "type": "constant",
+      "params": {
+        "value": 0.0
+      }
+    },
+    {
+      "id": "in/dt",
+      "type": "input",
+      "params": {
+        "path": "arora/dt",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "const/1000000000",
+      "type": "constant",
+      "params": {
+        "value": 1000000000.0
+      }
+    },
+    {
+      "id": "crossfade/dt",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "const/0.03",
+      "type": "constant",
+      "params": {
+        "value": 0.03
+      }
+    },
+    {
+      "id": "crossfade/half_lives",
+      "type": "divide",
+      "params": {}
+    },
+    {
+      "id": "const/0.5",
+      "type": "constant",
+      "params": {
+        "value": 0.5
+      }
+    },
+    {
+      "id": "crossfade/decay",
+      "type": "power",
+      "params": {}
+    },
+    {
+      "id": "crossfade/gain",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/sil",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/sil"
+      }
+    },
+    {
+      "id": "viseme/PP/target",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "PP"
+        ]
+      }
+    },
+    {
+      "id": "in/viseme/PP",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/PP",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/PP/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "viseme/PP/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "viseme/PP/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/PP",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/PP"
+      }
+    },
+    {
+      "id": "viseme/FF/target",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "FF"
+        ]
+      }
+    },
+    {
+      "id": "in/viseme/FF",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/FF",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/FF/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "viseme/FF/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "viseme/FF/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/FF",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/FF"
+      }
+    },
+    {
+      "id": "viseme/loudest/FF",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "viseme/TH/target",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "TH"
+        ]
+      }
+    },
+    {
+      "id": "in/viseme/TH",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/TH",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/TH/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "viseme/TH/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "viseme/TH/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/TH",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/TH"
+      }
+    },
+    {
+      "id": "viseme/loudest/TH",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "viseme/DD/target",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "DD"
+        ]
+      }
+    },
+    {
+      "id": "in/viseme/DD",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/DD",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/DD/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "viseme/DD/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "viseme/DD/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/DD",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/DD"
+      }
+    },
+    {
+      "id": "viseme/loudest/DD",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "viseme/kk/target",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "kk"
+        ]
+      }
+    },
+    {
+      "id": "in/viseme/kk",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/kk",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/kk/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "viseme/kk/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "viseme/kk/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/kk",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/kk"
+      }
+    },
+    {
+      "id": "viseme/loudest/kk",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "viseme/CH/target",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "CH"
+        ]
+      }
+    },
+    {
+      "id": "in/viseme/CH",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/CH",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/CH/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "viseme/CH/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "viseme/CH/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/CH",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/CH"
+      }
+    },
+    {
+      "id": "viseme/loudest/CH",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "viseme/SS/target",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "SS"
+        ]
+      }
+    },
+    {
+      "id": "in/viseme/SS",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/SS",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/SS/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "viseme/SS/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "viseme/SS/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/SS",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/SS"
+      }
+    },
+    {
+      "id": "viseme/loudest/SS",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "viseme/nn/target",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "nn"
+        ]
+      }
+    },
+    {
+      "id": "in/viseme/nn",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/nn",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/nn/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "viseme/nn/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "viseme/nn/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/nn",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/nn"
+      }
+    },
+    {
+      "id": "viseme/loudest/nn",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "viseme/RR/target",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "RR"
+        ]
+      }
+    },
+    {
+      "id": "in/viseme/RR",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/RR",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/RR/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "viseme/RR/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "viseme/RR/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/RR",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/RR"
+      }
+    },
+    {
+      "id": "viseme/loudest/RR",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "viseme/aa/target",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "aa"
+        ]
+      }
+    },
+    {
+      "id": "in/viseme/aa",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/aa",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/aa/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "viseme/aa/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "viseme/aa/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/aa",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/aa"
+      }
+    },
+    {
+      "id": "viseme/loudest/aa",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "viseme/E/target",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "in/viseme/E",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/E",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/E/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "viseme/E/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "viseme/E/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/E",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/E"
+      }
+    },
+    {
+      "id": "viseme/loudest/E",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "viseme/ih/target",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "ih"
+        ]
+      }
+    },
+    {
+      "id": "in/viseme/ih",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/ih",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/ih/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "viseme/ih/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "viseme/ih/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/ih",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/ih"
+      }
+    },
+    {
+      "id": "viseme/loudest/ih",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "viseme/oh/target",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "oh"
+        ]
+      }
+    },
+    {
+      "id": "in/viseme/oh",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/oh",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/oh/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "viseme/oh/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "viseme/oh/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/oh",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/oh"
+      }
+    },
+    {
+      "id": "viseme/loudest/oh",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "viseme/ou/target",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "ou"
+        ]
+      }
+    },
+    {
+      "id": "in/viseme/ou",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/viseme/ou",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "viseme/ou/toward",
+      "type": "subtract",
+      "params": {}
+    },
+    {
+      "id": "viseme/ou/step",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "viseme/ou/weight",
+      "type": "add",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/ou",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme/ou"
+      }
+    },
+    {
+      "id": "viseme/loudest/ou",
+      "type": "max",
+      "params": {}
+    },
+    {
+      "id": "const/0.02",
+      "type": "constant",
+      "params": {
+        "value": 0.02
+      }
+    },
+    {
+      "id": "viseme/settled",
+      "type": "lessthan",
+      "params": {}
+    },
+    {
+      "id": "viseme/driven",
+      "type": "greaterthan",
+      "params": {}
+    },
+    {
+      "id": "const/sil",
+      "type": "constant",
+      "params": {
+        "value": "sil"
+      }
+    },
+    {
+      "id": "viseme/current",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "out/viseme/state",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/viseme"
+      }
+    },
+    {
+      "id": "viseme/intensity",
+      "type": "case",
+      "params": {
+        "case_labels": [
+          "sil"
+        ]
+      }
+    },
+    {
+      "id": "viseme/report",
+      "type": "buildrecord",
+      "params": {
+        "record_keys": [
+          "viseme",
+          "intensity"
+        ]
+      }
+    },
+    {
+      "id": "out/feedback",
+      "type": "output",
+      "params": {
+        "path": "task/feedback"
+      }
+    },
+    {
+      "id": "lifecycle/ended",
+      "type": "and",
+      "params": {}
+    },
+    {
+      "id": "lifecycle/running",
+      "type": "constant",
+      "params": {
+        "value": {
+          "enum": {
+            "id": "325a5767-e344-4532-860e-0749bcf2e428",
+            "variant_id": "acd79ec6-0c44-401a-82f8-5da5422d3eec",
+            "value": "unit"
+          }
+        }
+      }
+    },
+    {
+      "id": "lifecycle/status",
+      "type": "if",
+      "params": {}
+    },
+    {
+      "id": "out/status",
+      "type": "output",
+      "params": {
+        "path": "task/status"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node_id": "in/args"
+      },
+      "to": {
+        "node_id": "say/call",
+        "input": "args"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/call",
+        "output": "mutated"
+      },
+      "to": {
+        "node_id": "say/viseme",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/dt"
+      },
+      "to": {
+        "node_id": "crossfade/dt",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1000000000"
+      },
+      "to": {
+        "node_id": "crossfade/dt",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/dt"
+      },
+      "to": {
+        "node_id": "crossfade/half_lives",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.03"
+      },
+      "to": {
+        "node_id": "crossfade/half_lives",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.5"
+      },
+      "to": {
+        "node_id": "crossfade/decay",
+        "input": "base"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/half_lives"
+      },
+      "to": {
+        "node_id": "crossfade/decay",
+        "input": "exp"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "crossfade/gain",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/decay"
+      },
+      "to": {
+        "node_id": "crossfade/gain",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "out/viseme/sil",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "viseme/PP/target",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/PP/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/PP/target",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/PP/target"
+      },
+      "to": {
+        "node_id": "viseme/PP/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/PP"
+      },
+      "to": {
+        "node_id": "viseme/PP/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/PP/toward"
+      },
+      "to": {
+        "node_id": "viseme/PP/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/gain"
+      },
+      "to": {
+        "node_id": "viseme/PP/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/PP"
+      },
+      "to": {
+        "node_id": "viseme/PP/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/PP/step"
+      },
+      "to": {
+        "node_id": "viseme/PP/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/PP/weight"
+      },
+      "to": {
+        "node_id": "out/viseme/PP",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "viseme/FF/target",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/FF/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/FF/target",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/FF/target"
+      },
+      "to": {
+        "node_id": "viseme/FF/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/FF"
+      },
+      "to": {
+        "node_id": "viseme/FF/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/FF/toward"
+      },
+      "to": {
+        "node_id": "viseme/FF/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/gain"
+      },
+      "to": {
+        "node_id": "viseme/FF/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/FF"
+      },
+      "to": {
+        "node_id": "viseme/FF/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/FF/step"
+      },
+      "to": {
+        "node_id": "viseme/FF/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/FF/weight"
+      },
+      "to": {
+        "node_id": "out/viseme/FF",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/PP/weight"
+      },
+      "to": {
+        "node_id": "viseme/loudest/FF",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/FF/weight"
+      },
+      "to": {
+        "node_id": "viseme/loudest/FF",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "viseme/TH/target",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/TH/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/TH/target",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/TH/target"
+      },
+      "to": {
+        "node_id": "viseme/TH/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/TH"
+      },
+      "to": {
+        "node_id": "viseme/TH/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/TH/toward"
+      },
+      "to": {
+        "node_id": "viseme/TH/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/gain"
+      },
+      "to": {
+        "node_id": "viseme/TH/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/TH"
+      },
+      "to": {
+        "node_id": "viseme/TH/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/TH/step"
+      },
+      "to": {
+        "node_id": "viseme/TH/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/TH/weight"
+      },
+      "to": {
+        "node_id": "out/viseme/TH",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/loudest/FF"
+      },
+      "to": {
+        "node_id": "viseme/loudest/TH",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/TH/weight"
+      },
+      "to": {
+        "node_id": "viseme/loudest/TH",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "viseme/DD/target",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/DD/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/DD/target",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/DD/target"
+      },
+      "to": {
+        "node_id": "viseme/DD/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/DD"
+      },
+      "to": {
+        "node_id": "viseme/DD/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/DD/toward"
+      },
+      "to": {
+        "node_id": "viseme/DD/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/gain"
+      },
+      "to": {
+        "node_id": "viseme/DD/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/DD"
+      },
+      "to": {
+        "node_id": "viseme/DD/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/DD/step"
+      },
+      "to": {
+        "node_id": "viseme/DD/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/DD/weight"
+      },
+      "to": {
+        "node_id": "out/viseme/DD",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/loudest/TH"
+      },
+      "to": {
+        "node_id": "viseme/loudest/DD",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/DD/weight"
+      },
+      "to": {
+        "node_id": "viseme/loudest/DD",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "viseme/kk/target",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/kk/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/kk/target",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/kk/target"
+      },
+      "to": {
+        "node_id": "viseme/kk/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/kk"
+      },
+      "to": {
+        "node_id": "viseme/kk/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/kk/toward"
+      },
+      "to": {
+        "node_id": "viseme/kk/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/gain"
+      },
+      "to": {
+        "node_id": "viseme/kk/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/kk"
+      },
+      "to": {
+        "node_id": "viseme/kk/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/kk/step"
+      },
+      "to": {
+        "node_id": "viseme/kk/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/kk/weight"
+      },
+      "to": {
+        "node_id": "out/viseme/kk",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/loudest/DD"
+      },
+      "to": {
+        "node_id": "viseme/loudest/kk",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/kk/weight"
+      },
+      "to": {
+        "node_id": "viseme/loudest/kk",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "viseme/CH/target",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/CH/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/CH/target",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/CH/target"
+      },
+      "to": {
+        "node_id": "viseme/CH/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/CH"
+      },
+      "to": {
+        "node_id": "viseme/CH/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/CH/toward"
+      },
+      "to": {
+        "node_id": "viseme/CH/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/gain"
+      },
+      "to": {
+        "node_id": "viseme/CH/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/CH"
+      },
+      "to": {
+        "node_id": "viseme/CH/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/CH/step"
+      },
+      "to": {
+        "node_id": "viseme/CH/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/CH/weight"
+      },
+      "to": {
+        "node_id": "out/viseme/CH",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/loudest/kk"
+      },
+      "to": {
+        "node_id": "viseme/loudest/CH",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/CH/weight"
+      },
+      "to": {
+        "node_id": "viseme/loudest/CH",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "viseme/SS/target",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/SS/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/SS/target",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/SS/target"
+      },
+      "to": {
+        "node_id": "viseme/SS/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/SS"
+      },
+      "to": {
+        "node_id": "viseme/SS/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/SS/toward"
+      },
+      "to": {
+        "node_id": "viseme/SS/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/gain"
+      },
+      "to": {
+        "node_id": "viseme/SS/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/SS"
+      },
+      "to": {
+        "node_id": "viseme/SS/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/SS/step"
+      },
+      "to": {
+        "node_id": "viseme/SS/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/SS/weight"
+      },
+      "to": {
+        "node_id": "out/viseme/SS",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/loudest/CH"
+      },
+      "to": {
+        "node_id": "viseme/loudest/SS",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/SS/weight"
+      },
+      "to": {
+        "node_id": "viseme/loudest/SS",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "viseme/nn/target",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/nn/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/nn/target",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/nn/target"
+      },
+      "to": {
+        "node_id": "viseme/nn/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/nn"
+      },
+      "to": {
+        "node_id": "viseme/nn/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/nn/toward"
+      },
+      "to": {
+        "node_id": "viseme/nn/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/gain"
+      },
+      "to": {
+        "node_id": "viseme/nn/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/nn"
+      },
+      "to": {
+        "node_id": "viseme/nn/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/nn/step"
+      },
+      "to": {
+        "node_id": "viseme/nn/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/nn/weight"
+      },
+      "to": {
+        "node_id": "out/viseme/nn",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/loudest/SS"
+      },
+      "to": {
+        "node_id": "viseme/loudest/nn",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/nn/weight"
+      },
+      "to": {
+        "node_id": "viseme/loudest/nn",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "viseme/RR/target",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/RR/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/RR/target",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/RR/target"
+      },
+      "to": {
+        "node_id": "viseme/RR/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/RR"
+      },
+      "to": {
+        "node_id": "viseme/RR/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/RR/toward"
+      },
+      "to": {
+        "node_id": "viseme/RR/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/gain"
+      },
+      "to": {
+        "node_id": "viseme/RR/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/RR"
+      },
+      "to": {
+        "node_id": "viseme/RR/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/RR/step"
+      },
+      "to": {
+        "node_id": "viseme/RR/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/RR/weight"
+      },
+      "to": {
+        "node_id": "out/viseme/RR",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/loudest/nn"
+      },
+      "to": {
+        "node_id": "viseme/loudest/RR",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/RR/weight"
+      },
+      "to": {
+        "node_id": "viseme/loudest/RR",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "viseme/aa/target",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/aa/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/aa/target",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/aa/target"
+      },
+      "to": {
+        "node_id": "viseme/aa/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/aa"
+      },
+      "to": {
+        "node_id": "viseme/aa/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/aa/toward"
+      },
+      "to": {
+        "node_id": "viseme/aa/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/gain"
+      },
+      "to": {
+        "node_id": "viseme/aa/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/aa"
+      },
+      "to": {
+        "node_id": "viseme/aa/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/aa/step"
+      },
+      "to": {
+        "node_id": "viseme/aa/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/aa/weight"
+      },
+      "to": {
+        "node_id": "out/viseme/aa",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/loudest/RR"
+      },
+      "to": {
+        "node_id": "viseme/loudest/aa",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/aa/weight"
+      },
+      "to": {
+        "node_id": "viseme/loudest/aa",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "viseme/E/target",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/E/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/E/target",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/E/target"
+      },
+      "to": {
+        "node_id": "viseme/E/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/E"
+      },
+      "to": {
+        "node_id": "viseme/E/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/E/toward"
+      },
+      "to": {
+        "node_id": "viseme/E/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/gain"
+      },
+      "to": {
+        "node_id": "viseme/E/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/E"
+      },
+      "to": {
+        "node_id": "viseme/E/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/E/step"
+      },
+      "to": {
+        "node_id": "viseme/E/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/E/weight"
+      },
+      "to": {
+        "node_id": "out/viseme/E",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/loudest/aa"
+      },
+      "to": {
+        "node_id": "viseme/loudest/E",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/E/weight"
+      },
+      "to": {
+        "node_id": "viseme/loudest/E",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "viseme/ih/target",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/ih/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/ih/target",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ih/target"
+      },
+      "to": {
+        "node_id": "viseme/ih/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/ih"
+      },
+      "to": {
+        "node_id": "viseme/ih/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ih/toward"
+      },
+      "to": {
+        "node_id": "viseme/ih/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/gain"
+      },
+      "to": {
+        "node_id": "viseme/ih/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/ih"
+      },
+      "to": {
+        "node_id": "viseme/ih/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ih/step"
+      },
+      "to": {
+        "node_id": "viseme/ih/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ih/weight"
+      },
+      "to": {
+        "node_id": "out/viseme/ih",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/loudest/E"
+      },
+      "to": {
+        "node_id": "viseme/loudest/ih",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ih/weight"
+      },
+      "to": {
+        "node_id": "viseme/loudest/ih",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "viseme/oh/target",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/oh/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/oh/target",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/oh/target"
+      },
+      "to": {
+        "node_id": "viseme/oh/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/oh"
+      },
+      "to": {
+        "node_id": "viseme/oh/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/oh/toward"
+      },
+      "to": {
+        "node_id": "viseme/oh/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/gain"
+      },
+      "to": {
+        "node_id": "viseme/oh/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/oh"
+      },
+      "to": {
+        "node_id": "viseme/oh/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/oh/step"
+      },
+      "to": {
+        "node_id": "viseme/oh/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/oh/weight"
+      },
+      "to": {
+        "node_id": "out/viseme/oh",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/loudest/ih"
+      },
+      "to": {
+        "node_id": "viseme/loudest/oh",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/oh/weight"
+      },
+      "to": {
+        "node_id": "viseme/loudest/oh",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "viseme/ou/target",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/ou/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/ou/target",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ou/target"
+      },
+      "to": {
+        "node_id": "viseme/ou/toward",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/ou"
+      },
+      "to": {
+        "node_id": "viseme/ou/toward",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ou/toward"
+      },
+      "to": {
+        "node_id": "viseme/ou/step",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "crossfade/gain"
+      },
+      "to": {
+        "node_id": "viseme/ou/step",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/viseme/ou"
+      },
+      "to": {
+        "node_id": "viseme/ou/weight",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ou/step"
+      },
+      "to": {
+        "node_id": "viseme/ou/weight",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ou/weight"
+      },
+      "to": {
+        "node_id": "out/viseme/ou",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/loudest/oh"
+      },
+      "to": {
+        "node_id": "viseme/loudest/ou",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/ou/weight"
+      },
+      "to": {
+        "node_id": "viseme/loudest/ou",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/loudest/ou"
+      },
+      "to": {
+        "node_id": "viseme/settled",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0.02"
+      },
+      "to": {
+        "node_id": "viseme/settled",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/driven",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/driven",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/driven"
+      },
+      "to": {
+        "node_id": "viseme/current",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/viseme",
+        "output": "field_0"
+      },
+      "to": {
+        "node_id": "viseme/current",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/sil"
+      },
+      "to": {
+        "node_id": "viseme/current",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/current"
+      },
+      "to": {
+        "node_id": "out/viseme/state",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/current"
+      },
+      "to": {
+        "node_id": "viseme/intensity",
+        "input": "selector"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "viseme/intensity",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "viseme/intensity",
+        "input": "default"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/current"
+      },
+      "to": {
+        "node_id": "viseme/report",
+        "input": "field_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/intensity"
+      },
+      "to": {
+        "node_id": "viseme/report",
+        "input": "field_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/report"
+      },
+      "to": {
+        "node_id": "out/feedback",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/call",
+        "output": "done"
+      },
+      "to": {
+        "node_id": "lifecycle/ended",
+        "input": "lhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "viseme/settled"
+      },
+      "to": {
+        "node_id": "lifecycle/ended",
+        "input": "rhs"
+      }
+    },
+    {
+      "from": {
+        "node_id": "lifecycle/ended"
+      },
+      "to": {
+        "node_id": "lifecycle/status",
+        "input": "cond"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/call"
+      },
+      "to": {
+        "node_id": "lifecycle/status",
+        "input": "then"
+      }
+    },
+    {
+      "from": {
+        "node_id": "lifecycle/running"
+      },
+      "to": {
+        "node_id": "lifecycle/status",
+        "input": "else"
+      }
+    },
+    {
+      "from": {
+        "node_id": "lifecycle/status"
+      },
+      "to": {
+        "node_id": "out/status",
+        "input": "in"
+      }
+    }
+  ]
+}

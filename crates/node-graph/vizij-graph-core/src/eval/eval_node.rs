@@ -401,9 +401,13 @@ fn eval_task_run(
     use super::graph_runtime::{NodeRuntimeState, TaskRunState};
 
     // A terminal run is latched: its function is not invoked again; the node
-    // keeps emitting the terminal status until its fragment is pruned.
+    // keeps emitting the terminal status (and the last out-parameter record)
+    // until its fragment is pruned.
     if let Some(NodeRuntimeState::TaskRun(state)) = rt.node_states.get(&spec.id) {
         if let Some(latched) = state.latched.clone() {
+            let mutated = state.outputs.clone().unwrap_or_else(|| vocab::record([]));
+            keyed_output(outputs, "mutated", mutated)?;
+            keyed_output(outputs, "done", vocab::bool_(true))?;
             return single_output(outputs, latched);
         }
     }
@@ -436,15 +440,33 @@ fn eval_task_run(
         }
     };
 
-    let status = crate::task::coerce(functions.call_module(spec.params.module, function, &args)?);
-    if crate::task::is_terminal(&status) {
+    let (status, out_parameters) =
+        functions.call_module_with_outputs(spec.params.module, function, &args)?;
+    let status = crate::task::coerce(status);
+    // The out parameters as a record keyed by parameter id — the fragment
+    // reads the one it routes (a `read_record` on the id) without the node
+    // knowing the function's signature.
+    let ids: Vec<String> = out_parameters
+        .iter()
+        .map(|(id, _)| id.to_string())
+        .collect();
+    let mutated = vocab::record(
+        ids.iter()
+            .map(String::as_str)
+            .zip(out_parameters.into_iter().map(|(_, value)| value)),
+    );
+    let done = crate::task::is_terminal(&status);
+    if done {
         rt.node_states.insert(
             spec.id.clone(),
             NodeRuntimeState::TaskRun(TaskRunState {
                 latched: Some(status.clone()),
+                outputs: Some(mutated.clone()),
             }),
         );
     }
+    keyed_output(outputs, "mutated", mutated)?;
+    keyed_output(outputs, "done", vocab::bool_(done))?;
     single_output(outputs, status)
 }
 

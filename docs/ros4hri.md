@@ -10,9 +10,9 @@ any compliant Vizij face.
 
 Support spans both ROS4HRI planes:
 
-- **Topics** — the face-command vocabulary (expressions, action units, gaze,
-  and — as a Vizij extension — visemes) lands on the `ros4hri` profile's
-  `standard/ros4hri/*` keys through typed topic endpoints.
+- **Topics** — the face-command vocabulary (expressions, action units, gaze)
+  lands on the `ros4hri` profile's `standard/ros4hri/*` keys through typed
+  topic endpoints.
 - **The skill plane** — the device serves ROS4HRI's gaze skill as a native
   ROS 2 action server, [`/skill/look_at`](#the-look_at-skill)
   (`interaction_skills/LookAt` — the standard's only action; `set_expression`
@@ -70,7 +70,7 @@ serves it); this table summarizes it.
 | `standard/ros4hri/gaze/target` | vec3 (m) | a look-at point (face frame: x forward, y left, z up) | per-eye gaze with vergence |
 | `standard/ros4hri/gaze/frame` | string | the look-at point's frame id | consumed by the `look_at` skill, not the mapping |
 | `standard/ros4hri/au/<code>` | f32 `[0,1]` | `hri_msgs/FacialActionUnits` | FACS action-unit intensity → muscle controls |
-| `standard/ros4hri/viseme/<shape>` | f32 `[0,1]` | *Vizij extension* (ROS4HRI has no viseme topic) | viseme weight, pass-through |
+| `standard/ros4hri/speech/text` | string | `/robot_face/tts`, `/expressive_face/speech` | the utterance to lip-sync — **nothing consumes it yet** (see Lips below) |
 
 ## Per-channel behaviour
 
@@ -85,9 +85,14 @@ serves it); this table summarizes it.
   ([`FACE_CONTROLS`](face-standard.md#muscle-tier)); the eyes-closed unit also
   drives the eyelids, and jaw-open additionally drives the de-facto
   `mouth/morph/jaw_open` control.
-- **Visemes** — `viseme/<shape>` weights pass through, smoothed, to
-  `standard/vizij/viseme/<shape>`. ROS4HRI defines no viseme channel; this is a
-  Vizij extension fed by a lipsync source.
+- **Lips** — not the mapping's: ROS4HRI defines no viseme channel, and the
+  face's lipsync is the viseme players' ([skills](skills.md): `play_viseme`,
+  `say`), which write the face standard's viseme weights themselves. The
+  standard's lipsync input is a *text* topic, so `speech/text` is a
+  speech-synthesis request, not a face command: turning it into lip motion
+  means spawning a `say` run for the text. Nothing does that today — the key
+  is written and never read, so publishing on `/robot_face/tts` moves no
+  mouth.
 - **Blink** — an idle generator (≈8 s cycle, deterministically jittered, 0.2 s
   parabolic pulse) drives the eyelids, inhibited while the eyes are commanded
   closed or the face is asleep.
@@ -95,40 +100,84 @@ serves it); this table summarizes it.
 All continuous channels pass through a ~200 ms exponential smoother — the
 incumbent ROS4HRI face's dynamics.
 
+## Speaking through the standard skill
+
+With the ROS4HRI exposure profile, the device serves ROS4HRI's speech skill —
+`/skill/say`, `communication_skills/action/Say` — bound to its `say` task run:
+the goal's `input` is the utterance, and the feedback streams the viseme the
+mouth is making as the audio plays, in the two fields Vizij adds after the
+standard's own `feedback` (`string viseme`, `float32 intensity`; `sil` at
+zero when the mouth is at rest). A client built from the vendored definition
+(`arora-msgs-ros2`'s `msgs/communication_skills/Say.action`) drives it with
+the standard tooling:
+
+```bash
+ros2 action send_goal /skill/say communication_skills/action/Say \
+  "{meta: {priority: 128}, input: 'Hello, I am a talking face.'}" --feedback
+```
+
+and reads, as the face speaks:
+
+```
+Goal accepted with ID: …
+Feedback:
+    feedback: {data_bool: false, data_int: 0, data_float: 0.0, data_str: ''}
+viseme: kk
+intensity: 1.0
+…
+Goal finished with status: SUCCEEDED
+```
+
+`person_id` and `group_id` address an audience a face has no notion of, and
+the goal carries no voice, so the provider's default speaks. The skill is
+exclusive: a new goal takes the lips over and the preempted one ends as a
+failed goal. The extension to the standard's feedback is recorded as a
+departure from upstream in `arora-msgs-ros2`'s README.
+
+This is exercised end to end, from `rclpy` on Jazzy with `rmw_zenoh`, by the
+manual test in [`crates/vizij/tests/ros4hri/`](../crates/vizij/tests/ros4hri/README.md).
+
 ## Driving a key from ROS 2
 
 With the bridge attached (`vizij --ros2 <namespace>`), every `standard/ros4hri/*`
-key the profile reads and nothing in the composition writes is a **free
+key the mapping reads and nothing in the composition writes is a **free
 input**, subscribed at `/<namespace>/keys/<path>` as the `std_msgs` type of
 its default value (`Float64` for the weights). The keys are **device-global**:
-the profile prefixes only what it *writes* (`rig/<faceId>/standard/vizij/…`),
+the mapping prefixes only what it *writes* (`rig/<faceId>/standard/vizij/…`),
 never what it reads, so the topic carries no face id. The store keeps the last
 value, so one message holds a shape until the next one.
 
-Open the mouth on the `aa` viseme shape and hold it, then release it (the
-device runs as `vizij --ros2 quori`; `--once` waits for the device's
-subscription to match, then sends one message):
+Open the jaw through the jaw-open action unit (AU 26) and hold it, then
+release it (the device runs as `vizij --ros2 quori`; `--once` waits for the
+device's subscription to match, then sends one message):
 
 ```bash
-ros2 topic pub --once /quori/keys/standard/ros4hri/viseme/aa \
+ros2 topic pub --once /quori/keys/standard/ros4hri/au/26 \
   std_msgs/msg/Float64 "{data: 1.0}"
-ros2 topic pub --once /quori/keys/standard/ros4hri/viseme/aa \
+ros2 topic pub --once /quori/keys/standard/ros4hri/au/26 \
   std_msgs/msg/Float64 "{data: 0.0}"
 ```
 
-What happens on the device: the profile's exponential smoother (half-life
-0.14 s — a ≈200 ms time constant) carries the weight to
-`rig/<faceId>/standard/vizij/viseme/aa`, and the face's own
-`standard-adaptation` graph maps that onto its pose plane (Quori:
-`rig/quori_latest/poses/pose_a.weight`, which the bundled pose-driver turns
-into the jaw and lip controls). A face without an adaptation graph has no
-viseme tier and the weight goes nowhere — `vizij-bundle validate` reports it.
+What happens on the device: the mapping's exponential smoother (half-life
+0.14 s — a ≈200 ms time constant) carries the intensity to the muscle-tier
+control `rig/<faceId>/standard/vizij/face/jaw_open` (and to the de-facto
+`mouth/morph/jaw_open`), and the face's own graphs map that onto its rig. A
+face without the muscle tier moves nothing — `vizij-bundle validate` reports
+which tiers a face covers. The same goes for the typed topics: publishing
+`hri_msgs/Expression` on `/robot_face/expression` lands on
+`standard/ros4hri/expression/*`.
+
+The lips are not driven this way: a viseme is a played thing, not a level,
+so the mouth shapes belong to the viseme players ([skills](skills.md)).
+Their state is a published key: while a `play_viseme` or `say` run drives
+the lips, `rig/<faceId>/standard/vizij/viseme` carries the current shape.
 
 Watch it land: the device publishes every key it writes on the same plane,
 so the face's controls and its rendered frames are topics too:
 
 ```bash
 ros2 topic echo /quori/keys/rig/quori_latest/pose/control/propsrig_mouth_jawud_value
+ros2 topic echo /quori/keys/rig/quori_latest/standard/vizij/viseme
 ros2 topic hz /robot_face/image_raw/compressed
 ```
 
@@ -184,6 +233,9 @@ ZENOH_CONFIG_OVERRIDE='mode="client";connect/endpoints=["tcp/127.0.0.1:7447"]' \
 ```
 
 ## The `look_at` skill
+
+The gaze skill is one of the device's [skills](skills.md); this section is
+its ROS4HRI binding.
 
 With the ROS 2 bridge attached, the device serves ROS4HRI's gaze skill as a
 standard ROS 2 action server on **`/skill/look_at`**
@@ -269,9 +321,10 @@ is a diff of the behavior.
   `mapping("ros4hri", rigPrefix)` returns the graph as an object for an
   authoring app to embed.
 - **Reconcile it against the profiles** with `vizij-bundle surface`: the
-  mapping reads 39 of the profile's 40 keys (`gaze/frame` belongs to the
-  `look_at` skill) and writes 80 of the face standard's 82 (`jaw_left` and
-  `jaw_right` have no FACS code).
+  mapping reads 24 of the profile's 25 keys (`gaze/frame` belongs to the
+  `look_at` skill) and writes 65 of the face standard's 82 (`jaw_left` and
+  `jaw_right` have no FACS code, and the 15 viseme weights belong to the
+  players).
 
 ## Progressive compliance
 

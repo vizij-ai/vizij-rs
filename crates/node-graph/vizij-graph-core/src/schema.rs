@@ -2740,13 +2740,32 @@ pub fn registry() -> Registry {
             optional: true,
         }],
         variadic_inputs: None,
-        outputs: vec![PortSpec {
-            id: "out",
-            ty: PortType::Any,
-            label: "Out",
-            doc: "The run's behavior Status value; a terminal status is latched.",
-            optional: false,
-        }],
+        outputs: vec![
+            PortSpec {
+                id: "out",
+                ty: PortType::Any,
+                label: "Out",
+                doc: "The run's behavior Status value; a terminal status is latched.",
+                optional: false,
+            },
+            PortSpec {
+                id: "mutated",
+                ty: PortType::Any,
+                label: "Mutated",
+                doc: "The call's mutable (out) parameters after the invocation, as a record keyed \
+                      by parameter id — read one with a `read_record` on that id. Latched with \
+                      the status.",
+                optional: true,
+            },
+            PortSpec {
+                id: "done",
+                ty: PortType::Bool,
+                label: "Done",
+                doc: "Whether the run has ended (its status is terminal, and latched) — the \
+                      graph-side handle on terminality, without comparing Status values.",
+                optional: true,
+            },
+        ],
         variadic_outputs: None,
         params: vec![],
     });

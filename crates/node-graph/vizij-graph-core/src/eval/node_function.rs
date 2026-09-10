@@ -47,6 +47,20 @@ pub trait NodeFunctions {
         let _ = module;
         self.call(function, args)
     }
+
+    /// Invoke `function` addressed to `module` and also return the values its
+    /// mutable (out) parameters carry after the call, by parameter id — what
+    /// a [`TaskRun`](crate::types::NodeType::TaskRun) node emits on its
+    /// `mutated` port. The default reports none, so a host whose functions
+    /// have no out parameters needs no extra wiring.
+    fn call_module_with_outputs(
+        &mut self,
+        module: Option<Uuid>,
+        function: Uuid,
+        args: &[(Uuid, Value)],
+    ) -> Result<(Value, Vec<(Uuid, Value)>), String> {
+        Ok((self.call_module(module, function, args)?, Vec::new()))
+    }
 }
 
 /// A registry of [`NodeFunction`]s keyed by their stable id.

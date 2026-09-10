@@ -27,6 +27,38 @@
 /// Prefix of every control path in the Vizij face standard.
 pub const VIZIJ_PREFIX: &str = "standard/vizij";
 
+/// Prepend `rig_prefix` to every standard control a graph spec reads or
+/// writes (its `input` and `output` nodes on `standard/vizij/…`), leaving
+/// any other path alone. Faces namespace their controls under their rig
+/// (`rig/quori_latest/`), so a profile or a skill fragment authored against
+/// the bare standard takes the face's prefix when it composes; `""` leaves
+/// the spec unprefixed.
+pub fn prefix_controls(spec: &mut serde_json::Value, rig_prefix: &str) {
+    if rig_prefix.is_empty() {
+        return;
+    }
+    for node in spec
+        .get_mut("nodes")
+        .and_then(serde_json::Value::as_array_mut)
+        .into_iter()
+        .flatten()
+    {
+        if !matches!(
+            node.get("type").and_then(serde_json::Value::as_str),
+            Some("output" | "input")
+        ) {
+            continue;
+        }
+        if let Some(path) = node.pointer_mut("/params/path") {
+            if let Some(p) = path.as_str() {
+                if p.starts_with(VIZIJ_PREFIX) {
+                    *path = serde_json::Value::String(format!("{rig_prefix}{p}"));
+                }
+            }
+        }
+    }
+}
+
 // --- Gaze & lids ------------------------------------------------------------
 
 /// Eye position controls, normalized [-1, 1]: `pos/x` is the wearer's
@@ -82,15 +114,26 @@ pub fn expression_path(name: &str) -> String {
 // --- Semantic tier: visemes -------------------------------------------------
 
 /// The viseme shapes, the industry 15-shape set (Oculus/Meta naming). `sil`
-/// is silence — the closed-mouth rest shape.
+/// is silence: rest, which is the face's own neutral — every viseme weight
+/// at zero, the `sil` weight included (a player writes it, never drives it).
 pub const VISEME_SHAPES: [&str; 15] = [
     "sil", "PP", "FF", "TH", "DD", "kk", "CH", "SS", "nn", "RR", "aa", "E", "ih", "oh", "ou",
 ];
 
-/// The weight control path for a viseme shape.
+/// The weight control path for a viseme shape. A raw weight: the face maps
+/// it onto its poses as is, with no transition of its own — the timing
+/// (attack, hold, release, the crossfade to the next shape) is the viseme
+/// player's, the `play_viseme` skill and the `say` skill's lipsync.
 pub fn viseme_path(shape: &str) -> String {
     format!("{VIZIJ_PREFIX}/viseme/{shape}")
 }
+
+/// The current viseme, one of [`VISEME_SHAPES`] as a string, `sil` at rest —
+/// the face's lipsync state, written by whichever viseme player is speaking
+/// (a `play_viseme` run, a `say` run's lipsync) for anything that follows
+/// speech (subtitles, a mirror face, a monitor). Not a command: the players
+/// are the actions; this is what they report.
+pub const VISEME: &str = "standard/vizij/viseme";
 
 // --- Muscle tier: face controls ---------------------------------------------
 

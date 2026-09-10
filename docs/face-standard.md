@@ -62,12 +62,26 @@ tired     asleep     confused    amazed       excited
 ### Visemes
 
 One weight per viseme shape, at `standard/vizij/viseme/<shape>`. The shapes are
-the industry 15-shape set (Oculus/Meta naming); `sil` is silence, the
-closed-mouth rest shape.
+the industry 15-shape set (Oculus/Meta naming); `sil` is silence.
 
 ```
 sil PP FF TH DD kk CH SS nn RR aa E ih oh ou
 ```
+
+The weights are raw: a face maps each onto its own poses as is, with no
+transition of its own. Rest is the face's neutral — every viseme weight at
+zero, `sil` included (a viseme player writes the `sil` weight, never drives
+it). The timing is the player's: the attack, hold and release of a played
+viseme and the crossfade to the next shape come from the two viseme players
+Vizij ships as [skills](skills.md) — `play_viseme(shape, weight)`, one shape
+through a lipsync envelope, and `say(text, voice)`, whose run streams the
+visemes of the speech it synthesizes through the same driver.
+
+The face's **current viseme** is state, at `standard/vizij/viseme`: one of the
+shapes as a string, `sil` at rest, written by whichever player is driving the
+lips — for anything that follows speech (subtitles, a mirror face, a
+monitor). It is not a command: the players are the actions; this is what they
+report, and what their runs feed back.
 
 ## Muscle tier
 
@@ -128,6 +142,8 @@ than hand-format strings.
   how a mapping implements one in terms of another.
 - [ROS4HRI](ros4hri.md) — the built-in mapping that fills this vocabulary from
   ROS4HRI's topics.
+- [Skills](skills.md) — the goal-driven behaviors that write it: the gaze
+  skill and the two viseme players.
 - [`vizij-bundle`](../crates/tools/vizij-bundle/README.md) — the tool that
   reports which tiers a face covers (`validate`), declares a profile on a face
   GLB (`add-profile`), and embeds a standard mapping into it

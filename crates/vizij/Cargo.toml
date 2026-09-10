@@ -33,8 +33,11 @@ arora = "9.10"
 # The ROS 2 bridge, attached under `--ros2` (feature `ros2`). Heavy (ros2-client
 # + a DDS/Zenoh backend), so opt-in; the Studio bridge rides arora's own
 # `studio-bridge` feature instead (`--studio`). It carries the skill plane the
-# ros4hri exposure profile binds `/skill/look_at` through; 6.3 is where that
-# profile publishes the face image, so the view declares nothing itself.
+# ros4hri exposure profile binds `/skill/look_at` and `/skill/say` through:
+# bound actions announce their REP-2016 hashes (reachable from native rmw_zenoh
+# clients) and run feedback may be a record (the say skill's viseme/intensity).
+# 6.3 is where that profile publishes the face image, so the view declares
+# nothing itself.
 arora-bridge-ros2 = { version = "6.3", optional = true, default-features = false }
 # The Status enumeration ids the gaze and tts contracts mark their action shapes with.
 arora-behavior-tree-types = "1"
@@ -74,7 +77,7 @@ vizij-animation-module = { path = "../interop/vizij-animation-module" }
 # standalone). `rodio` plays the Piper provider's audio; `vizij-piper` is the
 # local provider (feature `tts-piper`) — its build self-provisions libpiper
 # and a patched default voice; note it links GPLv3 code into the binary.
-vizij-arora-tts = { version = "1", path = "../interop/vizij-arora-tts" }
+vizij-arora-tts = { version = "2", path = "../interop/vizij-arora-tts" }
 rodio = "0.20"
 vizij-piper = { path = "../interop/vizij-piper", optional = true }
 

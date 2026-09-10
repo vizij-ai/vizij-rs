@@ -20,8 +20,6 @@
 //!   controls per [`crate::standard::FACE_CONTROLS`]; the eyes-closed unit
 //!   also drives the eyelids, and jaw-open additionally drives the de-facto
 //!   `mouth/morph/jaw_open` control.
-//! - **Visemes** — `viseme/<shape>` weights pass through, smoothed, to
-//!   `standard/vizij/viseme/<shape>`.
 //! - **Blink** — an idle generator (≈8 s cycle, deterministically jittered,
 //!   0.2 s parabolic pulse) drives the eyelids, inhibited while the eyes are
 //!   commanded closed or the face is asleep.
@@ -35,7 +33,7 @@
 use serde_json::{json, Value as Json};
 
 use crate::graph_builder::GraphBuilder;
-use crate::standard::{self, EXPRESSION_NAMES, FACE_CONTROLS, VISEME_SHAPES};
+use crate::standard::{self, EXPRESSION_NAMES, FACE_CONTROLS};
 
 /// Source id of the composed mapping (node ids get `ros4hri::` prefixes).
 pub const ROS4HRI_SOURCE_ID: &str = "ros4hri";
@@ -53,11 +51,6 @@ pub const GAZE_FRAME_KEY: &str = "standard/ros4hri/gaze/frame";
 /// The key carrying a FACS action-unit intensity, [0, 1].
 pub fn au_key(code: u8) -> String {
     format!("{ROS4HRI_PREFIX}/au/{code}")
-}
-
-/// The key carrying a viseme-shape weight, [0, 1].
-pub fn viseme_key(shape: &str) -> String {
-    format!("{ROS4HRI_PREFIX}/viseme/{shape}")
 }
 
 /// Circumplex anchor (valence, arousal) per expression name, used to blend
@@ -130,23 +123,7 @@ pub fn generate() -> Json {
 /// nodes) — the face-scoped `vizij-face` profile. Input paths — the
 /// device-scoped `ros4hri` profile a bridge writes — stay untouched.
 pub fn apply_rig_prefix(spec: &mut Json, rig_prefix: &str) {
-    if rig_prefix.is_empty() {
-        return;
-    }
-    for node in spec
-        .get_mut("nodes")
-        .and_then(Json::as_array_mut)
-        .into_iter()
-        .flatten()
-    {
-        if node.get("type").and_then(Json::as_str) == Some("output") {
-            if let Some(path) = node.pointer_mut("/params/path") {
-                if let Some(p) = path.as_str() {
-                    *path = Json::String(format!("{rig_prefix}{p}"));
-                }
-            }
-        }
-    }
+    standard::prefix_controls(spec, rig_prefix);
 }
 
 /// `atan(num / den)` under `prefix`, via the rational approximation
@@ -168,7 +145,7 @@ fn gaze_angle(g: &mut GraphBuilder, prefix: &str, num: &str, den: &str) -> Strin
 
 /// The mapping, section by section. Node ids are hierarchical — `in/…` the
 /// consumed profile, `out/…` the produced one, and `expression/…`,
-/// `gaze/…`, `au/…`, `viseme/…`, `blink/…` the channel that computes each
+/// `gaze/…`, `au/…`, `blink/…` the channel that computes each
 /// output — so the asset reads by channel and every node says what it holds.
 fn build(rig_prefix: &str) -> (String, Json) {
     let g = &mut GraphBuilder::new();
@@ -373,18 +350,6 @@ fn build(rig_prefix: &str) -> (String, Json) {
         }
     }
 
-    // --- Visemes: pass-through, smoothed -----------------------------------
-    for shape in VISEME_SHAPES {
-        let raw = g.input(
-            &format!("in/viseme/{shape}"),
-            &viseme_key(shape),
-            json!(0.0),
-        );
-        let smooth = g.damp(&format!("viseme/{shape}/smooth"), &raw, HALF_LIFE);
-        let path = standard::viseme_path(shape);
-        g.output(&out_id(&path), &smooth, out(path));
-    }
-
     // --- Blink: jittered idle pulse, inhibited when lids are commanded -----
     let t = g.node("blink/time", "time", json!({}));
     let period = g.constant(BLINK_PERIOD);
@@ -478,10 +443,9 @@ mod tests {
             let path = format!("rig/test_face/standard/vizij/expression/{expr}");
             assert!(paths.contains(&path.as_str()), "missing {path}");
         }
-        for shape in VISEME_SHAPES {
-            let path = format!("rig/test_face/standard/vizij/viseme/{shape}");
-            assert!(paths.contains(&path.as_str()), "missing {path}");
-        }
+        // Visemes are not the profile's: ROS4HRI has no viseme channel, and the
+        // face's lipsync is the viseme players' (the play_viseme and say skills).
+        assert!(!paths.iter().any(|p| p.contains("/viseme/")));
         for control in &FACE_CONTROLS {
             if control.au.is_some() {
                 let path = format!("rig/test_face/standard/vizij/face/{}", control.name);

@@ -41,7 +41,7 @@ pub const STANDARD_MAPPINGS: [StandardMapping; 1] = [StandardMapping {
     title: "ROS4HRI",
     description: "Drives the standard face controls from the standard/ros4hri/* keys: \
                   expression names and valence/arousal, gaze targets with vergence, FACS \
-                  action units, visemes, idle blink, and the incumbent's ~200 ms smoothing.",
+                  action units, idle blink, and the incumbent's ~200 ms smoothing.",
     asset_json: ros4hri::MAPPING_JSON,
     generate: ros4hri::generate,
 }];

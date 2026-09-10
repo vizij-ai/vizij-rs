@@ -6,8 +6,9 @@
 //! ```
 //!
 //! Drives the build's `say` provider exactly as the device does — one call per
-//! tick, `Running` until playback ends — printing the viseme/phoneme stream as
-//! it advances.
+//! tick, `Running` until playback ends — printing the viseme stream (the face
+//! standard's shapes) as it advances. On the device the say skill's run does
+//! the same and drives the lips from it.
 
 // The provider modules are compiled in whole via #[path]; the example only
 // exercises their call surface.
@@ -39,10 +40,10 @@ fn main() {
     println!("saying: {text}");
 
     let call = Call {
-        module_id: Some(provider::module_id()),
-        id: tts_api::say_id(),
+        module_id: Some(provider::MODULE_ID),
+        id: tts_api::SAY_ID,
         args: vec![StructureField {
-            id: tts_api::text_param_id(),
+            id: tts_api::SAY_TEXT_PARAM_ID,
             value: Box::new(Value::String(text)),
         }],
     };
@@ -52,7 +53,7 @@ fn main() {
     loop {
         let result = provider::say(call.clone()).expect("say reports failure as a status");
         for field in &result.mutated {
-            if field.id == tts_api::viseme_param_id() {
+            if field.id == tts_api::SAY_VISEME_PARAM_ID {
                 if let Value::String(viseme) = field.value.as_ref() {
                     if *viseme != last {
                         println!("viseme: {viseme}");

@@ -44,6 +44,25 @@ impl GraphBuilder {
             .push(json!({ "from": { "node_id": from }, "to": { "node_id": to, "input": input } }));
     }
 
+    /// An edge from a named output port of `from` (the default port is `out`).
+    pub(crate) fn edge_from(&mut self, from: &str, output: &str, to: &str, input: &str) {
+        self.edges.push(json!({
+            "from": { "node_id": from, "output": output },
+            "to": { "node_id": to, "input": input }
+        }));
+    }
+
+    /// The shared constant node holding the text `value` — created on first
+    /// use, then reused, under the id `const/<value>`.
+    pub(crate) fn text(&mut self, value: &str) -> String {
+        let id = format!("const/{value}");
+        if !self.constants.contains_key(&id) {
+            self.node(&id, "constant", json!({ "value": value }));
+            self.constants.insert(id.clone(), id.clone());
+        }
+        id
+    }
+
     /// The shared constant node holding `value` — created on first use, then
     /// reused, under the id `const/<value>`.
     pub(crate) fn constant(&mut self, value: f64) -> String {
@@ -145,6 +164,9 @@ impl GraphBuilder {
             json!({}),
             &[("cond", cond), ("then", then), ("else", otherwise)],
         )
+    }
+    pub(crate) fn min(&mut self, id: &str, a: &str, b: &str) -> String {
+        self.op(id, "min", json!({}), &[("operand_0", a), ("operand_1", b)])
     }
 
     /// Exponential smoothing with the given half-life (seconds).

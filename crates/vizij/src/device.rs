@@ -21,6 +21,8 @@ use crate::gaze;
 use crate::meta::FaceMeta;
 #[cfg(feature = "tts-piper")]
 use crate::tts_piper;
+use crate::viseme;
+use vizij_arora_behavior::speech;
 #[cfg(not(feature = "tts-piper"))]
 use vizij_arora_tts as tts;
 
@@ -124,9 +126,10 @@ async fn attach_bridges(
     if let Some((namespace, domain)) = &bridges.ros2 {
         let mut config = arora_bridge_ros2::Ros2BridgeConfig::new(namespace.clone(), *domain);
         // The ROS4HRI exposure profile: the typed face topics fanning onto the
-        // standard keys, the face image on its `image_transport` pair, and
-        // the skill actions bound to the task runs the device describes. It
-        // is the whole ROS4HRI surface, so `--no-ros4hri` leaves it out.
+        // standard keys, the face image on its `image_transport` pair, and the
+        // standard skills — `/skill/look_at`, `/skill/say` — bound to the gaze
+        // and speech task runs the device describes. It is the whole ROS4HRI
+        // surface, so `--no-ros4hri` leaves it out.
         if ros4hri {
             config = config.with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
         }
@@ -142,8 +145,8 @@ async fn attach_bridges(
              subscribed under /{namespace}/keys/<path>{}",
             data_inputs.len(),
             if ros4hri {
-                ", plus the ROS4HRI profile (the typed face topics, the face image, the skill \
-                 actions)"
+                ", plus the ROS4HRI profile (the typed face topics, the face image, the \
+                 /skill/look_at and /skill/say actions)"
             } else {
                 ""
             }
@@ -344,6 +347,7 @@ pub(crate) fn builder_for(
     store: BlackboardStore,
     embedded_skills: &[(String, serde_json::Value)],
 ) -> Option<arora::AroraBuilder> {
+    let rig_prefix = rig_prefix_of(spec);
     let spec = match parse_spec(spec) {
         Ok(spec) => spec,
         Err(e) => {
@@ -359,29 +363,79 @@ pub(crate) fn builder_for(
         }
     };
     // Route the animation source's `step`/`player_states` handles (and any
-    // in-process transport call) to the host module registered below.
-    graph.set_function_modules(animation::function_modules());
-    // The gaze skill: the described contract rides the gaze module; the
-    // behavior is the shipped fragment the interpreter grafts per goal — or
-    // the face's embedded override.
+    // in-process transport call) to the host module registered below, and the
+    // say skill's hosted `say` call to this build's text-to-speech provider.
+    let mut function_modules = animation::function_modules();
+    function_modules.insert(speech::SAY_ID, tts_module_id());
+    graph.set_function_modules(function_modules);
+    // The skills: each described contract rides its host module; the
+    // behavior is the shipped fragment the interpreter grafts per run — or
+    // the face's embedded override. The viseme players write the face's
+    // standard controls, so they take its rig prefix.
     graph.set_task_fragment(
         gaze::look_at_id(),
         gaze::look_at_fragment_from(embedded_skills),
+    );
+    graph.set_task_fragment(
+        viseme::PLAY_VISEME_ID,
+        viseme::play_viseme_fragment_from(embedded_skills, &rig_prefix),
+    );
+    graph.set_task_fragment(
+        speech::SAY_ID,
+        speech::say_fragment_from(embedded_skills, &rig_prefix),
     );
     let builder = arora::Arora::builder()
         .with_hal(Box::new(rig))
         .with_data_store(Box::new(store))
         .with_behavior_interpreter(Box::new(graph))
         .with_host_module(animation::host_module())
-        .with_host_module(gaze::host_module());
-    // The TTS module: the described `say` action (poll-on-tick, viseme
-    // out-param). One provider per build, same contract (`tts_api`): the cloud
+        .with_host_module(gaze::host_module())
+        .with_host_module(viseme::host_module());
+    // The TTS module: the `say` provider behind the say skill (poll-on-tick,
+    // viseme out-param). One provider per build, same contract: the cloud
     // provider by default, the local Piper provider under `tts-piper`.
     #[cfg(not(feature = "tts-piper"))]
     let builder = builder.with_host_module(tts::host_module());
     #[cfg(feature = "tts-piper")]
     let builder = builder.with_host_module(tts_piper::host_module());
     Some(builder)
+}
+
+/// The prefix the face's standard controls live under in `spec` —
+/// `rig/<faceId>/` out of the first `…/standard/vizij/…` path it reads or
+/// writes — or empty when the face has no standard coverage (the players
+/// then write the bare standard, which nothing maps). The same derivation
+/// as vizij-standalone's.
+fn rig_prefix_of(spec: &str) -> String {
+    let Ok(spec) = serde_json::from_str::<serde_json::Value>(spec) else {
+        return String::new();
+    };
+    spec.get("nodes")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|node| {
+            node.pointer("/params/path")
+                .and_then(serde_json::Value::as_str)
+        })
+        .find_map(|path| {
+            path.find(vizij_arora_host::standard::VIZIJ_PREFIX)
+                .map(|at| path[..at].to_string())
+        })
+        .unwrap_or_default()
+}
+
+/// The module id of this build's text-to-speech provider — where the say
+/// skill's hosted call dispatches.
+fn tts_module_id() -> uuid::Uuid {
+    #[cfg(not(feature = "tts-piper"))]
+    {
+        tts::MODULE_ID
+    }
+    #[cfg(feature = "tts-piper")]
+    {
+        tts_piper::MODULE_ID
+    }
 }
 
 /// The operator flow, generation by generation: each `g` (load GLB) stops the
@@ -1009,13 +1063,270 @@ mod tests {
         assert!((0.75..=0.85).contains(&defacto), "de-facto jaw = {defacto}");
     }
 
+    /// The shape a viseme player's feedback record names.
+    fn fed_back_viseme(arora: &arora::Arora, path: &str) -> Option<String> {
+        match read_value(arora, path)? {
+            Value::KeyValue(report) => match report.get_field("viseme")?.value.as_deref()? {
+                Value::String(shape) => Some(shape.clone()),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// How hard the feedback record says its shape is driven.
+    fn fed_back_intensity(arora: &arora::Arora, path: &str) -> f32 {
+        let Some(Value::KeyValue(report)) = read_value(arora, path) else {
+            return 0.0;
+        };
+        match report
+            .get_field("intensity")
+            .and_then(|f| f.value.as_deref())
+        {
+            Some(Value::F32(x)) => *x,
+            Some(Value::F64(x)) => *x as f32,
+            _ => 0.0,
+        }
+    }
+
+    fn read_value(arora: &arora::Arora, path: &str) -> Option<Value> {
+        arora
+            .store()
+            .read(&[Key::from(path)])
+            .into_iter()
+            .next()
+            .flatten()
+    }
+
+    /// Spawn `call` as a task run through the engine, as a bridge would.
+    fn spawn(
+        arora: &mut arora::Arora,
+        call: &arora_types::call::Call,
+    ) -> arora_behavior::TaskHandle {
+        use arora_behavior::{interpreter_module, RunPolicy};
+        let spawned = arora
+            .call(interpreter_module::encode_spawn(
+                call,
+                RunPolicy::Concurrent,
+            ))
+            .expect("SPAWN dispatches through the engine");
+        interpreter_module::decode_spawn_result(&spawned.ret).expect("a TaskHandle comes back")
+    }
+
+    /// A `play_viseme(shape, weight)` call, as a bridge would build it from
+    /// the described signature.
+    fn play_viseme_call(shape: &str, weight: f32) -> arora_types::call::Call {
+        use arora_types::value::StructureField;
+        let parameters = viseme::play_viseme_parameters();
+        let arg = |name: &str, value: Value| StructureField {
+            id: *parameters
+                .iter()
+                .find(|(_, n)| n == &name)
+                .expect("a declared parameter")
+                .0,
+            value: Box::new(value),
+        };
+        arora_types::call::Call {
+            module_id: Some(viseme::MODULE_ID),
+            id: viseme::PLAY_VISEME_ID,
+            args: vec![
+                arg("shape", Value::String(shape.to_string())),
+                arg("weight", Value::F32(weight)),
+            ],
+        }
+    }
+
+    fn step_for(arora: &mut arora::Arora, seconds: f32) {
+        let ticks = (seconds / 0.016).round() as usize;
+        for _ in 0..ticks {
+            arora.step(Duration::from_millis(16)).expect("step");
+        }
+    }
+
+    /// A play_viseme run drives its shape's weight through the lipsync
+    /// envelope — up within the attack, held, then closed — reports the
+    /// shape as the face's current viseme and as its feedback while it is
+    /// driven, and succeeds once the envelope has closed; the other shapes
+    /// stay at rest.
     #[test]
-    fn ros4hri_visemes_pass_through() {
+    fn a_play_viseme_run_plays_the_shape_through_its_envelope() {
+        use vizij_arora_behavior::task;
         let mut arora = ros4hri_device();
-        stage(&arora, &ros4hri::viseme_key("aa"), float(1.0));
-        settle(&mut arora);
-        assert!(read_f32(&arora, &standard::viseme_path("aa")) > 0.95);
+        let handle = spawn(&mut arora, &play_viseme_call("aa", 1.0));
+
+        // Past the attack (80 ms) and the crossfade: driven.
+        step_for(&mut arora, 0.2);
+        let aa = read_f32(&arora, &standard::viseme_path("aa"));
+        assert!(aa > 0.8, "aa = {aa} after the attack");
         assert!(read_f32(&arora, &standard::viseme_path("oh")) < 0.01);
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("aa")));
+        assert_eq!(
+            fed_back_viseme(&arora, &handle.feedback[0].path).as_deref(),
+            Some("aa")
+        );
+        let intensity = fed_back_intensity(&arora, &handle.feedback[0].path);
+        assert!(intensity > 0.8, "intensity = {intensity} after the attack");
+        assert_eq!(
+            read_value(&arora, &handle.status.path),
+            Some(task::running())
+        );
+
+        // Past the hold and the release (480 ms in all): closed, done.
+        step_for(&mut arora, 0.45);
+        let aa = read_f32(&arora, &standard::viseme_path("aa"));
+        assert!(aa < 0.1, "aa = {aa} after the release");
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("sil")));
+        assert_eq!(
+            read_value(&arora, &handle.status.path),
+            Some(task::success())
+        );
+    }
+
+    /// A weight below one plays the shape at that weight; a second run for
+    /// another shape takes over — the first run ends preempted, and the lips
+    /// crossfade: the new shape rises while the old one closes from where it
+    /// was, with no snap (the fade's state is the face's own weight).
+    #[test]
+    fn a_new_play_viseme_run_takes_over_and_crossfades() {
+        use vizij_arora_behavior::task;
+        let mut arora = ros4hri_device();
+        let first = spawn(&mut arora, &play_viseme_call("PP", 0.5));
+        step_for(&mut arora, 0.2);
+        let pp = read_f32(&arora, &standard::viseme_path("PP"));
+        assert!((0.4..=0.55).contains(&pp), "PP = {pp} at half weight");
+
+        spawn(&mut arora, &play_viseme_call("oh", 1.0));
+        step_for(&mut arora, 0.032);
+        let pp_fading = read_f32(&arora, &standard::viseme_path("PP"));
+        assert!(
+            pp_fading < pp && pp_fading > 0.1,
+            "PP fades, no snap: {pp} → {pp_fading}"
+        );
+        assert_eq!(
+            read_value(&arora, &first.status.path),
+            Some(task::failure()),
+            "preempted"
+        );
+        step_for(&mut arora, 0.2);
+        assert!(read_f32(&arora, &standard::viseme_path("oh")) > 0.8);
+        assert!(read_f32(&arora, &standard::viseme_path("PP")) < 0.02);
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("oh")));
+    }
+
+    /// The say skill: its run hosts the provider's `say` call and drives the
+    /// lips from the viseme the provider streams — here a scripted provider
+    /// (two ticks of `PP`, two of `aa`, then done at rest) — reporting the
+    /// current viseme as the face's state and as the run's feedback, and the
+    /// call's status as its own.
+    #[test]
+    fn a_say_run_streams_the_provider_s_visemes_to_the_lips() {
+        use arora_types::call::CallResult;
+        use arora_types::value::StructureField;
+        use std::collections::HashMap;
+        use std::sync::{Arc, Mutex};
+        use uuid::Uuid;
+        use vizij_arora_behavior::task;
+
+        const PROVIDER: Uuid = Uuid::from_u128(0x7474732d74657374);
+        let calls = Arc::new(Mutex::new(0usize));
+        let script = calls.clone();
+        let provider = arora::ModuleBuilder::new(PROVIDER)
+            .described_function(
+                speech::SAY_ID,
+                "say",
+                speech::say_signature(),
+                move |_call| {
+                    let mut n = script.lock().unwrap();
+                    *n += 1;
+                    let (status, viseme) = match *n {
+                        1 | 2 => (task::running(), "PP"),
+                        3 | 4 => (task::running(), "aa"),
+                        _ => (task::success(), speech::SILENCE_VISEME),
+                    };
+                    Ok(CallResult {
+                        ret: status,
+                        mutated: vec![StructureField {
+                            id: speech::SAY_VISEME_PARAM_ID,
+                            value: Box::new(Value::String(viseme.to_string())),
+                        }],
+                    })
+                },
+            )
+            .build();
+
+        // The device by hand: the profile as the base graph, the say fragment
+        // registered, the say call routed to the scripted provider.
+        let spec = compose_sources(&[ros4hri_source("")])
+            .expect("compose the ros4hri profile")
+            .to_string();
+        let mut graph =
+            ProcessingGraph::from_spec(parse_spec(&spec).expect("parse")).expect("encode");
+        graph.set_function_modules(HashMap::from([(speech::SAY_ID, PROVIDER)]));
+        graph.set_task_fragment(speech::SAY_ID, speech::say_fragment(""));
+        let mut arora = arora::Arora::builder()
+            .with_data_store(Box::new(BlackboardStore::new()))
+            .with_behavior_interpreter(Box::new(graph))
+            .with_host_module(provider)
+            .build()
+            .expect("build arora");
+
+        let say = arora_types::call::Call {
+            module_id: Some(PROVIDER),
+            id: speech::SAY_ID,
+            args: vec![
+                StructureField {
+                    id: speech::SAY_TEXT_PARAM_ID,
+                    value: Box::new(Value::String("hello".to_string())),
+                },
+                StructureField {
+                    id: speech::SAY_VOICE_PARAM_ID,
+                    value: Box::new(Value::String(String::new())),
+                },
+            ],
+        };
+        let handle = spawn(&mut arora, &say);
+
+        step_for(&mut arora, 0.032);
+        assert_eq!(*calls.lock().unwrap(), 2, "one provider call per tick");
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("PP")));
+        assert_eq!(
+            fed_back_viseme(&arora, &handle.feedback[0].path).as_deref(),
+            Some("PP")
+        );
+        let pp = read_f32(&arora, &standard::viseme_path("PP"));
+        assert!(pp > 0.3, "PP = {pp} rising");
+        assert_eq!(
+            read_value(&arora, &handle.status.path),
+            Some(task::running())
+        );
+
+        step_for(&mut arora, 0.032);
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("aa")));
+        assert!(read_f32(&arora, &standard::viseme_path("aa")) > 0.3);
+        assert!(
+            read_f32(&arora, &standard::viseme_path("PP")) < pp,
+            "PP crossfades out"
+        );
+
+        // The provider ends on its fifth call; the run reports it once the
+        // lips have settled (five crossfade half-lives), not before.
+        step_for(&mut arora, 0.032);
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("sil")));
+        assert_eq!(
+            read_value(&arora, &handle.status.path),
+            Some(task::running())
+        );
+        step_for(&mut arora, 0.2);
+        assert_eq!(
+            read_value(&arora, &handle.status.path),
+            Some(task::success())
+        );
+        assert!(read_f32(&arora, &standard::viseme_path("aa")) < 0.02);
+        assert_eq!(
+            *calls.lock().unwrap(),
+            5,
+            "a finished run is not re-invoked"
+        );
     }
 
     #[test]
@@ -1105,10 +1416,18 @@ mod tests {
         let pose = read_f32(&arora, "rig/quori_latest/poses/pose_d_happy_d.weight");
         assert!(pose > 0.95, "adaptation output missing (pose = {pose})");
 
-        // A viseme command reaches the letter-pose plane.
-        stage(&arora, &ros4hri::viseme_key("aa"), float(1.0));
-        settle(&mut arora);
+        // A played viseme reaches the letter-pose plane: the run writes the
+        // face's prefixed standard control, the adaptation maps it.
+        spawn(&mut arora, &play_viseme_call("aa", 1.0));
+        step_for(&mut arora, 0.2);
         let mouth = read_f32(&arora, "rig/quori_latest/poses/pose_a.weight");
-        assert!(mouth > 0.95, "viseme mapping missing (pose_a = {mouth})");
+        assert!(mouth > 0.8, "viseme mapping missing (pose_a = {mouth})");
+        assert_eq!(
+            read_value(&arora, "rig/quori_latest/standard/vizij/viseme"),
+            Some(text("aa"))
+        );
+        step_for(&mut arora, 0.45);
+        let mouth = read_f32(&arora, "rig/quori_latest/poses/pose_a.weight");
+        assert!(mouth < 0.1, "the envelope closes (pose_a = {mouth})");
     }
 }

@@ -51,7 +51,7 @@ vizij-bundle export-skill   look_at -o look_at.json
   face's graphs listen on, the compliance level L0–L3, and what is missing.
   `--min-level` turns it into a CI gate.
 - **profiles** — the profiles Vizij ships, as JSON: `vizij-face` (81 paths,
-  face-scoped) and `ros4hri` (40 paths, device-scoped).
+  face-scoped) and `ros4hri` (25 paths, device-scoped).
 - **mappings** — the standard mappings Vizij ships, as JSON: the opt-in menu
   `add-standard` and the web's `mappings()` draw from.
 - **surface** — lift a profile out of a mapping graph: its `input` nodes are

@@ -106,6 +106,107 @@ fn external_function_dispatches_through_host_and_sets_output() {
     }
 }
 
+/// A task-run host whose function reports an out parameter: `Running` with
+/// the out parameter at "speaking" on the first call, `Success` with it at
+/// "rest" on the second.
+#[derive(Default)]
+struct OutParameterFunctions {
+    calls: usize,
+}
+
+impl NodeFunctions for OutParameterFunctions {
+    fn call(&mut self, _function: Uuid, _args: &[(Uuid, Value)]) -> Result<Value, String> {
+        Err("task runs dispatch through call_module_with_outputs".to_string())
+    }
+
+    fn call_module_with_outputs(
+        &mut self,
+        _module: Option<Uuid>,
+        _function: Uuid,
+        _args: &[(Uuid, Value)],
+    ) -> Result<(Value, Vec<(Uuid, Value)>), String> {
+        self.calls += 1;
+        let out = Uuid::from_u128(0x4444);
+        Ok(if self.calls == 1 {
+            (crate::task::running(), vec![(out, vocab::text("speaking"))])
+        } else {
+            (crate::task::success(), vec![(out, vocab::text("rest"))])
+        })
+    }
+}
+
+fn task_run_graph() -> GraphSpec {
+    GraphSpec {
+        nodes: vec![NodeSpec {
+            id: "run".to_string(),
+            kind: NodeType::TaskRun,
+            params: NodeParams {
+                function: Some(Uuid::from_u128(0x2222)),
+                ..Default::default()
+            },
+            output_shapes: HashMap::new(),
+            input_defaults: HashMap::new(),
+        }],
+        edges: vec![],
+        ..Default::default()
+    }
+    .with_cache()
+}
+
+fn mutated_field(rt: &GraphRuntime, id: Uuid) -> Option<Value> {
+    let port = rt
+        .outputs
+        .get("run")
+        .and_then(|ports| ports.get("mutated"))?;
+    vocab::as_record(&port.value)?
+        .into_iter()
+        .find(|(name, _)| *name == id.to_string())
+        .map(|(_, value)| value.clone())
+}
+
+#[test]
+fn task_run_emits_the_call_s_out_parameters_and_latches_them() {
+    let graph = task_run_graph();
+    let out = Uuid::from_u128(0x4444);
+    let mut rt = GraphRuntime::default();
+    let mut functions = OutParameterFunctions::default();
+
+    // First evaluation: Running, the out parameter as the function set it.
+    evaluate_all_with_functions(&mut rt, &graph, &mut functions).expect("the run evaluates");
+    assert_eq!(mutated_field(&rt, out), Some(vocab::text("speaking")));
+    let status = rt
+        .outputs
+        .get("run")
+        .and_then(|p| p.get("out"))
+        .expect("status");
+    assert_eq!(status.value, crate::task::running());
+    let done = rt
+        .outputs
+        .get("run")
+        .and_then(|p| p.get("done"))
+        .expect("done");
+    assert_eq!(done.value, vocab::bool_(false));
+
+    // Second: terminal — the status and the final out parameter latch, and
+    // the function is not invoked again.
+    evaluate_all_with_functions(&mut rt, &graph, &mut functions).expect("the run evaluates");
+    evaluate_all_with_functions(&mut rt, &graph, &mut functions).expect("the run evaluates");
+    assert_eq!(functions.calls, 2, "a latched run is not re-invoked");
+    assert_eq!(mutated_field(&rt, out), Some(vocab::text("rest")));
+    let status = rt
+        .outputs
+        .get("run")
+        .and_then(|p| p.get("out"))
+        .expect("status");
+    assert_eq!(status.value, crate::task::success());
+    let done = rt
+        .outputs
+        .get("run")
+        .and_then(|p| p.get("done"))
+        .expect("done");
+    assert_eq!(done.value, vocab::bool_(true));
+}
+
 #[test]
 fn external_function_without_host_errors() {
     let graph = external_function_graph(Uuid::from_u128(0x2222), Uuid::from_u128(0x3333));

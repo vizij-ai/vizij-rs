@@ -3165,6 +3165,20 @@ const registry: Registry = {
           "label": "Out",
           "doc": "The run's behavior Status value; a terminal status is latched.",
           "optional": false
+        },
+        {
+          "id": "mutated",
+          "ty": "any",
+          "label": "Mutated",
+          "doc": "The call's mutable (out) parameters after the invocation, as a record keyed by parameter id — read one with a `read_record` on that id. Latched with the status.",
+          "optional": true
+        },
+        {
+          "id": "done",
+          "ty": "bool",
+          "label": "Done",
+          "doc": "Whether the run has ended (its status is terminal, and latched) — the graph-side handle on terminality, without comparing Status values.",
+          "optional": true
         }
       ],
       "params": []

@@ -12,13 +12,14 @@ import {
 } from "../dist/runtime/src/index.js";
 
 // The shipped profiles, summarized: the face standard (face-scoped) and the
-// ROS4HRI command interface (device-scoped).
+// ROS4HRI command interface (device-scoped — 5 named keys and one per action
+// unit; the lipsync surface is the viseme players', not ROS4HRI's).
 const listed = await profiles();
 assert.deepEqual(
   listed.map((p) => [p.id, p.scope, p.keys]),
   [
     ["vizij-face", "face", 82],
-    ["ros4hri", "device", 40],
+    ["ros4hri", "device", 25],
   ],
 );
 

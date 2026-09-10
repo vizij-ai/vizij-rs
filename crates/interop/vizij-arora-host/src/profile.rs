@@ -252,8 +252,10 @@ pub fn vizij_face_profile() -> Profile {
 /// reads. Generated from [`crate::ros4hri`]'s key contract.
 ///
 /// The shipped ROS 2 exposure preset feeds only the expression and gaze keys;
-/// the action-unit and viseme keys are part of the interface and have no topic
-/// behind them yet. Declaring the set is what makes that visible.
+/// the action-unit keys are part of the interface and have no topic behind
+/// them yet. Declaring the set is what makes that visible. Visemes are not
+/// here: ROS4HRI defines no viseme channel, and the face's lipsync belongs to
+/// the viseme players (see [`crate::skills`]).
 pub fn ros4hri_profile() -> Profile {
     let mut keys = vec![
         ProfileKey::text(ros4hri::EXPRESSION_NAME_KEY),
@@ -278,17 +280,13 @@ pub fn ros4hri_profile() -> Profile {
             }),
         );
     }
-    for shape in VISEME_SHAPES {
-        keys.push(ProfileKey::weight(ros4hri::viseme_key(shape)));
-    }
-
     Profile {
         id: "ros4hri".into(),
         version: "v1".into(),
         title: "ROS4HRI face command".into(),
         description: "The ROS4HRI face-command interface: expression name with valence and \
-                      arousal, a gaze target and its frame, FACS action-unit intensities, \
-                      and viseme weights (a Vizij extension)."
+                      arousal, a gaze target and its frame, and FACS action-unit \
+                      intensities."
             .into(),
         scope: Scope::Device,
         keys,
@@ -503,15 +501,15 @@ mod tests {
         assert_eq!(without_au, 2, "only the two jaw-shift controls lack an AU");
     }
 
-    /// The ROS4HRI profile is the mapping's input contract: 5 named keys, one
-    /// per distinct action unit, and one per viseme shape — device-global.
+    /// The ROS4HRI profile is the mapping's input contract: 5 named keys and
+    /// one per distinct action unit — device-global.
     #[test]
     fn the_ros4hri_profile_matches_its_key_contract() {
         let ros = ros4hri_profile();
-        assert_eq!(ros.keys.len(), 5 + 20 + 15);
+        assert_eq!(ros.keys.len(), 5 + 20);
         assert_eq!(ros.scope, Scope::Device);
         assert!(ros.paths().contains(&ros4hri::EXPRESSION_NAME_KEY));
-        assert!(ros.paths().contains(&"standard/ros4hri/viseme/sil"));
+        assert!(!ros.paths().iter().any(|p| p.contains("/viseme/")));
         let target = ros
             .keys
             .iter()
@@ -577,13 +575,16 @@ mod tests {
             .into_iter()
             .filter(|p| !produced.paths().contains(p))
             .collect();
-        assert_eq!(
-            unwritten,
-            [
-                "standard/vizij/face/jaw_left",
-                "standard/vizij/face/jaw_right"
-            ]
-        );
+        // The lipsync surface is unwritten here by design — the viseme
+        // players own it — and the two jaw shifts have no action unit to
+        // drive them.
+        let mut expected: Vec<String> = VISEME_SHAPES
+            .iter()
+            .map(|s| standard::viseme_path(s))
+            .collect();
+        expected.push("standard/vizij/face/jaw_left".into());
+        expected.push("standard/vizij/face/jaw_right".into());
+        assert_eq!(unwritten, expected);
         let undeclared: Vec<&str> = produced
             .paths()
             .into_iter()

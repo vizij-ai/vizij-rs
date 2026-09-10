@@ -1,77 +1,58 @@
 //! Vizij's text-to-speech as an Arora host module.
 //!
 //! The **contract** — `say(text, voice) -> Status` with a mutable `viseme`
-//! out-parameter — is shared by every provider: same function id, parameter
-//! ids, and signature, so a behavior references `say` without caring which
-//! provider a build registered. This crate ships the contract and the **cloud
-//! provider** (the Vizij TTS cloud function — AWS Polly behind an HTTP
-//! endpoint, no credentials in the app; `API_URL` overrides the deployment).
-//! A sibling provider (e.g. the local Piper one) implements the same
-//! contract with its own module id.
+//! out-parameter — is the speech skill's
+//! ([`vizij_arora_behavior::speech`], re-exported here): same function id,
+//! parameter ids, and signature for every provider, so a behavior references
+//! `say` without caring which provider a build registered. This crate ships
+//! the **cloud provider** (the Vizij TTS cloud function — AWS Polly behind an
+//! HTTP endpoint, no credentials in the app; `API_URL` overrides the
+//! deployment). A sibling provider (e.g. the local Piper one) implements the
+//! same contract with its own module id.
 //!
 //! A poll-on-tick action (the arora-sdk `docs/async-functions.md` contract):
 //! [`say`] is re-invoked each tick while `Running`; synthesis + playback run
-//! off the tick thread, and the closure only polls. The module *produces*
-//! the current viseme (AWS Polly viseme codes); mapping it to face poses is
-//! the caller's job. [`SILENCE_VISEME`] is written at rest.
+//! off the tick thread, and the closure only polls. The module streams the
+//! current viseme as one of the face standard's shapes
+//! ([`vizij_arora_host::standard::VISEME_SHAPES`]), Polly's viseme codes
+//! mapped by [`polly_shape`]; [`SILENCE_VISEME`] is written at rest. What a
+//! shape looks like, and how one blends into the next, is the face's and the
+//! speech skill's business, not the provider's.
 
 use arora_engine::module::{HostModule, ModuleBuilder};
 
 use std::collections::HashMap;
 
-use arora_behavior_tree_types::STATUS_ENUMERATION_ID;
-use arora_types::record::module::frozen::{Function, Parameter};
-use arora_types::record::ty::{FrozenScalar, FrozenTy, PrimitiveKind};
-use arora_types::record::{FrozenReference, Version};
 use uuid::{uuid, Uuid};
 
-/// The rest token, written whenever nothing is speaking (both vocabularies).
-pub const SILENCE_VISEME: &str = "sil";
+pub use vizij_arora_behavior::speech::{
+    say_signature, SAY_ID, SAY_TEXT_PARAM_ID, SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID,
+    SILENCE_VISEME,
+};
 
-/// The `say` function's id — identical across providers.
-pub fn say_id() -> Uuid {
-    uuid!("77bf2798-e7ce-47c6-a45c-3c2e9ba1837d")
-}
-
-pub fn text_param_id() -> Uuid {
-    uuid!("881dc182-d4ba-4ea0-9e81-f4eddab6f669")
-}
-pub fn voice_param_id() -> Uuid {
-    uuid!("f56ca142-db46-4c58-bc44-7896c4b54d5c")
-}
-pub fn viseme_param_id() -> Uuid {
-    uuid!("a1fbf58b-bf66-44a6-a503-9d9078ee5755")
-}
-
-/// `say(text, voice) -> Status`, with a mutable `viseme` out-parameter. The
-/// `Status` return is the task-run marker a bridge exposes as an action.
-pub fn say_signature() -> Function {
-    let mut parameters = HashMap::new();
-    let mut parameter_ordering = Vec::new();
-    for (id, name, kind, mutable) in [
-        (text_param_id(), "text", PrimitiveKind::String, false),
-        (voice_param_id(), "voice", PrimitiveKind::String, false),
-        (viseme_param_id(), "viseme", PrimitiveKind::String, true),
-    ] {
-        parameter_ordering.push(id);
-        parameters.insert(
-            id,
-            Parameter {
-                name: name.to_string(),
-                ty: FrozenTy::from(kind),
-                mutable,
-            },
-        );
-    }
-    Function {
-        parameters,
-        parameter_ordering,
-        return_ty: FrozenTy::FrozenScalar(FrozenScalar {
-            reference: FrozenReference {
-                id: STATUS_ENUMERATION_ID,
-                version: Version::parse("1.0.0").expect("a valid version"),
-            },
-        }),
+/// The face-standard shape for a Polly viseme code (the AWS Polly viseme
+/// set), `sil` for silence and for a code this table does not know (logged).
+pub fn polly_shape(code: &str) -> &'static str {
+    match code {
+        "sil" => "sil",
+        "p" => "PP",
+        "f" => "FF",
+        "T" => "TH",
+        "t" => "DD",
+        "k" => "kk",
+        "S" => "CH",
+        "s" => "SS",
+        "l" => "nn",
+        "r" => "RR",
+        "a" => "aa",
+        "e" | "E" => "E",
+        "i" | "@" => "ih",
+        "o" | "O" => "oh",
+        "u" => "ou",
+        other => {
+            log::warn!("tts: unknown Polly viseme code {other:?}, at rest");
+            SILENCE_VISEME
+        }
     }
 }
 
@@ -94,9 +75,7 @@ const DEFAULT_API_BASE: &str = "https://us-central1-semio-vizij.cloudfunctions.n
 const DEFAULT_VOICE: &str = "Ruth";
 
 /// The tts module's id on the device.
-pub fn module_id() -> Uuid {
-    uuid!("4f6f0b0a-62cb-4a1f-ab0d-08f283485091")
-}
+pub const MODULE_ID: Uuid = uuid!("4f6f0b0a-62cb-4a1f-ab0d-08f283485091");
 
 /// A handle for spawning: reuse the ambient runtime if one is active, otherwise a
 /// dedicated one. Only a `Handle` is needed.
@@ -138,7 +117,7 @@ struct TtsRequest<'a> {
 struct SpeechMark {
     /// Milliseconds into the audio.
     time: u64,
-    /// The viseme code (AWS Polly viseme set).
+    /// The viseme code (AWS Polly viseme set), mapped to a shape at the playhead.
     value: String,
 }
 
@@ -150,19 +129,19 @@ struct VisemeResponse {
 /// The tts module: the described `say` action, discoverable over `DescribeMethods`
 /// and — via its `Status` return — exposable as a ROS 2 action by a bridge.
 pub fn host_module() -> HostModule {
-    ModuleBuilder::new(module_id())
-        .described_function(say_id(), "say", say_signature(), say)
+    ModuleBuilder::new(MODULE_ID)
+        .described_function(SAY_ID, "say", say_signature(), say)
         .build()
 }
 
 /// Speak `text` in `voice`, streaming the current viseme. Re-invoked each tick
 /// while `Running`; keeps its state in [`RUNS`], keyed by content.
 pub fn say(call: Call) -> Result<CallResult, CallError> {
-    let text = match arg_string(&call, text_param_id()) {
+    let text = match arg_string(&call, SAY_TEXT_PARAM_ID) {
         Some(text) => text,
         None => return Ok(status_only(task::failure())),
     };
-    let voice = arg_string(&call, voice_param_id()).unwrap_or_else(|| DEFAULT_VOICE.to_string());
+    let voice = arg_string(&call, SAY_VOICE_PARAM_ID).unwrap_or_else(|| DEFAULT_VOICE.to_string());
     let key = utterance_key(&text, &voice);
     let mut runs = match RUNS.lock() {
         Ok(runs) => runs,
@@ -253,7 +232,7 @@ fn play(audio: Vec<u8>, marks: Vec<SpeechMark>, viseme: Arc<Mutex<String>>) -> V
         let elapsed = start.elapsed().as_millis() as u64;
         while next < marks.len() && marks[next].time <= elapsed {
             if let Ok(mut cur) = viseme.lock() {
-                *cur = marks[next].value.clone();
+                *cur = polly_shape(&marks[next].value).to_string();
             }
             next += 1;
         }
@@ -314,7 +293,7 @@ fn with_viseme(status: Value, viseme: &str) -> CallResult {
     CallResult {
         ret: status,
         mutated: vec![StructureField {
-            id: viseme_param_id(),
+            id: SAY_VISEME_PARAM_ID,
             value: Box::new(Value::String(viseme.to_string())),
         }],
     }
