@@ -97,6 +97,43 @@ serves it); this table summarizes it.
 All continuous channels pass through a ~200 ms exponential smoother — the
 incumbent ROS4HRI face's dynamics.
 
+## Speaking through the standard skill
+
+With the ROS4HRI exposure profile, the device serves ROS4HRI's speech skill —
+`/skill/say`, `communication_skills/action/Say` — bound to its `say` task run:
+the goal's `input` is the utterance, and the feedback streams the viseme the
+mouth is making as the audio plays, in the two fields Vizij adds after the
+standard's own `feedback` (`string viseme`, `float32 intensity`; `sil` at
+zero when the mouth is at rest). A client built from the vendored definition
+(`arora-msgs-ros2`'s `msgs/communication_skills/Say.action`) drives it with
+the standard tooling:
+
+```bash
+ros2 action send_goal /skill/say communication_skills/action/Say \
+  "{meta: {priority: 128}, input: 'Hello, I am a talking face.'}" --feedback
+```
+
+and reads, as the face speaks:
+
+```
+Goal accepted with ID: …
+Feedback:
+    feedback: {data_bool: false, data_int: 0, data_float: 0.0, data_str: ''}
+viseme: kk
+intensity: 1.0
+…
+Goal finished with status: SUCCEEDED
+```
+
+`person_id` and `group_id` address an audience a face has no notion of, and
+the goal carries no voice, so the provider's default speaks. The skill is
+exclusive: a new goal takes the lips over and the preempted one ends as a
+failed goal. The extension to the standard's feedback is recorded as a
+departure from upstream in `arora-msgs-ros2`'s README.
+
+This is exercised end to end, from `rclpy` on Jazzy with `rmw_zenoh`, by the
+manual test in [`crates/vizij/tests/ros4hri/`](../crates/vizij/tests/ros4hri/README.md).
+
 ## Driving a key from ROS 2
 
 With the bridge attached (`vizij --ros2 <namespace>`), every `standard/ros4hri/*`
