@@ -345,6 +345,19 @@ async fn the_look_at_skill_serves_the_standard_contract_on_the_vizij_device() {
     }
 }
 
+/// The absolute topic the ROS4HRI profile publishes a whole device key on.
+fn ros4hri_topic_of(key: &str) -> String {
+    use arora_bridge_ros2::profile::Flow;
+    arora_bridge_ros2::ExposureProfile::ros4hri()
+        .endpoints
+        .into_iter()
+        .find(|e| {
+            e.flow == Flow::Out && e.routes.iter().any(|r| r.field.is_empty() && r.key == key)
+        })
+        .map(|e| e.topic)
+        .unwrap_or_else(|| panic!("the ros4hri profile publishes {key}"))
+}
+
 /// The face's free inputs are ROS 2 data-topic inputs: a peer publishing the
 /// input's `std_msgs` type on `/{ns}/keys/<path>` lands the value in the
 /// device's store — what a remote drives directly (everything a graph writes
@@ -486,6 +499,11 @@ async fn the_device_keeps_a_flat_heap_in_a_ros_graph() {
     for (path, ty) in free_inputs(&spec) {
         config = config.with_input(path, ty);
     }
+    // The frame publishes as the `sensor_msgs` image it already is, on the
+    // ROS4HRI image topic the profile declares for its key — the path a
+    // running device takes, and the one whose retention this measures.
+    let frame_topic =
+        ros4hri_topic_of(vizij_arora_host::frames::FrameFormat::from(FrameFormat::Png).key());
     let bridge = arora_bridge_ros2::Ros2Bridge::new(config).await;
 
     let rig = RigHal::new();
@@ -530,22 +548,21 @@ async fn the_device_keeps_a_flat_heap_in_a_ros_graph() {
             .create_publisher::<msg_types::Float64>(&in_topic, None)
             .expect("create the publisher");
 
-        // The peer reads the frame back. `view/frame` rides the scalar plane's
-        // JSON fallback as a `std_msgs/String`, so its published type is fixed;
-        // a numeric rig key's is not (the plane pins a key's ROS type to the
-        // first value it sees, and the graph's F32 outputs and an inbound
-        // `std_msgs/Float64` are not the same type), which is why reading one
-        // of those measures the bridge's type pinning rather than delivery.
-        let out_name = Name::parse(&topic_name("robot", "view/frame")).expect("a valid topic name");
+        // The peer reads the frame back, because a declared type fixes what is
+        // published; a numeric rig key's does not (the scalar plane pins a key's
+        // ROS type to the first value it sees, and the graph's F32 outputs and
+        // an inbound `std_msgs/Float64` are not the same type), so reading one
+        // of those would measure the bridge's type pinning rather than delivery.
+        let out_name = Name::parse(&frame_topic).expect("a valid topic name");
         let out_topic = node
             .create_topic(
                 &out_name,
-                msg_types::String::message_type_name(),
+                ros2_client::MessageTypeName::new("sensor_msgs", "CompressedImage"),
                 &DEFAULT_SUBSCRIPTION_QOS,
             )
             .expect("create the output topic");
         let subscription = node
-            .create_subscription::<msg_types::String>(&out_topic, None)
+            .create_subscription::<arora_msgs_ros2::sensor_msgs::CompressedImage>(&out_topic, None)
             .expect("create the subscription");
 
         tokio::time::timeout(

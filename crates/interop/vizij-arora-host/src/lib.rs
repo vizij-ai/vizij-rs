@@ -17,6 +17,8 @@
 //! This is only the logic both hosts would otherwise write twice, once in Rust
 //! and once in TypeScript.
 
+#[cfg(feature = "publish-frames")]
+pub mod frames;
 mod graph_builder;
 pub mod mappings;
 pub mod profile;

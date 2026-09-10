@@ -19,3 +19,11 @@ log = "0.4"
 # from the crate declaring the enumeration, so the encoding cannot drift.
 arora-behavior = "8"
 uuid = "1"
+# The `sensor_msgs` definitions the `frames` module encodes the rendered face
+# into. Optional because the browser runtime builds this crate too and has no
+# frame to publish.
+arora-msgs-ros2 = { version = "1", optional = true }
+
+[features]
+default = []
+publish-frames = ["dep:arora-msgs-ros2"]

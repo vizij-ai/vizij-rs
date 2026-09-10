@@ -65,9 +65,17 @@ struct Cli {
     unlit: bool,
 
     /// How the face fits the window: contain letterboxes (the web renderer's
-    /// behavior), cover fills the window and crops the excess axis.
+    /// behavior), cover fills the window and crops the excess axis, stretch
+    /// fills it on both axes, distorting the face to the window's aspect.
     #[arg(long, value_enum, default_value_t = view::Fit::Contain)]
     fit: view::Fit,
+
+    /// Magnify the fitted face: one factor for both axes (`1.5`) or one per
+    /// axis, width x height (`1.5x1.2`). Applies on top of `--fit`, about the
+    /// face's center: above 1 enlarges past the fit (cropping the excess),
+    /// below 1 shrinks it inside the window.
+    #[arg(long, default_value = "1", value_parser = parse_zoom)]
+    zoom: Vec2,
 
     /// Compose only these bundle graph kinds (comma-separated), e.g. "rig" or
     /// "rig,pose-driver". Default: rig + pose-driver + the face's standard
@@ -75,15 +83,29 @@ struct Cli {
     #[arg(long, default_value = "rig,pose-driver,pose,standard-adaptation")]
     graphs: String,
 
-    /// Publish rendered frames into the store as HAL `view/frame` readings, at
-    /// this rate in Hz (decoupled from the step rate); 0 disables. Works with a
-    /// window or headless.
-    #[arg(long, default_value_t = 15.0)]
-    frame_rate: f32,
+    /// Publish rendered frames into the store as HAL readings, at this rate in
+    /// Hz (decoupled from the step rate); 0 disables. Frames are the face image
+    /// a ROS4HRI consumer reads, so by default they publish at 15 Hz when the
+    /// device is exposed as ROS4HRI (`--ros2` without `--no-ros4hri`) and not
+    /// at all otherwise. A rate given here applies regardless, except under
+    /// `--ros2 --no-ros4hri`, which is refused: with no ROS4HRI profile to type
+    /// the frame key, a frame would ride the bridge's JSON scalar plane. Works
+    /// with a window or headless.
+    #[arg(long)]
+    frame_rate: Option<f32>,
 
-    /// How published frames are encoded.
+    /// How published frames are encoded, which decides the key they are
+    /// written under: `png` writes `display/face/compressed` (a
+    /// `sensor_msgs/CompressedImage`), `raw` writes `display/face` (a
+    /// `sensor_msgs/Image`).
     #[arg(long, value_enum, default_value_t = frames::FrameFormat::Png)]
     frame_format: frames::FrameFormat,
+
+    /// The TF frame published frames are stamped with (`header.frame_id`).
+    /// Default: the face's id from its GLB (`metadata.faceId`, e.g.
+    /// `quori_latest`), else the GLB's file stem.
+    #[arg(long)]
+    frame_id: Option<String>,
 
     /// Autoplay this motiongraph program id instead of the bundle's own
     /// `activeMotionGraphId`. Window mode plays the active program by default;
@@ -161,6 +183,13 @@ fn main() -> Result<()> {
         #[cfg(feature = "studio")]
         studio: cli.studio,
     };
+    // Frames are the ROS4HRI face image, so they follow that exposure unless
+    // a rate is given (see `frames::publish_rate`).
+    #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
+    let ros2 = cli.ros2.is_some();
+    #[cfg(not(any(feature = "ros2-dds", feature = "ros2-zenoh")))]
+    let ros2 = false;
+    let rate_hz = frames::publish_rate(cli.frame_rate, ros2, !cli.no_ros4hri)?;
     let dev = device::start(&cli.glb, config, bridges, mode)?;
     println!(
         "vizij: {} — {} elements, {} animatables, {} bundle graphs",
@@ -169,11 +198,18 @@ fn main() -> Result<()> {
         dev.meta.animatables.len(),
         dev.meta.bundle.graphs.len(),
     );
+    let frame_config = frames::FrameConfig {
+        format: cli.frame_format,
+        rate_hz,
+        fixed_frame_id: cli.frame_id.clone(),
+        face_frame_id: frames::default_frame_id(dev.meta.bundle.face_id.as_deref(), &dev.glb_path),
+    };
 
     let [r, g, b] = device::parse_rgb(&cli.background)?;
     let options = view::ViewOptions {
         background: Color::srgb_u8(r, g, b),
         fit: cli.fit,
+        zoom: cli.zoom,
         ambient: cli.ambient,
         unlit: cli.unlit,
     };
@@ -187,10 +223,6 @@ fn main() -> Result<()> {
     let face = view::Face { meta, glb_path };
     let device_res = view::DeviceRes { rig };
 
-    let frame_config = frames::FrameConfig {
-        format: cli.frame_format,
-        rate_hz: cli.frame_rate,
-    };
     match (&cli.snapshot, cli.headless) {
         (Some(out), _) => run_snapshot(&cli, face, device_res, options, out),
         (None, true) => run_headless(&cli.size, face, device_res, options, events, frame_config),
@@ -239,8 +271,8 @@ fn run_window(
     .insert_resource(view::DeviceEvents(std::sync::Mutex::new(events)))
     .add_plugins(view::ViewPlugin);
     // Frame publishing works with a window too (not only headless): capture the
-    // window and push `view/frame` onto the device's reading feed.
-    if frame_config.rate_hz > 0.0 {
+    // window and push the frame onto the device's reading feed.
+    if frame_config.publishes() {
         app.insert_resource(frame_config)
             .add_plugins(frames::FramesPlugin);
     }
@@ -297,11 +329,14 @@ fn run_headless(
     let handle = app.world_mut().resource_mut::<Assets<Image>>().add(target);
     app.insert_resource(view::OffscreenTarget(handle));
 
-    if frame_config.rate_hz > 0.0 {
+    if frame_config.publishes() {
         app.insert_resource(frame_config)
             .add_plugins(frames::FramesPlugin);
     } else {
-        log::warn!("--headless with --frame-rate 0 renders but publishes nothing");
+        log::warn!(
+            "--headless renders but publishes no frames: expose the device as ROS4HRI (--ros2) or \
+             give a --frame-rate"
+        );
     }
     app.run();
     restore_terminal();
@@ -356,6 +391,26 @@ fn parse_size(size: &str) -> Result<(u32, u32)> {
     Ok((w.parse()?, h.parse()?))
 }
 
+/// `--zoom` value: one positive factor for both axes, or `<x>x<y>`, one per
+/// axis (width, then height).
+fn parse_zoom(spec: &str) -> Result<Vec2> {
+    let factor = |s: &str| -> Result<f32> {
+        let f: f32 = s
+            .trim()
+            .parse()
+            .map_err(|_| anyhow!("--zoom factors must be numbers, got {s:?}"))?;
+        if f.is_finite() && f > 0.0 {
+            Ok(f)
+        } else {
+            Err(anyhow!("--zoom factors must be positive, got {s}"))
+        }
+    };
+    Ok(match spec.split_once('x') {
+        Some((x, y)) => Vec2::new(factor(x)?, factor(y)?),
+        None => Vec2::splat(factor(spec)?),
+    })
+}
+
 /// `--ros2` value `[namespace][:domain]` → (namespace, domain), each optional
 /// (empty namespace, domain 0 by default).
 #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
@@ -367,4 +422,26 @@ fn parse_ros2(spec: &str) -> Result<(String, u16)> {
         domain.parse().context("--ros2 domain must be a number")?
     };
     Ok((namespace.to_string(), domain))
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+
+    #[test]
+    fn a_single_zoom_factor_applies_to_both_axes() {
+        assert_eq!(parse_zoom("1.5").unwrap(), Vec2::splat(1.5));
+    }
+
+    #[test]
+    fn a_zoom_pair_is_width_then_height() {
+        assert_eq!(parse_zoom("2x0.5").unwrap(), Vec2::new(2.0, 0.5));
+    }
+
+    #[test]
+    fn zoom_rejects_non_positive_and_malformed_factors() {
+        for bad in ["0", "-1", "nan", "inf", "2x", "x2", "2x0", "big", "1x2x3"] {
+            assert!(parse_zoom(bad).is_err(), "{bad:?} should be rejected");
+        }
+    }
 }

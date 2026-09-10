@@ -20,7 +20,7 @@ use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
 use crate::device::builder_for;
-use crate::frames::{encode_frame, FrameFormat, FRAME_KEY};
+use crate::frames::{encode_frame, FrameFormat};
 
 /// Bytes the process has been handed and has not given back.
 static LIVE_BYTES: AtomicUsize = AtomicUsize::new(0);
@@ -117,19 +117,39 @@ pub(crate) async fn feed_frames(
     rate_hz: f32,
     carried: &AtomicUsize,
 ) {
-    let frame = encode_frame(&gradient(side), side, side, format);
-    let payload = match &frame {
-        Value::KeyValue(kv) => match kv.fields.get("data").and_then(|f| f.value.as_deref()) {
-            Some(Value::ArrayU8(data)) => data.len(),
-            _ => 0,
-        },
-        _ => 0,
-    };
+    let frame = encode_frame(&gradient(side), side, side, format, "probe");
+    let key = vizij_arora_host::frames::FrameFormat::from(format).key();
+    let payload = payload_bytes(&frame);
+    // A frame that measures zero is a broken probe, not a free frame: every
+    // assertion downstream is a comparison against this number, and a silent
+    // zero turns "nothing was kept" into "nothing was sent" without saying so.
+    assert!(
+        payload > 0,
+        "a {side}x{side} {format:?} frame measured no payload — payload_bytes no longer finds the \
+         buffer in the frame's value shape"
+    );
     let period = Duration::from_secs_f32(1.0 / rate_hz);
     loop {
-        rig.push_reading(StateChange::set(Key::from(FRAME_KEY), frame.clone()));
+        rig.push_reading(StateChange::set(Key::from(key), frame.clone()));
         carried.fetch_add(payload, Ordering::Relaxed);
         tokio::time::sleep(period).await;
+    }
+}
+
+/// The bytes one pushed frame carries: the image message's pixel or codec
+/// buffer. Summed over the value rather than read from a named field, so the
+/// probe follows the message shape instead of pinning it — the pixels are the
+/// only bulk in either `sensor_msgs` image, whatever the fields around them
+/// are called.
+fn payload_bytes(value: &Value) -> usize {
+    match value {
+        Value::ArrayU8(data) => data.len(),
+        Value::Structure(structure) => structure
+            .fields
+            .iter()
+            .map(|field| payload_bytes(&field.value))
+            .sum(),
+        _ => 0,
     }
 }
 
@@ -160,7 +180,7 @@ pub(crate) const FAN_OUT: usize = 16;
 pub(crate) const STEP: Duration = Duration::from_millis(16);
 
 /// The device alone — no bridge — under the heaviest thing that crosses its
-/// seams: the view's raw frame feed landing in the store as a `view/frame`
+/// seams: the view's raw frame feed landing in the store as a `display/face`
 /// reading, while the graph writes its keys every step.
 ///
 /// The control for the live-ROS leak test: a rising floor here is the device

@@ -46,9 +46,14 @@ The device joins the ROS graph as a drop-in ROS4HRI face renderer:
   keys;
 - **the `/skill/look_at` action** (`interaction_skills/LookAt`) — goal-driven
   gaze with tracking, glances, reset, priorities, and standard error codes;
-- **data topics** under `/<namespace>/keys/<path>` — every store key published,
-  and the face's free inputs (what no graph writes) subscribed as `std_msgs`
-  (`Float64` for numeric controls; `ros2 topic info -v` shows each type).
+- **the face image** on `/robot_face/image_raw/compressed` (a
+  `sensor_msgs/CompressedImage`, PNG at 15 Hz; `--frame-format raw` for a
+  `sensor_msgs/Image` on `/robot_face/image_raw`) — `rqt_image_view` shows the
+  face;
+- **data topics** under `/<namespace>/keys/<path>` — every other store key
+  published, and the face's free inputs (what no graph writes) subscribed as
+  `std_msgs` (`Float64` for numeric controls; `ros2 topic info -v` shows each
+  type).
 
 [ROS4HRI support](docs/ros4hri.md) documents the full contract;
 [the app README](crates/vizij/README.md) documents every flag.
@@ -57,11 +62,14 @@ The device joins the ROS graph as a drop-in ROS4HRI face renderer:
 
 ```bash
 cargo run -p vizij -- --glb path/to/face.glb --snapshot out.png --size 763x760
-cargo run -p vizij -- --glb path/to/face.glb --headless
+cargo run -p vizij -- --glb path/to/face.glb --headless --frame-rate 15
 ```
 
 One frame rendered offscreen to PNG, or a windowless device streaming rendered
-frames into the store — same behavior, no display.
+frames into the store — same behavior, no display. Headless is for streaming
+the face somewhere: exposed as ROS4HRI (`--ros2`) it publishes its frames on
+the face image topic by itself, and `--frame-rate` streams them into the store
+regardless.
 
 ### Speech (TTS)
 

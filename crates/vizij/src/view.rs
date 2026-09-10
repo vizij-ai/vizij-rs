@@ -9,9 +9,10 @@ use std::collections::HashMap;
 use std::sync::mpsc::Receiver;
 use std::sync::Mutex;
 
-use bevy::camera::{Projection, RenderTarget, ScalingMode};
+use bevy::camera::{CameraProjection, Projection, RenderTarget, ScalingMode, SubCameraView};
 use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::gltf::GltfAssetLabel;
+use bevy::math::Vec3A;
 use bevy::mesh::morph::MorphWeights;
 use bevy::prelude::*;
 use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector};
@@ -47,15 +48,22 @@ pub enum Fit {
     /// The bounds fill the window; the excess axis is cropped — for a full
     /// screen whose aspect ratio the face does not control.
     Cover,
+    /// The bounds fill the window on both axes, each scaled on its own — the
+    /// face distorts to the window's aspect ratio instead of being cropped or
+    /// letterboxed.
+    Stretch,
 }
 
-/// View options (CLI knobs while calibrating against the web renderer).
+/// View options (the CLI's rendering knobs).
 #[derive(Resource, Clone)]
 pub struct ViewOptions {
     /// Background clear color.
     pub background: Color,
     /// How the face fits the window.
     pub fit: Fit,
+    /// Magnification applied after the fit, per axis (x = width, y = height),
+    /// about the face's center; 1 is the bare fit. Positive.
+    pub zoom: Vec2,
     /// three.js-style ambient light intensity (the web uses π/2). Materials
     /// render unlit with their albedo scaled by `intensity/π` in linear space
     /// — exactly the web's ambient-Lambert pipeline (verified pixel-exact
@@ -131,6 +139,7 @@ fn setup_scene(mut commands: Commands, face: Res<Face>, asset_server: Res<AssetS
 #[allow(clippy::too_many_arguments)]
 fn apply_device_events(
     events: Option<Res<DeviceEvents>>,
+    mut frame_config: Option<ResMut<crate::frames::FrameConfig>>,
     mut face: ResMut<Face>,
     mut device: ResMut<DeviceRes>,
     mut options: ResMut<ViewOptions>,
@@ -167,12 +176,16 @@ fn apply_device_events(
                 commands.spawn(WorldAssetRoot(
                     asset_server.load(GltfAssetLabel::Scene(0).from_asset(glb_path.clone())),
                 ));
-                let (scaling, transform) = camera_fit(&meta, options.fit);
-                for (_, mut projection, mut camera_transform) in &mut cameras {
-                    if let Projection::Orthographic(orthographic) = &mut *projection {
-                        orthographic.scaling_mode = scaling;
-                    }
+                let (projection, transform) = camera_fit(&meta, &options);
+                for (_, mut camera_projection, mut camera_transform) in &mut cameras {
+                    *camera_projection = projection.clone();
                     *camera_transform = transform;
+                }
+                // The published frames are stamped in the loaded face's own
+                // frame, so they follow the face.
+                if let Some(config) = frame_config.as_mut() {
+                    config.face_frame_id =
+                        crate::frames::default_frame_id(meta.bundle.face_id.as_deref(), &glb_path);
                 }
                 *face = Face {
                     meta: *meta,
@@ -185,25 +198,103 @@ fn apply_device_events(
     }
 }
 
-/// The camera placement for a face: orthographic fit to the authored
-/// rootBounds, centered on them. Contain keeps at least the bounds visible
-/// (the web computes zoom = min(w/bw, h/bh)); cover keeps at most.
-fn camera_fit(meta: &FaceMeta, fit: Fit) -> (ScalingMode, Transform) {
+/// The camera placement for a face: a [`FitProjection`] over the authored
+/// rootBounds, centered on them.
+fn camera_fit(meta: &FaceMeta, options: &ViewOptions) -> (Projection, Transform) {
     let (cx, cy, bw, bh) = meta.root_bounds.unwrap_or((0.0, 0.0, 5.0, 4.0));
-    let scaling = match fit {
-        Fit::Contain => ScalingMode::AutoMin {
-            min_width: bw,
-            min_height: bh,
-        },
-        Fit::Cover => ScalingMode::AutoMax {
-            max_width: bw,
-            max_height: bh,
-        },
-    };
+    let projection = Projection::custom(FitProjection {
+        bounds: Vec2::new(bw, bh),
+        fit: options.fit,
+        zoom: options.zoom,
+        ortho: OrthographicProjection::default_3d(),
+    });
     (
-        scaling,
+        projection,
         Transform::from_xyz(cx, cy, 100.0).looking_at(Vec3::new(cx, cy, 0.0), Vec3::Y),
     )
+}
+
+/// The view camera's projection: orthographic, showing the face's authored
+/// bounds fitted to the viewport under a [`Fit`] policy, then magnified by a
+/// per-axis zoom.
+///
+/// A custom projection rather than an [`OrthographicProjection`] scaling mode
+/// because the zoom applies *after* the fit and per axis: the fit picks which
+/// bounds axis spans the viewport from the unzoomed bounds, and no
+/// [`ScalingMode`] takes a second, anisotropic factor on top of that choice.
+/// Bevy hands a custom projection the viewport size through
+/// [`CameraProjection::update`] whenever it would recompute a built-in one, so
+/// the extent is right on the first frame, on every resize, and after a face
+/// swap. The mesh pipeline files it as a nonstandard projection, which only
+/// routes its depth↔view-z shader helpers through the general matrix path —
+/// the same numbers for an orthographic matrix.
+#[derive(Debug, Clone)]
+struct FitProjection {
+    /// The authored rootBounds size (width, height), in world units.
+    bounds: Vec2,
+    fit: Fit,
+    /// Magnification per axis, applied after the fit.
+    zoom: Vec2,
+    /// Holds the extent as a `Fixed` scaling mode and does the matrix work.
+    ortho: OrthographicProjection,
+}
+
+impl CameraProjection for FitProjection {
+    fn get_clip_from_view(&self) -> Mat4 {
+        self.ortho.get_clip_from_view()
+    }
+
+    fn get_clip_from_view_for_sub(&self, sub_view: &SubCameraView) -> Mat4 {
+        self.ortho.get_clip_from_view_for_sub(sub_view)
+    }
+
+    fn update(&mut self, width: f32, height: f32) {
+        let extent = visible_extent(self.bounds, self.fit, self.zoom, width, height);
+        self.ortho.scaling_mode = ScalingMode::Fixed {
+            width: extent.x,
+            height: extent.y,
+        };
+        self.ortho.update(width, height);
+    }
+
+    fn far(&self) -> f32 {
+        self.ortho.far()
+    }
+
+    fn get_frustum_corners(&self, z_near: f32, z_far: f32) -> [Vec3A; 8] {
+        self.ortho.get_frustum_corners(z_near, z_far)
+    }
+}
+
+/// The world-space extent a `width`×`height` viewport shows of a face whose
+/// authored bounds are `bounds`: the bounds fitted to the viewport's aspect
+/// under `fit`, divided by the per-axis `zoom` (a zoom above 1 magnifies).
+///
+/// Contain and cover repeat Bevy's `AutoMin` / `AutoMax` arithmetic operation
+/// for operation, so the default view renders bit-identically to those modes
+/// — the snapshot references were rendered with them.
+fn visible_extent(bounds: Vec2, fit: Fit, zoom: Vec2, width: f32, height: f32) -> Vec2 {
+    // The bounds' height spanning the viewport, or their width.
+    let by_height = Vec2::new(width * bounds.y / height, bounds.y);
+    let by_width = Vec2::new(bounds.x, height * bounds.x / width);
+    let fitted = match fit {
+        Fit::Contain => {
+            if width * bounds.y > bounds.x * height {
+                by_height
+            } else {
+                by_width
+            }
+        }
+        Fit::Cover => {
+            if width * bounds.y < bounds.x * height {
+                by_height
+            } else {
+                by_width
+            }
+        }
+        Fit::Stretch => bounds,
+    };
+    fitted / zoom
 }
 
 fn setup_camera(
@@ -215,9 +306,7 @@ fn setup_camera(
     // Lighting is baked into the materials (see `ViewOptions::albedo_factor`);
     // no scene light is spawned.
 
-    let (scaling, transform) = camera_fit(&face.meta, options.fit);
-    let mut projection = OrthographicProjection::default_3d();
-    projection.scaling_mode = scaling;
+    let (projection, transform) = camera_fit(&face.meta, &options);
 
     let mut camera = commands.spawn((
         Camera3d::default(),
@@ -225,7 +314,7 @@ fn setup_camera(
             clear_color: ClearColorConfig::Custom(options.background),
             ..default()
         },
-        Projection::Orthographic(projection),
+        projection,
         transform,
         Tonemapping::None,
         DebandDither::Disabled,
@@ -481,4 +570,112 @@ fn as_rgb(value: &Value) -> Option<[f32; 3]> {
     as_color_rgba(value)
         .map(|c| [c[0], c[1], c[2]])
         .or_else(|| as_xyz(value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const BOUNDS: Vec2 = Vec2::new(4.0, 2.0);
+    const NO_ZOOM: Vec2 = Vec2::ONE;
+
+    #[test]
+    fn contain_letterboxes_the_viewports_excess_axis() {
+        // Wider than the bounds: their height spans, the width shows margins.
+        assert_eq!(
+            visible_extent(BOUNDS, Fit::Contain, NO_ZOOM, 800.0, 200.0),
+            Vec2::new(8.0, 2.0)
+        );
+        // Taller: their width spans.
+        assert_eq!(
+            visible_extent(BOUNDS, Fit::Contain, NO_ZOOM, 400.0, 400.0),
+            Vec2::new(4.0, 4.0)
+        );
+    }
+
+    #[test]
+    fn cover_crops_the_viewports_excess_axis() {
+        assert_eq!(
+            visible_extent(BOUNDS, Fit::Cover, NO_ZOOM, 800.0, 200.0),
+            Vec2::new(4.0, 1.0)
+        );
+        assert_eq!(
+            visible_extent(BOUNDS, Fit::Cover, NO_ZOOM, 400.0, 400.0),
+            Vec2::new(2.0, 2.0)
+        );
+    }
+
+    #[test]
+    fn stretch_shows_exactly_the_bounds_whatever_the_viewport() {
+        for (width, height) in [(800.0, 200.0), (400.0, 400.0), (100.0, 900.0)] {
+            assert_eq!(
+                visible_extent(BOUNDS, Fit::Stretch, NO_ZOOM, width, height),
+                BOUNDS
+            );
+        }
+    }
+
+    #[test]
+    fn zoom_magnifies_after_the_fit_per_axis() {
+        // Contain on the wide viewport shows 8×2; ×2 wide and ×½ tall.
+        assert_eq!(
+            visible_extent(BOUNDS, Fit::Contain, Vec2::new(2.0, 0.5), 800.0, 200.0),
+            Vec2::new(4.0, 4.0)
+        );
+        assert_eq!(
+            visible_extent(BOUNDS, Fit::Stretch, Vec2::splat(2.0), 800.0, 200.0),
+            Vec2::new(2.0, 1.0)
+        );
+    }
+
+    /// Contain and cover are Bevy's `AutoMin` / `AutoMax`: the default view
+    /// renders bit-identically to those modes, which the snapshot references
+    /// were rendered with.
+    #[test]
+    fn contain_and_cover_match_bevys_auto_scaling_modes() {
+        // Includes the snapshot sizes and the viewport of exactly the bounds' aspect.
+        let viewports = [
+            (763.0, 486.0),
+            (763.0, 760.0),
+            (1920.0, 1080.0),
+            (1000.0, 500.0),
+            (333.0, 777.0),
+        ];
+        let modes = [
+            (
+                Fit::Contain,
+                ScalingMode::AutoMin {
+                    min_width: BOUNDS.x,
+                    min_height: BOUNDS.y,
+                },
+            ),
+            (
+                Fit::Cover,
+                ScalingMode::AutoMax {
+                    max_width: BOUNDS.x,
+                    max_height: BOUNDS.y,
+                },
+            ),
+        ];
+        for (fit, mode) in modes {
+            for (width, height) in viewports {
+                let mut bevy = OrthographicProjection::default_3d();
+                bevy.scaling_mode = mode;
+                bevy.update(width, height);
+                let mut ours = FitProjection {
+                    bounds: BOUNDS,
+                    fit,
+                    zoom: NO_ZOOM,
+                    ortho: OrthographicProjection::default_3d(),
+                };
+                ours.update(width, height);
+                assert_eq!(ours.ortho.area, bevy.area, "{fit:?} at {width}x{height}");
+                assert_eq!(
+                    ours.get_clip_from_view(),
+                    bevy.get_clip_from_view(),
+                    "{fit:?} at {width}x{height}"
+                );
+            }
+        }
+    }
 }

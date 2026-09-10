@@ -79,9 +79,12 @@ pub struct FaceConfig {
     pub program: ProgramSelect,
     /// Stage the bundle's neutral inputs into the store at boot.
     pub stage_neutral: bool,
-    /// Compose the built-in ROS4HRI mapping (`standard/ros4hri/*` keys drive
-    /// the face's standard controls). On by default in the binary, opt-out
-    /// via `--no-ros4hri`.
+    /// Serve ROS4HRI: compose the built-in mapping (`standard/ros4hri/*` keys
+    /// drive the face's standard controls) and, under `--ros2`, expose the
+    /// device through the ROS4HRI profile — the typed face topics, the face
+    /// image, the skill actions. On by default in the binary; `--no-ros4hri`
+    /// leaves a plain ROS 2 device, its keys under `/{namespace}/keys/…` and
+    /// nothing on the ROS4HRI names.
     pub ros4hri: bool,
 }
 
@@ -110,22 +113,26 @@ pub struct BridgeConfig {
 async fn attach_bridges(
     mut builder: arora::AroraBuilder,
     bridges: &BridgeConfig,
+    ros4hri: bool,
     data_inputs: &[(String, arora_types::value::Type)],
 ) -> arora::AroraBuilder {
     #[cfg(not(any(feature = "ros2-dds", feature = "ros2-zenoh")))]
-    let _ = data_inputs;
+    let _ = (data_inputs, ros4hri);
     match arora::local_ws_bridge().await {
         Ok(bridge) => builder = builder.with_bridge(bridge),
         Err(e) => log::error!("local bridge: {e:?}"),
     }
     #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
     if let Some((namespace, domain)) = &bridges.ros2 {
-        // The ROS4HRI exposure profile: typed face topics fanning onto the
-        // standard keys, and the standard skills — `/skill/look_at`,
-        // `/skill/say` — bound to the gaze and speech skills the device
-        // describes.
-        let mut config = arora_bridge_ros2::Ros2BridgeConfig::new(namespace.clone(), *domain)
-            .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
+        let mut config = arora_bridge_ros2::Ros2BridgeConfig::new(namespace.clone(), *domain);
+        // The ROS4HRI exposure profile: the typed face topics fanning onto the
+        // standard keys, the face image on its `image_transport` pair, and the
+        // standard skills — `/skill/look_at`, `/skill/say` — bound to the gaze
+        // and speech task runs the device describes. It is the whole ROS4HRI
+        // surface, so `--no-ros4hri` leaves it out.
+        if ros4hri {
+            config = config.with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
+        }
         // The face's free inputs — what nothing in the composed graph writes —
         // are the keys a remote may drive, each subscribed as the std_msgs type
         // of its kind (`ros2 topic info -v` shows it).
@@ -135,9 +142,14 @@ async fn attach_bridges(
         builder = builder.with_bridge(Box::new(arora_bridge_ros2::Ros2Bridge::new(config).await));
         log::info!(
             "serving the ROS 2 bridge (namespace {namespace:?}, domain {domain}): {} input keys \
-             subscribed under /{namespace}/keys/<path>, plus the ROS4HRI typed topics and the \
-             /skill/look_at and /skill/say actions",
-            data_inputs.len()
+             subscribed under /{namespace}/keys/<path>{}",
+            data_inputs.len(),
+            if ros4hri {
+                ", plus the ROS4HRI profile (the typed face topics, the face image, the \
+                 /skill/look_at and /skill/say actions)"
+            } else {
+                ""
+            }
         );
     }
     #[cfg(feature = "studio")]
@@ -505,6 +517,7 @@ fn supervise(
             let builder = attach_bridges(
                 builder.with_frontend(frontend),
                 &bridges,
+                config.ros4hri,
                 &free_inputs(&spec),
             )
             .await;
