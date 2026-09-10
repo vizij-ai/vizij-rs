@@ -58,7 +58,10 @@ A player is called, never subscribed to: some producer decides what the mouth
 does. `say` is its own producer — the run's provider streams the visemes of
 the speech it synthesizes. For anything else, the caller supplies them: a
 behavior, an action client, or a phoneme aligner calling `play_viseme` once
-per shape.
+per shape. A producer that keeps its own envelope bypasses the players and
+writes the weights: each `standard/vizij/viseme/<shape>` is a free input,
+under `--ros2` a subscribed topic ([ROS4HRI
+support](ros4hri.md#driving-a-key-from-ros-2)).
 
 Two producers exist outside the players and neither reaches them:
 

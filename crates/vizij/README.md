@@ -146,15 +146,34 @@ endpoints `POST /tts/get-audio` and `POST /tts/get-visemes` (body
 `{"voice", "text"}`, returning the audio bytes and the Polly viseme speech
 marks) and point the app at it with the `API_URL` environment variable.
 
+**Swapping the provider:** a build carries one, and the face never sees
+which. `--features tts-piper` picks the local one, `API_URL` points the cloud
+one at your own deployment, and a provider of your own is a host module
+implementing the `say` contract `vizij-arora-tts` re-exports — a sibling of
+[`src/tts_piper.rs`](src/tts_piper.rs), registered behind a feature the same
+way. The contract is text in, status and a viseme stream out, so a
+text-to-speech that produces no visemes (derive them from the text) or a
+viseme generator with no audio at all plugs in there too. The guidebook walks
+through each option: [Swap the Speech Provider](https://github.com/vizij-ai/vizij-docs/blob/main/current_documentation/guidebook/deploy/swap-the-speech-provider.md).
+
 **Sending text to it:** `say` is a described device method — a behavior
 calls it like any module function, and a bridge spawns it as a task run
 (bridges list it over `DescribeMethods`; its `Status` return is the action
 shape, and `--ros2` serves it as the `/<namespace>/actions/say` action).
 Spawned, the run is the say skill's: the lips follow the speech and the
 run's feedback is the current viseme. `play_viseme(shape, weight)` plays one
-shape the same way without speech. The ROS4HRI `/robot_face/tts` topic lands
-text on the `standard/ros4hri/speech/text` key, which nothing routes into
-`say` yet.
+shape the same way without speech. The fifteen viseme weights are free inputs
+too: under `--ros2` a producer with its own timing writes them raw, no player
+involved —
+
+```bash
+ros2 topic pub --once /<namespace>/keys/rig/<faceId>/standard/vizij/viseme/aa \
+  std_msgs/msg/Float64 "{data: 1.0}"
+```
+
+— and [Bring Your Own Visemes](https://github.com/vizij-ai/vizij-docs/blob/main/current_documentation/guidebook/deploy/bring-your-own-visemes.md) compares the three entry points. The
+ROS4HRI `/robot_face/tts` topic lands text on the `standard/ros4hri/speech/text`
+key, which nothing routes into `say` yet.
 
 ## Lighting model
 

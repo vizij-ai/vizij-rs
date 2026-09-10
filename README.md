@@ -25,9 +25,11 @@ A window opens with the face — alive, not a picture. By default the app:
   the ROS4HRI face vocabulary out of the box (`--no-ros4hri` opts out);
 - registers the **`say` speech skill** — text-to-speech with the lips driven
   from the visemes it streams; by default the AWS-backed cloud provider (zero
-  setup, no credentials in the app), or build with `--features tts-piper` to
-  speak fully locally through Piper — and the **`play_viseme` skill**, one
-  viseme shape through its envelope; see [Speech (TTS)](crates/vizij/README.md#speech-tts)
+  setup, no credentials in the app), build with `--features tts-piper` to
+  speak fully locally through Piper, or register a provider of your own — and
+  the **`play_viseme` skill**, one viseme shape through its envelope; the
+  fifteen viseme weights are plain inputs a lipsync source of yours may drive
+  directly; see [Speech (TTS)](crates/vizij/README.md#speech-tts)
   and [Skills](docs/skills.md);
 - serves arora's local WebSocket bridge for live control and inspection.
 
