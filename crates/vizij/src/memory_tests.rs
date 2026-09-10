@@ -20,7 +20,7 @@ use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
 use crate::device::builder_for;
-use crate::frames::{encode_frame, FrameFormat, FRAME_KEY};
+use crate::frames::{encode_frame, FrameFormat};
 
 /// Bytes the process has been handed and has not given back.
 static LIVE_BYTES: AtomicUsize = AtomicUsize::new(0);
@@ -117,7 +117,8 @@ pub(crate) async fn feed_frames(
     rate_hz: f32,
     carried: &AtomicUsize,
 ) {
-    let frame = encode_frame(&gradient(side), side, side, format);
+    let frame = encode_frame(&gradient(side), side, side, format, "probe");
+    let key = vizij_arora_host::frames::FrameFormat::from(format).key();
     let payload = payload_bytes(&frame);
     // A frame that measures zero is a broken probe, not a free frame: every
     // assertion downstream is a comparison against this number, and a silent
@@ -129,7 +130,7 @@ pub(crate) async fn feed_frames(
     );
     let period = Duration::from_secs_f32(1.0 / rate_hz);
     loop {
-        rig.push_reading(StateChange::set(Key::from(FRAME_KEY), frame.clone()));
+        rig.push_reading(StateChange::set(Key::from(key), frame.clone()));
         carried.fetch_add(payload, Ordering::Relaxed);
         tokio::time::sleep(period).await;
     }

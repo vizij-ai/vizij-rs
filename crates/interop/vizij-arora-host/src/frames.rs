@@ -1,10 +1,13 @@
 //! The rendered face as a ROS image.
 //!
 //! Each host captures its own pixels (Bevy's screenshot readback natively, the
-//! WebGL canvas in the standalone) and writes the frame under [`FRAME_KEY`]
-//! in the shape ROS expects — `sensor_msgs/Image` for raw pixels,
-//! `sensor_msgs/CompressedImage` for an encoded frame — so a ROS 2 bridge
-//! publishing that key as its declared type needs no conversion of its own.
+//! WebGL canvas in the standalone) and writes the frame under the key of the
+//! transport it encodes ([`FrameFormat::key`]), in the shape ROS expects —
+//! `display/face` holds a `sensor_msgs/Image` of raw pixels,
+//! `display/face/compressed` a `sensor_msgs/CompressedImage` of an encoded
+//! frame. The ROS4HRI exposure profile publishes each key as that message on
+//! its `image_transport` topic, so a bridge needs no conversion of its own; a
+//! face writes one of the two keys, and a key never written never publishes.
 //! The value is the message's typed form (the registry's field ids, not
 //! names): the same bytes ROS tools decode with the bundled `sensor_msgs`
 //! definition, and the shape `arora-msgs-ros2`'s CDR codec encodes without a
@@ -22,12 +25,6 @@ use arora_types::value_serde::bridge::to_value_seeded;
 use arora_types::AroraType;
 use serde::Serialize;
 
-/// The store key the rendered frame is published under.
-pub const FRAME_KEY: &str = "display/face";
-
-/// The `header.frame_id` every frame carries: the face is its own frame.
-pub const FRAME_ID: &str = "robot_face";
-
 /// The `format` a PNG frame declares, in the shape `CompressedImage` specifies:
 /// `ORIG_PIXFMT; CODEC compressed [COMPRESSED_PIXFMT]`. The pattern is what
 /// matters — a `format` that does not match it, `"png"` included, is defined to
@@ -39,7 +36,7 @@ pub const FRAME_ID: &str = "robot_face";
 pub const PNG_FORMAT: &str = "rgba8; png compressed rgba8";
 
 /// How a published frame's pixels are encoded — and, with it, which ROS image
-/// message and topic the frame rides.
+/// message the frame is and which store key it is written under.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum FrameFormat {
     /// PNG — compact enough to travel over a bridge; a `CompressedImage`.
@@ -57,24 +54,32 @@ impl FrameFormat {
         }
     }
 
-    /// The ROS4HRI topic for the face image (`image_transport` naming: the raw
-    /// image, and its compressed sibling under it).
-    pub fn topic(self) -> &'static str {
+    /// The store key a frame in this format is written under. One key per
+    /// transport, mirroring `image_transport`'s topic pair, because the
+    /// exposure profile that publishes it is static and a face encodes one
+    /// way: the key names the transport, so the message it holds is fixed.
+    pub fn key(self) -> &'static str {
         match self {
-            FrameFormat::Png => "/robot_face/image_raw/compressed",
-            FrameFormat::Raw => "/robot_face/image_raw",
+            FrameFormat::Png => "display/face/compressed",
+            FrameFormat::Raw => "display/face",
         }
     }
 }
 
 /// A raw RGBA8 frame as a `sensor_msgs/Image` value (`encoding: "rgba8"`,
-/// `step: width * 4`).
-pub fn raw_frame(width: u32, height: u32, rgba: Vec<u8>, stamp: SystemTime) -> Value {
+/// `step: width * 4`), stamped `stamp` in the TF frame `frame_id`.
+pub fn raw_frame(
+    width: u32,
+    height: u32,
+    rgba: Vec<u8>,
+    stamp: SystemTime,
+    frame_id: &str,
+) -> Value {
     static TYPE: OnceLock<(low::Type, TypeRegistry)> = OnceLock::new();
     let (ty, registry) = TYPE.get_or_init(Image::arora_type_with_registry);
     seed_around_pixels(
         &Image {
-            header: header(stamp),
+            header: header(stamp, frame_id),
             height,
             width,
             encoding: "rgba8".to_string(),
@@ -88,14 +93,15 @@ pub fn raw_frame(width: u32, height: u32, rgba: Vec<u8>, stamp: SystemTime) -> V
     )
 }
 
-/// An encoded frame (`format` names the codec, e.g. `"png"`) as a
-/// `sensor_msgs/CompressedImage` value.
-pub fn compressed_frame(format: &str, data: Vec<u8>, stamp: SystemTime) -> Value {
+/// An encoded frame (`format` in the shape [`PNG_FORMAT`] has) as a
+/// `sensor_msgs/CompressedImage` value, stamped `stamp` in the TF frame
+/// `frame_id`.
+pub fn compressed_frame(format: &str, data: Vec<u8>, stamp: SystemTime, frame_id: &str) -> Value {
     static TYPE: OnceLock<(low::Type, TypeRegistry)> = OnceLock::new();
     let (ty, registry) = TYPE.get_or_init(CompressedImage::arora_type_with_registry);
     seed_around_pixels(
         &CompressedImage {
-            header: header(stamp),
+            header: header(stamp, frame_id),
             format: format.to_string(),
             data: Vec::new(),
         },
@@ -105,14 +111,14 @@ pub fn compressed_frame(format: &str, data: Vec<u8>, stamp: SystemTime) -> Value
     )
 }
 
-fn header(stamp: SystemTime) -> Header {
+fn header(stamp: SystemTime, frame_id: &str) -> Header {
     let since_epoch = stamp.duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO);
     Header {
         stamp: Time {
             sec: since_epoch.as_secs() as i32,
             nanosec: since_epoch.subsec_nanos(),
         },
-        frame_id: FRAME_ID.to_string(),
+        frame_id: frame_id.to_string(),
     }
 }
 
@@ -151,6 +157,7 @@ fn seed_around_pixels<T: Serialize>(
 mod tests {
     use super::*;
     use arora_msgs_ros2::{decode, encode, registry};
+    use arora_types::value_serde::bridge::from_value;
 
     /// The frame values round-trip through the bridge's registry and CDR codec
     /// under the names a `Flow::Out` endpoint declares.
@@ -166,22 +173,51 @@ mod tests {
 
     #[test]
     fn a_raw_frame_is_a_sensor_msgs_image() {
-        let value = raw_frame(2, 1, vec![1, 2, 3, 255, 4, 5, 6, 255], UNIX_EPOCH);
+        let value = raw_frame(
+            2,
+            1,
+            vec![1, 2, 3, 255, 4, 5, 6, 255],
+            UNIX_EPOCH,
+            "quori_latest",
+        );
         round_trips(FrameFormat::Raw, &value);
         let Value::Structure(image) = &value else {
             panic!("an Image is a structure");
         };
         assert_eq!(image.fields.len(), 7, "header + 6 Image fields");
+        let image: Image = from_value(value).expect("reads back as an Image");
+        assert_eq!(image.header.frame_id, "quori_latest");
     }
 
     #[test]
     fn a_png_frame_is_a_sensor_msgs_compressed_image() {
         let stamp = UNIX_EPOCH + Duration::new(1_700_000_000, 42);
-        let value = compressed_frame("png", vec![0x89, b'P', b'N', b'G'], stamp);
+        let value = compressed_frame(
+            PNG_FORMAT,
+            vec![0x89, b'P', b'N', b'G'],
+            stamp,
+            "hugo_latest",
+        );
         round_trips(FrameFormat::Png, &value);
         let Value::Structure(image) = &value else {
             panic!("a CompressedImage is a structure");
         };
         assert_eq!(image.fields.len(), 3, "header, format, data");
+        let image: CompressedImage = from_value(value).expect("reads back as a CompressedImage");
+        assert_eq!(image.header.frame_id, "hugo_latest");
+        assert_eq!(
+            (image.header.stamp.sec, image.header.stamp.nanosec),
+            (1_700_000_000, 42)
+        );
+    }
+
+    /// The two keys are what the ROS4HRI exposure profile publishes; a
+    /// transport writing the other's key would publish as the wrong message.
+    #[test]
+    fn each_format_has_its_own_key_named_for_its_transport() {
+        assert_eq!(FrameFormat::Raw.key(), "display/face");
+        assert_eq!(FrameFormat::Png.key(), "display/face/compressed");
+        assert_eq!(FrameFormat::Raw.ros_type(), "sensor_msgs/Image");
+        assert_eq!(FrameFormat::Png.ros_type(), "sensor_msgs/CompressedImage");
     }
 }

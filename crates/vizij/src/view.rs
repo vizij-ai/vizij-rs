@@ -139,6 +139,7 @@ fn setup_scene(mut commands: Commands, face: Res<Face>, asset_server: Res<AssetS
 #[allow(clippy::too_many_arguments)]
 fn apply_device_events(
     events: Option<Res<DeviceEvents>>,
+    mut frame_config: Option<ResMut<crate::frames::FrameConfig>>,
     mut face: ResMut<Face>,
     mut device: ResMut<DeviceRes>,
     mut options: ResMut<ViewOptions>,
@@ -179,6 +180,12 @@ fn apply_device_events(
                 for (_, mut camera_projection, mut camera_transform) in &mut cameras {
                     *camera_projection = projection.clone();
                     *camera_transform = transform;
+                }
+                // The published frames are stamped in the loaded face's own
+                // frame, so they follow the face.
+                if let Some(config) = frame_config.as_mut() {
+                    config.face_frame_id =
+                        crate::frames::default_frame_id(meta.bundle.face_id.as_deref(), &glb_path);
                 }
                 *face = Face {
                     meta: *meta,

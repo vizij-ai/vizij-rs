@@ -33,8 +33,9 @@ arora = "9.10"
 # The ROS 2 bridge, attached under `--ros2` (feature `ros2`). Heavy (ros2-client
 # + a DDS/Zenoh backend), so opt-in; the Studio bridge rides arora's own
 # `studio-bridge` feature instead (`--studio`). It carries the skill plane the
-# ros4hri exposure profile binds `/skill/look_at` through.
-arora-bridge-ros2 = { version = "6", optional = true, default-features = false }
+# ros4hri exposure profile binds `/skill/look_at` through; 6.3 is where that
+# profile publishes the face image, so the view declares nothing itself.
+arora-bridge-ros2 = { version = "6.3", optional = true, default-features = false }
 # The Status enumeration ids the gaze and tts contracts mark their action shapes with.
 arora-behavior-tree-types = "1"
 # The built-in key prefix the ROS 2 input declaration leaves out.
@@ -85,8 +86,10 @@ arora-msgs-ros2 = "1"
 # sidecar into the demo GLB before driving it over the ROS4HRI keys).
 vizij-bundle = { path = "../tools/vizij-bundle" }
 # The typed ROS 2 peer of the live action E2E (the semio-ai ros2-client fork;
-# the library imports as `ros2_client`).
-ros2-client = { package = "ros2-client-multi-rmw", version = "0.12", default-features = false, features = ["jazzy", "dds"] }
+# the library imports as `ros2_client`). The same line the bridge speaks: two
+# versions in one build are two crates, and the peer's topics stop typing
+# against the bridge's.
+ros2-client = { package = "ros2-client-multi-rmw", version = "0.13", default-features = false, features = ["jazzy", "dds"] }
 rand = "0.9"
 
 [features]

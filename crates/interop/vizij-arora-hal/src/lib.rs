@@ -15,7 +15,8 @@
 //! The rig itself measures nothing — it applies targets instantly — so the
 //! runtime's *reading* feed [`Hal::updates`] carries only what the host
 //! explicitly [`push_reading`](RigHal::push_reading)s: a genuine sensor such as
-//! the rendered frame (`display/face`), which a renderer publishes each frame.
+//! the rendered frame (`display/face` raw, `display/face/compressed` encoded),
+//! which a renderer publishes each frame.
 //! Applied actuations are deliberately **not** echoed here — that would make
 //! the runtime re-apply them as readings a frame later, overwriting anything
 //! fresher written to the store in between — so their echo lives on
@@ -122,7 +123,7 @@ impl RigHal {
     }
 
     /// Push a sensor reading into the runtime's [`Hal::updates`] feed — e.g. a
-    /// renderer publishing the rendered frame under `display/face`. The runtime
+    /// renderer publishing a rendered frame under `display/face/compressed`. The runtime
     /// lands it in the store and fans it to every bridge. This is the device
     /// *reporting back*, the counterpart to the actuation the runtime writes.
     pub fn push_reading(&self, reading: StateChange) {

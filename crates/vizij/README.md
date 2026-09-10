@@ -42,15 +42,16 @@ cargo run -p vizij -- --glb face.glb --snapshot out.png --size 763x760
 |---|---|---|
 | `--glb <path>` | required | the face GLB (embedded `RobotData` + `VIZIJ_bundle`) |
 | `--graphs <kinds>` | `rig,pose-driver,pose,standard-adaptation` | compose only these bundle graph kinds |
-| `--no-ros4hri` | off (mapping **on**) | drop the built-in [ROS4HRI](../../docs/ros4hri.md) mapping |
+| `--no-ros4hri` | off (ROS4HRI **on**) | drop the built-in [ROS4HRI](../../docs/ros4hri.md) mapping and, under `--ros2`, the ROS4HRI exposure (typed topics, face image, skills) |
 | `--program <id>` | bundle's active program | autoplay this motiongraph program |
 | `--no-autoplay` | off | hold the rig's authored/neutral pose |
 | `--no-stage-neutral` | off | don't stage the bundle's `neutralInputs` at boot |
 | `--snapshot <png>` | — | render one frame offscreen and exit (no window) |
-| `--headless` | off | run windowless, streaming frames into the store |
+| `--headless` | off | run windowless; streams frames when exposed as ROS4HRI or given `--frame-rate` |
 | `--size WxH` | `763x486` | offscreen render size (`--snapshot` / `--headless`) |
-| `--frame-rate <hz>` | `15` | publish rendered frames as HAL `display/face` readings; 0 disables |
-| `--frame-format <fmt>` | `png` | encoding of published frames: `png` a `sensor_msgs/CompressedImage`, `raw` a `sensor_msgs/Image` |
+| `--frame-rate <hz>` | `15` when exposed as ROS4HRI, else off | publish rendered frames as HAL readings under the key of their transport; 0 disables |
+| `--frame-format <fmt>` | `png` | encoding of published frames: `png` writes `display/face/compressed`, a `sensor_msgs/CompressedImage`; `raw` writes `display/face`, a `sensor_msgs/Image` |
+| `--frame-id <name>` | the face's id from its GLB | the TF frame published frames are stamped with (`header.frame_id`) |
 | `--background <rrggbb>` | `000000` | clear color |
 | `--ambient <f>` | `π/2` | three.js-style ambient intensity |
 | `--unlit` | off | render materials unlit (albedo passthrough) |
@@ -73,6 +74,10 @@ with its ROS4HRI exposure preset:
   `standard/ros4hri/*` keys;
 - the **`/skill/look_at`** action server (`interaction_skills/LookAt`):
   track / glance / reset policies, priority preemption, standard error codes;
+- the **face image** on the `image_transport` pair PAL OS documents:
+  `display/face/compressed` as a `sensor_msgs/CompressedImage` on
+  `/robot_face/image_raw/compressed` (`--frame-format png`, the default), or
+  `display/face` as a `sensor_msgs/Image` on `/robot_face/image_raw` (`raw`);
 - data topics under `/<namespace>/keys/<path>`: every store key **published**,
   and the face's **free inputs** — input paths no graph in the composition
   writes — **subscribed** as `std_msgs` (`Float64` for numeric controls,

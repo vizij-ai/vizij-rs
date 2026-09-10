@@ -43,8 +43,11 @@ stays with the face.
 > not this repo.** Its `ExposureProfile::ros4hri()` preset subscribes the typed
 > face topics — PAL's `/robot_face/{expression,look_at,tts}` and IIIA's
 > `/expressive_face/{look_at,speech}` — and routes their fields onto these keys,
+> publishes the [face image](#driving-a-key-from-ros-2) on
+> `/robot_face/image_raw[/compressed]`,
 > and binds the [`/skill/look_at`](#the-look_at-skill) action. The `vizij`
-> binary wires the preset automatically when run with `--ros2`. The message
+> binary wires the preset when run with `--ros2` (`--no-ros4hri` leaves it
+> out). The message
 > vocabulary (`hri_msgs`, `geometry_msgs`, `interaction_skills`, …) ships as
 > typed ROS 2 messages in
 > [`arora-msgs-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-msgs-ros2).
@@ -122,7 +125,7 @@ into the jaw and lip controls). A face without an adaptation graph has no
 viseme tier and the weight goes nowhere — `vizij-bundle validate` reports it.
 
 Watch it land: the device publishes every key it writes on the same plane,
-so the face's controls and, headless, its rendered frames are topics too:
+so the face's controls and its rendered frames are topics too:
 
 ```bash
 ros2 topic echo /quori/keys/rig/quori_latest/pose/control/propsrig_mouth_jawud_value
@@ -132,24 +135,34 @@ ros2 topic hz /robot_face/image_raw/compressed
 Scalar keys publish as the `std_msgs` type of their value (the face's
 controls are `Float32`).
 
-The rendered frame (`--headless --frame-rate 2`) is a `sensor_msgs` image on
-its own topic rather than under `/keys/`, because the value the view writes is
-already that message: `--frame-format png` publishes a
-`sensor_msgs/CompressedImage` on `/robot_face/image_raw/compressed`, and
-`--frame-format raw` a `sensor_msgs/Image` on `/robot_face/image_raw`. The
-names are `image_transport`'s, so `rqt_image_view` and the rest of the ROS
-image tooling display the face without a republisher.
+The rendered frame is a `sensor_msgs` image on its own topic rather than
+under `/keys/`, because the value the view writes is already that message
+and the ROS4HRI exposure profile publishes it as such. The frame's transport
+is its key: `--frame-format png` (the default) writes `display/face/compressed`,
+a `sensor_msgs/CompressedImage` the profile publishes on
+`/robot_face/image_raw/compressed`; `--frame-format raw` writes `display/face`,
+a `sensor_msgs/Image` on `/robot_face/image_raw`. The names are the
+`image_transport` pair PAL OS documents for the robot face, so `rqt_image_view`
+and the rest of the ROS image tooling display the face without a republisher.
+Each frame is stamped in the face's own TF frame — its id from the GLB
+(`quori_latest`), or `--frame-id`.
+
+Frames are the ROS4HRI face image, so they follow that exposure: a device on
+`--ros2` (without `--no-ros4hri`) publishes them at 15 Hz, with a window or
+headless, and a device not exposed as ROS4HRI publishes none. `--frame-rate`
+overrides either way (`--headless --frame-rate 2` for a slow stream, `0` for
+none).
 
 Two consequences worth knowing:
 
 * **The image topic is absolute, so `--ros2 <namespace>` does not move it.**
-  That is the point of a well-known ROS4HRI name — a consumer finds the face
-  without being told where it is — but it means two faces on one ROS graph
-  publish to the same topic. Run them on separate domains (`--ros2 :<domain>`),
-  or turn one of them off with `--frame-rate 0`.
+  That is the point of a well-known name — a consumer finds the face without
+  being told where it is — but it means two faces on one ROS graph publish to
+  the same topic. Run them on separate domains (`--ros2 :<domain>`), or turn
+  one of them off with `--frame-rate 0`.
 * **The frame is a ROS message, not a self-describing record.** Its fields are
   the registry's ids, so a consumer needs the `sensor_msgs` definition to read
-  it — every ROS tool has it, and nothing else reads `display/face` today. A
+  it — every ROS tool has it, and nothing else reads the frame keys today. A
   `CompressedImage` also carries no width or height; the dimensions are inside
   the PNG.
 

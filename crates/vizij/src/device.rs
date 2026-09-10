@@ -77,9 +77,12 @@ pub struct FaceConfig {
     pub program: ProgramSelect,
     /// Stage the bundle's neutral inputs into the store at boot.
     pub stage_neutral: bool,
-    /// Compose the built-in ROS4HRI mapping (`standard/ros4hri/*` keys drive
-    /// the face's standard controls). On by default in the binary, opt-out
-    /// via `--no-ros4hri`.
+    /// Serve ROS4HRI: compose the built-in mapping (`standard/ros4hri/*` keys
+    /// drive the face's standard controls) and, under `--ros2`, expose the
+    /// device through the ROS4HRI profile — the typed face topics, the face
+    /// image, the skill actions. On by default in the binary; `--no-ros4hri`
+    /// leaves a plain ROS 2 device, its keys under `/{namespace}/keys/…` and
+    /// nothing on the ROS4HRI names.
     pub ros4hri: bool,
 }
 
@@ -94,12 +97,6 @@ pub struct BridgeConfig {
     /// `--studio`: attach the Semio Studio bridge (env-configured).
     #[cfg(feature = "studio")]
     pub studio: bool,
-    /// The format the view will publish `display/face` in, when it publishes one
-    /// at all. It decides the ROS message the key is declared as, so it has to
-    /// be the format the view actually encodes with — a mismatch would have the
-    /// bridge encode a frame against the wrong message.
-    #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
-    pub frames: Option<crate::frames::FrameFormat>,
 }
 
 /// Attach the device's bridges to `builder`: always the open local bridge
@@ -114,49 +111,41 @@ pub struct BridgeConfig {
 async fn attach_bridges(
     mut builder: arora::AroraBuilder,
     bridges: &BridgeConfig,
+    ros4hri: bool,
     data_inputs: &[(String, arora_types::value::Type)],
 ) -> arora::AroraBuilder {
     #[cfg(not(any(feature = "ros2-dds", feature = "ros2-zenoh")))]
-    let _ = data_inputs;
+    let _ = (data_inputs, ros4hri);
     match arora::local_ws_bridge().await {
         Ok(bridge) => builder = builder.with_bridge(bridge),
         Err(e) => log::error!("local bridge: {e:?}"),
     }
     #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
     if let Some((namespace, domain)) = &bridges.ros2 {
-        // The ROS4HRI exposure profile: typed face topics fanning onto the
-        // standard keys, and the `/skill/look_at` action bound to the gaze
-        // skill the device describes.
-        let mut config = arora_bridge_ros2::Ros2BridgeConfig::new(namespace.clone(), *domain)
-            .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
+        let mut config = arora_bridge_ros2::Ros2BridgeConfig::new(namespace.clone(), *domain);
+        // The ROS4HRI exposure profile: the typed face topics fanning onto the
+        // standard keys, the face image on its `image_transport` pair, and
+        // the skill actions bound to the task runs the device describes. It
+        // is the whole ROS4HRI surface, so `--no-ros4hri` leaves it out.
+        if ros4hri {
+            config = config.with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
+        }
         // The face's free inputs — what nothing in the composed graph writes —
         // are the keys a remote may drive, each subscribed as the std_msgs type
         // of its kind (`ros2 topic info -v` shows it).
         for (path, ty) in data_inputs {
             config = config.with_input(path.clone(), ty.clone());
         }
-        // The rendered face is already a `sensor_msgs` image value, so declaring
-        // its type is all the bridge needs to publish it as the real message on
-        // the ROS4HRI image topic instead of the JSON fallback.
-        let frame = bridges
-            .frames
-            .map(vizij_arora_host::frames::FrameFormat::from);
-        if let Some(frame) = frame {
-            config = config.with_typed_output_on(
-                crate::frames::FRAME_KEY,
-                frame.ros_type(),
-                frame.topic(),
-            );
-        }
         builder = builder.with_bridge(Box::new(arora_bridge_ros2::Ros2Bridge::new(config).await));
         log::info!(
             "serving the ROS 2 bridge (namespace {namespace:?}, domain {domain}): {} input keys \
-             subscribed under /{namespace}/keys/<path>, plus the ROS4HRI typed topics, the \
-             /skill/look_at action{}",
+             subscribed under /{namespace}/keys/<path>{}",
             data_inputs.len(),
-            match frame {
-                Some(frame) => format!(" and the face image on {}", frame.topic()),
-                None => String::new(),
+            if ros4hri {
+                ", plus the ROS4HRI profile (the typed face topics, the face image, the skill \
+                 actions)"
+            } else {
+                ""
             }
         );
     }
@@ -474,6 +463,7 @@ fn supervise(
             let builder = attach_bridges(
                 builder.with_frontend(frontend),
                 &bridges,
+                config.ros4hri,
                 &free_inputs(&spec),
             )
             .await;
