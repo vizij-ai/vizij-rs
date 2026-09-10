@@ -167,10 +167,15 @@ which tiers a face covers. The same goes for the typed topics: publishing
 `hri_msgs/Expression` on `/robot_face/expression` lands on
 `standard/ros4hri/expression/*`.
 
-The lips are not driven this way: a viseme is a played thing, not a level,
-so the mouth shapes belong to the viseme players ([skills](skills.md)).
+The lips can be driven this way — each of the fifteen viseme weights is a
+free input at `/<namespace>/keys/rig/<faceId>/standard/vizij/viseme/<shape>`
+(the face's rig reads them under its prefix), so a producer with its own
+timing writes them raw — but a viseme is a played thing, not a level: the
+envelope and the crossfade are otherwise the viseme players'
+([skills](skills.md)), and a running player writes every weight each tick.
 Their state is a published key: while a `play_viseme` or `say` run drives
 the lips, `rig/<faceId>/standard/vizij/viseme` carries the current shape.
+[Bring Your Own Visemes](https://github.com/vizij-ai/vizij-docs/blob/main/current_documentation/guidebook/deploy/bring-your-own-visemes.md) compares the entry points.
 
 Watch it land: the device publishes every key it writes on the same plane,
 so the face's controls and its rendered frames are topics too:
