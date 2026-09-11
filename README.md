@@ -318,7 +318,7 @@ Each domain stack keeps the Rust crate, WASM crate, and npm wrapper versions in 
 
 ### Prerequisites
 
-- `NPM_TOKEN` in repo secrets with publish rights for the `@vizij/*` scope.
+- npm trusted publishing (OIDC): the workflow holds `id-token: write` and each `@vizij/*` package names this repository's `publish-npm` workflow as its trusted publisher on npmjs.com. There is no token in the repo's secrets. Trusted publishing cannot create a package, so a new `@vizij/*` package's first version is published by hand; the workflow handles every later one.
 - Each publishable package has `"private": false` and a `publishConfig.access` entry.
 
 ### How a release flows
@@ -326,7 +326,7 @@ Each domain stack keeps the Rust crate, WASM crate, and npm wrapper versions in 
 1. Bump the Rust + WASM crate versions in their `Cargo.toml` files (npm wrappers stay on autopilot).
 2. Run `pnpm changeset` and select the npm packages under `npm/@vizij/*` that changed. Commit the generated markdown under `.changeset/`.
 3. Once those changes land on the branch you want to ship (e.g., `graph-refactor`), cut a tag named `npm-pub-<something>` (for example `npm-pub-graph-refactor-2025-11-11`) that points at that branch head, and push both the tag and branch to origin. You can also trigger the workflow manually with `workflow_dispatch`.
-4. The `publish-npm` workflow finds the remote branch that contains the tagged commit, checks it out, runs `pnpm ci:version` (which deletes the processed changesets, bumps package versions, and commits `chore(release): version packages` onto that same branch), then runs `pnpm ci:publish`. That script temporarily rewrites any `workspace:` dependency ranges to real semver versions, rebuilds the wasm/shared packages, executes `changeset publish`, and restores the workspace protocol before the job pushes anything back. The workflow pushes the release commit and the generated package tags back to the branch, using `NPM_TOKEN` for provenance-enabled publishes.
+4. The `publish-npm` workflow finds the remote branch that contains the tagged commit, checks it out, runs `pnpm ci:version` (which deletes the processed changesets, bumps package versions, and commits `chore(release): version packages` onto that same branch), then runs `pnpm ci:publish`. That script temporarily rewrites any `workspace:` dependency ranges to real semver versions, rebuilds the wasm/shared packages, executes `changeset publish`, and restores the workspace protocol before the job pushes anything back. The workflow pushes the release commit and the generated package tags back to the branch; the publishes carry provenance.
 5. After the workflow finishes, pull your feature branch so you have the auto-generated release commit locally.
 
 Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wasm bundling, npm pack contents) before pushing real releases.
