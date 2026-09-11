@@ -1,4 +1,4 @@
-# vizij-render-core
+# vizij-render
 
 What draws a Vizij face, separated from what runs it.
 
@@ -43,7 +43,7 @@ they are the positions that frame drew rather than the previous frame's.
 
 ## Tests
 
-`cargo test -p vizij-render-core` covers the camera fit (contain, cover,
+`cargo test -p vizij-render` covers the camera fit (contain, cover,
 stretch, per-axis zoom, and agreement with Bevy's own scaling modes) and the
 rule that a pointer hit resolves to the nearest ancestor carrying an element.
 

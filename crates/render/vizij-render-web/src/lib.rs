@@ -2,12 +2,12 @@
 //! The Vizij renderer mounted on a page.
 //!
 //! What the page provides: a canvas, a GLB, and values. What it gets back is
-//! the same renderer the native app runs — `vizij-render-core` — with a values
+//! the same renderer the native app runs — `vizij-render` — with a values
 //! feed the page writes into.
 //!
 //! The GLB arrives twice by design. Bevy's asset server loads it by path to
 //! get meshes, materials and morph targets; the same bytes are handed in
-//! directly so [`vizij_render_core::FaceMeta`] can read the `RobotData`
+//! directly so [`vizij_render::FaceMeta`] can read the `RobotData`
 //! extension, which Bevy's loader does not surface. The browser serves the
 //! second read from cache.
 
@@ -21,7 +21,7 @@ use bevy::prelude::*;
 use bevy::window::WindowPlugin;
 use vizij_api_core::value::{float, vec3};
 use vizij_api_core::{TypedPath, Value};
-use vizij_render_core::{
+use vizij_render::{
     Anchor, AnchorSink, AnimatableInfo, Face, FaceMeta, Fit, PickSink, PoseFeed, ViewOffsetFeed,
     ViewOptions, ViewPlugin,
 };

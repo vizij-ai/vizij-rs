@@ -1,6 +1,6 @@
 # vizij-render-web
 
-`vizij-render-core` mounted on a page: the same renderer the native app runs,
+`vizij-render` mounted on a page: the same renderer the native app runs,
 in a browser canvas, over WebGPU.
 
 Demonstrative. Nothing in this repository depends on it, and the web apps keep

@@ -3,7 +3,7 @@ name = "vizij-render-web"
 version = "0.0.0"
 edition = { workspace = true }
 publish = false
-description = "The Vizij renderer in a browser canvas: a wasm entry mounting vizij-render-core on a page."
+description = "The Vizij renderer in a browser canvas: a wasm entry mounting vizij-render on a page."
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -11,7 +11,7 @@ crate-type = ["cdylib", "rlib"]
 # wasm32-only, so the crate takes part in a native `cargo build`/`cargo test`
 # of the workspace without pulling a browser target into the host link.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-vizij-render-core = { path = "../vizij-render-core" }
+vizij-render = { path = "../vizij-render" }
 vizij-api-core = { path = "../../api/vizij-api-core" }
 
 # The web backend, on top of the feature set the render crate declares.

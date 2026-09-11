@@ -1,8 +1,8 @@
 //! The app's half of the view: the operator's runtime changes, and the device
-//! standing behind `vizij-render-core`'s pose feed.
+//! standing behind `vizij-render`'s pose feed.
 //!
 //! The renderer itself — the scene join, the camera fit, the material
-//! conventions, the value application — is `vizij-render-core`. What is here
+//! conventions, the value application — is `vizij-render`. What is here
 //! is what only this app has: a live Arora device, and an operator who can
 //! recolor the background or swap the whole face while it runs.
 
@@ -15,7 +15,7 @@ use bevy::prelude::*;
 
 use crate::device::DeviceEvent;
 
-pub use vizij_render_core::view::{
+pub use vizij_render::view::{
     camera_fit, BindingIndex, Face, Fit, OffscreenTarget, PoseFeed, ViewCamera, ViewOptions,
     ViewSystems,
 };
@@ -44,7 +44,7 @@ pub struct ViewPlugin;
 
 impl Plugin for ViewPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(vizij_render_core::ViewPlugin)
+        app.add_plugins(vizij_render::ViewPlugin)
             .add_systems(Update, apply_device_events.before(ViewSystems));
     }
 }

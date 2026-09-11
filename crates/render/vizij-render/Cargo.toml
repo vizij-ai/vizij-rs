@@ -1,5 +1,5 @@
 [package]
-name = "vizij-render-core"
+name = "vizij-render"
 version = "0.0.0"
 edition = { workspace = true }
 publish = false

@@ -11183,7 +11183,7 @@ dependencies = [
  "vizij-bundle",
  "vizij-graph-core",
  "vizij-piper",
- "vizij-render-core",
+ "vizij-render",
 ]
 
 [[package]]
@@ -11427,7 +11427,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "vizij-render-core"
+name = "vizij-render"
 version = "0.0.0"
 dependencies = [
  "anyhow",
@@ -11452,7 +11452,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "tracing",
  "vizij-api-core",
- "vizij-render-core",
+ "vizij-render",
  "wasm-bindgen",
  "web-sys",
 ]
