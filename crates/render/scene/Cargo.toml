@@ -13,9 +13,13 @@ log = "0.4"
 env_logger = "0.11"
 clap = { version = "4", features = ["derive"] }
 
-# Deliberately not depending on `vizij-render` yet. What the scene actually
-# needs from the face crate is a finding of this spike, so the dependency gets
-# added when something reaches for it rather than assumed up front.
+# What the scene reaches into the face crate for, as of the screen work:
+# `ViewPlugin` and its `Face`/`PoseFeed`/`ViewOptions`/`OffscreenTarget`/
+# `FaceLayer` resources to draw a face into a texture, and `meta::glb_json_chunk`
+# to read the robot's own `RobotData`, which Bevy's glTF loader drops. The
+# second of those is not about faces at all — it is the seam where an
+# `arora-viz-core` would start.
+vizij-render = { path = "../vizij-render" }
 
 # The 3d stack: glTF loading, PBR (which carries shadows), the core pipeline,
 # windowing, and mesh picking. Composed rather than taking the `3d` collection,

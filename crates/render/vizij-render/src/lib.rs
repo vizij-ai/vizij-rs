@@ -29,6 +29,6 @@ pub mod view;
 pub use interact::{Anchor, AnchorSink, FaceElement, PickSink, ViewOffsetFeed};
 pub use meta::{AnimatableInfo, Binding, Element, FaceMeta, FeatureKind};
 pub use view::{
-    BindingIndex, Face, Fit, OffscreenTarget, PoseFeed, ViewCamera, ViewOptions, ViewPlugin,
-    ViewSystems,
+    BindingIndex, Face, FaceLayer, FaceRoot, Fit, OffscreenTarget, PoseFeed, ViewCamera,
+    ViewOptions, ViewPlugin, ViewSystems,
 };

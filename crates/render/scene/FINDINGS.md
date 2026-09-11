@@ -3,34 +3,37 @@
 What a Bevy scene costs and what it takes to build, measured on the real robot
 (`Quori_2_RevB.glb`) rather than on a face's flat planes.
 
-Machine: Apple Silicon, macOS, release build, 1280x800, vsync (see below).
+Machine: Apple Silicon (14" MacBook Pro, ProMotion), macOS, release build,
+1280x800, shadows on, camera orbiting.
 
 ## 1. Frame time on the real load
 
-One robot is 24 meshes, 131,132 triangles, 24 materials. It renders at the
-display's cadence with every mesh passing frustum culling — 16.67ms p50,
-18.5ms p95.
+One robot is 24 meshes, 131,132 triangles, 24 materials, with shadows on and
+the camera orbiting. **It costs 2.40ms a frame.**
 
-That number alone says only that the load fits, because vsync cannot be lifted
-here: wgpu falls back to Fifo for `AutoNoVsync` on macOS, so `--uncapped`
-reports the same 16.67ms. Headroom therefore gets measured by multiplying the
-real asset until the cadence breaks.
+| robots | meshes | triangles | p50 ms | p95 ms |  fps |
+| -----: | -----: | --------: | -----: | -----: | ---: |
+|      1 |     24 |      131k |   2.40 |   2.72 |  417 |
+|      4 |     96 |      525k |   2.86 |   3.21 |  349 |
+|     16 |    384 |      2.1M |   8.25 |   8.69 |  121 |
+|     36 |    864 |      4.7M |  16.35 |  17.08 |   61 |
+|     64 |  1,536 |      8.4M |  27.33 |  32.38 |   37 |
 
-| robots | meshes | triangles | p50 ms | p95 ms | holds 60fps |
-| -----: | -----: | --------: | -----: | -----: | ----------- |
-|      1 |     24 |      131k |  16.71 |  18.53 | yes         |
-|     16 |    384 |      2.1M |  16.70 |  18.08 | yes         |
-|     36 |    864 |      4.7M |  16.69 |  17.95 | yes         |
-|     49 |  1,176 |      6.4M |  16.66 |  17.95 | yes         |
-|     64 |  1,536 |      8.4M |  16.77 |  18.61 | yes         |
-|     81 |  1,944 |     10.6M |  17.62 |  25.72 | no          |
-|    100 |  2,400 |     13.1M |  19.87 |  31.90 | no          |
-|    225 |  5,400 |     29.5M |  51.35 |  56.83 | no          |
+So a 120Hz budget holds about 16 robots and a 60Hz budget about 36. One robot
+spends roughly a third of a 120Hz frame and a seventh of a 60Hz one.
 
-The knee sits between 64 and 81 robots. One robot is roughly 1/64th of what
-this machine holds at 60fps.
+**Measuring this at all takes care, because a windowed run measures the
+display, not the renderer.** `--uncapped` does nothing: wgpu ignores
+`AutoNoVsync` on macOS and stays on Fifo. Worse, this machine is ProMotion, so
+the refresh rate itself moves — the same robot read 16.67ms in one run and
+8.33ms in another with *more* work in the scene, because the panel had settled
+at 60Hz in the first and 120Hz in the second. Both are exact multiples of a
+refresh interval, which is the tell. The numbers above come from `--offscreen`,
+which renders into an image and leaves the window empty: with nothing
+presenting to a surface, there is no vsync to wait on and the frame time is the
+work.
 
-**Two things that number is not.** The copies share 24 distinct meshes and 24
+**Two things the table is not.** The copies share 24 distinct meshes and 24
 materials, so Bevy batches them; the triangle throughput is real but the
 draw-call count is optimistic against 1,536 genuinely distinct objects. And
 this is desktop-native — Studio ships to the browser, where the same scene runs
@@ -61,7 +64,62 @@ Bevy's `RenderTarget::Image` plus `base_color_texture`.
 `PivotControls` as `rotationLimits`, on the third axis, after rotating the
 control so its +Z lies along the joint axis.
 
-## 3. Bevy 0.19 details this cost time on
+## 3. The face on the screen
+
+`scene --face Quori_Current_Extended.glb` draws a Vizij face into the screen
+the robot declares. It costs **1.05ms** on top of the bare robot — 3.45ms
+against 2.40ms — for a second camera pass into a 254x160 target and 15 more
+meshes. The face crate reports `95 bindings over 18 elements`, so it is bound
+and drivable, not merely drawn.
+
+The path itself was short, because the face crate already had most of it:
+`OffscreenTarget` puts a `RenderTarget::Image` on the face's camera, and the
+quad's `StandardMaterial` takes that same handle as `base_color_texture`. That
+is the same shape as Studio's `RenderTexture` attached as `map`.
+
+**What embedding it actually required**, and what this says about the split:
+
+- **A render layer.** Render layers are read per entity and are *not*
+  inherited, so a face sharing a world with a scene needs its layer stamped on
+  every entity its glTF spawned, not on the root. Without it the face's camera
+  draws the robot and the robot's camera draws the face. Added as an optional
+  `FaceLayer` resource, applied to the camera and, in `index_scene`, to the
+  whole spawned subtree.
+- **A scope for the name lookup.** `index_scene` matched elements against
+  `Query<(Entity, &Name)>` over the *entire world*. A robot's links and joints
+  carry names too, so embedding could bind a face feature to whatever else
+  happened to share a name. It now walks the face's own subtree, marked by a
+  new `FaceRoot`.
+- **Nothing else changed.** Both are additive; a host that inserts no
+  `FaceLayer` behaves exactly as before.
+
+**The limit this leaves** is that `Face`, `PoseFeed`, `ViewOptions`,
+`OffscreenTarget` and `FaceLayer` are all *resources* — one of each per world —
+so one app can host exactly one face. Studio needs more than one: several
+robots in a scene, or a picture-in-picture preview beside the scene. Making
+that work means these become components on a face-instance entity and the
+systems iterate instances rather than reading a global. That is the single
+biggest structural item, and it is the one that should decide what
+`arora-viz-core` looks like.
+
+A smaller one: the face re-renders every frame whether or not its pose moved.
+Studio's `RenderTexture` has the same default. Gating it on a pose change is
+the obvious saving, and it is what makes many screens affordable.
+
+### What the scene pulled from the face crate
+
+Two things, and only one of them is about faces:
+
+- `ViewPlugin` with `Face` / `PoseFeed` / `ViewOptions` / `OffscreenTarget` /
+  `FaceLayer` — drawing a face into a texture.
+- `meta::glb_json_chunk` — reading a GLB's JSON chunk, which the scene needs
+  for `RobotData` and which has nothing to do with faces.
+
+The second is the seam. A shared foundation starts with GLB/`RobotData`
+reading and the render-target plumbing; the face-specific half stays in the
+face crate.
+
+## 4. Bevy 0.19 details this cost time on
 
 - `AmbientLight` is a **component** (on the camera), not a resource.
 - The glTF scene root is `WorldAssetRoot`, not `SceneRoot`.
@@ -74,7 +132,7 @@ control so its +Z lies along the joint axis.
   to measured bounds for this reason, and visibility is reported as
   "N/M meshes visible after culling" so an empty frame cannot read as a fast one.
 
-## 4. Reading a frame back does not work here
+## 5. Reading a frame back does not work here
 
 `Screenshot::primary_window()` returns pure black — not the clear colour —
 when the window is not the composited frontmost surface, which is the normal

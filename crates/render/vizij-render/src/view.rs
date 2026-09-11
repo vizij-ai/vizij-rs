@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 
+use bevy::camera::visibility::RenderLayers;
 use bevy::camera::{CameraProjection, Projection, RenderTarget, ScalingMode, SubCameraView};
 use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::gltf::GltfAssetLabel;
@@ -112,9 +113,24 @@ fn shade(color: Color, factor: f32) -> Color {
 #[derive(Resource, Clone)]
 pub struct OffscreenTarget(pub Handle<Image>);
 
+/// When present, the face draws on this render layer instead of the default
+/// one.
+///
+/// A host that owns the whole window does not need this. One that puts the
+/// face inside a larger world does: render layers are read per entity and are
+/// not inherited, so without a layer of its own the face's camera draws the
+/// host's scene and the host's camera draws the face.
+#[derive(Resource, Clone)]
+pub struct FaceLayer(pub RenderLayers);
+
 /// Marker for the view camera.
 #[derive(Component)]
 pub struct ViewCamera;
+
+/// Marker for the entity the face's glTF scene spawns under, so the systems
+/// below can tell the face's entities from everything else in the world.
+#[derive(Component)]
+pub struct FaceRoot;
 
 /// Index from animatable UUID to the scene entity/feature it drives,
 /// built once the GLB scene has spawned.
@@ -152,8 +168,11 @@ impl Plugin for ViewPlugin {
 }
 
 fn setup_scene(mut commands: Commands, face: Res<Face>, asset_server: Res<AssetServer>) {
-    commands.spawn(WorldAssetRoot(
-        asset_server.load(GltfAssetLabel::Scene(0).from_asset(face.glb_path.clone())),
+    commands.spawn((
+        WorldAssetRoot(
+            asset_server.load(GltfAssetLabel::Scene(0).from_asset(face.glb_path.clone())),
+        ),
+        FaceRoot,
     ));
 }
 
@@ -261,6 +280,7 @@ fn setup_camera(
     face: Res<Face>,
     options: Res<ViewOptions>,
     offscreen: Option<Res<OffscreenTarget>>,
+    layer: Option<Res<FaceLayer>>,
 ) {
     // Lighting is baked into the materials (see `ViewOptions::albedo_factor`);
     // no scene light is spawned.
@@ -284,6 +304,9 @@ fn setup_camera(
     if let Some(target) = &offscreen {
         camera.insert(RenderTarget::Image(target.0.clone().into()));
     }
+    if let Some(layer) = &layer {
+        camera.insert(layer.0.clone());
+    }
 }
 
 /// Joins the spawned GLB scene with the RobotData bindings: node `Name` →
@@ -298,6 +321,8 @@ fn index_scene(
     names: Query<(Entity, &Name)>,
     parents: Query<&ChildOf>,
     children: Query<&Children>,
+    roots: Query<Entity, With<FaceRoot>>,
+    layer: Option<Res<FaceLayer>>,
     meshes: Query<(Entity, &MeshMaterial3d<StandardMaterial>), With<Mesh3d>>,
     morphs: Query<Entity, With<MorphWeights>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -320,8 +345,32 @@ fn index_scene(
         }
         depth
     };
+    // Only the face's own entities. A host embedding the face shares the world
+    // with its own named scene — a robot's links and joints carry names too —
+    // and matching an element against those would bind a face feature to
+    // whatever else happened to be called the same thing.
+    let Ok(root) = roots.single() else {
+        return;
+    };
+    let mut face_entities = Vec::new();
+    let mut stack = vec![root];
+    while let Some(entity) = stack.pop() {
+        face_entities.push(entity);
+        if let Ok(kids) = children.get(entity) {
+            stack.extend(kids.iter());
+        }
+    }
+
+    // Render layers are per entity and are not inherited, so the layer has to
+    // reach every entity the scene spawned, not just its root.
+    if let Some(layer) = &layer {
+        for entity in &face_entities {
+            commands.entity(*entity).insert(layer.0.clone());
+        }
+    }
+
     let mut by_name: HashMap<&str, Entity> = HashMap::new();
-    for (entity, name) in &names {
+    for (entity, name) in face_entities.iter().filter_map(|e| names.get(*e).ok()) {
         by_name
             .entry(name.as_str())
             .and_modify(|kept| {

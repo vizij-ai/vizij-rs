@@ -5,24 +5,32 @@
 //! on the flat planes a face is made of. Everything else in the spike rests on
 //! this, so it is measured before anything is built on top of it.
 //!
-//! Two numbers, because they answer different questions. Capped (the default)
-//! presents on vsync and says whether the cadence holds; its frame time is the
-//! display's, not the renderer's. Uncapped removes the presentation wait, so
-//! frame time is the work itself and the gap to 16.7ms is the headroom left
-//! for everything the spike has not built yet.
+//! **Measure with `--offscreen`.** A windowed run reports the display, not the
+//! renderer: `--uncapped` cannot lift vsync on macOS, where wgpu stays on
+//! Fifo, and on a ProMotion panel the refresh rate itself moves, so the same
+//! scene reads 8.33ms or 16.67ms depending on where the display has settled.
+//! Both are exact refresh intervals, which is how to recognise the trap.
+//! Rendering into an image leaves nothing presenting to a surface, and then
+//! the frame time is the work.
 //!
 //! Percentiles rather than an average: a mean hides the stalls that make a
 //! viewport feel bad, and the 99th is what a person notices.
 
+mod robot;
+
 use std::path::PathBuf;
 
 use bevy::camera::primitives::Aabb;
+use bevy::camera::visibility::RenderLayers;
 use bevy::camera::RenderTarget;
 use bevy::gltf::GltfAssetLabel;
 use bevy::prelude::*;
 use bevy::render::render_resource::{TextureFormat, TextureUsages};
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 use bevy::window::PresentMode;
+use vizij_render::{
+    Face, FaceLayer, FaceMeta, Fit, OffscreenTarget, PoseFeed, ViewOptions, ViewPlugin,
+};
 
 #[derive(clap::Parser, Resource, Clone)]
 #[command(about = "Render a robot GLB and report what it costs per frame.")]
@@ -53,17 +61,15 @@ struct Cli {
     /// rather than the display's cadence.
     ///
     /// Note that wgpu falls back to Fifo where a platform cannot honour this —
-    /// macOS among them — in which case the cadence stands and `--copies` is
-    /// the way to find the ceiling.
+    /// macOS among them, where it does nothing at all. Use `--offscreen`
+    /// there.
     #[arg(long, default_value_t = false)]
     uncapped: bool,
 
     /// Spawn the robot this many times, in a grid.
     ///
-    /// Where vsync cannot be lifted, a frame time pinned to the display says
-    /// only that the load fits, not by how much. Multiplying the real asset
-    /// until the cadence breaks measures the headroom in the units that
-    /// matter: how many robots' worth of scene this holds.
+    /// Multiplying the real asset states the headroom in the units that
+    /// matter: how many robots' worth of scene a frame budget holds.
     #[arg(long, default_value_t = 1)]
     copies: u32,
 
@@ -76,6 +82,18 @@ struct Cli {
     /// nothing was read back — and these two separate those cases.
     #[arg(long, default_value_t = false)]
     marker: bool,
+
+    /// Draw this face onto the screen the robot declares.
+    #[arg(long)]
+    face: Option<String>,
+
+    /// Render into an offscreen target and leave the window empty.
+    ///
+    /// With nothing presenting to the surface there is no vsync to wait on, so
+    /// frame time becomes the work itself. This is the only way to get past
+    /// the display's cadence here, since wgpu ignores `--uncapped` on macOS.
+    #[arg(long, default_value_t = false)]
+    offscreen: bool,
 }
 
 /// Frame durations, collected after a warm-up so shader compilation and asset
@@ -122,6 +140,13 @@ struct Census {
     /// for a visible robot: a camera pointed at nothing culls everything and
     /// still reports a healthy frame rate.
     visible_peak: usize,
+    /// The face's own meshes, counted apart from the robot's.
+    face_meshes: usize,
+}
+
+/// Whether an entity belongs to the face rather than the scene around it.
+fn on_face_layer(layers: Option<&RenderLayers>) -> bool {
+    layers.is_some_and(|layers| layers.intersects(&RenderLayers::layer(FACE_LAYER)))
 }
 
 /// Where the model actually sits, measured rather than assumed. A glTF carries
@@ -137,59 +162,171 @@ struct Framing {
 
 const WARMUP_SECONDS: f32 = 2.0;
 
+/// The layer the face draws on, so the two scenes sharing this world do not
+/// draw into each other's views.
+const FACE_LAYER: usize = 1;
+
 #[derive(Component)]
 struct OrbitCamera;
+
+/// The screen the robot declared, and the texture a face is drawing into.
+#[derive(Resource)]
+struct ScreenMount {
+    screen: robot::Screen,
+    texture: Handle<Image>,
+}
 
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let cli = <Cli as clap::Parser>::parse();
 
-    App::new()
-        .add_plugins(
-            DefaultPlugins
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        title: "scene spike".into(),
-                        resolution: (1280u32, 800u32).into(),
-                        present_mode: if cli.uncapped {
-                            PresentMode::AutoNoVsync
-                        } else {
-                            PresentMode::AutoVsync
-                        },
-                        ..default()
-                    }),
+    let mut app = App::new();
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "scene spike".into(),
+                    resolution: (1280u32, 800u32).into(),
+                    present_mode: if cli.uncapped {
+                        PresentMode::AutoNoVsync
+                    } else {
+                        PresentMode::AutoVsync
+                    },
                     ..default()
-                })
-                .set(AssetPlugin {
-                    file_path: cli.assets.to_string_lossy().into_owned(),
-                    ..default()
-                })
-                .build()
-                // The process installs its own logger before Bevy starts.
-                .disable::<bevy::log::LogPlugin>(),
+                }),
+                ..default()
+            })
+            .set(AssetPlugin {
+                file_path: cli.assets.to_string_lossy().into_owned(),
+                ..default()
+            })
+            .build()
+            // The process installs its own logger before Bevy starts.
+            .disable::<bevy::log::LogPlugin>(),
+    )
+    .init_resource::<Frames>()
+    .init_resource::<Census>()
+    .init_resource::<Framing>()
+    .init_resource::<Capture>()
+    .add_systems(Startup, setup)
+    .add_systems(
+        Update,
+        (
+            take_census,
+            spawn_marker,
+            orbit_camera,
+            count_visible,
+            capture,
+            measure,
         )
-        .insert_resource(cli)
-        .init_resource::<Frames>()
-        .init_resource::<Census>()
-        .init_resource::<Framing>()
-        .init_resource::<Capture>()
-        .add_systems(Startup, setup)
-        .add_systems(
-            Update,
-            (
-                take_census,
-                spawn_marker,
-                orbit_camera,
-                count_visible,
-                capture,
-                measure,
-            )
-                .chain(),
-        )
-        .run();
+            .chain(),
+    );
+
+    if cli.face.is_some() {
+        mount_face(&mut app, &cli);
+    }
+    app.insert_resource(cli).run();
 }
 
-fn setup(mut commands: Commands, cli: Res<Cli>, assets: Res<AssetServer>) {
+/// Puts a face on the screen the robot declares.
+///
+/// This runs before the app does, because the face crate's own startup reads
+/// the target and the layer — and because the screen's size, which sets the
+/// texture's, comes out of the robot's JSON rather than out of the world.
+fn mount_face(app: &mut App, cli: &Cli) {
+    let face_glb = cli.face.clone().expect("checked by the caller");
+    let read = |name: &str| std::fs::read(cli.assets.join(name));
+
+    let screen = match read(&cli.glb)
+        .map_err(anyhow::Error::from)
+        .and_then(|bytes| robot::find_screen(&bytes))
+    {
+        Ok(screen) => screen,
+        Err(error) => {
+            log::error!("no screen to draw a face on: {error:#}");
+            return;
+        }
+    };
+    let meta = match read(&face_glb)
+        .map_err(anyhow::Error::from)
+        .and_then(|bytes| FaceMeta::from_glb_bytes(&bytes))
+    {
+        Ok(meta) => meta,
+        Err(error) => {
+            log::error!("could not read {face_glb}: {error:#}");
+            return;
+        }
+    };
+
+    let (width, height) = screen.texture_size();
+    log::info!(
+        "screen: {:.3}x{:.3}m at {:.2?}, drawing {face_glb} into {width}x{height}",
+        screen.width,
+        screen.height,
+        screen.transform.translation,
+    );
+
+    // Sized from the screen's own metres and pixels-per-metre, as Studio sizes
+    // its RenderTexture. No COPY_SRC: this texture is sampled by the quad's
+    // material on the GPU and never read back.
+    let texture = app
+        .world_mut()
+        .resource_mut::<Assets<Image>>()
+        .add(Image::new_target_texture(
+            width,
+            height,
+            TextureFormat::Rgba8Unorm,
+            Some(TextureFormat::Rgba8UnormSrgb),
+        ));
+
+    app.insert_resource(OffscreenTarget(texture.clone()))
+        .insert_resource(FaceLayer(RenderLayers::layer(FACE_LAYER)))
+        .insert_resource(Face {
+            meta,
+            glb_path: face_glb,
+        })
+        .insert_resource(ViewOptions {
+            background: Color::BLACK,
+            fit: Fit::Contain,
+            zoom: Vec2::ONE,
+            ambient: std::f32::consts::FRAC_PI_2,
+            unlit: false,
+        })
+        // No device drives this spike, so the face holds its authored pose.
+        // What is being proved here is the path to the screen, not the values.
+        .insert_resource(PoseFeed::new(Vec::new))
+        .insert_resource(ScreenMount { screen, texture })
+        .add_plugins(ViewPlugin)
+        .add_systems(Startup, spawn_screen);
+}
+
+/// Builds the quad the robot's screen only describes, and hangs the face's
+/// texture on it.
+fn spawn_screen(
+    mount: Res<ScreenMount>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut commands: Commands,
+) {
+    commands.spawn((
+        Mesh3d(meshes.add(Rectangle::new(mount.screen.width, mount.screen.height))),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color_texture: Some(mount.texture.clone()),
+            // The face bakes its own lighting, so the scene's lights must not
+            // get a second say over it.
+            unlit: true,
+            ..default()
+        })),
+        mount.screen.transform,
+    ));
+}
+
+fn setup(
+    mut commands: Commands,
+    cli: Res<Cli>,
+    assets: Res<AssetServer>,
+    mut images: ResMut<Assets<Image>>,
+) {
     log::info!(
         "loading {} ({})",
         cli.glb,
@@ -208,7 +345,7 @@ fn setup(mut commands: Commands, cli: Res<Cli>, assets: Res<AssetServer>) {
     }
 
     // Placed properly once the model's bounds are known; see `take_census`.
-    commands.spawn((
+    let mut camera = commands.spawn((
         Camera3d::default(),
         // Ambient light rides the camera in 0.19 rather than being a resource.
         AmbientLight {
@@ -218,6 +355,15 @@ fn setup(mut commands: Commands, cli: Res<Cli>, assets: Res<AssetServer>) {
         },
         OrbitCamera,
     ));
+    if cli.offscreen {
+        let target = images.add(Image::new_target_texture(
+            1280,
+            800,
+            TextureFormat::Rgba8Unorm,
+            Some(TextureFormat::Rgba8UnormSrgb),
+        ));
+        camera.insert(RenderTarget::Image(target.into()));
+    }
 
     // A directional light is a direction, not a position, so this one needs no
     // fitting — only its shadow cascades do, once the scale is known.
@@ -282,7 +428,12 @@ fn take_census(
     frames: Res<Frames>,
     mut census: ResMut<Census>,
     mut framing: ResMut<Framing>,
-    meshes: Query<(&Mesh3d, &GlobalTransform, Option<&Aabb>)>,
+    meshes: Query<(
+        &Mesh3d,
+        &GlobalTransform,
+        Option<&Aabb>,
+        Option<&RenderLayers>,
+    )>,
     materials: Query<&MeshMaterial3d<StandardMaterial>>,
     assets: Res<Assets<Mesh>>,
 ) {
@@ -293,7 +444,13 @@ fn take_census(
     let mut triangles = 0;
     let mut min = Vec3::splat(f32::INFINITY);
     let mut max = Vec3::splat(f32::NEG_INFINITY);
-    for (handle, global, aabb) in &meshes {
+    for (handle, global, aabb, layers) in &meshes {
+        // The face lives in this world too, off to one side and metres wide.
+        // Counting it would price the wrong scene, and fitting the camera to
+        // it would push the robot into the distance.
+        if on_face_layer(layers) {
+            continue;
+        }
         count += 1;
         if let Some(mesh) = assets.get(&handle.0) {
             triangles += match mesh.indices() {
@@ -323,6 +480,10 @@ fn take_census(
     census.triangles = triangles;
     census.materials = materials.iter().count();
     census.taken = true;
+    census.face_meshes = meshes
+        .iter()
+        .filter(|(_, _, _, layers)| on_face_layer(*layers))
+        .count();
     *framing = Framing {
         center: (min + max) * 0.5,
         radius: ((max - min).length() * 0.5).max(f32::EPSILON),
@@ -345,8 +506,14 @@ fn take_census(
 
 /// Tracks how many meshes survived culling, which is the engine's own answer
 /// to "is the camera looking at the robot".
-fn count_visible(mut census: ResMut<Census>, meshes: Query<&ViewVisibility, With<Mesh3d>>) {
-    let visible = meshes.iter().filter(|v| v.get()).count();
+fn count_visible(
+    mut census: ResMut<Census>,
+    meshes: Query<(&ViewVisibility, Option<&RenderLayers>), With<Mesh3d>>,
+) {
+    let visible = meshes
+        .iter()
+        .filter(|(visible, layers)| visible.get() && !on_face_layer(*layers))
+        .count();
     census.visible_peak = census.visible_peak.max(visible);
 }
 
@@ -447,7 +614,10 @@ fn capture(
     }
     capture.done = true;
     log::info!("saving a frame to {}", path.display());
-    let image = capture.image.clone().expect("image spawned with the camera");
+    let image = capture
+        .image
+        .clone()
+        .expect("image spawned with the camera");
     commands
         .spawn(Screenshot::image(image))
         .observe(save_to_disk(path));
@@ -502,11 +672,15 @@ fn report(cli: &Cli, frames: &Frames, census: &Census) {
     );
     if census.taken {
         log::info!(
-            "drawing {}/{} meshes visible after culling / {} triangles / {} materials",
+            "drawing {}/{} meshes visible after culling / {} triangles / {} materials{}",
             census.visible_peak,
             census.meshes,
             census.triangles,
-            census.materials
+            census.materials,
+            match census.face_meshes {
+                0 => String::new(),
+                n => format!(" / plus {n} face meshes on their own layer"),
+            }
         );
     }
 }
