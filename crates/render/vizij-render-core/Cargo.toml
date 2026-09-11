@@ -27,6 +27,10 @@ bevy = { version = "0.19", default-features = false, features = [
   "scene",
   "png",
   "bevy_winit",
+  # Pointer hits against the face's meshes, so a host can answer a click with
+  # an element name.
+  "picking",
+  "mesh_picking",
   "std",
 ] }
 

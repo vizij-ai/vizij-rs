@@ -1,0 +1,37 @@
+[package]
+name = "vizij-render-web"
+version = "0.0.0"
+edition = { workspace = true }
+publish = false
+description = "The Vizij renderer in a browser canvas: a wasm entry mounting vizij-render-core on a page."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# wasm32-only, so the crate takes part in a native `cargo build`/`cargo test`
+# of the workspace without pulling a browser target into the host link.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+vizij-render-core = { path = "../vizij-render-core" }
+vizij-api-core = { path = "../../api/vizij-api-core" }
+
+# The web backend, on top of the feature set the render crate declares.
+# WebGPU rather than WebGL2: Bevy resolves the backend at build time, and
+# `default_platform` (which the render crate deliberately omits) would have
+# pinned webgl2.
+bevy = { version = "0.19", default-features = false, features = ["webgpu"] }
+
+wasm-bindgen = { workspace = true }
+js-sys = { workspace = true }
+console_error_panic_hook = "0.1"
+console_log = "1"
+# Nothing here uses tracing; the dependency only turns on its `log` feature, so
+# Bevy's tracing events fall through to `log` — and therefore to the host's
+# logger — now that Bevy's own LogPlugin is disabled. The native app uses the
+# same arrangement for the same reason.
+tracing = { version = "0.1", default-features = false, features = ["std", "log"] }
+log = "0.4"
+getrandom = { version = "0.4", features = ["wasm_js"] }
+# For the cold-start measurement the harness reads.
+web-sys = { version = "0.3", features = ["Window", "Performance"] }
+# Marshals the per-frame anchors into plain JS objects.
+serde-wasm-bindgen = { workspace = true }

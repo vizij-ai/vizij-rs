@@ -27,3 +27,8 @@ npm/@vizij/*/node_modules/
 .codex/pr_13_summary.md
 
 .worktrees/
+
+# The render harness's built wasm and copied GLB fixtures.
+crates/render/vizij-render-web/harness/pkg/
+crates/render/vizij-render-web/harness/assets/
+fixtures/*.glb

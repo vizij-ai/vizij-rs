@@ -14,14 +14,20 @@
 //! where the values came from, so nothing here has to change when that
 //! changes.
 //!
+//! What comes back out is the same shape: [`PickSink`] receives the element a
+//! pointer hit, and [`AnchorSink`] receives every element's screen-space box
+//! each frame, which is what a host overlaying its own UI on the canvas needs.
+//!
 //! Keys are [`vizij_api_core::TypedPath`]s and values are
 //! [`vizij_api_core::Value`], which is the same type Arora's data plane
 //! carries — a host converts nothing.
 
+pub mod interact;
 pub mod meta;
 pub mod view;
 
-pub use meta::{Binding, Element, FaceMeta, FeatureKind};
+pub use interact::{Anchor, AnchorSink, FaceElement, PickSink, ViewOffsetFeed};
+pub use meta::{AnimatableInfo, Binding, Element, FaceMeta, FeatureKind};
 pub use view::{
     BindingIndex, Face, Fit, OffscreenTarget, PoseFeed, ViewCamera, ViewOptions, ViewPlugin,
     ViewSystems,

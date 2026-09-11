@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 
 /// What one animated feature drives on a scene element.
@@ -68,6 +68,24 @@ pub struct FaceMeta {
     pub root_bounds: Option<(f32, f32, f32, f32)>,
 }
 
+/// One animatable, described for a host that has to present it.
+///
+/// The animatable UUID alone is unusable in an interface — it says nothing
+/// about what it drives. This pairs it with the element and the feature, which
+/// is what a host needs to label a control, group controls by element, or pick
+/// a sensible range for one.
+#[derive(Clone, Debug, Serialize)]
+pub struct AnimatableInfo {
+    /// The UUID a value is written under.
+    pub id: String,
+    /// The element this drives.
+    pub node: String,
+    /// One of `translation`, `rotation`, `scale`, `color`, `opacity`, `morph`.
+    pub feature: &'static str,
+    /// The morph target's name, when `feature` is `morph`.
+    pub morph_target: Option<String>,
+}
+
 /// Raw `RobotData` feature entry (only what the app needs).
 #[derive(Deserialize)]
 struct RawFeature {
@@ -118,6 +136,35 @@ impl FaceMeta {
     pub fn from_glb_bytes(bytes: &[u8]) -> Result<Self> {
         let json = glb_json_chunk(bytes)?;
         Self::from_gltf_json(&json)
+    }
+
+    /// Every animatable, described for presentation, ordered by element then
+    /// feature so a host can group them without sorting again.
+    pub fn animatable_info(&self) -> Vec<AnimatableInfo> {
+        let mut infos: Vec<AnimatableInfo> = self
+            .animatables
+            .iter()
+            .map(|(id, binding)| {
+                let (feature, morph_target) = match &binding.feature {
+                    FeatureKind::Translation => ("translation", None),
+                    FeatureKind::Rotation => ("rotation", None),
+                    FeatureKind::Scale => ("scale", None),
+                    FeatureKind::Color => ("color", None),
+                    FeatureKind::Opacity => ("opacity", None),
+                    FeatureKind::Morph(target) => ("morph", Some(target.clone())),
+                };
+                AnimatableInfo {
+                    id: id.clone(),
+                    node: binding.node_name.clone(),
+                    feature,
+                    morph_target,
+                }
+            })
+            .collect();
+        infos.sort_by(|a, b| {
+            (&a.node, a.feature, &a.morph_target).cmp(&(&b.node, b.feature, &b.morph_target))
+        });
+        infos
     }
 
     /// Reads the render half out of an already-parsed glTF document.

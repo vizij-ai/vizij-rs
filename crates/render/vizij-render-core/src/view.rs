@@ -12,10 +12,12 @@ use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::gltf::GltfAssetLabel;
 use bevy::math::Vec3A;
 use bevy::mesh::morph::MorphWeights;
+use bevy::picking::mesh_picking::MeshPickingPlugin;
 use bevy::prelude::*;
 use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector};
 use vizij_api_core::{TypedPath, Value};
 
+use crate::interact::{apply_view_offset, publish_anchors, report_click, FaceElement};
 use crate::meta::{Binding, FaceMeta, FeatureKind};
 
 /// The face metadata, as a Bevy resource.
@@ -134,11 +136,18 @@ pub struct ViewPlugin;
 impl Plugin for ViewPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<BindingIndex>()
+            .add_plugins(MeshPickingPlugin)
+            .add_observer(report_click)
             .add_systems(Startup, (setup_scene, setup_camera))
             .add_systems(
                 Update,
-                (index_scene, apply_pose).chain().in_set(ViewSystems),
-            );
+                (apply_view_offset, index_scene, apply_pose)
+                    .chain()
+                    .in_set(ViewSystems),
+            )
+            // After transform propagation, so the anchors are the positions
+            // this frame drew.
+            .add_systems(Last, publish_anchors);
     }
 }
 
@@ -358,9 +367,10 @@ fn index_scene(
                 mat.unlit = true;
                 mat.base_color = shade(mat.base_color, factor);
                 let handle = materials.add(mat);
-                commands
-                    .entity(mesh_entity)
-                    .insert(MeshMaterial3d(handle.clone()));
+                commands.entity(mesh_entity).insert((
+                    MeshMaterial3d(handle.clone()),
+                    FaceElement(element.node_name.clone()),
+                ));
                 mesh_of.insert(element.node_name.clone(), (mesh_entity, handle));
                 break;
             }

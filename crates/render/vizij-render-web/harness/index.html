@@ -1,0 +1,245 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>vizij-render-web</title>
+<style>
+  :root { color-scheme: dark; font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; }
+  body { margin: 0; background: #111; color: #eee; display: grid; grid-template-rows: auto 1fr; height: 100vh; overflow: hidden; }
+  header { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid #333; flex-wrap: wrap; }
+  header > label { display: flex; gap: 4px; align-items: center; }
+  select { max-width: 22rem; }
+  .axis { display: none; gap: 3px; align-items: center; }
+  .axis.on { display: flex; }
+  .axis input { width: 90px; }
+  .axis b { color: #9ad; font-weight: 600; }
+  #stats { margin-left: auto; font-variant-numeric: tabular-nums; color: #9ad; }
+  #picked { color: #6cf; }
+  main { position: relative; min-height: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  #label { position: fixed; z-index: 2; pointer-events: none; display: none;
+    border: 1px solid #6cf; border-radius: 3px;
+    box-shadow: inset 0 0 0 9999px rgba(102, 204, 255, 0.08); }
+  #label span { position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, -4px);
+    white-space: nowrap; background: #6cf; color: #012; padding: 1px 5px;
+    border-radius: 3px; font-weight: 600; }
+
+  .panel { position: absolute; top: 0; bottom: 0; z-index: 1;
+    background: #1b1b1f; transition: transform 350ms ease;
+    padding: 12px; box-sizing: border-box; font-size: 12px; color: #9a9aa2; }
+  #panel-left  { left: 0;  width: 240px; border-right: 1px solid #333;
+                 transform: translateX(-100%); }
+  #panel-right { right: 0; width: 320px; border-left: 1px solid #333;
+                 transform: translateX(100%); }
+  /* Id selectors, to outrank the per-side `transform` above — a `.panel.open`
+     rule loses to `#panel-left` on specificity and never slides. */
+  #panel-left.open, #panel-right.open { transform: translateX(0); }
+  #offset { font-variant-numeric: tabular-nums; color: #7a7a82; }
+</style>
+<header>
+  <label>element <select id="element"></select></label>
+  <label>animatable <select id="path"></select></label>
+  <span class="axis" id="ax"><b>x</b><input type="range" /></span>
+  <span class="axis" id="ay"><b>y</b><input type="range" /></span>
+  <span class="axis" id="az"><b>z</b><input type="range" /></span>
+  <button id="toggle">show sidebars</button>
+  <span id="offset"></span>
+  <span id="picked">click the face</span>
+  <span id="stats">loading…</span>
+</header>
+<main>
+  <canvas id="view"></canvas>
+  <div class="panel" id="panel-left">Left sidebar.</div>
+  <div class="panel" id="panel-right">Right sidebar. The face should stay centred in
+    the uncovered region between the two, and the label should stay glued to its
+    element throughout the slide.</div>
+</main>
+<div id="label"><span></span></div>
+
+<script type="module">
+  // @ts-check
+  /// <reference path="./pkg/vizij_render_web.d.ts" />
+  // The generated declarations are the renderer's real signature. Checking
+  // against them catches drift at edit time: adding a parameter to `start`
+  // otherwise fails only at runtime, deep inside wasm-bindgen's marshalling.
+  const GLB = new URLSearchParams(location.search).get("glb") ?? "Quori_Current_Extended.glb";
+  const canvas = document.getElementById("view");
+  const stats = document.getElementById("stats");
+  const label = document.getElementById("label");
+  const labelText = label.querySelector("span");
+  const pickedOut = document.getElementById("picked");
+  const elementSelect = document.getElementById("element");
+  const pathSelect = document.getElementById("path");
+  const axes = ["ax", "ay", "az"].map((id) => document.getElementById(id));
+
+  const fail = (what, error) => {
+    stats.style.color = "#f77";
+    stats.textContent = `${what}: ${error?.message ?? error}`;
+    console.error(what, error);
+  };
+  addEventListener("error", (e) => fail("error", e.error ?? e.message));
+  addEventListener("unhandledrejection", (e) => fail("rejected", e.reason));
+
+  const t0 = performance.now();
+  const wasm = await import("./pkg/vizij_render_web.js");
+  await wasm.default();
+  const tInit = performance.now();
+  const bytes = new Uint8Array(await (await fetch(`assets/${GLB}`)).arrayBuffer());
+  const tFetch = performance.now();
+
+  // What a feature can sensibly be dragged over, and how many axes it takes.
+  // Absolute values, so the first touch snaps the element off its neutral pose.
+  const FEATURES = {
+    translation: { axes: 3, min: -3, max: 3, step: 0.01 },
+    rotation:    { axes: 3, min: -Math.PI, max: Math.PI, step: 0.01 },
+    scale:       { axes: 3, min: 0, max: 3, step: 0.01 },
+    color:       { axes: 3, min: 0, max: 1, step: 0.01 },
+    opacity:     { axes: 1, min: 0, max: 1, step: 0.01 },
+    morph:       { axes: 1, min: 0, max: 1, step: 0.01 },
+  };
+  const describe = (a) =>
+    a.feature === "morph" ? `${a.node} · morph:${a.morph_target}` : `${a.node} · ${a.feature}`;
+
+  let tracked = null;
+
+  wasm.set_pick_callback((element) => {
+    tracked = element;
+    pickedOut.textContent = `picked ${element}`;
+    // Selecting an element narrows the animatables to the ones that drive it —
+    // otherwise finding a control that visibly moves what you clicked is a
+    // hunt through a couple of hundred UUIDs.
+    elementSelect.value = element;
+    fillPaths();
+  });
+
+  wasm.set_anchor_callback((anchors) => {
+    if (!tracked) return;
+    const anchor = anchors.find((a) => a.element === tracked);
+    if (!anchor) { label.style.display = "none"; return; }
+    const rect = canvas.getBoundingClientRect();
+    Object.assign(label.style, {
+      display: "block",
+      left: `${rect.left + anchor.min_x}px`,
+      top: `${rect.top + anchor.min_y}px`,
+      width: `${Math.max(1, anchor.max_x - anchor.min_x)}px`,
+      height: `${Math.max(1, anchor.max_y - anchor.min_y)}px`,
+    });
+    labelText.textContent = tracked;
+  });
+
+  // The asset root is relative to the page's origin; this page serves its GLBs
+  // from `assets/`, and a host mounting the renderer on a route says where its
+  // own live.
+  wasm.start("#view", "assets", GLB, bytes);
+  stats.textContent = `init ${(tInit - t0).toFixed(0)}ms · glb in ${(tFetch - tInit).toFixed(0)}ms`;
+
+  const animatables = wasm.animatables();
+  const elements = [...new Set(animatables.map((a) => a.node))].sort();
+  elementSelect.append(new Option("(all)", ""));
+  for (const node of elements) elementSelect.append(new Option(node, node));
+
+  function fillPaths() {
+    const node = elementSelect.value;
+    const shown = node ? animatables.filter((a) => a.node === node) : animatables;
+    pathSelect.replaceChildren(...shown.map((a) => new Option(describe(a), a.id)));
+    pathSelect.selectedIndex = 0;
+    syncAxes();
+  }
+
+  // The selected animatable's live value, so a vec3 write carries all three.
+  let value = [0, 0, 0];
+
+  function selected() {
+    return animatables.find((a) => a.id === pathSelect.value);
+  }
+
+  function syncAxes() {
+    const a = selected();
+    const spec = a ? FEATURES[a.feature] : null;
+    value = [0, 0, 0];
+    axes.forEach((axis, i) => {
+      const on = spec !== null && i < spec.axes;
+      axis.classList.toggle("on", on);
+      if (!on) return;
+      const input = axis.querySelector("input");
+      Object.assign(input, { min: spec.min, max: spec.max, step: spec.step, value: 0 });
+    });
+  }
+
+  function write() {
+    const a = selected();
+    if (!a) return;
+    if (FEATURES[a.feature].axes === 1) wasm.set_float(a.id, value[0]);
+    else wasm.set_vec3(a.id, value[0], value[1], value[2]);
+  }
+
+  axes.forEach((axis, i) => {
+    axis.querySelector("input").addEventListener("input", (event) => {
+      value[i] = Number(event.target.value);
+      write();
+    });
+  });
+  elementSelect.addEventListener("change", fillPaths);
+  pathSelect.addEventListener("change", syncAxes);
+  fillPaths();
+
+  // Mirrors `packages/scene`'s InnerControls, which springs an `activeBounds`
+  // rect measured from the DOM and calls, every frame:
+  //
+  //   camera.setViewOffset(activeW, activeH, -activeX, -activeY, canvasW, canvasH)
+  //
+  // Against three's (fullWidth, fullHeight, x, y, width, height) that makes the
+  // *uncovered* rect the full view and the *whole canvas* the sub-window — so
+  // the sub-window is LARGER than the full view, at a negative offset. That is
+  // a different corner of the API than a simple shift, and the one the app
+  // actually uses.
+  const panels = {
+    left: { element: document.getElementById("panel-left"), width: 240 },
+    right: { element: document.getElementById("panel-right"), width: 320 },
+  };
+  const toggle = document.getElementById("toggle");
+  const offsetOut = document.getElementById("offset");
+  let open = false;
+  let animating = 0;
+
+  toggle.addEventListener("click", () => {
+    open = !open;
+    for (const { element } of Object.values(panels)) element.classList.toggle("open", open);
+    toggle.textContent = open ? "hide sidebars" : "show sidebars";
+    const started = performance.now();
+    cancelAnimationFrame(animating);
+    const step = () => {
+      const t = Math.min(1, (performance.now() - started) / 350);
+      const shown = open ? t : 1 - t;
+      const left = panels.left.width * shown;
+      const right = panels.right.width * shown;
+      const canvasW = Math.round(canvas.clientWidth);
+      const canvasH = Math.round(canvas.clientHeight);
+      const activeW = Math.round(canvasW - left - right);
+
+      if (activeW <= 0 || left + right < 1) {
+        wasm.clear_view_offset();
+        offsetOut.textContent = "";
+      } else {
+        // set_view_offset(offsetX, offsetY, width, height, fullWidth, fullHeight)
+        wasm.set_view_offset(-Math.round(left), 0, canvasW, canvasH, activeW, canvasH);
+        offsetOut.textContent =
+          `offset ${-Math.round(left)},0 · size ${canvasW}x${canvasH} · full ${activeW}x${canvasH}`;
+      }
+      if (t < 1) animating = requestAnimationFrame(step);
+    };
+    animating = requestAnimationFrame(step);
+  });
+
+  let frames = 0;
+  let last = performance.now();
+  const tick = (now) => {
+    frames += 1;
+    if (now - last >= 1000) {
+      stats.textContent = `${frames} fps · ${animatables.length} animatables`;
+      frames = 0;
+      last = now;
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+</script>
