@@ -53,6 +53,11 @@ struct Cli {
     #[arg(long, default_value_t = false)]
     still: bool,
 
+    /// Where a still camera stands, in radians about the model. The robot's
+    /// screen faces -X, so pi looks it in the face.
+    #[arg(long, default_value_t = std::f32::consts::PI)]
+    angle: f32,
+
     /// Drop shadows, to price them separately.
     #[arg(long, default_value_t = false)]
     no_shadows: bool,
@@ -119,11 +124,14 @@ struct Frames {
 /// first frame is sampled.
 #[derive(Resource, Default)]
 struct Capture {
-    image: Option<Handle<Image>>,
-    camera: Option<Entity>,
     at_frame: u64,
     done: bool,
 }
+
+/// The image the main camera renders into, when it is not drawing to the
+/// window. This is what a screenshot reads.
+#[derive(Resource)]
+struct OffscreenView(Handle<Image>);
 
 const CAPTURE_SECONDS: f32 = 1.0;
 
@@ -355,14 +363,25 @@ fn setup(
         },
         OrbitCamera,
     ));
-    if cli.offscreen {
-        let target = images.add(Image::new_target_texture(
+    // Saving a frame implies rendering offscreen, because the window's own
+    // swapchain cannot be read back here: a capture of it returns pure black
+    // whenever the window is not the composited frontmost surface, which is
+    // the normal case for a run started from a terminal.
+    if cli.offscreen || cli.screenshot.is_some() {
+        let mut target = Image::new_target_texture(
             1280,
             800,
             TextureFormat::Rgba8Unorm,
             Some(TextureFormat::Rgba8UnormSrgb),
-        ));
-        camera.insert(RenderTarget::Image(target.into()));
+        );
+        // `new_target_texture` asks for everything needed to render *into* the
+        // texture but not to copy back *out* of it, and without this the
+        // readback quietly returns the zero-filled CPU side — a black image
+        // indistinguishable from a scene that drew nothing.
+        target.texture_descriptor.usage |= TextureUsages::COPY_SRC;
+        let target = images.add(target);
+        camera.insert(RenderTarget::Image(target.clone().into()));
+        commands.insert_resource(OffscreenView(target));
     }
 
     // A directional light is a direction, not a position, so this one needs no
@@ -389,7 +408,7 @@ fn orbit_camera(
         return;
     }
     let angle = if cli.still {
-        0.6
+        cli.angle
     } else {
         time.elapsed_secs() * 0.35
     };
@@ -551,77 +570,30 @@ fn capture(
     cli: Res<Cli>,
     frames: Res<Frames>,
     framing: Res<Framing>,
+    view: Option<Res<OffscreenView>>,
     mut capture: ResMut<Capture>,
-    mut images: ResMut<Assets<Image>>,
-    cameras: Query<(&Transform, &Projection), With<OrbitCamera>>,
     mut commands: Commands,
 ) {
-    let Some(path) = cli.screenshot.clone() else {
+    let (Some(path), Some(view)) = (cli.screenshot.clone(), view) else {
         return;
     };
     if capture.done || !framing.fitted || frames.elapsed < CAPTURE_SECONDS {
         return;
     }
-    let Ok((transform, projection)) = cameras.single() else {
-        return;
-    };
-
-    let Some(camera) = capture.camera else {
-        let mut target = Image::new_target_texture(
-            1280,
-            800,
-            TextureFormat::Rgba8Unorm,
-            Some(TextureFormat::Rgba8UnormSrgb),
-        );
-        // `new_target_texture` asks for everything needed to render *into* the
-        // texture but not to copy back *out* of it, so without this the
-        // readback returns the zero-filled CPU side — a black image that looks
-        // exactly like a scene that drew nothing.
-        target.texture_descriptor.usage |= TextureUsages::COPY_SRC;
-        let image = images.add(target);
-        // Same viewpoint as the window's camera, drawn before it.
-        capture.camera = Some(
-            commands
-                .spawn((
-                    Camera3d::default(),
-                    Camera {
-                        order: -1,
-                        clear_color: if cli.marker {
-                            ClearColorConfig::Custom(Color::srgb(1.0, 0.0, 1.0))
-                        } else {
-                            ClearColorConfig::Default
-                        },
-                        ..default()
-                    },
-                    RenderTarget::Image(image.clone().into()),
-                    *transform,
-                    projection.clone(),
-                    AmbientLight {
-                        color: Color::WHITE,
-                        brightness: 220.0,
-                        ..default()
-                    },
-                ))
-                .id(),
-        );
-        capture.image = Some(image);
+    // A couple of frames after the camera was placed, so the target holds the
+    // fitted view rather than the one before it.
+    if capture.at_frame == 0 {
         capture.at_frame = frames.count;
         return;
-    };
-
-    if frames.count < capture.at_frame + 2 {
+    }
+    if frames.count < capture.at_frame + 3 {
         return;
     }
     capture.done = true;
     log::info!("saving a frame to {}", path.display());
-    let image = capture
-        .image
-        .clone()
-        .expect("image spawned with the camera");
     commands
-        .spawn(Screenshot::image(image))
+        .spawn(Screenshot::image(view.0.clone()))
         .observe(save_to_disk(path));
-    commands.entity(camera).despawn();
 }
 
 fn measure(
