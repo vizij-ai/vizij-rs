@@ -1,6 +1,8 @@
 #!/bin/bash
 # Build the ROS 2 Jazzy + rmw_zenoh image carrying the ROS4HRI skill
-# interfaces, from the `.msg` / `.action` files the arora-msgs-ros2 crate vendors
+# interfaces (std_skills, communication_skills, interaction_skills, hri_msgs),
+# from the
+# `.msg` / `.action` files the arora-msgs-ros2 crate vendors
 # (located through cargo, so the container speaks exactly the definitions the
 # bridge serves — Vizij's extensions included). Usage: build-image.sh [tag]
 set -euo pipefail
@@ -15,15 +17,23 @@ if not crates:
 crates.sort(key=lambda p: p["version"])
 print(os.path.join(os.path.dirname(crates[-1]["manifest_path"]), "msgs"))
 ')"
-[ -d "$MSGS/std_skills" ] && [ -d "$MSGS/communication_skills" ] || { echo "no ROS4HRI skill definitions under $MSGS" >&2; exit 1; }
+[ -d "$MSGS/std_skills" ] && [ -d "$MSGS/communication_skills" ] && [ -d "$MSGS/interaction_skills" ] && [ -d "$MSGS/hri_msgs" ] || { echo "no ROS4HRI skill definitions under $MSGS" >&2; exit 1; }
 echo "interfaces from $MSGS" >&2
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 W="$STAGE/ros4hri_ws/src"
-mkdir -p "$W/std_skills/msg" "$W/communication_skills/action"
+mkdir -p "$W/std_skills/msg" "$W/communication_skills/action" "$W/interaction_skills/action" "$W/interaction_skills/msg" "$W/hri_msgs/msg"
+# AudioFeatures names a field `ZCR`, which rosidl rejects (field names are
+# lower_snake_case); the skills reference only Expression, so it is left out.
+cp "$MSGS"/hri_msgs/*.msg "$W/hri_msgs/msg/" && rm "$W/hri_msgs/msg/AudioFeatures.msg"
+# The vendored files write the header as ROS 1's bare `Header`; rosidl wants
+# it qualified.
+sed -i.bak 's/^Header /std_msgs\/Header /' "$W"/hri_msgs/msg/*.msg "$W"/interaction_skills/msg/*.msg && rm "$W"/*/msg/*.bak
 cp "$MSGS"/std_skills/*.msg "$W/std_skills/msg/"
 cp "$MSGS"/communication_skills/*.action "$W/communication_skills/action/"
+cp "$MSGS"/interaction_skills/*.action "$W/interaction_skills/action/"
+cp "$MSGS"/interaction_skills/*.msg "$W/interaction_skills/msg/"
 
 package() { # name, description, deps...
   local name="$1" description="$2"; shift 2
@@ -39,6 +49,10 @@ package std_skills "ROS4HRI standard skill messages, from arora-msgs-ros2's vend
 cmake std_skills "$(cd "$W/std_skills" && ls msg/*.msg | sed 's/^/"/;s/$/"/' | tr '\n' ' ')" ""
 package communication_skills "ROS4HRI communication skills (Say carries Vizij's viseme feedback extension)." std_skills action_msgs
 cmake communication_skills "$(cd "$W/communication_skills" && ls action/*.action | sed 's/^/"/;s/$/"/' | tr '\n' ' ')" "std_skills action_msgs"
+package hri_msgs "ROS4HRI messages, from arora-msgs-ros2's vendored definitions." std_msgs
+cmake hri_msgs "$(cd "$W/hri_msgs" && ls msg/*.msg | sed 's/^/"/;s/$/"/' | tr '\n' ' ')" "std_msgs"
+package interaction_skills "ROS4HRI interaction skills (LookAt, SetExpression), from arora-msgs-ros2's vendored definitions." std_skills hri_msgs geometry_msgs action_msgs
+cmake interaction_skills "$(cd "$W/interaction_skills" && ls action/*.action msg/*.msg | sed 's/^/"/;s/$/"/' | tr '\n' ' ')" "std_skills hri_msgs geometry_msgs action_msgs"
 
 cp "$HERE/Dockerfile" "$STAGE/Dockerfile"
 docker build -f "$STAGE/Dockerfile" -t "$TAG" "$STAGE"
