@@ -38,6 +38,132 @@ impl Screen {
     }
 }
 
+/// A joint the robot declares, with the range its value is allowed to take.
+#[derive(Debug, Clone)]
+pub struct Joint {
+    pub name: String,
+    /// `revolute`, `continuous`, `prismatic` or `fixed`.
+    pub kind: String,
+    pub axis: Vec3,
+    /// Where the joint sits, in world space.
+    pub at: Transform,
+    /// The glTF node index of the body this joint moves. Bevy names an unnamed
+    /// glTF node `GltfNode{index}`, which is the only join back to the spawned
+    /// scene — a robot's nodes carry no names of their own.
+    pub child_node: usize,
+    pub min: f32,
+    pub max: f32,
+    pub default: f32,
+    /// The colour the author gave this joint's control.
+    pub color: Option<Srgba>,
+}
+
+impl Joint {
+    /// Whether the joint's value is bounded at all. A `continuous` joint turns
+    /// forever and a `fixed` one does not turn, so neither takes a limited
+    /// control.
+    pub fn is_limited(&self) -> bool {
+        self.min.is_finite() && self.max.is_finite() && self.max > self.min
+    }
+}
+
+/// Finds every joint the robot declares, resolved to the nodes they move.
+pub fn find_joints(bytes: &[u8]) -> Result<Vec<Joint>> {
+    let gltf = glb_json_chunk(bytes)?;
+    let nodes = gltf
+        .get("nodes")
+        .and_then(Json::as_array)
+        .ok_or_else(|| anyhow!("glTF has no nodes"))?;
+
+    let mut parent = vec![usize::MAX; nodes.len()];
+    let mut by_id = std::collections::HashMap::new();
+    for (index, node) in nodes.iter().enumerate() {
+        if let Some(id) = node
+            .pointer("/extensions/RobotData/id")
+            .and_then(Json::as_str)
+        {
+            by_id.insert(id.to_string(), index);
+        }
+        let Some(children) = node.get("children").and_then(Json::as_array) else {
+            continue;
+        };
+        for child in children.iter().filter_map(Json::as_u64) {
+            parent[child as usize] = index;
+        }
+    }
+
+    let mut joints = Vec::new();
+    for (index, node) in nodes.iter().enumerate() {
+        let Some(data) = node.pointer("/extensions/RobotData") else {
+            continue;
+        };
+        let kind = data.get("type").and_then(Json::as_str).unwrap_or_default();
+        if !matches!(kind, "revolute" | "continuous" | "prismatic" | "fixed") {
+            continue;
+        }
+        let Some(&child_node) = data
+            .get("child")
+            .and_then(Json::as_str)
+            .and_then(|id| by_id.get(id))
+        else {
+            continue;
+        };
+
+        // A joint's own node carries no mesh, so its placement comes from the
+        // chain above it, same as the screen's.
+        let at = world_transform(nodes, &parent, index);
+        let axis = data
+            .get("axis")
+            .map(|a| {
+                let at = |k: &str| a.get(k).and_then(Json::as_f64).unwrap_or_default() as f32;
+                Vec3::new(at("x"), at("y"), at("z"))
+            })
+            .unwrap_or(Vec3::Y);
+
+        let value = data.pointer("/features/jointValue/value");
+        let number = |path: &str| {
+            value
+                .and_then(|v| v.pointer(path))
+                .and_then(Json::as_f64)
+                .map(|v| v as f32)
+        };
+        joints.push(Joint {
+            name: data
+                .get("name")
+                .and_then(Json::as_str)
+                .unwrap_or("(unnamed)")
+                .to_string(),
+            kind: kind.to_string(),
+            axis: axis.normalize_or(Vec3::Y),
+            at,
+            child_node,
+            min: number("/constraints/min").unwrap_or(f32::NEG_INFINITY),
+            max: number("/constraints/max").unwrap_or(f32::INFINITY),
+            default: number("/default").unwrap_or_default(),
+            color: value
+                .and_then(|v| v.pointer("/pub/color"))
+                .and_then(Json::as_str)
+                .and_then(|hex| Srgba::hex(hex).ok()),
+        });
+    }
+    Ok(joints)
+}
+
+/// Composes a node's transform with every ancestor's, root first.
+fn world_transform(nodes: &[Json], parent: &[usize], index: usize) -> Transform {
+    let mut chain = vec![index];
+    let mut current = index;
+    while parent[current] != usize::MAX {
+        current = parent[current];
+        chain.push(current);
+    }
+    let mut transform = Transform::IDENTITY;
+    for ancestor in chain.into_iter().rev() {
+        transform = transform * node_transform(&nodes[ancestor]);
+    }
+    transform
+}
+
 /// Finds the screen a robot declares, and where it ends up once its ancestors
 /// have had their say.
 pub fn find_screen(bytes: &[u8]) -> Result<Screen> {
@@ -66,21 +192,9 @@ pub fn find_screen(bytes: &[u8]) -> Result<Screen> {
         })
         .ok_or_else(|| anyhow!("no node declares a screen"))?;
 
-    // Compose root-first, so each transform applies inside its parent's frame.
-    let mut chain = vec![index];
-    let mut current = index;
-    while parent[current] != usize::MAX {
-        current = parent[current];
-        chain.push(current);
-    }
-    let mut transform = Transform::IDENTITY;
-    for ancestor in chain.into_iter().rev() {
-        transform = transform * node_transform(&nodes[ancestor]);
-    }
-
     let number = |key: &str| data.get(key).and_then(Json::as_f64).map(|v| v as f32);
     Ok(Screen {
-        transform,
+        transform: world_transform(nodes, &parent, index),
         width: number("width").ok_or_else(|| anyhow!("screen has no width"))?,
         height: number("height").ok_or_else(|| anyhow!("screen has no height"))?,
         resolution: number("resolution").unwrap_or(1080.0),

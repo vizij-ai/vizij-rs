@@ -64,6 +64,37 @@ Bevy's `RenderTarget::Image` plus `base_color_texture`.
 `PivotControls` as `rotationLimits`, on the third axis, after rotating the
 control so its +Z lies along the joint axis.
 
+### The material data is wrong in three ways
+
+`scripts/fix-glb-materials.py` corrects all three and writes a new GLB.
+Rendering before and after shows the change exactly where predicted, which is
+what makes these data faults rather than renderer ones.
+
+- **Three shapes carry a black base colour and a near-white `emissive` (0.98)
+  at once** — two on `upper_base_link`, one on `upper_neck_link` directly
+  behind the head. A part cannot be both black and self-lit; emissive wins, so
+  parts meant to read black render white. The glTF carries the emissive
+  faithfully, so every renderer that honours emissive shows it.
+- **`metallicFactor` is 0.5 on every shape `RobotData` calls `phong`.** Phong
+  has no metalness, so this is THREE.GLTFExporter's placeholder. At 0.5 half
+  the base colour leaves the diffuse term for a specular one, which without an
+  environment map simply goes missing.
+- **`roughnessFactor` is 0.5 for the same reason**, discarding the shininess
+  `RobotData` still carries. Phong converts as
+  `roughness = sqrt(2 / (shininess + 2))`.
+
+Colour itself is carried faithfully: `RobotData`'s colour equals
+`baseColorFactor` on every shape. **The real material description is
+`RobotData`'s** `color`/`specular`/`shininess`/`emissive`/`opacity`, and
+Studio rebuilds a Phong material from it. A renderer reading the glTF's PBR
+values instead inherits the exporter's guesses, so a scene crate that wants to
+match Studio drives materials from `RobotData` — as the face crate already
+does for faces, where it reproduces the web's ambient-Lambert model.
+
+This spike does not yet do that: it reads the glTF material and lights the
+scene with numbers picked for the spike, so its absolute colour matches
+nothing in particular.
+
 ## 3. The face on the screen
 
 `scene --face Quori_Current_Extended.glb` draws a Vizij face into the screen
@@ -119,7 +150,32 @@ The second is the seam. A shared foundation starts with GLB/`RobotData`
 reading and the render-target plumbing; the face-specific half stays in the
 face crate.
 
-## 4. Bevy 0.19 details this cost time on
+## 4. The joint gizmo
+
+`scene --joint neck_yaw_joint` puts a limited rotator on a joint. All 15
+joints parse with their authored ranges — `revolute` x2 (`tilt_joint` ±0.785,
+`neck_yaw_joint` ±1.571), `prismatic` x1 (`head_lift_joint` ±0.1m),
+`continuous` x4 (0..2pi), `fixed` x8 — and driving one past its range holds it:
+asked for 9.0, held at 1.571.
+
+**Binding a joint to what it moves runs through the node index.** A robot's
+glTF nodes have no names, so Bevy names them `GltfNode{index}` — and that is
+the only thread tying `RobotData` back to a spawned entity. `RobotData`'s
+`child` is a uuid, so it resolves uuid -> node index -> `GltfNode{index}` ->
+entity. Studio never needs this: three.js hands the extension to the
+`Object3D` it belongs to.
+
+**What Bevy does not give.** Studio's `rotational-joint-gizmo.tsx` is a drei
+`PivotControls`, which brings the ring, hover and annotation states, the drag
+projection and `rotationLimits` with it. Bevy has immediate-mode `Gizmos` for
+the drawing — an arc over the range, stops at each end, a spoke at the current
+value, all a few lines — and nothing for the interaction. The drag here is
+pointer-x times a constant, which is enough to show the clamp but is not a
+control: a real one projects the pointer ray onto the joint's plane, needs a
+pickable handle rather than a gizmo line, and has to carry hover and selection
+states of its own. That gap is the honest cost estimate for this piece.
+
+## 5. Bevy 0.19 details this cost time on
 
 - `AmbientLight` is a **component** (on the camera), not a resource.
 - The glTF scene root is `WorldAssetRoot`, not `SceneRoot`.
@@ -132,17 +188,17 @@ face crate.
   to measured bounds for this reason, and visibility is reported as
   "N/M meshes visible after culling" so an empty frame cannot read as a fast one.
 
-## 5. Reading a frame back does not work here
+## 6. Reading a frame back
 
-`Screenshot::primary_window()` returns pure black — not the clear colour —
-when the window is not the composited frontmost surface, which is the normal
-case for a run started from a terminal. Capturing an offscreen target instead
-needs `TextureUsages::COPY_SRC`, which `Image::new_target_texture` does not
-set; without it the readback silently returns the zero-filled CPU side. Adding
-it was still not enough: a camera clearing to magenta reads back black, so the
-readback path is not delivering the rendered texture on this platform.
+`--screenshot` renders the main camera into an image and reads that back.
+Two things make the obvious route fail silently instead of erroring:
 
-This blocks screenshot-based verification only. It does not affect the screen
-in the scene, which samples the texture on the GPU and never reads it back.
-Visibility after culling is used as the in-engine substitute, and the live
-window is the way to look at pixels.
+- `Screenshot::primary_window()` returns pure black — not even the clear
+  colour — whenever the window is not the composited frontmost surface, which
+  is the normal case for a run started from a terminal.
+- `Image::new_target_texture` sets every usage needed to render *into* a
+  texture and not `COPY_SRC`, so a readback returns the zero-filled CPU side.
+
+Both produce a black PNG, which is indistinguishable from a scene that drew
+nothing. The visibility count in the report exists so that case cannot be
+mistaken for a fast one.

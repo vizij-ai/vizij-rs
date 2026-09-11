@@ -92,6 +92,17 @@ struct Cli {
     #[arg(long)]
     face: Option<String>,
 
+    /// Put a limited rotation gizmo on this joint, by name. Pass `list` to see
+    /// which joints the robot declares and what limits they carry.
+    #[arg(long)]
+    joint: Option<String>,
+
+    /// Drive the joint to this value instead of its authored default. Goes
+    /// through the same clamp a drag does, so an out-of-range value here shows
+    /// the limit holding.
+    #[arg(long)]
+    joint_value: Option<f32>,
+
     /// Render into an offscreen target and leave the window empty.
     ///
     /// With nothing presenting to the surface there is no vsync to wait on, so
@@ -114,14 +125,11 @@ struct Frames {
 /// Proof that the frames above were paid for a robot rather than an empty
 /// viewport.
 ///
-/// Reads back an offscreen render target rather than the window. A capture of
-/// the window's swapchain comes back pure black on macOS when the window is
-/// not the composited, frontmost surface — which is indistinguishable from a
+/// Reads back the main camera's offscreen target rather than the window. A
+/// capture of the window's swapchain comes back pure black whenever the window
+/// is not the composited frontmost surface — which is indistinguishable from a
 /// scene that genuinely drew nothing, and the frame counter is happy either
 /// way. An offscreen target does not depend on the window being on screen.
-///
-/// Runs during the warm-up, so the second camera it needs is gone before the
-/// first frame is sampled.
 #[derive(Resource, Default)]
 struct Capture {
     at_frame: u64,
@@ -176,6 +184,28 @@ const FACE_LAYER: usize = 1;
 
 #[derive(Component)]
 struct OrbitCamera;
+
+/// One joint, its authored range, and the body it turns.
+///
+/// The gizmo exists to answer what a limited rotator costs in Bevy. Studio
+/// gets one from drei's `PivotControls`, which brings the ring, the hover and
+/// annotation states, the drag maths and `rotationLimits` with it; Bevy has no
+/// equivalent, so each of those is drawn or written here.
+#[derive(Resource)]
+struct JointGizmo {
+    joint: robot::Joint,
+    /// The body this turns, once the scene has spawned and been found.
+    body: Option<Entity>,
+    /// The body's pose before any of this touched it.
+    rest: Transform,
+    value: f32,
+    dragging: bool,
+}
+
+/// A value asked for from outside, applied once through the same clamp a drag
+/// takes. Lets a headless run show a limit holding.
+#[derive(Resource, Default)]
+struct AskedFor(Option<f32>);
 
 /// The screen the robot declared, and the texture a face is drawing into.
 #[derive(Resource)]
@@ -233,7 +263,182 @@ fn main() {
     if cli.face.is_some() {
         mount_face(&mut app, &cli);
     }
+    if cli.joint.is_some() {
+        mount_joint(&mut app, &cli);
+    }
     app.insert_resource(cli).run();
+}
+
+/// Selects the joint to put a gizmo on, or lists what there is.
+fn mount_joint(app: &mut App, cli: &Cli) {
+    let wanted = cli.joint.clone().expect("checked by the caller");
+    let joints = match std::fs::read(cli.assets.join(&cli.glb))
+        .map_err(anyhow::Error::from)
+        .and_then(|bytes| robot::find_joints(&bytes))
+    {
+        Ok(joints) => joints,
+        Err(error) => {
+            log::error!("could not read the robot's joints: {error:#}");
+            return;
+        }
+    };
+
+    if wanted == "list" {
+        log::info!("{} joints:", joints.len());
+        for joint in &joints {
+            let limits = if joint.is_limited() {
+                format!("[{:.3}, {:.3}]", joint.min, joint.max)
+            } else {
+                "unlimited".to_string()
+            };
+            log::info!(
+                "  {:24} {:11} {limits:22} default {:.3}  axis {:.0?}",
+                joint.name,
+                joint.kind,
+                joint.default,
+                joint.axis,
+            );
+        }
+        return;
+    }
+
+    let Some(joint) = joints.into_iter().find(|j| j.name == wanted) else {
+        log::error!("no joint called {wanted:?}; pass --joint list to see them");
+        return;
+    };
+    log::info!(
+        "gizmo on {:?} ({}), range [{:.3}, {:.3}], resting at {:.3}",
+        joint.name,
+        joint.kind,
+        joint.min,
+        joint.max,
+        joint.default
+    );
+    app.insert_resource(JointGizmo {
+        value: joint.default,
+        joint,
+        body: None,
+        rest: Transform::IDENTITY,
+        dragging: false,
+    })
+    .insert_resource(AskedFor(cli.joint_value))
+    .add_systems(Update, (bind_joint, drive_joint, draw_joint).chain());
+}
+
+/// Finds the body the joint turns, once the scene has spawned.
+///
+/// The robot's glTF nodes carry no names, so Bevy names them `GltfNode{index}`
+/// — and that index is the only thing tying `RobotData` to a spawned entity.
+fn bind_joint(
+    mut gizmo: ResMut<JointGizmo>,
+    names: Query<(Entity, &Name, &Transform)>,
+    frames: Res<Frames>,
+) {
+    if gizmo.body.is_some() || frames.elapsed < 0.5 {
+        return;
+    }
+    let wanted = format!("GltfNode{}", gizmo.joint.child_node);
+    let Some((entity, _, transform)) = names.iter().find(|(_, name, _)| name.as_str() == wanted)
+    else {
+        return;
+    };
+    gizmo.rest = *transform;
+    gizmo.body = Some(entity);
+    log::info!("{:?} drives {wanted}", gizmo.joint.name);
+}
+
+/// Drags the joint within its limits, and writes the result onto the body.
+///
+/// The drag is deliberately crude — horizontal pointer motion while the left
+/// button is down. What is being measured is the clamping and the write, not
+/// the ergonomics of a ring handle.
+fn drive_joint(
+    mut gizmo: ResMut<JointGizmo>,
+    mut asked: ResMut<AskedFor>,
+    buttons: Res<ButtonInput<MouseButton>>,
+    mut motion: MessageReader<bevy::input::mouse::MouseMotion>,
+    mut bodies: Query<&mut Transform>,
+) {
+    let Some(body) = gizmo.body else {
+        motion.clear();
+        return;
+    };
+    gizmo.dragging = buttons.pressed(MouseButton::Left);
+    let dragged: f32 = motion.read().map(|m| m.delta.x).sum();
+    let wanted = match asked.0.take() {
+        Some(value) => Some(value),
+        None if gizmo.dragging && dragged != 0.0 => Some(gizmo.value + dragged * 0.01),
+        None => None,
+    };
+    if let Some(wanted) = wanted {
+        // The authored range is the whole point: a joint driven past its limit
+        // is not a pose the robot can hold.
+        gizmo.value = if gizmo.joint.is_limited() {
+            wanted.clamp(gizmo.joint.min, gizmo.joint.max)
+        } else {
+            wanted
+        };
+        if wanted != gizmo.value {
+            log::info!(
+                "{:?} asked for {wanted:.3}, held at {:.3}",
+                gizmo.joint.name,
+                gizmo.value
+            );
+        }
+    }
+
+    let Ok(mut transform) = bodies.get_mut(body) else {
+        return;
+    };
+    let turn = Quat::from_axis_angle(gizmo.joint.axis, gizmo.value - gizmo.joint.default);
+    *transform = Transform {
+        rotation: gizmo.rest.rotation * turn,
+        ..gizmo.rest
+    };
+}
+
+/// Draws the range as an arc, with a spoke at the current value.
+fn draw_joint(gizmo: Res<JointGizmo>, mut gizmos: Gizmos) {
+    if gizmo.body.is_none() {
+        return;
+    }
+    let joint = &gizmo.joint;
+    let centre = joint.at.translation;
+    let radius = 0.12;
+    let colour: Color = joint.color.unwrap_or(Srgba::hex("22c55e").unwrap()).into();
+
+    // The arc is drawn in the plane the joint turns in, so it has to be
+    // rotated from the gizmo's own +Z out to the joint's axis.
+    let frame = Quat::from_rotation_arc(Vec3::Z, joint.axis);
+    let isometry = Isometry3d::new(centre, frame);
+
+    if joint.is_limited() {
+        let span = joint.max - joint.min;
+        gizmos
+            .arc_3d(
+                span,
+                radius,
+                Isometry3d::new(centre, frame * Quat::from_rotation_z(joint.min)),
+                colour,
+            )
+            .resolution(64);
+        // The ends of the range, as stops rather than a fading arc.
+        for limit in [joint.min, joint.max] {
+            let spoke = frame * (Quat::from_rotation_z(limit) * Vec3::X) * radius;
+            gizmos.line(centre + spoke * 0.8, centre + spoke * 1.15, colour);
+        }
+    } else {
+        gizmos.circle(isometry, radius, colour.with_alpha(0.35));
+    }
+
+    // Where the joint currently stands.
+    let handle = frame * (Quat::from_rotation_z(gizmo.value) * Vec3::X) * radius;
+    gizmos.line(centre, centre + handle, Color::WHITE);
+    gizmos.sphere(
+        Isometry3d::from_translation(centre + handle),
+        0.012,
+        if gizmo.dragging { Color::WHITE } else { colour },
+    );
 }
 
 /// Puts a face on the screen the robot declares.
