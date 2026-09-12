@@ -65,17 +65,45 @@ impl Plugin for JointRingPlugin {
     }
 }
 
-/// Normalises a joint's limits the way Studio's `getVisualLimits` does: into
-/// `[0, 2pi)`, where a range may wrap through zero, and where anything wider
-/// than a full turn is just a full turn.
-pub fn visual_limits(min: f32, max: f32) -> (f32, f32) {
-    if !min.is_finite() || !max.is_finite() || max - min >= std::f32::consts::TAU {
-        return (0.0, std::f32::consts::TAU);
-    }
-    (wrap(min), wrap(max))
+/// A joint's range as the ring draws it: measured from one end rather than
+/// from the joint's own zero.
+///
+/// The shader fills from `min` to the current value, so the range has to be
+/// **shifted** to start at zero, not wrapped into `[0, 2pi)`. Wrapping a range
+/// like `[-pi/2, pi/2]` puts its start at 4.71 and its end at 1.57, which the
+/// shader then reads as a range crossing zero — and fills the whole half the
+/// joint has already passed. Studio shifts for the same reason, in
+/// `getVisualLimits` and `getVisualValueNormalizer`.
+///
+/// `origin` is where the ring's own zero has to point for the drawing to line
+/// up with the directions the joint can actually reach.
+#[derive(Debug, Clone, Copy)]
+pub struct VisualRange {
+    pub origin: f32,
+    pub min: f32,
+    pub max: f32,
 }
 
-/// An angle in `[0, 2pi)`.
-pub fn wrap(angle: f32) -> f32 {
-    angle.rem_euclid(std::f32::consts::TAU)
+impl VisualRange {
+    pub fn of(min: f32, max: f32) -> Self {
+        // An unbounded joint turns forever, so its ring is a whole turn read
+        // from the joint's own zero.
+        if !min.is_finite() || !max.is_finite() || max - min >= std::f32::consts::TAU {
+            return Self {
+                origin: 0.0,
+                min: 0.0,
+                max: std::f32::consts::TAU,
+            };
+        }
+        Self {
+            origin: min,
+            min: 0.0,
+            max: max - min,
+        }
+    }
+
+    /// Where a joint value sits in this range.
+    pub fn value(&self, value: f32) -> f32 {
+        (value - self.origin).rem_euclid(std::f32::consts::TAU)
+    }
 }

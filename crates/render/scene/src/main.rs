@@ -213,6 +213,8 @@ struct JointGizmo {
     value: f32,
     dragging: bool,
     hovered: bool,
+    /// The range as the ring draws it, measured from one end.
+    range: ring::VisualRange,
     /// The two tori: thin while idle, thick and shaded while in hand.
     idle: Option<Entity>,
     active: Option<Entity>,
@@ -333,6 +335,7 @@ fn mount_joint(app: &mut App, cli: &Cli) {
     );
     app.insert_resource(JointGizmo {
         value: joint.default,
+        range: ring::VisualRange::of(joint.min, joint.max),
         joint,
         body: None,
         rest: Transform::IDENTITY,
@@ -378,7 +381,7 @@ fn bind_joint(
     };
     gizmo.rest = *transform;
     gizmo.body = Some(entity);
-    let (min, max) = ring::visual_limits(gizmo.joint.min, gizmo.joint.max);
+    let range = gizmo.range;
     let colour = gizmo
         .joint
         .color
@@ -409,9 +412,9 @@ fn bind_joint(
                 })),
                 MeshMaterial3d(rings.add(JointRingMaterial {
                     ring: JointRingUniform {
-                        min,
-                        max,
-                        current: ring::wrap(gizmo.value),
+                        min: range.min,
+                        max: range.max,
+                        current: range.value(gizmo.value),
                         color: colour.to_vec4(),
                         background: Srgba::hex("333333").expect("literal").to_vec4(),
                         ..default()
@@ -449,16 +452,20 @@ struct JointPlane {
 }
 
 impl JointPlane {
-    /// Orients a torus mesh onto this plane. Bevy builds one around +Y, so the
-    /// plane's axis becomes the mesh's up and the ring's zero lies along `u` —
-    /// which is where the mesh's own winding starts, so the shader's angle and
-    /// this basis agree without an offset.
-    fn for_torus(&self) -> Quat {
-        Quat::from_mat3(&Mat3::from_cols(
-            self.u,
-            self.axis,
-            -self.axis.cross(self.u),
-        ))
+    /// Orients a torus mesh so its own angle runs the way this plane measures
+    /// angles, starting from `origin`.
+    ///
+    /// Two corrections live here. The mesh's up is the plane's axis
+    /// **negated**, because a torus winds the opposite way about its own axis
+    /// from the way this basis measures — without that the ring fills against
+    /// the drag. A torus is symmetric about its plane, so flipping its up
+    /// changes the winding and nothing about how it looks. And the zero is
+    /// turned to `origin`, so the span the shader draws lands on the
+    /// directions the joint can actually reach rather than starting wherever
+    /// `u` happened to fall.
+    fn for_torus(&self, origin: f32) -> Quat {
+        let start = self.u * origin.cos() + self.v * origin.sin();
+        Quat::from_mat3(&Mat3::from_cols(start, -self.axis, self.axis.cross(start)))
     }
 }
 
@@ -634,7 +641,7 @@ fn draw_joint(
     let plane = joint_plane(&gizmo.joint, body);
     let placement = Transform {
         translation: plane.centre,
-        rotation: plane.for_torus(),
+        rotation: plane.for_torus(gizmo.range.origin),
         scale: Vec3::ONE,
     };
     let in_hand = gizmo.hovered || gizmo.dragging;
@@ -662,7 +669,7 @@ fn draw_joint(
     };
     // `get_mut` hands back a change-detection guard, not a plain reference.
     if let Some(mut material) = rings.get_mut(&handle.0) {
-        material.ring.current = ring::wrap(gizmo.value);
+        material.ring.current = gizmo.range.value(gizmo.value);
     }
 }
 
