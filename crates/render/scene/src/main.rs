@@ -16,6 +16,7 @@
 //! Percentiles rather than an average: a mean hides the stalls that make a
 //! viewport feel bad, and the 99th is what a person notices.
 
+mod ring;
 mod robot;
 
 use std::path::PathBuf;
@@ -29,6 +30,7 @@ use bevy::render::render_resource::{TextureFormat, TextureUsages};
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 use bevy::window::PresentMode;
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin, PanOrbitCameraSystemSet};
+use ring::{JointRingMaterial, JointRingPlugin, JointRingUniform};
 use vizij_render::{
     Face, FaceLayer, FaceMeta, Fit, OffscreenTarget, PoseFeed, ViewOptions, ViewPlugin,
 };
@@ -101,6 +103,11 @@ struct Cli {
     /// which joints the robot declares and what limits they carry.
     #[arg(long)]
     joint: Option<String>,
+
+    /// Hold the ring in its hovered state. The hover follows the pointer, so
+    /// a headless capture cannot otherwise show the shaded ring at all.
+    #[arg(long, default_value_t = false)]
+    ring_active: bool,
 
     /// Drive the joint to this value instead of its authored default. Goes
     /// through the same clamp a drag does, so an out-of-range value here shows
@@ -205,6 +212,10 @@ struct JointGizmo {
     rest: Transform,
     value: f32,
     dragging: bool,
+    hovered: bool,
+    /// The two tori: thin while idle, thick and shaded while in hand.
+    idle: Option<Entity>,
+    active: Option<Entity>,
 }
 
 /// A value asked for from outside, applied once through the same clamp a drag
@@ -247,7 +258,7 @@ fn main() {
             // The process installs its own logger before Bevy starts.
             .disable::<bevy::log::LogPlugin>(),
     )
-    .add_plugins(PanOrbitCameraPlugin)
+    .add_plugins((PanOrbitCameraPlugin, JointRingPlugin))
     .init_resource::<Frames>()
     .init_resource::<Census>()
     .init_resource::<Framing>()
@@ -326,6 +337,9 @@ fn mount_joint(app: &mut App, cli: &Cli) {
         body: None,
         rest: Transform::IDENTITY,
         dragging: false,
+        hovered: false,
+        idle: None,
+        active: None,
     })
     .insert_resource(AskedFor(cli.joint_value))
     .add_systems(Startup, (spawn_label, gizmos_on_top))
@@ -343,8 +357,13 @@ fn mount_joint(app: &mut App, cli: &Cli) {
 ///
 /// The robot's glTF nodes carry no names, so Bevy names them `GltfNode{index}`
 /// — and that index is the only thing tying `RobotData` to a spawned entity.
+#[allow(clippy::too_many_arguments)]
 fn bind_joint(
     mut gizmo: ResMut<JointGizmo>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut plain: ResMut<Assets<StandardMaterial>>,
+    mut rings: ResMut<Assets<JointRingMaterial>>,
     names: Query<(Entity, &Name, &Transform, &GlobalTransform)>,
     frames: Res<Frames>,
 ) {
@@ -359,6 +378,49 @@ fn bind_joint(
     };
     gizmo.rest = *transform;
     gizmo.body = Some(entity);
+    let (min, max) = ring::visual_limits(gizmo.joint.min, gizmo.joint.max);
+    let colour = gizmo
+        .joint
+        .color
+        .unwrap_or(Srgba::hex("e8c547").expect("literal"));
+    gizmo.idle = Some(
+        commands
+            .spawn((
+                Mesh3d(meshes.add(Torus {
+                    minor_radius: HANDLE_RADIUS * 0.02,
+                    major_radius: HANDLE_RADIUS,
+                })),
+                MeshMaterial3d(plain.add(StandardMaterial {
+                    base_color: Color::from(colour).with_alpha(0.5),
+                    unlit: true,
+                    alpha_mode: AlphaMode::Blend,
+                    depth_bias: f32::MAX,
+                    ..default()
+                })),
+            ))
+            .id(),
+    );
+    gizmo.active = Some(
+        commands
+            .spawn((
+                Mesh3d(meshes.add(Torus {
+                    minor_radius: HANDLE_RADIUS * 0.1,
+                    major_radius: HANDLE_RADIUS,
+                })),
+                MeshMaterial3d(rings.add(JointRingMaterial {
+                    ring: JointRingUniform {
+                        min,
+                        max,
+                        current: ring::wrap(gizmo.value),
+                        color: colour.to_vec4(),
+                        background: Srgba::hex("333333").expect("literal").to_vec4(),
+                        ..default()
+                    },
+                })),
+                Visibility::Hidden,
+            ))
+            .id(),
+    );
     log::info!(
         "{:?} drives {wanted}; axis {:.2?} locally, {:.2?} in the world",
         gizmo.joint.name,
@@ -387,21 +449,16 @@ struct JointPlane {
 }
 
 impl JointPlane {
-    /// A point on the ring at `radius` from the centre.
-    fn at(&self, angle: f32, radius: f32) -> Vec3 {
-        self.centre + (self.u * angle.cos() + self.v * angle.sin()) * radius
-    }
-
-    /// Orients `circle`, whose XY plane has to become this one.
-    fn for_circle(&self) -> Quat {
-        Quat::from_mat3(&Mat3::from_cols(self.u, self.v, self.axis))
-    }
-
-    /// Orients `arc_3d`, so that its +X start lies along `from` and its +Y
-    /// sweep axis lies along this plane's.
-    fn for_arc(&self, from: f32) -> Quat {
-        let start = self.u * from.cos() + self.v * from.sin();
-        Quat::from_mat3(&Mat3::from_cols(start, self.axis, -self.axis.cross(start)))
+    /// Orients a torus mesh onto this plane. Bevy builds one around +Y, so the
+    /// plane's axis becomes the mesh's up and the ring's zero lies along `u` —
+    /// which is where the mesh's own winding starts, so the shader's angle and
+    /// this basis agree without an offset.
+    fn for_torus(&self) -> Quat {
+        Quat::from_mat3(&Mat3::from_cols(
+            self.u,
+            self.axis,
+            -self.axis.cross(self.u),
+        ))
     }
 }
 
@@ -456,6 +513,16 @@ fn angle_under_pointer(
 
 const HANDLE_RADIUS: f32 = 0.12;
 
+/// Whether a hit on the joint's plane counts as being on the ring.
+///
+/// A band rather than the tube's own surface, because the plane a ray is
+/// tested against reaches across the whole scene: without this a click
+/// anywhere would take hold of the joint. Studio does the same thing with a
+/// fatter invisible torus in front of the visible one.
+fn near_ring(distance: f32) -> bool {
+    (HANDLE_RADIUS * 0.45..=HANDLE_RADIUS * 1.7).contains(&distance)
+}
+
 /// Drags the joint within its limits, and writes the result onto the body.
 ///
 /// This is a real rotator rather than a pointer-delta: the cursor ray is
@@ -463,7 +530,9 @@ const HANDLE_RADIUS: f32 = 0.12;
 /// handle stays under the pointer whatever the camera is doing. Grabbing
 /// records the offset between the pointer's angle and the joint's value, so
 /// the handle does not jump to the cursor on the first frame.
+#[allow(clippy::too_many_arguments)]
 fn drive_joint(
+    cli: Res<Cli>,
     mut gizmo: ResMut<JointGizmo>,
     mut asked: ResMut<AskedFor>,
     buttons: Res<ButtonInput<MouseButton>>,
@@ -487,6 +556,11 @@ fn drive_joint(
             angle_under_pointer(&gizmo.joint, &body_at, camera, camera_at, cursor)
         });
 
+    // Near the ring is what "hovered" means, and it is the same test a press
+    // has to pass — so what lights up under the pointer is exactly what a
+    // click would take hold of.
+    gizmo.hovered = cli.ring_active || pointer.is_some_and(|(_, distance)| near_ring(distance));
+
     if !buttons.pressed(MouseButton::Left) {
         *grab = None;
     } else if grab.is_none() {
@@ -494,8 +568,7 @@ fn drive_joint(
         // click anywhere grabs the joint, because the plane the ray is tested
         // against extends across the whole scene.
         if let Some((angle, distance)) = pointer {
-            let near_ring = (HANDLE_RADIUS * 0.45..=HANDLE_RADIUS * 1.7).contains(&distance);
-            if near_ring {
+            if near_ring(distance) {
                 *grab = Some(angle - gizmo.value);
             }
         }
@@ -541,68 +614,56 @@ fn drive_joint(
     };
 }
 
-/// Draws the range as an arc, with a spoke at the current value.
-fn draw_joint(gizmo: Res<JointGizmo>, bodies: Query<&GlobalTransform>, mut gizmos: Gizmos) {
+/// Sits the rings on the joint's plane and tells the shader where the joint
+/// stands.
+///
+/// Bevy's torus is built around +Y, so the plane's axis becomes the mesh's up.
+/// The shader reads its angle from the mesh's own winding, which starts at +X
+/// — the same direction this basis calls zero — so the two agree without an
+/// offset.
+fn draw_joint(
+    gizmo: Res<JointGizmo>,
+    bodies: Query<&GlobalTransform>,
+    mut rings: ResMut<Assets<JointRingMaterial>>,
+    mut parts: Query<(&mut Transform, &mut Visibility)>,
+    handles: Query<&MeshMaterial3d<JointRingMaterial>>,
+) {
     let Some(body) = gizmo.body.and_then(|body| bodies.get(body).ok()) else {
         return;
     };
-    let joint = &gizmo.joint;
-    // The same plane the drag is measured against, so what is drawn and what
-    // is grabbed cannot drift apart.
-    let plane = joint_plane(joint, body);
-    let centre = plane.centre;
-    let radius = HANDLE_RADIUS;
-    let colour: Color = joint.color.unwrap_or(Srgba::hex("22c55e").unwrap()).into();
-
-    // `across` is a fraction of the ring's radius, not a distance.
-    let at = |angle: f32, across: f32| plane.at(angle, radius * across);
-
-    // A band of concentric arcs rather than one line, so the ring reads as a
-    // tube the way a torus would, without a mesh to keep in step with the
-    // joint.
-    let band = [0.94, 0.97, 1.0, 1.03, 1.06];
-    let make_arc = |gizmos: &mut Gizmos, from: f32, to: f32, colour: Color| {
-        for scale in band {
-            gizmos
-                .arc_3d(
-                    to - from,
-                    radius * scale,
-                    Isometry3d::new(centre, plane.for_arc(from)),
-                    colour,
-                )
-                .resolution(48);
-        }
+    let plane = joint_plane(&gizmo.joint, body);
+    let placement = Transform {
+        translation: plane.centre,
+        rotation: plane.for_torus(),
+        scale: Vec3::ONE,
     };
+    let in_hand = gizmo.hovered || gizmo.dragging;
 
-    // The whole turn first, faint. A ring that is only drawn where the joint
-    // can reach stops reading as a ring at all — a half-range arc seen at an
-    // angle looks like a circle bent in half rather than a flat collar.
-    //
-    // Drawn with `circle` rather than an `arc_3d` of a full turn: a TAU sweep
-    // does not come out as a closed circle, it degenerates to a line.
-    for scale in band {
-        gizmos.circle(
-            Isometry3d::new(centre, plane.for_circle()),
-            radius * scale,
-            colour.with_alpha(0.4),
-        );
-    }
-    if joint.is_limited() {
-        // Then the reachable part over the top of it, and a stop at each end.
-        make_arc(&mut gizmos, joint.min, joint.max, colour);
-        for limit in [joint.min, joint.max] {
-            gizmos.line(at(limit, 0.86), at(limit, 1.14), colour);
-        }
+    for (part, shown) in [(gizmo.idle, !in_hand), (gizmo.active, in_hand)] {
+        let Some(part) = part else { continue };
+        let Ok((mut transform, mut visibility)) = parts.get_mut(part) else {
+            continue;
+        };
+        *transform = placement;
+        *visibility = if shown {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
     }
 
-    // Where the joint currently stands: a spoke out to a handle on the ring.
-    let handle = at(gizmo.value, 1.0);
-    let lit = if gizmo.dragging { Color::WHITE } else { colour };
-    gizmos.sphere(
-        Isometry3d::from_translation(handle),
-        if gizmo.dragging { 0.018 } else { 0.014 },
-        lit,
-    );
+    // The travelled span runs from the range's start to where the joint is, so
+    // the shader wants the value in the same wrapped space as the limits.
+    let Some(active) = gizmo.active else {
+        return;
+    };
+    let Ok(handle) = handles.get(active) else {
+        return;
+    };
+    // `get_mut` hands back a change-detection guard, not a plain reference.
+    if let Some(mut material) = rings.get_mut(&handle.0) {
+        material.ring.current = ring::wrap(gizmo.value);
+    }
 }
 
 /// The gizmo's readout: which joint, and where it stands in degrees.
