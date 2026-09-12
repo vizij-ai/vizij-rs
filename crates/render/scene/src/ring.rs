@@ -15,6 +15,10 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
 use bevy::shader::ShaderRef;
 
+/// Enough bias to sit a control in front of the geometry it controls, without
+/// the saturation that an infinite one invites.
+pub const DEPTH_IN_FRONT: f32 = 1.0e6;
+
 /// What the ring needs to know to shade itself.
 #[derive(ShaderType, Debug, Clone, Default)]
 pub struct JointRingUniform {
@@ -50,7 +54,29 @@ impl Material for JointRingMaterial {
     /// bias is the same intent and keeps the ring sorting sanely against
     /// itself.
     fn depth_bias(&self) -> f32 {
-        f32::MAX
+        DEPTH_IN_FRONT
+    }
+}
+
+/// The sliding joint's bar. Same uniforms, different geometry: a slide has two
+/// ends and no wrapping, so this is the ring's shader without the circle.
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone, Default)]
+pub struct JointBarMaterial {
+    #[uniform(0)]
+    pub bar: JointRingUniform,
+}
+
+impl Material for JointBarMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "embedded://scene/joint_bar.wgsl".into()
+    }
+
+    fn alpha_mode(&self) -> AlphaMode {
+        AlphaMode::Blend
+    }
+
+    fn depth_bias(&self) -> f32 {
+        DEPTH_IN_FRONT
     }
 }
 
@@ -61,7 +87,11 @@ impl Plugin for JointRingPlugin {
         // Carried in the binary rather than loaded from the asset root, which
         // here is wherever the robot happens to live.
         embedded_asset!(app, "joint_ring.wgsl");
-        app.add_plugins(MaterialPlugin::<JointRingMaterial>::default());
+        embedded_asset!(app, "joint_bar.wgsl");
+        app.add_plugins((
+            MaterialPlugin::<JointRingMaterial>::default(),
+            MaterialPlugin::<JointBarMaterial>::default(),
+        ));
     }
 }
 

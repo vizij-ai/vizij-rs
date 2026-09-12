@@ -43,12 +43,61 @@ impl Screen {
     }
 }
 
+/// How a joint moves, which decides what kind of control it takes.
+///
+/// A platform is free to use any of these on any link, so nothing downstream
+/// may assume a joint turns — that assumption is what made a sliding joint
+/// silently rotate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JointKind {
+    /// Turns about its axis, within limits.
+    Revolute,
+    /// Turns about its axis without end.
+    Continuous,
+    /// Slides along its axis, within limits.
+    Prismatic,
+    /// Does not move; carries its child along.
+    Fixed,
+}
+
+impl JointKind {
+    fn parse(kind: &str) -> Option<Self> {
+        Some(match kind {
+            "revolute" => Self::Revolute,
+            "continuous" => Self::Continuous,
+            "prismatic" => Self::Prismatic,
+            "fixed" => Self::Fixed,
+            _ => return None,
+        })
+    }
+
+    /// Whether a person can drive it at all.
+    pub fn is_drivable(&self) -> bool {
+        !matches!(self, Self::Fixed)
+    }
+
+    /// Whether its value is an angle. The alternative is a distance, and the
+    /// two are not interchangeable: 0.09 is a twentieth of a turn or nine
+    /// centimetres depending on this.
+    pub fn is_angular(&self) -> bool {
+        matches!(self, Self::Revolute | Self::Continuous)
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Revolute => "revolute",
+            Self::Continuous => "continuous",
+            Self::Prismatic => "prismatic",
+            Self::Fixed => "fixed",
+        }
+    }
+}
+
 /// A joint the robot declares, with the range its value is allowed to take.
 #[derive(Debug, Clone)]
 pub struct Joint {
     pub name: String,
-    /// `revolute`, `continuous`, `prismatic` or `fixed`.
-    pub kind: String,
+    pub kind: JointKind,
     pub axis: Vec3,
     /// The glTF node index of the body this joint moves. Bevy names an unnamed
     /// glTF node `GltfNode{index}`, which is the only join back to the spawned
@@ -100,10 +149,13 @@ pub fn find_joints(bytes: &[u8]) -> Result<Vec<Joint>> {
         let Some(data) = node.pointer("/extensions/RobotData") else {
             continue;
         };
-        let kind = data.get("type").and_then(Json::as_str).unwrap_or_default();
-        if !matches!(kind, "revolute" | "continuous" | "prismatic" | "fixed") {
+        let Some(kind) = data
+            .get("type")
+            .and_then(Json::as_str)
+            .and_then(JointKind::parse)
+        else {
             continue;
-        }
+        };
         let Some(&child_node) = data
             .get("child")
             .and_then(Json::as_str)
@@ -133,7 +185,7 @@ pub fn find_joints(bytes: &[u8]) -> Result<Vec<Joint>> {
                 .and_then(Json::as_str)
                 .unwrap_or("(unnamed)")
                 .to_string(),
-            kind: kind.to_string(),
+            kind,
             axis: axis.normalize_or(Vec3::Y),
             child_node,
             min: number("/constraints/min").unwrap_or(f32::NEG_INFINITY),

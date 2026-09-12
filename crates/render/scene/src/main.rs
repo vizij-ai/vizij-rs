@@ -30,7 +30,9 @@ use bevy::render::render_resource::{TextureFormat, TextureUsages};
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 use bevy::window::PresentMode;
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin, PanOrbitCameraSystemSet};
-use ring::{JointRingMaterial, JointRingPlugin, JointRingUniform};
+use ring::{
+    JointBarMaterial, JointRingMaterial, JointRingPlugin, JointRingUniform, DEPTH_IN_FRONT,
+};
 use vizij_render::{
     Face, FaceLayer, FaceMeta, Fit, OffscreenTarget, PoseFeed, ViewOptions, ViewPlugin,
 };
@@ -313,7 +315,7 @@ fn mount_joint(app: &mut App, cli: &Cli) {
             log::info!(
                 "  {:24} {:11} {limits:22} default {:.3}  axis {:.0?}",
                 joint.name,
-                joint.kind,
+                joint.kind.as_str(),
                 joint.default,
                 joint.axis,
             );
@@ -325,10 +327,20 @@ fn mount_joint(app: &mut App, cli: &Cli) {
         log::error!("no joint called {wanted:?}; pass --joint list to see them");
         return;
     };
+    // A fixed joint holds its child in place; offering a control for it would
+    // be a handle that moves something the robot cannot move.
+    if !joint.kind.is_drivable() {
+        log::error!(
+            "{:?} is {} — it does not move, so it takes no control",
+            joint.name,
+            joint.kind.as_str()
+        );
+        return;
+    }
     log::info!(
         "gizmo on {:?} ({}), range [{:.3}, {:.3}], resting at {:.3}",
         joint.name,
-        joint.kind,
+        joint.kind.as_str(),
         joint.min,
         joint.max,
         joint.default
@@ -350,7 +362,7 @@ fn mount_joint(app: &mut App, cli: &Cli) {
         Update,
         // Before the camera reads the same button, so a press that grabs the
         // ring has already taken the camera out of the running.
-        (bind_joint, drive_joint, draw_joint, place_label)
+        (bind_joint, drive_joint, draw_joint, drive_bar, place_label)
             .chain()
             .before(PanOrbitCameraSystemSet),
     );
@@ -367,6 +379,7 @@ fn bind_joint(
     mut meshes: ResMut<Assets<Mesh>>,
     mut plain: ResMut<Assets<StandardMaterial>>,
     mut rings: ResMut<Assets<JointRingMaterial>>,
+    mut bars: ResMut<Assets<JointBarMaterial>>,
     names: Query<(Entity, &Name, &Transform, &GlobalTransform)>,
     frames: Res<Frames>,
 ) {
@@ -386,44 +399,69 @@ fn bind_joint(
         .joint
         .color
         .unwrap_or(Srgba::hex("e8c547").expect("literal"));
+    let uniform = JointRingUniform {
+        min: range.min,
+        max: range.max,
+        current: range.value(gizmo.value),
+        color: colour.to_vec4(),
+        background: Srgba::hex("333333").expect("literal").to_vec4(),
+        ..default()
+    };
+    // Thin while idle, thick once in hand — the swap is the hover, as it is in
+    // Studio's `axis-rotator` and `axis-slider` alike.
+    let idle_material = plain.add(StandardMaterial {
+        base_color: Color::from(colour).with_alpha(0.5),
+        unlit: true,
+        alpha_mode: AlphaMode::Blend,
+        depth_bias: DEPTH_IN_FRONT,
+        ..default()
+    });
+    let angular = gizmo.joint.kind.is_angular();
+
+    let (idle_mesh, active_mesh) = if angular {
+        (
+            meshes.add(Torus {
+                minor_radius: HANDLE_RADIUS * 0.02,
+                major_radius: HANDLE_RADIUS,
+            }),
+            meshes.add(Torus {
+                minor_radius: HANDLE_RADIUS * 0.1,
+                major_radius: HANDLE_RADIUS,
+            }),
+        )
+    } else {
+        // A bar as long as the joint's travel, so its size states the range
+        // the way the ring's arc does.
+        let travel = (range.max - range.min).max(1e-3);
+        let width = HANDLE_RADIUS;
+        (
+            meshes.add(Cuboid::new(width * 0.04, travel, width * 0.04)),
+            meshes.add(Cuboid::new(width * 0.18, travel, width * 0.18)),
+        )
+    };
+
     gizmo.idle = Some(
         commands
-            .spawn((
-                Mesh3d(meshes.add(Torus {
-                    minor_radius: HANDLE_RADIUS * 0.02,
-                    major_radius: HANDLE_RADIUS,
-                })),
-                MeshMaterial3d(plain.add(StandardMaterial {
-                    base_color: Color::from(colour).with_alpha(0.5),
-                    unlit: true,
-                    alpha_mode: AlphaMode::Blend,
-                    depth_bias: f32::MAX,
-                    ..default()
-                })),
-            ))
+            .spawn((Mesh3d(idle_mesh), MeshMaterial3d(idle_material)))
             .id(),
     );
-    gizmo.active = Some(
+    gizmo.active = Some(if angular {
         commands
             .spawn((
-                Mesh3d(meshes.add(Torus {
-                    minor_radius: HANDLE_RADIUS * 0.1,
-                    major_radius: HANDLE_RADIUS,
-                })),
-                MeshMaterial3d(rings.add(JointRingMaterial {
-                    ring: JointRingUniform {
-                        min: range.min,
-                        max: range.max,
-                        current: range.value(gizmo.value),
-                        color: colour.to_vec4(),
-                        background: Srgba::hex("333333").expect("literal").to_vec4(),
-                        ..default()
-                    },
-                })),
+                Mesh3d(active_mesh),
+                MeshMaterial3d(rings.add(JointRingMaterial { ring: uniform })),
                 Visibility::Hidden,
             ))
-            .id(),
-    );
+            .id()
+    } else {
+        commands
+            .spawn((
+                Mesh3d(active_mesh),
+                MeshMaterial3d(bars.add(JointBarMaterial { bar: uniform })),
+                Visibility::Hidden,
+            ))
+            .id()
+    });
     log::info!(
         "{:?} drives {wanted}; axis {:.2?} locally, {:.2?} in the world",
         gizmo.joint.name,
@@ -614,10 +652,20 @@ fn drive_joint(
     let Ok((mut transform, _)) = bodies.get_mut(body) else {
         return;
     };
-    let turn = Quat::from_axis_angle(gizmo.joint.axis, gizmo.value - gizmo.joint.default);
-    *transform = Transform {
-        rotation: gizmo.rest.rotation * turn,
-        ..gizmo.rest
+    // Radians about the axis, or metres along it. Reading a joint's value as
+    // the wrong one of those is silent — the body just moves wrongly — which is
+    // why the kind decides here rather than being assumed.
+    let moved = gizmo.value - gizmo.joint.default;
+    *transform = if gizmo.joint.kind.is_angular() {
+        Transform {
+            rotation: gizmo.rest.rotation * Quat::from_axis_angle(gizmo.joint.axis, moved),
+            ..gizmo.rest
+        }
+    } else {
+        Transform {
+            translation: gizmo.rest.translation + gizmo.rest.rotation * gizmo.joint.axis * moved,
+            ..gizmo.rest
+        }
     };
 }
 
@@ -639,10 +687,28 @@ fn draw_joint(
         return;
     };
     let plane = joint_plane(&gizmo.joint, body);
-    let placement = Transform {
-        translation: plane.centre,
-        rotation: plane.for_torus(gizmo.range.origin),
-        scale: Vec3::ONE,
+    let placement = if gizmo.joint.kind.is_angular() {
+        // A turning joint pivots where it stands, so the ring sits on it.
+        Transform {
+            translation: plane.centre,
+            rotation: plane.for_torus(gizmo.range.origin),
+            scale: Vec3::ONE,
+        }
+    } else {
+        // A sliding one carries its body away, so the bar has to stay put
+        // while the body travels along it — anchored to the middle of the
+        // travel rather than to wherever the body currently is.
+        let middle = (gizmo.joint.min + gizmo.joint.max) * 0.5;
+        Transform {
+            // Offset clear of the link. A ring is wider than the thing it
+            // turns and so reads from outside it; a bar laid on the axis sits
+            // inside the housing it slides, where no depth bias will save it.
+            translation: plane.centre
+                + plane.axis * (middle - gizmo.value)
+                + plane.u * HANDLE_RADIUS,
+            rotation: Quat::from_rotation_arc(Vec3::Y, plane.axis),
+            scale: Vec3::ONE,
+        }
     };
     let in_hand = gizmo.hovered || gizmo.dragging;
 
@@ -670,6 +736,20 @@ fn draw_joint(
     // `get_mut` hands back a change-detection guard, not a plain reference.
     if let Some(mut material) = rings.get_mut(&handle.0) {
         material.ring.current = gizmo.range.value(gizmo.value);
+    }
+}
+
+/// The sliding joint's bar, kept current the same way its ring counterpart is.
+fn drive_bar(
+    gizmo: Res<JointGizmo>,
+    mut bars: ResMut<Assets<JointBarMaterial>>,
+    handles: Query<&MeshMaterial3d<JointBarMaterial>>,
+) {
+    let Some(handle) = gizmo.active.and_then(|part| handles.get(part).ok()) else {
+        return;
+    };
+    if let Some(mut material) = bars.get_mut(&handle.0) {
+        material.bar.current = gizmo.range.value(gizmo.value);
     }
 }
 
@@ -773,7 +853,13 @@ fn place_label(
         if let Ok((mut text, mut text_colour)) = texts.get_mut(child) {
             // Bevy's bundled fallback font carries ASCII only, so a degree
             // sign renders as tofu. A real build ships a font and can use one.
-            text.0 = format!("{}   {:.1} deg", gizmo.joint.name, gizmo.value.to_degrees());
+            text.0 = if gizmo.joint.kind.is_angular() {
+                format!("{}   {:.1} deg", gizmo.joint.name, gizmo.value.to_degrees())
+            } else {
+                // A sliding joint's value is a distance; reporting it in
+                // degrees is the same category error as rotating it.
+                format!("{}   {:.0} mm", gizmo.joint.name, gizmo.value * 1000.0)
+            };
             text_colour.0 = colour;
         }
     }
