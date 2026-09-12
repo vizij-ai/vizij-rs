@@ -13,6 +13,12 @@ log = "0.4"
 env_logger = "0.11"
 clap = { version = "4", features = ["derive"] }
 
+# Camera controls. A hand-rolled orbit gets the drag conventions wrong on some
+# devices and has no inertia, focus handling or zoom limits; this is the
+# ecosystem's answer and tracks Bevy's releases. `bevy_egui` is an optional
+# feature of it and stays off.
+bevy_panorbit_camera = { version = "0.35", default-features = false }
+
 # What the scene reaches into the face crate for, as of the screen work:
 # `ViewPlugin` and its `Face`/`PoseFeed`/`ViewOptions`/`OffscreenTarget`/
 # `FaceLayer` resources to draw a face into a texture, and `meta::glb_json_chunk`

@@ -28,6 +28,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{TextureFormat, TextureUsages};
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 use bevy::window::PresentMode;
+use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 use vizij_render::{
     Face, FaceLayer, FaceMeta, Fit, OffscreenTarget, PoseFeed, ViewOptions, ViewPlugin,
 };
@@ -53,9 +54,9 @@ struct Cli {
     #[arg(long, default_value_t = false)]
     still: bool,
 
-    /// Where a still camera stands, in radians about the model. The robot's
-    /// screen faces -X, so pi looks it in the face.
-    #[arg(long, default_value_t = std::f32::consts::PI)]
+    /// Where the camera starts, as a yaw in radians about the model. Defaults
+    /// to looking the robot in the face.
+    #[arg(long, default_value_t = -std::f32::consts::FRAC_PI_2)]
     angle: f32,
 
     /// Drop shadows, to price them separately.
@@ -242,10 +243,10 @@ fn main() {
             // The process installs its own logger before Bevy starts.
             .disable::<bevy::log::LogPlugin>(),
     )
+    .add_plugins(PanOrbitCameraPlugin)
     .init_resource::<Frames>()
     .init_resource::<Census>()
     .init_resource::<Framing>()
-    .init_resource::<Orbit>()
     .init_resource::<Capture>()
     .add_systems(Startup, setup)
     .add_systems(
@@ -253,7 +254,7 @@ fn main() {
         (
             take_census,
             spawn_marker,
-            orbit_camera,
+            fit_orbit,
             count_visible,
             capture,
             measure,
@@ -782,6 +783,11 @@ fn setup(
             brightness: 220.0,
             ..default()
         },
+        PanOrbitCamera {
+            button_orbit: MouseButton::Right,
+            button_pan: MouseButton::Middle,
+            ..default()
+        },
         OrbitCamera,
     ));
     // Saving a frame implies rendering offscreen, because the window's own
@@ -817,83 +823,58 @@ fn setup(
     ));
 }
 
-/// Where the camera stands: an angle about the model, a height above it, and
-/// a distance out. Driven either by the clock or by the right mouse button.
-#[derive(Resource, Default)]
-struct Orbit {
-    yaw: f32,
-    pitch: f32,
-    /// Multiplies the distance the framing suggests, so zoom survives a refit.
-    zoom: f32,
-    started: bool,
-}
-
-/// Turns the camera around the model.
+/// Points the camera controller at the model, once its bounds are known.
 ///
-/// Takes the world and the input it needs; splitting it to please an argument
-/// count would scatter one interaction across several systems.
+/// The controls themselves are `bevy_panorbit_camera`'s. A hand-rolled orbit
+/// gets drag direction wrong on trackpads and has no inertia, focus handling
+/// or zoom limits, and none of that is what this spike is measuring.
 ///
-/// The right button orbits and the wheel zooms, because the left button
-/// belongs to the gizmo — a joint control and a camera control competing for
-/// the same drag is the one interaction mistake that makes both feel broken.
-#[allow(clippy::too_many_arguments)]
-fn orbit_camera(
+/// Orbit is on the right button and pan on the middle one, because the left
+/// belongs to the joint gizmo — a camera control and a joint control competing
+/// for one drag makes both feel broken.
+fn fit_orbit(
     cli: Res<Cli>,
     time: Res<Time>,
     framing: Res<Framing>,
-    mut orbit: ResMut<Orbit>,
-    buttons: Res<ButtonInput<MouseButton>>,
-    mut motion: MessageReader<bevy::input::mouse::MouseMotion>,
-    mut wheel: MessageReader<bevy::input::mouse::MouseWheel>,
-    mut cameras: Query<(&mut Transform, &mut Projection), With<OrbitCamera>>,
+    mut cameras: Query<(&mut PanOrbitCamera, &mut Projection), With<OrbitCamera>>,
 ) {
     if !framing.fitted {
-        motion.clear();
-        wheel.clear();
         return;
     }
-    if !orbit.started {
-        orbit.started = true;
-        orbit.yaw = cli.angle;
-        orbit.pitch = 0.18;
-        orbit.zoom = 1.0;
-    }
-
-    let dragged: Vec2 = motion.read().map(|m| m.delta).sum();
-    if buttons.pressed(MouseButton::Right) {
-        orbit.yaw -= dragged.x * 0.006;
-        // Stopping short of the poles keeps the up vector meaningful.
-        orbit.pitch = (orbit.pitch + dragged.y * 0.006).clamp(-1.45, 1.45);
-    } else if !cli.still {
-        orbit.yaw = time.elapsed_secs() * 0.35;
-    }
-    let scrolled: f32 = wheel.read().map(|w| w.y).sum();
-    if scrolled != 0.0 {
-        orbit.zoom = (orbit.zoom * (1.0 - scrolled * 0.08)).clamp(0.15, 6.0);
-    }
-
     // Far enough out that the bounding sphere fits the vertical field of view,
     // with a little air around it.
-    let distance = framing.radius * 2.6 * orbit.zoom;
-    let (yaw, pitch) = (orbit.yaw, orbit.pitch);
-    let eye = framing.center
-        + Vec3::new(
-            distance * pitch.cos() * yaw.cos(),
-            distance * pitch.sin(),
-            distance * pitch.cos() * yaw.sin(),
-        );
-
-    for (mut transform, mut projection) in &mut cameras {
-        *transform = Transform::from_translation(eye).looking_at(framing.center, Vec3::Y);
-
-        // The default near/far pair assumes a metre-scale world; a model in
-        // millimetres would sit entirely behind the far plane.
+    let distance = framing.radius * 2.6;
+    for (mut orbit, mut projection) in &mut cameras {
         if framing.is_changed() {
+            orbit.focus = framing.center;
+            orbit.target_focus = framing.center;
+            orbit.radius = Some(distance);
+            orbit.target_radius = distance;
+            orbit.yaw = Some(cli.angle);
+            orbit.target_yaw = cli.angle;
+            orbit.pitch = Some(0.18);
+            orbit.target_pitch = 0.18;
+            orbit.zoom_lower_limit = framing.radius * 0.4;
+            orbit.zoom_upper_limit = Some(framing.radius * 20.0);
+            // The controller initialises itself from the camera's transform,
+            // and this camera has none worth reading; without this it keeps
+            // its own state and ignores everything set above.
+            orbit.force_update = true;
+
+            // The default near/far pair assumes a metre-scale world; a model in
+            // millimetres would sit entirely behind the far plane.
             *projection = Projection::Perspective(PerspectiveProjection {
                 near: framing.radius * 0.01,
-                far: framing.radius * 20.0,
+                far: framing.radius * 40.0,
                 ..default()
             });
+        }
+
+        // A turning camera is what the frame-time measurement wants; a still
+        // one is what inspecting a joint wants. Driving the target rather than
+        // the angle leaves the controller free to take over mid-turn.
+        if !cli.still {
+            orbit.target_yaw = cli.angle + time.elapsed_secs() * 0.35;
         }
     }
 }
