@@ -9329,6 +9329,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "scene"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bevy",
+ "clap 4.6.6",
+ "env_logger",
+ "log",
+ "serde",
+ "serde_json",
+ "vizij-render",
+]
+
+[[package]]
 name = "schannel"
 version = "0.1.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"

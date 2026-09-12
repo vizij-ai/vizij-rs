@@ -34,4 +34,10 @@ bevy = { version = "0.19", default-features = false, features = [
   "multi_threaded",
   "picking",
   "mesh_picking",
+  # For the gizmo's label. `default_font` ships a face with the binary, so the
+  # spike does not need a font asset alongside the robot.
+  "bevy_ui",
+  "bevy_ui_render",
+  "bevy_text",
+  "default_font",
 ] }

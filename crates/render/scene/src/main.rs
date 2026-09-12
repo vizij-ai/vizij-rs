@@ -245,6 +245,7 @@ fn main() {
     .init_resource::<Frames>()
     .init_resource::<Census>()
     .init_resource::<Framing>()
+    .init_resource::<Orbit>()
     .init_resource::<Capture>()
     .add_systems(Startup, setup)
     .add_systems(
@@ -322,7 +323,11 @@ fn mount_joint(app: &mut App, cli: &Cli) {
         dragging: false,
     })
     .insert_resource(AskedFor(cli.joint_value))
-    .add_systems(Update, (bind_joint, drive_joint, draw_joint).chain());
+    .add_systems(Startup, (spawn_label, gizmos_on_top))
+    .add_systems(
+        Update,
+        (bind_joint, drive_joint, draw_joint, place_label).chain(),
+    );
 }
 
 /// Finds the body the joint turns, once the scene has spawned.
@@ -478,35 +483,150 @@ fn draw_joint(gizmo: Res<JointGizmo>, mut gizmos: Gizmos) {
     // The same plane the drag is measured against, so what is drawn and what
     // is grabbed cannot drift apart.
     let (_, frame) = joint_plane(joint);
-    let isometry = Isometry3d::new(centre, frame);
+    // `across` is a fraction of the ring's radius, not a distance.
+    let at = |angle: f32, across: f32| {
+        centre + frame * (Quat::from_rotation_z(angle) * Vec3::X) * (radius * across)
+    };
+
+    // A band of concentric arcs rather than one line, so the ring reads as a
+    // tube the way a torus would, without a mesh to keep in step with the
+    // joint.
+    let band = [0.94, 0.97, 1.0, 1.03, 1.06];
+    let mut arc = |from: f32, to: f32, colour: Color| {
+        for scale in band {
+            gizmos
+                .arc_3d(
+                    to - from,
+                    radius * scale,
+                    Isometry3d::new(centre, frame * Quat::from_rotation_z(from)),
+                    colour,
+                )
+                .resolution(48);
+        }
+    };
 
     if joint.is_limited() {
-        let span = joint.max - joint.min;
-        gizmos
-            .arc_3d(
-                span,
-                radius,
-                Isometry3d::new(centre, frame * Quat::from_rotation_z(joint.min)),
-                colour,
-            )
-            .resolution(64);
-        // The ends of the range, as stops rather than a fading arc.
+        arc(joint.min, joint.max, colour);
+        // The rest of the turn is where the joint cannot go. Hatched rather
+        // than absent, so the range reads as a portion of a whole circle
+        // instead of an arc floating on its own.
+        let barred = colour.with_alpha(0.25);
+        let gap = std::f32::consts::TAU - (joint.max - joint.min);
+        let ticks = ((gap / 0.12).round() as i32).max(1);
+        for tick in 0..ticks {
+            let from = joint.max + gap * (tick as f32) / ticks as f32;
+            arc(from, from + gap / ticks as f32 * 0.45, barred);
+        }
         for limit in [joint.min, joint.max] {
-            let spoke = frame * (Quat::from_rotation_z(limit) * Vec3::X) * radius;
-            gizmos.line(centre + spoke * 0.8, centre + spoke * 1.15, colour);
+            gizmos.line(at(limit, 0.86), at(limit, 1.14), colour);
         }
     } else {
-        gizmos.circle(isometry, radius, colour.with_alpha(0.35));
+        arc(0.0, std::f32::consts::TAU, colour.with_alpha(0.5));
     }
 
-    // Where the joint currently stands.
-    let handle = frame * (Quat::from_rotation_z(gizmo.value) * Vec3::X) * radius;
-    gizmos.line(centre, centre + handle, Color::WHITE);
+    // Where the joint currently stands: a spoke out to a handle on the ring.
+    let handle = at(gizmo.value, 1.0);
+    let lit = if gizmo.dragging { Color::WHITE } else { colour };
+    gizmos.line(centre, handle, lit);
     gizmos.sphere(
-        Isometry3d::from_translation(centre + handle),
-        0.012,
-        if gizmo.dragging { Color::WHITE } else { colour },
+        Isometry3d::from_translation(handle),
+        if gizmo.dragging { 0.018 } else { 0.014 },
+        lit,
     );
+}
+
+/// The gizmo's readout: which joint, and where it stands in degrees.
+///
+/// Drawn as UI and placed by projecting the joint into the viewport each
+/// frame — the same shape as the HTML overlay the web renderer drives from its
+/// anchor callback.
+#[derive(Component)]
+struct JointLabel;
+
+/// Draws the gizmo in front of the robot rather than inside it.
+///
+/// A control buried in the geometry it controls cannot be grabbed, and the
+/// neck is exactly the kind of thing a joint ring sits inside.
+fn gizmos_on_top(mut store: ResMut<GizmoConfigStore>) {
+    store.config_mut::<DefaultGizmoConfigGroup>().0.depth_bias = -1.0;
+}
+
+fn spawn_label(mut commands: Commands) {
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                padding: UiRect::axes(Val::Px(8.0), Val::Px(4.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.09, 0.09, 0.11, 0.92)),
+            JointLabel,
+        ))
+        .with_child((
+            Text::new(""),
+            TextFont {
+                font_size: bevy::text::FontSize::Px(13.0),
+                ..default()
+            },
+        ));
+}
+
+fn place_label(
+    gizmo: Res<JointGizmo>,
+    cameras: Query<(Entity, &Camera, &GlobalTransform), With<OrbitCamera>>,
+    mut labels: Query<
+        (
+            Entity,
+            &mut Node,
+            &mut Visibility,
+            &Children,
+            Has<UiTargetCamera>,
+        ),
+        With<JointLabel>,
+    >,
+    mut texts: Query<(&mut Text, &mut TextColor)>,
+    mut commands: Commands,
+) {
+    let Ok((label, mut node, mut visibility, children, targeted)) = labels.single_mut() else {
+        return;
+    };
+    let Some((camera_entity, camera, camera_at)) = cameras.iter().next() else {
+        return;
+    };
+    // UI draws to the primary window unless told otherwise, so a label left
+    // untargeted is missing from every offscreen capture while looking fine on
+    // screen.
+    if !targeted {
+        commands.entity(label).insert(UiTargetCamera(camera_entity));
+    }
+    let anchor = gizmo.joint.at.translation;
+    let Ok(screen) = camera.world_to_viewport(camera_at, anchor) else {
+        *visibility = Visibility::Hidden;
+        return;
+    };
+    *visibility = Visibility::Inherited;
+    // Clear of the ring rather than over it, so the handle stays legible. The
+    // ring's own screen size is what decides how far clear that is.
+    let edge = camera
+        .world_to_viewport(camera_at, anchor + camera_at.right() * HANDLE_RADIUS)
+        .map(|edge| (edge.x - screen.x).abs())
+        .unwrap_or(40.0);
+    node.left = Val::Px(screen.x + edge + 14.0);
+    node.top = Val::Px(screen.y - 10.0);
+
+    let colour: Color = gizmo
+        .joint
+        .color
+        .unwrap_or(Srgba::hex("e8c547").unwrap())
+        .into();
+    for child in children.iter() {
+        if let Ok((mut text, mut text_colour)) = texts.get_mut(child) {
+            // Bevy's bundled fallback font carries ASCII only, so a degree
+            // sign renders as tofu. A real build ships a font and can use one.
+            text.0 = format!("{}   {:.1} deg", gizmo.joint.name, gizmo.value.to_degrees());
+            text_colour.0 = colour;
+        }
+    }
 }
 
 /// Puts a face on the screen the robot declares.
@@ -692,35 +812,70 @@ fn setup(
     ));
 }
 
-/// A slow orbit at a distance the model's own size sets, so the measurement
-/// covers a moving camera rather than a static frame the GPU can coast on.
+/// Where the camera stands: an angle about the model, a height above it, and
+/// a distance out. Driven either by the clock or by the right mouse button.
+#[derive(Resource, Default)]
+struct Orbit {
+    yaw: f32,
+    pitch: f32,
+    /// Multiplies the distance the framing suggests, so zoom survives a refit.
+    zoom: f32,
+    started: bool,
+}
+
+/// Turns the camera around the model.
+///
+/// The right button orbits and the wheel zooms, because the left button
+/// belongs to the gizmo — a joint control and a camera control competing for
+/// the same drag is the one interaction mistake that makes both feel broken.
 fn orbit_camera(
     cli: Res<Cli>,
     time: Res<Time>,
     framing: Res<Framing>,
+    mut orbit: ResMut<Orbit>,
+    buttons: Res<ButtonInput<MouseButton>>,
+    mut motion: MessageReader<bevy::input::mouse::MouseMotion>,
+    mut wheel: MessageReader<bevy::input::mouse::MouseWheel>,
     mut cameras: Query<(&mut Transform, &mut Projection), With<OrbitCamera>>,
 ) {
     if !framing.fitted {
+        motion.clear();
+        wheel.clear();
         return;
     }
-    let angle = if cli.still {
-        cli.angle
-    } else {
-        time.elapsed_secs() * 0.35
-    };
+    if !orbit.started {
+        orbit.started = true;
+        orbit.yaw = cli.angle;
+        orbit.pitch = 0.18;
+        orbit.zoom = 1.0;
+    }
+
+    let dragged: Vec2 = motion.read().map(|m| m.delta).sum();
+    if buttons.pressed(MouseButton::Right) {
+        orbit.yaw -= dragged.x * 0.006;
+        // Stopping short of the poles keeps the up vector meaningful.
+        orbit.pitch = (orbit.pitch + dragged.y * 0.006).clamp(-1.45, 1.45);
+    } else if !cli.still {
+        orbit.yaw = time.elapsed_secs() * 0.35;
+    }
+    let scrolled: f32 = wheel.read().map(|w| w.y).sum();
+    if scrolled != 0.0 {
+        orbit.zoom = (orbit.zoom * (1.0 - scrolled * 0.08)).clamp(0.15, 6.0);
+    }
+
     // Far enough out that the bounding sphere fits the vertical field of view,
     // with a little air around it.
-    let distance = framing.radius * 2.6;
+    let distance = framing.radius * 2.6 * orbit.zoom;
+    let (yaw, pitch) = (orbit.yaw, orbit.pitch);
+    let eye = framing.center
+        + Vec3::new(
+            distance * pitch.cos() * yaw.cos(),
+            distance * pitch.sin(),
+            distance * pitch.cos() * yaw.sin(),
+        );
+
     for (mut transform, mut projection) in &mut cameras {
-        *transform = Transform::from_translation(
-            framing.center
-                + Vec3::new(
-                    distance * angle.cos(),
-                    framing.radius * 0.35,
-                    distance * angle.sin(),
-                ),
-        )
-        .looking_at(framing.center, Vec3::Y);
+        *transform = Transform::from_translation(eye).looking_at(framing.center, Vec3::Y);
 
         // The default near/far pair assumes a metre-scale world; a model in
         // millimetres would sit entirely behind the far plane.
