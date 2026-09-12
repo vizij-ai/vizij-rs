@@ -357,13 +357,14 @@ fn joint_plane(joint: &robot::Joint) -> (Vec3, Quat) {
     (axis, Quat::from_rotation_arc(Vec3::Z, axis))
 }
 
-/// Where a pointer ray meets the joint's plane, as an angle about the axis.
+/// Where a pointer ray meets the joint's plane: the angle about the axis, and
+/// how far out from the centre it landed.
 fn angle_under_pointer(
     joint: &robot::Joint,
     camera: &Camera,
     camera_at: &GlobalTransform,
     cursor: Vec2,
-) -> Option<f32> {
+) -> Option<(f32, f32)> {
     let Ok(ray) = camera.viewport_to_world(camera_at, cursor) else {
         return None;
     };
@@ -381,9 +382,9 @@ fn angle_under_pointer(
         return None;
     }
     let offset = ray.origin + *ray.direction * distance - centre;
-    Some(f32::atan2(
-        offset.dot(frame * Vec3::Y),
-        offset.dot(frame * Vec3::X),
+    Some((
+        f32::atan2(offset.dot(frame * Vec3::Y), offset.dot(frame * Vec3::X)),
+        offset.length(),
     ))
 }
 
@@ -420,17 +421,21 @@ fn drive_joint(
     if !buttons.pressed(MouseButton::Left) {
         *grab = None;
     } else if grab.is_none() {
-        // Only a press that lands near the ring takes hold of it, so dragging
-        // the empty scene does not move the joint.
-        if let Some(angle) = pointer {
-            *grab = Some(angle - gizmo.value);
+        // Only a press landing near the ring takes hold of it. Without this a
+        // click anywhere grabs the joint, because the plane the ray is tested
+        // against extends across the whole scene.
+        if let Some((angle, distance)) = pointer {
+            let near_ring = (HANDLE_RADIUS * 0.45..=HANDLE_RADIUS * 1.7).contains(&distance);
+            if near_ring {
+                *grab = Some(angle - gizmo.value);
+            }
         }
     }
     gizmo.dragging = grab.is_some();
 
     let wanted = match (asked.0.take(), *grab, pointer) {
         (Some(value), _, _) => Some(value),
-        (None, Some(offset), Some(angle)) => Some(angle - offset),
+        (None, Some(offset), Some((angle, _))) => Some(angle - offset),
         _ => None,
     };
     if let Some(wanted) = wanted {
