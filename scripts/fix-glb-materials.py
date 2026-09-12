@@ -1,22 +1,25 @@
-"""Correct the material data in a robot GLB, and say what changed.
+"""Correct the PBR fields in a robot GLB, and say what changed.
 
-Three faults, all introduced between the CAD material and the exported glTF:
+`metallicFactor` is 0.5 and `roughnessFactor` is 0.5 on every shape RobotData
+calls `phong`. Neither is derived from the authored material: Phong has no
+metalness at all, and the shininess RobotData still carries would give a
+roughness of 0.25, not 0.5. At metalness 0.5 half the base colour stops being
+diffuse and becomes specular reflectance, which in a scene with no environment
+map simply goes missing.
 
-1. Parts authored with a black diffuse also carry a near-white `emissive`,
-   which makes them render near-white in any renderer that applies emissive.
-   A part cannot be both black and self-lit; the emissive is the error.
-
-2. `metallicFactor` is 0.5 on every shape RobotData calls `phong`. Phong has
-   no metalness, so this is the exporter's placeholder. At 0.5, half the base
-   colour stops being diffuse and becomes specular reflectance, which in a
-   scene without an environment map simply goes missing.
-
-3. `roughnessFactor` is 0.5 for the same reason, discarding the shininess
-   RobotData still carries. Phong shininess converts as
-   `roughness = sqrt(2 / (shininess + 2))`.
+Both are rewritten here — metalness to 0, roughness from shininess as
+`sqrt(2 / (shininess + 2))`. That conversion is a fit, not an authority: if the
+real metalness and roughness are supplied, use those and delete this.
 
 RobotData is corrected alongside the glTF material, because the two describe
 the same surface and a consumer may read either.
+
+**Emissive is deliberately left alone.** A part authored with a black base
+colour *and* a near-white emissive is not a contradiction — it is how a
+self-lit element is written, so that it glows evenly and scene lighting cannot
+touch it. On this robot those parts are the lamp bands at the top of the pole
+and around the base, and the ring around the chest button. Zeroing them turns
+the lights off.
 """
 
 import json
@@ -98,7 +101,7 @@ def main(source, destination):
             if index is not None:
                 node_of_material.setdefault(index, []).append(data)
 
-    unlit = relit = smoothed = 0
+    lamps = relit = smoothed = 0
     for index, material in enumerate(materials):
         pbr = material.setdefault("pbrMetallicRoughness", {})
         owners = node_of_material.get(index, [])
@@ -106,17 +109,15 @@ def main(source, destination):
         base = pbr.get("baseColorFactor", [1, 1, 1, 1])[:3]
         emissive = material.get("emissiveFactor", [0, 0, 0])
 
+        # Reported, not touched: these are the robot's lamps.
         if any(e > 0.01 for e in emissive) and all(c <= 0.01 for c in base):
             name = next((d.get("name") for d in owners if d.get("name")), f"#{index}")
+            tags = next((d.get("tags") for d in owners if d.get("tags")), [])
             print(
-                f"  emissive {tuple(round(e, 3) for e in emissive)} -> (0,0,0) on "
-                f"{name!r}, whose base colour is black"
+                f"  lamp: {name!r} {tags} glows "
+                f"{tuple(round(e, 3) for e in emissive)} — left as authored"
             )
-            material["emissiveFactor"] = [0.0, 0.0, 0.0]
-            for data in owners:
-                for channel in "rgb":
-                    set_feature(data.get("features", {}), f"emissive.{channel}", 0.0)
-            unlit += 1
+            lamps += 1
 
         if not phong:
             continue
@@ -138,8 +139,8 @@ def main(source, destination):
             smoothed += 1
 
     print(
-        f"\n{unlit} materials un-lit, {relit} de-metalled, "
-        f"{smoothed} given a roughness from shininess"
+        f"\n{relit} de-metalled, {smoothed} given a roughness from shininess, "
+        f"{lamps} lamps left alone"
     )
 
     chunks[kinds.index(JSON_CHUNK)] = (JSON_CHUNK, json.dumps(gltf).encode("utf-8"))

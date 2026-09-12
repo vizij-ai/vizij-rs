@@ -64,36 +64,44 @@ Bevy's `RenderTarget::Image` plus `base_color_texture`.
 `PivotControls` as `rotationLimits`, on the third axis, after rotating the
 control so its +Z lies along the joint axis.
 
-### The material data is wrong in three ways
+### The material data, and what the file cannot say
 
-`scripts/fix-glb-materials.py` corrects all three and writes a new GLB.
-Rendering before and after shows the change exactly where predicted, which is
-what makes these data faults rather than renderer ones.
+`scripts/fix-glb-materials.py` rewrites the two PBR fields and writes a new
+GLB.
 
-- **Three shapes carry a black base colour and a near-white `emissive` (0.98)
-  at once** — two on `upper_base_link`, one on `upper_neck_link` directly
-  behind the head. A part cannot be both black and self-lit; emissive wins, so
-  parts meant to read black render white. The glTF carries the emissive
-  faithfully, so every renderer that honours emissive shows it.
-- **`metallicFactor` is 0.5 on every shape `RobotData` calls `phong`.** Phong
-  has no metalness, so this is THREE.GLTFExporter's placeholder. At 0.5 half
-  the base colour leaves the diffuse term for a specular one, which without an
-  environment map simply goes missing.
-- **`roughnessFactor` is 0.5 for the same reason**, discarding the shininess
-  `RobotData` still carries. Phong converts as
-  `roughness = sqrt(2 / (shininess + 2))`.
+- **`metallicFactor` is 0.5 on every shape `RobotData` calls `phong`**, and
+  `roughnessFactor` is 0.5. Neither is derived from the authored material:
+  Phong has no metalness at all, and the shininess the file still carries (30)
+  would convert to a roughness of 0.25. At metalness 0.5 half the base colour
+  stops being diffuse and becomes specular reflectance, which without an
+  environment map simply goes missing. The script sets metalness to 0 and
+  roughness from shininess — a fit, not an authority, to be replaced the moment
+  real values exist.
+- **Colour is carried faithfully**: `RobotData`'s colour equals
+  `baseColorFactor` on every shape.
+- **A black base colour with a near-white `emissive` is a lamp**, not a
+  contradiction. It is how a self-lit part is authored, so that it glows evenly
+  and scene lighting cannot touch it. On Quori these are the bands at the top
+  of the pole and around the base and the ring around the chest button, and the
+  script leaves them alone.
 
-Colour itself is carried faithfully: `RobotData`'s colour equals
-`baseColorFactor` on every shape. **The real material description is
-`RobotData`'s** `color`/`specular`/`shininess`/`emissive`/`opacity`, and
-Studio rebuilds a Phong material from it. A renderer reading the glTF's PBR
-values instead inherits the exporter's guesses, so a scene crate that wants to
-match Studio drives materials from `RobotData` — as the face crate already
-does for faces, where it reproduces the web's ambient-Lambert model.
+**The real material description is `RobotData`'s**
+`color`/`specular`/`shininess`/`emissive`/`opacity`, and Studio rebuilds a
+Phong material from it. A renderer reading the glTF's PBR values inherits
+numbers nobody authored, so a scene crate that wants to match Studio drives
+materials from `RobotData` — as the face crate already does for faces, where
+it reproduces the web's ambient-Lambert model.
 
-This spike does not yet do that: it reads the glTF material and lights the
-scene with numbers picked for the spike, so its absolute colour matches
-nothing in particular.
+**And `RobotData` cannot express PBR.** Its `standard` kind carries `color` and
+`opacity` and nothing else, while Bevy, glTF 2.0 and three.js all support
+metallic-roughness in full. The schema is the only layer that cannot, which is
+why `standard` parts render as flat matte plastic — they fall back to three.js's
+defaults of metalness 0 and roughness 1. Reaching parity means metalness and
+roughness on the authored material; glass over the screen additionally means
+transmission and IOR, which are a different axis from `opacity`.
+
+This spike still reads the glTF material and lights the scene with numbers
+picked for the spike, so its absolute colour matches nothing in particular.
 
 ## 3. The face on the screen
 
