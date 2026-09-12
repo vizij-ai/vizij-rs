@@ -50,8 +50,6 @@ pub struct Joint {
     /// `revolute`, `continuous`, `prismatic` or `fixed`.
     pub kind: String,
     pub axis: Vec3,
-    /// Where the joint sits, in world space.
-    pub at: Transform,
     /// The glTF node index of the body this joint moves. Bevy names an unnamed
     /// glTF node `GltfNode{index}`, which is the only join back to the spawned
     /// scene — a robot's nodes carry no names of their own.
@@ -98,7 +96,7 @@ pub fn find_joints(bytes: &[u8]) -> Result<Vec<Joint>> {
     }
 
     let mut joints = Vec::new();
-    for (index, node) in nodes.iter().enumerate() {
+    for node in nodes {
         let Some(data) = node.pointer("/extensions/RobotData") else {
             continue;
         };
@@ -114,9 +112,6 @@ pub fn find_joints(bytes: &[u8]) -> Result<Vec<Joint>> {
             continue;
         };
 
-        // A joint's own node carries no mesh, so its placement comes from the
-        // chain above it, same as the screen's.
-        let at = world_transform(nodes, &parent, index);
         let axis = data
             .get("axis")
             .map(|a| {
@@ -140,7 +135,6 @@ pub fn find_joints(bytes: &[u8]) -> Result<Vec<Joint>> {
                 .to_string(),
             kind: kind.to_string(),
             axis: axis.normalize_or(Vec3::Y),
-            at,
             child_node,
             min: number("/constraints/min").unwrap_or(f32::NEG_INFINITY),
             max: number("/constraints/max").unwrap_or(f32::INFINITY),
