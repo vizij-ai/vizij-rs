@@ -543,6 +543,20 @@ fn draw_joint(gizmo: Res<JointGizmo>, mut gizmos: Gizmos) {
 #[derive(Component)]
 struct JointLabel;
 
+/// The label, and whether it has been pointed at a camera yet.
+type LabelQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static mut Node,
+        &'static mut Visibility,
+        &'static Children,
+        Has<UiTargetCamera>,
+    ),
+    With<JointLabel>,
+>;
+
 /// Draws the gizmo in front of the robot rather than inside it.
 ///
 /// A control buried in the geometry it controls cannot be grabbed, and the
@@ -574,16 +588,7 @@ fn spawn_label(mut commands: Commands) {
 fn place_label(
     gizmo: Res<JointGizmo>,
     cameras: Query<(Entity, &Camera, &GlobalTransform), With<OrbitCamera>>,
-    mut labels: Query<
-        (
-            Entity,
-            &mut Node,
-            &mut Visibility,
-            &Children,
-            Has<UiTargetCamera>,
-        ),
-        With<JointLabel>,
-    >,
+    mut labels: LabelQuery,
     mut texts: Query<(&mut Text, &mut TextColor)>,
     mut commands: Commands,
 ) {
@@ -825,9 +830,13 @@ struct Orbit {
 
 /// Turns the camera around the model.
 ///
+/// Takes the world and the input it needs; splitting it to please an argument
+/// count would scatter one interaction across several systems.
+///
 /// The right button orbits and the wheel zooms, because the left button
 /// belongs to the gizmo — a joint control and a camera control competing for
 /// the same drag is the one interaction mistake that makes both feel broken.
+#[allow(clippy::too_many_arguments)]
 fn orbit_camera(
     cli: Res<Cli>,
     time: Res<Time>,
