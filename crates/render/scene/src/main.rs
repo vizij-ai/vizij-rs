@@ -347,28 +347,91 @@ fn bind_joint(
     log::info!("{:?} drives {wanted}", gizmo.joint.name);
 }
 
+/// The plane the joint turns in, in world space.
+///
+/// The authored axis is expressed in the joint's own frame, so it has to be
+/// carried out by the joint's world rotation before anything in world space —
+/// the ring, the pointer ray — can be measured against it.
+fn joint_plane(joint: &robot::Joint) -> (Vec3, Quat) {
+    let axis = (joint.at.rotation * joint.axis).normalize_or(Vec3::Y);
+    (axis, Quat::from_rotation_arc(Vec3::Z, axis))
+}
+
+/// Where a pointer ray meets the joint's plane, as an angle about the axis.
+fn angle_under_pointer(
+    joint: &robot::Joint,
+    camera: &Camera,
+    camera_at: &GlobalTransform,
+    cursor: Vec2,
+) -> Option<f32> {
+    let Ok(ray) = camera.viewport_to_world(camera_at, cursor) else {
+        return None;
+    };
+    let (axis, frame) = joint_plane(joint);
+    let centre = joint.at.translation;
+
+    // A ray parallel to the plane never meets it, and one nearly parallel
+    // meets it so far away that the angle is noise.
+    let slope = axis.dot(*ray.direction);
+    if slope.abs() < 1e-3 {
+        return None;
+    }
+    let distance = (centre - ray.origin).dot(axis) / slope;
+    if distance <= 0.0 {
+        return None;
+    }
+    let offset = ray.origin + *ray.direction * distance - centre;
+    Some(f32::atan2(
+        offset.dot(frame * Vec3::Y),
+        offset.dot(frame * Vec3::X),
+    ))
+}
+
+const HANDLE_RADIUS: f32 = 0.12;
+
 /// Drags the joint within its limits, and writes the result onto the body.
 ///
-/// The drag is deliberately crude — horizontal pointer motion while the left
-/// button is down. What is being measured is the clamping and the write, not
-/// the ergonomics of a ring handle.
+/// This is a real rotator rather than a pointer-delta: the cursor ray is
+/// projected onto the plane the joint turns in and read as an angle, so the
+/// handle stays under the pointer whatever the camera is doing. Grabbing
+/// records the offset between the pointer's angle and the joint's value, so
+/// the handle does not jump to the cursor on the first frame.
 fn drive_joint(
     mut gizmo: ResMut<JointGizmo>,
     mut asked: ResMut<AskedFor>,
     buttons: Res<ButtonInput<MouseButton>>,
-    mut motion: MessageReader<bevy::input::mouse::MouseMotion>,
+    windows: Query<&Window>,
+    cameras: Query<(&Camera, &GlobalTransform), With<OrbitCamera>>,
+    mut grab: Local<Option<f32>>,
     mut bodies: Query<&mut Transform>,
 ) {
     let Some(body) = gizmo.body else {
-        motion.clear();
         return;
     };
-    gizmo.dragging = buttons.pressed(MouseButton::Left);
-    let dragged: f32 = motion.read().map(|m| m.delta.x).sum();
-    let wanted = match asked.0.take() {
-        Some(value) => Some(value),
-        None if gizmo.dragging && dragged != 0.0 => Some(gizmo.value + dragged * 0.01),
-        None => None,
+
+    let pointer = windows
+        .iter()
+        .find_map(|window| window.cursor_position())
+        .zip(cameras.iter().next())
+        .and_then(|(cursor, (camera, camera_at))| {
+            angle_under_pointer(&gizmo.joint, camera, camera_at, cursor)
+        });
+
+    if !buttons.pressed(MouseButton::Left) {
+        *grab = None;
+    } else if grab.is_none() {
+        // Only a press that lands near the ring takes hold of it, so dragging
+        // the empty scene does not move the joint.
+        if let Some(angle) = pointer {
+            *grab = Some(angle - gizmo.value);
+        }
+    }
+    gizmo.dragging = grab.is_some();
+
+    let wanted = match (asked.0.take(), *grab, pointer) {
+        (Some(value), _, _) => Some(value),
+        (None, Some(offset), Some(angle)) => Some(angle - offset),
+        _ => None,
     };
     if let Some(wanted) = wanted {
         // The authored range is the whole point: a joint driven past its limit
@@ -378,7 +441,7 @@ fn drive_joint(
         } else {
             wanted
         };
-        if wanted != gizmo.value {
+        if (wanted - gizmo.value).abs() > 1e-4 {
             log::info!(
                 "{:?} asked for {wanted:.3}, held at {:.3}",
                 gizmo.joint.name,
@@ -404,12 +467,12 @@ fn draw_joint(gizmo: Res<JointGizmo>, mut gizmos: Gizmos) {
     }
     let joint = &gizmo.joint;
     let centre = joint.at.translation;
-    let radius = 0.12;
+    let radius = HANDLE_RADIUS;
     let colour: Color = joint.color.unwrap_or(Srgba::hex("22c55e").unwrap()).into();
 
-    // The arc is drawn in the plane the joint turns in, so it has to be
-    // rotated from the gizmo's own +Z out to the joint's axis.
-    let frame = Quat::from_rotation_arc(Vec3::Z, joint.axis);
+    // The same plane the drag is measured against, so what is drawn and what
+    // is grabbed cannot drift apart.
+    let (_, frame) = joint_plane(joint);
     let isometry = Isometry3d::new(centre, frame);
 
     if joint.is_limited() {
@@ -510,17 +573,38 @@ fn mount_face(app: &mut App, cli: &Cli) {
         .insert_resource(PoseFeed::new(Vec::new))
         .insert_resource(ScreenMount { screen, texture })
         .add_plugins(ViewPlugin)
-        .add_systems(Startup, spawn_screen);
+        // Update, not Startup: the node it attaches to does not exist until
+        // the glTF scene has spawned.
+        .add_systems(Update, spawn_screen);
 }
 
 /// Builds the quad the robot's screen only describes, and hangs the face's
 /// texture on it.
+///
+/// The quad goes *under* the screen's own glTF node, not at the world position
+/// that node resolves to. A screen is bolted to a robot that moves: parent it
+/// and every joint above it carries it for free; place it in world space and
+/// it stays behind the moment a neck turns.
+///
+/// Runs until the node appears, since the glTF scene spawns asynchronously.
 fn spawn_screen(
     mount: Res<ScreenMount>,
+    mut placed: Local<bool>,
+    names: Query<(Entity, &Name)>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut commands: Commands,
 ) {
+    if *placed {
+        return;
+    }
+    // Unnamed glTF nodes are named for their index, which is the only handle
+    // on a node the robot's own metadata refers to.
+    let wanted = format!("GltfNode{}", mount.screen.node);
+    let Some((node, _)) = names.iter().find(|(_, name)| name.as_str() == wanted) else {
+        return;
+    };
+    *placed = true;
     commands.spawn((
         Mesh3d(meshes.add(Rectangle::new(mount.screen.width, mount.screen.height))),
         MeshMaterial3d(materials.add(StandardMaterial {
@@ -530,8 +614,10 @@ fn spawn_screen(
             unlit: true,
             ..default()
         })),
-        mount.screen.transform,
+        Transform::IDENTITY,
+        ChildOf(node),
     ));
+    log::info!("screen quad attached under {wanted}");
 }
 
 fn setup(

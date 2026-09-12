@@ -19,7 +19,12 @@ use vizij_render::meta::glb_json_chunk;
 /// no geometry of its own. Whoever renders it builds the quad.
 #[derive(Debug, Clone)]
 pub struct Screen {
-    /// Where the screen sits, in the glTF's own coordinates.
+    /// The glTF node that declares the screen. The quad belongs *under* this
+    /// node rather than at its world position: a screen is mounted on a robot
+    /// that moves, so it has to inherit whatever the joints above it do.
+    pub node: usize,
+    /// Where the screen sits once its ancestors have had their say. Reported,
+    /// not used to place the quad.
     pub transform: Transform,
     pub width: f32,
     pub height: f32,
@@ -194,6 +199,7 @@ pub fn find_screen(bytes: &[u8]) -> Result<Screen> {
 
     let number = |key: &str| data.get(key).and_then(Json::as_f64).map(|v| v as f32);
     Ok(Screen {
+        node: index,
         transform: world_transform(nodes, &parent, index),
         width: number("width").ok_or_else(|| anyhow!("screen has no width"))?,
         height: number("height").ok_or_else(|| anyhow!("screen has no height"))?,
