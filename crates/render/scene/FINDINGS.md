@@ -185,6 +185,18 @@ states of its own. That gap is the honest cost estimate for this piece.
 
 ## 5. Bevy 0.19 details this cost time on
 
+- **Gizmo primitives disagree about their own plane.** `circle` draws in the
+  XY plane about +Z; `arc_3d` starts at +X and sweeps about **+Y** through XZ.
+  A frame built for one and used for the other puts a ring and its arc at right
+  angles. And `arc_3d` over a full turn does not close into a circle — it
+  degenerates to a line, so a complete ring needs `circle`. Both faults look
+  like a wrong axis, which is the expensive part: derive one explicit basis and
+  orient each primitive from it.
+- Gizmos depth-test by default, so a control drawn inside the geometry it
+  controls is buried in it.
+- Bevy UI draws to the primary window unless given a `UiTargetCamera`, so a
+  label is missing from every offscreen capture while looking right on screen.
+- The bundled fallback font is ASCII only; a degree sign renders as tofu.
 - `AmbientLight` is a **component** (on the camera), not a resource.
 - The glTF scene root is `WorldAssetRoot`, not `SceneRoot`.
 - `DirectionalLight` spells it `shadow_maps_enabled`.

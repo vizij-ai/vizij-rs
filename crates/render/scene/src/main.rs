@@ -372,7 +372,40 @@ fn bind_joint(
 /// The authored axis is expressed in the joint's own frame, so it has to be
 /// carried out by the joint's world rotation before anything in world space —
 /// the ring, the pointer ray — can be measured against it.
-fn joint_plane(joint: &robot::Joint, body: &GlobalTransform) -> (Vec3, Vec3, Quat) {
+/// The circle a joint turns through: where it is centred, the axis it turns
+/// about, and two perpendicular directions spanning its plane.
+///
+/// One basis, stated once. Bevy's gizmo primitives disagree about which plane
+/// they draw in — `circle` uses XY about +Z, while `arc_3d` starts at +X and
+/// sweeps about +Y through XZ — so anything deriving its own frame from those
+/// conventions draws a ring and its arc at right angles.
+struct JointPlane {
+    centre: Vec3,
+    axis: Vec3,
+    u: Vec3,
+    v: Vec3,
+}
+
+impl JointPlane {
+    /// A point on the ring at `radius` from the centre.
+    fn at(&self, angle: f32, radius: f32) -> Vec3 {
+        self.centre + (self.u * angle.cos() + self.v * angle.sin()) * radius
+    }
+
+    /// Orients `circle`, whose XY plane has to become this one.
+    fn for_circle(&self) -> Quat {
+        Quat::from_mat3(&Mat3::from_cols(self.u, self.v, self.axis))
+    }
+
+    /// Orients `arc_3d`, so that its +X start lies along `from` and its +Y
+    /// sweep axis lies along this plane's.
+    fn for_arc(&self, from: f32) -> Quat {
+        let start = self.u * from.cos() + self.v * from.sin();
+        Quat::from_mat3(&Mat3::from_cols(start, self.axis, -self.axis.cross(start)))
+    }
+}
+
+fn joint_plane(joint: &robot::Joint, body: &GlobalTransform) -> JointPlane {
     // Read from the body the joint turns, not from the joint node parsed out
     // of the glTF. The turn is applied in the body's own frame, so the axis
     // rides that frame out into the world, and the pivot is the body's own
@@ -380,7 +413,13 @@ fn joint_plane(joint: &robot::Joint, body: &GlobalTransform) -> (Vec3, Vec3, Qua
     // above it are doing, which a pose parsed once at load cannot.
     let (_, rotation, centre) = body.to_scale_rotation_translation();
     let axis = (rotation * joint.axis).normalize_or(Vec3::Y);
-    (centre, axis, Quat::from_rotation_arc(Vec3::Z, axis))
+    let u = axis.any_orthonormal_vector();
+    JointPlane {
+        centre,
+        axis,
+        u,
+        v: axis.cross(u),
+    }
 }
 
 /// Where a pointer ray meets the joint's plane: the angle about the axis, and
@@ -395,7 +434,8 @@ fn angle_under_pointer(
     let Ok(ray) = camera.viewport_to_world(camera_at, cursor) else {
         return None;
     };
-    let (centre, axis, frame) = joint_plane(joint, body);
+    let plane = joint_plane(joint, body);
+    let (centre, axis) = (plane.centre, plane.axis);
 
     // A ray parallel to the plane never meets it, and one nearly parallel
     // meets it so far away that the angle is noise.
@@ -409,7 +449,7 @@ fn angle_under_pointer(
     }
     let offset = ray.origin + *ray.direction * distance - centre;
     Some((
-        f32::atan2(offset.dot(frame * Vec3::Y), offset.dot(frame * Vec3::X)),
+        f32::atan2(offset.dot(plane.v), offset.dot(plane.u)),
         offset.length(),
     ))
 }
@@ -509,14 +549,13 @@ fn draw_joint(gizmo: Res<JointGizmo>, bodies: Query<&GlobalTransform>, mut gizmo
     let joint = &gizmo.joint;
     // The same plane the drag is measured against, so what is drawn and what
     // is grabbed cannot drift apart.
-    let (centre, _, frame) = joint_plane(joint, body);
+    let plane = joint_plane(joint, body);
+    let centre = plane.centre;
     let radius = HANDLE_RADIUS;
     let colour: Color = joint.color.unwrap_or(Srgba::hex("22c55e").unwrap()).into();
 
     // `across` is a fraction of the ring's radius, not a distance.
-    let at = |angle: f32, across: f32| {
-        centre + frame * (Quat::from_rotation_z(angle) * Vec3::X) * (radius * across)
-    };
+    let at = |angle: f32, across: f32| plane.at(angle, radius * across);
 
     // A band of concentric arcs rather than one line, so the ring reads as a
     // tube the way a torus would, without a mesh to keep in step with the
@@ -528,7 +567,7 @@ fn draw_joint(gizmo: Res<JointGizmo>, bodies: Query<&GlobalTransform>, mut gizmo
                 .arc_3d(
                     to - from,
                     radius * scale,
-                    Isometry3d::new(centre, frame * Quat::from_rotation_z(from)),
+                    Isometry3d::new(centre, plane.for_arc(from)),
                     colour,
                 )
                 .resolution(48);
@@ -543,7 +582,7 @@ fn draw_joint(gizmo: Res<JointGizmo>, bodies: Query<&GlobalTransform>, mut gizmo
     // does not come out as a closed circle, it degenerates to a line.
     for scale in band {
         gizmos.circle(
-            Isometry3d::new(centre, frame),
+            Isometry3d::new(centre, plane.for_circle()),
             radius * scale,
             colour.with_alpha(0.4),
         );
