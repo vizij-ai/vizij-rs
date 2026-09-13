@@ -132,12 +132,21 @@ pub struct ViewCamera;
 #[derive(Component)]
 pub struct FaceRoot;
 
-/// Index from animatable UUID to the scene entity/feature it drives,
+/// Where one animatable writes: an entity, which of its features, which morph
+/// target where that applies, and the shade factor its material takes.
+pub type Bound = (Entity, FeatureKind, Option<usize>, f32);
+
+/// Index from animatable UUID to the scene entities and features it drives,
 /// built once the GLB scene has spawned.
 #[derive(Resource, Default)]
 pub struct BindingIndex {
-    /// uuid → (target entity, feature, morph index, material shade factor).
-    pub by_uuid: HashMap<String, (Entity, FeatureKind, Option<usize>, f32)>,
+    /// uuid → every target it drives.
+    ///
+    /// A list, because one animatable may drive several elements: a face binds
+    /// one colour to all four eyelids and the inner face at once. Keyed
+    /// one-to-one, the last element indexed would win and the rest would sit
+    /// unmoved while the pose looked applied.
+    pub by_uuid: HashMap<String, Vec<Bound>>,
     pub ready: bool,
 }
 
@@ -433,7 +442,13 @@ fn index_scene(
     }
 
     let mut by_uuid = HashMap::new();
-    for (uuid, Binding { node_name, feature }) in &face.meta.animatables {
+    for (uuid, binding) in face
+        .meta
+        .animatables
+        .iter()
+        .flat_map(|(uuid, bindings)| bindings.iter().map(move |b| (uuid, b)))
+    {
+        let Binding { node_name, feature } = binding;
         let Some(&node) = by_name.get(node_name.as_str()) else {
             continue;
         };
@@ -469,12 +484,15 @@ fn index_scene(
                 (morph_entity, feature.clone(), Some(index), factor)
             }
         };
-        by_uuid.insert(uuid.clone(), entry);
+        by_uuid
+            .entry(uuid.clone())
+            .or_insert_with(Vec::new)
+            .push(entry);
     }
 
     log::info!(
         "scene indexed: {} bindings over {} elements",
-        by_uuid.len(),
+        by_uuid.values().map(Vec::len).sum::<usize>(),
         face.meta.elements.len(),
     );
     index.by_uuid = by_uuid;
@@ -496,69 +514,73 @@ fn apply_pose(
     }
     for (path, value) in (feed.0)() {
         let key = path.to_string();
-        let Some((entity, feature, morph_index, factor)) = index.by_uuid.get(&key) else {
+        let Some(targets) = index.by_uuid.get(&key) else {
             continue;
         };
-        match feature {
-            FeatureKind::Translation => {
-                if let (Ok(mut transform), Some(v)) = (transforms.get_mut(*entity), as_xyz(&value))
-                {
-                    transform.translation = Vec3::from_array(v);
-                }
-            }
-            FeatureKind::Rotation => {
-                if let (Ok(mut transform), Some(v)) = (transforms.get_mut(*entity), as_xyz(&value))
-                {
-                    // three.js euler order ZYX: R = Rz·Ry·Rx, composed
-                    // explicitly — EulerRot naming conventions moved between
-                    // glam versions, this cannot. Validated pixel-wise against
-                    // the web renderer on Toasty, whose tilts are
-                    // order-sensitive.
-                    transform.rotation = Quat::from_rotation_z(v[2])
-                        * Quat::from_rotation_y(v[1])
-                        * Quat::from_rotation_x(v[0]);
-                }
-            }
-            FeatureKind::Scale => {
-                if let Ok(mut transform) = transforms.get_mut(*entity) {
-                    if let Some(v) = as_xyz(&value) {
-                        transform.scale = Vec3::from_array(v);
-                    } else if let Some(s) = as_f32(&value) {
-                        transform.scale = Vec3::splat(s);
+        for (entity, feature, morph_index, factor) in targets {
+            match feature {
+                FeatureKind::Translation => {
+                    if let (Ok(mut transform), Some(v)) =
+                        (transforms.get_mut(*entity), as_xyz(&value))
+                    {
+                        transform.translation = Vec3::from_array(v);
                     }
                 }
-            }
-            FeatureKind::Color => {
-                if let (Ok(handle), Some([r, g, b])) =
-                    (material_handles.get(*entity), as_rgb(&value))
-                {
-                    if let Some(mut mat) = materials.get_mut(&handle.0) {
-                        let alpha = mat.base_color.alpha();
-                        // Graph color components are linear working-space
-                        // floats (three's `Color.setRGB` semantics), not sRGB.
-                        let shaded = shade(Color::linear_rgb(r, g, b), *factor);
-                        mat.base_color = shaded.with_alpha(alpha);
+                FeatureKind::Rotation => {
+                    if let (Ok(mut transform), Some(v)) =
+                        (transforms.get_mut(*entity), as_xyz(&value))
+                    {
+                        // three.js euler order ZYX: R = Rz·Ry·Rx, composed
+                        // explicitly — EulerRot naming conventions moved between
+                        // glam versions, this cannot. Validated pixel-wise against
+                        // the web renderer on Toasty, whose tilts are
+                        // order-sensitive.
+                        transform.rotation = Quat::from_rotation_z(v[2])
+                            * Quat::from_rotation_y(v[1])
+                            * Quat::from_rotation_x(v[0]);
                     }
                 }
-            }
-            FeatureKind::Opacity => {
-                if let (Ok(handle), Some(o)) = (material_handles.get(*entity), as_f32(&value)) {
-                    if let Some(mut mat) = materials.get_mut(&handle.0) {
-                        mat.base_color.set_alpha(o);
-                        mat.alpha_mode = if o < 1.0 {
-                            AlphaMode::Blend
-                        } else {
-                            AlphaMode::Opaque
-                        };
+                FeatureKind::Scale => {
+                    if let Ok(mut transform) = transforms.get_mut(*entity) {
+                        if let Some(v) = as_xyz(&value) {
+                            transform.scale = Vec3::from_array(v);
+                        } else if let Some(s) = as_f32(&value) {
+                            transform.scale = Vec3::splat(s);
+                        }
                     }
                 }
-            }
-            FeatureKind::Morph(_) => {
-                if let (Ok(mut weights), Some(w), Some(i)) =
-                    (morph_weights.get_mut(*entity), as_f32(&value), *morph_index)
-                {
-                    if let Some(slot) = weights.weights_mut().get_mut(i) {
-                        *slot = w;
+                FeatureKind::Color => {
+                    if let (Ok(handle), Some([r, g, b])) =
+                        (material_handles.get(*entity), as_rgb(&value))
+                    {
+                        if let Some(mut mat) = materials.get_mut(&handle.0) {
+                            let alpha = mat.base_color.alpha();
+                            // Graph color components are linear working-space
+                            // floats (three's `Color.setRGB` semantics), not sRGB.
+                            let shaded = shade(Color::linear_rgb(r, g, b), *factor);
+                            mat.base_color = shaded.with_alpha(alpha);
+                        }
+                    }
+                }
+                FeatureKind::Opacity => {
+                    if let (Ok(handle), Some(o)) = (material_handles.get(*entity), as_f32(&value)) {
+                        if let Some(mut mat) = materials.get_mut(&handle.0) {
+                            mat.base_color.set_alpha(o);
+                            mat.alpha_mode = if o < 1.0 {
+                                AlphaMode::Blend
+                            } else {
+                                AlphaMode::Opaque
+                            };
+                        }
+                    }
+                }
+                FeatureKind::Morph(_) => {
+                    if let (Ok(mut weights), Some(w), Some(i)) =
+                        (morph_weights.get_mut(*entity), as_f32(&value), *morph_index)
+                    {
+                        if let Some(slot) = weights.weights_mut().get_mut(i) {
+                            *slot = w;
+                        }
                     }
                 }
             }

@@ -62,8 +62,13 @@ pub struct Element {
 #[derive(Debug, Clone)]
 pub struct FaceMeta {
     pub elements: Vec<Element>,
-    /// animatable UUID (string form) → what it drives.
-    pub animatables: HashMap<String, Binding>,
+    /// animatable UUID (string form) → everything it drives.
+    ///
+    /// A list, because one animatable may address several elements at once: a
+    /// face binds one colour to the inner face and all four eyelids. Keyed to
+    /// a single binding, the last element parsed would win and the rest would
+    /// never move.
+    pub animatables: HashMap<String, Vec<Binding>>,
     /// Authored view bounds on the root element: (center_x, center_y, size_x, size_y).
     pub root_bounds: Option<(f32, f32, f32, f32)>,
 }
@@ -144,6 +149,7 @@ impl FaceMeta {
         let mut infos: Vec<AnimatableInfo> = self
             .animatables
             .iter()
+            .flat_map(|(id, bindings)| bindings.iter().map(move |binding| (id, binding)))
             .map(|(id, binding)| {
                 let (feature, morph_target) = match &binding.feature {
                     FeatureKind::Translation => ("translation", None),
@@ -219,13 +225,13 @@ impl FaceMeta {
                         continue;
                     }
                 };
-                animatables.insert(
-                    value.id.clone(),
-                    Binding {
+                animatables
+                    .entry(value.id.clone())
+                    .or_insert_with(Vec::new)
+                    .push(Binding {
                         node_name: node_name.clone(),
                         feature: kind,
-                    },
-                );
+                    });
             }
 
             elements.push(Element {
