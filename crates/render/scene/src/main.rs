@@ -117,6 +117,14 @@ struct Cli {
     #[arg(long)]
     joint_value: Option<f32>,
 
+    /// Give every mesh its own material, as a renderer must when each
+    /// element's colour is separately drivable.
+    ///
+    /// Materials are a batching key, so sharing them is what makes many copies
+    /// of one robot cheap. This prices what per-element editability costs.
+    #[arg(long, default_value_t = false)]
+    unique_materials: bool,
+
     /// Render into an offscreen target and leave the window empty.
     ///
     /// With nothing presenting to the surface there is no vsync to wait on, so
@@ -272,6 +280,7 @@ fn main() {
         Update,
         (
             take_census,
+            split_materials,
             spawn_marker,
             fit_orbit,
             count_visible,
@@ -395,10 +404,7 @@ fn bind_joint(
     gizmo.rest = *transform;
     gizmo.body = Some(entity);
     let range = gizmo.range;
-    let colour = gizmo
-        .joint
-        .color
-        .unwrap_or(Srgba::hex("e8c547").expect("literal"));
+    let colour = gizmo.joint.color;
     let uniform = JointRingUniform {
         min: range.min,
         max: range.max,
@@ -844,11 +850,7 @@ fn place_label(
     node.left = Val::Px(screen.x + edge + 14.0);
     node.top = Val::Px(screen.y - 10.0);
 
-    let colour: Color = gizmo
-        .joint
-        .color
-        .unwrap_or(Srgba::hex("e8c547").unwrap())
-        .into();
+    let colour: Color = gizmo.joint.color.into();
     for child in children.iter() {
         if let Ok((mut text, mut text_colour)) = texts.get_mut(child) {
             // Bevy's bundled fallback font carries ASCII only, so a degree
@@ -1196,6 +1198,38 @@ fn take_census(
         (max - min).length(),
         framing.center,
     );
+}
+
+/// Gives every mesh its own copy of its material.
+///
+/// What a renderer has to do when each element's colour, opacity or emissive
+/// is separately drivable — the face crate does exactly this per element, for
+/// exactly this reason. Done once, when the scene has finished spawning.
+fn split_materials(
+    cli: Res<Cli>,
+    frames: Res<Frames>,
+    mut done: Local<bool>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    meshes: Query<(Entity, &MeshMaterial3d<StandardMaterial>), With<Mesh3d>>,
+    mut commands: Commands,
+) {
+    if *done || !cli.unique_materials || frames.elapsed < 0.5 {
+        return;
+    }
+    let mut split = 0;
+    for (entity, material) in &meshes {
+        let Some(own) = materials.get(&material.0).cloned() else {
+            continue;
+        };
+        commands
+            .entity(entity)
+            .insert(MeshMaterial3d(materials.add(own)));
+        split += 1;
+    }
+    if split > 0 {
+        *done = true;
+        log::info!("gave {split} meshes their own material");
+    }
 }
 
 /// Tracks how many meshes survived culling, which is the engine's own answer

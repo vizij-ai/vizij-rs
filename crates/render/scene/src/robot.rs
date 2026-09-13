@@ -106,8 +106,30 @@ pub struct Joint {
     pub min: f32,
     pub max: f32,
     pub default: f32,
-    /// The colour the author gave this joint's control.
-    pub color: Option<Srgba>,
+    /// What colour this joint's control takes: the author's if they named
+    /// one, otherwise derived from the axis.
+    pub color: Srgba,
+}
+
+/// The colour a control takes when the author named none.
+///
+/// Blended from the axis the joint moves on, the way Studio's
+/// `get-color-from-axis` does it: each cardinal axis has a colour, and a
+/// slanted axis mixes them by how much of it points each way. Deriving it
+/// means a platform shipping no `pub.color` still gets controls that say which
+/// way they move; an authored colour, where there is one, overrides it.
+fn colour_of_axis(axis: Vec3) -> Srgba {
+    const X: Srgba = Srgba::new(0.937, 0.267, 0.267, 1.0); // #ef4444
+    const Y: Srgba = Srgba::new(0.133, 0.773, 0.369, 1.0); // #22c55e
+    const Z: Srgba = Srgba::new(0.231, 0.510, 0.965, 1.0); // #3b82f6
+
+    let axis = axis.normalize_or(Vec3::Y).abs();
+    Srgba::new(
+        axis.x * X.red + axis.y * Y.red + axis.z * Z.red,
+        axis.x * X.green + axis.y * Y.green + axis.z * Z.green,
+        axis.x * X.blue + axis.y * Y.blue + axis.z * Z.blue,
+        1.0,
+    )
 }
 
 impl Joint {
@@ -194,7 +216,8 @@ pub fn find_joints(bytes: &[u8]) -> Result<Vec<Joint>> {
             color: value
                 .and_then(|v| v.pointer("/pub/color"))
                 .and_then(Json::as_str)
-                .and_then(|hex| Srgba::hex(hex).ok()),
+                .and_then(|hex| Srgba::hex(hex).ok())
+                .unwrap_or_else(|| colour_of_axis(axis)),
         });
     }
     Ok(joints)
