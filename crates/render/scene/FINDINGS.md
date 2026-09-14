@@ -222,3 +222,132 @@ Two things make the obvious route fail silently instead of erroring:
 Both produce a black PNG, which is indistinguishable from a scene that drew
 nothing. The visibility count in the report exists so that case cannot be
 mistaken for a fast one.
+
+## 7. What this means for vizij and a shared core
+
+The scene crate is built on the face crate and reuses two pieces of it, so
+most of what it found is a statement about `vizij-render` rather than about
+scenes. Each item below is either a change vizij needs on its own terms, or a
+constraint on what `arora-viz-core` can hold.
+
+### The instance boundary is the whole extraction
+
+`Face`, `PoseFeed`, `ViewOptions`, `OffscreenTarget` and `FaceLayer` are
+resources, and `setup_scene` / `setup_camera` run in `Startup`. One face per
+app, decided before the first frame — a host cannot load a face later, swap
+one, or show two.
+
+**What describes a thing being rendered is a component on that thing's entity;
+only what describes the renderer stays a resource.** A resource is a claim
+that there will never be two, and every asset a host draws is something there
+will eventually be two of — two robots, a picture-in-picture preview, a face
+on each of several screens. The fault is the same one the scene hit with its
+gizmos, and it is cheaper to fix in the face crate first, because that is the
+half with callers to migrate.
+
+### A join must be scoped to the subtree it belongs to
+
+`index_scene` matched `Query<(Entity, &Name)>` across the whole world. Once a
+second asset shares that world, a face feature binds to whatever else happens
+to carry the same name — silently, because a name collision is a successful
+lookup. Scoped to `FaceRoot` now; the rule generalises to every join a core
+performs.
+
+The same shape applies to visibility: **render layers are read per entity and
+are not inherited**, so stamping a layer on a glTF root leaves every spawned
+descendant on the default layer. Anything that isolates one asset's rendering
+has to walk the subtree.
+
+### A binding is many-to-many in the schema, so it must be many-to-many in the map
+
+`FaceMeta::animatables` and `BindingIndex::by_uuid` both stored one target per
+key and built it with `insert`, so a later binding silently replaced an
+earlier one. Two meshes' materials may share a pointer to one colour — that is
+what the format allows and what makes controllables generic — and on the Quori
+face 8 of 95 animatables drive more than one element. Widening both maps to
+`Vec<_>` took indexing from 95 bindings to 113: 18 targets were being dropped.
+
+**The JS side has not been checked.** The same one-to-one assumption is easy to
+write in `packages/vizij` and would present identically — a control that moves
+one of the things it should move.
+
+### An anchor has to name its coordinate space
+
+`publish_anchors` projects with `Camera::world_to_viewport`, which is the
+*render target's* pixel space, not the window's. When the face camera draws
+straight to the canvas those are the same and a DOM overlay lands correctly.
+When it draws into an `OffscreenTarget` that becomes a texture on a quad in
+another scene — which is exactly what `OffscreenTarget` is for, and what a
+robot's declared screen is — the published numbers are positions *on the
+texture*. A host that reads them as screen coordinates draws its labels
+somewhere else entirely, with no error anywhere.
+
+So the anchor contract must say which space it is in, and an embedded face
+needs a second projection through the outer camera and the quad before a host
+can anchor to it. This is the one place where the face-in-a-scene case breaks
+an existing vizij API rather than merely extending it.
+
+### A library plugin must not claim a third-party plugin for the host
+
+`ViewPlugin` adds `MeshPickingPlugin` unconditionally (`view.rs:164`), and
+Bevy panics on a duplicate plugin. Any host that wants mesh picking for its own
+scene — which a scene with selection and draggable gizmos does — cannot add it,
+because the face crate already did. Guard it with `is_plugin_added`, or leave
+it to the host and require it in the docs.
+
+### GLB extension reading belongs in the core, not the face crate
+
+`meta::glb_json_chunk` lives in `vizij-render` because that is where it was
+needed first, but nothing about it is face-specific: **Bevy's glTF loader
+parses the extensions it knows and drops the rest**, so every Semio asset read
+in Rust needs its own pass over the JSON chunk. The scene crate reuses it
+verbatim for `RobotData`.
+
+What belongs in the core is that parse, the extension schema types, and the
+uuid → node index → `GltfNode{index}` resolution that ties an extension record
+back to a spawned entity. What stays in the face crate is the interpretation —
+elements, animatables, feature kinds.
+
+That last step is also the weakest link in a platform-agnostic core. A robot's
+glTF nodes are unnamed, so Bevy's index-derived names are the only thread back
+to an entity; a platform whose exporter *does* name its nodes breaks the lookup
+and returns nothing. It needs to resolve by node index directly rather than by
+reconstructing the name Bevy would have chosen.
+
+### The screen is the seam, and it is already in the right place
+
+A `screen` in `RobotData` is `{width, height, resolution}` with no mesh — a
+declaration. Whoever renders the robot builds the quad and sizes the texture;
+whoever renders the face fills it. `OffscreenTarget` is that handoff and needed
+no change to serve it. The split between the two projects survives contact with
+the case that crosses it, which is the argument for extracting a core rather
+than merging the two renderers.
+
+### Per-element materials are not a cost
+
+Giving every element its own material instead of sharing measured 8.32 / 8.38ms
+against 8.30ms shared — inside the run-to-run spread. Runtime-editable colour,
+opacity and material properties per mesh therefore have no batching argument
+against them, which is what vizij needs to hear before making material
+properties controllable per element.
+
+Left standing from §3: the face redraws every frame whether or not its pose
+changed. That, not material sharing, is what decides how many screens are
+affordable.
+
+### State each convention once, in a type
+
+Bevy's gizmo primitives disagree about their own plane, the imported model is
+Y-up where the Studio scene is Z-up, and `Torus::new` takes inner/outer radii
+where three's `TorusGeometry` takes radius/tube. Every one of these produces a
+render that is wrong and does not error. A core should carry each convention in
+a type that holds a basis — the scene's `JointPlane` is the small version —
+rather than leaving each call site to rediscover it.
+
+### What gates the extraction: none of this is measured on wasm
+
+Every number here is desktop-native. `vizij-render-web` builds the face half
+for wasm, so that path is known; the scene crate has never been built for
+`wasm32`, and it pulls in `bevy_panorbit_camera` and embedded WGSL assets.
+Frame times, and any decision about what a shared core may depend on, should
+not be settled on native measurements alone.
