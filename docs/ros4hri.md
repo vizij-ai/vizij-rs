@@ -285,6 +285,23 @@ Every node on the graph must agree on the domain: `--ros2 quori:5` sets it on
 the device (`--ros2 quori` alone is domain 0); `ROS_DOMAIN_ID` sets it
 everywhere else, the way it always does under rmw_zenoh.
 
+**Already have a ROS4HRI workspace?** `std_skills`, `interaction_skills` and
+`hri_msgs` are byte-for-byte the real `ros4hri` org packages
+([arora-msgs-ros2](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-msgs-ros2#departures-from-upstream)) —
+if it already builds them, source it and skip `build-workspace.sh` for those
+three. `communication_skills` is the one exception: its `Say` action's
+Feedback carries Vizij's `viseme`/`intensity` extension, so a plain upstream
+copy still accepts and completes a `say` goal (`Goal`/`Result` are unchanged)
+but silently delivers no feedback — the goal looks fine, the face never
+speaks with it. Build only that one, and source it *after* the existing
+workspace so it shadows any plain copy:
+
+```bash
+crates/vizij/tests/ros4hri/build-workspace.sh --only communication_skills ~/vizij_comm_ws
+source ~/existing_ros4hri_ws/install/setup.bash   # first: everything else
+source ~/vizij_comm_ws/install/setup.bash          # last: the extended Say
+```
+
 `crates/vizij/tests/ros4hri/` runs this same setup end to end, against a
 container, driven by a real `rclpy` client (`say-feedback.sh`,
 `look-at.sh`) — the harness `build-image.sh` stages the same interfaces into
