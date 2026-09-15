@@ -247,18 +247,29 @@ half with callers to migrate.
 
 **Which state lands on which side is a requirements question, not a mechanical
 one.** A resource never has to declare what it belongs to; a component does,
-because it is attached to something. `ViewOptions` shows how little the current
-shape settles: `fit` and `zoom` are per face, since two faces on two screens
-fit differently; `background` belongs to the render target, since a screen
-texture wants a different clear from a full canvas; and `ambient`/`unlit` read
-as global but are not — they implement the web's ambient-Lambert model, so a
-face renders unlit with its albedo scaled, while a robot beside it in the same
-world is lit by real lights.
+because it is attached to something.
 
-That last case is only visible once two differently-lit things share a world,
-which is why the answer comes from consumers rather than from inspection. The
-contents of a shared core are the answer to "what is shared", so they follow
-this split rather than preceding it.
+**The test: would two faces drawn at the same time ever need different
+values?** That splits the current resources three ways rather than moving them
+all. `Face`, `OffscreenTarget`, `FaceLayer` and `ViewOptions`'s `fit`/`zoom`
+belong to the face — identity, where it draws, which world it is isolated
+into, and how it fits a screen all differ between two faces. `background`
+belongs to the render target, because what shows where the face is *not* is a
+property of the surface: a screen texture wants transparent so the quad's own
+material shows through. `ambient`/`unlit` stay with the renderer — they
+describe the face rendering model, the web's ambient-Lambert pipeline, not an
+individual face, and two faces would share them until someone wants per-face
+art direction.
+
+`PoseFeed` is the one worth arguing about. One closure per face is the obvious
+reading, but the JS already does better: one shared values store addressed as
+`getLookup(namespace, animatable.id)`, the namespace identifying the instance.
+Values here arrive as `(TypedPath, Value)` pairs, so carrying the instance in
+the path costs nothing and keeps one crossing of the host boundary rather than
+one per face — which matters most in wasm, where that crossing is a JS call.
+
+The contents of a shared core are the answer to "what is shared", so they
+follow this split rather than preceding it.
 
 ### A join must be scoped to the subtree it belongs to
 
