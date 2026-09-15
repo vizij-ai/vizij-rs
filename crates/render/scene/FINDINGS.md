@@ -230,7 +230,7 @@ most of what it found is a statement about `vizij-render` rather than about
 scenes. Each item below is either a change vizij needs on its own terms, or a
 constraint on what `arora-viz-core` can hold.
 
-### The instance boundary is the whole extraction
+### Per-instance and per-renderer state, and why that split is the extraction
 
 `Face`, `PoseFeed`, `ViewOptions`, `OffscreenTarget` and `FaceLayer` are
 resources, and `setup_scene` / `setup_camera` run in `Startup`. One face per
@@ -244,6 +244,21 @@ will eventually be two of — two robots, a picture-in-picture preview, a face
 on each of several screens. The fault is the same one the scene hit with its
 gizmos, and it is cheaper to fix in the face crate first, because that is the
 half with callers to migrate.
+
+**Which state lands on which side is a requirements question, not a mechanical
+one.** A resource never has to declare what it belongs to; a component does,
+because it is attached to something. `ViewOptions` shows how little the current
+shape settles: `fit` and `zoom` are per face, since two faces on two screens
+fit differently; `background` belongs to the render target, since a screen
+texture wants a different clear from a full canvas; and `ambient`/`unlit` read
+as global but are not — they implement the web's ambient-Lambert model, so a
+face renders unlit with its albedo scaled, while a robot beside it in the same
+world is lit by real lights.
+
+That last case is only visible once two differently-lit things share a world,
+which is why the answer comes from consumers rather than from inspection. The
+contents of a shared core are the answer to "what is shared", so they follow
+this split rather than preceding it.
 
 ### A join must be scoped to the subtree it belongs to
 
