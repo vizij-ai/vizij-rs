@@ -267,9 +267,19 @@ what the format allows and what makes controllables generic — and on the Quori
 face 8 of 95 animatables drive more than one element. Widening both maps to
 `Vec<_>` took indexing from 95 bindings to 113: 18 targets were being dropped.
 
-**The JS side has not been checked.** The same one-to-one assumption is easy to
-write in `packages/vizij` and would present identically — a control that moves
-one of the things it should move.
+**The JS side cannot have this defect, and the reason is the useful part.**
+`useFeatures` (identical in `packages/vizij` and `packages/scene` once the
+context is renamed) walks an *element's own* features and subscribes once per
+animated feature, so the only direction stored is element → animatable. Every
+`animatables[animatable.id]` in both packages maps an id to that animatable's
+definition, never to a target; there is no reverse index to collapse. Many
+elements on one animatable are many subscribers to one key, and one element on
+many animatables is several subscriptions.
+
+So this defect is not inherited from the format or from the JS design — it is
+created by choosing to push. **A renderer that indexes controllable → targets
+in order to push values has to make that index many-valued by construction**,
+because it is the only one of the two designs that can lose a binding.
 
 ### An anchor has to name its coordinate space
 
