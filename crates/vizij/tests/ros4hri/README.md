@@ -42,3 +42,9 @@ crates/vizij/tests/ros4hri/look-at.sh              # the gaze test
 
 Knobs: `ROS2_ZENOH_IMAGE`, `VIZIJ_BIN`, `VIZIJ_GLB` (a face carrying the
 standard adaptation; the Quori demo by default), `OUT_DIR` for the transcripts.
+
+`build-image.sh` and `build-workspace.sh` share their package staging
+(`stage-packages.sh`): the former into a Docker image, the latter directly
+into a colcon workspace — for joining a real ROS graph on Linux, without
+Docker. [`docs/ros4hri.md`](../../../../docs/ros4hri.md#with-rmw_zenoh)
+("With rmw_zenoh") is that tutorial.

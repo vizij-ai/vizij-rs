@@ -237,6 +237,59 @@ ZENOH_CONFIG_OVERRIDE='mode="client";connect/endpoints=["tcp/127.0.0.1:7447"]' \
   vizij --glb face.glb --headless --ros2 quori --frame-rate 2
 ```
 
+**Joining a real ROS4HRI graph, on Linux.** A native `ros2` CLI, `rclpy`/
+`rclcpp` node, or `rqt` needs the ROS4HRI skill interfaces
+(`std_skills`, `communication_skills`, `interaction_skills`, `hri_msgs`)
+installed to resolve `/skill/look_at`, `/skill/say` and the face image's
+types — without them, `ros2 action send_goal` has nothing to autocomplete
+and no message to encode the goal with. Build them from the same vendored
+definitions the bridge serves (so the two sides never drift), once:
+
+```bash
+sudo apt install ros-jazzy-rmw-zenoh-cpp ros-jazzy-rosidl-default-generators \
+  ros-jazzy-action-msgs ros-jazzy-geometry-msgs python3-colcon-common-extensions
+
+crates/vizij/tests/ros4hri/build-workspace.sh ~/ros4hri_ws
+source ~/ros4hri_ws/install/setup.bash
+```
+
+Then, in one shell each:
+
+```bash
+# the router — once per graph, any host every node can reach
+export RMW_IMPLEMENTATION=rmw_zenoh_cpp
+ros2 run rmw_zenoh_cpp rmw_zenohd
+
+# every other ROS4HRI node — rclpy/rclcpp nodes, the `ros2` CLI, rqt — needs
+# only RMW_IMPLEMENTATION set; rmw_zenoh finds the local router by its own
+# discovery, the way it always does
+export RMW_IMPLEMENTATION=rmw_zenoh_cpp
+
+# the device: point it at the router explicitly — the bridge's Zenoh session
+# does not scout for one on its own, unlike a full rmw_zenoh node
+cargo build -p vizij --features ros2-zenoh --bins
+ZENOH_CONFIG_OVERRIDE='mode="client";connect/endpoints=["tcp/127.0.0.1:7447"]' \
+  vizij --glb face.glb --headless --ros2 quori --frame-rate 2
+```
+
+Verify from a fourth shell (`RMW_IMPLEMENTATION=rmw_zenoh_cpp`, nothing else):
+
+```bash
+ros2 action list -t   # /skill/look_at [interaction_skills/action/LookAt], /skill/say [...]
+ros2 topic echo --once --qos-reliability best_effort /robot_face/image_raw/compressed
+ros2 action send_goal /skill/look_at interaction_skills/action/LookAt \
+  "{meta: {priority: 128}, policy: 'glance', target: {header: {frame_id: face}, point: {x: 1.0, y: 0.3, z: 0.1}}}"
+```
+
+Every node on the graph must agree on the domain: `--ros2 quori:5` sets it on
+the device (`--ros2 quori` alone is domain 0); `ROS_DOMAIN_ID` sets it
+everywhere else, the way it always does under rmw_zenoh.
+
+`crates/vizij/tests/ros4hri/` runs this same setup end to end, against a
+container, driven by a real `rclpy` client (`say-feedback.sh`,
+`look-at.sh`) — the harness `build-image.sh` stages the same interfaces into
+a Docker image instead of a local workspace.
+
 ## The `look_at` skill
 
 The gaze skill is one of the device's [skills](skills.md); this section is

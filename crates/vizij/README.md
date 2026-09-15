@@ -96,7 +96,8 @@ rmw_zenohd`), reached through the same environment rmw_zenoh reads —
 or a full `ZENOH_SESSION_CONFIG_URI`. The live ROS tests run under `ros2-dds`.
 
 [ROS4HRI support](../../docs/ros4hri.md) documents the key contract, the
-per-channel behavior, how to drive a key from a ROS 2 shell, and the skill's
+per-channel behavior, how to drive a key from a ROS 2 shell, how to join a
+real graph over rmw_zenoh, and the skill's
 semantics.
 
 ## Speech (TTS)
