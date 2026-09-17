@@ -173,8 +173,11 @@ async fn the_look_at_skill_serves_the_standard_contract_on_the_vizij_device() {
 
     let client_flow = async {
         let (_ctx, mut node) = create_test_node(domain_id, "skill_client");
-        // The reliable service profile ros2-client's own action examples use —
-        // the best-effort default drops service requests.
+        // The service profile a native rclcpp/rclpy client runs
+        // (`rmw_qos_profile_services_default`): reliable — the best-effort
+        // default drops service requests — and volatile. The bridge serves
+        // every service endpoint volatile on both sides (arora-bridge-ros2
+        // 6.3.1), so a reply reader asking for transient-local stays unmatched.
         let service_qos = {
             use ros2_client::ros2::{policy, QosPolicyBuilder};
             QosPolicyBuilder::new()
@@ -182,7 +185,7 @@ async fn the_look_at_skill_serves_the_standard_contract_on_the_vizij_device() {
                     max_blocking_time: ros2_client::ros2::Duration::from_millis(100),
                 })
                 .history(policy::History::KeepLast { depth: 4 })
-                .durability(policy::Durability::TransientLocal)
+                .durability(policy::Durability::Volatile)
                 .build()
         };
 
