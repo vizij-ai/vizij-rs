@@ -22,3 +22,4 @@ uuid = "1"
 vizij-graph-core = { version = "1", path = "../../node-graph/vizij-graph-core" }
 # The say contract (ids, signature, the rest token): the speech skill's.
 vizij-arora-behavior = { version = "1.1", path = "../vizij-arora-behavior" }
+vizij-arora-store = { path = "../vizij-arora-store" }

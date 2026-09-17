@@ -64,6 +64,7 @@ use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
 
 use arora_types::call::{Call, CallError, CallResult};
+use arora_types::data::{DataStore, StateChange};
 use arora_types::value::{StructureField, Value};
 use serde::{Deserialize, Serialize};
 use vizij_graph_core::task;
@@ -128,15 +129,20 @@ struct VisemeResponse {
 
 /// The tts module: the described `say` action, discoverable over `DescribeMethods`
 /// and — via its `Status` return — exposable as a ROS 2 action by a bridge.
-pub fn host_module() -> HostModule {
+pub fn host_module(store: vizij_arora_store::BlackboardStore) -> HostModule {
     ModuleBuilder::new(MODULE_ID)
-        .described_function(SAY_ID, "say", say_signature(), say)
+        .described_function(SAY_ID, "say", say_signature(), move |call| {
+            say(call, store.clone())
+        })
         .build()
 }
 
 /// Speak `text` in `voice`, streaming the current viseme. Re-invoked each tick
 /// while `Running`; keeps its state in [`RUNS`], keyed by content.
-pub fn say(call: Call) -> Result<CallResult, CallError> {
+pub fn say(
+    call: Call,
+    store: vizij_arora_store::BlackboardStore,
+) -> Result<CallResult, CallError> {
     let text = match arg_string(&call, SAY_TEXT_PARAM_ID) {
         Some(text) => text,
         None => return Ok(status_only(task::failure())),
@@ -150,8 +156,10 @@ pub fn say(call: Call) -> Result<CallResult, CallError> {
 
     // First tick: spawn synthesis + playback off the tick thread. Later ticks
     // find the run and fall through to the poll.
-    let run = runs.entry(key).or_insert_with(|| spawn_say(text, voice));
-
+    let run = runs
+        .entry(key)
+        .or_insert_with(|| spawn_say(text, voice, store.clone()));
+        
     // The viseme at the playhead, advanced by the playback task.
     let current = run
         .viseme
@@ -180,7 +188,11 @@ pub fn say(call: Call) -> Result<CallResult, CallError> {
 /// task fetches audio + a viseme timeline, plays the audio, and advances the
 /// shared viseme cell at the playhead. The heavy work never runs on the tick
 /// thread; `say` only samples the cell and polls the handle.
-fn spawn_say(text: String, voice: String) -> Run {
+fn spawn_say(
+    text: String,
+    voice: String,
+    store: vizij_arora_store::BlackboardStore,
+) -> Run {
     let viseme = Arc::new(Mutex::new(SILENCE_VISEME.to_string()));
     let viseme_task = viseme.clone();
     let handle = TOKIO_HANDLE.spawn(async move {
@@ -192,6 +204,12 @@ fn spawn_say(text: String, voice: String) -> Run {
                 return task::failure();
             }
         };
+        if let Err(e) = store.write(StateChange::set(
+            "standard/ros4hri/speech/text",
+            Value::String(text.clone()),
+        )) {
+            log::error!("tts: failed to publish speech text: {e}");
+        }
         // Playback blocks and rodio's stream is thread-bound, so it runs on
         // the blocking pool; this task just awaits the outcome.
         match tokio::task::spawn_blocking(move || play(audio, marks, viseme_task)).await {
