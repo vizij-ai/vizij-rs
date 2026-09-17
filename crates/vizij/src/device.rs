@@ -386,7 +386,7 @@ pub(crate) fn builder_for(
     );
     let builder = arora::Arora::builder()
         .with_hal(Box::new(rig))
-        .with_data_store(Box::new(store))
+        .with_data_store(Box::new(store.clone()))
         .with_behavior_interpreter(Box::new(graph))
         .with_host_module(animation::host_module())
         .with_host_module(gaze::host_module())
@@ -395,7 +395,7 @@ pub(crate) fn builder_for(
     // viseme out-param). One provider per build, same contract: the cloud
     // provider by default, the local Piper provider under `tts-piper`.
     #[cfg(not(feature = "tts-piper"))]
-    let builder = builder.with_host_module(tts::host_module());
+    let builder = builder.with_host_module(tts::host_module(store.clone()));
     #[cfg(feature = "tts-piper")]
     let builder = builder.with_host_module(tts_piper::host_module());
     Some(builder)

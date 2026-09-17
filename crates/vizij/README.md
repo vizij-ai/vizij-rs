@@ -69,9 +69,9 @@ WS bridge):
 `--ros2` attaches [`arora-bridge-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-bridge-ros2)
 with its ROS4HRI exposure preset:
 
-- the typed face topics — `/robot_face/{expression,look_at,tts}` and
-  `/expressive_face/{look_at,speech}` — routed onto the `ros4hri` profile's
-  `standard/ros4hri/*` keys;
+- the typed face topics — `/robot_face/{look_at,speech}` and
+`/expressive_face/{look_at}` — plus `/skill/set_expression`,
+routed onto the `ros4hri` profile's `standard/ros4hri/*` keys;
 - the **`/<namespace>/actions/{play_viseme,say}`** action servers, synthesized
   from the viseme players' signatures ([skills](../../docs/skills.md));
 - the **`/skill/look_at`** action server (`interaction_skills/LookAt`):
@@ -171,10 +171,12 @@ involved —
 ros2 topic pub --once /<namespace>/keys/rig/<faceId>/standard/vizij/viseme/aa \
   std_msgs/msg/Float64 "{data: 1.0}"
 ```
+When `say` performs successful synthesis, the resulting utterance is also
+written to `standard/ros4hri/speech/text`, which the ROS4HRI profile exposes as
+`/robot_face/speech` (`std_msgs/String`).
 
-— and [Bring Your Own Visemes](https://github.com/vizij-ai/vizij-docs/blob/main/current_documentation/guidebook/deploy/bring-your-own-visemes.md) compares the three entry points. The
-ROS4HRI `/robot_face/tts` topic lands text on the `standard/ros4hri/speech/text`
-key, which nothing routes into `say` yet.
+— and [Bring Your Own Visemes](https://github.com/vizij-ai/vizij-docs/blob/main/current_documentation/guidebook/deploy/bring-your-own-visemes.md) compares the three entry points. The ROS4HRI `/robot_face/speech` topic publishes the synthesized speech text
+from the `standard/ros4hri/speech/text` key after successful synthesis.
 
 ## Lighting model
 
