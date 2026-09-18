@@ -3,23 +3,46 @@ name = "vizij"
 version = "0.1.0"
 edition = { workspace = true }
 publish = false
-description = "Vizij: the native app — an arora with a head. cargo run opens the Bevy view rendering a GLB face over a natively-run arora device."
+description = "Vizij: an arora with a head. One crate: the Bevy view rendering a GLB face and the arora device driving it, as a library on every target (desktop, browser, Android) and as the `vizij` binary on desktop."
+
+# The library is the view + device every entry point composes: the desktop
+# binary below, the browser module (a wasm-bindgen cdylib) and the Android
+# activity (a cdylib the activity loads).
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+# The desktop app: the CLI, the terminal operator UI, the bridges.
+[[bin]]
+name = "vizij"
+required-features = ["desktop"]
 
 [dependencies]
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive"], optional = true }
 log = "0.4"
-env_logger = "0.11"
+env_logger = { version = "0.11", optional = true }
 image = "0.25"
 uuid = { version = "1", features = ["serde"] }
 
-# The engine. Default features: gltf scene loading, winit windowing, png, etc.
-# 0.19 batches morph-target rendering — the faces' main workload. Trimming the
-# feature set (ros-viz-rs style) is a follow-up once the app is proven;
-# certainty over binary size for now.
-bevy = "0.19"
+# The engine, trimmed to what the view uses: the 3D render path (glTF, PBR,
+# morph targets — 0.19 batches morph-target rendering, the faces' main
+# workload), scene spawning, winit windowing, mesh picking, and WebGL2 as the
+# browser backend. No audio, UI, 2D or image codecs (the face GLBs embed no
+# textures). The per-platform windowing backends are in the target tables
+# below.
+bevy = { version = "0.19", default-features = false, features = [
+    "default_app",
+    "3d_bevy_render",
+    "scene",
+    "std",
+    "bevy_winit",
+    "multi_threaded",
+    "webgl2",
+    "bevy_picking",
+    "mesh_picking",
+] }
 
 # The device: an arora over the Vizij interop seams, run through the standard
 # operator flow (terminal UI on an interactive terminal, the open local bridge
@@ -28,8 +51,11 @@ bevy = "0.19"
 # public so the app composes the local bridge alongside the --ros2/--studio ones.
 # 9.7 adds `with_host_module`, which registers the animation module natively (a
 # `HostModule` of in-process functions) — no wasm guest, no bindep, so the
-# workspace stays on stable.
-arora = "9.10"
+# workspace stays on stable. No default features here: the executor-free
+# slice builds on every target; the native target table below adds `native`
+# (wasmtime, the local WS bridge, the operator flow) and the desktop feature
+# adds `tui`.
+arora = { version = "9.10", default-features = false }
 # The ROS 2 bridge, attached under `--ros2` (feature `ros2`). Heavy (ros2-client
 # + a DDS/Zenoh backend), so opt-in; the Studio bridge rides arora's own
 # `studio-bridge` feature instead (`--studio`). It carries the skill plane the
@@ -43,13 +69,9 @@ arora-bridge-ros2 = { version = "6.3", optional = true, default-features = false
 arora-behavior-tree-types = "1"
 # The built-in key prefix the ROS 2 input declaration leaves out.
 arora-behavior = "8"
-tokio = { version = "1", features = ["rt-multi-thread", "time"] }
-# The command pump's async plumbing: the TUI command stream and the per-run
-# stop signal.
-futures = "0.3"
 # Restores the terminal on the window-close exit path, where the device's
 # terminal UI (worker thread) never gets to unwind.
-crossterm = "0.28"
+crossterm = { version = "0.28", optional = true }
 # Nothing here uses tracing; the dep only turns on its `log` feature for the
 # whole build, so Bevy's tracing events (its LogPlugin stays disabled) fall
 # through to `log` — into the terminal UI's pane or the snapshot harness's
@@ -73,13 +95,34 @@ vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
 # dependency and no nightly. Its generated `Value` conversions marshal the calls.
 vizij-animation-module = { path = "../interop/vizij-animation-module" }
 
-# The TTS contract + cloud provider, as a host module (shared with the
-# standalone). `vizij-piper` is the local provider (feature `tts-piper`) — its
-# build self-provisions libpiper and a patched default voice, and `rodio`
-# plays its audio; note it links GPLv3 code into the binary.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# The native driver (`device::native`): the device on a worker thread under
+# arora's operator flow — `native` is the run loop, the local WS bridge and
+# the module executors — with the bridges the build adds.
+arora = { version = "9.10", default-features = false, features = ["native"] }
+# The device thread's runtime: the operator flow and the bridges are async,
+# the supervisor drives them on a multi-thread runtime.
+tokio = { version = "1", features = ["rt-multi-thread", "time", "macros"] }
+# The front-end pump's async plumbing: the merged command streams.
+futures = "0.3"
+# The TTS contract + cloud provider, as a host module. `vizij-piper` is the
+# local provider (feature `tts-piper`) — its build self-provisions libpiper
+# and a patched default voice, and `rodio` plays its audio; note it links
+# GPLv3 code into the binary. The browser device gets its own producer (the
+# page plays the audio) rather than this native one.
 vizij-arora-tts = { version = "2.1", path = "../interop/vizij-arora-tts" }
 rodio = { version = "0.20", optional = true }
 vizij-piper = { path = "../interop/vizij-piper", optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+bevy = { version = "0.19", default-features = false, features = ["x11", "wayland"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+bevy = { version = "0.19", default-features = false, features = ["android-native-activity"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# uuid v4 on wasm needs a browser RNG (selects getrandom's wasm_js backend).
+getrandom = { version = "0.4", features = ["wasm_js"] }
 
 [dev-dependencies]
 # The image messages a published frame is read back as, so a field landing in
@@ -96,7 +139,12 @@ ros2-client = { package = "ros2-client-multi-rmw", version = "0.13", default-fea
 rand = "0.9"
 
 [features]
-default = []
+default = ["desktop"]
+# The desktop app: the CLI and the terminal operator UI. Off, the library is
+# the view, the composition and the native driver with a headless front end
+# — what the Android activity builds on; the browser module builds on the
+# view and the composition alone.
+desktop = ["arora/tui", "dep:crossterm", "dep:clap", "dep:env_logger"]
 # `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics,
 # over one RMW backend per build — the bridge's `dds` / `zenoh` features are
 # mutually exclusive, exposed here under the bridge's consumer convention:

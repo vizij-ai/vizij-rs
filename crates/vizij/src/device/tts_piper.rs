@@ -80,7 +80,7 @@ pub fn host_module() -> HostModule {
 
 /// Speak `text`, streaming the phoneme at the playhead. Re-invoked each tick
 /// while `Running`; keeps its state in [`RUNS`], keyed by content.
-pub(crate) fn say(call: Call) -> Result<CallResult, CallError> {
+pub fn say(call: Call) -> Result<CallResult, CallError> {
     let text = match arg_string(&call, SAY_TEXT_PARAM_ID) {
         Some(text) => text,
         None => return Ok(status_only(task::failure())),
@@ -230,8 +230,7 @@ fn play(
 /// exit tears libpiper down deliberately instead of leaving it to C++
 /// static-destruction order (which aborts). The `say` example calls this; the
 /// app itself exits through the process teardown and does not yet.
-#[allow(dead_code)]
-pub(crate) fn shutdown() {
+pub fn shutdown() {
     if let Ok(mut guard) = SYNTH.lock() {
         guard.take();
     }
