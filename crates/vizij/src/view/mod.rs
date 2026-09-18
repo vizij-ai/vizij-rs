@@ -4,11 +4,27 @@
 //! in the XY plane layered along Z, orthographic camera fit to the authored
 //! `rootBounds`, ambient-only lighting, sRGB output with no tonemapping,
 //! double-sided materials, opacity-driven alpha blending.
+//!
+//! A face enters as GLB bytes: [`meta`] reads the bindings and the bundle
+//! from them, and the scene loads them through the in-memory asset source
+//! ([`FaceAssets`]), so the view never touches a file system — the same path
+//! on desktop, in the browser and on Android. [`snapshot`] renders offscreen
+//! and reads the pixels back; [`frames`] publishes what is rendered into the
+//! device's store.
+
+pub mod frames;
+pub mod meta;
+pub mod snapshot;
 
 use std::collections::HashMap;
+use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::Receiver;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
+use bevy::asset::io::memory::{Dir, MemoryAssetReader};
+use bevy::asset::io::AssetSourceBuilder;
+use bevy::asset::AssetApp;
 use bevy::camera::{CameraProjection, Projection, RenderTarget, ScalingMode, SubCameraView};
 use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::gltf::GltfAssetLabel;
@@ -18,20 +34,86 @@ use bevy::prelude::*;
 use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector};
 use vizij_api_core::Value;
 
-use crate::device::DeviceEvent;
-use crate::meta::{Binding, FaceMeta, FeatureKind};
+use meta::{Binding, FaceMeta, FeatureKind};
 
-/// The face metadata, as a Bevy resource.
+/// The in-memory asset source the faces' GLBs are served from: a loaded
+/// face's bytes live here under a path of their own until the face is
+/// unloaded, and its scene loads `mem://<path>`. Registered before the asset
+/// plugin ([`FaceAssets::register`]).
+#[derive(Resource, Clone)]
+pub struct FaceAssets {
+    dir: Dir,
+    /// Paths are never reused: the asset server caches a handle by its path,
+    /// and a face pushed under a path another face had would load stale.
+    pushes: Arc<AtomicU32>,
+}
+
+impl FaceAssets {
+    /// The asset source's name, the scheme of every face's asset path.
+    pub const SOURCE: &'static str = "mem";
+
+    /// Register the `mem` source on `app` — before `DefaultPlugins`, which the
+    /// asset plugin's construction requires — and keep the handle as a
+    /// resource. The returned clone pushes the first face.
+    pub fn register(app: &mut App) -> Self {
+        let assets = Self {
+            dir: Dir::default(),
+            pushes: Arc::new(AtomicU32::new(0)),
+        };
+        let dir = assets.dir.clone();
+        app.register_asset_source(
+            Self::SOURCE,
+            AssetSourceBuilder::new(move || Box::new(MemoryAssetReader { root: dir.clone() })),
+        );
+        app.insert_resource(assets.clone());
+        assets
+    }
+
+    /// Serve `glb` under a fresh path named after `name`; the path to load
+    /// the scene from.
+    pub fn push(&self, name: &str, glb: Vec<u8>) -> String {
+        let n = self.pushes.fetch_add(1, Ordering::SeqCst);
+        let path = format!("{name}-{n}.glb");
+        self.dir.insert_asset(Path::new(&path), glb);
+        path
+    }
+
+    /// Stop serving the GLB at `path`.
+    pub fn remove(&self, path: &str) {
+        self.dir.remove_asset(Path::new(path));
+    }
+
+    /// The scene asset of the GLB served at `path`.
+    fn scene(path: &str) -> bevy::asset::AssetPath<'static> {
+        GltfAssetLabel::Scene(0).from_asset(format!("{}://{path}", Self::SOURCE))
+    }
+}
+
+/// The face the view shows, as a Bevy resource.
 #[derive(Resource)]
 pub struct Face {
     pub meta: FaceMeta,
-    pub glb_path: String,
+    /// Where its GLB is served from ([`FaceAssets::push`]).
+    pub asset_path: String,
 }
 
-/// The operator's runtime changes, drained each frame ([`DeviceEvent`]).
+/// A change the view applies, sent by whatever fronts the device.
+pub enum ViewEvent {
+    /// A different face was loaded: the device restarted on its graphs; the
+    /// view swaps over to the new meta, GLB and rig feed.
+    FaceLoaded {
+        meta: Box<FaceMeta>,
+        glb: Vec<u8>,
+        rig: vizij_arora_hal::RigHal,
+    },
+    /// A new background color, as sRGB bytes.
+    Background([u8; 3]),
+}
+
+/// The front ends' runtime changes, drained each frame ([`ViewEvent`]).
 /// Absent in snapshot mode.
 #[derive(Resource)]
-pub struct DeviceEvents(pub Mutex<Receiver<DeviceEvent>>);
+pub struct DeviceEvents(pub Mutex<Receiver<ViewEvent>>);
 
 /// The device handles the view reads each frame.
 #[derive(Resource)]
@@ -40,7 +122,8 @@ pub struct DeviceRes {
 }
 
 /// How the camera fits the face's authored rootBounds into the viewport.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, clap::ValueEnum)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "desktop", derive(clap::ValueEnum))]
 pub enum Fit {
     /// The whole bounds stay visible; the window's excess axis shows
     /// background — the web renderer's behavior.
@@ -128,18 +211,19 @@ impl Plugin for ViewPlugin {
 
 fn setup_scene(mut commands: Commands, face: Res<Face>, asset_server: Res<AssetServer>) {
     commands.spawn(WorldAssetRoot(
-        asset_server.load(GltfAssetLabel::Scene(0).from_asset(face.glb_path.clone())),
+        asset_server.load(FaceAssets::scene(&face.asset_path)),
     ));
 }
 
-/// Apply the operator's runtime changes: recolor the background, or swap the
-/// whole face — despawn the scene, load the new GLB, refit the camera, hand
-/// the pose feed over to the new device generation's rig, and let
-/// `index_scene` rebuild the joins once the new scene has spawned.
+/// Apply the front ends' runtime changes: recolor the background, or swap
+/// the whole face — despawn the scene, serve and load the new GLB, refit the
+/// camera, hand the pose feed over to the new device generation's rig, and
+/// let `index_scene` rebuild the joins once the new scene has spawned.
 #[allow(clippy::too_many_arguments)]
 fn apply_device_events(
     events: Option<Res<DeviceEvents>>,
-    mut frame_config: Option<ResMut<crate::frames::FrameConfig>>,
+    mut frame_config: Option<ResMut<frames::FrameConfig>>,
+    assets: Res<FaceAssets>,
     mut face: ResMut<Face>,
     mut device: ResMut<DeviceRes>,
     mut options: ResMut<ViewOptions>,
@@ -155,26 +239,25 @@ fn apply_device_events(
     };
     while let Ok(event) = receiver.try_recv() {
         match event {
-            DeviceEvent::Background([r, g, b]) => {
+            ViewEvent::Background([r, g, b]) => {
                 options.background = Color::srgb_u8(r, g, b);
                 for (mut camera, _, _) in &mut cameras {
                     camera.clear_color = ClearColorConfig::Custom(options.background);
                 }
             }
-            DeviceEvent::FaceLoaded {
-                glb_path,
-                meta,
-                rig,
-            } => {
+            ViewEvent::FaceLoaded { meta, glb, rig } => {
                 log::info!(
-                    "face swapped to {glb_path} ({} elements); reloading the scene",
+                    "face swapped to {} ({} elements); reloading the scene",
+                    meta.bundle.face_id.as_deref().unwrap_or("an unnamed face"),
                     meta.elements.len()
                 );
                 for root in &roots {
                     commands.entity(root).despawn();
                 }
+                assets.remove(&face.asset_path);
+                let asset_path = assets.push(face_name(&meta), glb);
                 commands.spawn(WorldAssetRoot(
-                    asset_server.load(GltfAssetLabel::Scene(0).from_asset(glb_path.clone())),
+                    asset_server.load(FaceAssets::scene(&asset_path)),
                 ));
                 let (projection, transform) = camera_fit(&meta, &options);
                 for (_, mut camera_projection, mut camera_transform) in &mut cameras {
@@ -184,18 +267,27 @@ fn apply_device_events(
                 // The published frames are stamped in the loaded face's own
                 // frame, so they follow the face.
                 if let Some(config) = frame_config.as_mut() {
-                    config.face_frame_id =
-                        crate::frames::default_frame_id(meta.bundle.face_id.as_deref(), &glb_path);
+                    config.face_frame_id = frames::default_frame_id(&meta);
                 }
                 *face = Face {
                     meta: *meta,
-                    glb_path,
+                    asset_path,
                 };
                 device.rig = rig;
                 *index = BindingIndex::default();
             }
         }
     }
+}
+
+/// The name a face's GLB is served under: its id from the bundle, else
+/// `face`.
+pub fn face_name(meta: &FaceMeta) -> &str {
+    meta.bundle
+        .face_id
+        .as_deref()
+        .filter(|id| !id.is_empty())
+        .unwrap_or("face")
 }
 
 /// The camera placement for a face: a [`FitProjection`] over the authored

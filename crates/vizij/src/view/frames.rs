@@ -29,14 +29,16 @@ use arora_types::data::{Key, StateChange};
 use arora_types::value::Value;
 use vizij_arora_host::frames as host;
 
-use crate::view::{DeviceRes, OffscreenTarget};
+use super::meta::FaceMeta;
+use super::{DeviceRes, OffscreenTarget};
 
 /// The rate frames publish at when nothing says otherwise.
 pub const DEFAULT_RATE_HZ: f32 = 15.0;
 
 /// How a published frame's pixels are encoded — and, with it, which ROS image
 /// message the frame is and which store key it is written under.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, clap::ValueEnum)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "desktop", derive(clap::ValueEnum))]
 pub enum FrameFormat {
     /// PNG — compact enough to travel over a bridge (the default); a
     /// `sensor_msgs/CompressedImage`.
@@ -109,15 +111,9 @@ pub fn publish_rate(given: Option<f32>, ros2: bool, ros4hri: bool) -> anyhow::Re
 /// The TF frame a face's image is stamped with when `--frame-id` is not
 /// given: the face's id from its GLB (the bundle's `metadata.faceId`, e.g.
 /// `quori_latest`), which names the face rather than the device it runs on;
-/// a GLB without one is named by its file stem.
-pub fn default_frame_id(face_id: Option<&str>, glb_path: &str) -> String {
-    match face_id {
-        Some(id) if !id.is_empty() => id.to_string(),
-        _ => std::path::Path::new(glb_path)
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "face".to_string()),
-    }
+/// a GLB without one is `face`.
+pub fn default_frame_id(meta: &FaceMeta) -> String {
+    super::face_name(meta).to_string()
 }
 
 pub struct FramesPlugin;
@@ -366,18 +362,17 @@ mod tests {
     }
 
     /// The face is named by its GLB; only a GLB without a face id falls back
-    /// to the file's name.
+    /// to `face`.
     #[test]
     fn the_default_frame_id_is_the_faces_id_from_its_glb() {
-        assert_eq!(
-            default_frame_id(Some("quori_latest"), "/faces/Quori_Latest_ROS.glb"),
-            "quori_latest"
-        );
-        assert_eq!(
-            default_frame_id(None, "/faces/Quori_Latest_ROS.glb"),
-            "Quori_Latest_ROS"
-        );
-        assert_eq!(default_frame_id(Some(""), "hugo.glb"), "hugo");
+        let named = |face_id: Option<&str>| {
+            let mut meta = FaceMeta::default();
+            meta.bundle.face_id = face_id.map(str::to_string);
+            default_frame_id(&meta)
+        };
+        assert_eq!(named(Some("quori_latest")), "quori_latest");
+        assert_eq!(named(None), "face");
+        assert_eq!(named(Some("")), "face");
     }
 
     /// The key each format writes is the one the ROS4HRI exposure profile
