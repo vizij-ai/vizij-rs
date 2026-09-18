@@ -1,9 +1,9 @@
-# vizij — the native app
+# vizij — an arora with a head
 
-An arora with a head. `cargo run -p vizij -- --glb <face.glb>` opens a Bevy
-window rendering the face, driven by a natively-run arora device executing the
-face's own graphs (rig + pose-driver from the embedded `VIZIJ_bundle`) — the
-same runtime contract the web apps use, with no browser and no JS.
+`cargo run -p vizij -- --glb <face.glb>` opens a Bevy window rendering the
+face, driven by a natively-run arora device executing the face's own graphs
+(rig + pose-driver from the embedded `VIZIJ_bundle`) — the same runtime
+contract the web apps use, with no browser and no JS.
 
 ```bash
 cargo run -p vizij -- --glb path/to/Quori_Current_Extended.glb
@@ -11,18 +11,46 @@ cargo run -p vizij -- --glb path/to/Quori_Current_Extended.glb
 cargo run -p vizij -- --glb face.glb --snapshot out.png --size 763x760
 ```
 
+## One crate, every target
+
+The crate is a library plus the desktop binary. The library is the view and
+the device, and builds wherever a face is shown; the binary is the desktop
+entry point over it, and the other entry points — the browser module, the
+Android activity — compose the same two halves.
+
+| Module | What it is | Where it builds |
+|---|---|---|
+| `view` | the Bevy rendering of a face from its GLB bytes, applying a device's pose each frame; `view::meta` (the bindings and the bundle read from the GLB), `view::snapshot` (offscreen rendering and readback), `view::frames` (rendered frames into the store) | everywhere |
+| `device` | the composition: `RigHal` + `BlackboardStore` + the face's composed graph, with the animation, gaze, viseme and speech modules | everywhere |
+| `device::native` | the driver: the device on a worker thread under arora's operator flow, the bridges the build adds, the `DeviceHandle` front ends speak through | every target but the browser |
+| `main.rs` | the CLI and the terminal operator UI | feature `desktop` (default) |
+
+Features: `desktop` (default) is the CLI and the terminal UI; `studio`,
+`ros2-dds` / `ros2-zenoh` and `tts-piper` add the bridges and the local
+speech provider to any native build. Without `desktop`, `cargo check --lib
+--no-default-features` gives the library the browser (`--target
+wasm32-unknown-unknown`) and Android (`cargo ndk … --features studio`)
+entry points build on; CI checks both.
+
+A face enters as GLB bytes on every target: `view::meta::FaceMeta` reads the
+bindings and the bundle from them, `device::load_face` composes them, and
+the view serves them to Bevy's loader from memory (`view::FaceAssets`), so
+nothing below the entry point touches a file system. The desktop binary
+reads `--glb`; a front end loads another face by handing the running
+device its bytes (`DeviceHandle::reload`).
+
 ## How it works
 
-- **`meta`** reads what Bevy's GLB loader does not surface: the per-node
-  `RobotData` extension (the animatables — UUID-identified features) and the
-  scene-root `VIZIJ_bundle` (graphs, poses, clips, metadata). Bevy loads the
-  same GLB for meshes/materials/morphs; the two worlds join on the glTF node
-  name.
+- **`view::meta`** reads what Bevy's GLB loader does not surface: the
+  per-node `RobotData` extension (the animatables — UUID-identified
+  features) and the scene-root `VIZIJ_bundle` (graphs, poses, clips,
+  metadata). Bevy loads the same GLB for meshes/materials/morphs; the two
+  worlds join on the glTF node name.
 - **`device`** composes the bundle's graphs into one spec (node ids namespaced
   per source, store paths shared — the cross-source contract) and runs
-  `RigHal` + `BlackboardStore` + `ProcessingGraph` as an arora, stepped at
-  ~100 Hz on a worker thread. The `Arora` is built inside that thread — it is
-  single-owner by design and not `Send`.
+  `RigHal` + `BlackboardStore` + `ProcessingGraph` as an arora; on desktop
+  `device::native` steps it at ~100 Hz on a worker thread. The `Arora` is
+  built inside that thread — it is single-owner by design and not `Send`.
 - **`view`** renders the web renderer's scene model: Z-up, faces in the XY
   plane layered along Z, orthographic camera fit to the authored `rootBounds`
   (`--fit` picks how, `--zoom` magnifies on top), sRGB output, no tonemapping,
@@ -30,7 +58,7 @@ cargo run -p vizij -- --glb face.glb --snapshot out.png --size 763x760
   morph-target influences. Each frame it reads the device's actuation state
   from the HAL seam (`RigHal::pose()`) and applies it: transforms (euler ZYX),
   material color/opacity, morphs.
-- **`snapshot`** is the headless pipeline (recipe from ros-viz-rs):
+- **`view::snapshot`** is the headless pipeline (recipe from ros-viz-rs):
   `WinitPlugin` disabled, `ScheduleRunnerPlugin`, camera → `RenderTarget`
   image, `gpu_readback` → PNG.
 
@@ -151,7 +179,7 @@ marks) and point the app at it with the `API_URL` environment variable.
 which. `--features tts-piper` picks the local one, `API_URL` points the cloud
 one at your own deployment, and a provider of your own is a host module
 implementing the `say` contract `vizij-arora-tts` re-exports — a sibling of
-[`src/tts_piper.rs`](src/tts_piper.rs), registered behind a feature the same
+[`src/device/tts_piper.rs`](src/device/tts_piper.rs), registered behind a feature the same
 way. The contract is text in, status and a viseme stream out, so a
 text-to-speech that produces no visemes (derive them from the text) or a
 viseme generator with no audio at all plugs in there too. The guidebook walks
