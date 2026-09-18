@@ -42,6 +42,9 @@ pub struct Binding {
 /// A scene element as declared by its `RobotData` extension.
 #[derive(Debug, Clone)]
 pub struct Element {
+    /// The element's own id (a UUID) — what the authoring app and Studio
+    /// name it by, and what a pick reports.
+    pub id: String,
     pub node_name: String,
     /// `shape` (mesh-bearing) or `group`; unused until the UI groups elements.
     #[allow(dead_code)]
@@ -84,6 +87,8 @@ struct RawAnimatable {
 
 #[derive(Deserialize)]
 struct RawRobotData {
+    #[serde(default)]
+    id: String,
     #[serde(default)]
     name: String,
     material: Option<String>,
@@ -178,6 +183,7 @@ impl FaceMeta {
             }
 
             elements.push(Element {
+                id: rd.id,
                 node_name,
                 kind: rd.kind,
                 material: rd.material,

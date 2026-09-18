@@ -30,7 +30,7 @@ use arora_types::value::Value;
 use vizij_arora_host::frames as host;
 
 use super::meta::FaceMeta;
-use super::{DeviceRes, OffscreenTarget};
+use super::{Face, OffscreenTarget};
 
 /// The rate frames publish at when nothing says otherwise.
 pub const DEFAULT_RATE_HZ: f32 = 15.0;
@@ -113,7 +113,12 @@ pub fn publish_rate(given: Option<f32>, ros2: bool, ros4hri: bool) -> anyhow::Re
 /// `quori_latest`), which names the face rather than the device it runs on;
 /// a GLB without one is `face`.
 pub fn default_frame_id(meta: &FaceMeta) -> String {
-    super::face_name(meta).to_string()
+    meta.bundle
+        .face_id
+        .as_deref()
+        .filter(|id| !id.is_empty())
+        .unwrap_or("face")
+        .to_string()
 }
 
 pub struct FramesPlugin;
@@ -149,15 +154,20 @@ fn request_capture(
     commands.spawn(screenshot).observe(publish_frame);
 }
 
-/// Encode the captured frame and push it onto the rig's reading feed. RGBA is
-/// taken as-is; BGRA is swizzled (window swapchains are commonly BGRA, offscreen
-/// targets RGBA); an unreadable format is skipped.
+/// Encode the captured frame and push it onto the rig's reading feed of the
+/// face the target shows — the one in the lowest slot, which is the only
+/// one where a frame is published from (the desktop and headless runs show
+/// one face). RGBA is taken as-is; BGRA is swizzled (window swapchains are
+/// commonly BGRA, offscreen targets RGBA); an unreadable format is skipped.
 fn publish_frame(
     event: On<ScreenshotCaptured>,
-    device: Res<DeviceRes>,
+    faces: Query<&Face>,
     config: Res<FrameConfig>,
     mut announced: Local<bool>,
 ) {
+    let Some(face) = faces.iter().min_by_key(|face| face.slot) else {
+        return;
+    };
     let image = &event.image;
     let (width, height) = (image.width(), image.height());
     let Some(rgba) = to_rgba8(image) else {
@@ -171,8 +181,7 @@ fn publish_frame(
             config.frame_id()
         );
     }
-    device
-        .rig
+    face.rig
         .push_reading(frame_reading(&rgba, width, height, &config));
 }
 
