@@ -169,7 +169,6 @@ fn build(rig_prefix: &str) -> (String, Json) {
     let name = g.input("in/expression/name", EXPRESSION_NAME_KEY, json!(""));
     let valence = g.input("in/expression/valence", EXPRESSION_VALENCE_KEY, json!(0.0));
     let arousal = g.input("in/expression/arousal", EXPRESSION_AROUSAL_KEY, json!(0.0));
-
     // The commanded affect as a point (valence, arousal) on the circumplex.
     let affect = g.op(
         "expression/affect",
@@ -245,15 +244,15 @@ fn build(rig_prefix: &str) -> (String, Json) {
         } else {
             g.mul(&id("blend"), &active, &share)
         };
-        // The commanded name selects: this expression → 1, no name → the
-        // blend, another name → 0.
+        // The commanded name selects: this expression → expression intensity,
+        // no name → the circumplex blend, another name → 0.
         let weight = g.op(
             &id("weight"),
             "case",
             json!({ "case_labels": [expr, ""] }),
             &[
                 ("selector", &name),
-                ("operand_0", &one),
+                ("operand_0", &arousal),
                 ("operand_1", &blend),
                 ("default", &zero),
             ],
