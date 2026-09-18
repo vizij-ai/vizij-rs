@@ -6,10 +6,14 @@ runs inside any Arora runtime (native, browser, Web Worker).
 
 ## What it is
 
-The animation `Engine` lives in a **guest global** (`lazy_static`, like
-`polly`): a wasm module's `Store`/`Memory` persist across `dispatch`, so the
-engine's state survives between calls — no engine state round-trips through the
-store.
+The module's state — the animation `Engine`, the key-to-track index and the
+transport commands buffered for the next step — is an `Animation`. The wasm
+guest owns one in a **guest global** (a wasm module's `Store`/`Memory`
+persist across `dispatch`, so the state survives between calls — no engine
+state round-trips through the store); the free functions the generated
+exports call are that global's. A host that links this crate as an rlib
+(`vizij`'s native and browser devices) builds one `Animation` per module
+instance instead, so two devices in one process never share an engine.
 
 The boundary types are declared in [`module.yaml`](module.yaml) + the type
 records under [`types/`](types), and the arora-module-authoring `rust` generator
@@ -56,7 +60,7 @@ per-composite type is declared here; the runtime `Value` carries the identity.
 ## Building & testing
 
 ```sh
-# native logic test (guest global engine + per-track output contract):
+# native logic test (an Animation per test + per-track output contract):
 cargo test -p vizij-animation-module --lib
 
 # build the wasm artifact:

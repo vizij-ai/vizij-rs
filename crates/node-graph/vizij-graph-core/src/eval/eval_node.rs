@@ -16,6 +16,7 @@ use super::shape_helpers::{
     coerce_numeric_to_shape, is_numeric_like, null_of_shape_numeric, project_by_selector,
     value_matches_shape,
 };
+#[cfg(feature = "urdf_ik")]
 use super::urdfik::{
     apply_joint_positions, fetch_joint_vector, hash_urdf_config, quat_from_value, solve_pose,
     solve_position, tip_pose, vector_from_value, IkKey,

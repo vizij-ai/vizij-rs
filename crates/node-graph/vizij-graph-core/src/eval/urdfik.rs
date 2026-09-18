@@ -1,19 +1,14 @@
 //! URDF inverse kinematics helpers gated behind the `urdf_ik` feature.
 
 use hashbrown::HashMap;
-#[cfg(feature = "urdf_ik")]
 use k::InverseKinematicsSolver;
-#[cfg(feature = "urdf_ik")]
 use std::collections::hash_map::DefaultHasher;
-#[cfg(feature = "urdf_ik")]
 use std::fmt;
-#[cfg(feature = "urdf_ik")]
 use std::hash::{Hash, Hasher};
 use vizij_api_core::value as vocab;
 use vizij_api_core::value::VizijKind;
 use vizij_api_core::{coercion, Value};
 
-#[cfg(feature = "urdf_ik")]
 /// Cached state for URDF chains shared by IK and FK nodes.
 pub struct UrdfKinematicsState {
     pub hash: u64,
@@ -22,7 +17,6 @@ pub struct UrdfKinematicsState {
     pub chain: k::SerialChain<f32>,
 }
 
-#[cfg(feature = "urdf_ik")]
 impl fmt::Debug for UrdfKinematicsState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("UrdfKinematicsState")
@@ -33,7 +27,6 @@ impl fmt::Debug for UrdfKinematicsState {
     }
 }
 
-#[cfg(feature = "urdf_ik")]
 impl UrdfKinematicsState {
     /// Construct a new kinematics state from a serial chain and its joint names.
     pub fn new(hash: u64, chain: k::SerialChain<f32>, joint_names: Vec<String>) -> Self {
@@ -61,7 +54,6 @@ impl UrdfKinematicsState {
     }
 }
 
-#[cfg(feature = "urdf_ik")]
 /// Key that uniquely identifies a URDF chain configuration for caching.
 pub struct IkKey<'a> {
     pub hash: u64,
@@ -70,7 +62,6 @@ pub struct IkKey<'a> {
     pub tip_link: &'a str,
 }
 
-#[cfg(feature = "urdf_ik")]
 /// Compute a stable hash for a URDF IK configuration.
 pub fn hash_urdf_config(urdf_xml: &str, root_link: &str, tip_link: &str) -> u64 {
     let mut hasher = DefaultHasher::new();
@@ -80,7 +71,6 @@ pub fn hash_urdf_config(urdf_xml: &str, root_link: &str, tip_link: &str) -> u64 
     hasher.finish()
 }
 
-#[cfg(feature = "urdf_ik")]
 /// Build a serial chain between `root` and `tip` from the provided URDF XML.
 pub fn build_chain_from_urdf(
     urdf_xml: &str,
@@ -157,7 +147,6 @@ pub fn build_chain_from_urdf(
     Ok((serial, joint_names))
 }
 
-#[cfg(feature = "urdf_ik")]
 /// Apply optional joint-space weights to the solver.
 fn apply_weights(
     solver: &mut k::JacobianIkSolver<f32>,
@@ -175,7 +164,6 @@ fn apply_weights(
     Ok(())
 }
 
-#[cfg(feature = "urdf_ik")]
 /// Solve for joint positions that reach `target_pos` while respecting `weights`.
 pub fn solve_position(
     state: &mut UrdfKinematicsState,
@@ -216,7 +204,6 @@ pub fn solve_position(
     Ok(state.chain.joint_positions())
 }
 
-#[cfg(feature = "urdf_ik")]
 fn scalar_from_value(value: &Value) -> Result<f32, String> {
     let mismatch = || format!("expected numeric scalar, received {:?}", vocab::kind(value));
     match vocab::kind(value) {
@@ -249,7 +236,6 @@ fn scalar_from_value(value: &Value) -> Result<f32, String> {
     }
 }
 
-#[cfg(feature = "urdf_ik")]
 fn align_sequence_with_defaults(
     values: &[f32],
     expected: usize,
@@ -269,7 +255,6 @@ fn align_sequence_with_defaults(
     result
 }
 
-#[cfg(feature = "urdf_ik")]
 /// Coerce input joint data into a vector matching the chain joint order.
 pub fn fetch_joint_vector(
     value: &Value,
@@ -325,7 +310,6 @@ pub fn fetch_joint_vector(
     }
 }
 
-#[cfg(feature = "urdf_ik")]
 /// Apply joint values to the cached serial chain.
 pub fn apply_joint_positions(
     state: &mut UrdfKinematicsState,
@@ -345,7 +329,6 @@ pub fn apply_joint_positions(
     Ok(())
 }
 
-#[cfg(feature = "urdf_ik")]
 /// Extract the current tip pose (position + quaternion) from the chain.
 pub fn tip_pose(state: &UrdfKinematicsState) -> ([f32; 3], [f32; 4]) {
     let end = state.chain.end_transform();
@@ -355,7 +338,6 @@ pub fn tip_pose(state: &UrdfKinematicsState) -> ([f32; 3], [f32; 4]) {
 }
 
 #[allow(clippy::too_many_arguments)]
-#[cfg(feature = "urdf_ik")]
 /// Solve for joint positions that reach both `target_pos` and `target_rot`.
 pub fn solve_pose(
     state: &mut UrdfKinematicsState,
@@ -397,7 +379,6 @@ pub fn solve_pose(
     Ok(state.chain.joint_positions())
 }
 
-#[cfg(feature = "urdf_ik")]
 /// Extract the numeric components from a supported value type.
 pub fn vector_from_value(value: &Value, label: &str) -> Result<Vec<f32>, String> {
     if let Some(xs) = vocab::as_vector(value) {
@@ -416,7 +397,6 @@ pub fn vector_from_value(value: &Value, label: &str) -> Result<Vec<f32>, String>
         })
 }
 
-#[cfg(feature = "urdf_ik")]
 /// Interpet a [`Value`] as a quaternion `[x, y, z, w]`.
 pub fn quat_from_value(value: &Value, label: &str) -> Result<[f32; 4], String> {
     vocab::as_quat(value)

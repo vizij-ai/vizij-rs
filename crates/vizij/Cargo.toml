@@ -74,11 +74,11 @@ vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
 vizij-animation-module = { path = "../interop/vizij-animation-module" }
 
 # The TTS contract + cloud provider, as a host module (shared with the
-# standalone). `rodio` plays the Piper provider's audio; `vizij-piper` is the
-# local provider (feature `tts-piper`) — its build self-provisions libpiper
-# and a patched default voice; note it links GPLv3 code into the binary.
-vizij-arora-tts = { version = "2", path = "../interop/vizij-arora-tts" }
-rodio = "0.20"
+# standalone). `vizij-piper` is the local provider (feature `tts-piper`) — its
+# build self-provisions libpiper and a patched default voice, and `rodio`
+# plays its audio; note it links GPLv3 code into the binary.
+vizij-arora-tts = { version = "2.1", path = "../interop/vizij-arora-tts" }
+rodio = { version = "0.20", optional = true }
 vizij-piper = { path = "../interop/vizij-piper", optional = true }
 
 [dev-dependencies]
@@ -115,4 +115,4 @@ studio = ["arora/studio-bridge"]
 # Swap the TTS provider: the local Piper module (`tts_piper.rs`) instead of the
 # cloud module (`tts.rs`). Same `say` contract; fully offline at run time; the
 # first build downloads and prepares everything it needs.
-tts-piper = ["dep:vizij-piper"]
+tts-piper = ["dep:vizij-piper", "dep:rodio"]

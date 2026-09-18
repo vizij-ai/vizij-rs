@@ -5,6 +5,7 @@ use hashbrown::{hash_map::Entry, HashMap};
 use vizij_api_core::{Shape, TypedPath, Value, WriteBatch};
 
 use super::plan::PlanCache;
+#[cfg(feature = "urdf_ik")]
 use super::urdfik::{build_chain_from_urdf, IkKey, UrdfKinematicsState};
 use super::value_layout::{FlatValue, PortValue, ValueLayout};
 
