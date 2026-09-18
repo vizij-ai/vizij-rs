@@ -1,0 +1,149 @@
+{
+ "readyMs": 2185,
+ "beforeStop": {
+  "running": true,
+  "frames": 9,
+  "faceCount": 1,
+  "rafTicks": 9,
+  "devices": {
+   "a": {
+    "steps": 3,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 667
+   }
+  },
+  "memoryBytes": 139329536,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "stopMs": 712,
+ "afterStop": {
+  "running": false,
+  "frames": 18,
+  "faceCount": 1,
+  "rafTicks": 35,
+  "devices": {
+   "a": {
+    "steps": 29,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 667
+   }
+  },
+  "memoryBytes": 139329536,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "afterStopLater": {
+  "running": false,
+  "frames": 18,
+  "faceCount": 1,
+  "rafTicks": 44,
+  "devices": {
+   "a": {
+    "steps": 38,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 667
+   }
+  },
+  "memoryBytes": 139329536,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "deviceAfterStop": {
+  "ok": true,
+  "steps": 66,
+  "poseLen": 372
+ },
+ "secondMount": "ok",
+ "afterSecondMount": {
+  "running": true,
+  "frames": 37,
+  "faceCount": 0
+ },
+ "secondLoad": "ok",
+ "afterRestart": {
+  "running": true,
+  "frames": 41,
+  "faceCount": 1,
+  "rafTicks": 95,
+  "devices": {
+   "a": {
+    "steps": 90,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 667
+   },
+   "a2": {
+    "steps": 3,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 595
+   }
+  },
+  "memoryBytes": 172032000,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "afterRestartWrite": {
+  "running": true,
+  "frames": 50,
+  "faceCount": 1,
+  "rafTicks": 104,
+  "devices": {
+   "a": {
+    "steps": 99,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 667
+   },
+   "a2": {
+    "steps": 12,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 595
+   }
+  },
+  "memoryBytes": 172032000,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "errors": [
+  "[log] %cWARN%c /Users/victor.paleologue/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_render-0.19.1/src/renderer/mod.rs:291%c The selected adapter is using a driver that only supports software rendering. This is likely to be very slow. See https://bevy.org/learn/errors/b0006/ color: orange; background: #444 color: gray; font-style: italic color: inherit",
+  "[log] %cERROR%c /Users/victor.paleologue/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_log-0.19.1/src/lib.rs:395%c Could not set global logger and tracing subscriber as they are already set. Consider disabling LogPlugin. color: red; background: #444 color: gray; font-style: italic color: inherit",
+  "[log] %cWARN%c /Users/victor.paleologue/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_render-0.19.1/src/renderer/mod.rs:291%c The selected adapter is using a driver that only supports software rendering. This is likely to be very slow. See https://bevy.org/learn/errors/b0006/ color: orange; background: #444 color: gray; font-style: italic color: inherit"
+ ],
+ "consoleLines": 39
+}

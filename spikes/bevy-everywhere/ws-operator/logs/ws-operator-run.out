@@ -1,0 +1,22 @@
+ServerConfig: bind=127.0.0.1 port=9124 validate_paths=true serve_control_panel=true
+> {"type":"list_keys"}
+< {"type":"list_keys_resp","keys":[{"path":"face/mouth/open","kind":"input","value_type":"f64","min":0.0,"max":1.0,"default_value":{"f64":0.0}},{"path":"face/brow/raise","kind":"input","value_type":"f64","min":0.0,"max":1.0,"default_value":{"f64":0.5}}]}
+> {"type":"list_methods"}
+< {"type":"list_methods_resp","methods":[{"path":"reset","description":"Restore every input to its default"},{"path":"ping","return_type":"str","description":"Call the device's ping function"}]}
+> {"type":"write_values","values":{"face/mouth/open":{"f64":0.7}}}
+< {"type":"write_values_resp","success":true}
+< {"type":"values_changed","values":{"face/mouth/open":{"f64":0.7},"arora/dt":{"u64":8025958},"arora/time":{"u64":311046958}}}
+> {"type":"read_values","keys":["face/mouth/open"]}
+< {"type":"read_values_resp","values":{"face/mouth/open":{"f64":0.7}}}
+> {"type":"write_values","values":{"not/registered":{"f64":1.0}}}
+< {"type":"values_changed","values":{"arora/dt":{"u64":9810875},"arora/time":{"u64":320857833}}}
+< {"type":"write_values_resp","success":false,"message":"Unknown input path(s): not/registered"}
+> {"type":"invoke","method":"reset","request_id":"r1"}
+< {"type":"invoke_resp","success":true,"request_id":"r1"}
+< {"type":"values_changed","values":{"face/mouth/open":{"f64":0.0},"face/brow/raise":{"f64":0.5},"arora/time":{"u64":332134083},"arora/dt":{"u64":11276250}}}
+> {"type":"invoke","method":"ping","request_id":"r2"}
+< {"type":"invoke_resp","success":true,"request_id":"r2","value":{"str":"accepted"}}
+  ping reply from the device: Ok(CallResult { ret: String("pong (0 args)"), mutated: [] })
+idle feed over 500 ms: 59 values_changed pushes, 59 carrying only arora/* keys
+HTTP GET /: 26346 bytes; status "HTTP/1.1 200 OK"; title present: true
+OK

@@ -1,0 +1,21 @@
+case=api34-host-vulkan apk=bevy-spike-vulkan-debug.apk serial=emulator-5562 date=2026-09-18T14:40:41Z
+sdk=34
+install=Success
+Status: ok TotalTime: 12722 
+t=5s dominant=[((0, 0, 0), 9905), ((241, 240, 247), 1379)] orange_px=0 center=(241, 240, 247)
+t=10s dominant=[((0, 0, 0), 9905), ((241, 240, 247), 1379)] orange_px=0 center=(241, 240, 247)
+t=15s dominant=[((0, 0, 0), 9907), ((241, 240, 247), 1389)] orange_px=0 center=(241, 240, 247)
+t=20s dominant=[((0, 0, 0), 9907), ((241, 240, 247), 1389)] orange_px=45 center=(241, 240, 247)
+t=25s dominant=[((6, 7, 9), 9732), ((241, 240, 247), 1389)] orange_px=45 center=(241, 240, 247)
+t=30s dominant=[((22, 22, 22), 6781), ((27, 48, 50), 1479)] orange_px=45 center=(241, 240, 247)
+t=35s dominant=[((22, 22, 22), 6781), ((27, 48, 50), 1479)] orange_px=45 center=(241, 240, 247)
+t=40s dominant=[((22, 22, 22), 6781), ((27, 48, 50), 1479)] orange_px=45 center=(241, 240, 247)
+t=45s dominant=[((22, 22, 22), 6781), ((27, 48, 50), 1479)] orange_px=45 center=(241, 240, 247)
+pid_at_end=3255
+resumed=    topResumedActivity=ActivityRecord{465b35f u0 ai.vizij.bevyspike/android.app.NativeActivity t12}
+log: 09-18 16:42:24.237  3255  3370 I RustStdoutStderr: 2026-09-18T14:42:24.237703Z  INFO bevy_render::renderer: AdapterInfo { name: "Apple M1", vendor: 4203, device: 436601351, device_type: IntegratedGpu,
+log: 09-18 16:42:28.045  3255  3370 I RustStdoutStderr: 2026-09-18T14:42:28.043872Z  INFO bevy_winit::system: Creating new window app_process64 (65v0)
+log: 09-18 16:42:29.211   527  3426 E ActivityManager: ANR in com.android.phone
+log: 09-18 16:43:34.155   527  3606 E ActivityManager: ANR in com.google.android.gms.persistent
+log: 09-18 16:43:45.482   527  3606 E ActivityManager: ANR in com.android.phone
+log: 09-18 16:44:05.964   527  3606 E ActivityManager: ANR in com.google.android.apps.messaging

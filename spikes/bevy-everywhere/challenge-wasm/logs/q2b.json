@@ -1,0 +1,123 @@
+{
+ "timing": {
+  "initMs": 213,
+  "memoryAfterInit": 5570560,
+  "mountMs": 512,
+  "memoryAfterMount": 19464192
+ },
+ "cycles": [
+  {
+   "i": 1,
+   "cycleMs": 5000,
+   "readyMs": 2430,
+   "memAfterUnload": 196083712,
+   "memAfterLoad": 196083712,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 33
+  },
+  {
+   "i": 2,
+   "cycleMs": 5516,
+   "readyMs": 2706,
+   "memAfterUnload": 196083712,
+   "memAfterLoad": 196083712,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 47
+  },
+  {
+   "i": 3,
+   "cycleMs": 4858,
+   "readyMs": 2312,
+   "memAfterUnload": 196083712,
+   "memAfterLoad": 196083712,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 55
+  }
+ ],
+ "memoryBeforeLoad": 34996224,
+ "readyMsA": 2206,
+ "readyMsB": 15795,
+ "twoFaces": {
+  "running": true,
+  "frames": 18,
+  "faceCount": 2,
+  "rafTicks": 18,
+  "devices": {
+   "a": {
+    "steps": 13,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 590
+   },
+   "b": {
+    "steps": 5,
+    "alive": true,
+    "poseLen": 310,
+    "loadMs": 643
+   }
+  },
+  "memoryBytes": 196083712,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "cyclesTotalMs": 25281,
+ "final": {
+  "running": true,
+  "frames": 64,
+  "faceCount": 2,
+  "rafTicks": 64,
+  "devices": {
+   "b": {
+    "steps": 51,
+    "alive": true,
+    "poseLen": 310,
+    "loadMs": 643
+   },
+   "a": {
+    "steps": 12,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 497
+   }
+  },
+  "memoryBytes": 196083712,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "standardKey": {
+  "key": "rig/quori_latest/standard/vizij/mouth/morph/jaw_open",
+  "before": {
+   "f32": 0
+  },
+  "afterWrite": {
+   "f32": 1
+  },
+  "afterStep": {
+   "f32": 0
+  },
+  "after500ms": {
+   "f32": 0
+  },
+  "steps": 23
+ },
+ "orderTrace": "FFFFFSFSFSFSFSFSFSFSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSFSFSFSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSFSFSFSFSSFSSFSSFSSFSFSFSFSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSF",
+ "errors": [
+  "[log] %cWARN%c /Users/victor.paleologue/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_render-0.19.1/src/renderer/mod.rs:291%c The selected adapter is using a driver that only supports software rendering. This is likely to be very slow. See https://bevy.org/learn/errors/b0006/ color: orange; background: #444 color: gray; font-style: italic color: inherit"
+ ],
+ "consoleLines": 35
+}

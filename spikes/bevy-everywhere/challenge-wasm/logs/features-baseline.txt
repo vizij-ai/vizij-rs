@@ -1,0 +1,1664 @@
+accesskit feature "default"
+accesskit feature "default" (*)
+accesskit v0.24.1 
+accesskit v0.24.1  (*)
+accesskit_winit feature "rwh_06"
+accesskit_winit v0.32.2 rwh_06
+adler2 v2.0.1 
+aho-corasick feature "perf-literal"
+aho-corasick feature "std"
+aho-corasick feature "std" (*)
+aho-corasick v1.1.5 perf-literal,std
+aho-corasick v1.1.5 perf-literal,std (*)
+approx v0.5.1 
+arrayvec feature "std"
+arrayvec v0.7.8 std
+assert_type_match feature "default"
+assert_type_match v0.1.1 (proc-macro) 
+async-broadcast v0.7.2 
+async-channel feature "default"
+async-channel feature "default" (*)
+async-channel feature "std"
+async-channel v2.5.0 default,std
+async-channel v2.5.0 default,std (*)
+async-executor feature "default"
+async-executor v1.14.0 
+async-fs v2.2.0 
+async-lock feature "default"
+async-lock feature "std"
+async-lock v3.4.2 default,std
+async-lock v3.4.2 default,std (*)
+async-task feature "default"
+async-task feature "default" (*)
+async-task feature "std"
+async-task feature "std" (*)
+async-task v4.7.1 default,std
+atomic-waker feature "default"
+atomic-waker v1.1.2 
+atomicow feature "std"
+atomicow v1.2.0 std
+base64 feature "alloc"
+base64 feature "default"
+base64 feature "std"
+base64 v0.22.1 alloc,default,std
+bevy feature "3d_api"
+bevy feature "3d_bevy_render"
+bevy feature "async_executor"
+bevy feature "bevy_animation"
+bevy feature "bevy_anti_alias"
+bevy feature "bevy_asset"
+bevy feature "bevy_camera"
+bevy feature "bevy_color"
+bevy feature "bevy_core_pipeline"
+bevy feature "bevy_gizmos"
+bevy feature "bevy_gizmos_render"
+bevy feature "bevy_gltf"
+bevy feature "bevy_image"
+bevy feature "bevy_light"
+bevy feature "bevy_log"
+bevy feature "bevy_material"
+bevy feature "bevy_mesh"
+bevy feature "bevy_mikktspace"
+bevy feature "bevy_pbr"
+bevy feature "bevy_post_process"
+bevy feature "bevy_render"
+bevy feature "bevy_scene"
+bevy feature "bevy_shader"
+bevy feature "bevy_state"
+bevy feature "bevy_text"
+bevy feature "bevy_window"
+bevy feature "bevy_winit"
+bevy feature "bevy_world_serialization"
+bevy feature "common_api"
+bevy feature "default_app"
+bevy feature "gltf_animation"
+bevy feature "hdr"
+bevy feature "ktx2"
+bevy feature "morph"
+bevy feature "morph_animation"
+bevy feature "multi_threaded"
+bevy feature "png"
+bevy feature "reflect_auto_register"
+bevy feature "scene"
+bevy feature "smaa_luts"
+bevy feature "std"
+bevy feature "std" (*)
+bevy feature "tonemapping_luts"
+bevy feature "webgl2"
+bevy feature "zstd_rust"
+bevy v0.19.1 3d_api,3d_bevy_render,async_executor,bevy_animation,bevy_anti_alias,bevy_asset,bevy_camera,bevy_color,bevy_core_pipeline,bevy_gizmos,bevy_gizmos_render,bevy_gltf,bevy_image,bevy_light,bevy_log,bevy_material,bevy_mesh,bevy_mikktspace,bevy_pbr,bevy_post_process,bevy_render,bevy_scene,bevy_shader,bevy_state,bevy_text,bevy_window,bevy_winit,bevy_world_serialization,common_api,default_app,gltf_animation,hdr,ktx2,morph,morph_animation,multi_threaded,png,reflect_auto_register,scene,smaa_luts,std,tonemapping_luts,webgl2,zstd_rust
+bevy v0.19.1 3d_api,3d_bevy_render,async_executor,bevy_animation,bevy_anti_alias,bevy_asset,bevy_camera,bevy_color,bevy_core_pipeline,bevy_gizmos,bevy_gizmos_render,bevy_gltf,bevy_image,bevy_light,bevy_log,bevy_material,bevy_mesh,bevy_mikktspace,bevy_pbr,bevy_post_process,bevy_render,bevy_scene,bevy_shader,bevy_state,bevy_text,bevy_window,bevy_winit,bevy_world_serialization,common_api,default_app,gltf_animation,hdr,ktx2,morph,morph_animation,multi_threaded,png,reflect_auto_register,scene,smaa_luts,std,tonemapping_luts,webgl2,zstd_rust (*)
+bevy-wasm-spike v0.0.0 
+bevy_a11y feature "bevy_reflect"
+bevy_a11y feature "bevy_reflect" (*)
+bevy_a11y feature "default"
+bevy_a11y feature "default" (*)
+bevy_a11y feature "std"
+bevy_a11y feature "std" (*)
+bevy_a11y v0.19.1 bevy_reflect,default,std
+bevy_a11y v0.19.1 bevy_reflect,default,std (*)
+bevy_animation feature "bevy_mesh"
+bevy_animation feature "bevy_mesh" (*)
+bevy_animation feature "default"
+bevy_animation feature "default" (*)
+bevy_animation v0.19.1 bevy_mesh
+bevy_animation v0.19.1 bevy_mesh (*)
+bevy_animation_macros feature "default"
+bevy_animation_macros v0.19.1 (proc-macro) 
+bevy_anti_alias feature "default"
+bevy_anti_alias feature "smaa_luts"
+bevy_anti_alias feature "webgl"
+bevy_anti_alias v0.19.1 smaa_luts,webgl
+bevy_anti_alias v0.19.1 smaa_luts,webgl (*)
+bevy_app feature "bevy_reflect"
+bevy_app feature "bevy_reflect" (*)
+bevy_app feature "default"
+bevy_app feature "default" (*)
+bevy_app feature "error_panic_hook"
+bevy_app feature "reflect_auto_register"
+bevy_app feature "reflect_auto_register" (*)
+bevy_app feature "std"
+bevy_app feature "std" (*)
+bevy_app feature "web"
+bevy_app feature "web" (*)
+bevy_app v0.19.1 bevy_reflect,default,error_panic_hook,reflect_auto_register,std,web
+bevy_app v0.19.1 bevy_reflect,default,error_panic_hook,reflect_auto_register,std,web (*)
+bevy_asset feature "default"
+bevy_asset feature "default" (*)
+bevy_asset feature "multi_threaded"
+bevy_asset v0.19.1 multi_threaded
+bevy_asset v0.19.1 multi_threaded (*)
+bevy_asset_macros feature "default"
+bevy_asset_macros v0.19.1 (proc-macro) 
+bevy_camera feature "default"
+bevy_camera feature "default" (*)
+bevy_camera v0.19.1 default
+bevy_clipboard v0.19.1 
+bevy_color feature "alloc"
+bevy_color feature "alloc" (*)
+bevy_color feature "bevy_reflect"
+bevy_color feature "bevy_reflect" (*)
+bevy_color feature "default"
+bevy_color feature "default" (*)
+bevy_color feature "encase"
+bevy_color feature "encase" (*)
+bevy_color feature "serde"
+bevy_color feature "serialize"
+bevy_color feature "serialize" (*)
+bevy_color feature "std"
+bevy_color feature "std" (*)
+bevy_color feature "wgpu-types"
+bevy_color feature "wgpu-types" (*)
+bevy_color v0.19.1 alloc,bevy_reflect,default,encase,serde,serialize,std,wgpu-types
+bevy_color v0.19.1 alloc,bevy_reflect,default,encase,serde,serialize,std,wgpu-types (*)
+bevy_core_pipeline feature "default"
+bevy_core_pipeline feature "default" (*)
+bevy_core_pipeline feature "tonemapping_luts"
+bevy_core_pipeline feature "webgl"
+bevy_core_pipeline v0.19.1 tonemapping_luts,webgl
+bevy_core_pipeline v0.19.1 tonemapping_luts,webgl (*)
+bevy_derive feature "default"
+bevy_derive feature "default" (*)
+bevy_derive v0.19.1 (proc-macro) 
+bevy_derive v0.19.1 (proc-macro)  (*)
+bevy_diagnostic feature "default"
+bevy_diagnostic feature "default" (*)
+bevy_diagnostic feature "std"
+bevy_diagnostic feature "std" (*)
+bevy_diagnostic v0.19.1 default,std
+bevy_diagnostic v0.19.1 default,std (*)
+bevy_ecs feature "async_executor"
+bevy_ecs feature "async_executor" (*)
+bevy_ecs feature "backtrace"
+bevy_ecs feature "bevy_reflect"
+bevy_ecs feature "bevy_reflect" (*)
+bevy_ecs feature "default"
+bevy_ecs feature "default" (*)
+bevy_ecs feature "multi_threaded"
+bevy_ecs feature "reflect_auto_register"
+bevy_ecs feature "reflect_auto_register" (*)
+bevy_ecs feature "serialize"
+bevy_ecs feature "std"
+bevy_ecs feature "std" (*)
+bevy_ecs v0.19.1 async_executor,backtrace,bevy_reflect,default,multi_threaded,reflect_auto_register,serialize,std
+bevy_ecs v0.19.1 async_executor,backtrace,bevy_reflect,default,multi_threaded,reflect_auto_register,serialize,std (*)
+bevy_ecs_macro_logic feature "default"
+bevy_ecs_macro_logic feature "default" (*)
+bevy_ecs_macro_logic v0.19.1 
+bevy_ecs_macros feature "default"
+bevy_ecs_macros v0.19.1 (proc-macro) 
+bevy_encase_derive feature "default"
+bevy_encase_derive feature "default" (*)
+bevy_encase_derive v0.19.1 (proc-macro) 
+bevy_gizmos feature "bevy_mesh"
+bevy_gizmos feature "default"
+bevy_gizmos feature "default" (*)
+bevy_gizmos v0.19.1 bevy_mesh
+bevy_gizmos v0.19.1 bevy_mesh (*)
+bevy_gizmos_macros feature "default"
+bevy_gizmos_macros v0.19.1 (proc-macro) 
+bevy_gizmos_render feature "bevy_pbr"
+bevy_gizmos_render feature "webgl"
+bevy_gizmos_render v0.19.1 bevy_pbr,webgl
+bevy_gizmos_render v0.19.1 bevy_pbr,webgl (*)
+bevy_gltf feature "bevy_animation"
+bevy_gltf feature "default"
+bevy_gltf feature "default" (*)
+bevy_gltf v0.19.1 bevy_animation
+bevy_gltf v0.19.1 bevy_animation (*)
+bevy_image feature "bevy_reflect"
+bevy_image feature "default"
+bevy_image feature "default" (*)
+bevy_image feature "hdr"
+bevy_image feature "ktx2"
+bevy_image feature "ktx2" (*)
+bevy_image feature "png"
+bevy_image feature "zstd"
+bevy_image feature "zstd" (*)
+bevy_image feature "zstd_rust"
+bevy_image v0.19.1 bevy_reflect,default,hdr,ktx2,png,zstd,zstd_rust
+bevy_image v0.19.1 bevy_reflect,default,hdr,ktx2,png,zstd,zstd_rust (*)
+bevy_input feature "bevy_reflect"
+bevy_input feature "bevy_reflect" (*)
+bevy_input feature "default"
+bevy_input feature "default" (*)
+bevy_input feature "gamepad"
+bevy_input feature "gestures"
+bevy_input feature "keyboard"
+bevy_input feature "keyboard" (*)
+bevy_input feature "mouse"
+bevy_input feature "mouse" (*)
+bevy_input feature "smol_str"
+bevy_input feature "std"
+bevy_input feature "std" (*)
+bevy_input feature "touch"
+bevy_input v0.19.1 bevy_reflect,default,gamepad,gestures,keyboard,mouse,smol_str,std,touch
+bevy_input v0.19.1 bevy_reflect,default,gamepad,gestures,keyboard,mouse,smol_str,std,touch (*)
+bevy_input_focus feature "bevy_reflect"
+bevy_input_focus feature "bevy_reflect" (*)
+bevy_input_focus feature "default"
+bevy_input_focus feature "gamepad"
+bevy_input_focus feature "keyboard"
+bevy_input_focus feature "mouse"
+bevy_input_focus feature "std"
+bevy_input_focus v0.19.1 bevy_reflect,default,gamepad,keyboard,mouse,std
+bevy_input_focus v0.19.1 bevy_reflect,default,gamepad,keyboard,mouse,std (*)
+bevy_internal feature "async_executor"
+bevy_internal feature "bevy_animation"
+bevy_internal feature "bevy_animation" (*)
+bevy_internal feature "bevy_anti_alias"
+bevy_internal feature "bevy_asset"
+bevy_internal feature "bevy_asset" (*)
+bevy_internal feature "bevy_camera"
+bevy_internal feature "bevy_camera" (*)
+bevy_internal feature "bevy_color"
+bevy_internal feature "bevy_color" (*)
+bevy_internal feature "bevy_core_pipeline"
+bevy_internal feature "bevy_core_pipeline" (*)
+bevy_internal feature "bevy_gizmos"
+bevy_internal feature "bevy_gizmos" (*)
+bevy_internal feature "bevy_gizmos_render"
+bevy_internal feature "bevy_gltf"
+bevy_internal feature "bevy_image"
+bevy_internal feature "bevy_image" (*)
+bevy_internal feature "bevy_light"
+bevy_internal feature "bevy_light" (*)
+bevy_internal feature "bevy_log"
+bevy_internal feature "bevy_material"
+bevy_internal feature "bevy_material" (*)
+bevy_internal feature "bevy_mesh"
+bevy_internal feature "bevy_mesh" (*)
+bevy_internal feature "bevy_mikktspace"
+bevy_internal feature "bevy_pbr"
+bevy_internal feature "bevy_post_process"
+bevy_internal feature "bevy_render"
+bevy_internal feature "bevy_render" (*)
+bevy_internal feature "bevy_scene"
+bevy_internal feature "bevy_shader"
+bevy_internal feature "bevy_shader" (*)
+bevy_internal feature "bevy_state"
+bevy_internal feature "bevy_text"
+bevy_internal feature "bevy_window"
+bevy_internal feature "bevy_window" (*)
+bevy_internal feature "bevy_winit"
+bevy_internal feature "bevy_world_serialization"
+bevy_internal feature "bevy_world_serialization" (*)
+bevy_internal feature "gltf_animation"
+bevy_internal feature "hdr"
+bevy_internal feature "ktx2"
+bevy_internal feature "ktx2" (*)
+bevy_internal feature "morph"
+bevy_internal feature "morph" (*)
+bevy_internal feature "morph_animation"
+bevy_internal feature "multi_threaded"
+bevy_internal feature "png"
+bevy_internal feature "reflect_auto_register"
+bevy_internal feature "smaa_luts"
+bevy_internal feature "std"
+bevy_internal feature "std" (*)
+bevy_internal feature "tonemapping_luts"
+bevy_internal feature "webgl"
+bevy_internal feature "zstd_rust"
+bevy_internal v0.19.1 async_executor,bevy_animation,bevy_anti_alias,bevy_asset,bevy_camera,bevy_color,bevy_core_pipeline,bevy_gizmos,bevy_gizmos_render,bevy_gltf,bevy_image,bevy_light,bevy_log,bevy_material,bevy_mesh,bevy_mikktspace,bevy_pbr,bevy_post_process,bevy_render,bevy_scene,bevy_shader,bevy_state,bevy_text,bevy_window,bevy_winit,bevy_world_serialization,gltf_animation,hdr,ktx2,morph,morph_animation,multi_threaded,png,reflect_auto_register,smaa_luts,std,tonemapping_luts,webgl,zstd_rust
+bevy_internal v0.19.1 async_executor,bevy_animation,bevy_anti_alias,bevy_asset,bevy_camera,bevy_color,bevy_core_pipeline,bevy_gizmos,bevy_gizmos_render,bevy_gltf,bevy_image,bevy_light,bevy_log,bevy_material,bevy_mesh,bevy_mikktspace,bevy_pbr,bevy_post_process,bevy_render,bevy_scene,bevy_shader,bevy_state,bevy_text,bevy_window,bevy_winit,bevy_world_serialization,gltf_animation,hdr,ktx2,morph,morph_animation,multi_threaded,png,reflect_auto_register,smaa_luts,std,tonemapping_luts,webgl,zstd_rust (*)
+bevy_light feature "bevy_gizmos"
+bevy_light feature "default"
+bevy_light feature "default" (*)
+bevy_light feature "webgl"
+bevy_light v0.19.1 bevy_gizmos,default,webgl
+bevy_light v0.19.1 bevy_gizmos,default,webgl (*)
+bevy_log feature "default"
+bevy_log feature "default" (*)
+bevy_log v0.19.1 
+bevy_log v0.19.1  (*)
+bevy_macro_utils feature "default"
+bevy_macro_utils feature "default" (*)
+bevy_macro_utils v0.19.1 
+bevy_material feature "default"
+bevy_material feature "default" (*)
+bevy_material v0.19.1 
+bevy_material_macros feature "default"
+bevy_material_macros feature "default" (*)
+bevy_material_macros v0.19.1 (proc-macro) 
+bevy_math feature "alloc"
+bevy_math feature "alloc" (*)
+bevy_math feature "bevy_reflect"
+bevy_math feature "bevy_reflect" (*)
+bevy_math feature "curve"
+bevy_math feature "curve" (*)
+bevy_math feature "default"
+bevy_math feature "default" (*)
+bevy_math feature "nostd-libm"
+bevy_math feature "rand"
+bevy_math feature "serialize"
+bevy_math feature "std"
+bevy_math feature "std" (*)
+bevy_math v0.19.1 alloc,bevy_reflect,curve,default,nostd-libm,rand,serialize,std
+bevy_math v0.19.1 alloc,bevy_reflect,curve,default,nostd-libm,rand,serialize,std (*)
+bevy_mesh feature "bevy_mikktspace"
+bevy_mesh feature "bevy_mikktspace" (*)
+bevy_mesh feature "default"
+bevy_mesh feature "default" (*)
+bevy_mesh feature "glam"
+bevy_mesh feature "morph"
+bevy_mesh feature "morph" (*)
+bevy_mesh v0.19.1 bevy_mikktspace,default,glam,morph
+bevy_mesh v0.19.1 bevy_mikktspace,default,glam,morph (*)
+bevy_mikktspace feature "default"
+bevy_mikktspace feature "std"
+bevy_mikktspace v1.0.0 default,std
+bevy_pbr feature "bevy_gltf"
+bevy_pbr feature "default"
+bevy_pbr feature "default" (*)
+bevy_pbr feature "webgl"
+bevy_pbr v0.19.1 bevy_gltf,webgl
+bevy_pbr v0.19.1 bevy_gltf,webgl (*)
+bevy_platform feature "alloc"
+bevy_platform feature "alloc" (*)
+bevy_platform feature "default"
+bevy_platform feature "default" (*)
+bevy_platform feature "futures-lite"
+bevy_platform feature "hashbrown"
+bevy_platform feature "serialize"
+bevy_platform feature "serialize" (*)
+bevy_platform feature "std"
+bevy_platform feature "std" (*)
+bevy_platform feature "web"
+bevy_platform feature "web" (*)
+bevy_platform v0.19.1 alloc,default,futures-lite,serialize,std,web
+bevy_platform v0.19.1 alloc,default,futures-lite,serialize,std,web (*)
+bevy_post_process feature "default"
+bevy_post_process feature "webgl"
+bevy_post_process v0.19.1 webgl
+bevy_post_process v0.19.1 webgl (*)
+bevy_ptr feature "default"
+bevy_ptr feature "default" (*)
+bevy_ptr v0.19.1 
+bevy_reflect feature "auto_register"
+bevy_reflect feature "auto_register" (*)
+bevy_reflect feature "auto_register_inventory"
+bevy_reflect feature "auto_register_inventory" (*)
+bevy_reflect feature "debug"
+bevy_reflect feature "debug_stack"
+bevy_reflect feature "default"
+bevy_reflect feature "default" (*)
+bevy_reflect feature "glam"
+bevy_reflect feature "glam" (*)
+bevy_reflect feature "indexmap"
+bevy_reflect feature "indexmap" (*)
+bevy_reflect feature "petgraph"
+bevy_reflect feature "smallvec"
+bevy_reflect feature "smallvec" (*)
+bevy_reflect feature "smol_str"
+bevy_reflect feature "smol_str" (*)
+bevy_reflect feature "std"
+bevy_reflect feature "std" (*)
+bevy_reflect feature "uuid"
+bevy_reflect feature "web"
+bevy_reflect feature "web" (*)
+bevy_reflect feature "wgpu-types"
+bevy_reflect v0.19.1 auto_register,auto_register_inventory,debug,debug_stack,default,glam,indexmap,petgraph,smallvec,smol_str,std,uuid,web,wgpu-types
+bevy_reflect v0.19.1 auto_register,auto_register_inventory,debug,debug_stack,default,glam,indexmap,petgraph,smallvec,smol_str,std,uuid,web,wgpu-types (*)
+bevy_reflect_derive feature "auto_register"
+bevy_reflect_derive feature "auto_register_inventory"
+bevy_reflect_derive feature "default"
+bevy_reflect_derive v0.19.1 (proc-macro) auto_register,auto_register_inventory,default
+bevy_reflect_derive v0.19.1 (proc-macro) auto_register,auto_register_inventory,default (*)
+bevy_render feature "default"
+bevy_render feature "default" (*)
+bevy_render feature "morph"
+bevy_render feature "morph" (*)
+bevy_render feature "multi_threaded"
+bevy_render feature "reflect_auto_register"
+bevy_render feature "webgl"
+bevy_render v0.19.1 morph,multi_threaded,reflect_auto_register,webgl
+bevy_render v0.19.1 morph,multi_threaded,reflect_auto_register,webgl (*)
+bevy_render_macros feature "default"
+bevy_render_macros v0.19.1 (proc-macro) 
+bevy_scene feature "default"
+bevy_scene v0.19.1 
+bevy_scene_macros feature "default"
+bevy_scene_macros v0.19.1 (proc-macro) 
+bevy_shader feature "default"
+bevy_shader feature "default" (*)
+bevy_shader v0.19.1 
+bevy_state feature "bevy_app"
+bevy_state feature "bevy_reflect"
+bevy_state feature "std"
+bevy_state v0.19.1 bevy_app,bevy_reflect,std
+bevy_state v0.19.1 bevy_app,bevy_reflect,std (*)
+bevy_state_macros feature "default"
+bevy_state_macros v0.19.1 (proc-macro) 
+bevy_tasks feature "async_executor"
+bevy_tasks feature "async_executor" (*)
+bevy_tasks feature "default"
+bevy_tasks feature "default" (*)
+bevy_tasks feature "futures-lite"
+bevy_tasks feature "futures-lite" (*)
+bevy_tasks feature "multi_threaded"
+bevy_tasks feature "multi_threaded" (*)
+bevy_tasks v0.19.1 async_executor,default,futures-lite,multi_threaded
+bevy_tasks v0.19.1 async_executor,default,futures-lite,multi_threaded (*)
+bevy_text feature "default"
+bevy_text v0.19.1 
+bevy_time feature "bevy_reflect"
+bevy_time feature "bevy_reflect" (*)
+bevy_time feature "default"
+bevy_time feature "default" (*)
+bevy_time feature "std"
+bevy_time feature "std" (*)
+bevy_time v0.19.1 bevy_reflect,default,std
+bevy_time v0.19.1 bevy_reflect,default,std (*)
+bevy_transform feature "alloc"
+bevy_transform feature "alloc" (*)
+bevy_transform feature "async_executor"
+bevy_transform feature "async_executor" (*)
+bevy_transform feature "bevy-support"
+bevy_transform feature "bevy-support" (*)
+bevy_transform feature "bevy_app"
+bevy_transform feature "bevy_ecs"
+bevy_transform feature "bevy_reflect"
+bevy_transform feature "bevy_reflect" (*)
+bevy_transform feature "bevy_utils"
+bevy_transform feature "default"
+bevy_transform feature "default" (*)
+bevy_transform feature "multi_threaded"
+bevy_transform feature "multi_threaded" (*)
+bevy_transform feature "std"
+bevy_transform feature "std" (*)
+bevy_transform v0.19.1 alloc,async_executor,bevy-support,bevy_reflect,bevy_utils,default,multi_threaded,std
+bevy_transform v0.19.1 alloc,async_executor,bevy-support,bevy_reflect,bevy_utils,default,multi_threaded,std (*)
+bevy_utils feature "buffered_channel"
+bevy_utils feature "buffered_channel" (*)
+bevy_utils feature "default"
+bevy_utils feature "default" (*)
+bevy_utils feature "parallel"
+bevy_utils feature "parallel" (*)
+bevy_utils feature "std"
+bevy_utils v0.19.1 buffered_channel,default,parallel,std
+bevy_utils v0.19.1 buffered_channel,default,parallel,std (*)
+bevy_window feature "bevy_reflect"
+bevy_window feature "bevy_reflect" (*)
+bevy_window feature "default"
+bevy_window feature "default" (*)
+bevy_window feature "std"
+bevy_window feature "std" (*)
+bevy_window v0.19.1 bevy_reflect,default,std
+bevy_window v0.19.1 bevy_reflect,default,std (*)
+bevy_winit v0.19.1 
+bevy_world_serialization feature "default"
+bevy_world_serialization feature "default" (*)
+bevy_world_serialization feature "serialize"
+bevy_world_serialization v0.19.1 default,serialize
+bevy_world_serialization v0.19.1 default,serialize (*)
+bit-set v0.9.1 
+bit-set v0.9.1  (*)
+bit-vec v0.9.1 
+bitflags feature "bytemuck"
+bitflags feature "default"
+bitflags feature "default" (*)
+bitflags feature "serde"
+bitflags feature "serde" (*)
+bitflags feature "serde_core"
+bitflags feature "std"
+bitflags v2.13.2 bytemuck,serde,serde_core,std
+bitflags v2.13.2 bytemuck,serde,serde_core,std (*)
+blake3 feature "default"
+blake3 feature "std"
+blake3 v1.8.7 default,std
+blake3 v1.8.7 default,std (*)
+blocking feature "default"
+blocking v1.7.0 
+bumpalo feature "default"
+bumpalo v3.20.3 default
+bytemuck feature "aarch64_simd"
+bytemuck feature "bytemuck_derive"
+bytemuck feature "default"
+bytemuck feature "default" (*)
+bytemuck feature "derive"
+bytemuck feature "derive" (*)
+bytemuck feature "extern_crate_alloc"
+bytemuck feature "extern_crate_alloc" (*)
+bytemuck feature "min_const_generics"
+bytemuck feature "min_const_generics" (*)
+bytemuck feature "must_cast"
+bytemuck feature "must_cast" (*)
+bytemuck feature "wasm_simd"
+bytemuck v1.25.2 aarch64_simd,bytemuck_derive,derive,extern_crate_alloc,min_const_generics,must_cast,wasm_simd
+bytemuck v1.25.2 aarch64_simd,bytemuck_derive,derive,extern_crate_alloc,min_const_generics,must_cast,wasm_simd (*)
+bytemuck_derive feature "default"
+bytemuck_derive v1.12.1 (proc-macro) 
+byteorder feature "default"
+byteorder feature "std"
+byteorder v1.5.0 default,std
+byteorder-lite feature "default"
+byteorder-lite feature "std"
+byteorder-lite v0.1.0 default,std
+cfg-if feature "default"
+cfg-if feature "default" (*)
+cfg-if v1.0.5 
+codespan-reporting feature "default"
+codespan-reporting feature "std"
+codespan-reporting feature "std" (*)
+codespan-reporting feature "termcolor"
+codespan-reporting v0.12.0 default,std,termcolor
+codespan-reporting v0.12.0 default,std,termcolor (*)
+codespan-reporting v0.13.1 std,termcolor
+codespan-reporting v0.13.1 std,termcolor (*)
+concurrent-queue feature "default"
+concurrent-queue feature "default" (*)
+concurrent-queue feature "std"
+concurrent-queue feature "std" (*)
+concurrent-queue v2.5.0 default,std
+concurrent-queue v2.5.0 default,std (*)
+console_error_panic_hook feature "default"
+console_error_panic_hook v0.1.7 
+const-fnv1a-hash feature "default"
+const-fnv1a-hash v1.1.0 
+const_panic feature "default"
+const_panic feature "non_basic"
+const_panic v0.2.17 default,non_basic
+const_panic v0.2.17 default,non_basic (*)
+const_soft_float feature "default"
+const_soft_float feature "no_std"
+const_soft_float v0.1.4 no_std
+constant_time_eq feature "std"
+constant_time_eq v0.4.2 std
+constgebra v0.1.4 
+convert_case feature "default"
+convert_case v0.10.0 
+core_maths feature "default"
+core_maths v0.1.1 
+crc32fast feature "default"
+crc32fast feature "std"
+crc32fast feature "std" (*)
+crc32fast v1.5.2 default,std
+crc32fast v1.5.2 default,std (*)
+crossbeam-channel feature "std"
+crossbeam-channel feature "std" (*)
+crossbeam-channel v0.5.17 std
+crossbeam-queue feature "alloc"
+crossbeam-queue v0.3.14 alloc
+crossbeam-utils feature "std"
+crossbeam-utils v0.8.23 std
+cursor-icon feature "alloc"
+cursor-icon feature "default"
+cursor-icon feature "std"
+cursor-icon v1.2.0 alloc,default,std
+data-encoding feature "alloc"
+data-encoding feature "default"
+data-encoding feature "std"
+data-encoding v2.11.1 alloc,default,std
+derive_more feature "as_ref"
+derive_more feature "deref"
+derive_more feature "deref_mut"
+derive_more feature "display"
+derive_more feature "from"
+derive_more feature "from" (*)
+derive_more feature "into"
+derive_more feature "into" (*)
+derive_more feature "std"
+derive_more v2.1.1 as_ref,deref,deref_mut,display,from,into,std
+derive_more v2.1.1 as_ref,deref,deref_mut,display,from,into,std (*)
+derive_more-impl feature "as_ref"
+derive_more-impl feature "default"
+derive_more-impl feature "deref"
+derive_more-impl feature "deref_mut"
+derive_more-impl feature "display"
+derive_more-impl feature "from"
+derive_more-impl feature "into"
+derive_more-impl v2.1.1 (proc-macro) as_ref,default,deref,deref_mut,display,from,into
+derive_more-impl v2.1.1 (proc-macro) as_ref,default,deref,deref_mut,display,from,into (*)
+displaydoc v0.2.7 (proc-macro) 
+displaydoc v0.2.7 (proc-macro)  (*)
+disqualified feature "alloc"
+disqualified v1.0.0 alloc
+document-features feature "default"
+document-features feature "default" (*)
+document-features v0.2.12 (proc-macro) default
+downcast-rs feature "std"
+downcast-rs feature "std" (*)
+downcast-rs v2.0.2 std
+dpi feature "default"
+dpi feature "std"
+dpi v0.1.2 default,std
+either feature "default"
+either feature "std"
+either feature "std" (*)
+either feature "use_std"
+either v1.18.0 default,std,use_std
+encase feature "default"
+encase feature "default" (*)
+encase v0.12.1 
+encase v0.12.1  (*)
+encase_derive feature "default"
+encase_derive v0.12.1 (proc-macro) 
+encase_derive_impl feature "default"
+encase_derive_impl feature "default" (*)
+encase_derive_impl v0.12.1 
+equivalent v1.0.2 
+erased-serde feature "alloc"
+erased-serde feature "alloc" (*)
+erased-serde feature "std"
+erased-serde v0.4.10 alloc,std
+erased-serde v0.4.10 alloc,std (*)
+euclid feature "default"
+euclid feature "std"
+euclid v0.22.14 default,std
+euclid v0.22.14 default,std (*)
+event-listener feature "default"
+event-listener feature "parking"
+event-listener feature "std"
+event-listener feature "std" (*)
+event-listener v5.4.2 default,parking,std
+event-listener v5.4.2 default,parking,std (*)
+event-listener-strategy feature "default"
+event-listener-strategy feature "std"
+event-listener-strategy feature "std" (*)
+event-listener-strategy v0.5.4 default,std
+event-listener-strategy v0.5.4 default,std (*)
+fastrand feature "alloc"
+fastrand feature "default"
+fastrand feature "std"
+fastrand feature "std" (*)
+fastrand v2.5.0 alloc,default,std
+fdeflate feature "default"
+fdeflate v0.3.7 
+fixedbitset feature "default"
+fixedbitset feature "default" (*)
+fixedbitset feature "std"
+fixedbitset feature "std" (*)
+fixedbitset v0.5.7 default,std
+flate2 feature "any_impl"
+flate2 feature "any_impl" (*)
+flate2 feature "default"
+flate2 feature "miniz_oxide"
+flate2 feature "runtime_detection"
+flate2 feature "rust_backend"
+flate2 v1.1.10 any_impl,default,miniz_oxide,runtime_detection,rust_backend
+flate2 v1.1.10 any_impl,default,miniz_oxide,runtime_detection,rust_backend (*)
+foldhash feature "std"
+foldhash v0.1.5 
+foldhash v0.2.0 std
+font-types feature "bytemuck"
+font-types feature "default"
+font-types feature "std"
+font-types v0.11.3 bytemuck,std
+font-types v0.11.3 bytemuck,std (*)
+font-types v0.12.5 bytemuck,std
+font-types v0.12.5 bytemuck,std (*)
+fontique feature "std"
+fontique v0.9.0 std
+fontique v0.9.0 std (*)
+futures-channel feature "alloc"
+futures-channel feature "std"
+futures-channel v0.3.34 alloc,std
+futures-channel v0.3.34 alloc,std (*)
+futures-core feature "alloc"
+futures-core feature "alloc" (*)
+futures-core feature "default"
+futures-core feature "std"
+futures-core feature "std" (*)
+futures-core v0.3.34 alloc,default,std
+futures-io feature "default"
+futures-io feature "default" (*)
+futures-io feature "std"
+futures-io feature "std" (*)
+futures-io v0.3.34 default,std
+futures-lite feature "alloc"
+futures-lite feature "alloc" (*)
+futures-lite feature "default"
+futures-lite feature "default" (*)
+futures-lite feature "fastrand"
+futures-lite feature "fastrand" (*)
+futures-lite feature "futures-io"
+futures-lite feature "parking"
+futures-lite feature "race"
+futures-lite feature "std"
+futures-lite feature "std" (*)
+futures-lite v2.6.1 alloc,default,fastrand,futures-io,parking,race,std
+futures-lite v2.6.1 alloc,default,fastrand,futures-io,parking,race,std (*)
+futures-macro v0.3.34 (proc-macro) 
+futures-task feature "alloc"
+futures-task feature "alloc" (*)
+futures-task feature "std"
+futures-task v0.3.34 alloc,std
+futures-util feature "alloc"
+futures-util feature "alloc" (*)
+futures-util feature "async-await"
+futures-util feature "async-await-macro"
+futures-util feature "futures-macro"
+futures-util feature "slab"
+futures-util feature "slab" (*)
+futures-util feature "std"
+futures-util v0.3.34 alloc,async-await,async-await-macro,futures-macro,slab,std
+futures-util v0.3.34 alloc,async-await,async-await-macro,futures-macro,slab,std (*)
+glam feature "bytemuck"
+glam feature "encase"
+glam feature "encase" (*)
+glam feature "nostd-libm"
+glam feature "rand"
+glam feature "serde"
+glam feature "serde" (*)
+glam feature "std"
+glam feature "std" (*)
+glam v0.32.1 bytemuck,encase,nostd-libm,rand,serde,std
+glam v0.32.1 bytemuck,encase,nostd-libm,rand,serde,std (*)
+glow feature "default"
+glow v0.17.0 
+gltf feature "KHR_lights_punctual"
+gltf feature "KHR_materials_emissive_strength"
+gltf feature "KHR_materials_ior"
+gltf feature "KHR_materials_transmission"
+gltf feature "KHR_materials_unlit"
+gltf feature "KHR_materials_volume"
+gltf feature "KHR_texture_transform"
+gltf feature "extensions"
+gltf feature "extras"
+gltf feature "names"
+gltf feature "utils"
+gltf v1.4.1 KHR_lights_punctual,KHR_materials_emissive_strength,KHR_materials_ior,KHR_materials_transmission,KHR_materials_unlit,KHR_materials_volume,KHR_texture_transform,extensions,extras,names,utils
+gltf v1.4.1 KHR_lights_punctual,KHR_materials_emissive_strength,KHR_materials_ior,KHR_materials_transmission,KHR_materials_unlit,KHR_materials_volume,KHR_texture_transform,extensions,extras,names,utils (*)
+gltf-derive feature "default"
+gltf-derive v1.4.1 (proc-macro) 
+gltf-json feature "KHR_lights_punctual"
+gltf-json feature "KHR_materials_emissive_strength"
+gltf-json feature "KHR_materials_ior"
+gltf-json feature "KHR_materials_transmission"
+gltf-json feature "KHR_materials_unlit"
+gltf-json feature "KHR_materials_volume"
+gltf-json feature "KHR_texture_transform"
+gltf-json feature "default"
+gltf-json feature "extensions"
+gltf-json feature "extras"
+gltf-json feature "names"
+gltf-json v1.4.1 KHR_lights_punctual,KHR_materials_emissive_strength,KHR_materials_ior,KHR_materials_transmission,KHR_materials_unlit,KHR_materials_volume,KHR_texture_transform,default,extensions,extras,names
+gltf-json v1.4.1 KHR_lights_punctual,KHR_materials_emissive_strength,KHR_materials_ior,KHR_materials_transmission,KHR_materials_unlit,KHR_materials_volume,KHR_texture_transform,default,extensions,extras,names (*)
+guillotiere feature "default"
+guillotiere v0.6.2 
+half feature "alloc"
+half feature "bytemuck"
+half feature "default"
+half feature "default" (*)
+half feature "num-traits"
+half feature "std"
+half v2.7.1 alloc,bytemuck,default,num-traits,std
+half v2.7.1 alloc,bytemuck,default,num-traits,std (*)
+harfrust feature "std"
+harfrust v0.6.2 std
+harfrust v0.6.2 std (*)
+hashbrown feature "default-hasher"
+hashbrown feature "default-hasher" (*)
+hashbrown feature "equivalent"
+hashbrown feature "inline-more"
+hashbrown feature "inline-more" (*)
+hashbrown feature "raw-entry"
+hashbrown feature "raw-entry" (*)
+hashbrown feature "serde"
+hashbrown v0.15.5 default-hasher,inline-more
+hashbrown v0.15.5 default-hasher,inline-more (*)
+hashbrown v0.16.1 default-hasher,equivalent,inline-more,raw-entry,serde
+hashbrown v0.16.1 default-hasher,equivalent,inline-more,raw-entry,serde (*)
+hashbrown v0.17.1 
+hashbrown v0.17.1 default-hasher,raw-entry
+hashbrown v0.17.1 default-hasher,raw-entry (*)
+hexasphere feature "default"
+hexasphere feature "std"
+hexasphere v18.0.0 default,std
+hexasphere v18.0.0 default,std (*)
+hexf-parse feature "default"
+hexf-parse v0.2.1 
+icu_collections v2.3.0 
+icu_collections v2.3.0  (*)
+icu_locale_core feature "alloc"
+icu_locale_core feature "alloc" (*)
+icu_locale_core feature "zerovec"
+icu_locale_core feature "zerovec" (*)
+icu_locale_core v2.3.0 alloc,zerovec
+icu_locale_core v2.3.0 alloc,zerovec (*)
+icu_locale_fallback feature "compiled_data"
+icu_locale_fallback v2.3.0 compiled_data
+icu_locale_fallback v2.3.0 compiled_data (*)
+icu_locale_fallback_data v2.3.0 
+icu_normalizer feature "compiled_data"
+icu_normalizer v2.3.0 compiled_data
+icu_normalizer_data v2.3.0 
+icu_properties feature "compiled_data"
+icu_properties v2.3.0 compiled_data
+icu_properties v2.3.0 compiled_data (*)
+icu_properties_data v2.3.0 
+icu_provider feature "alloc"
+icu_provider feature "baked"
+icu_provider feature "baked" (*)
+icu_provider v2.3.1 alloc,baked
+icu_provider v2.3.1 alloc,baked (*)
+icu_segmenter feature "compiled_data"
+icu_segmenter v2.3.0 compiled_data
+icu_segmenter_data v2.3.0 
+image feature "hdr"
+image feature "png"
+image v0.25.10 hdr,png
+image v0.25.10 hdr,png (*)
+indexmap feature "default"
+indexmap feature "default" (*)
+indexmap feature "serde"
+indexmap feature "std"
+indexmap feature "std" (*)
+indexmap v2.14.2 default,serde,std
+indexmap v2.14.2 default,serde,std (*)
+indexmap v2.14.2 default,std
+indexmap v2.14.2 default,std (*)
+inflections feature "default"
+inflections v1.1.1 
+inventory feature "default"
+inventory v0.3.24 
+itertools feature "default"
+itertools feature "default" (*)
+itertools feature "use_alloc"
+itertools feature "use_alloc" (*)
+itertools feature "use_std"
+itertools feature "use_std" (*)
+itertools v0.14.0 default,use_alloc,use_std
+itertools v0.14.0 default,use_alloc,use_std (*)
+itoa feature "default"
+itoa v1.0.18 
+js-sys feature "default"
+js-sys feature "default" (*)
+js-sys feature "futures-util"
+js-sys feature "std"
+js-sys feature "std" (*)
+js-sys feature "unsafe-eval"
+js-sys v0.3.105 default,std,unsafe-eval
+js-sys v0.3.105 default,std,unsafe-eval (*)
+ktx2 feature "default"
+ktx2 feature "std"
+ktx2 v0.5.0 default,std
+ktx2 v0.5.0 default,std (*)
+lazy_static feature "default"
+lazy_static feature "default" (*)
+lazy_static v1.5.0 
+libm feature "arch"
+libm feature "default"
+libm feature "default" (*)
+libm v0.2.16 arch,default
+linebender_resource_handle v0.1.1 
+litemap feature "alloc"
+litemap v0.8.3 alloc
+litrs feature "default"
+litrs v1.0.0 
+lock_api feature "atomic_usize"
+lock_api feature "default"
+lock_api v0.4.14 atomic_usize,default
+lock_api v0.4.14 atomic_usize,default (*)
+log feature "alloc"
+log feature "default"
+log feature "default" (*)
+log feature "std"
+log feature "std" (*)
+log v0.4.34 alloc,std
+matchers feature "default"
+matchers v0.2.0 
+memchr feature "alloc"
+memchr feature "std"
+memchr feature "std" (*)
+memchr v2.8.3 alloc,std
+memmap2 feature "default"
+memmap2 v0.9.11 
+miniz_oxide feature "default"
+miniz_oxide feature "simd"
+miniz_oxide feature "simd-adler32"
+miniz_oxide feature "with-alloc"
+miniz_oxide v0.8.9 default,simd,simd-adler32,with-alloc
+miniz_oxide v0.8.9 default,simd,simd-adler32,with-alloc (*)
+miniz_oxide v0.9.1 default,simd,simd-adler32,with-alloc
+miniz_oxide v0.9.1 default,simd,simd-adler32,with-alloc (*)
+moxcms feature "avx"
+moxcms feature "avx" (*)
+moxcms feature "avx_luts"
+moxcms feature "avx_shaper_fixed_point_paths"
+moxcms feature "avx_shaper_paths"
+moxcms feature "default"
+moxcms feature "lut"
+moxcms feature "lut" (*)
+moxcms feature "neon"
+moxcms feature "neon" (*)
+moxcms feature "neon_luts"
+moxcms feature "neon_shaper_fixed_point_paths"
+moxcms feature "neon_shaper_paths"
+moxcms feature "sse"
+moxcms feature "sse" (*)
+moxcms feature "sse_luts"
+moxcms feature "sse_shaper_fixed_point_paths"
+moxcms feature "sse_shaper_paths"
+moxcms v0.8.1 avx,avx_luts,avx_shaper_fixed_point_paths,avx_shaper_paths,default,lut,neon,neon_luts,neon_shaper_fixed_point_paths,neon_shaper_paths,sse,sse_luts,sse_shaper_fixed_point_paths,sse_shaper_paths
+moxcms v0.8.1 avx,avx_luts,avx_shaper_fixed_point_paths,avx_shaper_paths,default,lut,neon,neon_luts,neon_shaper_fixed_point_paths,neon_shaper_paths,sse,sse_luts,sse_shaper_fixed_point_paths,sse_shaper_paths (*)
+naga feature "default"
+naga feature "default" (*)
+naga feature "glsl-in"
+naga feature "glsl-out"
+naga feature "glsl-out" (*)
+naga feature "termcolor"
+naga feature "termcolor" (*)
+naga feature "wgsl-in"
+naga feature "wgsl-in" (*)
+naga feature "wgsl-out"
+naga v29.0.4 default,glsl-in,glsl-out,termcolor,wgsl-in,wgsl-out
+naga v29.0.4 default,glsl-in,glsl-out,termcolor,wgsl-in,wgsl-out (*)
+naga_oil feature "default"
+naga_oil feature "glsl"
+naga_oil feature "test_shader"
+naga_oil v0.22.0 default,glsl,test_shader
+naga_oil v0.22.0 default,glsl,test_shader (*)
+nonmax feature "default"
+nonmax feature "default" (*)
+nonmax feature "std"
+nonmax feature "std" (*)
+nonmax v0.5.5 default,std
+nu-ansi-term feature "default"
+nu-ansi-term feature "std"
+nu-ansi-term v0.50.3 default,std
+num-traits feature "default"
+num-traits feature "default" (*)
+num-traits feature "libm"
+num-traits feature "libm" (*)
+num-traits feature "std"
+num-traits feature "std" (*)
+num-traits v0.2.19 default,libm,std
+num-traits v0.2.19 default,libm,std (*)
+offset-allocator feature "default"
+offset-allocator feature "default" (*)
+offset-allocator v0.2.0 
+once_cell feature "alloc"
+once_cell feature "alloc" (*)
+once_cell feature "default"
+once_cell feature "default" (*)
+once_cell feature "race"
+once_cell feature "race" (*)
+once_cell feature "std"
+once_cell feature "std" (*)
+once_cell v1.21.4 alloc,default,race,std
+parking feature "default"
+parking v2.2.1 
+parking_lot feature "default"
+parking_lot feature "default" (*)
+parking_lot v0.12.5 default
+parking_lot_core feature "default"
+parking_lot_core v0.9.12 
+parlance feature "std"
+parlance feature "std" (*)
+parlance v0.1.0 std
+parley feature "std"
+parley v0.9.0 std
+parley_data feature "baked"
+parley_data v0.9.0 baked
+percent-encoding feature "alloc"
+percent-encoding feature "default"
+percent-encoding feature "std"
+percent-encoding v2.3.2 alloc,default,std
+petgraph feature "default"
+petgraph feature "default" (*)
+petgraph feature "graphmap"
+petgraph feature "matrix_graph"
+petgraph feature "serde"
+petgraph feature "serde-1"
+petgraph feature "serde-1" (*)
+petgraph feature "serde_derive"
+petgraph feature "stable_graph"
+petgraph feature "std"
+petgraph v0.8.3 default,graphmap,matrix_graph,serde,serde-1,serde_derive,stable_graph,std
+petgraph v0.8.3 default,graphmap,matrix_graph,serde,serde-1,serde_derive,stable_graph,std (*)
+pin-project feature "default"
+pin-project v1.1.13 
+pin-project-internal feature "default"
+pin-project-internal v1.1.13 (proc-macro) 
+pin-project-lite feature "default"
+pin-project-lite feature "default" (*)
+pin-project-lite v0.2.17 
+piper feature "default"
+piper feature "futures-io"
+piper feature "std"
+piper v0.2.5 default,futures-io,std
+piper v0.2.5 default,futures-io,std (*)
+png feature "default"
+png v0.18.1 
+potential_utf feature "alloc"
+potential_utf feature "alloc" (*)
+potential_utf feature "writeable"
+potential_utf feature "zerovec"
+potential_utf feature "zerovec" (*)
+potential_utf v0.1.6 alloc,writeable,zerovec
+potential_utf v0.1.6 alloc,writeable,zerovec (*)
+pp-rs feature "default"
+pp-rs v0.2.1 
+proc-macro2 feature "default"
+proc-macro2 feature "default" (*)
+proc-macro2 feature "proc-macro"
+proc-macro2 feature "proc-macro" (*)
+proc-macro2 v1.0.107 default,proc-macro
+proc-macro2 v1.0.107 default,proc-macro (*)
+profiling v1.0.18 
+pxfm feature "default"
+pxfm v0.1.30 
+quote feature "default"
+quote feature "default" (*)
+quote feature "proc-macro"
+quote feature "proc-macro" (*)
+quote v1.0.47 default,proc-macro
+quote v1.0.47 default,proc-macro (*)
+rand feature "alloc"
+rand feature "alloc" (*)
+rand feature "std"
+rand feature "std" (*)
+rand v0.10.2 alloc,std
+rand v0.10.2 alloc,std (*)
+rand_core v0.10.1 
+rand_distr feature "alloc"
+rand_distr feature "alloc" (*)
+rand_distr feature "default"
+rand_distr feature "std"
+rand_distr feature "std" (*)
+rand_distr v0.6.0 alloc,default,std
+rand_distr v0.6.0 alloc,default,std (*)
+raw-window-handle feature "alloc"
+raw-window-handle feature "alloc" (*)
+raw-window-handle feature "default"
+raw-window-handle feature "default" (*)
+raw-window-handle feature "std"
+raw-window-handle feature "std" (*)
+raw-window-handle v0.6.2 alloc,std
+read-fonts feature "std"
+read-fonts feature "std" (*)
+read-fonts v0.39.2 std
+read-fonts v0.39.2 std (*)
+read-fonts v0.41.0 std
+read-fonts v0.41.0 std (*)
+rectangle-pack feature "default"
+rectangle-pack feature "std"
+rectangle-pack v0.4.2 default,std
+regex feature "default"
+regex feature "perf"
+regex feature "perf-backtrack"
+regex feature "perf-cache"
+regex feature "perf-dfa"
+regex feature "perf-inline"
+regex feature "perf-literal"
+regex feature "perf-onepass"
+regex feature "std"
+regex feature "unicode"
+regex feature "unicode-age"
+regex feature "unicode-bool"
+regex feature "unicode-case"
+regex feature "unicode-gencat"
+regex feature "unicode-perl"
+regex feature "unicode-script"
+regex feature "unicode-segment"
+regex v1.13.1 default,perf,perf-backtrack,perf-cache,perf-dfa,perf-inline,perf-literal,perf-onepass,std,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment
+regex v1.13.1 default,perf,perf-backtrack,perf-cache,perf-dfa,perf-inline,perf-literal,perf-onepass,std,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment (*)
+regex-automata feature "alloc"
+regex-automata feature "alloc" (*)
+regex-automata feature "dfa-build"
+regex-automata feature "dfa-onepass"
+regex-automata feature "dfa-search"
+regex-automata feature "dfa-search" (*)
+regex-automata feature "hybrid"
+regex-automata feature "meta"
+regex-automata feature "nfa-backtrack"
+regex-automata feature "nfa-pikevm"
+regex-automata feature "nfa-pikevm" (*)
+regex-automata feature "nfa-thompson"
+regex-automata feature "nfa-thompson" (*)
+regex-automata feature "perf-inline"
+regex-automata feature "perf-literal"
+regex-automata feature "perf-literal-multisubstring"
+regex-automata feature "perf-literal-substring"
+regex-automata feature "std"
+regex-automata feature "std" (*)
+regex-automata feature "syntax"
+regex-automata feature "syntax" (*)
+regex-automata feature "unicode"
+regex-automata feature "unicode-age"
+regex-automata feature "unicode-age" (*)
+regex-automata feature "unicode-bool"
+regex-automata feature "unicode-bool" (*)
+regex-automata feature "unicode-case"
+regex-automata feature "unicode-case" (*)
+regex-automata feature "unicode-gencat"
+regex-automata feature "unicode-gencat" (*)
+regex-automata feature "unicode-perl"
+regex-automata feature "unicode-perl" (*)
+regex-automata feature "unicode-script"
+regex-automata feature "unicode-script" (*)
+regex-automata feature "unicode-segment"
+regex-automata feature "unicode-segment" (*)
+regex-automata feature "unicode-word-boundary"
+regex-automata feature "unicode-word-boundary" (*)
+regex-automata v0.4.18 alloc,dfa-build,dfa-onepass,dfa-search,hybrid,meta,nfa-backtrack,nfa-pikevm,nfa-thompson,perf-inline,perf-literal,perf-literal-multisubstring,perf-literal-substring,std,syntax,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment,unicode-word-boundary
+regex-automata v0.4.18 alloc,dfa-build,dfa-onepass,dfa-search,hybrid,meta,nfa-backtrack,nfa-pikevm,nfa-thompson,perf-inline,perf-literal,perf-literal-multisubstring,perf-literal-substring,std,syntax,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment,unicode-word-boundary (*)
+regex-syntax feature "default"
+regex-syntax feature "std"
+regex-syntax feature "std" (*)
+regex-syntax feature "unicode"
+regex-syntax feature "unicode" (*)
+regex-syntax feature "unicode-age"
+regex-syntax feature "unicode-age" (*)
+regex-syntax feature "unicode-bool"
+regex-syntax feature "unicode-bool" (*)
+regex-syntax feature "unicode-case"
+regex-syntax feature "unicode-case" (*)
+regex-syntax feature "unicode-gencat"
+regex-syntax feature "unicode-gencat" (*)
+regex-syntax feature "unicode-perl"
+regex-syntax feature "unicode-perl" (*)
+regex-syntax feature "unicode-script"
+regex-syntax feature "unicode-script" (*)
+regex-syntax feature "unicode-segment"
+regex-syntax feature "unicode-segment" (*)
+regex-syntax v0.8.11 default,std,unicode,unicode-age,unicode-bool,unicode-case,unicode-gencat,unicode-perl,unicode-script,unicode-segment
+ron feature "default"
+ron feature "std"
+ron v0.12.2 default,std
+ron v0.12.2 default,std (*)
+rustc-hash feature "default"
+rustc-hash feature "std"
+rustc-hash v1.1.0 default,std
+rustversion feature "default"
+rustversion v1.0.23 (proc-macro) 
+ruzstd feature "default"
+ruzstd feature "hash"
+ruzstd feature "std"
+ruzstd v0.8.3 default,hash,std
+ruzstd v0.8.3 default,hash,std (*)
+scopeguard v1.2.0 
+serde feature "alloc"
+serde feature "alloc" (*)
+serde feature "default"
+serde feature "default" (*)
+serde feature "derive"
+serde feature "derive" (*)
+serde feature "serde_derive"
+serde feature "serde_derive" (*)
+serde feature "std"
+serde feature "std" (*)
+serde v1.0.229 alloc,default,derive,serde_derive,std
+serde v1.0.229 alloc,default,derive,serde_derive,std (*)
+serde_core feature "alloc"
+serde_core feature "alloc" (*)
+serde_core feature "result"
+serde_core feature "std"
+serde_core feature "std" (*)
+serde_core v1.0.229 alloc,result,std
+serde_derive feature "default"
+serde_derive feature "default" (*)
+serde_derive v1.0.229 (proc-macro) default
+serde_derive v1.0.229 (proc-macro) default (*)
+serde_json feature "default"
+serde_json feature "default" (*)
+serde_json feature "raw_value"
+serde_json feature "raw_value" (*)
+serde_json feature "std"
+serde_json v1.0.151 default,raw_value,std
+serde_json v1.0.151 default,raw_value,std (*)
+sharded-slab feature "default"
+sharded-slab v0.1.7 
+simd-adler32 feature "const-generics"
+simd-adler32 feature "default"
+simd-adler32 feature "std"
+simd-adler32 v0.3.10 const-generics,default,std
+skrifa feature "std"
+skrifa v0.42.1 std
+skrifa v0.42.1 std (*)
+skrifa v0.44.0 std
+skrifa v0.44.0 std (*)
+slab feature "default"
+slab feature "std"
+slab feature "std" (*)
+slab v0.4.12 default,std
+slotmap feature "default"
+slotmap feature "std"
+slotmap v1.1.1 default,std
+smallvec feature "const_generics"
+smallvec feature "const_generics" (*)
+smallvec feature "const_new"
+smallvec feature "const_new" (*)
+smallvec feature "default"
+smallvec feature "default" (*)
+smallvec feature "union"
+smallvec v1.16.1 const_generics,const_new,union
+smol_str feature "default"
+smol_str feature "serde"
+smol_str feature "std"
+smol_str feature "std" (*)
+smol_str v0.2.2 default,serde,std
+smol_str v0.2.2 default,serde,std (*)
+spin feature "barrier"
+spin feature "lazy"
+spin feature "mutex"
+spin feature "mutex" (*)
+spin feature "once"
+spin feature "once" (*)
+spin feature "rwlock"
+spin feature "spin_mutex"
+spin feature "std"
+spin v0.10.1 barrier,lazy,mutex,once,rwlock,spin_mutex,std
+stable_deref_trait feature "alloc"
+stable_deref_trait v1.2.1 alloc
+stackfuture v0.3.1 
+static_assertions feature "default"
+static_assertions feature "default" (*)
+static_assertions v1.1.0 
+svg_fmt feature "default"
+svg_fmt v0.4.5 
+swash feature "default"
+swash feature "render"
+swash feature "scale"
+swash feature "scale" (*)
+swash feature "std"
+swash feature "zeno"
+swash v0.2.10 default,render,scale,std
+swash v0.2.10 default,render,scale,std (*)
+syn feature "clone-impls"
+syn feature "clone-impls" (*)
+syn feature "default"
+syn feature "default" (*)
+syn feature "derive"
+syn feature "derive" (*)
+syn feature "extra-traits"
+syn feature "extra-traits" (*)
+syn feature "fold"
+syn feature "fold" (*)
+syn feature "full"
+syn feature "full" (*)
+syn feature "parsing"
+syn feature "parsing" (*)
+syn feature "printing"
+syn feature "printing" (*)
+syn feature "proc-macro"
+syn feature "proc-macro" (*)
+syn feature "visit"
+syn feature "visit" (*)
+syn feature "visit-mut"
+syn feature "visit-mut" (*)
+syn v2.0.119 clone-impls,default,derive,extra-traits,full,parsing,printing,proc-macro,visit,visit-mut
+syn v2.0.119 clone-impls,default,derive,extra-traits,full,parsing,printing,proc-macro,visit,visit-mut (*)
+syn v3.0.5 clone-impls,default,derive,extra-traits,fold,full,parsing,printing,proc-macro,visit,visit-mut
+syn v3.0.5 clone-impls,default,derive,extra-traits,fold,full,parsing,printing,proc-macro,visit,visit-mut (*)
+synstructure feature "default"
+synstructure feature "default" (*)
+synstructure feature "proc-macro"
+synstructure v0.14.0 default,proc-macro
+synstructure v0.14.0 default,proc-macro (*)
+sys-locale feature "default"
+sys-locale v0.3.2 
+termcolor feature "default"
+termcolor feature "default" (*)
+termcolor v1.4.1 
+thiserror feature "default"
+thiserror feature "std"
+thiserror v2.0.20 default,std
+thiserror v2.0.20 default,std (*)
+thiserror-impl feature "default"
+thiserror-impl v2.0.20 (proc-macro) 
+thread_local feature "default"
+thread_local feature "default" (*)
+thread_local v1.1.10 
+tinystr feature "alloc"
+tinystr feature "alloc" (*)
+tinystr feature "zerovec"
+tinystr feature "zerovec" (*)
+tinystr v0.8.4 alloc,zerovec
+tinystr v0.8.4 alloc,zerovec (*)
+toml_datetime feature "alloc"
+toml_datetime feature "default"
+toml_datetime feature "std"
+toml_datetime v1.1.1+spec-1.1.0 alloc,default,std
+toml_edit feature "parse"
+toml_edit v0.25.15+spec-1.1.0 parse
+toml_parser feature "alloc"
+toml_parser feature "default"
+toml_parser feature "std"
+toml_parser v1.1.3+spec-1.1.0 alloc,default,std
+toml_parser v1.1.3+spec-1.1.0 alloc,default,std (*)
+tracing feature "attributes"
+tracing feature "attributes" (*)
+tracing feature "default"
+tracing feature "std"
+tracing feature "std" (*)
+tracing feature "tracing-attributes"
+tracing v0.1.44 attributes,default,std,tracing-attributes
+tracing v0.1.44 attributes,default,std,tracing-attributes (*)
+tracing-attributes feature "default"
+tracing-attributes v0.1.31 (proc-macro) 
+tracing-core feature "default"
+tracing-core feature "once_cell"
+tracing-core feature "std"
+tracing-core feature "std" (*)
+tracing-core v0.1.36 default,once_cell,std
+tracing-core v0.1.36 default,once_cell,std (*)
+tracing-log feature "default"
+tracing-log feature "log-tracer"
+tracing-log feature "log-tracer" (*)
+tracing-log feature "std"
+tracing-log feature "std" (*)
+tracing-log v0.2.0 default,log-tracer,std
+tracing-log v0.2.0 default,log-tracer,std (*)
+tracing-subscriber feature "alloc"
+tracing-subscriber feature "ansi"
+tracing-subscriber feature "default"
+tracing-subscriber feature "env-filter"
+tracing-subscriber feature "fmt"
+tracing-subscriber feature "fmt" (*)
+tracing-subscriber feature "matchers"
+tracing-subscriber feature "nu-ansi-term"
+tracing-subscriber feature "once_cell"
+tracing-subscriber feature "registry"
+tracing-subscriber feature "registry" (*)
+tracing-subscriber feature "sharded-slab"
+tracing-subscriber feature "smallvec"
+tracing-subscriber feature "std"
+tracing-subscriber feature "std" (*)
+tracing-subscriber feature "thread_local"
+tracing-subscriber feature "thread_local" (*)
+tracing-subscriber feature "tracing"
+tracing-subscriber feature "tracing-log"
+tracing-subscriber v0.3.23 alloc,ansi,default,env-filter,fmt,matchers,nu-ansi-term,once_cell,registry,sharded-slab,smallvec,std,thread_local,tracing,tracing-log
+tracing-subscriber v0.3.23 alloc,ansi,default,env-filter,fmt,matchers,nu-ansi-term,once_cell,registry,sharded-slab,smallvec,std,thread_local,tracing,tracing-log (*)
+tracing-wasm feature "default"
+tracing-wasm v0.2.1 
+twox-hash feature "xxhash64"
+twox-hash v2.1.4 xxhash64
+typeid feature "default"
+typeid v1.0.3 
+typewit v1.15.2 
+unicode-ident feature "default"
+unicode-ident feature "default" (*)
+unicode-ident v1.0.24 
+unicode-segmentation feature "default"
+unicode-segmentation v1.13.3 
+unicode-width feature "cjk"
+unicode-width feature "default"
+unicode-width feature "default" (*)
+unicode-width v0.2.2 cjk,default
+unicode-xid feature "default"
+unicode-xid v0.2.6 default
+utf8_iter v1.0.4 
+uuid feature "default"
+uuid feature "default" (*)
+uuid feature "js"
+uuid feature "js" (*)
+uuid feature "rng"
+uuid feature "serde"
+uuid feature "serde" (*)
+uuid feature "std"
+uuid feature "std" (*)
+uuid feature "v4"
+uuid feature "v4" (*)
+uuid v1.26.1 default,js,rng,serde,std,v4
+uuid v1.26.1 default,js,rng,serde,std,v4 (*)
+variadics_please feature "alloc"
+variadics_please feature "default"
+variadics_please feature "default" (*)
+variadics_please v1.1.0 (proc-macro) alloc,default
+variadics_please v1.1.0 (proc-macro) alloc,default (*)
+wasm-bindgen feature "default"
+wasm-bindgen feature "default" (*)
+wasm-bindgen feature "std"
+wasm-bindgen feature "std" (*)
+wasm-bindgen v0.2.128 default,std
+wasm-bindgen v0.2.128 default,std (*)
+wasm-bindgen-futures feature "default"
+wasm-bindgen-futures feature "default" (*)
+wasm-bindgen-futures feature "std"
+wasm-bindgen-futures feature "std" (*)
+wasm-bindgen-futures v0.4.78 default,std
+wasm-bindgen-futures v0.4.78 default,std (*)
+wasm-bindgen-macro feature "default"
+wasm-bindgen-macro v0.2.128 (proc-macro) 
+wasm-bindgen-macro-support feature "default"
+wasm-bindgen-macro-support v0.2.128 
+wasm-bindgen-shared feature "default"
+wasm-bindgen-shared v0.2.128 
+weak-table feature "default"
+weak-table feature "std"
+weak-table v0.3.2 default,std
+web-sys feature "AbortController"
+web-sys feature "AbortSignal"
+web-sys feature "AngleInstancedArrays"
+web-sys feature "Blob"
+web-sys feature "Blob" (*)
+web-sys feature "BlobPropertyBag"
+web-sys feature "Clipboard"
+web-sys feature "CssStyleDeclaration"
+web-sys feature "Document"
+web-sys feature "Document" (*)
+web-sys feature "DomException"
+web-sys feature "DomRect"
+web-sys feature "DomRectReadOnly"
+web-sys feature "DomRectReadOnly" (*)
+web-sys feature "Element"
+web-sys feature "Element" (*)
+web-sys feature "Event"
+web-sys feature "Event" (*)
+web-sys feature "EventTarget"
+web-sys feature "EventTarget" (*)
+web-sys feature "ExtBlendMinmax"
+web-sys feature "ExtColorBufferFloat"
+web-sys feature "ExtColorBufferHalfFloat"
+web-sys feature "ExtDisjointTimerQuery"
+web-sys feature "ExtFragDepth"
+web-sys feature "ExtSRgb"
+web-sys feature "ExtShaderTextureLod"
+web-sys feature "ExtTextureFilterAnisotropic"
+web-sys feature "FocusEvent"
+web-sys feature "HtmlCanvasElement"
+web-sys feature "HtmlCanvasElement" (*)
+web-sys feature "HtmlElement"
+web-sys feature "HtmlElement" (*)
+web-sys feature "HtmlImageElement"
+web-sys feature "HtmlImageElement" (*)
+web-sys feature "HtmlMediaElement"
+web-sys feature "HtmlVideoElement"
+web-sys feature "HtmlVideoElement" (*)
+web-sys feature "ImageBitmap"
+web-sys feature "ImageBitmap" (*)
+web-sys feature "ImageBitmapOptions"
+web-sys feature "ImageBitmapRenderingContext"
+web-sys feature "ImageData"
+web-sys feature "ImageData" (*)
+web-sys feature "IntersectionObserver"
+web-sys feature "IntersectionObserverEntry"
+web-sys feature "KeyboardEvent"
+web-sys feature "MediaQueryList"
+web-sys feature "MessageChannel"
+web-sys feature "MessagePort"
+web-sys feature "MouseEvent"
+web-sys feature "MouseEvent" (*)
+web-sys feature "Navigator"
+web-sys feature "Navigator" (*)
+web-sys feature "Node"
+web-sys feature "Node" (*)
+web-sys feature "OesElementIndexUint"
+web-sys feature "OesStandardDerivatives"
+web-sys feature "OesTextureFloat"
+web-sys feature "OesTextureFloatLinear"
+web-sys feature "OesTextureHalfFloat"
+web-sys feature "OesTextureHalfFloatLinear"
+web-sys feature "OesVertexArrayObject"
+web-sys feature "OffscreenCanvas"
+web-sys feature "OffscreenCanvas" (*)
+web-sys feature "OrientationLockType"
+web-sys feature "OrientationType"
+web-sys feature "OvrMultiview2"
+web-sys feature "PageTransitionEvent"
+web-sys feature "PermissionState"
+web-sys feature "PermissionStatus"
+web-sys feature "Permissions"
+web-sys feature "PointerEvent"
+web-sys feature "PremultiplyAlpha"
+web-sys feature "ResizeObserver"
+web-sys feature "ResizeObserverBoxOptions"
+web-sys feature "ResizeObserverEntry"
+web-sys feature "ResizeObserverOptions"
+web-sys feature "ResizeObserverSize"
+web-sys feature "Response"
+web-sys feature "Screen"
+web-sys feature "ScreenOrientation"
+web-sys feature "UiEvent"
+web-sys feature "UiEvent" (*)
+web-sys feature "Url"
+web-sys feature "Url" (*)
+web-sys feature "VideoFrame"
+web-sys feature "VideoFrame" (*)
+web-sys feature "VisibilityState"
+web-sys feature "WebGl2RenderingContext"
+web-sys feature "WebGl2RenderingContext" (*)
+web-sys feature "WebGlActiveInfo"
+web-sys feature "WebGlBuffer"
+web-sys feature "WebGlFramebuffer"
+web-sys feature "WebGlProgram"
+web-sys feature "WebGlQuery"
+web-sys feature "WebGlRenderbuffer"
+web-sys feature "WebGlRenderingContext"
+web-sys feature "WebGlSampler"
+web-sys feature "WebGlShader"
+web-sys feature "WebGlShaderPrecisionFormat"
+web-sys feature "WebGlSync"
+web-sys feature "WebGlTexture"
+web-sys feature "WebGlTransformFeedback"
+web-sys feature "WebGlUniformLocation"
+web-sys feature "WebGlVertexArrayObject"
+web-sys feature "WebglColorBufferFloat"
+web-sys feature "WebglCompressedTextureAstc"
+web-sys feature "WebglCompressedTextureEtc"
+web-sys feature "WebglCompressedTextureEtc1"
+web-sys feature "WebglCompressedTexturePvrtc"
+web-sys feature "WebglCompressedTextureS3tc"
+web-sys feature "WebglCompressedTextureS3tcSrgb"
+web-sys feature "WebglDebugRendererInfo"
+web-sys feature "WebglDebugShaders"
+web-sys feature "WebglDepthTexture"
+web-sys feature "WebglDrawBuffers"
+web-sys feature "WebglLoseContext"
+web-sys feature "WheelEvent"
+web-sys feature "Window"
+web-sys feature "Window" (*)
+web-sys feature "Worker"
+web-sys feature "WorkerGlobalScope"
+web-sys feature "console"
+web-sys feature "default"
+web-sys feature "default" (*)
+web-sys feature "std"
+web-sys feature "std" (*)
+web-sys v0.3.105 AbortController,AbortSignal,AngleInstancedArrays,Blob,BlobPropertyBag,Clipboard,CssStyleDeclaration,Document,DomException,DomRect,DomRectReadOnly,Element,Event,EventTarget,ExtBlendMinmax,ExtColorBufferFloat,ExtColorBufferHalfFloat,ExtDisjointTimerQuery,ExtFragDepth,ExtSRgb,ExtShaderTextureLod,ExtTextureFilterAnisotropic,FocusEvent,HtmlCanvasElement,HtmlElement,HtmlImageElement,HtmlMediaElement,HtmlVideoElement,ImageBitmap,ImageBitmapOptions,ImageBitmapRenderingContext,ImageData,IntersectionObserver,IntersectionObserverEntry,KeyboardEvent,MediaQueryList,MessageChannel,MessagePort,MouseEvent,Navigator,Node,OesElementIndexUint,OesStandardDerivatives,OesTextureFloat,OesTextureFloatLinear,OesTextureHalfFloat,OesTextureHalfFloatLinear,OesVertexArrayObject,OffscreenCanvas,OrientationLockType,OrientationType,OvrMultiview2,PageTransitionEvent,PermissionState,PermissionStatus,Permissions,PointerEvent,PremultiplyAlpha,ResizeObserver,ResizeObserverBoxOptions,ResizeObserverEntry,ResizeObserverOptions,ResizeObserverSize,Response,Screen,ScreenOrientation,UiEvent,Url,VideoFrame,VisibilityState,WebGl2RenderingContext,WebGlActiveInfo,WebGlBuffer,WebGlFramebuffer,WebGlProgram,WebGlQuery,WebGlRenderbuffer,WebGlRenderingContext,WebGlSampler,WebGlShader,WebGlShaderPrecisionFormat,WebGlSync,WebGlTexture,WebGlTransformFeedback,WebGlUniformLocation,WebGlVertexArrayObject,WebglColorBufferFloat,WebglCompressedTextureAstc,WebglCompressedTextureEtc,WebglCompressedTextureEtc1,WebglCompressedTexturePvrtc,WebglCompressedTextureS3tc,WebglCompressedTextureS3tcSrgb,WebglDebugRendererInfo,WebglDebugShaders,WebglDepthTexture,WebglDrawBuffers,WebglLoseContext,WheelEvent,Window,Worker,WorkerGlobalScope,console,default,std
+web-sys v0.3.105 AbortController,AbortSignal,AngleInstancedArrays,Blob,BlobPropertyBag,Clipboard,CssStyleDeclaration,Document,DomException,DomRect,DomRectReadOnly,Element,Event,EventTarget,ExtBlendMinmax,ExtColorBufferFloat,ExtColorBufferHalfFloat,ExtDisjointTimerQuery,ExtFragDepth,ExtSRgb,ExtShaderTextureLod,ExtTextureFilterAnisotropic,FocusEvent,HtmlCanvasElement,HtmlElement,HtmlImageElement,HtmlMediaElement,HtmlVideoElement,ImageBitmap,ImageBitmapOptions,ImageBitmapRenderingContext,ImageData,IntersectionObserver,IntersectionObserverEntry,KeyboardEvent,MediaQueryList,MessageChannel,MessagePort,MouseEvent,Navigator,Node,OesElementIndexUint,OesStandardDerivatives,OesTextureFloat,OesTextureFloatLinear,OesTextureHalfFloat,OesTextureHalfFloatLinear,OesVertexArrayObject,OffscreenCanvas,OrientationLockType,OrientationType,OvrMultiview2,PageTransitionEvent,PermissionState,PermissionStatus,Permissions,PointerEvent,PremultiplyAlpha,ResizeObserver,ResizeObserverBoxOptions,ResizeObserverEntry,ResizeObserverOptions,ResizeObserverSize,Response,Screen,ScreenOrientation,UiEvent,Url,VideoFrame,VisibilityState,WebGl2RenderingContext,WebGlActiveInfo,WebGlBuffer,WebGlFramebuffer,WebGlProgram,WebGlQuery,WebGlRenderbuffer,WebGlRenderingContext,WebGlSampler,WebGlShader,WebGlShaderPrecisionFormat,WebGlSync,WebGlTexture,WebGlTransformFeedback,WebGlUniformLocation,WebGlVertexArrayObject,WebglColorBufferFloat,WebglCompressedTextureAstc,WebglCompressedTextureEtc,WebglCompressedTextureEtc1,WebglCompressedTexturePvrtc,WebglCompressedTextureS3tc,WebglCompressedTextureS3tcSrgb,WebglDebugRendererInfo,WebglDebugShaders,WebglDepthTexture,WebglDrawBuffers,WebglLoseContext,WheelEvent,Window,Worker,WorkerGlobalScope,console,default,std (*)
+web-task feature "default"
+web-task feature "std"
+web-task v1.1.3 default,std
+web-task v1.1.3 default,std (*)
+web-time feature "default"
+web-time v1.1.0 
+web-time v1.1.0  (*)
+wgpu feature "dx12"
+wgpu feature "fragile-send-sync-non-atomic-wasm"
+wgpu feature "metal"
+wgpu feature "naga-ir"
+wgpu feature "vulkan"
+wgpu feature "web"
+wgpu feature "webgl"
+wgpu feature "wgpu-core"
+wgpu feature "wgsl"
+wgpu v29.0.4 dx12,fragile-send-sync-non-atomic-wasm,metal,naga-ir,vulkan,web,webgl,wgpu-core,wgsl
+wgpu v29.0.4 dx12,fragile-send-sync-non-atomic-wasm,metal,naga-ir,vulkan,web,webgl,wgpu-core,wgsl (*)
+wgpu-core feature "default"
+wgpu-core feature "dx12"
+wgpu-core feature "fragile-send-sync-non-atomic-wasm"
+wgpu-core feature "metal"
+wgpu-core feature "std"
+wgpu-core feature "vulkan"
+wgpu-core feature "webgl"
+wgpu-core feature "wgpu-core-deps-wasm"
+wgpu-core feature "wgsl"
+wgpu-core v29.0.4 default,dx12,fragile-send-sync-non-atomic-wasm,metal,std,vulkan,webgl,wgpu-core-deps-wasm,wgsl
+wgpu-core v29.0.4 default,dx12,fragile-send-sync-non-atomic-wasm,metal,std,vulkan,webgl,wgpu-core-deps-wasm,wgsl (*)
+wgpu-core-deps-wasm feature "default"
+wgpu-core-deps-wasm feature "webgl"
+wgpu-core-deps-wasm v29.0.4 webgl
+wgpu-core-deps-wasm v29.0.4 webgl (*)
+wgpu-hal feature "default"
+wgpu-hal feature "default" (*)
+wgpu-hal feature "fragile-send-sync-non-atomic-wasm"
+wgpu-hal feature "gles"
+wgpu-hal v29.0.4 fragile-send-sync-non-atomic-wasm,gles
+wgpu-hal v29.0.4 fragile-send-sync-non-atomic-wasm,gles (*)
+wgpu-naga-bridge feature "default"
+wgpu-naga-bridge feature "default" (*)
+wgpu-naga-bridge v29.0.4 
+wgpu-naga-bridge v29.0.4  (*)
+wgpu-types feature "default"
+wgpu-types feature "fragile-send-sync-non-atomic-wasm"
+wgpu-types feature "fragile-send-sync-non-atomic-wasm" (*)
+wgpu-types feature "serde"
+wgpu-types feature "serde" (*)
+wgpu-types feature "std"
+wgpu-types feature "std" (*)
+wgpu-types feature "web"
+wgpu-types feature "web" (*)
+wgpu-types v29.0.4 default,fragile-send-sync-non-atomic-wasm,serde,std,web
+wgpu-types v29.0.4 default,fragile-send-sync-non-atomic-wasm,serde,std,web (*)
+winit feature "rwh_06"
+winit feature "rwh_06" (*)
+winit v0.30.13 rwh_06
+winit v0.30.13 rwh_06 (*)
+winnow feature "alloc"
+winnow feature "ascii"
+winnow feature "binary"
+winnow feature "default"
+winnow feature "parser"
+winnow feature "parser" (*)
+winnow feature "std"
+winnow v1.0.4 alloc,ascii,binary,default,parser,std
+writeable feature "alloc"
+writeable feature "alloc" (*)
+writeable v0.6.4 alloc
+yazi feature "std"
+yazi v0.2.1 std
+yoke feature "alloc"
+yoke feature "derive"
+yoke feature "derive" (*)
+yoke feature "zerofrom"
+yoke feature "zerofrom" (*)
+yoke v0.8.3 alloc,derive,zerofrom
+yoke v0.8.3 alloc,derive,zerofrom (*)
+yoke-derive v0.8.3 (proc-macro) 
+zeno feature "eval"
+zeno feature "std"
+zeno v0.3.3 eval,std
+zerocopy feature "derive"
+zerocopy feature "simd"
+zerocopy feature "zerocopy-derive"
+zerocopy v0.8.57 derive,simd,zerocopy-derive
+zerocopy v0.8.57 derive,simd,zerocopy-derive (*)
+zerocopy-derive feature "default"
+zerocopy-derive v0.8.57 (proc-macro) 
+zerofrom feature "alloc"
+zerofrom feature "alloc" (*)
+zerofrom feature "derive"
+zerofrom feature "derive" (*)
+zerofrom v0.1.8 alloc,derive
+zerofrom v0.1.8 alloc,derive (*)
+zerofrom-derive v0.1.8 (proc-macro) 
+zerotrie feature "alloc"
+zerotrie feature "yoke"
+zerotrie feature "zerofrom"
+zerotrie v0.2.5 alloc,yoke,zerofrom
+zerotrie v0.2.5 alloc,yoke,zerofrom (*)
+zerovec feature "alloc"
+zerovec feature "alloc" (*)
+zerovec feature "derive"
+zerovec feature "derive" (*)
+zerovec feature "yoke"
+zerovec feature "yoke" (*)
+zerovec v0.11.8 alloc,derive,yoke
+zerovec v0.11.8 alloc,derive,yoke (*)
+zerovec-derive v0.11.6 (proc-macro) 
+zmij feature "default"
+zmij v1.0.23 

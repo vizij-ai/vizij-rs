@@ -1,0 +1,58 @@
+# Challenge spike: one wasm module = N arora devices (store + RigHal + graph
+# behavior, composed as vizij-arora-web does) + one Bevy 0.19.1 App for the
+# page lifetime, one transparent canvas, one viewport camera per face. The
+# devices are JS-paced (the page calls step(dt)); the view reads each device's
+# RigHal::pose() every frame. Built with the bevy-wasm spike's
+# CARGO_TARGET_DIR so Bevy's artifacts are reused.
+[package]
+name = "challenge-wasm"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Same feature list as the bevy-wasm spike; `picking` adds bevy_picking + the
+# mesh backend for Q4 under this crate's feature.
+bevy = { version = "=0.19.1", default-features = false, features = [
+    "default_app",
+    "3d_bevy_render",
+    "scene",
+    "std",
+    "bevy_winit",
+    "multi_threaded",
+    "webgl2",
+] }
+wasm-bindgen = "=0.2.128"
+js-sys = "0.3"
+serde_json = "1"
+uuid = "1"
+console_error_panic_hook = "0.1"
+# The device runtime as vizij-rs pins it, no default features (no wasmtime,
+# no native bridges), the composition seams from the vizij-rs checkout.
+arora = { version = "=9.11.1", default-features = false }
+arora-types = "2"
+arora-behavior = "8"
+arora-hal = "3"
+vizij-api-core = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/api/vizij-api-core" }
+vizij-arora-store = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-store" }
+vizij-arora-hal = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-hal" }
+vizij-arora-behavior = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-behavior" }
+vizij-arora-host = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-host" }
+# uuid v4 on wasm needs the browser RNG (as vizij-arora-web declares it).
+getrandom = { version = "0.4", features = ["wasm_js"] }
+
+[features]
+default = []
+picking = ["bevy/bevy_picking", "bevy/mesh_picking"]
+
+# vizij-rs's release profile (identical to the bevy-wasm spike, so the
+# dependency artifacts are shared).
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1

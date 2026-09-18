@@ -1,0 +1,44 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>C2 review: per-instance wasm memory</title>
+<style>
+  body { margin: 0; background: #202020; color: #ddd; font: 14px system-ui; }
+  .stage { position: relative; width: 480px; height: 300px; margin: 24px; background: #101114; display: inline-block; }
+  .stage canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+</style>
+<p style="margin:24px 24px 0"><span id="status">loading…</span></p>
+<div class="stage"><canvas id="face-a"></canvas></div>
+<div class="stage"><canvas id="face-b"></canvas></div>
+<script type="module">
+  const n = Number(new URLSearchParams(location.search).get('n') || 2);
+  const status = document.getElementById('status');
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const heap = () => (performance.memory ? performance.memory.usedJSHeapSize : null);
+  const out = { n, steps: [] };
+  const mark = (label, ex) => out.steps.push({ label, t: Math.round(performance.now()),
+    memA: ex.a ? ex.a.memory.buffer.byteLength : null, memB: ex.b ? ex.b.memory.buffer.byteLength : null, jsHeap: heap() });
+  const ex = {};
+  let t = performance.now();
+  const a = await import('./pkg/bevy_wasm_spike.js?instance=a');
+  ex.a = await a.default();
+  out.initA_ms = Math.round(performance.now() - t);
+  mark('after init A', ex);
+  a.start('#face-a', 'Quori_Current_Extended.glb');
+  await wait(7000);
+  mark('A running 7s', ex);
+  if (n >= 2) {
+    t = performance.now();
+    const b = await import('./pkg/bevy_wasm_spike.js?instance=b');
+    ex.b = await b.default();
+    out.initB_ms = Math.round(performance.now() - t);
+    out.sameModule = a === b;
+    mark('after init B', ex);
+    b.start('#face-b', 'Quori_Current_Extended.glb');
+    await wait(7000);
+    mark('A+B running 7s', ex);
+  }
+  await wait(5000);
+  mark('final +5s', ex);
+  window.__c2 = out;
+  status.textContent = JSON.stringify(out);
+</script>

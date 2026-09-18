@@ -1,0 +1,94 @@
+Stable Game Driver: unsupported
+Pre-release Game Driver: unsupported
+
+GPU memory total usage map is empty
+
+driverPackageName = system
+driverVersionName = 
+driverVersionCode = 0
+driverBuildTime = 0
+glLoadingCount = 4
+glLoadingFailureCount = 0
+angleLoadingCount = 0
+angleLoadingFailureCount = 0
+vkLoadingCount = 1
+vkLoadingFailureCount = 0
+vulkanVersion = 4206592
+cpuVulkanVersion = 4206592
+glesVersion = 196609
+
+appPackageName = ai.vizij.bevyspike
+driverVersionCode = 0
+cpuVulkanInUse = 1
+falsePrerotation = 0
+gles1InUse = 0
+angleInUse = 0
+createdGlesContext = 0
+createdVulkanDevice = 1
+createdVulkanSwapchain = 1
+vulkanApiVersion = 0x403000
+vulkanDeviceFeaturesEnabled = 0x2006782e4d
+glDriverLoadingTime: 1380249625
+angleDriverLoadingTime:
+vkDriverLoadingTime: 347941334
+vulkanInstanceExtensions: 0xf3a8bad9 0x3466e6d9 0xd59acd01 0x87325ffc 0xd59acd01
+vulkanDeviceExtensions: 0xc85f1eda
+vulkanEngineNames: wgpu-hal,
+
+appPackageName = com.google.android.apps.nexuslauncher
+driverVersionCode = 0
+cpuVulkanInUse = 0
+falsePrerotation = 0
+gles1InUse = 0
+angleInUse = 0
+createdGlesContext = 0
+createdVulkanDevice = 0
+createdVulkanSwapchain = 0
+vulkanApiVersion = 0x0
+vulkanDeviceFeaturesEnabled = 0x0
+glDriverLoadingTime: 129152959
+angleDriverLoadingTime:
+vkDriverLoadingTime:
+vulkanInstanceExtensions:
+vulkanDeviceExtensions:
+vulkanEngineNames:
+
+appPackageName = com.google.android.googlesdksetup
+driverVersionCode = 0
+cpuVulkanInUse = 0
+falsePrerotation = 0
+gles1InUse = 0
+angleInUse = 0
+createdGlesContext = 0
+createdVulkanDevice = 0
+createdVulkanSwapchain = 0
+vulkanApiVersion = 0x0
+vulkanDeviceFeaturesEnabled = 0x0
+glDriverLoadingTime: 20838167
+angleDriverLoadingTime:
+vkDriverLoadingTime:
+vulkanInstanceExtensions:
+vulkanDeviceExtensions:
+vulkanEngineNames:
+
+appPackageName = com.android.settings
+driverVersionCode = 0
+cpuVulkanInUse = 0
+falsePrerotation = 0
+gles1InUse = 0
+angleInUse = 0
+createdGlesContext = 1
+createdVulkanDevice = 0
+createdVulkanSwapchain = 0
+vulkanApiVersion = 0x0
+vulkanDeviceFeaturesEnabled = 0x0
+glDriverLoadingTime: 55053208
+angleDriverLoadingTime:
+vkDriverLoadingTime:
+vulkanInstanceExtensions:
+vulkanDeviceExtensions:
+vulkanEngineNames:
+
+
+GPU work information is not available.
+

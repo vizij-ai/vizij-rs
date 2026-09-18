@@ -1,0 +1,21 @@
+case=api35-swiftshader-vulkan apk=/private/tmp/claude-501/-Users-victor-paleologue-Code-Semio-semio-studio/3db729c2-88a1-4330-986e-37ae26376064/scratchpad/spikes/bevy-android/bevy-spike-vulkan-debug.apk serial=emulator-5556 date=2026-09-17T14:47:27Z
+android=15
+sdk=35
+ro.hardware.vulkan=ranchu
+ro.hardware.egl=emulation
+wm=Physical size: 2560x1600
+install=Success
+Status: ok TotalTime: 14104 
+pid_after_10s=4404
+resumed=    topResumedActivity=ActivityRecord{3a5c7ba u0 ai.vizij.bevyspike/android.app.NativeActivity t8}
+screencap_bytes=23828
+gfxinfo: Total frames rendered: 0
+gfxinfo: Janky frames: 0 (0.00%)
+gfxinfo: Janky frames (legacy): 0 (0.00%)
+logcat_lines=    1608
+log: 09-17 16:47:50.491  4404  4447 I RustStdoutStderr: [2m2026-09-17T14:47:50.490853Z[0m [32m INFO[0m [2mbevy_render::renderer[0m[2m:[0m AdapterInfo { name: "SwiftShader Device (LLVM 10.0.0)", vendor: 6880, device: 49374, device_type: Cpu, device_pci_bus_i
+log: 09-17 16:47:52.212  4404  4447 I RustStdoutStderr: [2m2026-09-17T14:47:52.208539Z[0m [31mERROR[0m [2mbevy_gilrs[0m[2m:[0m Failed to start Gilrs. Gilrs does not support current platform.
+log: 09-17 16:47:52.416  4404  4447 I RustStdoutStderr: [2m2026-09-17T14:47:52.383565Z[0m [32m INFO[0m [2mbevy_pbr::cluster[0m[2m:[0m GPU clustering isn't supported on this device; falling back to CPU clustering.
+log: 09-17 16:48:11.357  4404  4447 I RustStdoutStderr: thread 'Compute Task Pool (0)' (4454) panicked at /Users/victor.paleologue/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wgpu-29.0.4/src/backend/wgpu_core.rs:2253:18:
+log: 09-17 16:48:11.357  4404  4447 I RustStdoutStderr: Encountered a panic in system `<Enable the debug feature to see the name>`!
+log: 09-17 16:48:11.394  4404  4447 I RustStdoutStderr: Encountered a panic in system `<Enable the debug feature to see the name>`!

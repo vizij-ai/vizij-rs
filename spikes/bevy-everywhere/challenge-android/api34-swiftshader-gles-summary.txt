@@ -1,0 +1,23 @@
+case=api34-swiftshader-gles apk=bevy-spike-gles-debug.apk serial=emulator-5560 date=2026-09-18T14:32:26Z
+android=14
+sdk=34
+wm=Physical size: 2560x1600
+install=Success
+Status: ok TotalTime: 5114 
+pid_after_20s=11684
+resumed=      topResumedActivity=ActivityRecord{ce53c30 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t7}
+pixels_a: center (240, 240, 243) orange_cube_px 0 clear_color_px 3614 of 64000
+pixels_b: center (240, 240, 243) orange_cube_px 0 clear_color_px 3614 of 64000
+diff_a_b: bbox (56, 14, 658, 996) changed_px 111
+gfxinfo: Total frames rendered: 0
+sf_latency_rows=1
+logcat_lines=     644
+log: 09-18 16:32:34.484 11684 11714 I RustStdoutStderr: 2026-09-18T14:32:34.483957Z  INFO bevy_render::renderer: AdapterInfo { name: "Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader dri
+log: 09-18 16:32:34.999 11684 11714 I RustStdoutStderr: 2026-09-18T14:32:34.999486Z  INFO bevy_pbr::cluster: GPU clustering isn't supported on this device; falling back to CPU clustering.
+log: 09-18 16:32:34.999 11684 11714 I RustStdoutStderr: 2026-09-18T14:32:34.999691Z  INFO bevy_render::batching::gpu_preprocessing: GPU preprocessing is not supported on this device. Falling back to CPU preprocessing.
+log: 09-18 16:32:36.489 11684 11714 I RustStdoutStderr: 2026-09-18T14:32:36.488949Z  INFO bevy_winit::system: Creating new window app_process64 (65v0)
+log: 09-18 16:32:37.824 11684 11714 I RustStdoutStderr: 2026-09-18T14:32:37.823358Z ERROR wgpu_hal::gles::device: 	Shader compilation failed: ERROR: 0:26: 'Except for images with the r32f, r32i and r32ui format qualifiers, image variables must be qualified readonly
+log: 09-18 16:32:37.828 11684 11714 I RustStdoutStderr: 2026-09-18T14:32:37.826883Z ERROR bevy_render::error_handler: Caught rendering error: Validation Error
+log: 09-18 16:32:37.873 11684 11714 I RustStdoutStderr: 2026-09-18T14:32:37.871955Z ERROR wgpu_hal::gles::device: 	Shader compilation failed: ERROR: 0:24: 'Except for images with the r32f, r32i and r32ui format qualifiers, image variables must be qualified readonly
+log: 09-18 16:32:37.874 11684 11714 I RustStdoutStderr: 2026-09-18T14:32:37.872451Z ERROR bevy_render::error_handler: Caught rendering error: Validation Error
+log: 09-18 16:32:37.884 11684 11714 I RustStdoutStderr: 2026-09-18T14:32:37.884172Z ERROR bevy_render::error_handler: Quitting the application due to Internal RenderError

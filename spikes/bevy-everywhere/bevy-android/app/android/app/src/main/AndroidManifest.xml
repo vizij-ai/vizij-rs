@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The rosbridge WebSocket client is the only thing needing network. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="Bevy Spike"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:allowBackup="false">
+
+        <!-- The framework's NativeActivity (no games-activity AAR): it keeps
+             the system status/navigation bars and lays the surface out within
+             their insets. android.app.lib_name must match the Rust cdylib
+             (libros_viz_rs.so -> "ros_viz_rs"); the native-activity backend of
+             android-activity exports its ANativeActivity_onCreate entry point.
+             A plain DeviceDefault NoActionBar theme preserves the system chrome
+             (no app title bar, no fullscreen). -->
+        <activity
+            android:name="android.app.NativeActivity"
+            android:exported="true"
+            android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|density|uiMode"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="bevy_android_spike" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

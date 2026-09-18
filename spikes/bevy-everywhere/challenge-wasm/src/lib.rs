@@ -1,0 +1,1038 @@
+//! One wasm module = N arora devices + one Bevy view, JS-paced.
+//!
+//! The page calls `mount(canvas)` once: one `App` for the page lifetime, one
+//! transparent canvas, `ClearColor::NONE`. `loadFace(faceId, glbBytes)`
+//! composes a device the way `vizij-arora-web` composes it (arora 9 with no
+//! default features over a `BlackboardStore`, a `RigHal` and a Vizij
+//! `ProcessingGraph` built from the GLB's `VIZIJ_bundle`) and returns it as a
+//! JS-owned `FaceDevice` (an `Rc<RefCell<Option<Arora>>>`): the page steps it
+//! with `step(dtMs)`; no Bevy system steps it. The Bevy world receives only a
+//! clone of the device's `RigHal` on a per-face `Face` component, together
+//! with the face's own `Camera3d` (a viewport placed by `setRect`), and reads
+//! `pose()` every frame (`crates/vizij/src/view.rs`'s `apply_pose`). The GLB
+//! reaches Bevy from the bytes JS hands over through an in-memory asset source
+//! (`mem://<faceId>-<n>.glb`, a fresh path per push), never from `assets/`.
+//!
+//! JS surface (wasm-bindgen): `mount`, `loadFace` → `FaceDevice { step,
+//! setValue, readValues, poseLen, release }`, `unloadFace`, `setRect`,
+//! `clearRect`, `faceReady`, `faceCount`, `frames`, `running`, `stop`
+//! (sends `AppExit`), `orderTrace`, and under feature `picking`
+//! `setClickCallback` / `drainClicks`.
+
+use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, VecDeque};
+use std::path::Path;
+use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
+use std::sync::Mutex;
+use std::time::Duration;
+
+use arora::{Arora, HostModule, ModuleBuilder};
+use arora_types::call::CallResult;
+use arora_types::data::{DataStore, Key, StateChange};
+use arora_types::value::Value;
+use bevy::asset::io::memory::{Dir, MemoryAssetReader};
+use bevy::asset::io::AssetSourceBuilder;
+use bevy::asset::{AssetApp, AssetMetaCheck, AssetPlugin};
+use bevy::app::{HierarchyPropagatePlugin, Propagate};
+use bevy::camera::visibility::RenderLayers;
+use bevy::camera::{Projection, ScalingMode, Viewport};
+use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
+use bevy::gltf::GltfAssetLabel;
+use bevy::mesh::morph::MorphWeights;
+use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
+use serde_json::Value as Json;
+use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector};
+use vizij_arora_behavior::{parse_spec, viseme, ProcessingGraph};
+use vizij_arora_hal::RigHal;
+use vizij_arora_host::{ros4hri, Bundle, ProgramSelect};
+use vizij_arora_store::BlackboardStore;
+use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console, js_name = log)]
+    fn console_log(s: &str);
+}
+
+#[wasm_bindgen(start)]
+fn init() {
+    console_error_panic_hook::set_once();
+}
+
+// ---------------------------------------------------------------------------
+// Face metadata (the `RobotData` half of crates/vizij/src/meta.rs, minimal)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq)]
+enum FeatureKind {
+    Translation,
+    Rotation,
+    Scale,
+    Color,
+    Opacity,
+    Morph(String),
+}
+
+#[derive(Debug, Clone)]
+struct Binding {
+    node_name: String,
+    feature: FeatureKind,
+}
+
+#[derive(Debug, Clone)]
+struct Element {
+    node_name: String,
+    /// The `RobotData.id` of the node.
+    id: Option<String>,
+    material: Option<String>,
+    morph_targets: Vec<String>,
+}
+
+/// The face metadata joined from `RobotData` + `VIZIJ_bundle`.
+#[derive(Clone)]
+struct FaceMeta {
+    elements: Vec<Element>,
+    /// animatable UUID (string form) → what it drives.
+    animatables: HashMap<String, Binding>,
+    /// (center_x, center_y, size_x, size_y) of the root element.
+    root_bounds: Option<(f32, f32, f32, f32)>,
+    bundle: Bundle,
+}
+
+fn glb_json_chunk(bytes: &[u8]) -> Result<Json, String> {
+    if bytes.len() < 20 || &bytes[0..4] != b"glTF" {
+        return Err("not a GLB container".into());
+    }
+    let chunk_len = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+    if &bytes[16..20] != b"JSON" {
+        return Err("first GLB chunk is not JSON".into());
+    }
+    if bytes.len() < 20 + chunk_len {
+        return Err("GLB truncated".into());
+    }
+    serde_json::from_slice(&bytes[20..20 + chunk_len]).map_err(|e| format!("GLB JSON: {e}"))
+}
+
+impl FaceMeta {
+    fn from_glb_bytes(bytes: &[u8]) -> Result<Self, String> {
+        let gltf = glb_json_chunk(bytes)?;
+        let nodes = gltf
+            .get("nodes")
+            .and_then(Json::as_array)
+            .ok_or("glTF has no nodes")?;
+        let mut elements = Vec::new();
+        let mut animatables = HashMap::new();
+        let mut root_bounds = None;
+        for node in nodes {
+            let Some(rd) = node.get("extensions").and_then(|e| e.get("RobotData")) else {
+                continue;
+            };
+            let node_name = node
+                .get("name")
+                .and_then(Json::as_str)
+                .or_else(|| rd.get("name").and_then(Json::as_str))
+                .unwrap_or_default()
+                .to_string();
+            if let Some(b) = rd.get("rootBounds") {
+                let f = |k: &str, a: &str| b.get(k).and_then(|v| v.get(a)).and_then(Json::as_f64);
+                if let (Some(cx), Some(cy), Some(sx), Some(sy)) =
+                    (f("center", "x"), f("center", "y"), f("size", "x"), f("size", "y"))
+                {
+                    root_bounds = Some((cx as f32, cy as f32, sx as f32, sy as f32));
+                }
+            }
+            let morph_targets: Vec<String> = rd
+                .get("morphTargets")
+                .and_then(Json::as_array)
+                .map(|a| a.iter().filter_map(Json::as_str).map(str::to_string).collect())
+                .unwrap_or_default();
+            if let Some(features) = rd.get("features").and_then(Json::as_object) {
+                for (name, feature) in features {
+                    if !feature.get("animated").and_then(Json::as_bool).unwrap_or(false) {
+                        continue;
+                    }
+                    let Some(id) = feature.get("value").and_then(|v| v.get("id")).and_then(Json::as_str)
+                    else {
+                        continue;
+                    };
+                    let kind = match name.as_str() {
+                        "translation" => FeatureKind::Translation,
+                        "rotation" => FeatureKind::Rotation,
+                        "scale" => FeatureKind::Scale,
+                        "color" => FeatureKind::Color,
+                        "opacity" => FeatureKind::Opacity,
+                        other if morph_targets.iter().any(|m| m == other) => {
+                            FeatureKind::Morph(other.to_string())
+                        }
+                        _ => continue,
+                    };
+                    animatables.insert(
+                        id.to_string(),
+                        Binding {
+                            node_name: node_name.clone(),
+                            feature: kind,
+                        },
+                    );
+                }
+            }
+            elements.push(Element {
+                node_name,
+                id: rd.get("id").and_then(Json::as_str).map(str::to_string),
+                material: rd.get("material").and_then(Json::as_str).map(str::to_string),
+                morph_targets,
+            });
+        }
+        let bundle = Bundle::from_gltf_json(&gltf).unwrap_or_default();
+        Ok(Self {
+            elements,
+            animatables,
+            root_bounds,
+            bundle,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The device (JS-owned)
+// ---------------------------------------------------------------------------
+
+/// The viseme module: the play_viseme contract described so a bridge
+/// discovers it (crates/vizij/src/viseme.rs); the closure is only reached
+/// when no fragment is registered.
+fn viseme_host_module() -> HostModule {
+    ModuleBuilder::new(viseme::MODULE_ID)
+        .described_function(
+            viseme::PLAY_VISEME_ID,
+            vizij_arora_host::skills::PLAY_VISEME_FUNCTION,
+            viseme::play_viseme_signature(),
+            |_call| {
+                Ok(CallResult {
+                    ret: vizij_arora_behavior::task::failure(),
+                    mutated: Vec::new(),
+                })
+            },
+        )
+        .build()
+}
+
+/// Compose the device the way vizij-arora-web's `composeFace` + `start` do
+/// (base kinds, ROS4HRI mapping, no program, no animation source), stage the
+/// neutral pose (device.rs's `stage_neutral_pose`), register the play_viseme
+/// fragment (device.rs's `builder_for`).
+fn compose_device(meta: &FaceMeta) -> Result<(Arora, RigHal, String), String> {
+    let rig_prefix = meta.bundle.rig_prefix();
+    let mappings = vec![ros4hri::ros4hri_source(&rig_prefix)];
+    let spec = meta
+        .bundle
+        .compose(
+            &["rig", "pose-driver", "pose", "standard-adaptation"],
+            &ProgramSelect::None,
+            false,
+            &mappings,
+        )
+        .map_err(|e| format!("compose: {e}"))?;
+    let spec = parse_spec(&spec.to_string())?;
+    let mut graph = ProcessingGraph::from_spec(spec)?;
+    graph.set_task_fragment(
+        viseme::PLAY_VISEME_ID,
+        viseme::play_viseme_fragment(&rig_prefix),
+    );
+
+    let rig = RigHal::new();
+    let store = BlackboardStore::new();
+    let writes = meta.bundle.neutral_stage_writes();
+    if !writes.is_empty() {
+        let mut change = StateChange::new();
+        for (path, value) in &writes {
+            change
+                .set
+                .insert(Key::from(path.as_str()), Some(Value::F32(*value)));
+        }
+        store
+            .write(change)
+            .map_err(|e| format!("neutral staging: {e:?}"))?;
+    }
+
+    let arora = Arora::builder()
+        .with_hal(Box::new(rig.clone()))
+        .with_data_store(Box::new(store))
+        .with_behavior_interpreter(Box::new(graph))
+        .with_host_module(viseme_host_module())
+        .build()
+        .map_err(|e| format!("arora build: {e}"))?;
+    Ok((arora, rig, rig_prefix))
+}
+
+/// A face's device, owned by the page. The Bevy world never sees the
+/// `Arora`: it holds a clone of `rig` only.
+#[wasm_bindgen]
+pub struct FaceDevice {
+    face_id: String,
+    arora: Rc<RefCell<Option<Arora>>>,
+    rig: RigHal,
+    rig_prefix: String,
+    steps: Cell<u32>,
+}
+
+#[wasm_bindgen]
+impl FaceDevice {
+    #[wasm_bindgen(getter, js_name = faceId)]
+    pub fn face_id(&self) -> String {
+        self.face_id.clone()
+    }
+
+    /// The face's rig prefix (`rig/<faceId>/`).
+    #[wasm_bindgen(getter, js_name = rigPrefix)]
+    pub fn rig_prefix(&self) -> String {
+        self.rig_prefix.clone()
+    }
+
+    /// Advance the device one step; `dt_ms` is the wall time since the
+    /// previous step (the difference of two `requestAnimationFrame` stamps).
+    pub fn step(&self, dt_ms: f64) -> Result<(), JsValue> {
+        let mut slot = self
+            .arora
+            .try_borrow_mut()
+            .map_err(|_| JsValue::from_str("the device is mid-step"))?;
+        let device = slot
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("the device was released"))?;
+        device
+            .step(Duration::from_secs_f64(dt_ms / 1_000.0))
+            .map_err(|e| JsValue::from_str(&format!("step failed: {e}")))?;
+        self.steps.set(self.steps.get() + 1);
+        trace(b'S');
+        Ok(())
+    }
+
+    /// Steps taken since `loadFace`.
+    pub fn steps(&self) -> u32 {
+        self.steps.get()
+    }
+
+    /// True until `release()`.
+    pub fn alive(&self) -> bool {
+        self.arora.borrow().is_some()
+    }
+
+    /// Drop the `Arora` (store, engine, behavior); the `RigHal` clone in the
+    /// Bevy world survives until `unloadFace` despawns the face.
+    pub fn release(&self) -> bool {
+        self.arora.borrow_mut().take().is_some()
+    }
+
+    /// Number of entries in the rig's current pose (what the view applies).
+    #[wasm_bindgen(js_name = poseLen)]
+    pub fn pose_len(&self) -> usize {
+        self.rig.pose().len()
+    }
+
+    /// Write one key into the store; `value_json` is an arora `Value` as JSON
+    /// (`{"f32": 0.5}`) or a vizij shorthand (`{"float": 0.5}`).
+    #[wasm_bindgen(js_name = setValue)]
+    pub fn set_value(&self, path: &str, value_json: &str) -> Result<(), JsValue> {
+        let json: Json = serde_json::from_str(value_json)
+            .map_err(|e| JsValue::from_str(&format!("value is not JSON: {e}")))?;
+        let json = vizij_api_core::json::normalize_value_json(json);
+        let value: Value = serde_json::from_value(json)
+            .map_err(|e| JsValue::from_str(&format!("not an arora Value: {e}")))?;
+        let slot = self
+            .arora
+            .try_borrow()
+            .map_err(|_| JsValue::from_str("the device is mid-step"))?;
+        let device = slot
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("the device was released"))?;
+        let mut change = StateChange::new();
+        change.set.insert(Key::from(path), Some(value));
+        device
+            .store()
+            .write(change)
+            .map_err(|e| JsValue::from_str(&format!("write: {e:?}")))
+    }
+
+    /// Read keys from the store: `paths` is a JS `string[]`; the result maps
+    /// each path to its arora `Value` as a JS object (or `null`).
+    #[wasm_bindgen(js_name = readValues)]
+    pub fn read_values(&self, paths: JsValue) -> Result<JsValue, JsValue> {
+        let paths: Vec<String> = js_sys::Array::from(&paths)
+            .iter()
+            .filter_map(|v| v.as_string())
+            .collect();
+        let keys: Vec<Key> = paths.iter().map(|p| Key::from(p.as_str())).collect();
+        let values = {
+            let slot = self
+                .arora
+                .try_borrow()
+                .map_err(|_| JsValue::from_str("the device is mid-step"))?;
+            let device = slot
+                .as_ref()
+                .ok_or_else(|| JsValue::from_str("the device was released"))?;
+            device.store().read(&keys)
+        };
+        let out = js_sys::Object::new();
+        for (path, value) in paths.iter().zip(values) {
+            let json = serde_json::to_string(&value)
+                .map_err(|e| JsValue::from_str(&format!("serialize: {e}")))?;
+            js_sys::Reflect::set(&out, &JsValue::from_str(path), &js_sys::JSON::parse(&json)?)?;
+        }
+        Ok(out.into())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Page → App commands, and the App's status back to the page
+// ---------------------------------------------------------------------------
+
+enum Command {
+    Load {
+        face_id: String,
+        meta: FaceMeta,
+        rig: RigHal,
+        asset_path: String,
+    },
+    Unload {
+        face_id: String,
+    },
+}
+
+thread_local! {
+    static COMMANDS: RefCell<VecDeque<Command>> = const { RefCell::new(VecDeque::new()) };
+    /// The in-memory asset source's root: every pushed GLB lives here under
+    /// its own path until its face is unloaded.
+    static ASSETS: Dir = Dir::default();
+    static CLICK_CALLBACK: RefCell<Option<js_sys::Function>> = const { RefCell::new(None) };
+}
+
+/// CSS-pixel rects [x, y, w, h] relative to the canvas, per face.
+static RECTS: Mutex<Vec<(String, [f32; 4])>> = Mutex::new(Vec::new());
+/// Faces whose scene spawned and whose bindings are indexed.
+static READY: Mutex<Vec<String>> = Mutex::new(Vec::new());
+/// The interleaving of JS steps (`S`) and Bevy frames (`F`), last 240 events.
+static TRACE: Mutex<VecDeque<u8>> = Mutex::new(VecDeque::new());
+static RUNNING: AtomicBool = AtomicBool::new(false);
+static EXIT_REQUESTED: AtomicBool = AtomicBool::new(false);
+static FRAMES: AtomicU32 = AtomicU32::new(0);
+static FACE_COUNT: AtomicUsize = AtomicUsize::new(0);
+static PUSHES: AtomicU32 = AtomicU32::new(0);
+static CLICKS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+fn trace(event: u8) {
+    let mut t = TRACE.lock().unwrap();
+    if t.len() >= 240 {
+        t.pop_front();
+    }
+    t.push_back(event);
+}
+
+/// Dropped with the `App`'s world: how JS learns the `App` was actually
+/// dropped after `stop()`.
+struct RunGuard;
+
+impl Drop for RunGuard {
+    fn drop(&mut self) {
+        RUNNING.store(false, Ordering::SeqCst);
+        console_log("challenge-wasm: App world dropped (RunGuard)");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JS surface
+// ---------------------------------------------------------------------------
+
+/// Create the one App over `canvas` (a CSS selector): transparent window,
+/// `ClearColor::NONE`, the `mem` asset source, no face yet.
+#[wasm_bindgen]
+pub fn mount(canvas: String) -> Result<(), JsValue> {
+    if RUNNING.load(Ordering::SeqCst) {
+        return Err(JsValue::from_str("already mounted; stop() first"));
+    }
+    EXIT_REQUESTED.store(false, Ordering::SeqCst);
+    RUNNING.store(true, Ordering::SeqCst);
+    let dir = ASSETS.with(|d| d.clone());
+    let mut app = App::new();
+    app.register_asset_source(
+        "mem",
+        AssetSourceBuilder::new(move || Box::new(MemoryAssetReader { root: dir.clone() })),
+    );
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "Vizij faces (challenge-wasm)".into(),
+                    canvas: Some(canvas),
+                    fit_canvas_to_parent: true,
+                    prevent_default_event_handling: false,
+                    transparent: true,
+                    ..default()
+                }),
+                ..default()
+            })
+            .set(AssetPlugin {
+                meta_check: AssetMetaCheck::Never,
+                ..default()
+            }),
+    )
+    // With viewport cameras, Bevy clears the window outside every viewport
+    // with the global `ClearColor`; the overlay needs that region transparent.
+    .insert_resource(ClearColor(Color::NONE))
+    // Every face lives at the origin of one world: a per-face render layer,
+    // propagated over the spawned scene's hierarchy, keeps each viewport
+    // camera (and the mesh picking backend) to its own face.
+    .add_plugins(HierarchyPropagatePlugin::<RenderLayers>::new(Update))
+    .insert_non_send(RunGuard)
+    .add_systems(
+        Update,
+        (
+            drain_commands,
+            index_faces,
+            apply_poses,
+            apply_rects,
+            bookkeeping,
+        )
+            .chain(),
+    );
+    #[cfg(feature = "picking")]
+    {
+        app.add_plugins(bevy::picking::mesh_picking::MeshPickingPlugin);
+        app.add_observer(on_click);
+    }
+    // On the web the winit runner spawns the loop and returns at once.
+    let exit = app.run();
+    console_log(&format!("challenge-wasm: App::run returned: {exit:?}"));
+    Ok(())
+}
+
+/// Compose a device from the GLB, push the bytes to the in-memory asset
+/// source under a fresh path, and ask the App to spawn the face's scene and
+/// camera. Returns the JS-owned device.
+#[wasm_bindgen(js_name = loadFace)]
+pub fn load_face(face_id: String, glb: &[u8]) -> Result<FaceDevice, JsValue> {
+    let meta = FaceMeta::from_glb_bytes(glb).map_err(|e| JsValue::from_str(&e))?;
+    console_log(&format!(
+        "challenge-wasm: face {face_id} ({:?}): {} elements, {} animatables, bounds {:?}, {} graphs, {} neutral inputs",
+        meta.bundle.face_id,
+        meta.elements.len(),
+        meta.animatables.len(),
+        meta.root_bounds,
+        meta.bundle.graphs.len(),
+        meta.bundle.neutral_inputs.len()
+    ));
+    let (arora, rig, rig_prefix) = compose_device(&meta).map_err(|e| JsValue::from_str(&e))?;
+    let n = PUSHES.fetch_add(1, Ordering::SeqCst);
+    let asset_path = format!("{face_id}-{n}.glb");
+    ASSETS.with(|d| d.insert_asset(Path::new(&asset_path), glb.to_vec()));
+    COMMANDS.with(|c| {
+        c.borrow_mut().push_back(Command::Load {
+            face_id: face_id.clone(),
+            meta,
+            rig: rig.clone(),
+            asset_path,
+        })
+    });
+    Ok(FaceDevice {
+        face_id,
+        arora: Rc::new(RefCell::new(Some(arora))),
+        rig,
+        rig_prefix,
+        steps: Cell::new(0),
+    })
+}
+
+/// Despawn the face's scene and camera and drop its GLB from the asset
+/// source (at the App's next frame).
+#[wasm_bindgen(js_name = unloadFace)]
+pub fn unload_face(face_id: String) {
+    COMMANDS.with(|c| c.borrow_mut().push_back(Command::Unload { face_id }));
+}
+
+/// Place a face's viewport: a CSS-pixel rect relative to the canvas.
+#[wasm_bindgen(js_name = setRect)]
+pub fn set_rect(face_id: String, x: f32, y: f32, w: f32, h: f32) {
+    let mut rects = RECTS.lock().unwrap();
+    rects.retain(|(id, _)| id != &face_id);
+    rects.push((face_id, [x, y, w, h]));
+}
+
+#[wasm_bindgen(js_name = clearRect)]
+pub fn clear_rect(face_id: String) {
+    RECTS.lock().unwrap().retain(|(id, _)| id != &face_id);
+}
+
+/// True once the face's scene spawned and its bindings are indexed.
+#[wasm_bindgen(js_name = faceReady)]
+pub fn face_ready(face_id: String) -> bool {
+    READY.lock().unwrap().contains(&face_id)
+}
+
+/// Faces currently spawned in the App.
+#[wasm_bindgen(js_name = faceCount)]
+pub fn face_count() -> usize {
+    FACE_COUNT.load(Ordering::SeqCst)
+}
+
+/// Frames rendered since `mount()`.
+#[wasm_bindgen]
+pub fn frames() -> u32 {
+    FRAMES.load(Ordering::SeqCst)
+}
+
+/// True between `mount()` and the drop of the App's world.
+#[wasm_bindgen]
+pub fn running() -> bool {
+    RUNNING.load(Ordering::SeqCst)
+}
+
+/// Ask the App to exit at its next frame (an `AppExit` message).
+#[wasm_bindgen]
+pub fn stop() {
+    EXIT_REQUESTED.store(true, Ordering::SeqCst);
+}
+
+/// The last 240 events, `S` = a JS `step()`, `F` = a Bevy `Update`.
+#[wasm_bindgen(js_name = orderTrace)]
+pub fn order_trace() -> String {
+    TRACE.lock().unwrap().iter().map(|&b| b as char).collect()
+}
+
+/// The clicks recorded since the last call, as JSON strings (feature
+/// `picking`).
+#[wasm_bindgen(js_name = drainClicks)]
+pub fn drain_clicks() -> JsValue {
+    let clicks: Vec<String> = std::mem::take(&mut *CLICKS.lock().unwrap());
+    let arr = js_sys::Array::new();
+    for c in clicks {
+        arr.push(&JsValue::from_str(&c));
+    }
+    arr.into()
+}
+
+/// A JS function called with each click's JSON (feature `picking`).
+#[wasm_bindgen(js_name = setClickCallback)]
+pub fn set_click_callback(callback: js_sys::Function) {
+    CLICK_CALLBACK.with(|c| *c.borrow_mut() = Some(callback));
+}
+
+// ---------------------------------------------------------------------------
+// The view: per-face components, view.rs's index_scene / apply_pose
+// ---------------------------------------------------------------------------
+
+type Index = HashMap<String, (Entity, FeatureKind, Option<usize>, f32)>;
+
+/// One loaded face: on the scene root entity (with its `WorldAssetRoot`).
+#[derive(Component)]
+struct Face {
+    id: String,
+    meta: FaceMeta,
+    rig: RigHal,
+    asset_path: String,
+    camera: Entity,
+    /// animatable UUID → the scene entity/feature it drives, once indexed.
+    index: Option<Index>,
+}
+
+/// A face's viewport camera.
+#[derive(Component)]
+struct FaceCamera(String);
+
+/// The web renderer's ambient model: albedo scaled by π/2 / π in linear.
+const ALBEDO_FACTOR: f32 = 0.5;
+
+fn shade(color: Color, factor: f32) -> Color {
+    let lin = color.to_linear();
+    Color::LinearRgba(LinearRgba {
+        red: lin.red * factor,
+        green: lin.green * factor,
+        blue: lin.blue * factor,
+        alpha: lin.alpha,
+    })
+}
+
+fn camera_for(meta: &FaceMeta, order: isize, face_id: &str) -> impl bevy::ecs::bundle::Bundle {
+    let (cx, cy, bw, bh) = meta.root_bounds.unwrap_or((0.0, 0.0, 5.0, 4.0));
+    (
+        Camera3d::default(),
+        Camera {
+            clear_color: ClearColorConfig::Custom(Color::NONE),
+            order,
+            is_active: false,
+            ..default()
+        },
+        Projection::Orthographic(OrthographicProjection {
+            // view.rs's `Fit::Contain`.
+            scaling_mode: ScalingMode::AutoMin {
+                min_width: bw,
+                min_height: bh,
+            },
+            ..OrthographicProjection::default_3d()
+        }),
+        Transform::from_xyz(cx, cy, 100.0).looking_at(Vec3::new(cx, cy, 0.0), Vec3::Y),
+        Tonemapping::None,
+        DebandDither::Disabled,
+        Msaa::Sample4,
+        RenderLayers::layer(order as usize),
+        FaceCamera(face_id.to_string()),
+    )
+}
+
+/// Applies the page's `loadFace` / `unloadFace` requests.
+fn drain_commands(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    faces: Query<(Entity, &Face)>,
+    mut order: Local<isize>,
+) {
+    let pending: Vec<Command> = COMMANDS.with(|c| c.borrow_mut().drain(..).collect());
+    let despawn = |face_id: &str, commands: &mut Commands| {
+        for (entity, face) in &faces {
+            if face.id == face_id {
+                commands.entity(face.camera).despawn();
+                commands.entity(entity).despawn();
+                ASSETS.with(|d| d.remove_asset(Path::new(&face.asset_path)));
+                READY.lock().unwrap().retain(|id| id != face_id);
+                info!("face {face_id}: despawned ({})", face.asset_path);
+            }
+        }
+    };
+    for command in pending {
+        match command {
+            Command::Load {
+                face_id,
+                meta,
+                rig,
+                asset_path,
+            } => {
+                despawn(&face_id, &mut commands);
+                *order += 1;
+                let camera = commands.spawn(camera_for(&meta, *order, &face_id)).id();
+                let scene = asset_server
+                    .load(GltfAssetLabel::Scene(0).from_asset(format!("mem://{asset_path}")));
+                let layer = RenderLayers::layer(*order as usize);
+                commands.spawn((
+                    WorldAssetRoot(scene),
+                    layer.clone(),
+                    Propagate(layer),
+                    Face {
+                        id: face_id.clone(),
+                        meta,
+                        rig,
+                        asset_path: asset_path.clone(),
+                        camera,
+                        index: None,
+                    },
+                ));
+                info!("face {face_id}: loading mem://{asset_path}");
+            }
+            Command::Unload { face_id } => despawn(&face_id, &mut commands),
+        }
+    }
+}
+
+/// Joins each spawned GLB scene with its RobotData bindings (view.rs's
+/// `index_scene`, per face over the face root's descendants).
+#[allow(clippy::too_many_arguments)]
+fn index_faces(
+    mut faces: Query<(Entity, &mut Face)>,
+    names: Query<&Name>,
+    children: Query<&Children>,
+    meshes: Query<(Entity, &MeshMaterial3d<StandardMaterial>), With<Mesh3d>>,
+    morphs: Query<Entity, With<MorphWeights>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut commands: Commands,
+) {
+    for (root, mut face) in &mut faces {
+        if face.index.is_some() {
+            continue;
+        }
+        // Deepest entity of each name under this face's root.
+        let mut by_name: HashMap<String, (Entity, usize)> = HashMap::new();
+        let mut stack = vec![(root, 0usize)];
+        while let Some((entity, depth)) = stack.pop() {
+            if let Ok(name) = names.get(entity) {
+                let slot = by_name
+                    .entry(name.as_str().to_string())
+                    .or_insert((entity, depth));
+                if depth > slot.1 {
+                    *slot = (entity, depth);
+                }
+            }
+            if let Ok(kids) = children.get(entity) {
+                for kid in kids.iter() {
+                    stack.push((kid, depth + 1));
+                }
+            }
+        }
+        let meta = &face.meta;
+        if !meta
+            .elements
+            .iter()
+            .all(|e| by_name.contains_key(e.node_name.as_str()))
+        {
+            continue;
+        }
+
+        let mut mesh_of: HashMap<String, Entity> = HashMap::new();
+        let mut morph_of: HashMap<String, Entity> = HashMap::new();
+        for element in &meta.elements {
+            let node = by_name[element.node_name.as_str()].0;
+            let factor = if element.material.as_deref() == Some("basic") {
+                1.0
+            } else {
+                ALBEDO_FACTOR
+            };
+            for descendant in std::iter::once(node).chain(children.iter_descendants(node)) {
+                if let Ok((mesh_entity, material)) = meshes.get(descendant) {
+                    let mut mat = materials
+                        .get(&material.0)
+                        .cloned()
+                        .unwrap_or_else(StandardMaterial::default);
+                    mat.double_sided = true;
+                    mat.cull_mode = None;
+                    mat.unlit = true;
+                    mat.base_color = shade(mat.base_color, factor);
+                    let handle = materials.add(mat);
+                    commands.entity(mesh_entity).insert(MeshMaterial3d(handle));
+                    mesh_of.insert(element.node_name.clone(), mesh_entity);
+                    break;
+                }
+            }
+            for descendant in std::iter::once(node).chain(children.iter_descendants(node)) {
+                if morphs.get(descendant).is_ok() {
+                    morph_of.insert(element.node_name.clone(), descendant);
+                    break;
+                }
+            }
+        }
+
+        let mut by_uuid = HashMap::new();
+        for (uuid, Binding { node_name, feature }) in &meta.animatables {
+            let Some(&(node, _)) = by_name.get(node_name.as_str()) else {
+                continue;
+            };
+            let element = meta.elements.iter().find(|e| &e.node_name == node_name);
+            let factor = if element.and_then(|e| e.material.as_deref()) == Some("basic") {
+                1.0
+            } else {
+                ALBEDO_FACTOR
+            };
+            let entry = match feature {
+                FeatureKind::Translation | FeatureKind::Rotation | FeatureKind::Scale => {
+                    (node, feature.clone(), None, factor)
+                }
+                FeatureKind::Color | FeatureKind::Opacity => {
+                    let Some(&mesh_entity) = mesh_of.get(node_name) else {
+                        continue;
+                    };
+                    (mesh_entity, feature.clone(), None, factor)
+                }
+                FeatureKind::Morph(target) => {
+                    let Some(&morph_entity) = morph_of.get(node_name) else {
+                        continue;
+                    };
+                    let Some(i) = element.and_then(|e| e.morph_targets.iter().position(|m| m == target))
+                    else {
+                        continue;
+                    };
+                    (morph_entity, feature.clone(), Some(i), factor)
+                }
+            };
+            by_uuid.insert(uuid.clone(), entry);
+        }
+        info!(
+            "face {}: indexed {} bindings over {} elements",
+            face.id,
+            by_uuid.len(),
+            meta.elements.len()
+        );
+        READY.lock().unwrap().push(face.id.clone());
+        face.index = Some(by_uuid);
+    }
+}
+
+/// Applies each rig's current pose onto its scene (view.rs's `apply_pose`).
+fn apply_poses(
+    faces: Query<&Face>,
+    mut transforms: Query<&mut Transform>,
+    material_handles: Query<&MeshMaterial3d<StandardMaterial>>,
+    mut morph_weights: Query<&mut MorphWeights>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    trace(b'F');
+    for face in &faces {
+        let Some(index) = &face.index else { continue };
+        for (path, value) in face.rig.pose() {
+            let key = path.to_string();
+            let Some((entity, feature, morph_index, factor)) = index.get(&key) else {
+                continue;
+            };
+            match feature {
+                FeatureKind::Translation => {
+                    if let (Ok(mut t), Some(v)) = (transforms.get_mut(*entity), as_xyz(&value)) {
+                        t.translation = Vec3::from_array(v);
+                    }
+                }
+                FeatureKind::Rotation => {
+                    if let (Ok(mut t), Some(v)) = (transforms.get_mut(*entity), as_xyz(&value)) {
+                        t.rotation = Quat::from_rotation_z(v[2])
+                            * Quat::from_rotation_y(v[1])
+                            * Quat::from_rotation_x(v[0]);
+                    }
+                }
+                FeatureKind::Scale => {
+                    if let Ok(mut t) = transforms.get_mut(*entity) {
+                        if let Some(v) = as_xyz(&value) {
+                            t.scale = Vec3::from_array(v);
+                        } else if let Some(s) = as_f32(&value) {
+                            t.scale = Vec3::splat(s);
+                        }
+                    }
+                }
+                FeatureKind::Color => {
+                    if let (Ok(handle), Some([r, g, b])) =
+                        (material_handles.get(*entity), as_rgb(&value))
+                    {
+                        if let Some(mut mat) = materials.get_mut(&handle.0) {
+                            let alpha = mat.base_color.alpha();
+                            mat.base_color =
+                                shade(Color::linear_rgb(r, g, b), *factor).with_alpha(alpha);
+                        }
+                    }
+                }
+                FeatureKind::Opacity => {
+                    if let (Ok(handle), Some(o)) = (material_handles.get(*entity), as_f32(&value)) {
+                        if let Some(mut mat) = materials.get_mut(&handle.0) {
+                            mat.base_color.set_alpha(o);
+                            mat.alpha_mode = if o < 1.0 {
+                                AlphaMode::Blend
+                            } else {
+                                AlphaMode::Opaque
+                            };
+                        }
+                    }
+                }
+                FeatureKind::Morph(_) => {
+                    if let (Ok(mut weights), Some(w), Some(i)) =
+                        (morph_weights.get_mut(*entity), as_f32(&value), *morph_index)
+                    {
+                        if let Some(slot) = weights.weights_mut().get_mut(i) {
+                            *slot = w;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Each face camera's viewport follows its page rect (CSS px from
+/// `setRect`, scaled to physical px, clamped to the canvas); a face with no
+/// rect has an inactive camera.
+fn apply_rects(
+    windows: Query<&Window, With<PrimaryWindow>>,
+    mut cameras: Query<(&FaceCamera, &mut Camera)>,
+) {
+    let Ok(window) = windows.single() else { return };
+    let scale = window.scale_factor();
+    let (pw, ph) = (window.physical_width() as f32, window.physical_height() as f32);
+    let rects = RECTS.lock().unwrap().clone();
+    for (FaceCamera(id), mut camera) in &mut cameras {
+        let Some(&(_, [x, y, w, h])) = rects.iter().find(|(rid, _)| rid == id) else {
+            camera.is_active = false;
+            continue;
+        };
+        let x0 = (x * scale).clamp(0.0, pw);
+        let y0 = (y * scale).clamp(0.0, ph);
+        let x1 = ((x + w) * scale).clamp(0.0, pw);
+        let y1 = ((y + h) * scale).clamp(0.0, ph);
+        if x1 - x0 < 1.0 || y1 - y0 < 1.0 {
+            camera.is_active = false;
+            continue;
+        }
+        camera.is_active = true;
+        camera.viewport = Some(Viewport {
+            physical_position: UVec2::new(x0 as u32, y0 as u32),
+            physical_size: UVec2::new((x1 - x0) as u32, (y1 - y0) as u32),
+            ..default()
+        });
+    }
+}
+
+fn bookkeeping(faces: Query<&Face>, mut exit: MessageWriter<AppExit>) {
+    FRAMES.fetch_add(1, Ordering::SeqCst);
+    FACE_COUNT.store(faces.iter().count(), Ordering::SeqCst);
+    if EXIT_REQUESTED.swap(false, Ordering::SeqCst) {
+        info!("AppExit requested from JS");
+        exit.write(AppExit::Success);
+    }
+}
+
+fn as_f32(value: &Value) -> Option<f32> {
+    as_float(value).or_else(|| as_bool(value).map(|b| if b { 1.0 } else { 0.0 }))
+}
+
+fn as_xyz(value: &Value) -> Option<[f32; 3]> {
+    as_vec3(value)
+        .or_else(|| as_vector(value).and_then(|v| (v.len() >= 3).then(|| [v[0], v[1], v[2]])))
+}
+
+fn as_rgb(value: &Value) -> Option<[f32; 3]> {
+    as_color_rgba(value)
+        .map(|c| [c[0], c[1], c[2]])
+        .or_else(|| as_xyz(value))
+}
+
+/// Picking: on a click over a mesh, record the face (the ancestor carrying
+/// `Face`), the glTF node (the nearest named ancestor that is a RobotData
+/// element) with its RobotData id, and the hit, and hand it to JS.
+#[cfg(feature = "picking")]
+fn on_click(
+    click: On<bevy::picking::events::Pointer<bevy::picking::events::Click>>,
+    names: Query<&Name>,
+    parents: Query<&ChildOf>,
+    faces: Query<&Face>,
+) {
+    // The event bubbles up the hierarchy; record it once, at its origin.
+    if click.entity != click.original_event_target() {
+        return;
+    }
+    let mut chain = Vec::new();
+    let mut face = None;
+    let mut current = click.original_event_target();
+    loop {
+        if let Ok(name) = names.get(current) {
+            chain.push(name.to_string());
+        }
+        if let Ok(f) = faces.get(current) {
+            face = Some(f);
+        }
+        match parents.get(current) {
+            Ok(parent) => current = parent.parent(),
+            Err(_) => break,
+        }
+    }
+    let element = face.and_then(|f| {
+        chain
+            .iter()
+            .find_map(|n| f.meta.elements.iter().find(|e| &e.node_name == n))
+    });
+    let hit = click.event.hit.position.map(|p| [p.x, p.y, p.z]);
+    let record = serde_json::json!({
+        "face": face.map(|f| f.id.clone()),
+        "element": element.map(|e| e.node_name.clone()),
+        "elementId": element.and_then(|e| e.id.clone()),
+        "chain": chain,
+        "hit": hit,
+        "depth": click.event.hit.depth,
+        "pointer": [click.pointer_location.position.x, click.pointer_location.position.y],
+    })
+    .to_string();
+    info!("click: {record}");
+    CLICKS.lock().unwrap().push(record.clone());
+    CLICK_CALLBACK.with(|c| {
+        if let Some(f) = c.borrow().as_ref() {
+            let _ = f.call1(&JsValue::NULL, &JsValue::from_str(&record));
+        }
+    });
+}

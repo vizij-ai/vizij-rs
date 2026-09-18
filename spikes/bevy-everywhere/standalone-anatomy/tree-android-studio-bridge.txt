@@ -1,0 +1,775 @@
+RustyXML v0.3.0
+adler2 v2.0.1
+aead v0.5.2
+aes v0.8.4
+ahash v0.8.12
+ahash v0.8.12 (*)
+aho-corasick v1.1.4
+aho-corasick v1.1.4 (*)
+alloc-no-stdlib v2.0.4
+alloc-stdlib v0.2.2
+alloc-stdlib v0.2.2 (*)
+allocator-api2 v0.2.21
+android_log-sys v0.3.2
+android_logger v0.15.1
+android_system_properties v0.1.5
+anstream v0.6.21
+anstyle v1.0.13
+anstyle-parse v0.2.7
+anstyle-query v1.1.5
+anyhow v1.0.100
+approx v0.5.1
+approx v0.5.1 (*)
+arc-swap v1.9.2
+arc-swap v1.9.2 (*)
+arora v9.11.1
+arora-behavior v8.4.0
+arora-behavior v8.4.0 (*)
+arora-behavior-tree v7.0.0
+arora-behavior-tree-types v1.1.0
+arora-behavior-tree-types v1.1.0 (*)
+arora-bridge v4.1.0
+arora-bridge v4.1.0 (*)
+arora-bridge-ws v4.0.0
+arora-buffers v2.2.0
+arora-buffers v2.2.0 (*)
+arora-engine v4.1.0
+arora-engine v4.1.0 (*)
+arora-hal v3.0.0
+arora-simple-data-store v2.0.0
+arora-simple-data-store v2.0.0 (*)
+arora-studio-bridge-client v6.0.0
+arora-types v2.5.0
+arora-types v2.5.0 (*)
+arora-types-derive v1.2.0 (proc-macro)
+array-init v2.1.0
+arrayvec v0.7.6
+asn1-rs v0.7.2
+asn1-rs v0.7.2 (*)
+asn1-rs-derive v0.6.0 (proc-macro)
+asn1-rs-impl v0.2.0 (proc-macro)
+async-compression v0.4.42
+async-stream v0.3.6
+async-stream-impl v0.3.6 (proc-macro)
+async-trait v0.1.89 (proc-macro)
+async-trait v0.1.89 (proc-macro) (*)
+atomic-waker v1.1.2
+aws-lc-rs v1.17.1
+aws-lc-rs v1.17.1 (*)
+aws-lc-sys v0.42.0
+axum v0.8.9
+axum-core v0.5.6
+backoff v0.4.0
+base64 v0.21.7
+base64 v0.22.1
+base64ct v1.8.3
+bitflags v1.3.2
+bitflags v2.13.0
+bitflags v2.13.0 (*)
+block-buffer v0.10.4
+brotli v8.0.2
+brotli v8.0.2 (*)
+brotli-decompressor v5.0.0
+byte-unit v5.2.0
+bytemuck v1.24.0
+byteorder v1.5.0
+bytes v1.11.0
+bytes v1.11.0 (*)
+camino v1.2.2
+cargo-platform v0.1.9
+cargo_metadata v0.19.2
+cesu8 v1.1.0
+cfb v0.7.3
+cfg-if v1.0.4
+chacha20 v0.10.1
+chrono v0.4.43
+chrono v0.4.43 (*)
+cipher v0.4.4
+cipher v0.4.4 (*)
+clap v4.5.54
+clap_builder v4.5.54
+clap_derive v4.5.49 (proc-macro)
+clap_lex v0.7.7
+claxon v0.4.3
+colorchoice v1.0.4
+combine v4.6.7
+combine v4.6.7 (*)
+compression-codecs v0.4.38
+compression-core v0.4.32
+concurrent-queue v2.5.0
+const-oid v0.9.6
+const_format v0.2.36
+const_format v0.2.36 (*)
+const_format_proc_macros v0.2.34 (proc-macro)
+convert_case v0.10.0
+convert_case v0.4.0
+convert_case v0.8.0
+cookie v0.18.1
+cookie v0.18.1 (*)
+cpal v0.15.3
+cpufeatures v0.2.17
+cpufeatures v0.2.17 (*)
+crc32fast v1.5.0
+crc32fast v1.5.0 (*)
+crossbeam v0.8.4
+crossbeam-channel v0.5.15
+crossbeam-channel v0.5.15 (*)
+crossbeam-deque v0.8.7
+crossbeam-epoch v0.9.20
+crossbeam-epoch v0.9.20 (*)
+crossbeam-queue v0.3.13
+crossbeam-utils v0.8.21
+crypto-common v0.1.7
+crypto-common v0.1.7 (*)
+crypto_secretbox v0.1.1
+cssparser v0.29.6
+cssparser v0.29.6 (*)
+cssparser-macros v0.6.1 (proc-macro)
+cssparser-macros v0.6.1 (proc-macro) (*)
+ctor v0.2.9 (proc-macro)
+ctor v0.2.9 (proc-macro) (*)
+darling v0.20.11
+darling v0.21.3
+darling_core v0.20.11
+darling_core v0.20.11 (*)
+darling_core v0.21.3
+darling_core v0.21.3 (*)
+darling_macro v0.20.11 (proc-macro)
+darling_macro v0.21.3 (proc-macro)
+dasp_sample v0.11.0
+data-encoding v2.10.0
+der v0.7.10
+der v0.7.10 (*)
+der-parser v10.0.0
+deranged v0.5.8
+derive_more v0.99.20 (proc-macro)
+derive_more v0.99.20 (proc-macro) (*)
+derive_more v2.1.1
+derive_more v2.1.1 (*)
+derive_more-impl v2.1.1 (proc-macro)
+digest v0.10.7
+digest v0.10.7 (*)
+dirs v6.0.0
+dirs v6.0.0 (*)
+dirs-sys v0.5.0
+displaydoc v0.2.5 (proc-macro)
+displaydoc v0.2.5 (proc-macro) (*)
+dotenvy v0.15.7
+dpi v0.1.2
+dpi v0.1.2 (*)
+dtoa v1.0.11
+dtoa-short v0.3.5
+dunce v1.0.5
+dyn-clone v1.0.20
+either v1.15.0
+encoding_rs v0.8.35
+encoding_rs v0.8.35 (*)
+env_filter v0.1.4
+equivalent v1.0.2
+erased-serde v0.4.9
+event-listener v5.4.1
+fastbloom v0.17.0
+fastrand v2.4.1
+fdeflate v0.3.7
+fern v0.7.1
+firestore v0.49.0
+fixedbitset v0.5.7
+flate2 v1.1.8
+flate2 v1.1.8 (*)
+flume v0.11.1
+flume v0.11.1 (*)
+fnv v1.0.7
+foldhash v0.1.5
+foldhash v0.2.0
+form_urlencoded v1.2.2
+form_urlencoded v1.2.2 (*)
+futf v0.1.5
+futures v0.3.31
+futures v0.3.31 (*)
+futures-channel v0.3.31
+futures-channel v0.3.31 (*)
+futures-core v0.3.31
+futures-executor v0.3.31
+futures-io v0.3.31
+futures-macro v0.3.31 (proc-macro)
+futures-sink v0.3.31
+futures-task v0.3.31
+futures-util v0.3.31
+futures-util v0.3.31 (*)
+fxhash v0.2.1
+gcloud-sdk v0.30.1
+gcloud-sdk v0.30.1 (*)
+generic-array v0.14.7
+generic-array v0.14.7 (*)
+getrandom v0.2.17
+getrandom v0.2.17 (*)
+getrandom v0.3.4
+getrandom v0.3.4 (*)
+getrandom v0.4.3
+git-version v0.3.9
+git-version v0.3.9 (*)
+git-version-macro v0.3.9 (proc-macro)
+glob v0.3.3
+h2 v0.4.15
+h2 v0.4.15 (*)
+hashbrown v0.12.3
+hashbrown v0.14.5
+hashbrown v0.15.5
+hashbrown v0.16.1
+hashbrown v0.16.1 (*)
+hashbrown v0.17.1
+hashbrown v0.17.1 (*)
+heck v0.5.0
+hex v0.4.3
+hmac v0.12.1
+home v0.5.12
+hound v3.5.1
+html5ever v0.29.1
+html5ever v0.29.1 (*)
+http v1.4.0
+http v1.4.0 (*)
+http-body v1.0.1
+http-body v1.0.1 (*)
+http-body-util v0.1.3
+http-body-util v0.1.3 (*)
+httparse v1.10.1
+httpdate v1.0.3
+humantime v2.4.0
+hyper v1.8.1
+hyper v1.8.1 (*)
+hyper-rustls v0.27.9
+hyper-timeout v0.5.2
+hyper-util v0.1.19
+hyper-util v0.1.19 (*)
+iana-time-zone v0.1.64
+ico v0.5.0
+icu_collections v2.1.1
+icu_collections v2.1.1 (*)
+icu_locale_core v2.1.1
+icu_locale_core v2.1.1 (*)
+icu_normalizer v2.1.1
+icu_normalizer_data v2.1.1
+icu_properties v2.1.2
+icu_properties_data v2.1.2
+icu_provider v2.1.1
+icu_provider v2.1.1 (*)
+ident_case v1.0.1
+idna v1.1.0
+idna_adapter v1.2.1
+indexmap v1.9.3
+indexmap v2.13.0
+indexmap v2.13.0 (*)
+infer v0.19.0
+inout v0.1.4
+instant v0.1.13
+ipnet v2.11.0
+ipnetwork v0.20.0
+iri-string v0.7.10
+is_terminal_polyfill v1.70.2
+itertools v0.14.0
+itoa v1.0.17
+jni v0.21.1
+jni v0.21.1 (*)
+jni v0.22.4
+jni-macros v0.22.4 (proc-macro)
+jni-sys v0.3.0
+jni-sys v0.4.1
+jni-sys-macros v0.4.1 (proc-macro)
+json-patch v3.0.1
+json-patch v3.0.1 (*)
+json5 v0.4.1
+json5 v0.4.1 (*)
+jsonptr v0.6.3
+jsonwebtoken v10.4.0
+k v0.32.0
+keccak v0.1.6
+keyed-set v1.1.0
+konst v0.2.20
+konst_macro_rules v0.2.19
+kuchikiki v0.8.8-speedreader
+lazy_static v1.5.0
+lazy_static v1.5.0 (*)
+lewton v0.10.2
+libc v0.2.180
+libloading v0.8.9
+libloading v0.8.9 (*)
+libm v0.2.16
+litemap v0.8.1
+lock_api v0.4.14
+lock_api v0.4.14 (*)
+log v0.4.29
+log v0.4.29 (*)
+lru-slab v0.1.2
+lz4_flex v0.10.0
+mac v0.1.1
+markup5ever v0.14.1
+match_token v0.1.0 (proc-macro)
+match_token v0.1.0 (proc-macro) (*)
+matchers v0.2.0
+matches v0.1.10
+matchit v0.8.4
+matrixmultiply v0.3.11
+memchr v2.7.6
+mime v0.3.17
+mime_guess v2.0.5
+minimal-lexical v0.2.1
+miniz_oxide v0.8.9
+miniz_oxide v0.8.9 (*)
+mio v1.1.1
+nalgebra v0.30.1
+nalgebra-macros v0.1.0 (proc-macro)
+nanorand v0.7.0
+ndk v0.8.0
+ndk v0.8.0 (*)
+ndk v0.9.0
+ndk v0.9.0 (*)
+ndk-context v0.1.1
+ndk-sys v0.5.0+25.2.9519653
+ndk-sys v0.6.0+11769913
+ndk-sys v0.6.0+11769913 (*)
+new_debug_unreachable v1.0.6
+nix v0.29.0
+no-std-net v0.6.0
+nodrop v0.1.14
+nom v7.1.3
+nom v7.1.3 (*)
+nonempty-collections v0.3.1
+nonempty-collections v0.3.1 (*)
+nu-ansi-term v0.50.3
+num-bigint v0.4.8
+num-bigint v0.4.8 (*)
+num-bigint-dig v0.8.6
+num-complex v0.4.6
+num-complex v0.4.6 (*)
+num-conv v0.2.2
+num-derive v0.4.2 (proc-macro)
+num-integer v0.1.46
+num-integer v0.1.46 (*)
+num-iter v0.1.46
+num-rational v0.4.2
+num-traits v0.2.19
+num-traits v0.2.19 (*)
+num_cpus v1.17.0
+num_enum v0.7.5
+num_enum v0.7.5 (*)
+num_enum_derive v0.7.5 (proc-macro)
+num_threads v0.1.7
+oboe v0.6.1
+oboe-sys v0.6.1
+ogg v0.8.0
+oid-registry v0.8.1
+once_cell v1.21.3
+opaque-debug v0.3.1
+option-ext v0.2.0
+parking v2.2.1
+parking_lot v0.12.5
+parking_lot_core v0.9.12
+partially v0.2.1
+partially_derive v0.2.1 (proc-macro)
+paste v1.0.15 (proc-macro)
+pem v3.0.6
+pem v3.0.6 (*)
+pem-rfc7468 v0.7.0
+percent-encoding v2.3.2
+pest v2.8.7
+pest v2.8.7 (*)
+pest_derive v2.8.7 (proc-macro)
+pest_generator v2.8.7
+pest_meta v2.8.7
+petgraph v0.8.3
+phf v0.10.1
+phf v0.11.3
+phf v0.11.3 (*)
+phf v0.13.1
+phf v0.8.0
+phf_generator v0.10.0
+phf_generator v0.11.3
+phf_generator v0.13.1
+phf_macros v0.10.0 (proc-macro)
+phf_macros v0.10.0 (proc-macro) (*)
+phf_macros v0.11.3 (proc-macro)
+phf_macros v0.11.3 (proc-macro) (*)
+phf_macros v0.13.1 (proc-macro)
+phf_shared v0.10.0
+phf_shared v0.10.0 (*)
+phf_shared v0.11.3
+phf_shared v0.11.3 (*)
+phf_shared v0.13.1
+phf_shared v0.13.1 (*)
+phf_shared v0.8.0
+pin-project v1.1.13
+pin-project-internal v1.1.13 (proc-macro)
+pin-project-lite v0.2.16
+pin-utils v0.1.0
+pkcs1 v0.7.5
+pkcs8 v0.10.2
+pkcs8 v0.10.2 (*)
+plist v1.8.0
+pnet_base v0.35.0
+pnet_datalink v0.35.0
+pnet_sys v0.35.0
+png v0.17.16
+png v0.17.16 (*)
+poly1305 v0.8.0
+portable-atomic v1.13.1
+potential_utf v0.1.4
+powerfmt v0.2.0
+ppv-lite86 v0.2.21
+ppv-lite86 v0.2.21 (*)
+precomputed-hash v0.1.1
+proc-macro-crate v3.4.0
+proc-macro-crate v3.4.0 (*)
+proc-macro-hack v0.5.20+deprecated (proc-macro)
+proc-macro2 v1.0.105
+proc-macro2 v1.0.105 (*)
+prost v0.14.4
+prost v0.14.4 (*)
+prost-derive v0.14.4 (proc-macro)
+prost-types v0.14.4
+quick-xml v0.36.2
+quick-xml v0.38.4
+quick-xml v0.40.1
+quinn v0.11.11
+quinn-proto v0.11.16
+quinn-proto v0.11.16 (*)
+quinn-udp v0.5.15
+quote v1.0.43
+quote v1.0.43 (*)
+rand v0.10.2
+rand v0.10.2 (*)
+rand v0.8.5
+rand v0.8.5 (*)
+rand v0.9.2
+rand_chacha v0.3.1
+rand_chacha v0.3.1 (*)
+rand_chacha v0.9.0
+rand_core v0.10.1
+rand_core v0.6.4
+rand_core v0.6.4 (*)
+rand_core v0.9.5
+rand_core v0.9.5 (*)
+rand_pcg v0.10.2
+raw-window-handle v0.6.2
+rawpointer v0.2.1
+rcgen v0.14.8
+ref-cast v1.0.25
+ref-cast-impl v1.0.25 (proc-macro)
+ref-cast-impl v1.0.25 (proc-macro) (*)
+regex v1.12.2
+regex v1.12.2 (*)
+regex-automata v0.4.13
+regex-automata v0.4.13 (*)
+regex-syntax v0.8.8
+reqwest v0.13.2
+reqwest v0.13.2 (*)
+ring v0.17.14
+ring v0.17.14 (*)
+ringbuffer-spsc v0.1.15
+rodio v0.20.1
+ron v0.12.2
+ron v0.8.1
+rsa v0.9.10
+rsb_derive v0.5.1 (proc-macro)
+rust_decimal v1.40.0
+rustc-hash v2.1.3
+rusticata-macros v4.1.0
+rusticata-macros v4.1.0 (*)
+rustls v0.23.42
+rustls v0.23.42 (*)
+rustls-pemfile v2.2.0
+rustls-pemfile v2.2.0 (*)
+rustls-pki-types v1.15.0
+rustls-pki-types v1.15.0 (*)
+rustls-platform-verifier v0.6.2
+rustls-platform-verifier v0.7.0
+rustls-platform-verifier-android v0.1.1
+rustls-webpki v0.103.13
+rustls-webpki v0.103.13 (*)
+rustversion v1.0.22 (proc-macro)
+rvs_derive v0.3.2 (proc-macro)
+rvstruct v0.3.2
+ryu v1.0.23
+safe_arch v0.7.4
+salsa20 v0.10.2
+same-file v1.0.6
+schemars v0.8.22
+schemars v1.2.0
+schemars v1.2.0 (*)
+schemars_derive v0.8.22 (proc-macro)
+schemars_derive v1.2.0 (proc-macro)
+schemars_derive v1.2.0 (proc-macro) (*)
+scopeguard v1.2.0
+secrecy v0.8.0
+secrecy v0.8.0 (*)
+secret-vault-value v1.0.1
+selectors v0.24.0
+semver v1.0.27
+semver v1.0.27 (*)
+serde v1.0.228
+serde v1.0.228 (*)
+serde-untagged v0.1.9
+serde-xml-rs v0.6.0
+serde_core v1.0.228
+serde_derive v1.0.228 (proc-macro)
+serde_derive v1.0.228 (proc-macro) (*)
+serde_derive_internals v0.29.1
+serde_derive_internals v0.29.1 (*)
+serde_json v1.0.149
+serde_json v1.0.149 (*)
+serde_repr v0.1.20 (proc-macro)
+serde_repr v0.1.20 (proc-macro) (*)
+serde_spanned v1.0.4
+serde_urlencoded v0.7.1
+serde_with v3.16.1
+serde_with v3.16.1 (*)
+serde_with_macros v3.16.1 (proc-macro)
+serde_with_macros v3.16.1 (proc-macro) (*)
+serde_yaml v0.9.34+deprecated
+serde_yaml v0.9.34+deprecated (*)
+serialize-to-javascript v0.1.2
+serialize-to-javascript-impl v0.1.2 (proc-macro)
+servo_arc v0.2.0
+sha1 v0.10.6
+sha2 v0.10.9
+sha2-const-stable v0.1.0
+sha3 v0.10.9
+sha3 v0.10.9 (*)
+sharded-slab v0.1.7
+shellexpand v3.1.2
+signature v2.2.0
+signature v2.2.0 (*)
+simba v0.7.3
+simba v0.7.3 (*)
+simd-adler32 v0.3.8
+simd_cesu8 v1.1.1
+simdutf8 v0.1.5
+simple_asn1 v0.6.4
+siphasher v0.3.11
+siphasher v1.0.1
+slab v0.4.11
+smallvec v1.15.1
+socket2 v0.5.10
+socket2 v0.5.10 (*)
+socket2 v0.6.1
+socket2 v0.6.1 (*)
+spin v0.10.1
+spin v0.9.9
+spin v0.9.9 (*)
+spki v0.7.3
+spki v0.7.3 (*)
+stabby v72.1.8
+stabby-abi v72.1.8
+stabby-macros v72.1.8 (proc-macro)
+stable_deref_trait v1.2.1
+static_assertions v1.1.0
+strfmt v0.2.5
+string_cache v0.8.9
+strsim v0.11.1
+struct-path v0.2.4 (proc-macro)
+studio-bridge-msgs v4.0.0
+subtle v2.6.1
+swift-rs v1.0.7
+symphonia v0.5.5
+symphonia-bundle-mp3 v0.5.5
+symphonia-core v0.5.5
+symphonia-core v0.5.5 (*)
+symphonia-metadata v0.5.5
+symphonia-metadata v0.5.5 (*)
+syn v1.0.109
+syn v1.0.109 (*)
+syn v2.0.114
+syn v2.0.114 (*)
+sync_wrapper v1.0.2
+sync_wrapper v1.0.2 (*)
+synstructure v0.13.2
+synstructure v0.13.2 (*)
+tao v0.34.5
+tao-macros v0.1.3 (proc-macro)
+tao-macros v0.1.3 (proc-macro) (*)
+tauri v2.10.3
+tauri v2.10.3 (*)
+tauri-codegen v2.5.5
+tauri-macros v2.5.5 (proc-macro)
+tauri-plugin-dialog v2.6.0
+tauri-plugin-fs v2.4.5
+tauri-plugin-fs v2.4.5 (*)
+tauri-plugin-log v2.8.0
+tauri-runtime v2.10.1
+tauri-runtime v2.10.1 (*)
+tauri-runtime-wry v2.10.1
+tauri-utils v2.8.3
+tauri-utils v2.8.3 (*)
+tendril v0.4.3
+thiserror v1.0.69
+thiserror v1.0.69 (*)
+thiserror v2.0.18
+thiserror v2.0.18 (*)
+thiserror-impl v1.0.69 (proc-macro)
+thiserror-impl v1.0.69 (proc-macro) (*)
+thiserror-impl v2.0.18 (proc-macro)
+thiserror-impl v2.0.18 (proc-macro) (*)
+thread_local v1.1.10
+time v0.3.53
+time v0.3.53 (*)
+time-core v0.1.9
+time-macros v0.2.31 (proc-macro)
+tinystr v0.8.2
+tinyvec v1.10.0
+tinyvec v1.10.0 (*)
+tinyvec_macros v0.1.1
+tls-listener v0.11.2
+token-cell v2.1.1
+tokio v1.49.0
+tokio v1.49.0 (*)
+tokio-macros v2.6.0 (proc-macro)
+tokio-rustls v0.26.4
+tokio-rustls v0.26.4 (*)
+tokio-stream v0.1.18
+tokio-stream v0.1.18 (*)
+tokio-tungstenite v0.24.0
+tokio-tungstenite v0.24.0 (*)
+tokio-util v0.7.18
+tokio-util v0.7.18 (*)
+toml v0.9.11+spec-1.1.0
+toml_datetime v0.7.5+spec-1.1.0
+toml_datetime v0.7.5+spec-1.1.0 (*)
+toml_edit v0.23.10+spec-1.0.0
+toml_parser v1.0.6+spec-1.1.0
+toml_parser v1.0.6+spec-1.1.0 (*)
+toml_writer v1.0.6+spec-1.1.0
+tonic v0.14.6
+tonic v0.14.6 (*)
+tonic-prost v0.14.6
+tower v0.5.3
+tower v0.5.3 (*)
+tower-http v0.6.8
+tower-layer v0.3.3
+tower-service v0.3.3
+tracing v0.1.44
+tracing v0.1.44 (*)
+tracing-attributes v0.1.31 (proc-macro)
+tracing-core v0.1.36
+tracing-core v0.1.36 (*)
+tracing-log v0.2.0
+tracing-serde v0.2.0
+tracing-subscriber v0.3.23
+try-lock v0.2.5
+tungstenite v0.24.0
+twox-hash v1.6.3
+typeid v1.0.3
+typenum v1.19.0
+ucd-trie v0.1.7
+uhlc v0.8.2
+uhlc v0.8.2 (*)
+unic-char-property v0.9.0
+unic-char-range v0.9.0
+unic-common v0.9.0
+unic-ucd-ident v0.9.0
+unic-ucd-version v0.9.0
+unicase v2.9.0
+unicode-ident v1.0.22
+unicode-segmentation v1.12.0
+unicode-xid v0.2.6
+universal-hash v0.5.1
+unsafe-libyaml v0.2.11
+untrusted v0.9.0
+unzip-n v0.1.4 (proc-macro)
+urdf-rs v0.9.0
+urdf-rs v0.9.0 (*)
+url v2.5.8
+url v2.5.8 (*)
+urlpattern v0.3.0
+utf-8 v0.7.6
+utf8-width v0.1.8
+utf8_iter v1.0.4
+utf8parse v0.2.2
+uuid v1.19.0
+uuid v1.19.0 (*)
+validated_struct v2.2.0
+validated_struct_macros v2.2.0 (proc-macro)
+value-bag v1.12.0
+vec_map v0.8.2
+vizij-api-core v1.0.0
+vizij-api-core v1.0.0 (*)
+vizij-arora-behavior v1.0.0
+vizij-arora-host v1.0.0
+vizij-arora-host v1.0.0 (*)
+vizij-arora-tts v1.0.0
+vizij-graph-core v1.3.0
+vizij-graph-core v1.3.0 (*)
+vizij-standalone v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-web/apps/vizij-standalone/src-tauri)
+walkdir v2.5.0
+walkdir v2.5.0 (*)
+want v0.3.1
+web-time v1.1.0
+webpki-roots v1.0.8
+webpki-roots v1.0.8 (*)
+wide v0.7.33
+winnow v0.7.14
+writeable v0.6.2
+wry v0.54.2
+x509-parser v0.18.1
+x509-parser v0.18.1 (*)
+xml-rs v0.8.28
+yasna v0.6.0
+yoke v0.8.1
+yoke v0.8.1 (*)
+yoke-derive v0.8.1 (proc-macro)
+yoke-derive v0.8.1 (proc-macro) (*)
+zenoh v1.9.0
+zenoh-buffers v1.9.0
+zenoh-buffers v1.9.0 (*)
+zenoh-codec v1.9.0
+zenoh-codec v1.9.0 (*)
+zenoh-collections v1.9.0
+zenoh-collections v1.9.0 (*)
+zenoh-config v1.9.0
+zenoh-config v1.9.0 (*)
+zenoh-core v1.9.0
+zenoh-core v1.9.0 (*)
+zenoh-crypto v1.9.0
+zenoh-keyexpr v1.9.0
+zenoh-keyexpr v1.9.0 (*)
+zenoh-link v1.9.0
+zenoh-link v1.9.0 (*)
+zenoh-link-commons v1.9.0
+zenoh-link-commons v1.9.0 (*)
+zenoh-link-quic v1.9.0
+zenoh-link-quic_datagram v1.9.0
+zenoh-link-quic_datagram v1.9.0 (*)
+zenoh-link-tcp v1.9.0
+zenoh-link-tls v1.9.0
+zenoh-link-udp v1.9.0
+zenoh-link-unixsock_stream v1.9.0
+zenoh-link-ws v1.9.0
+zenoh-macros v1.9.0 (proc-macro)
+zenoh-macros v1.9.0 (proc-macro) (*)
+zenoh-plugin-trait v1.9.0
+zenoh-protocol v1.9.0
+zenoh-protocol v1.9.0 (*)
+zenoh-result v1.9.0
+zenoh-result v1.9.0 (*)
+zenoh-runtime v1.9.0
+zenoh-runtime v1.9.0 (*)
+zenoh-sync v1.9.0
+zenoh-sync v1.9.0 (*)
+zenoh-task v1.9.0
+zenoh-task v1.9.0 (*)
+zenoh-transport v1.9.0
+zenoh-util v1.9.0
+zenoh-util v1.9.0 (*)
+zerocopy v0.8.33
+zerofrom v0.1.6
+zerofrom v0.1.6 (*)
+zerofrom-derive v0.1.6 (proc-macro)
+zerofrom-derive v0.1.6 (proc-macro) (*)
+zeroize v1.9.0
+zeroize v1.9.0 (*)
+zeroize_derive v1.5.0 (proc-macro)
+zerotrie v0.2.3
+zerotrie v0.2.3 (*)
+zerovec v0.11.5
+zerovec v0.11.5 (*)
+zerovec-derive v0.11.2 (proc-macro)
+zerovec-derive v0.11.2 (proc-macro) (*)
+zmij v1.0.15

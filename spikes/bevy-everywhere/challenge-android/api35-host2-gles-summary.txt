@@ -1,0 +1,29 @@
+case=api35-host2-gles apk=bevy-spike-gles-debug.apk serial=emulator-5562 date=2026-09-18T14:58:43Z
+android=15
+sdk=35
+wm=Physical size: 2560x1600
+install=Success
+Status: timeout 
+pid_after_20s=4085
+resumed=      topResumedActivity=ActivityRecord{54ae2d0 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t12}
+pixels_a: center (241, 240, 247) orange_cube_px 0 clear_color_px 72 of 64000
+pixels_b: center (241, 240, 247) orange_cube_px 0 clear_color_px 3277 of 64000
+diff_a_b: bbox (0, 0, 2560, 1600) changed_px 12379
+gfxinfo: Total frames rendered: 0
+sf_layer=RequestedLayerState{Surface(name=49e9b57 ai.vizij.bevyspike/android.app.NativeActivity)/@0x7b38115 - animation-leash of starting_reveal#186}
+sf_layer=RequestedLayerState{ai.vizij.bevyspike/android.app.NativeActivity#185}
+sf_latency_rows=1
+logcat_lines=   12824
+log: 09-18 16:59:23.273  3954  4047 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 4047 (bt_stack_manage), pid 3954 (droid.bluetooth)
+log: 09-18 16:59:38.674  4085  4194 I RustStdoutStderr: 2026-09-18T14:59:38.674834Z  INFO bevy_render::renderer: AdapterInfo { name: "Android Emulator OpenGL ES Translator (Apple M1)", vendor: 4203, device: 0, device_type: IntegratedGpu, device_pci_bus_id: "", driv
+log: 09-18 16:59:44.646  4085  4194 I RustStdoutStderr: 2026-09-18T14:59:44.641728Z  INFO bevy_pbr::cluster: GPU clustering isn't supported on this device; falling back to CPU clustering.
+log: 09-18 16:59:44.646  4085  4194 I RustStdoutStderr: 2026-09-18T14:59:44.642793Z  INFO bevy_render::batching::gpu_preprocessing: GPU preprocessing is not supported on this device. Falling back to CPU preprocessing.
+log: 09-18 16:59:54.389  4085  4194 I RustStdoutStderr: 2026-09-18T14:59:54.372785Z  INFO bevy_winit::system: Creating new window app_process64 (65v0)
+log: 09-18 16:59:54.930  4085  4194 I RustStdoutStderr: 2026-09-18T14:59:54.930491Z  WARN bevy_time: time_system did not receive the time from the render world! Calculations depending on the time may be incorrect.
+log: 09-18 16:59:55.963  4085  4194 I RustStdoutStderr: 2026-09-18T14:59:55.859297Z ERROR bevy_render::error_handler: Caught rendering error: Validation Error
+log: 09-18 16:59:55.964  4085  4194 I RustStdoutStderr:     Downlevel flags DownlevelFlags(SURFACE_VIEW_FORMATS) are required but not supported on the device.
+log: 09-18 16:59:55.964  4085  4194 I RustStdoutStderr: thread 'Compute Task Pool (0)' (4202) panicked at /Users/victor.paleologue/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wgpu-29.0.4/src/backend/wgpu_core.rs:3934:26:
+log: 09-18 16:59:55.964  4085  4194 I RustStdoutStderr:   Surface is not configured for presentation
+log: 09-18 16:59:55.964  4085  4194 I RustStdoutStderr: Encountered a panic in system `<Enable the debug feature to see the name>`!
+log: 09-18 16:59:58.379  4085  4194 I RustStdoutStderr: Encountered a panic in system `<Enable the debug feature to see the name>`!
+log: 09-18 17:00:22.636  4302  4373 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 4373 (bt_stack_manage), pid 4302 (droid.bluetooth)

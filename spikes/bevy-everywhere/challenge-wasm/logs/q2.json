@@ -1,0 +1,343 @@
+{
+ "timing": {
+  "initMs": 207,
+  "memoryAfterInit": 5570560,
+  "mountMs": 558,
+  "memoryAfterMount": 19464192
+ },
+ "cycles": [
+  {
+   "i": 1,
+   "cycleMs": 20188,
+   "readyMs": 9121,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 35
+  },
+  {
+   "i": 2,
+   "cycleMs": 19709,
+   "readyMs": 7838,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 49
+  },
+  {
+   "i": 3,
+   "cycleMs": 25057,
+   "readyMs": 15576,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 57
+  },
+  {
+   "i": 4,
+   "cycleMs": 19229,
+   "readyMs": 7790,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 65
+  },
+  {
+   "i": 5,
+   "cycleMs": 11475,
+   "readyMs": 4948,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 73
+  },
+  {
+   "i": 6,
+   "cycleMs": 10785,
+   "readyMs": 5093,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 81
+  },
+  {
+   "i": 7,
+   "cycleMs": 12384,
+   "readyMs": 4675,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 89
+  },
+  {
+   "i": 8,
+   "cycleMs": 19792,
+   "readyMs": 11425,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 97
+  },
+  {
+   "i": 9,
+   "cycleMs": 17978,
+   "readyMs": 9923,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 105
+  },
+  {
+   "i": 10,
+   "cycleMs": 18468,
+   "readyMs": 7681,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 113
+  },
+  {
+   "i": 11,
+   "cycleMs": 11194,
+   "readyMs": 4654,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 121
+  },
+  {
+   "i": 12,
+   "cycleMs": 9351,
+   "readyMs": 4391,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 129
+  },
+  {
+   "i": 13,
+   "cycleMs": 11846,
+   "readyMs": 5227,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 137
+  },
+  {
+   "i": 14,
+   "cycleMs": 10655,
+   "readyMs": 5108,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 145
+  },
+  {
+   "i": 15,
+   "cycleMs": 11875,
+   "readyMs": 5715,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 153
+  },
+  {
+   "i": 16,
+   "cycleMs": 10155,
+   "readyMs": 4660,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 161
+  },
+  {
+   "i": 17,
+   "cycleMs": 10185,
+   "readyMs": 4860,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 169
+  },
+  {
+   "i": 18,
+   "cycleMs": 10578,
+   "readyMs": 4875,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 177
+  },
+  {
+   "i": 19,
+   "cycleMs": 9932,
+   "readyMs": 4471,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 185
+  },
+  {
+   "i": 20,
+   "cycleMs": 10297,
+   "readyMs": 4937,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 193
+  },
+  {
+   "i": 21,
+   "cycleMs": 10357,
+   "readyMs": 4910,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 201
+  },
+  {
+   "i": 22,
+   "cycleMs": 10476,
+   "readyMs": 5212,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 209
+  },
+  {
+   "i": 23,
+   "cycleMs": 12739,
+   "readyMs": 5959,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 217
+  },
+  {
+   "i": 24,
+   "cycleMs": 13037,
+   "readyMs": 5970,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 225
+  },
+  {
+   "i": 25,
+   "cycleMs": 12897,
+   "readyMs": 6122,
+   "memAfterUnload": 195887104,
+   "memAfterLoad": 195887104,
+   "faceCount": 2,
+   "contextLost": false,
+   "frames": 233
+  }
+ ],
+ "memoryBeforeLoad": 34996224,
+ "readyMsA": 61370,
+ "readyMsB": 17589,
+ "twoFaces": {
+  "running": true,
+  "frames": 20,
+  "faceCount": 2,
+  "rafTicks": 20,
+  "devices": {
+   "a": {
+    "steps": 12,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 611
+   },
+   "b": {
+    "steps": 4,
+    "alive": true,
+    "poseLen": 310,
+    "loadMs": 577
+   }
+  },
+  "memoryBytes": 195887104,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "cyclesTotalMs": 376636,
+ "final": {
+  "running": true,
+  "frames": 240,
+  "faceCount": 2,
+  "rafTicks": 240,
+  "devices": {
+   "b": {
+    "steps": 224,
+    "alive": true,
+    "poseLen": 310,
+    "loadMs": 577
+   },
+   "a": {
+    "steps": 10,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 664
+   }
+  },
+  "memoryBytes": 195887104,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "standardKey": {
+  "key": "rig/quori_latest/standard/vizij/mouth/morph/jaw_open",
+  "before": {
+   "f32": 0
+  },
+  "afterWrite": {
+   "f32": 1
+  },
+  "afterStep": {
+   "f32": 0
+  },
+  "after500ms": {
+   "f32": 0
+  },
+  "steps": 21
+ },
+ "orderTrace": "SSFSSFSFSFSFSFSSFSSFSSFSSFSFSFSFSFSSFSSFSSFSSFSFSFSFSFSSFSSFSSFSSFSFSFSFSFSSFSSFSSFSSFSFSFSFSFSSFSSFSSFSSFSFSFSFSFSSFSSFSSFSSFSFSFSFSFSSFSSFSSFSSFSFSFSFSFSSFSSFSSFSSFSFSFSFSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSFSSF",
+ "errors": [
+  "[log] %cWARN%c /Users/victor.paleologue/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_render-0.19.1/src/renderer/mod.rs:291%c The selected adapter is using a driver that only supports software rendering. This is likely to be very slow. See https://bevy.org/learn/errors/b0006/ color: orange; background: #444 color: gray; font-style: italic color: inherit"
+ ],
+ "consoleLines": 123
+}

@@ -1,0 +1,102 @@
+{
+ "timing": {
+  "initMs": 395,
+  "memoryAfterInit": 5570560,
+  "mountMs": 705,
+  "memoryAfterMount": 19464192
+ },
+ "memoryBeforeLoad": 34996224,
+ "readyMs": 26142,
+ "paths": [
+  "rig/quori_latest/standard/vizij/mouth/morph/jaw_open",
+  "rig/quori_latest/propsrig/l_eye/translation/x",
+  "rig/quori_latest/propsrig/mouth/jawud/value"
+ ],
+ "before": {
+  "values": {
+   "rig/quori_latest/standard/vizij/mouth/morph/jaw_open": {
+    "f32": 0
+   },
+   "rig/quori_latest/propsrig/l_eye/translation/x": {
+    "f32": 3.35
+   },
+   "rig/quori_latest/propsrig/mouth/jawud/value": {
+    "f32": 0.093
+   }
+  },
+  "running": true,
+  "frames": 12,
+  "faceCount": 1,
+  "rafTicks": 12,
+  "devices": {
+   "a": {
+    "steps": 6,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 786
+   }
+  },
+  "memoryBytes": 137625600,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "after": {
+  "values": {
+   "rig/quori_latest/standard/vizij/mouth/morph/jaw_open": {
+    "f32": 0
+   },
+   "rig/quori_latest/propsrig/l_eye/translation/x": {
+    "f32": 6.35
+   },
+   "rig/quori_latest/propsrig/mouth/jawud/value": {
+    "f32": 0.093
+   }
+  },
+  "running": true,
+  "frames": 23,
+  "faceCount": 1,
+  "rafTicks": 23,
+  "devices": {
+   "a": {
+    "steps": 17,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 786
+   }
+  },
+  "memoryBytes": 137625600,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "orderTrace": "FFFFFFSFSFSFSFSFSFSFSFSFSFSFSFSFSFSFSFSFSFSFSFSFSFSFSF",
+ "rects": {
+  "canvas": [
+   24,
+   65,
+   1000,
+   520
+  ],
+  "slotA": [
+   44,
+   85,
+   600,
+   400
+  ]
+ },
+ "errors": [
+  "[log] %cWARN%c /Users/victor.paleologue/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_render-0.19.1/src/renderer/mod.rs:291%c The selected adapter is using a driver that only supports software rendering. This is likely to be very slow. See https://bevy.org/learn/errors/b0006/ color: orange; background: #444 color: gray; font-style: italic color: inherit"
+ ],
+ "consoleLines": 20
+}

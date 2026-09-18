@@ -1,0 +1,31 @@
+# Stand-alone spike: Bevy 0.19.1 (the version vizij-rs locks) rendering a
+# Vizij face GLB with morph targets into a browser canvas, built for
+# wasm32-unknown-unknown with the WebGL2 backend.
+[package]
+name = "bevy-wasm-spike-lto"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# ros-viz-rs's expanded default list, minus what a face view does not need
+# (2d, ui, audio, picking, gilrs, x11/wayland, sysinfo, android bits).
+bevy = { version = "=0.19.1", default-features = false, features = [
+    "default_app",
+    "3d_bevy_render",
+    "scene",
+    "std",
+    "bevy_winit",
+    "multi_threaded",
+    "webgl2",
+] }
+wasm-bindgen = "=0.2.128"
+
+# vizij-rs's release profile.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1

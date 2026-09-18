@@ -1,0 +1,47 @@
+[package]
+name = "tts-wasm-spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[workspace]
+
+[dependencies]
+# The runtime as vizij-rs pins it, no default features: the executor-free
+# slice that builds on every target (arora-engine 4 → HostModule/ModuleBuilder).
+arora = { version = "=9.11.1", default-features = false }
+arora-types = "2"
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = "1"
+# Declared exactly as vizij-arora-tts declares it: plain, `json` on. On wasm32
+# reqwest's manifest gates the native stack out and selects `fetch`.
+reqwest = { version = "0.13", features = ["json"] }
+# task::{running, success, failure}; `urdf_ik` because the crate does not
+# build without it (S:arora-wasm-constraints 7).
+vizij-graph-core = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/node-graph/vizij-graph-core" }
+# The say contract + the fragments (say, play_viseme) + ProcessingGraph.
+vizij-arora-behavior = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-behavior" }
+vizij-arora-host = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-host" }
+vizij-arora-store = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-store" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rodio = "0.20"
+tokio = { version = "1", features = ["rt-multi-thread", "time"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+serde-wasm-bindgen = "0.6"
+
+[dev-dependencies]
+# The tests spawn runs the way a bridge does: through the interpreter module.
+arora-behavior = "8"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"

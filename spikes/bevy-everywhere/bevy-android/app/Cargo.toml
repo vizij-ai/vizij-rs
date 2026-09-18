@@ -1,0 +1,41 @@
+[package]
+name = "bevy-android-spike"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "bevy_android_spike"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Bevy 0.19.1 default features. In 0.19 neither Android activity backend is a
+# default feature, so the Android target table below selects one.
+bevy = "0.19.1"
+
+# The framework's NativeActivity (no games-activity AAR, no Java/Kotlin), as in
+# ros-viz-rs; the manifest names android.app.NativeActivity and this cdylib.
+[target.'cfg(target_os = "android")'.dependencies]
+bevy = { version = "0.19.1", features = ["android-native-activity"] }
+# Bevy 0.19 has no top-level feature for wgpu's native GLES backend (its
+# `webgl2` maps to wgpu's wasm-only `webgl`); enabling it means depending on
+# bevy_render directly so feature unification turns `gles` on.
+bevy_render = { version = "0.19.1", features = ["gles"] }
+
+# Bevy's own recommendation for dev iteration; release keeps cargo's defaults
+# (no LTO, 16 codegen units) so the cold build time measured is the plain one.
+[features]
+default = []
+# Force wgpu's GLES backend (see lib.rs).
+gl = []
+
+[profile.release]
+opt-level = 3
+
+# The vizij-rs workspace's release profile (Cargo.toml [profile.release]), to
+# measure the shipped size and an uncontended cold build under that profile.
+[profile.small]
+inherits = "release"
+opt-level = "s"
+lto = true
+codegen-units = 1

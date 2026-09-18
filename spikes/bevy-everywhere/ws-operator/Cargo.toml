@@ -1,0 +1,21 @@
+[package]
+name = "ws-operator"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+# The versions vizij-rs locks (Cargo.lock: arora 9.11.1, arora-bridge-ws 4.0.0,
+# arora-bridge 4.1.0). No default features: the portable runtime, no wasmtime,
+# no TUI — the same slice vizij-standalone builds on.
+arora = { version = "=9.11.1", default-features = false }
+arora-bridge-ws = "=4.0.0"
+arora-bridge = "4.1"
+arora-simple-data-store = "2"
+arora-types = "2"
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.24"
+futures = "0.3"
+serde_json = "1"

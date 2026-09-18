@@ -1,0 +1,30 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Bevy wasm spike: one overlay canvas, viewport cameras</title>
+<style>
+  body { margin: 0; background: linear-gradient(#2a2a40, #202020); color: #ddd; font: 14px system-ui; min-height: 1400px; }
+  #overlay { position: fixed; inset: 0; pointer-events: none; }
+  #overlay canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+  .slot { width: 400px; height: 260px; border: 2px dashed #6a6; margin: 24px; display: inline-block; }
+  #slot-b { width: 300px; height: 300px; margin-left: 200px; }
+</style>
+<p style="margin:24px 24px 0">T3(c): one App, one transparent full-page canvas, one viewport camera per dashed slot · <span id="status">loading…</span></p>
+<div id="slot-a" class="slot"></div>
+<div id="slot-b" class="slot"></div>
+<p style="margin:24px">Page content behind the canvas (must stay visible outside the slots).</p>
+<div id="overlay"><canvas id="face-overlay"></canvas></div>
+<script type="module">
+  const mod = await import('./pkg/bevy_wasm_spike.js');
+  await mod.default();
+  const slots = [document.getElementById('slot-a'), document.getElementById('slot-b')];
+  mod.start_overlay('#face-overlay', 'Quori_Current_Extended.glb', slots.length);
+  const push = () => {
+    const rects = [];
+    for (const s of slots) { const r = s.getBoundingClientRect(); rects.push(r.left, r.top, r.width, r.height); }
+    mod.set_rects(new Float32Array(rects));
+    requestAnimationFrame(push);
+  };
+  push();
+  document.getElementById('status').textContent = 'started';
+  window.__spikeStarted = true;
+</script>

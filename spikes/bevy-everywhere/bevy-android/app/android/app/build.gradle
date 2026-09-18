@@ -1,0 +1,41 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'ai.vizij.bevyspike'
+    compileSdk 36
+    // The NDK AGP strips native libraries with; without it AGP packages the .so unstripped.
+    ndkVersion '25.1.8937393'
+
+    defaultConfig {
+        applicationId 'ai.vizij.bevyspike'
+        minSdk 26
+        targetSdk 34
+        versionCode 2
+        versionName '0.1.0'
+        // arm64 for real phones; x86_64 so the CI emulator can run it too.
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Sign release builds with the auto-generated debug keystore so the
+            // APK is installable (and emulator-testable) without managing a
+            // release keystore/secrets in CI. For direct distribution, not
+            // Play Store uploads.
+            signingConfig signingConfigs.debug
+        }
+    }
+    // jniLibs default srcDir (src/main/jniLibs) holds libros_viz_rs.so, placed
+    // there by `cargo ndk -o app/src/main/jniLibs ...` before the Gradle build.
+}
+
+dependencies {
+    // None needed: the app uses the framework's android.app.NativeActivity
+    // (the android-activity native-activity backend), so neither the
+    // games-activity AAR nor AppCompat is required.
+}

@@ -1,0 +1,326 @@
+{
+  "file": "Quori_Current_Extended.glb",
+  "bytes": 6536616,
+  "jsonChunkBytes": 3728332,
+  "asset": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter"
+  },
+  "extensionsUsed": [
+    "RobotData",
+    "VIZIJ_bundle"
+  ],
+  "rootExtensions": [],
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        17
+      ],
+      "ext": []
+    }
+  ],
+  "scene": 0,
+  "nodeCount": 18,
+  "robotDataNodes": 18,
+  "bundleNodes": [
+    "Scene"
+  ],
+  "robotDataTypes": {
+    "shape": 15,
+    "group": 3
+  },
+  "nodesWithoutRobotData": [],
+  "meshCount": 15,
+  "meshesWithMorph": 7,
+  "morphTargetNamesSample": [
+    {
+      "name": "Mouth",
+      "targetNames": [
+        "ltsneer",
+        "lbsneer",
+        "rtsneer",
+        "rbsneer",
+        "jawud",
+        "sidewide",
+        "sideud"
+      ]
+    },
+    {
+      "name": "OuterFace001",
+      "targetNames": [
+        "chin",
+        "lbrow_outud",
+        "lbrow_midud",
+        "lbrow_inud",
+        "lbrow_inlr",
+        "rbrow_inlr",
+        "rbrow_inud",
+        "rbrow_midud",
+        "rbrow_outud"
+      ]
+    }
+  ],
+  "materialCount": 15,
+  "materialSample": [
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.0009772359626367688,
+          0.0009772359626367688,
+          0.0009772359626367688,
+          1
+        ],
+        "metallicFactor": 0,
+        "roughnessFactor": 1
+      },
+      "doubleSided": true,
+      "name": "Black"
+    },
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.04581279307603836,
+          0.23092688620090485,
+          0.24475224316120148,
+          1
+        ],
+        "metallicFactor": 0,
+        "roughnessFactor": 1
+      },
+      "doubleSided": true,
+      "name": "Face_Color.001"
+    },
+    {
+      "pbrMetallicRoughness": {
+        "metallicFactor": 0,
+        "roughnessFactor": 1
+      },
+      "doubleSided": true,
+      "name": "Material.002"
+    }
+  ],
+  "images": 0,
+  "textures": 0,
+  "samplers": 0,
+  "accessors": 118,
+  "bufferViews": 118,
+  "buffers": [
+    {
+      "byteLength": 2808256
+    }
+  ],
+  "animations": 0,
+  "skins": 0,
+  "cameras": 0,
+  "bundleKeys": [
+    "version",
+    "exportedAt",
+    "graphs",
+    "poses",
+    "animations",
+    "metadata"
+  ],
+  "bundleBytes": 3626348,
+  "sampleRobotData": [
+    {
+      "id": "a8bfe96e-1c2b-446b-b295-129c65b78ae5",
+      "name": "Background",
+      "material": "standard",
+      "type": "shape",
+      "tags": [],
+      "features": {
+        "translation": {
+          "animated": true,
+          "value": {
+            "id": "ab7fcf9e-0634-4529-b05f-311e95613c6d",
+            "name": "Background translation",
+            "type": "vector3",
+            "default": {
+              "struct": {
+                "id": "76697a69-6a00-0000-0000-000000000003",
+                "fields": [
+                  {
+                    "id": "76697a69-6a00-0000-0000-000000030001",
+                    "value": {
+                      "f32": -0.03269479051232338
+                    }
+                  },
+                  {
+                    "id": "76697a69-6a00-0000-0000-000000030002",
+                    "value": {
+                      "f32": 0.16579335927963257
+                    }
+                  },
+                  {
+                    "id": "76697a69-6a00-0000-0000-000000030003",
+                    "value": {
+                      "f32": -0.30425116419792175
+                    }
+                  }
+                ]
+              }
+            },
+            "constraints": {},
+            "pub": {
+              "public": true,
+              "output": "Background translation",
+              "units": "m"
+            }
+          }
+        },
+        "rotation": {
+          "animated": true,
+          "value": {
+            "id": "0a74c35b-5198-471f-8044-1bf8d8cffd77",
+            "name": "Background rotation",
+            "type": "euler",
+            "default": {
+              "struct": {
+                "id": "76697a69-6a00-0000-0000-000000000003",
+                "fields": [
+                  {
+                    "id": "76697a69-6a00-0000-0000-000000030001",
+                    "value": {
+                      "f32": -3.1415927410125732
+                    }
+                  },
+                  {
+                    "id": "76697a69-6a00-0000-0000-000000030002",
+                    "value": {
+                      "f32": 1.5105841555396182e-7
+                    }
+                  },
+                  {
+                    "id": "76697a69-6a00-0000-0000-000000030003",
+                    "value": {
+                      "f32": -3.1415927410125732
+                    }
+                  }
+                ]
+              }
+            },
+            "constraints": {},
+            "pub": {
+              "public": true,
+              "output": "Background rotation",
+              "units": "rad"
+            }
+          }
+        },
+        "scale": {
+          "animated": true,
+          "value": {
+            "id": "44fdef3d-a85a-410f-a619-617f94e9a781",
+            "name": "Background scale",
+            "type": "vector3",
+            "default": {
+              "struct": {
+                "id": "76697a69-6a00-0000-0000-000000000003",
+                "fields": [
+                  {
+                    "id": "76697a69-6a00-0000-0000-000000030001",
+                    "value": {
+                      "f32": 25.75177764892578
+                    }
+                  },
+                  {
+                    "id": "76697a69-6a00-0000-0000-000000030002",
+                    "value": {
+                      "f32": 24.999998092651367
+                    }
+                  },
+                  {
+                    "id": "76697a69-6a00-0000-0000-000000030003",
+                    "value": {
+                      "f32": 25
+                    }
+                  }
+                ]
+              }
+            },
+            "constraints": {},
+            "pub": {
+              "public": true,
+              "output": "Background scale"
+            }
+          }
+        },
+        "color": {
+          "animated": true,
+          "value": {
+            "id": "e66360c0-bae8-4f68-a696-7784a22c8556",
+            "name": "Black",
+            "type": "rgb",
+            "default": {
+              "struct": {
+                "id": "76697a69-6a00-0000-0000-000000000020",
+                "fields": [
+                  {
+                    "id": "76697a69-6a00-0000-0000-000000200001",
+                    "value": {
+                      "f32": 0.0009772359626367688
+                    }
+                  },
+                  {
+                    "id": "76697a69-6a00-0000-0000-000000200002",
+                    "value": {
+                      "f32": 0.0009772359626367688
+                    }
+                  },
+                  {
+                    "id": "76697a69-6a00-0000-0000-000000200003",
+                    "value": {
+                      "f32": 0.0009772359626367688
+                    }
+                  },
+                  {
+                    "id": "76697a69-6a00-0000-0000-000000200004",
+                    "value": {
+                      "f32": 1
+                    }
+                  }
+                ]
+              }
+            },
+            "constraints": {
+              "min": [
+                0,
+                0,
+                0
+              ],
+              "max": [
+                1,
+                1,
+                1
+              ]
+            },
+            "pub": {
+              "public": true,
+              "output": "Black color"
+            }
+          }
+        },
+        "opacity": {
+          "animated": true,
+          "value": {
+            "id": "a83f18e5-1d85-4574-9646-5c1bd988fe99",
+            "name": "Black opacity",
+            "type": "number",
+            "default": {
+              "f32": 1
+            },
+            "constraints": {
+              "min": 0,
+              "max": 1
+            },
+            "pub": {
+              "public": true,
+              "output": "Black opacity"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

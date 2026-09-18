@@ -1,0 +1,41 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11m 36s
+     Running unittests src/main.rs (/private/tmp/claude-501/-Users-victor-paleologue-Code-Semio-semio-studio/3db729c2-88a1-4330-986e-37ae26376064/scratchpad/spikes/native-app-anatomy/target/debug/deps/vizij-c4dba5ae905c30ea)
+cli_tests::a_single_zoom_factor_applies_to_both_axes: test
+cli_tests::a_zoom_pair_is_width_then_height: test
+cli_tests::zoom_rejects_non_positive_and_malformed_factors: test
+device::tests::a_look_at_run_advances_and_halts_through_the_device: test
+device::tests::a_new_play_viseme_run_takes_over_and_crossfades: test
+device::tests::a_play_viseme_run_plays_the_shape_through_its_envelope: test
+device::tests::a_say_run_streams_the_provider_s_visemes_to_the_lips: test
+device::tests::animation_source_ticks_the_loaded_module: test
+device::tests::embedded_mapping_wins_over_the_built_in: test
+device::tests::free_inputs_are_the_unwritten_typed_input_paths: test
+device::tests::free_inputs_read_normalized_defaults: test
+device::tests::ros4hri_action_units_route_to_muscles: test
+device::tests::ros4hri_blink_pulses_and_commanded_close_wins: test
+device::tests::ros4hri_drives_the_adapted_quori: test
+device::tests::ros4hri_expression_name_one_hots: test
+device::tests::ros4hri_gaze_maps_eyes_with_vergence: test
+device::tests::ros4hri_mapping_rests_neutral: test
+device::tests::ros4hri_valence_arousal_blends_anchors: test
+device::tests::the_face_embedded_skill_fragment_overrides_the_built_in: test
+device::tests::the_gaze_skill_runs_the_shipped_fragment_through_the_device: test
+frames::tests::a_png_frame_is_a_decodable_sensor_msgs_compressed_image: test
+frames::tests::a_raw_frame_carries_the_pixels_as_a_sensor_msgs_image: test
+frames::tests::a_reading_lands_on_the_key_of_its_format_holding_that_formats_message: test
+frames::tests::frames_follow_the_ros4hri_exposure_unless_a_rate_is_given: test
+frames::tests::the_default_frame_id_is_the_faces_id_from_its_glb: test
+frames::tests::the_frame_id_is_the_fixed_one_or_the_loaded_faces: test
+memory_tests::the_device_alone_keeps_a_flat_heap_under_a_frame_feed: test
+meta::tests::rejects_non_glb: test
+view::tests::contain_and_cover_match_bevys_auto_scaling_modes: test
+view::tests::contain_letterboxes_the_viewports_excess_axis: test
+view::tests::cover_crops_the_viewports_excess_axis: test
+view::tests::stretch_shows_exactly_the_bounds_whatever_the_viewport: test
+view::tests::zoom_magnifies_after_the_fit_per_axis: test
+
+33 tests, 0 benchmarks
+     Running tests/snapshot_regression.rs (/private/tmp/claude-501/-Users-victor-paleologue-Code-Semio-semio-studio/3db729c2-88a1-4330-986e-37ae26376064/scratchpad/spikes/native-app-anatomy/target/debug/deps/snapshot_regression-333aaa7e40f5c8c1)
+native_render_matches_reference: test
+
+1 test, 0 benchmarks

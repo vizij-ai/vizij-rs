@@ -1,0 +1,58 @@
+[package]
+name = "arora-wasm-spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[workspace]
+
+[dependencies]
+# Step 0: the runtime as vizij-rs pins it (registry 9.11.1), no default
+# features: the browser engine host is selected by target cfg.
+arora = { version = "=9.11.1", default-features = false }
+
+# Step 1: the Vizij value/graph cores.
+vizij-api-core = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/api/vizij-api-core", optional = true }
+vizij-graph-core = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/node-graph/vizij-graph-core", optional = true, default-features = false }
+
+# Step 2: the store and HAL seams.
+vizij-arora-store = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-store", optional = true }
+vizij-arora-hal = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-hal", optional = true }
+
+# Step 3: the host glue (composition, bundle, ros4hri source).
+vizij-arora-host = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-host", optional = true }
+
+# Step 4: the graph behavior.
+vizij-arora-behavior = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-behavior", optional = true }
+
+# Step 5: the animation module (native functions + generated Value conversions).
+vizij-animation-module = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-animation-module", optional = true }
+
+# Step 6: the cloud TTS host module.
+vizij-arora-tts = { path = "/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-tts", optional = true }
+
+# Step 7: the browser JS surface (registry, as vizij-arora-web pins it).
+arora-web = { version = "=6.1.0", optional = true }
+
+# Step 8: the Studio bridge connector (zenoh + firestore), as arora's
+# `studio-bridge` feature pulls it.
+arora-studio-bridge-client = { version = "=6.1.0", optional = true }
+
+arora-types = "2"
+
+[features]
+default = []
+step1 = ["dep:vizij-api-core", "dep:vizij-graph-core"]
+step1-urdf = ["step1", "vizij-graph-core/urdf_ik"]
+step2 = ["step1-urdf", "dep:vizij-arora-store", "dep:vizij-arora-hal"]
+step3 = ["step2", "dep:vizij-arora-host"]
+step3-frames = ["step3", "vizij-arora-host/publish-frames"]
+step4 = ["step3", "dep:vizij-arora-behavior"]
+step5 = ["step4", "dep:vizij-animation-module"]
+step6 = ["step5", "dep:vizij-arora-tts"]
+step7 = ["step5", "dep:arora-web"]
+step8-studio = ["dep:arora-studio-bridge-client"]
+step9-native = ["arora/native"]

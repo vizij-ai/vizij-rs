@@ -1,0 +1,12 @@
+instance apiVersion 1.3.0
+instance ext VK_KHR_get_physical_device_properties2: true
+physical devices: 1
+
+device "llvmpipe (LLVM 21.1.4, 128 bits)" type CPU vendor 0x10005 device 0x0 driverVersion 0x6463063 apiVersion 1.3.0
+  device extensions: 43
+  VK_KHR_maintenance3: true  VK_KHR_maintenance4: false  VK_KHR_swapchain_mutable_format: false  VK_KHR_swapchain: true
+  wgpu-hal would chain: maintenance3 true, maintenance4 true
+  maintenance3.maxMemoryAllocationSize = 2147483648 (2048 MiB)
+  maintenance3.maxPerSetDescriptors    = 1000000
+  maintenance4.maxBufferSize           = 4294967295 (4095 MiB)
+  -> wgpu-hal max_buffer_size = min(4294967295, 2147483648, 2147483647) = 2147483647

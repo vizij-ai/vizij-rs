@@ -1,0 +1,855 @@
+//! One wasm module = the arora device + the Bevy view.
+//!
+//! The device is composed as `vizij-arora-web` composes it (arora 9 with no
+//! default features over a `BlackboardStore`, a `RigHal` and a Vizij
+//! `ProcessingGraph` built from the GLB's `VIZIJ_bundle`), owned by the Bevy
+//! `App` as a non-send resource and stepped from `Update` with `Time::delta()`.
+//! The view is the bevy-wasm spike's (a port of `crates/vizij/src/view.rs`):
+//! it joins the spawned glTF scene with the `RobotData` bindings and applies
+//! `RigHal::pose()` every frame. The GLB reaches Bevy from the bytes JS hands
+//! over, through an in-memory asset source (`mem://face.glb`), never from
+//! `assets/<path>`.
+//!
+//! JS surface (wasm-bindgen): `start(canvas, glbBytes)`, `setValue`,
+//! `readValues`, `stop` (sends `AppExit`), `running`, `indexReady`, `poseLen`,
+//! `frames`, `drainClicks` / `setClickCallback` (feature `picking`),
+//! `spawnPlayViseme` / `halt` (the interpreter's SPAWN/HALT path).
+
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::path::Path;
+use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::Mutex;
+
+use arora::{Arora, HostModule, ModuleBuilder};
+use arora_behavior::{interpreter_module, RunPolicy, TaskHandle};
+use arora_types::call::{Call, CallResult};
+use arora_types::data::{DataStore, Key, StateChange};
+use arora_types::gen_uuid_from_str;
+use arora_types::value::{StructureField, Value};
+use bevy::asset::io::memory::{Dir, MemoryAssetReader};
+use bevy::asset::io::AssetSourceBuilder;
+use bevy::asset::{AssetApp, AssetMetaCheck, AssetPlugin};
+use bevy::camera::{Projection, ScalingMode};
+use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
+use bevy::gltf::GltfAssetLabel;
+use bevy::mesh::morph::MorphWeights;
+use bevy::prelude::*;
+use serde_json::Value as Json;
+use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector};
+use vizij_arora_behavior::{parse_spec, viseme, ProcessingGraph};
+use vizij_arora_hal::RigHal;
+use vizij_arora_host::{ros4hri, Bundle, ProgramSelect};
+use vizij_arora_store::BlackboardStore;
+use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console, js_name = log)]
+    fn console_log(s: &str);
+}
+
+// ---------------------------------------------------------------------------
+// Face metadata (the `RobotData` half of crates/vizij/src/meta.rs, minimal)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq)]
+enum FeatureKind {
+    Translation,
+    Rotation,
+    Scale,
+    Color,
+    Opacity,
+    Morph(String),
+}
+
+#[derive(Debug, Clone)]
+struct Binding {
+    node_name: String,
+    feature: FeatureKind,
+}
+
+#[derive(Debug, Clone)]
+struct Element {
+    node_name: String,
+    material: Option<String>,
+    morph_targets: Vec<String>,
+}
+
+/// The face metadata joined from `RobotData` + `VIZIJ_bundle`, as a Bevy
+/// resource.
+#[derive(Resource, Clone)]
+struct FaceMeta {
+    elements: Vec<Element>,
+    /// animatable UUID (string form) → what it drives.
+    animatables: HashMap<String, Binding>,
+    /// (center_x, center_y, size_x, size_y) of the root element.
+    root_bounds: Option<(f32, f32, f32, f32)>,
+    bundle: Bundle,
+}
+
+fn glb_json_chunk(bytes: &[u8]) -> Result<Json, String> {
+    if bytes.len() < 20 || &bytes[0..4] != b"glTF" {
+        return Err("not a GLB container".into());
+    }
+    let chunk_len = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+    if &bytes[16..20] != b"JSON" {
+        return Err("first GLB chunk is not JSON".into());
+    }
+    if bytes.len() < 20 + chunk_len {
+        return Err("GLB truncated".into());
+    }
+    serde_json::from_slice(&bytes[20..20 + chunk_len]).map_err(|e| format!("GLB JSON: {e}"))
+}
+
+impl FaceMeta {
+    fn from_glb_bytes(bytes: &[u8]) -> Result<Self, String> {
+        let gltf = glb_json_chunk(bytes)?;
+        let nodes = gltf
+            .get("nodes")
+            .and_then(Json::as_array)
+            .ok_or("glTF has no nodes")?;
+        let mut elements = Vec::new();
+        let mut animatables = HashMap::new();
+        let mut root_bounds = None;
+        for node in nodes {
+            let Some(rd) = node.get("extensions").and_then(|e| e.get("RobotData")) else {
+                continue;
+            };
+            let node_name = node
+                .get("name")
+                .and_then(Json::as_str)
+                .or_else(|| rd.get("name").and_then(Json::as_str))
+                .unwrap_or_default()
+                .to_string();
+            if let Some(b) = rd.get("rootBounds") {
+                let f = |k: &str, a: &str| b.get(k).and_then(|v| v.get(a)).and_then(Json::as_f64);
+                if let (Some(cx), Some(cy), Some(sx), Some(sy)) =
+                    (f("center", "x"), f("center", "y"), f("size", "x"), f("size", "y"))
+                {
+                    root_bounds = Some((cx as f32, cy as f32, sx as f32, sy as f32));
+                }
+            }
+            let morph_targets: Vec<String> = rd
+                .get("morphTargets")
+                .and_then(Json::as_array)
+                .map(|a| a.iter().filter_map(Json::as_str).map(str::to_string).collect())
+                .unwrap_or_default();
+            if let Some(features) = rd.get("features").and_then(Json::as_object) {
+                for (name, feature) in features {
+                    if !feature.get("animated").and_then(Json::as_bool).unwrap_or(false) {
+                        continue;
+                    }
+                    let Some(id) = feature.get("value").and_then(|v| v.get("id")).and_then(Json::as_str)
+                    else {
+                        continue;
+                    };
+                    let kind = match name.as_str() {
+                        "translation" => FeatureKind::Translation,
+                        "rotation" => FeatureKind::Rotation,
+                        "scale" => FeatureKind::Scale,
+                        "color" => FeatureKind::Color,
+                        "opacity" => FeatureKind::Opacity,
+                        other if morph_targets.iter().any(|m| m == other) => {
+                            FeatureKind::Morph(other.to_string())
+                        }
+                        _ => continue,
+                    };
+                    animatables.insert(
+                        id.to_string(),
+                        Binding {
+                            node_name: node_name.clone(),
+                            feature: kind,
+                        },
+                    );
+                }
+            }
+            elements.push(Element {
+                node_name,
+                material: rd.get("material").and_then(Json::as_str).map(str::to_string),
+                morph_targets,
+            });
+        }
+        let bundle = Bundle::from_gltf_json(&gltf).unwrap_or_default();
+        Ok(Self {
+            elements,
+            animatables,
+            root_bounds,
+            bundle,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The device
+// ---------------------------------------------------------------------------
+
+/// The composed device. `Arora` is `!Send` (Rc/RefCell inside), so it lives
+/// in a non-send Bevy resource and, for the JS surface, in a thread-local.
+struct Device {
+    arora: Arora,
+    rig: RigHal,
+    rig_prefix: String,
+}
+
+thread_local! {
+    static DEVICE: RefCell<Option<Rc<RefCell<Device>>>> = const { RefCell::new(None) };
+    static CLICK_CALLBACK: RefCell<Option<js_sys::Function>> = const { RefCell::new(None) };
+}
+
+/// The non-send resource: the same `Rc` the JS surface holds.
+struct DeviceRes(Rc<RefCell<Device>>);
+
+/// The view's read handle on the rig (clones share the rig; `Send + Sync`).
+#[derive(Resource)]
+struct RigRes(RigHal);
+
+/// Dropped with the `App`'s world: how JS learns the `App` was actually
+/// dropped after `stop()`.
+struct RunGuard;
+
+impl Drop for RunGuard {
+    fn drop(&mut self) {
+        RUNNING.store(false, Ordering::SeqCst);
+        DEVICE.with(|d| d.borrow_mut().take());
+        console_log("challenge-wasm: App world dropped (RunGuard)");
+    }
+}
+
+static RUNNING: AtomicBool = AtomicBool::new(false);
+static EXIT_REQUESTED: AtomicBool = AtomicBool::new(false);
+static INDEX_READY: AtomicBool = AtomicBool::new(false);
+static FRAMES: AtomicU32 = AtomicU32::new(0);
+static CLICKS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// The viseme module: the play_viseme contract described so a bridge
+/// discovers it (crates/vizij/src/viseme.rs); the closure is only reached
+/// when no fragment is registered.
+fn viseme_host_module() -> HostModule {
+    ModuleBuilder::new(viseme::MODULE_ID)
+        .described_function(
+            viseme::PLAY_VISEME_ID,
+            vizij_arora_host::skills::PLAY_VISEME_FUNCTION,
+            viseme::play_viseme_signature(),
+            |_call| {
+                Ok(CallResult {
+                    ret: vizij_arora_behavior::task::failure(),
+                    mutated: Vec::new(),
+                })
+            },
+        )
+        .build()
+}
+
+/// Compose the device the way vizij-arora-web's `composeFace` + `start` do
+/// (base kinds, ROS4HRI mapping, no program, no animation source), stage the
+/// neutral pose (device.rs's `stage_neutral_pose`), register the play_viseme
+/// fragment (device.rs's `builder_for`).
+fn compose_device(meta: &FaceMeta) -> Result<(Arora, RigHal, String), String> {
+    let rig_prefix = meta.bundle.rig_prefix();
+    let mappings = vec![ros4hri::ros4hri_source(&rig_prefix)];
+    let spec = meta
+        .bundle
+        .compose(
+            &["rig", "pose-driver", "pose", "standard-adaptation"],
+            &ProgramSelect::None,
+            false,
+            &mappings,
+        )
+        .map_err(|e| format!("compose: {e}"))?;
+    let spec = parse_spec(&spec.to_string())?;
+    let mut graph = ProcessingGraph::from_spec(spec)?;
+    graph.set_task_fragment(
+        viseme::PLAY_VISEME_ID,
+        viseme::play_viseme_fragment(&rig_prefix),
+    );
+
+    let rig = RigHal::new();
+    let store = BlackboardStore::new();
+    let writes = meta.bundle.neutral_stage_writes();
+    if !writes.is_empty() {
+        let mut change = StateChange::new();
+        for (path, value) in &writes {
+            change
+                .set
+                .insert(Key::from(path.as_str()), Some(Value::F32(*value)));
+        }
+        store
+            .write(change)
+            .map_err(|e| format!("neutral staging: {e:?}"))?;
+        console_log(&format!("challenge-wasm: staged {} neutral inputs", writes.len()));
+    }
+
+    let arora = Arora::builder()
+        .with_hal(Box::new(rig.clone()))
+        .with_data_store(Box::new(store))
+        .with_behavior_interpreter(Box::new(graph))
+        .with_host_module(viseme_host_module())
+        .build()
+        .map_err(|e| format!("arora build: {e}"))?;
+    Ok((arora, rig, rig_prefix))
+}
+
+fn with_device<T>(f: impl FnOnce(&mut Device) -> Result<T, String>) -> Result<T, JsValue> {
+    let device = DEVICE
+        .with(|d| d.borrow().clone())
+        .ok_or_else(|| JsValue::from_str("no device: call start() first"))?;
+    let mut guard = device
+        .try_borrow_mut()
+        .map_err(|_| JsValue::from_str("the device is mid-step"))?;
+    f(&mut guard).map_err(|e| JsValue::from_str(&e))
+}
+
+// ---------------------------------------------------------------------------
+// JS surface
+// ---------------------------------------------------------------------------
+
+/// Start one App rendering the face in `canvas` (a CSS selector) from the
+/// GLB `glb` (bytes from JS), with the device composed from its bundle.
+#[wasm_bindgen]
+pub fn start(canvas: String, glb: &[u8]) -> Result<(), JsValue> {
+    if RUNNING.load(Ordering::SeqCst) {
+        return Err(JsValue::from_str("already running; stop() first"));
+    }
+    let meta = FaceMeta::from_glb_bytes(glb).map_err(|e| JsValue::from_str(&e))?;
+    console_log(&format!(
+        "challenge-wasm: face {:?}: {} elements, {} animatables, bounds {:?}, {} graphs, {} neutral inputs",
+        meta.bundle.face_id,
+        meta.elements.len(),
+        meta.animatables.len(),
+        meta.root_bounds,
+        meta.bundle.graphs.len(),
+        meta.bundle.neutral_inputs.len()
+    ));
+    let (arora, rig, rig_prefix) = compose_device(&meta).map_err(|e| JsValue::from_str(&e))?;
+    let device = Rc::new(RefCell::new(Device {
+        arora,
+        rig: rig.clone(),
+        rig_prefix,
+    }));
+    DEVICE.with(|d| *d.borrow_mut() = Some(device.clone()));
+    INDEX_READY.store(false, Ordering::SeqCst);
+    EXIT_REQUESTED.store(false, Ordering::SeqCst);
+    RUNNING.store(true, Ordering::SeqCst);
+
+    // The GLB bytes as an in-memory asset source: `mem://face.glb`.
+    let dir = Dir::default();
+    dir.insert_asset(Path::new("face.glb"), glb.to_vec());
+
+    let mut app = App::new();
+    app.register_asset_source(
+        "mem",
+        AssetSourceBuilder::new(move || Box::new(MemoryAssetReader { root: dir.clone() })),
+    );
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "Vizij face (challenge-wasm)".into(),
+                    canvas: Some(canvas),
+                    fit_canvas_to_parent: true,
+                    prevent_default_event_handling: false,
+                    ..default()
+                }),
+                ..default()
+            })
+            .set(AssetPlugin {
+                meta_check: AssetMetaCheck::Never,
+                ..default()
+            }),
+    )
+    .insert_resource(meta)
+    .insert_resource(RigRes(rig))
+    .insert_resource(BindingIndex::default())
+    .insert_resource(ClearColor(Color::BLACK))
+    .insert_non_send_resource(DeviceRes(device))
+    .insert_non_send_resource(RunGuard)
+    .add_systems(Startup, (setup_scene, setup_camera))
+    .add_systems(
+        Update,
+        (step_device, index_scene, apply_pose, count_frames, request_exit).chain(),
+    );
+    #[cfg(feature = "picking")]
+    {
+        app.add_plugins(bevy::picking::mesh_picking::MeshPickingPlugin);
+        app.add_observer(on_click);
+    }
+    // On the web the winit runner spawns the loop and returns at once.
+    let exit = app.run();
+    console_log(&format!("challenge-wasm: App::run returned: {exit:?}"));
+    Ok(())
+}
+
+/// Ask the App to exit at its next frame (an `AppExit` message).
+#[wasm_bindgen]
+pub fn stop() {
+    EXIT_REQUESTED.store(true, Ordering::SeqCst);
+}
+
+/// True between `start()` and the drop of the App's world.
+#[wasm_bindgen]
+pub fn running() -> bool {
+    RUNNING.load(Ordering::SeqCst)
+}
+
+/// True once the scene spawned and its bindings are indexed.
+#[wasm_bindgen(js_name = indexReady)]
+pub fn index_ready() -> bool {
+    INDEX_READY.load(Ordering::SeqCst)
+}
+
+/// Frames rendered since `start()`.
+#[wasm_bindgen]
+pub fn frames() -> u32 {
+    FRAMES.load(Ordering::SeqCst)
+}
+
+/// Number of entries in the rig's current pose (what the view applies).
+#[wasm_bindgen(js_name = poseLen)]
+pub fn pose_len() -> Result<usize, JsValue> {
+    with_device(|d| Ok(d.rig.pose().len()))
+}
+
+/// Write one key into the store; `value_json` is an arora `Value` as JSON
+/// (`{"f32": 0.5}`) or a vizij shorthand (`{"float": 0.5}`).
+#[wasm_bindgen(js_name = setValue)]
+pub fn set_value(path: &str, value_json: &str) -> Result<(), JsValue> {
+    let json: Json = serde_json::from_str(value_json)
+        .map_err(|e| JsValue::from_str(&format!("value is not JSON: {e}")))?;
+    let json = vizij_api_core::json::normalize_value_json(json);
+    let value: Value = serde_json::from_value(json)
+        .map_err(|e| JsValue::from_str(&format!("not an arora Value: {e}")))?;
+    with_device(|d| {
+        let mut change = StateChange::new();
+        change.set.insert(Key::from(path), Some(value));
+        d.arora
+            .store()
+            .write(change)
+            .map_err(|e| format!("write: {e:?}"))
+    })
+}
+
+/// Read keys from the store: `paths` is a JS `string[]`; the result maps each
+/// path to its arora `Value` as a JS object (or `null`).
+#[wasm_bindgen(js_name = readValues)]
+pub fn read_values(paths: JsValue) -> Result<JsValue, JsValue> {
+    let paths: Vec<String> = js_sys::Array::from(&paths)
+        .iter()
+        .filter_map(|v| v.as_string())
+        .collect();
+    let keys: Vec<Key> = paths.iter().map(|p| Key::from(p.as_str())).collect();
+    let values = with_device(|d| Ok(d.arora.store().read(&keys)))?;
+    let out = js_sys::Object::new();
+    for (path, value) in paths.iter().zip(values) {
+        let json = serde_json::to_string(&value)
+            .map_err(|e| JsValue::from_str(&format!("serialize: {e}")))?;
+        js_sys::Reflect::set(&out, &JsValue::from_str(path), &js_sys::JSON::parse(&json)?)?;
+    }
+    Ok(out.into())
+}
+
+/// The face's rig prefix (`rig/<faceId>/`).
+#[wasm_bindgen(js_name = rigPrefix)]
+pub fn rig_prefix() -> Result<String, JsValue> {
+    with_device(|d| Ok(d.rig_prefix.clone()))
+}
+
+/// Spawn a `play_viseme(shape, weight)` run through the interpreter's SPAWN
+/// call (arora-behavior's interpreter module); returns the `TaskHandle` as
+/// JSON (`status` key, `stop` call, feedback keys).
+#[wasm_bindgen(js_name = spawnPlayViseme)]
+pub fn spawn_play_viseme(shape: &str, weight: f32) -> Result<String, JsValue> {
+    let call = Call {
+        module_id: Some(viseme::MODULE_ID),
+        id: viseme::PLAY_VISEME_ID,
+        args: vec![
+            StructureField {
+                id: gen_uuid_from_str("shape"),
+                value: Box::new(Value::String(shape.to_string())),
+            },
+            StructureField {
+                id: gen_uuid_from_str("weight"),
+                value: Box::new(Value::F32(weight)),
+            },
+        ],
+    };
+    with_device(|d| {
+        let result = d
+            .arora
+            .call(interpreter_module::encode_spawn(&call, RunPolicy::Concurrent))
+            .map_err(|e| format!("SPAWN failed: {e:?}"))?;
+        let handle = interpreter_module::decode_spawn_result(&result.ret)?;
+        serde_json::to_string(&handle).map_err(|e| format!("serialize handle: {e}"))
+    })
+}
+
+/// Halt a run: dispatch the handle's `stop` call; returns the `CallResult`
+/// as JSON.
+#[wasm_bindgen]
+pub fn halt(handle_json: &str) -> Result<String, JsValue> {
+    let handle: TaskHandle = serde_json::from_str(handle_json)
+        .map_err(|e| JsValue::from_str(&format!("not a TaskHandle: {e}")))?;
+    with_device(|d| {
+        let result = d
+            .arora
+            .call(handle.stop.clone())
+            .map_err(|e| format!("HALT failed: {e:?}"))?;
+        serde_json::to_string(&result).map_err(|e| format!("serialize result: {e}"))
+    })
+}
+
+/// The clicks recorded since the last call, as JSON strings (feature
+/// `picking`).
+#[wasm_bindgen(js_name = drainClicks)]
+pub fn drain_clicks() -> JsValue {
+    let clicks: Vec<String> = std::mem::take(&mut *CLICKS.lock().unwrap());
+    let arr = js_sys::Array::new();
+    for c in clicks {
+        arr.push(&JsValue::from_str(&c));
+    }
+    arr.into()
+}
+
+/// A JS function called with each click's JSON (feature `picking`).
+#[wasm_bindgen(js_name = setClickCallback)]
+pub fn set_click_callback(callback: js_sys::Function) {
+    CLICK_CALLBACK.with(|c| *c.borrow_mut() = Some(callback));
+}
+
+// ---------------------------------------------------------------------------
+// The view (bevy-wasm spike + view.rs's index_scene / apply_pose)
+// ---------------------------------------------------------------------------
+
+/// Index from animatable UUID to the scene entity/feature it drives.
+#[derive(Resource, Default)]
+struct BindingIndex {
+    by_uuid: HashMap<String, (Entity, FeatureKind, Option<usize>, f32)>,
+    ready: bool,
+}
+
+#[derive(Component)]
+struct ViewCamera;
+
+/// The web renderer's ambient model: albedo scaled by π/2 / π in linear.
+const ALBEDO_FACTOR: f32 = 0.5;
+
+fn shade(color: Color, factor: f32) -> Color {
+    let lin = color.to_linear();
+    Color::LinearRgba(LinearRgba {
+        red: lin.red * factor,
+        green: lin.green * factor,
+        blue: lin.blue * factor,
+        alpha: lin.alpha,
+    })
+}
+
+fn setup_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
+    commands.spawn(WorldAssetRoot(
+        asset_server.load(GltfAssetLabel::Scene(0).from_asset("mem://face.glb")),
+    ));
+}
+
+fn setup_camera(mut commands: Commands, meta: Res<FaceMeta>) {
+    let (cx, cy, bw, bh) = meta.root_bounds.unwrap_or((0.0, 0.0, 5.0, 4.0));
+    commands.spawn((
+        Camera3d::default(),
+        Camera {
+            clear_color: ClearColorConfig::Custom(Color::srgb_u8(0x10, 0x11, 0x14)),
+            ..default()
+        },
+        Projection::Orthographic(OrthographicProjection {
+            scaling_mode: ScalingMode::AutoMin {
+                min_width: bw,
+                min_height: bh,
+            },
+            ..OrthographicProjection::default_3d()
+        }),
+        Transform::from_xyz(cx, cy, 100.0).looking_at(Vec3::new(cx, cy, 0.0), Vec3::Y),
+        Tonemapping::None,
+        DebandDither::Disabled,
+        Msaa::Sample4,
+        ViewCamera,
+    ));
+}
+
+/// Step the device from Bevy's clock. The device is a non-send resource, so
+/// this system runs on the main thread (the only thread on wasm).
+fn step_device(device: NonSend<DeviceRes>, time: Res<Time>) {
+    match device.0.try_borrow_mut() {
+        Ok(mut d) => {
+            if let Err(e) = d.arora.step(time.delta()) {
+                warn!("device step failed: {e}");
+            }
+        }
+        Err(_) => warn!("device borrowed during step (JS re-entrancy)"),
+    }
+}
+
+fn count_frames() {
+    FRAMES.fetch_add(1, Ordering::SeqCst);
+}
+
+fn request_exit(mut exit: MessageWriter<AppExit>) {
+    if EXIT_REQUESTED.swap(false, Ordering::SeqCst) {
+        info!("AppExit requested from JS");
+        exit.write(AppExit::Success);
+    }
+}
+
+/// Joins the spawned GLB scene with the RobotData bindings (view.rs's
+/// `index_scene`, verbatim in logic).
+#[allow(clippy::too_many_arguments)]
+fn index_scene(
+    mut index: ResMut<BindingIndex>,
+    meta: Res<FaceMeta>,
+    names: Query<(Entity, &Name)>,
+    parents: Query<&ChildOf>,
+    children: Query<&Children>,
+    meshes: Query<(Entity, &MeshMaterial3d<StandardMaterial>), With<Mesh3d>>,
+    morphs: Query<Entity, With<MorphWeights>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut commands: Commands,
+) {
+    if index.ready {
+        return;
+    }
+    let depth = |entity: Entity| {
+        let mut depth = 0usize;
+        let mut current = entity;
+        while let Ok(parent) = parents.get(current) {
+            depth += 1;
+            current = parent.parent();
+        }
+        depth
+    };
+    let mut by_name: HashMap<&str, Entity> = HashMap::new();
+    for (entity, name) in &names {
+        by_name
+            .entry(name.as_str())
+            .and_modify(|kept| {
+                if depth(entity) > depth(*kept) {
+                    *kept = entity;
+                }
+            })
+            .or_insert(entity);
+    }
+    if !meta
+        .elements
+        .iter()
+        .all(|e| by_name.contains_key(e.node_name.as_str()))
+    {
+        return;
+    }
+
+    let mut mesh_of: HashMap<String, Entity> = HashMap::new();
+    let mut morph_of: HashMap<String, Entity> = HashMap::new();
+    for element in &meta.elements {
+        let node = by_name[element.node_name.as_str()];
+        let factor = if element.material.as_deref() == Some("basic") {
+            1.0
+        } else {
+            ALBEDO_FACTOR
+        };
+        for descendant in std::iter::once(node).chain(children.iter_descendants(node)) {
+            if let Ok((mesh_entity, material)) = meshes.get(descendant) {
+                let mut mat = materials
+                    .get(&material.0)
+                    .cloned()
+                    .unwrap_or_else(StandardMaterial::default);
+                mat.double_sided = true;
+                mat.cull_mode = None;
+                mat.unlit = true;
+                mat.base_color = shade(mat.base_color, factor);
+                let handle = materials.add(mat);
+                commands.entity(mesh_entity).insert(MeshMaterial3d(handle));
+                mesh_of.insert(element.node_name.clone(), mesh_entity);
+                break;
+            }
+        }
+        for descendant in std::iter::once(node).chain(children.iter_descendants(node)) {
+            if morphs.get(descendant).is_ok() {
+                morph_of.insert(element.node_name.clone(), descendant);
+                break;
+            }
+        }
+    }
+
+    let mut by_uuid = HashMap::new();
+    for (uuid, Binding { node_name, feature }) in &meta.animatables {
+        let Some(&node) = by_name.get(node_name.as_str()) else {
+            continue;
+        };
+        let element = meta.elements.iter().find(|e| &e.node_name == node_name);
+        let factor = if element.and_then(|e| e.material.as_deref()) == Some("basic") {
+            1.0
+        } else {
+            ALBEDO_FACTOR
+        };
+        let entry = match feature {
+            FeatureKind::Translation | FeatureKind::Rotation | FeatureKind::Scale => {
+                (node, feature.clone(), None, factor)
+            }
+            FeatureKind::Color | FeatureKind::Opacity => {
+                let Some(&mesh_entity) = mesh_of.get(node_name) else {
+                    continue;
+                };
+                (mesh_entity, feature.clone(), None, factor)
+            }
+            FeatureKind::Morph(target) => {
+                let Some(&morph_entity) = morph_of.get(node_name) else {
+                    continue;
+                };
+                let Some(i) = element.and_then(|e| e.morph_targets.iter().position(|m| m == target))
+                else {
+                    continue;
+                };
+                (morph_entity, feature.clone(), Some(i), factor)
+            }
+        };
+        by_uuid.insert(uuid.clone(), entry);
+    }
+    info!(
+        "scene indexed: {} bindings over {} elements",
+        by_uuid.len(),
+        meta.elements.len()
+    );
+    index.by_uuid = by_uuid;
+    index.ready = true;
+    INDEX_READY.store(true, Ordering::SeqCst);
+}
+
+/// Applies the rig's current pose onto the scene (view.rs's `apply_pose`).
+fn apply_pose(
+    index: Res<BindingIndex>,
+    rig: Res<RigRes>,
+    mut transforms: Query<&mut Transform>,
+    material_handles: Query<&MeshMaterial3d<StandardMaterial>>,
+    mut morph_weights: Query<&mut MorphWeights>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    if !index.ready {
+        return;
+    }
+    for (path, value) in rig.0.pose() {
+        let key = path.to_string();
+        let Some((entity, feature, morph_index, factor)) = index.by_uuid.get(&key) else {
+            continue;
+        };
+        match feature {
+            FeatureKind::Translation => {
+                if let (Ok(mut t), Some(v)) = (transforms.get_mut(*entity), as_xyz(&value)) {
+                    t.translation = Vec3::from_array(v);
+                }
+            }
+            FeatureKind::Rotation => {
+                if let (Ok(mut t), Some(v)) = (transforms.get_mut(*entity), as_xyz(&value)) {
+                    t.rotation = Quat::from_rotation_z(v[2])
+                        * Quat::from_rotation_y(v[1])
+                        * Quat::from_rotation_x(v[0]);
+                }
+            }
+            FeatureKind::Scale => {
+                if let Ok(mut t) = transforms.get_mut(*entity) {
+                    if let Some(v) = as_xyz(&value) {
+                        t.scale = Vec3::from_array(v);
+                    } else if let Some(s) = as_f32(&value) {
+                        t.scale = Vec3::splat(s);
+                    }
+                }
+            }
+            FeatureKind::Color => {
+                if let (Ok(handle), Some([r, g, b])) =
+                    (material_handles.get(*entity), as_rgb(&value))
+                {
+                    if let Some(mat) = materials.get_mut(&handle.0) {
+                        let alpha = mat.base_color.alpha();
+                        mat.base_color = shade(Color::linear_rgb(r, g, b), *factor).with_alpha(alpha);
+                    }
+                }
+            }
+            FeatureKind::Opacity => {
+                if let (Ok(handle), Some(o)) = (material_handles.get(*entity), as_f32(&value)) {
+                    if let Some(mat) = materials.get_mut(&handle.0) {
+                        mat.base_color.set_alpha(o);
+                        mat.alpha_mode = if o < 1.0 {
+                            AlphaMode::Blend
+                        } else {
+                            AlphaMode::Opaque
+                        };
+                    }
+                }
+            }
+            FeatureKind::Morph(_) => {
+                if let (Ok(mut weights), Some(w), Some(i)) =
+                    (morph_weights.get_mut(*entity), as_f32(&value), *morph_index)
+                {
+                    if let Some(slot) = weights.weights_mut().get_mut(i) {
+                        *slot = w;
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn as_f32(value: &Value) -> Option<f32> {
+    as_float(value).or_else(|| as_bool(value).map(|b| if b { 1.0 } else { 0.0 }))
+}
+
+fn as_xyz(value: &Value) -> Option<[f32; 3]> {
+    as_vec3(value)
+        .or_else(|| as_vector(value).and_then(|v| (v.len() >= 3).then(|| [v[0], v[1], v[2]])))
+}
+
+fn as_rgb(value: &Value) -> Option<[f32; 3]> {
+    as_color_rgba(value)
+        .map(|c| [c[0], c[1], c[2]])
+        .or_else(|| as_xyz(value))
+}
+
+/// Picking: on a click over a mesh, record the glTF node (the nearest named
+/// ancestor that is a RobotData element) and the hit, and hand it to JS.
+#[cfg(feature = "picking")]
+fn on_click(
+    click: On<bevy::picking::events::Pointer<bevy::picking::events::Click>>,
+    names: Query<&Name>,
+    parents: Query<&ChildOf>,
+    meta: Res<FaceMeta>,
+) {
+    // The event bubbles up the hierarchy; record it once, at its origin.
+    if click.entity != click.original_event_target() {
+        return;
+    }
+    let mut chain = Vec::new();
+    let mut current = click.original_event_target();
+    loop {
+        if let Ok(name) = names.get(current) {
+            chain.push(name.to_string());
+        }
+        match parents.get(current) {
+            Ok(parent) => current = parent.parent(),
+            Err(_) => break,
+        }
+    }
+    let element = chain
+        .iter()
+        .find(|n| meta.elements.iter().any(|e| &e.node_name == *n))
+        .cloned();
+    let hit = click.event.hit.position.map(|p| [p.x, p.y, p.z]);
+    let record = serde_json::json!({
+        "element": element,
+        "chain": chain,
+        "hit": hit,
+        "depth": click.event.hit.depth,
+        "pointer": [click.pointer_location.position.x, click.pointer_location.position.y],
+    })
+    .to_string();
+    info!("click: {record}");
+    CLICKS.lock().unwrap().push(record.clone());
+    CLICK_CALLBACK.with(|c| {
+        if let Some(f) = c.borrow().as_ref() {
+            let _ = f.call1(&JsValue::NULL, &JsValue::from_str(&record));
+        }
+    });
+}

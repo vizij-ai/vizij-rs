@@ -1,0 +1,1230 @@
+{
+ "source": "/Users/victor.paleologue/Code/Semio/vizij-web/apps/vizij-authoring/public/assets/Hugo_Current_Extended.glb",
+ "headless": {
+  "label": "headless-vs-source",
+  "bytes": {
+   "source": 3980836,
+   "output": 3972708
+  },
+  "jsonChunk": {
+   "source": 3011976,
+   "output": 3003848
+  },
+  "binChunk": {
+   "source": 968832,
+   "output": 968832
+  },
+  "asset": {
+   "source": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter"
+   },
+   "output": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter"
+   }
+  },
+  "extensionsUsed": {
+   "source": [
+    "RobotData",
+    "VIZIJ_bundle",
+    "KHR_materials_unlit"
+   ],
+   "output": [
+    "RobotData",
+    "VIZIJ_bundle",
+    "KHR_materials_unlit"
+   ]
+  },
+  "scenes": {
+   "source": [
+    {
+     "name": "Scene",
+     "nodes": [
+      20
+     ]
+    }
+   ],
+   "output": [
+    {
+     "name": "Scene",
+     "nodes": [
+      20
+     ]
+    }
+   ]
+  },
+  "counts": {
+   "nodes": {
+    "source": 21,
+    "output": 21
+   },
+   "meshes": {
+    "source": 19,
+    "output": 19
+   },
+   "materials": {
+    "source": 19,
+    "output": 19
+   },
+   "accessors": {
+    "source": 110,
+    "output": 110
+   },
+   "bufferViews": {
+    "source": 110,
+    "output": 110
+   },
+   "buffers": {
+    "source": 1,
+    "output": 1
+   },
+   "images": {
+    "source": 0,
+    "output": 0
+   },
+   "textures": {
+    "source": 0,
+    "output": 0
+   },
+   "animations": {
+    "source": 0,
+    "output": 0
+   }
+  },
+  "nodeOrder": {
+   "same": true,
+   "source": [
+    "Background",
+    "InnerFace",
+    "L_Cheek",
+    "L_EyeHighlight1",
+    "L_EyeHighlight2",
+    "L_Eye",
+    "L_EyeWhite",
+    "LBLid",
+    "LTLid",
+    "Mouth",
+    "R_Cheek",
+    "R_EyeHighlight1",
+    "R_EyeHighlight2",
+    "R_Eye",
+    "R_EyeWhite",
+    "RBLid",
+    "RTLid",
+    "Face_Tran_Rot_C",
+    "L_Brow",
+    "R_Brow",
+    "Scene"
+   ],
+   "output": [
+    "Background",
+    "InnerFace",
+    "L_Cheek",
+    "L_EyeHighlight1",
+    "L_EyeHighlight2",
+    "L_Eye",
+    "L_EyeWhite",
+    "LBLid",
+    "LTLid",
+    "Mouth",
+    "R_Cheek",
+    "R_EyeHighlight1",
+    "R_EyeHighlight2",
+    "R_Eye",
+    "R_EyeWhite",
+    "RBLid",
+    "RTLid",
+    "Face_Tran_Rot_C",
+    "L_Brow",
+    "R_Brow",
+    "Scene"
+   ]
+  },
+  "nodes": [
+   {
+    "name": "Background",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Background",
+     "output": "Background"
+    }
+   },
+   {
+    "name": "InnerFace",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "InnerFace",
+     "output": "InnerFace"
+    }
+   },
+   {
+    "name": "L_Cheek",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Cheek",
+     "output": "L_Cheek"
+    }
+   },
+   {
+    "name": "L_EyeHighlight1",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_EyeHighlight1",
+     "output": "L_EyeHighlight1"
+    }
+   },
+   {
+    "name": "L_EyeHighlight2",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_EyeHighlight2",
+     "output": "L_EyeHighlight2"
+    }
+   },
+   {
+    "name": "L_Eye",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Eye",
+     "output": "L_Eye"
+    }
+   },
+   {
+    "name": "L_EyeWhite",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_EyeWhite",
+     "output": "L_EyeWhite"
+    }
+   },
+   {
+    "name": "LBLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "LBLid",
+     "output": "LBLid"
+    }
+   },
+   {
+    "name": "LTLid",
+    "robotDataDiff": [],
+    "trsDiff": [
+     {
+      "path": "/t/1",
+      "a": 2.2244811058044434,
+      "b": 2.2347805500030518
+     }
+    ],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "LTLid",
+     "output": "LTLid"
+    }
+   },
+   {
+    "name": "Mouth",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Mouth",
+     "output": "Mouth"
+    }
+   },
+   {
+    "name": "R_Cheek",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Cheek",
+     "output": "R_Cheek"
+    }
+   },
+   {
+    "name": "R_EyeHighlight1",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_EyeHighlight1",
+     "output": "R_EyeHighlight1"
+    }
+   },
+   {
+    "name": "R_EyeHighlight2",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_EyeHighlight2",
+     "output": "R_EyeHighlight2"
+    }
+   },
+   {
+    "name": "R_Eye",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Eye",
+     "output": "R_Eye"
+    }
+   },
+   {
+    "name": "R_EyeWhite",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_EyeWhite",
+     "output": "R_EyeWhite"
+    }
+   },
+   {
+    "name": "RBLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "RBLid",
+     "output": "RBLid"
+    }
+   },
+   {
+    "name": "RTLid",
+    "robotDataDiff": [],
+    "trsDiff": [
+     {
+      "path": "/t/1",
+      "a": 2.2244811058044434,
+      "b": 2.2347805500030518
+     }
+    ],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "RTLid",
+     "output": "RTLid"
+    }
+   },
+   {
+    "name": "Face_Tran_Rot_C",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "L_Brow",
+    "robotDataDiff": [],
+    "trsDiff": [
+     {
+      "path": "/t/0",
+      "a": 2.5999999046325684,
+      "b": 2.601634979248047
+     }
+    ],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Brow",
+     "output": "L_Brow"
+    }
+   },
+   {
+    "name": "R_Brow",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Brow",
+     "output": "R_Brow"
+    }
+   },
+   {
+    "name": "Scene",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": true,
+     "output": true
+    },
+    "meshName": {}
+   }
+  ],
+  "bundleDiff": [],
+  "bundleEqualJson": true,
+  "meshDiff": [],
+  "materialDiff": [],
+  "materialOrder": {
+   "source": [
+    "Face_Color.001",
+    "Face_Color.001",
+    "CheekShader",
+    "Material.004",
+    "Material.002",
+    "Material.002",
+    "Material.002",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Material.004",
+    "CheekShader",
+    "Material.004",
+    "Material.002",
+    "Material.002",
+    "Material.002",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Material.004",
+    "Material.004"
+   ],
+   "output": [
+    "Face_Color.001",
+    "Face_Color.001",
+    "CheekShader",
+    "Material.004",
+    "Material.002",
+    "Material.002",
+    "Material.002",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Material.004",
+    "CheekShader",
+    "Material.004",
+    "Material.002",
+    "Material.002",
+    "Material.002",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Material.004",
+    "Material.004"
+   ]
+  }
+ },
+ "fallback": {
+  "label": "fallback-vs-source",
+  "bytes": {
+   "source": 3980836,
+   "output": 3973428
+  },
+  "jsonChunk": {
+   "source": 3011976,
+   "output": 3004568
+  },
+  "binChunk": {
+   "source": 968832,
+   "output": 968832
+  },
+  "asset": {
+   "source": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter"
+   },
+   "output": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter"
+   }
+  },
+  "extensionsUsed": {
+   "source": [
+    "RobotData",
+    "VIZIJ_bundle",
+    "KHR_materials_unlit"
+   ],
+   "output": [
+    "VIZIJ_bundle",
+    "RobotData",
+    "KHR_materials_unlit"
+   ]
+  },
+  "scenes": {
+   "source": [
+    {
+     "name": "Scene",
+     "nodes": [
+      20
+     ]
+    }
+   ],
+   "output": [
+    {
+     "name": "Scene",
+     "nodes": [
+      21
+     ]
+    }
+   ]
+  },
+  "counts": {
+   "nodes": {
+    "source": 21,
+    "output": 22
+   },
+   "meshes": {
+    "source": 19,
+    "output": 19
+   },
+   "materials": {
+    "source": 19,
+    "output": 19
+   },
+   "accessors": {
+    "source": 110,
+    "output": 110
+   },
+   "bufferViews": {
+    "source": 110,
+    "output": 110
+   },
+   "buffers": {
+    "source": 1,
+    "output": 1
+   },
+   "images": {
+    "source": 0,
+    "output": 0
+   },
+   "textures": {
+    "source": 0,
+    "output": 0
+   },
+   "animations": {
+    "source": 0,
+    "output": 0
+   }
+  },
+  "nodeOrder": {
+   "same": false,
+   "source": [
+    "Background",
+    "InnerFace",
+    "L_Cheek",
+    "L_EyeHighlight1",
+    "L_EyeHighlight2",
+    "L_Eye",
+    "L_EyeWhite",
+    "LBLid",
+    "LTLid",
+    "Mouth",
+    "R_Cheek",
+    "R_EyeHighlight1",
+    "R_EyeHighlight2",
+    "R_Eye",
+    "R_EyeWhite",
+    "RBLid",
+    "RTLid",
+    "Face_Tran_Rot_C",
+    "L_Brow",
+    "R_Brow",
+    "Scene"
+   ],
+   "output": [
+    "Background",
+    "InnerFace",
+    "L_Cheek",
+    "L_EyeHighlight1",
+    "L_EyeHighlight2",
+    "L_Eye",
+    "L_EyeWhite",
+    "LBLid",
+    "LTLid",
+    "Mouth",
+    "R_Cheek",
+    "R_EyeHighlight1",
+    "R_EyeHighlight2",
+    "R_Eye",
+    "R_EyeWhite",
+    "RBLid",
+    "RTLid",
+    "Face_Tran_Rot_C",
+    "L_Brow",
+    "R_Brow",
+    "Scene",
+    "Scene"
+   ]
+  },
+  "nodes": [
+   {
+    "name": "Background",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "Background"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Background",
+     "output": "Background"
+    }
+   },
+   {
+    "name": "InnerFace",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "InnerFace"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "InnerFace",
+     "output": "InnerFace"
+    }
+   },
+   {
+    "name": "L_Cheek",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "L_Cheek"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Cheek",
+     "output": "L_Cheek"
+    }
+   },
+   {
+    "name": "L_EyeHighlight1",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "L_EyeHighlight1"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_EyeHighlight1",
+     "output": "L_EyeHighlight1"
+    }
+   },
+   {
+    "name": "L_EyeHighlight2",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "L_EyeHighlight2"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_EyeHighlight2",
+     "output": "L_EyeHighlight2"
+    }
+   },
+   {
+    "name": "L_Eye",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "L_Eye"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Eye",
+     "output": "L_Eye"
+    }
+   },
+   {
+    "name": "L_EyeWhite",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "L_EyeWhite"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_EyeWhite",
+     "output": "L_EyeWhite"
+    }
+   },
+   {
+    "name": "LBLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lidcurve"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "LBLid"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "LBLid",
+     "output": "LBLid"
+    }
+   },
+   {
+    "name": "LTLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lidcurve"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "LTLid"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "LTLid",
+     "output": "LTLid"
+    }
+   },
+   {
+    "name": "Mouth",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "ltsneer",
+       "lbsneer",
+       "rtsneer",
+       "rbsneer",
+       "jawud",
+       "sidewide",
+       "sideud"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "Mouth"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Mouth",
+     "output": "Mouth"
+    }
+   },
+   {
+    "name": "R_Cheek",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "R_Cheek"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Cheek",
+     "output": "R_Cheek"
+    }
+   },
+   {
+    "name": "R_EyeHighlight1",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "R_EyeHighlight1"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_EyeHighlight1",
+     "output": "R_EyeHighlight1"
+    }
+   },
+   {
+    "name": "R_EyeHighlight2",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "R_EyeHighlight2"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_EyeHighlight2",
+     "output": "R_EyeHighlight2"
+    }
+   },
+   {
+    "name": "R_Eye",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "R_Eye"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Eye",
+     "output": "R_Eye"
+    }
+   },
+   {
+    "name": "R_EyeWhite",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "R_EyeWhite"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_EyeWhite",
+     "output": "R_EyeWhite"
+    }
+   },
+   {
+    "name": "RBLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lidcurve"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "RBLid"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "RBLid",
+     "output": "RBLid"
+    }
+   },
+   {
+    "name": "RTLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lidcurve"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "RTLid"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "RTLid",
+     "output": "RTLid"
+    }
+   },
+   {
+    "name": "Face_Tran_Rot_C",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "Face_Tran_Rot_C"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "L_Brow",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "in",
+       "mid",
+       "out"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "L_Brow"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Brow",
+     "output": "L_Brow"
+    }
+   },
+   {
+    "name": "R_Brow",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "in",
+       "mid",
+       "out"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "R_Brow"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Brow",
+     "output": "R_Brow"
+    }
+   },
+   {
+    "name": "Scene",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "Scene"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": true,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "Scene#1",
+    "missingInSource": true
+   }
+  ],
+  "bundleDiff": [],
+  "bundleEqualJson": true,
+  "meshDiff": [],
+  "materialDiff": [],
+  "materialOrder": {
+   "source": [
+    "Face_Color.001",
+    "Face_Color.001",
+    "CheekShader",
+    "Material.004",
+    "Material.002",
+    "Material.002",
+    "Material.002",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Material.004",
+    "CheekShader",
+    "Material.004",
+    "Material.002",
+    "Material.002",
+    "Material.002",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Material.004",
+    "Material.004"
+   ],
+   "output": [
+    "Face_Color.001",
+    "Face_Color.001",
+    "CheekShader",
+    "Material.004",
+    "Material.002",
+    "Material.002",
+    "Material.002",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Material.004",
+    "CheekShader",
+    "Material.004",
+    "Material.002",
+    "Material.002",
+    "Material.002",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Material.004",
+    "Material.004"
+   ]
+  }
+ },
+ "roundTrip": {
+  "worldDiff": [],
+  "animatablesDiff": [],
+  "bundleDiff": [],
+  "animations": {
+   "source": 0,
+   "reloaded": 0
+  },
+  "rootBounds": {
+   "source": {
+    "center": {
+     "x": 0.04513396086701604,
+     "y": 0.39433996090327383
+    },
+    "size": {
+     "x": 18.256377189555316,
+     "y": 11.56279383008164
+    }
+   },
+   "reloaded": {
+    "center": {
+     "x": 0.04513396086701604,
+     "y": 0.39433996090327383
+    },
+    "size": {
+     "x": 18.256377189555316,
+     "y": 11.56279383008164
+    }
+   }
+  }
+ },
+ "timingsMs": {
+  "load": 661.3142500000004,
+  "build": 45.05254200000036,
+  "export": 567.2117499999995,
+  "total": 4741.788167000001
+ },
+ "memoryMB": {
+  "rss": 147.193856,
+  "heapUsed": 68.516672
+ }
+}

@@ -1,0 +1,23 @@
+case=api32-swiftshader-gles apk=bevy-spike-gles-debug.apk serial=emulator-5558 date=2026-09-18T14:33:16Z
+android=12
+sdk=32
+wm=Physical size: 1080x2220
+install=Success
+Status: ok TotalTime: 13497 
+pid_after_20s=9540
+resumed=      topResumedActivity=ActivityRecord{6561cc8 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t28}
+pixels_a: center (242, 240, 244) orange_cube_px 0 clear_color_px 442 of 37395
+pixels_b: center (242, 240, 244) orange_cube_px 0 clear_color_px 442 of 37395
+diff_a_b: bbox None changed_px 0
+gfxinfo: Total frames rendered: 0
+sf_latency_rows=2
+logcat_lines=     735
+log: 09-18 16:34:06.354  9540  9566 I RustStdoutStderr: 2026-09-18T14:34:06.351872Z  INFO bevy_render::renderer: AdapterInfo { name: "Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader dri
+log: 09-18 16:34:08.008  9540  9566 I RustStdoutStderr: 2026-09-18T14:34:08.008186Z  INFO bevy_pbr::cluster: GPU clustering isn't supported on this device; falling back to CPU clustering.
+log: 09-18 16:34:08.009  9540  9566 I RustStdoutStderr: 2026-09-18T14:34:08.009010Z  INFO bevy_render::batching::gpu_preprocessing: GPU preprocessing is not supported on this device. Falling back to CPU preprocessing.
+log: 09-18 16:34:11.652  9540  9566 I RustStdoutStderr: 2026-09-18T14:34:11.652018Z  INFO bevy_winit::system: Creating new window app_process64 (65v0)
+log: 09-18 16:34:16.154  9540  9566 I RustStdoutStderr: 2026-09-18T14:34:16.150151Z ERROR wgpu_hal::gles::device: 	Shader compilation failed: ERROR: 0:26: 'Except for images with the r32f, r32i and r32ui format qualifiers, image variables must be qualified readonly
+log: 09-18 16:34:16.165  9540  9566 I RustStdoutStderr: 2026-09-18T14:34:16.165692Z ERROR bevy_render::error_handler: Caught rendering error: Validation Error
+log: 09-18 16:34:16.182  9540  9566 I RustStdoutStderr: 2026-09-18T14:34:16.171818Z ERROR bevy_render::error_handler: Quitting the application due to Internal RenderError
+log: 09-18 16:34:16.571  9540  9566 I RustStdoutStderr: 2026-09-18T14:34:16.571083Z ERROR wgpu_hal::gles::device: 	Shader compilation failed: ERROR: 0:24: 'Except for images with the r32f, r32i and r32ui format qualifiers, image variables must be qualified readonly
+log: 09-18 16:34:16.631  9540  9566 I RustStdoutStderr: 2026-09-18T14:34:16.631093Z ERROR bevy_render::error_handler: Caught rendering error: Validation Error

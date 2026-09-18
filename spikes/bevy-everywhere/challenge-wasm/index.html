@@ -1,0 +1,92 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>challenge-wasm: one module, one App, N faces</title>
+<style>
+  body { margin: 0; background: #202020; color: #ddd; font: 14px system-ui; }
+  /* The page colour under the transparent canvas: visible wherever no viewport draws. */
+  #stage { position: relative; width: 1000px; height: 520px; margin: 24px; background: #35507a; }
+  .slot { position: absolute; outline: 1px dashed #9ab; }
+  #slot-a { left: 20px; top: 20px; width: 600px; height: 400px; }
+  #slot-b { left: 640px; top: 120px; width: 340px; height: 300px; }
+  #view { position: absolute; inset: 0; width: 100% !important; height: 100% !important; outline: none; }
+</style>
+<p style="margin:24px 24px 0">challenge-wasm · <span id="status">loading…</span></p>
+<div id="stage">
+  <div class="slot" id="slot-a"></div>
+  <div class="slot" id="slot-b"></div>
+  <canvas id="view"></canvas>
+</div>
+<script type="module">
+  const params = new URLSearchParams(location.search);
+  const pkg = params.get('pkg') ?? 'pkg';
+  const t0 = performance.now();
+  const mod = await import(`./${pkg}/challenge_wasm.js`);
+  const exports = await mod.default();
+  const t1 = performance.now();
+  const canvas = document.getElementById('view');
+  const contextEvents = [];
+  canvas.addEventListener('webglcontextlost', (e) => contextEvents.push('lost@' + Math.round(performance.now())));
+  canvas.addEventListener('webglcontextrestored', () => contextEvents.push('restored@' + Math.round(performance.now())));
+
+  const glbCache = new Map();
+  async function glb(name) {
+    if (!glbCache.has(name)) {
+      glbCache.set(name, new Uint8Array(await (await fetch(`assets/${name}`)).arrayBuffer()));
+    }
+    return glbCache.get(name);
+  }
+
+  // faceId -> { dev, slotId }: the page owns every device and steps it.
+  const devices = new Map();
+  const stepErrors = [];
+  async function load(id, glbName, slotId) {
+    const bytes = await glb(glbName);
+    const t = performance.now();
+    const dev = mod.loadFace(id, bytes);
+    devices.set(id, { dev, slotId, loadMs: performance.now() - t });
+    placeRects();
+    return dev;
+  }
+  function unload(id) {
+    const entry = devices.get(id);
+    if (!entry) return false;
+    mod.unloadFace(id);
+    mod.clearRect(id);
+    entry.dev.release();
+    entry.dev.free();
+    devices.delete(id);
+    return true;
+  }
+  function placeRects() {
+    const cr = canvas.getBoundingClientRect();
+    for (const [id, { slotId }] of devices) {
+      const r = document.getElementById(slotId).getBoundingClientRect();
+      mod.setRect(id, r.x - cr.x, r.y - cr.y, r.width, r.height);
+    }
+  }
+  let last = performance.now();
+  let rafTicks = 0;
+  function loop(t) {
+    const dt = Math.min(t - last, 100);
+    last = t;
+    rafTicks += 1;
+    for (const [id, { dev }] of devices) {
+      try { dev.step(dt); } catch (e) { stepErrors.push(`${id}: ${e}`); }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  window.__vz = { mod, exports, load, unload, devices, placeRects, glbCache, stepErrors, contextEvents, canvas,
+    rafTicks: () => rafTicks,
+    memory: () => exports.memory.buffer.byteLength };
+  window.__timing = { initMs: Math.round(t1 - t0), memoryAfterInit: exports.memory.buffer.byteLength };
+  if (!params.has('nomount')) {
+    const t2 = performance.now();
+    mod.mount('#view');
+    window.__timing.mountMs = Math.round(performance.now() - t2);
+    window.__timing.memoryAfterMount = exports.memory.buffer.byteLength;
+  }
+  requestAnimationFrame(loop);
+  document.getElementById('status').textContent = JSON.stringify(window.__timing);
+  window.__spikeStarted = true;
+</script>

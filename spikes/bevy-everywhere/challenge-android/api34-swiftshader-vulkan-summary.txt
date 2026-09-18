@@ -1,0 +1,25 @@
+case=api34-swiftshader-vulkan apk=bevy-spike-vulkan-debug.apk serial=emulator-5560 date=2026-09-18T14:31:37Z
+android=14
+sdk=34
+wm=Physical size: 2560x1600
+install=Success
+Status: ok TotalTime: 8844 
+pid_after_20s=11322
+resumed=    topResumedActivity=ActivityRecord{d0a5b4e u0 ai.vizij.bevyspike/android.app.NativeActivity t8}
+pixels_a: center (240, 240, 243) orange_cube_px 45 clear_color_px 633 of 64000
+pixels_b: center (240, 240, 243) orange_cube_px 45 clear_color_px 635 of 64000
+diff_a_b: bbox (2448, 18, 2471, 37) changed_px 3
+gfxinfo: Total frames rendered: 0
+sf_layer=e056450 ActivityRecordInputSink ai.vizij.bevyspike/android.app.NativeActivity#323
+sf_layer=ActivityRecord{d0a5b4e u0 ai.vizij.bevyspike/android.app.NativeActivity#319
+sf_layer=867017c ai.vizij.bevyspike/android.app.NativeActivity#324
+sf_latency_rows=1
+logcat_lines=     951
+log: 09-18 16:31:47.096 11322 11384 I RustStdoutStderr: 2026-09-18T14:31:47.079696Z  INFO bevy_render::renderer: AdapterInfo { name: "SwiftShader Device (LLVM 10.0.0)", vendor: 6880, device: 49374, device_type: Cpu, device_pci_bus_id: "", driver: "SwiftShader drive
+log: 09-18 16:31:49.013 11322 11384 I RustStdoutStderr: 2026-09-18T14:31:49.012585Z  INFO bevy_pbr::cluster: GPU clustering isn't supported on this device; falling back to CPU clustering.
+log: 09-18 16:31:49.013 11322 11384 I RustStdoutStderr: 2026-09-18T14:31:49.013345Z  INFO bevy_render::batching::gpu_preprocessing: Some GPU preprocessing are limited on this device.
+log: 09-18 16:31:50.102 11322 11384 I RustStdoutStderr: 2026-09-18T14:31:50.102459Z  INFO bevy_winit::system: Creating new window app_process64 (65v0)
+log: 09-18 16:32:05.100 11322 11384 I RustStdoutStderr: 2026-09-18T14:32:05.098321Z ERROR bevy_render::error_handler: Caught DeviceLost error: Unknown Unexpected error variant (driver implementation is at fault)
+log: 09-18 16:32:05.111 11322 11384 I RustStdoutStderr: thread 'Compute Task Pool (0)' (11388) panicked at /Users/victor.paleologue/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wgpu-29.0.4/src/backend/wgpu_core.rs:2253:18:
+log: 09-18 16:32:05.123 11322 11384 I RustStdoutStderr: Encountered a panic in system `<Enable the debug feature to see the name>`!
+log: 09-18 16:32:05.154 11322 11384 I RustStdoutStderr: Encountered a panic in system `<Enable the debug feature to see the name>`!

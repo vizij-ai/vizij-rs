@@ -1,0 +1,37 @@
+case=api35-host2-vulkan apk=bevy-spike-vulkan-debug.apk serial=emulator-5562 date=2026-09-18T14:52:13Z
+sdk=35
+install=Success
+Status: timeout 
+t=5s dominant=[((26, 27, 32), 11003), ((255, 255, 255), 139)] orange_px=0 center=(21, 101, 192)
+t=10s dominant=[((10, 11, 13), 7634), ((9, 9, 11), 1457)] orange_px=0 center=(241, 240, 247)
+t=15s dominant=[((22, 22, 22), 6781), ((27, 48, 50), 1476)] orange_px=0 center=(241, 240, 247)
+t=20s dominant=[((22, 22, 22), 6781), ((27, 48, 50), 1476)] orange_px=0 center=(241, 240, 247)
+t=25s dominant=[((22, 22, 22), 6781), ((27, 48, 50), 1476)] orange_px=0 center=(241, 240, 247)
+t=30s dominant=[((22, 22, 22), 6781), ((27, 48, 50), 1476)] orange_px=0 center=(241, 240, 247)
+t=35s dominant=[((22, 22, 22), 6781), ((27, 48, 50), 1476)] orange_px=0 center=(241, 240, 247)
+t=40s dominant=[((22, 22, 22), 6781), ((27, 48, 50), 1478)] orange_px=0 center=(241, 240, 247)
+t=45s dominant=[((22, 22, 22), 6814), ((27, 48, 50), 1461)] orange_px=0 center=(241, 240, 247)
+pid_at_end=2439
+sf_layer=
+sf1: rows=1 last_present_ns=
+sf2: rows=1 last_present_ns=
+resumed=    topResumedActivity=ActivityRecord{79877b8 u0 ai.vizij.bevyspike/android.app.NativeActivity t13}
+log: 09-18 16:55:35.249   557  2379 E ActivityManager: ANR in com.google.android.calendar
+log: 09-18 16:55:48.048   557  2445 E ActivityManager: ANR in com.google.android.googlequicksearchbox:search
+log: 09-18 16:55:58.654   557  2537 E ActivityManager: ANR in com.google.android.gms.persistent
+log: 09-18 16:56:08.557   557  2590 E ActivityManager: ANR in com.android.phone
+log: 09-18 16:56:09.571  2439  2629 I RustStdoutStderr: 2026-09-18T14:56:09.571128Z  INFO bevy_render::renderer: AdapterInfo { name: "Apple M1", vendor: 4203, device: 436601351, device_type: IntegratedGpu,
+log: 09-18 16:56:20.055   557  2590 E ActivityManager: ANR in com.google.android.providers.media.module
+log: 09-18 16:56:26.846  2439  2629 I RustStdoutStderr: 2026-09-18T14:56:26.833768Z  INFO bevy_winit::system: Creating new window app_process64 (65v0)
+log: 09-18 16:56:29.719  2439  2629 I RustStdoutStderr: 2026-09-18T14:56:29.692466Z  WARN bevy_time: time_system did not receive the time from the render world! Calculations depending on the time may be in
+log: 09-18 16:56:30.174   557  2590 E ActivityManager: ANR in com.google.android.inputmethod.latin
+log: 09-18 16:56:55.951   557  2741 E ActivityManager: ANR in com.google.android.calendar
+log: 09-18 16:56:55.963  2553  2769 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 2769 (bt_stack_manage), pid 2553 (droid.bluetooth)
+log: 09-18 16:57:05.092   557  2741 E ActivityManager: ANR in com.google.android.googlequicksearchbox:search
+log: 09-18 16:57:24.320   557  2741 E ActivityManager: ANR in com.google.android.gms.persistent
+log: 09-18 16:57:31.473   557  2741 E ActivityManager: ANR in com.android.phone
+log: 09-18 16:57:31.491   557  2741 E ActivityManager: ANR in com.google.android.as
+log: 09-18 16:58:02.827   557  2973 E ActivityManager: ANR in com.google.android.providers.media.module
+log: 09-18 16:58:04.028   557  2973 E ActivityManager: ANR in com.google.android.googlequicksearchbox:search
+log: 09-18 16:58:13.955   557  3191 E ActivityManager: ANR in com.android.phone
+log: 09-18 16:58:31.907   557  3344 E ActivityManager: ANR in com.google.android.inputmethod.latin

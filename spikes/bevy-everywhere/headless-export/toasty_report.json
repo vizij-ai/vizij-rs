@@ -1,0 +1,2410 @@
+{
+ "source": "/Users/victor.paleologue/Code/Semio/vizij-web/apps/vizij-authoring/public/assets/Toasty_Current.glb",
+ "headless": {
+  "label": "headless-vs-source",
+  "bytes": {
+   "source": 4853568,
+   "output": 4845792
+  },
+  "jsonChunk": {
+   "source": 4745452,
+   "output": 4737676
+  },
+  "binChunk": {
+   "source": 108088,
+   "output": 108088
+  },
+  "asset": {
+   "source": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter"
+   },
+   "output": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter"
+   }
+  },
+  "extensionsUsed": {
+   "source": [
+    "RobotData",
+    "VIZIJ_bundle",
+    "KHR_materials_unlit"
+   ],
+   "output": [
+    "RobotData",
+    "VIZIJ_bundle",
+    "KHR_materials_unlit"
+   ]
+  },
+  "scenes": {
+   "source": [
+    {
+     "name": "Scene",
+     "nodes": [
+      48
+     ]
+    }
+   ],
+   "output": [
+    {
+     "name": "Scene",
+     "nodes": [
+      48
+     ]
+    }
+   ]
+  },
+  "counts": {
+   "nodes": {
+    "source": 49,
+    "output": 49
+   },
+   "meshes": {
+    "source": 33,
+    "output": 33
+   },
+   "materials": {
+    "source": 33,
+    "output": 33
+   },
+   "accessors": {
+    "source": 266,
+    "output": 266
+   },
+   "bufferViews": {
+    "source": 266,
+    "output": 266
+   },
+   "buffers": {
+    "source": 1,
+    "output": 1
+   },
+   "images": {
+    "source": 0,
+    "output": 0
+   },
+   "textures": {
+    "source": 0,
+    "output": 0
+   },
+   "animations": {
+    "source": 0,
+    "output": 0
+   }
+  },
+  "nodeOrder": {
+   "same": true,
+   "source": [
+    "L_BLid",
+    "L_Highlight",
+    "L_Iris",
+    "L_Pupil",
+    "L_Sclera",
+    "L_LidGEO",
+    "L_TLid",
+    "L_EyeControl",
+    "R_BLid",
+    "R_LidGEO",
+    "R_Highlight",
+    "R_Iris",
+    "R_Pupil",
+    "R_Sclera",
+    "R_TLid",
+    "R_EyeControl",
+    "EyeControl",
+    "FaceShadowGeo",
+    "Bottom_Teeth",
+    "Mouth",
+    "MouthBlack",
+    "TopTeeth",
+    "MouthControl",
+    "Plane",
+    "FaceGEO",
+    "BG_GEO",
+    "Strip1",
+    "Stripe2",
+    "Stripe3",
+    "Stripe4",
+    "Stripe5",
+    "Stripe6",
+    "Stripe7",
+    "Stripe8",
+    "Stripe9",
+    "LMouthUD",
+    "RMouthUD",
+    "JawUD",
+    "LSide",
+    "RSide",
+    "TLipMidUD",
+    "TLipLUD",
+    "TLipRUD",
+    "BLipMidUD",
+    "BLipLUD",
+    "BLipRUD",
+    "LBrow",
+    "RBrow",
+    "Scene"
+   ],
+   "output": [
+    "L_BLid",
+    "L_Highlight",
+    "L_Iris",
+    "L_Pupil",
+    "L_Sclera",
+    "L_LidGEO",
+    "L_TLid",
+    "L_EyeControl",
+    "R_BLid",
+    "R_LidGEO",
+    "R_Highlight",
+    "R_Iris",
+    "R_Pupil",
+    "R_Sclera",
+    "R_TLid",
+    "R_EyeControl",
+    "EyeControl",
+    "FaceShadowGeo",
+    "Bottom_Teeth",
+    "Mouth",
+    "MouthBlack",
+    "TopTeeth",
+    "MouthControl",
+    "Plane",
+    "FaceGEO",
+    "BG_GEO",
+    "Strip1",
+    "Stripe2",
+    "Stripe3",
+    "Stripe4",
+    "Stripe5",
+    "Stripe6",
+    "Stripe7",
+    "Stripe8",
+    "Stripe9",
+    "LMouthUD",
+    "RMouthUD",
+    "JawUD",
+    "LSide",
+    "RSide",
+    "TLipMidUD",
+    "TLipLUD",
+    "TLipRUD",
+    "BLipMidUD",
+    "BLipLUD",
+    "BLipRUD",
+    "LBrow",
+    "RBrow",
+    "Scene"
+   ]
+  },
+  "nodes": [
+   {
+    "name": "L_BLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_BLid",
+     "output": "L_BLid"
+    }
+   },
+   {
+    "name": "L_Highlight",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Highlight",
+     "output": "L_Highlight"
+    }
+   },
+   {
+    "name": "L_Iris",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Iris",
+     "output": "L_Iris"
+    }
+   },
+   {
+    "name": "L_Pupil",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Pupil",
+     "output": "L_Pupil"
+    }
+   },
+   {
+    "name": "L_Sclera",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Sclera",
+     "output": "L_Sclera"
+    }
+   },
+   {
+    "name": "L_LidGEO",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_LidGEO",
+     "output": "L_LidGEO"
+    }
+   },
+   {
+    "name": "L_TLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_TLid",
+     "output": "L_TLid"
+    }
+   },
+   {
+    "name": "L_EyeControl",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "R_BLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_BLid",
+     "output": "R_BLid"
+    }
+   },
+   {
+    "name": "R_LidGEO",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_LidGEO",
+     "output": "R_LidGEO"
+    }
+   },
+   {
+    "name": "R_Highlight",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Highlight",
+     "output": "R_Highlight"
+    }
+   },
+   {
+    "name": "R_Iris",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Iris",
+     "output": "R_Iris"
+    }
+   },
+   {
+    "name": "R_Pupil",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Pupil",
+     "output": "R_Pupil"
+    }
+   },
+   {
+    "name": "R_Sclera",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Sclera",
+     "output": "R_Sclera"
+    }
+   },
+   {
+    "name": "R_TLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_TLid",
+     "output": "R_TLid"
+    }
+   },
+   {
+    "name": "R_EyeControl",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "EyeControl",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "FaceShadowGeo",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "FaceShadowGeo",
+     "output": "FaceShadowGeo"
+    }
+   },
+   {
+    "name": "Bottom_Teeth",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Bottom_Teeth",
+     "output": "Bottom_Teeth"
+    }
+   },
+   {
+    "name": "Mouth",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Mouth",
+     "output": "Mouth"
+    }
+   },
+   {
+    "name": "MouthBlack",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "MouthBlack",
+     "output": "MouthBlack"
+    }
+   },
+   {
+    "name": "TopTeeth",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "TopTeeth",
+     "output": "TopTeeth"
+    }
+   },
+   {
+    "name": "MouthControl",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "Plane",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Plane",
+     "output": "Plane"
+    }
+   },
+   {
+    "name": "FaceGEO",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "FaceGEO",
+     "output": "FaceGEO"
+    }
+   },
+   {
+    "name": "BG_GEO",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "BG_GEO",
+     "output": "BG_GEO"
+    }
+   },
+   {
+    "name": "Strip1",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Strip1",
+     "output": "Strip1"
+    }
+   },
+   {
+    "name": "Stripe2",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe2",
+     "output": "Stripe2"
+    }
+   },
+   {
+    "name": "Stripe3",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe3",
+     "output": "Stripe3"
+    }
+   },
+   {
+    "name": "Stripe4",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe4",
+     "output": "Stripe4"
+    }
+   },
+   {
+    "name": "Stripe5",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe5",
+     "output": "Stripe5"
+    }
+   },
+   {
+    "name": "Stripe6",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe6",
+     "output": "Stripe6"
+    }
+   },
+   {
+    "name": "Stripe7",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe7",
+     "output": "Stripe7"
+    }
+   },
+   {
+    "name": "Stripe8",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe8",
+     "output": "Stripe8"
+    }
+   },
+   {
+    "name": "Stripe9",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe9",
+     "output": "Stripe9"
+    }
+   },
+   {
+    "name": "LMouthUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "RMouthUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "JawUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "LSide",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "RSide",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "TLipMidUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "TLipLUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "TLipRUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "BLipMidUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "BLipLUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "BLipRUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "LBrow",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "LBrow",
+     "output": "LBrow"
+    }
+   },
+   {
+    "name": "RBrow",
+    "robotDataDiff": [],
+    "trsDiff": [
+     {
+      "path": "/r/0",
+      "a": 0.10452847357554801,
+      "b": -0.10452847357554731
+     }
+    ],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "RBrow",
+     "output": "RBrow"
+    }
+   },
+   {
+    "name": "Scene",
+    "robotDataDiff": [],
+    "trsDiff": [
+     {
+      "path": "/r",
+      "a": [
+       0.7071067966408575,
+       0,
+       0,
+       0.7071067657322372
+      ]
+     }
+    ],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": true,
+     "output": true
+    },
+    "meshName": {}
+   }
+  ],
+  "bundleDiff": [],
+  "bundleEqualJson": true,
+  "meshDiff": [],
+  "materialDiff": [],
+  "materialOrder": {
+   "source": [
+    "Face_S",
+    "L_BLid",
+    "Face_S",
+    "Sclera_S",
+    "Pupil_S",
+    "Highlight_S",
+    "Iris_L_S",
+    "Stripes_S",
+    "BG_S",
+    "Face_S",
+    "Pupil_S",
+    "Sclera_S",
+    "Iris_R_S",
+    "R_Sclera",
+    "Stripes_S",
+    "Face_Shadow_S",
+    "Teeth_S",
+    "Face_S",
+    "MouthInside_S",
+    "Teeth_S",
+    "Face_Shadow_S",
+    "BG_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Brow_S",
+    "Brow_S"
+   ],
+   "output": [
+    "Face_S",
+    "L_BLid",
+    "Face_S",
+    "Sclera_S",
+    "Pupil_S",
+    "Highlight_S",
+    "Iris_L_S",
+    "Stripes_S",
+    "BG_S",
+    "Face_S",
+    "Pupil_S",
+    "Sclera_S",
+    "Iris_R_S",
+    "R_Sclera",
+    "Stripes_S",
+    "Face_Shadow_S",
+    "Teeth_S",
+    "Face_S",
+    "MouthInside_S",
+    "Teeth_S",
+    "Face_Shadow_S",
+    "BG_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Brow_S",
+    "Brow_S"
+   ]
+  }
+ },
+ "fallback": {
+  "label": "fallback-vs-source",
+  "bytes": {
+   "source": 4853568,
+   "output": 4847836
+  },
+  "jsonChunk": {
+   "source": 4745452,
+   "output": 4739720
+  },
+  "binChunk": {
+   "source": 108088,
+   "output": 108088
+  },
+  "asset": {
+   "source": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter"
+   },
+   "output": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter"
+   }
+  },
+  "extensionsUsed": {
+   "source": [
+    "RobotData",
+    "VIZIJ_bundle",
+    "KHR_materials_unlit"
+   ],
+   "output": [
+    "VIZIJ_bundle",
+    "RobotData",
+    "KHR_materials_unlit"
+   ]
+  },
+  "scenes": {
+   "source": [
+    {
+     "name": "Scene",
+     "nodes": [
+      48
+     ]
+    }
+   ],
+   "output": [
+    {
+     "name": "Scene",
+     "nodes": [
+      49
+     ]
+    }
+   ]
+  },
+  "counts": {
+   "nodes": {
+    "source": 49,
+    "output": 50
+   },
+   "meshes": {
+    "source": 33,
+    "output": 33
+   },
+   "materials": {
+    "source": 33,
+    "output": 33
+   },
+   "accessors": {
+    "source": 266,
+    "output": 266
+   },
+   "bufferViews": {
+    "source": 266,
+    "output": 266
+   },
+   "buffers": {
+    "source": 1,
+    "output": 1
+   },
+   "images": {
+    "source": 0,
+    "output": 0
+   },
+   "textures": {
+    "source": 0,
+    "output": 0
+   },
+   "animations": {
+    "source": 0,
+    "output": 0
+   }
+  },
+  "nodeOrder": {
+   "same": false,
+   "source": [
+    "L_BLid",
+    "L_Highlight",
+    "L_Iris",
+    "L_Pupil",
+    "L_Sclera",
+    "L_LidGEO",
+    "L_TLid",
+    "L_EyeControl",
+    "R_BLid",
+    "R_LidGEO",
+    "R_Highlight",
+    "R_Iris",
+    "R_Pupil",
+    "R_Sclera",
+    "R_TLid",
+    "R_EyeControl",
+    "EyeControl",
+    "FaceShadowGeo",
+    "Bottom_Teeth",
+    "Mouth",
+    "MouthBlack",
+    "TopTeeth",
+    "MouthControl",
+    "Plane",
+    "FaceGEO",
+    "BG_GEO",
+    "Strip1",
+    "Stripe2",
+    "Stripe3",
+    "Stripe4",
+    "Stripe5",
+    "Stripe6",
+    "Stripe7",
+    "Stripe8",
+    "Stripe9",
+    "LMouthUD",
+    "RMouthUD",
+    "JawUD",
+    "LSide",
+    "RSide",
+    "TLipMidUD",
+    "TLipLUD",
+    "TLipRUD",
+    "BLipMidUD",
+    "BLipLUD",
+    "BLipRUD",
+    "LBrow",
+    "RBrow",
+    "Scene"
+   ],
+   "output": [
+    "L_BLid",
+    "L_Highlight",
+    "L_Iris",
+    "L_Pupil",
+    "L_Sclera",
+    "L_LidGEO",
+    "L_TLid",
+    "L_EyeControl",
+    "R_BLid",
+    "R_LidGEO",
+    "R_Highlight",
+    "R_Iris",
+    "R_Pupil",
+    "R_Sclera",
+    "R_TLid",
+    "R_EyeControl",
+    "EyeControl",
+    "FaceShadowGeo",
+    "Bottom_Teeth",
+    "Mouth",
+    "MouthBlack",
+    "TopTeeth",
+    "MouthControl",
+    "Plane",
+    "FaceGEO",
+    "BG_GEO",
+    "Strip1",
+    "Stripe2",
+    "Stripe3",
+    "Stripe4",
+    "Stripe5",
+    "Stripe6",
+    "Stripe7",
+    "Stripe8",
+    "Stripe9",
+    "LMouthUD",
+    "RMouthUD",
+    "JawUD",
+    "LSide",
+    "RSide",
+    "TLipMidUD",
+    "TLipLUD",
+    "TLipRUD",
+    "BLipMidUD",
+    "BLipLUD",
+    "BLipRUD",
+    "LBrow",
+    "RBrow",
+    "Scene",
+    "Scene"
+   ]
+  },
+  "nodes": [
+   {
+    "name": "L_BLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lid_updn",
+       "curvedn",
+       "curveup"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "L_BLid"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_BLid",
+     "output": "L_BLid"
+    }
+   },
+   {
+    "name": "L_Highlight",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "L_Highlight"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Highlight",
+     "output": "L_Highlight"
+    }
+   },
+   {
+    "name": "L_Iris",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "L_Iris"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Iris",
+     "output": "L_Iris"
+    }
+   },
+   {
+    "name": "L_Pupil",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "L_Pupil"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Pupil",
+     "output": "L_Pupil"
+    }
+   },
+   {
+    "name": "L_Sclera",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "L_Sclera"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Sclera",
+     "output": "L_Sclera"
+    }
+   },
+   {
+    "name": "L_LidGEO",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lmouthu"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "L_LidGEO"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_LidGEO",
+     "output": "L_LidGEO"
+    }
+   },
+   {
+    "name": "L_TLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lid_updn",
+       "curveup",
+       "curvedn"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "L_TLid"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_TLid",
+     "output": "L_TLid"
+    }
+   },
+   {
+    "name": "L_EyeControl",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "L_EyeControl"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "R_BLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lid_updn",
+       "curvedn",
+       "curveup"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "R_BLid"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_BLid",
+     "output": "R_BLid"
+    }
+   },
+   {
+    "name": "R_LidGEO",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "rmouthu"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "R_LidGEO"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_LidGEO",
+     "output": "R_LidGEO"
+    }
+   },
+   {
+    "name": "R_Highlight",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "R_Highlight"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Highlight",
+     "output": "R_Highlight"
+    }
+   },
+   {
+    "name": "R_Iris",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "R_Iris"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Iris",
+     "output": "R_Iris"
+    }
+   },
+   {
+    "name": "R_Pupil",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "R_Pupil"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Pupil",
+     "output": "R_Pupil"
+    }
+   },
+   {
+    "name": "R_Sclera",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "R_Sclera"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Sclera",
+     "output": "R_Sclera"
+    }
+   },
+   {
+    "name": "R_TLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lid_updn",
+       "curveup",
+       "curvedn"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "R_TLid"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_TLid",
+     "output": "R_TLid"
+    }
+   },
+   {
+    "name": "R_EyeControl",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "R_EyeControl"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "EyeControl",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "EyeControl"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "FaceShadowGeo",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "round",
+       "fullscreen"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "FaceShadowGeo"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "FaceShadowGeo",
+     "output": "FaceShadowGeo"
+    }
+   },
+   {
+    "name": "Bottom_Teeth",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "jawud",
+       "lside",
+       "blipmidd",
+       "blipld",
+       "rside",
+       "bliprd"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "Bottom_Teeth"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Bottom_Teeth",
+     "output": "Bottom_Teeth"
+    }
+   },
+   {
+    "name": "Mouth",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lmouthu",
+       "lmouthd",
+       "lside",
+       "jawud",
+       "tlipmidup",
+       "tliplup",
+       "blipmiddn",
+       "blipldn",
+       "rmouthu",
+       "rmouthd",
+       "rside",
+       "tliprup",
+       "bliprdn"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "Mouth"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Mouth",
+     "output": "Mouth"
+    }
+   },
+   {
+    "name": "MouthBlack",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lmouthu",
+       "lmouthd",
+       "lside",
+       "jawud",
+       "tlipmidup",
+       "tliplup",
+       "blipmiddn",
+       "blipldn",
+       "rmouthu",
+       "rmouthd",
+       "rside",
+       "tliprup",
+       "bliprdn"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "MouthBlack"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "MouthBlack",
+     "output": "MouthBlack"
+    }
+   },
+   {
+    "name": "TopTeeth",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lside",
+       "rside",
+       "tliplu",
+       "tlipmidu",
+       "tlipru"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "TopTeeth"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "TopTeeth",
+     "output": "TopTeeth"
+    }
+   },
+   {
+    "name": "MouthControl",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "MouthControl"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "Plane",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "jawud"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "Plane"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Plane",
+     "output": "Plane"
+    }
+   },
+   {
+    "name": "FaceGEO",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "round",
+       "fullscreen",
+       "jaw"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "FaceGEO"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "FaceGEO",
+     "output": "FaceGEO"
+    }
+   },
+   {
+    "name": "BG_GEO",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "BG_GEO"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "BG_GEO",
+     "output": "BG_GEO"
+    }
+   },
+   {
+    "name": "Strip1",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "Strip1"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Strip1",
+     "output": "Strip1"
+    }
+   },
+   {
+    "name": "Stripe2",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "Stripe2"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe2",
+     "output": "Stripe2"
+    }
+   },
+   {
+    "name": "Stripe3",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "Stripe3"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe3",
+     "output": "Stripe3"
+    }
+   },
+   {
+    "name": "Stripe4",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "Stripe4"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe4",
+     "output": "Stripe4"
+    }
+   },
+   {
+    "name": "Stripe5",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "Stripe5"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe5",
+     "output": "Stripe5"
+    }
+   },
+   {
+    "name": "Stripe6",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "Stripe6"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe6",
+     "output": "Stripe6"
+    }
+   },
+   {
+    "name": "Stripe7",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "Stripe7"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe7",
+     "output": "Stripe7"
+    }
+   },
+   {
+    "name": "Stripe8",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "Stripe8"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe8",
+     "output": "Stripe8"
+    }
+   },
+   {
+    "name": "Stripe9",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "Stripe9"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Stripe9",
+     "output": "Stripe9"
+    }
+   },
+   {
+    "name": "LMouthUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "LMouthUD"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "RMouthUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "RMouthUD"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "JawUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "JawUD"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "LSide",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "LSide"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "RSide",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "RSide"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "TLipMidUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "TLipMidUD"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "TLipLUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "TLipLUD"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "TLipRUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "TLipRUD"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "BLipMidUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "BLipMidUD"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "BLipLUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "BLipLUD"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "BLipRUD",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "BLipRUD"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "LBrow",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "bendup",
+       "benddn",
+       "innerthick",
+       "outterthick",
+       "midthick"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "LBrow"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "LBrow",
+     "output": "LBrow"
+    }
+   },
+   {
+    "name": "RBrow",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "bendup",
+       "benddn",
+       "innerthick",
+       "outterthick",
+       "midthick"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "RBrow"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "RBrow",
+     "output": "RBrow"
+    }
+   },
+   {
+    "name": "Scene",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "Scene"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": true,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "Scene#1",
+    "missingInSource": true
+   }
+  ],
+  "bundleDiff": [],
+  "bundleEqualJson": true,
+  "meshDiff": [],
+  "materialDiff": [],
+  "materialOrder": {
+   "source": [
+    "Face_S",
+    "L_BLid",
+    "Face_S",
+    "Sclera_S",
+    "Pupil_S",
+    "Highlight_S",
+    "Iris_L_S",
+    "Stripes_S",
+    "BG_S",
+    "Face_S",
+    "Pupil_S",
+    "Sclera_S",
+    "Iris_R_S",
+    "R_Sclera",
+    "Stripes_S",
+    "Face_Shadow_S",
+    "Teeth_S",
+    "Face_S",
+    "MouthInside_S",
+    "Teeth_S",
+    "Face_Shadow_S",
+    "BG_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Brow_S",
+    "Brow_S"
+   ],
+   "output": [
+    "Face_S",
+    "L_BLid",
+    "Face_S",
+    "Sclera_S",
+    "Pupil_S",
+    "Highlight_S",
+    "Iris_L_S",
+    "Stripes_S",
+    "BG_S",
+    "Face_S",
+    "Pupil_S",
+    "Sclera_S",
+    "Iris_R_S",
+    "R_Sclera",
+    "Stripes_S",
+    "Face_Shadow_S",
+    "Teeth_S",
+    "Face_S",
+    "MouthInside_S",
+    "Teeth_S",
+    "Face_Shadow_S",
+    "BG_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Stripes_S",
+    "Brow_S",
+    "Brow_S"
+   ]
+  }
+ },
+ "roundTrip": {
+  "worldDiff": [],
+  "animatablesDiff": [],
+  "bundleDiff": [],
+  "animations": {
+   "source": 0,
+   "reloaded": 0
+  },
+  "rootBounds": {
+   "source": {
+    "center": {
+     "x": 0.6399,
+     "y": -0.0098
+    },
+    "size": {
+     "x": 3.2482,
+     "y": 2.2399
+    }
+   },
+   "reloaded": {
+    "center": {
+     "x": 0.6399,
+     "y": -0.0098
+    },
+    "size": {
+     "x": 3.2482,
+     "y": 2.2399
+    }
+   }
+  }
+ },
+ "timingsMs": {
+  "load": 987.2759579999993,
+  "build": 107.65150000000085,
+  "export": 645.7181249999994,
+  "total": 5017.557457999999
+ },
+ "memoryMB": {
+  "rss": 211.664896,
+  "heapUsed": 94.147656
+ }
+}

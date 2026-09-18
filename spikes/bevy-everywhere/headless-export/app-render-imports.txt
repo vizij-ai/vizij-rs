@@ -1,0 +1,41 @@
+main.tsx:  VizijContext, createVizijStore 
+referenceFace/referenceCatalog.ts:  VizijBundleExtension 
+App.tsx:  loadGLTFFromBlobWithBundle, useVizijStore 
+types/bundle.ts:  VizijBundleGraphEntry 
+utils/rigRoundtripAudit.ts:  World 
+utils/robotDataAudit.ts:  World 
+utils/robotDataAudit.ts:  Feature 
+utils/runtimeBundle.ts:  VizijBundleExtension 
+utils/runtimeBundle.ts:  World 
+utils/faceId.ts:  Group 
+utils/animationClipCompiler.ts:  VizijBundleAnimationEntry 
+utils/bundleAudit.ts:  VizijBundleExtension 
+state/graphRuntimeStore.tsx:  VizijStoreSetter, World 
+utils/standardInputBindings.ts:  VizijBundleExtension 
+utils/world.ts:  Group, World 
+state/ReferenceFaceContext.tsx:  VizijBundleExtension 
+state/selectionStore.tsx:  Selection 
+components/app/ReferenceFaceRuntime.tsx:  VizijBundleExtension 
+components/app/ExportDialog.tsx:  useVizijStore 
+components/app/ExportDialog.tsx:  VizijBundleExtension 
+components/app/Viewer.tsx:  useVizijStore, useVizijStoreSetter 
+components/panels/DebugPanel.tsx:  VizijBundleExtension 
+hooks/useStandardInputSelectionSync.ts:  Selection, World 
+hooks/useSkills.ts:  VizijBundleExtension, VizijBundleGraphEntry, 
+hooks/useRigGraphImport.ts:  VizijData, World 
+hooks/useBundleAudit.ts:  VizijBundleExtension 
+hooks/useRobotDataAuditRunner.ts:  World 
+hooks/useVizijExport.ts:  exportScene, VizijBundleAnimationEntry, VizijBundleExtension, VizijBundleGraphEntry, VizijPoseRigConfig, VizijSpeechConfig, VizijData, 
+hooks/useBundleSynchronizer.ts:  VizijBundleExtension 
+hooks/useRigController.ts:  useVizijStore, useVizijStoreSetter, AnimatedFeature, Feature, Group, VizijData, World, 
+hooks/useStandardProfiles.ts:  VizijBundleExtension, VizijBundleGraphEntry, 
+hooks/useVizijAssetLoader.ts:  LoadedVizijAsset, VizijBundleExtension 
+hooks/useVizijAssetLoader.ts:  useVizijStore, useVizijStoreSetter 
+hooks/useReferenceFaceState.ts:  VizijBundleExtension 
+scene/featureEntries.ts:  Feature 
+motiongraph/hooks/useMotionGraphNamespace.ts:  VizijBundleExtension 
+scene/sceneGraph.ts:  World 
+scene/sceneEditing.ts:  World, Feature, Shape, Group, ShapeMaterial, 
+scene/useSceneComposer.ts:  ShapeMaterial 
+scene/useSceneComposer.ts:  useVizijStoreGetter 
+scene/featureMutations.ts:  VizijStoreSetter, VizijData 

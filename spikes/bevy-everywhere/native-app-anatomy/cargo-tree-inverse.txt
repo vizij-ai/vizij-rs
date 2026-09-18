@@ -1,0 +1,188 @@
+# cargo tree -p vizij -i tokio --depth 3
+tokio v1.53.1
+├── arora-module-core v1.0.0
+│   └── arora-module-rust v1.0.0
+│       [build-dependencies]
+│       ├── arora-behavior-tree v7.0.0
+│       └── vizij-animation-module v0.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-animation-module)
+│   [build-dependencies]
+│   └── vizij-animation-module v0.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-animation-module) (*)
+├── arora-module-rust v1.0.0 (*)
+└── arora-registry v1.0.0
+    ├── arora-module-core v1.0.0 (*)
+    └── arora-module-rust v1.0.0 (*)
+    [build-dependencies]
+    ├── arora-behavior-tree v7.0.0 (*)
+    └── vizij-animation-module v0.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-animation-module) (*)
+[build-dependencies]
+├── arora-behavior-tree v7.0.0 (*)
+└── vizij-animation-module v0.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-animation-module) (*)
+
+tokio v1.53.1
+├── arora v9.11.1
+│   └── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+├── arora-bridge-ws v4.0.0
+│   └── arora v9.11.1 (*)
+├── h2 v0.4.19
+│   ├── hyper v1.11.1
+│   │   ├── hyper-rustls v0.27.9
+│   │   ├── hyper-util v0.1.20
+│   │   └── reqwest v0.13.5
+│   └── reqwest v0.13.5 (*)
+├── hyper v1.11.1 (*)
+├── hyper-rustls v0.27.9 (*)
+├── hyper-util v0.1.20 (*)
+├── reqwest v0.13.5 (*)
+├── tokio-rustls v0.26.5
+│   ├── hyper-rustls v0.27.9 (*)
+│   └── reqwest v0.13.5 (*)
+├── tokio-tungstenite v0.24.0
+│   └── arora-bridge-ws v4.0.0 (*)
+├── tokio-util v0.7.19
+│   ├── arora-bridge-ws v4.0.0 (*)
+│   └── h2 v0.4.19 (*)
+├── tower v0.5.3
+│   ├── reqwest v0.13.5 (*)
+│   └── tower-http v0.6.11
+│       └── reqwest v0.13.5 (*)
+├── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+├── vizij-arora-tts v2.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-tts)
+│   └── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+└── wasmtime-wasi v45.0.3
+    └── arora-engine v4.1.0
+        ├── arora v9.11.1 (*)
+        └── vizij-arora-tts v2.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-tts) (*)
+
+# cargo tree -p vizij -i crossterm --depth 3
+crossterm v0.28.1
+├── ratatui v0.29.0
+│   └── arora v9.11.1
+│       └── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+└── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+
+# cargo tree -p vizij -i env_logger --depth 3
+env_logger v0.11.11
+├── arora v9.11.1
+│   └── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+└── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+
+# cargo tree -p vizij -i image --depth 3
+image v0.25.10
+├── bevy_image v0.19.1
+│   ├── bevy_anti_alias v0.19.1
+│   │   └── bevy_internal v0.19.1
+│   ├── bevy_camera v0.19.1
+│   │   ├── bevy_anti_alias v0.19.1 (*)
+│   │   ├── bevy_core_pipeline v0.19.1
+│   │   ├── bevy_gizmos v0.19.1
+│   │   ├── bevy_gizmos_render v0.19.1
+│   │   ├── bevy_gltf v0.19.1
+│   │   ├── bevy_internal v0.19.1 (*)
+│   │   ├── bevy_light v0.19.1
+│   │   ├── bevy_pbr v0.19.1
+│   │   ├── bevy_picking v0.19.1
+│   │   ├── bevy_post_process v0.19.1
+│   │   ├── bevy_render v0.19.1
+│   │   ├── bevy_sprite v0.19.1
+│   │   ├── bevy_sprite_render v0.19.1
+│   │   ├── bevy_ui v0.19.1
+│   │   ├── bevy_ui_render v0.19.1
+│   │   ├── bevy_ui_widgets v0.19.1
+│   │   └── bevy_world_serialization v0.19.1
+│   ├── bevy_core_pipeline v0.19.1 (*)
+│   ├── bevy_gizmos_render v0.19.1 (*)
+│   ├── bevy_gltf v0.19.1 (*)
+│   ├── bevy_internal v0.19.1 (*)
+│   ├── bevy_light v0.19.1 (*)
+│   ├── bevy_pbr v0.19.1 (*)
+│   ├── bevy_post_process v0.19.1 (*)
+│   ├── bevy_render v0.19.1 (*)
+│   ├── bevy_sprite v0.19.1 (*)
+│   ├── bevy_sprite_render v0.19.1 (*)
+│   ├── bevy_text v0.19.1
+│   │   ├── bevy_internal v0.19.1 (*)
+│   │   ├── bevy_sprite v0.19.1 (*)
+│   │   ├── bevy_sprite_render v0.19.1 (*)
+│   │   ├── bevy_ui v0.19.1 (*)
+│   │   ├── bevy_ui_render v0.19.1 (*)
+│   │   └── bevy_ui_widgets v0.19.1 (*)
+│   ├── bevy_ui v0.19.1 (*)
+│   ├── bevy_ui_render v0.19.1 (*)
+│   ├── bevy_window v0.19.1
+│   │   ├── bevy_camera v0.19.1 (*)
+│   │   ├── bevy_core_pipeline v0.19.1 (*)
+│   │   ├── bevy_gizmos v0.19.1 (*)
+│   │   ├── bevy_input_focus v0.19.1
+│   │   ├── bevy_internal v0.19.1 (*)
+│   │   ├── bevy_picking v0.19.1 (*)
+│   │   ├── bevy_render v0.19.1 (*)
+│   │   ├── bevy_sprite v0.19.1 (*)
+│   │   ├── bevy_ui v0.19.1 (*)
+│   │   ├── bevy_ui_widgets v0.19.1 (*)
+│   │   └── bevy_winit v0.19.1
+│   └── bevy_winit v0.19.1 (*)
+├── bevy_render v0.19.1 (*)
+└── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+
+# cargo tree -p vizij -i wasmtime --depth 3
+wasmtime v45.0.3
+├── arora-engine v4.1.0
+│   ├── arora v9.11.1
+│   │   └── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+│   └── vizij-arora-tts v2.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-tts)
+│       └── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+├── wasmtime-wasi v45.0.3
+│   └── arora-engine v4.1.0 (*)
+├── wasmtime-wasi-io v45.0.3
+│   └── wasmtime-wasi v45.0.3 (*)
+└── wiggle v45.0.3
+    └── wasmtime-wasi v45.0.3 (*)
+
+# cargo tree -p vizij -i ratatui --depth 3
+ratatui v0.29.0
+└── arora v9.11.1
+    └── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+
+# cargo tree -p vizij -i reqwest --depth 3
+reqwest v0.13.5
+└── vizij-arora-tts v2.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-tts)
+    └── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+
+# cargo tree -p vizij -i winit --depth 3
+winit v0.30.13
+├── accesskit_winit v0.32.2
+│   └── bevy_winit v0.19.1
+│       └── bevy_internal v0.19.1
+└── bevy_winit v0.19.1 (*)
+
+# cargo tree -p vizij -i tokio-tungstenite --depth 3
+tokio-tungstenite v0.24.0
+└── arora-bridge-ws v4.0.0
+    └── arora v9.11.1
+        └── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+
+# cargo tree -p vizij -i arora-bridge-ws --depth 3
+arora-bridge-ws v4.0.0
+└── arora v9.11.1
+    └── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+
+# cargo tree -p vizij -i arora-engine --depth 3
+arora-engine v4.1.0
+├── arora v9.11.1
+│   └── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+└── vizij-arora-tts v2.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-tts)
+    └── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+
+# cargo tree -p vizij -i arora-msgs-ros2 --depth 3
+arora-msgs-ros2 v1.2.0
+└── vizij-arora-host v2.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-host)
+    ├── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+    ├── vizij-arora-behavior v1.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-behavior)
+    │   ├── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+    │   └── vizij-arora-tts v2.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-tts)
+    └── vizij-bundle v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/tools/vizij-bundle)
+        [dev-dependencies]
+        └── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+[dev-dependencies]
+└── vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+

@@ -1,0 +1,315 @@
+{
+ "readyMsA": 2217,
+ "readyMsB": 16840,
+ "rects": {
+  "a": {
+   "x": 44,
+   "y": 85,
+   "w": 600,
+   "h": 400
+  },
+  "b": {
+   "x": 664,
+   "y": 185,
+   "w": 340,
+   "h": 300
+  }
+ },
+ "results": [
+  {
+   "slot": "a",
+   "label": "mouth",
+   "slotXY": [
+    301,
+    250
+   ],
+   "pageXY": [
+    345,
+    335
+   ],
+   "clicks": [
+    {
+     "chain": [
+      "InnerFace.Face_Color.001",
+      "InnerFace",
+      "Face_Tran_Rot_C",
+      "Scene",
+      "Scene"
+     ],
+     "depth": 100.14537811279297,
+     "element": "InnerFace",
+     "elementId": "a934cf4f-0ed1-435f-a7e0-4e9b2dfbd2f4",
+     "face": "a",
+     "hit": [
+      0.09154903143644333,
+      -1.3902525901794434,
+      -0.1453714668750763
+     ],
+     "pointer": [
+      321,
+      270
+     ]
+    }
+   ],
+   "callback": 1
+  },
+  {
+   "slot": "a",
+   "label": "left-eye",
+   "slotXY": [
+    206,
+    205
+   ],
+   "pageXY": [
+    250,
+    290
+   ],
+   "clicks": [
+    {
+     "chain": [
+      "R_EyeWhite.Material.002",
+      "R_EyeWhite",
+      "Face_Tran_Rot_C",
+      "Scene",
+      "Scene"
+     ],
+     "depth": 100.5728988647461,
+     "element": "R_EyeWhite",
+     "elementId": "5fb14069-c256-4eca-9057-09a80dccf2a6",
+     "face": "a",
+     "hit": [
+      -3.4835052490234375,
+      0.30319419503211975,
+      -0.572912871837616
+     ],
+     "pointer": [
+      226,
+      225
+     ]
+    }
+   ],
+   "callback": 1
+  },
+  {
+   "slot": "a",
+   "label": "right-eye",
+   "slotXY": [
+    386,
+    205
+   ],
+   "pageXY": [
+    430,
+    290
+   ],
+   "clicks": [
+    {
+     "chain": [
+      "L_EyeWhite.Material.002",
+      "L_EyeWhite",
+      "Face_Tran_Rot_C",
+      "Scene",
+      "Scene"
+     ],
+     "depth": 100.57283782958984,
+     "element": "L_EyeWhite",
+     "elementId": "0b0ea234-19e2-46f7-ba04-50755d4b71c2",
+     "face": "a",
+     "hit": [
+      3.2902817726135254,
+      0.30319422483444214,
+      -0.5728448629379272
+     ],
+     "pointer": [
+      406,
+      225
+     ]
+    }
+   ],
+   "callback": 1
+  },
+  {
+   "slot": "a",
+   "label": "background",
+   "slotXY": [
+    56,
+    65
+   ],
+   "pageXY": [
+    100,
+    150
+   ],
+   "clicks": [
+    {
+     "chain": [
+      "Background.Black",
+      "Background",
+      "Face_Tran_Rot_C",
+      "Scene",
+      "Scene"
+     ],
+     "depth": 99.83674621582031,
+     "element": "Background",
+     "elementId": "a8bfe96e-1c2b-446b-b295-129c65b78ae5",
+     "face": "a",
+     "hit": [
+      -9.128329277038574,
+      5.571695804595947,
+      0.1632661670446396
+     ],
+     "pointer": [
+      76,
+      85
+     ]
+    }
+   ],
+   "callback": 1
+  },
+  {
+   "slot": "b",
+   "label": "toasty-eye",
+   "slotXY": [
+    106,
+    150
+   ],
+   "pageXY": [
+    770,
+    335
+   ],
+   "clicks": [
+    {
+     "chain": [
+      "R_BLid.BG_S",
+      "R_BLid",
+      "R_EyeControl",
+      "EyeControl",
+      "FaceGEO",
+      "Scene",
+      "Scene"
+     ],
+     "depth": 99.98812866210938,
+     "element": "R_BLid",
+     "elementId": "c240e0c4-7e55-4477-bc77-76e4de5ed71b",
+     "face": "b",
+     "hit": [
+      0.028474152088165283,
+      -0.009800000116229057,
+      0.011878094635903835
+     ],
+     "pointer": [
+      746,
+      270
+     ]
+    }
+   ],
+   "callback": 1
+  },
+  {
+   "slot": "b",
+   "label": "toasty-mouth",
+   "slotXY": [
+    171,
+    215
+   ],
+   "pageXY": [
+    835,
+    400
+   ],
+   "clicks": [
+    {
+     "chain": [
+      "Mouth.Face_S",
+      "Mouth",
+      "MouthControl",
+      "FaceGEO",
+      "Scene",
+      "Scene"
+     ],
+     "depth": 99.93767547607422,
+     "element": "Mouth",
+     "elementId": "2e67149d-9c42-48b7-9df9-e5c81161a693",
+     "face": "b",
+     "hit": [
+      0.6494535803794861,
+      -0.6307793855667114,
+      0.06231269985437393
+     ],
+     "pointer": [
+      811,
+      335
+     ]
+    }
+   ],
+   "callback": 1
+  },
+  {
+   "slot": "b",
+   "label": "toasty-stripes",
+   "slotXY": [
+    36,
+    65
+   ],
+   "pageXY": [
+    700,
+    250
+   ],
+   "clicks": [
+    {
+     "chain": [
+      "Stripe8.Stripes_S",
+      "Stripe8",
+      "Stripe9",
+      "Scene",
+      "Scene"
+     ],
+     "depth": 100.08271789550781,
+     "element": "Stripe8",
+     "elementId": "640de460-4746-4826-a1cc-e49688ab43b5",
+     "face": "b",
+     "hit": [
+      -0.6402729749679565,
+      0.8022499680519104,
+      -0.08272377401590347
+     ],
+     "pointer": [
+      676,
+      185
+     ]
+    }
+   ],
+   "callback": 1
+  }
+ ],
+ "state": {
+  "running": true,
+  "frames": 48,
+  "faceCount": 2,
+  "rafTicks": 48,
+  "devices": {
+   "a": {
+    "steps": 42,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 626
+   },
+   "b": {
+    "steps": 34,
+    "alive": true,
+    "poseLen": 309,
+    "loadMs": 621
+   }
+  },
+  "memoryBytes": 196476928,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "errors": [
+  "[log] %cWARN%c /Users/victor.paleologue/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_render-0.19.1/src/renderer/mod.rs:291%c The selected adapter is using a driver that only supports software rendering. This is likely to be very slow. See https://bevy.org/learn/errors/b0006/ color: orange; background: #444 color: gray; font-style: italic color: inherit"
+ ],
+ "consoleLines": 30
+}

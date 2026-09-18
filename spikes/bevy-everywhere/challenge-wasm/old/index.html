@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>challenge-wasm: one module = device + view</title>
+<style>
+  body { margin: 0; background: #202020; color: #ddd; font: 14px system-ui; }
+  #stage { position: relative; width: 763px; height: 486px; margin: 24px; background: #101114; }
+  #stage canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; outline: none; }
+</style>
+<p style="margin:24px 24px 0">challenge-wasm · <span id="status">loading…</span></p>
+<div id="stage"><canvas id="face-a"></canvas></div>
+<script type="module">
+  const params = new URLSearchParams(location.search);
+  const glbName = params.get('glb') ?? 'Quori_Current_Extended.glb';
+  const pkg = params.get('pkg') ?? 'pkg';
+  const t0 = performance.now();
+  const mod = await import(`./${pkg}/challenge_wasm.js`);
+  const exports = await mod.default();
+  const t1 = performance.now();
+  // The GLB is fetched by the page, once, and handed to wasm as bytes.
+  const glb = new Uint8Array(await (await fetch(`assets/${glbName}`)).arrayBuffer());
+  const t2 = performance.now();
+  window.__mod = mod;
+  window.__exports = exports;
+  window.__glb = glb;
+  window.__timing = { initMs: Math.round(t1 - t0), fetchMs: Math.round(t2 - t1), glbBytes: glb.length };
+  if (!params.has('nostart')) {
+    mod.start('#face-a', glb);
+    window.__timing.startMs = Math.round(performance.now() - t2);
+  }
+  document.getElementById('status').textContent = JSON.stringify(window.__timing);
+  window.__spikeStarted = true;
+</script>

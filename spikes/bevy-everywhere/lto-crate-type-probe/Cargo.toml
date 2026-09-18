@@ -1,0 +1,18 @@
+[package]
+name = "ltoprobe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "ltoprobe-bin"
+path = "src/main.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1

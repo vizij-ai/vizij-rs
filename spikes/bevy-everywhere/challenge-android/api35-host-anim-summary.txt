@@ -1,0 +1,29 @@
+case=api35-host-anim apk=bevy-spike-anim-debug.apk serial=emulator-5570 date=2026-09-18T15:46:34Z
+sdk=35
+wm=Physical size: 2560x1600
+install=Success
+Status: ok TotalTime: 2972 
+t=5s dominant=[((55, 55, 55), 4569), ((67, 120, 125), 905)] orange_px=717 center=(92, 169, 173)
+t=10s dominant=[((55, 55, 55), 4588), ((67, 120, 125), 905)] orange_px=560 center=(92, 169, 173) lowerleft_changed_px=10533 of 844800
+t=15s dominant=[((55, 55, 55), 4566), ((67, 120, 125), 905)] orange_px=697 center=(92, 169, 173) lowerleft_changed_px=12835 of 844800
+t=20s dominant=[((55, 55, 55), 4566), ((67, 120, 125), 905)] orange_px=730 center=(92, 169, 173) lowerleft_changed_px=2255 of 844800
+t=25s dominant=[((55, 55, 55), 4564), ((67, 120, 125), 905)] orange_px=751 center=(92, 169, 173) lowerleft_changed_px=6452 of 844800
+t=30s dominant=[((55, 55, 55), 4584), ((67, 120, 125), 905)] orange_px=551 center=(92, 169, 173) lowerleft_changed_px=13142 of 844800
+t=35s dominant=[((55, 55, 55), 4570), ((67, 120, 125), 905)] orange_px=716 center=(92, 169, 173) lowerleft_changed_px=12971 of 844800
+t=40s dominant=[((55, 55, 55), 4570), ((67, 120, 125), 905)] orange_px=685 center=(92, 169, 173) lowerleft_changed_px=3372 of 844800
+t=45s dominant=[((55, 55, 55), 4573), ((67, 120, 125), 905)] orange_px=618 center=(92, 169, 173) lowerleft_changed_px=9095 of 844800
+t=50s dominant=[((55, 55, 55), 4577), ((67, 120, 125), 905)] orange_px=651 center=(92, 169, 173) lowerleft_changed_px=9468 of 844800
+t=55s dominant=[((55, 55, 55), 4577), ((67, 120, 125), 905)] orange_px=635 center=(92, 169, 173) lowerleft_changed_px=12100 of 844800
+t=60s dominant=[((55, 55, 55), 4583), ((67, 120, 125), 905)] orange_px=582 center=(92, 169, 173) lowerleft_changed_px=8439 of 844800
+pid_at_end=2994
+sf_list: RequestedLayerState{ai.vizij.bevyspike/android.app.NativeActivity#111 parentId=110}
+sf_list: RequestedLayerState{5c3c71c ActivityRecordInputSink ai.vizij.bevyspike/android.app.NativeActivity#109 parentId=103 z=-2147483648}
+sf_list: RequestedLayerState{77de50e ai.vizij.bevyspike/android.app.NativeActivity#110 parentId=103}
+sf_list: RequestedLayerState{ActivityRecord{6ae7f25 u0 ai.vizij.bevyspike/android.app.NativeActivity#103 parentId=102}
+sf_list: RequestedLayerState{Surface(name=77de50e ai.vizij.bevyspike/android.app.NativeActivity)/@0x8561921 - animation-leash of starting_reveal#114}
+sf_latency[RequestedLayerState{ai.vizij.bevyspike/android.app.NativeActivity#111 parentId=110}]: rows=1
+resumed=    topResumedActivity=ActivityRecord{6ae7f25 u0 ai.vizij.bevyspike/android.app.NativeActivity t16}
+log: 09-18 17:46:39.769  2994  3032 I RustStdoutStderr: 2026-09-18T15:46:39.761857Z  INFO bevy_render::renderer: AdapterInfo { name: "Apple M1", vendor: 4203, device: 436601351, device_type: IntegratedGpu,
+log: 09-18 17:46:41.283  2994  3032 I RustStdoutStderr: 2026-09-18T15:46:41.282981Z  INFO bevy_winit::system: Creating new window app_process64 (65v0)
+log: 09-18 17:46:59.917  2116  3002 W BugleRcsEngine: onQuitting [null] [CONTEXT log_prefix="(PEv2-SM96793102-DefaultCallSmsData-1-64c)" thread_id=86 ]
+log: 09-18 17:47:35.960  2994  3032 I RustStdoutStderr: 2026-09-18T15:47:35.939454Z  INFO bevy_android_spike: fit: bounds min=Vec3(-11.235728, -6.7121334, -0.5729314) max=Vec3(11.343563, 6.9333544, 0.16515

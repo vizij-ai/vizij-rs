@@ -1,0 +1,12 @@
+step0: exit=0 time=355s first_error=none
+step1: exit=101 time=66s first_error=error[E0432]: unresolved imports `super::urdfik::apply_joint_positions`, `super::urdfik::fetch_joint_vector`, `super::urdfik::hash_urdf_config`, `super::urdfik:
+step1-urdf: exit=0 time=108s first_error=none
+step2: exit=0 time=2s first_error=none
+step3: exit=0 time=3s first_error=none
+step3-frames: exit=0 time=14s first_error=none
+step4: exit=0 time=7s first_error=none
+step5: exit=0 time=12s first_error=none
+step6: exit=101 time=37s first_error=error: Only features sync,macros,io-util,rt,time are supported on wasm.
+step7: exit=0 time=9s first_error=none
+step8-studio: exit=101 time=14s first_error=error: This wasm target is unsupported by mio. If using Tokio, disable the net feature.
+step9-native: exit=101 time=22s first_error=error: The target OS is "unknown" or "none", so it's unsupported by the errno crate.

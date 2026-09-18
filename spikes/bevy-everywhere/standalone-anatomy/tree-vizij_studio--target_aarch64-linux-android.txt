@@ -1,0 +1,3373 @@
+vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+anyhow v1.0.104
+arora v9.11.1
+anyhow v1.0.104
+arora-behavior v8.4.0
+arora-types v2.5.1
+arora-types-derive v1.2.0 (proc-macro)
+proc-macro2 v1.0.107
+unicode-ident v1.0.24
+quote v1.0.47
+proc-macro2 v1.0.107 (*)
+syn v2.0.119
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+unicode-ident v1.0.24
+uuid v1.26.1
+getrandom v0.4.3
+cfg-if v1.0.4
+libc v0.2.189
+serde_core v1.0.229
+async-trait v0.1.92 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v3.0.5
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+unicode-ident v1.0.24
+derive_more v2.1.1
+derive_more-impl v2.1.1 (proc-macro)
+convert_case v0.10.0
+unicode-segmentation v1.13.3
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+unicode-xid v0.2.6
+indexmap v2.14.2
+equivalent v1.0.2
+hashbrown v0.17.1
+allocator-api2 v0.2.21
+equivalent v1.0.2
+foldhash v0.2.0
+serde_core v1.0.229
+serde_core v1.0.229
+lazy_static v1.5.0
+spin v0.9.9
+lock_api v0.4.14
+scopeguard v1.2.0
+semver v1.0.28
+serde_core v1.0.229
+serde v1.0.229
+serde_core v1.0.229
+serde_derive v1.0.229 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v3.0.5 (*)
+uuid v1.26.1
+getrandom v0.4.3
+cfg-if v1.0.4
+libc v0.2.189
+rand_core v0.10.1
+serde_core v1.0.229
+semver v1.0.28 (*)
+serde v1.0.229 (*)
+uuid v1.26.1 (*)
+arora-behavior-tree v7.0.0
+arora-behavior v8.4.0 (*)
+arora-behavior-tree-types v1.1.0
+arora-behavior v8.4.0 (*)
+arora-types v2.5.1 (*)
+lazy_static v1.5.0 (*)
+semver v1.0.28 (*)
+uuid v1.26.1 (*)
+arora-buffers v2.2.0
+arora-types v2.5.1 (*)
+bytes v1.12.1
+serde v1.0.229 (*)
+serde_yaml v0.9.34+deprecated
+indexmap v2.14.2 (*)
+itoa v1.0.18
+ryu v1.0.23
+serde v1.0.229 (*)
+unsafe-libyaml v0.2.11
+uuid v1.26.1 (*)
+arora-types v2.5.1 (*)
+derive_more v2.1.1 (*)
+lazy_static v1.5.0 (*)
+quick-xml v0.40.1
+memchr v2.8.3
+serde v1.0.229 (*)
+serde_yaml v0.9.34+deprecated (*)
+uuid v1.26.1 (*)
+arora-bridge v4.1.0
+arora-types v2.5.1 (*)
+async-trait v0.1.92 (proc-macro) (*)
+futures-channel v0.3.34
+futures-core v0.3.34
+futures-sink v0.3.34
+futures-core v0.3.34
+futures-util v0.3.34
+futures-channel v0.3.34 (*)
+futures-core v0.3.34
+futures-io v0.3.34
+futures-macro v0.3.34 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v3.0.5 (*)
+futures-sink v0.3.34
+futures-task v0.3.34
+memchr v2.8.3
+pin-project-lite v0.2.17
+slab v0.4.12
+serde v1.0.229 (*)
+arora-bridge-ws v4.0.0
+arora-bridge v4.1.0 (*)
+arora-types v2.5.1 (*)
+async-trait v0.1.92 (proc-macro) (*)
+futures v0.3.34
+futures-channel v0.3.34 (*)
+futures-core v0.3.34
+futures-executor v0.3.34
+futures-core v0.3.34
+futures-task v0.3.34
+futures-util v0.3.34 (*)
+futures-io v0.3.34
+futures-sink v0.3.34
+futures-task v0.3.34
+futures-util v0.3.34 (*)
+futures-util v0.3.34 (*)
+log v0.4.34
+serde v1.0.229 (*)
+serde_json v1.0.151
+itoa v1.0.18
+memchr v2.8.3
+serde_core v1.0.229
+zmij v1.0.23
+tokio v1.53.1
+bytes v1.12.1
+libc v0.2.189
+mio v1.2.3
+libc v0.2.189
+log v0.4.34
+pin-project-lite v0.2.17
+socket2 v0.6.5
+libc v0.2.189
+tokio-macros v2.7.2 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v3.0.5 (*)
+tokio-tungstenite v0.24.0
+futures-util v0.3.34 (*)
+log v0.4.34
+tokio v1.53.1 (*)
+tungstenite v0.24.0
+byteorder v1.5.0
+bytes v1.12.1
+data-encoding v2.11.1
+http v1.5.0
+bytes v1.12.1
+itoa v1.0.18
+httparse v1.10.1
+log v0.4.34
+rand v0.8.8
+libc v0.2.189
+rand_chacha v0.3.1
+ppv-lite86 v0.2.21
+zerocopy v0.8.57
+zerocopy-derive v0.8.57 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+rand_core v0.6.4
+getrandom v0.2.17
+cfg-if v1.0.4
+libc v0.2.189
+rand_core v0.6.4 (*)
+sha1 v0.10.7
+cfg-if v1.0.4
+cpufeatures v0.2.17
+libc v0.2.189
+digest v0.10.7
+block-buffer v0.10.4
+generic-array v0.14.7
+typenum v1.20.1
+zeroize v1.9.0
+zeroize_derive v1.5.0 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+const-oid v0.9.6
+crypto-common v0.1.7
+generic-array v0.14.7 (*)
+rand_core v0.6.4 (*)
+typenum v1.20.1
+subtle v2.6.1
+thiserror v1.0.69
+thiserror-impl v1.0.69 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+utf-8 v0.7.6
+tokio-util v0.7.19
+bytes v1.12.1
+futures-core v0.3.34
+futures-sink v0.3.34
+futures-util v0.3.34 (*)
+libc v0.2.189
+pin-project-lite v0.2.17
+tokio v1.53.1 (*)
+arora-engine v4.1.0
+anyhow v1.0.104
+arora-buffers v2.2.0 (*)
+arora-types v2.5.1 (*)
+async-trait v0.1.92 (proc-macro) (*)
+bytes v1.12.1
+derive_more v2.1.1 (*)
+lazy_static v1.5.0 (*)
+libloading v0.9.0
+cfg-if v1.0.4
+rand v0.10.2
+chacha20 v0.10.2
+cfg-if v1.0.4
+rand_core v0.10.1
+getrandom v0.4.3 (*)
+rand_core v0.10.1
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+tempfile v3.27.0
+fastrand v2.5.0
+getrandom v0.4.3 (*)
+once_cell v1.21.4
+rustix v1.1.4
+bitflags v2.13.2
+bytemuck v1.25.2
+bytemuck_derive v1.12.0 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v3.0.5 (*)
+serde_core v1.0.229
+errno v0.3.14
+libc v0.2.189
+libc v0.2.189
+linux-raw-sys v0.12.1
+uuid v1.26.1 (*)
+wasmtime v45.0.3
+addr2line v0.26.1
+gimli v0.33.0
+fnv v1.0.7
+hashbrown v0.16.1
+allocator-api2 v0.2.21
+equivalent v1.0.2
+foldhash v0.2.0
+serde_core v1.0.229
+indexmap v2.14.2 (*)
+async-trait v0.1.92 (proc-macro) (*)
+bitflags v2.13.2 (*)
+bumpalo v3.20.3
+allocator-api2 v0.2.21
+cfg-if v1.0.4
+encoding_rs v0.8.41
+cfg-if v1.0.4
+multiversion_no_op v1.0.0 (proc-macro)
+scopeguard v1.2.0
+simdutf8 v0.1.5
+futures v0.3.34 (*)
+fxprof-processed-profile v0.8.1
+bitflags v2.13.2 (*)
+debugid v0.8.0
+uuid v1.26.1 (*)
+rustc-hash v2.1.3
+serde v1.0.229 (*)
+serde_derive v1.0.229 (proc-macro) (*)
+serde_json v1.0.151 (*)
+gimli v0.33.0 (*)
+libc v0.2.189
+log v0.4.34
+object v0.39.1
+crc32fast v1.5.1
+cfg-if v1.0.4
+hashbrown v0.17.1 (*)
+indexmap v2.14.2 (*)
+memchr v2.8.3
+once_cell v1.21.4
+postcard v1.1.3
+cobs v0.3.0
+thiserror v2.0.20
+thiserror-impl v2.0.20 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v3.0.5 (*)
+serde v1.0.229 (*)
+pulley-interpreter v45.0.3
+cranelift-bitset v0.132.3
+serde v1.0.229 (*)
+serde_derive v1.0.229 (proc-macro) (*)
+wasmtime-internal-core v45.0.3
+anyhow v1.0.104
+hashbrown v0.17.1 (*)
+libm v0.2.16
+serde v1.0.229 (*)
+log v0.4.34
+pulley-macros v45.0.3 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+wasmtime-internal-core v45.0.3 (*)
+rayon v1.12.0
+either v1.18.0
+rayon-core v1.13.0
+crossbeam-deque v0.8.8
+crossbeam-epoch v0.9.21
+crossbeam-utils v0.8.23
+crossbeam-utils v0.8.23
+crossbeam-utils v0.8.23
+rustix v1.1.4 (*)
+semver v1.0.28 (*)
+serde v1.0.229 (*)
+serde_derive v1.0.229 (proc-macro) (*)
+serde_json v1.0.151 (*)
+smallvec v1.16.0
+serde v1.0.229 (*)
+target-lexicon v0.13.5
+tempfile v3.27.0 (*)
+wasm-compose v0.248.0
+anyhow v1.0.104
+heck v0.5.0
+indexmap v2.14.2 (*)
+log v0.4.34
+petgraph v0.6.5
+fixedbitset v0.4.2
+indexmap v2.14.2 (*)
+smallvec v1.16.0 (*)
+wasm-encoder v0.248.0
+leb128fmt v0.1.0
+wasmparser v0.248.0
+bitflags v2.13.2 (*)
+semver v1.0.28 (*)
+serde v1.0.229 (*)
+wasmparser v0.248.0 (*)
+wat v1.259.0
+wast v259.0.0
+bumpalo v3.20.3 (*)
+leb128fmt v0.1.0
+memchr v2.8.3
+unicode-width v0.2.0
+wasm-encoder v0.259.0
+leb128fmt v0.1.0
+wasm-encoder v0.248.0 (*)
+wasmparser v0.248.0 (*)
+wasmtime-environ v45.0.3
+anyhow v1.0.104
+cpp_demangle v0.4.5
+cfg-if v1.0.4
+cranelift-bforest v0.132.3
+cranelift-entity v0.132.3
+cranelift-bitset v0.132.3 (*)
+serde v1.0.229 (*)
+serde_derive v1.0.229 (proc-macro) (*)
+wasmtime-internal-core v45.0.3 (*)
+wasmtime-internal-core v45.0.3 (*)
+cranelift-bitset v0.132.3 (*)
+cranelift-entity v0.132.3 (*)
+gimli v0.33.0 (*)
+hashbrown v0.17.1 (*)
+indexmap v2.14.2 (*)
+log v0.4.34
+object v0.39.1 (*)
+postcard v1.1.3 (*)
+rustc-demangle v0.1.28
+semver v1.0.28 (*)
+serde v1.0.229 (*)
+serde_derive v1.0.229 (proc-macro) (*)
+sha2 v0.10.9
+cfg-if v1.0.4
+cpufeatures v0.2.17 (*)
+digest v0.10.7 (*)
+smallvec v1.16.0 (*)
+target-lexicon v0.13.5
+wasm-encoder v0.248.0 (*)
+wasmparser v0.248.0 (*)
+wasmprinter v0.248.0
+anyhow v1.0.104
+termcolor v1.4.1
+wasmparser v0.248.0 (*)
+wasmtime-internal-component-util v45.0.3
+wasmtime-internal-core v45.0.3 (*)
+wasmtime-internal-cache v45.0.3
+base64 v0.22.1
+directories-next v2.0.0
+cfg-if v1.0.4
+dirs-sys-next v0.1.2
+libc v0.2.189
+log v0.4.34
+postcard v1.1.3 (*)
+rustix v1.1.4 (*)
+serde v1.0.229 (*)
+serde_derive v1.0.229 (proc-macro) (*)
+sha2 v0.10.9 (*)
+toml v0.9.12+spec-1.1.0
+serde_core v1.0.229
+serde_spanned v1.1.1
+serde_core v1.0.229
+toml_datetime v0.7.5+spec-1.1.0
+serde_core v1.0.229
+toml_parser v1.1.3+spec-1.1.0
+winnow v1.0.4
+toml_writer v1.1.2+spec-1.1.0
+winnow v0.7.15
+wasmtime-environ v45.0.3 (*)
+zstd v0.13.3
+zstd-safe v7.3.0
+zstd-sys v2.1.0+zstd.1.5.7
+wasmtime-internal-component-macro v45.0.3 (proc-macro)
+anyhow v1.0.104
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+wasmtime-internal-component-util v45.0.3
+wasmtime-internal-wit-bindgen v45.0.3
+anyhow v1.0.104
+bitflags v2.13.2
+heck v0.5.0
+indexmap v2.14.2
+equivalent v1.0.2
+hashbrown v0.17.1
+foldhash v0.2.0
+serde_core v1.0.229
+wit-parser v0.248.0
+anyhow v1.0.104
+hashbrown v0.17.1 (*)
+id-arena v2.3.0
+indexmap v2.14.2 (*)
+log v0.4.34
+semver v1.0.28
+serde_core v1.0.229
+serde v1.0.229
+serde_core v1.0.229
+serde_derive v1.0.229 (proc-macro) (*)
+serde_derive v1.0.229 (proc-macro) (*)
+serde_json v1.0.151
+itoa v1.0.18
+memchr v2.8.3
+serde_core v1.0.229
+zmij v1.0.23
+unicode-xid v0.2.6
+wasmparser v0.248.0
+bitflags v2.13.2
+semver v1.0.28 (*)
+serde v1.0.229 (*)
+wit-parser v0.248.0 (*)
+wasmtime-internal-component-util v45.0.3
+wasmtime-internal-core v45.0.3 (*)
+wasmtime-internal-cranelift v45.0.3
+cfg-if v1.0.4
+cranelift-codegen v0.132.3
+bumpalo v3.20.3 (*)
+cranelift-assembler-x64 v0.132.3
+cranelift-bforest v0.132.3 (*)
+cranelift-bitset v0.132.3 (*)
+cranelift-codegen-shared v0.132.3
+cranelift-control v0.132.3
+arbitrary v1.4.2
+cranelift-entity v0.132.3 (*)
+gimli v0.33.0 (*)
+hashbrown v0.17.1 (*)
+libm v0.2.16
+log v0.4.34
+pulley-interpreter v45.0.3 (*)
+regalloc2 v0.15.2
+allocator-api2 v0.2.21
+bumpalo v3.20.3 (*)
+hashbrown v0.17.1 (*)
+log v0.4.34
+rustc-hash v2.1.3
+smallvec v1.16.0 (*)
+rustc-hash v2.1.3
+smallvec v1.16.0 (*)
+target-lexicon v0.13.5
+wasmtime-internal-core v45.0.3 (*)
+cranelift-control v0.132.3 (*)
+cranelift-entity v0.132.3 (*)
+cranelift-frontend v0.132.3
+cranelift-codegen v0.132.3 (*)
+log v0.4.34
+smallvec v1.16.0 (*)
+target-lexicon v0.13.5
+cranelift-native v0.132.3
+cranelift-codegen v0.132.3 (*)
+target-lexicon v0.13.5
+gimli v0.33.0 (*)
+itertools v0.14.0
+either v1.18.0
+log v0.4.34
+object v0.39.1 (*)
+pulley-interpreter v45.0.3 (*)
+smallvec v1.16.0 (*)
+target-lexicon v0.13.5
+thiserror v2.0.20 (*)
+wasmparser v0.248.0 (*)
+wasmtime-environ v45.0.3 (*)
+wasmtime-internal-core v45.0.3 (*)
+wasmtime-internal-unwinder v45.0.3
+cfg-if v1.0.4
+cranelift-codegen v0.132.3 (*)
+log v0.4.34
+object v0.39.1 (*)
+wasmtime-environ v45.0.3 (*)
+wasmtime-internal-versioned-export-macros v45.0.3 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+wasmtime-internal-fiber v45.0.3
+cfg-if v1.0.4
+libc v0.2.189
+rustix v1.1.4 (*)
+wasmtime-environ v45.0.3 (*)
+wasmtime-internal-versioned-export-macros v45.0.3 (proc-macro) (*)
+wasmtime-internal-jit-debug v45.0.3
+object v0.39.1 (*)
+wasmtime-internal-versioned-export-macros v45.0.3 (proc-macro) (*)
+wasmtime-internal-jit-icache-coherence v45.0.3
+cfg-if v1.0.4
+libc v0.2.189
+wasmtime-internal-core v45.0.3 (*)
+wasmtime-internal-unwinder v45.0.3 (*)
+wasmtime-internal-versioned-export-macros v45.0.3 (proc-macro) (*)
+wat v1.259.0 (*)
+wasmtime-wasi v45.0.3
+async-trait v0.1.92 (proc-macro) (*)
+bitflags v2.13.2 (*)
+bytes v1.12.1
+cap-fs-ext v3.4.6
+cap-primitives v3.4.6
+ambient-authority v0.0.2
+fs-set-times v0.20.3
+io-lifetimes v2.0.4
+rustix v1.1.4 (*)
+io-extras v0.18.4
+io-lifetimes v2.0.4
+io-lifetimes v2.0.4
+ipnet v2.12.2
+maybe-owned v0.3.4
+rustix v1.1.4 (*)
+rustix-linux-procfs v0.1.1
+once_cell v1.21.4
+rustix v1.1.4 (*)
+cap-std v3.4.6
+cap-primitives v3.4.6 (*)
+io-extras v0.18.4 (*)
+io-lifetimes v2.0.4
+rustix v1.1.4 (*)
+io-lifetimes v2.0.4
+cap-net-ext v3.4.6
+cap-primitives v3.4.6 (*)
+cap-std v3.4.6 (*)
+rustix v1.1.4 (*)
+smallvec v1.16.0 (*)
+cap-std v3.4.6 (*)
+cap-time-ext v3.4.6
+ambient-authority v0.0.2
+cap-primitives v3.4.6 (*)
+iana-time-zone v0.1.65
+android_system_properties v0.1.6
+libc v0.2.189
+rustix v1.1.4 (*)
+cfg-if v1.0.4
+fs-set-times v0.20.3 (*)
+futures v0.3.34 (*)
+io-lifetimes v2.0.4
+rand v0.10.2 (*)
+rustix v1.1.4 (*)
+thiserror v2.0.20 (*)
+tokio v1.53.1 (*)
+tracing v0.1.44
+log v0.4.34
+pin-project-lite v0.2.17
+tracing-attributes v0.1.31 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+tracing-core v0.1.36
+once_cell v1.21.4
+url v2.5.8
+form_urlencoded v1.2.2
+percent-encoding v2.3.2
+idna v1.1.0
+idna_adapter v1.2.2
+icu_normalizer v2.3.0
+icu_collections v2.3.0
+displaydoc v0.2.7 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v3.0.5 (*)
+potential_utf v0.1.6
+writeable v0.6.4
+zerovec v0.11.8
+yoke v0.8.3
+stable_deref_trait v1.2.1
+yoke-derive v0.8.2 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+synstructure v0.13.2
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+zerofrom v0.1.8
+zerofrom-derive v0.1.7 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+synstructure v0.13.2 (*)
+zerofrom v0.1.8 (*)
+zerovec-derive v0.11.6 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v3.0.5 (*)
+utf8_iter v1.0.4
+yoke v0.8.3 (*)
+zerofrom v0.1.8 (*)
+zerovec v0.11.8 (*)
+icu_normalizer_data v2.3.0
+icu_provider v2.3.1
+displaydoc v0.2.7 (proc-macro) (*)
+icu_locale_core v2.3.0
+displaydoc v0.2.7 (proc-macro) (*)
+litemap v0.8.3
+tinystr v0.8.4
+displaydoc v0.2.7 (proc-macro) (*)
+zerovec v0.11.8 (*)
+writeable v0.6.4
+zerovec v0.11.8 (*)
+stable_deref_trait v1.2.1
+writeable v0.6.4
+yoke v0.8.3 (*)
+zerofrom v0.1.8 (*)
+zerotrie v0.2.5
+displaydoc v0.2.7 (proc-macro) (*)
+yoke v0.8.3 (*)
+zerofrom v0.1.8 (*)
+zerovec v0.11.8 (*)
+smallvec v1.16.0 (*)
+zerovec v0.11.8 (*)
+icu_properties v2.3.0
+displaydoc v0.2.7 (proc-macro) (*)
+icu_collections v2.3.0 (*)
+icu_locale_core v2.3.0 (*)
+icu_properties_data v2.3.0
+icu_provider v2.3.1 (*)
+zerotrie v0.2.5 (*)
+zerovec v0.11.8 (*)
+smallvec v1.16.0 (*)
+utf8_iter v1.0.4
+percent-encoding v2.3.2
+wasmtime v45.0.3 (*)
+wasmtime-wasi-io v45.0.3
+async-trait v0.1.92 (proc-macro) (*)
+bytes v1.12.1
+futures v0.3.34 (*)
+tracing v0.1.44 (*)
+wasmtime v45.0.3 (*)
+wiggle v45.0.3
+bitflags v2.13.2 (*)
+thiserror v2.0.20 (*)
+tracing v0.1.44 (*)
+wasmtime v45.0.3 (*)
+wasmtime-environ v45.0.3 (*)
+wiggle-macro v45.0.3 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+wiggle-generate v45.0.3
+heck v0.5.0
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+wasmtime-environ v45.0.3
+anyhow v1.0.104
+cranelift-bforest v0.132.3
+cranelift-entity v0.132.3
+cranelift-bitset v0.132.3
+serde v1.0.229 (*)
+serde_derive v1.0.229 (proc-macro) (*)
+wasmtime-internal-core v45.0.3
+hashbrown v0.17.1 (*)
+libm v0.2.16
+serde v1.0.229 (*)
+serde v1.0.229 (*)
+serde_derive v1.0.229 (proc-macro) (*)
+wasmtime-internal-core v45.0.3 (*)
+wasmtime-internal-core v45.0.3 (*)
+cranelift-bitset v0.132.3 (*)
+cranelift-entity v0.132.3 (*)
+gimli v0.33.0
+hashbrown v0.17.1 (*)
+indexmap v2.14.2 (*)
+log v0.4.34
+object v0.39.1
+memchr v2.8.3
+postcard v1.1.3
+cobs v0.3.0
+thiserror v2.0.20
+thiserror-impl v2.0.20 (proc-macro) (*)
+serde v1.0.229 (*)
+serde v1.0.229 (*)
+serde_derive v1.0.229 (proc-macro) (*)
+sha2 v0.10.9
+cfg-if v1.0.4
+cpufeatures v0.2.17
+libc v0.2.189
+digest v0.10.7
+block-buffer v0.10.4
+generic-array v0.14.7
+typenum v1.20.1
+crypto-common v0.1.7
+generic-array v0.14.7 (*)
+typenum v1.20.1
+smallvec v1.16.0
+serde v1.0.229 (*)
+target-lexicon v0.13.5
+wasmparser v0.248.0 (*)
+wasmtime-internal-core v45.0.3 (*)
+witx v0.9.1
+anyhow v1.0.104
+log v0.4.34
+thiserror v1.0.69
+thiserror-impl v1.0.69 (proc-macro) (*)
+wast v35.0.2
+leb128 v0.2.7
+arora-hal v3.0.0
+arora-types v2.5.1 (*)
+async-trait v0.1.92 (proc-macro) (*)
+futures-channel v0.3.34 (*)
+futures-core v0.3.34
+arora-simple-data-store v2.0.0
+arora-types v2.5.1 (*)
+arora-studio-bridge-client v6.1.0
+arora-bridge v4.1.0 (*)
+arora-types v2.5.1 (*)
+async-stream v0.3.6
+async-stream-impl v0.3.6 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+futures-core v0.3.34
+pin-project-lite v0.2.17
+async-trait v0.1.92 (proc-macro) (*)
+chrono v0.4.45
+iana-time-zone v0.1.65 (*)
+num-traits v0.2.19
+libm v0.2.16
+serde v1.0.229 (*)
+firestore v0.50.0
+async-trait v0.1.92 (proc-macro) (*)
+backoff v0.4.0
+futures-core v0.3.34
+getrandom v0.2.17 (*)
+instant v0.1.13
+cfg-if v1.0.4
+pin-project-lite v0.2.17
+rand v0.8.8 (*)
+tokio v1.53.1 (*)
+chrono v0.4.45 (*)
+futures v0.3.34 (*)
+gcloud-sdk v0.30.2
+async-trait v0.1.92 (proc-macro) (*)
+bytes v1.12.1
+chrono v0.4.45 (*)
+futures v0.3.34 (*)
+hyper v1.11.1
+atomic-waker v1.1.2
+bytes v1.12.1
+futures-channel v0.3.34 (*)
+futures-core v0.3.34
+h2 v0.4.19
+atomic-waker v1.1.2
+bytes v1.12.1
+fnv v1.0.7
+futures-core v0.3.34
+futures-sink v0.3.34
+http v1.5.0 (*)
+indexmap v2.14.2 (*)
+slab v0.4.12
+tokio v1.53.1 (*)
+tokio-util v0.7.19 (*)
+tracing v0.1.44 (*)
+http v1.5.0 (*)
+http-body v1.1.0
+bytes v1.12.1
+http v1.5.0 (*)
+httparse v1.10.1
+httpdate v1.0.3
+itoa v1.0.18
+pin-project-lite v0.2.17
+smallvec v1.16.0 (*)
+tokio v1.53.1 (*)
+want v0.3.1
+try-lock v0.2.5
+jsonwebtoken v10.4.0
+base64 v0.22.1
+pem v3.0.6
+base64 v0.22.1
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+signature v2.2.0
+digest v0.10.7 (*)
+rand_core v0.6.4 (*)
+simple_asn1 v0.6.4
+num-bigint v0.4.8
+num-integer v0.1.47
+num-traits v0.2.19 (*)
+num-traits v0.2.19 (*)
+num-traits v0.2.19 (*)
+thiserror v2.0.20 (*)
+time v0.3.55
+deranged v0.5.8
+num-conv v0.2.2
+powerfmt v0.2.0
+time-core v0.1.9
+time-macros v0.2.32 (proc-macro)
+num-conv v0.2.2
+time-core v0.1.9
+zeroize v1.9.0 (*)
+once_cell v1.21.4
+prost v0.14.4
+bytes v1.12.1
+prost-derive v0.14.4 (proc-macro)
+anyhow v1.0.104
+itertools v0.14.0
+either v1.18.0
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+prost-types v0.14.4
+prost v0.14.4 (*)
+reqwest v0.13.5
+base64 v0.23.1
+bytes v1.12.1
+encoding_rs v0.8.41 (*)
+futures-core v0.3.34
+futures-util v0.3.34 (*)
+h2 v0.4.19 (*)
+http v1.5.0 (*)
+http-body v1.1.0 (*)
+http-body-util v0.1.5
+bytes v1.12.1
+futures-core v0.3.34
+http v1.5.0 (*)
+http-body v1.1.0 (*)
+pin-project-lite v0.2.17
+hyper v1.11.1 (*)
+hyper-rustls v0.27.9
+http v1.5.0 (*)
+hyper v1.11.1 (*)
+hyper-util v0.1.20
+base64 v0.22.1
+bytes v1.12.1
+futures-channel v0.3.34 (*)
+futures-util v0.3.34 (*)
+http v1.5.0 (*)
+http-body v1.1.0 (*)
+hyper v1.11.1 (*)
+ipnet v2.12.2
+libc v0.2.189
+percent-encoding v2.3.2
+pin-project-lite v0.2.17
+socket2 v0.6.5 (*)
+tokio v1.53.1 (*)
+tower-service v0.3.3
+tracing v0.1.44 (*)
+rustls v0.23.44
+aws-lc-rs v1.18.1
+aws-lc-sys v0.45.0
+zeroize v1.9.0 (*)
+log v0.4.34
+once_cell v1.21.4
+ring v0.17.14
+cfg-if v1.0.4
+getrandom v0.2.17 (*)
+libc v0.2.189
+untrusted v0.9.0
+rustls-pki-types v1.15.1
+zeroize v1.9.0 (*)
+rustls-webpki v0.103.15
+aws-lc-rs v1.18.1 (*)
+ring v0.17.14 (*)
+rustls-pki-types v1.15.1 (*)
+untrusted v0.9.0
+subtle v2.6.1
+zeroize v1.9.0 (*)
+tokio v1.53.1 (*)
+tokio-rustls v0.26.5
+rustls v0.23.44 (*)
+tokio v1.53.1 (*)
+tower-service v0.3.3
+hyper-util v0.1.20 (*)
+log v0.4.34
+mime v0.3.17
+mime_guess v2.0.5
+mime v0.3.17
+unicase v2.9.0
+percent-encoding v2.3.2
+pin-project-lite v0.2.17
+rustls v0.23.44 (*)
+rustls-pki-types v1.15.1 (*)
+rustls-platform-verifier v0.7.0
+jni v0.22.4
+cfg-if v1.0.4
+combine v4.6.8
+bytes v1.12.1
+memchr v2.8.3
+jni-macros v0.22.4 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+simd_cesu8 v1.2.0
+simdutf8 v0.1.5
+syn v2.0.119 (*)
+jni-sys v0.4.1
+jni-sys-macros v0.4.1 (proc-macro)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+log v0.4.34
+simd_cesu8 v1.2.0
+simdutf8 v0.1.5
+thiserror v2.0.20 (*)
+log v0.4.34
+once_cell v1.21.4
+rustls v0.23.44 (*)
+rustls-platform-verifier-android v0.1.1
+rustls-webpki v0.103.15 (*)
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+serde_urlencoded v0.7.1
+form_urlencoded v1.2.2 (*)
+itoa v1.0.18
+ryu v1.0.23
+serde v1.0.229 (*)
+sync_wrapper v1.0.2
+futures-core v0.3.34
+tokio v1.53.1 (*)
+tokio-rustls v0.26.5 (*)
+tokio-util v0.7.19 (*)
+tower v0.5.3
+futures-core v0.3.34
+futures-util v0.3.34 (*)
+indexmap v2.14.2 (*)
+pin-project-lite v0.2.17
+slab v0.4.12
+sync_wrapper v1.0.2 (*)
+tokio v1.53.1 (*)
+tokio-util v0.7.19 (*)
+tower-layer v0.3.3
+tower-service v0.3.3
+tracing v0.1.44 (*)
+tower-http v0.6.11
+async-compression v0.4.46
+compression-codecs v0.4.41
+compression-core v0.4.33
+flate2 v1.1.10
+crc32fast v1.5.1 (*)
+miniz_oxide v0.9.1
+adler2 v2.0.1
+simd-adler32 v0.3.10
+memchr v2.8.3
+compression-core v0.4.33
+pin-project-lite v0.2.17
+tokio v1.53.1 (*)
+bitflags v2.13.2 (*)
+bytes v1.12.1
+futures-core v0.3.34
+futures-util v0.3.34 (*)
+http v1.5.0 (*)
+http-body v1.1.0 (*)
+http-body-util v0.1.5 (*)
+pin-project-lite v0.2.17
+tokio v1.53.1 (*)
+tokio-util v0.7.19 (*)
+tower v0.5.3 (*)
+tower-layer v0.3.3
+tower-service v0.3.3
+url v2.5.8 (*)
+tower-service v0.3.3
+url v2.5.8 (*)
+secret-vault-value v1.0.1
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+zeroize v1.9.0 (*)
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+tokio v1.53.1 (*)
+tonic v0.14.6
+async-trait v0.1.92 (proc-macro) (*)
+axum v0.8.9
+axum-core v0.5.6
+bytes v1.12.1
+futures-core v0.3.34
+http v1.5.0 (*)
+http-body v1.1.0 (*)
+http-body-util v0.1.5 (*)
+mime v0.3.17
+pin-project-lite v0.2.17
+sync_wrapper v1.0.2 (*)
+tower-layer v0.3.3
+tower-service v0.3.3
+bytes v1.12.1
+futures-util v0.3.34 (*)
+http v1.5.0 (*)
+http-body v1.1.0 (*)
+http-body-util v0.1.5 (*)
+itoa v1.0.18
+matchit v0.8.4
+memchr v2.8.3
+mime v0.3.17
+percent-encoding v2.3.2
+pin-project-lite v0.2.17
+serde_core v1.0.229
+sync_wrapper v1.0.2 (*)
+tower v0.5.3 (*)
+tower-layer v0.3.3
+tower-service v0.3.3
+base64 v0.22.1
+bytes v1.12.1
+h2 v0.4.19 (*)
+http v1.5.0 (*)
+http-body v1.1.0 (*)
+http-body-util v0.1.5 (*)
+hyper v1.11.1 (*)
+hyper-timeout v0.5.2
+hyper v1.11.1 (*)
+hyper-util v0.1.20 (*)
+pin-project-lite v0.2.17
+tokio v1.53.1 (*)
+tower-service v0.3.3
+hyper-util v0.1.20 (*)
+percent-encoding v2.3.2
+pin-project v1.1.13
+pin-project-internal v1.1.13 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+socket2 v0.6.5 (*)
+sync_wrapper v1.0.2 (*)
+tokio v1.53.1 (*)
+tokio-rustls v0.26.5 (*)
+tokio-stream v0.1.19
+futures-core v0.3.34
+pin-project-lite v0.2.17
+tokio v1.53.1 (*)
+tower v0.5.3 (*)
+tower-layer v0.3.3
+tower-service v0.3.3
+tracing v0.1.44 (*)
+webpki-roots v1.0.9
+rustls-pki-types v1.15.1 (*)
+tonic-prost v0.14.6
+bytes v1.12.1
+prost v0.14.4 (*)
+tonic v0.14.6 (*)
+tower v0.5.3 (*)
+tower-layer v0.3.3
+tracing v0.1.44 (*)
+url v2.5.8 (*)
+hex v0.4.3
+hyper v1.11.1 (*)
+rand v0.10.2 (*)
+rsb_derive v0.5.1 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v1.0.109
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+unicode-ident v1.0.24
+rvstruct v0.3.2
+rvs_derive v0.3.2 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v1.0.109 (*)
+serde v1.0.229 (*)
+struct-path v0.2.5 (proc-macro)
+convert_case v0.12.0
+unicode-segmentation v1.13.3
+tokio v1.53.1 (*)
+tokio-stream v0.1.19 (*)
+tracing v0.1.44 (*)
+futures v0.3.34 (*)
+futures-util v0.3.34 (*)
+gcloud-sdk v0.30.2 (*)
+log v0.4.34
+rand v0.9.5
+rand_chacha v0.9.0
+ppv-lite86 v0.2.21 (*)
+rand_core v0.9.5
+getrandom v0.3.4
+cfg-if v1.0.4
+libc v0.2.189
+rand_core v0.9.5 (*)
+reqwest v0.13.5 (*)
+rustls v0.23.44 (*)
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+strfmt v0.2.5
+studio-bridge-msgs v4.0.0
+arora-types v2.5.1 (*)
+chrono v0.4.45 (*)
+partially v0.2.1
+partially_derive v0.2.1 (proc-macro)
+darling v0.20.11
+darling_core v0.20.11
+fnv v1.0.7
+ident_case v1.0.1
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+strsim v0.11.1
+syn v2.0.119 (*)
+darling_macro v0.20.11 (proc-macro)
+darling_core v0.20.11 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+ron v0.8.1
+base64 v0.21.7
+bitflags v2.13.2 (*)
+serde v1.0.229 (*)
+serde_derive v1.0.229 (proc-macro) (*)
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+uuid v1.26.1 (*)
+sync_wrapper v1.0.2 (*)
+tokio v1.53.1 (*)
+tokio-stream v0.1.19 (*)
+webpki-roots v1.0.9 (*)
+zenoh v1.10.1
+ahash v0.8.12
+cfg-if v1.0.4
+getrandom v0.3.4 (*)
+once_cell v1.21.4
+zerocopy v0.8.57 (*)
+arc-swap v1.9.2
+rustversion v1.0.23 (proc-macro)
+async-trait v0.1.92 (proc-macro) (*)
+bytes v1.12.1
+const_format v0.2.36
+const_format_proc_macros v0.2.34 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+unicode-xid v0.2.6
+konst v0.2.20
+konst_macro_rules v0.2.19
+flate2 v1.1.10 (*)
+flume v0.11.1
+futures-core v0.3.34
+futures-sink v0.3.34
+nanorand v0.7.0
+getrandom v0.2.17 (*)
+spin v0.9.9 (*)
+futures v0.3.34 (*)
+git-version v0.3.9
+git-version-macro v0.3.9 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+itertools v0.14.0 (*)
+json5 v0.4.1
+pest v2.9.1
+memchr v2.8.3
+ucd-trie v0.1.7
+pest_derive v2.9.1 (proc-macro)
+pest v2.9.1
+memchr v2.8.3
+ucd-trie v0.1.7
+pest_generator v2.9.1
+pest v2.9.1 (*)
+pest_meta v2.9.1
+pest v2.9.1 (*)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+serde v1.0.229 (*)
+lazy_static v1.5.0 (*)
+nonempty-collections v0.3.1
+serde v1.0.229 (*)
+once_cell v1.21.4
+petgraph v0.8.3
+fixedbitset v0.5.7
+hashbrown v0.15.5
+allocator-api2 v0.2.21
+equivalent v1.0.2
+foldhash v0.1.5
+indexmap v2.14.2 (*)
+serde v1.0.229 (*)
+serde_derive v1.0.229 (proc-macro) (*)
+phf v0.13.1
+phf_macros v0.13.1 (proc-macro)
+phf_generator v0.13.1
+fastrand v2.5.0
+phf_shared v0.13.1
+siphasher v1.0.3
+phf_shared v0.13.1 (*)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+phf_shared v0.13.1
+siphasher v1.0.3
+rand v0.8.8 (*)
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+socket2 v0.5.10
+libc v0.2.189
+tokio v1.53.1 (*)
+tokio-util v0.7.19 (*)
+tracing v0.1.44 (*)
+uhlc v0.8.2
+humantime v2.4.0
+lazy_static v1.5.0 (*)
+log v0.4.34
+rand v0.8.8 (*)
+serde v1.0.229 (*)
+spin v0.10.1
+vec_map v0.8.2
+zenoh-buffers v1.10.1
+zenoh-collections v1.10.1
+ahash v0.8.12 (*)
+zenoh-codec v1.10.1
+rand v0.8.8 (*)
+tracing v0.1.44 (*)
+uhlc v0.8.2 (*)
+zenoh-buffers v1.10.1 (*)
+zenoh-protocol v1.10.1
+const_format v0.2.36 (*)
+serde v1.0.229 (*)
+uhlc v0.8.2 (*)
+zenoh-buffers v1.10.1 (*)
+zenoh-keyexpr v1.10.1
+getrandom v0.2.17 (*)
+hashbrown v0.16.1 (*)
+keyed-set v1.1.0
+hashbrown v0.14.5
+ahash v0.8.12 (*)
+allocator-api2 v0.2.21
+rand v0.8.8 (*)
+schemars v1.2.2
+dyn-clone v1.0.20
+either v1.18.0
+ref-cast v1.0.27
+ref-cast-impl v1.0.27 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v3.0.5 (*)
+schemars_derive v1.2.2 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+serde_derive_internals v0.30.0
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v3.0.5 (*)
+syn v3.0.5 (*)
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+serde v1.0.229 (*)
+token-cell v2.1.1
+paste v1.0.15 (proc-macro)
+portable-atomic v1.15.0
+rustversion v1.0.23 (proc-macro)
+zenoh-result v1.10.1
+anyhow v1.0.104
+zenoh-macros v1.10.1 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+zenoh-keyexpr v1.10.1
+getrandom v0.2.17
+cfg-if v1.0.4
+libc v0.2.189
+hashbrown v0.16.1
+allocator-api2 v0.2.21
+equivalent v1.0.2
+foldhash v0.2.0
+keyed-set v1.1.0
+hashbrown v0.14.5
+ahash v0.8.12
+cfg-if v1.0.4
+once_cell v1.21.4
+zerocopy v0.8.57
+allocator-api2 v0.2.21
+rand v0.8.8
+rand_core v0.6.4
+getrandom v0.2.17 (*)
+schemars v1.2.2
+dyn-clone v1.0.20
+either v1.18.0
+ref-cast v1.0.27
+ref-cast-impl v1.0.27 (proc-macro) (*)
+schemars_derive v1.2.2 (proc-macro) (*)
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+serde v1.0.229 (*)
+token-cell v2.1.1
+paste v1.0.15 (proc-macro)
+portable-atomic v1.15.0
+rustversion v1.0.23 (proc-macro)
+zenoh-result v1.10.1
+anyhow v1.0.104
+zenoh-result v1.10.1 (*)
+zenoh-collections v1.10.1 (*)
+zenoh-config v1.10.1
+json5 v0.4.1 (*)
+nonempty-collections v0.3.1 (*)
+num_cpus v1.17.0
+libc v0.2.189
+secrecy v0.8.0
+serde v1.0.229 (*)
+zeroize v1.9.0 (*)
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+serde_with v3.23.0
+serde_core v1.0.229
+serde_with_macros v3.23.0 (proc-macro)
+darling v0.24.1
+darling_core v0.24.1
+ident_case v1.0.1
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+strsim v0.11.1
+syn v3.0.5 (*)
+darling_macro v0.24.1 (proc-macro)
+darling_core v0.24.1 (*)
+quote v1.0.47 (*)
+syn v3.0.5 (*)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v3.0.5 (*)
+serde_yaml v0.9.34+deprecated (*)
+tracing v0.1.44 (*)
+uhlc v0.8.2 (*)
+validated_struct v2.2.0
+json5 v0.4.1 (*)
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+validated_struct_macros v2.2.0 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+unzip-n v0.1.4 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+zenoh-core v1.10.1
+lazy_static v1.5.0 (*)
+tokio v1.53.1 (*)
+zenoh-result v1.10.1 (*)
+zenoh-runtime v1.10.1
+lazy_static v1.5.0 (*)
+ron v0.12.2
+bitflags v2.13.2 (*)
+once_cell v1.21.4
+serde v1.0.229 (*)
+serde_derive v1.0.229 (proc-macro) (*)
+typeid v1.0.3
+unicode-ident v1.0.24
+serde v1.0.229 (*)
+tokio v1.53.1 (*)
+tracing v0.1.44 (*)
+zenoh-macros v1.10.1 (proc-macro) (*)
+zenoh-result v1.10.1 (*)
+zenoh-keyexpr v1.10.1 (*)
+zenoh-macros v1.10.1 (proc-macro) (*)
+zenoh-protocol v1.10.1 (*)
+zenoh-result v1.10.1 (*)
+zenoh-util v1.10.1
+async-trait v0.1.92 (proc-macro) (*)
+const_format v0.2.36 (*)
+flume v0.11.1 (*)
+home v0.5.12
+humantime v2.4.0
+lazy_static v1.5.0 (*)
+libc v0.2.189
+libloading v0.8.9
+cfg-if v1.0.4
+pnet_datalink v0.35.0
+ipnetwork v0.20.0
+serde v1.0.229 (*)
+libc v0.2.189
+pnet_base v0.35.0
+no-std-net v0.6.0
+pnet_sys v0.35.0
+libc v0.2.189
+schemars v1.2.2 (*)
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+shellexpand v3.1.2
+dirs v6.0.0
+dirs-sys v0.5.0
+libc v0.2.189
+option-ext v0.2.0
+tokio v1.53.1 (*)
+tracing v0.1.44 (*)
+tracing-subscriber v0.3.23
+matchers v0.2.0
+regex-automata v0.4.18
+aho-corasick v1.1.5
+memchr v2.8.3
+memchr v2.8.3
+regex-syntax v0.8.11
+nu-ansi-term v0.50.3
+once_cell v1.21.4
+regex-automata v0.4.18 (*)
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+sharded-slab v0.1.7
+lazy_static v1.5.0 (*)
+smallvec v1.16.0 (*)
+thread_local v1.1.10
+cfg-if v1.0.4
+tracing v0.1.44 (*)
+tracing-core v0.1.36 (*)
+tracing-log v0.2.0
+log v0.4.34
+once_cell v1.21.4
+tracing-core v0.1.36 (*)
+tracing-serde v0.2.0
+serde v1.0.229 (*)
+tracing-core v0.1.36 (*)
+zenoh-core v1.10.1 (*)
+zenoh-result v1.10.1 (*)
+zenoh-core v1.10.1 (*)
+zenoh-keyexpr v1.10.1 (*)
+zenoh-link v1.10.1
+zenoh-config v1.10.1 (*)
+zenoh-link-commons v1.10.1
+async-trait v0.1.92 (proc-macro) (*)
+base64 v0.22.1
+bytes v1.12.1
+flume v0.11.1 (*)
+futures v0.3.34 (*)
+quinn v0.11.11
+bytes v1.12.1
+pin-project-lite v0.2.17
+quinn-proto v0.11.17
+bytes v1.12.1
+fastbloom v0.17.0
+foldhash v0.2.0
+libm v0.2.16
+portable-atomic v1.15.0
+siphasher v1.0.3
+lru-slab v0.1.2
+rand v0.10.2 (*)
+rand_pcg v0.10.2
+rand_core v0.10.1
+ring v0.17.14 (*)
+rustc-hash v2.1.3
+rustls v0.23.44 (*)
+rustls-platform-verifier v0.7.0 (*)
+slab v0.4.12
+thiserror v2.0.20 (*)
+tinyvec v1.13.2
+tinyvec_macros v0.1.1
+tracing v0.1.44 (*)
+quinn-udp v0.5.15
+libc v0.2.189
+socket2 v0.6.5 (*)
+tracing v0.1.44 (*)
+rustc-hash v2.1.3
+rustls v0.23.44 (*)
+socket2 v0.6.5 (*)
+thiserror v2.0.20 (*)
+tokio v1.53.1 (*)
+tracing v0.1.44 (*)
+quinn-proto v0.11.17 (*)
+rcgen v0.14.10
+pem v4.0.0
+base64 v0.23.1
+ring v0.17.14 (*)
+rustls-pki-types v1.15.1 (*)
+time v0.3.55 (*)
+yasna v0.6.0
+time v0.3.55 (*)
+rustls v0.23.44 (*)
+rustls-pemfile v2.2.0
+rustls-pki-types v1.15.1 (*)
+rustls-pki-types v1.15.1 (*)
+rustls-webpki v0.103.15 (*)
+secrecy v0.8.0 (*)
+serde v1.0.229 (*)
+socket2 v0.5.10 (*)
+time v0.3.55 (*)
+tokio v1.53.1 (*)
+tokio-util v0.7.19 (*)
+tracing v0.1.44 (*)
+webpki-roots v1.0.9 (*)
+x509-parser v0.18.1
+asn1-rs v0.7.2
+asn1-rs-derive v0.6.0 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+synstructure v0.13.2 (*)
+asn1-rs-impl v0.2.0 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+displaydoc v0.2.7 (proc-macro) (*)
+nom v7.1.3
+memchr v2.8.3
+minimal-lexical v0.2.1
+num-traits v0.2.19 (*)
+rusticata-macros v4.1.0
+nom v7.1.3 (*)
+thiserror v2.0.20 (*)
+time v0.3.55 (*)
+data-encoding v2.11.1
+der-parser v10.0.0
+asn1-rs v0.7.2 (*)
+displaydoc v0.2.7 (proc-macro) (*)
+nom v7.1.3 (*)
+num-bigint v0.4.8 (*)
+num-traits v0.2.19 (*)
+rusticata-macros v4.1.0 (*)
+lazy_static v1.5.0 (*)
+nom v7.1.3 (*)
+oid-registry v0.8.1
+asn1-rs v0.7.2 (*)
+rusticata-macros v4.1.0 (*)
+thiserror v2.0.20 (*)
+time v0.3.55 (*)
+zenoh-buffers v1.10.1 (*)
+zenoh-codec v1.10.1 (*)
+zenoh-config v1.10.1 (*)
+zenoh-core v1.10.1 (*)
+zenoh-protocol v1.10.1 (*)
+zenoh-result v1.10.1 (*)
+zenoh-runtime v1.10.1 (*)
+zenoh-util v1.10.1 (*)
+zenoh-link-quic v1.10.1
+async-trait v0.1.92 (proc-macro) (*)
+rustls-webpki v0.103.15 (*)
+time v0.3.55 (*)
+tracing v0.1.44 (*)
+zenoh-core v1.10.1 (*)
+zenoh-link-commons v1.10.1 (*)
+zenoh-link-quic_datagram v1.10.1
+async-trait v0.1.92 (proc-macro) (*)
+rustls-webpki v0.103.15 (*)
+time v0.3.55 (*)
+tokio-util v0.7.19 (*)
+tracing v0.1.44 (*)
+zenoh-core v1.10.1 (*)
+zenoh-link-commons v1.10.1 (*)
+zenoh-protocol v1.10.1 (*)
+zenoh-result v1.10.1 (*)
+zenoh-protocol v1.10.1 (*)
+zenoh-result v1.10.1 (*)
+zenoh-link-quic_datagram v1.10.1 (*)
+zenoh-link-tcp v1.10.1
+async-trait v0.1.92 (proc-macro) (*)
+socket2 v0.5.10 (*)
+tokio v1.53.1 (*)
+tokio-util v0.7.19 (*)
+tracing v0.1.44 (*)
+zenoh-config v1.10.1 (*)
+zenoh-core v1.10.1 (*)
+zenoh-link-commons v1.10.1 (*)
+zenoh-protocol v1.10.1 (*)
+zenoh-result v1.10.1 (*)
+zenoh-link-tls v1.10.1
+async-trait v0.1.92 (proc-macro) (*)
+base64 v0.22.1
+rustls v0.23.44 (*)
+rustls-pemfile v2.2.0 (*)
+rustls-pki-types v1.15.1 (*)
+rustls-webpki v0.103.15 (*)
+secrecy v0.8.0 (*)
+socket2 v0.5.10 (*)
+time v0.3.55 (*)
+tls-listener v0.11.2
+futures-util v0.3.34 (*)
+pin-project-lite v0.2.17
+thiserror v2.0.20 (*)
+tokio v1.53.1 (*)
+tokio-rustls v0.26.5 (*)
+tokio v1.53.1 (*)
+tokio-rustls v0.26.5 (*)
+tokio-util v0.7.19 (*)
+tracing v0.1.44 (*)
+webpki-roots v1.0.9 (*)
+x509-parser v0.18.1 (*)
+zenoh-config v1.10.1 (*)
+zenoh-core v1.10.1 (*)
+zenoh-link-commons v1.10.1 (*)
+zenoh-protocol v1.10.1 (*)
+zenoh-result v1.10.1 (*)
+zenoh-runtime v1.10.1 (*)
+zenoh-link-udp v1.10.1
+async-trait v0.1.92 (proc-macro) (*)
+libc v0.2.189
+socket2 v0.5.10 (*)
+tokio v1.53.1 (*)
+tokio-util v0.7.19 (*)
+tracing v0.1.44 (*)
+zenoh-buffers v1.10.1 (*)
+zenoh-core v1.10.1 (*)
+zenoh-link-commons v1.10.1 (*)
+zenoh-link-quic_datagram v1.10.1 (*)
+zenoh-protocol v1.10.1 (*)
+zenoh-result v1.10.1 (*)
+zenoh-sync v1.10.1
+arc-swap v1.9.2 (*)
+event-listener v5.4.2
+parking v2.2.1
+pin-project-lite v0.2.17
+futures v0.3.34 (*)
+tokio v1.53.1 (*)
+zenoh-buffers v1.10.1 (*)
+zenoh-collections v1.10.1 (*)
+zenoh-core v1.10.1 (*)
+zenoh-util v1.10.1 (*)
+zenoh-link-unixsock_stream v1.10.1
+async-trait v0.1.92 (proc-macro) (*)
+nix v0.29.0
+bitflags v2.13.2 (*)
+cfg-if v1.0.4
+libc v0.2.189
+tokio v1.53.1 (*)
+tokio-util v0.7.19 (*)
+tracing v0.1.44 (*)
+uuid v1.26.1 (*)
+zenoh-core v1.10.1 (*)
+zenoh-link-commons v1.10.1 (*)
+zenoh-protocol v1.10.1 (*)
+zenoh-result v1.10.1 (*)
+zenoh-runtime v1.10.1 (*)
+zenoh-link-ws v1.10.1
+async-trait v0.1.92 (proc-macro) (*)
+futures-util v0.3.34 (*)
+tokio v1.53.1 (*)
+tokio-tungstenite v0.24.0 (*)
+tokio-util v0.7.19 (*)
+tracing v0.1.44 (*)
+url v2.5.8 (*)
+zenoh-core v1.10.1 (*)
+zenoh-link-commons v1.10.1 (*)
+zenoh-protocol v1.10.1 (*)
+zenoh-result v1.10.1 (*)
+zenoh-runtime v1.10.1 (*)
+zenoh-util v1.10.1 (*)
+zenoh-protocol v1.10.1 (*)
+zenoh-result v1.10.1 (*)
+zenoh-link-commons v1.10.1 (*)
+zenoh-macros v1.10.1 (proc-macro) (*)
+zenoh-plugin-trait v1.10.1
+git-version v0.3.9 (*)
+libloading v0.8.9 (*)
+serde v1.0.229 (*)
+stabby v72.1.16
+rustversion v1.0.23 (proc-macro)
+stabby-abi v72.1.16
+rustversion v1.0.23 (proc-macro)
+sha2-const-stable v0.1.0
+stabby-macros v72.1.16 (proc-macro)
+proc-macro-crate v3.5.0
+toml_edit v0.25.13+spec-1.1.0
+indexmap v2.14.2 (*)
+toml_datetime v1.1.1+spec-1.1.0
+toml_parser v1.1.3+spec-1.1.0
+winnow v1.0.4
+winnow v1.0.4
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+tracing v0.1.44 (*)
+zenoh-config v1.10.1 (*)
+zenoh-keyexpr v1.10.1 (*)
+zenoh-macros v1.10.1 (proc-macro) (*)
+zenoh-result v1.10.1 (*)
+zenoh-util v1.10.1 (*)
+zenoh-protocol v1.10.1 (*)
+zenoh-result v1.10.1 (*)
+zenoh-runtime v1.10.1 (*)
+zenoh-sync v1.10.1 (*)
+zenoh-task v1.10.1
+futures v0.3.34 (*)
+tokio v1.53.1 (*)
+tokio-util v0.7.19 (*)
+tracing v0.1.44 (*)
+zenoh-core v1.10.1 (*)
+zenoh-runtime v1.10.1 (*)
+zenoh-transport v1.10.1
+async-trait v0.1.92 (proc-macro) (*)
+crossbeam-utils v0.8.23
+flume v0.11.1 (*)
+futures v0.3.34 (*)
+lazy_static v1.5.0 (*)
+lz4_flex v0.10.0
+twox-hash v1.6.3
+cfg-if v1.0.4
+static_assertions v1.1.0
+rand v0.8.8 (*)
+ringbuffer-spsc v0.1.15
+array-init v2.1.0
+crossbeam v0.8.5
+crossbeam-channel v0.5.17
+crossbeam-utils v0.8.23
+crossbeam-deque v0.8.8 (*)
+crossbeam-epoch v0.9.21 (*)
+crossbeam-queue v0.3.14
+crossbeam-utils v0.8.23
+crossbeam-utils v0.8.23
+rsa v0.9.10
+const-oid v0.9.6
+digest v0.10.7 (*)
+num-bigint-dig v0.8.6
+lazy_static v1.5.0 (*)
+libm v0.2.16
+num-integer v0.1.47 (*)
+num-iter v0.1.46
+num-integer v0.1.47 (*)
+num-traits v0.2.19 (*)
+num-traits v0.2.19 (*)
+rand v0.8.8 (*)
+smallvec v1.16.0 (*)
+zeroize v1.9.0 (*)
+num-integer v0.1.47 (*)
+num-traits v0.2.19 (*)
+pkcs1 v0.7.5
+der v0.7.10
+const-oid v0.9.6
+pem-rfc7468 v0.7.0
+base64ct v1.8.3
+zeroize v1.9.0 (*)
+pkcs8 v0.10.2
+der v0.7.10 (*)
+spki v0.7.3
+der v0.7.10 (*)
+spki v0.7.3 (*)
+pkcs8 v0.10.2 (*)
+rand_core v0.6.4 (*)
+signature v2.2.0 (*)
+spki v0.7.3 (*)
+subtle v2.6.1
+zeroize v1.9.0 (*)
+serde v1.0.229 (*)
+sha3 v0.10.9
+digest v0.10.7 (*)
+keccak v0.1.6
+cpufeatures v0.2.17 (*)
+tokio v1.53.1 (*)
+tokio-util v0.7.19 (*)
+tracing v0.1.44 (*)
+zenoh-buffers v1.10.1 (*)
+zenoh-codec v1.10.1 (*)
+zenoh-config v1.10.1 (*)
+zenoh-core v1.10.1 (*)
+zenoh-crypto v1.10.1
+aes v0.8.4
+cfg-if v1.0.4
+cipher v0.4.4
+crypto-common v0.1.7 (*)
+inout v0.1.4
+generic-array v0.14.7 (*)
+zeroize v1.9.0 (*)
+cpufeatures v0.2.17 (*)
+hmac v0.12.1
+digest v0.10.7 (*)
+rand v0.8.8 (*)
+rand_chacha v0.3.1 (*)
+sha3 v0.10.9 (*)
+zenoh-result v1.10.1 (*)
+zenoh-link v1.10.1 (*)
+zenoh-link-commons v1.10.1 (*)
+zenoh-protocol v1.10.1 (*)
+zenoh-result v1.10.1 (*)
+zenoh-runtime v1.10.1 (*)
+zenoh-sync v1.10.1 (*)
+zenoh-task v1.10.1 (*)
+zenoh-util v1.10.1 (*)
+zenoh-util v1.10.1 (*)
+arora-types v2.5.1 (*)
+async-trait v0.1.92 (proc-macro) (*)
+clap v4.6.6
+clap_builder v4.6.6
+anstream v1.0.0
+anstyle v1.0.14
+anstyle-parse v1.0.0
+utf8parse v0.2.2
+anstyle-query v1.1.5
+colorchoice v1.0.5
+is_terminal_polyfill v1.70.2
+utf8parse v0.2.2
+anstyle v1.0.14
+clap_lex v1.1.0
+strsim v0.11.1
+clap_derive v4.6.4 (proc-macro)
+heck v0.5.0
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v3.0.5 (*)
+crypto_secretbox v0.1.1
+aead v0.5.2
+crypto-common v0.1.7 (*)
+generic-array v0.14.7 (*)
+cipher v0.4.4 (*)
+generic-array v0.14.7 (*)
+poly1305 v0.8.0
+opaque-debug v0.3.1
+universal-hash v0.5.1
+crypto-common v0.1.7 (*)
+subtle v2.6.1
+salsa20 v0.10.2
+cipher v0.4.4 (*)
+subtle v2.6.1
+zeroize v1.9.0 (*)
+dirs v6.0.0 (*)
+env_filter v0.1.4
+log v0.4.34
+regex v1.13.1
+aho-corasick v1.1.5 (*)
+memchr v2.8.3
+regex-automata v0.4.18 (*)
+regex-syntax v0.8.11
+env_logger v0.11.11
+anstream v1.0.0 (*)
+anstyle v1.0.14
+env_filter v2.0.0
+log v0.4.34
+regex v1.13.1 (*)
+jiff v0.2.35
+jiff-core v0.1.0
+log v0.4.34
+futures v0.3.34 (*)
+log v0.4.34
+ratatui v0.29.0
+bitflags v2.13.2 (*)
+cassowary v0.3.0
+compact_str v0.8.2
+castaway v0.2.4
+rustversion v1.0.23 (proc-macro)
+cfg-if v1.0.4
+itoa v1.0.18
+rustversion v1.0.23 (proc-macro)
+ryu v1.0.23
+static_assertions v1.1.0
+crossterm v0.28.1
+bitflags v2.13.2 (*)
+mio v1.2.3 (*)
+parking_lot v0.12.5
+lock_api v0.4.14 (*)
+parking_lot_core v0.9.12
+cfg-if v1.0.4
+libc v0.2.189
+smallvec v1.16.0 (*)
+rustix v0.38.44
+bitflags v2.13.2 (*)
+errno v0.3.14 (*)
+libc v0.2.189
+linux-raw-sys v0.4.15
+signal-hook v0.3.18
+libc v0.2.189
+signal-hook-registry v1.4.8
+errno v0.3.14 (*)
+libc v0.2.189
+signal-hook-mio v0.2.5
+libc v0.2.189
+mio v1.2.3 (*)
+signal-hook v0.3.18 (*)
+indoc v2.0.7 (proc-macro)
+instability v0.3.13 (proc-macro)
+darling v0.24.1 (*)
+indoc v2.0.7 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v3.0.5 (*)
+itertools v0.13.0
+either v1.18.0
+lru v0.12.5
+hashbrown v0.15.5 (*)
+paste v1.0.15 (proc-macro)
+strum v0.26.3
+strum_macros v0.26.4 (proc-macro)
+heck v0.5.0
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+rustversion v1.0.23 (proc-macro)
+syn v2.0.119 (*)
+unicode-segmentation v1.13.3
+unicode-truncate v1.1.0
+itertools v0.13.0 (*)
+unicode-segmentation v1.13.3
+unicode-width v0.1.14
+unicode-width v0.2.0
+rustls v0.23.44 (*)
+sysinfo v0.33.1
+libc v0.2.189
+memchr v2.8.3
+tokio v1.53.1 (*)
+uuid v1.26.1 (*)
+web-time v1.1.0
+arora-behavior v8.4.0 (*)
+arora-behavior-tree-types v1.1.0 (*)
+arora-types v2.5.1 (*)
+bevy v0.19.1
+bevy_internal v0.19.1
+bevy_a11y v0.19.1
+accesskit v0.24.1
+uuid v1.26.1 (*)
+bevy_app v0.19.1
+bevy_derive v0.19.1 (proc-macro)
+bevy_macro_utils v0.19.1
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+toml_edit v0.25.13+spec-1.1.0 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+bevy_ecs v0.19.1
+arrayvec v0.7.8
+bevy_ecs_macros v0.19.1 (proc-macro)
+bevy_ecs_macro_logic v0.19.1
+bevy_macro_utils v0.19.1 (*)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+bevy_macro_utils v0.19.1 (*)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+bevy_platform v0.19.1
+foldhash v0.2.0
+futures-lite v2.6.1
+fastrand v2.5.0
+futures-core v0.3.34
+futures-io v0.3.34
+parking v2.2.1
+pin-project-lite v0.2.17
+hashbrown v0.16.1 (*)
+serde v1.0.229 (*)
+spin v0.10.1
+bevy_ptr v0.19.1
+bevy_reflect v0.19.1
+assert_type_match v0.1.1 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+bevy_platform v0.19.1 (*)
+bevy_ptr v0.19.1
+bevy_reflect_derive v0.19.1 (proc-macro)
+bevy_macro_utils v0.19.1 (*)
+indexmap v2.14.2 (*)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+bevy_utils v0.19.1
+async-channel v2.5.0
+concurrent-queue v2.5.0
+crossbeam-utils v0.8.23
+event-listener-strategy v0.5.4
+event-listener v5.4.2 (*)
+pin-project-lite v0.2.17
+futures-core v0.3.34
+pin-project-lite v0.2.17
+bevy_platform v0.19.1 (*)
+disqualified v1.0.0
+indexmap v2.14.2 (*)
+thread_local v1.1.10 (*)
+derive_more v2.1.1 (*)
+disqualified v1.0.0
+downcast-rs v2.0.2
+erased-serde v0.4.10
+serde_core v1.0.229
+typeid v1.0.3
+foldhash v0.2.0
+glam v0.32.1
+bytemuck v1.25.2 (*)
+encase v0.12.1
+const_panic v0.2.17
+typewit v1.15.2
+encase_derive v0.12.1 (proc-macro)
+encase_derive_impl v0.12.1
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+thiserror v2.0.20 (*)
+libm v0.2.16
+rand v0.10.2 (*)
+serde_core v1.0.229
+indexmap v2.14.2 (*)
+inventory v0.3.24
+petgraph v0.8.3 (*)
+serde v1.0.229 (*)
+smallvec v1.16.0 (*)
+smol_str v0.2.2
+serde v1.0.229 (*)
+thiserror v2.0.20 (*)
+uuid v1.26.1 (*)
+variadics_please v1.1.0 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+wgpu-types v29.0.4
+bitflags v2.13.2 (*)
+bytemuck v1.25.2 (*)
+log v0.4.34
+raw-window-handle v0.6.2
+serde v1.0.229 (*)
+bevy_tasks v0.19.1
+async-channel v2.5.0 (*)
+async-executor v1.14.0
+async-task v4.7.1
+concurrent-queue v2.5.0 (*)
+fastrand v2.5.0
+futures-lite v2.6.1 (*)
+pin-project-lite v0.2.17
+slab v0.4.12
+async-task v4.7.1
+atomic-waker v1.1.2
+bevy_platform v0.19.1 (*)
+concurrent-queue v2.5.0 (*)
+crossbeam-queue v0.3.14 (*)
+derive_more v2.1.1 (*)
+futures-lite v2.6.1 (*)
+bevy_utils v0.19.1 (*)
+bitflags v2.13.2 (*)
+bumpalo v3.20.3 (*)
+concurrent-queue v2.5.0 (*)
+derive_more v2.1.1 (*)
+fixedbitset v0.5.7
+indexmap v2.14.2 (*)
+log v0.4.34
+nonmax v0.5.5
+serde v1.0.229 (*)
+slotmap v1.1.1
+smallvec v1.16.0 (*)
+thiserror v2.0.20 (*)
+variadics_please v1.1.0 (proc-macro) (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_tasks v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+ctrlc v3.5.2
+nix v0.31.3
+bitflags v2.13.2 (*)
+cfg-if v1.0.4
+libc v0.2.189
+downcast-rs v2.0.2
+log v0.4.34
+thiserror v2.0.20 (*)
+variadics_please v1.1.0 (proc-macro) (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_ecs v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_android v0.19.1
+android-activity v0.6.1
+android-properties v0.2.2
+bitflags v2.13.2 (*)
+jni v0.22.4 (*)
+libc v0.2.189
+log v0.4.34
+ndk v0.9.0
+bitflags v2.13.2 (*)
+jni-sys v0.3.1
+jni-sys v0.4.1 (*)
+log v0.4.34
+ndk-sys v0.6.0+11769913
+jni-sys v0.3.1 (*)
+num_enum v0.7.6
+num_enum_derive v0.7.6 (proc-macro)
+proc-macro-crate v3.5.0 (*)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+rustversion v1.0.23 (proc-macro)
+raw-window-handle v0.6.2
+thiserror v1.0.69 (*)
+ndk-context v0.1.1
+ndk-sys v0.6.0+11769913 (*)
+num_enum v0.7.6 (*)
+thiserror v2.0.20 (*)
+bevy_animation v0.19.1
+bevy_animation_macros v0.19.1 (proc-macro)
+bevy_macro_utils v0.19.1 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1
+async-broadcast v0.7.2
+event-listener v5.4.2 (*)
+event-listener-strategy v0.5.4 (*)
+futures-core v0.3.34
+pin-project-lite v0.2.17
+async-channel v2.5.0 (*)
+async-fs v2.2.0
+async-lock v3.4.2
+event-listener v5.4.2 (*)
+event-listener-strategy v0.5.4 (*)
+pin-project-lite v0.2.17
+blocking v1.7.0
+async-channel v2.5.0 (*)
+async-task v4.7.1
+futures-io v0.3.34
+futures-lite v2.6.1 (*)
+piper v0.2.5
+atomic-waker v1.1.2
+fastrand v2.5.0
+futures-io v0.3.34
+futures-lite v2.6.1 (*)
+async-io v2.6.0
+cfg-if v1.0.4
+concurrent-queue v2.5.0 (*)
+futures-io v0.3.34
+futures-lite v2.6.1 (*)
+parking v2.2.1
+polling v3.11.0
+cfg-if v1.0.4
+rustix v1.1.4 (*)
+rustix v1.1.4 (*)
+slab v0.4.12
+async-lock v3.4.2 (*)
+atomicow v1.2.0
+bevy_android v0.19.1 (*)
+bevy_app v0.19.1 (*)
+bevy_asset_macros v0.19.1 (proc-macro)
+bevy_macro_utils v0.19.1 (*)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+bevy_diagnostic v0.19.1
+atomic-waker v1.1.2
+bevy_app v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_tasks v0.19.1 (*)
+bevy_time v0.19.1
+bevy_app v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+crossbeam-channel v0.5.17 (*)
+log v0.4.34
+const-fnv1a-hash v1.1.0
+log v0.4.34
+sysinfo v0.38.4
+libc v0.2.189
+memchr v2.8.3
+bevy_ecs v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_tasks v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+bitflags v2.13.2 (*)
+blake3 v1.8.7
+arrayvec v0.7.8
+cfg-if v1.0.4
+constant_time_eq v0.4.2
+crossbeam-channel v0.5.17 (*)
+derive_more v2.1.1 (*)
+disqualified v1.0.0
+downcast-rs v2.0.2
+either v1.18.0
+futures-io v0.3.34
+futures-lite v2.6.1 (*)
+futures-util v0.3.34 (*)
+ron v0.12.2 (*)
+serde v1.0.229 (*)
+stackfuture v0.3.1
+const_panic v0.2.17 (*)
+thiserror v2.0.20 (*)
+tracing v0.1.44 (*)
+uuid v1.26.1 (*)
+bevy_color v0.19.1
+bevy_math v0.19.1
+arrayvec v0.7.8
+bevy_reflect v0.19.1 (*)
+derive_more v2.1.1 (*)
+glam v0.32.1 (*)
+itertools v0.14.0 (*)
+libm v0.2.16
+rand v0.10.2 (*)
+rand_distr v0.6.0
+num-traits v0.2.19 (*)
+rand v0.10.2 (*)
+serde v1.0.229 (*)
+thiserror v2.0.20 (*)
+variadics_please v1.1.0 (proc-macro) (*)
+bevy_reflect v0.19.1 (*)
+bytemuck v1.25.2 (*)
+derive_more v2.1.1 (*)
+encase v0.12.1 (*)
+serde v1.0.229 (*)
+thiserror v2.0.20 (*)
+wgpu-types v29.0.4 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_ecs v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_mesh v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_ecs v0.19.1 (*)
+bevy_encase_derive v0.19.1 (proc-macro)
+bevy_macro_utils v0.19.1 (*)
+encase_derive_impl v0.12.1 (*)
+bevy_math v0.19.1 (*)
+bevy_mikktspace v1.0.0
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_transform v0.19.1
+bevy_app v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_tasks v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+derive_more v2.1.1 (*)
+thiserror v2.0.20 (*)
+bitflags v2.13.2 (*)
+bytemuck v1.25.2 (*)
+derive_more v2.1.1 (*)
+encase v0.12.1 (*)
+glam v0.32.1 (*)
+half v2.7.1
+bytemuck v1.25.2 (*)
+cfg-if v1.0.4
+num-traits v0.2.19 (*)
+zerocopy v0.8.57 (*)
+hexasphere v18.0.0
+constgebra v0.1.4
+const_soft_float v0.1.4
+glam v0.32.1 (*)
+thiserror v2.0.20 (*)
+tracing v0.1.44 (*)
+wgpu-types v29.0.4 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_time v0.19.1 (*)
+bevy_transform v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+blake3 v1.8.7 (*)
+derive_more v2.1.1 (*)
+downcast-rs v2.0.2
+either v1.18.0
+petgraph v0.8.3 (*)
+ron v0.12.2 (*)
+serde v1.0.229 (*)
+smallvec v1.16.0 (*)
+thiserror v2.0.20 (*)
+thread_local v1.1.10 (*)
+tracing v0.1.44 (*)
+uuid v1.26.1 (*)
+bevy_anti_alias v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_camera v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_ecs v0.19.1 (*)
+bevy_image v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+bitflags v2.13.2 (*)
+bytemuck v1.25.2 (*)
+futures-lite v2.6.1 (*)
+guillotiere v0.6.2
+euclid v0.22.14
+num-traits v0.2.19 (*)
+svg_fmt v0.4.5
+half v2.7.1 (*)
+image v0.25.10
+bytemuck v1.25.2 (*)
+byteorder-lite v0.1.0
+color_quant v1.1.0
+exr v1.74.2
+bit_field v0.10.3
+half v2.7.1 (*)
+lebe v0.5.3
+miniz_oxide v0.8.9
+adler2 v2.0.1
+simd-adler32 v0.3.10
+num-complex v0.4.6
+bytemuck v1.25.2 (*)
+num-traits v0.2.19 (*)
+pulp v0.22.3
+bytemuck v1.25.2 (*)
+cfg-if v1.0.4
+libm v0.2.16
+num-complex v0.4.6 (*)
+paste v1.0.15 (proc-macro)
+pulp-wasm-simd-flag v0.1.1
+reborrow v0.5.5
+rayon-core v1.13.0 (*)
+smallvec v1.16.0 (*)
+zune-inflate v0.2.54
+simd-adler32 v0.3.10
+gif v0.14.2
+color_quant v1.1.0
+weezl v0.1.12
+image-webp v0.2.4
+byteorder-lite v0.1.0
+quick-error v2.0.1
+moxcms v0.8.1
+num-traits v0.2.19 (*)
+pxfm v0.1.30
+num-traits v0.2.19 (*)
+png v0.18.1
+bitflags v2.13.2 (*)
+crc32fast v1.5.1 (*)
+fdeflate v0.3.7
+simd-adler32 v0.3.10
+flate2 v1.1.10 (*)
+miniz_oxide v0.8.9 (*)
+qoi v0.4.1
+bytemuck v1.25.2 (*)
+ravif v0.13.0
+avif-serialize v0.8.9
+arrayvec v0.7.8
+imgref v1.12.3
+loop9 v0.1.5
+imgref v1.12.3
+quick-error v2.0.1
+rav1e v0.8.1
+aligned-vec v0.6.4
+equator v0.4.2
+equator-macro v0.4.2 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+arg_enum_proc_macro v0.3.4 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+arrayvec v0.7.8
+av-scenechange v0.14.1
+aligned v0.4.3
+as-slice v0.2.1
+stable_deref_trait v1.2.1
+anyhow v1.0.104
+arg_enum_proc_macro v0.3.4 (proc-macro) (*)
+arrayvec v0.7.8
+log v0.4.34
+num-rational v0.4.2
+num-bigint v0.4.8 (*)
+num-integer v0.1.47 (*)
+num-traits v0.2.19 (*)
+num-traits v0.2.19 (*)
+pastey v0.1.1 (proc-macro)
+rayon v1.12.0 (*)
+thiserror v2.0.20 (*)
+v_frame v0.3.9
+aligned-vec v0.6.4 (*)
+num-traits v0.2.19 (*)
+y4m v0.8.0
+av1-grain v0.2.5
+anyhow v1.0.104
+arrayvec v0.7.8
+log v0.4.34
+nom v8.0.0
+memchr v2.8.3
+num-rational v0.4.2 (*)
+v_frame v0.3.9 (*)
+bitstream-io v4.10.0
+no_std_io2 v0.9.4
+memchr v2.8.3
+cfg-if v1.0.4
+itertools v0.14.0 (*)
+libc v0.2.189
+log v0.4.34
+maybe-rayon v0.1.1
+cfg-if v1.0.4
+rayon v1.12.0 (*)
+new_debug_unreachable v1.0.6
+noop_proc_macro v0.3.0 (proc-macro)
+num-derive v0.4.2 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+num-traits v0.2.19 (*)
+paste v1.0.15 (proc-macro)
+profiling v1.0.18
+profiling-procmacros v1.0.18 (proc-macro)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+simd_helpers v0.1.0 (proc-macro)
+quote v1.0.47 (*)
+thiserror v2.0.20 (*)
+v_frame v0.3.9 (*)
+rayon v1.12.0 (*)
+rgb v0.8.53
+rayon v1.12.0 (*)
+rgb v0.8.53
+tiff v0.11.3
+fax v0.2.7
+flate2 v1.1.10 (*)
+half v2.7.1 (*)
+quick-error v2.0.1
+weezl v0.1.12
+zune-jpeg v0.5.15
+zune-core v0.5.3
+zune-core v0.5.3
+zune-jpeg v0.5.15 (*)
+ktx2 v0.5.0
+bitflags v2.13.2 (*)
+rectangle-pack v0.4.2
+ruzstd v0.8.3
+twox-hash v2.1.4
+serde v1.0.229 (*)
+thiserror v2.0.20 (*)
+tracing v0.1.44 (*)
+wgpu-types v29.0.4 (*)
+bevy_math v0.19.1 (*)
+bevy_mesh v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_transform v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+bevy_window v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_image v0.19.1 (*)
+bevy_input v0.19.1
+bevy_app v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+derive_more v2.1.1 (*)
+log v0.4.34
+smol_str v0.2.2 (*)
+thiserror v2.0.20 (*)
+bevy_math v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+log v0.4.34
+raw-window-handle v0.6.2
+derive_more v2.1.1 (*)
+downcast-rs v2.0.2
+serde v1.0.229 (*)
+smallvec v1.16.0 (*)
+thiserror v2.0.20 (*)
+wgpu-types v29.0.4 (*)
+bevy_core_pipeline v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_camera v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_diagnostic v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_image v0.19.1 (*)
+bevy_light v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_camera v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_gizmos v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_camera v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_gizmos_macros v0.19.1 (proc-macro)
+bevy_macro_utils v0.19.1 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+bevy_input v0.19.1 (*)
+bevy_log v0.19.1
+android_log-sys v0.3.2
+bevy_app v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+tracing v0.1.44 (*)
+tracing-log v0.2.0 (*)
+tracing-subscriber v0.3.23 (*)
+bevy_math v0.19.1 (*)
+bevy_mesh v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_time v0.19.1 (*)
+bevy_transform v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+bevy_window v0.19.1 (*)
+bevy_image v0.19.1 (*)
+bevy_log v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_mesh v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_transform v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+half v2.7.1 (*)
+smallvec v1.16.0 (*)
+tracing v0.1.44 (*)
+wgpu-types v29.0.4 (*)
+bevy_log v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_render v0.19.1
+async-channel v2.5.0 (*)
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_camera v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_diagnostic v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_encase_derive v0.19.1 (proc-macro) (*)
+bevy_image v0.19.1 (*)
+bevy_log v0.19.1 (*)
+bevy_material v0.19.1
+bevy_asset v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_ecs v0.19.1 (*)
+bevy_material_macros v0.19.1 (proc-macro)
+bevy_macro_utils v0.19.1 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+bevy_mesh v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_shader v0.19.1
+bevy_asset v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+naga v29.0.4
+arrayvec v0.7.8
+bit-set v0.9.1
+bit-vec v0.9.1
+bitflags v2.13.2 (*)
+cfg-if v1.0.4
+codespan-reporting v0.13.1
+termcolor v1.4.1
+unicode-width v0.2.0
+half v2.7.1 (*)
+hashbrown v0.16.1 (*)
+hexf-parse v0.2.1
+indexmap v2.14.2 (*)
+libm v0.2.16
+log v0.4.34
+num-traits v0.2.19 (*)
+once_cell v1.21.4
+rustc-hash v1.1.0
+spirv v0.4.0+sdk-1.4.341.0
+bitflags v2.13.2 (*)
+thiserror v2.0.20 (*)
+unicode-ident v1.0.24
+naga_oil v0.22.0
+codespan-reporting v0.12.0
+termcolor v1.4.1
+unicode-width v0.2.0
+data-encoding v2.11.1
+indexmap v2.14.2 (*)
+naga v29.0.4 (*)
+regex v1.13.1 (*)
+rustc-hash v1.1.0
+thiserror v2.0.20 (*)
+tracing v0.1.44 (*)
+unicode-ident v1.0.24
+serde v1.0.229 (*)
+thiserror v2.0.20 (*)
+tracing v0.1.44 (*)
+wgpu-naga-bridge v29.0.4
+naga v29.0.4 (*)
+wgpu-types v29.0.4 (*)
+wgpu-types v29.0.4 (*)
+bevy_utils v0.19.1 (*)
+encase v0.12.1 (*)
+smallvec v1.16.0 (*)
+thiserror v2.0.20 (*)
+tracing v0.1.44 (*)
+variadics_please v1.1.0 (proc-macro) (*)
+wgpu-types v29.0.4 (*)
+bevy_material_macros v0.19.1 (proc-macro) (*)
+bevy_math v0.19.1 (*)
+bevy_mesh v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_render_macros v0.19.1 (proc-macro)
+bevy_macro_utils v0.19.1 (*)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+bevy_shader v0.19.1 (*)
+bevy_tasks v0.19.1 (*)
+bevy_time v0.19.1 (*)
+bevy_transform v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+bevy_window v0.19.1 (*)
+bitflags v2.13.2 (*)
+bytemuck v1.25.2 (*)
+derive_more v2.1.1 (*)
+downcast-rs v2.0.2
+encase v0.12.1 (*)
+glam v0.32.1 (*)
+image v0.25.10 (*)
+indexmap v2.14.2 (*)
+itertools v0.14.0 (*)
+naga v29.0.4 (*)
+nonmax v0.5.5
+offset-allocator v0.2.0
+log v0.4.34
+nonmax v0.5.5
+smallvec v1.16.0 (*)
+thiserror v2.0.20 (*)
+variadics_please v1.1.0 (proc-macro) (*)
+weak-table v0.3.2
+wgpu v29.0.4
+arrayvec v0.7.8
+bitflags v2.13.2 (*)
+bytemuck v1.25.2 (*)
+cfg-if v1.0.4
+document-features v0.2.12 (proc-macro)
+litrs v1.0.0
+hashbrown v0.16.1 (*)
+log v0.4.34
+naga v29.0.4 (*)
+profiling v1.0.18 (*)
+raw-window-handle v0.6.2
+smallvec v1.16.0 (*)
+static_assertions v1.1.0
+wgpu-core v29.0.4
+arrayvec v0.7.8
+bit-set v0.9.1 (*)
+bit-vec v0.9.1
+bitflags v2.13.2 (*)
+bytemuck v1.25.2 (*)
+document-features v0.2.12 (proc-macro) (*)
+hashbrown v0.16.1 (*)
+indexmap v2.14.2 (*)
+log v0.4.34
+naga v29.0.4 (*)
+once_cell v1.21.4
+parking_lot v0.12.5 (*)
+profiling v1.0.18 (*)
+raw-window-handle v0.6.2
+rustc-hash v1.1.0
+smallvec v1.16.0 (*)
+thiserror v2.0.20 (*)
+wgpu-core-deps-windows-linux-android v29.0.4
+wgpu-hal v29.0.4
+android_system_properties v0.1.6 (*)
+arrayvec v0.7.8
+ash v0.38.0+1.3.281
+libloading v0.8.9 (*)
+bitflags v2.13.2 (*)
+bytemuck v1.25.2 (*)
+cfg-if v1.0.4
+gpu-allocator v0.28.0
+ash v0.38.0+1.3.281 (*)
+hashbrown v0.16.1 (*)
+log v0.4.34
+presser v0.3.1
+thiserror v2.0.20 (*)
+gpu-descriptor v0.3.2
+bitflags v2.13.2 (*)
+gpu-descriptor-types v0.2.0
+bitflags v2.13.2 (*)
+hashbrown v0.15.5 (*)
+hashbrown v0.16.1 (*)
+libc v0.2.189
+libloading v0.8.9 (*)
+log v0.4.34
+naga v29.0.4 (*)
+ordered-float v5.5.0
+num-traits v0.2.19 (*)
+parking_lot v0.12.5 (*)
+profiling v1.0.18 (*)
+raw-window-handle v0.6.2
+renderdoc-sys v1.1.0
+smallvec v1.16.0 (*)
+thiserror v2.0.20 (*)
+wgpu-naga-bridge v29.0.4 (*)
+wgpu-types v29.0.4 (*)
+wgpu-hal v29.0.4 (*)
+wgpu-naga-bridge v29.0.4 (*)
+wgpu-types v29.0.4 (*)
+wgpu-hal v29.0.4 (*)
+wgpu-types v29.0.4 (*)
+wgpu-types v29.0.4 (*)
+bevy_shader v0.19.1 (*)
+bevy_transform v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+bevy_window v0.19.1 (*)
+bitflags v2.13.2 (*)
+indexmap v2.14.2 (*)
+nonmax v0.5.5
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_diagnostic v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_image v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_render v0.19.1 (*)
+bevy_shader v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+tracing v0.1.44 (*)
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_audio v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_transform v0.19.1 (*)
+rodio v0.22.2
+cpal v0.17.1
+dasp_sample v0.11.0
+jni v0.21.1
+cesu8 v1.1.0
+cfg-if v1.0.4
+combine v4.6.8 (*)
+jni-sys v0.3.1 (*)
+log v0.4.34
+thiserror v1.0.69 (*)
+ndk v0.9.0 (*)
+ndk-context v0.1.1
+num-derive v0.4.2 (proc-macro) (*)
+num-traits v0.2.19 (*)
+dasp_sample v0.11.0
+lewton v0.10.2
+byteorder v1.5.0
+ogg v0.8.0
+byteorder v1.5.0
+tinyvec v1.13.2 (*)
+num-rational v0.4.2 (*)
+thiserror v2.0.20 (*)
+tracing v0.1.44 (*)
+tracing v0.1.44 (*)
+bevy_camera v0.19.1 (*)
+bevy_clipboard v0.19.1
+bevy_app v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_log v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_core_pipeline v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_diagnostic v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_gilrs v0.19.1
+bevy_app v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_input v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_time v0.19.1 (*)
+gilrs v0.11.2
+fnv v1.0.7
+gilrs-core v0.6.8
+log v0.4.34
+uuid v1.26.1 (*)
+log v0.4.34
+uuid v1.26.1 (*)
+vec_map v0.8.2
+thiserror v2.0.20 (*)
+tracing v0.1.44 (*)
+bevy_gizmos v0.19.1 (*)
+bevy_gizmos_render v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_camera v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_core_pipeline v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_gizmos v0.19.1 (*)
+bevy_image v0.19.1 (*)
+bevy_log v0.19.1 (*)
+bevy_material v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_mesh v0.19.1 (*)
+bevy_pbr v0.19.1
+arrayvec v0.7.8
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_camera v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_core_pipeline v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_diagnostic v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_gltf v0.19.1
+async-lock v3.4.2 (*)
+base64 v0.22.1
+bevy_animation v0.19.1 (*)
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_camera v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_image v0.19.1 (*)
+bevy_light v0.19.1 (*)
+bevy_material v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_mesh v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_tasks v0.19.1 (*)
+bevy_transform v0.19.1 (*)
+bevy_world_serialization v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_camera v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_ecs v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_transform v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+derive_more v2.1.1 (*)
+ron v0.12.2 (*)
+serde v1.0.229 (*)
+thiserror v2.0.20 (*)
+uuid v1.26.1 (*)
+fixedbitset v0.5.7
+gltf v1.4.1
+byteorder v1.5.0
+gltf-json v1.4.1
+gltf-derive v1.4.1 (proc-macro)
+inflections v1.1.1
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+serde v1.0.229 (*)
+serde_derive v1.0.229 (proc-macro) (*)
+serde_json v1.0.151 (*)
+lazy_static v1.5.0 (*)
+serde_json v1.0.151 (*)
+itertools v0.14.0 (*)
+percent-encoding v2.3.2
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+smallvec v1.16.0 (*)
+thiserror v2.0.20 (*)
+tracing v0.1.44 (*)
+wgpu-types v29.0.4 (*)
+bevy_image v0.19.1 (*)
+bevy_light v0.19.1 (*)
+bevy_log v0.19.1 (*)
+bevy_material v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_mesh v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_render v0.19.1 (*)
+bevy_shader v0.19.1 (*)
+bevy_tasks v0.19.1 (*)
+bevy_transform v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+bitflags v2.13.2 (*)
+bytemuck v1.25.2 (*)
+derive_more v2.1.1 (*)
+fixedbitset v0.5.7
+indexmap v2.14.2 (*)
+nonmax v0.5.5
+offset-allocator v0.2.0 (*)
+smallvec v1.16.0 (*)
+static_assertions v1.1.0
+thiserror v2.0.20 (*)
+tracing v0.1.44 (*)
+wgpu-types v29.0.4 (*)
+bevy_reflect v0.19.1 (*)
+bevy_render v0.19.1 (*)
+bevy_shader v0.19.1 (*)
+bevy_sprite_render v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_camera v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_core_pipeline v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_ecs v0.19.1 (*)
+bevy_image v0.19.1 (*)
+bevy_material v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_mesh v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_render v0.19.1 (*)
+bevy_shader v0.19.1 (*)
+bevy_sprite v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_camera v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_ecs v0.19.1 (*)
+bevy_image v0.19.1 (*)
+bevy_log v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_mesh v0.19.1 (*)
+bevy_picking v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_camera v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_ecs v0.19.1 (*)
+bevy_input v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_mesh v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_time v0.19.1 (*)
+bevy_transform v0.19.1 (*)
+bevy_window v0.19.1 (*)
+crossbeam-channel v0.5.17 (*)
+tracing v0.1.44 (*)
+uuid v1.26.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_text v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_clipboard v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_ecs v0.19.1 (*)
+bevy_image v0.19.1 (*)
+bevy_log v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+parley v0.9.0
+fontique v0.9.0
+hashbrown v0.17.1 (*)
+linebender_resource_handle v0.1.1
+memmap2 v0.9.11
+libc v0.2.189
+parlance v0.1.0
+read-fonts v0.39.2
+bytemuck v1.25.2 (*)
+font-types v0.11.3
+bytemuck v1.25.2 (*)
+smallvec v1.16.0 (*)
+harfrust v0.6.2
+bitflags v2.13.2 (*)
+bytemuck v1.25.2 (*)
+core_maths v0.1.1
+libm v0.2.16
+read-fonts v0.39.2 (*)
+smallvec v1.16.0 (*)
+hashbrown v0.17.1 (*)
+icu_normalizer v2.3.0 (*)
+icu_properties v2.3.0 (*)
+icu_segmenter v2.3.0
+icu_collections v2.3.0 (*)
+icu_locale_fallback v2.3.0
+icu_locale_core v2.3.0 (*)
+icu_locale_fallback_data v2.3.0
+icu_provider v2.3.1 (*)
+potential_utf v0.1.6 (*)
+tinystr v0.8.4 (*)
+zerovec v0.11.8 (*)
+icu_provider v2.3.1 (*)
+icu_segmenter_data v2.3.0
+potential_utf v0.1.6 (*)
+smallvec v1.16.0 (*)
+utf8_iter v1.0.4
+zerovec v0.11.8 (*)
+linebender_resource_handle v0.1.1
+parlance v0.1.0
+parley_data v0.9.0
+icu_properties v2.3.0 (*)
+skrifa v0.42.1
+bytemuck v1.25.2 (*)
+read-fonts v0.39.2 (*)
+serde v1.0.229 (*)
+smallvec v1.16.0 (*)
+smol_str v0.2.2 (*)
+swash v0.2.10
+skrifa v0.44.0
+bytemuck v1.25.2 (*)
+read-fonts v0.41.0
+bytemuck v1.25.2 (*)
+font-types v0.12.5
+bytemuck v1.25.2 (*)
+once_cell v1.21.4
+yazi v0.2.1
+zeno v0.3.3
+sys-locale v0.3.2
+libc v0.2.189
+thiserror v2.0.20 (*)
+tracing v0.1.44 (*)
+wgpu-types v29.0.4 (*)
+bevy_transform v0.19.1 (*)
+bevy_window v0.19.1 (*)
+radsort v0.1.1
+tracing v0.1.44 (*)
+wgpu-types v29.0.4 (*)
+bevy_text v0.19.1 (*)
+bevy_transform v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+bitflags v2.13.2 (*)
+bytemuck v1.25.2 (*)
+derive_more v2.1.1 (*)
+fixedbitset v0.5.7
+nonmax v0.5.5
+tracing v0.1.44 (*)
+bevy_transform v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+bytemuck v1.25.2 (*)
+tracing v0.1.44 (*)
+bevy_gltf v0.19.1 (*)
+bevy_image v0.19.1 (*)
+bevy_input v0.19.1 (*)
+bevy_input_focus v0.19.1
+bevy_app v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_input v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_picking v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_window v0.19.1 (*)
+log v0.4.34
+thiserror v2.0.20 (*)
+bevy_light v0.19.1 (*)
+bevy_log v0.19.1 (*)
+bevy_material v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_mesh v0.19.1 (*)
+bevy_pbr v0.19.1 (*)
+bevy_picking v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_post_process v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_camera v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_core_pipeline v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_ecs v0.19.1 (*)
+bevy_image v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_render v0.19.1 (*)
+bevy_shader v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+smallvec v1.16.0 (*)
+thiserror v2.0.20 (*)
+tracing v0.1.44 (*)
+bevy_ptr v0.19.1
+bevy_reflect v0.19.1 (*)
+bevy_render v0.19.1 (*)
+bevy_scene v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_ecs v0.19.1 (*)
+bevy_log v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_scene_macros v0.19.1 (proc-macro)
+bevy_ecs_macro_logic v0.19.1 (*)
+bevy_macro_utils v0.19.1 (*)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+bevy_utils v0.19.1 (*)
+smallvec v1.16.0 (*)
+thiserror v2.0.20 (*)
+tracing v0.1.44 (*)
+variadics_please v1.1.0 (proc-macro) (*)
+bevy_shader v0.19.1 (*)
+bevy_sprite v0.19.1 (*)
+bevy_sprite_render v0.19.1 (*)
+bevy_state v0.19.1
+bevy_app v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_state_macros v0.19.1 (proc-macro)
+bevy_macro_utils v0.19.1 (*)
+quote v1.0.47 (*)
+syn v2.0.119 (*)
+bevy_utils v0.19.1 (*)
+log v0.4.34
+variadics_please v1.1.0 (proc-macro) (*)
+bevy_tasks v0.19.1 (*)
+bevy_text v0.19.1 (*)
+bevy_time v0.19.1 (*)
+bevy_transform v0.19.1 (*)
+bevy_ui v0.19.1
+accesskit v0.24.1 (*)
+bevy_a11y v0.19.1 (*)
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_camera v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_ecs v0.19.1 (*)
+bevy_image v0.19.1 (*)
+bevy_input v0.19.1 (*)
+bevy_input_focus v0.19.1 (*)
+bevy_log v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_picking v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_sprite v0.19.1 (*)
+bevy_text v0.19.1 (*)
+bevy_time v0.19.1 (*)
+bevy_transform v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+bevy_window v0.19.1 (*)
+derive_more v2.1.1 (*)
+parley v0.9.0 (*)
+smallvec v1.16.0 (*)
+swash v0.2.10 (*)
+taffy v0.10.1
+arrayvec v0.7.8
+grid v1.0.1
+slotmap v1.1.1
+thiserror v2.0.20 (*)
+tracing v0.1.44 (*)
+uuid v1.26.1 (*)
+bevy_ui_render v0.19.1
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_camera v0.19.1 (*)
+bevy_color v0.19.1 (*)
+bevy_core_pipeline v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_ecs v0.19.1 (*)
+bevy_image v0.19.1 (*)
+bevy_input_focus v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_mesh v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_render v0.19.1 (*)
+bevy_shader v0.19.1 (*)
+bevy_sprite v0.19.1 (*)
+bevy_sprite_render v0.19.1 (*)
+bevy_text v0.19.1 (*)
+bevy_transform v0.19.1 (*)
+bevy_ui v0.19.1 (*)
+bevy_utils v0.19.1 (*)
+bytemuck v1.25.2 (*)
+derive_more v2.1.1 (*)
+indexmap v2.14.2 (*)
+tracing v0.1.44 (*)
+bevy_ui_widgets v0.19.1
+accesskit v0.24.1 (*)
+bevy_a11y v0.19.1 (*)
+bevy_app v0.19.1 (*)
+bevy_camera v0.19.1 (*)
+bevy_ecs v0.19.1 (*)
+bevy_input v0.19.1 (*)
+bevy_input_focus v0.19.1 (*)
+bevy_log v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_picking v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_text v0.19.1 (*)
+bevy_ui v0.19.1 (*)
+bevy_window v0.19.1 (*)
+parley v0.9.0 (*)
+smol_str v0.2.2 (*)
+bevy_utils v0.19.1 (*)
+bevy_window v0.19.1 (*)
+bevy_winit v0.19.1
+accesskit v0.24.1 (*)
+accesskit_winit v0.32.2
+accesskit v0.24.1 (*)
+raw-window-handle v0.6.2
+winit v0.30.13
+android-activity v0.6.1 (*)
+bitflags v2.13.2 (*)
+cursor-icon v1.2.0
+dpi v0.1.2
+ndk v0.9.0 (*)
+raw-window-handle v0.6.2
+smol_str v0.2.2 (*)
+tracing v0.1.44 (*)
+approx v0.5.1
+num-traits v0.2.19 (*)
+bevy_a11y v0.19.1 (*)
+bevy_android v0.19.1 (*)
+bevy_app v0.19.1 (*)
+bevy_asset v0.19.1 (*)
+bevy_derive v0.19.1 (proc-macro) (*)
+bevy_ecs v0.19.1 (*)
+bevy_image v0.19.1 (*)
+bevy_input v0.19.1 (*)
+bevy_input_focus v0.19.1 (*)
+bevy_log v0.19.1 (*)
+bevy_math v0.19.1 (*)
+bevy_platform v0.19.1 (*)
+bevy_reflect v0.19.1 (*)
+bevy_tasks v0.19.1 (*)
+bevy_window v0.19.1 (*)
+bytemuck v1.25.2 (*)
+tracing v0.1.44 (*)
+wgpu-types v29.0.4 (*)
+winit v0.30.13 (*)
+bevy_world_serialization v0.19.1 (*)
+clap v4.6.6 (*)
+crossterm v0.28.1 (*)
+env_logger v0.11.11 (*)
+futures v0.3.34 (*)
+image v0.25.10 (*)
+log v0.4.34
+rodio v0.20.1
+claxon v0.4.3
+cpal v0.15.3
+dasp_sample v0.11.0
+jni v0.21.1 (*)
+ndk v0.8.0
+bitflags v2.13.2 (*)
+jni-sys v0.3.1 (*)
+log v0.4.34
+ndk-sys v0.5.0+25.2.9519653
+jni-sys v0.3.1 (*)
+num_enum v0.7.6 (*)
+thiserror v1.0.69 (*)
+ndk-context v0.1.1
+oboe v0.6.1
+jni v0.21.1 (*)
+ndk v0.8.0 (*)
+ndk-context v0.1.1
+num-derive v0.4.2 (proc-macro) (*)
+num-traits v0.2.19 (*)
+oboe-sys v0.6.1
+hound v3.5.1
+lewton v0.10.2 (*)
+symphonia v0.5.5
+lazy_static v1.5.0 (*)
+symphonia-bundle-mp3 v0.5.5
+lazy_static v1.5.0 (*)
+log v0.4.34
+symphonia-core v0.5.5
+arrayvec v0.7.8
+bitflags v1.3.2
+bytemuck v1.25.2 (*)
+lazy_static v1.5.0 (*)
+log v0.4.34
+symphonia-metadata v0.5.5
+encoding_rs v0.8.41 (*)
+lazy_static v1.5.0 (*)
+log v0.4.34
+symphonia-core v0.5.5 (*)
+symphonia-core v0.5.5 (*)
+symphonia-metadata v0.5.5 (*)
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+tokio v1.53.1 (*)
+tracing v0.1.44 (*)
+uuid v1.26.1 (*)
+vizij-animation-module v0.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-animation-module)
+arora-buffers v2.2.0 (*)
+arora-types v2.5.1 (*)
+derive_more v2.1.1 (*)
+lazy_static v1.5.0 (*)
+uuid v1.26.1 (*)
+vizij-animation-core v1.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/animation/vizij-animation-core)
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+vizij-api-core v1.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/api/vizij-api-core)
+arora-types v2.5.1 (*)
+hashbrown v0.17.1 (*)
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+thiserror v2.0.20 (*)
+uuid v1.26.1 (*)
+vizij-api-core v1.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/api/vizij-api-core) (*)
+vizij-arora v0.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora)
+serde_json v1.0.151 (*)
+vizij-api-core v1.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/api/vizij-api-core) (*)
+vizij-api-core v1.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/api/vizij-api-core) (*)
+vizij-arora v0.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora) (*)
+vizij-arora-behavior v1.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-behavior)
+arora-behavior v8.4.0 (*)
+arora-behavior-tree-types v1.1.0 (*)
+arora-types v2.5.1 (*)
+log v0.4.34
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+uuid v1.26.1 (*)
+vizij-api-core v1.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/api/vizij-api-core) (*)
+vizij-arora-host v2.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-host)
+anyhow v1.0.104
+arora-behavior v8.4.0 (*)
+arora-msgs-ros2 v1.2.0
+arora-types v2.5.1 (*)
+serde v1.0.229 (*)
+serde-big-array v0.5.1
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+thiserror v2.0.20 (*)
+arora-types v2.5.1 (*)
+log v0.4.34
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+uuid v1.26.1 (*)
+vizij-api-core v1.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/api/vizij-api-core) (*)
+vizij-graph-core v1.4.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/node-graph/vizij-graph-core)
+anyhow v1.0.104
+arora-behavior v8.4.0 (*)
+hashbrown v0.17.1 (*)
+k v0.32.0
+nalgebra v0.30.1
+approx v0.5.1 (*)
+matrixmultiply v0.3.11
+rawpointer v0.2.1
+nalgebra-macros v0.1.0 (proc-macro)
+proc-macro2 v1.0.107 (*)
+quote v1.0.47 (*)
+syn v1.0.109 (*)
+num-complex v0.4.6 (*)
+num-rational v0.4.2 (*)
+num-traits v0.2.19 (*)
+simba v0.7.3
+approx v0.5.1 (*)
+num-complex v0.4.6 (*)
+num-traits v0.2.19 (*)
+paste v1.0.15 (proc-macro)
+wide v0.7.33
+bytemuck v1.25.2 (*)
+safe_arch v0.7.4
+bytemuck v1.25.2 (*)
+typenum v1.20.1
+simba v0.7.3 (*)
+thiserror v1.0.69 (*)
+tracing v0.1.44 (*)
+urdf-rs v0.9.0
+RustyXML v0.3.0
+quick-xml v0.36.2
+memchr v2.8.3
+serde v1.0.229 (*)
+regex v1.13.1 (*)
+serde v1.0.229 (*)
+serde-xml-rs v0.6.0
+log v0.4.34
+serde v1.0.229 (*)
+thiserror v1.0.69 (*)
+xml-rs v0.8.29
+thiserror v1.0.69 (*)
+serde v1.0.229 (*)
+serde_json v1.0.151 (*)
+thiserror v2.0.20 (*)
+urdf-rs v0.9.0 (*)
+uuid v1.26.1 (*)
+vizij-api-core v1.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/api/vizij-api-core) (*)
+vizij-arora-hal v0.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-hal)
+arora-hal v3.0.0 (*)
+arora-types v2.5.1 (*)
+async-trait v0.1.92 (proc-macro) (*)
+futures-channel v0.3.34 (*)
+futures-core v0.3.34
+vizij-api-core v1.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/api/vizij-api-core) (*)
+vizij-arora-host v2.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-host) (*)
+vizij-arora-store v0.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-store)
+arora-types v2.5.1 (*)
+vizij-api-core v1.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/api/vizij-api-core) (*)
+vizij-arora-tts v2.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-tts)
+arora-engine v4.1.0 (*)
+arora-types v2.5.1 (*)
+log v0.4.34
+reqwest v0.13.5 (*)
+rodio v0.20.1 (*)
+serde v1.0.229 (*)
+tokio v1.53.1 (*)
+uuid v1.26.1 (*)
+vizij-arora-behavior v1.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-behavior) (*)
+vizij-graph-core v1.4.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/node-graph/vizij-graph-core) (*)
+vizij-graph-core v1.4.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/node-graph/vizij-graph-core) (*)

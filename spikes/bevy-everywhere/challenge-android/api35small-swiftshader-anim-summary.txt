@@ -1,0 +1,27 @@
+case=api35small-swiftshader-anim apk=bevy-spike-anim-debug.apk serial=emulator-5574 date=2026-09-18T15:54:12Z
+sdk=35
+wm=Physical size: 640x480
+install=Success
+Status: ok TotalTime: 4421 
+t=5s dominant=[((0, 0, 0), 132)] orange_px=0 center=(0, 0, 0)
+t=10s dominant=[((0, 0, 0), 132)] orange_px=0 center=(0, 0, 0) lowerleft_changed_px=0 of 32000
+t=15s dominant=[((0, 0, 0), 132)] orange_px=0 center=(0, 0, 0) lowerleft_changed_px=0 of 32000
+t=20s dominant=[((15, 15, 25), 61), ((16, 15, 25), 10)] orange_px=5 center=(15, 15, 24) lowerleft_changed_px=11 of 32000
+t=25s dominant=[((15, 15, 25), 61), ((16, 15, 25), 10)] orange_px=5 center=(15, 15, 24) lowerleft_changed_px=0 of 32000
+t=30s dominant=[((15, 15, 25), 61), ((16, 15, 25), 10)] orange_px=5 center=(15, 15, 24) lowerleft_changed_px=0 of 32000
+t=35s dominant=[((15, 15, 25), 61), ((16, 15, 25), 10)] orange_px=5 center=(15, 15, 24) lowerleft_changed_px=0 of 32000
+t=40s dominant=[((15, 15, 25), 61), ((16, 15, 25), 10)] orange_px=5 center=(15, 15, 24) lowerleft_changed_px=0 of 32000
+t=45s dominant=[((15, 15, 25), 61), ((16, 15, 25), 10)] orange_px=5 center=(15, 15, 24) lowerleft_changed_px=0 of 32000
+t=50s dominant=[((15, 15, 25), 61), ((16, 15, 25), 10)] orange_px=5 center=(15, 15, 24) lowerleft_changed_px=0 of 32000
+t=55s dominant=[((15, 15, 25), 61), ((16, 15, 25), 10)] orange_px=5 center=(15, 15, 24) lowerleft_changed_px=0 of 32000
+t=60s dominant=[((15, 15, 25), 61), ((16, 15, 25), 10)] orange_px=5 center=(15, 15, 24) lowerleft_changed_px=0 of 32000
+pid_at_end=3178
+sf_list: RequestedLayerState{Surface(name=6ff1361 ai.vizij.bevyspike/android.app.NativeActivity)/@0x6c745a4 - animation-leash of starting_reveal#112}
+sf_list: RequestedLayerState{ai.vizij.bevyspike/android.app.NativeActivity#109}
+sf_latency[RequestedLayerState{Surface(name=6ff1361 ai.vizij.bevyspike/android.app.NativeActivity)/@0x6c745a4 - animation-leash of starting_reveal#112}]: rows=0
+resumed=      topResumedActivity=ActivityRecord{d033deb u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t15}
+log: 09-18 17:54:21.659  3178  3239 I RustStdoutStderr: 2026-09-18T15:54:21.644446Z  INFO bevy_render::renderer: AdapterInfo { name: "SwiftShader Device (LLVM 10.0.0)", vendor: 6880, device: 49374, device_
+log: 09-18 17:54:23.758  3178  3239 I RustStdoutStderr: 2026-09-18T15:54:23.758421Z  INFO bevy_winit::system: Creating new window app_process64 (65v0)
+log: 09-18 17:54:29.389  1832  3175 W BugleRcsEngine: onQuitting [null] [CONTEXT log_prefix="(PEv2-SM218010298-DefaultCallSmsData-1-64c)" thread_id=94 ]
+log: 09-18 17:54:34.879  3178  3239 I RustStdoutStderr: 2026-09-18T15:54:34.879216Z ERROR bevy_render::error_handler: Caught DeviceLost error: Unknown Unexpected error variant (driver implementation is at 
+log: 09-18 17:54:34.894  3178  3239 I RustStdoutStderr: thread 'Compute Task Pool (0)' (3244) panicked at /Users/victor.paleologue/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wgpu-29.0.4/src/backe

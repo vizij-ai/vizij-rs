@@ -1,0 +1,203 @@
+# cargo tree -p vizij --target wasm32-unknown-unknown -e features -i tokio --depth 1
+tokio v1.53.1
+├── tokio feature "bytes"
+├── tokio feature "default"
+│   [build-dependencies]
+├── tokio feature "fs"
+├── tokio feature "io-std"
+├── tokio feature "io-util"
+├── tokio feature "macros"
+│   [build-dependencies]
+├── tokio feature "rt"
+├── tokio feature "rt-multi-thread"
+│   [build-dependencies]
+└── tokio feature "tokio-macros"
+
+tokio v1.53.1
+├── tokio feature "bytes"
+├── tokio feature "default"
+├── tokio feature "io-std"
+├── tokio feature "io-util"
+├── tokio feature "libc"
+├── tokio feature "macros"
+├── tokio feature "mio"
+├── tokio feature "net"
+├── tokio feature "rt"
+├── tokio feature "rt-multi-thread"
+├── tokio feature "socket2"
+├── tokio feature "sync"
+├── tokio feature "time"
+└── tokio feature "tokio-macros"
+
+# cargo tree -p vizij --target wasm32-unknown-unknown -e features -i crossterm --depth 1
+crossterm v0.28.1
+├── crossterm feature "bracketed-paste"
+├── crossterm feature "default"
+├── crossterm feature "events"
+└── crossterm feature "windows"
+
+# cargo tree -p vizij --target wasm32-unknown-unknown -e features -i wasmtime --depth 1
+wasmtime v45.0.3
+└── wiggle v45.0.3
+├── wasmtime feature "addr2line"
+├── wasmtime feature "anyhow"
+├── wasmtime feature "async"
+├── wasmtime feature "backtrace"
+├── wasmtime feature "cache"
+├── wasmtime feature "compile-time-builtins"
+├── wasmtime feature "component-model"
+├── wasmtime feature "component-model-async"
+├── wasmtime feature "coredump"
+├── wasmtime feature "cranelift"
+├── wasmtime feature "debug"
+├── wasmtime feature "debug-builtins"
+├── wasmtime feature "default"
+├── wasmtime feature "demangle"
+├── wasmtime feature "futures"
+├── wasmtime feature "gc"
+├── wasmtime feature "gc-copying"
+├── wasmtime feature "gc-drc"
+├── wasmtime feature "gc-null"
+├── wasmtime feature "once_cell"
+├── wasmtime feature "parallel-compilation"
+├── wasmtime feature "pooling-allocator"
+├── wasmtime feature "profiling"
+├── wasmtime feature "runtime"
+├── wasmtime feature "stack-switching"
+├── wasmtime feature "std"
+├── wasmtime feature "threads"
+├── wasmtime feature "wasmtime-jit-debug"
+├── wasmtime feature "wasmtime-jit-icache-coherence"
+├── wasmtime feature "wasmtime-unwinder"
+└── wasmtime feature "wat"
+
+# cargo tree -p vizij --target wasm32-unknown-unknown -e features -i ratatui --depth 1
+ratatui v0.29.0
+├── ratatui feature "crossterm"
+├── ratatui feature "default"
+└── ratatui feature "underline-color"
+
+# cargo tree -p vizij --target wasm32-unknown-unknown -e features -i tokio-tungstenite --depth 1
+tokio-tungstenite v0.24.0
+├── tokio-tungstenite feature "connect"
+├── tokio-tungstenite feature "default"
+├── tokio-tungstenite feature "handshake"
+└── tokio-tungstenite feature "stream"
+
+# cargo tree -p vizij --target wasm32-unknown-unknown -e features -i reqwest --depth 1
+reqwest v0.13.5
+├── reqwest feature "__rustls"
+├── reqwest feature "__rustls-aws-lc-rs"
+├── reqwest feature "__tls"
+├── reqwest feature "charset"
+├── reqwest feature "default"
+├── reqwest feature "default-tls"
+├── reqwest feature "http2"
+├── reqwest feature "json"
+├── reqwest feature "rustls"
+└── reqwest feature "system-proxy"
+
+# cargo tree -p vizij --target aarch64-linux-android -e features -i tokio --depth 1
+tokio v1.53.1
+├── tokio feature "bytes"
+├── tokio feature "default"
+│   [build-dependencies]
+├── tokio feature "fs"
+├── tokio feature "io-std"
+├── tokio feature "io-util"
+├── tokio feature "macros"
+│   [build-dependencies]
+├── tokio feature "rt"
+├── tokio feature "rt-multi-thread"
+│   [build-dependencies]
+└── tokio feature "tokio-macros"
+
+tokio v1.53.1
+└── hyper-util v0.1.20
+├── tokio feature "bytes"
+├── tokio feature "default"
+├── tokio feature "io-std"
+├── tokio feature "io-util"
+├── tokio feature "libc"
+├── tokio feature "macros"
+├── tokio feature "mio"
+├── tokio feature "net"
+├── tokio feature "rt"
+├── tokio feature "rt-multi-thread"
+├── tokio feature "socket2"
+├── tokio feature "sync"
+├── tokio feature "time"
+└── tokio feature "tokio-macros"
+
+# cargo tree -p vizij --target aarch64-linux-android -e features -i crossterm --depth 1
+crossterm v0.28.1
+├── crossterm feature "bracketed-paste"
+├── crossterm feature "default"
+├── crossterm feature "events"
+└── crossterm feature "windows"
+
+# cargo tree -p vizij --target aarch64-linux-android -e features -i wasmtime --depth 1
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+wasmtime v45.0.3
+└── wiggle v45.0.3
+├── wasmtime feature "addr2line"
+├── wasmtime feature "anyhow"
+├── wasmtime feature "async"
+├── wasmtime feature "backtrace"
+├── wasmtime feature "cache"
+├── wasmtime feature "compile-time-builtins"
+├── wasmtime feature "component-model"
+├── wasmtime feature "component-model-async"
+├── wasmtime feature "coredump"
+├── wasmtime feature "cranelift"
+├── wasmtime feature "debug"
+├── wasmtime feature "debug-builtins"
+├── wasmtime feature "default"
+├── wasmtime feature "demangle"
+├── wasmtime feature "futures"
+├── wasmtime feature "gc"
+├── wasmtime feature "gc-copying"
+├── wasmtime feature "gc-drc"
+├── wasmtime feature "gc-null"
+├── wasmtime feature "once_cell"
+├── wasmtime feature "parallel-compilation"
+├── wasmtime feature "pooling-allocator"
+├── wasmtime feature "profiling"
+├── wasmtime feature "runtime"
+├── wasmtime feature "rustix"
+├── wasmtime feature "stack-switching"
+├── wasmtime feature "std"
+├── wasmtime feature "threads"
+├── wasmtime feature "wasmtime-jit-debug"
+├── wasmtime feature "wasmtime-jit-icache-coherence"
+├── wasmtime feature "wasmtime-unwinder"
+└── wasmtime feature "wat"
+
+# cargo tree -p vizij --target aarch64-linux-android -e features -i ratatui --depth 1
+ratatui v0.29.0
+├── ratatui feature "crossterm"
+├── ratatui feature "default"
+└── ratatui feature "underline-color"
+
+# cargo tree -p vizij --target aarch64-linux-android -e features -i tokio-tungstenite --depth 1
+tokio-tungstenite v0.24.0
+├── tokio-tungstenite feature "connect"
+├── tokio-tungstenite feature "default"
+├── tokio-tungstenite feature "handshake"
+└── tokio-tungstenite feature "stream"
+
+# cargo tree -p vizij --target aarch64-linux-android -e features -i reqwest --depth 1
+reqwest v0.13.5
+├── reqwest feature "__rustls"
+├── reqwest feature "__rustls-aws-lc-rs"
+├── reqwest feature "__tls"
+├── reqwest feature "charset"
+├── reqwest feature "default"
+├── reqwest feature "default-tls"
+├── reqwest feature "http2"
+├── reqwest feature "json"
+├── reqwest feature "rustls"
+└── reqwest feature "system-proxy"
+

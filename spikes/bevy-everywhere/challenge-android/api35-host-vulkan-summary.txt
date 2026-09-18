@@ -1,0 +1,19 @@
+case=api35-host-vulkan apk=/private/tmp/claude-501/-Users-victor-paleologue-Code-Semio-semio-studio/3db729c2-88a1-4330-986e-37ae26376064/scratchpad/spikes/challenge-android/../bevy-android/bevy-spike-vulkan-debug.apk serial=emulator-5556 date=2026-09-17T15:02:28Z
+android=15
+sdk=35
+ro.hardware.vulkan=ranchu
+ro.hardware.egl=emulation
+wm=Physical size: 2560x1600
+install=Success
+Status: timeout 
+pid_after_10s=2397
+resumed=    topResumedActivity=ActivityRecord{52917b0 u0 ai.vizij.bevyspike/android.app.NativeActivity t11}
+screencap_bytes=45665
+pixels: center (241, 240, 247) orange_cube_px 0 clear_color_px 8 of 64000
+gfxinfo: Total frames rendered: 0
+gfxinfo: Janky frames: 0 (0.00%)
+gfxinfo: Janky frames (legacy): 0 (0.00%)
+logcat_lines=    1537
+log: 09-17 17:10:53.881  2397  2496 I RustStdoutStderr: [2m2026-09-17T15:10:53.880663Z[0m [32m INFO[0m [2mbevy_render::renderer[0m[2m:[0m AdapterInfo { name: "Apple M1", vendor: 4203, device: 436601351, device_type: IntegratedGpu, device_pci_bus_id: "", dri
+log: 09-17 17:11:01.914  2397  2496 I RustStdoutStderr: [2m2026-09-17T15:11:01.822469Z[0m [31mERROR[0m [2mbevy_gilrs[0m[2m:[0m Failed to start Gilrs. Gilrs does not support current platform.
+log: 09-17 17:11:02.566  2397  2496 I RustStdoutStderr: [2m2026-09-17T15:11:02.565040Z[0m [32m INFO[0m [2mbevy_pbr::cluster[0m[2m:[0m GPU clustering isn't supported on this device; falling back to CPU clustering.

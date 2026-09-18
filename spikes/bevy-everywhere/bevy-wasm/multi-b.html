@@ -1,0 +1,22 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Bevy wasm spike: two module instances</title>
+<style>
+  body { margin: 0; background: #202020; color: #ddd; font: 14px system-ui; }
+  .stage { position: relative; width: 480px; height: 300px; margin: 24px; background: #101114; display: inline-block; }
+  .stage canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+</style>
+<p style="margin:24px 24px 0">T3(b): two instances of the same glue (distinct module URLs, separate memories) · <span id="status">loading…</span></p>
+<div class="stage"><canvas id="face-a"></canvas></div>
+<div class="stage"><canvas id="face-b"></canvas></div>
+<script type="module">
+  const status = document.getElementById('status');
+  const a = await import('./pkg/bevy_wasm_spike.js?instance=a');
+  const b = await import('./pkg/bevy_wasm_spike.js?instance=b');
+  await a.default();
+  await b.default();
+  status.textContent = `same module object: ${a === b}; `;
+  try { a.start('#face-a', 'Quori_Current_Extended.glb'); status.textContent += 'A started; '; } catch (e) { status.textContent += 'A threw: ' + e + '; '; }
+  try { b.start('#face-b', 'Toasty_Current.glb'); status.textContent += 'B started'; } catch (e) { status.textContent += 'B threw: ' + e; }
+  window.__spikeStarted = true;
+</script>

@@ -1,0 +1,29 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Bevy wasm spike: two apps in one module</title>
+<style>
+  body { margin: 0; background: #202020; color: #ddd; font: 14px system-ui; }
+  .stage { position: relative; width: 480px; height: 300px; margin: 24px; background: #101114; display: inline-block; }
+  .stage canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+</style>
+<p style="margin:24px 24px 0">T3(a): one module instance, <code>start()</code> called twice · <span id="status">loading…</span></p>
+<div class="stage"><canvas id="face-a"></canvas></div>
+<div class="stage"><canvas id="face-b"></canvas></div>
+<script type="module">
+  const mod = await import('./pkg/bevy_wasm_spike.js');
+  await mod.default();
+  const status = document.getElementById('status');
+  try {
+    mod.start('#face-a', 'Quori_Current_Extended.glb');
+    status.textContent = 'first start returned; ';
+  } catch (e) {
+    status.textContent = 'first start threw: ' + e + '; ';
+  }
+  try {
+    mod.start('#face-b', 'Toasty_Current.glb');
+    status.textContent += 'second start returned';
+  } catch (e) {
+    status.textContent += 'second start threw: ' + e;
+  }
+  window.__spikeStarted = true;
+</script>

@@ -1,0 +1,19 @@
+case=api34-swiftshader-vulkan-alone apk=bevy-spike-vulkan-debug.apk serial=emulator-5560 date=2026-09-18T14:35:52Z
+sdk=34
+install=Success
+Status: ok TotalTime: 13994 
+t=5s dominant=[((0, 0, 0), 9907), ((240, 240, 243), 1386)] orange_px=45 center=(240, 240, 243)
+t=10s dominant=[((0, 0, 0), 9907), ((240, 240, 243), 1386)] orange_px=45 center=(240, 240, 243)
+t=15s dominant=[((0, 0, 0), 9907), ((240, 240, 243), 1386)] orange_px=45 center=(240, 240, 243)
+t=20s dominant=[((0, 0, 0), 9907), ((240, 240, 243), 1386)] orange_px=45 center=(240, 240, 243)
+t=25s dominant=[((0, 0, 0), 9907), ((240, 240, 243), 1386)] orange_px=45 center=(240, 240, 243)
+t=30s dominant=[((0, 0, 0), 9907), ((240, 240, 243), 1386)] orange_px=45 center=(240, 240, 243)
+t=35s dominant=[((0, 0, 0), 9907), ((240, 240, 243), 1386)] orange_px=45 center=(240, 240, 243)
+t=40s dominant=[((0, 0, 0), 9907), ((240, 240, 243), 1386)] orange_px=45 center=(240, 240, 243)
+t=45s dominant=[((0, 0, 0), 9907), ((240, 240, 243), 1386)] orange_px=45 center=(240, 240, 243)
+pid_at_end=11873
+resumed=    topResumedActivity=ActivityRecord{c4474fd u0 ai.vizij.bevyspike/android.app.NativeActivity t10}
+log: 09-18 16:36:22.992 11873 11914 I RustStdoutStderr: 2026-09-18T14:36:22.991722Z  INFO bevy_render::renderer: AdapterInfo { name: "SwiftShader Device (LLVM 10.0.0)", vendor: 6880, device: 49374, device_
+log: 09-18 16:36:27.779 11873 11914 I RustStdoutStderr: 2026-09-18T14:36:27.740272Z  INFO bevy_winit::system: Creating new window app_process64 (65v0)
+log: 09-18 16:37:11.220 11873 11914 I RustStdoutStderr: 2026-09-18T14:37:11.220114Z ERROR bevy_render::error_handler: Caught DeviceLost error: Unknown Unexpected error variant (driver implementation is at 
+log: 09-18 16:37:11.267 11873 11914 I RustStdoutStderr: thread 'Compute Task Pool (0)' (11918) panicked at /Users/victor.paleologue/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wgpu-29.0.4/src/back

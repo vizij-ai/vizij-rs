@@ -1,0 +1,710 @@
+{
+ "forms": {
+  "anim:struct:vector3": 36,
+  "anim:struct:euler": 18,
+  "anim:struct:rgb": 15,
+  "anim:f32:number": 44
+ },
+ "perNode": [
+  {
+   "name": "Background",
+   "type": "shape",
+   "material": "standard",
+   "tags": [],
+   "extraKeys": [],
+   "trs": {
+    "t": [
+     -0.03269479051232338,
+     0.16579335927963257,
+     -0.30425116419792175
+    ],
+    "r": [
+     4.371138670037558e-8,
+     0.9999999999999951,
+     4.371138670037558e-8,
+     7.55292096876663e-8
+    ],
+    "s": [
+     25.75177764892578,
+     24.999998092651367,
+     25
+    ]
+   },
+   "extras": {
+    "selection": {
+     "id": "a8bfe96e-1c2b-446b-b295-129c65b78ae5",
+     "namespace": "default",
+     "type": "shape"
+    }
+   },
+   "mesh": 0,
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale",
+    "color",
+    "opacity"
+   ]
+  },
+  {
+   "name": "InnerFace",
+   "type": "shape",
+   "material": "standard",
+   "tags": [],
+   "extraKeys": [],
+   "trs": {
+    "t": [
+     0.019208217039704323,
+     0.4199029207229614,
+     0.0000040995055314851925
+    ],
+    "r": [
+     4.371138670029576e-8,
+     0.9999999999999951,
+     4.371138670029576e-8,
+     7.55310357824972e-8
+    ],
+    "s": [
+     18.628416061401367,
+     18.084590911865234,
+     18.084590911865234
+    ]
+   },
+   "extras": {
+    "selection": {
+     "id": "a934cf4f-0ed1-435f-a7e0-4e9b2dfbd2f4",
+     "namespace": "default",
+     "type": "shape"
+    }
+   },
+   "mesh": 1,
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale",
+    "color",
+    "opacity"
+   ]
+  },
+  {
+   "name": "L_EyeWhite",
+   "type": "shape",
+   "material": "standard",
+   "tags": [],
+   "extraKeys": [],
+   "trs": {
+    "t": [
+     -3.57397723197937,
+     0.1962330937385559,
+     0.4308027923107147
+    ],
+    "r": [
+     0.00003345409877492561,
+     -0.9999999994307358,
+     4.3564231683239516e-8,
+     -0.0000043988135122358
+    ],
+    "s": [
+     5.150355339050293,
+     4.999998569488525,
+     5.000000953674316
+    ]
+   },
+   "extras": {
+    "selection": {
+     "id": "0b0ea234-19e2-46f7-ba04-50755d4b71c2",
+     "namespace": "default",
+     "type": "shape"
+    }
+   },
+   "mesh": 2,
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale",
+    "color",
+    "opacity"
+   ]
+  },
+  {
+   "name": "Mouth",
+   "type": "shape",
+   "material": "standard",
+   "morphTargets": 7,
+   "tags": [],
+   "extraKeys": [],
+   "trs": {
+    "t": [
+     -0.09253735840320587,
+     -1.2514238357543945,
+     -0.10609599947929382
+    ],
+    "r": [
+     4.371138670037558e-8,
+     0.9999999999999951,
+     4.371138670037558e-8,
+     7.55292096876663e-8
+    ],
+    "s": [
+     25.75177764892578,
+     24.999998092651367,
+     25
+    ]
+   },
+   "extras": {
+    "selection": {
+     "id": "a4bad4cb-b2ed-4d38-a00e-d31c3039200c",
+     "namespace": "default",
+     "type": "shape"
+    }
+   },
+   "mesh": 3,
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale",
+    "color",
+    "opacity",
+    "ltsneer",
+    "lbsneer",
+    "rtsneer",
+    "rbsneer",
+    "jawud",
+    "sidewide",
+    "sideud"
+   ]
+  },
+  {
+   "name": "OuterFace001",
+   "type": "shape",
+   "material": "standard",
+   "morphTargets": 9,
+   "tags": [],
+   "extraKeys": [],
+   "trs": {},
+   "extras": {
+    "selection": {
+     "id": "dec0bf5f-4e3f-47ac-8ab7-3b14f77d08b5",
+     "namespace": "default",
+     "type": "shape"
+    }
+   },
+   "mesh": 4,
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale",
+    "color",
+    "opacity",
+    "chin",
+    "lbrow_outud",
+    "lbrow_midud",
+    "lbrow_inud",
+    "lbrow_inlr",
+    "rbrow_inlr",
+    "rbrow_inud",
+    "rbrow_midud",
+    "rbrow_outud"
+   ]
+  },
+  {
+   "name": "OuterFace001_1",
+   "type": "shape",
+   "material": "standard",
+   "morphTargets": 9,
+   "tags": [],
+   "extraKeys": [],
+   "trs": {},
+   "extras": {
+    "selection": {
+     "id": "335784db-a3a5-45b2-bfa6-d317a0524f04",
+     "namespace": "default",
+     "type": "shape"
+    }
+   },
+   "mesh": 5,
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale",
+    "color",
+    "opacity",
+    "chin",
+    "lbrow_outud",
+    "lbrow_midud",
+    "lbrow_inud",
+    "lbrow_inlr",
+    "rbrow_inlr",
+    "rbrow_inud",
+    "rbrow_midud",
+    "rbrow_outud"
+   ]
+  },
+  {
+   "name": "OuterFace",
+   "type": "group",
+   "tags": [],
+   "extraKeys": [],
+   "root": false,
+   "childrenIds": 2,
+   "trs": {
+    "t": [
+     -0.050981901586055756,
+     0.2144903540611267,
+     -0.07736416906118393
+    ],
+    "r": [
+     -4.371139712335138e-8,
+     0.9999999999999847,
+     -4.371139712335138e-8,
+     -1.6292068303225988e-7
+    ],
+    "s": [
+     4.9800190925598145,
+     4.834636688232422,
+     4.834637641906738
+    ]
+   },
+   "children": [
+    4,
+    5
+   ],
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale"
+   ]
+  },
+  {
+   "name": "R_EyeWhite",
+   "type": "shape",
+   "material": "standard",
+   "tags": [],
+   "extraKeys": [],
+   "trs": {
+    "t": [
+     3.3312008380889893,
+     0.131178081035614,
+     0.4308634400367737
+    ],
+    "r": [
+     0.00003345409877492561,
+     -0.9999999994307358,
+     4.3564231683239516e-8,
+     -0.0000043988135122358
+    ],
+    "s": [
+     5.150355339050293,
+     4.999998569488525,
+     5.000000953674316
+    ]
+   },
+   "extras": {
+    "selection": {
+     "id": "5fb14069-c256-4eca-9057-09a80dccf2a6",
+     "namespace": "default",
+     "type": "shape"
+    }
+   },
+   "mesh": 6,
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale",
+    "color",
+    "opacity"
+   ]
+  },
+  {
+   "name": "Face_Tran_Rot_C",
+   "type": "group",
+   "tags": [],
+   "extraKeys": [],
+   "root": false,
+   "childrenIds": 6,
+   "trs": {
+    "t": [
+     0.00804206170141697,
+     -0.05421716347336769,
+     -0.14203901588916779
+    ],
+    "r": [
+     -4.3711393301980444e-8,
+     0.9999999999999951,
+     -4.3711393301980444e-8,
+     -7.549789935335749e-8
+    ]
+   },
+   "children": [
+    0,
+    1,
+    2,
+    3,
+    6,
+    7
+   ],
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale"
+   ]
+  },
+  {
+   "name": "R_EyeHighlight",
+   "type": "shape",
+   "material": "standard",
+   "tags": [],
+   "extraKeys": [],
+   "trs": {
+    "t": [
+     -0.017126381397247314,
+     0.01696811616420746,
+     0.010151747614145279
+    ],
+    "r": [
+     0.000010991904105326014,
+     0.0000014906925011117304,
+     -0.09843131252071363,
+     0.9951438471861269
+    ],
+    "s": [
+     -0.08699999749660492,
+     0.08699999749660492,
+     -0.0810309648513794
+    ]
+   },
+   "extras": {
+    "selection": {
+     "id": "2626d0a4-9680-43e8-91c9-c8cc0964e4ed",
+     "namespace": "default",
+     "type": "shape"
+    }
+   },
+   "mesh": 8,
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale",
+    "color",
+    "opacity"
+   ]
+  },
+  {
+   "name": "R_Eye",
+   "type": "shape",
+   "material": "standard",
+   "tags": [],
+   "extraKeys": [],
+   "childrenIds": 1,
+   "trs": {
+    "t": [
+     -3.1615371704101562,
+     0.3729405403137207,
+     -0.455471009016037
+    ],
+    "s": [
+     6.566703796386719,
+     6.375000476837158,
+     6.374999523162842
+    ]
+   },
+   "extras": {
+    "selection": {
+     "id": "15a54046-1b6d-482d-8f5d-e59e3f6c4412",
+     "namespace": "default",
+     "type": "shape"
+    }
+   },
+   "mesh": 7,
+   "children": [
+    9
+   ],
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale",
+    "color",
+    "opacity"
+   ]
+  },
+  {
+   "name": "L_EyeHighlight",
+   "type": "shape",
+   "material": "standard",
+   "tags": [],
+   "extraKeys": [],
+   "trs": {
+    "t": [
+     -0.006885349750518799,
+     0.007566126063466072,
+     0.002104124054312706
+    ],
+    "r": [
+     9.054030654608388e-7,
+     0.00000453570292348226,
+     -0.09835432849641715,
+     0.9951514588466553
+    ],
+    "s": [
+     -0.020000003278255463,
+     0.02199999988079071,
+     -0.022240081802010536
+    ]
+   },
+   "extras": {
+    "selection": {
+     "id": "4c7812ed-dd96-4b61-bbf2-b0b2d1d7e7a9",
+     "namespace": "default",
+     "type": "shape"
+    }
+   },
+   "mesh": 10,
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale",
+    "color",
+    "opacity"
+   ]
+  },
+  {
+   "name": "L_Eye",
+   "type": "shape",
+   "material": "standard",
+   "tags": [],
+   "extraKeys": [],
+   "childrenIds": 1,
+   "trs": {
+    "t": [
+     3.5067977905273438,
+     0.358278751373291,
+     -0.45680952072143555
+    ],
+    "s": [
+     25.423912048339844,
+     25.423912048339844,
+     25.00006866455078
+    ]
+   },
+   "extras": {
+    "selection": {
+     "id": "01ab4ca4-bebe-4a97-a05f-68a25d09033a",
+     "namespace": "default",
+     "type": "shape"
+    }
+   },
+   "mesh": 9,
+   "children": [
+    11
+   ],
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale",
+    "color",
+    "opacity"
+   ]
+  },
+  {
+   "name": "LBLid",
+   "type": "shape",
+   "material": "standard",
+   "morphTargets": 1,
+   "tags": [],
+   "extraKeys": [],
+   "trs": {
+    "t": [
+     3.604658842086792,
+     -1.1499998569488525,
+     -0.22057414054870605
+    ],
+    "r": [
+     0,
+     0,
+     -0.000049733214816531675,
+     0.9999999987633037
+    ],
+    "s": [
+     4.980006694793701,
+     4.834637641906738,
+     4.834650993347168
+    ]
+   },
+   "extras": {
+    "selection": {
+     "id": "6c8321c2-6244-4b8f-a8e2-08b2565f2dcf",
+     "namespace": "default",
+     "type": "shape"
+    }
+   },
+   "mesh": 11,
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale",
+    "color",
+    "opacity",
+    "lidcurve"
+   ]
+  },
+  {
+   "name": "LTLid",
+   "type": "shape",
+   "material": "standard",
+   "morphTargets": 1,
+   "tags": [],
+   "extraKeys": [],
+   "trs": {
+    "t": [
+     3.457075834274292,
+     1.749986171722412,
+     -0.32434988021850586
+    ],
+    "r": [
+     0.00003917620031099453,
+     0.9999998900124843,
+     0.0004673759005707912,
+     -1.094835696448514e-7
+    ],
+    "s": [
+     4.980013370513916,
+     4.8346381187438965,
+     4.834645748138428
+    ]
+   },
+   "extras": {
+    "selection": {
+     "id": "7e10465d-5af1-4d5c-baf8-8419400ffa5d",
+     "namespace": "default",
+     "type": "shape"
+    }
+   },
+   "mesh": 12,
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale",
+    "color",
+    "opacity",
+    "lidcurve"
+   ]
+  },
+  {
+   "name": "RBLid",
+   "type": "shape",
+   "material": "standard",
+   "morphTargets": 1,
+   "tags": [],
+   "extraKeys": [],
+   "trs": {
+    "t": [
+     -3.276599645614624,
+     -1.1499998569488525,
+     -0.22057309746742249
+    ],
+    "r": [
+     0,
+     0,
+     -0.000049733214816531675,
+     0.9999999987633037
+    ],
+    "s": [
+     4.980006694793701,
+     4.834637641906738,
+     4.834650993347168
+    ]
+   },
+   "extras": {
+    "selection": {
+     "id": "5466e399-e578-44a7-a0d7-b0fe3cf157b7",
+     "namespace": "default",
+     "type": "shape"
+    }
+   },
+   "mesh": 13,
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale",
+    "color",
+    "opacity",
+    "lidcurve"
+   ]
+  },
+  {
+   "name": "RTLid",
+   "type": "shape",
+   "material": "standard",
+   "morphTargets": 1,
+   "tags": [],
+   "extraKeys": [],
+   "trs": {
+    "t": [
+     -3.2891857624053955,
+     1.749986171722412,
+     -0.32434988021850586
+    ],
+    "r": [
+     0.000035838340570483556,
+     0.9999998901376784,
+     0.0004673759002027468,
+     -1.1104360501792423e-7
+    ],
+    "s": [
+     4.980013370513916,
+     4.8346381187438965,
+     4.834645748138428
+    ]
+   },
+   "extras": {
+    "selection": {
+     "id": "828607fa-bbe9-4058-a35a-d850c6b06552",
+     "namespace": "default",
+     "type": "shape"
+    }
+   },
+   "mesh": 14,
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale",
+    "color",
+    "opacity",
+    "lidcurve"
+   ]
+  },
+  {
+   "name": "Scene",
+   "type": "group",
+   "tags": [],
+   "extraKeys": [],
+   "root": true,
+   "rootBounds": {
+    "center": {
+     "x": 0.05391692019898198,
+     "y": 0.49135482901279204
+    },
+    "size": {
+     "x": 22.579289895905475,
+     "y": 14.40697096909824
+    }
+   },
+   "childrenIds": 7,
+   "trs": {},
+   "children": [
+    8,
+    10,
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "featureKeys": [
+    "translation",
+    "rotation",
+    "scale"
+   ]
+  }
+ ]
+}

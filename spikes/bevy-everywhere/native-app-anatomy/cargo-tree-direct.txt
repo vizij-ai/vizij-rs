@@ -1,0 +1,79 @@
+# cargo tree -p vizij -e features --depth 1
+vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+├── anyhow feature "default"
+├── arora feature "default"
+├── arora-behavior feature "default"
+├── arora-types feature "default"
+├── serde feature "default"
+├── serde feature "derive"
+├── uuid feature "default"
+├── uuid feature "serde"
+├── arora-behavior-tree-types feature "default"
+├── futures feature "default"
+├── log feature "default"
+├── serde_json feature "default"
+├── tokio feature "default"
+├── tokio feature "rt-multi-thread"
+├── tokio feature "time"
+├── tracing feature "log"
+├── tracing feature "std"
+├── clap feature "default"
+├── clap feature "derive"
+├── env_logger feature "default"
+├── crossterm feature "default"
+├── bevy feature "default"
+├── image feature "default"
+├── rodio feature "default"
+├── vizij-animation-module feature "default"
+├── vizij-api-core feature "default"
+├── vizij-arora feature "default"
+├── vizij-arora-behavior feature "default"
+├── vizij-arora-host feature "default"
+├── vizij-arora-host feature "publish-frames"
+├── vizij-graph-core feature "default"
+├── vizij-arora-hal feature "default"
+├── vizij-arora-store feature "default"
+└── vizij-arora-tts feature "default"
+[dev-dependencies]
+├── arora-msgs-ros2 feature "default"
+├── rand feature "default"
+├── ros2-client-multi-rmw feature "dds"
+├── ros2-client-multi-rmw feature "jazzy"
+└── vizij-bundle feature "default"
+
+# cargo tree -p vizij --depth 1
+vizij v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/vizij)
+├── anyhow v1.0.104
+├── arora v9.11.1
+├── arora-behavior v8.4.0
+├── arora-behavior-tree-types v1.1.0
+├── arora-types v2.5.1
+├── bevy v0.19.1
+├── clap v4.6.6
+├── crossterm v0.28.1
+├── env_logger v0.11.11
+├── futures v0.3.34
+├── image v0.25.10
+├── log v0.4.34
+├── rodio v0.20.1
+├── serde v1.0.229
+├── serde_json v1.0.151
+├── tokio v1.53.1
+├── tracing v0.1.44
+├── uuid v1.26.1
+├── vizij-animation-module v0.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-animation-module)
+│   [build-dependencies]
+├── vizij-api-core v1.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/api/vizij-api-core)
+├── vizij-arora v0.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora)
+├── vizij-arora-behavior v1.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-behavior)
+├── vizij-arora-hal v0.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-hal)
+├── vizij-arora-host v2.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-host)
+├── vizij-arora-store v0.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-store)
+├── vizij-arora-tts v2.0.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/interop/vizij-arora-tts)
+└── vizij-graph-core v1.4.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/node-graph/vizij-graph-core)
+[dev-dependencies]
+├── arora-msgs-ros2 v1.2.0
+│   [build-dependencies]
+├── rand v0.9.5
+├── ros2-client-multi-rmw v0.13.0
+└── vizij-bundle v0.1.0 (/Users/victor.paleologue/Code/Semio/vizij-rs/crates/tools/vizij-bundle)

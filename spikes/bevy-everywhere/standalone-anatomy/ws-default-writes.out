@@ -1,0 +1,11 @@
+$ cargo run --offline --quiet   (ws-default-writes, arora-bridge-ws =4.0.0)
+ServerConfig: bind=127.0.0.1 validate_paths=true serve_control_panel=false
+> {"type":"list_keys"}
+< {"type":"list_keys_resp","keys":[]}
+> {"type":"list_methods"}
+< {"type":"list_methods_resp","methods":[]}
+> {"type":"write_values","values":{"face/mouth/open":{"f64":1.0}}}
+< {"type":"write_values_resp","success":false,"message":"Unknown input path(s): face/mouth/open"}
+> {"type":"invoke","method":"reset","request_id":"r1"}
+< {"type":"invoke_resp","success":false,"request_id":"r1","message":"Method not found: reset"}
+HTTP GET /: read error Connection reset by peer (os error 54) (no control panel)

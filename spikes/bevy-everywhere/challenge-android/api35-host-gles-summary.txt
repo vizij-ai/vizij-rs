@@ -1,0 +1,7 @@
+case=api35-host-gles apk=/private/tmp/claude-501/-Users-victor-paleologue-Code-Semio-semio-studio/3db729c2-88a1-4330-986e-37ae26376064/scratchpad/spikes/challenge-android/../bevy-android/bevy-spike-gles-debug.apk serial=emulator-5556 date=2026-09-17T15:11:26Z
+android=15
+sdk=35
+ro.hardware.vulkan=ranchu
+ro.hardware.egl=emulation
+wm=Physical size: 2560x1600
+install=adb: failed to install /private/tmp/claude-501/-Users-victor-paleologue-Code-Semio-semio-studio/3db729c2-88a1-4330-986e-37ae26376064/scratchpad/spikes/challenge-android/../bevy-android/bevy-spike-gles-debug.apk: 

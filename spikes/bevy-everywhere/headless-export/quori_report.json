@@ -1,0 +1,1258 @@
+{
+ "source": "/Users/victor.paleologue/Code/Semio/vizij-web/apps/vizij-authoring/public/assets/Quori_Current_Extended.glb",
+ "headless": {
+  "label": "headless-vs-source",
+  "bytes": {
+   "source": 6536616,
+   "output": 6523460
+  },
+  "jsonChunk": {
+   "source": 3728332,
+   "output": 3715176
+  },
+  "binChunk": {
+   "source": 2808256,
+   "output": 2808256
+  },
+  "asset": {
+   "source": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter"
+   },
+   "output": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter"
+   }
+  },
+  "extensionsUsed": {
+   "source": [
+    "RobotData",
+    "VIZIJ_bundle"
+   ],
+   "output": [
+    "RobotData",
+    "VIZIJ_bundle"
+   ]
+  },
+  "scenes": {
+   "source": [
+    {
+     "name": "Scene",
+     "nodes": [
+      17
+     ]
+    }
+   ],
+   "output": [
+    {
+     "name": "Scene",
+     "nodes": [
+      17
+     ]
+    }
+   ]
+  },
+  "counts": {
+   "nodes": {
+    "source": 18,
+    "output": 18
+   },
+   "meshes": {
+    "source": 15,
+    "output": 15
+   },
+   "materials": {
+    "source": 15,
+    "output": 15
+   },
+   "accessors": {
+    "source": 118,
+    "output": 118
+   },
+   "bufferViews": {
+    "source": 118,
+    "output": 118
+   },
+   "buffers": {
+    "source": 1,
+    "output": 1
+   },
+   "images": {
+    "source": 0,
+    "output": 0
+   },
+   "textures": {
+    "source": 0,
+    "output": 0
+   },
+   "animations": {
+    "source": 0,
+    "output": 0
+   }
+  },
+  "nodeOrder": {
+   "same": true,
+   "source": [
+    "Background",
+    "InnerFace",
+    "L_EyeWhite",
+    "Mouth",
+    "OuterFace001",
+    "OuterFace001_1",
+    "OuterFace",
+    "R_EyeWhite",
+    "Face_Tran_Rot_C",
+    "R_EyeHighlight",
+    "R_Eye",
+    "L_EyeHighlight",
+    "L_Eye",
+    "LBLid",
+    "LTLid",
+    "RBLid",
+    "RTLid",
+    "Scene"
+   ],
+   "output": [
+    "Background",
+    "InnerFace",
+    "L_EyeWhite",
+    "Mouth",
+    "OuterFace001",
+    "OuterFace001_1",
+    "OuterFace",
+    "R_EyeWhite",
+    "Face_Tran_Rot_C",
+    "R_EyeHighlight",
+    "R_Eye",
+    "L_EyeHighlight",
+    "L_Eye",
+    "LBLid",
+    "LTLid",
+    "RBLid",
+    "RTLid",
+    "Scene"
+   ]
+  },
+  "nodes": [
+   {
+    "name": "Background",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Background",
+     "output": "Background"
+    }
+   },
+   {
+    "name": "InnerFace",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "InnerFace",
+     "output": "InnerFace"
+    }
+   },
+   {
+    "name": "L_EyeWhite",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_EyeWhite",
+     "output": "L_EyeWhite"
+    }
+   },
+   {
+    "name": "Mouth",
+    "robotDataDiff": [],
+    "trsDiff": [
+     {
+      "path": "/t/1",
+      "a": -1.2514238357543945,
+      "b": -1.2489261627197266
+     }
+    ],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Mouth",
+     "output": "Mouth"
+    }
+   },
+   {
+    "name": "OuterFace001",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "OuterFace001",
+     "output": "OuterFace001"
+    }
+   },
+   {
+    "name": "OuterFace001_1",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "OuterFace001_1",
+     "output": "OuterFace001_1"
+    }
+   },
+   {
+    "name": "OuterFace",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "R_EyeWhite",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_EyeWhite",
+     "output": "R_EyeWhite"
+    }
+   },
+   {
+    "name": "Face_Tran_Rot_C",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "R_EyeHighlight",
+    "robotDataDiff": [],
+    "trsDiff": [
+     {
+      "path": "/s/0",
+      "a": -0.08699999749660492,
+      "b": -0.08707021176815033
+     },
+     {
+      "path": "/s/1",
+      "a": 0.08699999749660492,
+      "b": -0.08707065135240555
+     }
+    ],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_EyeHighlight",
+     "output": "R_EyeHighlight"
+    }
+   },
+   {
+    "name": "R_Eye",
+    "robotDataDiff": [],
+    "trsDiff": [
+     {
+      "path": "/t/0",
+      "a": -3.1615371704101562,
+      "b": -3.3183350563049316
+     },
+     {
+      "path": "/t/1",
+      "a": 0.3729405403137207,
+      "b": 0.3777601718902588
+     }
+    ],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Eye",
+     "output": "R_Eye"
+    }
+   },
+   {
+    "name": "L_EyeHighlight",
+    "robotDataDiff": [],
+    "trsDiff": [
+     {
+      "path": "/s/0",
+      "a": -0.020000003278255463,
+      "b": -0.02205861732363701
+     },
+     {
+      "path": "/s/1",
+      "a": 0.02199999988079071,
+      "b": -0.02205861732363701
+     }
+    ],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_EyeHighlight",
+     "output": "L_EyeHighlight"
+    }
+   },
+   {
+    "name": "L_Eye",
+    "robotDataDiff": [],
+    "trsDiff": [
+     {
+      "path": "/t/0",
+      "a": 3.5067977905273438,
+      "b": 3.3499999046325684
+     },
+     {
+      "path": "/t/1",
+      "a": 0.358278751373291,
+      "b": 0.3630983829498291
+     }
+    ],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Eye",
+     "output": "L_Eye"
+    }
+   },
+   {
+    "name": "LBLid",
+    "robotDataDiff": [],
+    "trsDiff": [
+     {
+      "path": "/t/1",
+      "a": -1.1499998569488525,
+      "b": -1.5852679014205933
+     }
+    ],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "LBLid",
+     "output": "LBLid"
+    }
+   },
+   {
+    "name": "LTLid",
+    "robotDataDiff": [],
+    "trsDiff": [
+     {
+      "path": "/t/1",
+      "a": 1.749986171722412,
+      "b": 2.2244815826416016
+     },
+     {
+      "path": "/r/0",
+      "a": 0.00003917620031099453,
+      "b": 0.000037626479717237886
+     }
+    ],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "LTLid",
+     "output": "LTLid"
+    }
+   },
+   {
+    "name": "RBLid",
+    "robotDataDiff": [],
+    "trsDiff": [
+     {
+      "path": "/t/1",
+      "a": -1.1499998569488525,
+      "b": -1.5852679014205933
+     }
+    ],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "RBLid",
+     "output": "RBLid"
+    }
+   },
+   {
+    "name": "RTLid",
+    "robotDataDiff": [],
+    "trsDiff": [
+     {
+      "path": "/t/1",
+      "a": 1.749986171722412,
+      "b": 2.2244815826416016
+     },
+     {
+      "path": "/r/0",
+      "a": 0.000035838340570483556,
+      "b": 0.000037626479717237886
+     }
+    ],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "RTLid",
+     "output": "RTLid"
+    }
+   },
+   {
+    "name": "Scene",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [],
+    "childrenDiff": [],
+    "bundle": {
+     "source": true,
+     "output": true
+    },
+    "meshName": {}
+   }
+  ],
+  "bundleDiff": [],
+  "bundleEqualJson": true,
+  "meshDiff": [
+   {
+    "path": "/Mouth/weights/0",
+    "a": 0.07140424847602844,
+    "b": 0
+   },
+   {
+    "path": "/Mouth/weights/1",
+    "a": 0.03293698653578758,
+    "b": 0
+   },
+   {
+    "path": "/Mouth/weights/2",
+    "a": 0.011628865264356136,
+    "b": 0
+   },
+   {
+    "path": "/Mouth/weights/3",
+    "a": 0.005667482502758503,
+    "b": 0
+   },
+   {
+    "path": "/Mouth/weights/6",
+    "a": 0.2862912118434906,
+    "b": 0
+   },
+   {
+    "path": "/OuterFace001/weights/0",
+    "a": 0.09300000965595245,
+    "b": 0
+   },
+   {
+    "path": "/OuterFace001/weights/2",
+    "a": 0.005858688149601221,
+    "b": 0
+   },
+   {
+    "path": "/OuterFace001/weights/3",
+    "a": -0.004681803286075592,
+    "b": 0
+   },
+   {
+    "path": "/OuterFace001/weights/4",
+    "a": -0.0014350340934470296,
+    "b": 0
+   },
+   {
+    "path": "/OuterFace001/weights/5",
+    "a": -0.0024395580403506756,
+    "b": 0
+   },
+   {
+    "path": "/OuterFace001/weights/6",
+    "a": -0.004681803286075592,
+    "b": 0
+   },
+   {
+    "path": "/OuterFace001/weights/7",
+    "a": 0.005858688149601221,
+    "b": 0
+   },
+   {
+    "path": "/OuterFace001_1/weights/2",
+    "a": 0.005858688149601221,
+    "b": 0
+   },
+   {
+    "path": "/OuterFace001_1/weights/3",
+    "a": -0.004681803286075592,
+    "b": 0
+   },
+   {
+    "path": "/OuterFace001_1/weights/4",
+    "a": -0.0014350340934470296,
+    "b": 0
+   },
+   {
+    "path": "/OuterFace001_1/weights/5",
+    "a": -0.0024395580403506756,
+    "b": 0
+   },
+   {
+    "path": "/OuterFace001_1/weights/6",
+    "a": -0.004681803286075592,
+    "b": 0
+   },
+   {
+    "path": "/OuterFace001_1/weights/7",
+    "a": 0.005858688149601221,
+    "b": 0
+   }
+  ],
+  "materialDiff": [],
+  "materialOrder": {
+   "source": [
+    "Black",
+    "Face_Color.001",
+    "Material.002",
+    "Black",
+    "Face_Color2",
+    "Brows",
+    "Material.002",
+    "Material.004",
+    "Material.002",
+    "Material.004",
+    "Material.002",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Face_Color.001"
+   ],
+   "output": [
+    "Black",
+    "Face_Color.001",
+    "Material.002",
+    "Black",
+    "Face_Color2",
+    "Brows",
+    "Material.002",
+    "Material.004",
+    "Material.002",
+    "Material.004",
+    "Material.002",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Face_Color.001"
+   ]
+  }
+ },
+ "fallback": {
+  "label": "fallback-vs-source",
+  "bytes": {
+   "source": 6536616,
+   "output": 6524760
+  },
+  "jsonChunk": {
+   "source": 3728332,
+   "output": 3716476
+  },
+  "binChunk": {
+   "source": 2808256,
+   "output": 2808256
+  },
+  "asset": {
+   "source": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter"
+   },
+   "output": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter"
+   }
+  },
+  "extensionsUsed": {
+   "source": [
+    "RobotData",
+    "VIZIJ_bundle"
+   ],
+   "output": [
+    "VIZIJ_bundle",
+    "RobotData"
+   ]
+  },
+  "scenes": {
+   "source": [
+    {
+     "name": "Scene",
+     "nodes": [
+      17
+     ]
+    }
+   ],
+   "output": [
+    {
+     "name": "Scene",
+     "nodes": [
+      18
+     ]
+    }
+   ]
+  },
+  "counts": {
+   "nodes": {
+    "source": 18,
+    "output": 19
+   },
+   "meshes": {
+    "source": 15,
+    "output": 15
+   },
+   "materials": {
+    "source": 15,
+    "output": 15
+   },
+   "accessors": {
+    "source": 118,
+    "output": 118
+   },
+   "bufferViews": {
+    "source": 118,
+    "output": 118
+   },
+   "buffers": {
+    "source": 1,
+    "output": 1
+   },
+   "images": {
+    "source": 0,
+    "output": 0
+   },
+   "textures": {
+    "source": 0,
+    "output": 0
+   },
+   "animations": {
+    "source": 0,
+    "output": 0
+   }
+  },
+  "nodeOrder": {
+   "same": false,
+   "source": [
+    "Background",
+    "InnerFace",
+    "L_EyeWhite",
+    "Mouth",
+    "OuterFace001",
+    "OuterFace001_1",
+    "OuterFace",
+    "R_EyeWhite",
+    "Face_Tran_Rot_C",
+    "R_EyeHighlight",
+    "R_Eye",
+    "L_EyeHighlight",
+    "L_Eye",
+    "LBLid",
+    "LTLid",
+    "RBLid",
+    "RTLid",
+    "Scene"
+   ],
+   "output": [
+    "Background",
+    "InnerFace",
+    "L_EyeWhite",
+    "Mouth",
+    "OuterFace001",
+    "OuterFace001_1",
+    "OuterFace",
+    "R_EyeWhite",
+    "Face_Tran_Rot_C",
+    "R_EyeHighlight",
+    "R_Eye",
+    "L_EyeHighlight",
+    "L_Eye",
+    "LBLid",
+    "LTLid",
+    "RBLid",
+    "RTLid",
+    "Scene",
+    "Scene"
+   ]
+  },
+  "nodes": [
+   {
+    "name": "Background",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "Background"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Background",
+     "output": "Background"
+    }
+   },
+   {
+    "name": "InnerFace",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "InnerFace"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "InnerFace",
+     "output": "InnerFace"
+    }
+   },
+   {
+    "name": "L_EyeWhite",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "L_EyeWhite"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_EyeWhite",
+     "output": "L_EyeWhite"
+    }
+   },
+   {
+    "name": "Mouth",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "ltsneer",
+       "lbsneer",
+       "rtsneer",
+       "rbsneer",
+       "jawud",
+       "sidewide",
+       "sideud"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "Mouth"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "Mouth",
+     "output": "Mouth"
+    }
+   },
+   {
+    "name": "OuterFace001",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "chin",
+       "lbrow_outud",
+       "lbrow_midud",
+       "lbrow_inud",
+       "lbrow_inlr",
+       "rbrow_inlr",
+       "rbrow_inud",
+       "rbrow_midud",
+       "rbrow_outud"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "OuterFace001"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "OuterFace001",
+     "output": "OuterFace001"
+    }
+   },
+   {
+    "name": "OuterFace001_1",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "chin",
+       "lbrow_outud",
+       "lbrow_midud",
+       "lbrow_inud",
+       "lbrow_inlr",
+       "rbrow_inlr",
+       "rbrow_inud",
+       "rbrow_midud",
+       "rbrow_outud"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "OuterFace001_1"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "OuterFace001_1",
+     "output": "OuterFace001_1"
+    }
+   },
+   {
+    "name": "OuterFace",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "OuterFace"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "R_EyeWhite",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "R_EyeWhite"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_EyeWhite",
+     "output": "R_EyeWhite"
+    }
+   },
+   {
+    "name": "Face_Tran_Rot_C",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "Face_Tran_Rot_C"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "R_EyeHighlight",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "R_EyeHighlight"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_EyeHighlight",
+     "output": "R_EyeHighlight"
+    }
+   },
+   {
+    "name": "R_Eye",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "R_Eye"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "R_Eye",
+     "output": "R_Eye"
+    }
+   },
+   {
+    "name": "L_EyeHighlight",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "L_EyeHighlight"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_EyeHighlight",
+     "output": "L_EyeHighlight"
+    }
+   },
+   {
+    "name": "L_Eye",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/name",
+      "b": "L_Eye"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "L_Eye",
+     "output": "L_Eye"
+    }
+   },
+   {
+    "name": "LBLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lidcurve"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "LBLid"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "LBLid",
+     "output": "LBLid"
+    }
+   },
+   {
+    "name": "LTLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lidcurve"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "LTLid"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "LTLid",
+     "output": "LTLid"
+    }
+   },
+   {
+    "name": "RBLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lidcurve"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "RBLid"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "RBLid",
+     "output": "RBLid"
+    }
+   },
+   {
+    "name": "RTLid",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "/targetNames",
+      "b": [
+       "lidcurve"
+      ]
+     },
+     {
+      "path": "/name",
+      "b": "RTLid"
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": false,
+     "output": false
+    },
+    "meshName": {
+     "source": "RTLid",
+     "output": "RTLid"
+    }
+   },
+   {
+    "name": "Scene",
+    "robotDataDiff": [],
+    "trsDiff": [],
+    "extrasDiff": [
+     {
+      "path": "",
+      "b": {
+       "name": "Scene"
+      }
+     }
+    ],
+    "childrenDiff": [],
+    "bundle": {
+     "source": true,
+     "output": false
+    },
+    "meshName": {}
+   },
+   {
+    "name": "Scene#1",
+    "missingInSource": true
+   }
+  ],
+  "bundleDiff": [],
+  "bundleEqualJson": true,
+  "meshDiff": [],
+  "materialDiff": [],
+  "materialOrder": {
+   "source": [
+    "Black",
+    "Face_Color.001",
+    "Material.002",
+    "Black",
+    "Face_Color2",
+    "Brows",
+    "Material.002",
+    "Material.004",
+    "Material.002",
+    "Material.004",
+    "Material.002",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Face_Color.001"
+   ],
+   "output": [
+    "Black",
+    "Face_Color.001",
+    "Material.002",
+    "Black",
+    "Face_Color2",
+    "Brows",
+    "Material.002",
+    "Material.004",
+    "Material.002",
+    "Material.004",
+    "Material.002",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Face_Color.001",
+    "Face_Color.001"
+   ]
+  }
+ },
+ "roundTrip": {
+  "worldDiff": [],
+  "animatablesDiff": [],
+  "bundleDiff": [],
+  "animations": {
+   "source": 0,
+   "reloaded": 0
+  },
+  "rootBounds": {
+   "source": {
+    "center": {
+     "x": 0.05391692019898198,
+     "y": 0.49135482901279204
+    },
+    "size": {
+     "x": 22.579289895905475,
+     "y": 14.40697096909824
+    }
+   },
+   "reloaded": {
+    "center": {
+     "x": 0.05391692019898198,
+     "y": 0.49135482901279204
+    },
+    "size": {
+     "x": 22.579289895905475,
+     "y": 14.40697096909824
+    }
+   }
+  }
+ },
+ "timingsMs": {
+  "load": 1649.614125,
+  "build": 98.9417910000002,
+  "export": 857.8650839999991,
+  "total": 5140.399415999999
+ },
+ "memoryMB": {
+  "rss": 232.6528,
+  "heapUsed": 102.898784
+ }
+}

@@ -1,0 +1,12 @@
+instance apiVersion 1.3.0
+instance ext VK_KHR_get_physical_device_properties2: true
+physical devices: 1
+
+device "Apple M1" type INTEGRATED_GPU vendor 0x106b device 0x1a060207 driverVersion 0x28a0 apiVersion 1.3.0
+  device extensions: 39
+  VK_KHR_maintenance3: true  VK_KHR_maintenance4: false  VK_KHR_swapchain_mutable_format: false  VK_KHR_swapchain: true
+  wgpu-hal would chain: maintenance3 true, maintenance4 true
+  maintenance3.maxMemoryAllocationSize = 9534832640 (9093 MiB)
+  maintenance3.maxPerSetDescriptors    = 1024
+  maintenance4.maxBufferSize           = 9534832640 (9093 MiB)
+  -> wgpu-hal max_buffer_size = min(9534832640, 9534832640, 2147483647) = 2147483647

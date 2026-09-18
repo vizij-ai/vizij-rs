@@ -1,0 +1,13 @@
+[package]
+name = "ws-default-writes"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+arora-bridge-ws = "=4.0.0"
+arora-bridge = "4"
+arora-types = "2"
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+serde_json = "1"

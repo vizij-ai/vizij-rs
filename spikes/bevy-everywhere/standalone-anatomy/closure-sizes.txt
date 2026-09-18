@@ -1,0 +1,4 @@
+--no-default-features: android=483 desktop(host)=497
+--no-default-features --features studio-bridge: android=775 desktop(host)=786
+--features ros2: android=560 desktop(host)=572
+--features ros2,studio-bridge: android=834 desktop(host)=843

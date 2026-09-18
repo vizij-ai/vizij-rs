@@ -1,0 +1,29 @@
+case=api35-lavapipe-anim apk=bevy-spike-anim-debug.apk serial=emulator-5572 date=2026-09-18T15:50:10Z
+sdk=35
+wm=Physical size: 2560x1600
+install=Success
+Status: ok TotalTime: 4363 
+t=5s dominant=[((0, 0, 0), 11322)] orange_px=0 center=(0, 0, 0)
+t=10s dominant=[((55, 55, 55), 2213), ((56, 55, 55), 1086)] orange_px=748 center=(92, 169, 173) lowerleft_changed_px=763599 of 844800
+t=15s dominant=[((55, 55, 55), 2216), ((56, 55, 55), 1086)] orange_px=698 center=(92, 169, 173) lowerleft_changed_px=7594 of 844800
+t=20s dominant=[((55, 55, 55), 2226), ((56, 55, 55), 1089)] orange_px=491 center=(92, 169, 173) lowerleft_changed_px=14243 of 844800
+t=25s dominant=[((55, 55, 55), 2215), ((56, 55, 55), 1087)] orange_px=702 center=(92, 169, 173) lowerleft_changed_px=14911 of 844800
+t=30s dominant=[((55, 55, 55), 2213), ((56, 55, 55), 1087)] orange_px=666 center=(92, 169, 173) lowerleft_changed_px=11593 of 844800
+t=35s dominant=[((55, 55, 55), 2214), ((56, 55, 55), 1088)] orange_px=627 center=(92, 169, 173) lowerleft_changed_px=5321 of 844800
+t=40s dominant=[((55, 55, 55), 2214), ((56, 55, 55), 1085)] orange_px=754 center=(92, 169, 173) lowerleft_changed_px=11716 of 844800
+t=45s dominant=[((55, 55, 55), 2216), ((56, 55, 55), 1088)] orange_px=595 center=(92, 169, 173) lowerleft_changed_px=13304 of 844800
+t=50s dominant=[((55, 55, 55), 2213), ((56, 55, 55), 1085)] orange_px=758 center=(92, 169, 173) lowerleft_changed_px=12958 of 844800
+t=55s dominant=[((55, 55, 55), 2214), ((56, 55, 55), 1087)] orange_px=736 center=(92, 169, 173) lowerleft_changed_px=7080 of 844800
+t=60s dominant=[((55, 55, 55), 2215), ((56, 55, 55), 1085)] orange_px=740 center=(92, 169, 173) lowerleft_changed_px=7619 of 844800
+pid_at_end=2478
+sf_list: RequestedLayerState{9f8ec8 ActivityRecordInputSink ai.vizij.bevyspike/android.app.NativeActivity#106 parentId=100 z=-2147483648}
+sf_list: RequestedLayerState{Surface(name=f061c54 ai.vizij.bevyspike/android.app.NativeActivity)/@0xb2f667f - animation-leash of starting_reveal#111}
+sf_list: RequestedLayerState{ActivityRecord{820eb61 u0 ai.vizij.bevyspike/android.app.NativeActivity#100 parentId=99}
+sf_list: RequestedLayerState{ai.vizij.bevyspike/android.app.NativeActivity#108 parentId=107}
+sf_list: RequestedLayerState{f061c54 ai.vizij.bevyspike/android.app.NativeActivity#107 parentId=100}
+sf_latency[RequestedLayerState{9f8ec8 ActivityRecordInputSink ai.vizij.bevyspike/android.app.NativeActivity#106 parentId=100 z=-2147483648}]: rows=1
+resumed=    topResumedActivity=ActivityRecord{820eb61 u0 ai.vizij.bevyspike/android.app.NativeActivity t18}
+log: 09-18 17:50:18.229  2478  2506 I RustStdoutStderr: 2026-09-18T15:50:18.221690Z  INFO bevy_render::renderer: AdapterInfo { name: "llvmpipe (LLVM 21.1.4, 128 bits)", vendor: 65541, device: 0, device_typ
+log: 09-18 17:50:19.755  2478  2506 I RustStdoutStderr: 2026-09-18T15:50:19.755018Z  INFO bevy_winit::system: Creating new window app_process64 (65v0)
+log: 09-18 17:50:24.700  2705  2705 I RkpdBootReceiver: Caught boot intent, waking up.
+log: 09-18 17:51:57.958  2478  2506 I RustStdoutStderr: 2026-09-18T15:51:57.957848Z  INFO bevy_android_spike: fit: bounds min=Vec3(-11.235728, -6.7121334, -0.5729314) max=Vec3(11.343563, 6.9333544, 0.16515

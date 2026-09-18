@@ -1,0 +1,11 @@
+[package]
+name = "vkprobe"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+ash = { version = "0.38", features = ["loaded"] }
+
+[profile.release]
+opt-level = 1

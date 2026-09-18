@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Bevy wasm spike: one face</title>
+<style>
+  body { margin: 0; background: #202020; color: #ddd; font: 14px system-ui; }
+  #stage { position: relative; width: 763px; height: 486px; margin: 24px; background: #101114; }
+  #stage canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; outline: none; }
+</style>
+<p style="margin:24px 24px 0">Bevy 0.19.1 · WebGL2 · <span id="status">loading…</span></p>
+<div id="stage"><canvas id="face-a"></canvas></div>
+<script type="module">
+  const glb = new URLSearchParams(location.search).get('glb') ?? 'Quori_Current_Extended.glb';
+  const t0 = performance.now();
+  const mod = await import('./pkg/bevy_wasm_spike.js');
+  await mod.default();
+  document.getElementById('status').textContent = `wasm ready in ${(performance.now() - t0).toFixed(0)} ms; starting ${glb}`;
+  mod.start('#face-a', glb);
+  window.__spikeStarted = true;
+</script>

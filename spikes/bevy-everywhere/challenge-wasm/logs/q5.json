@@ -1,0 +1,120 @@
+{
+ "readyMs": 80960,
+ "beforeStop": {
+  "running": true,
+  "frames": 11,
+  "faceCount": 1,
+  "rafTicks": 11,
+  "devices": {
+   "a": {
+    "steps": 3,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 739
+   }
+  },
+  "memoryBytes": 137625600,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "stopMs": 1860,
+ "afterStop": {
+  "running": false,
+  "frames": 20,
+  "faceCount": 1,
+  "rafTicks": 38,
+  "devices": {
+   "a": {
+    "steps": 30,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 739
+   }
+  },
+  "memoryBytes": 137625600,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "afterStopLater": {
+  "running": false,
+  "frames": 20,
+  "faceCount": 1,
+  "rafTicks": 47,
+  "devices": {
+   "a": {
+    "steps": 39,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 739
+   }
+  },
+  "memoryBytes": 137625600,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "deviceAfterStop": {
+  "ok": true,
+  "steps": 48,
+  "poseLen": 372
+ },
+ "secondMount": "ok",
+ "afterSecondMount": {
+  "running": true,
+  "frames": 35,
+  "faceCount": 0
+ },
+ "secondLoad": "ok",
+ "afterRestart": {
+  "running": true,
+  "frames": 40,
+  "faceCount": 1,
+  "rafTicks": 76,
+  "devices": {
+   "a": {
+    "steps": 69,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 739
+   },
+   "a2": {
+    "steps": 4,
+    "alive": true,
+    "poseLen": 372,
+    "loadMs": 503
+   }
+  },
+  "memoryBytes": 172032000,
+  "hasContext": true,
+  "contextLost": false,
+  "contextEvents": [],
+  "stepErrors": [],
+  "canvas": {
+   "w": 1000,
+   "h": 520
+  }
+ },
+ "errors": [
+  "[log] %cWARN%c /Users/victor.paleologue/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_render-0.19.1/src/renderer/mod.rs:291%c The selected adapter is using a driver that only supports software rendering. This is likely to be very slow. See https://bevy.org/learn/errors/b0006/ color: orange; background: #444 color: gray; font-style: italic color: inherit",
+  "[log] %cERROR%c /Users/victor.paleologue/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_log-0.19.1/src/lib.rs:395%c Could not set global logger and tracing subscriber as they are already set. Consider disabling LogPlugin. color: red; background: #444 color: gray; font-style: italic color: inherit",
+  "[log] %cWARN%c /Users/victor.paleologue/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bevy_render-0.19.1/src/renderer/mod.rs:291%c The selected adapter is using a driver that only supports software rendering. This is likely to be very slow. See https://bevy.org/learn/errors/b0006/ color: orange; background: #444 color: gray; font-style: italic color: inherit"
+ ],
+ "consoleLines": 39
+}

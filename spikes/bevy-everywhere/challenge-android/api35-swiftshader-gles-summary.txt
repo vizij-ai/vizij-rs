@@ -1,0 +1,20 @@
+case=api35-swiftshader-gles apk=/private/tmp/claude-501/-Users-victor-paleologue-Code-Semio-semio-studio/3db729c2-88a1-4330-986e-37ae26376064/scratchpad/spikes/bevy-android/bevy-spike-gles-debug.apk serial=emulator-5556 date=2026-09-17T14:50:04Z
+android=15
+sdk=35
+ro.hardware.vulkan=ranchu
+ro.hardware.egl=emulation
+wm=Physical size: 2560x1600
+install=Success
+Status: ok TotalTime: 8890 
+pid_after_10s=4711
+resumed=      topResumedActivity=ActivityRecord{94bfd33 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t7}
+screencap_bytes=2873093
+gfxinfo: Total frames rendered: 0
+gfxinfo: Janky frames: 0 (0.00%)
+gfxinfo: Janky frames (legacy): 0 (0.00%)
+logcat_lines=    1118
+log: 09-17 16:50:16.349  4711  4742 I RustStdoutStderr: [2m2026-09-17T14:50:16.349351Z[0m [32m INFO[0m [2mbevy_render::renderer[0m[2m:[0m AdapterInfo { name: "Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.
+log: 09-17 16:50:17.147  4711  4742 I RustStdoutStderr: [2m2026-09-17T14:50:17.145986Z[0m [31mERROR[0m [2mbevy_gilrs[0m[2m:[0m Failed to start Gilrs. Gilrs does not support current platform.
+log: 09-17 16:50:17.335  4711  4742 I RustStdoutStderr: [2m2026-09-17T14:50:17.281460Z[0m [32m INFO[0m [2mbevy_pbr::cluster[0m[2m:[0m GPU clustering isn't supported on this device; falling back to CPU clustering.
+log: 09-17 16:50:20.452  4711  4742 I RustStdoutStderr: [2m2026-09-17T14:50:20.446987Z[0m [31mERROR[0m [2mbevy_render::error_handler[0m[2m:[0m Caught rendering error: Validation Error
+log: 09-17 16:50:20.496  4711  4742 I RustStdoutStderr: [2m2026-09-17T14:50:20.477513Z[0m [31mERROR[0m [2mbevy_render::error_handler[0m[2m:[0m Caught rendering error: Validation Error
