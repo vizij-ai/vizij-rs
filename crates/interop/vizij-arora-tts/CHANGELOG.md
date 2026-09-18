@@ -4,6 +4,24 @@ All notable changes to `vizij-arora-tts`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] - 2026-09-19
+
+### Changed
+
+- A halt is silence: the interpreter stops re-invoking `say`, nothing in the
+  module ABI tells the producer, so every tick refreshes the run's pulse and
+  a producer that sees no tick for `IDLE_STOP` (250 ms) stops the audio and
+  ends the run. Audio still queued at that point is cut, not played out.
+- The viseme follows the sink's own playhead (`Sink::get_pos()`) rather than
+  wall-clock time since `append`, so a late audio start no longer shifts the
+  lips ahead of the sound.
+
+### Added
+
+- The playback loop every native provider shares, public so a sibling
+  provider (the Piper one in `vizij`) plays under the same halt rule: `Cue`,
+  `Pulse`, `IDLE_STOP`, `is_halted`, `follow`, `Playback` and `shape_at`.
+
 ## [2.0.0] - 2026-09-10
 
 ### Breaking

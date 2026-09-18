@@ -162,7 +162,8 @@ calls it like any module function, and a bridge spawns it as a task run
 (bridges list it over `DescribeMethods`; its `Status` return is the action
 shape, and `--ros2` serves it as the `/<namespace>/actions/say` action).
 Spawned, the run is the say skill's: the lips follow the speech and the
-run's feedback is the current viseme. `play_viseme(shape, weight)` plays one
+run's feedback is the current viseme; halting the run cuts the audio within
+250 ms and puts the lips at rest. `play_viseme(shape, weight)` plays one
 shape the same way without speech. The fifteen viseme weights are free inputs
 too: under `--ros2` a producer with its own timing writes them raw, no player
 involved —
