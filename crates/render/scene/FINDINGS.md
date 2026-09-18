@@ -33,12 +33,22 @@ which renders into an image and leaves the window empty: with nothing
 presenting to a surface, there is no vsync to wait on and the frame time is the
 work.
 
-**Two things the table is not.** The copies share 24 distinct meshes and 24
+**Three things the table is not.** The copies share 24 distinct meshes and 24
 materials, so Bevy batches them; the triangle throughput is real but the
 draw-call count is optimistic against 1,536 genuinely distinct objects. And
 this is desktop-native — Studio ships to the browser, where the same scene runs
 through WebGPU in wasm and will cost more. The native figure bounds the
 question from above; it does not settle the browser one.
+
+**Third, and easiest to misread: this is a static scene.** Every run installs
+`PoseFeed::new(Vec::new)`, and the copies runs spawn no controls, so nothing
+animates, no transform or material is written, no morph weight updates and no
+pointer interacts. The numbers are geometry, shadows and an orbiting camera,
+with the face redrawing an unchanging pose every frame. **Read them as a
+floor.** They answer whether the GPU can draw this; they say nothing about the
+three write paths a live edit session exercises — a transform write, a material
+mutation that may re-upload to the GPU, and a morph-weight update — none of
+which has been timed at any scale.
 
 ## 2. What the robot file actually carries
 
