@@ -51,8 +51,8 @@ pub const LOOK_AT_FUNCTION: &str = "look_at";
 const SETTLE_SECONDS: f64 = 0.6;
 
 /// The `std_skills/Result` "not supported" error code, answered for gaze
-/// policies this skill does not implement (`social`, `random`, `auto`, and
-/// anything unknown).
+/// policies this skill does not implement (`social`, `auto`, and anything
+/// unknown).
 const ROS_ENOTSUP: u8 = 134;
 
 /// The canonical fragment asset, verbatim: the behavior as data. Edit it by
@@ -129,12 +129,12 @@ const VISEME_REST: f64 = 0.02;
 ///
 /// - empty policy or `track`: write the goal target (and frame) onto the
 ///   ROS4HRI gaze keys and stay `Running` — tracking ends when the goal is
-///   cancelled or replaced (the halt is the exit);
-/// - `glance` / `reset`: write the target (`reset` recenters on the mapping's
-///   far-ahead rest), hold the fixation for [`SETTLE_SECONDS`], then
-///   `Success`;
-/// - anything else (`social`, `random`, `auto`, unknown): `Failure`, with
-///   the `ROS_ENOTSUP` errno on the result key.
+///   cancelled or replaced;
+/// - `idle`: continuously wander slowly around the forward direction;
+/// - `random`: continuously generate a more active random gaze trajectory;
+/// - `glance` / `reset`: write the target, hold the fixation for
+///   [`SETTLE_SECONDS`], then `Success`;
+/// - unsupported/unknown policies: `Failure`, with the `ROS_ENOTSUP` errno.
 pub fn generate_look_at() -> Json {
     let status = |variant: Uuid| -> Json {
         serde_json::to_value(Value::Enumeration(Enumeration {
@@ -146,6 +146,7 @@ pub fn generate_look_at() -> Json {
     };
 
     let g = &mut GraphBuilder::new();
+    let zero = g.constant(0.0);
 
     // The method's parameters, staged from the run's keys (the spawn-time
     // arguments become these inputs' defaults at graft time).
@@ -157,34 +158,126 @@ pub fn generate_look_at() -> Json {
     );
     let frame = g.input("in/frame", "task/frame", json!(""));
 
-    // Gaze: `reset` recenters on the mapping's far-ahead rest target (the
-    // unverged straight-ahead), every other policy tracks the goal. The
-    // written keys are the same standard surface the topic plane feeds — the
-    // ROS4HRI mapping turns them into eye pose.
+    // Gaze:
+    // - `track` / `glance`: use the supplied target.
+    // - `reset`: recenter on the straight-ahead rest target.
+    // - `idle`: slowly wander around the forward direction.
+    //
+    // Y controls horizontal gaze and Z controls vertical gaze. X stays fixed
+    // at 10 m so the eyes look around a distant point in front of the face.
     let rest = g.node(
         "gaze/rest_target",
         "constant",
         json!({ "value": { "x": 10.0, "y": 0.0, "z": 0.0 } }),
     );
+
     let face_frame = g.node("gaze/face_frame", "constant", json!({ "value": "" }));
+
+    let idle_time = g.node("gaze/idle/time", "time", json!({}));
+    let idle_x = g.constant(10.0);
+    // Random gaze: a more active wandering pattern than idle.
+    let random_y_noise = g.op(
+        "gaze/random/y/noise",
+        "simplenoise",
+        json!({
+            "noise_seed": 101.0,
+            "frequency": 0.45,
+            "octaves": 1.0
+        }),
+        &[("x", &idle_time), ("y", &zero)],
+    );
+    let random_y_amp = g.constant(2.5);
+    let random_y = g.mul("gaze/random/y", &random_y_noise, &random_y_amp);
+
+    let random_z_noise = g.op(
+        "gaze/random/z/noise",
+        "simplenoise",
+        json!({
+            "noise_seed": 203.0,
+            "frequency": 0.32,
+            "octaves": 1.0
+        }),
+        &[("x", &idle_time), ("y", &zero)],
+    );
+    let random_z_amp = g.constant(1.5);
+    let random_z = g.mul("gaze/random/z", &random_z_noise, &random_z_amp);
+
+    let random_target = g.op(
+        "gaze/random/target",
+        "join",
+        json!({}),
+        &[
+            ("operand_0", &idle_x),
+            ("operand_1", &random_y),
+            ("operand_2", &random_z),
+        ],
+    );
+
+    // Slowly varying horizontal noise: approximately +/- 2 m.
+    let idle_y_noise = g.op(
+        "gaze/idle/y/noise",
+        "simplenoise",
+        json!({
+            "noise_seed": 17.0,
+            "frequency": 0.25,
+            "octaves": 1.0
+        }),
+        &[("x", &idle_time), ("y", &zero)],
+    );
+    let idle_y_amp = g.constant(2.0);
+    let idle_y_raw = g.mul("gaze/idle/y/raw", &idle_y_noise, &idle_y_amp);
+    let idle_y = g.damp("gaze/idle/y/smooth", &idle_y_raw, 1.5);
+
+    // Slowly varying vertical noise: approximately +/- 1 m.
+    let idle_z_noise = g.op(
+        "gaze/idle/z/noise",
+        "simplenoise",
+        json!({
+            "noise_seed": 31.0,
+            "frequency": 0.20,
+            "octaves": 1.0
+        }),
+        &[("x", &idle_time), ("y", &zero)],
+    );
+    let idle_z_amp = g.constant(1.0);
+    let idle_z_raw = g.mul("gaze/idle/z/raw", &idle_z_noise, &idle_z_amp);
+    let idle_z = g.damp("gaze/idle/z/smooth", &idle_z_raw, 1.5);
+
+    // Build the ROS4HRI Point target: X forward, Y horizontal, Z vertical.
+    let idle_target = g.op(
+        "gaze/idle/target",
+        "join",
+        json!({}),
+        &[
+            ("operand_0", &idle_x),
+            ("operand_1", &idle_y),
+            ("operand_2", &idle_z),
+        ],
+    );
+
     let gaze = g.op(
         "gaze/target",
         "case",
-        json!({ "case_labels": ["reset"] }),
+        json!({ "case_labels": ["reset", "idle", "random"] }),
         &[
             ("selector", &policy),
             ("operand_0", &rest),
+            ("operand_1", &idle_target),
+            ("operand_2", &random_target),
             ("default", &target),
         ],
     );
     g.output("out/gaze/target", &gaze, GAZE_TARGET_KEY.to_string());
+
     let gaze_frame = g.op(
         "gaze/frame",
         "case",
-        json!({ "case_labels": ["reset"] }),
+        json!({ "case_labels": ["reset", "idle", "random"] }),
         &[
             ("selector", &policy),
             ("operand_0", &face_frame),
+            ("operand_1", &face_frame),
+            ("operand_2", &face_frame),
             ("default", &frame),
         ],
     );
@@ -213,8 +306,8 @@ pub fn generate_look_at() -> Json {
         &[("lhs", &elapsed), ("rhs", &dwell)],
     );
 
-    // The lifecycle: tracking runs until halted; a fixation succeeds once
-    // settled; unimplemented policies fail.
+    // The lifecycle: tracking and idle run until halted; glance/reset succeed
+    // once the target has settled; unimplemented policies fail.
     let running = g.node(
         "status/running",
         "constant",
@@ -231,16 +324,19 @@ pub fn generate_look_at() -> Json {
         json!({ "value": status(STATUS_FAILURE_VARIANT_ID) }),
     );
     let fixation = g.select("fixation/status", &settled, &success, &running);
+    eprintln!("[LOOK_AT] building lifecycle with idle=RUNNING");
     let lifecycle = g.op(
         "status",
         "case",
-        json!({ "case_labels": ["", "track", "glance", "reset"] }),
+        json!({ "case_labels": ["", "track", "glance", "reset", "idle", "random"] }),
         &[
             ("selector", &policy),
             ("operand_0", &running),
             ("operand_1", &running),
             ("operand_2", &fixation),
             ("operand_3", &fixation),
+            ("operand_4", &running),
+            ("operand_5", &running),
             ("default", &failure),
         ],
     );
@@ -259,13 +355,15 @@ pub fn generate_look_at() -> Json {
     let errno = g.op(
         "errno",
         "case",
-        json!({ "case_labels": ["", "track", "glance", "reset"] }),
+        json!({ "case_labels": ["", "track", "glance", "reset", "idle", "random"] }),
         &[
             ("selector", &policy),
             ("operand_0", &silent),
             ("operand_1", &silent),
             ("operand_2", &silent),
             ("operand_3", &silent),
+            ("operand_4", &silent),
+            ("operand_5", &silent),
             ("default", &enotsup),
         ],
     );
@@ -548,9 +646,10 @@ pub const SKILLS: [Skill; 3] = [
         id: LOOK_AT_FUNCTION,
         title: "Look At",
         description: "The ROS4HRI gaze skill (interaction_skills/LookAt on /skill/look_at): \
-                      tracks a target on the standard gaze surface until cancelled, holds a \
-                      glance/reset fixation then succeeds, and answers ROS_ENOTSUP for the \
-                      social/random policies.",
+                        tracks a target on the standard gaze surface until cancelled, holds a
+                        glance/reset fixation then succeeds, slowly wanders around the forward
+                        direction for the idle policy, and answers ROS_ENOTSUP for unsupported
+                        policies.",
         parameters: &LOOK_AT_PARAMS,
         asset_json: LOOK_AT_JSON,
     },
@@ -732,5 +831,33 @@ mod tests {
         ] {
             assert!(outputs.contains(&path), "missing output {path}");
         }
+    }
+    /// Idle and random are continuous gaze policies: their lifecycle branches
+    /// must remain Running rather than completing like glance/reset.
+    #[test]
+    fn look_at_continuous_policies_are_present() {
+        let spec = generate_look_at();
+
+        let nodes = spec["nodes"].as_array().unwrap();
+
+        assert!(nodes.iter().any(|n| n["id"] == "gaze/idle/target"));
+        assert!(nodes.iter().any(|n| n["id"] == "gaze/random/target"));
+
+        let status = nodes
+            .iter()
+            .find(|n| n["id"] == "status")
+            .expect("look_at status case exists");
+
+        assert_eq!(
+            status["params"]["case_labels"],
+            json!(["", "track", "glance", "reset", "idle", "random"])
+        );
+
+        let running = nodes
+            .iter()
+            .find(|n| n["id"] == "status/running")
+            .expect("running status exists");
+
+        assert!(running["params"]["value"]["enum"].is_object());
     }
 }

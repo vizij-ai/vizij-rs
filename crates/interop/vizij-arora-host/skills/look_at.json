@@ -1,6 +1,13 @@
 {
   "nodes": [
     {
+      "id": "const/0",
+      "type": "constant",
+      "params": {
+        "value": 0.0
+      }
+    },
+    {
       "id": "in/policy",
       "type": "input",
       "params": {
@@ -47,11 +54,133 @@
       }
     },
     {
+      "id": "gaze/idle/time",
+      "type": "time",
+      "params": {}
+    },
+    {
+      "id": "const/10",
+      "type": "constant",
+      "params": {
+        "value": 10.0
+      }
+    },
+    {
+      "id": "gaze/random/y/noise",
+      "type": "simplenoise",
+      "params": {
+        "noise_seed": 101.0,
+        "frequency": 0.45,
+        "octaves": 1.0
+      }
+    },
+    {
+      "id": "const/2.5",
+      "type": "constant",
+      "params": {
+        "value": 2.5
+      }
+    },
+    {
+      "id": "gaze/random/y",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "gaze/random/z/noise",
+      "type": "simplenoise",
+      "params": {
+        "noise_seed": 203.0,
+        "frequency": 0.32,
+        "octaves": 1.0
+      }
+    },
+    {
+      "id": "const/1.5",
+      "type": "constant",
+      "params": {
+        "value": 1.5
+      }
+    },
+    {
+      "id": "gaze/random/z",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "gaze/random/target",
+      "type": "join",
+      "params": {}
+    },
+    {
+      "id": "gaze/idle/y/noise",
+      "type": "simplenoise",
+      "params": {
+        "noise_seed": 17.0,
+        "frequency": 0.25,
+        "octaves": 1.0
+      }
+    },
+    {
+      "id": "const/2",
+      "type": "constant",
+      "params": {
+        "value": 2.0
+      }
+    },
+    {
+      "id": "gaze/idle/y/raw",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "gaze/idle/y/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 1.5
+      }
+    },
+    {
+      "id": "gaze/idle/z/noise",
+      "type": "simplenoise",
+      "params": {
+        "noise_seed": 31.0,
+        "frequency": 0.2,
+        "octaves": 1.0
+      }
+    },
+    {
+      "id": "const/1",
+      "type": "constant",
+      "params": {
+        "value": 1.0
+      }
+    },
+    {
+      "id": "gaze/idle/z/raw",
+      "type": "multiply",
+      "params": {}
+    },
+    {
+      "id": "gaze/idle/z/smooth",
+      "type": "damp",
+      "params": {
+        "half_life": 1.5
+      }
+    },
+    {
+      "id": "gaze/idle/target",
+      "type": "join",
+      "params": {}
+    },
+    {
       "id": "gaze/target",
       "type": "case",
       "params": {
         "case_labels": [
-          "reset"
+          "reset",
+          "idle",
+          "random"
         ]
       }
     },
@@ -67,7 +196,9 @@
       "type": "case",
       "params": {
         "case_labels": [
-          "reset"
+          "reset",
+          "idle",
+          "random"
         ]
       }
     },
@@ -88,13 +219,6 @@
       "type": "input",
       "params": {
         "path": "task/start",
-        "value": 0.0
-      }
-    },
-    {
-      "id": "const/0",
-      "type": "constant",
-      "params": {
         "value": 0.0
       }
     },
@@ -184,7 +308,9 @@
           "",
           "track",
           "glance",
-          "reset"
+          "reset",
+          "idle",
+          "random"
         ]
       }
     },
@@ -219,7 +345,9 @@
           "",
           "track",
           "glance",
-          "reset"
+          "reset",
+          "idle",
+          "random"
         ]
       }
     },
@@ -232,6 +360,222 @@
     }
   ],
   "edges": [
+    {
+      "from": {
+        "node_id": "gaze/idle/time"
+      },
+      "to": {
+        "node_id": "gaze/random/y/noise",
+        "input": "x"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "gaze/random/y/noise",
+        "input": "y"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/random/y/noise"
+      },
+      "to": {
+        "node_id": "gaze/random/y",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/2.5"
+      },
+      "to": {
+        "node_id": "gaze/random/y",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/idle/time"
+      },
+      "to": {
+        "node_id": "gaze/random/z/noise",
+        "input": "x"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "gaze/random/z/noise",
+        "input": "y"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/random/z/noise"
+      },
+      "to": {
+        "node_id": "gaze/random/z",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1.5"
+      },
+      "to": {
+        "node_id": "gaze/random/z",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/10"
+      },
+      "to": {
+        "node_id": "gaze/random/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/random/y"
+      },
+      "to": {
+        "node_id": "gaze/random/target",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/random/z"
+      },
+      "to": {
+        "node_id": "gaze/random/target",
+        "input": "operand_2"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/idle/time"
+      },
+      "to": {
+        "node_id": "gaze/idle/y/noise",
+        "input": "x"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "gaze/idle/y/noise",
+        "input": "y"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/idle/y/noise"
+      },
+      "to": {
+        "node_id": "gaze/idle/y/raw",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/2"
+      },
+      "to": {
+        "node_id": "gaze/idle/y/raw",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/idle/y/raw"
+      },
+      "to": {
+        "node_id": "gaze/idle/y/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/idle/time"
+      },
+      "to": {
+        "node_id": "gaze/idle/z/noise",
+        "input": "x"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "gaze/idle/z/noise",
+        "input": "y"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/idle/z/noise"
+      },
+      "to": {
+        "node_id": "gaze/idle/z/raw",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "gaze/idle/z/raw",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/idle/z/raw"
+      },
+      "to": {
+        "node_id": "gaze/idle/z/smooth",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/10"
+      },
+      "to": {
+        "node_id": "gaze/idle/target",
+        "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/idle/y/smooth"
+      },
+      "to": {
+        "node_id": "gaze/idle/target",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/idle/z/smooth"
+      },
+      "to": {
+        "node_id": "gaze/idle/target",
+        "input": "operand_2"
+      }
+    },
     {
       "from": {
         "node_id": "in/policy"
@@ -248,6 +592,24 @@
       "to": {
         "node_id": "gaze/target",
         "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/idle/target"
+      },
+      "to": {
+        "node_id": "gaze/target",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/random/target"
+      },
+      "to": {
+        "node_id": "gaze/target",
+        "input": "operand_2"
       }
     },
     {
@@ -284,6 +646,24 @@
       "to": {
         "node_id": "gaze/frame",
         "input": "operand_0"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/face_frame"
+      },
+      "to": {
+        "node_id": "gaze/frame",
+        "input": "operand_1"
+      }
+    },
+    {
+      "from": {
+        "node_id": "gaze/face_frame"
+      },
+      "to": {
+        "node_id": "gaze/frame",
+        "input": "operand_2"
       }
     },
     {
@@ -468,6 +848,24 @@
     },
     {
       "from": {
+        "node_id": "status/running"
+      },
+      "to": {
+        "node_id": "status",
+        "input": "operand_4"
+      }
+    },
+    {
+      "from": {
+        "node_id": "status/running"
+      },
+      "to": {
+        "node_id": "status",
+        "input": "operand_5"
+      }
+    },
+    {
+      "from": {
         "node_id": "status/failure"
       },
       "to": {
@@ -527,6 +925,24 @@
       "to": {
         "node_id": "errno",
         "input": "operand_3"
+      }
+    },
+    {
+      "from": {
+        "node_id": "errno/silent"
+      },
+      "to": {
+        "node_id": "errno",
+        "input": "operand_4"
+      }
+    },
+    {
+      "from": {
+        "node_id": "errno/silent"
+      },
+      "to": {
+        "node_id": "errno",
+        "input": "operand_5"
       }
     },
     {
