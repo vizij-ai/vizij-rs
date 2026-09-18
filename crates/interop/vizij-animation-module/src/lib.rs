@@ -1,8 +1,13 @@
-//! `vizij-animation-core` packaged as an Arora wasm module.
+//! `vizij-animation-core` packaged as an Arora module, wasm guest or host-linked.
 //!
-//! The animation [`Engine`] lives in a **guest global** (like `polly`): a wasm
-//! module's `Store`/`Memory` persist across `dispatch`, so the engine's state
-//! survives between calls — no engine state round-trips through the store.
+//! The module's state — the animation [`Engine`], the key-to-track index and
+//! the transport commands buffered for the next step — is an [`Animation`].
+//! The wasm guest owns one in a **guest global** (a wasm module's
+//! `Store`/`Memory` persist across `dispatch`, so the state survives between
+//! calls — no engine state round-trips through the store); the free
+//! functions the generated exports call are that global's. A host that links
+//! this crate builds one [`Animation`] per module instance instead, so two
+//! devices in one process never share an engine.
 //!
 //! Boundary types are declared in `module.yaml` and code-generated into
 //! [`arora_generated`] as typed `Value::Structure`s (ARORA-55): an
@@ -79,185 +84,192 @@ use vizij_animation_core::{
     LoopMode, PlayerCommand, PlayerId, Track as CoreTrack, Transitions, Vec2,
 };
 
-lazy_static::lazy_static! {
-    /// The animation engine — one long-lived instance per module instance.
-    static ref ENGINE: Mutex<Engine> = Mutex::new(Engine::new(Config::default()));
+/// One module instance's state: the engine, the key-to-track index and the
+/// transport commands waiting for the next step.
+pub struct Animation {
+    engine: Engine,
     /// Canonical output key (a track's `animatable_id`) -> the authored track id,
     /// so `step` can report per-track identity alongside the default key.
-    static ref KEY_TO_TRACK: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+    key_to_track: HashMap<String, String>,
     /// Player commands and instance updates issued since the previous step,
     /// drained (in issue order) into the next `step`'s engine update.
-    static ref PENDING: Mutex<Inputs> = Mutex::new(Inputs::default());
+    pending: Inputs,
 }
 
-/// Load a typed animation clip into the engine and return its `AnimId`.
-///
-/// The keyframe `value`s arrive as raw Arora `Value`s (vizij-arora encoding) and
-/// are converted back to Vizij values for the core model.
-pub fn load_animation(clip: Option<AnimationClip>) -> u32 {
-    let Some(clip) = clip else {
-        return u32::MAX;
-    };
-
-    let mut key_map = KEY_TO_TRACK.lock().expect("key map");
-    let tracks = clip
-        .tracks
-        .into_iter()
-        .map(|t| {
-            key_map.insert(t.animatable_id.clone(), t.id.clone());
-            CoreTrack {
-                id: t.id,
-                name: t.name,
-                animatable_id: t.animatable_id,
-                points: t.points.into_iter().map(to_core_keypoint).collect(),
-                settings: None,
-            }
-        })
-        .collect();
-    drop(key_map);
-
-    let data = AnimationData {
-        id: None,
-        name: clip.name,
-        tracks,
-        groups: Default::default(),
-        duration_ms: clip.duration,
-    };
-
-    ENGINE.lock().expect("engine").load_animation(data).0
+impl Default for Animation {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
-/// Create a player and return its `PlayerId`.
-pub fn create_player(name: Option<String>) -> u32 {
-    ENGINE
-        .lock()
-        .expect("engine")
-        .create_player(&name.unwrap_or_default())
-        .0
-}
+impl Animation {
+    /// An empty engine with the core's default configuration.
+    pub fn new() -> Self {
+        Self {
+            engine: Engine::new(Config::default()),
+            key_to_track: HashMap::new(),
+            pending: Inputs::default(),
+        }
+    }
 
-/// Attach an animation instance to a player and return its `InstId`.
-pub fn add_instance(player: Option<u32>, anim: Option<u32>) -> u32 {
-    let (Some(player), Some(anim)) = (player, anim) else {
-        return u32::MAX;
-    };
-    ENGINE
-        .lock()
-        .expect("engine")
-        .add_instance(PlayerId(player), AnimId(anim), InstanceCfg::default())
-        .0
-}
+    /// Load a typed animation clip into the engine and return its `AnimId`.
+    ///
+    /// The keyframe `value`s arrive as raw Arora `Value`s (vizij-arora encoding)
+    /// and are converted back to Vizij values for the core model.
+    pub fn load_animation(&mut self, clip: Option<AnimationClip>) -> u32 {
+        let Some(clip) = clip else {
+            return u32::MAX;
+        };
 
-/// Buffer a player command for the next `step`. Returns the echoed player id.
-fn buffer_command(player: u32, command: PlayerCommand) -> u32 {
-    PENDING
-        .lock()
-        .expect("pending inputs")
-        .player_cmds
-        .push(command);
-    player
-}
+        let tracks = clip
+            .tracks
+            .into_iter()
+            .map(|t| {
+                self.key_to_track
+                    .insert(t.animatable_id.clone(), t.id.clone());
+                CoreTrack {
+                    id: t.id,
+                    name: t.name,
+                    animatable_id: t.animatable_id,
+                    points: t.points.into_iter().map(to_core_keypoint).collect(),
+                    settings: None,
+                }
+            })
+            .collect();
 
-/// Resume or start playback. Applied at the next `step`.
-pub fn play(player: Option<u32>) -> u32 {
-    let Some(player) = player else {
-        return u32::MAX;
-    };
-    buffer_command(
-        player,
-        PlayerCommand::Play {
-            player: PlayerId(player),
-        },
-    )
-}
+        let data = AnimationData {
+            id: None,
+            name: clip.name,
+            tracks,
+            groups: Default::default(),
+            duration_ms: clip.duration,
+        };
 
-/// Hold the playhead where it is. Applied at the next `step`.
-pub fn pause(player: Option<u32>) -> u32 {
-    let Some(player) = player else {
-        return u32::MAX;
-    };
-    buffer_command(
-        player,
-        PlayerCommand::Pause {
-            player: PlayerId(player),
-        },
-    )
-}
+        self.engine.load_animation(data).0
+    }
 
-/// Stop playback and reset to the window start. Applied at the next `step`.
-pub fn stop(player: Option<u32>) -> u32 {
-    let Some(player) = player else {
-        return u32::MAX;
-    };
-    buffer_command(
-        player,
-        PlayerCommand::Stop {
-            player: PlayerId(player),
-        },
-    )
-}
+    /// Create a player and return its `PlayerId`.
+    pub fn create_player(&mut self, name: Option<String>) -> u32 {
+        self.engine.create_player(&name.unwrap_or_default()).0
+    }
 
-/// Move the playhead to `time_ns` (nanoseconds, the `dt_ns` time base).
-/// Applied at the next `step`.
-pub fn seek(player: Option<u32>, time_ns: Option<u64>) -> u32 {
-    let (Some(player), Some(time_ns)) = (player, time_ns) else {
-        return u32::MAX;
-    };
-    buffer_command(
-        player,
-        PlayerCommand::Seek {
-            player: PlayerId(player),
-            time: (time_ns as f64 / 1e9) as f32,
-        },
-    )
-}
+    /// Attach an animation instance to a player and return its `InstId`.
+    pub fn add_instance(&mut self, player: Option<u32>, anim: Option<u32>) -> u32 {
+        let (Some(player), Some(anim)) = (player, anim) else {
+            return u32::MAX;
+        };
+        self.engine
+            .add_instance(PlayerId(player), AnimId(anim), InstanceCfg::default())
+            .0
+    }
 
-/// Set the playback speed multiplier. Applied at the next `step`.
-pub fn set_speed(player: Option<u32>, speed: Option<f32>) -> u32 {
-    let (Some(player), Some(speed)) = (player, speed) else {
-        return u32::MAX;
-    };
-    buffer_command(
-        player,
-        PlayerCommand::SetSpeed {
-            player: PlayerId(player),
-            speed,
-        },
-    )
-}
+    /// Buffer a player command for the next `step`. Returns the echoed player id.
+    fn buffer_command(&mut self, player: u32, command: PlayerCommand) -> u32 {
+        self.pending.player_cmds.push(command);
+        player
+    }
 
-/// Set how player time maps into clip time: `"once"`, `"loop"`, or
-/// `"ping_pong"`. Applied at the next `step`.
-pub fn set_loop(player: Option<u32>, mode: Option<String>) -> u32 {
-    let (Some(player), Some(mode)) = (player, mode) else {
-        return u32::MAX;
-    };
-    let mode = match mode.as_str() {
-        "once" => LoopMode::Once,
-        "loop" => LoopMode::Loop,
-        "ping_pong" => LoopMode::PingPong,
-        _ => return u32::MAX,
-    };
-    buffer_command(
-        player,
-        PlayerCommand::SetLoopMode {
-            player: PlayerId(player),
-            mode,
-        },
-    )
-}
+    /// Resume or start playback. Applied at the next `step`.
+    pub fn play(&mut self, player: Option<u32>) -> u32 {
+        let Some(player) = player else {
+            return u32::MAX;
+        };
+        self.buffer_command(
+            player,
+            PlayerCommand::Play {
+                player: PlayerId(player),
+            },
+        )
+    }
 
-/// Set an instance's blend weight (weights normalize across a player's
-/// instances). Applied at the next `step`. Returns the echoed instance id.
-pub fn set_weight(player: Option<u32>, instance: Option<u32>, weight: Option<f32>) -> u32 {
-    let (Some(player), Some(instance), Some(weight)) = (player, instance, weight) else {
-        return u32::MAX;
-    };
-    PENDING
-        .lock()
-        .expect("pending inputs")
-        .instance_updates
-        .push(InstanceUpdate {
+    /// Hold the playhead where it is. Applied at the next `step`.
+    pub fn pause(&mut self, player: Option<u32>) -> u32 {
+        let Some(player) = player else {
+            return u32::MAX;
+        };
+        self.buffer_command(
+            player,
+            PlayerCommand::Pause {
+                player: PlayerId(player),
+            },
+        )
+    }
+
+    /// Stop playback and reset to the window start. Applied at the next `step`.
+    pub fn stop(&mut self, player: Option<u32>) -> u32 {
+        let Some(player) = player else {
+            return u32::MAX;
+        };
+        self.buffer_command(
+            player,
+            PlayerCommand::Stop {
+                player: PlayerId(player),
+            },
+        )
+    }
+
+    /// Move the playhead to `time_ns` (nanoseconds, the `dt_ns` time base).
+    /// Applied at the next `step`.
+    pub fn seek(&mut self, player: Option<u32>, time_ns: Option<u64>) -> u32 {
+        let (Some(player), Some(time_ns)) = (player, time_ns) else {
+            return u32::MAX;
+        };
+        self.buffer_command(
+            player,
+            PlayerCommand::Seek {
+                player: PlayerId(player),
+                time: (time_ns as f64 / 1e9) as f32,
+            },
+        )
+    }
+
+    /// Set the playback speed multiplier. Applied at the next `step`.
+    pub fn set_speed(&mut self, player: Option<u32>, speed: Option<f32>) -> u32 {
+        let (Some(player), Some(speed)) = (player, speed) else {
+            return u32::MAX;
+        };
+        self.buffer_command(
+            player,
+            PlayerCommand::SetSpeed {
+                player: PlayerId(player),
+                speed,
+            },
+        )
+    }
+
+    /// Set how player time maps into clip time: `"once"`, `"loop"`, or
+    /// `"ping_pong"`. Applied at the next `step`.
+    pub fn set_loop(&mut self, player: Option<u32>, mode: Option<String>) -> u32 {
+        let (Some(player), Some(mode)) = (player, mode) else {
+            return u32::MAX;
+        };
+        let mode = match mode.as_str() {
+            "once" => LoopMode::Once,
+            "loop" => LoopMode::Loop,
+            "ping_pong" => LoopMode::PingPong,
+            _ => return u32::MAX,
+        };
+        self.buffer_command(
+            player,
+            PlayerCommand::SetLoopMode {
+                player: PlayerId(player),
+                mode,
+            },
+        )
+    }
+
+    /// Set an instance's blend weight (weights normalize across a player's
+    /// instances). Applied at the next `step`. Returns the echoed instance id.
+    pub fn set_weight(
+        &mut self,
+        player: Option<u32>,
+        instance: Option<u32>,
+        weight: Option<f32>,
+    ) -> u32 {
+        let (Some(player), Some(instance), Some(weight)) = (player, instance, weight) else {
+            return u32::MAX;
+        };
+        self.pending.instance_updates.push(InstanceUpdate {
             player: PlayerId(player),
             inst: InstId(instance),
             weight: Some(weight),
@@ -265,41 +277,212 @@ pub fn set_weight(player: Option<u32>, instance: Option<u32>, weight: Option<f32
             start_offset: None,
             enabled: None,
         });
-    instance
+        instance
+    }
+
+    /// Detach an instance from its player, immediately (a structural edit, like
+    /// `add_instance`). Returns 1 when the instance existed, 0 otherwise.
+    pub fn remove_instance(&mut self, player: Option<u32>, instance: Option<u32>) -> u32 {
+        let (Some(player), Some(instance)) = (player, instance) else {
+            return u32::MAX;
+        };
+        self.engine
+            .remove_instance(PlayerId(player), InstId(instance)) as u32
+    }
+
+    /// One `PlayerState` per player: the engine's derived playback state, the
+    /// playhead and full length in nanoseconds (the `dt_ns` time base), and the
+    /// speed multiplier.
+    pub fn player_states(&self) -> Vec<PlayerState> {
+        self.engine
+            .list_players()
+            .into_iter()
+            .map(|info| PlayerState {
+                player: info.id,
+                state: match info.state {
+                    vizij_animation_core::engine::PlaybackState::Playing => "playing".to_string(),
+                    vizij_animation_core::engine::PlaybackState::Paused => "paused".to_string(),
+                    vizij_animation_core::engine::PlaybackState::Stopped => "stopped".to_string(),
+                },
+                time_ns: seconds_to_ns(info.time),
+                duration_ns: seconds_to_ns(info.length),
+                speed: info.speed,
+            })
+            .collect()
+    }
+
+    /// Bake animation `anim` to sampled per-track values over a fixed window
+    /// and return the result as a JSON string (`vizij-animation-core`'s
+    /// `export_baked_json` shape). `frame_rate` (Hz) defaults to 60,
+    /// `start_time` (seconds) to 0, and `end_time` (seconds) to the clip
+    /// duration. Returns an empty string if `anim` is not loaded.
+    pub fn bake(
+        &self,
+        anim: Option<u32>,
+        frame_rate: Option<f32>,
+        start_time: Option<f32>,
+        end_time: Option<f32>,
+    ) -> String {
+        let Some(anim) = anim else {
+            return String::new();
+        };
+        let cfg = baking_config(frame_rate, start_time, end_time);
+        match self.engine.bake_animation(AnimId(anim), &cfg) {
+            Some(baked) => export_baked_json(&baked).to_string(),
+            None => String::new(),
+        }
+    }
+
+    /// Like [`Animation::bake`], but also samples per-frame derivatives;
+    /// returns the combined values-and-derivatives JSON
+    /// (`export_baked_with_derivatives_json` shape). Returns an empty string
+    /// if `anim` is not loaded.
+    pub fn bake_with_derivatives(
+        &self,
+        anim: Option<u32>,
+        frame_rate: Option<f32>,
+        start_time: Option<f32>,
+        end_time: Option<f32>,
+    ) -> String {
+        let Some(anim) = anim else {
+            return String::new();
+        };
+        let cfg = baking_config(frame_rate, start_time, end_time);
+        match self
+            .engine
+            .bake_animation_with_derivatives(AnimId(anim), &cfg)
+        {
+            Some((baked, derivatives)) => {
+                export_baked_with_derivatives_json(&baked, &derivatives).to_string()
+            }
+            None => String::new(),
+        }
+    }
+
+    /// Advance the engine by `dt_ns` nanoseconds and return per-track outputs.
+    ///
+    /// `dt_ns` is the runtime's `arora/dt` built-in key. The transport commands
+    /// buffered since the previous step apply first, in issue order. Each
+    /// output carries the track's authored key as `default_key` and its stable
+    /// id as `track_id`; the value uses the vizij-arora `Value` encoding.
+    pub fn step(&mut self, dt_ns: Option<u64>) -> Vec<TrackOutput> {
+        let dt = dt_ns.unwrap_or(0) as f64 / 1e9;
+        let inputs = std::mem::take(&mut self.pending);
+        let outputs = self.engine.update(dt as f32, inputs);
+        outputs
+            .changes
+            .iter()
+            .map(|change| TrackOutput {
+                track_id: self
+                    .key_to_track
+                    .get(&change.key)
+                    .cloned()
+                    .unwrap_or_else(|| change.key.clone()),
+                default_key: change.key.clone(),
+                value: vizij_arora::to_arora(&change.value),
+            })
+            .collect()
+    }
 }
 
-/// Detach an instance from its player, immediately (a structural edit, like
-/// `add_instance`). Returns 1 when the instance existed, 0 otherwise.
+// The wasm guest's entry points: the generated exports call these free
+// functions, which act on the guest global. A host links the crate as an
+// rlib and builds its own [`Animation`] instead.
+
+lazy_static::lazy_static! {
+    /// The guest's module state — one per wasm instance.
+    static ref GUEST: Mutex<Animation> = Mutex::new(Animation::new());
+}
+
+/// Run `f` on the guest global.
+fn guest<T>(f: impl FnOnce(&mut Animation) -> T) -> T {
+    let mut guest = GUEST.lock().unwrap_or_else(|e| e.into_inner());
+    f(&mut guest)
+}
+
+/// [`Animation::load_animation`] on the guest global.
+pub fn load_animation(clip: Option<AnimationClip>) -> u32 {
+    guest(|a| a.load_animation(clip))
+}
+
+/// [`Animation::create_player`] on the guest global.
+pub fn create_player(name: Option<String>) -> u32 {
+    guest(|a| a.create_player(name))
+}
+
+/// [`Animation::add_instance`] on the guest global.
+pub fn add_instance(player: Option<u32>, anim: Option<u32>) -> u32 {
+    guest(|a| a.add_instance(player, anim))
+}
+
+/// [`Animation::play`] on the guest global.
+pub fn play(player: Option<u32>) -> u32 {
+    guest(|a| a.play(player))
+}
+
+/// [`Animation::pause`] on the guest global.
+pub fn pause(player: Option<u32>) -> u32 {
+    guest(|a| a.pause(player))
+}
+
+/// [`Animation::stop`] on the guest global.
+pub fn stop(player: Option<u32>) -> u32 {
+    guest(|a| a.stop(player))
+}
+
+/// [`Animation::seek`] on the guest global.
+pub fn seek(player: Option<u32>, time_ns: Option<u64>) -> u32 {
+    guest(|a| a.seek(player, time_ns))
+}
+
+/// [`Animation::set_speed`] on the guest global.
+pub fn set_speed(player: Option<u32>, speed: Option<f32>) -> u32 {
+    guest(|a| a.set_speed(player, speed))
+}
+
+/// [`Animation::set_loop`] on the guest global.
+pub fn set_loop(player: Option<u32>, mode: Option<String>) -> u32 {
+    guest(|a| a.set_loop(player, mode))
+}
+
+/// [`Animation::set_weight`] on the guest global.
+pub fn set_weight(player: Option<u32>, instance: Option<u32>, weight: Option<f32>) -> u32 {
+    guest(|a| a.set_weight(player, instance, weight))
+}
+
+/// [`Animation::remove_instance`] on the guest global.
 pub fn remove_instance(player: Option<u32>, instance: Option<u32>) -> u32 {
-    let (Some(player), Some(instance)) = (player, instance) else {
-        return u32::MAX;
-    };
-    ENGINE
-        .lock()
-        .expect("engine")
-        .remove_instance(PlayerId(player), InstId(instance)) as u32
+    guest(|a| a.remove_instance(player, instance))
 }
 
-/// One `PlayerState` per player: the engine's derived playback state, the
-/// playhead and full length in nanoseconds (the `dt_ns` time base), and the
-/// speed multiplier.
+/// [`Animation::player_states`] on the guest global.
 pub fn player_states() -> Vec<PlayerState> {
-    let engine = ENGINE.lock().expect("engine");
-    engine
-        .list_players()
-        .into_iter()
-        .map(|info| PlayerState {
-            player: info.id,
-            state: match info.state {
-                vizij_animation_core::engine::PlaybackState::Playing => "playing".to_string(),
-                vizij_animation_core::engine::PlaybackState::Paused => "paused".to_string(),
-                vizij_animation_core::engine::PlaybackState::Stopped => "stopped".to_string(),
-            },
-            time_ns: seconds_to_ns(info.time),
-            duration_ns: seconds_to_ns(info.length),
-            speed: info.speed,
-        })
-        .collect()
+    guest(|a| a.player_states())
+}
+
+/// [`Animation::bake`] on the guest global.
+pub fn bake(
+    anim: Option<u32>,
+    frame_rate: Option<f32>,
+    start_time: Option<f32>,
+    end_time: Option<f32>,
+) -> String {
+    guest(|a| a.bake(anim, frame_rate, start_time, end_time))
+}
+
+/// [`Animation::bake_with_derivatives`] on the guest global.
+pub fn bake_with_derivatives(
+    anim: Option<u32>,
+    frame_rate: Option<f32>,
+    start_time: Option<f32>,
+    end_time: Option<f32>,
+) -> String {
+    guest(|a| a.bake_with_derivatives(anim, frame_rate, start_time, end_time))
+}
+
+/// [`Animation::step`] on the guest global.
+pub fn step(dt_ns: Option<u64>) -> Vec<TrackOutput> {
+    guest(|a| a.step(dt_ns))
 }
 
 // baking ---------------------------------------------------------------------
@@ -319,84 +502,6 @@ fn baking_config(
         end_time: end_time.or(defaults.end_time),
         derivative_epsilon: defaults.derivative_epsilon,
     }
-}
-
-/// Bake animation `anim` to sampled per-track values over a fixed window and
-/// return the result as a JSON string (`vizij-animation-core`'s
-/// `export_baked_json` shape). `frame_rate` (Hz) defaults to 60, `start_time`
-/// (seconds) to 0, and `end_time` (seconds) to the clip duration. Returns an
-/// empty string if `anim` is not loaded.
-pub fn bake(
-    anim: Option<u32>,
-    frame_rate: Option<f32>,
-    start_time: Option<f32>,
-    end_time: Option<f32>,
-) -> String {
-    let Some(anim) = anim else {
-        return String::new();
-    };
-    let cfg = baking_config(frame_rate, start_time, end_time);
-    match ENGINE
-        .lock()
-        .expect("engine")
-        .bake_animation(AnimId(anim), &cfg)
-    {
-        Some(baked) => export_baked_json(&baked).to_string(),
-        None => String::new(),
-    }
-}
-
-/// Like [`bake`], but also samples per-frame derivatives; returns the combined
-/// values-and-derivatives JSON (`export_baked_with_derivatives_json` shape).
-/// Returns an empty string if `anim` is not loaded.
-pub fn bake_with_derivatives(
-    anim: Option<u32>,
-    frame_rate: Option<f32>,
-    start_time: Option<f32>,
-    end_time: Option<f32>,
-) -> String {
-    let Some(anim) = anim else {
-        return String::new();
-    };
-    let cfg = baking_config(frame_rate, start_time, end_time);
-    match ENGINE
-        .lock()
-        .expect("engine")
-        .bake_animation_with_derivatives(AnimId(anim), &cfg)
-    {
-        Some((baked, derivatives)) => {
-            export_baked_with_derivatives_json(&baked, &derivatives).to_string()
-        }
-        None => String::new(),
-    }
-}
-
-/// Advance the engine by `dt_ns` nanoseconds and return per-track outputs.
-///
-/// `dt_ns` is the runtime's `arora/dt` built-in key. The transport commands
-/// buffered since the previous step apply first, in issue order. Each output
-/// carries the track's authored key as `default_key` and its stable id as
-/// `track_id`; the value uses the vizij-arora `Value` encoding.
-pub fn step(dt_ns: Option<u64>) -> Vec<TrackOutput> {
-    let dt = dt_ns.unwrap_or(0) as f64 / 1e9;
-    let inputs = std::mem::take(&mut *PENDING.lock().expect("pending inputs"));
-
-    let mut engine = ENGINE.lock().expect("engine");
-    let outputs = engine.update(dt as f32, inputs);
-    let key_map = KEY_TO_TRACK.lock().expect("key map");
-
-    outputs
-        .changes
-        .iter()
-        .map(|change| TrackOutput {
-            track_id: key_map
-                .get(&change.key)
-                .cloned()
-                .unwrap_or_else(|| change.key.clone()),
-            default_key: change.key.clone(),
-            value: vizij_arora::to_arora(&change.value),
-        })
-        .collect()
 }
 
 fn seconds_to_ns(seconds: f32) -> u64 {
@@ -422,12 +527,11 @@ fn to_core_keypoint(kp: GenKeypoint) -> CoreKeypoint {
 
 #[cfg(test)]
 mod tests {
-    //! Exercises the module's exported functions directly (native), the way a
-    //! wasm host would — but bypassing the buffer ABI. This proves the
-    //! guest-global engine, the clip mapping, the transport buffering, and the
-    //! per-track output contract. The equivalent end-to-end path through a
-    //! real wasm engine lives in `tests/host_ramp.rs`; see its docs for the
-    //! upstream marshaling blocker.
+    //! Exercises the module's functions on an [`Animation`] of the test's own
+    //! (native), the way a host does — bypassing the buffer ABI. This proves
+    //! the clip mapping, the transport buffering, and the per-track output
+    //! contract. The equivalent end-to-end path through a real wasm engine
+    //! lives in `tests/host_ramp.rs`.
 
     use super::*;
     use arora_generated::vizij::{
@@ -435,18 +539,6 @@ mod tests {
         transition_handle::TransitionHandle,
     };
     use arora_types::value::Value as AValue;
-
-    lazy_static::lazy_static! {
-        /// The engine is a guest global shared by every test in this process;
-        /// tests run one at a time so a test's `step`s advance only the time
-        /// its own assertions account for. (Keys are per-test, so sequenced
-        /// tests cannot see each other's outputs.)
-        static ref SERIAL: Mutex<()> = Mutex::new(());
-    }
-
-    fn serial() -> std::sync::MutexGuard<'static, ()> {
-        SERIAL.lock().unwrap_or_else(|e| e.into_inner())
-    }
 
     /// Cubic-bezier handles on the segment thirds: identity easing, so the
     /// sampled value equals normalized time exactly.
@@ -521,8 +613,9 @@ mod tests {
             .map(|o| &o.value)
     }
 
-    fn state_of(player: u32) -> PlayerState {
-        player_states()
+    fn state_of(animation: &Animation, player: u32) -> PlayerState {
+        animation
+            .player_states()
             .into_iter()
             .find(|s| s.player == player)
             .expect("player state")
@@ -530,16 +623,16 @@ mod tests {
 
     #[test]
     fn ramp_advances_and_carries_the_authored_key() {
-        let _serial = serial();
-        let anim = load_animation(Some(ramp_clip("ease-ramp", "ease/x", false)));
-        let player = create_player(Some("p-ease".into()));
-        let inst = add_instance(Some(player), Some(anim));
+        let mut a = Animation::new();
+        let anim = a.load_animation(Some(ramp_clip("ease-ramp", "ease/x", false)));
+        let player = a.create_player(Some("p-ease".into()));
+        let inst = a.add_instance(Some(player), Some(anim));
         assert_ne!(inst, u32::MAX);
 
         // The clip eases (default S-curve), so it is antisymmetric about the
         // midpoint: at t = 0.5 s (half of the 1 s clip) the value is ~0.5, and it
         // advances monotonically toward it.
-        let first = step(Some(250_000_000)); // t = 0.25 s
+        let first = a.step(Some(250_000_000)); // t = 0.25 s
         let out = first
             .iter()
             .find(|o| o.default_key == "ease/x")
@@ -551,7 +644,7 @@ mod tests {
             "expected advance into (0, 0.5), got {v0}"
         );
 
-        let second = step(Some(250_000_000)); // t = 0.5 s
+        let second = a.step(Some(250_000_000)); // t = 0.5 s
         let v1 = as_f32(value_of(&second, "ease/x").expect("ease/x output"));
         assert!(v1 > v0, "expected monotonic advance, {v1} !> {v0}");
         assert!(
@@ -562,13 +655,13 @@ mod tests {
 
     #[test]
     fn transitions_ride_through_to_sampling() {
-        let _serial = serial();
+        let mut a = Animation::new();
         // Linear handles: value == normalized time, exactly.
-        let anim = load_animation(Some(ramp_clip("lin-ramp", "lin/x", true)));
-        let player = create_player(Some("p-lin".into()));
-        add_instance(Some(player), Some(anim));
+        let anim = a.load_animation(Some(ramp_clip("lin-ramp", "lin/x", true)));
+        let player = a.create_player(Some("p-lin".into()));
+        a.add_instance(Some(player), Some(anim));
 
-        let outputs = step(Some(250_000_000));
+        let outputs = a.step(Some(250_000_000));
         let v = as_f32(value_of(&outputs, "lin/x").expect("lin/x output"));
         assert!(
             (v - 0.25).abs() < 1e-3,
@@ -578,11 +671,11 @@ mod tests {
         // A slow-out handle holds the curve low early on: strictly below linear.
         let mut slow = ramp_clip("slow-ramp", "slow/x", false);
         slow.tracks[0].points[0].transitions_out = vec![TransitionHandle { x: 1.0, y: 0.0 }];
-        let anim = load_animation(Some(slow));
-        let player = create_player(Some("p-slow".into()));
-        add_instance(Some(player), Some(anim));
+        let anim = a.load_animation(Some(slow));
+        let player = a.create_player(Some("p-slow".into()));
+        a.add_instance(Some(player), Some(anim));
 
-        let outputs = step(Some(250_000_000));
+        let outputs = a.step(Some(250_000_000));
         let v_slow = as_f32(value_of(&outputs, "slow/x").expect("slow/x output"));
         assert!(
             v_slow < 0.25 - 1e-3,
@@ -592,23 +685,23 @@ mod tests {
 
     #[test]
     fn transport_commands_apply_at_the_next_step() {
-        let _serial = serial();
-        let anim = load_animation(Some(ramp_clip("tr-ramp", "tr/x", true)));
-        let player = create_player(Some("p-transport".into()));
-        add_instance(Some(player), Some(anim));
+        let mut a = Animation::new();
+        let anim = a.load_animation(Some(ramp_clip("tr-ramp", "tr/x", true)));
+        let player = a.create_player(Some("p-transport".into()));
+        a.add_instance(Some(player), Some(anim));
 
         // Advance to 0.25 s.
-        let outputs = step(Some(250_000_000));
+        let outputs = a.step(Some(250_000_000));
         assert!((as_f32(value_of(&outputs, "tr/x").unwrap()) - 0.25).abs() < 1e-3);
-        let s = state_of(player);
+        let s = state_of(&a, player);
         assert_eq!(s.state, "playing");
         assert_eq!(s.duration_ns, 1_000_000_000, "1 s clip length");
         assert!((s.time_ns as f64 - 0.25e9).abs() < 2e6, "playhead ~0.25 s");
 
         // pause: the playhead holds through further steps.
-        assert_eq!(pause(Some(player)), player);
-        step(Some(250_000_000));
-        let s = state_of(player);
+        assert_eq!(a.pause(Some(player)), player);
+        a.step(Some(250_000_000));
+        let s = state_of(&a, player);
         assert_eq!(s.state, "paused");
         assert!(
             (s.time_ns as f64 - 0.25e9).abs() < 2e6,
@@ -616,44 +709,44 @@ mod tests {
         );
 
         // play resumes from where it held.
-        assert_eq!(play(Some(player)), player);
-        let outputs = step(Some(250_000_000));
+        assert_eq!(a.play(Some(player)), player);
+        let outputs = a.step(Some(250_000_000));
         assert!((as_f32(value_of(&outputs, "tr/x").unwrap()) - 0.5).abs() < 1e-3);
 
         // seek lands exactly (u64 nanoseconds in).
-        assert_eq!(seek(Some(player), Some(100_000_000)), player);
-        let outputs = step(Some(0));
+        assert_eq!(a.seek(Some(player), Some(100_000_000)), player);
+        let outputs = a.step(Some(0));
         assert!((as_f32(value_of(&outputs, "tr/x").unwrap()) - 0.1).abs() < 1e-3);
 
         // set_speed scales dt: 0.2 s of wall clock at 2x advances 0.4 s.
-        assert_eq!(set_speed(Some(player), Some(2.0)), player);
-        let outputs = step(Some(200_000_000));
+        assert_eq!(a.set_speed(Some(player), Some(2.0)), player);
+        let outputs = a.step(Some(200_000_000));
         assert!((as_f32(value_of(&outputs, "tr/x").unwrap()) - 0.5).abs() < 1e-3);
 
         // stop resets to the window start.
-        assert_eq!(stop(Some(player)), player);
-        step(Some(0));
-        let s = state_of(player);
+        assert_eq!(a.stop(Some(player)), player);
+        a.step(Some(0));
+        let s = state_of(&a, player);
         assert_eq!(s.state, "stopped");
         assert_eq!(s.time_ns, 0);
     }
 
     #[test]
     fn loop_once_clamps_at_the_clip_end() {
-        let _serial = serial();
-        let anim = load_animation(Some(ramp_clip("once-ramp", "once/x", true)));
-        let player = create_player(Some("p-once".into()));
-        add_instance(Some(player), Some(anim));
+        let mut a = Animation::new();
+        let anim = a.load_animation(Some(ramp_clip("once-ramp", "once/x", true)));
+        let player = a.create_player(Some("p-once".into()));
+        a.add_instance(Some(player), Some(anim));
 
-        assert_eq!(set_loop(Some(player), Some("once".into())), player);
-        assert_eq!(seek(Some(player), Some(900_000_000)), player);
-        step(Some(0));
-        step(Some(300_000_000)); // 0.9 s + 0.3 s, clamped to the 1 s end
-        let s = state_of(player);
+        assert_eq!(a.set_loop(Some(player), Some("once".into())), player);
+        assert_eq!(a.seek(Some(player), Some(900_000_000)), player);
+        a.step(Some(0));
+        a.step(Some(300_000_000)); // 0.9 s + 0.3 s, clamped to the 1 s end
+        let s = state_of(&a, player);
         assert_eq!(s.time_ns, 1_000_000_000, "Once clamps at the clip end");
 
         assert_eq!(
-            set_loop(Some(player), Some("sideways".into())),
+            a.set_loop(Some(player), Some("sideways".into())),
             u32::MAX,
             "unknown loop modes are rejected"
         );
@@ -661,34 +754,34 @@ mod tests {
 
     #[test]
     fn weights_skew_the_blend_and_removal_silences_the_key() {
-        let _serial = serial();
-        let zero = load_animation(Some(constant_clip("mix-zero", "mix/x", 0.0)));
-        let one = load_animation(Some(constant_clip("mix-one", "mix/x", 1.0)));
-        let player = create_player(Some("p-mix".into()));
-        let inst_zero = add_instance(Some(player), Some(zero));
-        let inst_one = add_instance(Some(player), Some(one));
+        let mut a = Animation::new();
+        let zero = a.load_animation(Some(constant_clip("mix-zero", "mix/x", 0.0)));
+        let one = a.load_animation(Some(constant_clip("mix-one", "mix/x", 1.0)));
+        let player = a.create_player(Some("p-mix".into()));
+        let inst_zero = a.add_instance(Some(player), Some(zero));
+        let inst_one = a.add_instance(Some(player), Some(one));
 
         // Equal weights: the normalized blend of 0 and 1.
-        let outputs = step(Some(100_000_000));
+        let outputs = a.step(Some(100_000_000));
         assert!((as_f32(value_of(&outputs, "mix/x").unwrap()) - 0.5).abs() < 1e-3);
 
         // Silencing the zero-instance leaves only the one-instance.
         assert_eq!(
-            set_weight(Some(player), Some(inst_zero), Some(0.0)),
+            a.set_weight(Some(player), Some(inst_zero), Some(0.0)),
             inst_zero
         );
-        let outputs = step(Some(100_000_000));
+        let outputs = a.step(Some(100_000_000));
         assert!((as_f32(value_of(&outputs, "mix/x").unwrap()) - 1.0).abs() < 1e-3);
 
         // Removing both instances stops the key from being emitted at all.
-        assert_eq!(remove_instance(Some(player), Some(inst_zero)), 1);
-        assert_eq!(remove_instance(Some(player), Some(inst_one)), 1);
+        assert_eq!(a.remove_instance(Some(player), Some(inst_zero)), 1);
+        assert_eq!(a.remove_instance(Some(player), Some(inst_one)), 1);
         assert_eq!(
-            remove_instance(Some(player), Some(inst_one)),
+            a.remove_instance(Some(player), Some(inst_one)),
             0,
             "already gone"
         );
-        let outputs = step(Some(100_000_000));
+        let outputs = a.step(Some(100_000_000));
         assert!(
             value_of(&outputs, "mix/x").is_none(),
             "no instances, no output for the key"
@@ -697,12 +790,12 @@ mod tests {
 
     #[test]
     fn bake_exports_sampled_tracks_as_json() {
-        let _serial = serial();
-        let anim = load_animation(Some(constant_clip("bake-me", "joint/x", 0.5)));
+        let mut a = Animation::new();
+        let anim = a.load_animation(Some(constant_clip("bake-me", "joint/x", 0.5)));
 
         // A loaded clip bakes to a JSON object echoing the requested frame rate
         // and carrying at least one track of sampled values.
-        let json = bake(Some(anim), Some(30.0), None, None);
+        let json = a.bake(Some(anim), Some(30.0), None, None);
         let parsed: serde_json::Value = serde_json::from_str(&json).expect("baked JSON parses");
         assert_eq!(parsed["frame_rate"].as_f64(), Some(30.0));
         let tracks = parsed["tracks"].as_array().expect("tracks array");
@@ -719,12 +812,43 @@ mod tests {
         );
 
         // The derivatives variant wraps values + derivatives.
-        let deriv = bake_with_derivatives(Some(anim), Some(30.0), None, None);
+        let deriv = a.bake_with_derivatives(Some(anim), Some(30.0), None, None);
         let dparsed: serde_json::Value =
             serde_json::from_str(&deriv).expect("derivative JSON parses");
         assert!(dparsed.get("values").is_some() && dparsed.get("derivatives").is_some());
 
         // An unloaded animation bakes to an empty string.
-        assert!(bake(Some(u32::MAX), None, None, None).is_empty());
+        assert!(a.bake(Some(u32::MAX), None, None, None).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod instances {
+    //! Two module instances in one process are two engines.
+    use super::*;
+
+    #[test]
+    fn instances_do_not_share_players() {
+        let mut first = Animation::new();
+        let mut second = Animation::new();
+        let player = first.create_player(Some("only-in-first".into()));
+        assert_eq!(first.player_states().len(), 1);
+        assert!(second.player_states().is_empty());
+        // A command addressed to the other instance's player, and a step of
+        // that instance, leave the first one untouched.
+        assert_eq!(second.pause(Some(player)), player);
+        assert!(second.step(Some(250_000_000)).is_empty());
+        assert!(second.player_states().is_empty());
+        let state = state_of(&first, player);
+        assert_eq!(state.state, "playing");
+        assert_eq!(state.time_ns, 0);
+    }
+
+    fn state_of(animation: &Animation, player: u32) -> PlayerState {
+        animation
+            .player_states()
+            .into_iter()
+            .find(|s| s.player == player)
+            .expect("player state")
     }
 }

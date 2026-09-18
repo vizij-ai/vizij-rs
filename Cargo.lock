@@ -11311,7 +11311,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-tts"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "arora-engine 4.1.0",
  "arora-types",
@@ -11369,7 +11369,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-graph-core"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "anyhow",
  "arora-behavior",

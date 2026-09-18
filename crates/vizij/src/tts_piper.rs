@@ -20,18 +20,18 @@ use std::hash::{Hash, Hasher};
 use std::pin::Pin;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::task::{Context, Poll, Waker};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use arora::{HostModule, ModuleBuilder};
 use arora_types::call::{Call, CallError, CallResult};
 use arora_types::value::{StructureField, Value};
 use uuid::{uuid, Uuid};
 use vizij_graph_core::task;
-use vizij_piper::{PhonemeEvent, Synthesizer};
+use vizij_piper::Synthesizer;
 
 use vizij_arora_tts::{
-    say_signature, SAY_ID, SAY_TEXT_PARAM_ID, SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID,
-    SILENCE_VISEME,
+    follow, is_halted, say_signature, Cue, Playback, Pulse, SAY_ID, SAY_TEXT_PARAM_ID,
+    SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID, SILENCE_VISEME,
 };
 
 /// The Piper tts module's id on the device — distinct from the cloud module so
@@ -63,9 +63,11 @@ static RUNS: LazyLock<Mutex<HashMap<u64, Run>>> = LazyLock::new(|| Mutex::new(Ha
 struct Run {
     /// The synthesis+playback task; its output is the terminal status `Value`.
     handle: tokio::task::JoinHandle<Value>,
-    /// The phoneme at the audio playhead, advanced by the task and sampled by
+    /// The shape at the audio playhead, advanced by the task and sampled by
     /// the closure each tick.
-    viseme: Arc<Mutex<String>>,
+    viseme: Arc<Mutex<&'static str>>,
+    /// The instant of the last `say` tick; the producer stops on a quiet one.
+    pulse: Pulse,
 }
 
 /// The Piper tts module: the described `say` action — the same signature the
@@ -100,20 +102,19 @@ pub(crate) fn say(call: Call) -> Result<CallResult, CallError> {
     // First tick: spawn synthesis + playback off the tick thread. Later ticks
     // find the run and fall through to the poll.
     let run = runs.entry(key).or_insert_with(|| spawn_say(text));
+    if let Ok(mut last) = run.pulse.lock() {
+        *last = Instant::now();
+    }
 
-    // The phoneme at the playhead, advanced by the playback task.
-    let current = run
-        .viseme
-        .lock()
-        .map(|cur| cur.clone())
-        .unwrap_or_else(|_| SILENCE_VISEME.to_string());
+    // The shape at the playhead, advanced by the playback task.
+    let current = run.viseme.lock().map(|cur| *cur).unwrap_or(SILENCE_VISEME);
 
     // Poll the run's `JoinHandle` (a `Future`) once — the tick loop is the
     // executor, a no-op waker suffices, and a terminal result drops the run so
     // the completed handle is never polled again.
     let mut cx = Context::from_waker(Waker::noop());
     match Future::poll(Pin::new(&mut run.handle), &mut cx) {
-        Poll::Pending => Ok(with_viseme(task::running(), &current)),
+        Poll::Pending => Ok(with_viseme(task::running(), current)),
         Poll::Ready(Ok(status)) => {
             runs.remove(&key);
             Ok(with_viseme(status, SILENCE_VISEME))
@@ -129,8 +130,10 @@ pub(crate) fn say(call: Call) -> Result<CallResult, CallError> {
 /// and return the run. The playback loop advances the shared phoneme cell at
 /// the playhead; the tick only samples the cell and polls the handle.
 fn spawn_say(text: String) -> Run {
-    let viseme = Arc::new(Mutex::new(SILENCE_VISEME.to_string()));
+    let viseme = Arc::new(Mutex::new(SILENCE_VISEME));
     let viseme_task = viseme.clone();
+    let pulse: Pulse = Arc::new(Mutex::new(Instant::now()));
+    let pulse_task = pulse.clone();
     let handle = TOKIO_HANDLE.spawn(async move {
         // Synthesize off the async workers: model inference is CPU-bound.
         let synthesis = tokio::task::spawn_blocking(move || {
@@ -160,20 +163,32 @@ fn spawn_say(text: String) -> Run {
             Some(s) => s,
             None => return task::failure(),
         };
+        // A halt during synthesis shows as a quiet pulse: nothing to play.
+        if is_halted(&pulse_task) {
+            return task::failure();
+        }
 
         // Playback blocks and rodio's stream is thread-bound, so it runs on
         // the blocking pool; this task just awaits the outcome.
-        match tokio::task::spawn_blocking(move || play(synthesis, viseme_task)).await {
+        match tokio::task::spawn_blocking(move || play(synthesis, viseme_task, pulse_task)).await {
             Ok(status) => status,
             Err(_join_error) => task::failure(),
         }
     });
-    Run { handle, viseme }
+    Run {
+        handle,
+        viseme,
+        pulse,
+    }
 }
 
-/// Play the synthesized PCM whole, advancing the shared phoneme cell at the
-/// playhead.
-fn play(synthesis: vizij_piper::Synthesis, viseme: Arc<Mutex<String>>) -> Value {
+/// Play the synthesized PCM whole, advancing the shared shape cell at the
+/// sink's own playhead; a quiet pulse stops the sink.
+fn play(
+    synthesis: vizij_piper::Synthesis,
+    viseme: Arc<Mutex<&'static str>>,
+    pulse: Pulse,
+) -> Value {
     let (_stream, handle) = match rodio::OutputStream::try_default() {
         Ok(pair) => pair,
         Err(e) => {
@@ -189,25 +204,26 @@ fn play(synthesis: vizij_piper::Synthesis, viseme: Arc<Mutex<String>>) -> Value 
         }
     };
     let rate = synthesis.sample_rate;
-    let events = synthesis.events;
+    let cues: Vec<Cue> = synthesis
+        .events
+        .iter()
+        .map(|event| Cue {
+            time_ms: event.start_samples as u64 * 1000 / rate as u64,
+            shape: phoneme_shape(&event.phoneme),
+        })
+        .collect();
     let source = rodio::buffer::SamplesBuffer::new(1, rate, synthesis.samples);
-    let start = Instant::now();
     sink.append(source);
-    let mut next = 0usize;
-    while !sink.empty() {
-        let elapsed_samples = start.elapsed().as_millis() as u64 * rate as u64 / 1000;
-        while next < events.len() && (events[next].start_samples as u64) <= elapsed_samples {
-            if let Ok(mut cur) = viseme.lock() {
-                *cur = cursor_token(&events[next]);
-            }
-            next += 1;
+    let outcome = follow(&cues, &viseme, &pulse, || {
+        (!sink.empty()).then(|| sink.get_pos())
+    });
+    match outcome {
+        Playback::Ended => task::success(),
+        Playback::Halted => {
+            sink.stop();
+            task::failure()
         }
-        std::thread::sleep(Duration::from_millis(15));
     }
-    if let Ok(mut cur) = viseme.lock() {
-        *cur = SILENCE_VISEME.to_string();
-    }
-    task::success()
 }
 
 /// Drop the loaded voice (running `piper_free`), so a host that is about to
@@ -219,12 +235,6 @@ pub(crate) fn shutdown() {
     if let Ok(mut guard) = SYNTH.lock() {
         guard.take();
     }
-}
-
-/// The out-param token for an event: the phoneme's shape; markers, stress
-/// and punctuation pseudo-phonemes are the rest token.
-fn cursor_token(event: &PhonemeEvent) -> String {
-    phoneme_shape(&event.phoneme).to_string()
 }
 
 /// The face-standard shape for an espeak-ng phoneme (IPA symbols, possibly

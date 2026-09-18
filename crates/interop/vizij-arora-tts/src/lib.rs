@@ -18,6 +18,12 @@
 //! mapped by [`polly_shape`]; [`SILENCE_VISEME`] is written at rest. What a
 //! shape looks like, and how one blends into the next, is the face's and the
 //! speech skill's business, not the provider's.
+//!
+//! A halt is silence: the interpreter stops re-invoking `say`, and nothing
+//! in the module ABI tells the producer so. Every tick refreshes the run's
+//! pulse, and a producer that sees no tick for [`IDLE_STOP`] stops the audio
+//! and ends the run — the same rule for every producer, so that a halted
+//! run goes quiet within that bound whatever plays the audio.
 
 use arora_engine::module::{HostModule, ModuleBuilder};
 
@@ -101,7 +107,10 @@ struct Run {
     handle: tokio::task::JoinHandle<Value>,
     /// The viseme code at the audio playhead, advanced by the task and sampled by
     /// the closure each tick.
-    viseme: Arc<Mutex<String>>,
+    viseme: Arc<Mutex<&'static str>>,
+    /// The instant of the last `say` tick — the producer's only sign that the
+    /// run is still wanted.
+    pulse: Pulse,
 }
 
 /// The request body both TTS endpoints take.
@@ -151,20 +160,19 @@ pub fn say(call: Call) -> Result<CallResult, CallError> {
     // First tick: spawn synthesis + playback off the tick thread. Later ticks
     // find the run and fall through to the poll.
     let run = runs.entry(key).or_insert_with(|| spawn_say(text, voice));
+    if let Ok(mut last) = run.pulse.lock() {
+        *last = Instant::now();
+    }
 
     // The viseme at the playhead, advanced by the playback task.
-    let current = run
-        .viseme
-        .lock()
-        .map(|cur| cur.clone())
-        .unwrap_or_else(|_| SILENCE_VISEME.to_string());
+    let current = run.viseme.lock().map(|cur| *cur).unwrap_or(SILENCE_VISEME);
 
     // Poll the run's `JoinHandle` (a `Future`) once — the tick loop is the
     // executor, a no-op waker suffices, and a terminal result drops the run so
     // the completed handle is never polled again.
     let mut cx = Context::from_waker(Waker::noop());
     match Future::poll(Pin::new(&mut run.handle), &mut cx) {
-        Poll::Pending => Ok(with_viseme(task::running(), &current)),
+        Poll::Pending => Ok(with_viseme(task::running(), current)),
         Poll::Ready(Ok(status)) => {
             runs.remove(&key);
             Ok(with_viseme(status, SILENCE_VISEME))
@@ -181,8 +189,10 @@ pub fn say(call: Call) -> Result<CallResult, CallError> {
 /// shared viseme cell at the playhead. The heavy work never runs on the tick
 /// thread; `say` only samples the cell and polls the handle.
 fn spawn_say(text: String, voice: String) -> Run {
-    let viseme = Arc::new(Mutex::new(SILENCE_VISEME.to_string()));
+    let viseme = Arc::new(Mutex::new(SILENCE_VISEME));
     let viseme_task = viseme.clone();
+    let pulse: Pulse = Arc::new(Mutex::new(Instant::now()));
+    let pulse_task = pulse.clone();
     let handle = TOKIO_HANDLE.spawn(async move {
         let base = std::env::var("API_URL").unwrap_or_else(|_| DEFAULT_API_BASE.to_string());
         let (audio, marks) = match synthesize(&base, &voice, &text).await {
@@ -194,16 +204,32 @@ fn spawn_say(text: String, voice: String) -> Run {
         };
         // Playback blocks and rodio's stream is thread-bound, so it runs on
         // the blocking pool; this task just awaits the outcome.
-        match tokio::task::spawn_blocking(move || play(audio, marks, viseme_task)).await {
+        // A halt during synthesis shows as a quiet pulse: nothing to stop yet,
+        // but nothing to play either.
+        if is_halted(&pulse_task) {
+            return task::failure();
+        }
+        match tokio::task::spawn_blocking(move || play(audio, marks, viseme_task, pulse_task)).await
+        {
             Ok(status) => status,
             Err(_join_error) => task::failure(),
         }
     });
-    Run { handle, viseme }
+    Run {
+        handle,
+        viseme,
+        pulse,
+    }
 }
 
-/// Play the mp3 whole, advancing the shared viseme cell at the playhead.
-fn play(audio: Vec<u8>, marks: Vec<SpeechMark>, viseme: Arc<Mutex<String>>) -> Value {
+/// Play the mp3 whole, advancing the shared viseme cell at the sink's own
+/// playhead; a quiet pulse stops the sink.
+fn play(
+    audio: Vec<u8>,
+    marks: Vec<SpeechMark>,
+    viseme: Arc<Mutex<&'static str>>,
+    pulse: Pulse,
+) -> Value {
     let (_stream, handle) = match rodio::OutputStream::try_default() {
         Ok(pair) => pair,
         Err(e) => {
@@ -225,23 +251,24 @@ fn play(audio: Vec<u8>, marks: Vec<SpeechMark>, viseme: Arc<Mutex<String>>) -> V
             return task::failure();
         }
     };
-    let start = Instant::now();
     sink.append(source);
-    let mut next = 0usize;
-    while !sink.empty() {
-        let elapsed = start.elapsed().as_millis() as u64;
-        while next < marks.len() && marks[next].time <= elapsed {
-            if let Ok(mut cur) = viseme.lock() {
-                *cur = polly_shape(&marks[next].value).to_string();
-            }
-            next += 1;
+    let cues: Vec<Cue> = marks
+        .iter()
+        .map(|mark| Cue {
+            time_ms: mark.time,
+            shape: polly_shape(&mark.value),
+        })
+        .collect();
+    let outcome = follow(&cues, &viseme, &pulse, || {
+        (!sink.empty()).then(|| sink.get_pos())
+    });
+    match outcome {
+        Playback::Ended => task::success(),
+        Playback::Halted => {
+            sink.stop();
+            task::failure()
         }
-        std::thread::sleep(Duration::from_millis(15));
     }
-    if let Ok(mut cur) = viseme.lock() {
-        *cur = SILENCE_VISEME.to_string();
-    }
-    task::success()
 }
 
 /// Fetch audio (mp3) + the viseme timeline from the TTS provider — the same two
@@ -278,6 +305,86 @@ async fn synthesize(
         .map_err(|e| format!("get-visemes decode: {e}"))?
         .visemes;
     Ok((audio, marks))
+}
+
+/// A shape change on the audio timeline, in milliseconds from its start.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Cue {
+    pub time_ms: u64,
+    pub shape: &'static str,
+}
+
+/// How long a producer keeps playing without a `say` tick before it treats
+/// the run as halted and stops the audio.
+pub const IDLE_STOP: Duration = Duration::from_millis(250);
+
+/// The last instant a run was ticked, shared between the tick and the
+/// producer: the producer's only sign that the run is still wanted, because
+/// a halt is the interpreter ceasing to re-invoke `say`.
+pub type Pulse = Arc<Mutex<Instant>>;
+
+/// Whether a pulse has gone quiet for longer than [`IDLE_STOP`].
+pub fn is_halted(pulse: &Pulse) -> bool {
+    pulse
+        .lock()
+        .map(|last| last.elapsed() > IDLE_STOP)
+        .unwrap_or(true)
+}
+
+/// How a followed playback ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Playback {
+    /// The audio ran out.
+    Ended,
+    /// The pulse went quiet while audio was still queued; the caller stops it.
+    Halted,
+}
+
+/// Drive the viseme cell from a playhead until the audio ends (`None`) or the
+/// pulse goes quiet, sampling every 15 ms; the cell is at rest on return.
+/// Every native provider plays through this loop, so the halt bound is the
+/// same whatever synthesizes the audio.
+pub fn follow(
+    cues: &[Cue],
+    viseme: &Mutex<&'static str>,
+    pulse: &Pulse,
+    mut playhead: impl FnMut() -> Option<Duration>,
+) -> Playback {
+    let mut next = 0usize;
+    let mut current = SILENCE_VISEME;
+    let outcome = loop {
+        if is_halted(pulse) {
+            break Playback::Halted;
+        }
+        let Some(position) = playhead() else {
+            break Playback::Ended;
+        };
+        current = shape_at(cues, &mut next, position.as_millis() as u64, current);
+        if let Ok(mut cell) = viseme.lock() {
+            *cell = current;
+        }
+        std::thread::sleep(Duration::from_millis(15));
+    };
+    if let Ok(mut cell) = viseme.lock() {
+        *cell = SILENCE_VISEME;
+    }
+    outcome
+}
+
+/// The shape at `playhead_ms`: every cue at or before the playhead is
+/// consumed, and the last one consumed is the current shape.
+pub fn shape_at(
+    cues: &[Cue],
+    next: &mut usize,
+    playhead_ms: u64,
+    current: &'static str,
+) -> &'static str {
+    let mut shape = current;
+    while *next < cues.len() && cues[*next].time_ms <= playhead_ms {
+        shape = cues[*next].shape;
+        *next += 1;
+    }
+    shape
 }
 
 /// A result carrying only the status (no viseme output).
@@ -319,4 +426,60 @@ fn utterance_key(text: &str, voice: &str) -> u64 {
     text.hash(&mut h);
     voice.hash(&mut h);
     h.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cue(time_ms: u64, shape: &'static str) -> Cue {
+        Cue { time_ms, shape }
+    }
+
+    #[test]
+    fn the_shape_follows_the_playhead_through_the_cues() {
+        let cues = vec![cue(0, "PP"), cue(100, "aa"), cue(200, "sil")];
+        let mut next = 0;
+        assert_eq!(shape_at(&cues, &mut next, 0, SILENCE_VISEME), "PP");
+        assert_eq!(shape_at(&cues, &mut next, 50, "PP"), "PP");
+        assert_eq!(shape_at(&cues, &mut next, 150, "PP"), "aa");
+        // A playhead that jumps consumes every passed cue; the last wins.
+        assert_eq!(shape_at(&cues, &mut next, 900, "aa"), "sil");
+        assert_eq!(next, 3);
+    }
+
+    /// A run nobody ticks any more is a halted run: the producer stops within
+    /// `IDLE_STOP` of the last tick and leaves the lips at rest, however long
+    /// the audio still had to play.
+    #[test]
+    fn a_run_without_ticks_goes_silent_within_the_idle_bound() {
+        let cues = vec![cue(0, "aa")];
+        let viseme = Mutex::new(SILENCE_VISEME);
+        let last_tick = Instant::now();
+        let pulse: Pulse = Arc::new(Mutex::new(last_tick));
+        let started = Instant::now();
+        // An endless playhead: the audio never runs out on its own.
+        let outcome = follow(&cues, &viseme, &pulse, || Some(started.elapsed()));
+        assert_eq!(outcome, Playback::Halted);
+        assert!(last_tick.elapsed() < IDLE_STOP + Duration::from_millis(100));
+        assert_eq!(*viseme.lock().unwrap(), SILENCE_VISEME);
+    }
+
+    /// Ticks keep a run alive past the idle bound, and the run ends with the
+    /// audio.
+    #[test]
+    fn a_ticked_run_plays_to_the_end() {
+        let cues = vec![cue(0, "aa"), cue(300, "sil")];
+        let viseme = Mutex::new(SILENCE_VISEME);
+        let pulse: Pulse = Arc::new(Mutex::new(Instant::now()));
+        let started = Instant::now();
+        let audio = Duration::from_millis(400);
+        let outcome = follow(&cues, &viseme, &pulse, || {
+            *pulse.lock().unwrap() = Instant::now();
+            let position = started.elapsed();
+            (position < audio).then_some(position)
+        });
+        assert_eq!(outcome, Playback::Ended);
+        assert!(started.elapsed() >= audio);
+    }
 }

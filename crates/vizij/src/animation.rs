@@ -6,80 +6,95 @@
 //! with [`AroraBuilder::with_host_module`](arora::AroraBuilder::with_host_module).
 //! Each closure marshals the `Call` at the `Value` boundary using the module
 //! crate's own generated conversions (`TryFrom<Value>` in, `Into<Value>` out)
-//! and calls its native functions, which run the same `vizij-animation-core`
-//! engine the wasm module wraps. A graph `ExternalFunction` node then dispatches
-//! `step`/`player_states` to these exactly as it would to the loaded wasm guest.
+//! and calls the module's [`Animation`], which runs the same
+//! `vizij-animation-core` engine the wasm module wraps. A graph
+//! `ExternalFunction` node then dispatches `step`/`player_states` to these
+//! exactly as it would to the loaded wasm guest. Each host module owns its
+//! own engine, so two devices in one process never share players.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use arora::{HostModule, ModuleBuilder};
 use arora_types::call::{Call, CallError, CallResult};
 use arora_types::value::{StructureWithoutId, Value};
 use uuid::Uuid;
-use vizij_animation_module::{ids, AnimationClip, PlayerState, TrackOutput};
+use vizij_animation_module::{ids, Animation, AnimationClip, PlayerState, TrackOutput};
 
-/// The animation module as a host module: its functions dispatch in-process,
-/// under the same ids the wasm module exports.
+/// The animation module as a host module over an engine of its own: its
+/// functions dispatch in-process, under the same ids the wasm module exports.
 pub fn host_module() -> HostModule {
-    ModuleBuilder::new(ids::MODULE)
-        .function(ids::LOAD_ANIMATION, |call| {
-            u32_result(vizij_animation_module::load_animation(arg_clip(&call)))
-        })
-        .function(ids::CREATE_PLAYER, |call| {
-            u32_result(vizij_animation_module::create_player(arg_string(&call, 0)))
-        })
-        .function(ids::ADD_INSTANCE, |call| {
-            u32_result(vizij_animation_module::add_instance(
-                arg_u32(&call, 0),
-                arg_u32(&call, 1),
-            ))
-        })
-        .function(ids::STEP, |call| {
-            let outputs = vizij_animation_module::step(arg_u64(&call, 0));
-            value_result(array_structure(ids::TRACK_OUTPUT_TYPE, outputs))
-        })
-        .function(ids::PLAY, |call| {
-            u32_result(vizij_animation_module::play(arg_u32(&call, 0)))
-        })
-        .function(ids::PAUSE, |call| {
-            u32_result(vizij_animation_module::pause(arg_u32(&call, 0)))
-        })
-        .function(ids::STOP, |call| {
-            u32_result(vizij_animation_module::stop(arg_u32(&call, 0)))
-        })
-        .function(ids::SEEK, |call| {
-            u32_result(vizij_animation_module::seek(
-                arg_u32(&call, 0),
-                arg_u64(&call, 1),
-            ))
-        })
-        .function(ids::SET_SPEED, |call| {
-            u32_result(vizij_animation_module::set_speed(
-                arg_u32(&call, 0),
-                arg_f32(&call, 1),
-            ))
-        })
-        .function(ids::SET_LOOP, |call| {
-            u32_result(vizij_animation_module::set_loop(
-                arg_u32(&call, 0),
-                arg_string(&call, 1),
-            ))
-        })
-        .function(ids::SET_WEIGHT, |call| {
-            u32_result(vizij_animation_module::set_weight(
-                arg_u32(&call, 0),
-                arg_u32(&call, 1),
-                arg_f32(&call, 2),
-            ))
-        })
-        .function(ids::REMOVE_INSTANCE, |call| {
-            u32_result(vizij_animation_module::remove_instance(
-                arg_u32(&call, 0),
-                arg_u32(&call, 1),
-            ))
-        })
-        .function(ids::PLAYER_STATES, |_call| {
-            let states = vizij_animation_module::player_states();
+    let animation = Rc::new(RefCell::new(Animation::new()));
+    let a = animation.clone();
+    let builder = ModuleBuilder::new(ids::MODULE).function(ids::LOAD_ANIMATION, move |call| {
+        u32_result(a.borrow_mut().load_animation(arg_clip(&call)))
+    });
+    let a = animation.clone();
+    let builder = builder.function(ids::CREATE_PLAYER, move |call| {
+        u32_result(a.borrow_mut().create_player(arg_string(&call, 0)))
+    });
+    let a = animation.clone();
+    let builder = builder.function(ids::ADD_INSTANCE, move |call| {
+        u32_result(
+            a.borrow_mut()
+                .add_instance(arg_u32(&call, 0), arg_u32(&call, 1)),
+        )
+    });
+    let a = animation.clone();
+    let builder = builder.function(ids::STEP, move |call| {
+        let outputs = a.borrow_mut().step(arg_u64(&call, 0));
+        value_result(array_structure(ids::TRACK_OUTPUT_TYPE, outputs))
+    });
+    let a = animation.clone();
+    let builder = builder.function(ids::PLAY, move |call| {
+        u32_result(a.borrow_mut().play(arg_u32(&call, 0)))
+    });
+    let a = animation.clone();
+    let builder = builder.function(ids::PAUSE, move |call| {
+        u32_result(a.borrow_mut().pause(arg_u32(&call, 0)))
+    });
+    let a = animation.clone();
+    let builder = builder.function(ids::STOP, move |call| {
+        u32_result(a.borrow_mut().stop(arg_u32(&call, 0)))
+    });
+    let a = animation.clone();
+    let builder = builder.function(ids::SEEK, move |call| {
+        u32_result(a.borrow_mut().seek(arg_u32(&call, 0), arg_u64(&call, 1)))
+    });
+    let a = animation.clone();
+    let builder = builder.function(ids::SET_SPEED, move |call| {
+        u32_result(
+            a.borrow_mut()
+                .set_speed(arg_u32(&call, 0), arg_f32(&call, 1)),
+        )
+    });
+    let a = animation.clone();
+    let builder = builder.function(ids::SET_LOOP, move |call| {
+        u32_result(
+            a.borrow_mut()
+                .set_loop(arg_u32(&call, 0), arg_string(&call, 1)),
+        )
+    });
+    let a = animation.clone();
+    let builder = builder.function(ids::SET_WEIGHT, move |call| {
+        u32_result(a.borrow_mut().set_weight(
+            arg_u32(&call, 0),
+            arg_u32(&call, 1),
+            arg_f32(&call, 2),
+        ))
+    });
+    let a = animation.clone();
+    let builder = builder.function(ids::REMOVE_INSTANCE, move |call| {
+        u32_result(
+            a.borrow_mut()
+                .remove_instance(arg_u32(&call, 0), arg_u32(&call, 1)),
+        )
+    });
+    let a = animation;
+    builder
+        .function(ids::PLAYER_STATES, move |_call| {
+            let states = a.borrow().player_states();
             value_result(array_structure(ids::PLAYER_STATE_TYPE, states))
         })
         .build()
@@ -184,3 +199,58 @@ const _: fn() = || {
     assert_into_value::<TrackOutput>();
     assert_into_value::<PlayerState>();
 };
+
+#[cfg(test)]
+mod tests {
+    //! Two devices in one process own two engines.
+    use super::*;
+    use arora_types::call::Call;
+    use arora_types::value::StructureField;
+    use vizij_arora_store::BlackboardStore;
+
+    fn device() -> arora::Arora {
+        arora::Arora::builder()
+            .with_data_store(Box::new(BlackboardStore::new()))
+            .with_host_module(host_module())
+            .build()
+            .expect("build arora")
+    }
+
+    fn call(function: Uuid, args: Vec<Value>) -> Call {
+        Call {
+            module_id: Some(ids::MODULE),
+            id: function,
+            args: args
+                .into_iter()
+                .map(|value| StructureField {
+                    id: Uuid::nil(),
+                    value: Box::new(value),
+                })
+                .collect(),
+        }
+    }
+
+    fn player_count(device: &mut arora::Arora) -> usize {
+        let result = device
+            .call(call(ids::PLAYER_STATES, Vec::new()))
+            .expect("player_states");
+        match result.ret {
+            Value::ArrayStructure { elements, .. } => elements.len(),
+            other => panic!("expected an array of PlayerState, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn two_devices_own_separate_animation_engines() {
+        let mut first = device();
+        let mut second = device();
+        first
+            .call(call(
+                ids::CREATE_PLAYER,
+                vec![Value::String("only-in-first".into())],
+            ))
+            .expect("create_player");
+        assert_eq!(player_count(&mut first), 1);
+        assert_eq!(player_count(&mut second), 0);
+    }
+}
