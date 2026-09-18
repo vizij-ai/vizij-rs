@@ -25,11 +25,15 @@ use std::sync::{Arc, Mutex};
 use bevy::asset::io::memory::{Dir, MemoryAssetReader};
 use bevy::asset::io::AssetSourceBuilder;
 use bevy::asset::AssetApp;
-use bevy::camera::{CameraProjection, Projection, RenderTarget, ScalingMode, SubCameraView};
+use bevy::camera::{
+    CameraProjection, Projection, RenderTarget, ScalingMode, SubCameraView, Viewport,
+};
 use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::gltf::GltfAssetLabel;
 use bevy::math::Vec3A;
 use bevy::mesh::morph::MorphWeights;
+use bevy::picking::events::{Click, Pointer};
+use bevy::picking::mesh_picking::MeshPickingPlugin;
 use bevy::prelude::*;
 use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector};
 use vizij_api_core::Value;
@@ -89,36 +93,103 @@ impl FaceAssets {
     }
 }
 
-/// The face the view shows, as a Bevy resource.
-#[derive(Resource)]
+/// The face the view shows, as a Bevy resource./// A face shown by the view: an entity carrying the metadata, the GLB served
+/// from memory, the device's rig feed, its slot and the joins to the spawned
+/// scene once indexed. Its scene is a child; its camera is its own
+/// entity ([`FaceCamera`]).
+#[derive(Component)]
 pub struct Face {
+    /// The slot name the face was loaded under — what a front end names it
+    /// by, and what a pick reports.
+    pub id: String,
     pub meta: FaceMeta,
     /// Where its GLB is served from ([`FaceAssets::push`]).
     pub asset_path: String,
+    /// The device driving it; the view reads its pose each frame.
+    pub rig: vizij_arora_hal::RigHal,
+    /// The slot the face occupies in the world: faces stand [`SLOT_STRIDE`]
+    /// apart along X, each with its camera over it, so a camera sees only
+    /// its own face and a pointer ray from it meets no other.
+    pub slot: usize,
+    /// The joins to the spawned scene, once every element's node exists.
+    pub bindings: Bindings,
+    /// Its camera.
+    pub camera: Entity,
 }
+
+/// The joins from a face's animatables to its spawned scene: built once the
+/// GLB scene has spawned, empty until then.
+#[derive(Default)]
+pub struct Bindings {
+    /// uuid → (target entity, feature, morph index, material shade factor).
+    pub by_uuid: HashMap<String, (Entity, FeatureKind, Option<usize>, f32)>,
+    /// mesh entity → the id of the element it belongs to, for picks.
+    pub element_of: HashMap<Entity, String>,
+    pub ready: bool,
+}
+
+/// A face's camera: orthographic over the face's authored bounds, over the
+/// face's slot.
+#[derive(Component)]
+pub struct FaceCamera(pub Entity);
 
 /// A change the view applies, sent by whatever fronts the device.
 pub enum ViewEvent {
-    /// A different face was loaded: the device restarted on its graphs; the
-    /// view swaps over to the new meta, GLB and rig feed.
-    FaceLoaded {
+    /// Show a face under `face_id`: its metadata, its GLB bytes and the rig
+    /// feed of the device driving it. A face already shown under that id is
+    /// replaced — the device restarted on new graphs, the view swaps over.
+    LoadFace {
+        face_id: String,
         meta: Box<FaceMeta>,
         glb: Vec<u8>,
         rig: vizij_arora_hal::RigHal,
+    },
+    /// Take the face down: its scene, its camera, its GLB.
+    UnloadFace { face_id: String },
+    /// Confine the face's camera to a rectangle of the target, in physical
+    /// pixels (`[x, y, width, height]`, origin top-left); `None` gives it the
+    /// whole target again. How several faces share one window or canvas.
+    PlaceFace {
+        face_id: String,
+        rect: Option<[u32; 4]>,
     },
     /// A new background color, as sRGB bytes.
     Background([u8; 3]),
 }
 
-/// The front ends' runtime changes, drained each frame ([`ViewEvent`]).
-/// Absent in snapshot mode.
+/// The front ends' requests, drained each frame ([`ViewEvent`]).
 #[derive(Resource)]
-pub struct DeviceEvents(pub Mutex<Receiver<ViewEvent>>);
+pub struct ViewEvents(pub Mutex<Receiver<ViewEvent>>);
 
-/// The device handles the view reads each frame.
-#[derive(Resource)]
-pub struct DeviceRes {
-    pub rig: vizij_arora_hal::RigHal,
+/// An element a pointer clicked, by the ids its face's RobotData declares.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Picked {
+    pub face_id: String,
+    pub element_id: String,
+}
+
+/// The picks since a consumer last drained them.
+#[derive(Resource, Default)]
+pub struct Picks(pub Vec<Picked>);
+
+/// Where each face's camera draws, by face id ([`ViewEvent::PlaceFace`]);
+/// a face without an entry, or with `None`, draws over the whole target. Kept
+/// apart from the faces so a placement survives the face's reload.
+#[derive(Resource, Default)]
+struct Placements(HashMap<String, Option<[u32; 4]>>);
+
+/// Whether every requested face is shown and indexed — and at least one is.
+/// What a snapshot waits for before it captures.
+pub fn all_faces_ready(app: &mut App) -> bool {
+    let mut faces = app.world_mut().query::<&Face>();
+    let mut any = false;
+    for face in faces.iter(app.world()) {
+        if !face.bindings.ready {
+            return false;
+        }
+        any = true;
+    }
+    any
 }
 
 /// How the camera fits the face's authored rootBounds into the viewport.
@@ -180,57 +251,75 @@ fn shade(color: Color, factor: f32) -> Color {
 
 /// When present, the view camera renders into this offscreen image instead of
 /// a window (snapshot mode).
+/// When present, every face camera renders into this offscreen image
+/// instead of a window (snapshot and headless modes).
 #[derive(Resource, Clone)]
 pub struct OffscreenTarget(pub Handle<Image>);
 
-/// Marker for the view camera.
-#[derive(Component)]
-pub struct ViewCamera;
+/// The distance between two faces' slots along X. A face spans a few units
+/// (its authored bounds), so slots this far apart never share a camera's
+/// frustum or a pointer ray.
+///
+/// Slots, not render layers: a mesh carrying `RenderLayers` renders its
+/// morph targets at zero weight on Bevy 0.19.1's storage-buffer morph path
+/// (every desktop GPU; WebGL2 takes the uniform path and does not show it),
+/// which closes Toasty's eyes. Spacing the faces apart needs nothing of the
+/// renderer.
+pub const SLOT_STRIDE: f32 = 1000.0;
 
-/// Index from animatable UUID to the scene entity/feature it drives,
-/// built once the GLB scene has spawned.
+/// The slots in use, so an unloaded face's slot goes back to the pool.
 #[derive(Resource, Default)]
-pub struct BindingIndex {
-    /// uuid → (target entity, feature, morph index, material shade factor).
-    pub by_uuid: HashMap<String, (Entity, FeatureKind, Option<usize>, f32)>,
-    pub ready: bool,
+struct Slots(Vec<usize>);
+
+impl Slots {
+    fn take(&mut self) -> usize {
+        let slot = (0..)
+            .find(|slot| !self.0.contains(slot))
+            .expect("a free slot");
+        self.0.push(slot);
+        slot
+    }
+
+    fn release(&mut self, slot: usize) {
+        self.0.retain(|used| *used != slot);
+    }
+}
+
+/// Where a slot's face stands.
+fn slot_origin(slot: usize) -> Vec3 {
+    Vec3::new(slot as f32 * SLOT_STRIDE, 0.0, 0.0)
 }
 
 pub struct ViewPlugin;
 
 impl Plugin for ViewPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<BindingIndex>()
-            .add_systems(Startup, (setup_scene, setup_camera))
+        app.init_resource::<Slots>()
+            .init_resource::<Placements>()
+            .init_resource::<Picks>()
+            .add_plugins(MeshPickingPlugin)
+            .add_observer(on_click)
             .add_systems(
                 Update,
-                (apply_device_events, index_scene, apply_pose).chain(),
+                (apply_view_events, place_cameras, index_faces, apply_poses).chain(),
             );
     }
 }
 
-fn setup_scene(mut commands: Commands, face: Res<Face>, asset_server: Res<AssetServer>) {
-    commands.spawn(WorldAssetRoot(
-        asset_server.load(FaceAssets::scene(&face.asset_path)),
-    ));
-}
-
-/// Apply the front ends' runtime changes: recolor the background, or swap
-/// the whole face — despawn the scene, serve and load the new GLB, refit the
-/// camera, hand the pose feed over to the new device generation's rig, and
-/// let `index_scene` rebuild the joins once the new scene has spawned.
+/// Apply the front ends' requests: load, replace or unload a face, or
+/// recolor the background of every face camera.
 #[allow(clippy::too_many_arguments)]
-fn apply_device_events(
-    events: Option<Res<DeviceEvents>>,
-    mut frame_config: Option<ResMut<frames::FrameConfig>>,
+fn apply_view_events(
+    events: Option<Res<ViewEvents>>,
     assets: Res<FaceAssets>,
-    mut face: ResMut<Face>,
-    mut device: ResMut<DeviceRes>,
-    mut options: ResMut<ViewOptions>,
-    mut index: ResMut<BindingIndex>,
+    options: Res<ViewOptions>,
+    offscreen: Option<Res<OffscreenTarget>>,
+    mut frame_config: Option<ResMut<frames::FrameConfig>>,
+    mut slots: ResMut<Slots>,
+    mut placements: ResMut<Placements>,
     mut commands: Commands,
-    roots: Query<Entity, With<WorldAssetRoot>>,
-    mut cameras: Query<(&mut Camera, &mut Projection, &mut Transform), With<ViewCamera>>,
+    faces: Query<(Entity, &Face)>,
+    mut cameras: Query<&mut Camera, With<FaceCamera>>,
     asset_server: Res<AssetServer>,
 ) {
     let Some(events) = events else { return };
@@ -240,58 +329,163 @@ fn apply_device_events(
     while let Ok(event) = receiver.try_recv() {
         match event {
             ViewEvent::Background([r, g, b]) => {
-                options.background = Color::srgb_u8(r, g, b);
-                for (mut camera, _, _) in &mut cameras {
-                    camera.clear_color = ClearColorConfig::Custom(options.background);
+                let background = Color::srgb_u8(r, g, b);
+                for mut camera in &mut cameras {
+                    if let ClearColorConfig::Custom(color) = &mut camera.clear_color {
+                        *color = background;
+                    }
                 }
             }
-            ViewEvent::FaceLoaded { meta, glb, rig } => {
-                log::info!(
-                    "face swapped to {} ({} elements); reloading the scene",
-                    meta.bundle.face_id.as_deref().unwrap_or("an unnamed face"),
-                    meta.elements.len()
-                );
-                for root in &roots {
-                    commands.entity(root).despawn();
-                }
-                assets.remove(&face.asset_path);
-                let asset_path = assets.push(face_name(&meta), glb);
-                commands.spawn(WorldAssetRoot(
-                    asset_server.load(FaceAssets::scene(&asset_path)),
-                ));
-                let (projection, transform) = camera_fit(&meta, &options);
-                for (_, mut camera_projection, mut camera_transform) in &mut cameras {
-                    *camera_projection = projection.clone();
-                    *camera_transform = transform;
-                }
+            ViewEvent::LoadFace {
+                face_id,
+                meta,
+                glb,
+                rig,
+            } => {
+                unload(&face_id, &faces, &assets, &mut slots, &mut commands);
+                let slot = slots.take();
+                let asset_path = assets.push(&face_id, glb);
                 // The published frames are stamped in the loaded face's own
                 // frame, so they follow the face.
                 if let Some(config) = frame_config.as_mut() {
                     config.face_frame_id = frames::default_frame_id(&meta);
                 }
-                *face = Face {
-                    meta: *meta,
-                    asset_path,
-                };
-                device.rig = rig;
-                *index = BindingIndex::default();
+                log::info!(
+                    "face {face_id}: loading {} ({} elements) in slot {slot}",
+                    meta.bundle.face_id.as_deref().unwrap_or("an unnamed face"),
+                    meta.elements.len()
+                );
+                let camera = commands
+                    .spawn(camera_for(
+                        &meta,
+                        &options,
+                        slot,
+                        offscreen.as_deref(),
+                        faces.is_empty(),
+                    ))
+                    .id();
+                let face = commands
+                    .spawn((
+                        Face {
+                            id: face_id,
+                            meta: *meta,
+                            asset_path: asset_path.clone(),
+                            rig,
+                            slot,
+                            bindings: Bindings::default(),
+                            camera,
+                        },
+                        Transform::from_translation(slot_origin(slot)),
+                        Visibility::default(),
+                        children![WorldAssetRoot(
+                            asset_server.load(FaceAssets::scene(&asset_path))
+                        )],
+                    ))
+                    .id();
+                commands.entity(camera).insert(FaceCamera(face));
+            }
+            ViewEvent::UnloadFace { face_id } => {
+                unload(&face_id, &faces, &assets, &mut slots, &mut commands);
+            }
+            ViewEvent::PlaceFace { face_id, rect } => {
+                placements.0.insert(face_id, rect);
             }
         }
     }
 }
 
-/// The name a face's GLB is served under: its id from the bundle, else
-/// `face`.
-pub fn face_name(meta: &FaceMeta) -> &str {
-    meta.bundle
-        .face_id
-        .as_deref()
-        .filter(|id| !id.is_empty())
-        .unwrap_or("face")
+/// Confine each face's camera to its placement, when it has one.
+fn place_cameras(
+    placements: Res<Placements>,
+    faces: Query<&Face>,
+    mut cameras: Query<&mut Camera, With<FaceCamera>>,
+) {
+    for face in &faces {
+        let Ok(mut camera) = cameras.get_mut(face.camera) else {
+            continue;
+        };
+        let wanted = placements
+            .0
+            .get(&face.id)
+            .copied()
+            .flatten()
+            .map(|[x, y, width, height]| Viewport {
+                physical_position: UVec2::new(x, y),
+                physical_size: UVec2::new(width.max(1), height.max(1)),
+                ..default()
+            });
+        let same = match (&camera.viewport, &wanted) {
+            (None, None) => true,
+            (Some(current), Some(wanted)) => {
+                current.physical_position == wanted.physical_position
+                    && current.physical_size == wanted.physical_size
+            }
+            _ => false,
+        };
+        if !same {
+            camera.viewport = wanted;
+        }
+    }
 }
 
-/// The camera placement for a face: a [`FitProjection`] over the authored
-/// rootBounds, centered on them.
+/// Take the face shown under `face_id` down, if any: its scene, its camera,
+/// its GLB, its slot.
+fn unload(
+    face_id: &str,
+    faces: &Query<(Entity, &Face)>,
+    assets: &FaceAssets,
+    slots: &mut Slots,
+    commands: &mut Commands,
+) {
+    for (entity, face) in faces {
+        if face.id == face_id {
+            commands.entity(face.camera).despawn();
+            commands.entity(entity).despawn();
+            assets.remove(&face.asset_path);
+            slots.release(face.slot);
+            log::info!("face {face_id}: unloaded");
+        }
+    }
+}
+
+/// A face's camera: the fit over its authored bounds, over its slot; the
+/// first camera clears the target with the background, the others draw over
+/// it.
+fn camera_for(
+    meta: &FaceMeta,
+    options: &ViewOptions,
+    slot: usize,
+    offscreen: Option<&OffscreenTarget>,
+    clears: bool,
+) -> impl Bundle {
+    // Lighting is baked into the materials (see `ViewOptions::albedo_factor`);
+    // no scene light is spawned.
+    let (projection, mut transform) = camera_fit(meta, options);
+    transform.translation += slot_origin(slot);
+    (
+        Camera3d::default(),
+        Camera {
+            clear_color: if clears {
+                ClearColorConfig::Custom(options.background)
+            } else {
+                ClearColorConfig::None
+            },
+            order: slot as isize,
+            ..default()
+        },
+        // The render target is its own component since Bevy 0.17.
+        match offscreen {
+            Some(target) => RenderTarget::Image(target.0.clone().into()),
+            None => RenderTarget::default(),
+        },
+        projection,
+        transform,
+        Tonemapping::None,
+        DebandDither::Disabled,
+        Msaa::Sample4,
+    )
+}
+
 fn camera_fit(meta: &FaceMeta, options: &ViewOptions) -> (Projection, Transform) {
     let (cx, cy, bw, bh) = meta.root_bounds.unwrap_or((0.0, 0.0, 5.0, 4.0));
     let projection = Projection::custom(FitProjection {
@@ -389,263 +583,272 @@ fn visible_extent(bounds: Vec2, fit: Fit, zoom: Vec2, width: f32, height: f32) -
     fitted / zoom
 }
 
-fn setup_camera(
-    mut commands: Commands,
-    face: Res<Face>,
-    options: Res<ViewOptions>,
-    offscreen: Option<Res<OffscreenTarget>>,
-) {
-    // Lighting is baked into the materials (see `ViewOptions::albedo_factor`);
-    // no scene light is spawned.
-
-    let (projection, transform) = camera_fit(&face.meta, &options);
-
-    let mut camera = commands.spawn((
-        Camera3d::default(),
-        Camera {
-            clear_color: ClearColorConfig::Custom(options.background),
-            ..default()
-        },
-        projection,
-        transform,
-        Tonemapping::None,
-        DebandDither::Disabled,
-        Msaa::Sample4,
-        ViewCamera,
-    ));
-    // The render target is its own component since Bevy 0.17.
-    if let Some(target) = &offscreen {
-        camera.insert(RenderTarget::Image(target.0.clone().into()));
-    }
-}
-
-/// Joins the spawned GLB scene with the RobotData bindings: node `Name` →
-/// entity; for material/morph features, the mesh primitive child. Also makes
-/// each bound mesh's material unique (GLB materials can be shared) and applies
-/// the web renderer's material conventions.
+/// Joins each spawned GLB scene with its face's RobotData bindings: node
+/// `Name` → entity, for material/morph features the mesh primitive child.
+/// Also makes each bound mesh's material unique (GLB materials can be shared)
+/// and applies the web renderer's material conventions. Names are looked up
+/// under the face's own root, so two faces with the same node names never
+/// cross.
 #[allow(clippy::too_many_arguments)]
-fn index_scene(
-    mut index: ResMut<BindingIndex>,
-    face: Res<Face>,
+fn index_faces(
+    mut faces: Query<(Entity, &mut Face)>,
     options: Res<ViewOptions>,
-    names: Query<(Entity, &Name)>,
-    parents: Query<&ChildOf>,
+    names: Query<&Name>,
     children: Query<&Children>,
     meshes: Query<(Entity, &MeshMaterial3d<StandardMaterial>), With<Mesh3d>>,
     morphs: Query<Entity, With<MorphWeights>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut commands: Commands,
 ) {
-    if index.ready {
-        return;
-    }
-    // Wait until every element's node has spawned. Names can collide: the
-    // world spawner's own root carries the glTF *scene's* name, which
-    // exporters often also give a top-level *node* (Toasty's "Scene"). The
-    // element is always the innermost bearer, so on a collision keep the
-    // deepest entity.
-    let depth = |entity: Entity| {
-        let mut depth = 0usize;
-        let mut current = entity;
-        while let Ok(parent) = parents.get(current) {
-            depth += 1;
-            current = parent.parent();
-        }
-        depth
-    };
-    let mut by_name: HashMap<&str, Entity> = HashMap::new();
-    for (entity, name) in &names {
-        by_name
-            .entry(name.as_str())
-            .and_modify(|kept| {
-                if depth(entity) > depth(*kept) {
-                    *kept = entity;
-                }
-            })
-            .or_insert(entity);
-    }
-    if !face
-        .meta
-        .elements
-        .iter()
-        .all(|e| by_name.contains_key(e.node_name.as_str()))
-    {
-        return;
-    }
-
-    // Per element: the transform target is the named node entity; the
-    // material/morph target is its first mesh-bearing descendant.
-    let mut mesh_of: HashMap<String, (Entity, Handle<StandardMaterial>)> = HashMap::new();
-    let mut morph_of: HashMap<String, Entity> = HashMap::new();
-    for element in &face.meta.elements {
-        let node = by_name[element.node_name.as_str()];
-        // three's MeshBasicMaterial ignores lights: full albedo. `standard`
-        // gets the ambient-Lambert factor.
-        let factor = if element.material.as_deref() == Some("basic") {
-            1.0
-        } else {
-            options.albedo_factor()
-        };
-        for descendant in std::iter::once(node).chain(children.iter_descendants(node)) {
-            if let Ok((mesh_entity, material)) = meshes.get(descendant) {
-                // Unique material per element, with web conventions applied:
-                // double-sided, unlit with the ambient factor baked into the
-                // albedo (the web's ambient-Lambert model, computed in linear).
-                let mut mat = materials
-                    .get(&material.0)
-                    .cloned()
-                    .unwrap_or_else(StandardMaterial::default);
-                mat.double_sided = true;
-                mat.cull_mode = None;
-                mat.unlit = true;
-                mat.base_color = shade(mat.base_color, factor);
-                let handle = materials.add(mat);
-                commands
-                    .entity(mesh_entity)
-                    .insert(MeshMaterial3d(handle.clone()));
-                mesh_of.insert(element.node_name.clone(), (mesh_entity, handle));
-                break;
-            }
-        }
-        for descendant in std::iter::once(node).chain(children.iter_descendants(node)) {
-            if morphs.get(descendant).is_ok() {
-                morph_of.insert(element.node_name.clone(), descendant);
-                break;
-            }
-        }
-    }
-
-    let mut by_uuid = HashMap::new();
-    for (uuid, Binding { node_name, feature }) in &face.meta.animatables {
-        let Some(&node) = by_name.get(node_name.as_str()) else {
+    for (root, mut face) in &mut faces {
+        if face.bindings.ready {
             continue;
-        };
-        let element = face
+        }
+        // Wait until every element's node has spawned. Names can collide:
+        // the world spawner's own root carries the glTF *scene's* name, which
+        // exporters often also give a top-level *node* (Toasty's "Scene").
+        // The element is always the innermost bearer, so on a collision keep
+        // the deepest entity.
+        let mut by_name: HashMap<String, (Entity, usize)> = HashMap::new();
+        let mut stack = vec![(root, 0usize)];
+        while let Some((entity, depth)) = stack.pop() {
+            if let Ok(name) = names.get(entity) {
+                let slot = by_name
+                    .entry(name.as_str().to_string())
+                    .or_insert((entity, depth));
+                if depth > slot.1 {
+                    *slot = (entity, depth);
+                }
+            }
+            if let Ok(kids) = children.get(entity) {
+                stack.extend(kids.iter().map(|kid| (kid, depth + 1)));
+            }
+        }
+        if !face
             .meta
             .elements
             .iter()
-            .find(|e| &e.node_name == node_name);
-        let factor = if element.and_then(|e| e.material.as_deref()) == Some("basic") {
-            1.0
-        } else {
-            options.albedo_factor()
-        };
-        let entry = match feature {
-            FeatureKind::Translation | FeatureKind::Rotation | FeatureKind::Scale => {
-                (node, feature.clone(), None, factor)
-            }
-            FeatureKind::Color | FeatureKind::Opacity => {
-                let Some((mesh_entity, _)) = mesh_of.get(node_name) else {
-                    continue;
-                };
-                (*mesh_entity, feature.clone(), None, factor)
-            }
-            FeatureKind::Morph(target) => {
-                let Some(&morph_entity) = morph_of.get(node_name) else {
-                    continue;
-                };
-                let Some(index) =
-                    element.and_then(|e| e.morph_targets.iter().position(|m| m == target))
-                else {
-                    continue;
-                };
-                (morph_entity, feature.clone(), Some(index), factor)
-            }
-        };
-        by_uuid.insert(uuid.clone(), entry);
-    }
+            .all(|e| by_name.contains_key(e.node_name.as_str()))
+        {
+            continue;
+        }
 
-    log::info!(
-        "scene indexed: {} bindings over {} elements",
-        by_uuid.len(),
-        face.meta.elements.len(),
-    );
-    index.by_uuid = by_uuid;
-    index.ready = true;
+        // Per element: the transform target is the named node entity; the
+        // material/morph target is its first mesh-bearing descendant.
+        let mut mesh_of: HashMap<String, (Entity, Handle<StandardMaterial>)> = HashMap::new();
+        let mut morph_of: HashMap<String, Entity> = HashMap::new();
+        let mut element_of = HashMap::new();
+        for element in &face.meta.elements {
+            let node = by_name[element.node_name.as_str()].0;
+            // three's MeshBasicMaterial ignores lights: full albedo. `standard`
+            // gets the ambient-Lambert factor.
+            let factor = if element.material.as_deref() == Some("basic") {
+                1.0
+            } else {
+                options.albedo_factor()
+            };
+            for descendant in std::iter::once(node).chain(children.iter_descendants(node)) {
+                if let Ok((mesh_entity, material)) = meshes.get(descendant) {
+                    // Unique material per element, with web conventions applied:
+                    // double-sided, unlit with the ambient factor baked into the
+                    // albedo (the web's ambient-Lambert model, computed in linear).
+                    let mut mat = materials
+                        .get(&material.0)
+                        .cloned()
+                        .unwrap_or_else(StandardMaterial::default);
+                    mat.double_sided = true;
+                    mat.cull_mode = None;
+                    mat.unlit = true;
+                    mat.base_color = shade(mat.base_color, factor);
+                    let handle = materials.add(mat);
+                    commands
+                        .entity(mesh_entity)
+                        .insert(MeshMaterial3d(handle.clone()));
+                    mesh_of.insert(element.node_name.clone(), (mesh_entity, handle));
+                    element_of.insert(mesh_entity, element.id.clone());
+                    break;
+                }
+            }
+            for descendant in std::iter::once(node).chain(children.iter_descendants(node)) {
+                if morphs.get(descendant).is_ok() {
+                    morph_of.insert(element.node_name.clone(), descendant);
+                    break;
+                }
+            }
+        }
+
+        let mut by_uuid = HashMap::new();
+        for (uuid, Binding { node_name, feature }) in &face.meta.animatables {
+            let Some(&(node, _)) = by_name.get(node_name.as_str()) else {
+                continue;
+            };
+            let element = face
+                .meta
+                .elements
+                .iter()
+                .find(|e| &e.node_name == node_name);
+            let factor = if element.and_then(|e| e.material.as_deref()) == Some("basic") {
+                1.0
+            } else {
+                options.albedo_factor()
+            };
+            let entry = match feature {
+                FeatureKind::Translation | FeatureKind::Rotation | FeatureKind::Scale => {
+                    (node, feature.clone(), None, factor)
+                }
+                FeatureKind::Color | FeatureKind::Opacity => {
+                    let Some((mesh_entity, _)) = mesh_of.get(node_name) else {
+                        continue;
+                    };
+                    (*mesh_entity, feature.clone(), None, factor)
+                }
+                FeatureKind::Morph(target) => {
+                    let Some(&morph_entity) = morph_of.get(node_name) else {
+                        continue;
+                    };
+                    let Some(index) =
+                        element.and_then(|e| e.morph_targets.iter().position(|m| m == target))
+                    else {
+                        continue;
+                    };
+                    (morph_entity, feature.clone(), Some(index), factor)
+                }
+            };
+            by_uuid.insert(uuid.clone(), entry);
+        }
+
+        log::info!(
+            "face {}: scene indexed, {} bindings over {} elements",
+            face.id,
+            by_uuid.len(),
+            face.meta.elements.len(),
+        );
+        face.bindings = Bindings {
+            by_uuid,
+            element_of,
+            ready: true,
+        };
+    }
 }
 
-/// Applies the device's current pose (the HAL's actuation state) onto the
-/// scene: transforms, material color/opacity, morph influences.
-fn apply_pose(
-    index: Res<BindingIndex>,
-    device: Res<DeviceRes>,
+/// Applies each device's current pose (the HAL's actuation state) onto its
+/// face's scene: transforms, material color/opacity, morph influences.
+fn apply_poses(
+    faces: Query<&Face>,
     mut transforms: Query<&mut Transform>,
     material_handles: Query<&MeshMaterial3d<StandardMaterial>>,
     mut morph_weights: Query<&mut MorphWeights>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    if !index.ready {
-        return;
-    }
-    for (path, value) in device.rig.pose() {
-        let key = path.to_string();
-        let Some((entity, feature, morph_index, factor)) = index.by_uuid.get(&key) else {
+    for face in &faces {
+        if !face.bindings.ready {
             continue;
-        };
-        match feature {
-            FeatureKind::Translation => {
-                if let (Ok(mut transform), Some(v)) = (transforms.get_mut(*entity), as_xyz(&value))
-                {
-                    transform.translation = Vec3::from_array(v);
-                }
-            }
-            FeatureKind::Rotation => {
-                if let (Ok(mut transform), Some(v)) = (transforms.get_mut(*entity), as_xyz(&value))
-                {
-                    // three.js euler order ZYX: R = Rz·Ry·Rx, composed
-                    // explicitly — EulerRot naming conventions moved between
-                    // glam versions, this cannot. Validated pixel-wise against
-                    // the web renderer on Toasty, whose tilts are
-                    // order-sensitive.
-                    transform.rotation = Quat::from_rotation_z(v[2])
-                        * Quat::from_rotation_y(v[1])
-                        * Quat::from_rotation_x(v[0]);
-                }
-            }
-            FeatureKind::Scale => {
-                if let Ok(mut transform) = transforms.get_mut(*entity) {
-                    if let Some(v) = as_xyz(&value) {
-                        transform.scale = Vec3::from_array(v);
-                    } else if let Some(s) = as_f32(&value) {
-                        transform.scale = Vec3::splat(s);
+        }
+        for (path, value) in face.rig.pose() {
+            let key = path.to_string();
+            let Some((entity, feature, morph_index, factor)) = face.bindings.by_uuid.get(&key)
+            else {
+                continue;
+            };
+            match feature {
+                FeatureKind::Translation => {
+                    if let (Ok(mut transform), Some(v)) =
+                        (transforms.get_mut(*entity), as_xyz(&value))
+                    {
+                        transform.translation = Vec3::from_array(v);
                     }
                 }
-            }
-            FeatureKind::Color => {
-                if let (Ok(handle), Some([r, g, b])) =
-                    (material_handles.get(*entity), as_rgb(&value))
-                {
-                    if let Some(mut mat) = materials.get_mut(&handle.0) {
-                        let alpha = mat.base_color.alpha();
-                        // Graph color components are linear working-space
-                        // floats (three's `Color.setRGB` semantics), not sRGB.
-                        let shaded = shade(Color::linear_rgb(r, g, b), *factor);
-                        mat.base_color = shaded.with_alpha(alpha);
+                FeatureKind::Rotation => {
+                    if let (Ok(mut transform), Some(v)) =
+                        (transforms.get_mut(*entity), as_xyz(&value))
+                    {
+                        // three.js euler order ZYX: R = Rz·Ry·Rx, composed
+                        // explicitly — EulerRot naming conventions moved between
+                        // glam versions, this cannot. Validated pixel-wise against
+                        // the web renderer on Toasty, whose tilts are
+                        // order-sensitive.
+                        transform.rotation = Quat::from_rotation_z(v[2])
+                            * Quat::from_rotation_y(v[1])
+                            * Quat::from_rotation_x(v[0]);
                     }
                 }
-            }
-            FeatureKind::Opacity => {
-                if let (Ok(handle), Some(o)) = (material_handles.get(*entity), as_f32(&value)) {
-                    if let Some(mut mat) = materials.get_mut(&handle.0) {
-                        mat.base_color.set_alpha(o);
-                        mat.alpha_mode = if o < 1.0 {
-                            AlphaMode::Blend
-                        } else {
-                            AlphaMode::Opaque
-                        };
+                FeatureKind::Scale => {
+                    if let Ok(mut transform) = transforms.get_mut(*entity) {
+                        if let Some(v) = as_xyz(&value) {
+                            transform.scale = Vec3::from_array(v);
+                        } else if let Some(s) = as_f32(&value) {
+                            transform.scale = Vec3::splat(s);
+                        }
                     }
                 }
-            }
-            FeatureKind::Morph(_) => {
-                if let (Ok(mut weights), Some(w), Some(i)) =
-                    (morph_weights.get_mut(*entity), as_f32(&value), *morph_index)
-                {
-                    if let Some(slot) = weights.weights_mut().get_mut(i) {
-                        *slot = w;
+                FeatureKind::Color => {
+                    if let (Ok(handle), Some([r, g, b])) =
+                        (material_handles.get(*entity), as_rgb(&value))
+                    {
+                        if let Some(mut mat) = materials.get_mut(&handle.0) {
+                            let alpha = mat.base_color.alpha();
+                            // Graph color components are linear working-space
+                            // floats (three's `Color.setRGB` semantics), not sRGB.
+                            let shaded = shade(Color::linear_rgb(r, g, b), *factor);
+                            mat.base_color = shaded.with_alpha(alpha);
+                        }
+                    }
+                }
+                FeatureKind::Opacity => {
+                    if let (Ok(handle), Some(o)) = (material_handles.get(*entity), as_f32(&value)) {
+                        if let Some(mut mat) = materials.get_mut(&handle.0) {
+                            mat.base_color.set_alpha(o);
+                            mat.alpha_mode = if o < 1.0 {
+                                AlphaMode::Blend
+                            } else {
+                                AlphaMode::Opaque
+                            };
+                        }
+                    }
+                }
+                FeatureKind::Morph(_) => {
+                    if let (Ok(mut weights), Some(w), Some(i)) =
+                        (morph_weights.get_mut(*entity), as_f32(&value), *morph_index)
+                    {
+                        if let Some(slot) = weights.weights_mut().get_mut(i) {
+                            *slot = w;
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/// A click on a face's mesh, reported as the RobotData ids of the face and
+/// the element the mesh belongs to. The event bubbles up the hierarchy; it is
+/// recorded once, at its origin.
+fn on_click(
+    click: On<Pointer<Click>>,
+    parents: Query<&ChildOf>,
+    faces: Query<&Face>,
+    mut picks: ResMut<Picks>,
+) {
+    let target = click.original_event_target();
+    if click.entity != target {
+        return;
+    }
+    let mut current = target;
+    let face = loop {
+        if let Ok(face) = faces.get(current) {
+            break face;
+        }
+        match parents.get(current) {
+            Ok(parent) => current = parent.parent(),
+            Err(_) => return,
+        }
+    };
+    if let Some(element_id) = face.bindings.element_of.get(&target) {
+        log::info!("face {}: picked element {element_id}", face.id);
+        picks.0.push(Picked {
+            face_id: face.id.clone(),
+            element_id: element_id.clone(),
+        });
     }
 }
 

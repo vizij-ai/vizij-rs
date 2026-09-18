@@ -200,59 +200,42 @@ fn main() -> Result<()> {
         ambient: cli.ambient,
         unlit: cli.unlit,
     };
-    let Device {
-        rig, meta, events, ..
-    } = dev;
-    let face = Loaded { meta, glb };
-    let device_res = view::DeviceRes { rig };
+    let Device { meta, events, .. } = dev;
 
     match (&cli.snapshot, cli.headless) {
-        (Some(out), _) => run_snapshot(&cli, face, device_res, options, out),
-        (None, true) => run_headless(&cli.size, face, device_res, options, events, frame_config),
-        (None, false) => run_window(face, device_res, options, events, frame_config),
+        (Some(out), _) => run_snapshot(&cli, events, options, out),
+        (None, true) => run_headless(&cli.size, events, options, frame_config),
+        (None, false) => run_window(&meta, events, options, frame_config),
     }
 }
 
-/// The first face, before the App exists to serve it from.
-struct Loaded {
-    meta: view::meta::FaceMeta,
-    glb: Vec<u8>,
-}
-
-impl Loaded {
-    /// Serve the GLB from the App's in-memory source, registered here —
-    /// before the default plugins, which the asset plugin's construction
-    /// requires — and the face resource loading it.
-    fn serve(self, app: &mut App) -> view::Face {
-        let assets = FaceAssets::register(app);
-        let asset_path = assets.push(view::face_name(&self.meta), self.glb);
-        view::Face {
-            meta: self.meta,
-            asset_path,
-        }
-    }
+/// The view over the device's events: the in-memory asset source registered
+/// before the default plugins (which the asset plugin's construction
+/// requires), then the events the device already queued its face on.
+fn view_over(app: &mut App, events: std::sync::mpsc::Receiver<view::ViewEvent>) {
+    FaceAssets::register(app);
+    app.insert_resource(view::ViewEvents(std::sync::Mutex::new(events)));
 }
 
 /// The window size the app opens at: the face's authored aspect at a 720px
 /// height, so it starts letterbox-free (resizes and full screen then follow
 /// the `--fit` policy).
-fn window_resolution(face: &Loaded) -> (u32, u32) {
-    let (_, _, bw, bh) = face.meta.root_bounds.unwrap_or((0.0, 0.0, 5.0, 4.0));
+fn window_resolution(meta: &view::meta::FaceMeta) -> (u32, u32) {
+    let (_, _, bw, bh) = meta.root_bounds.unwrap_or((0.0, 0.0, 5.0, 4.0));
     let height = 720.0_f32;
     let width = (height * bw / bh).clamp(320.0, 1600.0);
     (width.round() as u32, height as u32)
 }
 
 fn run_window(
-    face: Loaded,
-    device_res: view::DeviceRes,
-    options: view::ViewOptions,
+    meta: &view::meta::FaceMeta,
     events: std::sync::mpsc::Receiver<view::ViewEvent>,
+    options: view::ViewOptions,
     frame_config: frames::FrameConfig,
 ) -> Result<()> {
-    let (width, height) = window_resolution(&face);
+    let (width, height) = window_resolution(meta);
     let mut app = App::new();
-    let face = face.serve(&mut app);
+    view_over(&mut app, events);
     app.add_plugins(
         DefaultPlugins
             .set(WindowPlugin {
@@ -271,10 +254,7 @@ fn run_window(
             })
             .disable::<bevy::log::LogPlugin>(),
     )
-    .insert_resource(face)
-    .insert_resource(device_res)
     .insert_resource(options)
-    .insert_resource(view::DeviceEvents(std::sync::Mutex::new(events)))
     .add_plugins(view::ViewPlugin);
     // Frame publishing works with a window too (not only headless): capture the
     // window and push the frame onto the device's reading feed.
@@ -293,10 +273,8 @@ fn run_window(
 /// as usual (bridges attached), so frames fan out over every bridge.
 fn run_headless(
     size: &str,
-    face: Loaded,
-    device_res: view::DeviceRes,
-    options: view::ViewOptions,
     events: std::sync::mpsc::Receiver<view::ViewEvent>,
+    options: view::ViewOptions,
     frame_config: frames::FrameConfig,
 ) -> Result<()> {
     use bevy::app::ScheduleRunnerPlugin;
@@ -304,7 +282,7 @@ fn run_headless(
 
     let (width, height) = parse_size(size)?;
     let mut app = App::new();
-    let face = face.serve(&mut app);
+    view_over(&mut app, events);
     app.add_plugins(
         DefaultPlugins
             .set(WindowPlugin {
@@ -324,10 +302,7 @@ fn run_headless(
     .add_plugins(ScheduleRunnerPlugin::run_loop(
         std::time::Duration::from_secs_f64(1.0 / 60.0),
     ))
-    .insert_resource(face)
-    .insert_resource(device_res)
     .insert_resource(options)
-    .insert_resource(view::DeviceEvents(std::sync::Mutex::new(events)))
     .add_plugins(view::ViewPlugin);
 
     // The offscreen image the view camera renders into (COPY_SRC so the frame
@@ -354,28 +329,20 @@ fn run_headless(
 
 fn run_snapshot(
     cli: &Cli,
-    face: Loaded,
-    device_res: view::DeviceRes,
+    events: std::sync::mpsc::Receiver<view::ViewEvent>,
     options: view::ViewOptions,
     out: &std::path::Path,
 ) -> Result<()> {
     let (width, height) = parse_size(&cli.size)?;
     let mut app = App::new();
-    let face = face.serve(&mut app);
+    view_over(&mut app, events);
     app.add_plugins(snapshot::SnapshotPlugin { width, height })
-        .insert_resource(face)
-        .insert_resource(device_res)
         .insert_resource(options)
         .add_plugins(view::ViewPlugin);
 
     // Ready once the scene is indexed (bindings joined); settle ~1 s of frames
     // so the device's pose has flowed through the HAL onto the scene.
-    let img = snapshot::capture(&mut app, width, height, 60, |app| {
-        app.world()
-            .get_resource::<view::BindingIndex>()
-            .map(|i| i.ready)
-            .unwrap_or(false)
-    })?;
+    let img = snapshot::capture(&mut app, width, height, 60, view::all_faces_ready)?;
     snapshot::save_png(&img, out)?;
     println!("snapshot written to {}", out.display());
     Ok(())
