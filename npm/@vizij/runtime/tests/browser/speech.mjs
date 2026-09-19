@@ -21,7 +21,7 @@ try {
     const paths = [shape("PP"), shape("aa"), h.path("face", "standard/vizij/viseme")];
     const sample = (status) => ({
       values: h.readValues("face", paths),
-      status: h.readValues("face", [status])[status],
+      status: h.runStatus(h.readValues("face", [status])[status]),
     });
     const handle = await h.spawnSkill("face", "say", { text: "hello", voice: "Ruth" });
     const samples = [];
@@ -59,14 +59,10 @@ try {
   assert.ok(maxAA > 0.3, `aa never rose (max ${maxAA})`);
   const shapes = new Set(result.samples.map((s) => values(s, current)?.str));
   assert.ok(shapes.has("PP") && shapes.has("aa") && shapes.has("sil"), [...shapes].join(","));
-  // The run ran, then ended once the playhead reported the end: its status
-  // key moved from one value to another and rests on the last one.
-  const statuses = result.samples.map((s) => JSON.stringify(s.status));
-  const distinct = [...new Set(statuses)];
-  assert.ok(distinct.length >= 2, `the run's status never changed: ${distinct}`);
-  assert.equal(statuses[0], distinct[0], "running first");
-  assert.equal(statuses[statuses.length - 1], distinct[distinct.length - 1], "then ended");
-  console.log(`statuses: ${distinct.join(" -> ")}`);
+  // The run ran, then succeeded once the playhead reported the end.
+  const statuses = result.samples.map((s) => s.status);
+  assert.equal(statuses[0], "running", "running first");
+  assert.equal(statuses[statuses.length - 1], "success", "then ended");
   // The halted run: polled while it played, not after the halt.
   assert.ok(result.pollsBeforeHalt > 0, "the second run was playing");
   assert.equal(result.pollsAfterHalt, result.pollsBeforeHalt, "no poll after the halt");
