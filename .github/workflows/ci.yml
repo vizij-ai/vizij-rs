@@ -70,6 +70,11 @@ jobs:
             target
           key: ${{ runner.os }}-vizij-lib-targets-${{ hashFiles('**/Cargo.lock') }}
       - run: cargo check -p vizij --lib --target wasm32-unknown-unknown --no-default-features
+      # The speech provider's browser producer, on the runner's Chrome.
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+      - name: Test the speech provider in headless Chrome
+        run: wasm-pack test --headless --chrome --chromedriver "$CHROMEWEBDRIVER/chromedriver" crates/interop/vizij-arora-tts
       - name: Set up Android NDK
         id: ndk
         uses: nttld/setup-ndk@v1

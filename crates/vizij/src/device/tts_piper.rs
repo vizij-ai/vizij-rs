@@ -20,7 +20,6 @@ use std::hash::{Hash, Hasher};
 use std::pin::Pin;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::task::{Context, Poll, Waker};
-use std::time::Instant;
 
 use arora::{HostModule, ModuleBuilder};
 use arora_types::call::{Call, CallError, CallResult};
@@ -53,6 +52,10 @@ static TOKIO_HANDLE: LazyLock<tokio::runtime::Handle> = LazyLock::new(|| {
 /// The loaded voice, created on first use (a model load) and reused. One
 /// utterance synthesizes at a time; the lock serializes access.
 static SYNTH: LazyLock<Mutex<Option<Synthesizer>>> = LazyLock::new(|| Mutex::new(None));
+
+/// Every `say` tick, whichever run: where the tick interval a run's halt
+/// bound follows is learned.
+static TICKS: LazyLock<Pulse> = LazyLock::new(Pulse::new);
 
 /// Live utterances, keyed by content so concurrent `say`s do not share a slot
 /// (the module ABI hands the closure no per-run id — same trade-off as the
@@ -94,6 +97,7 @@ pub fn say(call: Call) -> Result<CallResult, CallError> {
         }
     }
     let key = utterance_key(&text);
+    TICKS.beat();
     let mut runs = match RUNS.lock() {
         Ok(runs) => runs,
         Err(_) => return Ok(status_only(task::failure())),
@@ -101,10 +105,10 @@ pub fn say(call: Call) -> Result<CallResult, CallError> {
 
     // First tick: spawn synthesis + playback off the tick thread. Later ticks
     // find the run and fall through to the poll.
-    let run = runs.entry(key).or_insert_with(|| spawn_say(text));
-    if let Ok(mut last) = run.pulse.lock() {
-        *last = Instant::now();
-    }
+    let run = runs
+        .entry(key)
+        .or_insert_with(|| spawn_say(text, TICKS.sharing_interval()));
+    run.pulse.beat();
 
     // The shape at the playhead, advanced by the playback task.
     let current = run.viseme.lock().map(|cur| *cur).unwrap_or(SILENCE_VISEME);
@@ -129,10 +133,9 @@ pub fn say(call: Call) -> Result<CallResult, CallError> {
 /// Spawn synthesis (local, blocking inference on the blocking pool) + playback,
 /// and return the run. The playback loop advances the shared phoneme cell at
 /// the playhead; the tick only samples the cell and polls the handle.
-fn spawn_say(text: String) -> Run {
+fn spawn_say(text: String, pulse: Pulse) -> Run {
     let viseme = Arc::new(Mutex::new(SILENCE_VISEME));
     let viseme_task = viseme.clone();
-    let pulse: Pulse = Arc::new(Mutex::new(Instant::now()));
     let pulse_task = pulse.clone();
     let handle = TOKIO_HANDLE.spawn(async move {
         // Synthesize off the async workers: model inference is CPU-bound.
