@@ -158,6 +158,25 @@ export interface TaskHandle {
   update?: string[];
 }
 
+/** A task run's lifecycle status, read off its `status` key. */
+export type RunStatus = "running" | "success" | "failure";
+
+const RUN_STATUS_VARIANTS: Record<string, RunStatus> = {
+  "acd79ec6-0c44-401a-82f8-5da5422d3eec": "running",
+  "766e9e9a-446d-4e46-83e6-14b7ca101169": "success",
+  "2468f46c-bb60-425c-9a4d-9ad326ccc7e2": "failure",
+};
+
+/**
+ * The status a run's `status` key holds — the value `readValues` returns
+ * for `handle.status` — or `undefined` while the key is unset or holds
+ * something else. A halted run reads `failure`: it did not reach its goal.
+ */
+export function runStatus(value: unknown): RunStatus | undefined {
+  const variant = (value as { enum?: { variant_id?: string } } | null)?.enum?.variant_id;
+  return variant ? RUN_STATUS_VARIANTS[variant] : undefined;
+}
+
 /** A pointer press on a Vizij: the slot it is shown under and the element
  * id its GLB's RobotData declares. */
 export interface Pick {
