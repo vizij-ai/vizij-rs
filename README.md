@@ -354,18 +354,17 @@ vizij-rs/
 │  │  ├─ vizij-arora-hal           # Vizij rig presented as an Arora HAL
 │  │  ├─ vizij-arora-behavior      # Vizij node graph as an Arora behavior interpreter
 │  │  ├─ vizij-arora-host          # Bundle composition, face standard, profiles & mappings (ROS4HRI), skills
-│  │  ├─ vizij-arora-web           # Browser wasm cdylib: Vizij runtime as an Arora device
 │  │  └─ vizij-animation-module    # vizij-animation-core packaged as an Arora wasm module
 │  ├─ tools/
 │  │  └─ vizij-bundle              # Face-GLB bundle tool: inspect/pack/validate, declare profiles, embed mappings
-│  ├─ vizij                        # The native app: cargo run shows a face, running an arora
+│  ├─ vizij                        # The view and the device on every target: the desktop app (cargo run), the browser module (@vizij/runtime)
 │  └─ test-fixtures/
 │     └─ vizij-test-fixtures       # Loads JSON fixtures referenced across stacks
 ├─ npm/
 │  ├─ @vizij/animation-module      # vizij-animation-core built as an Arora wasm module (assets)
 │  ├─ @vizij/animation             # Stable ESM wrapper around `vizij-animation-wasm`
 │  ├─ @vizij/node-graph            # Wrapper around `vizij-graph-wasm`
-│  ├─ @vizij/runtime               # Browser Vizij runtime as an Arora device (wasm bindings)
+│  ├─ @vizij/runtime               # Vizij faces in the browser: the view and the device in one wasm module
 │  ├─ @vizij/test-fixtures         # Browser bundle of shared JSON fixtures
 │  ├─ @vizij/value-json            # Shared JSON coercion helpers
 │  └─ @vizij/wasm-loader           # Loader that enforces ABI compatibility
@@ -405,8 +404,8 @@ The `crates/interop/*` family adapts the Vizij stacks onto Arora runtime seams s
 | `vizij-arora-hal`        | Vizij rig presented as an Arora HAL.                                   | — |
 | `vizij-arora-behavior`   | Vizij node graph driven as an Arora behavior interpreter.              | — |
 | `vizij-arora-host`       | Composes a face's bundle graphs; hosts the [face standard](docs/face-standard.md) vocabulary, the [profiles and mappings](docs/profiles-and-mappings.md) registries (incl. [ROS4HRI](docs/ros4hri.md)), and the skills registry. | — |
-| `vizij-arora-web`        | Browser wasm cdylib composing a Vizij runtime as an Arora device.      | `@vizij/runtime` |
 | `vizij-animation-module` | `vizij-animation-core` packaged as an Arora wasm module.               | `@vizij/animation-module` |
+| `vizij`                  | The Bevy view and the arora device of a face, on every target: the desktop binary, the browser module (its `web` module). | `@vizij/runtime` |
 
 ### Support Packages
 

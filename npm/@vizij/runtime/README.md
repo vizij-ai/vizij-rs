@@ -1,37 +1,50 @@
 # @vizij/runtime
 
-Run a Vizij runtime in the browser.
-
-The wasm module (built from
-[`crates/interop/vizij-arora-web`](https://github.com/vizij-ai/vizij-rs/tree/main/crates/interop/vizij-arora-web))
-composes an [`arora`](https://crates.io/crates/arora) device over the Vizij
-interop seams — a blackboard store, a rig HAL, and your node graph as its
-behavior — and wraps it with
-[`arora-web`](https://crates.io/crates/arora-web)'s browser JS surface. One
-runtime, one store: the graph reads its `input` nodes' paths from the store
-each tick and writes its outputs back, and JS talks to the same store.
+Vizij faces in the browser: the Bevy view and the Arora device in one wasm
+module, built from the [`vizij`
+crate](https://github.com/vizij-ai/vizij-rs/tree/main/crates/vizij) (its
+`web` module). A page mounts its canvas once — one App for the page's
+lifetime — then loads as many faces as it shows. Each face is a device of
+its own: an [`arora`](https://crates.io/crates/arora) over a blackboard
+store, a rig HAL and the face's composed graphs, with the animation, gaze
+and viseme modules linked in, exposed through
+[`arora-web`](https://crates.io/crates/arora-web)'s surface. The view draws
+each face into the rectangle of the canvas the page places it in, reading
+its device's pose every frame.
 
 ## Use
 
 ```ts
-import { init, startRuntime } from "@vizij/runtime";
+import { init, mount, loadFace, placeFaceIn, whenReady, unloadFace } from "@vizij/runtime";
 
 await init();
-const runtime = await startRuntime(graphSpec); // a Vizij graph spec (object or JSON)
-runtime.run(); // the runtime paces itself from here on (the promise only ever rejects)
+await mount("#faces"); // the canvas; transparent wherever no face draws
 
-// any time — the store surface stays live while the runtime runs:
-runtime.setValue("sensor/x", { f32: 0.75 });
-const changes = runtime.drainChanges(); // path -> ValueJSON | null
-// The FIRST drain returns the store's whole current state.
+const glb = new Uint8Array(await (await fetch("/faces/Quori_Current_Extended.glb")).arrayBuffer());
+const face = await loadFace("quori", glb); // composes the face's graphs, starts its device
+placeFaceIn("quori", document.getElementById("quori-slot")!, canvas); // where it draws
+await whenReady("quori"); // its scene is indexed; the pose shows from here on
+face.run(); // the device paces itself (or call face.step(dtMs) per frame)
 
-// swap the running graph in place (store, modules, runtime all survive):
-await runtime.loadGraph(otherGraphSpec);
+// any time — the device's store stays live while it runs:
+face.setValue(face.path("standard/vizij/expression/happy"), 1);
+const run = await face.spawn({ id: SAY_ID, args: [{ id: SAY_TEXT_PARAM_ID, value: { str: "Hello" } }] });
+face.readValues([run.status.path]);
+await face.halt(run);
+
+unloadFace("quori"); // the scene, the camera, the GLB
+face.dispose();
 ```
 
-A host with its own clock skips `run()` and calls `runtime.step(dtMs)` per
-frame instead (e.g. from `requestAnimationFrame` timestamps); `step()`
-becomes unavailable once `run()` has taken the runtime.
+A face's paths are its own: `face.rigPrefix` is `rig/<faceId>/` and
+`face.path(relative)` builds one. `drainPicks()` reports clicks on faces as
+`{ faceId, elementId }` by the ids the GLB's RobotData declares;
+`describe(glb)` reads a GLB's elements, animatables, bounds and programs
+without loading it.
+
+`startRuntime(graphSpec)` gives a device with no face — a graph on a store,
+nothing drawn — for a bench or a graph run in Node; every `Device` method
+works on it.
 
 ### Profiles and mappings
 
@@ -63,9 +76,11 @@ aliases of `mappings()` / `mapping()`.
 
 ## Build
 
-The `pkg/` wasm artifacts are produced by `wasm-pack` from the repository root:
+The `pkg/` wasm artifacts are produced by `wasm-pack` from the repository root
+(one WebGL2 bundle of the `vizij` crate without its desktop half; a cold
+build takes many minutes, Bevy is most of it):
 
 ```sh
-pnpm run build:wasm:arora-web   # wasm-pack build -> npm/@vizij/runtime/pkg
+pnpm run build:wasm:runtime     # wasm-pack build -> npm/@vizij/runtime/pkg
 pnpm --filter @vizij/runtime run build
 ```
