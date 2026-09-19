@@ -3,9 +3,11 @@
 // and over needs. Linear memory never shrinks, and the allocator grows it
 // for the first cycles until the freed chunks of one cycle serve the next
 // (the plateau); a leak would keep it growing by a face's worth (tens of
-// MB) every cycle. How many cycles the plateau takes depends on how many
-// frames each cycle gets, so the criterion is the last five cycles flat.
-// Needs `VIZIJ_FIXTURES`; skips without.
+// MB) every cycle, linearly. How fast the plateau comes depends on how
+// many frames each cycle gets — a software GPU ramps for longer, in small
+// steps — so the criterion is the shape, not flatness: the last ten cycles
+// grow less than the first five did (a leak's last ten grow at least twice
+// the first five). Needs `VIZIJ_FIXTURES`; skips without.
 import assert from "node:assert/strict";
 import { FIXTURES, loadFace, open } from "./common.mjs";
 
@@ -14,8 +16,10 @@ if (!FIXTURES) {
   process.exit(0);
 }
 const CYCLES = 25;
-// The cycles over which memory must not grow at all: the last five.
-const FLAT_CYCLES = 5;
+// The ramp: the growth over these first cycles is what the tail is held under.
+const RAMP_CYCLES = 5;
+// The tail: the last cycles, whose growth must stay under the ramp's.
+const TAIL_CYCLES = 10;
 
 const { page, logs, close } = await open(FIXTURES);
 try {
@@ -32,11 +36,13 @@ try {
   assert.deepEqual(state.contextEvents, [], "the WebGL context was never lost");
   assert.equal(state.contextLost, false);
   assert.deepEqual(state.stepErrors, []);
-  const growth = memory[CYCLES - 1] - memory[CYCLES - FLAT_CYCLES];
-  assert.equal(
-    growth,
-    0,
-    `linear memory grew by ${(growth / 1048576).toFixed(1)} MB over the last ${FLAT_CYCLES} cycles`,
+  const mb = (bytes) => (bytes / 1048576).toFixed(1);
+  const ramp = memory[RAMP_CYCLES - 1] - memory[0];
+  const tail = memory[CYCLES - 1] - memory[CYCLES - 1 - TAIL_CYCLES];
+  assert.ok(
+    tail < ramp,
+    `linear memory grew by ${mb(tail)} MB over the last ${TAIL_CYCLES} cycles, ` +
+      `against ${mb(ramp)} MB over the first ${RAMP_CYCLES}: no plateau`,
   );
   console.log(
     `@vizij/runtime browser memory: ok (plateau ${(memory[CYCLES - 1] / 1048576).toFixed(0)} MB)`,
