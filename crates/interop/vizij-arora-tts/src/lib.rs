@@ -153,6 +153,7 @@ pub fn host_module_with_synth(config: Config, synth: Option<Synth>) -> HostModul
         config,
         synth,
         runs: HashMap::new(),
+        ticks: Pulse::new(),
     };
     ModuleBuilder::new(MODULE_ID)
         .described_function(SAY_ID, "say", say_signature(), move |call| {
@@ -168,6 +169,11 @@ struct Provider {
     config: Config,
     synth: Option<Synth>,
     runs: HashMap<u64, platform::Run>,
+    /// Beaten on every `say` tick, whichever run: where the tick interval is
+    /// learned, so a new run's halt bound is right from its first tick (a
+    /// run's own pulse has seen no interval yet when its second tick comes,
+    /// and on a slow page that tick already lies past `IDLE_STOP`).
+    ticks: Pulse,
 }
 
 /// What one tick observes of a run.
@@ -180,6 +186,7 @@ impl Provider {
     /// Speak `text` in `voice`, streaming the current viseme. Re-invoked each
     /// tick while `Running`.
     fn say(&mut self, call: Call) -> Result<CallResult, CallError> {
+        self.ticks.beat();
         // A run nobody ticks any more was halted; its producer has stopped or
         // is stopping on its own, and its slot goes.
         self.runs.retain(|_, run| !is_halted(platform::pulse(run)));
@@ -192,12 +199,12 @@ impl Provider {
         let key = utterance_key(&text, &voice);
         let synth = self.synth.clone();
         let config = &self.config;
+        let ticks = &self.ticks;
         // First tick: spawn synthesis + playback off the tick. Later ticks
         // find the run, refresh its pulse and fall through to the poll.
-        let run = self
-            .runs
-            .entry(key)
-            .or_insert_with(|| platform::spawn(config, synth, text, voice));
+        let run = self.runs.entry(key).or_insert_with(|| {
+            platform::spawn(config, synth, text, voice, ticks.sharing_interval())
+        });
         platform::pulse(run).beat();
         match platform::poll(run) {
             Observed::Running(viseme) => Ok(with_viseme(task::running(), viseme)),
@@ -214,13 +221,13 @@ impl Provider {
 /// keeps the interval the ticks come at, so the halt bound follows a slow
 /// ticker.
 #[derive(Clone)]
-pub struct Pulse(Arc<Mutex<Beats>>);
-
-struct Beats {
-    last: f64,
+pub struct Pulse {
+    last: Arc<Mutex<f64>>,
     /// The tick interval in milliseconds: the widest recent gap, forgetting
-    /// a one-off hiccup over the ticks that follow.
-    interval: f64,
+    /// a one-off hiccup over the ticks that follow. Shared between the
+    /// pulses of one ticker ([`Pulse::sharing_interval`]): the interval is
+    /// the ticker's, not one run's.
+    interval: Arc<Mutex<f64>>,
 }
 
 impl Default for Pulse {
@@ -230,33 +237,45 @@ impl Default for Pulse {
 }
 
 impl Pulse {
-    /// A pulse beating now.
+    /// A pulse beating now, no interval seen yet.
     pub fn new() -> Self {
-        Self(Arc::new(Mutex::new(Beats {
-            last: now_ms(),
-            interval: 0.0,
-        })))
+        Self {
+            last: Arc::new(Mutex::new(now_ms())),
+            interval: Arc::new(Mutex::new(0.0)),
+        }
+    }
+
+    /// A pulse beating now whose interval is this one's, learned and shared
+    /// from here on: the pulse of a run under the same ticker.
+    pub fn sharing_interval(&self) -> Self {
+        Self {
+            last: Arc::new(Mutex::new(now_ms())),
+            interval: self.interval.clone(),
+        }
     }
 
     /// Record a tick.
     pub fn beat(&self) {
-        if let Ok(mut beats) = self.0.lock() {
-            let now = now_ms();
-            let gap = (now - beats.last).max(0.0);
-            beats.interval = if gap > beats.interval {
+        let now = now_ms();
+        let Ok(mut last) = self.last.lock() else {
+            return;
+        };
+        let gap = (now - *last).max(0.0);
+        *last = now;
+        if let Ok(mut interval) = self.interval.lock() {
+            *interval = if gap > *interval {
                 gap
             } else {
-                0.9 * beats.interval + 0.1 * gap
+                0.9 * *interval + 0.1 * gap
             };
-            beats.last = now;
         }
     }
 
     /// Time since the last tick.
     pub fn since(&self) -> Duration {
-        self.0
+        self.last
             .lock()
-            .map(|beats| Duration::from_secs_f64(((now_ms() - beats.last) / 1000.0).max(0.0)))
+            .map(|last| Duration::from_secs_f64(((now_ms() - *last) / 1000.0).max(0.0)))
             .unwrap_or(Duration::MAX)
     }
 
@@ -264,7 +283,7 @@ impl Pulse {
     /// [`HALT_TICKS`] intervals of the ticks seen so far when they come
     /// slower than that.
     pub fn halt_bound(&self) -> Duration {
-        let interval = self.0.lock().map(|beats| beats.interval).unwrap_or(0.0);
+        let interval = self.interval.lock().map(|i| *i).unwrap_or(0.0);
         IDLE_STOP.max(Duration::from_secs_f64(
             f64::from(HALT_TICKS) * interval / 1000.0,
         ))
@@ -474,10 +493,15 @@ pub mod platform {
             &run.pulse
         }
 
-        pub fn spawn(config: &Config, synth: Option<Synth>, text: String, voice: String) -> Run {
+        pub fn spawn(
+            config: &Config,
+            synth: Option<Synth>,
+            text: String,
+            voice: String,
+            pulse: Pulse,
+        ) -> Run {
             let viseme = Arc::new(Mutex::new(SILENCE_VISEME));
             let cell = viseme.clone();
-            let pulse = Pulse::new();
             let pulse_task = pulse.clone();
             // A scripted `Synth` is `Rc` (single-threaded, the browser's shape)
             // and cannot cross onto the runtime; natively the fetch produces.
@@ -607,7 +631,13 @@ pub mod platform {
             &run.pulse
         }
 
-        pub fn spawn(config: &Config, synth: Option<Synth>, text: String, voice: String) -> Run {
+        pub fn spawn(
+            config: &Config,
+            synth: Option<Synth>,
+            text: String,
+            voice: String,
+            pulse: Pulse,
+        ) -> Run {
             let phase = Rc::new(RefCell::new(Phase::Fetching));
             let shared = phase.clone();
             let play = config.play.clone();
@@ -651,10 +681,7 @@ pub mod platform {
                     }
                 };
             });
-            Run {
-                phase,
-                pulse: Pulse::new(),
-            }
+            Run { phase, pulse }
         }
 
         pub fn poll(run: &mut Run) -> Observed {
@@ -794,6 +821,10 @@ mod tests {
         assert!(!is_halted(&pulse));
         std::thread::sleep(Duration::from_millis(400));
         assert!(!is_halted(&pulse), "a gap of two intervals is not a halt");
+        // A run's pulse under the same ticker starts with the bound learned.
+        let run = pulse.sharing_interval();
+        assert_eq!(run.halt_bound(), pulse.halt_bound());
+        assert!(!is_halted(&run));
     }
 
     /// Ticks keep a run alive past the idle bound, and the run ends with the
