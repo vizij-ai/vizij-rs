@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
+import { promises as fs } from "node:fs";
 import { applyWorkspaceManifestUpdates, restoreWorkspaceManifests } from "./prepare-publish-manifests.mjs";
 
 function run(command, args) {
@@ -42,6 +43,12 @@ async function main() {
       }
       await run("pnpm", ["run", "build:shared"]);
       await run("pnpm", ["--filter", `@vizij/${only}`, "run", "build"]);
+      // A prerelease (3.0.0-alpha.0) publishes under its own dist-tag, so
+      // `latest` keeps pointing at the last release.
+      const { version } = JSON.parse(
+        await fs.readFile(`npm/@vizij/${only}/package.json`, "utf8"),
+      );
+      const prerelease = /^\d+\.\d+\.\d+-([a-z]+)/i.exec(version);
       await run("pnpm", [
         "--filter",
         `@vizij/${only}`,
@@ -49,6 +56,7 @@ async function main() {
         "--access",
         "public",
         "--no-git-checks",
+        ...(prerelease ? ["--tag", prerelease[1]] : []),
       ]);
     } else {
       await run("pnpm", ["run", "build:wasm"]);
