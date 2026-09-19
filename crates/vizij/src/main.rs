@@ -10,6 +10,8 @@ use anyhow::{anyhow, Context, Result};
 use bevy::prelude::*;
 use clap::Parser;
 
+mod open;
+
 use vizij::device::native::{self, BridgeConfig, Device, Mode};
 use vizij::device::{self, FaceConfig};
 use vizij::view::{self, frames, snapshot, FaceAssets};
@@ -18,9 +20,51 @@ use vizij::view::{self, frames, snapshot, FaceAssets};
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Cli {
-    /// Path to the face GLB (with embedded RobotData + VIZIJ_bundle).
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    /// The face GLB (with embedded RobotData + VIZIJ_bundle): a path or an
+    /// `http(s)://` URL. Omitted, the face loaded last time opens again.
+    #[arg(long, short = 'g')]
+    glb: Option<String>,
+
+    /// The local bridge's port (WebSocket, and the control panel on the same
+    /// port).
+    #[arg(long, short = 'p', default_value_t = 9000)]
+    port: u16,
+
+    /// The address the local bridge binds; `0.0.0.0` opens it to the LAN.
+    #[arg(long, default_value = "127.0.0.1")]
+    bind: String,
+
+    /// Don't serve the control panel page on the local bridge's port.
     #[arg(long)]
-    glb: std::path::PathBuf,
+    no_web_control: bool,
+
+    /// Open the window full screen (borderless, on `--display`).
+    #[arg(long, short = 'f')]
+    fullscreen: bool,
+
+    /// The display the window opens on, by index (`list-displays`).
+    #[arg(long, short = 'd')]
+    display: Option<usize>,
+
+    /// The window's width, in logical pixels (default: the face's aspect at
+    /// 720 px high).
+    #[arg(long, short = 'W')]
+    width: Option<u32>,
+
+    /// The window's height, in logical pixels.
+    #[arg(long, short = 'H')]
+    height: Option<u32>,
+
+    /// Open the window without title bar and borders.
+    #[arg(long)]
+    no_decorations: bool,
+
+    /// Keep the window above the others.
+    #[arg(long)]
+    always_on_top: bool,
 
     /// Render one frame offscreen to this PNG and exit (no window).
     #[arg(long)]
@@ -118,15 +162,26 @@ struct Cli {
     #[arg(long, num_args = 0..=1, default_missing_value = "")]
     ros2: Option<String>,
 
-    /// Attach the Semio Studio bridge, configured from the environment
-    /// (`DEVICE_OWNERS`, …). Composes with the local bridge.
+    /// Attach the Semio Studio bridge: the device registers under the
+    /// identity kept in the app's data directory, else as the operator
+    /// answers on the terminal (kept for next time), else from the
+    /// environment (`DEVICE_OWNERS`, …). Composes with the local bridge.
     #[cfg(feature = "studio")]
     #[arg(long)]
     studio: bool,
 }
 
+#[derive(clap::Subcommand, Debug)]
+enum Command {
+    /// List the displays, by the index `--display` takes.
+    ListDisplays,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    if let Some(Command::ListDisplays) = cli.command {
+        return list_displays();
+    }
     // In window mode the arora operator flow owns logging (its front end —
     // TUI or headless — installs the log sink); the snapshot harness keeps
     // its own quiet logger.
@@ -164,10 +219,15 @@ fn main() -> Result<()> {
         speech: Some(speech_provider()),
     };
     let bridges = BridgeConfig {
+        local: vizij::device::bridge::LocalBridgeConfig {
+            bind: cli.bind.clone(),
+            port: cli.port,
+            control_panel: !cli.no_web_control,
+        },
         #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
         ros2: cli.ros2.as_deref().map(parse_ros2).transpose()?,
         #[cfg(feature = "studio")]
-        studio: cli.studio,
+        studio: cli.studio.then(|| data_dir().join("studio-identity.json")),
     };
     // Frames are the ROS4HRI face image, so they follow that exposure unless
     // a rate is given (see `frames::publish_rate`).
@@ -176,12 +236,17 @@ fn main() -> Result<()> {
     #[cfg(not(any(feature = "ros2-dds", feature = "ros2-zenoh")))]
     let ros2 = false;
     let rate_hz = frames::publish_rate(cli.frame_rate, ros2, !cli.no_ros4hri)?;
-    let glb = std::fs::read(&cli.glb)
-        .with_context(|| format!("cannot read GLB {}", cli.glb.display()))?;
+    let source = match cli.glb.clone() {
+        Some(source) => source,
+        None => remembered_face().ok_or_else(|| {
+            anyhow!("no face: pass --glb <path or URL> (the face loaded last time is remembered)")
+        })?,
+    };
+    let glb = read_face(&source)?;
     let dev = native::start(&glb, config, bridges, mode)?;
+    remember_face(&source);
     println!(
-        "vizij: {} — {} elements, {} animatables, {} bundle graphs",
-        cli.glb.display(),
+        "vizij: {source} — {} elements, {} animatables, {} bundle graphs",
         dev.meta.elements.len(),
         dev.meta.animatables.len(),
         dev.meta.bundle.graphs.len(),
@@ -201,13 +266,95 @@ fn main() -> Result<()> {
         ambient: cli.ambient,
         unlit: cli.unlit,
     };
-    let Device { meta, events, .. } = dev;
+    let Device {
+        meta,
+        events,
+        handle,
+        ..
+    } = dev;
 
     match (&cli.snapshot, cli.headless) {
         (Some(out), _) => run_snapshot(&cli, events, options, out),
         (None, true) => run_headless(&cli.size, events, options, frame_config),
-        (None, false) => run_window(&meta, events, options, frame_config),
+        (None, false) => run_window(&cli, &meta, events, handle, options, frame_config),
     }
+}
+
+/// The app's data directory: the remembered face and the Studio identity.
+fn data_dir() -> std::path::PathBuf {
+    dirs::data_local_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("vizij")
+}
+
+/// The face's bytes: a file, or a URL fetched whole.
+fn read_face(source: &str) -> Result<Vec<u8>> {
+    if source.starts_with("http://") || source.starts_with("https://") {
+        let runtime = tokio::runtime::Runtime::new()?;
+        return runtime.block_on(async {
+            let response = reqwest::get(source)
+                .await
+                .with_context(|| format!("cannot fetch {source}"))?
+                .error_for_status()
+                .with_context(|| format!("cannot fetch {source}"))?;
+            Ok(response.bytes().await?.to_vec())
+        });
+    }
+    std::fs::read(source).with_context(|| format!("cannot read GLB {source}"))
+}
+
+/// The face loaded last time, as `--glb` was given.
+fn remembered_face() -> Option<String> {
+    std::fs::read_to_string(data_dir().join("last-face"))
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn remember_face(source: &str) {
+    let dir = data_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(dir.join("last-face"), source);
+}
+
+/// Print the displays, by the index `--display` takes, and exit. Straight
+/// from winit — the event loop Bevy would open, resumed once with no window,
+/// and left as soon as the monitors are read.
+fn list_displays() -> Result<()> {
+    use winit::application::ApplicationHandler;
+    use winit::event_loop::ActiveEventLoop;
+
+    struct Lister;
+    impl ApplicationHandler for Lister {
+        fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+            let primary = event_loop.primary_monitor();
+            for (index, monitor) in event_loop.available_monitors().enumerate() {
+                let size = monitor.size();
+                println!(
+                    "{index}: {} — {}x{} at {:.0}%{}",
+                    monitor.name().unwrap_or_else(|| "unnamed".to_string()),
+                    size.width,
+                    size.height,
+                    monitor.scale_factor() * 100.0,
+                    if primary.as_ref() == Some(&monitor) {
+                        " (primary)"
+                    } else {
+                        ""
+                    }
+                );
+            }
+            event_loop.exit();
+        }
+        fn window_event(
+            &mut self,
+            _: &ActiveEventLoop,
+            _: winit::window::WindowId,
+            _: winit::event::WindowEvent,
+        ) {
+        }
+    }
+    winit::event_loop::EventLoop::new()?.run_app(&mut Lister)?;
+    Ok(())
 }
 
 /// This build's speech provider: the local Piper module under `tts-piper`,
@@ -248,12 +395,20 @@ fn window_resolution(meta: &view::meta::FaceMeta) -> (u32, u32) {
 }
 
 fn run_window(
+    cli: &Cli,
     meta: &view::meta::FaceMeta,
     events: std::sync::mpsc::Receiver<view::ViewEvent>,
+    handle: native::DeviceHandle,
     options: view::ViewOptions,
     frame_config: frames::FrameConfig,
 ) -> Result<()> {
+    use bevy::window::{MonitorSelection, WindowLevel, WindowMode, WindowPosition};
+
     let (width, height) = window_resolution(meta);
+    let monitor = match cli.display {
+        Some(index) => MonitorSelection::Index(index),
+        None => MonitorSelection::Primary,
+    };
     let mut app = App::new();
     view_over(&mut app, events);
     app.add_plugins(
@@ -261,7 +416,19 @@ fn run_window(
             .set(WindowPlugin {
                 primary_window: Some(Window {
                     title: "Vizij".to_string(),
-                    resolution: (width, height).into(),
+                    resolution: (cli.width.unwrap_or(width), cli.height.unwrap_or(height)).into(),
+                    mode: if cli.fullscreen {
+                        WindowMode::BorderlessFullscreen(monitor)
+                    } else {
+                        WindowMode::Windowed
+                    },
+                    position: WindowPosition::Centered(monitor),
+                    decorations: !cli.no_decorations,
+                    window_level: if cli.always_on_top {
+                        WindowLevel::AlwaysOnTop
+                    } else {
+                        WindowLevel::Normal
+                    },
                     ..default()
                 }),
                 ..default()
@@ -275,7 +442,8 @@ fn run_window(
             .disable::<bevy::log::LogPlugin>(),
     )
     .insert_resource(options)
-    .add_plugins(view::ViewPlugin);
+    .add_plugins(view::ViewPlugin)
+    .add_plugins(open::OpenPlugin(handle));
     // Frame publishing works with a window too (not only headless): capture the
     // window and push the frame onto the device's reading feed.
     if frame_config.publishes() {

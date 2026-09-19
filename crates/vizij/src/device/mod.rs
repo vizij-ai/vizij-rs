@@ -17,6 +17,8 @@ use vizij_arora_store::BlackboardStore;
 use crate::view::meta::FaceMeta;
 
 pub mod animation;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod bridge;
 pub mod gaze;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod native;
@@ -103,6 +105,25 @@ pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
 /// (`{"f32": 0.0}`, `{"str": ""}`), not as the bare JSON literal an author
 /// wrote.
 pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
+    walk_free_inputs(spec)
+        .into_iter()
+        .map(|(path, ty, _)| (path, ty))
+        .collect()
+}
+
+/// The rest value of each free input that has one: the input's authored
+/// default, as the value a store write puts back. What the face shows when
+/// nothing drives it, so what a `reset` returns the inputs to.
+pub fn input_rest_values(spec: &str) -> std::collections::HashMap<String, Value> {
+    walk_free_inputs(spec)
+        .into_iter()
+        .filter_map(|(path, _, default)| default.map(|value| (path, value)))
+        .collect()
+}
+
+/// Each free input with its ROS-facing type and its authored default, if any
+/// (see [`free_inputs`]).
+fn walk_free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type, Option<Value>)> {
     use arora_types::value::Type;
     let Ok(spec) = serde_json::from_str::<serde_json::Value>(spec) else {
         return Vec::new();
@@ -139,16 +160,18 @@ pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
         {
             continue;
         }
-        let ty = match node.get("params").and_then(|p| p.get("value")).cloned() {
-            None | Some(serde_json::Value::Null) => Type::F64,
+        let (ty, default) = match node.get("params").and_then(|p| p.get("value")).cloned() {
+            None | Some(serde_json::Value::Null) => (Type::F64, None),
             Some(json) => match vizij_api_core::json::parse_value(json) {
-                Ok(Value::String(_)) => Type::String,
-                Ok(Value::Boolean(_)) => Type::Boolean,
-                Ok(value) if vizij_api_core::value::as_float(&value).is_some() => Type::F64,
+                Ok(value @ Value::String(_)) => (Type::String, Some(value)),
+                Ok(value @ Value::Boolean(_)) => (Type::Boolean, Some(value)),
+                Ok(value) if vizij_api_core::value::as_float(&value).is_some() => {
+                    (Type::F64, Some(value))
+                }
                 _ => continue,
             },
         };
-        inputs.push((path, ty));
+        inputs.push((path, ty, default));
     }
     inputs.sort_by(|a, b| a.0.cmp(&b.0));
     inputs

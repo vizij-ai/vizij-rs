@@ -277,3 +277,7 @@ jobs:
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
         run: cargo test -p vizij --lib ros4hri_drives_the_adapted_quori -- --nocapture
+      - name: Drive the face from a client on the local bridge
+        env:
+          VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
+        run: cargo test -p vizij --test local_bridge -- --nocapture
