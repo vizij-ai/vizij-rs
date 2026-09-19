@@ -22,6 +22,9 @@ use super::{builder_for, free_inputs, load_face, stage_neutral_pose, FaceConfig,
 use crate::view::meta::FaceMeta;
 use crate::view::ViewEvent;
 
+/// The one face slot the desktop shows: what its view events name.
+pub const FACE: &str = "face";
+
 /// A running face device. Both handles share storage with the device's own
 /// (they are sibling clones), so the view reads the rig and the store live.
 pub struct Device {
@@ -31,8 +34,9 @@ pub struct Device {
     pub store: BlackboardStore,
     /// The face the device booted on.
     pub meta: FaceMeta,
-    /// What the view applies: the faces the device moves onto and the
-    /// background changes a front end asks for.
+    /// What the view applies: the face to show (the first event, already
+    /// queued), the faces the device moves onto and the background changes a
+    /// front end asks for.
     pub events: Receiver<ViewEvent>,
     /// The way into the running device for any front end.
     pub handle: DeviceHandle,
@@ -48,7 +52,7 @@ pub struct DeviceHandle {
 
 impl DeviceHandle {
     /// Load another face from its GLB bytes: the device restarts on its
-    /// graphs and the view swaps over ([`ViewEvent::FaceLoaded`]). A GLB
+    /// graphs and the view swaps over ([`ViewEvent::LoadFace`]). A GLB
     /// that does not compose is an error in the log, not a dead device.
     pub fn reload(&self, glb: Vec<u8>) {
         let _ = self.commands.unbounded_send(Command::Reload(glb));
@@ -165,6 +169,12 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
     let store = BlackboardStore::new();
     let (events_tx, events_rx) = std::sync::mpsc::channel();
     let (commands_tx, commands_rx) = futures::channel::mpsc::unbounded();
+    let _ = events_tx.send(ViewEvent::LoadFace {
+        face_id: FACE.to_string(),
+        meta: Box::new(meta.clone()),
+        glb: glb.to_vec(),
+        rig: rig.clone(),
+    });
 
     let thread = {
         let rig = rig.clone();
@@ -214,7 +224,7 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
 
 /// The operator flow, generation by generation: each reload stops the
 /// running device and rebuilds it — graphs, rig, store — on the new face,
-/// and the view follows through [`ViewEvent::FaceLoaded`]. Runs until a
+/// and the view follows through [`ViewEvent::LoadFace`]. Runs until a
 /// generation ends without a reload (a device error; the terminal UI's quit
 /// exits the process).
 #[allow(clippy::too_many_arguments)]
@@ -247,7 +257,8 @@ fn supervise(
             .unwrap_or_else(|| (RigHal::new(), BlackboardStore::new()));
         let (frontend, tui) = operator_frontend();
         if let Some(glb) = pending_glb.take() {
-            let _ = events.send(ViewEvent::FaceLoaded {
+            let _ = events.send(ViewEvent::LoadFace {
+                face_id: FACE.to_string(),
                 meta: Box::new(meta.clone()),
                 glb,
                 rig: rig.clone(),

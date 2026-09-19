@@ -55,9 +55,14 @@ device its bytes (`DeviceHandle::reload`).
   plane layered along Z, orthographic camera fit to the authored `rootBounds`
   (`--fit` picks how, `--zoom` magnifies on top), sRGB output, no tonemapping,
   double-sided materials, opacity-driven alpha,
-  morph-target influences. Each frame it reads the device's actuation state
+  morph-target influences. Each frame it reads each device's actuation state
   from the HAL seam (`RigHal::pose()`) and applies it: transforms (euler ZYX),
-  material color/opacity, morphs.
+  material color/opacity, morphs. A face is an entity (`view::Face`) with its
+  scene and its own camera, standing in a slot of its own along X so several
+  faces share one App, one window or canvas — each camera confined to a
+  rectangle of it (`ViewEvent::PlaceFace`) — and a click on a mesh reports
+  the face and the RobotData element it belongs to (`view::Picks`). The
+  desktop shows one face; the browser module shows as many as the page loads.
 - **`view::snapshot`** is the headless pipeline (recipe from ros-viz-rs):
   `WinitPlugin` disabled, `ScheduleRunnerPlugin`, camera → `RenderTarget`
   image, `gpu_readback` → PNG.
