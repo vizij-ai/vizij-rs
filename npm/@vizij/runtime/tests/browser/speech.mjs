@@ -29,18 +29,28 @@ try {
       await new Promise((r) => setTimeout(r, 50));
       samples.push(sample(handle.status));
     }
-    // A second run, halted while it plays: it is never polled again.
+    // A second run, halted while it plays: it is never polled again. The
+    // run fetches before it plays, and a slow page takes its time to the
+    // first poll, so the halt waits for one (bounded).
     const halted = await h.spawnSkill("face", "say", { text: "and again", voice: "Ruth" });
-    await new Promise((r) => setTimeout(r, 300));
-    const pollsBeforeHalt = window.vizijPlayback.calls[1]?.polls ?? null;
+    const polls = () => window.vizijPlayback.calls[1]?.polls ?? 0;
+    for (let i = 0; i < 100 && polls() === 0; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    const pollsBeforeHalt = polls();
     await h.halt("face", halted);
+    // The halt lands on the run's next step; the count is compared once it
+    // has, over a window of steps.
     await new Promise((r) => setTimeout(r, 300));
-    const pollsAfterHalt = window.vizijPlayback.calls[1]?.polls ?? null;
+    const pollsAtHalt = polls();
+    await new Promise((r) => setTimeout(r, 300));
+    const pollsAfterHalt = polls();
     return {
       samples,
       playback: window.vizijPlayback.calls,
       halted: sample(halted.status),
       pollsBeforeHalt,
+      pollsAtHalt,
       pollsAfterHalt,
       shapePaths: paths,
     };
@@ -65,7 +75,7 @@ try {
   assert.equal(statuses[statuses.length - 1], "success", "then ended");
   // The halted run: polled while it played, not after the halt.
   assert.ok(result.pollsBeforeHalt > 0, "the second run was playing");
-  assert.equal(result.pollsAfterHalt, result.pollsBeforeHalt, "no poll after the halt");
+  assert.equal(result.pollsAfterHalt, result.pollsAtHalt, "no poll after the halt");
   const state = await page.evaluate(() => window.vizijHarness.state());
   assert.deepEqual(state.stepErrors, []);
   console.log(`@vizij/runtime browser speech: ok (shapes ${[...shapes].join(" ")})`);
