@@ -482,8 +482,8 @@ async fn the_device_keeps_a_flat_heap_in_a_ros_graph() {
     use arora_bridge_ros2::msg_types::{self, MessageType};
     use ros2_client::{DEFAULT_PUBLISHER_QOS, DEFAULT_SUBSCRIPTION_QOS};
 
-    use crate::frames::FrameFormat;
     use crate::memory_tests::{fan_out_spec, feed_frames, heap_floor, KEPT_BUDGET, STEP};
+    use crate::view::frames::FrameFormat;
 
     let _ = env_logger::builder()
         .parse_filters("warn")

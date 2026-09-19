@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use anyhow::{bail, ensure, Context, Result};
 use bevy::app::{PluginsState, ScheduleRunnerPlugin};
-use bevy::asset::{AssetPlugin, UnapprovedPathMode};
+use bevy::asset::{AssetMetaCheck, AssetPlugin};
 use bevy::image::TextureFormatPixelInfo;
 use bevy::prelude::*;
 use bevy::render::gpu_readback::{Readback, ReadbackComplete};
@@ -21,7 +21,7 @@ use bevy::window::ExitCondition;
 use bevy::winit::WinitPlugin;
 use image::RgbaImage;
 
-use crate::view::OffscreenTarget;
+use super::OffscreenTarget;
 
 /// Matches `TextureFormat::bevy_default()` on desktop; keeps readback bytes in
 /// plain RGBA order. Shared with the headless run's offscreen target.
@@ -55,9 +55,10 @@ impl Plugin for SnapshotPlugin {
                     synchronous_pipeline_compilation: true,
                     ..default()
                 })
-                // The face GLB is given by absolute path, outside assets/.
+                // The face is served from memory (`FaceAssets`); no `.meta`
+                // file exists to probe for.
                 .set(AssetPlugin {
-                    unapproved_path_mode: UnapprovedPathMode::Allow,
+                    meta_check: AssetMetaCheck::Never,
                     ..default()
                 })
                 .disable::<WinitPlugin>()
@@ -86,6 +87,9 @@ impl Plugin for SnapshotPlugin {
 pub fn ensure_ready(app: &mut App) {
     if app.plugins_state() != PluginsState::Cleaned {
         while app.plugins_state() == PluginsState::Adding {
+            // The render plugin finishes on the task pools; on the web there
+            // are none to tick, the loop spins until the pool's promise lands.
+            #[cfg(not(target_arch = "wasm32"))]
             bevy::tasks::tick_global_task_pools_on_main_thread();
         }
         app.finish();

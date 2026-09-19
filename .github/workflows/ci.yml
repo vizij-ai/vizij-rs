@@ -49,6 +49,40 @@ jobs:
       - run: cargo clippy -p vizij --features ros2-zenoh --bins -- -D warnings
       - run: cargo fmt --all -- --check
 
+  # The `vizij` library on the targets its other entry points build for: the
+  # browser module (wasm32, no desktop half) and the Android activity (arm64,
+  # the native driver with a headless front end and the Studio bridge).
+  # Neither links an app; each proves the crate's feature and target tables
+  # keep the library building where the binary cannot.
+  vizij-lib-targets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown, aarch64-linux-android
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-vizij-lib-targets-${{ hashFiles('**/Cargo.lock') }}
+      - run: cargo check -p vizij --lib --target wasm32-unknown-unknown --no-default-features
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+          add-to-path: false
+      - name: Check the library for arm64 Android with the Studio bridge
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          cargo install cargo-ndk --locked
+          cargo ndk -t arm64-v8a -P 26 check -p vizij --lib --no-default-features --features studio
+
   wasm:
     runs-on: ubuntu-latest
     steps:
@@ -198,7 +232,12 @@ jobs:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
           WGPU_BACKEND: vulkan
         run: cargo test -p vizij --test snapshot_regression -- --ignored --nocapture
+      - name: Compose a face from bytes headless through the library
+        env:
+          VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
+          WGPU_BACKEND: vulkan
+        run: cargo test -p vizij --test headless_face -- --ignored --nocapture
       - name: Drive the adapted Quori over the ROS4HRI mapping
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
-        run: cargo test -p vizij --bin vizij ros4hri_drives_the_adapted_quori -- --nocapture
+        run: cargo test -p vizij --lib ros4hri_drives_the_adapted_quori -- --nocapture

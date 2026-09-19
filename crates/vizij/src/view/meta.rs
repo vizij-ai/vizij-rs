@@ -8,7 +8,6 @@
 //! the spawned entity's `Name`.
 
 use std::collections::HashMap;
-use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
@@ -57,7 +56,7 @@ pub struct Element {
 /// The face metadata joined from `RobotData` + `VIZIJ_bundle`. The `RobotData`
 /// half (elements, animatables, bounds) drives the Bevy renderer; the bundle is
 /// the portable host glue shared with the browser runtime.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct FaceMeta {
     pub elements: Vec<Element>,
     /// animatable UUID (string form) → what it drives.
@@ -111,12 +110,8 @@ struct RawVec2 {
 }
 
 impl FaceMeta {
-    pub fn from_glb_file(path: &Path) -> Result<Self> {
-        let bytes =
-            std::fs::read(path).with_context(|| format!("cannot read GLB {}", path.display()))?;
-        Self::from_glb_bytes(&bytes)
-    }
-
+    /// Read a face's metadata from its GLB bytes — the one way in, on every
+    /// target; reading a file is the caller's.
     pub fn from_glb_bytes(bytes: &[u8]) -> Result<Self> {
         let json = glb_json_chunk(bytes)?;
         Self::from_gltf_json(&json)

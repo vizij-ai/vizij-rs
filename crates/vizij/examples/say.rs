@@ -10,17 +10,12 @@
 //! standard's shapes) as it advances. On the device the say skill's run does
 //! the same and drives the lips from it.
 
-// The provider modules are compiled in whole via #[path]; the example only
-// exercises their call surface.
-#![allow(dead_code)]
-
 use vizij_arora_tts as tts_api;
 
+#[cfg(feature = "tts-piper")]
+use vizij::device::tts_piper as provider;
 #[cfg(not(feature = "tts-piper"))]
 use vizij_arora_tts as provider;
-#[cfg(feature = "tts-piper")]
-#[path = "../src/tts_piper.rs"]
-mod provider;
 
 use std::time::Duration;
 
