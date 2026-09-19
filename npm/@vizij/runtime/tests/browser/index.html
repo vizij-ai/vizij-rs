@@ -87,6 +87,7 @@
     },
     spawn: (id, call) => devices.get(id).spawn(call),
     spawnSkill: (id, name, args) => devices.get(id).spawnSkill(name, args),
+    runStatus: (value) => vizij.runStatus(value),
     halt: (id, handle) => devices.get(id).halt(handle),
     place: (id, rect) => vizij.placeFace(id, rect),
     ready: (id) => vizij.ready(id),

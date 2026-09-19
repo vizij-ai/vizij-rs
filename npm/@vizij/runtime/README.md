@@ -15,7 +15,7 @@ its device's pose every frame.
 ## Use
 
 ```ts
-import { init, mount, loadFace, placeFaceIn, whenReady, unloadFace } from "@vizij/runtime";
+import { init, mount, loadFace, placeFaceIn, whenReady, unloadFace, runStatus } from "@vizij/runtime";
 
 await init();
 await mount("#faces"); // the canvas; transparent wherever no face draws
@@ -29,7 +29,7 @@ face.run(); // the device paces itself (or call face.step(dtMs) per frame)
 // any time — the device's store stays live while it runs:
 face.setValue(face.path("standard/vizij/expression/happy"), 1);
 const run = await face.spawn({ id: SAY_ID, args: [{ id: SAY_TEXT_PARAM_ID, value: { str: "Hello" } }] });
-face.readValues([run.status]);
+runStatus(face.readValues([run.status])[run.status]); // "running" | "success" | "failure"
 await face.halt(run);
 
 unloadFace("quori"); // the scene, the camera, the GLB
