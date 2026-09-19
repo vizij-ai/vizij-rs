@@ -3,7 +3,7 @@ name = "vizij-arora-host"
 version = "2.1.0"
 edition.workspace = true
 license = "MIT OR Apache-2.0"
-description = "Portable Vizij host glue: compose the device behavior from graph sources, read the face bundle, pick the program to autoplay, and stage the neutral pose. Shared by the native app and vizij-arora-web (the browser runtime)."
+description = "Portable Vizij host glue: compose the device behavior from graph sources, read the face bundle, pick the program to autoplay, and stage the neutral pose. Shared by the native app and the browser module (both in the vizij crate)."
 repository = "https://github.com/vizij-ai/vizij-rs"
 
 [dependencies]

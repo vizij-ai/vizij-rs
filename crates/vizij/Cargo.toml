@@ -16,6 +16,12 @@ crate-type = ["rlib", "cdylib"]
 name = "vizij"
 required-features = ["desktop"]
 
+# The browser bundle: `wasm-pack build crates/vizij --target web --release --
+# --no-default-features` (`scripts/build-runtime-wasm.mjs`). wasm-opt shrinks
+# it for size and strips the debug names, the larger of the two wins.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Os", "--strip-debug"]
+
 [dependencies]
 anyhow = { workspace = true }
 serde = { workspace = true }
@@ -121,6 +127,16 @@ bevy = { version = "0.19", default-features = false, features = ["x11", "wayland
 bevy = { version = "0.19", default-features = false, features = ["android-native-activity"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+# The browser module (`web`): the shared JS surface of a device — `step`,
+# the self-pacing `run`, the Value<->JSON store accessors — wraps each face's
+# device; wasm-bindgen carries the module's own surface.
+arora-web = "6.1"
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = "0.4"
+js-sys = { workspace = true }
+# `log` records (Bevy's, through tracing's `log` feature, and the crate's
+# own) reach the browser console.
+console_log = "1"
 # uuid v4 on wasm needs a browser RNG (selects getrandom's wasm_js backend).
 getrandom = { version = "0.4", features = ["wasm_js"] }
 

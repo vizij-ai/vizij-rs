@@ -33,8 +33,9 @@ file summarises, it does not replace, those sources.
   `vizij-graph-wasm`, and npm `@vizij/node-graph`.
 - **Interop (Arora) stack**: `crates/interop/*` adapts the Vizij stacks onto
   Arora runtime seams — `vizij-arora` (Value interop), `vizij-arora-store`,
-  `vizij-arora-hal`, `vizij-arora-behavior`, `vizij-arora-web` (npm
-  `@vizij/runtime`), and `vizij-animation-module` (npm `@vizij/animation-module`).
+  `vizij-arora-hal`, `vizij-arora-behavior`, and `vizij-animation-module` (npm
+  `@vizij/animation-module`); `crates/vizij` is the view and the device on every
+  target, and its `web` module is npm `@vizij/runtime`.
 - **Test fixtures**: `vizij-test-fixtures` crate that exposes the shared JSON
   manifest, mirrored to npm `@vizij/test-fixtures` for browsers.
 - **Support packages**: npm `@vizij/value-json`, `@vizij/wasm-loader`, and
@@ -110,8 +111,8 @@ Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unkno
 - Scope visibility with `pub(crate)` wherever possible and add Rustdoc comments
   for public APIs, including short usage snippets if the surface isn't obvious.
 - Co-locate unit tests in `#[cfg(test)]` modules; use crate-level `tests/`
-  folders for integration coverage (`vizij-arora-web/tests` is a good
-  example). Add wasm-bindgen tests when adjusting wasm surfaces.
+  folders for integration coverage (`crates/vizij/tests` is a good example).
+  Add wasm-bindgen tests when adjusting wasm surfaces.
 - Run fmt/clippy/tests (ideally via the git hooks) before shipping; call out any
   steps you skipped.
 

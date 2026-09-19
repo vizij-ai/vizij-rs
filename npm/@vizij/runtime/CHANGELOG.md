@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.0.0-alpha.0
+
+### Major Changes
+
+- The Bevy view and the Arora device in one wasm module (the `vizij` crate's `web` module): `mount(canvas)` creates the page's one App, `loadFace(faceId, glb, options?)` starts a face's device and shows it, `placeFace` / `placeFaceIn` / `fillCanvas` confine it to a rectangle of the canvas, `unloadFace` takes it down, `ready` / `whenReady` say when its scene shows, `drainPicks` reports clicks as `{ faceId, elementId }`, `describe(glb)` reads a GLB's elements, animatables, bounds and programs. A face's paths are its own (`device.rigPrefix`, `device.path(relative)`); there is no `namespace/` prefix.
+- `Runtime` is `Device` (a face's device, or `startRuntime(graph)`'s device with no face): `run()` resolves on the new `stop()`, `running` reads the device, `spawn(call)` starts a task run and resolves to its `TaskHandle`, `halt(handle)` stops it. The animation module is host-linked into every device: `startRuntime` takes no `modules`, and its functions are called by id.
+- The package ships its wasm once, under `dist/pkg`.
+
 ## 2.3.0
 
 ### Minor Changes

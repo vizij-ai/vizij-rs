@@ -218,3 +218,91 @@ fn two_faces_share_one_target_each_in_its_own_viewport() {
         .collect();
     assert_eq!(remaining, vec!["left".to_string()]);
 }
+
+/// Loading and unloading a face over and over leaves nothing behind: after
+/// the cycles, the App holds no more entities, meshes, images or materials
+/// than after the first.
+#[test]
+#[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job with VIZIJ_FIXTURES set"]
+fn load_unload_cycles_leave_nothing_behind() {
+    use vizij::view::ViewEvent;
+
+    let Some(fixtures) = std::env::var_os("VIZIJ_FIXTURES").map(PathBuf::from) else {
+        eprintln!("VIZIJ_FIXTURES unset — skipping the cycle test");
+        return;
+    };
+    let glb = std::fs::read(fixtures.join("Quori_Current_Extended.glb")).expect("read Quori");
+    let config = FaceConfig {
+        wanted: ["rig", "pose-driver", "pose", "standard-adaptation"]
+            .map(String::from)
+            .to_vec(),
+        program: ProgramSelect::None,
+        stage_neutral: true,
+        ros4hri: true,
+    };
+    let device = start(&glb, config, BridgeConfig::default(), Mode::Quiet).expect("start");
+    let (events_tx, events_rx) = std::sync::mpsc::channel();
+
+    let mut app = App::new();
+    FaceAssets::register(&mut app);
+    app.add_plugins(SnapshotPlugin {
+        width: WIDTH,
+        height: HEIGHT,
+    })
+    .insert_resource(ViewEvents(std::sync::Mutex::new(events_rx)))
+    .insert_resource(ViewOptions {
+        background: Color::BLACK,
+        fit: view::Fit::Contain,
+        zoom: Vec2::ONE,
+        ambient: std::f32::consts::FRAC_PI_2,
+        unlit: false,
+    })
+    .add_plugins(ViewPlugin);
+    vizij::view::snapshot::ensure_ready(&mut app);
+
+    let census = |app: &mut App| {
+        let world = app.world_mut();
+        (
+            world.entities().len(),
+            world.resource::<Assets<Mesh>>().len(),
+            world.resource::<Assets<Image>>().len(),
+            world.resource::<Assets<StandardMaterial>>().len(),
+        )
+    };
+    let mut after_first = None;
+    for cycle in 0..25 {
+        events_tx
+            .send(ViewEvent::LoadFace {
+                face_id: "cycle".into(),
+                meta: Box::new(device.meta.clone()),
+                glb: glb.clone(),
+                rig: device.rig.clone(),
+            })
+            .unwrap();
+        for _ in 0..600 {
+            app.update();
+            if view::all_faces_ready(&mut app) {
+                break;
+            }
+        }
+        assert!(
+            view::all_faces_ready(&mut app),
+            "cycle {cycle}: the face never got ready"
+        );
+        events_tx
+            .send(ViewEvent::UnloadFace {
+                face_id: "cycle".into(),
+            })
+            .unwrap();
+        // Despawns and asset drops settle over a few frames.
+        for _ in 0..10 {
+            app.update();
+        }
+        let now = census(&mut app);
+        eprintln!("cycle {cycle}: entities/meshes/images/materials {now:?}");
+        match after_first {
+            None => after_first = Some(now),
+            Some(first) => assert_eq!(now, first, "cycle {cycle} left something behind"),
+        }
+    }
+}
