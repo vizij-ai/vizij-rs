@@ -33,7 +33,7 @@ quori.run(); // the device paces itself (or call quori.step(dtMs) per frame)
 // any time — the device's store stays live while it runs:
 quori.setValue(quori.path("standard/vizij/expression/happy"), 1);
 const run = await quori.spawn({ id: SAY_ID, args: [{ id: SAY_TEXT_PARAM_ID, value: { str: "Hello" } }] });
-quori.readValues([run.status.path]);
+quori.readValues([run.status]);
 await quori.halt(run);
 
 unloadVizij("quori"); // the scene, the camera, the GLB

@@ -16,12 +16,19 @@ use vizij_arora_store::BlackboardStore;
 
 use crate::view::meta::FaceMeta;
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "tts-piper"))]
-use crate::modules::tts_piper;
 use crate::modules::{animation, gaze, viseme};
 
-#[cfg(all(not(target_arch = "wasm32"), not(feature = "tts-piper")))]
-use vizij_arora_tts as tts;
+/// Builds this device's speech provider — the host module behind the say
+/// skill's hosted `say` call, one per device generation: the cloud provider
+/// ([`vizij_arora_tts`]) at a deployment, the local Piper one, or the
+/// browser's over the page's playback. A device without one plays no
+/// speech; its `say` runs fail. The native driver rebuilds the device on
+/// its worker thread, so the builder crosses threads there; the browser's
+/// holds a JS function and never leaves its thread.
+#[cfg(not(target_arch = "wasm32"))]
+pub type SpeechProvider = std::sync::Arc<dyn Fn() -> arora::HostModule + Send + Sync>;
+#[cfg(target_arch = "wasm32")]
+pub type SpeechProvider = std::rc::Rc<dyn Fn() -> arora::HostModule>;
 
 /// How a face is composed and staged — carried from the entry point into
 /// each device generation and its reloads.
@@ -40,6 +47,9 @@ pub struct FaceConfig {
     /// leaves a plain ROS 2 device, its keys under `/{namespace}/keys/…` and
     /// nothing on the ROS4HRI names.
     pub ros4hri: bool,
+    /// The speech provider, built per generation; `None` for a device that
+    /// plays no speech.
+    pub speech: Option<SpeechProvider>,
 }
 
 /// A face read for the device: its metadata and the one behavior graph its
@@ -179,15 +189,18 @@ pub type GuestModule = (arora_types::module::low::Header, Vec<u8>);
 
 /// The device builder over the Vizij seams: the composed graph as the behavior,
 /// with the animation module loaded so the composed animation source's
-/// `ExternalFunction` nodes dispatch and its transport is callable. `None`
-/// (logged) when the spec does not encode or the baked-in module does not load.
+/// `ExternalFunction` nodes dispatch and its transport is callable, and
+/// `speech` as the say skill's provider when there is one. `None` (logged)
+/// when the spec does not encode.
 pub fn builder_for(
     spec: &str,
     rig: RigHal,
     store: BlackboardStore,
     embedded_skills: &[(String, serde_json::Value)],
+    speech: Option<arora::HostModule>,
 ) -> Option<arora::AroraBuilder> {
-    builder_with_guests(spec, rig, store, embedded_skills, Vec::new()).map(|(builder, _)| builder)
+    builder_with_guests(spec, rig, store, embedded_skills, speech, Vec::new())
+        .map(|(builder, _)| builder)
 }
 
 /// [`builder_for`] with wasm modules loaded as guests besides the host-linked
@@ -199,6 +212,7 @@ pub fn builder_with_guests(
     rig: RigHal,
     store: BlackboardStore,
     embedded_skills: &[(String, serde_json::Value)],
+    speech: Option<arora::HostModule>,
     guests: Vec<GuestModule>,
 ) -> Option<(
     arora::AroraBuilder,
@@ -223,8 +237,8 @@ pub fn builder_with_guests(
     // in-process transport call) to the host module registered below, and the
     // say skill's hosted `say` call to this build's text-to-speech provider.
     let mut function_modules = animation::function_modules();
-    if let Some(tts) = tts_module_id() {
-        function_modules.insert(speech::SAY_ID, tts);
+    if let Some(provider) = &speech {
+        function_modules.insert(speech::SAY_ID, provider.id());
     }
     for (header, _) in &guests {
         function_modules.extend(
@@ -258,14 +272,13 @@ pub fn builder_with_guests(
         .with_host_module(animation::host_module())
         .with_host_module(gaze::host_module())
         .with_host_module(viseme::host_module());
-    // The TTS module: the `say` provider behind the say skill (poll-on-tick,
-    // viseme out-param). One provider per build, same contract: the cloud
-    // provider by default, the local Piper provider under `tts-piper`. The
-    // browser device has no native producer; its provider is the page's.
-    #[cfg(all(not(target_arch = "wasm32"), not(feature = "tts-piper")))]
-    let builder = builder.with_host_module(tts::host_module());
-    #[cfg(all(not(target_arch = "wasm32"), feature = "tts-piper"))]
-    let builder = builder.with_host_module(tts_piper::host_module());
+    // The speech provider: the `say` behind the say skill (poll-on-tick,
+    // viseme out-parameter) — one per device, same contract whichever
+    // synthesizes and plays.
+    let builder = match speech {
+        Some(provider) => builder.with_host_module(provider),
+        None => builder,
+    };
     let builder = guests.into_iter().fold(builder, |builder, (header, wasm)| {
         builder.with_module(header, wasm)
     });
@@ -294,23 +307,6 @@ fn rig_prefix_of(spec: &str) -> String {
                 .map(|at| path[..at].to_string())
         })
         .unwrap_or_default()
-}
-
-/// The module id of this build's text-to-speech provider — where the say
-/// skill's hosted call dispatches — or `None` where the build carries none.
-fn tts_module_id() -> Option<uuid::Uuid> {
-    #[cfg(all(not(target_arch = "wasm32"), not(feature = "tts-piper")))]
-    {
-        Some(tts::MODULE_ID)
-    }
-    #[cfg(all(not(target_arch = "wasm32"), feature = "tts-piper"))]
-    {
-        Some(tts_piper::MODULE_ID)
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        None
-    }
 }
 
 #[cfg(test)]
@@ -379,7 +375,7 @@ mod tests {
         let spec = compose_sources(&[animations_source()])
             .expect("compose the animation source")
             .to_string();
-        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[])
+        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
             .expect("build the device over the loaded animation module")
             .build()
             .expect("build arora");
@@ -431,6 +427,7 @@ mod tests {
             RigHal::new(),
             BlackboardStore::new(),
             &[],
+            None,
         )
         .expect("build the device")
         .with_host_module(gaze)
@@ -494,6 +491,7 @@ mod tests {
             RigHal::new(),
             BlackboardStore::new(),
             &[],
+            None,
         )
         .expect("build the device")
         .build()
@@ -584,6 +582,7 @@ mod tests {
             RigHal::new(),
             BlackboardStore::new(),
             &embedded,
+            None,
         )
         .expect("build the device")
         .build()
@@ -636,7 +635,7 @@ mod tests {
         let spec = compose_sources(&[ros4hri_source("")])
             .expect("compose the ros4hri mapping")
             .to_string();
-        builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[])
+        builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
             .expect("build the device over the mapping")
             .build()
             .expect("build arora")
@@ -700,7 +699,7 @@ mod tests {
             )
             .expect("compose the face with its embedded mapping")
             .to_string();
-        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[])
+        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
             .expect("build the device over the composed face")
             .build()
             .expect("build arora");
@@ -1120,12 +1119,13 @@ mod tests {
             program: ProgramSelect::None,
             stage_neutral: true,
             ros4hri: true,
+            speech: None,
         };
         let LoadedFace { meta, spec } =
             load_face(&adapted, &config).expect("load the adapted face");
         let store = BlackboardStore::new();
         stage_neutral_pose(&store, &meta);
-        let mut arora = builder_for(&spec, RigHal::new(), store, &[])
+        let mut arora = builder_for(&spec, RigHal::new(), store, &[], None)
             .expect("build the device")
             .build()
             .expect("build arora");

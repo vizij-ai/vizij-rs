@@ -195,7 +195,7 @@ async fn the_device_alone_keeps_a_flat_heap_under_a_frame_feed() {
 
     let rig = RigHal::new();
     let store = BlackboardStore::new();
-    let mut arora = builder_for(&fan_out_spec(), rig.clone(), store.clone(), &[])
+    let mut arora = builder_for(&fan_out_spec(), rig.clone(), store.clone(), &[], None)
         .expect("build the device")
         .build()
         .expect("build arora");
