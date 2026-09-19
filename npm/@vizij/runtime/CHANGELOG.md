@@ -1,5 +1,47 @@
 # Changelog
 
+## 3.0.0-alpha.0
+
+### Breaking
+
+- The wasm is the Bevy view and the Arora device together: 31 MB, 9.2 MB
+  gzipped, against 2.4.0's 2.5 MB and 0.8 MB. Every import of this package
+  fetches it, including one that only lists `skills()` / `profiles()` or runs
+  a device with nothing drawn (`startRuntime`). No device-only artifact is
+  built — the `vizij-arora-web` crate is gone — so a page that cannot carry
+  the view stays on `@vizij/runtime@2`.
+- The wasm file is `vizij_bg.wasm`, no longer `vizij_arora_web_bg.wasm`, and
+  it ships once, under `dist/pkg/` (`pkg/` is not in the package). An
+  `init(input)` that names the file by URL or path must name the new one.
+- `Runtime.run()` returns `Promise<void>` and resolves when `stop()` reclaims
+  the device (it was `Promise<never>`): a caller that took the promise's
+  settlement for a failure now takes a `stop()` for one. `running` reads the
+  device, so it turns false after `stop()`.
+
+### Added
+
+- The view: `mount(canvas, options?)` creates the page's one App;
+  `loadFace(faceId, glb, options?)` starts a face's device and shows it;
+  `placeFace` / `placeFaceIn` / `fillCanvas` confine it to a rectangle of the
+  canvas; `unloadFace` takes it down; `ready` / `whenReady` say when its scene
+  shows; `drainPicks` reports pointer presses on faces as
+  `{ faceId, elementId }`; `describe(glb)` reads a GLB's elements,
+  animatables, bounds and programs; `memoryBytes` reads the module's linear
+  memory. A face's paths are its own (`runtime.rigPrefix`,
+  `runtime.path(relative)`).
+- `Runtime` is a face's Arora, or `startRuntime(graph)`'s with no face:
+  `stop()`, `spawn(call)` (a task run, resolving to its `TaskHandle`),
+  `halt(handle)`.
+
+### Changed
+
+- The animation module is host-linked into every device, its functions
+  called by id: `composeFace({ animations: true })` dispatches without a
+  guest. Arora wasm modules still load as guests — `startRuntime(graph, init,
+  modules)` and `loadFace`'s `options.modules` take `{ headerJson, wasmBytes }`
+  pairs — and a guest under a host-linked module's id (`@vizij/animation-module`'s)
+  is served by the host-linked one.
+
 ## 2.3.0
 
 ### Minor Changes

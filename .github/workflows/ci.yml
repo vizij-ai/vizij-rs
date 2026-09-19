@@ -93,14 +93,24 @@ jobs:
           # wasm32-wasip1 builds the animation-module artifact (an Arora guest
           # module, not a wasm-bindgen wrapper).
           targets: wasm32-wasip1
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-wasm-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Install wasm-pack
         run: cargo install wasm-pack
       - name: Build WASM into npm wrapper pkg/
         run: node scripts/build-animation-wasm.mjs
       - name: Build Graph WASM into npm wrapper pkg/
         run: node scripts/build-graph-wasm.mjs
-      - name: Build Arora-web WASM into npm wrapper pkg/
-        run: node scripts/build-arora-web-wasm.mjs
+      # The browser bundle is the whole vizij crate (Bevy included) for
+      # wasm32: the cache above is what keeps this under the job's budget.
+      - name: Build the runtime WASM (the vizij crate for the browser) into npm wrapper pkg/
+        run: node scripts/build-runtime-wasm.mjs
       - name: Install pnpm
         uses: pnpm/action-setup@v4
       - name: Setup Node
@@ -125,6 +135,27 @@ jobs:
           pnpm --filter @vizij/node-graph run test
           pnpm --filter @vizij/animation-module run test
           pnpm --filter @vizij/runtime run test
+      # The bundle on a page: Quori and Toasty against the native references
+      # under the same metric, and 25 load/unload cycles with a flat memory.
+      - name: Fetch the face GLBs from vizij-web
+        run: |
+          mkdir -p fixtures
+          base="https://raw.githubusercontent.com/vizij-ai/vizij-web/main/apps/vizij-authoring/public/assets"
+          curl -fsSL "$base/Quori_Current_Extended.glb" -o fixtures/Quori_Current_Extended.glb
+          curl -fsSL "$base/Toasty_Current.glb" -o fixtures/Toasty_Current.glb
+      - name: Install Chromium for Playwright
+        run: pnpm --filter @vizij/runtime exec playwright install --with-deps chromium
+      - name: Run the browser tests
+        env:
+          VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
+          VIZIJ_SNAPSHOT_OUT: ${{ github.workspace }}/browser-snapshots
+        run: pnpm --filter @vizij/runtime run test:browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-snapshots
+          path: browser-snapshots
+          if-no-files-found: ignore
 
   bench-smoke:
     runs-on: ubuntu-latest
@@ -234,7 +265,7 @@ jobs:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
           WGPU_BACKEND: vulkan
         run: cargo test -p vizij --test snapshot_regression -- --ignored --nocapture
-      - name: Compose a face from bytes headless through the library
+      - name: Compose faces from bytes headless through the library (one, two, 25 cycles)
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
           WGPU_BACKEND: vulkan

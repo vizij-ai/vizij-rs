@@ -11,14 +11,16 @@
 //! device's hardware, on a worker thread under arora's operator flow, with
 //! the bridges a build adds; the desktop binary (`main.rs`, feature
 //! `desktop`) puts a CLI, a window and a terminal UI on it. The browser
-//! module and the Android activity build on the same library without the
-//! desktop half.
+//! module ([`web`], the wasm-bindgen surface behind `@vizij/runtime`) and the
+//! Android activity build on the same library without the desktop half.
 
 pub mod face;
 pub mod modules;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod native;
 pub mod view;
+#[cfg(target_arch = "wasm32")]
+pub mod web;
 
 #[cfg(all(test, feature = "desktop"))]
 mod memory_tests;

@@ -1,27 +1,31 @@
 /**
  * Stable ESM entrypoint for `@vizij/runtime`.
  *
- * Runs a Vizij runtime in the browser on an Arora engine: the wasm module
- * (`crates/interop/vizij-arora-web`) assembles an `arora_web::BrowserRuntime`
- * over a Vizij blackboard store, rig HAL, and the caller's node graph as the
- * runtime's behavior. This wrapper loads the wasm once and exposes the runtime
- * with idiomatic JS types: values cross the boundary in the normalized
- * `ValueJSON` vocabulary shared with the other Vizij packages.
+ * Vizij faces in the browser: one wasm module holding the Bevy view and the
+ * Arora device (the `vizij` crate's `web` module). A page {@link mount}s its
+ * canvas once — one App for the page's lifetime — then {@link loadFace}s as
+ * many faces as it shows: each is a {@link Runtime} of its own, JS-paced,
+ * drawn into the rectangle of the canvas the page {@link placeFace}s it in.
+ * Values cross the boundary in the normalized `ValueJSON` vocabulary shared
+ * with the other Vizij packages.
  *
  * Typical use:
  * ```ts
- * import { init, startRuntime } from "@vizij/runtime";
+ * import { init, mount, loadFace, placeFaceIn, whenReady } from "@vizij/runtime";
  *
  * await init();
- * const runtime = await startRuntime(graphSpec);
- * runtime.run(); // the runtime paces itself from here on
- * // each animation frame:
- * runtime.setValue("sensor/x", { f32: 0.75 });
- * const changes = runtime.drainChanges();
+ * await mount("#faces");
+ * const face = await loadFace("quori", glbBytes);
+ * placeFaceIn("quori", document.getElementById("slot")!, canvas);
+ * await whenReady("quori");
+ * face.run(); // the device paces itself from here on
+ * face.setValue(face.path("standard/vizij/expression/happy"), 1);
+ * const run = await face.spawn({ id: SAY_ID, args: [...] });
  * ```
  *
- * A host with its own clock skips `run()` and calls `runtime.step(dtMs)`
- * per frame instead.
+ * A host with its own clock skips `run()` and calls `face.step(dtMs)` per
+ * animation frame instead. {@link startRuntime} gives a device with no face
+ * (a graph on a store, nothing drawn) — a bench, or a graph run in Node.
  */
 import { toValueJSON, type ValueJSON, type ValueInput } from "@vizij/value-json";
 import {
@@ -124,16 +128,6 @@ export interface Skill {
 export type GraphEditsInput = object | string;
 
 /**
- * An Arora wasm module to load into the runtime's engine: its header as JSON
- * plus its `.wasm` executable bytes — e.g. what `@vizij/animation-module`'s
- * `loadAnimationModule()` returns.
- */
-export interface RuntimeModule {
-  headerJson: string;
-  wasmBytes: Uint8Array;
-}
-
-/**
  * An Arora `Call`, as an object (or already-serialized JSON): the function
  * `id`, optionally the `module_id` it lives in (inferred from the loaded
  * modules when omitted), and `args` as `{ id, value }` pairs in the Arora
@@ -147,12 +141,94 @@ export interface RuntimeCallResult {
   mutated?: unknown[];
 }
 
-interface WasmVizijArora {
+/** A store key, as the interpreter names one. */
+export interface KeyRef {
+  path: string;
+}
+
+/**
+ * A task run's lifecycle contract, as {@link Runtime.spawn} resolves it: the
+ * `status` key to watch (the run's `Status` value, terminal once it ends),
+ * the `feedback` keys it updates while it runs, the `result` keys it writes
+ * when it ends, and the `stop` call {@link Runtime.halt} issues.
+ */
+export interface TaskHandle {
+  id: unknown;
+  stop: object;
+  status: KeyRef;
+  feedback: KeyRef[];
+  result?: KeyRef[];
+}
+
+/** A pointer press on a face, by the ids its RobotData declares. */
+export interface Pick {
+  faceId: string;
+  elementId: string;
+}
+
+/** A rectangle of the canvas, in CSS pixels from its top-left corner. */
+export interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Options for {@link mount}: how every face is rendered. */
+export interface MountOptions {
+  /** `RRGGBB` clear colour of each face's rectangle; absent, the canvas
+   * stays transparent wherever nothing is drawn. */
+  background?: string;
+  /** How a face fits its rectangle: `contain` (default), `cover`, `stretch`. */
+  fit?: "contain" | "cover" | "stretch";
+  /** Magnification after the fit: one factor, or `[x, y]`. */
+  zoom?: number | [number, number];
+  /** three.js-style ambient intensity (default π/2). */
+  ambient?: number;
+  /** Render pure albedo. */
+  unlit?: boolean;
+}
+
+/** Options for {@link loadFace}: the composition, as {@link composeFace}'s,
+ * plus whether the bundle's neutral pose is staged (default `true`). */
+export interface FaceOptions extends ComposeFaceOptions {
+  stageNeutral?: boolean;
+}
+
+/** What {@link describe} reads from a GLB without loading it. */
+export interface FaceDescription {
+  faceId: string | null;
+  /** The prefix the face's own paths live under (`rig/<faceId>/`). */
+  rigPrefix: string;
+  rootBounds: { center: { x: number; y: number }; size: { x: number; y: number } } | null;
+  elements: {
+    id: string;
+    name: string;
+    kind: string;
+    material: string | null;
+    morphTargets: string[];
+  }[];
+  /** animatable UUID → the node it drives and the feature (`translation`,
+   * `rotation`, `scale`, `color`, `opacity`, or a morph target's name). */
+  animatables: Record<string, { node: string; feature: string }>;
+  graphs: { kind: string }[];
+  programs: string[];
+  activeProgramId: string | null;
+  neutralInputs: Record<string, number>;
+}
+
+interface WasmFaceRuntime {
+  readonly faceId: string;
+  readonly rigPrefix: string;
   step(dt_ms: number): void;
-  run(period_ms?: number): Promise<never>;
+  run(period_ms?: number): Promise<void>;
+  stop(): void;
+  readonly running: boolean;
   readonly behaviorError: string | undefined;
   behaviorErrorChanged(): Promise<string | undefined>;
   call(call_json: string): Promise<string>;
+  spawn(call_json: string): Promise<string>;
+  halt(handle_json: string): Promise<string>;
   loadGraph(graph_json: string): Promise<string>;
   applyGraphEdits(edits_json: string): Promise<string>;
   setValue(path: string, value_json: string): void;
@@ -165,9 +241,18 @@ interface WasmVizijArora {
 
 interface WasmBindings {
   default: (input?: unknown) => Promise<unknown>;
-  VizijArora: {
-    start(graph_json?: string, modules?: RuntimeModule[]): Promise<WasmVizijArora>;
+  FaceRuntime: {
+    fromGraph(graph_json?: string): WasmFaceRuntime;
   };
+  mount(canvas: string, options_json?: string): void;
+  loadFace(face_id: string, glb: Uint8Array, options_json?: string): WasmFaceRuntime;
+  unloadFace(face_id: string): void;
+  placeFace(face_id: string, x: number, y: number, width: number, height: number): void;
+  fillCanvas(face_id: string): void;
+  ready(face_id: string): boolean;
+  drainPicks(): Pick[];
+  describe(glb: Uint8Array): FaceDescription;
+  memoryBytes(): number;
   mappings(): Mapping[];
   mapping(id: string, rig_prefix: string): object | null;
   profiles(): ProfileSummary[];
@@ -193,11 +278,11 @@ function toWasmBindgenInitOptions(initArg: unknown): { module_or_path: unknown }
 }
 
 function pkgWasmJsUrl(): URL {
-  return new URL("../../pkg/vizij_arora_web.js", import.meta.url);
+  return new URL("../../pkg/vizij.js", import.meta.url);
 }
 
 function importStaticWasmModule(): Promise<unknown> {
-  return import("../../pkg/vizij_arora_web.js");
+  return import("../../pkg/vizij.js");
 }
 
 function importDynamicWasmModule(): Promise<unknown> {
@@ -221,7 +306,7 @@ async function importWasmModule(): Promise<unknown> {
 
 function defaultWasmUrl(): string {
   if (!wasmUrlCache) {
-    wasmUrlCache = new URL("../../pkg/vizij_arora_web_bg.wasm", import.meta.url).toString();
+    wasmUrlCache = new URL("../../pkg/vizij_bg.wasm", import.meta.url).toString();
   }
   return wasmUrlCache;
 }
@@ -264,49 +349,69 @@ export function init(input?: InitInput): Promise<void> {
 }
 
 /**
- * The running Vizij runtime. All methods talk to the runtime's shared
- * store; the graph installed at `startRuntime` reads and writes the same keys.
+ * A face's device — or, from {@link startRuntime}, a device with no face.
+ * All methods talk to the device's own store; the graph it runs reads and
+ * writes the same keys. A face's paths live under its {@link rigPrefix};
+ * {@link path} builds one.
  */
 export class Runtime {
-  private inner: WasmVizijArora;
-  private selfPaced = false;
+  private inner: WasmFaceRuntime;
 
-  constructor(inner: WasmVizijArora) {
+  constructor(inner: WasmFaceRuntime) {
     this.inner = inner;
   }
 
+  /** The slot the face is shown under; empty for a device with no face. */
+  get faceId(): string {
+    return this.inner.faceId;
+  }
+
+  /** The prefix the face's own paths live under (`rig/<faceId>/`), empty
+   * when the GLB names no face. */
+  get rigPrefix(): string {
+    return this.inner.rigPrefix;
+  }
+
+  /** A path of the face's own: `rigPrefix + relative`. */
+  path(relative: string): string {
+    return this.inner.rigPrefix + relative;
+  }
+
   /**
-   * Advance the runtime one tick. `dtMs` is the wall time since the previous
+   * Advance the device one tick. `dtMs` is the wall time since the previous
    * step in milliseconds (the difference of two `requestAnimationFrame`
-   * timestamps). Unavailable once `run()` has taken the runtime — it paces
-   * itself from then on.
+   * timestamps). Unavailable while `run()` owns the device.
    */
   step(dtMs: number): void {
     this.inner.step(dtMs);
   }
 
   /**
-   * Hand the runtime to its own loop, for good: a self-paced run at
-   * `periodMs` (default: the runtime's ~100 Hz). While it runs, `step()` is
-   * unavailable and the rest of this surface keeps working; it never touches
-   * the stepping runtime. A failing behavior tick does **not** end the loop —
-   * it stands as `behaviorError` until a tick recovers; the returned promise
-   * rejects only if the runtime itself fails.
+   * Hand the device its own loop at `periodMs` (default ~100 Hz) until
+   * {@link stop}. The rest of this surface keeps working meanwhile. A
+   * failing behavior tick does **not** end the loop — it stands as
+   * `behaviorError` until a tick recovers; the returned promise rejects only
+   * if the runtime itself fails, and resolves on `stop()`.
    */
-  run(periodMs?: number): Promise<never> {
-    this.selfPaced = true;
+  run(periodMs?: number): Promise<void> {
     return this.inner.run(periodMs);
   }
 
-  /** Whether `run()` has taken the runtime (so `step()` is unavailable). */
+  /** Reclaim the device from `run()`: the loop ends at its next step
+   * boundary and `step()` works again. */
+  stop(): void {
+    this.inner.stop();
+  }
+
+  /** Whether `run()` currently owns the device. */
   get running(): boolean {
-    return this.selfPaced;
+    return this.inner.running;
   }
 
   /**
    * The behavior's standing error — the message of its latest failed tick,
    * `undefined` while the behavior is healthy or none is installed. A
-   * failing tick does not stop the runtime or its `run()` loop; the reading
+   * failing tick does not stop the device or its `run()` loop; the reading
    * stays available throughout.
    */
   get behaviorError(): string | undefined {
@@ -318,18 +423,18 @@ export class Runtime {
    * reading: a message when a distinct failure appears, `undefined` when a
    * tick recovers. Sequential awaits share one cursor, so no change is
    * missed between them; one await may be pending at a time. Rejects when
-   * the runtime is gone.
+   * the device is gone.
    */
   behaviorErrorChanged(): Promise<string | undefined> {
     return this.inner.behaviorErrorChanged();
   }
 
   /**
-   * Call a loaded module's function through the runtime. The call is enqueued
-   * before this returns and dispatches inside the runtime's **next** step —
-   * the same phase a remote bridge command executes in — so the returned
-   * promise resolves only after that step runs. Under `run()` just `await`
-   * it; a direct driver calls `step` after issuing it.
+   * Call a module function through the device (the animation module's need
+   * no `module_id`). The call is enqueued before this returns and dispatches
+   * inside the device's **next** step, so the returned promise resolves only
+   * after that step runs. Under `run()` just `await` it; a direct driver
+   * calls `step` after issuing it.
    */
   call(call: RuntimeCall): Promise<RuntimeCallResult> {
     const json = typeof call === "string" ? call : JSON.stringify(call);
@@ -337,33 +442,49 @@ export class Runtime {
   }
 
   /**
-   * Replace the runtime's running graph **in place**: the spec reaches the
-   * interpreter as the engine's LOAD call, so the store, the loaded modules,
-   * and the runtime itself all survive the swap. Resolves once the new graph
-   * is installed; on a runtime not under `run()` a zero-dt step is taken so
-   * the swap lands without an external driver.
+   * Spawn a described function — `say`, `look_at`, `play_viseme` — as a task
+   * run on the device's interpreter, the way a bridge does for a remote.
+   * Resolves (after the next step) to the run's {@link TaskHandle}: watch
+   * its `status` key, read its `feedback` keys, {@link halt} it with it.
+   */
+  spawn(call: RuntimeCall): Promise<TaskHandle> {
+    const json = typeof call === "string" ? call : JSON.stringify(call);
+    return this.inner.spawn(json).then((handle) => JSON.parse(handle) as TaskHandle);
+  }
+
+  /** Halt a run: resolves once the halt is applied (its status key then
+   * reads terminal). */
+  halt(handle: TaskHandle): Promise<void> {
+    return this.inner.halt(JSON.stringify(handle)).then(() => undefined);
+  }
+
+  /**
+   * Replace the device's running graph **in place**: the spec reaches the
+   * interpreter as the engine's LOAD call, so the store, the modules and the
+   * device itself all survive the swap. Resolves once the new graph is
+   * installed; on a device not under `run()` a zero-dt step is taken so the
+   * swap lands without an external driver.
    */
   loadGraph(graph: GraphSpecInput): Promise<void> {
     const json = typeof graph === "string" ? graph : JSON.stringify(graph);
     const loaded = this.inner.loadGraph(json);
-    if (!this.selfPaced) {
+    if (!this.inner.running) {
       this.inner.step(0);
     }
     return loaded.then(() => undefined);
   }
 
   /**
-   * Edit the runtime's running graph **in place** (VIZ-79): `edits` is a
-   * spec-level graph diff (`upsert_nodes` / `remove_nodes` / `upsert_edges` /
-   * `remove_edges`) that reaches the interpreter as the engine's EDIT call.
-   * Unchanged nodes keep their runtime state, so the edit patches the graph
-   * rather than reloading it. Resolves once applied; on a runtime not under
+   * Edit the running graph **in place**: `edits` is a spec-level graph diff
+   * (`upsert_nodes` / `remove_nodes` / `upsert_edges` / `remove_edges`) that
+   * reaches the interpreter as the engine's EDIT call. Unchanged nodes keep
+   * their runtime state. Resolves once applied; on a device not under
    * `run()` a zero-dt step lands it.
    */
   applyGraphEdits(edits: GraphEditsInput): Promise<void> {
     const json = typeof edits === "string" ? edits : JSON.stringify(edits);
     const applied = this.inner.applyGraphEdits(json);
-    if (!this.selfPaced) {
+    if (!this.inner.running) {
       this.inner.step(0);
     }
     return applied.then(() => undefined);
@@ -394,43 +515,161 @@ export class Runtime {
   }
 
   /**
-   * The keys that changed since the last call (`null` = cleared) — poll it to
-   * feed a renderer. The first drain returns the store's whole current state:
-   * the subscription opens on it, so no separate init snapshot is needed.
+   * The keys that changed since the last call (`null` = cleared). The first
+   * drain returns the store's whole current state: the subscription opens on
+   * it, so no separate init snapshot is needed.
    */
   drainChanges(): Record<string, ValueJSON | null> {
     return this.inner.drainChanges();
   }
 
-  /** Release the wasm-side runtime. The instance is unusable afterwards. */
+  /** Release the wasm-side device. The instance is unusable afterwards; a
+   * face's device is disposed after {@link unloadFace}. */
   dispose(): void {
     this.inner.free();
   }
 }
 
+/** @deprecated Renamed {@link Runtime}: a face's device, or one with no face. */
+export type Runtime = Runtime;
+
+function bindings(): WasmBindings {
+  const current = bindingCache.current;
+  if (!current) {
+    throw new Error("@vizij/runtime: call init() first");
+  }
+  return current;
+}
+
 /**
- * Boot the runtime in the browser, with `graph` (a Vizij graph spec, in any
- * form the spec normalizer accepts) installed as its behavior. The graph's
- * `input` nodes' paths become the store keys it reads each tick. Omit `graph`
- * to get the built-in passthrough proof graph (`sensor/x` → `actuator/y`).
- *
- * `modules` optionally loads Arora wasm modules into the runtime's engine;
- * their functions are then reachable with `Runtime.call` and from the
- * graph's `ExternalFunction` nodes.
- *
- * Calls `init()` if it has not run yet.
+ * Create the page's one App over `canvas` — a CSS selector, or the canvas
+ * element itself (given an id if it has none). The canvas fits its parent
+ * and stays transparent wherever no face draws. Calls {@link init} if it
+ * has not run yet. A page mounts once.
  */
-export async function startRuntime(
-  graph?: GraphSpecInput,
+export async function mount(
+  canvas: string | HTMLCanvasElement,
+  options?: MountOptions,
   input?: InitInput,
-  modules?: RuntimeModule[],
+): Promise<void> {
+  await init(input);
+  let selector: string;
+  if (typeof canvas === "string") {
+    selector = canvas;
+  } else {
+    if (!canvas.id) {
+      canvas.id = `vizij-${Math.random().toString(36).slice(2)}`;
+    }
+    selector = `#${canvas.id}`;
+  }
+  bindings().mount(selector, options ? JSON.stringify(options) : undefined);
+}
+
+/**
+ * Show a face under `faceId` and start its device: the GLB's bindings and
+ * bundle are read, its graphs composed (`options` as {@link composeFace}'s,
+ * plus `stageNeutral`), the device built with the animation, gaze and viseme
+ * modules, and the scene queued for the App — {@link whenReady} resolves
+ * once it shows. A face already shown under `faceId` is replaced. Requires
+ * {@link mount}.
+ */
+export async function loadFace(
+  faceId: string,
+  glb: Uint8Array | ArrayBuffer,
+  options?: FaceOptions,
+  input?: InitInput,
 ): Promise<Runtime> {
   await init(input);
-  const bindings = bindingCache.current!;
+  const bytes = glb instanceof Uint8Array ? glb : new Uint8Array(glb);
+  return new Runtime(
+    bindings().loadFace(faceId, bytes, options ? JSON.stringify(options) : undefined),
+  );
+}
+
+/** Take the face down: its scene, its camera, its GLB. Dispose its
+ * {@link Runtime} afterwards. */
+export function unloadFace(faceId: string): void {
+  bindings().unloadFace(faceId);
+}
+
+/** Confine the face's camera to a rectangle of the canvas (CSS pixels from
+ * its top-left corner) — how several faces share one canvas. Kept across the
+ * face's reloads. */
+export function placeFace(faceId: string, rect: Rect): void {
+  bindings().placeFace(faceId, rect.x, rect.y, rect.width, rect.height);
+}
+
+/** Place the face over `element`, as it lies over `canvas` on the page —
+ * call it again when the layout changes. */
+export function placeFaceIn(faceId: string, element: Element, canvas: Element): void {
+  const c = canvas.getBoundingClientRect();
+  const e = element.getBoundingClientRect();
+  placeFace(faceId, { x: e.x - c.x, y: e.y - c.y, width: e.width, height: e.height });
+}
+
+/** Give the face's camera the whole canvas again. */
+export function fillCanvas(faceId: string): void {
+  bindings().fillCanvas(faceId);
+}
+
+/** Whether the face's scene has spawned and its bindings are joined — from
+ * then on its device's pose shows. */
+export function ready(faceId: string): boolean {
+  return bindings().ready(faceId);
+}
+
+/** Resolves once {@link ready} is true for the face; rejects after
+ * `timeoutMs` (default 60 s). */
+export function whenReady(faceId: string, timeoutMs = 60_000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const started = Date.now();
+    const poll = () => {
+      if (ready(faceId)) {
+        resolve();
+      } else if (Date.now() - started > timeoutMs) {
+        reject(new Error(`@vizij/runtime: face ${faceId} not ready after ${timeoutMs} ms`));
+      } else {
+        setTimeout(poll, 50);
+      }
+    };
+    poll();
+  });
+}
+
+/** The pointer presses on faces since the last drain, oldest first. */
+export function drainPicks(): Pick[] {
+  return bindings().drainPicks();
+}
+
+/** The module's linear memory in bytes; it never shrinks, so a flat reading
+ * across face loads and unloads is what "nothing leaks" looks like. */
+export function memoryBytes(): number {
+  return bindings().memoryBytes();
+}
+
+/** What a GLB declares — its elements, animatables, bounds, graphs and
+ * programs — without loading it. Calls {@link init} if it has not run yet. */
+export async function describe(
+  glb: Uint8Array | ArrayBuffer,
+  input?: InitInput,
+): Promise<FaceDescription> {
+  await init(input);
+  const bytes = glb instanceof Uint8Array ? glb : new Uint8Array(glb);
+  return bindings().describe(bytes);
+}
+
+/**
+ * A device with no face: `graph` (a Vizij graph spec, in any form the spec
+ * normalizer accepts) as its behavior over a fresh store and rig, the
+ * animation module host-linked. Nothing is drawn — a bench, or a graph run
+ * in Node. Omit `graph` for the built-in passthrough proof graph
+ * (`sensor/x` → `actuator/y`). Calls {@link init} if it has not run yet.
+ */
+export async function startRuntime(graph?: GraphSpecInput, input?: InitInput): Promise<Runtime> {
+  await init(input);
   const graphJson =
     graph === undefined ? undefined : typeof graph === "string" ? graph : JSON.stringify(graph);
-  const inner = await bindings.VizijArora.start(graphJson, modules);
-  return new Runtime(inner);
+  return new Runtime(bindings().FaceRuntime.fromGraph(graphJson));
 }
 
 /**
@@ -439,7 +678,7 @@ export async function startRuntime(
  */
 export async function mappings(input?: InitInput): Promise<Mapping[]> {
   await init(input);
-  return bindingCache.current!.mappings();
+  return bindings().mappings();
 }
 
 /**
@@ -455,7 +694,7 @@ export async function mapping(
   input?: InitInput,
 ): Promise<object | null> {
   await init(input);
-  return bindingCache.current!.mapping(id, rigPrefix);
+  return bindings().mapping(id, rigPrefix);
 }
 
 /** @deprecated Renamed {@link mappings}: the graphs it lists are mappings, not profiles. */
@@ -472,7 +711,7 @@ export const standardProfile = mapping;
  */
 export async function profiles(input?: InitInput): Promise<ProfileSummary[]> {
   await init(input);
-  return bindingCache.current!.profiles();
+  return bindings().profiles();
 }
 
 /**
@@ -488,7 +727,7 @@ export async function profile(
   input?: InitInput,
 ): Promise<Profile | null> {
   await init(input);
-  return bindingCache.current!.profile(id, rigPrefix);
+  return bindings().profile(id, rigPrefix);
 }
 
 /**
@@ -498,7 +737,7 @@ export async function profile(
  */
 export async function skills(input?: InitInput): Promise<Skill[]> {
   await init(input);
-  return bindingCache.current!.skills();
+  return bindings().skills();
 }
 
 /**
@@ -510,7 +749,7 @@ export async function skills(input?: InitInput): Promise<Skill[]> {
  */
 export async function skillSource(id: string, input?: InitInput): Promise<object | null> {
   await init(input);
-  return bindingCache.current!.skillSource(id);
+  return bindings().skillSource(id);
 }
 
 /** Options for {@link composeFace}; every field falls back to the native
@@ -525,8 +764,8 @@ export interface ComposeFaceOptions {
   /** Compose the built-in ROS4HRI mapping (an embedded copy still wins).
    * Default `true`. */
   ros4hri?: boolean;
-  /** Compose the animation source — only for a device that loads the
-   * animation module. Default `false`. */
+  /** Compose the animation source. Default `false`; every device this
+   * package builds links the animation module, so the source dispatches. */
   animations?: boolean;
 }
 
@@ -545,7 +784,7 @@ export async function composeFace(
   input?: InitInput,
 ): Promise<object> {
   await init(input);
-  return bindingCache.current!.composeFace(
+  return bindings().composeFace(
     JSON.stringify(gltf),
     options ? JSON.stringify(options) : undefined,
   );
