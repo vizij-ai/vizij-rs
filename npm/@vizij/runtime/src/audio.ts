@@ -20,11 +20,19 @@
  * A halt is silence: the module ABI has no halt, so a run the interpreter
  * prunes simply stops being polled. `IDLE_STOP_MS` without a poll stops the
  * audio, so halting a `say` run (a conversation's interruption) silences it
- * within that bound. A custom {@link Play} hook must keep the same rule.
+ * within that bound — or within `HALT_POLLS` of the polls' own interval when
+ * the page polls slower than that (a page at a few frames a second polls
+ * hundreds of milliseconds apart, and one missed frame is not a halt). A
+ * custom {@link Play} hook must keep the same rule.
  */
 
-/** How long playback goes on unpolled before it stops itself. */
+/** How long playback goes on unpolled before it stops itself, when the
+ * polls come at least this often. */
 export const IDLE_STOP_MS = 250;
+
+/** How many of the polls' own intervals without a poll mean a halt, where
+ * that is longer than `IDLE_STOP_MS`. */
+export const HALT_POLLS = 4;
 
 /** A speech mark, as the provider hands them to the hook. */
 export interface SpeechMark {
@@ -65,6 +73,8 @@ export const play: Play = (bytes, marks) => {
   let ended = false;
   let failure: unknown = null;
   let lastPoll = performance.now();
+  // The polls' interval: the widest recent gap, forgetting a one-off hiccup.
+  let pollInterval = 0;
 
   const stop = () => {
     ended = true;
@@ -78,7 +88,8 @@ export const play: Play = (bytes, marks) => {
     }
   };
   const watchdog = setInterval(() => {
-    if (performance.now() - lastPoll > IDLE_STOP_MS) stop();
+    const bound = Math.max(IDLE_STOP_MS, HALT_POLLS * pollInterval);
+    if (performance.now() - lastPoll > bound) stop();
   }, IDLE_STOP_MS / 2);
 
   const start = () => {
@@ -116,7 +127,10 @@ export const play: Play = (bytes, marks) => {
     });
 
   return function playhead() {
-    lastPoll = performance.now();
+    const now = performance.now();
+    const gap = now - lastPoll;
+    pollInterval = gap > pollInterval ? gap : 0.9 * pollInterval + 0.1 * gap;
+    lastPoll = now;
     if (failure) throw failure;
     if (ended) return null;
     if (startedAt === null) return 0;
