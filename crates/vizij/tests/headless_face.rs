@@ -299,11 +299,21 @@ fn load_unload_cycles_leave_nothing_behind() {
                 face_id: "cycle".into(),
             })
             .unwrap();
-        // Despawns and asset drops settle over a few frames.
-        for _ in 0..10 {
+        // Despawns and asset drops settle over frames — and a texture the
+        // loader was still decoding when the face went lands first and is
+        // dropped next. The census is read once it has held still for ten
+        // frames (bounded, so a leak fails the comparison, not the wait).
+        let mut now = census(&mut app);
+        let mut still = 0;
+        for _ in 0..600 {
             app.update();
+            let next = census(&mut app);
+            still = if next == now { still + 1 } else { 0 };
+            now = next;
+            if still >= 10 {
+                break;
+            }
         }
-        let now = census(&mut app);
         eprintln!("cycle {cycle}: entities/meshes/images/materials {now:?}");
         match after_first {
             None => after_first = Some(now),
