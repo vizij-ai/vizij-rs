@@ -29,11 +29,15 @@
 //!
 //! A halt is silence: the interpreter stops re-invoking `say`, and nothing
 //! in the module ABI tells the producer so. Every tick refreshes the run's
-//! pulse, and a producer that sees no tick for [`IDLE_STOP`] stops the audio
-//! and ends the run — natively in the playback loop, in the browser in the
-//! page's player (the `playhead()` poll is its pulse) — so that a halted run
-//! goes quiet within that bound whatever plays the audio. A run gone quiet is
-//! dropped from the module's map at the next `say`.
+//! pulse, and a producer that sees no tick for the halt bound stops the
+//! audio and ends the run — natively in the playback loop, in the browser
+//! in the page's player (the `playhead()` poll is its pulse) — so that a
+//! halted run goes quiet within that bound whatever plays the audio. The
+//! bound is [`IDLE_STOP`], or [`HALT_TICKS`] of the run's own tick interval
+//! when the ticks come slower than that ([`Pulse`] keeps the interval): a
+//! page rendering at a few frames a second ticks hundreds of milliseconds
+//! apart, and a gap of one tick is not a halt. A run gone quiet is dropped
+//! from the module's map at the next `say`.
 
 use arora_engine::module::{HostModule, ModuleBuilder};
 
@@ -62,8 +66,14 @@ const DEFAULT_VOICE: &str = "Ruth";
 pub const MODULE_ID: Uuid = uuid!("4f6f0b0a-62cb-4a1f-ab0d-08f283485091");
 
 /// How long a producer keeps playing without a `say` tick before it treats
-/// the run as halted and stops the audio.
+/// the run as halted and stops the audio — when the ticks come at least
+/// this often; slower ticks widen the bound to [`HALT_TICKS`] of their
+/// interval.
 pub const IDLE_STOP: Duration = Duration::from_millis(250);
+
+/// How many of the run's own tick intervals without a tick mean a halt,
+/// where that is longer than [`IDLE_STOP`].
+pub const HALT_TICKS: u32 = 4;
 
 /// The face-standard shape for a Polly viseme code (the AWS Polly viseme
 /// set), `sil` for silence and for a code this table does not know (logged).
@@ -200,9 +210,18 @@ impl Provider {
 }
 
 /// The last instant a run was ticked, shared between the tick and the
-/// producer: the producer's only sign that the run is still wanted.
+/// producer: the producer's only sign that the run is still wanted. It also
+/// keeps the interval the ticks come at, so the halt bound follows a slow
+/// ticker.
 #[derive(Clone)]
-pub struct Pulse(Arc<Mutex<f64>>);
+pub struct Pulse(Arc<Mutex<Beats>>);
+
+struct Beats {
+    last: f64,
+    /// The tick interval in milliseconds: the widest recent gap, forgetting
+    /// a one-off hiccup over the ticks that follow.
+    interval: f64,
+}
 
 impl Default for Pulse {
     fn default() -> Self {
@@ -213,13 +232,23 @@ impl Default for Pulse {
 impl Pulse {
     /// A pulse beating now.
     pub fn new() -> Self {
-        Self(Arc::new(Mutex::new(now_ms())))
+        Self(Arc::new(Mutex::new(Beats {
+            last: now_ms(),
+            interval: 0.0,
+        })))
     }
 
     /// Record a tick.
     pub fn beat(&self) {
-        if let Ok(mut last) = self.0.lock() {
-            *last = now_ms();
+        if let Ok(mut beats) = self.0.lock() {
+            let now = now_ms();
+            let gap = (now - beats.last).max(0.0);
+            beats.interval = if gap > beats.interval {
+                gap
+            } else {
+                0.9 * beats.interval + 0.1 * gap
+            };
+            beats.last = now;
         }
     }
 
@@ -227,14 +256,24 @@ impl Pulse {
     pub fn since(&self) -> Duration {
         self.0
             .lock()
-            .map(|last| Duration::from_secs_f64(((now_ms() - *last) / 1000.0).max(0.0)))
+            .map(|beats| Duration::from_secs_f64(((now_ms() - beats.last) / 1000.0).max(0.0)))
             .unwrap_or(Duration::MAX)
+    }
+
+    /// How long without a tick means a halt: [`IDLE_STOP`], or
+    /// [`HALT_TICKS`] intervals of the ticks seen so far when they come
+    /// slower than that.
+    pub fn halt_bound(&self) -> Duration {
+        let interval = self.0.lock().map(|beats| beats.interval).unwrap_or(0.0);
+        IDLE_STOP.max(Duration::from_secs_f64(
+            f64::from(HALT_TICKS) * interval / 1000.0,
+        ))
     }
 }
 
-/// Whether a pulse has gone quiet for longer than [`IDLE_STOP`].
+/// Whether a pulse has gone quiet for longer than its halt bound.
 pub fn is_halted(pulse: &Pulse) -> bool {
-    pulse.since() > IDLE_STOP
+    pulse.since() > pulse.halt_bound()
 }
 
 /// A monotonic-enough clock in milliseconds: `Instant` natively, the page's
@@ -737,6 +776,24 @@ mod tests {
         assert_eq!(outcome, Playback::Halted);
         assert!(last_tick.elapsed() < IDLE_STOP + Duration::from_millis(100));
         assert_eq!(*viseme.lock().unwrap(), SILENCE_VISEME);
+    }
+
+    /// A slow ticker widens the halt bound: ticks 100 ms apart keep the
+    /// bound at `IDLE_STOP`, ticks 200 ms apart raise it to four intervals.
+    #[test]
+    fn the_halt_bound_follows_a_slow_ticker() {
+        let pulse = Pulse::new();
+        assert_eq!(pulse.halt_bound(), IDLE_STOP);
+        std::thread::sleep(Duration::from_millis(100));
+        pulse.beat();
+        assert!(pulse.halt_bound() <= IDLE_STOP + Duration::from_millis(200));
+        std::thread::sleep(Duration::from_millis(200));
+        pulse.beat();
+        let bound = pulse.halt_bound();
+        assert!(bound >= Duration::from_millis(800), "{bound:?}");
+        assert!(!is_halted(&pulse));
+        std::thread::sleep(Duration::from_millis(400));
+        assert!(!is_halted(&pulse), "a gap of two intervals is not a halt");
     }
 
     /// Ticks keep a run alive past the idle bound, and the run ends with the
