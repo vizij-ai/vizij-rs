@@ -155,6 +155,7 @@ async fn the_look_at_skill_serves_the_standard_contract_on_the_vizij_device() {
         RigHal::new(),
         store.clone(),
         &[],
+        None,
     )
     .expect("build the device")
     .with_host_module(speak_module())
@@ -394,7 +395,7 @@ async fn a_free_input_takes_a_published_data_topic() {
     let bridge = arora_bridge_ros2::Ros2Bridge::new(config).await;
 
     let store = BlackboardStore::new();
-    let mut arora = builder_for(spec, RigHal::new(), store.clone(), &[])
+    let mut arora = builder_for(spec, RigHal::new(), store.clone(), &[], None)
         .expect("build the device")
         .with_bridge(Box::new(bridge))
         .build()
@@ -508,7 +509,7 @@ async fn the_device_keeps_a_flat_heap_in_a_ros_graph() {
 
     let rig = RigHal::new();
     let store = BlackboardStore::new();
-    let mut arora = builder_for(&spec, rig.clone(), store.clone(), &[])
+    let mut arora = builder_for(&spec, rig.clone(), store.clone(), &[], None)
         .expect("build the device")
         .with_bridge(Box::new(bridge))
         .build()

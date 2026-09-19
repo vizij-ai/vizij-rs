@@ -58,13 +58,36 @@
     return glbs.get(url);
   }
 
+  // A scripted playback hook for the speech tests: no audio output, a
+  // playhead advancing 40 ms per poll and ending after 260 ms; what it
+  // received is kept for the test to read.
+  window.vizijPlayback = { calls: [] };
+  const scriptedPlay = (bytes, marks) => {
+    let t = -40;
+    const call = { bytes: bytes.length, marks: marks.length, polls: 0 };
+    window.vizijPlayback.calls.push(call);
+    return () => {
+      t += 40;
+      call.polls += 1;
+      return t > 260 ? null : t;
+    };
+  };
+
   window.vizijHarness = {
     memory: () => vizij.memoryBytes(),
     async load(id, url, options) {
-      const device = await vizij.loadFace(id, await glb(url), options);
+      const scripted = options && options.audio === "scripted";
+      const device = await vizij.loadFace(id, await glb(url), {
+        ...options,
+        audio: scripted ? scriptedPlay : options?.audio,
+        speechApiUrl: scripted ? location.origin : options?.speechApiUrl,
+      });
       devices.set(id, device);
       return { rigPrefix: device.rigPrefix };
     },
+    spawn: (id, call) => devices.get(id).spawn(call),
+    spawnSkill: (id, name, args) => devices.get(id).spawnSkill(name, args),
+    halt: (id, handle) => devices.get(id).halt(handle),
     place: (id, rect) => vizij.placeFace(id, rect),
     ready: (id) => vizij.ready(id),
     unload(id) {

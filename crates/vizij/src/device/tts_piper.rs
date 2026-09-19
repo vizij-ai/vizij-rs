@@ -20,7 +20,6 @@ use std::hash::{Hash, Hasher};
 use std::pin::Pin;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::task::{Context, Poll, Waker};
-use std::time::Instant;
 
 use arora::{HostModule, ModuleBuilder};
 use arora_types::call::{Call, CallError, CallResult};
@@ -102,9 +101,7 @@ pub fn say(call: Call) -> Result<CallResult, CallError> {
     // First tick: spawn synthesis + playback off the tick thread. Later ticks
     // find the run and fall through to the poll.
     let run = runs.entry(key).or_insert_with(|| spawn_say(text));
-    if let Ok(mut last) = run.pulse.lock() {
-        *last = Instant::now();
-    }
+    run.pulse.beat();
 
     // The shape at the playhead, advanced by the playback task.
     let current = run.viseme.lock().map(|cur| *cur).unwrap_or(SILENCE_VISEME);
@@ -132,7 +129,7 @@ pub fn say(call: Call) -> Result<CallResult, CallError> {
 fn spawn_say(text: String) -> Run {
     let viseme = Arc::new(Mutex::new(SILENCE_VISEME));
     let viseme_task = viseme.clone();
-    let pulse: Pulse = Arc::new(Mutex::new(Instant::now()));
+    let pulse = Pulse::new();
     let pulse_task = pulse.clone();
     let handle = TOKIO_HANDLE.spawn(async move {
         // Synthesize off the async workers: model inference is CPU-bound.

@@ -39,6 +39,7 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
         program: ProgramSelect::None,
         stage_neutral: true,
         ros4hri: true,
+        speech: None,
     };
     let device = start(&glb, config, BridgeConfig::default(), Mode::Quiet).expect("start");
     let rig = device.rig.clone();
@@ -134,6 +135,7 @@ fn two_faces_share_one_target_each_in_its_own_viewport() {
         program: ProgramSelect::None,
         stage_neutral: true,
         ros4hri: true,
+        speech: None,
     };
     let quori = std::fs::read(fixtures.join("Quori_Current_Extended.glb")).expect("read Quori");
     let toasty = std::fs::read(fixtures.join("Toasty_Current.glb")).expect("read Toasty");
@@ -239,6 +241,7 @@ fn load_unload_cycles_leave_nothing_behind() {
         program: ProgramSelect::None,
         stage_neutral: true,
         ros4hri: true,
+        speech: None,
     };
     let device = start(&glb, config, BridgeConfig::default(), Mode::Quiet).expect("start");
     let (events_tx, events_rx) = std::sync::mpsc::channel();

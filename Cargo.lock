@@ -11060,18 +11060,28 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-tts"
-version = "2.1.0"
+version = "3.0.0"
 dependencies = [
+ "arora",
+ "arora-behavior",
  "arora-engine 4.1.0",
  "arora-types",
+ "js-sys",
  "log",
  "reqwest",
  "rodio",
  "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
  "tokio",
  "uuid",
  "vizij-arora-behavior",
+ "vizij-arora-host",
+ "vizij-arora-store",
  "vizij-graph-core",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
