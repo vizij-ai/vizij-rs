@@ -42,6 +42,25 @@ pub enum FeatureKind {
     Morph(String),
 }
 
+impl FeatureKind {
+    /// The feature's name in RobotData — what [`FaceMeta`] parsed it from;
+    /// a morph's is its target's.
+    pub fn name(&self) -> &str {
+        match self {
+            FeatureKind::Translation => "translation",
+            FeatureKind::Rotation => "rotation",
+            FeatureKind::Scale => "scale",
+            FeatureKind::Color => "color",
+            FeatureKind::Opacity => "opacity",
+            FeatureKind::Metalness => "metalness",
+            FeatureKind::Roughness => "roughness",
+            FeatureKind::Emissive => "emissive",
+            FeatureKind::EmissiveIntensity => "emissiveIntensity",
+            FeatureKind::Morph(target) => target,
+        }
+    }
+}
+
 /// One binding: a store write to the animatable moves `feature` of the
 /// element (glTF node) called `node_name`.
 #[derive(Debug, Clone)]
