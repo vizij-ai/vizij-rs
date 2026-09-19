@@ -34,7 +34,7 @@ use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::gltf::GltfAssetLabel;
 use bevy::math::Vec3A;
 use bevy::mesh::morph::MorphWeights;
-use bevy::picking::events::{Click, Pointer};
+use bevy::picking::events::{Pointer, Press};
 use bevy::picking::mesh_picking::MeshPickingPlugin;
 use bevy::prelude::*;
 use uuid::Uuid;
@@ -171,7 +171,7 @@ pub struct Picked {
     pub element_id: Uuid,
 }
 
-/// The picks since a consumer last drained them.
+/// The picks (pointer presses on faces) since a consumer last drained them.
 #[derive(Resource, Default)]
 pub struct Picks(pub Vec<Picked>);
 
@@ -368,7 +368,7 @@ impl Plugin for ViewPlugin {
             .init_resource::<Placements>()
             .init_resource::<Picks>()
             .add_plugins(MeshPickingPlugin)
-            .add_observer(on_click)
+            .add_observer(on_press)
             .add_systems(
                 Update,
                 (apply_view_events, place_cameras, index_faces, apply_poses).chain(),
@@ -900,17 +900,19 @@ fn apply_poses(
     }
 }
 
-/// A click on a face's mesh, reported as the RobotData ids of the face and
-/// the element the mesh belongs to. The event bubbles up the hierarchy; it is
-/// recorded once, at its origin.
-fn on_click(
-    click: On<Pointer<Click>>,
+/// A pointer pressed on a face's mesh, reported as the RobotData ids of the
+/// face and the element the mesh belongs to. The press, not the click: a
+/// click needs the press and the release to land on one entity, which a
+/// face moving between the two (a blink) denies. The event bubbles up the
+/// hierarchy; it is recorded once, at its origin.
+fn on_press(
+    press: On<Pointer<Press>>,
     parents: Query<&ChildOf>,
     faces: Query<&Face>,
     mut picks: ResMut<Picks>,
 ) {
-    let target = click.original_event_target();
-    if click.entity != target {
+    let target = press.original_event_target();
+    if press.entity != target {
         return;
     }
     let mut current = target;

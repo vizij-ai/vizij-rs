@@ -1,0 +1,93 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>@vizij/runtime browser harness</title>
+<style>
+  body { margin: 0; background: #202020; }
+  /* The canvas is exactly the reference render's size at device pixel ratio 1. */
+  #stage { position: relative; width: 763px; height: 486px; }
+  #faces { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+</style>
+<div id="stage"><canvas id="faces"></canvas></div>
+<!-- The package's dist imports its workspace siblings by name; the page maps
+     them onto their dist (the server follows pnpm's node_modules links). -->
+<script type="importmap">
+  {
+    "imports": {
+      "@vizij/value-json": "/node_modules/@vizij/value-json/dist/index.js",
+      "@vizij/wasm-loader": "/node_modules/@vizij/wasm-loader/dist/browser.js",
+      "@vizij/wasm-loader/browser": "/node_modules/@vizij/wasm-loader/dist/browser.js"
+    }
+  }
+</script>
+<script type="module">
+  import * as vizij from "../../dist/runtime/src/index.js";
+
+  const params = new URLSearchParams(location.search);
+  const background = params.get("background") ?? "000000";
+  const canvas = document.getElementById("faces");
+  const contextEvents = [];
+  canvas.addEventListener("webglcontextlost", () => contextEvents.push("lost"));
+  canvas.addEventListener("webglcontextrestored", () => contextEvents.push("restored"));
+
+  await vizij.init();
+  await vizij.mount("#faces", { background });
+
+  // The page owns every device and steps it on its own frames.
+  const devices = new Map();
+  const stepErrors = [];
+  let last = performance.now();
+  function loop(t) {
+    const dt = Math.min(t - last, 100);
+    last = t;
+    for (const [id, device] of devices) {
+      try {
+        device.step(dt);
+      } catch (e) {
+        stepErrors.push(`${id}: ${e}`);
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  const glbs = new Map();
+  async function glb(url) {
+    if (!glbs.has(url)) {
+      glbs.set(url, new Uint8Array(await (await fetch(url)).arrayBuffer()));
+    }
+    return glbs.get(url);
+  }
+
+  window.vizijHarness = {
+    memory: () => vizij.memoryBytes(),
+    async load(id, url, options) {
+      const device = await vizij.loadFace(id, await glb(url), options);
+      devices.set(id, device);
+      return { rigPrefix: device.rigPrefix };
+    },
+    place: (id, rect) => vizij.placeFace(id, rect),
+    ready: (id) => vizij.ready(id),
+    unload(id) {
+      const device = devices.get(id);
+      if (!device) return false;
+      vizij.unloadFace(id);
+      device.dispose();
+      devices.delete(id);
+      return true;
+    },
+    setValue: (id, path, value) => devices.get(id).setValue(path, value),
+    readValues: (id, paths) => devices.get(id).readValues(paths),
+    path: (id, relative) => devices.get(id).path(relative),
+    picks: () => vizij.drainPicks(),
+    state: () => {
+      const gl = canvas.getContext("webgl2");
+      return {
+        faces: [...devices.keys()],
+        stepErrors: stepErrors.slice(0, 5),
+        contextEvents: contextEvents.slice(),
+        contextLost: gl ? gl.isContextLost() : null,
+      };
+    },
+  };
+  window.vizijHarnessReady = true;
+</script>
