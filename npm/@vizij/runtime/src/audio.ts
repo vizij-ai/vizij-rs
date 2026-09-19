@@ -34,6 +34,11 @@ export const IDLE_STOP_MS = 250;
  * that is longer than `IDLE_STOP_MS`. */
 export const HALT_POLLS = 4;
 
+// The polls' interval in milliseconds: the widest recent gap, forgetting a
+// one-off hiccup. The page's, not one playback's: a new playback's first
+// gap must already be judged against it.
+let pollInterval = 0;
+
 /** A speech mark, as the provider hands them to the hook. */
 export interface SpeechMark {
   /** Milliseconds into the audio. */
@@ -73,8 +78,6 @@ export const play: Play = (bytes, marks) => {
   let ended = false;
   let failure: unknown = null;
   let lastPoll = performance.now();
-  // The polls' interval: the widest recent gap, forgetting a one-off hiccup.
-  let pollInterval = 0;
 
   const stop = () => {
     ended = true;

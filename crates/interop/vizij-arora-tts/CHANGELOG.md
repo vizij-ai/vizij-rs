@@ -15,9 +15,11 @@ All notable changes to `vizij-arora-tts`. The format follows
   (`new`, `beat`, `since`, `halt_bound`), `cues` maps marks to `Cue`s,
   `SpeechMark` is public and serializable.
 - The halt bound follows a slow ticker: `IDLE_STOP`, or `HALT_TICKS` (4) of
-  the run's own tick interval when the ticks come slower than that — a page
-  at a few frames a second ticks hundreds of milliseconds apart, and one
-  missed tick is not a halt. The page's player keeps the same rule.
+  the tick interval when the ticks come slower than that — a page at a few
+  frames a second ticks hundreds of milliseconds apart, and one missed tick
+  is not a halt. The interval is the ticker's, learned across runs
+  (`Pulse::sharing_interval`) so a new run is judged right from its first
+  tick. The page's player keeps the same rule.
 
 ### Added
 
