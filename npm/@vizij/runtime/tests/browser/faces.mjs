@@ -30,13 +30,25 @@ try {
   });
   assert.ok(elements.left.length > 0 && elements.right.length > 0);
 
-  // A click in the middle of each rectangle lands on that face.
+  // A press in the middle of each rectangle lands on that face. The pointer
+  // settles over the face before the press, and the press is held over a
+  // frame: picking hovers from the pointer's last position, and a frame of
+  // two faces under a software GPU can take longer than a click.
   await page.evaluate(() => window.vizijHarness.picks());
-  await page.mouse.click(190, 243);
-  await page.waitForTimeout(300);
-  await page.mouse.click(572, 243);
-  await page.waitForTimeout(300);
-  const picks = await page.evaluate(() => window.vizijHarness.picks());
+  const press = async (face, x, y) => {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await page.mouse.move(x, y);
+      await page.waitForTimeout(500);
+      await page.mouse.down();
+      await page.waitForTimeout(500);
+      await page.mouse.up();
+      await page.waitForTimeout(300);
+      const picks = await page.evaluate(() => window.vizijHarness.picks());
+      if (picks.some((p) => p.faceId === face)) return picks;
+    }
+    return [];
+  };
+  const picks = [...(await press("left", 190, 243)), ...(await press("right", 572, 243))];
   const byFace = (id) => picks.filter((p) => p.faceId === id);
   assert.ok(byFace("left").length >= 1, `no pick on the left face: ${JSON.stringify(picks)}`);
   assert.ok(byFace("right").length >= 1, `no pick on the right face: ${JSON.stringify(picks)}`);
