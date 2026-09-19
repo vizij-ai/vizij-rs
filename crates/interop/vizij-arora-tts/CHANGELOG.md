@@ -12,8 +12,12 @@ All notable changes to `vizij-arora-tts`. The format follows
   `API_URL` read inside the crate) and, in the browser, the page's playback
   hook. The module keeps its runs in the closure, not in a process-wide map.
 - `follow`, `Pulse` and the playback pieces changed shape: `Pulse` is a value
-  (`new`, `beat`, `since`), `cues` maps marks to `Cue`s, `SpeechMark` is
-  public and serializable.
+  (`new`, `beat`, `since`, `halt_bound`), `cues` maps marks to `Cue`s,
+  `SpeechMark` is public and serializable.
+- The halt bound follows a slow ticker: `IDLE_STOP`, or `HALT_TICKS` (4) of
+  the run's own tick interval when the ticks come slower than that — a page
+  at a few frames a second ticks hundreds of milliseconds apart, and one
+  missed tick is not a halt. The page's player keeps the same rule.
 
 ### Added
 
