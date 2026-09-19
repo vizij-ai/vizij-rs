@@ -201,7 +201,9 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
                     if config.stage_neutral {
                         stage_neutral_pose(&store, &meta);
                     }
-                    let Some(builder) = builder_for(&spec, rig, store, &meta.bundle.skills) else {
+                    let speech = config.speech.as_ref().map(|build| build());
+                    let Some(builder) = builder_for(&spec, rig, store, &meta.bundle.skills, speech)
+                    else {
                         return;
                     };
                     match builder.build() {
@@ -269,7 +271,8 @@ fn supervise(
         if config.stage_neutral {
             stage_neutral_pose(&store, &meta);
         }
-        let Some(builder) = builder_for(&spec, rig, store, &meta.bundle.skills) else {
+        let speech = config.speech.as_ref().map(|build| build());
+        let Some(builder) = builder_for(&spec, rig, store, &meta.bundle.skills, speech) else {
             return;
         };
         let reload = tokio_rt.block_on(async {

@@ -161,6 +161,7 @@ fn main() -> Result<()> {
         program,
         stage_neutral: !cli.no_stage_neutral,
         ros4hri: !cli.no_ros4hri,
+        speech: Some(speech_provider()),
     };
     let bridges = BridgeConfig {
         #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
@@ -207,6 +208,25 @@ fn main() -> Result<()> {
         (None, true) => run_headless(&cli.size, events, options, frame_config),
         (None, false) => run_window(&meta, events, options, frame_config),
     }
+}
+
+/// This build's speech provider: the local Piper module under `tts-piper`,
+/// the cloud provider otherwise, at the deployment `API_URL` names or the
+/// default one.
+#[cfg(not(feature = "tts-piper"))]
+fn speech_provider() -> face::SpeechProvider {
+    let api_base =
+        std::env::var("API_URL").unwrap_or_else(|_| vizij_arora_tts::DEFAULT_API_BASE.to_string());
+    std::sync::Arc::new(move || {
+        vizij_arora_tts::host_module(vizij_arora_tts::Config {
+            api_base: api_base.clone(),
+        })
+    })
+}
+
+#[cfg(feature = "tts-piper")]
+fn speech_provider() -> face::SpeechProvider {
+    std::sync::Arc::new(vizij::modules::tts_piper::host_module)
 }
 
 /// The view over the device's events: the in-memory asset source registered
