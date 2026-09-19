@@ -101,6 +101,10 @@ vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
 # dependency and no nightly. Its generated `Value` conversions marshal the calls.
 vizij-animation-module = { path = "../interop/vizij-animation-module" }
 
+# The speech provider — the say skill's `say` — over the Vizij TTS cloud
+# function: rodio plays it natively, the page's hook in the browser.
+vizij-arora-tts = { version = "3", path = "../interop/vizij-arora-tts" }
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The native driver (`native`): the stand-alone device on a worker thread under
 # arora's operator flow — `native` is the run loop, the local WS bridge and
@@ -111,12 +115,9 @@ arora = { version = "9.10", default-features = false, features = ["native"] }
 tokio = { version = "1", features = ["rt-multi-thread", "time", "macros"] }
 # The front-end pump's async plumbing: the merged command streams.
 futures = "0.3"
-# The TTS contract + cloud provider, as a host module. `vizij-piper` is the
-# local provider (feature `tts-piper`) — its build self-provisions libpiper
-# and a patched default voice, and `rodio` plays its audio; note it links
-# GPLv3 code into the binary. The browser device gets its own producer (the
-# page plays the audio) rather than this native one.
-vizij-arora-tts = { version = "2.1", path = "../interop/vizij-arora-tts" }
+# `vizij-piper` is the local speech provider (feature `tts-piper`) — its
+# build self-provisions libpiper and a patched default voice, and `rodio`
+# plays its audio; note it links GPLv3 code into the binary.
 rodio = { version = "0.20", optional = true }
 vizij-piper = { path = "../interop/vizij-piper", optional = true }
 

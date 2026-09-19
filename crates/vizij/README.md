@@ -191,7 +191,9 @@ marks) and point the app at it with the `API_URL` environment variable.
 
 **Swapping the provider:** a build carries one, and the face never sees
 which. `--features tts-piper` picks the local one, `API_URL` points the cloud
-one at your own deployment, and a provider of your own is a host module
+one at your own deployment (the browser module takes it as `loadFace`'s
+`speechApiUrl`, and plays the audio through the page's hook), and a provider
+of your own is a host module
 implementing the `say` contract `vizij-arora-tts` re-exports — a sibling of
 [`src/modules/tts_piper.rs`](src/modules/tts_piper.rs), registered behind a feature the same
 way. The contract is text in, status and a viseme stream out, so a
