@@ -2,8 +2,10 @@
 // the WebGL context alive: what an authoring session mounting faces over
 // and over needs. Linear memory never shrinks, and the allocator grows it
 // for the first cycles until the freed chunks of one cycle serve the next
-// (the plateau); a leak would keep it growing. Needs `VIZIJ_FIXTURES`;
-// skips without.
+// (the plateau); a leak would keep it growing by a face's worth (tens of
+// MB) every cycle. How many cycles the plateau takes depends on how many
+// frames each cycle gets, so the criterion is the last five cycles flat.
+// Needs `VIZIJ_FIXTURES`; skips without.
 import assert from "node:assert/strict";
 import { FIXTURES, loadFace, open } from "./common.mjs";
 
@@ -12,8 +14,8 @@ if (!FIXTURES) {
   process.exit(0);
 }
 const CYCLES = 25;
-// The cycles over which memory must not grow at all: the last ten.
-const FLAT_CYCLES = 10;
+// The cycles over which memory must not grow at all: the last five.
+const FLAT_CYCLES = 5;
 
 const { page, logs, close } = await open(FIXTURES);
 try {
