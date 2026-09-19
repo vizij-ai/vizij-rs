@@ -136,6 +136,8 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: 24
+          # Nothing is installed here, so there is no pnpm store to cache.
+          package-manager-cache: false
       - name: Verify node registry artifacts are updated
         run: node scripts/verify-node-registry.mjs
 
