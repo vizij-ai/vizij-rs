@@ -78,6 +78,16 @@ arora-behavior = "8"
 # Restores the terminal on the window-close exit path, where the device's
 # terminal UI (worker thread) never gets to unwind.
 crossterm = { version = "0.28", optional = true }
+# The desktop app's data directory (the remembered face, the Studio identity).
+dirs = { version = "6", optional = true }
+# The system's file dialog for opening a face (`O`); the XDG portal on Linux
+# so no GTK is linked.
+rfd = { version = "0.16", default-features = false, features = ["xdg-portal", "tokio"], optional = true }
+# `--glb <url>`: the face fetched whole (reqwest is already in the tree).
+reqwest = { version = "0.13", optional = true }
+# `list-displays`: the monitors straight from the event loop, no window (the
+# version Bevy's winit backend uses).
+winit = { version = "0.30", default-features = false, optional = true }
 # Nothing here uses tracing; the dep only turns on its `log` feature for the
 # whole build, so Bevy's tracing events (its LogPlugin stays disabled) fall
 # through to `log` — into the terminal UI's pane or the snapshot harness's
@@ -110,6 +120,11 @@ vizij-arora-tts = { version = "3", path = "../interop/vizij-arora-tts" }
 # arora's operator flow — `native` is the run loop, the local WS bridge and
 # the module executors — with the bridges the build adds.
 arora = { version = "9.10", default-features = false, features = ["native"] }
+# The open local bridge (`device::bridge`): the WebSocket server, its
+# registry and its control panel, on arora's line.
+arora-bridge-ws = "4"
+arora-bridge = "4.1"
+async-trait = "0.1"
 # The device thread's runtime: the operator flow and the bridges are async,
 # the supervisor drives them on a multi-thread runtime.
 tokio = { version = "1", features = ["rt-multi-thread", "time", "macros"] }
@@ -154,6 +169,10 @@ vizij-bundle = { path = "../tools/vizij-bundle" }
 # against the bridge's.
 ros2-client = { package = "ros2-client-multi-rmw", version = "0.13", default-features = false, features = ["jazzy", "dds"] }
 rand = "0.9"
+# The wire test's client, on the local bridge's WebSocket, and its GET of
+# the control panel.
+tokio-tungstenite = "0.24"
+reqwest = "0.13"
 
 [features]
 default = ["desktop"]
@@ -161,7 +180,16 @@ default = ["desktop"]
 # the view, the composition and the native driver with a headless front end
 # — what the Android activity builds on; the browser module builds on the
 # view and the composition alone.
-desktop = ["arora/tui", "dep:crossterm", "dep:clap", "dep:env_logger"]
+desktop = [
+    "arora/tui",
+    "dep:crossterm",
+    "dep:clap",
+    "dep:env_logger",
+    "dep:dirs",
+    "dep:rfd",
+    "dep:reqwest",
+    "dep:winit",
+]
 # `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics,
 # over one RMW backend per build — the bridge's `dds` / `zenoh` features are
 # mutually exclusive, exposed here under the bridge's consumer convention:
