@@ -74,7 +74,13 @@ try {
   assert.equal(statuses[0], "running", "running first");
   assert.equal(statuses[statuses.length - 1], "success", "then ended");
   // The halted run: polled while it played, not after the halt.
-  assert.ok(result.pollsBeforeHalt > 0, "the second run was playing");
+  const second = JSON.stringify({
+    playback: result.playback,
+    halted: result.halted,
+    polls: [result.pollsBeforeHalt, result.pollsAtHalt, result.pollsAfterHalt],
+    statuses,
+  });
+  assert.ok(result.pollsBeforeHalt > 0, `the second run was playing: ${second}`);
   assert.equal(result.pollsAfterHalt, result.pollsAtHalt, "no poll after the halt");
   const state = await page.evaluate(() => window.vizijHarness.state());
   assert.deepEqual(state.stepErrors, []);
