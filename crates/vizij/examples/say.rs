@@ -13,7 +13,7 @@
 use vizij_arora_tts as tts_api;
 
 #[cfg(feature = "tts-piper")]
-use vizij::device::tts_piper as provider;
+use vizij::modules::tts_piper as provider;
 #[cfg(not(feature = "tts-piper"))]
 use vizij_arora_tts as provider;
 

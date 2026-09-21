@@ -5,7 +5,7 @@ edition = { workspace = true }
 publish = false
 description = "Vizij: an arora with a head. One crate: the Bevy view rendering a GLB face and the arora device driving it, as a library on every target (desktop, browser, Android) and as the `vizij` binary on desktop."
 
-# The library is the view + device every entry point composes: the desktop
+# The library is the view + face + modules every entry point composes: the desktop
 # binary below, the browser module (a wasm-bindgen cdylib) and the Android
 # activity (a cdylib the activity loads).
 [lib]
@@ -96,7 +96,7 @@ vizij-arora-behavior = { path = "../interop/vizij-arora-behavior" }
 vizij-animation-module = { path = "../interop/vizij-animation-module" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# The native driver (`device::native`): the device on a worker thread under
+# The native driver (`native`): the stand-alone device on a worker thread under
 # arora's operator flow — `native` is the run loop, the local WS bridge and
 # the module executors — with the bridges the build adds.
 arora = { version = "9.10", default-features = false, features = ["native"] }

@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
-use crate::device::{builder_for, free_inputs};
+use crate::face::{builder_for, free_inputs};
 
 // The typed client's view of `interaction_skills/LookAt` — local mirrors of
 // the standard messages (`ros2_client::Message` is a foreign marker trait).

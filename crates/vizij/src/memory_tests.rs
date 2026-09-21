@@ -19,7 +19,7 @@ use arora_types::value::Value;
 use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
-use crate::device::builder_for;
+use crate::face::builder_for;
 use crate::view::frames::{encode_frame, FrameFormat};
 
 /// Bytes the process has been handed and has not given back.
