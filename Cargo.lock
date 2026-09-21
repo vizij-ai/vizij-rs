@@ -486,9 +486,9 @@ dependencies = [
 
 [[package]]
 name = "arora-bridge-ros2"
-version = "6.3.0"
+version = "6.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48983408225230113d4164952908e00250dfde3040895bbfd12342d796223a4e"
+checksum = "a6bdc275fe33454d815d6ff0559790ce7abe42649a5354a1a9cf9a152e7abb49"
 dependencies = [
  "arora-behavior-tree-types",
  "arora-bridge",
