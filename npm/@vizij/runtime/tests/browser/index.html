@@ -61,16 +61,16 @@
   window.vizijHarness = {
     memory: () => vizij.memoryBytes(),
     async load(id, url, options) {
-      const device = await vizij.loadFace(id, await glb(url), options);
+      const device = await vizij.loadVizij(id, await glb(url), options);
       devices.set(id, device);
       return { rigPrefix: device.rigPrefix };
     },
-    place: (id, rect) => vizij.placeFace(id, rect),
+    place: (id, rect) => vizij.placeVizij(id, rect),
     ready: (id) => vizij.ready(id),
     unload(id) {
       const device = devices.get(id);
       if (!device) return false;
-      vizij.unloadFace(id);
+      vizij.unloadVizij(id);
       device.dispose();
       devices.delete(id);
       return true;

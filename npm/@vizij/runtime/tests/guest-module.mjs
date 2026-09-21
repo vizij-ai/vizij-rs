@@ -1,5 +1,5 @@
 // Arora wasm modules load into a device as guests: `startRuntime(graph,
-// init, modules)` and `loadFace`'s `options.modules` take `{ headerJson,
+// init, modules)` and `loadVizij`'s `options.modules` take `{ headerJson,
 // wasmBytes }` pairs, instantiated by the device's engine at build. The only
 // artifact around is the animation module, whose id the host-linked engine
 // serves — a host module registered under an id a guest holds replaces it —

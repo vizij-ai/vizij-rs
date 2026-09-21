@@ -21,32 +21,38 @@
 ### Added
 
 - The view: `mount(canvas, options?)` creates the page's one App;
-  `loadFace(faceId, glb, options?)` starts a face's device and shows it;
-  `placeFace` / `placeFaceIn` / `fillCanvas` confine it to a rectangle of the
-  canvas; `unloadFace` takes it down; `ready` / `whenReady` say when its scene
-  shows; `drainPicks` reports pointer presses on faces as
-  `{ faceId, elementId }`; `describe(glb)` reads a GLB's elements,
+  `loadVizij(vizijId, glb, options?)` starts a Vizij's device and shows it;
+  `placeVizij` / `placeVizijIn` / `fillCanvas` confine it to a rectangle of
+  the canvas; `unloadVizij` takes it down; `ready` / `whenReady` say when its
+  scene shows; `drainPicks` reports pointer presses as
+  `{ vizijId, elementId }`; `describe(glb)` reads a GLB's elements,
   animatables, bounds and programs; `memoryBytes` reads the module's linear
-  memory. A face's paths are its own (`runtime.rigPrefix`,
+  memory. A Vizij's paths are its own (`runtime.rigPrefix`,
   `runtime.path(relative)`).
-- `Runtime` is a face's Arora, or `startRuntime(graph)`'s with no face:
+- `Runtime` is a Vizij's Arora, or `startRuntime(graph)`'s with no Vizij:
   `stop()`, `spawn(call)` (a task run, resolving to its `TaskHandle`),
   `halt(handle)`.
 
 ### Changed
 
+- The API's noun is the Vizij — what the authoring app exports, a face most
+  often, not always: `composeFace` is `composeVizij`, `ComposeFaceOptions`
+  `ComposeVizijOptions`. The GLB bundle's own field keeps its name
+  (`describe(glb).faceId`, the `rig/<faceId>/` prefix).
+- `RuntimeModule` is `AroraModule`: an Arora module as `arora-web` loads it,
+  header JSON plus executable.
 - The animation module is host-linked into every device, its functions
-  called by id: `composeFace({ animations: true })` dispatches without a
+  called by id: `composeVizij({ animations: true })` dispatches without a
   guest. Arora wasm modules still load as guests — `startRuntime(graph, init,
-  modules)` and `loadFace`'s `options.modules` take `{ headerJson, wasmBytes }`
-  pairs — and a guest under a host-linked module's id (`@vizij/animation-module`'s)
-  is served by the host-linked one.
+  modules)` and `loadVizij`'s `options.modules` take `AroraModule`s — and a
+  guest under a host-linked module's id (`@vizij/animation-module`'s) is
+  served by the host-linked one.
 
 ## 2.3.0
 
 ### Minor Changes
 
-- 3d4406a: Add `composeFace(gltf, options?)`: the composed behavior graph of a face bundle — base graphs, embedded standard profiles (each suppressing the built-in of the same id), the built-in ROS4HRI profile unless opted out, and the selected program — exactly as the native `vizij` app deploys it. The returned spec feeds `startRuntime`/`Runtime.loadGraph`, so an exported GLB can be deployed and verified in JS without the native app (VIZ-93's autonomous verification loop).
+- 3d4406a: Add `composeVizij(gltf, options?)`: the composed behavior graph of a face bundle — base graphs, embedded standard profiles (each suppressing the built-in of the same id), the built-in ROS4HRI profile unless opted out, and the selected program — exactly as the native `vizij` app deploys it. The returned spec feeds `startRuntime`/`Runtime.loadGraph`, so an exported GLB can be deployed and verified in JS without the native app (VIZ-93's autonomous verification loop).
 
 ## 2.2.0
 
@@ -70,7 +76,7 @@ All notable changes to `@vizij/runtime`. The format follows
 
 - The client-facing API drops the "device"/"Arora" vocabulary for "runtime":
   `startDevice` → `startRuntime`, the `AroraDevice` class → `Runtime`,
-  `DeviceModule` → `RuntimeModule`, `DeviceCall` → `RuntimeCall`,
+  `DeviceModule` → `AroraModule`, `DeviceCall` → `RuntimeCall`,
   `DeviceCallResult` → `RuntimeCallResult`. Behavior is unchanged; only the
   names differ. Update imports and the class name at call sites.
 

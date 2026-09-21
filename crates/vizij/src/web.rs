@@ -1,11 +1,12 @@
-//! The browser module: the view and the face's Arora in one wasm module, one App
-//! per page, faces as viewports.
+//! The browser module: the view and the Vizij's Arora in one wasm module, one
+//! App per page, Vizijs as viewports. A Vizij is what the authoring app
+//! exports — a GLB carrying a rig, its graphs and programs; a face, most often.
 //!
 //! JavaScript [`mount`]s the page's canvas once — one Bevy [`App`] for the
-//! page's lifetime — then [`load_face`]s as many faces as it shows: each is a
-//! device of its own ([`FaceRuntime`]), JS-paced (the page calls `step(dt)`
+//! page's lifetime — then [`load_vizij`]s as many Vizijs as it shows: each is a
+//! device of its own ([`VizijRuntime`]), JS-paced (the page calls `step(dt)`
 //! each frame, or hands the device its own `run` loop), drawn by the App into
-//! the rectangle of the canvas the page [`place_face`]s it in. The view reads
+//! the rectangle of the canvas the page [`place_vizij`]s it in. The view reads
 //! each device's pose on its own frame, so a step's writes draw one frame
 //! later. The page owns the pacing: Bevy's frames run on
 //! `requestAnimationFrame`, which a hidden tab halts, while a device under
@@ -19,7 +20,7 @@
 //! What the App holds is reachable only through this module's statics: on
 //! the web `App::run` hands the App to winit and returns at once, so the
 //! page's requests travel as [`ViewEvent`]s and the App's answers (which
-//! faces are ready, what was picked) are copied out each frame.
+//! Vizijs are ready, what was picked) are copied out each frame.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -51,7 +52,7 @@ thread_local! {
     static PAGE: RefCell<Option<Page>> = const { RefCell::new(None) };
 }
 
-/// What the App reports back each frame: the faces whose scene is indexed,
+/// What the App reports back each frame: the Vizijs whose scene is indexed,
 /// and the picks since the page last drained them.
 static READY: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static PICKS: Mutex<Vec<Picked>> = Mutex::new(Vec::new());
@@ -75,9 +76,9 @@ fn report(faces: Query<&view::Face>, mut picks: ResMut<Picks>) {
 }
 
 /// Create the page's one App over `canvas` (a CSS selector): the view, its
-/// events, no face yet. `options_json`, every field optional:
+/// events, no Vizij yet. `options_json`, every field optional:
 /// - `background`: `RRGGBB`; absent, the canvas stays transparent wherever
-///   nothing is drawn, and each face's rectangle too;
+///   nothing is drawn, and each Vizij's rectangle too;
 /// - `fit`: `contain` (default), `cover` or `stretch`;
 /// - `zoom`: one factor, or `[x, y]`;
 /// - `ambient`: the three.js-style ambient intensity (default π/2);
@@ -118,7 +119,7 @@ pub fn mount(canvas: String, options_json: Option<String>) -> Result<(), JsValue
             // `log` feature); the page owns the sink.
             .disable::<bevy::log::LogPlugin>(),
     )
-    // Wherever no face's rectangle draws, the canvas shows the page.
+    // Wherever no Vizij's rectangle draws, the canvas shows the page.
     .insert_resource(ClearColor(Color::NONE))
     .insert_resource(options)
     .insert_resource(ViewEvents(Mutex::new(events_rx)))
@@ -141,25 +142,25 @@ fn send(event: ViewEvent) -> Result<(), JsValue> {
     })
 }
 
-/// Show a face under `face_id` and start its device: the GLB's bindings and
+/// Show a Vizij under `vizij_id` and start its device: the GLB's bindings and
 /// bundle are read, its graphs composed (`options_json` as
-/// [`compose_face`]'s: `graphs`, `program`, `ros4hri`, plus `stageNeutral`,
+/// [`compose_vizij`]'s: `graphs`, `program`, `ros4hri`, plus `stageNeutral`,
 /// default `true`), the device built over `RigHal` + `BlackboardStore` with
 /// the animation, gaze and viseme modules, and the scene queued for the App.
 /// `modules` optionally loads Arora wasm modules into the device's engine as
 /// guests: a JS array of `{ headerJson, wasmBytes }` (the module's header as
 /// JSON, its `.wasm` bytes as a `Uint8Array`); their functions are then
 /// reachable by id from `call` and from the graph's `ExternalFunction`
-/// nodes. The module set is fixed at build. A face already shown under
-/// `face_id` is replaced. The device comes back JS-owned: step it, or `run`
-/// it, and `free` it after [`unload_face`].
-#[wasm_bindgen(js_name = loadFace)]
-pub fn load_face(
-    face_id: String,
+/// nodes. The module set is fixed at build. A Vizij already shown under
+/// `vizij_id` is replaced. The device comes back JS-owned: step it, or `run`
+/// it, and `free` it after [`unload_vizij`].
+#[wasm_bindgen(js_name = loadVizij)]
+pub fn load_vizij(
+    vizij_id: String,
     glb: Vec<u8>,
     options_json: Option<String>,
     modules: Option<js_sys::Array>,
-) -> Result<FaceRuntime, JsValue> {
+) -> Result<VizijRuntime, JsValue> {
     let (config, stage_neutral) = parse_face_config(options_json.as_deref())?;
     let LoadedFace { meta, spec } =
         face::load_face(&glb, &config).map_err(|e| JsValue::from_str(&format!("{e:#}")))?;
@@ -182,13 +183,13 @@ pub fn load_face(
     // The bytes move into the App's asset source; the copy wasm-bindgen made
     // from the page's buffer is the only one.
     send(ViewEvent::LoadFace {
-        face_id: face_id.clone(),
+        face_id: vizij_id.clone(),
         meta: Box::new(meta),
         glb,
         rig,
     })?;
-    Ok(FaceRuntime {
-        face_id,
+    Ok(VizijRuntime {
+        vizij_id,
         rig_prefix,
         inner: AroraWeb::from(arora),
         caller,
@@ -196,47 +197,53 @@ pub fn load_face(
     })
 }
 
-/// Take the face down: its scene, its camera, its GLB. The device the page
+/// Take the Vizij down: its scene, its camera, its GLB. The device the page
 /// holds keeps stepping until the page frees it.
-#[wasm_bindgen(js_name = unloadFace)]
-pub fn unload_face(face_id: String) -> Result<(), JsValue> {
-    send(ViewEvent::UnloadFace { face_id })
+#[wasm_bindgen(js_name = unloadVizij)]
+pub fn unload_vizij(vizij_id: String) -> Result<(), JsValue> {
+    send(ViewEvent::UnloadFace { face_id: vizij_id })
 }
 
-/// Confine the face's camera to a rectangle of the canvas, in CSS pixels
+/// Confine the Vizij's camera to a rectangle of the canvas, in CSS pixels
 /// relative to the canvas (`x`, `y` from its top-left corner) — how several
-/// faces share one canvas. The rectangle is kept across the face's reloads.
-#[wasm_bindgen(js_name = placeFace)]
-pub fn place_face(face_id: String, x: f64, y: f64, width: f64, height: f64) -> Result<(), JsValue> {
+/// Vizijs share one canvas. The rectangle is kept across the Vizij's reloads.
+#[wasm_bindgen(js_name = placeVizij)]
+pub fn place_vizij(
+    vizij_id: String,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), JsValue> {
     let scale = device_pixel_ratio();
     let px = |v: f64| (v * scale).round().max(0.0) as u32;
     send(ViewEvent::PlaceFace {
-        face_id,
+        face_id: vizij_id,
         rect: Some([px(x), px(y), px(width), px(height)]),
     })
 }
 
-/// Give the face's camera the whole canvas again.
+/// Give the Vizij's camera the whole canvas again.
 #[wasm_bindgen(js_name = fillCanvas)]
-pub fn fill_canvas(face_id: String) -> Result<(), JsValue> {
+pub fn fill_canvas(vizij_id: String) -> Result<(), JsValue> {
     send(ViewEvent::PlaceFace {
-        face_id,
+        face_id: vizij_id,
         rect: None,
     })
 }
 
-/// Whether the face's scene has spawned and its bindings are joined — from
+/// Whether the Vizij's scene has spawned and its bindings are joined — from
 /// then on its device's pose shows.
 #[wasm_bindgen]
-pub fn ready(face_id: String) -> bool {
+pub fn ready(vizij_id: String) -> bool {
     READY
         .lock()
-        .map(|ready| ready.contains(&face_id))
+        .map(|ready| ready.contains(&vizij_id))
         .unwrap_or(false)
 }
 
 /// The pointer presses on faces since the last drain, oldest first, as
-/// `{ faceId, elementId }` — the ids the face's RobotData declares.
+/// `{ vizijId, elementId }` — the slot and the element id the GLB's RobotData declares.
 #[wasm_bindgen(js_name = drainPicks)]
 pub fn drain_picks() -> Result<JsValue, JsValue> {
     let picks: Vec<Picked> = PICKS
@@ -246,13 +253,15 @@ pub fn drain_picks() -> Result<JsValue, JsValue> {
     let json = serde_json::Value::Array(
         picks
             .into_iter()
-            .map(|pick| serde_json::json!({ "faceId": pick.face_id, "elementId": pick.element_id }))
+            .map(
+                |pick| serde_json::json!({ "vizijId": pick.face_id, "elementId": pick.element_id }),
+            )
             .collect(),
     );
     js_sys::JSON::parse(&json.to_string())
 }
 
-/// The module's linear memory, in bytes — what a page watches across face
+/// The module's linear memory, in bytes — what a page watches across Vizij
 /// loads and unloads. Linear memory never shrinks; a flat reading over many
 /// cycles is what "nothing leaks" looks like.
 #[wasm_bindgen(js_name = memoryBytes)]
@@ -312,13 +321,13 @@ fn describe_json(meta: &FaceMeta) -> serde_json::Value {
     })
 }
 
-/// A face's device, JS-owned: the composed [`Arora`] behind
+/// A Vizij's device, JS-owned: the composed [`Arora`] behind
 /// [`arora_web::AroraWeb`]'s surface (`step`, `run`, `stop`, the store
 /// accessors), the in-process caller behind `call`, `loadGraph`,
 /// `applyGraphEdits`, `spawn` and `halt`.
 #[wasm_bindgen]
-pub struct FaceRuntime {
-    face_id: String,
+pub struct VizijRuntime {
+    vizij_id: String,
     rig_prefix: String,
     inner: AroraWeb,
     /// Dispatches in-process `Call`s into the device — enqueued at once,
@@ -331,18 +340,18 @@ pub struct FaceRuntime {
 }
 
 #[wasm_bindgen]
-impl FaceRuntime {
-    /// A device with no face: `graph_json` (any form the spec normalizer
+impl VizijRuntime {
+    /// A device with no Vizij: `graph_json` (any form the spec normalizer
     /// accepts) as its behavior over a fresh store and rig, the animation
     /// module host-linked and `modules` loaded as guests (as
-    /// [`load_face`]'s). Nothing to draw; a test bench, a graph run in
+    /// [`load_vizij`]'s). Nothing to draw; a test bench, a graph run in
     /// Node. Omit the graph for the passthrough proof graph
     /// (`sensor/x` → `actuator/y`).
     #[wasm_bindgen(js_name = fromGraph)]
     pub fn from_graph(
         graph_json: Option<String>,
         modules: Option<js_sys::Array>,
-    ) -> Result<FaceRuntime, JsValue> {
+    ) -> Result<VizijRuntime, JsValue> {
         let spec = match graph_json {
             Some(json) => json,
             None => passthrough_json("sensor/x", "actuator/y"),
@@ -356,8 +365,8 @@ impl FaceRuntime {
             .build()
             .map_err(|e| JsValue::from_str(&format!("arora build failed: {e:?}")))?;
         let caller = arora.caller();
-        Ok(FaceRuntime {
-            face_id: String::new(),
+        Ok(VizijRuntime {
+            vizij_id: String::new(),
             rig_prefix: String::new(),
             inner: AroraWeb::from(arora),
             caller,
@@ -365,14 +374,14 @@ impl FaceRuntime {
         })
     }
 
-    /// The slot the face is shown under (empty for a device with no face).
-    #[wasm_bindgen(getter, js_name = faceId)]
-    pub fn face_id(&self) -> String {
-        self.face_id.clone()
+    /// The slot the Vizij is shown under (empty for a device with no Vizij).
+    #[wasm_bindgen(getter, js_name = vizijId)]
+    pub fn vizij_id(&self) -> String {
+        self.vizij_id.clone()
     }
 
-    /// The prefix the face's own paths live under (`rig/<faceId>/`), empty
-    /// when the GLB names no face.
+    /// The prefix the Vizij's own paths live under (`rig/<faceId>/`), empty
+    /// when the GLB's bundle names no `faceId`.
     #[wasm_bindgen(getter, js_name = rigPrefix)]
     pub fn rig_prefix(&self) -> String {
         self.rig_prefix.clone()
@@ -634,7 +643,7 @@ fn parse_view_options(json: Option<&str>) -> Result<ViewOptions, JsValue> {
     })
 }
 
-/// [`load_face`]'s options: the composition ([`compose_face`]'s fields) and
+/// [`load_vizij`]'s options: the composition ([`compose_vizij`]'s fields) and
 /// whether the neutral pose is staged.
 fn parse_face_config(json: Option<&str>) -> Result<(FaceConfig, bool), JsValue> {
     let options: serde_json::Value = match json {
@@ -818,14 +827,14 @@ fn parse_modules(modules: Option<js_sys::Array>) -> Result<Vec<face::GuestModule
         .collect()
 }
 
-/// The composed behavior graph of a face bundle — the composition the native
-/// `vizij` app deploys and [`load_face`] installs: the bundle's base graphs,
+/// The composed behavior graph of a Vizij's bundle — the composition the native
+/// `vizij` app deploys and [`load_vizij`] installs: the bundle's base graphs,
 /// its embedded standard mappings (each suppressing the built-in of the same
 /// id — an embedded copy is the author's pinned override), the built-in
 /// ROS4HRI mapping unless opted out, then the selected program. The returned
-/// spec is ready for [`FaceRuntime::from_graph`] or
-/// [`loadGraph`](FaceRuntime::load_graph), so an exported GLB can be deployed
-/// and verified without a face on screen.
+/// spec is ready for [`VizijRuntime::from_graph`] or
+/// [`loadGraph`](VizijRuntime::load_graph), so an exported GLB can be deployed
+/// and verified without a Vizij on screen.
 ///
 /// `gltf_json` is the GLB's glTF JSON document (its `VIZIJ_bundle` read from
 /// the root or a node extension). `options_json`, all fields optional:
@@ -834,10 +843,10 @@ fn parse_modules(modules: Option<js_sys::Array>) -> Result<Vec<face::GuestModule
 /// - `program`: `"auto"` (default), `"none"`, or a program id;
 /// - `ros4hri`: compose the built-in ROS4HRI mapping — default `true`;
 /// - `animations`: compose the animation source — default `false`; a device
-///   built by [`load_face`] or [`FaceRuntime::from_graph`] always links the
+///   built by [`load_vizij`] or [`VizijRuntime::from_graph`] always links the
 ///   animation module, so the source dispatches there.
-#[wasm_bindgen(js_name = composeFace)]
-pub fn compose_face(gltf_json: &str, options_json: Option<String>) -> Result<JsValue, JsValue> {
+#[wasm_bindgen(js_name = composeVizij)]
+pub fn compose_vizij(gltf_json: &str, options_json: Option<String>) -> Result<JsValue, JsValue> {
     use vizij_arora_host::{ros4hri, Bundle};
 
     let gltf: serde_json::Value = serde_json::from_str(gltf_json)
