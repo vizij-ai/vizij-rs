@@ -29,27 +29,47 @@ serde_json = { workspace = true }
 clap = { version = "4", features = ["derive"], optional = true }
 log = "0.4"
 env_logger = { version = "0.11", optional = true }
-image = "0.25"
+# PNG only: the snapshot files and the published face frame; bevy_image's own
+# `image` unifies with this one, so every codec listed here ships in the wasm.
+image = { version = "0.25", default-features = false, features = ["png"] }
 uuid = { version = "1", features = ["serde"] }
 
-# The engine, trimmed to what the view uses: the 3D render path (glTF, PBR,
-# morph targets — 0.19 batches morph-target rendering, the faces' main
-# workload), scene spawning, winit windowing, mesh picking, and WebGL2 as the
-# browser backend. No audio, UI, 2D or image codecs (the face GLBs embed no
-# textures). The per-platform windowing backends are in the target tables
-# below.
+# The engine, named crate by crate rather than through the `3d_bevy_render`
+# umbrella: that umbrella also brings text, gizmos, glTF animation, anti-
+# aliasing, post-processing, tonemapping and SMAA lookup textures, ktx2/zstd
+# and hdr/png decoders, none of which a face uses, and `default_app` adds
+# reflection auto-registration; a browser page pays every one of them in
+# download. What stays is the 3D render path (glTF, PBR, morph targets —
+# 0.19 batches morph-target rendering, the faces' main workload), scene
+# spawning, winit windowing, mesh picking, WebGL2 as the browser backend,
+# and the log plugin the apps disable in favor of `log`. The face GLBs embed
+# no textures, so no image codec. The per-platform windowing backends are in
+# the target tables below.
 bevy = { version = "0.19", default-features = false, features = [
-    "default_app",
-    "3d_bevy_render",
-    "scene",
+    "bevy_asset",
+    "bevy_log",
+    "async_executor",
     "std",
-    "bevy_winit",
     "multi_threaded",
-    "webgl2",
+    "bevy_render",
+    "bevy_core_pipeline",
+    "bevy_pbr",
+    "bevy_light",
+    "bevy_camera",
+    "bevy_mesh",
+    "bevy_image",
+    "bevy_color",
+    "bevy_shader",
+    "bevy_material",
+    "bevy_window",
+    "bevy_gltf",
+    "bevy_scene",
+    "morph",
+    "bevy_winit",
     "bevy_picking",
     "mesh_picking",
+    "webgl2",
 ] }
-
 # The device: an arora over the Vizij interop seams, run through the standard
 # operator flow (terminal UI on an interactive terminal, the open local bridge
 # auto-attached). 9.5 gave the TUI application commands and drop-cancellation

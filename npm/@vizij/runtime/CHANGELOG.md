@@ -4,7 +4,7 @@
 
 ### Breaking
 
-- The wasm is the Bevy view and the Arora device together: 31 MB, 9.2 MB
+- The wasm is the Bevy view and the Arora device together: 25 MB, 7 MB
   gzipped, against 2.4.0's 2.5 MB and 0.8 MB. Every import of this package
   fetches it, including one that only lists `skills()` / `profiles()` or runs
   a device with nothing drawn (`startRuntime`). No device-only artifact is

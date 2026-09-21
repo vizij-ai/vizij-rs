@@ -12,7 +12,7 @@ and the Vizij's composed graphs, with the animation, gaze and viseme modules
 linked in, exposed through
 [`arora-web`](https://crates.io/crates/arora-web)'s surface. The view draws
 each Vizij into the rectangle of the canvas the page places it in, reading
-its device's pose every frame. The module is one artifact, 31 MB (9 MB
+its device's pose every frame. The module is one artifact, 25 MB (7 MB
 gzipped): a page that only runs a device or reads the registries fetches the
 view with it.
 
