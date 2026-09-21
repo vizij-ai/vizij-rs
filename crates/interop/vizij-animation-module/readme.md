@@ -7,13 +7,17 @@ runs inside any Arora runtime (native, browser, Web Worker).
 ## What it is
 
 The module's state — the animation `Engine`, the key-to-track index and the
-transport commands buffered for the next step — is an `Animation`. The wasm
-guest owns one in a **guest global** (a wasm module's `Store`/`Memory`
-persist across `dispatch`, so the state survives between calls — no engine
-state round-trips through the store); the free functions the generated
+transport commands buffered for the next step — is an `AnimationModule`. The
+module has no notion of which engine loaded it: the state is scoped by the
+load. The wasm guest owns one in a **guest global**, in the linear memory of
+the `Store` the executor creates per `load_module` — each engine that loads
+the module gets its own, persisting across `dispatch` calls (no engine state
+round-trips through the data store); the free functions the generated
 exports call are that global's. A host that links this crate as an rlib
-(`vizij`'s native and browser devices) builds one `Animation` per module
-instance instead, so two devices in one process never share an engine.
+(`vizij`'s native and browser devices) has no executor to scope it, so it
+builds one `AnimationModule` per `host_module()` — the host-linked
+counterpart of a load — and two devices in one process never share an
+engine.
 
 The boundary types are declared in [`module.yaml`](module.yaml) + the type
 records under [`types/`](types), and the arora-module-authoring `rust` generator
@@ -60,7 +64,7 @@ per-composite type is declared here; the runtime `Value` carries the identity.
 ## Building & testing
 
 ```sh
-# native logic test (an Animation per test + per-track output contract):
+# native logic test (an AnimationModule per test + per-track output contract):
 cargo test -p vizij-animation-module --lib
 
 # build the wasm artifact:

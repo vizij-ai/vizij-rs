@@ -1,13 +1,17 @@
 //! `vizij-animation-core` packaged as an Arora module, wasm guest or host-linked.
 //!
 //! The module's state — the animation [`Engine`], the key-to-track index and
-//! the transport commands buffered for the next step — is an [`Animation`].
-//! The wasm guest owns one in a **guest global** (a wasm module's
-//! `Store`/`Memory` persist across `dispatch`, so the state survives between
-//! calls — no engine state round-trips through the store); the free
-//! functions the generated exports call are that global's. A host that links
-//! this crate builds one [`Animation`] per module instance instead, so two
-//! devices in one process never share an engine.
+//! the transport commands buffered for the next step — is an
+//! [`AnimationModule`]. The module has no notion of which engine loaded it:
+//! the state is scoped by the load. The wasm guest owns one in a **guest
+//! global**, in the linear memory of the `Store` the executor creates per
+//! `load_module` — so each engine that loads the module gets its own, and it
+//! persists across `dispatch` calls (no engine state round-trips through the
+//! data store); the free functions the generated exports call are that
+//! global's. A host that links this crate has no executor to scope it, so it
+//! builds one [`AnimationModule`] per `host_module()` — the host-linked
+//! counterpart of a load — and two devices in one process never share an
+//! engine.
 //!
 //! Boundary types are declared in `module.yaml` and code-generated into
 //! [`arora_generated`] as typed `Value::Structure`s (ARORA-55): an
@@ -84,9 +88,9 @@ use vizij_animation_core::{
     LoopMode, PlayerCommand, PlayerId, Track as CoreTrack, Transitions, Vec2,
 };
 
-/// One module instance's state: the engine, the key-to-track index and the
+/// One load's state: the engine, the key-to-track index and the
 /// transport commands waiting for the next step.
-pub struct Animation {
+pub struct AnimationModule {
     engine: Engine,
     /// Canonical output key (a track's `animatable_id`) -> the authored track id,
     /// so `step` can report per-track identity alongside the default key.
@@ -96,13 +100,13 @@ pub struct Animation {
     pending: Inputs,
 }
 
-impl Default for Animation {
+impl Default for AnimationModule {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Animation {
+impl AnimationModule {
     /// An empty engine with the core's default configuration.
     pub fn new() -> Self {
         Self {
@@ -333,7 +337,7 @@ impl Animation {
         }
     }
 
-    /// Like [`Animation::bake`], but also samples per-frame derivatives;
+    /// Like [`AnimationModule::bake`], but also samples per-frame derivatives;
     /// returns the combined values-and-derivatives JSON
     /// (`export_baked_with_derivatives_json` shape). Returns an empty string
     /// if `anim` is not loaded.
@@ -387,80 +391,80 @@ impl Animation {
 
 // The wasm guest's entry points: the generated exports call these free
 // functions, which act on the guest global. A host links the crate as an
-// rlib and builds its own [`Animation`] instead.
+// rlib and builds its own [`AnimationModule`] instead.
 
 lazy_static::lazy_static! {
     /// The guest's module state — one per wasm instance.
-    static ref GUEST: Mutex<Animation> = Mutex::new(Animation::new());
+    static ref GUEST: Mutex<AnimationModule> = Mutex::new(AnimationModule::new());
 }
 
 /// Run `f` on the guest global.
-fn guest<T>(f: impl FnOnce(&mut Animation) -> T) -> T {
+fn guest<T>(f: impl FnOnce(&mut AnimationModule) -> T) -> T {
     let mut guest = GUEST.lock().unwrap_or_else(|e| e.into_inner());
     f(&mut guest)
 }
 
-/// [`Animation::load_animation`] on the guest global.
+/// [`AnimationModule::load_animation`] on the guest global.
 pub fn load_animation(clip: Option<AnimationClip>) -> u32 {
     guest(|a| a.load_animation(clip))
 }
 
-/// [`Animation::create_player`] on the guest global.
+/// [`AnimationModule::create_player`] on the guest global.
 pub fn create_player(name: Option<String>) -> u32 {
     guest(|a| a.create_player(name))
 }
 
-/// [`Animation::add_instance`] on the guest global.
+/// [`AnimationModule::add_instance`] on the guest global.
 pub fn add_instance(player: Option<u32>, anim: Option<u32>) -> u32 {
     guest(|a| a.add_instance(player, anim))
 }
 
-/// [`Animation::play`] on the guest global.
+/// [`AnimationModule::play`] on the guest global.
 pub fn play(player: Option<u32>) -> u32 {
     guest(|a| a.play(player))
 }
 
-/// [`Animation::pause`] on the guest global.
+/// [`AnimationModule::pause`] on the guest global.
 pub fn pause(player: Option<u32>) -> u32 {
     guest(|a| a.pause(player))
 }
 
-/// [`Animation::stop`] on the guest global.
+/// [`AnimationModule::stop`] on the guest global.
 pub fn stop(player: Option<u32>) -> u32 {
     guest(|a| a.stop(player))
 }
 
-/// [`Animation::seek`] on the guest global.
+/// [`AnimationModule::seek`] on the guest global.
 pub fn seek(player: Option<u32>, time_ns: Option<u64>) -> u32 {
     guest(|a| a.seek(player, time_ns))
 }
 
-/// [`Animation::set_speed`] on the guest global.
+/// [`AnimationModule::set_speed`] on the guest global.
 pub fn set_speed(player: Option<u32>, speed: Option<f32>) -> u32 {
     guest(|a| a.set_speed(player, speed))
 }
 
-/// [`Animation::set_loop`] on the guest global.
+/// [`AnimationModule::set_loop`] on the guest global.
 pub fn set_loop(player: Option<u32>, mode: Option<String>) -> u32 {
     guest(|a| a.set_loop(player, mode))
 }
 
-/// [`Animation::set_weight`] on the guest global.
+/// [`AnimationModule::set_weight`] on the guest global.
 pub fn set_weight(player: Option<u32>, instance: Option<u32>, weight: Option<f32>) -> u32 {
     guest(|a| a.set_weight(player, instance, weight))
 }
 
-/// [`Animation::remove_instance`] on the guest global.
+/// [`AnimationModule::remove_instance`] on the guest global.
 pub fn remove_instance(player: Option<u32>, instance: Option<u32>) -> u32 {
     guest(|a| a.remove_instance(player, instance))
 }
 
-/// [`Animation::player_states`] on the guest global.
+/// [`AnimationModule::player_states`] on the guest global.
 pub fn player_states() -> Vec<PlayerState> {
     guest(|a| a.player_states())
 }
 
-/// [`Animation::bake`] on the guest global.
+/// [`AnimationModule::bake`] on the guest global.
 pub fn bake(
     anim: Option<u32>,
     frame_rate: Option<f32>,
@@ -470,7 +474,7 @@ pub fn bake(
     guest(|a| a.bake(anim, frame_rate, start_time, end_time))
 }
 
-/// [`Animation::bake_with_derivatives`] on the guest global.
+/// [`AnimationModule::bake_with_derivatives`] on the guest global.
 pub fn bake_with_derivatives(
     anim: Option<u32>,
     frame_rate: Option<f32>,
@@ -480,7 +484,7 @@ pub fn bake_with_derivatives(
     guest(|a| a.bake_with_derivatives(anim, frame_rate, start_time, end_time))
 }
 
-/// [`Animation::step`] on the guest global.
+/// [`AnimationModule::step`] on the guest global.
 pub fn step(dt_ns: Option<u64>) -> Vec<TrackOutput> {
     guest(|a| a.step(dt_ns))
 }
@@ -527,7 +531,7 @@ fn to_core_keypoint(kp: GenKeypoint) -> CoreKeypoint {
 
 #[cfg(test)]
 mod tests {
-    //! Exercises the module's functions on an [`Animation`] of the test's own
+    //! Exercises the module's functions on an [`AnimationModule`] of the test's own
     //! (native), the way a host does — bypassing the buffer ABI. This proves
     //! the clip mapping, the transport buffering, and the per-track output
     //! contract. The equivalent end-to-end path through a real wasm engine
@@ -613,7 +617,7 @@ mod tests {
             .map(|o| &o.value)
     }
 
-    fn state_of(animation: &Animation, player: u32) -> PlayerState {
+    fn state_of(animation: &AnimationModule, player: u32) -> PlayerState {
         animation
             .player_states()
             .into_iter()
@@ -623,7 +627,7 @@ mod tests {
 
     #[test]
     fn ramp_advances_and_carries_the_authored_key() {
-        let mut a = Animation::new();
+        let mut a = AnimationModule::new();
         let anim = a.load_animation(Some(ramp_clip("ease-ramp", "ease/x", false)));
         let player = a.create_player(Some("p-ease".into()));
         let inst = a.add_instance(Some(player), Some(anim));
@@ -655,7 +659,7 @@ mod tests {
 
     #[test]
     fn transitions_ride_through_to_sampling() {
-        let mut a = Animation::new();
+        let mut a = AnimationModule::new();
         // Linear handles: value == normalized time, exactly.
         let anim = a.load_animation(Some(ramp_clip("lin-ramp", "lin/x", true)));
         let player = a.create_player(Some("p-lin".into()));
@@ -685,7 +689,7 @@ mod tests {
 
     #[test]
     fn transport_commands_apply_at_the_next_step() {
-        let mut a = Animation::new();
+        let mut a = AnimationModule::new();
         let anim = a.load_animation(Some(ramp_clip("tr-ramp", "tr/x", true)));
         let player = a.create_player(Some("p-transport".into()));
         a.add_instance(Some(player), Some(anim));
@@ -733,7 +737,7 @@ mod tests {
 
     #[test]
     fn loop_once_clamps_at_the_clip_end() {
-        let mut a = Animation::new();
+        let mut a = AnimationModule::new();
         let anim = a.load_animation(Some(ramp_clip("once-ramp", "once/x", true)));
         let player = a.create_player(Some("p-once".into()));
         a.add_instance(Some(player), Some(anim));
@@ -754,7 +758,7 @@ mod tests {
 
     #[test]
     fn weights_skew_the_blend_and_removal_silences_the_key() {
-        let mut a = Animation::new();
+        let mut a = AnimationModule::new();
         let zero = a.load_animation(Some(constant_clip("mix-zero", "mix/x", 0.0)));
         let one = a.load_animation(Some(constant_clip("mix-one", "mix/x", 1.0)));
         let player = a.create_player(Some("p-mix".into()));
@@ -790,7 +794,7 @@ mod tests {
 
     #[test]
     fn bake_exports_sampled_tracks_as_json() {
-        let mut a = Animation::new();
+        let mut a = AnimationModule::new();
         let anim = a.load_animation(Some(constant_clip("bake-me", "joint/x", 0.5)));
 
         // A loaded clip bakes to a JSON object echoing the requested frame rate
@@ -824,13 +828,13 @@ mod tests {
 
 #[cfg(test)]
 mod instances {
-    //! Two module instances in one process are two engines.
+    //! Two loads in one process are two engines.
     use super::*;
 
     #[test]
     fn instances_do_not_share_players() {
-        let mut first = Animation::new();
-        let mut second = Animation::new();
+        let mut first = AnimationModule::new();
+        let mut second = AnimationModule::new();
         let player = first.create_player(Some("only-in-first".into()));
         assert_eq!(first.player_states().len(), 1);
         assert!(second.player_states().is_empty());
@@ -844,7 +848,7 @@ mod instances {
         assert_eq!(state.time_ns, 0);
     }
 
-    fn state_of(animation: &Animation, player: u32) -> PlayerState {
+    fn state_of(animation: &AnimationModule, player: u32) -> PlayerState {
         animation
             .player_states()
             .into_iter()
