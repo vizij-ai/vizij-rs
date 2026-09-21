@@ -10,7 +10,7 @@
 // (tens of MB) on every cycle, so the reading never repeats. Needs
 // `VIZIJ_FIXTURES`; skips without.
 import assert from "node:assert/strict";
-import { FIXTURES, loadFace, open } from "./common.mjs";
+import { FIXTURES, loadVizij, open } from "./common.mjs";
 
 if (!FIXTURES) {
   console.log("VIZIJ_FIXTURES unset — skipping the browser memory test");
@@ -29,7 +29,7 @@ const { page, logs, close } = await open(FIXTURES);
 try {
   const memory = [];
   for (let i = 0; i < CYCLES; i++) {
-    await loadFace(page, "cycle", "Quori_Current_Extended.glb", { program: "none" });
+    await loadVizij(page, "cycle", "Quori_Current_Extended.glb", { program: "none" });
     await page.waitForTimeout(100);
     await page.evaluate(() => window.vizijHarness.unload("cycle"));
     await page.waitForTimeout(100);

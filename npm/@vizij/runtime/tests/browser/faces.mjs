@@ -2,7 +2,7 @@
 // reported as a pick naming the face and the element the GLB declares.
 // Needs `VIZIJ_FIXTURES`; skips without.
 import assert from "node:assert/strict";
-import { FIXTURES, loadFace, open } from "./common.mjs";
+import { FIXTURES, loadVizij, open } from "./common.mjs";
 
 if (!FIXTURES) {
   console.log("VIZIJ_FIXTURES unset — skipping the browser faces test");
@@ -11,8 +11,8 @@ if (!FIXTURES) {
 
 const { page, logs, close } = await open(FIXTURES);
 try {
-  await loadFace(page, "left", "Quori_Current_Extended.glb", { program: "none" });
-  await loadFace(page, "right", "Toasty_Current.glb", { program: "none" });
+  await loadVizij(page, "left", "Quori_Current_Extended.glb", { program: "none" });
+  await loadVizij(page, "right", "Toasty_Current.glb", { program: "none" });
   await page.evaluate(() => {
     window.vizijHarness.place("left", { x: 0, y: 0, width: 381, height: 486 });
     window.vizijHarness.place("right", { x: 382, y: 0, width: 381, height: 486 });
@@ -44,12 +44,12 @@ try {
       await page.mouse.up();
       await page.waitForTimeout(300);
       const picks = await page.evaluate(() => window.vizijHarness.picks());
-      if (picks.some((p) => p.faceId === face)) return picks;
+      if (picks.some((p) => p.vizijId === face)) return picks;
     }
     return [];
   };
   const picks = [...(await press("left", 190, 243)), ...(await press("right", 572, 243))];
-  const byFace = (id) => picks.filter((p) => p.faceId === id);
+  const byFace = (id) => picks.filter((p) => p.vizijId === id);
   assert.ok(byFace("left").length >= 1, `no pick on the left face: ${JSON.stringify(picks)}`);
   assert.ok(byFace("right").length >= 1, `no pick on the right face: ${JSON.stringify(picks)}`);
   for (const pick of byFace("left")) assert.ok(elements.left.includes(pick.elementId), pick.elementId);

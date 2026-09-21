@@ -1,8 +1,8 @@
-// An exported face GLB deploys through composeFace: the bundle's embedded
+// An exported face GLB deploys through composeVizij: the bundle's embedded
 // (here: modified) standard mapping composes and wins over the built-in —
 // the VIZ-92 precedence, proven on the wasm runtime anywhere Node runs.
 import assert from "node:assert/strict";
-import { composeFace, startRuntime } from "../dist/runtime/src/index.js";
+import { composeVizij, startRuntime } from "../dist/runtime/src/index.js";
 
 // A modified ros4hri copy: valence rides verbatim onto the happy weight (no
 // smoothing, no blending, name ignored) — a mapping the built-in never
@@ -41,7 +41,7 @@ const gltf = {
   ],
 };
 
-const spec = await composeFace(gltf, { program: "none" });
+const spec = await composeVizij(gltf, { program: "none" });
 const ids = spec.nodes.map((node) => node.id);
 assert.ok(
   ids.some((id) => id.startsWith("standard::ros4hri::")),
@@ -70,4 +70,4 @@ assert.ok(
   `embedded mapping wins, got ${JSON.stringify(happy)}`,
 );
 
-console.log("compose-face: ok");
+console.log("compose-vizij: ok");

@@ -30,8 +30,8 @@ export async function open(fixtures, query = "") {
   };
 }
 
-/** Load a face and wait until its scene is indexed. */
-export async function loadFace(page, id, file, options) {
+/** Load a Vizij and wait until its scene is indexed. */
+export async function loadVizij(page, id, file, options) {
   const device = await page.evaluate(
     ([id, file, options]) => window.vizijHarness.load(id, `/fixtures/${file}`, options),
     [id, file, options ?? null],
