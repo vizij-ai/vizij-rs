@@ -1,8 +1,9 @@
 //! The registry of standard **mappings** — the composable graph assets that
 //! implement one profile in terms of another, so a face responds to an
 //! external standard. One entry today (ROS4HRI): it consumes the `ros4hri`
-//! profile and produces the `vizij-face` profile, both declared in
-//! [`crate::profile`].
+//! profile's commands and produces the `vizij-face` profile's controls, and
+//! relays the face's speech state back as the `ros4hri` profile's one output;
+//! both profiles are declared in [`crate::profile`].
 //!
 //! A mapping is the operation half of a standard; the profile is the
 //! interface it translates. The registry exists so hosts, the bundler, and
@@ -41,7 +42,8 @@ pub const STANDARD_MAPPINGS: [StandardMapping; 1] = [StandardMapping {
     title: "ROS4HRI",
     description: "Drives the standard face controls from the standard/ros4hri/* keys: \
                   expression names and valence/arousal, gaze targets with vergence, FACS \
-                  action units, idle blink, and the incumbent's ~200 ms smoothing.",
+                  action units, idle blink, and the incumbent's ~200 ms smoothing; relays \
+                  the face's speech state to the ROS4HRI speech key.",
     asset_json: ros4hri::MAPPING_JSON,
     generate: ros4hri::generate,
 }];

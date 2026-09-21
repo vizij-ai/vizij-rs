@@ -8,8 +8,9 @@
 //! Drives the build's `say` provider exactly as the device does — registered
 //! as a host module on an arora and called once per tick, `Running` until
 //! playback ends — printing the viseme stream (the face standard's shapes)
-//! as it advances. On the device the say skill's run does the same and
-//! drives the lips from it.
+//! as it advances and the utterance when its audio starts and ends. On the
+//! device the say skill's run does the same, driving the lips from the one
+//! and writing the other as the face's speech state.
 
 use std::time::Duration;
 
@@ -67,24 +68,36 @@ fn main() {
                 id: say::VISEME,
                 value: Box::new(Value::String(tts_api::SILENCE_VISEME.to_string())),
             },
+            StructureField {
+                id: say::SPEECH,
+                value: Box::new(Value::String(String::new())),
+            },
         ],
     };
 
     // The tick loop, standalone: call the provider through the device until
     // the utterance ends.
     let mut last = String::new();
+    let mut speaking = String::new();
     loop {
         let result = arora
             .call(call.clone())
             .expect("say dispatches through the device");
         for field in &result.mutated {
-            if field.id == say::VISEME {
-                if let Value::String(viseme) = field.value.as_ref() {
-                    if *viseme != last {
-                        println!("viseme: {viseme}");
-                        last = viseme.clone();
-                    }
+            let Value::String(value) = field.value.as_ref() else {
+                continue;
+            };
+            if field.id == say::VISEME && *value != last {
+                println!("viseme: {value}");
+                last = value.clone();
+            }
+            if field.id == say::SPEECH && *value != speaking {
+                if value.is_empty() {
+                    println!("speech: ended");
+                } else {
+                    println!("speech: {value}");
                 }
+                speaking = value.clone();
             }
         }
         if result.ret != task::running() {

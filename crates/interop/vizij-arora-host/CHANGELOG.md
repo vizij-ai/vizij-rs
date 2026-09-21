@@ -4,6 +4,32 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [6.0.0] - 2026-10-06
+
+### Added
+
+- `standard::SPEECH`, `standard/vizij/speech`: what the face is saying — the
+  utterance of a `say` run from the moment its audio starts playing until it
+  ends, empty at rest. State the face reports, not a command.
+- The `vizij-face` profile declares its state keys as `output` keys, the
+  controls staying `input`: `standard/vizij/viseme` (resting at `sil`) and
+  `standard/vizij/speech` (resting empty), 90 keys in all.
+  `Profile::paths_of(kind)` lists a profile's keys of one kind.
+- The ROS4HRI mapping relays the face's speech state to the device-scoped
+  `ros4hri::SPEECH_TEXT_KEY`, `standard/ros4hri/speech/text`, the `ros4hri`
+  profile's one `output` key, which arora-bridge-ros2's ROS4HRI preset
+  publishes on `/robot_face/speech`.
+- The say skill writes the provider's `speech` out-parameter as the face's
+  speech state.
+
+### Changed
+
+- **Breaking:** the `Say` contract's `say` gains a mutable `speech: &mut
+  String` out-parameter (`say::ids::say::SPEECH`): a provider reports the
+  utterance while its audio plays — from the moment playback starts, whether
+  or not synthesis has finished — and empty before and after. Every provider
+  implements it.
+
 ## [5.2.0] - 2026-10-06
 
 ### Changed

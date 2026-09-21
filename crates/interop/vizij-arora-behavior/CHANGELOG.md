@@ -4,6 +4,14 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [5.0.0] - 2026-10-06
+
+### Changed
+
+- **Breaking:** depends on vizij-arora-host 6: the re-exported `Say` contract
+  has the mutable `speech` out-parameter, and the say fragment writes it as
+  the face's speech state, `standard/vizij/speech`.
+
 ## [4.1.0] - 2026-10-05
 
 ### Added
