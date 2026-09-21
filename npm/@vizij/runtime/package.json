@@ -1,7 +1,7 @@
 {
   "name": "@vizij/runtime",
   "version": "3.0.0-alpha.0",
-  "description": "Vizij faces in the browser: the Bevy view and the Arora device in one wasm module — mount a canvas, load faces, step or run their devices.",
+  "description": "Vizij faces in the browser: the Bevy view and the Arora device in one wasm module \u2014 mount a canvas, load faces, step or run their devices.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -35,7 +35,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json && node ../../../scripts/copy-wasm-pkg.mjs runtime",
-    "test": "pnpm run build && node tests/smoke.mjs && node tests/apply-graph-edits.mjs && node tests/animation-module.mjs && node tests/compose-face.mjs && node tests/registries.mjs",
+    "test": "pnpm run build && node tests/smoke.mjs && node tests/apply-graph-edits.mjs && node tests/animation-module.mjs && node tests/guest-module.mjs && node tests/compose-face.mjs && node tests/registries.mjs",
     "test:browser": "node tests/browser/snapshot.mjs && node tests/browser/faces.mjs && node tests/browser/memory.mjs",
     "prepack": "pnpm run build",
     "prepublishOnly": "node -e \"const fs=require('fs');if(!fs.existsSync('pkg')){console.error('Missing pkg/. Run wasm-pack build.');process.exit(1);}\""
@@ -48,7 +48,8 @@
     "typescript": "^5.5.0",
     "@types/node": "^20.12.7",
     "playwright": "^1.60.0",
-    "pngjs": "^7.0.0"
+    "pngjs": "^7.0.0",
+    "@vizij/animation-module": "workspace:*"
   },
   "publishConfig": {
     "access": "public",

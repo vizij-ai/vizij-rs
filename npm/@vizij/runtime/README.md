@@ -48,6 +48,14 @@ without loading it.
 nothing drawn — for a bench or a graph run in Node; every `Runtime` method
 works on it.
 
+Arora wasm modules load into a device as guests: `startRuntime(graph, init,
+modules)` and `loadFace`'s `options.modules` take `{ headerJson, wasmBytes }`
+pairs (what `@vizij/animation-module`'s `loadAnimationModule()` returns for
+its artifact); their functions are reachable by id from `device.call` and
+from the graph's `ExternalFunction` nodes, like the host-linked modules'. A
+guest under a host-linked module's id — the animation module's — is served
+by the host-linked one.
+
 ### Profiles and mappings
 
 A **profile** is an interface: the set of store paths one party exposes to

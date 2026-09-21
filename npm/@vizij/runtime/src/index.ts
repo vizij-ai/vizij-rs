@@ -189,10 +189,24 @@ export interface MountOptions {
   unlit?: boolean;
 }
 
+/**
+ * An Arora wasm module to load into a device's engine as a guest: its header
+ * as JSON plus its `.wasm` executable bytes — e.g. what
+ * `@vizij/animation-module`'s `loadAnimationModule()` returns. Its functions
+ * are then reachable by id from {@link Device.call} and from the graph's
+ * `ExternalFunction` nodes, like the host-linked modules'.
+ */
+export interface RuntimeModule {
+  headerJson: string;
+  wasmBytes: Uint8Array;
+}
+
 /** Options for {@link loadFace}: the composition, as {@link composeFace}'s,
- * plus whether the bundle's neutral pose is staged (default `true`). */
+ * whether the bundle's neutral pose is staged (default `true`), and the wasm
+ * modules to load into the device as guests. */
 export interface FaceOptions extends ComposeFaceOptions {
   stageNeutral?: boolean;
+  modules?: RuntimeModule[];
 }
 
 /** What {@link describe} reads from a GLB without loading it. */
@@ -242,10 +256,15 @@ interface WasmFaceRuntime {
 interface WasmBindings {
   default: (input?: unknown) => Promise<unknown>;
   FaceRuntime: {
-    fromGraph(graph_json?: string): WasmFaceRuntime;
+    fromGraph(graph_json?: string, modules?: RuntimeModule[]): WasmFaceRuntime;
   };
   mount(canvas: string, options_json?: string): void;
-  loadFace(face_id: string, glb: Uint8Array, options_json?: string): WasmFaceRuntime;
+  loadFace(
+    face_id: string,
+    glb: Uint8Array,
+    options_json?: string,
+    modules?: RuntimeModule[],
+  ): WasmFaceRuntime;
   unloadFace(face_id: string): void;
   placeFace(face_id: string, x: number, y: number, width: number, height: number): void;
   fillCanvas(face_id: string): void;
@@ -530,8 +549,6 @@ export class Runtime {
   }
 }
 
-/** @deprecated Renamed {@link Runtime}: a face's device, or one with no face. */
-export type Runtime = Runtime;
 
 function bindings(): WasmBindings {
   const current = bindingCache.current;
@@ -581,8 +598,14 @@ export async function loadFace(
 ): Promise<Runtime> {
   await init(input);
   const bytes = glb instanceof Uint8Array ? glb : new Uint8Array(glb);
+  const { modules, ...composition } = options ?? {};
   return new Runtime(
-    bindings().loadFace(faceId, bytes, options ? JSON.stringify(options) : undefined),
+    bindings().loadFace(
+      faceId,
+      bytes,
+      options ? JSON.stringify(composition) : undefined,
+      modules,
+    ),
   );
 }
 
@@ -661,15 +684,20 @@ export async function describe(
 /**
  * A device with no face: `graph` (a Vizij graph spec, in any form the spec
  * normalizer accepts) as its behavior over a fresh store and rig, the
- * animation module host-linked. Nothing is drawn — a bench, or a graph run
- * in Node. Omit `graph` for the built-in passthrough proof graph
- * (`sensor/x` → `actuator/y`). Calls {@link init} if it has not run yet.
+ * animation module host-linked and `modules` loaded as guests. Nothing is
+ * drawn — a bench, or a graph run in Node. Omit `graph` for the built-in
+ * passthrough proof graph (`sensor/x` → `actuator/y`). Calls {@link init}
+ * if it has not run yet.
  */
-export async function startRuntime(graph?: GraphSpecInput, input?: InitInput): Promise<Runtime> {
+export async function startRuntime(
+  graph?: GraphSpecInput,
+  input?: InitInput,
+  modules?: RuntimeModule[],
+): Promise<Runtime> {
   await init(input);
   const graphJson =
     graph === undefined ? undefined : typeof graph === "string" ? graph : JSON.stringify(graph);
-  return new Runtime(bindings().FaceRuntime.fromGraph(graphJson));
+  return new Runtime(bindings().FaceRuntime.fromGraph(graphJson, modules));
 }
 
 /**
