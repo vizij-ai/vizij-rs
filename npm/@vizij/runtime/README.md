@@ -1,15 +1,17 @@
 # @vizij/runtime
 
-Vizij faces in the browser: the Bevy view and the Arora device in one wasm
+Vizijs in the browser: the Bevy view and the Arora device in one wasm
 module, built from the [`vizij`
 crate](https://github.com/vizij-ai/vizij-rs/tree/main/crates/vizij) (its
-`web` module). A page mounts its canvas once — one App for the page's
-lifetime — then loads as many faces as it shows. Each face is a device of
-its own: an [`arora`](https://crates.io/crates/arora) over a blackboard
-store, a rig HAL and the face's composed graphs, with the animation, gaze
-and viseme modules linked in, exposed through
+`web` module). A Vizij is what the authoring app exports: a GLB carrying a
+rig, its graphs and programs — a face, most often. A page mounts its canvas
+once — one App for the page's lifetime — then loads as many Vizijs as it
+shows. Each is a device of its own: an
+[`arora`](https://crates.io/crates/arora) over a blackboard store, a rig HAL
+and the Vizij's composed graphs, with the animation, gaze and viseme modules
+linked in, exposed through
 [`arora-web`](https://crates.io/crates/arora-web)'s surface. The view draws
-each face into the rectangle of the canvas the page places it in, reading
+each Vizij into the rectangle of the canvas the page places it in, reading
 its device's pose every frame. The module is one artifact, 31 MB (9 MB
 gzipped): a page that only runs a device or reads the registries fetches the
 view with it.
@@ -17,41 +19,43 @@ view with it.
 ## Use
 
 ```ts
-import { init, mount, loadFace, placeFaceIn, whenReady, unloadFace } from "@vizij/runtime";
+import { init, mount, loadVizij, placeVizijIn, whenReady, unloadVizij } from "@vizij/runtime";
 
 await init();
-await mount("#faces"); // the canvas; transparent wherever no face draws
+await mount("#vizijs"); // the canvas; transparent wherever no Vizij draws
 
 const glb = new Uint8Array(await (await fetch("/faces/Quori_Current_Extended.glb")).arrayBuffer());
-const face = await loadFace("quori", glb); // composes the face's graphs, starts its device
-placeFaceIn("quori", document.getElementById("quori-slot")!, canvas); // where it draws
+const quori = await loadVizij("quori", glb); // composes its graphs, starts its device
+placeVizijIn("quori", document.getElementById("quori-slot")!, canvas); // where it draws
 await whenReady("quori"); // its scene is indexed; the pose shows from here on
-face.run(); // the device paces itself (or call face.step(dtMs) per frame)
+quori.run(); // the device paces itself (or call quori.step(dtMs) per frame)
 
 // any time — the device's store stays live while it runs:
-face.setValue(face.path("standard/vizij/expression/happy"), 1);
-const run = await face.spawn({ id: SAY_ID, args: [{ id: SAY_TEXT_PARAM_ID, value: { str: "Hello" } }] });
-face.readValues([run.status.path]);
-await face.halt(run);
+quori.setValue(quori.path("standard/vizij/expression/happy"), 1);
+const run = await quori.spawn({ id: SAY_ID, args: [{ id: SAY_TEXT_PARAM_ID, value: { str: "Hello" } }] });
+quori.readValues([run.status.path]);
+await quori.halt(run);
 
-unloadFace("quori"); // the scene, the camera, the GLB
-face.dispose();
+unloadVizij("quori"); // the scene, the camera, the GLB
+quori.dispose();
 ```
 
-A face's paths are its own: `face.rigPrefix` is `rig/<faceId>/` and
-`face.path(relative)` builds one. `drainPicks()` reports pointer presses on faces as
-`{ faceId, elementId }` by the ids the GLB's RobotData declares;
+A Vizij's paths are its own: `quori.rigPrefix` is `rig/<faceId>/` (the
+bundle's `faceId`) and `quori.path(relative)` builds one. `drainPicks()`
+reports pointer presses as `{ vizijId, elementId }` — the slot and the
+element id the GLB's RobotData declares;
 `describe(glb)` reads a GLB's elements, animatables, bounds and programs
 without loading it.
 
-`startRuntime(graphSpec)` gives a device with no face — a graph on a store,
+`startRuntime(graphSpec)` gives a device with no Vizij — a graph on a store,
 nothing drawn — for a bench or a graph run in Node; every `Runtime` method
 works on it.
 
 Arora wasm modules load into a device as guests: `startRuntime(graph, init,
-modules)` and `loadFace`'s `options.modules` take `{ headerJson, wasmBytes }`
-pairs (what `@vizij/animation-module`'s `loadAnimationModule()` returns for
-its artifact); their functions are reachable by id from `device.call` and
+modules)` and `loadVizij`'s `options.modules` take `AroraModule`s —
+`{ headerJson, wasmBytes }`, what `@vizij/animation-module`'s
+`loadAnimationModule()` returns for its artifact; their functions are
+reachable by id from `runtime.call` and
 from the graph's `ExternalFunction` nodes, like the host-linked modules'. A
 guest under a host-linked module's id — the animation module's — is served
 by the host-linked one.

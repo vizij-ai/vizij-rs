@@ -1,30 +1,30 @@
 /**
  * Stable ESM entrypoint for `@vizij/runtime`.
  *
- * Vizij faces in the browser: one wasm module holding the Bevy view and the
+ * Vizijs in the browser: one wasm module holding the Bevy view and the
  * Arora device (the `vizij` crate's `web` module). A page {@link mount}s its
- * canvas once — one App for the page's lifetime — then {@link loadFace}s as
- * many faces as it shows: each is a {@link Runtime} of its own, JS-paced,
- * drawn into the rectangle of the canvas the page {@link placeFace}s it in.
+ * canvas once — one App for the page's lifetime — then {@link loadVizij}s as
+ * many Vizijs as it shows: each is a {@link Runtime} of its own, JS-paced,
+ * drawn into the rectangle of the canvas the page {@link placeVizij}s it in.
  * Values cross the boundary in the normalized `ValueJSON` vocabulary shared
  * with the other Vizij packages.
  *
  * Typical use:
  * ```ts
- * import { init, mount, loadFace, placeFaceIn, whenReady } from "@vizij/runtime";
+ * import { init, mount, loadVizij, placeVizijIn, whenReady } from "@vizij/runtime";
  *
  * await init();
- * await mount("#faces");
- * const face = await loadFace("quori", glbBytes);
- * placeFaceIn("quori", document.getElementById("slot")!, canvas);
+ * await mount("#vizijs");
+ * const quori = await loadVizij("quori", glbBytes);
+ * placeVizijIn("quori", document.getElementById("slot")!, canvas);
  * await whenReady("quori");
- * face.run(); // the device paces itself from here on
- * face.setValue(face.path("standard/vizij/expression/happy"), 1);
- * const run = await face.spawn({ id: SAY_ID, args: [...] });
+ * quori.run(); // the device paces itself from here on
+ * quori.setValue(quori.path("standard/vizij/expression/happy"), 1);
+ * const run = await quori.spawn({ id: SAY_ID, args: [...] });
  * ```
  *
- * A host with its own clock skips `run()` and calls `face.step(dtMs)` per
- * animation frame instead. {@link startRuntime} gives a device with no face
+ * A host with its own clock skips `run()` and calls `quori.step(dtMs)` per
+ * animation frame instead. {@link startRuntime} gives a device with no Vizij
  * (a graph on a store, nothing drawn) — a bench, or a graph run in Node.
  */
 import { toValueJSON, type ValueJSON, type ValueInput } from "@vizij/value-json";
@@ -160,9 +160,10 @@ export interface TaskHandle {
   result?: KeyRef[];
 }
 
-/** A pointer press on a face, by the ids its RobotData declares. */
+/** A pointer press on a Vizij: the slot it is shown under and the element
+ * id its GLB's RobotData declares. */
 export interface Pick {
-  faceId: string;
+  vizijId: string;
   elementId: string;
 }
 
@@ -174,12 +175,12 @@ export interface Rect {
   height: number;
 }
 
-/** Options for {@link mount}: how every face is rendered. */
+/** Options for {@link mount}: how every Vizij is rendered. */
 export interface MountOptions {
-  /** `RRGGBB` clear colour of each face's rectangle; absent, the canvas
+  /** `RRGGBB` clear colour of each Vizij's rectangle; absent, the canvas
    * stays transparent wherever nothing is drawn. */
   background?: string;
-  /** How a face fits its rectangle: `contain` (default), `cover`, `stretch`. */
+  /** How a Vizij fits its rectangle: `contain` (default), `cover`, `stretch`. */
   fit?: "contain" | "cover" | "stretch";
   /** Magnification after the fit: one factor, or `[x, y]`. */
   zoom?: number | [number, number];
@@ -190,29 +191,31 @@ export interface MountOptions {
 }
 
 /**
- * An Arora wasm module to load into a device's engine as a guest: its header
- * as JSON plus its `.wasm` executable bytes — e.g. what
- * `@vizij/animation-module`'s `loadAnimationModule()` returns. Its functions
- * are then reachable by id from {@link Device.call} and from the graph's
+ * An Arora module as a device loads it: its header as JSON plus its wasm
+ * executable — the two arguments of `arora-web`'s `withModule(headerJson,
+ * executable)`, carried together. `@vizij/animation-module`'s
+ * `loadAnimationModule()` returns one. Loaded as a guest, its functions are
+ * reachable by id from {@link Runtime.call} and from the graph's
  * `ExternalFunction` nodes, like the host-linked modules'.
  */
-export interface RuntimeModule {
+export interface AroraModule {
   headerJson: string;
   wasmBytes: Uint8Array;
 }
 
-/** Options for {@link loadFace}: the composition, as {@link composeFace}'s,
+/** Options for {@link loadVizij}: the composition, as {@link composeVizij}'s,
  * whether the bundle's neutral pose is staged (default `true`), and the wasm
  * modules to load into the device as guests. */
-export interface FaceOptions extends ComposeFaceOptions {
+export interface VizijOptions extends ComposeVizijOptions {
   stageNeutral?: boolean;
-  modules?: RuntimeModule[];
+  modules?: AroraModule[];
 }
 
 /** What {@link describe} reads from a GLB without loading it. */
-export interface FaceDescription {
+export interface VizijDescription {
+  /** The `faceId` the GLB's bundle declares, if any. */
   faceId: string | null;
-  /** The prefix the face's own paths live under (`rig/<faceId>/`). */
+  /** The prefix the Vizij's own paths live under (`rig/<faceId>/`). */
   rigPrefix: string;
   rootBounds: { center: { x: number; y: number }; size: { x: number; y: number } } | null;
   elements: {
@@ -231,8 +234,8 @@ export interface FaceDescription {
   neutralInputs: Record<string, number>;
 }
 
-interface WasmFaceRuntime {
-  readonly faceId: string;
+interface WasmVizijRuntime {
+  readonly vizijId: string;
   readonly rigPrefix: string;
   step(dt_ms: number): void;
   run(period_ms?: number): Promise<void>;
@@ -255,22 +258,22 @@ interface WasmFaceRuntime {
 
 interface WasmBindings {
   default: (input?: unknown) => Promise<unknown>;
-  FaceRuntime: {
-    fromGraph(graph_json?: string, modules?: RuntimeModule[]): WasmFaceRuntime;
+  VizijRuntime: {
+    fromGraph(graph_json?: string, modules?: AroraModule[]): WasmVizijRuntime;
   };
   mount(canvas: string, options_json?: string): void;
-  loadFace(
-    face_id: string,
+  loadVizij(
+    vizij_id: string,
     glb: Uint8Array,
     options_json?: string,
-    modules?: RuntimeModule[],
-  ): WasmFaceRuntime;
-  unloadFace(face_id: string): void;
-  placeFace(face_id: string, x: number, y: number, width: number, height: number): void;
-  fillCanvas(face_id: string): void;
-  ready(face_id: string): boolean;
+    modules?: AroraModule[],
+  ): WasmVizijRuntime;
+  unloadVizij(vizij_id: string): void;
+  placeVizij(vizij_id: string, x: number, y: number, width: number, height: number): void;
+  fillCanvas(vizij_id: string): void;
+  ready(vizij_id: string): boolean;
   drainPicks(): Pick[];
-  describe(glb: Uint8Array): FaceDescription;
+  describe(glb: Uint8Array): VizijDescription;
   memoryBytes(): number;
   mappings(): Mapping[];
   mapping(id: string, rig_prefix: string): object | null;
@@ -278,7 +281,7 @@ interface WasmBindings {
   profile(id: string, rig_prefix: string): Profile | null;
   skills(): Skill[];
   skillSource(id: string): object | null;
-  composeFace(gltf_json: string, options_json?: string): object;
+  composeVizij(gltf_json: string, options_json?: string): object;
 }
 
 const bindingCache: { current: WasmBindings | null } = { current: null };
@@ -368,30 +371,30 @@ export function init(input?: InitInput): Promise<void> {
 }
 
 /**
- * A face's device — or, from {@link startRuntime}, a device with no face.
+ * A Vizij's device — or, from {@link startRuntime}, a device with no Vizij.
  * All methods talk to the device's own store; the graph it runs reads and
- * writes the same keys. A face's paths live under its {@link rigPrefix};
+ * writes the same keys. A Vizij's paths live under its {@link rigPrefix};
  * {@link path} builds one.
  */
 export class Runtime {
-  private inner: WasmFaceRuntime;
+  private inner: WasmVizijRuntime;
 
-  constructor(inner: WasmFaceRuntime) {
+  constructor(inner: WasmVizijRuntime) {
     this.inner = inner;
   }
 
-  /** The slot the face is shown under; empty for a device with no face. */
-  get faceId(): string {
-    return this.inner.faceId;
+  /** The slot the Vizij is shown under; empty for a device with no Vizij. */
+  get vizijId(): string {
+    return this.inner.vizijId;
   }
 
-  /** The prefix the face's own paths live under (`rig/<faceId>/`), empty
-   * when the GLB names no face. */
+  /** The prefix the Vizij's own paths live under (`rig/<faceId>/`), empty
+   * when the GLB's bundle names no `faceId`. */
   get rigPrefix(): string {
     return this.inner.rigPrefix;
   }
 
-  /** A path of the face's own: `rigPrefix + relative`. */
+  /** A path of the Vizij's own: `rigPrefix + relative`. */
   path(relative: string): string {
     return this.inner.rigPrefix + relative;
   }
@@ -543,7 +546,7 @@ export class Runtime {
   }
 
   /** Release the wasm-side device. The instance is unusable afterwards; a
-   * face's device is disposed after {@link unloadFace}. */
+   * Vizij's device is disposed after {@link unloadVizij}. */
   dispose(): void {
     this.inner.free();
   }
@@ -561,7 +564,7 @@ function bindings(): WasmBindings {
 /**
  * Create the page's one App over `canvas` — a CSS selector, or the canvas
  * element itself (given an id if it has none). The canvas fits its parent
- * and stays transparent wherever no face draws. Calls {@link init} if it
+ * and stays transparent wherever no Vizij draws. Calls {@link init} if it
  * has not run yet. A page mounts once.
  */
 export async function mount(
@@ -583,25 +586,25 @@ export async function mount(
 }
 
 /**
- * Show a face under `faceId` and start its device: the GLB's bindings and
- * bundle are read, its graphs composed (`options` as {@link composeFace}'s,
+ * Show a Vizij under `vizijId` and start its device: the GLB's bindings and
+ * bundle are read, its graphs composed (`options` as {@link composeVizij}'s,
  * plus `stageNeutral`), the device built with the animation, gaze and viseme
  * modules, and the scene queued for the App — {@link whenReady} resolves
- * once it shows. A face already shown under `faceId` is replaced. Requires
+ * once it shows. A Vizij already shown under `vizijId` is replaced. Requires
  * {@link mount}.
  */
-export async function loadFace(
-  faceId: string,
+export async function loadVizij(
+  vizijId: string,
   glb: Uint8Array | ArrayBuffer,
-  options?: FaceOptions,
+  options?: VizijOptions,
   input?: InitInput,
 ): Promise<Runtime> {
   await init(input);
   const bytes = glb instanceof Uint8Array ? glb : new Uint8Array(glb);
   const { modules, ...composition } = options ?? {};
   return new Runtime(
-    bindings().loadFace(
-      faceId,
+    bindings().loadVizij(
+      vizijId,
       bytes,
       options ? JSON.stringify(composition) : undefined,
       modules,
@@ -609,48 +612,48 @@ export async function loadFace(
   );
 }
 
-/** Take the face down: its scene, its camera, its GLB. Dispose its
+/** Take the Vizij down: its scene, its camera, its GLB. Dispose its
  * {@link Runtime} afterwards. */
-export function unloadFace(faceId: string): void {
-  bindings().unloadFace(faceId);
+export function unloadVizij(vizijId: string): void {
+  bindings().unloadVizij(vizijId);
 }
 
-/** Confine the face's camera to a rectangle of the canvas (CSS pixels from
- * its top-left corner) — how several faces share one canvas. Kept across the
- * face's reloads. */
-export function placeFace(faceId: string, rect: Rect): void {
-  bindings().placeFace(faceId, rect.x, rect.y, rect.width, rect.height);
+/** Confine the Vizij's camera to a rectangle of the canvas (CSS pixels from
+ * its top-left corner) — how several Vizijs share one canvas. Kept across the
+ * Vizij's reloads. */
+export function placeVizij(vizijId: string, rect: Rect): void {
+  bindings().placeVizij(vizijId, rect.x, rect.y, rect.width, rect.height);
 }
 
-/** Place the face over `element`, as it lies over `canvas` on the page —
+/** Place the Vizij over `element`, as it lies over `canvas` on the page —
  * call it again when the layout changes. */
-export function placeFaceIn(faceId: string, element: Element, canvas: Element): void {
+export function placeVizijIn(vizijId: string, element: Element, canvas: Element): void {
   const c = canvas.getBoundingClientRect();
   const e = element.getBoundingClientRect();
-  placeFace(faceId, { x: e.x - c.x, y: e.y - c.y, width: e.width, height: e.height });
+  placeVizij(vizijId, { x: e.x - c.x, y: e.y - c.y, width: e.width, height: e.height });
 }
 
-/** Give the face's camera the whole canvas again. */
-export function fillCanvas(faceId: string): void {
-  bindings().fillCanvas(faceId);
+/** Give the Vizij's camera the whole canvas again. */
+export function fillCanvas(vizijId: string): void {
+  bindings().fillCanvas(vizijId);
 }
 
-/** Whether the face's scene has spawned and its bindings are joined — from
+/** Whether the Vizij's scene has spawned and its bindings are joined — from
  * then on its device's pose shows. */
-export function ready(faceId: string): boolean {
-  return bindings().ready(faceId);
+export function ready(vizijId: string): boolean {
+  return bindings().ready(vizijId);
 }
 
-/** Resolves once {@link ready} is true for the face; rejects after
+/** Resolves once {@link ready} is true for the Vizij; rejects after
  * `timeoutMs` (default 60 s). */
-export function whenReady(faceId: string, timeoutMs = 60_000): Promise<void> {
+export function whenReady(vizijId: string, timeoutMs = 60_000): Promise<void> {
   return new Promise((resolve, reject) => {
     const started = Date.now();
     const poll = () => {
-      if (ready(faceId)) {
+      if (ready(vizijId)) {
         resolve();
       } else if (Date.now() - started > timeoutMs) {
-        reject(new Error(`@vizij/runtime: face ${faceId} not ready after ${timeoutMs} ms`));
+        reject(new Error(`@vizij/runtime: Vizij ${vizijId} not ready after ${timeoutMs} ms`));
       } else {
         setTimeout(poll, 50);
       }
@@ -659,13 +662,13 @@ export function whenReady(faceId: string, timeoutMs = 60_000): Promise<void> {
   });
 }
 
-/** The pointer presses on faces since the last drain, oldest first. */
+/** The pointer presses on Vizijs since the last drain, oldest first. */
 export function drainPicks(): Pick[] {
   return bindings().drainPicks();
 }
 
 /** The module's linear memory in bytes; it never shrinks, so a flat reading
- * across face loads and unloads is what "nothing leaks" looks like. */
+ * across Vizij loads and unloads is what "nothing leaks" looks like. */
 export function memoryBytes(): number {
   return bindings().memoryBytes();
 }
@@ -675,14 +678,14 @@ export function memoryBytes(): number {
 export async function describe(
   glb: Uint8Array | ArrayBuffer,
   input?: InitInput,
-): Promise<FaceDescription> {
+): Promise<VizijDescription> {
   await init(input);
   const bytes = glb instanceof Uint8Array ? glb : new Uint8Array(glb);
   return bindings().describe(bytes);
 }
 
 /**
- * A device with no face: `graph` (a Vizij graph spec, in any form the spec
+ * A device with no Vizij: `graph` (a graph spec, in any form the spec
  * normalizer accepts) as its behavior over a fresh store and rig, the
  * animation module host-linked and `modules` loaded as guests. Nothing is
  * drawn — a bench, or a graph run in Node. Omit `graph` for the built-in
@@ -692,12 +695,12 @@ export async function describe(
 export async function startRuntime(
   graph?: GraphSpecInput,
   input?: InitInput,
-  modules?: RuntimeModule[],
+  modules?: AroraModule[],
 ): Promise<Runtime> {
   await init(input);
   const graphJson =
     graph === undefined ? undefined : typeof graph === "string" ? graph : JSON.stringify(graph);
-  return new Runtime(bindings().FaceRuntime.fromGraph(graphJson, modules));
+  return new Runtime(bindings().VizijRuntime.fromGraph(graphJson, modules));
 }
 
 /**
@@ -780,9 +783,9 @@ export async function skillSource(id: string, input?: InitInput): Promise<object
   return bindings().skillSource(id);
 }
 
-/** Options for {@link composeFace}; every field falls back to the native
+/** Options for {@link composeVizij}; every field falls back to the native
  * `vizij` app's deploy default. */
-export interface ComposeFaceOptions {
+export interface ComposeVizijOptions {
   /** Base bundle graph kinds to compose. Default: `rig`, `pose-driver`,
    * `pose`, `standard-adaptation`. */
   graphs?: string[];
@@ -806,13 +809,13 @@ export interface ComposeFaceOptions {
  * returned spec feeds {@link startRuntime} or {@link Runtime.loadGraph}, so an
  * exported GLB can be deployed and verified without the native app.
  */
-export async function composeFace(
+export async function composeVizij(
   gltf: object,
-  options?: ComposeFaceOptions,
+  options?: ComposeVizijOptions,
   input?: InitInput,
 ): Promise<object> {
   await init(input);
-  return bindings().composeFace(
+  return bindings().composeVizij(
     JSON.stringify(gltf),
     options ? JSON.stringify(options) : undefined,
   );
