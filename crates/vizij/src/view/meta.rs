@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use serde_json::Value as Json;
+use uuid::Uuid;
 use vizij_arora_host::Bundle;
 
 /// What one animated feature drives on a scene element.
@@ -42,9 +43,9 @@ pub struct Binding {
 /// A scene element as declared by its `RobotData` extension.
 #[derive(Debug, Clone)]
 pub struct Element {
-    /// The element's own id (a UUID) — what the authoring app and Studio
-    /// name it by, and what a pick reports.
-    pub id: String,
+    /// The element's own id — what the authoring app and Studio name it by,
+    /// and what a pick reports.
+    pub id: Uuid,
     pub node_name: String,
     /// `shape` (mesh-bearing) or `group`; unused until the UI groups elements.
     #[allow(dead_code)]
@@ -62,8 +63,8 @@ pub struct Element {
 #[derive(Debug, Clone, Default)]
 pub struct FaceMeta {
     pub elements: Vec<Element>,
-    /// animatable UUID (string form) → what it drives.
-    pub animatables: HashMap<String, Binding>,
+    /// animatable id → what it drives.
+    pub animatables: HashMap<Uuid, Binding>,
     /// Authored view bounds on the root element: (center_x, center_y, size_x, size_y).
     pub root_bounds: Option<(f32, f32, f32, f32)>,
     /// The face's `VIZIJ_bundle` — its graphs, programs, and neutral pose. The
@@ -82,13 +83,12 @@ struct RawFeature {
 
 #[derive(Deserialize)]
 struct RawAnimatable {
-    id: String,
+    id: Uuid,
 }
 
 #[derive(Deserialize)]
 struct RawRobotData {
-    #[serde(default)]
-    id: String,
+    id: Uuid,
     #[serde(default)]
     name: String,
     material: Option<String>,
@@ -174,7 +174,7 @@ impl FaceMeta {
                     }
                 };
                 animatables.insert(
-                    value.id.clone(),
+                    value.id,
                     Binding {
                         node_name: node_name.clone(),
                         feature: kind,
