@@ -130,12 +130,12 @@ jobs:
       - name: Install system dependencies (alsa/udev/wayland/xkb dev for Bevy)
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 24
+          # The job runs no package-manager install, so there is no store to cache.
+          package-manager-cache: false
       - name: Verify node registry artifacts are updated
         run: node scripts/verify-node-registry.mjs
 
