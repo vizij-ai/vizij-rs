@@ -39,7 +39,6 @@ use vizij_arora_store::BlackboardStore;
 use wasm_bindgen::prelude::*;
 
 use crate::face::{self, FaceConfig, LoadedFace};
-use crate::modules::animation;
 use crate::view::meta::FaceMeta;
 use crate::view::{self, FaceAssets, Fit, Picked, Picks, ViewEvent, ViewEvents, ViewOptions};
 
@@ -147,13 +146,19 @@ fn send(event: ViewEvent) -> Result<(), JsValue> {
 /// [`compose_face`]'s: `graphs`, `program`, `ros4hri`, plus `stageNeutral`,
 /// default `true`), the device built over `RigHal` + `BlackboardStore` with
 /// the animation, gaze and viseme modules, and the scene queued for the App.
-/// A face already shown under `face_id` is replaced. The device comes back
-/// JS-owned: step it, or `run` it, and `free` it after [`unload_face`].
+/// `modules` optionally loads Arora wasm modules into the device's engine as
+/// guests: a JS array of `{ headerJson, wasmBytes }` (the module's header as
+/// JSON, its `.wasm` bytes as a `Uint8Array`); their functions are then
+/// reachable by id from `call` and from the graph's `ExternalFunction`
+/// nodes. The module set is fixed at build. A face already shown under
+/// `face_id` is replaced. The device comes back JS-owned: step it, or `run`
+/// it, and `free` it after [`unload_face`].
 #[wasm_bindgen(js_name = loadFace)]
 pub fn load_face(
     face_id: String,
     glb: Vec<u8>,
     options_json: Option<String>,
+    modules: Option<js_sys::Array>,
 ) -> Result<FaceRuntime, JsValue> {
     let (config, stage_neutral) = parse_face_config(options_json.as_deref())?;
     let LoadedFace { meta, spec } =
@@ -163,8 +168,12 @@ pub fn load_face(
     if stage_neutral {
         face::stage_neutral_pose(&store, &meta);
     }
-    let builder = face::builder_for(&spec, rig.clone(), store, &meta.bundle.skills)
-        .ok_or_else(|| JsValue::from_str("the composed graph does not encode (see the console)"))?;
+    let guests = parse_modules(modules)?;
+    let (builder, function_modules) =
+        face::builder_with_guests(&spec, rig.clone(), store, &meta.bundle.skills, guests)
+            .ok_or_else(|| {
+                JsValue::from_str("the composed graph does not encode (see the console)")
+            })?;
     let arora = builder
         .build()
         .map_err(|e| JsValue::from_str(&format!("arora build failed: {e:?}")))?;
@@ -183,7 +192,7 @@ pub fn load_face(
         rig_prefix,
         inner: AroraWeb::from(arora),
         caller,
-        function_modules: animation::function_modules(),
+        function_modules,
     })
 }
 
@@ -325,18 +334,24 @@ pub struct FaceRuntime {
 impl FaceRuntime {
     /// A device with no face: `graph_json` (any form the spec normalizer
     /// accepts) as its behavior over a fresh store and rig, the animation
-    /// module host-linked. Nothing to draw; a test bench, a graph run in
+    /// module host-linked and `modules` loaded as guests (as
+    /// [`load_face`]'s). Nothing to draw; a test bench, a graph run in
     /// Node. Omit the graph for the passthrough proof graph
     /// (`sensor/x` → `actuator/y`).
     #[wasm_bindgen(js_name = fromGraph)]
-    pub fn from_graph(graph_json: Option<String>) -> Result<FaceRuntime, JsValue> {
+    pub fn from_graph(
+        graph_json: Option<String>,
+        modules: Option<js_sys::Array>,
+    ) -> Result<FaceRuntime, JsValue> {
         let spec = match graph_json {
             Some(json) => json,
             None => passthrough_json("sensor/x", "actuator/y"),
         };
         parse_spec(&spec).map_err(|e| JsValue::from_str(&e))?;
-        let builder = face::builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[])
-            .ok_or_else(|| JsValue::from_str("the graph does not encode (see the console)"))?;
+        let guests = parse_modules(modules)?;
+        let (builder, function_modules) =
+            face::builder_with_guests(&spec, RigHal::new(), BlackboardStore::new(), &[], guests)
+                .ok_or_else(|| JsValue::from_str("the graph does not encode (see the console)"))?;
         let arora = builder
             .build()
             .map_err(|e| JsValue::from_str(&format!("arora build failed: {e:?}")))?;
@@ -346,7 +361,7 @@ impl FaceRuntime {
             rig_prefix: String::new(),
             inner: AroraWeb::from(arora),
             caller,
-            function_modules: animation::function_modules(),
+            function_modules,
         })
     }
 
@@ -769,6 +784,38 @@ pub fn skill_source(id: &str) -> Result<JsValue, JsValue> {
         }
         None => Ok(JsValue::NULL),
     }
+}
+
+/// Decode a `modules` argument: a JS array of `{ headerJson: string,
+/// wasmBytes: Uint8Array }` into the guest modules a device builder loads.
+/// `None` means no modules.
+fn parse_modules(modules: Option<js_sys::Array>) -> Result<Vec<face::GuestModule>, JsValue> {
+    let Some(modules) = modules else {
+        return Ok(Vec::new());
+    };
+    modules
+        .iter()
+        .enumerate()
+        .map(|(i, entry)| {
+            let header_json = js_sys::Reflect::get(&entry, &JsValue::from_str("headerJson"))?
+                .as_string()
+                .ok_or_else(|| {
+                    JsValue::from_str(&format!("modules[{i}].headerJson must be a string"))
+                })?;
+            let header = serde_json::from_str(&header_json).map_err(|e| {
+                JsValue::from_str(&format!(
+                    "modules[{i}].headerJson is not a module header: {e}"
+                ))
+            })?;
+            let bytes: js_sys::Uint8Array =
+                js_sys::Reflect::get(&entry, &JsValue::from_str("wasmBytes"))?
+                    .dyn_into()
+                    .map_err(|_| {
+                        JsValue::from_str(&format!("modules[{i}].wasmBytes must be a Uint8Array"))
+                    })?;
+            Ok((header, bytes.to_vec()))
+        })
+        .collect()
 }
 
 /// The composed behavior graph of a face bundle — the composition the native

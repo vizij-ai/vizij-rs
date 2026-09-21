@@ -77,6 +77,9 @@ importers:
       '@types/node':
         specifier: ^20.12.7
         version: 20.19.19
+      '@vizij/animation-module':
+        specifier: workspace:*
+        version: link:../animation-module
       playwright:
         specifier: ^1.60.0
         version: 1.63.0
