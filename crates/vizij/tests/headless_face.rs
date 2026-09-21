@@ -12,8 +12,8 @@
 use std::path::PathBuf;
 
 use bevy::prelude::*;
-use vizij::device::native::{start, BridgeConfig, Mode};
-use vizij::device::{FaceConfig, ProgramSelect};
+use vizij::face::{FaceConfig, ProgramSelect};
+use vizij::native::{start, BridgeConfig, Mode};
 use vizij::view::meta::FeatureKind;
 use vizij::view::snapshot::{capture, SnapshotPlugin};
 use vizij::view::{self, BindingIndex, DeviceRes, Face, FaceAssets, ViewOptions, ViewPlugin};

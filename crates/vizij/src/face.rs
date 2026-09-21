@@ -16,13 +16,9 @@ use vizij_arora_store::BlackboardStore;
 
 use crate::view::meta::FaceMeta;
 
-pub mod animation;
-pub mod gaze;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod native;
 #[cfg(all(not(target_arch = "wasm32"), feature = "tts-piper"))]
-pub mod tts_piper;
-pub mod viseme;
+use crate::modules::tts_piper;
+use crate::modules::{animation, gaze, viseme};
 
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "tts-piper")))]
 use vizij_arora_tts as tts;
@@ -459,7 +455,7 @@ mod tests {
         use arora_types::value::StructureField;
         use vizij_arora_behavior::task;
 
-        use crate::device::gaze;
+        use crate::modules::gaze;
 
         let mut arora = builder_for(
             r#"{ "nodes": [], "edges": [] }"#,
@@ -542,7 +538,7 @@ mod tests {
         use arora_types::value::StructureField;
         use vizij_arora_host::skills;
 
-        use crate::device::gaze;
+        use crate::modules::gaze;
 
         let edited =
             skills::LOOK_AT_JSON.replace(ros4hri::GAZE_TARGET_KEY, "test/edited/gaze/target");

@@ -10,8 +10,8 @@ use anyhow::{anyhow, Context, Result};
 use bevy::prelude::*;
 use clap::Parser;
 
-use vizij::device::native::{self, BridgeConfig, Device, Mode};
-use vizij::device::{self, FaceConfig};
+use vizij::face::{self, FaceConfig};
+use vizij::native::{self, BridgeConfig, Mode, Runtime};
 use vizij::view::{self, frames, snapshot, FaceAssets};
 
 /// Vizij: render a GLB face natively over an arora device.
@@ -148,13 +148,13 @@ fn main() -> Result<()> {
     // none; otherwise the window autoplays the bundle's active program while the
     // snapshot stays on the deterministic neutral face.
     let program = if cli.no_autoplay {
-        device::ProgramSelect::None
+        face::ProgramSelect::None
     } else if let Some(id) = cli.program.clone() {
-        device::ProgramSelect::Id(id)
+        face::ProgramSelect::Id(id)
     } else if cli.snapshot.is_some() {
-        device::ProgramSelect::None
+        face::ProgramSelect::None
     } else {
-        device::ProgramSelect::Auto
+        face::ProgramSelect::Auto
     };
     let config = FaceConfig {
         wanted,
@@ -192,7 +192,7 @@ fn main() -> Result<()> {
         face_frame_id: frames::default_frame_id(&dev.meta),
     };
 
-    let [r, g, b] = device::parse_rgb(&cli.background)?;
+    let [r, g, b] = face::parse_rgb(&cli.background)?;
     let options = view::ViewOptions {
         background: Color::srgb_u8(r, g, b),
         fit: cli.fit,
@@ -200,7 +200,7 @@ fn main() -> Result<()> {
         ambient: cli.ambient,
         unlit: cli.unlit,
     };
-    let Device {
+    let Runtime {
         rig, meta, events, ..
     } = dev;
     let face = Loaded { meta, glb };

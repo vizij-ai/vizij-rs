@@ -4,7 +4,7 @@
 //! generation by generation when a front end loads another face.
 //!
 //! Front ends are interchangeable: the terminal UI, a panel or a file dialog
-//! all speak to the running device through a [`DeviceHandle`], and the view
+//! all speak to the running device through a [`RuntimeHandle`], and the view
 //! learns of the outcome through [`ViewEvent`]s.
 
 use std::sync::mpsc::{Receiver, Sender};
@@ -18,13 +18,15 @@ use futures::StreamExt;
 use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
-use super::{builder_for, free_inputs, load_face, stage_neutral_pose, FaceConfig, LoadedFace};
+use crate::face::{
+    builder_for, free_inputs, load_face, stage_neutral_pose, FaceConfig, LoadedFace,
+};
 use crate::view::meta::FaceMeta;
 use crate::view::ViewEvent;
 
 /// A running face device. Both handles share storage with the device's own
 /// (they are sibling clones), so the view reads the rig and the store live.
-pub struct Device {
+pub struct Runtime {
     pub rig: RigHal,
     /// Sibling store handle; unused until input staging/UI lands (VIZ-47 UI stage).
     #[allow(dead_code)]
@@ -35,18 +37,18 @@ pub struct Device {
     /// background changes a front end asks for.
     pub events: Receiver<ViewEvent>,
     /// The way into the running device for any front end.
-    pub handle: DeviceHandle,
+    pub handle: RuntimeHandle,
     _thread: thread::JoinHandle<()>,
 }
 
 /// What a front end asks of the running device. Cloneable, so the terminal
 /// UI, a panel and a file dialog each hold one.
 #[derive(Clone)]
-pub struct DeviceHandle {
+pub struct RuntimeHandle {
     commands: UnboundedSender<Command>,
 }
 
-impl DeviceHandle {
+impl RuntimeHandle {
     /// Load another face from its GLB bytes: the device restarts on its
     /// graphs and the view swaps over ([`ViewEvent::FaceLoaded`]). A GLB
     /// that does not compose is an error in the log, not a dead device.
@@ -159,7 +161,7 @@ pub async fn attach_bridges(
 /// (single-owner by design); only the spec JSON and the sibling rig/store
 /// handles cross the thread boundary. The face is loaded here first so
 /// composition errors surface to the caller, not in a log.
-pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) -> Result<Device> {
+pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) -> Result<Runtime> {
     let LoadedFace { meta, spec } = load_face(glb, &config)?;
     let rig = RigHal::new();
     let store = BlackboardStore::new();
@@ -200,12 +202,12 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
             })?
     };
 
-    Ok(Device {
+    Ok(Runtime {
         rig,
         store,
         meta,
         events: events_rx,
-        handle: DeviceHandle {
+        handle: RuntimeHandle {
             commands: commands_tx,
         },
         _thread: thread,
@@ -290,7 +292,7 @@ fn supervise(
 
 /// Serve one device generation's front ends: the terminal UI's command
 /// events (`g` reads the GLB at the given path, `b` parses a background) and
-/// the [`DeviceHandle`] commands, each validated here — a bad path, a GLB
+/// the [`RuntimeHandle`] commands, each validated here — a bad path, a GLB
 /// that does not compose or a malformed colour is an error in the log, not
 /// a dead device. Returns when a face has been validated for a reload, with
 /// what the supervisor needs to rebuild; a generation whose front ends have
@@ -363,7 +365,7 @@ fn tui_command(event: arora::tui::TuiCommandEvent) -> Option<Command> {
                 None
             }
         },
-        ('b', Some(hex)) => match super::parse_rgb(&hex) {
+        ('b', Some(hex)) => match crate::face::parse_rgb(&hex) {
             Ok(rgb) => Some(Command::Background(rgb)),
             Err(e) => {
                 log::error!("background: {e}");
