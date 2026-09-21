@@ -6,7 +6,7 @@
 //! with [`AroraBuilder::with_host_module`](arora::AroraBuilder::with_host_module).
 //! Each closure marshals the `Call` at the `Value` boundary using the module
 //! crate's own generated conversions (`TryFrom<Value>` in, `Into<Value>` out)
-//! and calls the module's [`Animation`], which runs the same
+//! and calls the module's [`AnimationModule`], which runs the same
 //! `vizij-animation-core` engine the wasm module wraps. A graph
 //! `ExternalFunction` node then dispatches `step`/`player_states` to these
 //! exactly as it would to the loaded wasm guest. Each host module owns its
@@ -20,12 +20,12 @@ use arora::{HostModule, ModuleBuilder};
 use arora_types::call::{Call, CallError, CallResult};
 use arora_types::value::{StructureWithoutId, Value};
 use uuid::Uuid;
-use vizij_animation_module::{ids, Animation, AnimationClip, PlayerState, TrackOutput};
+use vizij_animation_module::{ids, AnimationClip, AnimationModule, PlayerState, TrackOutput};
 
 /// The animation module as a host module over an engine of its own: its
 /// functions dispatch in-process, under the same ids the wasm module exports.
 pub fn host_module() -> HostModule {
-    let animation = Rc::new(RefCell::new(Animation::new()));
+    let animation = Rc::new(RefCell::new(AnimationModule::new()));
     let a = animation.clone();
     let builder = ModuleBuilder::new(ids::MODULE).function(ids::LOAD_ANIMATION, move |call| {
         u32_result(a.borrow_mut().load_animation(arg_clip(&call)))
