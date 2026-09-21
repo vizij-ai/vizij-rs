@@ -59,15 +59,25 @@
   }
 
   // A scripted playback hook for the speech tests: no audio output, a
-  // playhead advancing 40 ms per poll and ending after 260 ms; what it
-  // received is kept for the test to read.
+  // playhead that follows the wall clock from the first poll but advances
+  // at most 40 ms per poll, ending after 260 ms; what it received is kept
+  // for the test to read. The crossfade smoother runs on `arora/dt`, so a
+  // shape's weight rises with the wall time it stays current: a playhead
+  // advanced 40 ms per poll gave a shape two polls — 20 ms of a 30 ms
+  // half-life on a fast page, under the test's floor — while a bare
+  // wall-clock playhead skips a 100 ms mark outright on a page stepping
+  // every 200 ms. Bounded per poll, a shape is current for its marks' span
+  // on a fast page and for at least two polls on a slow one.
   window.vizijPlayback = { calls: [] };
   const scriptedPlay = (bytes, marks) => {
-    let t = -40;
+    let t = 0;
+    let last;
     const call = { bytes: bytes.length, marks: marks.length, polls: 0 };
     window.vizijPlayback.calls.push(call);
     return () => {
-      t += 40;
+      const now = performance.now();
+      if (last !== undefined) t += Math.min(40, now - last);
+      last = now;
       call.polls += 1;
       return t > 260 ? null : t;
     };
