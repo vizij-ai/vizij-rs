@@ -99,12 +99,14 @@ pub const PLAY_VISEME_PARAMS: [&str; 2] = ["shape", "weight"];
 pub const PLAY_VISEME_JSON: &str = include_str!("../skills/play_viseme.json");
 
 /// The speech skill: `say` speaks `text` in `voice` (the provider's own when
-/// `None`) and streams the viseme at the audio playhead — one of
-/// [`VISEME_SHAPES`] — through the mutable `viseme`. Each text-to-speech
-/// provider implements it under its own module id, and is re-invoked each
-/// tick while `Running` (the poll-on-tick contract). The say fragment
-/// ([`generate_say`]) hosts the call and drives the lips from the streamed
-/// viseme.
+/// `None`) and streams through its mutable parameters the viseme at the
+/// audio playhead (`viseme`, one of [`VISEME_SHAPES`]) and the utterance
+/// while its audio plays (`speech`: the text from the moment playback
+/// starts, whether or not synthesis has finished, empty before and after).
+/// Each text-to-speech provider implements it under its own module id, and
+/// is re-invoked each tick while `Running` (the poll-on-tick contract). The
+/// say fragment ([`generate_say`]) hosts the call, drives the lips from the
+/// streamed viseme and writes the utterance as the face's speech state.
 #[arora_module::contract(name = "say")]
 pub trait Say {
     #[export(id = "77bf2798-e7ce-47c6-a45c-3c2e9ba1837d")]
@@ -113,12 +115,13 @@ pub trait Say {
         #[param(id = "881dc182-d4ba-4ea0-9e81-f4eddab6f669")] text: String,
         #[param(id = "f56ca142-db46-4c58-bc44-7896c4b54d5c")] voice: Option<String>,
         #[param(id = "a1fbf58b-bf66-44a6-a503-9d9078ee5755")] viseme: &mut String,
+        #[param(id = "de350f2e-0dc7-455a-b895-af3c61001669")] speech: &mut String,
     ) -> Status;
 }
 
 /// The say method's inputs, in declared order: the fragment's placeholder
 /// inputs, and the leading parameter names of [`Say::say`] (a test holds the
-/// two equal) — its `viseme` is an output.
+/// two equal) — its `viseme` and `speech` are outputs.
 pub const SAY_PARAMS: [&str; 2] = ["text", "voice"];
 
 /// The rest token every viseme player writes when nothing is speaking — the
@@ -605,33 +608,51 @@ pub fn generate_play_viseme() -> Json {
 ///
 /// The run hosts the device's [`Say::say`] call on the run's own argument
 /// bundle (`task/update`, live-updatable), with the viseme it passes in
-/// stated as [`SILENCE_VISEME`], and drives the lips from the viseme the
-/// provider streams back — the lipsync driver at full weight, so the current
-/// viseme's shape is on and the others fade. The run reports the call's
-/// status as its own once the call has ended and the lips have settled; until
-/// then it is running.
+/// stated as [`SILENCE_VISEME`] and the utterance as empty, and drives the
+/// lips from the viseme the provider streams back — the lipsync driver at
+/// full weight, so the current viseme's shape is on and the others fade.
+/// The utterance the provider reports while its audio plays is written as
+/// the face's speech state ([`standard::SPEECH`]), empty before and after.
+/// The run reports the call's status as its own once the call has ended and
+/// the lips have settled; until then it is running.
 pub fn generate_say() -> Json {
     let g = &mut GraphBuilder::new();
     let args = g.input("in/args", "task/update", Json::Null);
-    let initial_viseme = serde_json::to_value(Value::Structure(Structure {
+    let initial_outputs = serde_json::to_value(Value::Structure(Structure {
         id: say::ids::say::FUNCTION,
-        fields: vec![StructureField {
-            id: say::ids::say::VISEME,
-            value: Box::new(Value::String(SILENCE_VISEME.to_string())),
-        }],
+        fields: vec![
+            StructureField {
+                id: say::ids::say::VISEME,
+                value: Box::new(Value::String(SILENCE_VISEME.to_string())),
+            },
+            StructureField {
+                id: say::ids::say::SPEECH,
+                value: Box::new(Value::String(String::new())),
+            },
+        ],
     }))
     .expect("an argument bundle serializes");
-    // The run's first keyed `mutated` slot is the provider's viseme parameter.
+    // The run's keyed `mutated` slots are the provider's out-parameters, in
+    // this order: the viseme, then the utterance being spoken.
     let run = g.node(
         "say/call",
         "taskrun",
         json!({
             "function": say::ids::say::FUNCTION.to_string(),
-            "record_keys": [say::ids::say::VISEME.to_string()],
-            "value": initial_viseme
+            "record_keys": [
+                say::ids::say::VISEME.to_string(),
+                say::ids::say::SPEECH.to_string()
+            ],
+            "value": initial_outputs
         }),
     );
     g.edge(&args, &run, "args");
+    g.output_from(
+        "out/speech",
+        &run,
+        "mutated_1",
+        standard::SPEECH.to_string(),
+    );
 
     let full = g.constant(1.0);
     let settled = viseme_driver(g, (&run, "mutated_0"), &full);
@@ -712,7 +733,8 @@ pub const SKILLS: [Skill; 3] = [
         title: "Say",
         description: "Speaks a text: hosts the device's text-to-speech `say` call and drives \
                       the lips from the viseme it streams, through the same lipsync driver as \
-                      play_viseme; the current viseme is the run's feedback.",
+                      play_viseme; the current viseme is the run's feedback, and the utterance \
+                      is the face's speech state while its audio plays.",
         parameters: &SAY_PARAMS,
         asset_json: SAY_JSON,
     },
@@ -791,8 +813,21 @@ mod tests {
 
         let (name, parameters) = declared(say::record(parent), say::ids::say::FUNCTION);
         assert_eq!(name, say::NAME);
-        assert_eq!(parameters, ["text", "voice", "viseme"]);
+        assert_eq!(parameters, ["text", "voice", "viseme", "speech"]);
         assert_eq!(parameters[..SAY_PARAMS.len()], SAY_PARAMS);
+    }
+
+    /// `say` streams the viseme and the utterance through mutable
+    /// out-parameters; its inputs are not mutable.
+    #[test]
+    fn say_streams_the_viseme_and_the_utterance_as_out_parameters() {
+        let record = say::record(Uuid::nil());
+        let ExportKind::Function(signature) = &record.exports[&say::ids::say::FUNCTION].kind;
+        let mutable = |id: Uuid| signature.parameters[&id].mutable;
+        assert!(mutable(say::ids::say::VISEME));
+        assert!(mutable(say::ids::say::SPEECH));
+        assert!(!mutable(say::ids::say::TEXT));
+        assert!(!mutable(say::ids::say::VOICE));
     }
 
     /// The committed asset must equal what the generator produces — otherwise

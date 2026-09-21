@@ -1,7 +1,7 @@
 //! Vizij's text-to-speech as an Arora host module.
 //!
-//! The **contract** — `say(text, voice) -> Status` with a mutable `viseme`
-//! out-parameter — is the speech skill's
+//! The **contract** — `say(text, voice) -> Status` with the mutable `viseme`
+//! and `speech` out-parameters — is the speech skill's
 //! ([`vizij_arora_behavior::speech`], re-exported here): same function id,
 //! parameter ids, and signature for every provider, so a behavior references
 //! `say` without caring which provider a build registered. This crate ships
@@ -15,9 +15,12 @@
 //! off the tick, and `say` only polls. The module streams the current
 //! viseme as one of the face standard's shapes
 //! ([`vizij_arora_host::standard::VISEME_SHAPES`]), Polly's viseme codes
-//! mapped by [`polly_shape`]; [`SILENCE_VISEME`] is written at rest. What a
-//! shape looks like, and how one blends into the next, is the face's and the
-//! speech skill's business, not the provider's.
+//! mapped by [`polly_shape`]; [`SILENCE_VISEME`] is written at rest. It
+//! reports the utterance as `speech` while its audio plays — from the moment
+//! playback starts, empty before and after — so the face's speech state
+//! follows the voice, not the request. What a shape looks like, and how one
+//! blends into the next, is the face's and the speech skill's business, not
+//! the provider's.
 //!
 //! Synthesis ([`synthesize`]) is the same on every target — reqwest is
 //! `fetch` on wasm32 and hyper natively. What differs per target is the
@@ -169,14 +172,25 @@ struct Provider {
 
 /// What one tick observes of a run.
 pub enum Observed {
-    Running(&'static str),
+    /// The shape at the playhead, and whether the audio is playing yet.
+    Running {
+        viseme: &'static str,
+        playing: bool,
+    },
     Ended(Status),
 }
 
 impl Say for Provider {
     /// Speak `text` in `voice` (the default voice when `None`), streaming the
-    /// current viseme. Re-invoked each tick while `Running`.
-    fn say(&mut self, text: String, voice: Option<String>, viseme: &mut String) -> Status {
+    /// current viseme and, while the audio plays, the utterance. Re-invoked
+    /// each tick while `Running`.
+    fn say(
+        &mut self,
+        text: String,
+        voice: Option<String>,
+        viseme: &mut String,
+        speech: &mut String,
+    ) -> Status {
         self.ticks.beat();
         // A run nobody ticks any more was halted; its producer has stopped or
         // is stopping on its own, and its slot goes.
@@ -187,6 +201,7 @@ impl Say for Provider {
         let synth = self.synth.clone();
         let config = &self.config;
         let ticks = &self.ticks;
+        let utterance = text.clone();
         // First tick: spawn synthesis + playback off the tick. Later ticks
         // find the run, refresh its pulse and fall through to the poll.
         let run = self.runs.entry(key).or_insert_with(|| {
@@ -194,13 +209,18 @@ impl Say for Provider {
         });
         platform::pulse(run).beat();
         match platform::poll(run) {
-            Observed::Running(current) => {
+            Observed::Running {
+                viseme: current,
+                playing,
+            } => {
                 *viseme = current.to_string();
+                *speech = if playing { utterance } else { String::new() };
                 Status::Running
             }
             Observed::Ended(status) => {
                 self.runs.remove(&key);
                 *viseme = SILENCE_VISEME.to_string();
+                speech.clear();
                 status
             }
         }
@@ -454,6 +474,7 @@ pub mod platform {
         use arora_behavior::Status;
         use std::future::Future;
         use std::pin::Pin;
+        use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::{Arc, LazyLock, Mutex};
         use std::task::{Context, Poll, Waker};
 
@@ -476,6 +497,9 @@ pub mod platform {
             /// The shape at the audio playhead, advanced by the task and
             /// sampled by the tick.
             viseme: Arc<Mutex<&'static str>>,
+            /// Whether the audio is playing — the span the utterance is
+            /// reported as `speech`.
+            playing: Arc<AtomicBool>,
             pulse: Pulse,
         }
 
@@ -492,6 +516,8 @@ pub mod platform {
         ) -> Run {
             let viseme = Arc::new(Mutex::new(SILENCE_VISEME));
             let cell = viseme.clone();
+            let playing = Arc::new(AtomicBool::new(false));
+            let playing_task = playing.clone();
             let pulse_task = pulse.clone();
             // A scripted `Synth` is `Rc` (single-threaded, the browser's shape)
             // and cannot cross onto the runtime; natively the fetch produces.
@@ -515,8 +541,10 @@ pub mod platform {
                 }
                 // Playback blocks and rodio's stream is thread-bound, so it
                 // runs on the blocking pool; this task just awaits the outcome.
-                match tokio::task::spawn_blocking(move || play(audio, marks, cell, pulse_task))
-                    .await
+                match tokio::task::spawn_blocking(move || {
+                    play(audio, marks, cell, playing_task, pulse_task)
+                })
+                .await
                 {
                     Ok(status) => status,
                     Err(_join_error) => Status::Failure,
@@ -525,6 +553,7 @@ pub mod platform {
             Run {
                 handle,
                 viseme,
+                playing,
                 pulse,
             }
         }
@@ -532,21 +561,24 @@ pub mod platform {
         /// Poll the run's `JoinHandle` (a `Future`) once — the tick loop is
         /// the executor, a no-op waker suffices.
         pub fn poll(run: &mut Run) -> Observed {
-            let current = run.viseme.lock().map(|c| *c).unwrap_or(SILENCE_VISEME);
+            let viseme = run.viseme.lock().map(|c| *c).unwrap_or(SILENCE_VISEME);
+            let playing = run.playing.load(Ordering::Relaxed);
             let mut cx = Context::from_waker(Waker::noop());
             match Future::poll(Pin::new(&mut run.handle), &mut cx) {
-                Poll::Pending => Observed::Running(current),
+                Poll::Pending => Observed::Running { viseme, playing },
                 Poll::Ready(Ok(status)) => Observed::Ended(status),
                 Poll::Ready(Err(_join_error)) => Observed::Ended(Status::Failure),
             }
         }
 
-        /// Play the mp3 whole, advancing the shared viseme cell at the sink's
-        /// own playhead; a quiet pulse stops the sink.
+        /// Play the mp3 whole, holding `playing` up for its duration and
+        /// advancing the shared viseme cell at the sink's own playhead; a quiet
+        /// pulse stops the sink.
         fn play(
             audio: Vec<u8>,
             marks: Vec<SpeechMark>,
             viseme: Arc<Mutex<&'static str>>,
+            playing: Arc<AtomicBool>,
             pulse: Pulse,
         ) -> Status {
             let (_stream, handle) = match rodio::OutputStream::try_default() {
@@ -572,9 +604,11 @@ pub mod platform {
             };
             sink.append(source);
             let cues = cues(&marks);
+            playing.store(true, Ordering::Relaxed);
             let outcome = follow(&cues, &viseme, &pulse, || {
                 (!sink.empty()).then(|| sink.get_pos())
             });
+            playing.store(false, Ordering::Relaxed);
             match outcome {
                 Playback::Ended => Status::Success,
                 Playback::Halted => {
@@ -676,7 +710,10 @@ pub mod platform {
         pub fn poll(run: &mut Run) -> Observed {
             let mut phase = run.phase.borrow_mut();
             match &mut *phase {
-                Phase::Fetching => Observed::Running(SILENCE_VISEME),
+                Phase::Fetching => Observed::Running {
+                    viseme: SILENCE_VISEME,
+                    playing: false,
+                },
                 Phase::Ended(status) => Observed::Ended(status.clone()),
                 Phase::Playing {
                     playhead,
@@ -686,9 +723,14 @@ pub mod platform {
                 } => match playhead.call0(&JsValue::NULL) {
                     Ok(v) if v.is_null() || v.is_undefined() => Observed::Ended(Status::Success),
                     Ok(v) => {
-                        let ms = v.as_f64().unwrap_or(0.0).max(0.0) as u64;
-                        *current = shape_at(cues, next, ms, current);
-                        Observed::Running(current)
+                        // 0 while the page decodes or waits for its audio
+                        // unlock: the audio has not started yet.
+                        let ms = v.as_f64().unwrap_or(0.0).max(0.0);
+                        *current = shape_at(cues, next, ms as u64, current);
+                        Observed::Running {
+                            viseme: current,
+                            playing: ms > 0.0,
+                        }
                     }
                     Err(e) => {
                         log::error!("tts: the playhead threw: {e:?}");

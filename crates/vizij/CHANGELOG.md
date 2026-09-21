@@ -10,6 +10,11 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Added
 
+- The face reports what it is saying: while a `say` run's audio plays, the
+  utterance is the face's speech state, `standard/vizij/speech`, empty before
+  playback starts and once it ends. Under `--ros2` it is published on
+  `/robot_face/speech` for subtitles. Both providers (cloud and Piper) report
+  it; the `say` example prints when speech starts and ends.
 - The browser module's device (`VizijRuntime`) has the surface any client
   of an Arora device has, through `arora-web`: `call`, `invoke` (a described
   method by name), `spawn`, `halt` (by run id), `listKeys` and

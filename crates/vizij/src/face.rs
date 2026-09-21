@@ -1278,7 +1278,10 @@ mod tests {
     /// lips from the viseme the provider streams — here a scripted provider
     /// (two ticks of `PP`, two of `aa`, then done at rest) — reporting the
     /// current viseme as the face's state and as the run's feedback, and the
-    /// call's status as its own.
+    /// call's status as its own. The utterance the provider reports while
+    /// its audio plays (from its second tick here) is the face's speech
+    /// state, which the ROS4HRI mapping relays to the speech key a bridge
+    /// publishes; both empty again once the audio ends.
     #[test]
     fn a_say_run_streams_the_provider_s_visemes_to_the_lips() {
         use arora_behavior::Status;
@@ -1290,28 +1293,39 @@ mod tests {
 
         use speech::say::ids::say as ids;
 
-        /// Two ticks of `PP`, two of `aa`, then done at rest; it counts its
-        /// calls and checks the viseme each one passes in.
+        /// Two ticks of `PP`, two of `aa`, then done at rest — the audio
+        /// starting on the second tick, so the utterance is reported from
+        /// then until the end; it counts its calls and checks the
+        /// out-parameters each one passes in.
         struct Scripted {
             calls: Arc<Mutex<usize>>,
         }
 
         impl speech::Say for Scripted {
-            fn say(&mut self, text: String, _voice: Option<String>, viseme: &mut String) -> Status {
+            fn say(
+                &mut self,
+                text: String,
+                _voice: Option<String>,
+                viseme: &mut String,
+                speech: &mut String,
+            ) -> Status {
                 assert_eq!(text, "hello");
                 assert_eq!(
                     viseme,
                     speech::SILENCE_VISEME,
                     "the fragment states the viseme"
                 );
+                assert_eq!(speech, "", "the fragment states the utterance");
                 let mut n = self.calls.lock().unwrap();
                 *n += 1;
-                let (status, current) = match *n {
-                    1 | 2 => (Status::Running, "PP"),
-                    3 | 4 => (Status::Running, "aa"),
-                    _ => (Status::Success, speech::SILENCE_VISEME),
+                let (status, current, playing) = match *n {
+                    1 => (Status::Running, "PP", ""),
+                    2 => (Status::Running, "PP", "hello"),
+                    3 | 4 => (Status::Running, "aa", "hello"),
+                    _ => (Status::Success, speech::SILENCE_VISEME, ""),
                 };
                 *viseme = current.to_string();
+                *speech = playing.to_string();
                 status
             }
         }
@@ -1360,6 +1374,7 @@ mod tests {
         step_for(&mut arora, 0.032);
         assert_eq!(*calls.lock().unwrap(), 2, "one provider call per tick");
         assert_eq!(read_value(&arora, standard::VISEME), Some(text("PP")));
+        assert_eq!(read_value(&arora, standard::SPEECH), Some(text("hello")));
         assert_eq!(
             fed_back_viseme(&arora, &handle.feedback[0].path).as_deref(),
             Some("PP")
@@ -1373,6 +1388,11 @@ mod tests {
 
         step_for(&mut arora, 0.032);
         assert_eq!(read_value(&arora, standard::VISEME), Some(text("aa")));
+        assert_eq!(
+            read_value(&arora, ros4hri::SPEECH_TEXT_KEY),
+            Some(text("hello")),
+            "the mapping relays the speech state to the ROS4HRI key, a tick behind"
+        );
         assert!(read_f32(&arora, &standard::viseme_path("aa")) > 0.3);
         assert!(
             read_f32(&arora, &standard::viseme_path("PP")) < pp,
@@ -1383,6 +1403,8 @@ mod tests {
         // lips have settled (five crossfade half-lives), not before.
         step_for(&mut arora, 0.032);
         assert_eq!(read_value(&arora, standard::VISEME), Some(text("sil")));
+        assert_eq!(read_value(&arora, standard::SPEECH), Some(text("")));
+        assert_eq!(read_value(&arora, ros4hri::SPEECH_TEXT_KEY), Some(text("")));
         assert_eq!(
             read_value(&arora, &handle.status.path),
             Some(task::running())

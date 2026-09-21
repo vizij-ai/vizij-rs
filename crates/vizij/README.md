@@ -186,11 +186,12 @@ with its ROS4HRI exposure preset:
 
 - the typed face topics — `/robot_face/{expression,look_at}` and
   `/expressive_face/look_at` — routed onto the `ros4hri` profile's
-  `standard/ros4hri/*` keys. An expression command naming an expression
-  shows that expression alone at its arousal as the intensity (clamped to
-  0..1, so a calm, negative arousal shows none); one with an empty name
-  blends the expressions by its valence and arousal (each -1..1) on the
-  circumplex;
+  `standard/ros4hri/*` keys, and `/robot_face/speech` (`std_msgs/String`)
+  publishing what the face is saying, empty at rest. An expression command
+  naming an expression shows that expression alone at its arousal as the
+  intensity (clamped to 0..1, so a calm, negative arousal shows none); one
+  with an empty name blends the expressions by its valence and arousal
+  (each -1..1) on the circumplex;
 - the **`/<namespace>/actions/{play_viseme,say}`** action servers, synthesized
   from the viseme players' signatures ([skills](../../docs/skills.md));
 - the **`/skill/look_at`** action server (`interaction_skills/LookAt`):
@@ -276,7 +277,7 @@ one at your own deployment (the browser module takes it as `loadFace`'s
 of your own is a host module
 implementing the `say` contract `vizij-arora-tts` re-exports — a sibling of
 [`src/modules/tts_piper.rs`](src/modules/tts_piper.rs), registered behind a feature the same
-way. The contract is text in, status and a viseme stream out, so a
+way. The contract is text in, status, a viseme stream and the utterance out, so a
 text-to-speech that produces no visemes (derive them from the text) or a
 viseme generator with no audio at all plugs in there too. The guidebook walks
 through each option: [Swap the Speech Provider](https://github.com/vizij-ai/vizij-docs/blob/main/current_documentation/guidebook/deploy/swap-the-speech-provider.md).
@@ -297,9 +298,13 @@ ros2 topic pub --once /<namespace>/keys/rig/<faceId>/standard/vizij/viseme/aa \
   std_msgs/msg/Float64 "{data: 1.0}"
 ```
 
-— and [Bring Your Own Visemes](https://github.com/vizij-ai/vizij-docs/blob/main/current_documentation/guidebook/deploy/bring-your-own-visemes.md) compares the three entry points. The
-ROS4HRI `/robot_face/tts` topic lands text on the `standard/ros4hri/speech/text`
-key, which nothing routes into `say` yet.
+— and [Bring Your Own Visemes](https://github.com/vizij-ai/vizij-docs/blob/main/current_documentation/guidebook/deploy/bring-your-own-visemes.md) compares the three entry points.
+
+**What it is saying:** while a `say` run's audio plays, the utterance is the
+face's speech state, `standard/vizij/speech` (empty before playback starts
+and once it ends), next to the current viseme at `standard/vizij/viseme`. The
+ROS4HRI mapping relays it to `standard/ros4hri/speech/text`, which `--ros2`
+publishes as `/robot_face/speech` for subtitles.
 
 ## Lighting model
 

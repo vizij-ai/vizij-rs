@@ -3,11 +3,14 @@
 //!
 //! A provider implements [`Say`] under its own module id: its `say` call is
 //! re-invoked each tick while `Running` (the poll-on-tick contract) and
-//! streams the viseme at the audio playhead through the mutable `viseme`
-//! parameter, as one of the face standard's shapes. The skill's fragment
-//! hosts that call on the run's own argument bundle and drives the lips from
-//! the streamed viseme; the device routes the call to the provider it
-//! registered by the function id.
+//! streams through its mutable parameters the viseme at the audio playhead
+//! (`viseme`, one of the face standard's shapes) and the utterance while its
+//! audio plays (`speech`: the text from the moment playback starts, whether
+//! or not synthesis has finished, empty before and after). The skill's
+//! fragment hosts that call on the run's own argument bundle, drives the
+//! lips from the streamed viseme and writes the utterance as the face's
+//! speech state; the device routes the call to the provider it registered
+//! by the function id.
 
 use std::collections::HashMap;
 
@@ -21,7 +24,7 @@ use crate::TaskFragment;
 pub use vizij_arora_host::skills::{say, Say, SILENCE_VISEME};
 
 /// The parameter `id → name` map the fragment serves as `task/<name>`
-/// inputs: the call's inputs, not its `viseme` output.
+/// inputs: the call's inputs, not its `viseme` and `speech` outputs.
 pub fn say_parameters() -> HashMap<Uuid, String> {
     [say::ids::say::TEXT, say::ids::say::VOICE]
         .into_iter()
@@ -77,6 +80,7 @@ mod tests {
             .collect();
         assert!(outputs.contains(&"rig/f/standard/vizij/viseme/PP"));
         assert!(outputs.contains(&"rig/f/standard/vizij/viseme"));
+        assert!(outputs.contains(&"rig/f/standard/vizij/speech"));
         assert!(outputs.contains(&"task/status"));
         assert!(outputs.contains(&"task/feedback"));
     }

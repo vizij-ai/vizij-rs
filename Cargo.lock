@@ -10481,7 +10481,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-behavior"
-version = "4.1.0"
+version = "5.0.0"
 dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
@@ -10513,7 +10513,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-host"
-version = "5.2.0"
+version = "6.0.0"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -10537,7 +10537,7 @@ dependencies = [
 
 [[package]]
 name = "vizij-arora-tts"
-version = "5.0.0"
+version = "6.0.0"
 dependencies = [
  "arora",
  "arora-behavior",

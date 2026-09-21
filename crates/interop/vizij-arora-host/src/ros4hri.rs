@@ -1,8 +1,9 @@
 //! The built-in ROS4HRI mapping: a composable graph source implementing the
 //! `ros4hri` profile — the `standard/ros4hri/*` store keys a ROS bridge writes
-//! from the ROS4HRI topics — in terms of the `vizij-face` profile, the
-//! [`crate::standard`] face controls. Both interfaces are declared as data in
-//! [`crate::profile`]; this module is the operation between them.
+//! from the ROS4HRI topics, and the one it publishes — in terms of the
+//! `vizij-face` profile, the [`crate::standard`] face controls and state.
+//! Both interfaces are declared as data in [`crate::profile`]; this module is
+//! the operation between them.
 //!
 //! The mapping is asset-independent by construction — it only writes standard
 //! control paths; what an expression or a viseme *looks like* stays with the
@@ -27,6 +28,11 @@
 //!   commanded closed or the face is asleep. The standard's
 //!   `standard/vizij/blink` is not written: that key is for a caller's
 //!   blinks, which the face layers over these lids.
+//! - **Speech** — the other direction: the utterance a say run is speaking
+//!   (`standard/vizij/speech`, the face's speech state) is relayed as is to
+//!   `speech/text`, the ROS4HRI speech state a bridge publishes for
+//!   subtitles. The face's key is per face; the ROS4HRI key is the device's,
+//!   which is what a static bridge profile can name.
 //!
 //! All continuous channels pass through a ~200 ms exponential smoother (the
 //! incumbent ROS4HRI face's dynamics). The graph is generated data: it
@@ -42,7 +48,7 @@ use crate::standard::{self, FACE_CONTROLS, ROS4HRI_EXPRESSION_NAMES};
 /// Source id of the composed mapping (node ids get `ros4hri::` prefixes).
 pub const ROS4HRI_SOURCE_ID: &str = "ros4hri";
 
-/// Prefix of every key the mapping consumes.
+/// Prefix of every ROS4HRI key the mapping consumes or produces.
 pub const ROS4HRI_PREFIX: &str = "standard/ros4hri";
 
 /// Input keys, as a ROS bridge writes them.
@@ -51,6 +57,11 @@ pub const EXPRESSION_VALENCE_KEY: &str = "standard/ros4hri/expression/valence";
 pub const EXPRESSION_AROUSAL_KEY: &str = "standard/ros4hri/expression/arousal";
 pub const GAZE_TARGET_KEY: &str = "standard/ros4hri/gaze/target";
 pub const GAZE_FRAME_KEY: &str = "standard/ros4hri/gaze/frame";
+
+/// The output key, as a ROS bridge publishes it: the utterance being spoken,
+/// empty at rest — the face's speech state ([`standard::SPEECH`]) relayed to
+/// the device-scoped key the bridge's ROS4HRI profile names.
+pub const SPEECH_TEXT_KEY: &str = "standard/ros4hri/speech/text";
 
 /// The key carrying a FACS action-unit intensity, [0, 1].
 pub fn au_key(code: u8) -> String {
@@ -412,6 +423,11 @@ fn build(rig_prefix: &str) -> (String, Json) {
         g.output(&out_id(path), &lid, out(path.to_string()));
     }
 
+    // --- Speech: the face's speech state, relayed as is to the ROS4HRI
+    // speech key a bridge publishes. ------------------------------------
+    let speech = g.input("in/speech", &out(standard::SPEECH.to_string()), json!(""));
+    g.output("out/speech/text", &speech, SPEECH_TEXT_KEY.to_string());
+
     (
         ROS4HRI_SOURCE_ID.to_string(),
         json!({ "nodes": g.nodes, "edges": g.edges }),
@@ -469,13 +485,33 @@ mod tests {
         }
     }
 
+    /// The mapping reads the ROS4HRI command keys and writes the face's
+    /// controls; the speech channel runs the other way, reading the face's
+    /// speech state (per face, under the rig prefix) and writing the
+    /// device-scoped ROS4HRI speech key — and nothing else crosses over.
     #[test]
-    fn source_reads_only_ros4hri_keys() {
+    fn source_reads_ros4hri_keys_and_relays_the_speech_state() {
         let spec = spec();
+        let speech_in = format!("rig/test_face/{}", standard::SPEECH);
         for node in spec["nodes"].as_array().unwrap() {
-            if node["type"] == "input" {
-                let path = node["params"]["path"].as_str().unwrap();
-                assert!(path.starts_with(ROS4HRI_PREFIX), "unexpected input {path}");
+            let path = node["params"]["path"].as_str();
+            match node["type"].as_str() {
+                Some("input") => {
+                    let path = path.unwrap();
+                    assert!(
+                        path.starts_with(ROS4HRI_PREFIX) || path == speech_in,
+                        "unexpected input {path}"
+                    );
+                }
+                Some("output") => {
+                    let path = path.unwrap();
+                    assert!(
+                        path.starts_with("rig/test_face/standard/vizij/")
+                            || path == SPEECH_TEXT_KEY,
+                        "unexpected output {path}"
+                    );
+                }
+                _ => {}
             }
         }
     }

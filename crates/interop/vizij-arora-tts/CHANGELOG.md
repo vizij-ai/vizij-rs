@@ -4,6 +4,16 @@ All notable changes to `vizij-arora-tts`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [6.0.0] - 2026-10-06
+
+### Changed
+
+- **Breaking:** the provider implements the `say` contract of
+  vizij-arora-behavior 5: it reports the utterance through the `speech`
+  out-parameter while its audio plays — natively while the sink plays, in the
+  browser once the page's playhead moves — and empty before and after.
+  `Observed::Running` carries whether the audio is playing.
+
 ## [5.0.0] - 2026-10-05
 
 ### Breaking
