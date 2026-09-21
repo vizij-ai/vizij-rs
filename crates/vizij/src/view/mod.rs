@@ -2,8 +2,10 @@
 //!
 //! Scene model matches the web renderer (`@vizij/render`): Z-up world, faces
 //! in the XY plane layered along Z, orthographic camera fit to the authored
-//! `rootBounds`, ambient-only lighting, sRGB output with no tonemapping,
-//! double-sided materials, opacity-driven alpha blending.
+//! `rootBounds`, ambient-only lighting composed into unlit materials
+//! ([`Surface`]: diffuse scaled by `1 − metalness`, plus emissive), sRGB
+//! output with no tonemapping, double-sided materials, opacity-driven alpha
+//! blending.
 //!
 //! A face enters as GLB bytes: [`meta`] reads the bindings and the bundle
 //! from them, and the scene loads them through the in-memory asset source
@@ -239,15 +241,82 @@ impl ViewOptions {
     }
 }
 
-/// Scales a color's linear RGB by the ambient factor, keeping alpha.
-fn shade(color: Color, factor: f32) -> Color {
-    let lin = color.to_linear();
-    Color::LinearRgba(LinearRgba {
-        red: lin.red * factor,
-        green: lin.green * factor,
-        blue: lin.blue * factor,
-        alpha: lin.alpha,
-    })
+/// What a mesh's material is made of, in the web's terms: the inputs its
+/// unlit color is composed from. Kept per mesh so a change to any one of
+/// them recomposes the whole, and initialised from the GLB material so a
+/// face whose look is authored into the material (a metallic plate, an
+/// emissive feature) reads right before its rig writes a thing.
+///
+/// The composition is what three's ambient-only pipeline makes of a
+/// `MeshStandardMaterial` with no environment map: the diffuse term is the
+/// base color scaled by `1 − metalness` and the ambient factor (a metal has
+/// no diffuse, and with nothing to reflect it is black), the emissive term
+/// adds on top, and roughness changes nothing. A `basic` material
+/// (`MeshBasicMaterial`) is its base color alone.
+#[derive(Component, Clone, Debug, PartialEq)]
+pub struct Surface {
+    /// Linear RGB (three's `color`).
+    pub base: [f32; 3],
+    pub opacity: f32,
+    pub metalness: f32,
+    /// Linear RGB (three's `emissive`).
+    pub emissive: [f32; 3],
+    pub emissive_intensity: f32,
+    /// The ambient factor, `ambient/π`; 1 for a `basic` material.
+    pub factor: f32,
+    /// A `basic` material: full albedo, no metalness, no emissive.
+    pub basic: bool,
+}
+
+impl Surface {
+    /// The material as the GLB loader read it.
+    fn from_material(material: &StandardMaterial, factor: f32, basic: bool) -> Self {
+        let base = material.base_color.to_linear();
+        Self {
+            base: [base.red, base.green, base.blue],
+            opacity: base.alpha,
+            metalness: material.metallic,
+            emissive: [
+                material.emissive.red,
+                material.emissive.green,
+                material.emissive.blue,
+            ],
+            emissive_intensity: 1.0,
+            factor,
+            basic,
+        }
+    }
+
+    /// The unlit color the material renders with.
+    pub fn color(&self) -> Color {
+        let rgb = if self.basic {
+            self.base
+        } else {
+            let diffuse = (1.0 - self.metalness) * self.factor;
+            let mut rgb = [0.0; 3];
+            for (i, channel) in rgb.iter_mut().enumerate() {
+                *channel = self.base[i] * diffuse + self.emissive[i] * self.emissive_intensity;
+            }
+            rgb
+        };
+        Color::LinearRgba(LinearRgba {
+            red: rgb[0],
+            green: rgb[1],
+            blue: rgb[2],
+            alpha: self.opacity,
+        })
+    }
+
+    /// Write the composed color onto the material, with the alpha mode the
+    /// opacity calls for.
+    fn apply(&self, material: &mut StandardMaterial) {
+        material.base_color = self.color();
+        material.alpha_mode = if self.opacity < 1.0 {
+            AlphaMode::Blend
+        } else {
+            AlphaMode::Opaque
+        };
+    }
 }
 
 /// When present, the view camera renders into this offscreen image instead of
@@ -643,16 +712,14 @@ fn index_faces(
             let node = by_name[element.node_name.as_str()].0;
             // three's MeshBasicMaterial ignores lights: full albedo. `standard`
             // gets the ambient-Lambert factor.
-            let factor = if element.material.as_deref() == Some("basic") {
-                1.0
-            } else {
-                options.albedo_factor()
-            };
+            let basic = element.material.as_deref() == Some("basic");
+            let factor = if basic { 1.0 } else { options.albedo_factor() };
             for descendant in std::iter::once(node).chain(children.iter_descendants(node)) {
                 if let Ok((mesh_entity, material)) = meshes.get(descendant) {
                     // Unique material per element, with web conventions applied:
-                    // double-sided, unlit with the ambient factor baked into the
-                    // albedo (the web's ambient-Lambert model, computed in linear).
+                    // double-sided, unlit with the web's ambient-only model
+                    // composed into the albedo ([`Surface`]) from what the
+                    // loader read — base color, metalness, emissive.
                     let mut mat = materials
                         .get(&material.0)
                         .cloned()
@@ -660,11 +727,12 @@ fn index_faces(
                     mat.double_sided = true;
                     mat.cull_mode = None;
                     mat.unlit = true;
-                    mat.base_color = shade(mat.base_color, factor);
+                    let surface = Surface::from_material(&mat, factor, basic);
+                    surface.apply(&mut mat);
                     let handle = materials.add(mat);
                     commands
                         .entity(mesh_entity)
-                        .insert(MeshMaterial3d(handle.clone()));
+                        .insert((MeshMaterial3d(handle.clone()), surface));
                     mesh_of.insert(element.node_name.clone(), (mesh_entity, handle));
                     element_of.insert(mesh_entity, element.id);
                     break;
@@ -697,7 +765,12 @@ fn index_faces(
                 FeatureKind::Translation | FeatureKind::Rotation | FeatureKind::Scale => {
                     (node, feature.clone(), None, factor)
                 }
-                FeatureKind::Color | FeatureKind::Opacity => {
+                FeatureKind::Color
+                | FeatureKind::Opacity
+                | FeatureKind::Metalness
+                | FeatureKind::Roughness
+                | FeatureKind::Emissive
+                | FeatureKind::EmissiveIntensity => {
                     let Some((mesh_entity, _)) = mesh_of.get(node_name) else {
                         continue;
                     };
@@ -733,11 +806,11 @@ fn index_faces(
 }
 
 /// Applies each device's current pose (the HAL's actuation state) onto its
-/// face's scene: transforms, material color/opacity, morph influences.
+/// face's scene: transforms, material surfaces, morph influences.
 fn apply_poses(
     faces: Query<&Face>,
     mut transforms: Query<&mut Transform>,
-    material_handles: Query<&MeshMaterial3d<StandardMaterial>>,
+    mut surfaces: Query<(&MeshMaterial3d<StandardMaterial>, &mut Surface)>,
     mut morph_weights: Query<&mut MorphWeights>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
@@ -746,10 +819,21 @@ fn apply_poses(
             continue;
         }
         for (path, value) in face.rig.pose() {
-            let Some((entity, feature, morph_index, factor)) =
+            let Some((entity, feature, morph_index, _factor)) =
                 animatable_of(&path).and_then(|id| face.bindings.by_uuid.get(&id))
             else {
                 continue;
+            };
+            // A material feature lands on the mesh's surface, and the
+            // surface recomposes the material's color.
+            let mut surface_edit = |edit: &dyn Fn(&mut Surface) -> bool| {
+                if let Ok((handle, mut surface)) = surfaces.get_mut(*entity) {
+                    if edit(&mut surface) {
+                        if let Some(mut mat) = materials.get_mut(&handle.0) {
+                            surface.apply(&mut mat);
+                        }
+                    }
+                }
             };
             match feature {
                 FeatureKind::Translation => {
@@ -782,30 +866,25 @@ fn apply_poses(
                         }
                     }
                 }
+                // Graph color components are linear working-space floats
+                // (three's `Color.setRGB` semantics), not sRGB.
                 FeatureKind::Color => {
-                    if let (Ok(handle), Some([r, g, b])) =
-                        (material_handles.get(*entity), as_rgb(&value))
-                    {
-                        if let Some(mut mat) = materials.get_mut(&handle.0) {
-                            let alpha = mat.base_color.alpha();
-                            // Graph color components are linear working-space
-                            // floats (three's `Color.setRGB` semantics), not sRGB.
-                            let shaded = shade(Color::linear_rgb(r, g, b), *factor);
-                            mat.base_color = shaded.with_alpha(alpha);
-                        }
-                    }
+                    surface_edit(&|s| as_rgb(&value).map(|rgb| s.base = rgb).is_some())
                 }
                 FeatureKind::Opacity => {
-                    if let (Ok(handle), Some(o)) = (material_handles.get(*entity), as_f32(&value)) {
-                        if let Some(mut mat) = materials.get_mut(&handle.0) {
-                            mat.base_color.set_alpha(o);
-                            mat.alpha_mode = if o < 1.0 {
-                                AlphaMode::Blend
-                            } else {
-                                AlphaMode::Opaque
-                            };
-                        }
-                    }
+                    surface_edit(&|s| as_f32(&value).map(|o| s.opacity = o).is_some())
+                }
+                FeatureKind::Metalness => {
+                    surface_edit(&|s| as_f32(&value).map(|m| s.metalness = m).is_some())
+                }
+                // No direct light and no environment map: roughness has
+                // nothing to shape.
+                FeatureKind::Roughness => {}
+                FeatureKind::Emissive => {
+                    surface_edit(&|s| as_rgb(&value).map(|rgb| s.emissive = rgb).is_some())
+                }
+                FeatureKind::EmissiveIntensity => {
+                    surface_edit(&|s| as_f32(&value).map(|i| s.emissive_intensity = i).is_some())
                 }
                 FeatureKind::Morph(_) => {
                     if let (Ok(mut weights), Some(w), Some(i)) =
@@ -883,6 +962,75 @@ mod tests {
 
     const BOUNDS: Vec2 = Vec2::new(4.0, 2.0);
     const NO_ZOOM: Vec2 = Vec2::ONE;
+
+    fn rgb(color: Color) -> [f32; 3] {
+        let lin = color.to_linear();
+        [lin.red, lin.green, lin.blue]
+    }
+
+    fn standard(base: [f32; 3], metalness: f32, emissive: [f32; 3]) -> Surface {
+        Surface {
+            base,
+            opacity: 1.0,
+            metalness,
+            emissive,
+            emissive_intensity: 1.0,
+            factor: 0.5,
+            basic: false,
+        }
+    }
+
+    /// The web's ambient-only result for a standard material: a metal has
+    /// no diffuse and nothing to reflect, so a white metallic plate is black;
+    /// an emissive feature shows its emissive color on a black base; and a
+    /// plain colored material is its base scaled by the ambient factor — the
+    /// faces authored on `color` alone render as before.
+    #[test]
+    fn a_surface_composes_the_webs_ambient_only_color() {
+        let black = [0.0, 0.0, 0.0];
+        assert_eq!(rgb(standard([1.0, 1.0, 1.0], 1.0, black).color()), black);
+        let olive = [0.308, 0.332, 0.0];
+        assert_eq!(rgb(standard(black, 1.0, olive).color()), olive);
+        let mut dim = standard(black, 1.0, olive);
+        dim.emissive_intensity = 0.5;
+        assert_eq!(rgb(dim.color()), [0.154, 0.166, 0.0]);
+        assert_eq!(
+            rgb(standard([0.2, 0.4, 0.8], 0.0, black).color()),
+            [0.1, 0.2, 0.4]
+        );
+        // Half metallic: half the diffuse, plus the emissive.
+        assert_eq!(
+            rgb(standard([1.0, 1.0, 1.0], 0.5, [0.0, 0.0, 0.25]).color()),
+            [0.25, 0.25, 0.5]
+        );
+    }
+
+    /// A `basic` material is its base color, whatever the other inputs say.
+    #[test]
+    fn a_basic_surface_is_its_base_color() {
+        let mut surface = standard([0.2, 0.4, 0.8], 1.0, [1.0, 1.0, 1.0]);
+        surface.basic = true;
+        surface.factor = 1.0;
+        assert_eq!(rgb(surface.color()), [0.2, 0.4, 0.8]);
+        surface.opacity = 0.5;
+        assert_eq!(surface.color().alpha(), 0.5);
+    }
+
+    /// The surface reads the GLB material as the loader delivered it, so a
+    /// look authored into the material holds before the rig writes anything.
+    #[test]
+    fn a_surface_starts_from_the_loaded_material() {
+        let material = StandardMaterial {
+            base_color: Color::linear_rgb(1.0, 1.0, 1.0),
+            metallic: 1.0,
+            emissive: LinearRgba::rgb(0.3, 0.3, 0.0),
+            ..StandardMaterial::default()
+        };
+        let surface = Surface::from_material(&material, 0.5, false);
+        assert_eq!(surface.metalness, 1.0);
+        assert_eq!(surface.emissive, [0.3, 0.3, 0.0]);
+        assert_eq!(rgb(surface.color()), [0.3, 0.3, 0.0]);
+    }
 
     #[test]
     fn contain_letterboxes_the_viewports_excess_axis() {

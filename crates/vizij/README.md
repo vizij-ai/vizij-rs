@@ -216,16 +216,23 @@ key, which nothing routes into `say` yet.
 
 ## Lighting model
 
-The web renders `MeshStandardMaterial` under a single `ambientLight(π/2)`,
-which resolves to **albedo × 0.5 in linear space** (ambient intensity × the
-Lambert 1/π). The native view reproduces this deterministically: materials
-render unlit with `intensity/π` baked into the albedo (`--ambient`, default
-π/2). Elements declaring `material: "basic"` render at full albedo — three's
-`MeshBasicMaterial` ignores lights. Graph-driven `color` writes are linear
+The web renders `MeshStandardMaterial` under a single `ambientLight(π/2)` and
+no environment map, which resolves to **base × (1 − metalness) × 0.5 +
+emissive × emissiveIntensity in linear space** (ambient intensity × the
+Lambert 1/π on the diffuse term; a metal has no diffuse and nothing to
+reflect, so a metallic plate is black; roughness shapes nothing). The native
+view reproduces this deterministically: every material renders unlit with
+that composition baked into its albedo (`--ambient`, default π/2), from the
+GLB material at load and from the `color`, `opacity`, `metalness`,
+`roughness`, `emissive` and `emissiveIntensity` bindings as the rig writes
+them. Elements declaring `material: "basic"` render at full albedo with no
+metalness or emissive term — three's `MeshBasicMaterial` ignores lights and
+has neither. Graph-driven `color` and `emissive` writes are linear
 working-space floats (three `Color.setRGB` semantics), not sRGB.
 
-Verified pixel-exact against the web renderer on flat regions of both
-reference faces.
+Verified pixel-exact against the web renderer on flat regions of the
+reference faces: Quori and Toasty, whose look is in `color`, and Emy, whose
+look is a black metallic plate with emissive features.
 
 ## Comparison harness
 

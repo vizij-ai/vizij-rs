@@ -219,13 +219,17 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-snapreg-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Fetch the face GLBs from vizij-web
+      - name: Fetch the face GLBs
+        # Quori and Toasty from vizij-web; Emy from its own repository, at the
+        # commit the reference was rendered from.
         run: |
           mkdir -p fixtures
           base="https://raw.githubusercontent.com/vizij-ai/vizij-web/main/apps/vizij-authoring/public/assets"
           curl -fsSL "$base/Quori_Current_Extended.glb" -o fixtures/Quori_Current_Extended.glb
           curl -fsSL "$base/Toasty_Current.glb" -o fixtures/Toasty_Current.glb
-      - name: Render Quori/Toasty on lavapipe and compare to references
+          emy="https://raw.githubusercontent.com/SaraCooperAmun/vizij_ros_face_launcher/c538974ef24e40a2d2e251768a5e48f148b5bf1f/emy_glbs/emy.glb"
+          curl -fsSL "$emy" -o fixtures/emy.glb
+      - name: Render Quori/Toasty/Emy on lavapipe and compare to references
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
           WGPU_BACKEND: vulkan
