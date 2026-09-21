@@ -28,6 +28,16 @@ pub enum FeatureKind {
     Color,
     /// `opacity` — number onto the material; <1 enables alpha blending.
     Opacity,
+    /// `metalness` — number onto the material: a metal has no diffuse term,
+    /// so under the ambient-only model it darkens the base color to black.
+    Metalness,
+    /// `roughness` — number onto the material. Accepted for the standard's
+    /// sake; with no direct light and no environment map it changes nothing.
+    Roughness,
+    /// `emissive` — rgb added to the material's output, times the intensity.
+    Emissive,
+    /// `emissiveIntensity` — number scaling the emissive color.
+    EmissiveIntensity,
     /// A morph target influence, by target name (resolved to an index at join).
     Morph(String),
 }
@@ -163,6 +173,10 @@ impl FaceMeta {
                     "scale" => FeatureKind::Scale,
                     "color" => FeatureKind::Color,
                     "opacity" => FeatureKind::Opacity,
+                    "metalness" => FeatureKind::Metalness,
+                    "roughness" => FeatureKind::Roughness,
+                    "emissive" => FeatureKind::Emissive,
+                    "emissiveIntensity" => FeatureKind::EmissiveIntensity,
                     // Any other feature is a morph influence iff the node
                     // declares a morph target of that name.
                     other if rd.morph_targets.iter().any(|m| m == other) => {
@@ -226,5 +240,60 @@ mod tests {
     #[test]
     fn rejects_non_glb() {
         assert!(FaceMeta::from_glb_bytes(b"not a glb at all....").is_err());
+    }
+
+    /// Every material feature the authoring app publishes binds — the four
+    /// beyond color and opacity included, since a face's look may live in
+    /// them alone (a metallic plate reads black, its features are emissive).
+    #[test]
+    fn every_material_feature_binds() {
+        let feature = |ty: &str, default: serde_json::Value| {
+            serde_json::json!({
+                "animated": true,
+                "value": {
+                    "id": Uuid::new_v4().to_string(),
+                    "name": "x",
+                    "type": ty,
+                    "default": default,
+                }
+            })
+        };
+        let gltf = serde_json::json!({
+            "nodes": [{
+                "name": "Plate",
+                "extensions": { "RobotData": {
+                    "id": Uuid::new_v4().to_string(),
+                    "name": "Plate",
+                    "type": "shape",
+                    "material": "standard",
+                    "features": {
+                        "color": feature("rgb", serde_json::json!({"r": 1, "g": 1, "b": 1})),
+                        "opacity": feature("number", serde_json::json!(1)),
+                        "metalness": feature("number", serde_json::json!(1)),
+                        "roughness": feature("number", serde_json::json!(1)),
+                        "emissive": feature("rgb", serde_json::json!({"r": 0.3, "g": 0.3, "b": 0})),
+                        "emissiveIntensity": feature("number", serde_json::json!(1)),
+                    }
+                } }
+            }]
+        });
+        let meta = FaceMeta::from_gltf_json(&gltf).expect("parses");
+        let mut kinds: Vec<String> = meta
+            .animatables
+            .values()
+            .map(|b| format!("{:?}", b.feature))
+            .collect();
+        kinds.sort();
+        assert_eq!(
+            kinds,
+            [
+                "Color",
+                "Emissive",
+                "EmissiveIntensity",
+                "Metalness",
+                "Opacity",
+                "Roughness"
+            ]
+        );
     }
 }
