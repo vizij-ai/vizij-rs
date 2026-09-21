@@ -301,16 +301,25 @@ fn load_unload_cycles_leave_nothing_behind() {
             .unwrap();
         // Despawns and asset drops settle over frames — and a texture the
         // loader was still decoding when the face went lands first and is
-        // dropped next. The census is read once it has held still for ten
-        // frames (bounded, so a leak fails the comparison, not the wait).
+        // dropped next, on the asset thread's own clock, not the frame's
+        // (headless frames are milliseconds apart). The census is read once
+        // it has held still for ten frames and a quarter second (bounded, so
+        // a leak fails the comparison, not the wait).
         let mut now = census(&mut app);
         let mut still = 0;
-        for _ in 0..600 {
+        let mut changed = std::time::Instant::now();
+        let settle = std::time::Instant::now();
+        while settle.elapsed() < std::time::Duration::from_secs(10) {
             app.update();
             let next = census(&mut app);
-            still = if next == now { still + 1 } else { 0 };
+            if next == now {
+                still += 1;
+            } else {
+                still = 0;
+                changed = std::time::Instant::now();
+            }
             now = next;
-            if still >= 10 {
+            if still >= 10 && changed.elapsed() >= std::time::Duration::from_millis(250) {
                 break;
             }
         }
