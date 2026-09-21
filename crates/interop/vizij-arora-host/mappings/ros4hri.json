@@ -2552,6 +2552,21 @@
       "params": {
         "path": "standard/vizij/right_eye_top_eyelid/pos/y"
       }
+    },
+    {
+      "id": "in/speech",
+      "type": "input",
+      "params": {
+        "path": "standard/vizij/speech",
+        "value": ""
+      }
+    },
+    {
+      "id": "out/speech/text",
+      "type": "output",
+      "params": {
+        "path": "standard/ros4hri/speech/text"
+      }
     }
   ],
   "edges": [
@@ -8699,6 +8714,15 @@
       },
       "to": {
         "node_id": "out/right_eye_top_eyelid/pos/y",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in/speech"
+      },
+      "to": {
+        "node_id": "out/speech/text",
         "input": "in"
       }
     }

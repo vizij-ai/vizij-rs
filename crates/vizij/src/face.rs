@@ -911,7 +911,10 @@ mod tests {
     /// lips from the viseme the provider streams — here a scripted provider
     /// (two ticks of `PP`, two of `aa`, then done at rest) — reporting the
     /// current viseme as the face's state and as the run's feedback, and the
-    /// call's status as its own.
+    /// call's status as its own. The utterance the provider reports while
+    /// its audio plays (from its second tick here) is the face's speech
+    /// state, which the ROS4HRI mapping relays to the speech key a bridge
+    /// publishes; both empty again once the audio ends.
     #[test]
     fn a_say_run_streams_the_provider_s_visemes_to_the_lips() {
         use arora_types::call::CallResult;
@@ -932,17 +935,24 @@ mod tests {
                 move |_call| {
                     let mut n = script.lock().unwrap();
                     *n += 1;
-                    let (status, viseme) = match *n {
-                        1 | 2 => (task::running(), "PP"),
-                        3 | 4 => (task::running(), "aa"),
-                        _ => (task::success(), speech::SILENCE_VISEME),
+                    let (status, viseme, playing) = match *n {
+                        1 => (task::running(), "PP", ""),
+                        2 => (task::running(), "PP", "hello"),
+                        3 | 4 => (task::running(), "aa", "hello"),
+                        _ => (task::success(), speech::SILENCE_VISEME, ""),
                     };
                     Ok(CallResult {
                         ret: status,
-                        mutated: vec![StructureField {
-                            id: speech::SAY_VISEME_PARAM_ID,
-                            value: Box::new(Value::String(viseme.to_string())),
-                        }],
+                        mutated: vec![
+                            StructureField {
+                                id: speech::SAY_VISEME_PARAM_ID,
+                                value: Box::new(Value::String(viseme.to_string())),
+                            },
+                            StructureField {
+                                id: speech::SAY_SPEECH_PARAM_ID,
+                                value: Box::new(Value::String(playing.to_string())),
+                            },
+                        ],
                     })
                 },
             )
@@ -983,6 +993,7 @@ mod tests {
         step_for(&mut arora, 0.032);
         assert_eq!(*calls.lock().unwrap(), 2, "one provider call per tick");
         assert_eq!(read_value(&arora, standard::VISEME), Some(text("PP")));
+        assert_eq!(read_value(&arora, standard::SPEECH), Some(text("hello")));
         assert_eq!(
             fed_back_viseme(&arora, &handle.feedback[0].path).as_deref(),
             Some("PP")
@@ -996,6 +1007,11 @@ mod tests {
 
         step_for(&mut arora, 0.032);
         assert_eq!(read_value(&arora, standard::VISEME), Some(text("aa")));
+        assert_eq!(
+            read_value(&arora, ros4hri::SPEECH_TEXT_KEY),
+            Some(text("hello")),
+            "the mapping relays the speech state to the ROS4HRI key, a tick behind"
+        );
         assert!(read_f32(&arora, &standard::viseme_path("aa")) > 0.3);
         assert!(
             read_f32(&arora, &standard::viseme_path("PP")) < pp,
@@ -1006,6 +1022,8 @@ mod tests {
         // lips have settled (five crossfade half-lives), not before.
         step_for(&mut arora, 0.032);
         assert_eq!(read_value(&arora, standard::VISEME), Some(text("sil")));
+        assert_eq!(read_value(&arora, standard::SPEECH), Some(text("")));
+        assert_eq!(read_value(&arora, ros4hri::SPEECH_TEXT_KEY), Some(text("")));
         assert_eq!(
             read_value(&arora, &handle.status.path),
             Some(task::running())

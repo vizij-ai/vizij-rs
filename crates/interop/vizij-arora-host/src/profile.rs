@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as Json};
 
 use crate::ros4hri;
+use crate::skills;
 use crate::standard::{self, EXPRESSION_NAMES, FACE_CONTROLS, VISEME_SHAPES};
 
 /// Where a profile's paths live on the device's store.
@@ -56,7 +57,8 @@ pub struct KeyMeta {
 /// One typed path in a profile — `KeyInfo` plus optional standard metadata.
 ///
 /// `kind` is the role of the key for the party implementing the profile:
-/// `input` for a key a caller commands. A profile lifted from a mapping
+/// `input` for a key a caller commands, `output` for state the implementer
+/// reports and a caller follows. A profile lifted from a mapping
 /// ([`surface`]) carries the side it was lifted from instead.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProfileKey {
@@ -115,6 +117,16 @@ impl ProfileKey {
         }
     }
 
+    /// A string state key the implementer reports, `rest` when nothing is
+    /// happening.
+    fn state(path: impl Into<String>, rest: &str) -> Self {
+        ProfileKey {
+            kind: Some("output".into()),
+            default_value: Some(Value::String(rest.to_string())),
+            ..ProfileKey::input(path, Type::String)
+        }
+    }
+
     fn with_meta(mut self, meta: KeyMeta) -> Self {
         self.meta = Some(meta);
         self
@@ -162,6 +174,16 @@ impl Profile {
     /// Every path the profile declares — the cheap form for coverage checks.
     pub fn paths(&self) -> Vec<&str> {
         self.keys.iter().map(|k| k.path.as_str()).collect()
+    }
+
+    /// The paths of one `kind` — `input` for the keys a caller commands,
+    /// `output` for the state the implementer reports.
+    pub fn paths_of(&self, kind: &str) -> Vec<&str> {
+        self.keys
+            .iter()
+            .filter(|k| k.kind.as_deref() == Some(kind))
+            .map(|k| k.path.as_str())
+            .collect()
     }
 
     /// The distinct tiers the profile's keys declare, in first-seen order —
@@ -231,6 +253,10 @@ pub fn vizij_face_profile() -> Profile {
             tier: Some("muscle".into()),
         }),
     );
+    // What the face reports rather than takes: the lipsync state the viseme
+    // players write. No tier — the tiers grade controls.
+    keys.push(ProfileKey::state(standard::VISEME, skills::SILENCE_VISEME));
+    keys.push(ProfileKey::state(standard::SPEECH, ""));
 
     Profile {
         id: "vizij-face".into(),
@@ -239,7 +265,8 @@ pub fn vizij_face_profile() -> Profile {
         description: "The portable face interface: gaze and lids, 25 named expressions, \
                       15 visemes, and 36 muscle controls keyed to FACS action units and \
                       ARKit blendshapes (35 named per FACS/ARKit, plus the de-facto \
-                      jaw-open path)."
+                      jaw-open path); and the speech state the face reports, its current \
+                      viseme and the utterance being spoken."
             .into(),
         scope: Scope::Face,
         keys,
@@ -249,13 +276,15 @@ pub fn vizij_face_profile() -> Profile {
 // --- ROS4HRI ----------------------------------------------------------------
 
 /// The `ros4hri` profile: the keys a ROS bridge writes and the ROS4HRI mapping
-/// reads. Generated from [`crate::ros4hri`]'s key contract.
+/// reads, and the one the mapping writes and the bridge publishes. Generated
+/// from [`crate::ros4hri`]'s key contract.
 ///
 /// The shipped ROS 2 exposure preset feeds only the expression and gaze keys;
 /// the action-unit keys are part of the interface and have no topic behind
 /// them yet. Declaring the set is what makes that visible. Visemes are not
 /// here: ROS4HRI defines no viseme channel, and the face's lipsync belongs to
-/// the viseme players (see [`crate::skills`]).
+/// the viseme players (see [`crate::skills`]). The speech text is the one
+/// output: what the face is saying, for subtitles.
 pub fn ros4hri_profile() -> Profile {
     let mut keys = vec![
         ProfileKey::text(ros4hri::EXPRESSION_NAME_KEY),
@@ -265,6 +294,7 @@ pub fn ros4hri_profile() -> Profile {
         // holds its own far-ahead default until the key is written.
         ProfileKey::input(ros4hri::GAZE_TARGET_KEY, Type::Structure),
         ProfileKey::text(ros4hri::GAZE_FRAME_KEY),
+        ProfileKey::state(ros4hri::SPEECH_TEXT_KEY, ""),
     ];
 
     // The action units the standard's muscle tier can express, in the order
@@ -284,9 +314,9 @@ pub fn ros4hri_profile() -> Profile {
         id: "ros4hri".into(),
         version: "v1".into(),
         title: "ROS4HRI face command".into(),
-        description: "The ROS4HRI face-command interface: expression name with valence and \
+        description: "The ROS4HRI face interface: expression name with valence and \
                       arousal, a gaze target and its frame, and FACS action-unit \
-                      intensities."
+                      intensities commanded; the utterance being spoken reported."
             .into(),
         scope: Scope::Device,
         keys,
@@ -475,8 +505,13 @@ mod tests {
         assert_eq!(tier("expression"), 25);
         assert_eq!(tier("viseme"), 15);
         assert_eq!(tier("muscle"), 36);
-        assert_eq!(face.keys.len(), 82);
+        assert_eq!(face.keys.len(), 84);
         assert_eq!(face.tiers(), ["gaze", "expression", "viseme", "muscle"]);
+        assert_eq!(
+            face.paths_of("output"),
+            [standard::VISEME, standard::SPEECH],
+            "the speech state the face reports, outside the control tiers"
+        );
         assert_eq!(face.scope, Scope::Face);
     }
 
@@ -506,9 +541,10 @@ mod tests {
     #[test]
     fn the_ros4hri_profile_matches_its_key_contract() {
         let ros = ros4hri_profile();
-        assert_eq!(ros.keys.len(), 5 + 20);
+        assert_eq!(ros.keys.len(), 5 + 1 + 20);
         assert_eq!(ros.scope, Scope::Device);
         assert!(ros.paths().contains(&ros4hri::EXPRESSION_NAME_KEY));
+        assert_eq!(ros.paths_of("output"), [ros4hri::SPEECH_TEXT_KEY]);
         assert!(!ros.paths().iter().any(|p| p.contains("/viseme/")));
         let target = ros
             .keys
@@ -547,31 +583,37 @@ mod tests {
         assert!(shipped("nope").is_none());
     }
 
-    /// The shipped mapping reads the whole `ros4hri` profile but `gaze/frame`
-    /// (the look_at skill consumes it) and writes the whole `vizij-face`
-    /// profile but the two AU-less jaw controls — and nothing the profile
-    /// does not declare.
+    /// The shipped mapping reads the whole `ros4hri` command surface but
+    /// `gaze/frame` (the look_at skill consumes it) plus the face's speech
+    /// state, and writes the whole `vizij-face` control surface but the two
+    /// AU-less jaw controls plus the ROS4HRI speech text — and nothing either
+    /// profile does not declare on that side.
     #[test]
     fn surface_reconciles_the_ros4hri_mapping_against_the_profiles() {
         let spec: Json = serde_json::from_str(ros4hri::MAPPING_JSON).unwrap();
+        let ros = ros4hri_profile();
+        let face = vizij_face_profile();
 
+        // What the mapping reads: the ROS4HRI inputs and the face's outputs.
         let consumed = surface(&spec, Side::Input, "ros4hri", Scope::Device);
-        let declared = ros4hri_profile();
-        let unread: Vec<&str> = declared
-            .paths()
+        let unread: Vec<&str> = ros
+            .paths_of("input")
             .into_iter()
             .filter(|p| !consumed.paths().contains(p))
             .collect();
         assert_eq!(unread, [ros4hri::GAZE_FRAME_KEY]);
-        assert!(consumed
+        let readable = [ros.paths_of("input"), face.paths_of("output")].concat();
+        let unreadable: Vec<&str> = consumed
             .paths()
-            .iter()
-            .all(|p| declared.paths().contains(p)));
+            .into_iter()
+            .filter(|p| !readable.contains(p))
+            .collect();
+        assert!(unreadable.is_empty(), "undeclared inputs: {unreadable:?}");
 
+        // What the mapping writes: the face's inputs and the ROS4HRI outputs.
         let produced = surface(&spec, Side::Output, "vizij-face", Scope::Face);
-        let declared = vizij_face_profile();
-        let unwritten: Vec<&str> = declared
-            .paths()
+        let unwritten: Vec<&str> = face
+            .paths_of("input")
             .into_iter()
             .filter(|p| !produced.paths().contains(p))
             .collect();
@@ -585,10 +627,19 @@ mod tests {
         expected.push("standard/vizij/face/jaw_left".into());
         expected.push("standard/vizij/face/jaw_right".into());
         assert_eq!(unwritten, expected);
+        assert_eq!(
+            ros.paths_of("output")
+                .into_iter()
+                .filter(|p| !produced.paths().contains(p))
+                .count(),
+            0,
+            "the ROS4HRI outputs are all written"
+        );
+        let writable = [face.paths_of("input"), ros.paths_of("output")].concat();
         let undeclared: Vec<&str> = produced
             .paths()
             .into_iter()
-            .filter(|p| !declared.paths().contains(p))
+            .filter(|p| !writable.contains(p))
             .collect();
         assert!(undeclared.is_empty(), "undeclared outputs: {undeclared:?}");
     }

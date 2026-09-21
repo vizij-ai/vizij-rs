@@ -64,7 +64,7 @@ arora = { version = "9.10", default-features = false }
 # clients) and run feedback may be a record (the say skill's viseme/intensity).
 # 6.3 is where that profile publishes the face image, so the view declares
 # nothing itself.
-arora-bridge-ros2 = { version = "6.3", optional = true, default-features = false }
+arora-bridge-ros2 = { version = "6.4", optional = true, default-features = false }
 # The Status enumeration ids the gaze and tts contracts mark their action shapes with.
 arora-behavior-tree-types = "1"
 # The built-in key prefix the ROS 2 input declaration leaves out.

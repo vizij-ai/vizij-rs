@@ -189,4 +189,10 @@ impl GraphBuilder {
         self.node(id, "output", json!({ "path": path }));
         self.edge(from, id, "in");
     }
+
+    /// An output node writing `path` from a named output port of `from`.
+    pub(crate) fn output_from(&mut self, id: &str, from: &str, output: &str, path: String) {
+        self.node(id, "output", json!({ "path": path }));
+        self.edge_from(from, output, id, "in");
+    }
 }
