@@ -24,10 +24,13 @@ try {
       status: h.runStatus(h.readValues("face", [status])[status]),
     });
     const handle = await h.spawnSkill("face", "say", { text: "hello", voice: "Ruth" });
+    // Sampled until the run ends (bounded): the script's 260 ms take as
+    // many polls as the page steps in them, a slow page many seconds.
     const samples = [];
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 200; i++) {
       await new Promise((r) => setTimeout(r, 50));
       samples.push(sample(handle.status));
+      if (samples[samples.length - 1].status === "success" && i >= 5) break;
     }
     // A second run, halted while it plays: it is never polled again. The
     // run fetches before it plays, and a slow page takes its time to the
