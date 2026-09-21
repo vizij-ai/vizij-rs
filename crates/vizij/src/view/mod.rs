@@ -35,8 +35,9 @@ use bevy::mesh::morph::MorphWeights;
 use bevy::picking::events::{Click, Pointer};
 use bevy::picking::mesh_picking::MeshPickingPlugin;
 use bevy::prelude::*;
+use uuid::Uuid;
 use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector};
-use vizij_api_core::Value;
+use vizij_api_core::{TypedPath, Value};
 
 use meta::{Binding, FaceMeta, FeatureKind};
 
@@ -121,10 +122,10 @@ pub struct Face {
 /// GLB scene has spawned, empty until then.
 #[derive(Default)]
 pub struct Bindings {
-    /// uuid → (target entity, feature, morph index, material shade factor).
-    pub by_uuid: HashMap<String, (Entity, FeatureKind, Option<usize>, f32)>,
+    /// animatable id → (target entity, feature, morph index, material shade factor).
+    pub by_uuid: HashMap<Uuid, (Entity, FeatureKind, Option<usize>, f32)>,
     /// mesh entity → the id of the element it belongs to, for picks.
-    pub element_of: HashMap<Entity, String>,
+    pub element_of: HashMap<Entity, Uuid>,
     pub ready: bool,
 }
 
@@ -165,7 +166,7 @@ pub struct ViewEvents(pub Mutex<Receiver<ViewEvent>>);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Picked {
     pub face_id: String,
-    pub element_id: String,
+    pub element_id: Uuid,
 }
 
 /// The picks since a consumer last drained them.
@@ -665,7 +666,7 @@ fn index_faces(
                         .entity(mesh_entity)
                         .insert(MeshMaterial3d(handle.clone()));
                     mesh_of.insert(element.node_name.clone(), (mesh_entity, handle));
-                    element_of.insert(mesh_entity, element.id.clone());
+                    element_of.insert(mesh_entity, element.id);
                     break;
                 }
             }
@@ -714,7 +715,7 @@ fn index_faces(
                     (morph_entity, feature.clone(), Some(index), factor)
                 }
             };
-            by_uuid.insert(uuid.clone(), entry);
+            by_uuid.insert(*uuid, entry);
         }
 
         log::info!(
@@ -745,8 +746,8 @@ fn apply_poses(
             continue;
         }
         for (path, value) in face.rig.pose() {
-            let key = path.to_string();
-            let Some((entity, feature, morph_index, factor)) = face.bindings.by_uuid.get(&key)
+            let Some((entity, feature, morph_index, factor)) =
+                animatable_of(&path).and_then(|id| face.bindings.by_uuid.get(&id))
             else {
                 continue;
             };
@@ -847,9 +848,18 @@ fn on_click(
         log::info!("face {}: picked element {element_id}", face.id);
         picks.0.push(Picked {
             face_id: face.id.clone(),
-            element_id: element_id.clone(),
+            element_id: *element_id,
         });
     }
+}
+
+/// The animatable a rig key names: the rig keys its pose by bare animatable
+/// id, so a namespaced or field-selected path is no animatable.
+fn animatable_of(path: &TypedPath) -> Option<Uuid> {
+    if !path.namespaces.is_empty() || !path.fields.is_empty() {
+        return None;
+    }
+    Uuid::parse_str(&path.target).ok()
 }
 
 fn as_f32(value: &Value) -> Option<f32> {

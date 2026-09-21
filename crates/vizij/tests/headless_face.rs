@@ -12,6 +12,7 @@
 use std::path::PathBuf;
 
 use bevy::prelude::*;
+use uuid::Uuid;
 use vizij::face::{FaceConfig, ProgramSelect};
 use vizij::native::{start, BridgeConfig, Mode, FACE};
 use vizij::view::meta::FeatureKind;
@@ -75,7 +76,11 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
     assert!(!pose.is_empty(), "the rig holds no pose");
     let bound = pose
         .iter()
-        .filter(|(path, _)| face.bindings.by_uuid.contains_key(&path.to_string()))
+        .filter(|(path, _)| {
+            path.to_string()
+                .parse::<Uuid>()
+                .is_ok_and(|id| face.bindings.by_uuid.contains_key(&id))
+        })
         .count();
     assert_eq!(
         bound,
@@ -93,15 +98,15 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
         app.world().get::<Transform>(translated).is_some(),
         "the bound entity carries no transform"
     );
-    let element_ids: std::collections::HashSet<&str> =
-        face.meta.elements.iter().map(|e| e.id.as_str()).collect();
+    let element_ids: std::collections::HashSet<Uuid> =
+        face.meta.elements.iter().map(|e| e.id).collect();
     assert!(
         !face.bindings.element_of.is_empty(),
         "no mesh maps to an element"
     );
     for element_id in face.bindings.element_of.values() {
         assert!(
-            element_ids.contains(element_id.as_str()),
+            element_ids.contains(element_id),
             "{element_id} is no element id"
         );
     }
