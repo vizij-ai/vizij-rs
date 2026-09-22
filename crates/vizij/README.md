@@ -7,6 +7,10 @@ contract the web apps use, with no browser and no JS.
 
 ```bash
 cargo run -p vizij -- --glb path/to/Quori_Current_Extended.glb
+# a face from a URL, full screen on the second display, the bridge open to the LAN
+cargo run -p vizij -- --glb https://example.org/face.glb --fullscreen --display 1 --bind 0.0.0.0
+# the face loaded last time, again
+cargo run -p vizij
 # headless: render one frame offscreen and exit
 cargo run -p vizij -- --glb face.glb --snapshot out.png --size 763x760
 ```
@@ -27,8 +31,9 @@ piece of it, not a second device.
 | `face` | the composition: the GLB's bindings and bundle into one graph spec, folded with `RigHal` + `BlackboardStore` and the modules into an `AroraBuilder` a host may extend (`builder_for`); the free inputs, the neutral pose, the skills' fragments | everywhere |
 | `modules` | the host modules any Arora loads: `animation`, `gaze`, `viseme`, `tts_piper` (feature) | everywhere (Piper native) |
 | `native` | the stand-alone device: the face's Arora on a worker thread under arora's operator flow, the bridges the build adds, the `RuntimeHandle` front ends speak through | every target but the browser |
+| `native::bridge` | the open local bridge: the WebSocket server with the face's inputs and skills in its registry, the control panel on the same port | every target but the browser |
 | `web` | the browser module behind [`@vizij/runtime`](../../npm/@vizij/runtime/README.md): one App per page (`mount`), a JS-paced Arora per Vizij (`loadVizij`, a `VizijRuntime`), Vizijs as rectangles of the canvas (`placeVizij`), picks, `describe` | `wasm32` |
-| `main.rs` | the CLI and the terminal operator UI | feature `desktop` (default) |
+| `main.rs`, `open.rs` | the CLI, the window, the terminal operator UI, opening a face by drop or dialog | feature `desktop` (default) |
 
 Features: `desktop` (default) is the CLI and the terminal UI; `studio`,
 `ros2-dds` / `ros2-zenoh` and `tts-piper` add the bridges and the local
@@ -82,7 +87,15 @@ device its bytes (`RuntimeHandle::reload`).
 
 | Flag | Default | Effect |
 |---|---|---|
-| `--glb <path>` | required | the face GLB (embedded `RobotData` + `VIZIJ_bundle`) |
+| `--glb <path or url>` | the face loaded last time | the face GLB (embedded `RobotData` + `VIZIJ_bundle`); an `http(s)://` URL is fetched whole; the source is remembered in the app's data directory (`~/Library/Application Support/vizij`, `~/.local/share/vizij`, `%LOCALAPPDATA%\vizij`) |
+| `--port <n>` | `9000` | the local bridge's port — the WebSocket and the control panel |
+| `--bind <addr>` | `127.0.0.1` | the address the local bridge binds; `0.0.0.0` opens it to the LAN (the link is unauthenticated) |
+| `--no-web-control` | off | don't serve the control panel on `GET /` of the bridge's port |
+| `--fullscreen` | off | borderless full screen on `--display` |
+| `--display <i>` | the primary | the display the window opens on, by the index `list-displays` prints |
+| `--width <px>` / `--height <px>` | the face's aspect at 720 px high | the window's size, in logical pixels |
+| `--no-decorations` | off | no title bar or borders |
+| `--always-on-top` | off | the window stays above the others |
 | `--graphs <kinds>` | `rig,pose-driver,pose,standard-adaptation` | compose only these bundle graph kinds |
 | `--no-ros4hri` | off (ROS4HRI **on**) | drop the built-in [ROS4HRI](../../docs/ros4hri.md) mapping and, under `--ros2`, the ROS4HRI exposure (typed topics, face image, skills) |
 | `--program <id>` | bundle's active program | autoplay this motiongraph program |
@@ -100,13 +113,45 @@ device its bytes (`RuntimeHandle::reload`).
 | `--fit <contain\|cover\|stretch>` | `contain` | how the face fits the window: letterbox, crop the excess axis, or distort to the window's aspect |
 | `--zoom <f>` / `<fx>x<fy>` | `1` | magnify the fitted face — one factor for both axes, or width x height; below 1 shrinks it |
 
-The ROS 2 and Studio bridges are build features (they compose with arora's local
-WS bridge):
+`vizij list-displays` prints the displays by index and exits. While the
+window runs, a `.glb` dropped on it loads, and `O` opens the system's file
+dialog (an XDG portal on Linux, so no toolkit is linked); either way the
+running device restarts on the new face and the view follows.
+
+### The local bridge
+
+Every run serves the open local bridge of
+[`arora-bridge-ws`](https://docs.rs/arora-bridge-ws) on `--bind:--port`:
+`ws://127.0.0.1:9000` by default, with the control panel on
+`http://127.0.0.1:9000/`. Its registry advertises the face's **free
+inputs** — the input paths no graph in the composition writes, each typed
+and with its rest value — and the methods a client may `invoke`:
+
+| Method | Effect |
+|---|---|
+| `reset` | every input back to its rest value: the authored default, the rig's under the bundle's neutral pose |
+| `look_at` | the gaze skill: `policy` (`track`/`glance`/`reset`), `target` (meters), `frame` |
+| `play_viseme` | one viseme `shape` at a `weight` through the lipsync envelope |
+| `say` | speak `text` in `voice` (only when the build has a speech provider) |
+| `stop` | halt the last run of the skill named by `method` |
+
+A skill's `invoke` answers as soon as the run is spawned; the run reports on
+its status key. Writes and reads travel as the wire format documents
+(`{"type": "write_values", "values": {"standard/ros4hri/au/12": {"f64": 0.5}}}`);
+`arora/*` built-ins (the clock at step rate) are not pushed to clients. The
+server lives with the device generation: a reload frees the port before the
+next generation binds it. `tests/local_bridge.rs` is a client on it
+(`cargo test -p vizij --test local_bridge` with `VIZIJ_FIXTURES` set).
+
+### The other bridges
+
+The ROS 2 and Studio bridges are build features; they compose with the
+local bridge:
 
 | Flag | Feature | Effect |
 |---|---|---|
 | `--ros2 [namespace][:domain]` | `ros2-dds` (alias `ros2`) or `ros2-zenoh` | join the ROS graph as a ROS4HRI face (see below) |
-| `--studio` | `studio` | attach the Semio Studio bridge (configured from the environment) |
+| `--studio` | `studio` | attach the Semio Studio bridge: the device registers under the identity kept in the app's data directory (`studio-identity.json`), else as the operator answers on the terminal (then kept), else from the environment (`DEVICE_OWNERS`, …) |
 
 `--ros2` attaches [`arora-bridge-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-bridge-ros2)
 with its ROS4HRI exposure preset:
@@ -286,7 +331,8 @@ Zenoh backend does not. Run it with `--ignored` to re-measure.
 ## Not yet here
 
 The native app is otherwise complete (VIZ-47): the animation module + clip
-transport, the ROS 2 / Studio bridge flags, and `--headless` frames-to-store all
-landed. The egui inspector panels (VIZ-82) were dropped — the operator surface is
-the arora TUI + the store — and packaging (a distributable bundle) is still open.
+transport, the bridges, and `--headless` frames-to-store all landed. The
+operator surface is the arora TUI + the store: an in-window operator panel
+(egui) — the Studio registration prompt where there is no terminal, as on
+Android — is not built, and packaging (a distributable bundle) is still open.
 See `docs/proposal-vizij-native-app.md`.
