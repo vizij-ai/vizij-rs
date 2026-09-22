@@ -72,13 +72,14 @@
   const scriptedPlay = (bytes, marks) => {
     let t = 0;
     let last;
-    const call = { bytes: bytes.length, marks: marks.length, polls: 0 };
+    const call = { bytes: bytes.length, marks: marks.length, polls: 0, at: [] };
     window.vizijPlayback.calls.push(call);
     return () => {
       const now = performance.now();
       if (last !== undefined) t += Math.min(40, now - last);
       last = now;
       call.polls += 1;
+      call.at.push([Math.round(now), Math.round(t)]);
       return t > 260 ? null : t;
     };
   };

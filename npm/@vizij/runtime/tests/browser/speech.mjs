@@ -20,8 +20,10 @@ try {
     const shape = (s) => h.path("face", `standard/vizij/viseme/${s}`);
     const paths = [shape("PP"), shape("aa"), h.path("face", "standard/vizij/viseme")];
     const sample = (status) => ({
+      at: Math.round(performance.now()),
       values: h.readValues("face", paths),
       status: h.runStatus(h.readValues("face", [status])[status]),
+      polls: window.vizijPlayback.calls[0]?.polls ?? 0,
     });
     const handle = await h.spawnSkill("face", "say", { text: "hello", voice: "Ruth" });
     // Sampled until the run ends (bounded): the script's 260 ms take as
@@ -68,8 +70,13 @@ try {
   // The viseme weights changed over time: PP rose, then aa, then rest.
   const maxPP = Math.max(...result.samples.map((s) => num(values(s, pp))));
   const maxAA = Math.max(...result.samples.map((s) => num(values(s, aa))));
-  assert.ok(maxPP > 0.3, `PP never rose (max ${maxPP})`);
-  assert.ok(maxAA > 0.3, `aa never rose (max ${maxAA})`);
+  // On failure: each sample as `time shape aa status polls`, then the polls.
+  const trace = () =>
+    result.samples
+      .map((s) => `${s.at} ${values(s, current)?.str} ${num(values(s, aa)).toFixed(2)} ${s.status} ${s.polls}`)
+      .join("\n") + `\npolls: ${JSON.stringify(result.playback[0].at)}`;
+  assert.ok(maxPP > 0.3, `PP never rose (max ${maxPP})\n${trace()}`);
+  assert.ok(maxAA > 0.3, `aa never rose (max ${maxAA})\n${trace()}`);
   const shapes = new Set(result.samples.map((s) => values(s, current)?.str));
   assert.ok(shapes.has("PP") && shapes.has("aa") && shapes.has("sil"), [...shapes].join(","));
   // The run ran, then succeeded once the playhead reported the end.
