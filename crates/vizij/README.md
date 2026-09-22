@@ -27,6 +27,7 @@ piece of it, not a second device.
 | `face` | the composition: the GLB's bindings and bundle into one graph spec, folded with `RigHal` + `BlackboardStore` and the modules into an `AroraBuilder` a host may extend (`builder_for`); the free inputs, the neutral pose, the skills' fragments | everywhere |
 | `modules` | the host modules any Arora loads: `animation`, `gaze`, `viseme`, `tts_piper` (feature) | everywhere (Piper native) |
 | `native` | the stand-alone device: the face's Arora on a worker thread under arora's operator flow, the bridges the build adds, the `RuntimeHandle` front ends speak through | every target but the browser |
+| `web` | the browser module behind [`@vizij/runtime`](../../npm/@vizij/runtime/README.md): one App per page (`mount`), a JS-paced Arora per Vizij (`loadVizij`, a `VizijRuntime`), Vizijs as rectangles of the canvas (`placeVizij`), picks, `describe` | `wasm32` |
 | `main.rs` | the CLI and the terminal operator UI | feature `desktop` (default) |
 
 Features: `desktop` (default) is the CLI and the terminal UI; `studio`,
@@ -34,7 +35,11 @@ Features: `desktop` (default) is the CLI and the terminal UI; `studio`,
 speech provider to any native build. Without `desktop`, `cargo check --lib
 --no-default-features` gives the library the browser (`--target
 wasm32-unknown-unknown`) and Android (`cargo ndk … --features studio`)
-entry points build on; CI checks both.
+entry points build on; CI checks both. The browser bundle is `wasm-pack
+build crates/vizij --target web --release -- --no-default-features`
+(`pnpm run build:wasm:runtime` at the repository root), one WebGL2 bundle
+of about 31 MB (9 MB gzipped); CI renders Quori and Toasty on a page with
+it and holds them to the same references as the native snapshot.
 
 A face enters as GLB bytes on every target: `view::meta::FaceMeta` reads the
 bindings and the bundle from them, `face::load_face` composes them, and

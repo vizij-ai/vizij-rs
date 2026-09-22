@@ -173,6 +173,10 @@ pub fn parse_rgb(hex: &str) -> Result<[u8; 3]> {
     ])
 }
 
+/// An Arora wasm module to load into a device's engine as a guest: its
+/// header and its executable bytes.
+pub type GuestModule = (arora_types::module::low::Header, Vec<u8>);
+
 /// The device builder over the Vizij seams: the composed graph as the behavior,
 /// with the animation module loaded so the composed animation source's
 /// `ExternalFunction` nodes dispatch and its transport is callable. `None`
@@ -183,6 +187,23 @@ pub fn builder_for(
     store: BlackboardStore,
     embedded_skills: &[(String, serde_json::Value)],
 ) -> Option<arora::AroraBuilder> {
+    builder_with_guests(spec, rig, store, embedded_skills, Vec::new()).map(|(builder, _)| builder)
+}
+
+/// [`builder_for`] with wasm modules loaded as guests besides the host-linked
+/// ones: their functions dispatch by id, from a call and from the graph's
+/// `ExternalFunction` nodes, like the host modules'. Comes back with the
+/// function → module routing table the device resolves bare calls through.
+pub fn builder_with_guests(
+    spec: &str,
+    rig: RigHal,
+    store: BlackboardStore,
+    embedded_skills: &[(String, serde_json::Value)],
+    guests: Vec<GuestModule>,
+) -> Option<(
+    arora::AroraBuilder,
+    std::collections::HashMap<uuid::Uuid, uuid::Uuid>,
+)> {
     let rig_prefix = rig_prefix_of(spec);
     let spec = match parse_spec(spec) {
         Ok(spec) => spec,
@@ -205,7 +226,15 @@ pub fn builder_for(
     if let Some(tts) = tts_module_id() {
         function_modules.insert(speech::SAY_ID, tts);
     }
-    graph.set_function_modules(function_modules);
+    for (header, _) in &guests {
+        function_modules.extend(
+            header
+                .exports
+                .iter()
+                .map(|export| (*export.id(), header.id)),
+        );
+    }
+    graph.set_function_modules(function_modules.clone());
     // The skills: each described contract rides its host module; the
     // behavior is the shipped fragment the interpreter grafts per run — or
     // the face's embedded override. The viseme players write the face's
@@ -237,7 +266,10 @@ pub fn builder_for(
     let builder = builder.with_host_module(tts::host_module());
     #[cfg(all(not(target_arch = "wasm32"), feature = "tts-piper"))]
     let builder = builder.with_host_module(tts_piper::host_module());
-    Some(builder)
+    let builder = guests.into_iter().fold(builder, |builder, (header, wasm)| {
+        builder.with_module(header, wasm)
+    });
+    Some((builder, function_modules))
 }
 
 /// The prefix the face's standard controls live under in `spec` —

@@ -1,12 +1,11 @@
-// The animation module runs inside the browser runtime (VIZ-61 Stage A):
-// the runtime is constructed WITH the module, JS sets up a one-track ramp
-// through the call surface (load_animation / create_player / add_instance),
-// and a graph ExternalFunction node calls the module's step each tick,
-// landing the sampled outputs in the runtime store. Mirrors the Rust
-// host-side boundary proof (crates/interop/vizij-animation-module/tests/
-// host_ramp.rs) through the public JS surface.
+// The animation module is host-linked into every device: JS sets up a
+// one-track ramp through the call surface (load_animation / create_player /
+// add_instance, no module_id needed), and a graph ExternalFunction node
+// calls the module's step each tick, landing the sampled outputs in the
+// device's store. Mirrors the Rust boundary proof
+// (crates/interop/vizij-animation-module/tests/host_ramp.rs) through the
+// public JS surface.
 import assert from "node:assert/strict";
-import { loadAnimationModule } from "@vizij/animation-module";
 import { startRuntime } from "../dist/runtime/src/index.js";
 
 // --- declared ids (module.yaml + the type records) ---------------------------
@@ -110,7 +109,7 @@ const graph = {
 };
 
 // --- run ---------------------------------------------------------------------
-const runtime = await startRuntime(graph, undefined, [await loadAnimationModule()]);
+const runtime = await startRuntime(graph);
 
 // Setup through the call surface. Each call dispatches inside the next step.
 const pending = [
