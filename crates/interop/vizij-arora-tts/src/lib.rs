@@ -1,7 +1,7 @@
 //! Vizij's text-to-speech as an Arora host module.
 //!
-//! The **contract** — `say(text, voice) -> Status` with a mutable `viseme`
-//! out-parameter — is the speech skill's
+//! The **contract** — `say(text, voice) -> Status` with the mutable `viseme`
+//! and `speech` out-parameters — is the speech skill's
 //! ([`vizij_arora_behavior::speech`], re-exported here): same function id,
 //! parameter ids, and signature for every provider, so a behavior references
 //! `say` without caring which provider a build registered. This crate ships
@@ -15,9 +15,12 @@
 //! off the tick thread, and the closure only polls. The module streams the
 //! current viseme as one of the face standard's shapes
 //! ([`vizij_arora_host::standard::VISEME_SHAPES`]), Polly's viseme codes
-//! mapped by [`polly_shape`]; [`SILENCE_VISEME`] is written at rest. What a
-//! shape looks like, and how one blends into the next, is the face's and the
-//! speech skill's business, not the provider's.
+//! mapped by [`polly_shape`]; [`SILENCE_VISEME`] is written at rest. It
+//! reports the utterance as `speech` while its audio plays — from the moment
+//! playback starts, empty before and after — so the face's speech state
+//! follows the voice, not the request. What a shape looks like, and how one
+//! blends into the next, is the face's and the speech skill's business, not
+//! the provider's.
 //!
 //! A halt is silence: the interpreter stops re-invoking `say`, and nothing
 //! in the module ABI tells the producer so. Every tick refreshes the run's
@@ -32,8 +35,8 @@ use std::collections::HashMap;
 use uuid::{uuid, Uuid};
 
 pub use vizij_arora_behavior::speech::{
-    say_signature, SAY_ID, SAY_TEXT_PARAM_ID, SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID,
-    SILENCE_VISEME,
+    say_signature, SAY_ID, SAY_SPEECH_PARAM_ID, SAY_TEXT_PARAM_ID, SAY_VISEME_PARAM_ID,
+    SAY_VOICE_PARAM_ID, SILENCE_VISEME,
 };
 
 /// The face-standard shape for a Polly viseme code (the AWS Polly viseme
@@ -65,6 +68,7 @@ pub fn polly_shape(code: &str) -> &'static str {
 use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
@@ -111,6 +115,9 @@ struct Run {
     /// The instant of the last `say` tick — the producer's only sign that the
     /// run is still wanted.
     pulse: Pulse,
+    /// Whether the audio is playing — the span the utterance is reported as
+    /// `speech`.
+    playing: Arc<AtomicBool>,
 }
 
 /// The request body both TTS endpoints take.
@@ -143,8 +150,9 @@ pub fn host_module() -> HostModule {
         .build()
 }
 
-/// Speak `text` in `voice`, streaming the current viseme. Re-invoked each tick
-/// while `Running`; keeps its state in [`RUNS`], keyed by content.
+/// Speak `text` in `voice`, streaming the current viseme and, while the audio
+/// plays, the utterance. Re-invoked each tick while `Running`; keeps its state
+/// in [`RUNS`], keyed by content.
 pub fn say(call: Call) -> Result<CallResult, CallError> {
     let text = match arg_string(&call, SAY_TEXT_PARAM_ID) {
         Some(text) => text,
@@ -159,27 +167,35 @@ pub fn say(call: Call) -> Result<CallResult, CallError> {
 
     // First tick: spawn synthesis + playback off the tick thread. Later ticks
     // find the run and fall through to the poll.
-    let run = runs.entry(key).or_insert_with(|| spawn_say(text, voice));
+    let run = runs
+        .entry(key)
+        .or_insert_with(|| spawn_say(text.clone(), voice));
     if let Ok(mut last) = run.pulse.lock() {
         *last = Instant::now();
     }
 
-    // The viseme at the playhead, advanced by the playback task.
+    // The viseme at the playhead, advanced by the playback task, and the
+    // utterance while the audio plays.
     let current = run.viseme.lock().map(|cur| *cur).unwrap_or(SILENCE_VISEME);
+    let speech = if run.playing.load(Ordering::Relaxed) {
+        text.as_str()
+    } else {
+        ""
+    };
 
     // Poll the run's `JoinHandle` (a `Future`) once — the tick loop is the
     // executor, a no-op waker suffices, and a terminal result drops the run so
     // the completed handle is never polled again.
     let mut cx = Context::from_waker(Waker::noop());
     match Future::poll(Pin::new(&mut run.handle), &mut cx) {
-        Poll::Pending => Ok(with_viseme(task::running(), current)),
+        Poll::Pending => Ok(streaming(task::running(), current, speech)),
         Poll::Ready(Ok(status)) => {
             runs.remove(&key);
-            Ok(with_viseme(status, SILENCE_VISEME))
+            Ok(streaming(status, SILENCE_VISEME, ""))
         }
         Poll::Ready(Err(_join_error)) => {
             runs.remove(&key);
-            Ok(with_viseme(task::failure(), SILENCE_VISEME))
+            Ok(streaming(task::failure(), SILENCE_VISEME, ""))
         }
     }
 }
@@ -193,6 +209,8 @@ fn spawn_say(text: String, voice: String) -> Run {
     let viseme_task = viseme.clone();
     let pulse: Pulse = Arc::new(Mutex::new(Instant::now()));
     let pulse_task = pulse.clone();
+    let playing = Arc::new(AtomicBool::new(false));
+    let playing_task = playing.clone();
     let handle = TOKIO_HANDLE.spawn(async move {
         let base = std::env::var("API_URL").unwrap_or_else(|_| DEFAULT_API_BASE.to_string());
         let (audio, marks) = match synthesize(&base, &voice, &text).await {
@@ -209,7 +227,10 @@ fn spawn_say(text: String, voice: String) -> Run {
         if is_halted(&pulse_task) {
             return task::failure();
         }
-        match tokio::task::spawn_blocking(move || play(audio, marks, viseme_task, pulse_task)).await
+        match tokio::task::spawn_blocking(move || {
+            play(audio, marks, viseme_task, pulse_task, playing_task)
+        })
+        .await
         {
             Ok(status) => status,
             Err(_join_error) => task::failure(),
@@ -219,16 +240,19 @@ fn spawn_say(text: String, voice: String) -> Run {
         handle,
         viseme,
         pulse,
+        playing,
     }
 }
 
-/// Play the mp3 whole, advancing the shared viseme cell at the sink's own
-/// playhead; a quiet pulse stops the sink.
+/// Play the mp3 whole, holding `playing` up for its duration and advancing
+/// the shared viseme cell at the sink's own playhead; a quiet pulse stops the
+/// sink.
 fn play(
     audio: Vec<u8>,
     marks: Vec<SpeechMark>,
     viseme: Arc<Mutex<&'static str>>,
     pulse: Pulse,
+    playing: Arc<AtomicBool>,
 ) -> Value {
     let (_stream, handle) = match rodio::OutputStream::try_default() {
         Ok(pair) => pair,
@@ -259,9 +283,11 @@ fn play(
             shape: polly_shape(&mark.value),
         })
         .collect();
+    playing.store(true, Ordering::Relaxed);
     let outcome = follow(&cues, &viseme, &pulse, || {
         (!sink.empty()).then(|| sink.get_pos())
     });
+    playing.store(false, Ordering::Relaxed);
     match outcome {
         Playback::Ended => task::success(),
         Playback::Halted => {
@@ -395,14 +421,22 @@ fn status_only(status: Value) -> CallResult {
     }
 }
 
-/// A result carrying the status plus the current viseme in the out-parameter.
-fn with_viseme(status: Value, viseme: &str) -> CallResult {
+/// A result carrying the status plus what the run streams: the current
+/// viseme and the utterance being spoken (empty while no audio plays), in
+/// the out-parameters.
+fn streaming(status: Value, viseme: &str, speech: &str) -> CallResult {
     CallResult {
         ret: status,
-        mutated: vec![StructureField {
-            id: SAY_VISEME_PARAM_ID,
-            value: Box::new(Value::String(viseme.to_string())),
-        }],
+        mutated: vec![
+            StructureField {
+                id: SAY_VISEME_PARAM_ID,
+                value: Box::new(Value::String(viseme.to_string())),
+            },
+            StructureField {
+                id: SAY_SPEECH_PARAM_ID,
+                value: Box::new(Value::String(speech.to_string())),
+            },
+        ],
     }
 }
 

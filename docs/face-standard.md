@@ -80,8 +80,11 @@ visemes of the speech it synthesizes through the same driver.
 The face's **current viseme** is state, at `standard/vizij/viseme`: one of the
 shapes as a string, `sil` at rest, written by whichever player is driving the
 lips — for anything that follows speech (subtitles, a mirror face, a
-monitor). It is not a command: the players are the actions; this is what they
-report, and what their runs feed back.
+monitor). Next to it, `standard/vizij/speech` is **what the face is saying**:
+the utterance of a `say` run from the moment its audio starts playing until it
+ends, empty at rest. Neither is a command: the players are the actions; this
+is what they report, and what their runs feed back. Both are declared as the
+`vizij-face` profile's `output` keys, the rest being its `input` controls.
 
 ## Muscle tier
 

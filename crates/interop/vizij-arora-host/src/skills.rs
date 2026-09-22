@@ -80,12 +80,15 @@ pub const SAY_FUNCTION: &str = "say";
 /// The say contract's ids — identical across the text-to-speech providers,
 /// so a behavior references `say` without caring which provider a build
 /// registered. The fragment hosts the module call under [`SAY_ID`] and reads
-/// the viseme the provider streams through its mutable parameter
-/// [`SAY_VISEME_PARAM_ID`].
+/// what the provider streams through its mutable parameters: the viseme at
+/// the audio playhead ([`SAY_VISEME_PARAM_ID`]) and the utterance while its
+/// audio plays ([`SAY_SPEECH_PARAM_ID`], empty before playback starts and
+/// once it ends).
 pub const SAY_ID: Uuid = uuid::uuid!("77bf2798-e7ce-47c6-a45c-3c2e9ba1837d");
 pub const SAY_TEXT_PARAM_ID: Uuid = uuid::uuid!("881dc182-d4ba-4ea0-9e81-f4eddab6f669");
 pub const SAY_VOICE_PARAM_ID: Uuid = uuid::uuid!("f56ca142-db46-4c58-bc44-7896c4b54d5c");
 pub const SAY_VISEME_PARAM_ID: Uuid = uuid::uuid!("a1fbf58b-bf66-44a6-a503-9d9078ee5755");
+pub const SAY_SPEECH_PARAM_ID: Uuid = uuid::uuid!("de350f2e-0dc7-455a-b895-af3c61001669");
 
 /// The rest token every viseme player writes when nothing is speaking — the
 /// `sil` shape of [`VISEME_SHAPES`].
@@ -475,21 +478,33 @@ pub fn generate_play_viseme() -> Json {
 /// own argument bundle (`task/update`, live-updatable) and drives the lips
 /// from the viseme the provider streams through its mutable parameter — the
 /// lipsync driver at full weight, so the current viseme's shape is on and
-/// the others fade. The run reports the call's status as its own once the
+/// the others fade. The utterance the provider reports while its audio plays
+/// is written as the face's speech state ([`standard::SPEECH`]), empty
+/// before and after. The run reports the call's status as its own once the
 /// call has ended and the lips have settled; until then it is running.
 pub fn generate_say() -> Json {
     let g = &mut GraphBuilder::new();
     let args = g.input("in/args", "task/update", Json::Null);
-    // The run's first keyed `mutated` slot is the provider's viseme parameter.
+    // The run's keyed `mutated` slots are the provider's out-parameters, in
+    // this order: the viseme, then the utterance being spoken.
     let run = g.node(
         "say/call",
         "taskrun",
         json!({
             "function": SAY_ID.to_string(),
-            "record_keys": [SAY_VISEME_PARAM_ID.to_string()]
+            "record_keys": [
+                SAY_VISEME_PARAM_ID.to_string(),
+                SAY_SPEECH_PARAM_ID.to_string()
+            ]
         }),
     );
     g.edge(&args, &run, "args");
+    g.output_from(
+        "out/speech",
+        &run,
+        "mutated_1",
+        standard::SPEECH.to_string(),
+    );
 
     let full = g.constant(1.0);
     let settled = viseme_driver(g, (&run, "mutated_0"), &full);
@@ -568,7 +583,8 @@ pub const SKILLS: [Skill; 3] = [
         title: "Say",
         description: "Speaks a text: hosts the device's text-to-speech `say` call and drives \
                       the lips from the viseme it streams, through the same lipsync driver as \
-                      play_viseme; the current viseme is the run's feedback.",
+                      play_viseme; the current viseme is the run's feedback, and the utterance \
+                      is the face's speech state while its audio plays.",
         parameters: &SAY_PARAMS,
         asset_json: SAY_JSON,
     },

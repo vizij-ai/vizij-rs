@@ -8,7 +8,8 @@
 //! The `viseme` out-parameter carries the face-standard shape at the audio
 //! playhead, the espeak-ng **phoneme** there mapped by [`phoneme_shape`];
 //! markers and punctuation — BOS `^`, EOS `$`, stress marks, `.`/`,` — are
-//! the rest token `sil`.
+//! the rest token `sil`. The `speech` out-parameter carries the utterance
+//! while its audio plays, empty before and after.
 //!
 //! Piper's voice is chosen at build/run time (`PIPER_VOICE`); the `voice`
 //! call parameter names Polly voices and is ignored here (logged), keeping
@@ -18,6 +19,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::task::{Context, Poll, Waker};
 use std::time::Instant;
@@ -30,8 +32,8 @@ use vizij_graph_core::task;
 use vizij_piper::Synthesizer;
 
 use vizij_arora_tts::{
-    follow, is_halted, say_signature, Cue, Playback, Pulse, SAY_ID, SAY_TEXT_PARAM_ID,
-    SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID, SILENCE_VISEME,
+    follow, is_halted, say_signature, Cue, Playback, Pulse, SAY_ID, SAY_SPEECH_PARAM_ID,
+    SAY_TEXT_PARAM_ID, SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID, SILENCE_VISEME,
 };
 
 /// The Piper tts module's id on the device — distinct from the cloud module so
@@ -68,6 +70,9 @@ struct Run {
     viseme: Arc<Mutex<&'static str>>,
     /// The instant of the last `say` tick; the producer stops on a quiet one.
     pulse: Pulse,
+    /// Whether the audio is playing — the span the utterance is reported as
+    /// `speech`.
+    playing: Arc<AtomicBool>,
 }
 
 /// The Piper tts module: the described `say` action — the same signature the
@@ -101,27 +106,33 @@ pub fn say(call: Call) -> Result<CallResult, CallError> {
 
     // First tick: spawn synthesis + playback off the tick thread. Later ticks
     // find the run and fall through to the poll.
-    let run = runs.entry(key).or_insert_with(|| spawn_say(text));
+    let run = runs.entry(key).or_insert_with(|| spawn_say(text.clone()));
     if let Ok(mut last) = run.pulse.lock() {
         *last = Instant::now();
     }
 
-    // The shape at the playhead, advanced by the playback task.
+    // The shape at the playhead, advanced by the playback task, and the
+    // utterance while the audio plays.
     let current = run.viseme.lock().map(|cur| *cur).unwrap_or(SILENCE_VISEME);
+    let speech = if run.playing.load(Ordering::Relaxed) {
+        text.as_str()
+    } else {
+        ""
+    };
 
     // Poll the run's `JoinHandle` (a `Future`) once — the tick loop is the
     // executor, a no-op waker suffices, and a terminal result drops the run so
     // the completed handle is never polled again.
     let mut cx = Context::from_waker(Waker::noop());
     match Future::poll(Pin::new(&mut run.handle), &mut cx) {
-        Poll::Pending => Ok(with_viseme(task::running(), current)),
+        Poll::Pending => Ok(streaming(task::running(), current, speech)),
         Poll::Ready(Ok(status)) => {
             runs.remove(&key);
-            Ok(with_viseme(status, SILENCE_VISEME))
+            Ok(streaming(status, SILENCE_VISEME, ""))
         }
         Poll::Ready(Err(_join_error)) => {
             runs.remove(&key);
-            Ok(with_viseme(task::failure(), SILENCE_VISEME))
+            Ok(streaming(task::failure(), SILENCE_VISEME, ""))
         }
     }
 }
@@ -134,6 +145,8 @@ fn spawn_say(text: String) -> Run {
     let viseme_task = viseme.clone();
     let pulse: Pulse = Arc::new(Mutex::new(Instant::now()));
     let pulse_task = pulse.clone();
+    let playing = Arc::new(AtomicBool::new(false));
+    let playing_task = playing.clone();
     let handle = TOKIO_HANDLE.spawn(async move {
         // Synthesize off the async workers: model inference is CPU-bound.
         let synthesis = tokio::task::spawn_blocking(move || {
@@ -170,7 +183,11 @@ fn spawn_say(text: String) -> Run {
 
         // Playback blocks and rodio's stream is thread-bound, so it runs on
         // the blocking pool; this task just awaits the outcome.
-        match tokio::task::spawn_blocking(move || play(synthesis, viseme_task, pulse_task)).await {
+        match tokio::task::spawn_blocking(move || {
+            play(synthesis, viseme_task, pulse_task, playing_task)
+        })
+        .await
+        {
             Ok(status) => status,
             Err(_join_error) => task::failure(),
         }
@@ -179,15 +196,18 @@ fn spawn_say(text: String) -> Run {
         handle,
         viseme,
         pulse,
+        playing,
     }
 }
 
-/// Play the synthesized PCM whole, advancing the shared shape cell at the
-/// sink's own playhead; a quiet pulse stops the sink.
+/// Play the synthesized PCM whole, holding `playing` up for its duration and
+/// advancing the shared shape cell at the sink's own playhead; a quiet pulse
+/// stops the sink.
 fn play(
     synthesis: vizij_piper::Synthesis,
     viseme: Arc<Mutex<&'static str>>,
     pulse: Pulse,
+    playing: Arc<AtomicBool>,
 ) -> Value {
     let (_stream, handle) = match rodio::OutputStream::try_default() {
         Ok(pair) => pair,
@@ -214,9 +234,11 @@ fn play(
         .collect();
     let source = rodio::buffer::SamplesBuffer::new(1, rate, synthesis.samples);
     sink.append(source);
+    playing.store(true, Ordering::Relaxed);
     let outcome = follow(&cues, &viseme, &pulse, || {
         (!sink.empty()).then(|| sink.get_pos())
     });
+    playing.store(false, Ordering::Relaxed);
     match outcome {
         Playback::Ended => task::success(),
         Playback::Halted => {
@@ -277,14 +299,22 @@ fn status_only(status: Value) -> CallResult {
     }
 }
 
-/// A result carrying the status plus the current token in the out-parameter.
-fn with_viseme(status: Value, viseme: &str) -> CallResult {
+/// A result carrying the status plus what the run streams: the current
+/// token and the utterance being spoken (empty while no audio plays), in the
+/// out-parameters.
+fn streaming(status: Value, viseme: &str, speech: &str) -> CallResult {
     CallResult {
         ret: status,
-        mutated: vec![StructureField {
-            id: SAY_VISEME_PARAM_ID,
-            value: Box::new(Value::String(viseme.to_string())),
-        }],
+        mutated: vec![
+            StructureField {
+                id: SAY_VISEME_PARAM_ID,
+                value: Box::new(Value::String(viseme.to_string())),
+            },
+            StructureField {
+                id: SAY_SPEECH_PARAM_ID,
+                value: Box::new(Value::String(speech.to_string())),
+            },
+        ],
     }
 }
 

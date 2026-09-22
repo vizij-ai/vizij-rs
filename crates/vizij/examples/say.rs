@@ -7,8 +7,9 @@
 //!
 //! Drives the build's `say` provider exactly as the device does — one call per
 //! tick, `Running` until playback ends — printing the viseme stream (the face
-//! standard's shapes) as it advances. On the device the say skill's run does
-//! the same and drives the lips from it.
+//! standard's shapes) as it advances and the utterance when its audio starts
+//! and ends. On the device the say skill's run does the same, driving the
+//! lips from the one and writing the other as the face's speech state.
 
 use vizij_arora_tts as tts_api;
 
@@ -45,16 +46,24 @@ fn main() {
 
     // The tick loop, standalone: poll the provider until the utterance ends.
     let mut last = String::new();
+    let mut speaking = String::new();
     loop {
         let result = provider::say(call.clone()).expect("say reports failure as a status");
         for field in &result.mutated {
-            if field.id == tts_api::SAY_VISEME_PARAM_ID {
-                if let Value::String(viseme) = field.value.as_ref() {
-                    if *viseme != last {
-                        println!("viseme: {viseme}");
-                        last = viseme.clone();
-                    }
+            let Value::String(value) = field.value.as_ref() else {
+                continue;
+            };
+            if field.id == tts_api::SAY_VISEME_PARAM_ID && *value != last {
+                println!("viseme: {value}");
+                last = value.clone();
+            }
+            if field.id == tts_api::SAY_SPEECH_PARAM_ID && *value != speaking {
+                if value.is_empty() {
+                    println!("speech: ended");
+                } else {
+                    println!("speech: {value}");
                 }
+                speaking = value.clone();
             }
         }
         if result.ret != task::running() {

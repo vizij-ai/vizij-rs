@@ -4,11 +4,14 @@
 //!
 //! A provider is a host module whose `say(text, voice) -> Status` call is
 //! re-invoked each tick while `Running` (the poll-on-tick contract) and
-//! streams the viseme at the audio playhead through the mutable `viseme`
-//! parameter, as one of the face standard's shapes. The skill's fragment
-//! hosts that call on the run's own argument bundle and drives the lips from
-//! the streamed viseme; the device registers the provider under the
-//! function id so the fragment's call reaches it.
+//! streams through its mutable parameters the viseme at the audio playhead
+//! (`viseme`, one of the face standard's shapes) and the utterance while its
+//! audio plays (`speech`: the text from the moment playback starts, whether
+//! or not synthesis has finished, empty before and after). The skill's
+//! fragment hosts that call on the run's own argument bundle, drives the
+//! lips from the streamed viseme and writes the utterance as the face's
+//! speech state; the device registers the provider under the function id so
+//! the fragment's call reaches it.
 
 use std::collections::HashMap;
 
@@ -25,11 +28,13 @@ use crate::TaskFragment;
 /// providers, which is what lets a provider crate implement the call without
 /// depending on the skill that hosts it.
 pub use vizij_arora_host::skills::{
-    SAY_ID, SAY_TEXT_PARAM_ID, SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID, SILENCE_VISEME,
+    SAY_ID, SAY_SPEECH_PARAM_ID, SAY_TEXT_PARAM_ID, SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID,
+    SILENCE_VISEME,
 };
 
-/// `say(text, voice) -> Status`, with a mutable `viseme` out-parameter. The
-/// `Status` return is the task-run marker a bridge exposes as an action.
+/// `say(text, voice) -> Status`, with the mutable `viseme` and `speech`
+/// out-parameters. The `Status` return is the task-run marker a bridge
+/// exposes as an action.
 pub fn say_signature() -> Function {
     let mut parameters = HashMap::new();
     let mut parameter_ordering = Vec::new();
@@ -37,6 +42,7 @@ pub fn say_signature() -> Function {
         (SAY_TEXT_PARAM_ID, "text", PrimitiveKind::String, false),
         (SAY_VOICE_PARAM_ID, "voice", PrimitiveKind::String, false),
         (SAY_VISEME_PARAM_ID, "viseme", PrimitiveKind::String, true),
+        (SAY_SPEECH_PARAM_ID, "speech", PrimitiveKind::String, true),
     ] {
         parameter_ordering.push(id);
         parameters.insert(
@@ -61,7 +67,7 @@ pub fn say_signature() -> Function {
 }
 
 /// The parameter `id → name` map the fragment serves as `task/<name>`
-/// inputs: the call's inputs, not its `viseme` output.
+/// inputs: the call's inputs, not its `viseme` and `speech` outputs.
 fn say_parameters() -> HashMap<Uuid, String> {
     HashMap::from([
         (SAY_TEXT_PARAM_ID, "text".to_string()),
@@ -116,16 +122,20 @@ mod tests {
             .collect();
         assert!(outputs.contains(&"rig/f/standard/vizij/viseme/PP"));
         assert!(outputs.contains(&"rig/f/standard/vizij/viseme"));
+        assert!(outputs.contains(&"rig/f/standard/vizij/speech"));
         assert!(outputs.contains(&"task/status"));
         assert!(outputs.contains(&"task/feedback"));
     }
 
     #[test]
-    fn the_signature_streams_the_viseme_as_an_out_parameter() {
+    fn the_signature_streams_the_viseme_and_the_utterance_as_out_parameters() {
         let signature = say_signature();
         let viseme = &signature.parameters[&SAY_VISEME_PARAM_ID];
         assert!(viseme.mutable);
         assert_eq!(viseme.name, "viseme");
+        let speech = &signature.parameters[&SAY_SPEECH_PARAM_ID];
+        assert!(speech.mutable);
+        assert_eq!(speech.name, "speech");
         assert!(!signature.parameters[&SAY_TEXT_PARAM_ID].mutable);
     }
 }

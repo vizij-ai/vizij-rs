@@ -41,10 +41,11 @@ stays with the face.
 > **The ROS side lives in
 > [`arora-bridge-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-bridge-ros2),
 > not this repo.** Its `ExposureProfile::ros4hri()` preset subscribes the typed
-> face topics — PAL's `/robot_face/{expression,look_at,tts}` and IIIA's
-> `/expressive_face/{look_at,speech}` — and routes their fields onto these keys,
+> face topics — PAL's `/robot_face/{expression,look_at}` and IIIA's
+> `/expressive_face/look_at` — and routes their fields onto these keys,
 > publishes the [face image](#driving-a-key-from-ros-2) on
-> `/robot_face/image_raw[/compressed]`,
+> `/robot_face/image_raw[/compressed]` and [what the face is
+> saying](#speaking-through-the-standard-skill) on `/robot_face/speech`,
 > and binds the [`/skill/look_at`](#the-look_at-skill) action. The `vizij`
 > binary wires the preset when run with `--ros2` (`--no-ros4hri` leaves it
 > out). The message
@@ -70,7 +71,7 @@ serves it); this table summarizes it.
 | `standard/ros4hri/gaze/target` | vec3 (m) | a look-at point (face frame: x forward, y left, z up) | per-eye gaze with vergence |
 | `standard/ros4hri/gaze/frame` | string | the look-at point's frame id | consumed by the `look_at` skill, not the mapping |
 | `standard/ros4hri/au/<code>` | f32 `[0,1]` | `hri_msgs/FacialActionUnits` | FACS action-unit intensity → muscle controls |
-| `standard/ros4hri/speech/text` | string | `/robot_face/tts`, `/expressive_face/speech` | the utterance to lip-sync — **nothing consumes it yet** (see Lips below) |
+| `standard/ros4hri/speech/text` | string | *published* as `/robot_face/speech` (`std_msgs/String`) | the utterance being spoken, empty at rest — the mapping's one output, relayed from the face's speech state (see Speech below) |
 
 ## Per-channel behaviour
 
@@ -87,12 +88,15 @@ serves it); this table summarizes it.
   `mouth/morph/jaw_open` control.
 - **Lips** — not the mapping's: ROS4HRI defines no viseme channel, and the
   face's lipsync is the viseme players' ([skills](skills.md): `play_viseme`,
-  `say`), which write the face standard's viseme weights themselves. The
-  standard's lipsync input is a *text* topic, so `speech/text` is a
-  speech-synthesis request, not a face command: turning it into lip motion
-  means spawning a `say` run for the text. Nothing does that today — the key
-  is written and never read, so publishing on `/robot_face/tts` moves no
-  mouth.
+  `say`), which write the face standard's viseme weights themselves. Text
+  is not commanded through a topic either: speaking is the [`/skill/say`
+  action](#speaking-through-the-standard-skill), which is what produces the
+  visemes.
+- **Speech** — the other direction: the utterance a `say` run is speaking
+  (`standard/vizij/speech`, the face's speech state, per face) is relayed as
+  is to the device-scoped `speech/text`, which the bridge publishes on
+  `/robot_face/speech`. Empty before the audio starts and once it ends, so a
+  subtitle appears and clears with the voice.
 - **Blink** — an idle generator (≈8 s cycle, deterministically jittered, 0.2 s
   parabolic pulse) drives the eyelids, inhibited while the eyes are commanded
   closed or the face is asleep.
@@ -133,6 +137,15 @@ the goal carries no voice, so the provider's default speaks. The skill is
 exclusive: a new goal takes the lips over and the preempted one ends as a
 failed goal. The extension to the standard's feedback is recorded as a
 departure from upstream in `arora-msgs-ros2`'s README.
+
+While the audio plays, the utterance is also published on `/robot_face/speech`
+(`std_msgs/String`, best-effort like every state topic) for subtitles — from
+the moment playback starts, whether or not synthesis had finished, and an
+empty string once it ends:
+
+```bash
+ros2 topic echo --qos-reliability best_effort /robot_face/speech
+```
 
 This is exercised end to end, from `rclpy` on Jazzy with `rmw_zenoh`, by the
 manual test in [`crates/vizij/tests/ros4hri/`](../crates/vizij/tests/ros4hri/README.md).

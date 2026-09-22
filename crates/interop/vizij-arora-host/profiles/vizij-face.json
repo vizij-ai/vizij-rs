@@ -2,7 +2,7 @@
   "id": "vizij-face",
   "version": "v1",
   "title": "Vizij face standard",
-  "description": "The portable face interface: gaze and lids, 25 named expressions, 15 visemes, and 36 muscle controls keyed to FACS action units and ARKit blendshapes (35 named per FACS/ARKit, plus the de-facto jaw-open path).",
+  "description": "The portable face interface: gaze and lids, 25 named expressions, 15 visemes, and 36 muscle controls keyed to FACS action units and ARKit blendshapes (35 named per FACS/ARKit, plus the de-facto jaw-open path); and the speech state the face reports, its current viseme and the utterance being spoken.",
   "scope": "face",
   "keys": [
     {
@@ -1139,6 +1139,22 @@
         "au": 26,
         "arkit": "jawOpen",
         "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/viseme",
+      "kind": "output",
+      "value_type": "str",
+      "default_value": {
+        "str": "sil"
+      }
+    },
+    {
+      "path": "standard/vizij/speech",
+      "kind": "output",
+      "value_type": "str",
+      "default_value": {
+        "str": ""
       }
     }
   ]

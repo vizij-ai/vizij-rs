@@ -135,6 +135,14 @@ pub fn viseme_path(shape: &str) -> String {
 /// are the actions; this is what they report.
 pub const VISEME: &str = "standard/vizij/viseme";
 
+/// The utterance being spoken, the face's speech state: the text of a `say`
+/// run from the moment its audio starts playing — whether or not synthesis
+/// has finished — until it ends, empty at rest. Written by the say player
+/// for anything that follows speech (subtitles, a transcript, a ROS4HRI
+/// speech topic). Not a command: speaking is the `say` skill; this is what
+/// it reports.
+pub const SPEECH: &str = "standard/vizij/speech";
+
 // --- Muscle tier: face controls ---------------------------------------------
 
 /// A fine-grained face control: its Vizij name, the FACS action unit it

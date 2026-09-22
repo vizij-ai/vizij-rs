@@ -14,8 +14,16 @@
       "params": {
         "function": "77bf2798-e7ce-47c6-a45c-3c2e9ba1837d",
         "record_keys": [
-          "a1fbf58b-bf66-44a6-a503-9d9078ee5755"
+          "a1fbf58b-bf66-44a6-a503-9d9078ee5755",
+          "de350f2e-0dc7-455a-b895-af3c61001669"
         ]
+      }
+    },
+    {
+      "id": "out/speech",
+      "type": "output",
+      "params": {
+        "path": "standard/vizij/speech"
       }
     },
     {
@@ -800,6 +808,16 @@
       "to": {
         "node_id": "say/call",
         "input": "args"
+      }
+    },
+    {
+      "from": {
+        "node_id": "say/call",
+        "output": "mutated_1"
+      },
+      "to": {
+        "node_id": "out/speech",
+        "input": "in"
       }
     },
     {

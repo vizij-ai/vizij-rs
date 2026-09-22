@@ -48,9 +48,15 @@ provider's poll-on-tick function, re-invoked every tick while `Running` — on
 the run's own argument bundle, and feeds the viseme the provider streams
 through its mutable `viseme` parameter into the driver at full weight. The
 provider's viseme is already a standard shape: the cloud provider maps AWS
-Polly's viseme codes, the Piper provider maps espeak-ng phonemes. The run's
-status is the call's, once the lips have settled after the utterance. See
-[Speech (TTS)](../crates/vizij/README.md#speech-tts) for the providers.
+Polly's viseme codes, the Piper provider maps espeak-ng phonemes. The
+provider also reports the utterance through its mutable `speech` parameter
+while its audio plays — from the moment playback starts, whether or not
+synthesis had finished, empty before and after — and the run writes it as
+the face's speech state, `standard/vizij/speech`, for whatever follows
+speech (subtitles: the ROS4HRI mapping relays it to the topic the bridge
+publishes). The run's status is the call's, once the lips have settled after
+the utterance. See [Speech (TTS)](../crates/vizij/README.md#speech-tts) for
+the providers.
 
 ## Who plays the visemes
 
@@ -63,12 +69,8 @@ writes the weights: each `standard/vizij/viseme/<shape>` is a free input,
 under `--ros2` a subscribed topic ([ROS4HRI
 support](ros4hri.md#driving-a-key-from-ros-2)).
 
-Two producers exist outside the players and neither reaches them:
+One producer exists outside the players and does not reach them:
 
-- **The ROS4HRI lipsync topic.** `/robot_face/tts` and
-  `/expressive_face/speech` land their text on `standard/ros4hri/speech/text`
-  ([ROS4HRI support](ros4hri.md#the-standardros4hri-key-contract)); nothing
-  routes it into a `say` run, so the text moves no mouth.
 - **The web.** vizij-web runs its own lipsync in JS, against the face's pose
   weights directly (`rig/<faceId>/poses/<poseId>.weight`) rather than the
   standard's viseme surface — `@vizij/speech-react`'s Polly speech-mark cursor
