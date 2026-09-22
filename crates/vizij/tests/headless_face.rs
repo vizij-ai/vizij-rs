@@ -10,6 +10,7 @@
 //! `VIZIJ_FIXTURES` it skips.
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use bevy::prelude::*;
 use uuid::Uuid;
@@ -224,9 +225,13 @@ fn two_faces_share_one_target_each_in_its_own_viewport() {
     assert_eq!(remaining, vec!["left".to_string()]);
 }
 
-/// Loading and unloading a face over and over leaves nothing behind: after
-/// the cycles, the App holds no more entities, meshes, images or materials
-/// than after the first.
+/// Loading and unloading a face over and over leaves nothing behind: once
+/// the cycles are done and the App has settled, it holds no more entities,
+/// meshes, images or materials than the cycles' floor. A cycle's census can
+/// read high — a texture the asset thread has yet to drop, the first
+/// cycle's face still being torn down behind the loader's own work — never
+/// low, so the floor over the cycles is the steady state, and a leak is what
+/// the end holds above it.
 #[test]
 #[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job with VIZIJ_FIXTURES set"]
 fn load_unload_cycles_leave_nothing_behind() {
@@ -265,7 +270,7 @@ fn load_unload_cycles_leave_nothing_behind() {
     .add_plugins(ViewPlugin);
     vizij::view::snapshot::ensure_ready(&mut app);
 
-    let census = |app: &mut App| {
+    fn census(app: &mut App) -> (u32, usize, usize, usize) {
         let world = app.world_mut();
         (
             world.entities().len(),
@@ -273,8 +278,31 @@ fn load_unload_cycles_leave_nothing_behind() {
             world.resource::<Assets<Image>>().len(),
             world.resource::<Assets<StandardMaterial>>().len(),
         )
-    };
-    let mut after_first = None;
+    }
+    /// Frames until the census has held still for ten frames and `quiet`
+    /// (bounded by `bound`, so a leak fails the comparison, not the wait).
+    fn settle(app: &mut App, quiet: Duration, bound: Duration) -> (u32, usize, usize, usize) {
+        let mut now = census(app);
+        let mut still = 0;
+        let mut changed = std::time::Instant::now();
+        let start = std::time::Instant::now();
+        while start.elapsed() < bound {
+            app.update();
+            let next = census(app);
+            if next == now {
+                still += 1;
+            } else {
+                still = 0;
+                changed = std::time::Instant::now();
+            }
+            now = next;
+            if still >= 10 && changed.elapsed() >= quiet {
+                break;
+            }
+        }
+        now
+    }
+    let mut floor: Option<(u32, usize, usize, usize)> = None;
     for cycle in 0..25 {
         events_tx
             .send(ViewEvent::LoadFace {
@@ -299,34 +327,22 @@ fn load_unload_cycles_leave_nothing_behind() {
                 face_id: "cycle".into(),
             })
             .unwrap();
-        // Despawns and asset drops settle over frames — and a texture the
-        // loader was still decoding when the face went lands first and is
-        // dropped next, on the asset thread's own clock, not the frame's
-        // (headless frames are milliseconds apart). The census is read once
-        // it has held still for ten frames and a quarter second (bounded, so
-        // a leak fails the comparison, not the wait).
-        let mut now = census(&mut app);
-        let mut still = 0;
-        let mut changed = std::time::Instant::now();
-        let settle = std::time::Instant::now();
-        while settle.elapsed() < std::time::Duration::from_secs(10) {
-            app.update();
-            let next = census(&mut app);
-            if next == now {
-                still += 1;
-            } else {
-                still = 0;
-                changed = std::time::Instant::now();
-            }
-            now = next;
-            if still >= 10 && changed.elapsed() >= std::time::Duration::from_millis(250) {
-                break;
-            }
-        }
+        // Despawns and asset drops settle over frames; the census is read
+        // once it has held still for ten frames and a quarter second
+        // (bounded), and kept for the record.
+        let now = settle(&mut app, Duration::from_millis(250), Duration::from_secs(5));
         eprintln!("cycle {cycle}: entities/meshes/images/materials {now:?}");
-        match after_first {
-            None => after_first = Some(now),
-            Some(first) => assert_eq!(now, first, "cycle {cycle} left something behind"),
-        }
+        floor = Some(match floor {
+            None => now,
+            Some(f) => (
+                f.0.min(now.0),
+                f.1.min(now.1),
+                f.2.min(now.2),
+                f.3.min(now.3),
+            ),
+        });
     }
+    // The end: still for a full second before the count that matters.
+    let last = settle(&mut app, Duration::from_secs(1), Duration::from_secs(15));
+    assert_eq!(last, floor.unwrap(), "the cycles left something behind");
 }
