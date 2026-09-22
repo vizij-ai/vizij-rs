@@ -43,7 +43,7 @@ wasm32-unknown-unknown`) and Android (`cargo ndk … --features studio`)
 entry points build on; CI checks both. The browser bundle is `wasm-pack
 build crates/vizij --target web --release -- --no-default-features`
 (`pnpm run build:wasm:runtime` at the repository root), one WebGL2 bundle
-of about 31 MB (9 MB gzipped); CI renders Quori and Toasty on a page with
+of about 25 MB (7 MB gzipped); CI renders Quori and Toasty on a page with
 it and holds them to the same references as the native snapshot.
 
 A face enters as GLB bytes on every target: `view::meta::FaceMeta` reads the

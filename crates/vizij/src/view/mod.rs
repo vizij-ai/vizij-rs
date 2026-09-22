@@ -364,6 +364,31 @@ pub struct ViewPlugin;
 
 impl Plugin for ViewPlugin {
     fn build(&self, app: &mut App) {
+        // A GLB spawns as a `WorldAsset`: its stored world is copied into the
+        // app's through the type registry, one `ReflectComponent` per
+        // component, so every component type a face GLB carries has to be
+        // registered here — the engine registers none on its own (automatic
+        // registration of every reflected type is left out of the build for
+        // its size).
+        app.register_type::<Name>()
+            .register_type::<ChildOf>()
+            .register_type::<Children>()
+            .register_type::<Transform>()
+            .register_type::<GlobalTransform>()
+            .register_type::<bevy::transform::components::TransformTreeChanged>()
+            .register_type::<Visibility>()
+            .register_type::<InheritedVisibility>()
+            .register_type::<ViewVisibility>()
+            .register_type::<bevy::camera::primitives::Aabb>()
+            .register_type::<Mesh3d>()
+            .register_type::<MorphWeights>()
+            .register_type::<bevy::mesh::morph::MeshMorphWeights>()
+            .register_type::<bevy::gltf::GltfSceneName>()
+            .register_type::<bevy::gltf::GltfMeshName>()
+            .register_type::<bevy::gltf::GltfMaterialName>()
+            .register_type::<bevy::gltf::GltfExtras>()
+            .register_type::<bevy::gltf::GltfMeshExtras>()
+            .register_type::<bevy::gltf::GltfMaterialExtras>();
         app.init_resource::<Slots>()
             .init_resource::<Placements>()
             .init_resource::<Picks>()
