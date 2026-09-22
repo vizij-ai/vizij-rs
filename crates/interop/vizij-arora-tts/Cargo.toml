@@ -1,9 +1,9 @@
 [package]
 name = "vizij-arora-tts"
-version = "2.1.0"
+version = "3.0.0"
 edition.workspace = true
 license = "MIT OR Apache-2.0"
-description = "Vizij's text-to-speech as an Arora host module: say(text, voice) -> Status streaming the current viseme (a face-standard shape) through its out-parameter, over the Vizij TTS cloud provider. The contract is vizij-arora-behavior's speech skill, shared by every provider."
+description = "Vizij's text-to-speech as an Arora host module: say(text, voice) -> Status streaming the current viseme (a face-standard shape) through its out-parameter, over the Vizij TTS cloud provider, natively (rodio) and in the browser (the page's playback). The contract is vizij-arora-behavior's speech skill, shared by every provider."
 repository = "https://github.com/vizij-ai/vizij-rs"
 
 [dependencies]
@@ -12,13 +12,37 @@ repository = "https://github.com/vizij-ai/vizij-rs"
 arora-engine = { version = "4.1", default-features = false }
 arora-types = "2"
 log = "0.4"
+# Synthesis, the same on every target: `json` on, reqwest picks `fetch` on
+# wasm32 and hyper natively.
 reqwest = { version = "0.13", features = ["json"] }
-# Pure-Rust playback (cpal + symphonia): nothing to install.
-rodio = "0.20"
 serde = { workspace = true }
-tokio = { version = "1", features = ["rt-multi-thread", "time"] }
 uuid = "1"
 # task::{running, success, failure} — the run-status values.
 vizij-graph-core = { version = "1", path = "../../node-graph/vizij-graph-core" }
 # The say contract (ids, signature, the rest token): the speech skill's.
 vizij-arora-behavior = { version = "1.1", path = "../vizij-arora-behavior" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# The native producer: a tokio task fetches, a blocking-pool task plays
+# through rodio (cpal + symphonia, pure Rust: nothing to install).
+rodio = "0.20"
+tokio = { version = "1", features = ["rt-multi-thread", "time"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# The browser producer: a `spawn_local` future fetches, the page's hook plays.
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = "0.4"
+js-sys = { workspace = true }
+serde-wasm-bindgen = { workspace = true }
+
+[dev-dependencies]
+# The browser tests spawn runs the way a bridge does: through the
+# interpreter module, on a device composed like vizij's.
+arora = { version = "9.10", default-features = false }
+arora-behavior = "8"
+serde_json = { workspace = true }
+vizij-arora-host = { path = "../vizij-arora-host" }
+vizij-arora-store = { path = "../vizij-arora-store" }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"

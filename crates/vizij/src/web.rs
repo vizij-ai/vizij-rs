@@ -40,6 +40,7 @@ use vizij_arora_store::BlackboardStore;
 use wasm_bindgen::prelude::*;
 
 use crate::face::{self, FaceConfig, LoadedFace};
+use crate::modules::{gaze, viseme};
 use crate::view::meta::FaceMeta;
 use crate::view::{self, FaceAssets, Fit, Picked, Picks, ViewEvent, ViewEvents, ViewOptions};
 
@@ -145,23 +146,36 @@ fn send(event: ViewEvent) -> Result<(), JsValue> {
 /// Show a Vizij under `vizij_id` and start its device: the GLB's bindings and
 /// bundle are read, its graphs composed (`options_json` as
 /// [`compose_vizij`]'s: `graphs`, `program`, `ros4hri`, plus `stageNeutral`,
-/// default `true`), the device built over `RigHal` + `BlackboardStore` with
-/// the animation, gaze and viseme modules, and the scene queued for the App.
-/// `modules` optionally loads Arora wasm modules into the device's engine as
-/// guests: a JS array of `{ headerJson, wasmBytes }` (the module's header as
-/// JSON, its `.wasm` bytes as a `Uint8Array`); their functions are then
-/// reachable by id from `call` and from the graph's `ExternalFunction`
-/// nodes. The module set is fixed at build. A Vizij already shown under
-/// `vizij_id` is replaced. The device comes back JS-owned: step it, or `run`
-/// it, and `free` it after [`unload_vizij`].
+/// default `true`, and `speechApiUrl`, the TTS deployment), the device built
+/// over `RigHal` + `BlackboardStore` with the animation, gaze and viseme
+/// modules and — given `play`, the page's playback hook
+/// ([`vizij_arora_tts::Config::play`]) — the speech provider, and the scene
+/// queued for the App. `modules` optionally loads Arora wasm modules into
+/// the device's engine as guests: a JS array of `{ headerJson, wasmBytes }`
+/// (the module's header as JSON, its `.wasm` bytes as a `Uint8Array`); their
+/// functions are then reachable by id from `call` and from the graph's
+/// `ExternalFunction` nodes. The module set is fixed at build. A Vizij
+/// already shown under `vizij_id` is replaced. The device comes back
+/// JS-owned: step it, or `run` it, and `free` it after [`unload_vizij`].
 #[wasm_bindgen(js_name = loadVizij)]
 pub fn load_vizij(
     vizij_id: String,
     glb: Vec<u8>,
     options_json: Option<String>,
+    play: Option<js_sys::Function>,
     modules: Option<js_sys::Array>,
 ) -> Result<VizijRuntime, JsValue> {
-    let (config, stage_neutral) = parse_face_config(options_json.as_deref())?;
+    let (mut config, stage_neutral) = parse_face_config(options_json.as_deref())?;
+    config.speech = play.map(|play| {
+        let api_base = speech_api_url(options_json.as_deref());
+        let provider: face::SpeechProvider = std::rc::Rc::new(move || {
+            vizij_arora_tts::host_module(vizij_arora_tts::Config {
+                api_base: api_base.clone(),
+                play: play.clone(),
+            })
+        });
+        provider
+    });
     let LoadedFace { meta, spec } =
         face::load_face(&glb, &config).map_err(|e| JsValue::from_str(&format!("{e:#}")))?;
     let rig = RigHal::new();
@@ -169,12 +183,17 @@ pub fn load_vizij(
     if stage_neutral {
         face::stage_neutral_pose(&store, &meta);
     }
+    let speech = config.speech.as_ref().map(|build| build());
     let guests = parse_modules(modules)?;
-    let (builder, function_modules) =
-        face::builder_with_guests(&spec, rig.clone(), store, &meta.bundle.skills, guests)
-            .ok_or_else(|| {
-                JsValue::from_str("the composed graph does not encode (see the console)")
-            })?;
+    let (builder, function_modules) = face::builder_with_guests(
+        &spec,
+        rig.clone(),
+        store,
+        &meta.bundle.skills,
+        speech,
+        guests,
+    )
+    .ok_or_else(|| JsValue::from_str("the composed graph does not encode (see the console)"))?;
     let arora = builder
         .build()
         .map_err(|e| JsValue::from_str(&format!("arora build failed: {e:?}")))?;
@@ -191,6 +210,7 @@ pub fn load_vizij(
     Ok(VizijRuntime {
         vizij_id,
         rig_prefix,
+        speaks: config.speech.is_some(),
         inner: AroraWeb::from(arora),
         caller,
         function_modules,
@@ -329,6 +349,8 @@ fn describe_json(meta: &FaceMeta) -> serde_json::Value {
 pub struct VizijRuntime {
     vizij_id: String,
     rig_prefix: String,
+    /// Whether a speech provider was registered (a playback hook given).
+    speaks: bool,
     inner: AroraWeb,
     /// Dispatches in-process `Call`s into the device — enqueued at once,
     /// applied at the next step, resolved on that step's reply. Usable while
@@ -358,9 +380,15 @@ impl VizijRuntime {
         };
         parse_spec(&spec).map_err(|e| JsValue::from_str(&e))?;
         let guests = parse_modules(modules)?;
-        let (builder, function_modules) =
-            face::builder_with_guests(&spec, RigHal::new(), BlackboardStore::new(), &[], guests)
-                .ok_or_else(|| JsValue::from_str("the graph does not encode (see the console)"))?;
+        let (builder, function_modules) = face::builder_with_guests(
+            &spec,
+            RigHal::new(),
+            BlackboardStore::new(),
+            &[],
+            None,
+            guests,
+        )
+        .ok_or_else(|| JsValue::from_str("the graph does not encode (see the console)"))?;
         let arora = builder
             .build()
             .map_err(|e| JsValue::from_str(&format!("arora build failed: {e:?}")))?;
@@ -368,6 +396,7 @@ impl VizijRuntime {
         Ok(VizijRuntime {
             vizij_id: String::new(),
             rig_prefix: String::new(),
+            speaks: false,
             inner: AroraWeb::from(arora),
             caller,
             function_modules,
@@ -462,6 +491,77 @@ impl VizijRuntime {
             let handle = interpreter_module::decode_spawn_result(&result.ret)?;
             serde_json::to_string(&handle).map_err(|e| format!("serialize the handle: {e}"))
         }))
+    }
+
+    /// Spawn one of the device's skills by name — `say` (`text`, `voice`),
+    /// `look_at` (`policy`, `target`, `frame`), `play_viseme` (`shape`,
+    /// `weight`) — with `args_json` an object of parameter name to value in
+    /// any accepted vizij payload form (`{"text": {"str": "Hello"}}`, or the
+    /// `{"text": …}` / `{"float": …}` shorthands); parameters left out are
+    /// left out of the call. Resolves like [`spawn`](Self::spawn). `say` needs the
+    /// face loaded with a playback hook.
+    #[wasm_bindgen(js_name = spawnSkill)]
+    pub fn spawn_skill(&self, name: &str, args_json: &str) -> Result<js_sys::Promise, JsValue> {
+        let args: serde_json::Map<String, serde_json::Value> = serde_json::from_str(args_json)
+            .map_err(|e| JsValue::from_str(&format!("invalid skill arguments: {e}")))?;
+        let (module_id, function, parameters): (Uuid, Uuid, HashMap<Uuid, String>) = match name {
+            "say" => {
+                if !self.speaks {
+                    return Err(JsValue::from_str(
+                        "this device plays no speech: load the face with a playback hook",
+                    ));
+                }
+                (
+                    vizij_arora_tts::MODULE_ID,
+                    vizij_arora_tts::SAY_ID,
+                    HashMap::from([
+                        (vizij_arora_tts::SAY_TEXT_PARAM_ID, "text".to_string()),
+                        (vizij_arora_tts::SAY_VOICE_PARAM_ID, "voice".to_string()),
+                    ]),
+                )
+            }
+            "look_at" => (
+                gaze::module_id(),
+                gaze::look_at_id(),
+                gaze::look_at_parameters(),
+            ),
+            "play_viseme" => (
+                viseme::MODULE_ID,
+                viseme::PLAY_VISEME_ID,
+                viseme::play_viseme_parameters(),
+            ),
+            other => {
+                return Err(JsValue::from_str(&format!(
+                    "unknown skill {other:?}: say, look_at or play_viseme"
+                )))
+            }
+        };
+        let mut fields = Vec::new();
+        for (id, parameter) in &parameters {
+            if let Some(value) = args.get(parameter) {
+                let value: arora_types::value::Value = serde_json::from_value(
+                    vizij_api_core::json::normalize_value_json(value.clone()),
+                )
+                .map_err(|e| JsValue::from_str(&format!("{parameter}: {e}")))?;
+                fields.push(arora_types::value::StructureField {
+                    id: *id,
+                    value: Box::new(value),
+                });
+            }
+        }
+        for parameter in args.keys() {
+            if !parameters.values().any(|p| p == parameter) {
+                return Err(JsValue::from_str(&format!(
+                    "{name} has no parameter {parameter:?}"
+                )));
+            }
+        }
+        let call = Call {
+            module_id: Some(module_id),
+            id: function,
+            args: fields,
+        };
+        self.spawn(&serde_json::to_string(&call).map_err(|e| JsValue::from_str(&e.to_string()))?)
     }
 
     /// Halt a run: `handle_json` is the `TaskHandle` `spawn` resolved to.
@@ -643,6 +743,18 @@ fn parse_view_options(json: Option<&str>) -> Result<ViewOptions, JsValue> {
     })
 }
 
+/// [`load_vizij`]'s `speechApiUrl`, else the cloud provider's default.
+fn speech_api_url(json: Option<&str>) -> String {
+    json.and_then(|json| serde_json::from_str::<serde_json::Value>(json).ok())
+        .and_then(|options| {
+            options
+                .get("speechApiUrl")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| vizij_arora_tts::DEFAULT_API_BASE.to_string())
+}
+
 /// [`load_vizij`]'s options: the composition ([`compose_vizij`]'s fields) and
 /// whether the neutral pose is staged.
 fn parse_face_config(json: Option<&str>) -> Result<(FaceConfig, bool), JsValue> {
@@ -678,6 +790,7 @@ fn parse_face_config(json: Option<&str>) -> Result<(FaceConfig, bool), JsValue> 
             program,
             stage_neutral: flag("stageNeutral"),
             ros4hri: flag("ros4hri"),
+            speech: None,
         },
         flag("stageNeutral"),
     ))

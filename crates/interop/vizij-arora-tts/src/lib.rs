@@ -6,35 +6,74 @@
 //! parameter ids, and signature for every provider, so a behavior references
 //! `say` without caring which provider a build registered. This crate ships
 //! the **cloud provider** (the Vizij TTS cloud function — AWS Polly behind an
-//! HTTP endpoint, no credentials in the app; `API_URL` overrides the
+//! HTTP endpoint, no credentials in the app; [`Config::api_base`] names the
 //! deployment). A sibling provider (e.g. the local Piper one) implements the
 //! same contract with its own module id.
 //!
 //! A poll-on-tick action (the arora-sdk `docs/async-functions.md` contract):
-//! [`say`] is re-invoked each tick while `Running`; synthesis + playback run
-//! off the tick thread, and the closure only polls. The module streams the
-//! current viseme as one of the face standard's shapes
+//! `say` is re-invoked each tick while `Running`; synthesis + playback run
+//! off the tick, and the closure only polls. The module streams the current
+//! viseme as one of the face standard's shapes
 //! ([`vizij_arora_host::standard::VISEME_SHAPES`]), Polly's viseme codes
 //! mapped by [`polly_shape`]; [`SILENCE_VISEME`] is written at rest. What a
 //! shape looks like, and how one blends into the next, is the face's and the
 //! speech skill's business, not the provider's.
 //!
+//! Synthesis ([`synthesize`]) is the same on every target — reqwest is
+//! `fetch` on wasm32 and hyper natively. What differs per target is the
+//! **producer** the tick samples ([`platform`]): natively a tokio task fetches
+//! and a blocking-pool task plays through rodio, the playhead the sink's own;
+//! in the browser a `spawn_local` future fetches and hands the page's
+//! playback hook the bytes and the marks, keeping the `playhead()` it
+//! returns. The page owns the `AudioContext` and its user-gesture unlock.
+//!
 //! A halt is silence: the interpreter stops re-invoking `say`, and nothing
 //! in the module ABI tells the producer so. Every tick refreshes the run's
-//! pulse, and a producer that sees no tick for [`IDLE_STOP`] stops the audio
-//! and ends the run — the same rule for every producer, so that a halted
-//! run goes quiet within that bound whatever plays the audio.
+//! pulse, and a producer that sees no tick for the halt bound stops the
+//! audio and ends the run — natively in the playback loop, in the browser
+//! in the page's player (the `playhead()` poll is its pulse) — so that a
+//! halted run goes quiet within that bound whatever plays the audio. The
+//! bound is [`IDLE_STOP`], or [`HALT_TICKS`] of the run's own tick interval
+//! when the ticks come slower than that ([`Pulse`] keeps the interval): a
+//! page rendering at a few frames a second ticks hundreds of milliseconds
+//! apart, and a gap of one tick is not a halt. A run gone quiet is dropped
+//! from the module's map at the next `say`.
 
 use arora_engine::module::{HostModule, ModuleBuilder};
 
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
+use arora_types::call::{Call, CallError, CallResult};
+use arora_types::value::{StructureField, Value};
+use serde::{Deserialize, Serialize};
 use uuid::{uuid, Uuid};
+use vizij_graph_core::task;
 
 pub use vizij_arora_behavior::speech::{
     say_signature, SAY_ID, SAY_TEXT_PARAM_ID, SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID,
     SILENCE_VISEME,
 };
+
+/// The default provider: the Vizij TTS cloud function (AWS Polly behind an
+/// HTTP endpoint, no credentials in the app).
+pub const DEFAULT_API_BASE: &str = "https://us-central1-semio-vizij.cloudfunctions.net/api";
+const DEFAULT_VOICE: &str = "Ruth";
+
+/// The tts module's id on the device.
+pub const MODULE_ID: Uuid = uuid!("4f6f0b0a-62cb-4a1f-ab0d-08f283485091");
+
+/// How long a producer keeps playing without a `say` tick before it treats
+/// the run as halted and stops the audio — when the ticks come at least
+/// this often; slower ticks widen the bound to [`HALT_TICKS`] of their
+/// interval.
+pub const IDLE_STOP: Duration = Duration::from_millis(250);
+
+/// How many of the run's own tick intervals without a tick mean a halt,
+/// where that is longer than [`IDLE_STOP`].
+pub const HALT_TICKS: u32 = 4;
 
 /// The face-standard shape for a Polly viseme code (the AWS Polly viseme
 /// set), `sil` for silence and for a code this table does not know (logged).
@@ -62,55 +101,213 @@ pub fn polly_shape(code: &str) -> &'static str {
     }
 }
 
-use std::future::Future;
-use std::hash::{Hash, Hasher};
-use std::pin::Pin;
-use std::sync::{Arc, LazyLock, Mutex};
-use std::task::{Context, Poll, Waker};
-use std::time::{Duration, Instant};
+/// The provider's configuration.
+pub struct Config {
+    /// The deployment of the Vizij TTS cloud function, [`DEFAULT_API_BASE`]
+    /// unless a build points elsewhere (`API_URL` in the desktop app).
+    pub api_base: String,
+    /// The page's playback hook, `play(audioBytes: Uint8Array, marks:
+    /// {time, value}[]) -> playhead: () => number | null`: milliseconds since
+    /// the audio started (0 while decoding or while the `AudioContext` waits
+    /// for its unlock), `null` once playback ended or was stopped; a throw
+    /// fails the run. The hook is polled once per tick while the run plays
+    /// — its pulse: a player that is not polled for [`IDLE_STOP`] stops the
+    /// audio, which is how a halted run goes quiet in the browser.
+    #[cfg(target_arch = "wasm32")]
+    pub play: js_sys::Function,
+}
 
-use arora_types::call::{Call, CallError, CallResult};
-use arora_types::value::{StructureField, Value};
-use serde::{Deserialize, Serialize};
-use vizij_graph_core::task;
+impl Config {
+    /// The cloud provider at its default deployment.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn cloud() -> Self {
+        Self {
+            api_base: DEFAULT_API_BASE.to_string(),
+        }
+    }
+}
 
-/// Default provider: the same Vizij TTS cloud function the web demo
-/// (`@vizij/speech-react`'s `fetchVisemeData`) calls — AWS Polly behind an HTTP
-/// endpoint, so the module needs no credentials. Overridable via `API_URL`.
-const DEFAULT_API_BASE: &str = "https://us-central1-semio-vizij.cloudfunctions.net/api";
-const DEFAULT_VOICE: &str = "Ruth";
+/// The tts module: the described `say` action, discoverable over
+/// `DescribeMethods` and — via its `Status` return — exposable as a ROS 2
+/// action by a bridge.
+pub fn host_module(config: Config) -> HostModule {
+    host_module_with_synth(config, None)
+}
 
-/// The tts module's id on the device.
-pub const MODULE_ID: Uuid = uuid!("4f6f0b0a-62cb-4a1f-ab0d-08f283485091");
+/// A synthesis producer: what a run awaits for `(audio, marks)`. The default
+/// is [`synthesize`] against the configured base; a test scripts one. Only
+/// the browser producer can await a scripted one: the native producer runs
+/// on the tokio runtime, which needs `Send`.
+pub type Synth = std::rc::Rc<
+    dyn Fn(
+        String,
+        String,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<(Vec<u8>, Vec<SpeechMark>), String>>>,
+    >,
+>;
 
-/// A handle for spawning: reuse the ambient runtime if one is active, otherwise a
-/// dedicated one. Only a `Handle` is needed.
-static TOKIO_HANDLE: LazyLock<tokio::runtime::Handle> = LazyLock::new(|| {
-    tokio::runtime::Handle::try_current().unwrap_or_else(|_| {
-        Box::leak(Box::new(
-            tokio::runtime::Runtime::new().expect("a tokio runtime"),
+/// The module with a scripted synthesizer (`Some`, tests) or the default.
+pub fn host_module_with_synth(config: Config, synth: Option<Synth>) -> HostModule {
+    let mut provider = Provider {
+        config,
+        synth,
+        runs: HashMap::new(),
+        ticks: Pulse::new(),
+    };
+    ModuleBuilder::new(MODULE_ID)
+        .described_function(SAY_ID, "say", say_signature(), move |call| {
+            provider.say(call)
+        })
+        .build()
+}
+
+/// The module's state: its configuration and the live runs, keyed by content
+/// because the ABI hands the closure no per-run id (distinct `(text, voice)`
+/// never collide; the same one twice shares a run).
+struct Provider {
+    config: Config,
+    synth: Option<Synth>,
+    runs: HashMap<u64, platform::Run>,
+    /// Beaten on every `say` tick, whichever run: where the tick interval is
+    /// learned, so a new run's halt bound is right from its first tick (a
+    /// run's own pulse has seen no interval yet when its second tick comes,
+    /// and on a slow page that tick already lies past `IDLE_STOP`).
+    ticks: Pulse,
+}
+
+/// What one tick observes of a run.
+pub enum Observed {
+    Running(&'static str),
+    Ended(Value),
+}
+
+impl Provider {
+    /// Speak `text` in `voice`, streaming the current viseme. Re-invoked each
+    /// tick while `Running`.
+    fn say(&mut self, call: Call) -> Result<CallResult, CallError> {
+        self.ticks.beat();
+        // A run nobody ticks any more was halted; its producer has stopped or
+        // is stopping on its own, and its slot goes.
+        self.runs.retain(|_, run| !is_halted(platform::pulse(run)));
+
+        let Some(text) = arg_string(&call, SAY_TEXT_PARAM_ID) else {
+            return Ok(status_only(task::failure()));
+        };
+        let voice =
+            arg_string(&call, SAY_VOICE_PARAM_ID).unwrap_or_else(|| DEFAULT_VOICE.to_string());
+        let key = utterance_key(&text, &voice);
+        let synth = self.synth.clone();
+        let config = &self.config;
+        let ticks = &self.ticks;
+        // First tick: spawn synthesis + playback off the tick. Later ticks
+        // find the run, refresh its pulse and fall through to the poll.
+        let run = self.runs.entry(key).or_insert_with(|| {
+            platform::spawn(config, synth, text, voice, ticks.sharing_interval())
+        });
+        platform::pulse(run).beat();
+        match platform::poll(run) {
+            Observed::Running(viseme) => Ok(with_viseme(task::running(), viseme)),
+            Observed::Ended(status) => {
+                self.runs.remove(&key);
+                Ok(with_viseme(status, SILENCE_VISEME))
+            }
+        }
+    }
+}
+
+/// The last instant a run was ticked, shared between the tick and the
+/// producer: the producer's only sign that the run is still wanted. It also
+/// keeps the interval the ticks come at, so the halt bound follows a slow
+/// ticker.
+#[derive(Clone)]
+pub struct Pulse {
+    last: Arc<Mutex<f64>>,
+    /// The tick interval in milliseconds: the widest recent gap, forgetting
+    /// a one-off hiccup over the ticks that follow. Shared between the
+    /// pulses of one ticker ([`Pulse::sharing_interval`]): the interval is
+    /// the ticker's, not one run's.
+    interval: Arc<Mutex<f64>>,
+}
+
+impl Default for Pulse {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Pulse {
+    /// A pulse beating now, no interval seen yet.
+    pub fn new() -> Self {
+        Self {
+            last: Arc::new(Mutex::new(now_ms())),
+            interval: Arc::new(Mutex::new(0.0)),
+        }
+    }
+
+    /// A pulse beating now whose interval is this one's, learned and shared
+    /// from here on: the pulse of a run under the same ticker.
+    pub fn sharing_interval(&self) -> Self {
+        Self {
+            last: Arc::new(Mutex::new(now_ms())),
+            interval: self.interval.clone(),
+        }
+    }
+
+    /// Record a tick.
+    pub fn beat(&self) {
+        let now = now_ms();
+        let Ok(mut last) = self.last.lock() else {
+            return;
+        };
+        let gap = (now - *last).max(0.0);
+        *last = now;
+        if let Ok(mut interval) = self.interval.lock() {
+            *interval = if gap > *interval {
+                gap
+            } else {
+                0.9 * *interval + 0.1 * gap
+            };
+        }
+    }
+
+    /// Time since the last tick.
+    pub fn since(&self) -> Duration {
+        self.last
+            .lock()
+            .map(|last| Duration::from_secs_f64(((now_ms() - *last) / 1000.0).max(0.0)))
+            .unwrap_or(Duration::MAX)
+    }
+
+    /// How long without a tick means a halt: [`IDLE_STOP`], or
+    /// [`HALT_TICKS`] intervals of the ticks seen so far when they come
+    /// slower than that.
+    pub fn halt_bound(&self) -> Duration {
+        let interval = self.interval.lock().map(|i| *i).unwrap_or(0.0);
+        IDLE_STOP.max(Duration::from_secs_f64(
+            f64::from(HALT_TICKS) * interval / 1000.0,
         ))
-        .handle()
-        .clone()
-    })
-});
+    }
+}
 
-/// Live utterances, keyed by content so concurrent `say`s do not share a slot
-/// (the module ABI hands the closure no per-run id). Each run owns the
-/// synthesis+playback task and a shared viseme cell the task advances at the
-/// audio playhead; the closure polls the handle and samples the cell each tick.
-static RUNS: LazyLock<Mutex<HashMap<u64, Run>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+/// Whether a pulse has gone quiet for longer than its halt bound.
+pub fn is_halted(pulse: &Pulse) -> bool {
+    pulse.since() > pulse.halt_bound()
+}
 
-/// One live utterance.
-struct Run {
-    /// The synthesis+playback task; its output is the terminal status `Value`.
-    handle: tokio::task::JoinHandle<Value>,
-    /// The viseme code at the audio playhead, advanced by the task and sampled by
-    /// the closure each tick.
-    viseme: Arc<Mutex<&'static str>>,
-    /// The instant of the last `say` tick — the producer's only sign that the
-    /// run is still wanted.
-    pulse: Pulse,
+/// A monotonic-enough clock in milliseconds: `Instant` natively, the page's
+/// clock in the browser (`Instant` is unavailable on `wasm32-unknown-unknown`).
+#[cfg(not(target_arch = "wasm32"))]
+fn now_ms() -> f64 {
+    use std::sync::LazyLock;
+    use std::time::Instant;
+    static EPOCH: LazyLock<Instant> = LazyLock::new(Instant::now);
+    EPOCH.elapsed().as_secs_f64() * 1000.0
+}
+
+#[cfg(target_arch = "wasm32")]
+fn now_ms() -> f64 {
+    js_sys::Date::now()
 }
 
 /// The request body both TTS endpoints take.
@@ -122,12 +319,12 @@ struct TtsRequest<'a> {
 
 /// One AWS Polly speech mark; the endpoint returns them already filtered to
 /// `type == "viseme"`, and the other fields are ignored.
-#[derive(Deserialize)]
-struct SpeechMark {
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SpeechMark {
     /// Milliseconds into the audio.
-    time: u64,
+    pub time: u64,
     /// The viseme code (AWS Polly viseme set), mapped to a shape at the playhead.
-    value: String,
+    pub value: String,
 }
 
 #[derive(Deserialize)]
@@ -135,145 +332,10 @@ struct VisemeResponse {
     visemes: Vec<SpeechMark>,
 }
 
-/// The tts module: the described `say` action, discoverable over `DescribeMethods`
-/// and — via its `Status` return — exposable as a ROS 2 action by a bridge.
-pub fn host_module() -> HostModule {
-    ModuleBuilder::new(MODULE_ID)
-        .described_function(SAY_ID, "say", say_signature(), say)
-        .build()
-}
-
-/// Speak `text` in `voice`, streaming the current viseme. Re-invoked each tick
-/// while `Running`; keeps its state in [`RUNS`], keyed by content.
-pub fn say(call: Call) -> Result<CallResult, CallError> {
-    let text = match arg_string(&call, SAY_TEXT_PARAM_ID) {
-        Some(text) => text,
-        None => return Ok(status_only(task::failure())),
-    };
-    let voice = arg_string(&call, SAY_VOICE_PARAM_ID).unwrap_or_else(|| DEFAULT_VOICE.to_string());
-    let key = utterance_key(&text, &voice);
-    let mut runs = match RUNS.lock() {
-        Ok(runs) => runs,
-        Err(_) => return Ok(status_only(task::failure())),
-    };
-
-    // First tick: spawn synthesis + playback off the tick thread. Later ticks
-    // find the run and fall through to the poll.
-    let run = runs.entry(key).or_insert_with(|| spawn_say(text, voice));
-    if let Ok(mut last) = run.pulse.lock() {
-        *last = Instant::now();
-    }
-
-    // The viseme at the playhead, advanced by the playback task.
-    let current = run.viseme.lock().map(|cur| *cur).unwrap_or(SILENCE_VISEME);
-
-    // Poll the run's `JoinHandle` (a `Future`) once — the tick loop is the
-    // executor, a no-op waker suffices, and a terminal result drops the run so
-    // the completed handle is never polled again.
-    let mut cx = Context::from_waker(Waker::noop());
-    match Future::poll(Pin::new(&mut run.handle), &mut cx) {
-        Poll::Pending => Ok(with_viseme(task::running(), current)),
-        Poll::Ready(Ok(status)) => {
-            runs.remove(&key);
-            Ok(with_viseme(status, SILENCE_VISEME))
-        }
-        Poll::Ready(Err(_join_error)) => {
-            runs.remove(&key);
-            Ok(with_viseme(task::failure(), SILENCE_VISEME))
-        }
-    }
-}
-
-/// Spawn synthesis (the Vizij TTS provider) + playback and return the run. The
-/// task fetches audio + a viseme timeline, plays the audio, and advances the
-/// shared viseme cell at the playhead. The heavy work never runs on the tick
-/// thread; `say` only samples the cell and polls the handle.
-fn spawn_say(text: String, voice: String) -> Run {
-    let viseme = Arc::new(Mutex::new(SILENCE_VISEME));
-    let viseme_task = viseme.clone();
-    let pulse: Pulse = Arc::new(Mutex::new(Instant::now()));
-    let pulse_task = pulse.clone();
-    let handle = TOKIO_HANDLE.spawn(async move {
-        let base = std::env::var("API_URL").unwrap_or_else(|_| DEFAULT_API_BASE.to_string());
-        let (audio, marks) = match synthesize(&base, &voice, &text).await {
-            Ok(pair) => pair,
-            Err(e) => {
-                log::error!("tts: synthesis failed: {e}");
-                return task::failure();
-            }
-        };
-        // Playback blocks and rodio's stream is thread-bound, so it runs on
-        // the blocking pool; this task just awaits the outcome.
-        // A halt during synthesis shows as a quiet pulse: nothing to stop yet,
-        // but nothing to play either.
-        if is_halted(&pulse_task) {
-            return task::failure();
-        }
-        match tokio::task::spawn_blocking(move || play(audio, marks, viseme_task, pulse_task)).await
-        {
-            Ok(status) => status,
-            Err(_join_error) => task::failure(),
-        }
-    });
-    Run {
-        handle,
-        viseme,
-        pulse,
-    }
-}
-
-/// Play the mp3 whole, advancing the shared viseme cell at the sink's own
-/// playhead; a quiet pulse stops the sink.
-fn play(
-    audio: Vec<u8>,
-    marks: Vec<SpeechMark>,
-    viseme: Arc<Mutex<&'static str>>,
-    pulse: Pulse,
-) -> Value {
-    let (_stream, handle) = match rodio::OutputStream::try_default() {
-        Ok(pair) => pair,
-        Err(e) => {
-            log::error!("tts: audio output init failed: {e}");
-            return task::failure();
-        }
-    };
-    let sink = match rodio::Sink::try_new(&handle) {
-        Ok(sink) => sink,
-        Err(e) => {
-            log::error!("tts: audio sink failed: {e}");
-            return task::failure();
-        }
-    };
-    let source = match rodio::Decoder::new(std::io::Cursor::new(audio)) {
-        Ok(source) => source,
-        Err(e) => {
-            log::error!("tts: audio decode failed: {e}");
-            return task::failure();
-        }
-    };
-    sink.append(source);
-    let cues: Vec<Cue> = marks
-        .iter()
-        .map(|mark| Cue {
-            time_ms: mark.time,
-            shape: polly_shape(&mark.value),
-        })
-        .collect();
-    let outcome = follow(&cues, &viseme, &pulse, || {
-        (!sink.empty()).then(|| sink.get_pos())
-    });
-    match outcome {
-        Playback::Ended => task::success(),
-        Playback::Halted => {
-            sink.stop();
-            task::failure()
-        }
-    }
-}
-
-/// Fetch audio (mp3) + the viseme timeline from the TTS provider — the same two
-/// endpoints the web demo's `fetchVisemeData` uses.
-async fn synthesize(
+/// Fetch audio (mp3) + the viseme timeline from the TTS provider — the same
+/// two endpoints the web demo's `fetchVisemeData` uses. The same on every
+/// target: reqwest selects `fetch` on wasm32.
+pub async fn synthesize(
     base: &str,
     voice: &str,
     text: &str,
@@ -314,21 +376,31 @@ pub struct Cue {
     pub shape: &'static str,
 }
 
-/// How long a producer keeps playing without a `say` tick before it treats
-/// the run as halted and stops the audio.
-pub const IDLE_STOP: Duration = Duration::from_millis(250);
+/// The marks as cues, their codes mapped to shapes.
+pub fn cues(marks: &[SpeechMark]) -> Vec<Cue> {
+    marks
+        .iter()
+        .map(|mark| Cue {
+            time_ms: mark.time,
+            shape: polly_shape(&mark.value),
+        })
+        .collect()
+}
 
-/// The last instant a run was ticked, shared between the tick and the
-/// producer: the producer's only sign that the run is still wanted, because
-/// a halt is the interpreter ceasing to re-invoke `say`.
-pub type Pulse = Arc<Mutex<Instant>>;
-
-/// Whether a pulse has gone quiet for longer than [`IDLE_STOP`].
-pub fn is_halted(pulse: &Pulse) -> bool {
-    pulse
-        .lock()
-        .map(|last| last.elapsed() > IDLE_STOP)
-        .unwrap_or(true)
+/// The shape at `playhead_ms`: every cue at or before the playhead is
+/// consumed, and the last one consumed is the current shape.
+pub fn shape_at(
+    cues: &[Cue],
+    next: &mut usize,
+    playhead_ms: u64,
+    current: &'static str,
+) -> &'static str {
+    let mut shape = current;
+    while *next < cues.len() && cues[*next].time_ms <= playhead_ms {
+        shape = cues[*next].shape;
+        *next += 1;
+    }
+    shape
 }
 
 /// How a followed playback ended.
@@ -344,6 +416,7 @@ pub enum Playback {
 /// pulse goes quiet, sampling every 15 ms; the cell is at rest on return.
 /// Every native provider plays through this loop, so the halt bound is the
 /// same whatever synthesizes the audio.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn follow(
     cues: &[Cue],
     viseme: &Mutex<&'static str>,
@@ -371,20 +444,271 @@ pub fn follow(
     outcome
 }
 
-/// The shape at `playhead_ms`: every cue at or before the playhead is
-/// consumed, and the last one consumed is the current shape.
-pub fn shape_at(
-    cues: &[Cue],
-    next: &mut usize,
-    playhead_ms: u64,
-    current: &'static str,
-) -> &'static str {
-    let mut shape = current;
-    while *next < cues.len() && cues[*next].time_ms <= playhead_ms {
-        shape = cues[*next].shape;
-        *next += 1;
+/// The producer per target: `Run`, `spawn`, `poll`, `pulse`.
+pub mod platform {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub use self::native::*;
+    #[cfg(target_arch = "wasm32")]
+    pub use self::web::*;
+
+    /// Native: a tokio task fetches, a blocking-pool task plays through rodio;
+    /// the tick polls the `JoinHandle` with a no-op waker and samples the
+    /// shared viseme cell. The playhead is the sink's own position.
+    #[cfg(not(target_arch = "wasm32"))]
+    mod native {
+        use super::super::{
+            cues, follow, is_halted, synthesize, Config, Observed, Playback, Pulse, SpeechMark,
+            Synth, SILENCE_VISEME,
+        };
+        use arora_types::value::Value;
+        use std::future::Future;
+        use std::pin::Pin;
+        use std::sync::{Arc, LazyLock, Mutex};
+        use std::task::{Context, Poll, Waker};
+        use vizij_graph_core::task;
+
+        /// A handle for spawning: the ambient runtime if one is active,
+        /// otherwise a dedicated one. Only a `Handle` is needed.
+        static TOKIO_HANDLE: LazyLock<tokio::runtime::Handle> = LazyLock::new(|| {
+            tokio::runtime::Handle::try_current().unwrap_or_else(|_| {
+                Box::leak(Box::new(
+                    tokio::runtime::Runtime::new().expect("a tokio runtime"),
+                ))
+                .handle()
+                .clone()
+            })
+        });
+
+        /// One live utterance.
+        pub struct Run {
+            /// The synthesis+playback task; its output is the terminal status.
+            handle: tokio::task::JoinHandle<Value>,
+            /// The shape at the audio playhead, advanced by the task and
+            /// sampled by the tick.
+            viseme: Arc<Mutex<&'static str>>,
+            pulse: Pulse,
+        }
+
+        pub fn pulse(run: &Run) -> &Pulse {
+            &run.pulse
+        }
+
+        pub fn spawn(
+            config: &Config,
+            synth: Option<Synth>,
+            text: String,
+            voice: String,
+            pulse: Pulse,
+        ) -> Run {
+            let viseme = Arc::new(Mutex::new(SILENCE_VISEME));
+            let cell = viseme.clone();
+            let pulse_task = pulse.clone();
+            // A scripted `Synth` is `Rc` (single-threaded, the browser's shape)
+            // and cannot cross onto the runtime; natively the fetch produces.
+            if synth.is_some() {
+                log::warn!("tts: a scripted synthesizer is not exercised natively");
+            }
+            drop(synth);
+            let base = config.api_base.clone();
+            let handle = TOKIO_HANDLE.spawn(async move {
+                let (audio, marks) = match synthesize(&base, &voice, &text).await {
+                    Ok(pair) => pair,
+                    Err(e) => {
+                        log::error!("tts: synthesis failed: {e}");
+                        return task::failure();
+                    }
+                };
+                // A halt during synthesis shows as a quiet pulse: nothing to
+                // stop yet, but nothing to play either.
+                if is_halted(&pulse_task) {
+                    return task::failure();
+                }
+                // Playback blocks and rodio's stream is thread-bound, so it
+                // runs on the blocking pool; this task just awaits the outcome.
+                match tokio::task::spawn_blocking(move || play(audio, marks, cell, pulse_task))
+                    .await
+                {
+                    Ok(status) => status,
+                    Err(_join_error) => task::failure(),
+                }
+            });
+            Run {
+                handle,
+                viseme,
+                pulse,
+            }
+        }
+
+        /// Poll the run's `JoinHandle` (a `Future`) once — the tick loop is
+        /// the executor, a no-op waker suffices.
+        pub fn poll(run: &mut Run) -> Observed {
+            let current = run.viseme.lock().map(|c| *c).unwrap_or(SILENCE_VISEME);
+            let mut cx = Context::from_waker(Waker::noop());
+            match Future::poll(Pin::new(&mut run.handle), &mut cx) {
+                Poll::Pending => Observed::Running(current),
+                Poll::Ready(Ok(status)) => Observed::Ended(status),
+                Poll::Ready(Err(_join_error)) => Observed::Ended(task::failure()),
+            }
+        }
+
+        /// Play the mp3 whole, advancing the shared viseme cell at the sink's
+        /// own playhead; a quiet pulse stops the sink.
+        fn play(
+            audio: Vec<u8>,
+            marks: Vec<SpeechMark>,
+            viseme: Arc<Mutex<&'static str>>,
+            pulse: Pulse,
+        ) -> Value {
+            let (_stream, handle) = match rodio::OutputStream::try_default() {
+                Ok(pair) => pair,
+                Err(e) => {
+                    log::error!("tts: audio output init failed: {e}");
+                    return task::failure();
+                }
+            };
+            let sink = match rodio::Sink::try_new(&handle) {
+                Ok(sink) => sink,
+                Err(e) => {
+                    log::error!("tts: audio sink failed: {e}");
+                    return task::failure();
+                }
+            };
+            let source = match rodio::Decoder::new(std::io::Cursor::new(audio)) {
+                Ok(source) => source,
+                Err(e) => {
+                    log::error!("tts: audio decode failed: {e}");
+                    return task::failure();
+                }
+            };
+            sink.append(source);
+            let cues = cues(&marks);
+            let outcome = follow(&cues, &viseme, &pulse, || {
+                (!sink.empty()).then(|| sink.get_pos())
+            });
+            match outcome {
+                Playback::Ended => task::success(),
+                Playback::Halted => {
+                    sink.stop();
+                    task::failure()
+                }
+            }
+        }
     }
-    shape
+
+    /// The browser: a `spawn_local` future fetches (the scripted synthesizer
+    /// or the default), then hands the page's playback hook the bytes and the
+    /// marks and keeps the `playhead()` it returns; the tick calls it and
+    /// maps the marks to the current shape.
+    #[cfg(target_arch = "wasm32")]
+    mod web {
+        use super::super::{
+            cues, shape_at, synthesize, Config, Cue, Observed, Pulse, Synth, SILENCE_VISEME,
+        };
+        use arora_types::value::Value;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        use vizij_graph_core::task;
+        use wasm_bindgen::{JsCast, JsValue};
+
+        enum Phase {
+            Fetching,
+            Playing {
+                playhead: js_sys::Function,
+                cues: Vec<Cue>,
+                next: usize,
+                current: &'static str,
+            },
+            Ended(Value),
+        }
+
+        /// One live utterance.
+        pub struct Run {
+            phase: Rc<RefCell<Phase>>,
+            pulse: Pulse,
+        }
+
+        pub fn pulse(run: &Run) -> &Pulse {
+            &run.pulse
+        }
+
+        pub fn spawn(
+            config: &Config,
+            synth: Option<Synth>,
+            text: String,
+            voice: String,
+            pulse: Pulse,
+        ) -> Run {
+            let phase = Rc::new(RefCell::new(Phase::Fetching));
+            let shared = phase.clone();
+            let play = config.play.clone();
+            let base = config.api_base.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let synthesis = match synth {
+                    Some(synth) => synth(text, voice).await,
+                    None => synthesize(&base, &voice, &text).await,
+                };
+                let (audio, marks) = match synthesis {
+                    Ok(pair) => pair,
+                    Err(e) => {
+                        log::error!("tts: synthesis failed: {e}");
+                        *shared.borrow_mut() = Phase::Ended(task::failure());
+                        return;
+                    }
+                };
+                let bytes = js_sys::Uint8Array::from(audio.as_slice());
+                let marks_js = match serde_wasm_bindgen::to_value(&marks) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        log::error!("tts: marks to JS failed: {e}");
+                        *shared.borrow_mut() = Phase::Ended(task::failure());
+                        return;
+                    }
+                };
+                let playhead = play
+                    .call2(&JsValue::NULL, &bytes, &marks_js)
+                    .ok()
+                    .and_then(|v| v.dyn_into::<js_sys::Function>().ok());
+                *shared.borrow_mut() = match playhead {
+                    Some(playhead) => Phase::Playing {
+                        playhead,
+                        cues: cues(&marks),
+                        next: 0,
+                        current: SILENCE_VISEME,
+                    },
+                    None => {
+                        log::error!("tts: the playback hook returned no playhead function");
+                        Phase::Ended(task::failure())
+                    }
+                };
+            });
+            Run { phase, pulse }
+        }
+
+        pub fn poll(run: &mut Run) -> Observed {
+            let mut phase = run.phase.borrow_mut();
+            match &mut *phase {
+                Phase::Fetching => Observed::Running(SILENCE_VISEME),
+                Phase::Ended(status) => Observed::Ended(status.clone()),
+                Phase::Playing {
+                    playhead,
+                    cues,
+                    next,
+                    current,
+                } => match playhead.call0(&JsValue::NULL) {
+                    Ok(v) if v.is_null() || v.is_undefined() => Observed::Ended(task::success()),
+                    Ok(v) => {
+                        let ms = v.as_f64().unwrap_or(0.0).max(0.0) as u64;
+                        *current = shape_at(cues, next, ms, current);
+                        Observed::Running(current)
+                    }
+                    Err(e) => {
+                        log::error!("tts: the playhead threw: {e:?}");
+                        Observed::Ended(task::failure())
+                    }
+                },
+            }
+        }
+    }
 }
 
 /// A result carrying only the status (no viseme output).
@@ -428,9 +752,10 @@ fn utterance_key(text: &str, voice: &str) -> u64 {
     h.finish()
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
+    use std::time::Instant;
 
     fn cue(time_ms: u64, shape: &'static str) -> Cue {
         Cue { time_ms, shape }
@@ -448,6 +773,21 @@ mod tests {
         assert_eq!(next, 3);
     }
 
+    #[test]
+    fn polly_codes_map_to_the_standard_shapes() {
+        let marks = vec![
+            SpeechMark {
+                time: 0,
+                value: "p".into(),
+            },
+            SpeechMark {
+                time: 10,
+                value: "sil".into(),
+            },
+        ];
+        assert_eq!(cues(&marks), vec![cue(0, "PP"), cue(10, "sil")]);
+    }
+
     /// A run nobody ticks any more is a halted run: the producer stops within
     /// `IDLE_STOP` of the last tick and leaves the lips at rest, however long
     /// the audio still had to play.
@@ -456,7 +796,7 @@ mod tests {
         let cues = vec![cue(0, "aa")];
         let viseme = Mutex::new(SILENCE_VISEME);
         let last_tick = Instant::now();
-        let pulse: Pulse = Arc::new(Mutex::new(last_tick));
+        let pulse = Pulse::new();
         let started = Instant::now();
         // An endless playhead: the audio never runs out on its own.
         let outcome = follow(&cues, &viseme, &pulse, || Some(started.elapsed()));
@@ -465,17 +805,39 @@ mod tests {
         assert_eq!(*viseme.lock().unwrap(), SILENCE_VISEME);
     }
 
+    /// A slow ticker widens the halt bound: ticks 100 ms apart keep the
+    /// bound at `IDLE_STOP`, ticks 200 ms apart raise it to four intervals.
+    #[test]
+    fn the_halt_bound_follows_a_slow_ticker() {
+        let pulse = Pulse::new();
+        assert_eq!(pulse.halt_bound(), IDLE_STOP);
+        std::thread::sleep(Duration::from_millis(100));
+        pulse.beat();
+        assert!(pulse.halt_bound() <= IDLE_STOP + Duration::from_millis(200));
+        std::thread::sleep(Duration::from_millis(200));
+        pulse.beat();
+        let bound = pulse.halt_bound();
+        assert!(bound >= Duration::from_millis(800), "{bound:?}");
+        assert!(!is_halted(&pulse));
+        std::thread::sleep(Duration::from_millis(400));
+        assert!(!is_halted(&pulse), "a gap of two intervals is not a halt");
+        // A run's pulse under the same ticker starts with the bound learned.
+        let run = pulse.sharing_interval();
+        assert_eq!(run.halt_bound(), pulse.halt_bound());
+        assert!(!is_halted(&run));
+    }
+
     /// Ticks keep a run alive past the idle bound, and the run ends with the
     /// audio.
     #[test]
     fn a_ticked_run_plays_to_the_end() {
         let cues = vec![cue(0, "aa"), cue(300, "sil")];
         let viseme = Mutex::new(SILENCE_VISEME);
-        let pulse: Pulse = Arc::new(Mutex::new(Instant::now()));
+        let pulse = Pulse::new();
         let started = Instant::now();
         let audio = Duration::from_millis(400);
         let outcome = follow(&cues, &viseme, &pulse, || {
-            *pulse.lock().unwrap() = Instant::now();
+            pulse.beat();
             let position = started.elapsed();
             (position < audio).then_some(position)
         });

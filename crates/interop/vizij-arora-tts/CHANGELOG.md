@@ -4,6 +4,36 @@ All notable changes to `vizij-arora-tts`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] - 2026-09-19
+
+### Breaking
+
+- `host_module` takes a `Config`: the deployment (`api_base`, no more
+  `API_URL` read inside the crate) and, in the browser, the page's playback
+  hook. The module keeps its runs in the closure, not in a process-wide map.
+- `follow`, `Pulse` and the playback pieces changed shape: `Pulse` is a value
+  (`new`, `beat`, `since`, `halt_bound`), `cues` maps marks to `Cue`s,
+  `SpeechMark` is public and serializable.
+- The halt bound follows a slow ticker: `IDLE_STOP`, or `HALT_TICKS` (4) of
+  the tick interval when the ticks come slower than that — a page at a few
+  frames a second ticks hundreds of milliseconds apart, and one missed tick
+  is not a halt. The interval is the ticker's, learned across runs
+  (`Pulse::sharing_interval`) so a new run is judged right from its first
+  tick. The page's player keeps the same rule.
+
+### Added
+
+- The browser producer (`wasm32`): a `spawn_local` future fetches and hands
+  the page's `play(audioBytes, marks) -> playhead()` hook the audio and the
+  marks; the tick polls the playhead and maps the marks to the shape. The
+  page's player enforces the halt bound: a playhead not polled for
+  `IDLE_STOP` stops the audio. `synthesize` is public and the same on every
+  target.
+- `host_module_with_synth` for tests: a scripted synthesizer the browser
+  producer awaits.
+- The wasm-bindgen tests (`tests/browser.rs`, `wasm-pack test --headless
+  --chrome`): the visemes at the page's playhead, a failing playback.
+
 ## [2.1.0] - 2026-09-19
 
 ### Changed

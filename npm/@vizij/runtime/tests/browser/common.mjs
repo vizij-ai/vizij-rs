@@ -19,7 +19,12 @@ export async function open(fixtures, query = "") {
   page.on("console", (m) => logs.push(`[${m.type()}] ${m.text()}`));
   page.on("pageerror", (e) => logs.push(`[pageerror] ${e.message}`));
   await page.goto(`${server.base}/tests/browser/index.html${query}`);
-  await page.waitForFunction(() => window.vizijHarnessReady === true, null, { timeout: 120_000 });
+  try {
+    await page.waitForFunction(() => window.vizijHarnessReady === true, null, { timeout: 120_000 });
+  } catch (e) {
+    console.error(logs.slice(-30).join("\n"));
+    throw e;
+  }
   return {
     page,
     logs,

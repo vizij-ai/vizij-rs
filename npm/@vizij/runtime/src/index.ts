@@ -33,6 +33,7 @@ import {
   type InitInput as LoaderInitInput,
 } from "@vizij/wasm-loader";
 import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
+import { play as defaultPlay, type Play } from "./audio.js";
 
 /** A Vizij graph spec, as an object or already-serialized JSON. */
 export type GraphSpecInput = object | string;
@@ -141,23 +142,39 @@ export interface RuntimeCallResult {
   mutated?: unknown[];
 }
 
-/** A store key, as the interpreter names one. */
-export interface KeyRef {
-  path: string;
-}
-
 /**
  * A task run's lifecycle contract, as {@link Runtime.spawn} resolves it: the
  * `status` key to watch (the run's `Status` value, terminal once it ends),
  * the `feedback` keys it updates while it runs, the `result` keys it writes
- * when it ends, and the `stop` call {@link Runtime.halt} issues.
+ * when it ends, the `update` keys a live goal update is written to, and the
+ * `stop` call {@link Runtime.halt} issues. Keys are store paths.
  */
 export interface TaskHandle {
-  id: unknown;
+  id: string;
   stop: object;
-  status: KeyRef;
-  feedback: KeyRef[];
-  result?: KeyRef[];
+  status: string;
+  feedback: string[];
+  result?: string[];
+  update?: string[];
+}
+
+/** A task run's lifecycle status, read off its `status` key. */
+export type RunStatus = "running" | "success" | "failure";
+
+const RUN_STATUS_VARIANTS: Record<string, RunStatus> = {
+  "acd79ec6-0c44-401a-82f8-5da5422d3eec": "running",
+  "766e9e9a-446d-4e46-83e6-14b7ca101169": "success",
+  "2468f46c-bb60-425c-9a4d-9ad326ccc7e2": "failure",
+};
+
+/**
+ * The status a run's `status` key holds — the value `readValues` returns
+ * for `handle.status` — or `undefined` while the key is unset or holds
+ * something else. A halted run reads `failure`: it did not reach its goal.
+ */
+export function runStatus(value: unknown): RunStatus | undefined {
+  const variant = (value as { enum?: { variant_id?: string } } | null)?.enum?.variant_id;
+  return variant ? RUN_STATUS_VARIANTS[variant] : undefined;
 }
 
 /** A pointer press on a Vizij: the slot it is shown under and the element
@@ -204,10 +221,15 @@ export interface AroraModule {
 }
 
 /** Options for {@link loadVizij}: the composition, as {@link composeVizij}'s,
- * whether the bundle's neutral pose is staged (default `true`), and the wasm
- * modules to load into the device as guests. */
+ * whether the bundle's neutral pose is staged (default `true`), the speech —
+ * `audio` is the playback hook the `say` provider hands its audio to: the
+ * page's Web Audio player by default, `false` for a device that plays no
+ * speech — and `speechApiUrl` the TTS deployment, and the wasm modules to
+ * load into the device as guests. */
 export interface VizijOptions extends ComposeVizijOptions {
   stageNeutral?: boolean;
+  audio?: Play | false;
+  speechApiUrl?: string;
   modules?: AroraModule[];
 }
 
@@ -245,6 +267,7 @@ interface WasmVizijRuntime {
   behaviorErrorChanged(): Promise<string | undefined>;
   call(call_json: string): Promise<string>;
   spawn(call_json: string): Promise<string>;
+  spawnSkill(name: string, args_json: string): Promise<string>;
   halt(handle_json: string): Promise<string>;
   loadGraph(graph_json: string): Promise<string>;
   applyGraphEdits(edits_json: string): Promise<string>;
@@ -266,6 +289,7 @@ interface WasmBindings {
     vizij_id: string,
     glb: Uint8Array,
     options_json?: string,
+    play?: Play,
     modules?: AroraModule[],
   ): WasmVizijRuntime;
   unloadVizij(vizij_id: string): void;
@@ -474,6 +498,23 @@ export class Runtime {
     return this.inner.spawn(json).then((handle) => JSON.parse(handle) as TaskHandle);
   }
 
+  /**
+   * Spawn one of the device's skills by name — `say` (`text`, `voice`),
+   * `look_at` (`policy`, `target`, `frame`), `play_viseme` (`shape`,
+   * `weight`) — with its arguments by parameter name, in any `ValueInput`
+   * shorthand. `say` needs a face loaded with a playback hook. Resolves
+   * like {@link spawn}.
+   */
+  spawnSkill(name: string, args: Record<string, ValueInput>): Promise<TaskHandle> {
+    const normalized: Record<string, ValueJSON> = {};
+    for (const [parameter, value] of Object.entries(args)) {
+      normalized[parameter] = toValueJSON(value);
+    }
+    return this.inner
+      .spawnSkill(name, JSON.stringify(normalized))
+      .then((handle) => JSON.parse(handle) as TaskHandle);
+  }
+
   /** Halt a run: resolves once the halt is applied (its status key then
    * reads terminal). */
   halt(handle: TaskHandle): Promise<void> {
@@ -601,14 +642,10 @@ export async function loadVizij(
 ): Promise<Runtime> {
   await init(input);
   const bytes = glb instanceof Uint8Array ? glb : new Uint8Array(glb);
-  const { modules, ...composition } = options ?? {};
+  const { audio, modules, ...rest } = options ?? {};
+  const play = audio === false ? undefined : (audio ?? defaultPlay);
   return new Runtime(
-    bindings().loadVizij(
-      vizijId,
-      bytes,
-      options ? JSON.stringify(composition) : undefined,
-      modules,
-    ),
+    bindings().loadVizij(vizijId, bytes, options ? JSON.stringify(rest) : undefined, play, modules),
   );
 }
 
@@ -821,5 +858,7 @@ export async function composeVizij(
   );
 }
 
+export { unlockAudio, play as playAudio, IDLE_STOP_MS } from "./audio.js";
+export type { Play, SpeechMark } from "./audio.js";
 export { toValueJSON } from "@vizij/value-json";
 export type { ValueJSON, ValueInput } from "@vizij/value-json";

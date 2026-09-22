@@ -19,7 +19,7 @@ view with it.
 ## Use
 
 ```ts
-import { init, mount, loadVizij, placeVizijIn, whenReady, unloadVizij } from "@vizij/runtime";
+import { init, mount, loadVizij, placeVizijIn, whenReady, unloadVizij, runStatus } from "@vizij/runtime";
 
 await init();
 await mount("#vizijs"); // the canvas; transparent wherever no Vizij draws
@@ -33,7 +33,7 @@ quori.run(); // the device paces itself (or call quori.step(dtMs) per frame)
 // any time — the device's store stays live while it runs:
 quori.setValue(quori.path("standard/vizij/expression/happy"), 1);
 const run = await quori.spawn({ id: SAY_ID, args: [{ id: SAY_TEXT_PARAM_ID, value: { str: "Hello" } }] });
-quori.readValues([run.status.path]);
+runStatus(quori.readValues([run.status])[run.status]); // "running" | "success" | "failure"
 await quori.halt(run);
 
 unloadVizij("quori"); // the scene, the camera, the GLB
