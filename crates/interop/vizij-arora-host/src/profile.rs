@@ -286,11 +286,10 @@ pub fn vizij_face_profile() -> Profile {
 /// reads, and the one the mapping writes and the bridge publishes. Generated
 /// from [`crate::ros4hri`]'s key contract.
 ///
-/// The shipped ROS 2 exposure preset feeds only the expression and gaze keys;
-/// the action-unit keys are part of the interface and have no topic behind
-/// them yet. Declaring the set is what makes that visible. Visemes are not
-/// here: ROS4HRI defines no viseme channel, and the face's lipsync belongs to
-/// the viseme players (see [`crate::skills`]). The speech text is the one
+/// The shipped ROS 2 exposure preset feeds the expression, gaze and viseme
+/// keys; the action-unit keys are part of the interface and have no topic
+/// behind them yet, and the viseme has no mapping channel behind it yet.
+/// Declaring the set is what makes both visible. The speech text is the one
 /// output: what the face is saying, for subtitles.
 pub fn ros4hri_profile() -> Profile {
     let mut keys = vec![
@@ -301,6 +300,14 @@ pub fn ros4hri_profile() -> Profile {
         // holds its own far-ahead default until the key is written.
         ProfileKey::input(ros4hri::GAZE_TARGET_KEY, Type::Structure),
         ProfileKey::text(ros4hri::GAZE_FRAME_KEY),
+        // The lip shape at the audio playhead, as ROS4HRI codes it: an index
+        // into the standard's shapes, resting at `sil`.
+        ProfileKey {
+            min: Some(0.0),
+            max: Some((VISEME_SHAPES.len() - 1) as f64),
+            default_value: Some(Value::U8(0)),
+            ..ProfileKey::input(ros4hri::VISEME_KEY, Type::U8)
+        },
         ProfileKey::state(ros4hri::SPEECH_TEXT_KEY, ""),
     ];
 
@@ -322,8 +329,9 @@ pub fn ros4hri_profile() -> Profile {
         version: "v1".into(),
         title: "ROS4HRI face command".into(),
         description: "The ROS4HRI face interface: expression name with valence and \
-                      arousal, a gaze target and its frame, and FACS action-unit \
-                      intensities commanded; the utterance being spoken reported."
+                      arousal, a gaze target and its frame, the streamed viseme, and FACS \
+                      action-unit intensities commanded; the utterance being spoken \
+                      reported."
             .into(),
         scope: Scope::Device,
         keys,
@@ -579,22 +587,31 @@ mod tests {
         assert_eq!(without_au, 2, "only the two jaw-shift controls lack an AU");
     }
 
-    /// The ROS4HRI profile is the mapping's input contract: 5 named keys and
-    /// one per distinct action unit — device-global.
+    /// The ROS4HRI profile is the mapping's contract: 6 named input keys, one
+    /// per distinct action unit, and the speech text it reports —
+    /// device-global.
     #[test]
     fn the_ros4hri_profile_matches_its_key_contract() {
         let ros = ros4hri_profile();
-        assert_eq!(ros.keys.len(), 5 + 1 + 20);
+        assert_eq!(ros.keys.len(), 6 + 1 + 20);
         assert_eq!(ros.scope, Scope::Device);
         assert!(ros.paths().contains(&ros4hri::EXPRESSION_NAME_KEY));
         assert_eq!(ros.paths_of("output"), [ros4hri::SPEECH_TEXT_KEY]);
-        assert!(!ros.paths().iter().any(|p| p.contains("/viseme/")));
         let target = ros
             .keys
             .iter()
             .find(|k| k.path == ros4hri::GAZE_TARGET_KEY)
             .unwrap();
         assert_eq!(target.value_type, Some(Type::Structure));
+        // One ROS4HRI code, not a weight per shape: the face's shapes are the
+        // `vizij-face` side of the mapping.
+        let viseme = ros
+            .keys
+            .iter()
+            .find(|k| k.path == ros4hri::VISEME_KEY)
+            .unwrap();
+        assert_eq!(viseme.value_type, Some(Type::U8));
+        assert!(!ros.paths().iter().any(|p| p.contains("/viseme/")));
     }
 
     /// Only a face-scoped profile is addressed to a face; a device-scoped
@@ -627,10 +644,12 @@ mod tests {
     }
 
     /// The shipped mapping reads the whole `ros4hri` command surface but
-    /// `gaze/frame` (the look_at skill consumes it) plus the face's speech
-    /// state, and writes the whole `vizij-face` control surface but what
-    /// ROS4HRI has no channel for, plus the ROS4HRI speech text — and nothing
-    /// either profile does not declare on that side.
+    /// `gaze/frame` (the look_at skill consumes it) and `viseme` (nothing maps
+    /// it yet, see [`ros4hri::VISEME_KEY`]), plus the face's speech state, and
+    /// writes the whole `vizij-face` control surface but what ROS4HRI has no
+    /// channel for, plus the ROS4HRI speech text — and nothing either profile
+    /// does not declare on that side. Which keys are declared and unmapped is
+    /// the point of declaring them apart from the mapping.
     #[test]
     fn surface_reconciles_the_ros4hri_mapping_against_the_profiles() {
         let spec: Json = serde_json::from_str(ros4hri::MAPPING_JSON).unwrap();
@@ -644,7 +663,7 @@ mod tests {
             .into_iter()
             .filter(|p| !consumed.paths().contains(p))
             .collect();
-        assert_eq!(unread, [ros4hri::GAZE_FRAME_KEY]);
+        assert_eq!(unread, [ros4hri::GAZE_FRAME_KEY, ros4hri::VISEME_KEY]);
         let readable = [ros.paths_of("input"), face.paths_of("output")].concat();
         let unreadable: Vec<&str> = consumed
             .paths()
