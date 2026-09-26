@@ -4,6 +4,14 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-09-26
+
+### Changed
+
+- **Breaking:** depends on arora-types 3, arora-behavior 9,
+  arora-behavior-tree-types 2, arora-simple-data-store 3, vizij-api-core 2,
+  vizij-graph-core 2 and vizij-arora-host 3.
+
 ## [1.1.0] - 2026-09-10
 
 ### Added

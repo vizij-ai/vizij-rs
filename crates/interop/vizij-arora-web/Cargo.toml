@@ -16,12 +16,12 @@ crate-type = ["cdylib", "rlib"]
 # The device runtime: AroraBuilder composes the device over the injected
 # HAL/store/behavior seams; its LocalCaller dispatches in-process Calls.
 # `native` off: the browser's WebAssembly host executes modules, not wasmtime.
-arora = { version = "9", default-features = false }
+arora = { version = "10", default-features = false }
 # The shared browser JS surface: AroraWeb (step/run/call + the Value<->JSON
 # store accessors) wraps the composed device.
-arora-web = "6"
+arora-web = "7"
 # Call/Header/Value vocabulary crossing the JS boundary as JSON.
-arora-types = "2"
+arora-types = "3"
 
 # The interop crates that already implement the Arora traits over Vizij.
 vizij-arora-store = { path = "../vizij-arora-store" }
