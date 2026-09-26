@@ -3,22 +3,19 @@
 //
 //   artifact/vizij_animation_module.wasm  — the module executable, built with
 //     `cargo build -p vizij-animation-module --target wasm32-wasip1 --release`
-//   artifact/header.json — the module's Arora header, converted from the
-//     build's generated `src/arora_generated/module.yaml` (the cargo build
-//     runs the crate's build script, which emits it)
+//   artifact/header.json — the module's Arora header, written from its Rust
+//     declaration by the crate's `header` example
 //
 // The header ships as JSON because that is the form the browser loaders take
 // (`arora-web`'s `loadModule`, `@vizij/runtime`'s `modules` option).
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, copyFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import YAML from "yaml";
 
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = resolve(pkgDir, "../../..");
-const crateDir = resolve(repoRoot, "crates/interop/vizij-animation-module");
 const artifactDir = resolve(pkgDir, "artifact");
 
 execFileSync(
@@ -29,8 +26,12 @@ execFileSync(
 
 mkdirSync(artifactDir, { recursive: true });
 
-const header = YAML.parse(
-  readFileSync(resolve(crateDir, "src/arora_generated/module.yaml"), "utf8"),
+const header = JSON.parse(
+  execFileSync("cargo", ["run", "-q", "-p", "vizij-animation-module", "--example", "header"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+  }),
 );
 writeFileSync(resolve(artifactDir, "header.json"), JSON.stringify(header, null, 2) + "\n");
 
