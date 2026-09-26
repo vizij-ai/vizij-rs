@@ -574,6 +574,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "arora-module"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "729fdaffb618647295dc16c668189a83f0cb10b68d7b17326299e1e35610cbbd"
+dependencies = [
+ "arora-buffers",
+ "arora-module-macros",
+ "arora-types 3.0.0",
+]
+
+[[package]]
 name = "arora-module-core"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -590,6 +601,20 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "arora-module-macros"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c31179db11edc5c9352bf1359cf35a167e24b96a00ba4d4b57ffadda41ccfd7"
+dependencies = [
+ "arora-types 3.0.0",
+ "proc-macro2",
+ "quote",
+ "serde_yaml",
+ "syn 3.0.5",
  "uuid",
 ]
 
@@ -10746,19 +10771,11 @@ dependencies = [
 name = "vizij-animation-module"
 version = "0.0.0"
 dependencies = [
- "anyhow",
- "arora-buffers",
  "arora-engine",
- "arora-module-core",
- "arora-module-rust",
- "arora-registry",
+ "arora-module",
  "arora-types 3.0.0",
- "derive_more",
  "lazy_static",
  "serde_json",
- "serde_yaml",
- "tokio",
- "uuid",
  "vizij-animation-core",
  "vizij-api-core",
  "vizij-arora",
