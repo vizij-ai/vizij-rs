@@ -4,6 +4,18 @@ All notable changes to `@vizij/animation-module`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] - 2026-09-27
+
+### Changed
+
+- **Breaking:** the module is declared in Rust (arora-module) and its header
+  is written from that declaration. A call missing a required argument fails,
+  naming the parameter, where it returned `u32::MAX`. `create_player`'s
+  `name` and `bake`'s `frame_rate`, `start_time` and `end_time` are declared
+  optional: they may be left out, sent as `Value::Option`, or sent bare.
+- The header carries the module's version (0.2.0), author, license and
+  description, and lists the functions in declared order.
+
 ## [0.3.0] - 2026-07-22
 
 ### Added
