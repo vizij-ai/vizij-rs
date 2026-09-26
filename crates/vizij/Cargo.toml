@@ -55,7 +55,7 @@ bevy = { version = "0.19", default-features = false, features = [
 # slice builds on every target; the native target table below adds `native`
 # (wasmtime, the local WS bridge, the operator flow) and the desktop feature
 # adds `tui`.
-arora = { version = "9.10", default-features = false }
+arora = { version = "10", default-features = false }
 # The ROS 2 bridge, attached under `--ros2` (feature `ros2`). Heavy (ros2-client
 # + a DDS/Zenoh backend), so opt-in; the Studio bridge rides arora's own
 # `studio-bridge` feature instead (`--studio`). It carries the skill plane the
@@ -64,11 +64,11 @@ arora = { version = "9.10", default-features = false }
 # clients) and run feedback may be a record (the say skill's viseme/intensity).
 # 6.3 is where that profile publishes the face image, so the view declares
 # nothing itself.
-arora-bridge-ros2 = { version = "6.3", optional = true, default-features = false }
+arora-bridge-ros2 = { version = "7", optional = true, default-features = false }
 # The Status enumeration ids the gaze and tts contracts mark their action shapes with.
-arora-behavior-tree-types = "1"
+arora-behavior-tree-types = "2"
 # The built-in key prefix the ROS 2 input declaration leaves out.
-arora-behavior = "8"
+arora-behavior = "9"
 # Restores the terminal on the window-close exit path, where the device's
 # terminal UI (worker thread) never gets to unwind.
 crossterm = { version = "0.28", optional = true }
@@ -79,7 +79,7 @@ crossterm = { version = "0.28", optional = true }
 tracing = { version = "0.1", default-features = false, features = ["std", "log"] }
 # For staging neutral inputs into the store (`StateChange`/`Key`); the value
 # type is shared with vizij-api-core.
-arora-types = "2"
+arora-types = "3"
 vizij-api-core = { path = "../api/vizij-api-core" }
 vizij-graph-core = { path = "../node-graph/vizij-graph-core" }
 vizij-arora = { path = "../interop/vizij-arora" }
@@ -99,7 +99,7 @@ vizij-animation-module = { path = "../interop/vizij-animation-module" }
 # The native driver (`native`): the stand-alone device on a worker thread under
 # arora's operator flow — `native` is the run loop, the local WS bridge and
 # the module executors — with the bridges the build adds.
-arora = { version = "9.10", default-features = false, features = ["native"] }
+arora = { version = "10", default-features = false, features = ["native"] }
 # The device thread's runtime: the operator flow and the bridges are async,
 # the supervisor drives them on a multi-thread runtime.
 tokio = { version = "1", features = ["rt-multi-thread", "time", "macros"] }
@@ -110,7 +110,7 @@ futures = "0.3"
 # and a patched default voice, and `rodio` plays its audio; note it links
 # GPLv3 code into the binary. The browser device gets its own producer (the
 # page plays the audio) rather than this native one.
-vizij-arora-tts = { version = "2.1", path = "../interop/vizij-arora-tts" }
+vizij-arora-tts = { version = "3", path = "../interop/vizij-arora-tts" }
 rodio = { version = "0.20", optional = true }
 vizij-piper = { path = "../interop/vizij-piper", optional = true }
 
@@ -127,7 +127,7 @@ getrandom = { version = "0.4", features = ["wasm_js"] }
 [dev-dependencies]
 # The image messages a published frame is read back as, so a field landing in
 # the wrong place fails in a unit test rather than at a ROS subscriber.
-arora-msgs-ros2 = "1"
+arora-msgs-ros2 = "2"
 # The bundler, for the Quori integration test (grafts the standard-adaptation
 # sidecar into the demo GLB before driving it over the ROS4HRI keys).
 vizij-bundle = { path = "../tools/vizij-bundle" }

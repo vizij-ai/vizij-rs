@@ -4,6 +4,13 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] - 2026-09-26
+
+### Changed
+
+- **Breaking:** depends on arora-types 3, arora-behavior 9 and vizij-api-core 2;
+  the optional ROS 2 frames on arora-msgs-ros2 2.
+
 ## [2.1.0] - 2026-09-10
 
 ### Added

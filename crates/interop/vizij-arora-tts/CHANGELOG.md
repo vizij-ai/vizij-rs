@@ -4,6 +4,13 @@ All notable changes to `vizij-arora-tts`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] - 2026-09-26
+
+### Changed
+
+- **Breaking:** depends on arora-types 3, arora-engine 5, vizij-graph-core 2 and
+  vizij-arora-behavior 2.
+
 ## [2.1.0] - 2026-09-19
 
 ### Changed

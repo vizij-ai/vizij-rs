@@ -4,6 +4,12 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-09-26
+
+### Changed
+
+- **Breaking:** depends on arora-behavior 9 and vizij-api-core 2.
+
 ## [1.4.1] - 2026-09-19
 
 ### Fixed
