@@ -21,6 +21,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
+      # `cargo publish` builds each crate to verify it; vizij-arora-tts plays
+      # audio through rodio, whose ALSA backend needs the system headers.
+      - name: Install system dependencies (alsa dev)
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
       - uses: rust-lang/crates-io-auth-action@v1
         id: auth
       - name: Publish (ordered, skip-if-published)
