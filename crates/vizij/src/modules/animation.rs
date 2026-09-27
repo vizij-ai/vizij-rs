@@ -368,6 +368,45 @@ mod tests {
         );
     }
 
+    /// `vizij-arora-host`'s animation source names the module's functions, the
+    /// `step` parameter and the `TrackOutput` fields by id; they are the
+    /// declaration's.
+    #[test]
+    fn the_animation_source_names_the_declared_ids() {
+        let (_, spec) = vizij_arora_host::animations_source();
+        let node = |id: &str| {
+            spec["nodes"]
+                .as_array()
+                .expect("nodes")
+                .iter()
+                .find(|node| node["id"] == id)
+                .unwrap_or_else(|| panic!("node {id}"))
+                .clone()
+        };
+        let arora_types::ty::low::TypeKind::Structure(output) = TrackOutput::arora_type().kind
+        else {
+            panic!("TrackOutput is a structure");
+        };
+        let field = |name: &str| {
+            output
+                .fields
+                .iter()
+                .find(|(_, field)| field.name == name)
+                .map(|(id, _)| id.to_string())
+                .unwrap_or_else(|| panic!("field {name}"))
+        };
+        let step = node("step");
+        assert_eq!(step["params"]["function"], ids::step::FUNCTION.to_string());
+        assert_eq!(step["params"]["param_ids"][0], ids::step::DT_NS.to_string());
+        assert_eq!(
+            node("states")["params"]["function"],
+            ids::player_states::FUNCTION.to_string()
+        );
+        let apply = node("apply");
+        assert_eq!(apply["params"]["key_field"], field("default_key"));
+        assert_eq!(apply["params"]["value_field"], field("value"));
+    }
+
     #[test]
     fn every_declared_function_is_registered_and_described() {
         let declared = function_modules();

@@ -306,10 +306,11 @@ pub const ANIMATIONS_SOURCE_ID: &str = "animations";
 /// over a bridge and across a device restart like any other value.
 pub const ANIMATION_PLAYERS_PATH: &str = "vizij/animations/players";
 
-// The animation module's declared ids (mirror `module.yaml` / the web host's
-// `ANIMATION_MODULE_*`). The graph carries them as opaque handles: the
-// `ExternalFunction` nodes name the module functions, the `output` node the
-// `TrackOutput` fields it fans out by.
+// The animation module's declared ids (its Rust declaration, `animation` in
+// vizij-animation-module, which this published crate cannot depend on; the
+// `vizij` crate tests that they match). The graph carries them as opaque
+// handles: the `ExternalFunction` nodes name the module functions, the
+// `output` node the `TrackOutput` fields it fans out by.
 const FN_STEP: &str = "76697a69-6a00-0000-0f00-000000000004";
 const FN_PLAYER_STATES: &str = "76697a69-6a00-0000-0f00-00000000000d";
 const PARAM_DT_NS: &str = "76697a69-6a00-0000-0f04-000000000001";

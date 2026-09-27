@@ -33,9 +33,6 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      # Test before lint: the build runs each crate's build script, emitting
-      # the generated sources (src/arora_generated.rs) that `cargo fmt --check`
-      # otherwise fails to resolve as modules.
       # Every crate but `vizij` takes `--all-features`; `vizij` cannot, because
       # its ROS 2 bridge backends (`ros2-dds` / `ros2-zenoh`) are compile-time
       # exclusive, so it gets one pass per backend. The Zenoh pass covers the
