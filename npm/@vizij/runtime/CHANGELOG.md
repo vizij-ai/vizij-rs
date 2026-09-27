@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.5.0
+
+### Minor Changes
+
+- 4fe461f: Profiles and mappings are two things, and the API now says so.
+
+  A **profile** is an interface: the set of store paths one party exposes to another, each with its type, range, and default. `profiles()` lists the shipped ones (`{ id, version, title, description, scope, keys }` — currently `vizij-face`, 81 paths, and `ros4hri`, 25) and `profile(id, rigPrefix)` returns one in full, every path with its arora type, range, default, and standard metadata (FACS action unit, ARKit blendshape, tier). `scope` says where the paths live: a `face` profile is addressed to one face with its rig prefix, a `device` profile is absolute and ignores the prefix.
+
+  A **mapping** is a graph that implements one profile in terms of another. `mappings()` and `mapping(id, rigPrefix)` are the renamed `standardProfiles()` / `standardProfile(id, rigPrefix)`, which stay as deprecated aliases (with `StandardProfile` aliasing `Mapping`); nothing that consumes them moves.
+
+  This is the API an authoring app's profile import consumes: pick a profile, get its paths already addressed to the open face, and declare it on the GLB (`bundle.profiles`) so the interface a face is authored against travels with the asset.
+
+- 3d89902: Visemes leave the ROS4HRI profile and become the viseme players' business. `skills()` lists `play_viseme` (one shape through a lipsync envelope; a new call takes the lips over) and `say` (text-to-speech with the lips driven from the streamed visemes) next to `look_at`, with `skillSource(id)` serving their fragments; the `ros4hri` profile no longer declares `standard/ros4hri/viseme/*`, and the mapping no longer writes the lipsync surface. The face standard's `standard/vizij/viseme/<shape>` weights stay raw, the current viseme is state at `standard/vizij/viseme`, and a player's run feeds back `{viseme, intensity}` — the pair ROS4HRI's `Say` feedback carries as Vizij extends it. In the node graph, the `taskrun` node gains keyed `mutated` outputs (one per out parameter named in `record_keys`, by parameter id) and a `done` (terminality) output, and integer values count as scalars to the arithmetic nodes.
+
+### Patch Changes
+
+- 6471ac3: The `vizij-face` profile declares `standard/vizij/mouth/morph/jaw_open` — the de-facto jaw-open path every current face implements, the same muscle as `face/jaw_open` (AU 26, ARKit `jawOpen`) — so `profile("vizij-face")` lists 82 keys and every path the ROS4HRI mapping writes is declared.
+
 ## 2.3.0
 
 ### Minor Changes
