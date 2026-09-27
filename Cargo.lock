@@ -370,20 +370,20 @@ dependencies = [
 
 [[package]]
 name = "arora"
-version = "10.0.0"
+version = "10.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6be6b83f6063d4cfabbf21b33cb374925093ef83ae1dbc19c6bf1a761f6b206c"
+checksum = "bccbb97b910a72f10fa949de2e7b90c0aba3be62266316592112c6eb86ab19c7"
 dependencies = [
  "anyhow",
  "arora-behavior",
  "arora-behavior-tree",
- "arora-bridge 5.0.0",
+ "arora-bridge",
  "arora-bridge-ws",
  "arora-engine",
  "arora-hal",
  "arora-simple-data-store",
  "arora-studio-bridge-client",
- "arora-types 3.0.0",
+ "arora-types",
  "async-trait",
  "clap",
  "crypto_secretbox",
@@ -407,7 +407,7 @@ version = "9.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f25f50c54cf5e022458be5c3ec284313c5b370ebebe496bf14a28d1f418219e"
 dependencies = [
- "arora-types 3.0.0",
+ "arora-types",
  "semver",
  "serde",
  "uuid",
@@ -425,7 +425,7 @@ dependencies = [
  "arora-buffers",
  "arora-module-rust",
  "arora-registry",
- "arora-types 3.0.0",
+ "arora-types",
  "derive_more",
  "lazy_static",
  "quick-xml 0.40.1",
@@ -443,24 +443,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fe86ffb84c0ea3a28eaf4e5ff96093d30f269d0ddb3322558846adda622c014"
 dependencies = [
  "arora-behavior",
- "arora-types 3.0.0",
+ "arora-types",
  "lazy_static",
  "semver",
  "uuid",
-]
-
-[[package]]
-name = "arora-bridge"
-version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7848310653e25a84361cae07d1131f540b528f959e593e815e3e6a8a8f52859"
-dependencies = [
- "arora-types 2.5.1",
- "async-trait",
- "futures-channel",
- "futures-core",
- "futures-util",
- "serde",
 ]
 
 [[package]]
@@ -469,7 +455,7 @@ version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35c146a48a9f4d05f46a974328108696fc7bd89c7a59c7b207164423e2b52327"
 dependencies = [
- "arora-types 3.0.0",
+ "arora-types",
  "async-trait",
  "futures-channel",
  "futures-core",
@@ -484,9 +470,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69ccfc2e4dfd678d4686e0f565f4751643ebeb8a4178421798c25b8aee4b1dce"
 dependencies = [
  "arora-behavior-tree-types",
- "arora-bridge 5.0.0",
+ "arora-bridge",
  "arora-msgs-ros2",
- "arora-types 3.0.0",
+ "arora-types",
  "async-trait",
  "futures",
  "log",
@@ -503,8 +489,8 @@ version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d835fd078bbbc21408eec24044c84bdf58737d32a86465ba409661933b04c46"
 dependencies = [
- "arora-bridge 5.0.0",
- "arora-types 3.0.0",
+ "arora-bridge",
+ "arora-types",
  "async-trait",
  "futures",
  "futures-util",
@@ -522,7 +508,7 @@ version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2408b7ade82babe656cd849db33d33e8329365a52358232f75a77b947c54f1d2"
 dependencies = [
- "arora-types 3.0.0",
+ "arora-types",
  "bytes",
  "cbindgen",
  "serde",
@@ -538,7 +524,7 @@ checksum = "e325ace089b032368551cdc7079d4a536c10e53823929ae6b767d9eb05c33b2b"
 dependencies = [
  "anyhow",
  "arora-buffers",
- "arora-types 3.0.0",
+ "arora-types",
  "async-trait",
  "bytes",
  "cbindgen",
@@ -567,7 +553,7 @@ version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c67602ca23702b4ea993fbf1252c4828dc31fdb532b6809a2738693ee03a0f24"
 dependencies = [
- "arora-types 3.0.0",
+ "arora-types",
  "async-trait",
  "futures-channel",
  "futures-core",
@@ -581,7 +567,7 @@ checksum = "729fdaffb618647295dc16c668189a83f0cb10b68d7b17326299e1e35610cbbd"
 dependencies = [
  "arora-buffers",
  "arora-module-macros",
- "arora-types 3.0.0",
+ "arora-types",
 ]
 
 [[package]]
@@ -591,7 +577,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ed89456d0a5321bbfcea3da6db6107ebe3b8dc5ae7383ef0a2a5b76196b3a8d"
 dependencies = [
  "arora-registry",
- "arora-types 3.0.0",
+ "arora-types",
  "arora-vfs",
  "bytes",
  "convert_case 0.11.0",
@@ -610,7 +596,7 @@ version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c31179db11edc5c9352bf1359cf35a167e24b96a00ba4d4b57ffadda41ccfd7"
 dependencies = [
- "arora-types 3.0.0",
+ "arora-types",
  "proc-macro2",
  "quote",
  "serde_yaml",
@@ -627,7 +613,7 @@ dependencies = [
  "anyhow",
  "arora-module-core",
  "arora-registry",
- "arora-types 3.0.0",
+ "arora-types",
  "arora-vfs",
  "async-recursion",
  "clap",
@@ -651,7 +637,7 @@ version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49aa53eadc55c127f76c090fb72f2d74fb42ee0b110e834d0760668d6aa727b2"
 dependencies = [
- "arora-types 3.0.0",
+ "arora-types",
  "proc-macro2",
  "quote",
  "ros2-client-multi-rmw",
@@ -668,7 +654,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "757a8a60f687711273375e194fa2bfa7c87220e2d108048998b13971fafb06f5"
 dependencies = [
  "anyhow",
- "arora-types 3.0.0",
+ "arora-types",
  "async-trait",
  "derive_more",
  "semver",
@@ -685,17 +671,17 @@ version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91c5fa013c082c02a554579db5c51a0382fba6b874d1cb6875c631842b8d24ab"
 dependencies = [
- "arora-types 3.0.0",
+ "arora-types",
 ]
 
 [[package]]
 name = "arora-studio-bridge-client"
-version = "6.1.0"
+version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6149c5c40cf84cff3fb7d3efc3541559050922a0a0d9e800941f83b738df7516"
+checksum = "250b94c2e1f62c0ce9bd12ca1f9160ea19aba6577a24838166c2e5bd241bfb77"
 dependencies = [
- "arora-bridge 4.1.0",
- "arora-types 2.5.1",
+ "arora-bridge",
+ "arora-types",
  "async-stream",
  "async-trait",
  "chrono",
@@ -716,24 +702,6 @@ dependencies = [
  "tokio-stream",
  "webpki-roots",
  "zenoh",
-]
-
-[[package]]
-name = "arora-types"
-version = "2.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2491177064427d29fb44a2d86097b59e8f04eb09f2c12d74b8c7e220c2d8a893"
-dependencies = [
- "arora-types-derive",
- "async-trait",
- "derive_more",
- "indexmap 2.14.2",
- "js-sys",
- "lazy_static",
- "semver",
- "serde",
- "uuid",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -786,7 +754,7 @@ checksum = "354b83ce4fd5f35216b6c77abad8baa922f00591c9378fbb0cb9c6fce08ace6f"
 dependencies = [
  "arora",
  "arora-engine",
- "arora-types 3.0.0",
+ "arora-types",
  "console_error_panic_hook",
  "futures",
  "getrandom 0.4.3",
@@ -9691,11 +9659,11 @@ dependencies = [
 
 [[package]]
 name = "studio-bridge-msgs"
-version = "4.0.0"
+version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d33e3c9d81b89b46140184efa3b8c16d8b7e68a52bae43b081766b9e4bc4d2b"
+checksum = "d1d5ca450c72ac4252c6e8a8eb141b130224e3faf7fc3c6939bf94f50a9c4a53"
 dependencies = [
- "arora-types 2.5.1",
+ "arora-types",
  "chrono",
  "js-sys",
  "partially",
@@ -10726,7 +10694,7 @@ dependencies = [
  "arora-behavior-tree-types",
  "arora-bridge-ros2",
  "arora-msgs-ros2",
- "arora-types 3.0.0",
+ "arora-types",
  "bevy",
  "clap",
  "crossterm",
@@ -10773,7 +10741,7 @@ version = "0.0.0"
 dependencies = [
  "arora-engine",
  "arora-module",
- "arora-types 3.0.0",
+ "arora-types",
  "lazy_static",
  "serde_json",
  "vizij-animation-core",
@@ -10801,7 +10769,7 @@ dependencies = [
 name = "vizij-api-core"
 version = "2.0.0"
 dependencies = [
- "arora-types 3.0.0",
+ "arora-types",
  "hashbrown 0.17.1",
  "serde",
  "serde_json",
@@ -10835,7 +10803,7 @@ dependencies = [
  "arora-behavior",
  "arora-behavior-tree-types",
  "arora-simple-data-store",
- "arora-types 3.0.0",
+ "arora-types",
  "log",
  "serde",
  "serde_json",
@@ -10850,7 +10818,7 @@ name = "vizij-arora-hal"
 version = "0.0.0"
 dependencies = [
  "arora-hal",
- "arora-types 3.0.0",
+ "arora-types",
  "async-trait",
  "futures",
  "futures-channel",
@@ -10866,7 +10834,7 @@ dependencies = [
  "anyhow",
  "arora-behavior",
  "arora-msgs-ros2",
- "arora-types 3.0.0",
+ "arora-types",
  "log",
  "serde",
  "serde_json",
@@ -10878,7 +10846,7 @@ dependencies = [
 name = "vizij-arora-store"
 version = "0.0.0"
 dependencies = [
- "arora-types 3.0.0",
+ "arora-types",
  "vizij-api-core",
 ]
 
@@ -10887,7 +10855,7 @@ name = "vizij-arora-tts"
 version = "3.0.0"
 dependencies = [
  "arora-engine",
- "arora-types 3.0.0",
+ "arora-types",
  "log",
  "reqwest",
  "rodio",
@@ -10903,7 +10871,7 @@ name = "vizij-arora-web"
 version = "0.0.0"
 dependencies = [
  "arora",
- "arora-types 3.0.0",
+ "arora-types",
  "arora-web",
  "console_error_panic_hook",
  "getrandom 0.4.3",
