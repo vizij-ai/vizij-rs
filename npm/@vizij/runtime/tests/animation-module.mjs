@@ -9,18 +9,31 @@ import assert from "node:assert/strict";
 import { loadAnimationModule } from "@vizij/animation-module";
 import { startRuntime } from "../dist/runtime/src/index.js";
 
-// --- declared ids (module.yaml + the type records) ---------------------------
-const FN_LOAD = "76697a69-6a00-0000-0f00-000000000001";
-const FN_CREATE_PLAYER = "76697a69-6a00-0000-0f00-000000000002";
-const FN_ADD_INSTANCE = "76697a69-6a00-0000-0f00-000000000003";
-const FN_STEP = "76697a69-6a00-0000-0f00-000000000004";
+// --- function and parameter ids, from the module's shipped header -----------
+const animationModule = await loadAnimationModule();
+const header = JSON.parse(animationModule.headerJson);
+const fn = (name) => {
+  const found = header.exports.find((e) => e.name === name);
+  assert.ok(found, `the header exports ${name}`);
+  return found;
+};
+const param = (fnName, paramName) => {
+  const found = fn(fnName).parameters.find((p) => p.name === paramName);
+  assert.ok(found, `${fnName} takes ${paramName}`);
+  return found.id;
+};
+const FN_LOAD = fn("load_animation").id;
+const FN_CREATE_PLAYER = fn("create_player").id;
+const FN_ADD_INSTANCE = fn("add_instance").id;
+const FN_STEP = fn("step").id;
 
-const P_CLIP = "76697a69-6a00-0000-0f01-000000000001";
-const P_NAME = "76697a69-6a00-0000-0f02-000000000001";
-const P_PLAYER = "76697a69-6a00-0000-0f03-000000000001";
-const P_ANIM = "76697a69-6a00-0000-0f03-000000000002";
-const P_DT_NS = "76697a69-6a00-0000-0f04-000000000001";
+const P_CLIP = param("load_animation", "clip");
+const P_NAME = param("create_player", "name");
+const P_PLAYER = param("add_instance", "player");
+const P_ANIM = param("add_instance", "anim");
+const P_DT_NS = param("step", "dt_ns");
 
+// --- structure and field ids (the module's type records) ---------------------
 const CLIP_TYPE = "76697a69-6a00-0000-0000-000000000100";
 const CLIP_NAME = "76697a69-6a00-0000-0100-000000000001";
 const CLIP_DURATION = "76697a69-6a00-0000-0100-000000000002";
@@ -110,7 +123,7 @@ const graph = {
 };
 
 // --- run ---------------------------------------------------------------------
-const runtime = await startRuntime(graph, undefined, [await loadAnimationModule()]);
+const runtime = await startRuntime(graph, undefined, [animationModule]);
 
 // Setup through the call surface. Each call dispatches inside the next step.
 const pending = [
