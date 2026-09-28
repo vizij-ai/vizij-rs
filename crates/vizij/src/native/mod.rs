@@ -11,7 +11,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures::stream::BoxStream;
 use futures::StreamExt;
@@ -19,8 +19,9 @@ use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
 use crate::face::{
-    builder_for, free_inputs, load_face, stage_neutral_pose, FaceConfig, LoadedFace,
+    builder_for, declare_keys, load_face, stage_neutral_pose, FaceConfig, LoadedFace,
 };
+use crate::modules::rest;
 use crate::view::meta::FaceMeta;
 use crate::view::ViewEvent;
 
@@ -75,8 +76,8 @@ enum Command {
 pub enum Mode {
     /// The standard arora operator flow (`AroraBuilder::run`): the terminal UI
     /// on an interactive terminal (headless front end otherwise) with the
-    /// vizij commands installed, the open local bridge auto-attached
-    /// (`ws://127.0.0.1:9000`), logging owned by the front end's sink.
+    /// vizij commands installed, the open local bridge served where
+    /// [`BridgeConfig::local`] says, logging owned by the front end's sink.
     Operator,
     /// Build and step quietly: no bridge, no front end, no commands served —
     /// the snapshot harness, where the process' own logger stays in charge
@@ -87,34 +88,147 @@ pub enum Mode {
 /// The bridges the device serves beyond the always-on open local bridge — a
 /// build/CLI choice, constant for the process. Empty by default; the fields
 /// exist only for the bridge features that are compiled in.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct BridgeConfig {
+    /// The open local bridge: where it listens, whether it serves the panel.
+    pub local: arora::bridge_ws::ServerConfig,
     /// `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics.
     #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
     pub ros2: Option<(String, u16)>,
-    /// `--studio`: attach the Semio Studio bridge (env-configured).
+    /// `--studio`: attach the Semio Studio bridge, the device registered from
+    /// the identity persisted in this file, else from the operator's answers
+    /// (persisted there afterwards), else from the environment alone.
     #[cfg(feature = "studio")]
-    pub studio: bool,
+    pub studio: Option<std::path::PathBuf>,
+}
+
+impl Default for BridgeConfig {
+    fn default() -> Self {
+        Self {
+            // The control panel on: an app whose window is the face serves
+            // the page that drives it.
+            local: arora::bridge_ws::ServerConfig::default().serve_control_panel(true),
+            #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
+            ros2: None,
+            #[cfg(feature = "studio")]
+            studio: None,
+        }
+    }
+}
+
+/// What a device registers with Studio as, kept across launches so the
+/// operator answers once: arora regenerates the name per launch otherwise.
+#[cfg(feature = "studio")]
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Identity {
+    name: String,
+    owners: Vec<String>,
+    #[serde(default)]
+    model_family: Option<String>,
+}
+
+/// The Studio bridge for one generation, the device registered under the
+/// persisted identity when there is one, else as the operator answers (the
+/// terminal UI's prompt; an unattended run declines), which is then
+/// persisted. `None` when Studio is declined or fails.
+#[cfg(feature = "studio")]
+async fn studio_bridge(
+    identity: &std::path::Path,
+    operator: Option<&dyn arora::operator::Operator>,
+) -> Option<Box<dyn arora_bridge::Bridge>> {
+    let persisted: Option<Identity> = std::fs::read_to_string(identity)
+        .ok()
+        .and_then(|json| serde_json::from_str(&json).ok());
+    if let Some(known) = persisted {
+        let bridge = match arora::studio::connect().await {
+            Ok(bridge) => bridge,
+            Err(e) => {
+                log::error!("studio bridge: {e:?}");
+                return None;
+            }
+        };
+        let info = arora_bridge::DeviceInfo {
+            name: Some(known.name.clone()),
+            description: None,
+            model_family: known.model_family.clone(),
+            hardware_version: None,
+            software_version: None,
+            owners: known.owners.clone(),
+        };
+        match bridge.update_device_info(Some(info)).await {
+            Ok(_) => log::info!(
+                "registered with Studio as {:?} (owners {:?}, from {})",
+                known.name,
+                known.owners,
+                identity.display()
+            ),
+            Err(e) => log::error!("studio registration: {e:?}"),
+        }
+        return Some(bridge);
+    }
+    let connected = match operator {
+        Some(operator) => arora::studio::connect_with_operator(operator).await,
+        None => arora::studio::connect().await.map(Some),
+    };
+    match connected {
+        Ok(Some(bridge)) => {
+            if let Ok(Some(info)) = bridge.get_device_info().await {
+                if let (Some(name), false) = (info.name.clone(), info.owners.is_empty()) {
+                    let known = Identity {
+                        name,
+                        owners: info.owners.clone(),
+                        model_family: info.model_family.clone(),
+                    };
+                    if let Some(dir) = identity.parent() {
+                        let _ = std::fs::create_dir_all(dir);
+                    }
+                    match serde_json::to_string_pretty(&known)
+                        .map_err(|e| e.to_string())
+                        .and_then(|json| std::fs::write(identity, json).map_err(|e| e.to_string()))
+                    {
+                        Ok(()) => log::info!("Studio identity kept in {}", identity.display()),
+                        Err(e) => log::warn!("cannot keep the Studio identity: {e}"),
+                    }
+                }
+            }
+            Some(bridge)
+        }
+        Ok(None) => {
+            log::info!("Studio declined (no owner)");
+            None
+        }
+        Err(e) => {
+            log::error!("studio bridge: {e:?}");
+            None
+        }
+    }
 }
 
 /// Attach the device's bridges to `builder`: always the open local bridge
-/// (`ws://127.0.0.1:9000`, the one local editors and apps connect to), plus any
-/// the build/CLI adds. `run()` would attach the local bridge itself only if no
-/// bridge were injected, so once we add another bridge we attach the local one
-/// explicitly too. A bridge that fails to build is logged and skipped, not fatal.
+/// (the one local editors and apps connect to), plus any the build/CLI adds.
+/// Each relays the device as its store and modules describe it — keys, what
+/// they are, which a remote may write, and functions — so nothing is declared
+/// to a bridge. A bridge that fails to build is logged and skipped, not fatal.
 #[cfg_attr(
-    not(any(feature = "ros2-dds", feature = "ros2-zenoh", feature = "studio")),
+    not(any(feature = "ros2-dds", feature = "ros2-zenoh")),
     allow(unused_variables)
 )]
 pub async fn attach_bridges(
     mut builder: arora::AroraBuilder,
     bridges: &BridgeConfig,
     ros4hri: bool,
-    data_inputs: &[(String, arora_types::value::Type)],
+    operator: Option<&dyn arora::operator::Operator>,
 ) -> arora::AroraBuilder {
-    #[cfg(not(any(feature = "ros2-dds", feature = "ros2-zenoh")))]
-    let _ = (data_inputs, ros4hri);
-    match arora::local_ws_bridge().await {
+    #[cfg(not(feature = "studio"))]
+    let _ = operator;
+    // Studio first: the bridge whose identity the device carries.
+    #[cfg(feature = "studio")]
+    if let Some(identity) = &bridges.studio {
+        if let Some(bridge) = studio_bridge(identity, operator).await {
+            builder = builder.with_bridge(bridge);
+        }
+    }
+    match arora::local_ws_bridge_with(bridges.local.clone()).await {
         Ok(bridge) => builder = builder.with_bridge(bridge),
         Err(e) => log::error!("local bridge: {e:?}"),
     }
@@ -129,17 +243,10 @@ pub async fn attach_bridges(
         if ros4hri {
             config = config.with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
         }
-        // The face's free inputs — what nothing in the composed graph writes —
-        // are the keys a remote may drive, each subscribed as the std_msgs type
-        // of its kind (`ros2 topic info -v` shows it).
-        for (path, ty) in data_inputs {
-            config = config.with_input(path.clone(), ty.clone());
-        }
         builder = builder.with_bridge(Box::new(arora_bridge_ros2::Ros2Bridge::new(config).await));
         log::info!(
-            "serving the ROS 2 bridge (namespace {namespace:?}, domain {domain}): {} input keys \
-             subscribed under /{namespace}/keys/<path>{}",
-            data_inputs.len(),
+            "serving the ROS 2 bridge (namespace {namespace:?}, domain {domain}): the face's \
+             inputs subscribed under /{namespace}/keys/<path>{}",
             if ros4hri {
                 ", plus the ROS4HRI profile (the typed face topics, the face image, the \
                  /skill/look_at and /skill/say actions)"
@@ -147,13 +254,6 @@ pub async fn attach_bridges(
                 ""
             }
         );
-    }
-    #[cfg(feature = "studio")]
-    if bridges.studio {
-        match arora::studio::connect().await {
-            Ok(bridge) => builder = builder.with_bridge(bridge),
-            Err(e) => log::error!("studio bridge: {e:?}"),
-        }
     }
     builder
 }
@@ -271,22 +371,24 @@ fn supervise(
         if config.stage_neutral {
             stage_neutral_pose(&store, &meta);
         }
+        // What the face's keys are — the inputs a remote may drive, where
+        // each rests — said to the store, which every bridge relays.
+        declare_keys(&store, &spec, &meta.bundle.neutral_stage_writes());
         let speech = config.speech.as_ref().map(|build| build());
-        let Some(builder) = builder_for(&spec, rig, store, &meta.bundle.skills, speech) else {
+        let Some(builder) = builder_for(&spec, rig, store.clone(), &meta.bundle.skills, speech)
+        else {
             return;
         };
+        let builder = builder.with_host_module(rest::host_module(Box::new(store.clone())));
         let reload = tokio_rt.block_on(async {
-            let builder = match frontend {
-                Some(frontend) => builder.with_frontend(frontend),
-                None => builder,
-            };
+            let operator = frontend.as_ref().map(|frontend| frontend.operator.clone());
             let builder =
-                attach_bridges(builder, &bridges, config.ros4hri, &free_inputs(&spec)).await;
+                attach_bridges(builder, &bridges, config.ros4hri, operator.as_deref()).await;
             // A reload drops the run future — arora's stop story: the
             // teardown is complete and synchronous (front end released, local
             // bridge's port freed) before the next generation starts.
             tokio::select! {
-                result = builder.run() => {
+                result = run_generation(builder, frontend) => {
                     if let Err(e) = result {
                         log::error!("arora device stopped: {e:?}");
                     }
@@ -302,6 +404,25 @@ fn supervise(
         meta = loaded.meta;
         pending_glb = Some(glb);
     }
+}
+
+/// Run one device generation: build it, hand the front end its live view, and
+/// step until the run ends. The steps of arora's own operator flow
+/// (`AroraBuilder::run`), taken here because this app owns the generation
+/// loop; the access requests a bridge would yield are not served (no bridge
+/// yields any).
+async fn run_generation(
+    builder: arora::AroraBuilder,
+    frontend: Option<arora::operator::Frontend>,
+) -> Result<()> {
+    let mut arora = builder.build().context("failed to build the device")?;
+    if let Some(frontend) = frontend {
+        (frontend.on_ready)(arora.store().subscribe(), None, None);
+    }
+    arora
+        .run(arora::Arora::DEFAULT_STEP_PERIOD)
+        .await
+        .map_err(|e| anyhow::anyhow!("runtime error: {e}"))
 }
 
 /// Serve one device generation's front ends: the terminal UI's command
@@ -359,12 +480,17 @@ fn operator_frontend() -> (
     (Some(frontend), commands.boxed())
 }
 
+/// Without a terminal UI, arora's headless front end: it installs the log
+/// sink and never answers a prompt.
 #[cfg(not(feature = "desktop"))]
 fn operator_frontend() -> (
     Option<arora::operator::Frontend>,
     BoxStream<'static, Command>,
 ) {
-    (None, futures::stream::pending().boxed())
+    (
+        Some(arora::operator::default_frontend()),
+        futures::stream::pending().boxed(),
+    )
 }
 
 /// The command a terminal UI event carries, once its input is read or parsed;

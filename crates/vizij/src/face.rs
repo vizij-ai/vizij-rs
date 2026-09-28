@@ -87,7 +87,8 @@ pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
 }
 
 /// The composed graph's free inputs — input paths no graph in the composition
-/// writes (the ones a remote may drive) — with the ROS-facing type of each:
+/// writes (the ones a remote may drive) — with the type the store states for
+/// each ([`declare_keys`]):
 /// the input's default value decides (string → String, bool → Boolean,
 /// anything numeric or absent → F64); vector-valued inputs stay out (they
 /// travel as typed topics, e.g. the gaze target). Built-in keys stay out.
@@ -97,6 +98,50 @@ pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
 /// (`{"f32": 0.0}`, `{"str": ""}`), not as the bare JSON literal an author
 /// wrote.
 pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
+    walk_free_inputs(spec)
+        .into_iter()
+        .map(|(path, ty, _)| (path, ty))
+        .collect()
+}
+
+/// Say in the store what the face's keys are — what every bridge relays, and
+/// what `reset` returns them to.
+///
+/// Each free input (see [`free_inputs`]) is open to remote writers, of its
+/// type — a number in `[0, 1]` — and rests at its authored default. `neutral`
+/// (the bundle's neutral pose, [`Bundle::neutral_stage_writes`]) moves the rest
+/// of the keys it names, and gives a rig key that is no free input its rest
+/// alone: the standard inputs feed the rig through the adaptation, so a reset
+/// that left the rig out would be undone on the next tick.
+///
+/// [`Bundle::neutral_stage_writes`]: vizij_arora_host::Bundle::neutral_stage_writes
+pub fn declare_keys(store: &dyn DataStore, spec: &str, neutral: &[(String, f32)]) {
+    use arora_types::data::KeyMeta;
+    use arora_types::value::Type;
+    let mut meta: std::collections::HashMap<Key, KeyMeta> = walk_free_inputs(spec)
+        .into_iter()
+        .map(|(path, ty, rest)| {
+            let mut input = KeyMeta::new().editable().of_type(ty.clone());
+            if ty == Type::F64 {
+                input = input.range(0.0, 1.0);
+            }
+            if let Some(rest) = rest {
+                input = input.resting_at(rest);
+            }
+            (Key::new(path), input)
+        })
+        .collect();
+    for (path, value) in neutral {
+        meta.entry(Key::from(path.as_str())).or_default().default = Some(float(*value));
+    }
+    if let Err(e) = store.set_meta(meta) {
+        log::warn!("the store keeps no key meta: the face's inputs stay closed ({e:?})");
+    }
+}
+
+/// Each free input with its type and its authored default, if any (see
+/// [`free_inputs`]).
+fn walk_free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type, Option<Value>)> {
     use arora_types::value::Type;
     let Ok(spec) = serde_json::from_str::<serde_json::Value>(spec) else {
         return Vec::new();
@@ -133,16 +178,18 @@ pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
         {
             continue;
         }
-        let ty = match node.get("params").and_then(|p| p.get("value")).cloned() {
-            None | Some(serde_json::Value::Null) => Type::F64,
+        let (ty, default) = match node.get("params").and_then(|p| p.get("value")).cloned() {
+            None | Some(serde_json::Value::Null) => (Type::F64, None),
             Some(json) => match vizij_api_core::json::parse_value(json) {
-                Ok(Value::String(_)) => Type::String,
-                Ok(Value::Boolean(_)) => Type::Boolean,
-                Ok(value) if vizij_api_core::value::as_float(&value).is_some() => Type::F64,
+                Ok(value @ Value::String(_)) => (Type::String, Some(value)),
+                Ok(value @ Value::Boolean(_)) => (Type::Boolean, Some(value)),
+                Ok(value) if vizij_api_core::value::as_float(&value).is_some() => {
+                    (Type::F64, Some(value))
+                }
                 _ => continue,
             },
         };
-        inputs.push((path, ty));
+        inputs.push((path, ty, default));
     }
     inputs.sort_by(|a, b| a.0.cmp(&b.0));
     inputs
@@ -357,6 +404,48 @@ mod tests {
                 ("face/mouth/open".to_string(), Type::F64),
                 ("flags/awake".to_string(), Type::Boolean),
                 ("standard/ros4hri/expression/name".to_string(), Type::String),
+            ]
+        );
+    }
+
+    /// The store opens the free inputs, each typed, a number ranged, resting
+    /// at its authored default unless the neutral pose moves it; a neutral rig
+    /// key that is no input gets its rest alone and stays closed.
+    #[test]
+    fn declared_keys_open_the_free_inputs_at_their_rest() {
+        use arora_types::data::KeyMeta;
+        use arora_types::value::Type;
+        let spec = r#"{"nodes": [
+            {"id": "a", "type": "input", "params": {"path": "face/mouth/open", "value": {"f32": 0.25}}},
+            {"id": "b", "type": "input", "params": {"path": "flags/awake", "value": true}},
+            {"id": "c", "type": "input", "params": {"path": "face/brow"}}
+        ], "edges": []}"#;
+        let store = BlackboardStore::new();
+        declare_keys(
+            &store,
+            spec,
+            &[("face/brow".to_string(), 0.5), ("rig/jaw".to_string(), 0.1)],
+        );
+        let number = || KeyMeta::new().editable().of_type(Type::F64).range(0.0, 1.0);
+        assert_eq!(
+            store.meta(&[
+                Key::from("face/mouth/open"),
+                Key::from("face/brow"),
+                Key::from("flags/awake"),
+                Key::from("rig/jaw"),
+                Key::from("face/elsewhere"),
+            ]),
+            vec![
+                Some(number().resting_at(float(0.25))),
+                Some(number().resting_at(float(0.5))),
+                Some(
+                    KeyMeta::new()
+                        .editable()
+                        .of_type(Type::Boolean)
+                        .resting_at(Value::Boolean(true))
+                ),
+                Some(KeyMeta::new().resting_at(float(0.1))),
+                None,
             ]
         );
     }

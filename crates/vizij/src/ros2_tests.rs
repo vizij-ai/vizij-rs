@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
-use crate::face::{builder_for, free_inputs};
+use crate::face::{builder_for, declare_keys, free_inputs};
 
 // The typed client's view of `interaction_skills/LookAt` — local mirrors of
 // the standard messages (`ros2_client::Message` is a foreign marker trait).
@@ -388,16 +388,18 @@ async fn a_free_input_takes_a_published_data_topic() {
     let spec = r#"{ "nodes": [
         {"id": "in", "type": "input", "params": {"path": "face/mouth/open"}}
     ], "edges": [] }"#;
-    let inputs = free_inputs(spec);
-    assert_eq!(inputs.len(), 1, "the input is free (nothing writes it)");
-    let mut config = arora_bridge_ros2::Ros2BridgeConfig::new("robot", domain_id)
+    assert_eq!(
+        free_inputs(spec).len(),
+        1,
+        "the input is free (nothing writes it)"
+    );
+    // The store opens it; the bridge subscribes what the store opens.
+    let store = BlackboardStore::new();
+    declare_keys(&store, spec, &[]);
+    let config = arora_bridge_ros2::Ros2BridgeConfig::new("robot", domain_id)
         .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
-    for (path, ty) in &inputs {
-        config = config.with_input(path.clone(), ty.clone());
-    }
     let bridge = arora_bridge_ros2::Ros2Bridge::new(config).await;
 
-    let store = BlackboardStore::new();
     let mut arora = builder_for(spec, RigHal::new(), store.clone(), &[], None)
         .expect("build the device")
         .with_bridge(Box::new(bridge))
@@ -498,11 +500,10 @@ async fn the_device_keeps_a_flat_heap_in_a_ros_graph() {
     // The device a running vizij is: the face's graph writing every actuated
     // key each step, its free input subscribed, and the ROS4HRI profile.
     let spec = fan_out_spec();
-    let mut config = arora_bridge_ros2::Ros2BridgeConfig::new("robot", domain_id)
+    let store = BlackboardStore::new();
+    declare_keys(&store, &spec, &[]);
+    let config = arora_bridge_ros2::Ros2BridgeConfig::new("robot", domain_id)
         .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
-    for (path, ty) in free_inputs(&spec) {
-        config = config.with_input(path, ty);
-    }
     // The frame publishes as the `sensor_msgs` image it already is, on the
     // ROS4HRI image topic the profile declares for its key — the path a
     // running device takes, and the one whose retention this measures.
@@ -511,7 +512,6 @@ async fn the_device_keeps_a_flat_heap_in_a_ros_graph() {
     let bridge = arora_bridge_ros2::Ros2Bridge::new(config).await;
 
     let rig = RigHal::new();
-    let store = BlackboardStore::new();
     let mut arora = builder_for(&spec, rig.clone(), store.clone(), &[], None)
         .expect("build the device")
         .with_bridge(Box::new(bridge))

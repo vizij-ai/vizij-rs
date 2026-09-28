@@ -61,7 +61,7 @@ bevy = { version = "0.19", default-features = false, features = [
 # slice builds on every target; the native target table below adds `native`
 # (wasmtime, the local WS bridge, the operator flow) and the desktop feature
 # adds `tui`.
-arora = { version = "10.3", default-features = false }
+arora = { version = "11.0.1", default-features = false }
 # The ROS 2 bridge, attached under `--ros2` (feature `ros2`). Heavy (ros2-client
 # + a DDS/Zenoh backend), so opt-in; the Studio bridge rides arora's own
 # `studio-bridge` feature instead (`--studio`). It carries the skill plane the
@@ -70,7 +70,7 @@ arora = { version = "10.3", default-features = false }
 # clients) and run feedback may be a record (the say skill's viseme/intensity).
 # 6.3 is where that profile publishes the face image, so the view declares
 # nothing itself.
-arora-bridge-ros2 = { version = "7", optional = true, default-features = false }
+arora-bridge-ros2 = { version = "8", optional = true, default-features = false }
 # The Status enumeration ids the gaze and tts contracts mark their action shapes with.
 arora-behavior-tree-types = "2"
 # The built-in key prefix the ROS 2 input declaration leaves out.
@@ -78,14 +78,27 @@ arora-behavior = "9"
 # Restores the terminal on the window-close exit path, where the device's
 # terminal UI (worker thread) never gets to unwind.
 crossterm = { version = "0.28", optional = true }
+# The desktop app's data directory (the remembered face, the Studio identity).
+dirs = { version = "6", optional = true }
+# The system's file dialog for opening a face (`O`); the XDG portal on Linux
+# so no GTK is linked.
+rfd = { version = "0.16", default-features = false, features = ["xdg-portal", "tokio"], optional = true }
+# `--glb <url>`: the face fetched whole (reqwest is already in the tree).
+reqwest = { version = "0.13", optional = true }
+# `list-displays`: the monitors straight from the event loop, no window (the
+# version Bevy's winit backend uses).
+winit = { version = "0.30", default-features = false, optional = true }
 # Nothing here uses tracing; the dep only turns on its `log` feature for the
 # whole build, so Bevy's tracing events (its LogPlugin stays disabled) fall
 # through to `log` — into the terminal UI's pane or the snapshot harness's
 # env_logger.
 tracing = { version = "0.1", default-features = false, features = ["std", "log"] }
-# For staging neutral inputs into the store (`StateChange`/`Key`); the value
-# type is shared with vizij-api-core.
-arora-types = "3"
+# For staging neutral inputs into the store (`StateChange`/`Key`) and saying
+# what the face's keys are (`KeyMeta`); the value type is shared with
+# vizij-api-core.
+arora-types = "3.1"
+# The `reset` contract the rest module implements.
+arora-module = "2.1"
 vizij-api-core = { path = "../api/vizij-api-core" }
 vizij-graph-core = { path = "../node-graph/vizij-graph-core" }
 vizij-arora = { path = "../interop/vizij-arora" }
@@ -108,8 +121,12 @@ vizij-arora-tts = { version = "4", path = "../interop/vizij-arora-tts" }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The native driver (`native`): the stand-alone device on a worker thread under
 # arora's operator flow — `native` is the run loop, the local WS bridge and
-# the module executors — with the bridges the build adds.
-arora = { version = "10.3", default-features = false, features = ["native"] }
+# the module executors — with the bridges the build adds. 11.0.1 is where its
+# `studio-bridge` feature builds.
+arora = { version = "11.0.1", default-features = false, features = ["native"] }
+# The bridge seam the Studio identity is read and registered through; the major
+# this arora's bridges implement.
+arora-bridge = "6"
 # The device thread's runtime: the operator flow and the bridges are async,
 # the supervisor drives them on a multi-thread runtime.
 tokio = { version = "1", features = ["rt-multi-thread", "time", "macros"] }
@@ -131,7 +148,7 @@ bevy = { version = "0.19", default-features = false, features = ["android-native
 # The browser module (`web`): the shared JS surface of a device — `step`,
 # the self-pacing `run`, the Value<->JSON store accessors — wraps each face's
 # device; wasm-bindgen carries the module's own surface.
-arora-web = "7"
+arora-web = "8"
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4"
 js-sys = { workspace = true }
@@ -154,6 +171,10 @@ vizij-bundle = { path = "../tools/vizij-bundle" }
 # against the bridge's.
 ros2-client = { package = "ros2-client-multi-rmw", version = "0.13", default-features = false, features = ["jazzy", "dds"] }
 rand = "0.9"
+# The wire test's client, on the local bridge's WebSocket, and its GET of
+# the control panel.
+tokio-tungstenite = "0.24"
+reqwest = "0.13"
 
 [features]
 default = ["desktop"]
@@ -161,7 +182,16 @@ default = ["desktop"]
 # the view, the composition and the native driver with a headless front end
 # — what the Android activity builds on; the browser module builds on the
 # view and the composition alone.
-desktop = ["arora/tui", "dep:crossterm", "dep:clap", "dep:env_logger"]
+desktop = [
+    "arora/tui",
+    "dep:crossterm",
+    "dep:clap",
+    "dep:env_logger",
+    "dep:dirs",
+    "dep:rfd",
+    "dep:reqwest",
+    "dep:winit",
+]
 # `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics,
 # over one RMW backend per build — the bridge's `dds` / `zenoh` features are
 # mutually exclusive, exposed here under the bridge's consumer convention:
