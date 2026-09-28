@@ -31,7 +31,7 @@ piece of it, not a second device.
 | `face` | the composition: the GLB's bindings and bundle into one graph spec, folded with `RigHal` + `BlackboardStore` and the modules into an `AroraBuilder` a host may extend (`builder_for`); the free inputs, the neutral pose, the skills' fragments | everywhere |
 | `modules` | the host modules any Arora loads: `animation`, `gaze`, `viseme`, `tts_piper` (feature) | everywhere (Piper native) |
 | `native` | the stand-alone device: the face's Arora on a worker thread under arora's operator flow, the bridges the build adds, the `RuntimeHandle` front ends speak through | every target but the browser |
-| `native::bridge` | the open local bridge: the WebSocket server with the face's inputs and skills in its registry, the control panel on the same port | every target but the browser |
+| `native::bridge` | the open local bridge: the WebSocket server with the face's inputs in its registry and `reset` beside them, the control panel on the same port | every target but the browser |
 | `web` | the browser module behind [`@vizij/runtime`](../../npm/@vizij/runtime/README.md): one App per page (`mount`), a JS-paced Arora per Vizij (`loadVizij`, a `VizijRuntime`), Vizijs as rectangles of the canvas (`placeVizij`), picks, `describe` | `wasm32` |
 | `main.rs`, `open.rs` | the CLI, the window, the terminal operator UI, opening a face by drop or dialog | feature `desktop` (default) |
 
@@ -125,20 +125,26 @@ Every run serves the open local bridge of
 `ws://127.0.0.1:9000` by default, with the control panel on
 `http://127.0.0.1:9000/`. Its registry advertises the face's **free
 inputs** — the input paths no graph in the composition writes, each typed
-and with its rest value — and the methods a client may `invoke`:
+and with its rest value — and `reset`, which puts every input back to that
+rest value: the authored default, the rig's under the bundle's neutral pose.
+
+The face's **skills** are the device's own, listed and called by name on the
+signatures their modules describe, so `list_methods` carries them beside
+`reset`:
 
 | Method | Effect |
 |---|---|
-| `reset` | every input back to its rest value: the authored default, the rig's under the bundle's neutral pose |
 | `look_at` | the gaze skill: `policy` (`track`/`glance`/`reset`), `target` (meters), `frame` |
 | `play_viseme` | one viseme `shape` at a `weight` through the lipsync envelope |
 | `say` | speak `text` in `voice` (only when the build has a speech provider) |
-| `stop` | halt the last run of the skill named by `method` |
 
-A skill's `invoke` answers as soon as the run is spawned; the run reports on
-its status key. Writes and reads travel as the wire format documents
-(`{"type": "write_values", "values": {"standard/ros4hri/au/12": {"f64": 0.5}}}`);
-`arora/*` built-ins (the clock at step rate) are not pushed to clients. The
+Each is a **run** (`"task": true`): the `invoke` answers as soon as it starts,
+with the run's id and the key that says how it ends, and
+`{"type": "halt", "run": "<id>"}` stops it. Writes and reads travel as the wire
+format documents
+(`{"type": "write_values", "values": {"standard/ros4hri/au/12": {"f64": 0.5}}}`),
+and a client is pushed the keys it subscribes to — subscribe to what you
+display, or take the whole feed, the clock included, by not subscribing. The
 server lives with the device generation: a reload frees the port before the
 next generation binds it. `tests/local_bridge.rs` is a client on it
 (`cargo test -p vizij --test local_bridge` with `VIZIJ_FIXTURES` set).

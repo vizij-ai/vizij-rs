@@ -219,11 +219,9 @@ fn main() -> Result<()> {
         speech: Some(speech_provider()),
     };
     let bridges = BridgeConfig {
-        local: vizij::native::bridge::LocalBridgeConfig {
-            bind: cli.bind.clone(),
-            port: cli.port,
-            control_panel: !cli.no_web_control,
-        },
+        local: arora::bridge_ws::ServerConfig::with_port(cli.port)
+            .bind_address(cli.bind.clone())
+            .serve_control_panel(!cli.no_web_control),
         #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
         ros2: cli.ros2.as_deref().map(parse_ros2).transpose()?,
         #[cfg(feature = "studio")]

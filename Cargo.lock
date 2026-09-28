@@ -370,9 +370,9 @@ dependencies = [
 
 [[package]]
 name = "arora"
-version = "10.0.1"
+version = "10.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bccbb97b910a72f10fa949de2e7b90c0aba3be62266316592112c6eb86ab19c7"
+checksum = "8e95860375a464761ad7d63ecc9c2e248578bc3b9ded840f25b08e0cade5ea04"
 dependencies = [
  "anyhow",
  "arora-behavior",
@@ -485,10 +485,11 @@ dependencies = [
 
 [[package]]
 name = "arora-bridge-ws"
-version = "5.0.0"
+version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d835fd078bbbc21408eec24044c84bdf58737d32a86465ba409661933b04c46"
+checksum = "249adec51bc4cb1d315bba85a2f2125385befba1db4e8c8529da17c3faabf1df"
 dependencies = [
+ "arora-behavior-tree-types",
  "arora-bridge",
  "arora-types",
  "async-trait",
@@ -10789,7 +10790,6 @@ dependencies = [
  "arora-behavior-tree-types",
  "arora-bridge",
  "arora-bridge-ros2",
- "arora-bridge-ws",
  "arora-msgs-ros2",
  "arora-types",
  "arora-web",

@@ -1,7 +1,8 @@
 //! The desktop device on the wire: a client on the open local bridge lists
-//! the face's inputs, writes one and reads it back, invokes `reset`, and gets
-//! the control panel on the same port. What a script, a phone on the LAN or
-//! an editor sees of `vizij --port`.
+//! the face's inputs, writes one and reads it back, subscribes to the key it
+//! watches, calls the face's skills by name, starts and stops a run, invokes
+//! `reset`, and gets the control panel on the same port. What a script, a
+//! phone on the LAN or an editor sees of `vizij --port`.
 //!
 //! Needs the Quori GLB: `VIZIJ_FIXTURES` pointing at the directory holding
 //! it (the snapshot-regression convention); skipped otherwise.
@@ -14,7 +15,6 @@ use futures::{SinkExt, StreamExt};
 use serde_json::{json, Value as Json};
 use tokio_tungstenite::tungstenite::Message;
 use vizij::face::{FaceConfig, ProgramSelect};
-use vizij::native::bridge::LocalBridgeConfig;
 use vizij::native::{start, BridgeConfig, Mode};
 
 /// A port nobody listens on right now (bound and released; the bridge binds
@@ -79,10 +79,7 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
     // The other bridges are feature-gated fields; only the local one is set.
     #[allow(clippy::needless_update)]
     let bridges = BridgeConfig {
-        local: LocalBridgeConfig {
-            port,
-            ..LocalBridgeConfig::default()
-        },
+        local: arora::bridge_ws::ServerConfig::with_port(port).serve_control_panel(true),
         ..BridgeConfig::default()
     };
     let device = start(&glb, config, bridges, Mode::Operator).expect("start");
@@ -99,6 +96,17 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
     }
     let mut socket = socket.expect("the local bridge listens within 10 s");
 
+    // The client is pushed the key it watches and nothing else — the device's
+    // own keys (the clock among them) change every step.
+    let smile = "standard/ros4hri/au/12";
+    let subscribed = request(
+        &mut socket,
+        json!({"type": "subscribe", "keys": [smile]}),
+        "subscribe_resp",
+    )
+    .await;
+    assert_eq!(subscribed["keys"], json!([smile]), "{subscribed}");
+
     // The registry advertises the face's free inputs, the ROS4HRI ones among
     // them, each typed.
     let keys = request(&mut socket, json!({"type": "list_keys"}), "list_keys_resp").await;
@@ -108,7 +116,6 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
         .iter()
         .map(|key| key["path"].as_str().unwrap())
         .collect();
-    let smile = "standard/ros4hri/au/12";
     assert!(paths.contains(&smile), "no {smile} among {paths:?}");
     assert!(
         paths.iter().all(|path| !path.starts_with("arora/")),
@@ -150,24 +157,66 @@ async fn a_client_on_the_local_bridge_drives_the_face() {
         "the store holds the written value: {held:?}"
     );
 
-    // The methods: the skills of the face (`say` only with a speech
-    // provider, and the device has none here), `stop` and `reset`.
+    // The methods: the device's own skills, described by the modules that
+    // export them (`say` only with a speech provider, and the device has none
+    // here), beside `reset`, which the bridge's server owns.
     let methods = request(
         &mut socket,
         json!({"type": "list_methods"}),
         "list_methods_resp",
     )
     .await;
-    let names: Vec<&str> = methods["methods"]
-        .as_array()
-        .expect("methods")
+    let listed = methods["methods"].as_array().expect("methods");
+    let names: Vec<&str> = listed
         .iter()
         .map(|method| method["path"].as_str().unwrap())
         .collect();
-    for expected in ["reset", "look_at", "play_viseme", "stop"] {
+    for expected in ["reset", "look_at", "play_viseme"] {
         assert!(names.contains(&expected), "no {expected} among {names:?}");
     }
     assert!(!names.contains(&"say"), "say without a speech provider");
+    let play_viseme = listed
+        .iter()
+        .find(|method| method["path"] == "play_viseme")
+        .expect("play_viseme is listed");
+    assert_eq!(
+        play_viseme["task"], true,
+        "a viseme is a run: {play_viseme}"
+    );
+    let parameters: Vec<&str> = play_viseme["params"]
+        .as_array()
+        .expect("params")
+        .iter()
+        .map(|param| param["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(parameters, ["shape", "weight"], "{play_viseme}");
+
+    // A skill is called by name and answers with its run; the run stops on
+    // `halt`, by the id it carried.
+    let started = request(
+        &mut socket,
+        json!({
+            "type": "invoke",
+            "method": "play_viseme",
+            "args": {"shape": {"str": "aa"}, "weight": {"f32": 0.8}},
+            "request_id": "v1"
+        }),
+        "invoke_resp",
+    )
+    .await;
+    assert_eq!(started["success"], true, "{started}");
+    let run = started["value"]["keyvalue"]["fields"]["run"]["value"]["str"]
+        .as_str()
+        .unwrap_or_else(|| panic!("the answer names the run: {started}"))
+        .to_string();
+    let halted = request(
+        &mut socket,
+        json!({"type": "halt", "run": run, "request_id": "v2"}),
+        "halt_resp",
+    )
+    .await;
+    assert_eq!(halted["success"], true, "{halted}");
+    assert_eq!(halted["request_id"], "v2");
     // `reset` puts the neutral pose back.
     let reset = request(
         &mut socket,

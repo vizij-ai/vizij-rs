@@ -61,7 +61,7 @@ bevy = { version = "0.19", default-features = false, features = [
 # slice builds on every target; the native target table below adds `native`
 # (wasmtime, the local WS bridge, the operator flow) and the desktop feature
 # adds `tui`.
-arora = { version = "10.0.1", default-features = false }
+arora = { version = "10.1", default-features = false }
 # The ROS 2 bridge, attached under `--ros2` (feature `ros2`). Heavy (ros2-client
 # + a DDS/Zenoh backend), so opt-in; the Studio bridge rides arora's own
 # `studio-bridge` feature instead (`--studio`). It carries the skill plane the
@@ -118,11 +118,10 @@ vizij-arora-tts = { version = "4", path = "../interop/vizij-arora-tts" }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The native driver (`native`): the stand-alone device on a worker thread under
 # arora's operator flow — `native` is the run loop, the local WS bridge and
-# the module executors — with the bridges the build adds.
-arora = { version = "10.0.1", default-features = false, features = ["native"] }
-# The open local bridge (`device::bridge`): the WebSocket server, its
-# registry and its control panel, on arora's line.
-arora-bridge-ws = "5"
+# the module executors — with the bridges the build adds. The bridge's own
+# crate comes through `arora::bridge_ws`, so its major is the one this arora
+# serves.
+arora = { version = "10.1", default-features = false, features = ["native"] }
 arora-bridge = "5"
 async-trait = "0.1"
 # The device thread's runtime: the operator flow and the bridges are async,

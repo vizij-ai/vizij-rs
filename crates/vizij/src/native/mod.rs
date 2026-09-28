@@ -9,12 +9,10 @@
 
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use arora_bridge_ws::AroraWSServer;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures::stream::BoxStream;
 use futures::StreamExt;
@@ -23,7 +21,7 @@ use vizij_arora_store::BlackboardStore;
 
 pub mod bridge;
 
-use self::bridge::{neutral_defaults, register_methods, LocalBridge, LocalBridgeConfig};
+use self::bridge::{neutral_defaults, LocalBridge};
 use crate::face::{
     builder_for, free_inputs, load_face, stage_neutral_pose, FaceConfig, LoadedFace,
 };
@@ -93,10 +91,10 @@ pub enum Mode {
 /// The bridges the device serves beyond the always-on open local bridge — a
 /// build/CLI choice, constant for the process. Empty by default; the fields
 /// exist only for the bridge features that are compiled in.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct BridgeConfig {
     /// The open local bridge: where it listens, whether it serves the panel.
-    pub local: LocalBridgeConfig,
+    pub local: arora::bridge_ws::ServerConfig,
     /// `--ros2 [namespace][:domain]`: expose the device's keys over ROS 2 topics.
     #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
     pub ros2: Option<(String, u16)>,
@@ -105,6 +103,18 @@ pub struct BridgeConfig {
     /// (persisted there afterwards), else from the environment alone.
     #[cfg(feature = "studio")]
     pub studio: Option<std::path::PathBuf>,
+}
+
+impl Default for BridgeConfig {
+    fn default() -> Self {
+        Self {
+            local: bridge::default_config(),
+            #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
+            ros2: None,
+            #[cfg(feature = "studio")]
+            studio: None,
+        }
+    }
 }
 
 /// What a device registers with Studio as, kept across launches so the
@@ -209,8 +219,9 @@ pub async fn attach_bridges(
     ros4hri: bool,
     data_inputs: &[(String, arora_types::value::Type)],
     defaults: &HashMap<String, arora_types::value::Value>,
+    store: BlackboardStore,
     operator: Option<&dyn arora::operator::Operator>,
-) -> (arora::AroraBuilder, Option<Arc<AroraWSServer>>) {
+) -> arora::AroraBuilder {
     #[cfg(not(feature = "studio"))]
     let _ = operator;
     // Studio first: the bridge whose identity the device carries.
@@ -220,12 +231,8 @@ pub async fn attach_bridges(
             builder = builder.with_bridge(bridge);
         }
     }
-    let mut local = None;
-    match LocalBridge::serve(&bridges.local, data_inputs, defaults).await {
-        Ok(bridge) => {
-            local = Some(bridge.server());
-            builder = builder.with_bridge(Box::new(bridge));
-        }
+    match LocalBridge::serve(bridges.local.clone(), data_inputs, defaults, store).await {
+        Ok(bridge) => builder = builder.with_bridge(Box::new(bridge)),
         Err(e) => log::error!("local bridge: {e:?}"),
     }
     #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
@@ -258,7 +265,7 @@ pub async fn attach_bridges(
             }
         );
     }
-    (builder, local)
+    builder
 }
 
 /// Load the face from its GLB bytes (its graph kinds filtered by `config`)
@@ -375,7 +382,6 @@ fn supervise(
             stage_neutral_pose(&store, &meta);
         }
         let speech = config.speech.as_ref().map(|build| build());
-        let speech_module = speech.as_ref().map(|module| module.id());
         let Some(builder) = builder_for(&spec, rig, store.clone(), &meta.bundle.skills, speech)
         else {
             return;
@@ -383,12 +389,13 @@ fn supervise(
         let defaults = neutral_defaults(&meta, &spec);
         let reload = tokio_rt.block_on(async {
             let operator = frontend.as_ref().map(|frontend| frontend.operator.clone());
-            let (builder, local) = attach_bridges(
+            let builder = attach_bridges(
                 builder,
                 &bridges,
                 config.ros4hri,
                 &free_inputs(&spec),
                 &defaults,
+                store.clone(),
                 operator.as_deref(),
             )
             .await;
@@ -396,7 +403,7 @@ fn supervise(
             // teardown is complete and synchronous (front end released, local
             // bridge's port freed) before the next generation starts.
             tokio::select! {
-                result = run_generation(builder, frontend, local, store, defaults, speech_module) => {
+                result = run_generation(builder, frontend) => {
                     if let Err(e) = result {
                         log::error!("arora device stopped: {e:?}");
                     }
@@ -414,24 +421,16 @@ fn supervise(
     }
 }
 
-/// Run one device generation: build it, register the local bridge's methods
-/// over its caller (they exist only once the device does), hand the front
-/// end its live view, and step until the run ends. The steps of arora's own
-/// operator flow (`AroraBuilder::run`), taken here because the bridge's
-/// methods need the built device's [`LocalCaller`]; the access requests a
-/// bridge would yield are not served (no bridge yields any).
+/// Run one device generation: build it, hand the front end its live view, and
+/// step until the run ends. The steps of arora's own operator flow
+/// (`AroraBuilder::run`), taken here because this app owns the generation
+/// loop; the access requests a bridge would yield are not served (no bridge
+/// yields any).
 async fn run_generation(
     builder: arora::AroraBuilder,
     frontend: Option<arora::operator::Frontend>,
-    local: Option<Arc<AroraWSServer>>,
-    store: BlackboardStore,
-    defaults: HashMap<String, arora_types::value::Value>,
-    speech_module: Option<uuid::Uuid>,
 ) -> Result<()> {
     let mut arora = builder.build().context("failed to build the device")?;
-    if let Some(server) = local {
-        register_methods(&server, arora.caller(), store, defaults, speech_module).await;
-    }
     if let Some(frontend) = frontend {
         (frontend.on_ready)(arora.store().subscribe(), None, None);
     }
