@@ -1,8 +1,8 @@
 //! Live ROS 2 end-to-end: a typed `interaction_skills/LookAt` client drives
 //! the gaze skill on the real vizij device over DDS.
 //!
-//! The whole production chain is under test — discovery (`DescribeMethods`
-//! over the device's gaze module), the ros4hri exposure profile's
+//! The whole production chain is under test — discovery (`DescribeMethods`,
+//! look_at described by the interpreter), the ros4hri exposure profile's
 //! `/skill/look_at` action binding, SPAWN into the node-graph interpreter
 //! (the shipped look_at fragment grafts as graph structure, writes the
 //! `standard/ros4hri/gaze/*` surface, and reports on its status key),
@@ -141,7 +141,7 @@ async fn the_look_at_skill_serves_the_standard_contract_on_the_vizij_device() {
     let domain_id: u16 = rand::rng().random_range(1..=200);
 
     // The real device: node-graph interpreter with the shipped look_at
-    // fragment, the described gaze module, and the ROS 2 bridge exposing the
+    // fragment, which describes the method, and the ROS 2 bridge exposing the
     // ros4hri profile. The store clone watches the gaze surface from the
     // test.
     let store = BlackboardStore::new();

@@ -392,6 +392,20 @@ fn evaluate_kind_inner(
     }
 }
 
+/// The call args a TaskRun argument bundle carries: the fields of a
+/// structure, none when there is no bundle.
+fn bundle_fields(bundle: Option<&Value>) -> Result<Vec<(Uuid, Value)>, String> {
+    match bundle {
+        Some(Value::Structure(bundle)) => Ok(bundle
+            .fields
+            .iter()
+            .map(|field| (field.id, (*field.value).clone()))
+            .collect()),
+        None => Ok(Vec::new()),
+        Some(_) => Err("a TaskRun argument bundle is a structure of call args".to_string()),
+    }
+}
+
 fn eval_task_run(
     rt: &mut GraphRuntime,
     spec: &NodeSpec,
@@ -421,25 +435,18 @@ fn eval_task_run(
         "TaskRun node evaluated without a function host (graph run outside a host)".to_string()
     })?;
 
-    // The argument bundle is one structure whose fields are the call's args.
-    // It comes from the `args` input when wired — how a live goal update on the
-    // run's update key reaches the call each tick — falling back to the `value`
-    // param, which the interpreter seeds with the spawn-time args.
-    let bundle = inputs
-        .get("args")
-        .map(|port| &port.value)
-        .or(spec.params.value.as_ref());
-    let args: Vec<(Uuid, Value)> = match bundle {
-        Some(Value::Structure(bundle)) => bundle
-            .fields
-            .iter()
-            .map(|field| (field.id, (*field.value).clone()))
-            .collect(),
-        None => Vec::new(),
-        Some(_) => {
-            return Err("a TaskRun argument bundle is a structure of call args".to_string());
+    // The call's args: the `value` param's fields — what the graph states
+    // once, such as a mutable argument's initial value — then the fields of
+    // the `args` input, the live bundle through which a goal update on the
+    // run's update key reaches the call each tick. A live field wins over a
+    // stated one for the same parameter.
+    let mut args = bundle_fields(spec.params.value.as_ref())?;
+    for (id, value) in bundle_fields(inputs.get("args").map(|port| &port.value))? {
+        match args.iter_mut().find(|(known, _)| *known == id) {
+            Some(stated) => stated.1 = value,
+            None => args.push((id, value)),
         }
-    };
+    }
 
     let (status, out_parameters) =
         functions.call_module_with_outputs(spec.params.module, function, &args)?;

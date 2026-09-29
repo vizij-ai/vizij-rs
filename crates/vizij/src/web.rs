@@ -33,14 +33,15 @@ use arora_types::call::Call;
 use arora_web::AroraWeb;
 use bevy::prelude::*;
 use uuid::Uuid;
-use vizij_arora_behavior::{encode_edit_call, encode_load_call, parse_spec, parse_spec_diff};
+use vizij_arora_behavior::{
+    encode_edit_call, encode_load_call, gaze, parse_spec, parse_spec_diff, speech, viseme,
+};
 use vizij_arora_hal::RigHal;
 use vizij_arora_host::ProgramSelect;
 use vizij_arora_store::BlackboardStore;
 use wasm_bindgen::prelude::*;
 
 use crate::face::{self, FaceConfig, LoadedFace};
-use crate::modules::{gaze, viseme};
 use crate::view::meta::FaceMeta;
 use crate::view::{self, FaceAssets, Fit, Picked, Picks, ViewEvent, ViewEvents, ViewOptions};
 
@@ -147,8 +148,8 @@ fn send(event: ViewEvent) -> Result<(), JsValue> {
 /// bundle are read, its graphs composed (`options_json` as
 /// [`compose_vizij`]'s: `graphs`, `program`, `ros4hri`, plus `stageNeutral`,
 /// default `true`, and `speechApiUrl`, the TTS deployment), the device built
-/// over `RigHal` + `BlackboardStore` with the animation, gaze and viseme
-/// modules and — given `play`, the page's playback hook
+/// over `RigHal` + `BlackboardStore` with the animation module and the
+/// skills, and — given `play`, the page's playback hook
 /// ([`vizij_arora_tts::Config::play`]) — the speech provider, and the scene
 /// queued for the App. `modules` optionally loads Arora wasm modules into
 /// the device's engine as guests: a JS array of `{ headerJson, wasmBytes }`
@@ -513,21 +514,18 @@ impl VizijRuntime {
                 }
                 (
                     vizij_arora_tts::MODULE_ID,
-                    vizij_arora_tts::SAY_ID,
-                    HashMap::from([
-                        (vizij_arora_tts::SAY_TEXT_PARAM_ID, "text".to_string()),
-                        (vizij_arora_tts::SAY_VOICE_PARAM_ID, "voice".to_string()),
-                    ]),
+                    speech::say::ids::say::FUNCTION,
+                    speech::say_parameters(),
                 )
             }
             "look_at" => (
-                gaze::module_id(),
-                gaze::look_at_id(),
+                interpreter_module::ID,
+                gaze::look_at::ids::look_at::FUNCTION,
                 gaze::look_at_parameters(),
             ),
             "play_viseme" => (
-                viseme::MODULE_ID,
-                viseme::PLAY_VISEME_ID,
+                interpreter_module::ID,
+                viseme::play_viseme::ids::play_viseme::FUNCTION,
                 viseme::play_viseme_parameters(),
             ),
             other => {

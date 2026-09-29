@@ -8,7 +8,7 @@
 use anyhow::{anyhow, Result};
 use arora_types::data::{DataStore, Key, StateChange};
 use vizij_api_core::value::{float, Value};
-use vizij_arora_behavior::speech;
+use vizij_arora_behavior::{gaze, speech, viseme};
 use vizij_arora_behavior::{parse_spec, ProcessingGraph};
 use vizij_arora_hal::RigHal;
 pub use vizij_arora_host::ProgramSelect;
@@ -16,7 +16,7 @@ use vizij_arora_store::BlackboardStore;
 
 use crate::view::meta::FaceMeta;
 
-use crate::modules::{animation, gaze, viseme};
+use crate::modules::animation;
 
 /// Builds this device's speech provider — the host module behind the say
 /// skill's hosted `say` call, one per device generation: the cloud provider
@@ -238,7 +238,7 @@ pub fn builder_with_guests(
     // say skill's hosted `say` call to this build's text-to-speech provider.
     let mut function_modules = animation::function_modules();
     if let Some(provider) = &speech {
-        function_modules.insert(speech::SAY_ID, provider.id());
+        function_modules.insert(speech::say::ids::say::FUNCTION, provider.id());
     }
     for (header, _) in &guests {
         function_modules.extend(
@@ -249,29 +249,29 @@ pub fn builder_with_guests(
         );
     }
     graph.set_function_modules(function_modules.clone());
-    // The skills: each described contract rides its host module; the
-    // behavior is the shipped fragment the interpreter grafts per run — or
-    // the face's embedded override. The viseme players write the face's
-    // standard controls, so they take its rig prefix.
+    // The skills: the fragments the interpreter grafts per run — the shipped
+    // ones, or the face's embedded overrides. No module implements look_at
+    // or play_viseme: their fragments carry the contracts' descriptions, so
+    // the interpreter describes them. say's fragment wraps the provider's
+    // call, which the provider describes. The viseme players write the
+    // face's standard controls, so they take its rig prefix.
     graph.set_task_fragment(
-        gaze::look_at_id(),
+        gaze::look_at::ids::look_at::FUNCTION,
         gaze::look_at_fragment_from(embedded_skills),
     );
     graph.set_task_fragment(
-        viseme::PLAY_VISEME_ID,
+        viseme::play_viseme::ids::play_viseme::FUNCTION,
         viseme::play_viseme_fragment_from(embedded_skills, &rig_prefix),
     );
     graph.set_task_fragment(
-        speech::SAY_ID,
+        speech::say::ids::say::FUNCTION,
         speech::say_fragment_from(embedded_skills, &rig_prefix),
     );
     let builder = arora::Arora::builder()
         .with_hal(Box::new(rig))
         .with_data_store(Box::new(store))
         .with_behavior_interpreter(Box::new(graph))
-        .with_host_module(animation::host_module())
-        .with_host_module(gaze::host_module())
-        .with_host_module(viseme::host_module());
+        .with_host_module(animation::host_module());
     // The speech provider: the `say` behind the say skill (poll-on-tick,
     // viseme out-parameter) — one per device, same contract whichever
     // synthesizes and plays.
@@ -480,11 +480,10 @@ mod tests {
     fn the_gaze_skill_runs_the_shipped_fragment_through_the_device() {
         use arora_behavior::{interpreter_module, RunPolicy};
         use arora_types::call::Call;
-        use arora_types::gen_uuid_from_str;
         use arora_types::value::StructureField;
         use vizij_arora_behavior::task;
 
-        use crate::modules::gaze;
+        use vizij_arora_behavior::gaze::look_at::ids::look_at as ids;
 
         let mut arora = builder_for(
             r#"{ "nodes": [], "edges": [] }"#,
@@ -498,19 +497,19 @@ mod tests {
         .expect("build arora");
 
         let look_at = Call {
-            module_id: Some(gaze::module_id()),
-            id: gaze::look_at_id(),
+            module_id: Some(interpreter_module::ID),
+            id: ids::FUNCTION,
             args: vec![
                 StructureField {
-                    id: gen_uuid_from_str("policy"),
+                    id: ids::POLICY,
                     value: Box::new(Value::String(String::new())),
                 },
                 StructureField {
-                    id: gen_uuid_from_str("target"),
+                    id: ids::TARGET,
                     value: Box::new(Value::ArrayF32(vec![1.0, 2.0, 3.0])),
                 },
                 StructureField {
-                    id: gen_uuid_from_str("frame"),
+                    id: ids::FRAME,
                     value: Box::new(Value::String("sellion_link".to_string())),
                 },
             ],
@@ -564,11 +563,10 @@ mod tests {
     fn the_face_embedded_skill_fragment_overrides_the_built_in() {
         use arora_behavior::{interpreter_module, RunPolicy};
         use arora_types::call::Call;
-        use arora_types::gen_uuid_from_str;
         use arora_types::value::StructureField;
         use vizij_arora_host::skills;
 
-        use crate::modules::gaze;
+        use vizij_arora_behavior::gaze::look_at::ids::look_at as ids;
 
         let edited =
             skills::LOOK_AT_JSON.replace(ros4hri::GAZE_TARGET_KEY, "test/edited/gaze/target");
@@ -589,10 +587,10 @@ mod tests {
         .expect("build arora");
 
         let look_at = Call {
-            module_id: Some(gaze::module_id()),
-            id: gaze::look_at_id(),
+            module_id: Some(interpreter_module::ID),
+            id: ids::FUNCTION,
             args: vec![StructureField {
-                id: gen_uuid_from_str("target"),
+                id: ids::TARGET,
                 value: Box::new(Value::ArrayF32(vec![7.0, 8.0, 9.0])),
             }],
         };
@@ -852,8 +850,8 @@ mod tests {
             value: Box::new(value),
         };
         arora_types::call::Call {
-            module_id: Some(viseme::MODULE_ID),
-            id: viseme::PLAY_VISEME_ID,
+            module_id: Some(arora_behavior::interpreter_module::ID),
+            id: viseme::play_viseme::ids::play_viseme::FUNCTION,
             args: vec![
                 arg("shape", Value::String(shape.to_string())),
                 arg("weight", Value::F32(weight)),
@@ -945,39 +943,49 @@ mod tests {
     /// call's status as its own.
     #[test]
     fn a_say_run_streams_the_provider_s_visemes_to_the_lips() {
-        use arora_types::call::CallResult;
+        use arora_behavior::Status;
         use arora_types::value::StructureField;
         use std::collections::HashMap;
         use std::sync::{Arc, Mutex};
         use uuid::Uuid;
         use vizij_arora_behavior::task;
 
+        use speech::say::ids::say as ids;
+
+        /// Two ticks of `PP`, two of `aa`, then done at rest; it counts its
+        /// calls and checks the viseme each one passes in.
+        struct Scripted {
+            calls: Arc<Mutex<usize>>,
+        }
+
+        impl speech::Say for Scripted {
+            fn say(&mut self, text: String, _voice: Option<String>, viseme: &mut String) -> Status {
+                assert_eq!(text, "hello");
+                assert_eq!(
+                    viseme,
+                    speech::SILENCE_VISEME,
+                    "the fragment states the viseme"
+                );
+                let mut n = self.calls.lock().unwrap();
+                *n += 1;
+                let (status, current) = match *n {
+                    1 | 2 => (Status::Running, "PP"),
+                    3 | 4 => (Status::Running, "aa"),
+                    _ => (Status::Success, speech::SILENCE_VISEME),
+                };
+                *viseme = current.to_string();
+                status
+            }
+        }
+
         const PROVIDER: Uuid = Uuid::from_u128(0x7474732d74657374);
         let calls = Arc::new(Mutex::new(0usize));
-        let script = calls.clone();
-        let provider = arora::ModuleBuilder::new(PROVIDER)
-            .described_function(
-                speech::SAY_ID,
-                "say",
-                speech::say_signature(),
-                move |_call| {
-                    let mut n = script.lock().unwrap();
-                    *n += 1;
-                    let (status, viseme) = match *n {
-                        1 | 2 => (task::running(), "PP"),
-                        3 | 4 => (task::running(), "aa"),
-                        _ => (task::success(), speech::SILENCE_VISEME),
-                    };
-                    Ok(CallResult {
-                        ret: status,
-                        mutated: vec![StructureField {
-                            id: speech::SAY_VISEME_PARAM_ID,
-                            value: Box::new(Value::String(viseme.to_string())),
-                        }],
-                    })
-                },
-            )
-            .build();
+        let provider = arora::HostModule::from_exports(
+            PROVIDER,
+            speech::say::exports(Scripted {
+                calls: calls.clone(),
+            }),
+        );
 
         // The device by hand: the profile as the base graph, the say fragment
         // registered, the say call routed to the scripted provider.
@@ -986,8 +994,8 @@ mod tests {
             .to_string();
         let mut graph =
             ProcessingGraph::from_spec(parse_spec(&spec).expect("parse")).expect("encode");
-        graph.set_function_modules(HashMap::from([(speech::SAY_ID, PROVIDER)]));
-        graph.set_task_fragment(speech::SAY_ID, speech::say_fragment(""));
+        graph.set_function_modules(HashMap::from([(ids::FUNCTION, PROVIDER)]));
+        graph.set_task_fragment(ids::FUNCTION, speech::say_fragment(""));
         let mut arora = arora::Arora::builder()
             .with_data_store(Box::new(BlackboardStore::new()))
             .with_behavior_interpreter(Box::new(graph))
@@ -997,14 +1005,14 @@ mod tests {
 
         let say = arora_types::call::Call {
             module_id: Some(PROVIDER),
-            id: speech::SAY_ID,
+            id: ids::FUNCTION,
             args: vec![
                 StructureField {
-                    id: speech::SAY_TEXT_PARAM_ID,
+                    id: ids::TEXT,
                     value: Box::new(Value::String("hello".to_string())),
                 },
                 StructureField {
-                    id: speech::SAY_VOICE_PARAM_ID,
+                    id: ids::VOICE,
                     value: Box::new(Value::String(String::new())),
                 },
             ],

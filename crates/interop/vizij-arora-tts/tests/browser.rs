@@ -15,7 +15,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use arora_behavior::{interpreter_module, RunPolicy, TaskHandle};
-use arora_types::call::{Call, CallResult};
+use arora_types::call::Call;
 use arora_types::data::{Key, StateChange};
 use arora_types::value::{StructureField, Value};
 use vizij_arora_behavior::{parse_spec, speech, task, viseme, ProcessingGraph};
@@ -48,26 +48,15 @@ fn passthrough() -> String {
 fn compose(provider: arora::HostModule) -> arora::Arora {
     let spec = parse_spec(&passthrough()).expect("parse");
     let mut graph = ProcessingGraph::from_spec(spec).expect("encode");
-    graph.set_function_modules(HashMap::from([(SAY_ID, provider.id())]));
-    graph.set_task_fragment(viseme::PLAY_VISEME_ID, viseme::play_viseme_fragment(""));
-    graph.set_task_fragment(SAY_ID, speech::say_fragment(""));
-    let viseme_module = arora::ModuleBuilder::new(viseme::MODULE_ID)
-        .described_function(
-            viseme::PLAY_VISEME_ID,
-            "play_viseme",
-            viseme::play_viseme_signature(),
-            |_call| {
-                Ok(CallResult {
-                    ret: task::failure(),
-                    mutated: Vec::new(),
-                })
-            },
-        )
-        .build();
+    graph.set_function_modules(HashMap::from([(say::ids::say::FUNCTION, provider.id())]));
+    graph.set_task_fragment(
+        viseme::play_viseme::ids::play_viseme::FUNCTION,
+        viseme::play_viseme_fragment(""),
+    );
+    graph.set_task_fragment(say::ids::say::FUNCTION, speech::say_fragment(""));
     let arora = arora::Arora::builder()
         .with_data_store(Box::new(BlackboardStore::new()))
         .with_behavior_interpreter(Box::new(graph))
-        .with_host_module(viseme_module)
         .with_host_module(provider)
         .build()
         .expect("build arora");
@@ -121,14 +110,14 @@ fn text(s: &str) -> Value {
 fn say_call(what: &str) -> Call {
     Call {
         module_id: Some(MODULE_ID),
-        id: SAY_ID,
+        id: say::ids::say::FUNCTION,
         args: vec![
             StructureField {
-                id: SAY_TEXT_PARAM_ID,
+                id: say::ids::say::TEXT,
                 value: Box::new(text(what)),
             },
             StructureField {
-                id: SAY_VOICE_PARAM_ID,
+                id: say::ids::say::VOICE,
                 value: Box::new(text("Ruth")),
             },
         ],

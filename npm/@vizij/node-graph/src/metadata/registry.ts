@@ -3148,13 +3148,13 @@ const registry: Registry = {
       "type_id": "taskrun",
       "name": "Task Run",
       "category": "Functions",
-      "doc": "Hosts one task run: invokes its module function (module and function are params) each evaluation and emits the run's behavior Status, latched once terminal. The argument bundle comes from the `args` input when wired (so a live goal update on the run's update key flows in each tick), else from the `value` param. The call's mutable (out) parameters are the keyed `mutated` outputs, one per key in params.record_keys (a parameter id). Grafted per spawned run by the interpreter.",
+      "doc": "Hosts one task run: invokes its module function (module and function are params) each evaluation and emits the run's behavior Status, latched once terminal. The call's args are the `value` param's fields, then those of the `args` input (so a live goal update on the run's update key flows in each tick), which win for a parameter both name. The call's mutable (out) parameters are the keyed `mutated` outputs, one per key in params.record_keys (a parameter id). Grafted per spawned run by the interpreter.",
       "inputs": [
         {
           "id": "args",
           "ty": "any",
           "label": "Args",
-          "doc": "The call's argument bundle (a structure of the call args). Overrides the `value` param when present — how a live goal update reaches a running task.",
+          "doc": "The call's argument bundle (a structure of the call args). Its fields win over the `value` param's — how a live goal update reaches a running task.",
           "optional": true
         }
       ],

@@ -420,3 +420,50 @@ pub fn restore_terminal() {
         let _ = crossterm::execute!(std::io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
     }
 }
+
+/// The ROS4HRI profile comes from arora-bridge-ros2, which knows nothing of
+/// Vizij, and binds skills by name: each skill it binds is one this device
+/// declares, taking every parameter a goal field is routed to.
+#[cfg(all(test, any(feature = "ros2-dds", feature = "ros2-zenoh")))]
+mod ros4hri_profile_tests {
+    use arora_types::record::module::frozen::ExportKind;
+    use uuid::Uuid;
+    use vizij_arora_host::skills::{look_at, play_viseme, say};
+
+    #[test]
+    fn every_skill_the_ros4hri_profile_binds_is_a_declared_contract() {
+        let contracts = [
+            look_at::record(Uuid::nil()),
+            play_viseme::record(Uuid::nil()),
+            say::record(Uuid::nil()),
+        ];
+        let profile = arora_bridge_ros2::ExposureProfile::ros4hri();
+        assert!(!profile.actions.is_empty(), "the profile binds skills");
+        for binding in &profile.actions {
+            let signature = contracts
+                .iter()
+                .flat_map(|contract| contract.exports.values())
+                .find(|export| export.name == binding.function)
+                .map(|export| {
+                    let ExportKind::Function(signature) = &export.kind;
+                    signature
+                })
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{} binds `{}`, which no skill contract declares",
+                        binding.action, binding.function
+                    )
+                });
+            for route in &binding.goal_routes {
+                assert!(
+                    signature.parameters.values().any(|p| p.name == route.key),
+                    "{} routes `{}` to `{}`, which `{}` does not take",
+                    binding.action,
+                    route.field,
+                    route.key,
+                    binding.function
+                );
+            }
+        }
+    }
+}

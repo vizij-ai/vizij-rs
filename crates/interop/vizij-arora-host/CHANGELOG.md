@@ -4,6 +4,25 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [4.0.0] - 2026-09-28
+
+### Changed
+
+- **Breaking:** each skill's contract is a trait declared with arora-module's
+  `#[contract]`: `LookAt`, `PlayViseme` and `Say`, each beside a module
+  holding its ids (`look_at::ids::look_at::FUNCTION`, …), `NAME`,
+  `record(parent)` and `exports(implementation)`. They replace `SAY_ID`,
+  `SAY_TEXT_PARAM_ID`, `SAY_VOICE_PARAM_ID`, `SAY_VISEME_PARAM_ID`,
+  `LOOK_AT_FUNCTION`, `PLAY_VISEME_FUNCTION` and `SAY_FUNCTION`. The ids on
+  the wire are unchanged: the parameter ids of look_at and play_viseme,
+  hashed from their names, are literals of the same values.
+- **Breaking:** `say`'s `voice` is optional (`Option<String>`); a call
+  without one is spoken in the provider's default voice.
+- The say fragment passes `sil` as the provider's `viseme`, stated in its
+  task-run node's `value` (vizij-graph-core 2.1): a provider declared from
+  the contract fails a call that lacks a required argument.
+- Depends on arora-module 2.1.
+
 ## [3.0.0] - 2026-09-26
 
 ### Changed

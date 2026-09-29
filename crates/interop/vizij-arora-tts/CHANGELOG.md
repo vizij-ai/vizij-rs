@@ -8,6 +8,11 @@ All notable changes to `vizij-arora-tts`. The format follows
 
 ### Breaking
 
+- The provider implements the say contract, `Say`, and the module is
+  `HostModule::from_exports(MODULE_ID, say::exports(provider))`. The crate
+  re-exports `say`, `Say` and `SILENCE_VISEME` in place of `say_signature` and
+  the `SAY_*` ids. A call without `text` or `viseme` fails, where it used to
+  return a failure status. Depends on arora-engine 5.1 and arora-behavior 9.
 - `host_module` takes a `Config`: the deployment (`api_base`, no more
   `API_URL` read inside the crate) and, in the browser, the page's playback
   hook. The module keeps its runs in the closure, not in a process-wide map.

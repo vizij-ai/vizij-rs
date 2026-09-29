@@ -36,6 +36,7 @@ use arora_behavior::{
 };
 use arora_types::call::{Call, CallBridge, CallResult};
 use arora_types::data::{DataStore, Key, StateChange};
+use arora_types::record::module::frozen;
 use arora_types::value::{Structure, StructureField, Value};
 use uuid::Uuid;
 use vizij_api_core::TypedPath;
@@ -173,6 +174,10 @@ pub struct TaskFragment {
     /// spawning halts every live run of the same function first, so the
     /// newest run is the only one writing (a viseme player's lips).
     exclusive: bool,
+    /// The function the fragment implements, named and signed, when no
+    /// module implements it: the interpreter describes it, and the device
+    /// lists it under the interpreter module.
+    description: Option<frozen::Export>,
 }
 
 impl TaskFragment {
@@ -197,7 +202,19 @@ impl TaskFragment {
             spec,
             parameters,
             exclusive: false,
+            description: None,
         })
+    }
+
+    /// Describe the function the fragment implements, for a function no
+    /// module implements: the interpreter lists it among its
+    /// [`described_methods`](BehaviorInterpreter::described_methods), so a
+    /// remote discovers it and spawns it through the interpreter module. A
+    /// fragment wrapping a module's own function (the say skill around its
+    /// provider) is left undescribed: the module describes it.
+    pub fn described(mut self, description: frozen::Export) -> Self {
+        self.description = Some(description);
+        self
     }
 
     /// Make new runs of the function take over: spawning one halts every
@@ -685,6 +702,15 @@ fn fragment_graft(
 }
 
 impl BehaviorInterpreter for ProcessingGraph {
+    /// The functions the registered fragments implement, where a fragment
+    /// is [`described`](TaskFragment::described).
+    fn described_methods(&self) -> HashMap<Uuid, frozen::Export> {
+        self.fragments
+            .iter()
+            .filter_map(|(function, fragment)| Some((*function, fragment.description.clone()?)))
+            .collect()
+    }
+
     fn tick(&mut self, ctx: &mut BehaviorContext) -> Result<BehaviorStatus, BehaviorError> {
         let dt = built_in_dt_seconds(ctx.store);
         self.tick_store(ctx.store, &mut *ctx.call_bridge, dt)?;
@@ -1330,39 +1356,31 @@ mod tests {
     /// errno on the result key.
     #[test]
     fn a_registered_fragment_implements_the_spawned_run() {
-        use arora_types::gen_uuid_from_str;
-        use vizij_arora_host::skills;
-
-        let parameters: HashMap<Uuid, String> = skills::LOOK_AT_PARAMS
-            .iter()
-            .map(|name| (gen_uuid_from_str(name), name.to_string()))
-            .collect();
-        let fragment =
-            TaskFragment::parse(skills::LOOK_AT_JSON, parameters).expect("the asset parses");
+        use crate::gaze::{self, look_at::ids::look_at as ids};
 
         let store = SimpleDataStore::new();
         let mut graph =
             ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
-        graph.set_task_fragment(gen_uuid_from_str("look_at"), fragment);
+        graph.set_task_fragment(ids::FUNCTION, gaze::look_at_fragment());
         let mut bridge = NoopBridge;
         store
             .write(StateChange::set("sensor/x", float(0.75)))
             .unwrap();
 
         let look_at = |policy: &str, target: [f32; 3], frame: &str| Call {
-            module_id: Some(gen_uuid_from_str("gaze-module")),
-            id: gen_uuid_from_str("look_at"),
+            module_id: Some(arora_behavior::interpreter_module::ID),
+            id: ids::FUNCTION,
             args: vec![
                 StructureField {
-                    id: gen_uuid_from_str("policy"),
+                    id: ids::POLICY,
                     value: Box::new(Value::String(policy.to_string())),
                 },
                 StructureField {
-                    id: gen_uuid_from_str("target"),
+                    id: ids::TARGET,
                     value: Box::new(Value::ArrayF32(target.to_vec())),
                 },
                 StructureField {
-                    id: gen_uuid_from_str("frame"),
+                    id: ids::FRAME,
                     value: Box::new(Value::String(frame.to_string())),
                 },
             ],

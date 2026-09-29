@@ -2,9 +2,15 @@
 
 A skill is a device method whose behavior is **graph data**: a fragment the
 device's node-graph interpreter grafts into the running graph per call (a
-*run*), rather than host code. The exterior contract — the described
-signature bridges discover over `DescribeMethods`, its `Status` return the
-task-run marker — lives with the device; the behavior is a canonical JSON
+*run*), rather than host code. The exterior contract — the function's id,
+name and signature, which bridges discover over `DescribeMethods`, its
+`Status` return the task-run marker — is declared once per skill in
+`vizij_arora_host::skills`, as a trait (`#[arora_module::contract]`). No
+module implements `look_at` or `play_viseme`: their fragments carry the
+contracts' descriptions, so the device's interpreter describes the methods,
+listed under the interpreter module, and a remote spawns them through it.
+`say`'s fragment wraps the text-to-speech provider's call, which the provider
+describes under its own module id. The behavior is a canonical JSON
 asset in `vizij-arora-host` (`skills/<id>.json`), regenerable from its
 builder (`vizij-bundle export-skill <id>`), drift-tested, and **overridable
 per face**: a face GLB embedding a `skill::<id>` graph entry runs its own copy
@@ -19,7 +25,7 @@ Three skills ship.
 |---|---|---|
 | `look_at` | `(policy, target, frame) → Status` | ROS4HRI's gaze skill: tracks a target on the standard gaze surface until cancelled, or holds a glance/reset fixation then succeeds — see [ROS4HRI support](ros4hri.md#the-look_at-skill) |
 | `play_viseme` | `(shape, weight) → Status` | plays one shape of the face standard's 15 through the lipsync envelope, crossfading the others out |
-| `say` | `(text, voice) → Status` | speaks the text through the build's text-to-speech provider and drives the lips from the visemes it streams |
+| `say` | `(text, voice?, &mut viseme) → Status` | speaks the text through the build's text-to-speech provider and drives the lips from the visemes it streams |
 
 ## The viseme players
 
@@ -46,7 +52,10 @@ alone writes. A lipsync producer calls it once per viseme; `sil` plays rest.
 **`say(text, voice)`** hosts the device's `say` call — the text-to-speech
 provider's poll-on-tick function, re-invoked every tick while `Running` — on
 the run's own argument bundle, and feeds the viseme the provider streams
-through its mutable `viseme` parameter into the driver at full weight. The
+through its mutable `viseme` parameter into the driver at full weight.
+`voice` is optional: without one, the provider speaks in its own default.
+`viseme` is a required argument like any other; the fragment passes `sil` for
+it, stated in its task-run node's `value`, under the bundle's own arguments. The
 provider's viseme is already a standard shape: the cloud provider maps AWS
 Polly's viseme codes, the Piper provider maps espeak-ng phonemes. The run's
 status is the call's, once the lips have settled after the utterance. See
@@ -75,8 +84,8 @@ Two producers exist outside the players and neither reaches them:
   in vizij-standalone, a phoneme aligner in the agent-face tutorial, each with
   its own crossfade. The skills registry
   ([`@vizij/runtime`](../npm/@vizij/runtime/README.md)) serves the fragments to
-  the web, but the standalone app does not yet register the viseme module or
-  the players, so the two platforms lip-sync by different means.
+  the web, but the standalone app does not yet register the viseme players,
+  so the two platforms lip-sync by different means.
 
 ## Calling a skill
 
@@ -91,20 +100,25 @@ binds `say` to ROS4HRI's speech skill, `/skill/say`
 the feedback carries the run's `{viseme, intensity}` in the fields Vizij adds
 to the standard's `Say` feedback — a lipsync stream any client built from
 that definition reads. Both skills are exposed under the ROS4HRI exposure
-profile only. The bridge also synthesizes one action per described skill from
-its signature — `/<namespace>/actions/play_viseme` (`arora/action/play_viseme`,
-goal `shape`, `weight`) and `/<namespace>/actions/say` (`arora/action/say`,
-goal `text`, `voice`) — discovered over DDS and rmw_zenoh alike, but their
-`arora` interfaces are not a ROS package, so a client cannot build their goals
-until the definitions are generated for it.
+profile only. The bridge also synthesizes an action from the signature of each
+described skill whose parameters ROS 2 can carry —
+`/<namespace>/actions/play_viseme` (`arora/action/play_viseme`, goal `shape`,
+`weight`) — discovered over DDS and rmw_zenoh alike, but its `arora`
+interface is not a ROS package, so a client cannot build its goal until the
+definition is generated for it. `say` has no synthesized action: ROS 2 has no
+form for its optional `voice`, so `/skill/say` is its action.
 
 ## In code and on the web
 
-`vizij_arora_host::skills` holds the registry (`SKILLS`, `skill(id)`,
-`skill_source(id)`), the fragment generators, and the parameter lists each
-contract derives from; `vizij_arora_behavior::{gaze, viseme, speech}` hold the
-described signatures and the fragments a device registers (with the face's
-rig prefix on the standard controls a fragment writes).
+`vizij_arora_host::skills` holds the skill contracts (`LookAt`, `PlayViseme`,
+`Say`, with their ids under `look_at::ids`, `play_viseme::ids` and
+`say::ids`), the registry (`SKILLS`, `skill(id)`, `skill_source(id)`) and the
+fragment generators; `vizij_arora_behavior::{gaze, viseme, speech}` re-export
+the contracts beside the fragments a device registers (with the face's rig
+prefix on the standard controls a fragment writes) — the gaze and viseme ones
+`described`, so the interpreter describes their methods. A text-to-speech
+provider implements `Say` under its own module id and registers with
+`HostModule::from_exports(id, say::exports(provider))`.
 [`@vizij/runtime`](../npm/@vizij/runtime/README.md) serves the same registry
 to the web (`skills()`, `skillSource(id)`), and the vizij-web authoring app
 embeds and edits skill fragments from **File → Skills**.

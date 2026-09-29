@@ -9,7 +9,7 @@ repository = "https://github.com/vizij-ai/vizij-rs"
 [dependencies]
 # The host-module seam only — no engine features, so the crate rides the
 # executor-free arora slice on every target.
-arora-engine = { version = "5", default-features = false }
+arora-engine = { version = "5.1", default-features = false }
 arora-types = "3"
 log = "0.4"
 # Synthesis, the same on every target: `json` on, reqwest picks `fetch` on
@@ -17,10 +17,10 @@ log = "0.4"
 reqwest = { version = "0.13", features = ["json"] }
 serde = { workspace = true }
 uuid = "1"
-# task::{running, success, failure} — the run-status values.
-vizij-graph-core = { version = "2", path = "../../node-graph/vizij-graph-core" }
-# The say contract (ids, signature, the rest token): the speech skill's.
-vizij-arora-behavior = { version = "2", path = "../vizij-arora-behavior" }
+# The behavior `Status` a `say` call returns.
+arora-behavior = "9"
+# The say contract and the rest token: the speech skill's.
+vizij-arora-behavior = { version = "3", path = "../vizij-arora-behavior" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The native producer: a tokio task fetches, a blocking-pool task plays
@@ -38,8 +38,7 @@ serde-wasm-bindgen = { workspace = true }
 [dev-dependencies]
 # The browser tests spawn runs the way a bridge does: through the
 # interpreter module, on a device composed like vizij's.
-arora = { version = "10.0.1", default-features = false }
-arora-behavior = "9"
+arora = { version = "10.3", default-features = false }
 serde_json = { workspace = true }
 vizij-arora-host = { path = "../vizij-arora-host" }
 vizij-arora-store = { path = "../vizij-arora-store" }
