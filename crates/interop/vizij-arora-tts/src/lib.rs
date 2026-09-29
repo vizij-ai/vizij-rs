@@ -12,7 +12,7 @@
 //!
 //! A poll-on-tick action (the arora-sdk `docs/async-functions.md` contract):
 //! `say` is re-invoked each tick while `Running`; synthesis + playback run
-//! off the tick, and the closure only polls. The module streams the current
+//! off the tick, and `say` only polls. The module streams the current
 //! viseme as one of the face standard's shapes
 //! ([`vizij_arora_host::standard::VISEME_SHAPES`]), Polly's viseme codes
 //! mapped by [`polly_shape`]; [`SILENCE_VISEME`] is written at rest. What a
@@ -39,23 +39,18 @@
 //! apart, and a gap of one tick is not a halt. A run gone quiet is dropped
 //! from the module's map at the next `say`.
 
-use arora_engine::module::{HostModule, ModuleBuilder};
+use arora_engine::module::HostModule;
 
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use arora_types::call::{Call, CallError, CallResult};
-use arora_types::value::{StructureField, Value};
+use arora_behavior::Status;
 use serde::{Deserialize, Serialize};
 use uuid::{uuid, Uuid};
-use vizij_graph_core::task;
 
-pub use vizij_arora_behavior::speech::{
-    say_signature, SAY_ID, SAY_TEXT_PARAM_ID, SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID,
-    SILENCE_VISEME,
-};
+pub use vizij_arora_behavior::speech::{say, Say, SILENCE_VISEME};
 
 /// The default provider: the Vizij TTS cloud function (AWS Polly behind an
 /// HTTP endpoint, no credentials in the app).
@@ -149,21 +144,17 @@ pub type Synth = std::rc::Rc<
 
 /// The module with a scripted synthesizer (`Some`, tests) or the default.
 pub fn host_module_with_synth(config: Config, synth: Option<Synth>) -> HostModule {
-    let mut provider = Provider {
+    let provider = Provider {
         config,
         synth,
         runs: HashMap::new(),
         ticks: Pulse::new(),
     };
-    ModuleBuilder::new(MODULE_ID)
-        .described_function(SAY_ID, "say", say_signature(), move |call| {
-            provider.say(call)
-        })
-        .build()
+    HostModule::from_exports(MODULE_ID, say::exports(provider))
 }
 
 /// The module's state: its configuration and the live runs, keyed by content
-/// because the ABI hands the closure no per-run id (distinct `(text, voice)`
+/// because the ABI hands `say` no per-run id (distinct `(text, voice)`
 /// never collide; the same one twice shares a run).
 struct Provider {
     config: Config,
@@ -179,23 +170,19 @@ struct Provider {
 /// What one tick observes of a run.
 pub enum Observed {
     Running(&'static str),
-    Ended(Value),
+    Ended(Status),
 }
 
-impl Provider {
-    /// Speak `text` in `voice`, streaming the current viseme. Re-invoked each
-    /// tick while `Running`.
-    fn say(&mut self, call: Call) -> Result<CallResult, CallError> {
+impl Say for Provider {
+    /// Speak `text` in `voice` (the default voice when `None`), streaming the
+    /// current viseme. Re-invoked each tick while `Running`.
+    fn say(&mut self, text: String, voice: Option<String>, viseme: &mut String) -> Status {
         self.ticks.beat();
         // A run nobody ticks any more was halted; its producer has stopped or
         // is stopping on its own, and its slot goes.
         self.runs.retain(|_, run| !is_halted(platform::pulse(run)));
 
-        let Some(text) = arg_string(&call, SAY_TEXT_PARAM_ID) else {
-            return Ok(status_only(task::failure()));
-        };
-        let voice =
-            arg_string(&call, SAY_VOICE_PARAM_ID).unwrap_or_else(|| DEFAULT_VOICE.to_string());
+        let voice = voice.unwrap_or_else(|| DEFAULT_VOICE.to_string());
         let key = utterance_key(&text, &voice);
         let synth = self.synth.clone();
         let config = &self.config;
@@ -207,10 +194,14 @@ impl Provider {
         });
         platform::pulse(run).beat();
         match platform::poll(run) {
-            Observed::Running(viseme) => Ok(with_viseme(task::running(), viseme)),
+            Observed::Running(current) => {
+                *viseme = current.to_string();
+                Status::Running
+            }
             Observed::Ended(status) => {
                 self.runs.remove(&key);
-                Ok(with_viseme(status, SILENCE_VISEME))
+                *viseme = SILENCE_VISEME.to_string();
+                status
             }
         }
     }
@@ -460,12 +451,11 @@ pub mod platform {
             cues, follow, is_halted, synthesize, Config, Observed, Playback, Pulse, SpeechMark,
             Synth, SILENCE_VISEME,
         };
-        use arora_types::value::Value;
+        use arora_behavior::Status;
         use std::future::Future;
         use std::pin::Pin;
         use std::sync::{Arc, LazyLock, Mutex};
         use std::task::{Context, Poll, Waker};
-        use vizij_graph_core::task;
 
         /// A handle for spawning: the ambient runtime if one is active,
         /// otherwise a dedicated one. Only a `Handle` is needed.
@@ -482,7 +472,7 @@ pub mod platform {
         /// One live utterance.
         pub struct Run {
             /// The synthesis+playback task; its output is the terminal status.
-            handle: tokio::task::JoinHandle<Value>,
+            handle: tokio::task::JoinHandle<Status>,
             /// The shape at the audio playhead, advanced by the task and
             /// sampled by the tick.
             viseme: Arc<Mutex<&'static str>>,
@@ -515,13 +505,13 @@ pub mod platform {
                     Ok(pair) => pair,
                     Err(e) => {
                         log::error!("tts: synthesis failed: {e}");
-                        return task::failure();
+                        return Status::Failure;
                     }
                 };
                 // A halt during synthesis shows as a quiet pulse: nothing to
                 // stop yet, but nothing to play either.
                 if is_halted(&pulse_task) {
-                    return task::failure();
+                    return Status::Failure;
                 }
                 // Playback blocks and rodio's stream is thread-bound, so it
                 // runs on the blocking pool; this task just awaits the outcome.
@@ -529,7 +519,7 @@ pub mod platform {
                     .await
                 {
                     Ok(status) => status,
-                    Err(_join_error) => task::failure(),
+                    Err(_join_error) => Status::Failure,
                 }
             });
             Run {
@@ -547,7 +537,7 @@ pub mod platform {
             match Future::poll(Pin::new(&mut run.handle), &mut cx) {
                 Poll::Pending => Observed::Running(current),
                 Poll::Ready(Ok(status)) => Observed::Ended(status),
-                Poll::Ready(Err(_join_error)) => Observed::Ended(task::failure()),
+                Poll::Ready(Err(_join_error)) => Observed::Ended(Status::Failure),
             }
         }
 
@@ -558,26 +548,26 @@ pub mod platform {
             marks: Vec<SpeechMark>,
             viseme: Arc<Mutex<&'static str>>,
             pulse: Pulse,
-        ) -> Value {
+        ) -> Status {
             let (_stream, handle) = match rodio::OutputStream::try_default() {
                 Ok(pair) => pair,
                 Err(e) => {
                     log::error!("tts: audio output init failed: {e}");
-                    return task::failure();
+                    return Status::Failure;
                 }
             };
             let sink = match rodio::Sink::try_new(&handle) {
                 Ok(sink) => sink,
                 Err(e) => {
                     log::error!("tts: audio sink failed: {e}");
-                    return task::failure();
+                    return Status::Failure;
                 }
             };
             let source = match rodio::Decoder::new(std::io::Cursor::new(audio)) {
                 Ok(source) => source,
                 Err(e) => {
                     log::error!("tts: audio decode failed: {e}");
-                    return task::failure();
+                    return Status::Failure;
                 }
             };
             sink.append(source);
@@ -586,10 +576,10 @@ pub mod platform {
                 (!sink.empty()).then(|| sink.get_pos())
             });
             match outcome {
-                Playback::Ended => task::success(),
+                Playback::Ended => Status::Success,
                 Playback::Halted => {
                     sink.stop();
-                    task::failure()
+                    Status::Failure
                 }
             }
         }
@@ -604,10 +594,9 @@ pub mod platform {
         use super::super::{
             cues, shape_at, synthesize, Config, Cue, Observed, Pulse, Synth, SILENCE_VISEME,
         };
-        use arora_types::value::Value;
+        use arora_behavior::Status;
         use std::cell::RefCell;
         use std::rc::Rc;
-        use vizij_graph_core::task;
         use wasm_bindgen::{JsCast, JsValue};
 
         enum Phase {
@@ -618,7 +607,7 @@ pub mod platform {
                 next: usize,
                 current: &'static str,
             },
-            Ended(Value),
+            Ended(Status),
         }
 
         /// One live utterance.
@@ -651,7 +640,7 @@ pub mod platform {
                     Ok(pair) => pair,
                     Err(e) => {
                         log::error!("tts: synthesis failed: {e}");
-                        *shared.borrow_mut() = Phase::Ended(task::failure());
+                        *shared.borrow_mut() = Phase::Ended(Status::Failure);
                         return;
                     }
                 };
@@ -660,7 +649,7 @@ pub mod platform {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("tts: marks to JS failed: {e}");
-                        *shared.borrow_mut() = Phase::Ended(task::failure());
+                        *shared.borrow_mut() = Phase::Ended(Status::Failure);
                         return;
                     }
                 };
@@ -677,7 +666,7 @@ pub mod platform {
                     },
                     None => {
                         log::error!("tts: the playback hook returned no playhead function");
-                        Phase::Ended(task::failure())
+                        Phase::Ended(Status::Failure)
                     }
                 };
             });
@@ -695,7 +684,7 @@ pub mod platform {
                     next,
                     current,
                 } => match playhead.call0(&JsValue::NULL) {
-                    Ok(v) if v.is_null() || v.is_undefined() => Observed::Ended(task::success()),
+                    Ok(v) if v.is_null() || v.is_undefined() => Observed::Ended(Status::Success),
                     Ok(v) => {
                         let ms = v.as_f64().unwrap_or(0.0).max(0.0) as u64;
                         *current = shape_at(cues, next, ms, current);
@@ -703,47 +692,11 @@ pub mod platform {
                     }
                     Err(e) => {
                         log::error!("tts: the playhead threw: {e:?}");
-                        Observed::Ended(task::failure())
+                        Observed::Ended(Status::Failure)
                     }
                 },
             }
         }
-    }
-}
-
-/// A result carrying only the status (no viseme output).
-fn status_only(status: Value) -> CallResult {
-    CallResult {
-        ret: status,
-        mutated: Vec::new(),
-    }
-}
-
-/// A result carrying the status plus the current viseme in the out-parameter.
-fn with_viseme(status: Value, viseme: &str) -> CallResult {
-    CallResult {
-        ret: status,
-        mutated: vec![StructureField {
-            id: SAY_VISEME_PARAM_ID,
-            value: Box::new(Value::String(viseme.to_string())),
-        }],
-    }
-}
-
-/// Read a string argument by its parameter id, whatever its position in the
-/// call and whatever form an optional takes: a caller may send a bare string,
-/// or wrap it in `Value::Option` (arora-types 3's optional form), and an
-/// absent or `None` argument reads as `None` — what an optional parameter is,
-/// once the say contract declares `voice` as one.
-fn arg_string(call: &Call, id: Uuid) -> Option<String> {
-    let field = call.args.iter().find(|field| field.id == id)?;
-    match field.value.as_ref() {
-        Value::String(text) => Some(text.clone()),
-        Value::Option(Some(inner)) => match inner.as_ref() {
-            Value::String(text) => Some(text.clone()),
-            _ => None,
-        },
-        _ => None,
     }
 }
 
@@ -765,35 +718,6 @@ mod tests {
 
     fn cue(time_ms: u64, shape: &'static str) -> Cue {
         Cue { time_ms, shape }
-    }
-
-    /// An optional argument reads the same whichever form the caller sends:
-    /// bare, or wrapped in `Value::Option`. A caller that sends no voice, or
-    /// `None`, gets the provider's default.
-    #[test]
-    fn an_optional_argument_reads_bare_or_wrapped() {
-        let call = |value: Option<Value>| Call {
-            module_id: Some(MODULE_ID),
-            id: SAY_ID,
-            args: value
-                .map(|value| {
-                    vec![StructureField {
-                        id: SAY_VOICE_PARAM_ID,
-                        value: Box::new(value),
-                    }]
-                })
-                .unwrap_or_default(),
-        };
-        let voice = |value: Option<Value>| arg_string(&call(value), SAY_VOICE_PARAM_ID);
-        let joanna = || Value::String("Joanna".to_string());
-        assert_eq!(voice(Some(joanna())).as_deref(), Some("Joanna"));
-        assert_eq!(
-            voice(Some(Value::Option(Some(Box::new(joanna()))))).as_deref(),
-            Some("Joanna"),
-            "a wrapped optional carries its voice"
-        );
-        assert_eq!(voice(Some(Value::Option(None))), None);
-        assert_eq!(voice(None), None, "an absent argument reads as None");
     }
 
     #[test]

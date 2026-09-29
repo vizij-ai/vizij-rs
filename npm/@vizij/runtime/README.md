@@ -8,7 +8,7 @@ rig, its graphs and programs — a face, most often. A page mounts its canvas
 once — one App for the page's lifetime — then loads as many Vizijs as it
 shows. Each is a device of its own: an
 [`arora`](https://crates.io/crates/arora) over a blackboard store, a rig HAL
-and the Vizij's composed graphs, with the animation, gaze and viseme modules
+and the Vizij's composed graphs, with the animation module and the skills
 linked in, exposed through
 [`arora-web`](https://crates.io/crates/arora-web)'s surface. The view draws
 each Vizij into the rectangle of the canvas the page places it in, reading

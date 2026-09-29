@@ -4,6 +4,31 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] - 2026-09-28
+
+### Changed
+
+- **Breaking:** `speech::say_signature`, `viseme::play_viseme_signature` and
+  `gaze::look_at_signature` are gone: the contracts of vizij-arora-host 4
+  declare the signatures, re-exported here as `speech::{say, Say}`,
+  `viseme::{play_viseme, PlayViseme}` and `gaze::{look_at, LookAt}`. Their
+  ids replace the re-exported `SAY_*` ids and `viseme::PLAY_VISEME_ID`.
+- **Breaking:** no module implements look_at or play_viseme any more:
+  `gaze::module_id()`, `gaze::look_at_id()` and `viseme::MODULE_ID` are gone.
+  Their fragments are described, so the interpreter describes the methods
+  under the interpreter module (arora 10.3), and a remote spawns them through
+  it. The function ids are `look_at::ids::look_at::FUNCTION` and
+  `play_viseme::ids::play_viseme::FUNCTION`.
+- Depends on arora-behavior 9.1.
+
+### Added
+
+- `TaskFragment::described(export)`: the function a fragment implements,
+  named and signed, for a function no module implements. `ProcessingGraph`
+  lists the described fragments' functions as its `described_methods`.
+- `speech::say_parameters()` is public, like its gaze and viseme
+  counterparts.
+
 ## [2.0.0] - 2026-09-26
 
 ### Changed

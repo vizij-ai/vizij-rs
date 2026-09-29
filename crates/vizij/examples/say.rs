@@ -17,6 +17,7 @@ use arora_types::call::Call;
 use arora_types::value::{StructureField, Value};
 use vizij_arora_store::BlackboardStore;
 use vizij_arora_tts as tts_api;
+use vizij_arora_tts::say::ids::say;
 use vizij_graph_core::task;
 
 /// This build's provider: the cloud one at `API_URL` (or its default), the
@@ -56,11 +57,17 @@ fn main() {
         .expect("build arora");
     let call = Call {
         module_id: Some(module_id),
-        id: tts_api::SAY_ID,
-        args: vec![StructureField {
-            id: tts_api::SAY_TEXT_PARAM_ID,
-            value: Box::new(Value::String(text)),
-        }],
+        id: say::FUNCTION,
+        args: vec![
+            StructureField {
+                id: say::TEXT,
+                value: Box::new(Value::String(text)),
+            },
+            StructureField {
+                id: say::VISEME,
+                value: Box::new(Value::String(tts_api::SILENCE_VISEME.to_string())),
+            },
+        ],
     };
 
     // The tick loop, standalone: call the provider through the device until
@@ -71,7 +78,7 @@ fn main() {
             .call(call.clone())
             .expect("say dispatches through the device");
         for field in &result.mutated {
-            if field.id == tts_api::SAY_VISEME_PARAM_ID {
+            if field.id == say::VISEME {
                 if let Value::String(viseme) = field.value.as_ref() {
                     if *viseme != last {
                         println!("viseme: {viseme}");

@@ -206,6 +206,79 @@ fn task_run_emits_the_call_s_out_parameters_and_latches_them() {
     assert_eq!(done.value, vocab::bool_(true));
 }
 
+/// A task-run host that records the args of each call and keeps the run
+/// going.
+#[derive(Default)]
+struct ArgsRecordingFunctions {
+    calls: Vec<Vec<(Uuid, Value)>>,
+}
+
+impl NodeFunctions for ArgsRecordingFunctions {
+    fn call(&mut self, _function: Uuid, _args: &[(Uuid, Value)]) -> Result<Value, String> {
+        Err("task runs dispatch through call_module_with_outputs".to_string())
+    }
+
+    fn call_module_with_outputs(
+        &mut self,
+        _module: Option<Uuid>,
+        _function: Uuid,
+        args: &[(Uuid, Value)],
+    ) -> Result<(Value, Vec<(Uuid, Value)>), String> {
+        self.calls.push(args.to_vec());
+        Ok((crate::task::running(), Vec::new()))
+    }
+}
+
+fn bundle(fields: &[(Uuid, Value)]) -> Value {
+    Value::Structure(vizij_api_core::value::Structure {
+        id: Uuid::from_u128(0x2222),
+        fields: fields
+            .iter()
+            .map(|(id, value)| vizij_api_core::value::StructureField {
+                id: *id,
+                value: Box::new(value.clone()),
+            })
+            .collect(),
+    })
+}
+
+#[test]
+fn task_run_calls_with_the_stated_args_under_the_live_bundle() {
+    let (text, voice, viseme) = (
+        Uuid::from_u128(0x5551),
+        Uuid::from_u128(0x5552),
+        Uuid::from_u128(0x5553),
+    );
+    let mut graph = task_run_graph();
+    // Stated once in the graph: an initial viseme, and a voice the live
+    // bundle replaces.
+    graph.nodes[0].params.value = Some(bundle(&[
+        (viseme, vocab::text("")),
+        (voice, vocab::text("stated")),
+    ]));
+    graph.nodes.push(constant_node(
+        "live",
+        bundle(&[(text, vocab::text("hello")), (voice, vocab::text("live"))]),
+    ));
+    graph.edges.push(link("live", "run", "args"));
+    let graph = graph.with_cache();
+
+    let mut rt = GraphRuntime::default();
+    let mut functions = ArgsRecordingFunctions::default();
+    evaluate_all_with_functions(&mut rt, &graph, &mut functions).expect("the run evaluates");
+
+    let mut args = functions.calls.pop().expect("one call");
+    args.sort_by_key(|(id, _)| *id);
+    assert_eq!(
+        args,
+        vec![
+            (text, vocab::text("hello")),
+            (voice, vocab::text("live")),
+            (viseme, vocab::text("")),
+        ]
+    );
+}
+
 #[test]
 fn external_function_without_host_errors() {
     let graph = external_function_graph(Uuid::from_u128(0x2222), Uuid::from_u128(0x3333));

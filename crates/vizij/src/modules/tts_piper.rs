@@ -21,17 +21,12 @@ use std::pin::Pin;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::task::{Context, Poll, Waker};
 
-use arora::{HostModule, ModuleBuilder};
-use arora_types::call::{Call, CallError, CallResult};
-use arora_types::value::{StructureField, Value};
+use arora::HostModule;
+use arora_behavior::Status;
 use uuid::{uuid, Uuid};
-use vizij_graph_core::task;
 use vizij_piper::Synthesizer;
 
-use vizij_arora_tts::{
-    follow, is_halted, say_signature, Cue, Playback, Pulse, SAY_ID, SAY_TEXT_PARAM_ID,
-    SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID, SILENCE_VISEME,
-};
+use vizij_arora_tts::{follow, is_halted, say, Cue, Playback, Pulse, Say, SILENCE_VISEME};
 
 /// The Piper tts module's id on the device — distinct from the cloud module so
 /// DescribeMethods shows which provider this build carries.
@@ -53,80 +48,79 @@ static TOKIO_HANDLE: LazyLock<tokio::runtime::Handle> = LazyLock::new(|| {
 /// utterance synthesizes at a time; the lock serializes access.
 static SYNTH: LazyLock<Mutex<Option<Synthesizer>>> = LazyLock::new(|| Mutex::new(None));
 
-/// Every `say` tick, whichever run: where the tick interval a run's halt
-/// bound follows is learned.
-static TICKS: LazyLock<Pulse> = LazyLock::new(Pulse::new);
-
-/// Live utterances, keyed by content so concurrent `say`s do not share a slot
-/// (the module ABI hands the closure no per-run id — same trade-off as the
-/// cloud provider).
-static RUNS: LazyLock<Mutex<HashMap<u64, Run>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
-
 /// One live utterance.
 struct Run {
-    /// The synthesis+playback task; its output is the terminal status `Value`.
-    handle: tokio::task::JoinHandle<Value>,
+    /// The synthesis+playback task; its output is the terminal status.
+    handle: tokio::task::JoinHandle<Status>,
     /// The shape at the audio playhead, advanced by the task and sampled by
-    /// the closure each tick.
+    /// `say` each tick.
     viseme: Arc<Mutex<&'static str>>,
     /// The instant of the last `say` tick; the producer stops on a quiet one.
     pulse: Pulse,
 }
 
-/// The Piper tts module: the described `say` action — the same signature the
-/// cloud provider describes, discoverable over `DescribeMethods`.
+/// The Piper tts module: the `say` contract — the same signature the cloud
+/// provider describes, discoverable over `DescribeMethods`.
 pub fn host_module() -> HostModule {
-    ModuleBuilder::new(MODULE_ID)
-        .described_function(SAY_ID, "say", say_signature(), say)
-        .build()
+    HostModule::from_exports(
+        MODULE_ID,
+        say::exports(Piper {
+            runs: HashMap::new(),
+            ticks: Pulse::new(),
+        }),
+    )
 }
 
-/// Speak `text`, streaming the phoneme at the playhead. Re-invoked each tick
-/// while `Running`; keeps its state in [`RUNS`], keyed by content.
-pub fn say(call: Call) -> Result<CallResult, CallError> {
-    let text = match arg_string(&call, SAY_TEXT_PARAM_ID) {
-        Some(text) => text,
-        None => return Ok(status_only(task::failure())),
-    };
-    if let Some(voice) = arg_string(&call, SAY_VOICE_PARAM_ID) {
-        if !voice.is_empty() {
+/// The module's state: the live utterances, keyed by content so concurrent
+/// `say`s do not share a slot (the module ABI hands `say` no per-run id —
+/// same trade-off as the cloud provider).
+struct Piper {
+    runs: HashMap<u64, Run>,
+    /// Beaten on every `say` tick, whichever run: where the tick interval a
+    /// run's halt bound follows is learned.
+    ticks: Pulse,
+}
+
+impl Say for Piper {
+    /// Speak `text`, streaming the phoneme at the playhead. Re-invoked each
+    /// tick while `Running`.
+    fn say(&mut self, text: String, voice: Option<String>, viseme: &mut String) -> Status {
+        if let Some(voice) = voice.filter(|voice| !voice.is_empty()) {
             log::debug!(
                 "tts-piper: the voice parameter ({voice}) is ignored — \
                  the Piper voice is chosen at build/run time (PIPER_VOICE)"
             );
         }
-    }
-    let key = utterance_key(&text);
-    TICKS.beat();
-    let mut runs = match RUNS.lock() {
-        Ok(runs) => runs,
-        Err(_) => return Ok(status_only(task::failure())),
-    };
+        let key = utterance_key(&text);
+        self.ticks.beat();
 
-    // First tick: spawn synthesis + playback off the tick thread. Later ticks
-    // find the run and fall through to the poll.
-    let run = runs
-        .entry(key)
-        .or_insert_with(|| spawn_say(text, TICKS.sharing_interval()));
-    run.pulse.beat();
+        // First tick: spawn synthesis + playback off the tick thread. Later
+        // ticks find the run and fall through to the poll.
+        let ticks = &self.ticks;
+        let run = self
+            .runs
+            .entry(key)
+            .or_insert_with(|| spawn_say(text, ticks.sharing_interval()));
+        run.pulse.beat();
 
-    // The shape at the playhead, advanced by the playback task.
-    let current = run.viseme.lock().map(|cur| *cur).unwrap_or(SILENCE_VISEME);
+        // The shape at the playhead, advanced by the playback task.
+        let current = run.viseme.lock().map(|cur| *cur).unwrap_or(SILENCE_VISEME);
 
-    // Poll the run's `JoinHandle` (a `Future`) once — the tick loop is the
-    // executor, a no-op waker suffices, and a terminal result drops the run so
-    // the completed handle is never polled again.
-    let mut cx = Context::from_waker(Waker::noop());
-    match Future::poll(Pin::new(&mut run.handle), &mut cx) {
-        Poll::Pending => Ok(with_viseme(task::running(), current)),
-        Poll::Ready(Ok(status)) => {
-            runs.remove(&key);
-            Ok(with_viseme(status, SILENCE_VISEME))
-        }
-        Poll::Ready(Err(_join_error)) => {
-            runs.remove(&key);
-            Ok(with_viseme(task::failure(), SILENCE_VISEME))
-        }
+        // Poll the run's `JoinHandle` (a `Future`) once — the tick loop is the
+        // executor, a no-op waker suffices, and a terminal result drops the
+        // run so the completed handle is never polled again.
+        let mut cx = Context::from_waker(Waker::noop());
+        let status = match Future::poll(Pin::new(&mut run.handle), &mut cx) {
+            Poll::Pending => {
+                *viseme = current.to_string();
+                return Status::Running;
+            }
+            Poll::Ready(Ok(status)) => status,
+            Poll::Ready(Err(_join_error)) => Status::Failure,
+        };
+        self.runs.remove(&key);
+        *viseme = SILENCE_VISEME.to_string();
+        status
     }
 }
 
@@ -164,18 +158,18 @@ fn spawn_say(text: String, pulse: Pulse) -> Run {
         .flatten();
         let synthesis = match synthesis {
             Some(s) => s,
-            None => return task::failure(),
+            None => return Status::Failure,
         };
         // A halt during synthesis shows as a quiet pulse: nothing to play.
         if is_halted(&pulse_task) {
-            return task::failure();
+            return Status::Failure;
         }
 
         // Playback blocks and rodio's stream is thread-bound, so it runs on
         // the blocking pool; this task just awaits the outcome.
         match tokio::task::spawn_blocking(move || play(synthesis, viseme_task, pulse_task)).await {
             Ok(status) => status,
-            Err(_join_error) => task::failure(),
+            Err(_join_error) => Status::Failure,
         }
     });
     Run {
@@ -191,19 +185,19 @@ fn play(
     synthesis: vizij_piper::Synthesis,
     viseme: Arc<Mutex<&'static str>>,
     pulse: Pulse,
-) -> Value {
+) -> Status {
     let (_stream, handle) = match rodio::OutputStream::try_default() {
         Ok(pair) => pair,
         Err(e) => {
             log::error!("tts-piper: audio output init failed: {e}");
-            return task::failure();
+            return Status::Failure;
         }
     };
     let sink = match rodio::Sink::try_new(&handle) {
         Ok(sink) => sink,
         Err(e) => {
             log::error!("tts-piper: audio sink failed: {e}");
-            return task::failure();
+            return Status::Failure;
         }
     };
     let rate = synthesis.sample_rate;
@@ -221,10 +215,10 @@ fn play(
         (!sink.empty()).then(|| sink.get_pos())
     });
     match outcome {
-        Playback::Ended => task::success(),
+        Playback::Ended => Status::Success,
         Playback::Halted => {
             sink.stop();
-            task::failure()
+            Status::Failure
         }
     }
 }
@@ -269,42 +263,6 @@ pub(crate) fn phoneme_shape(phoneme: &str) -> &'static str {
         ('o' | 'ɔ' | 'ɒ', _) => "oh",
         ('u' | 'ʊ' | 'ʉ' | 'w', _) => "ou",
         _ => SILENCE_VISEME,
-    }
-}
-
-/// A result carrying only the status (no viseme output).
-fn status_only(status: Value) -> CallResult {
-    CallResult {
-        ret: status,
-        mutated: Vec::new(),
-    }
-}
-
-/// A result carrying the status plus the current token in the out-parameter.
-fn with_viseme(status: Value, viseme: &str) -> CallResult {
-    CallResult {
-        ret: status,
-        mutated: vec![StructureField {
-            id: SAY_VISEME_PARAM_ID,
-            value: Box::new(Value::String(viseme.to_string())),
-        }],
-    }
-}
-
-/// Read a string argument by its parameter id, whatever its position in the
-/// call and whatever form an optional takes: a caller may send a bare string,
-/// or wrap it in `Value::Option` (arora-types 3's optional form), and an
-/// absent or `None` argument reads as `None` — what an optional parameter is,
-/// once the say contract declares `voice` as one.
-fn arg_string(call: &Call, id: Uuid) -> Option<String> {
-    let field = call.args.iter().find(|field| field.id == id)?;
-    match field.value.as_ref() {
-        Value::String(text) => Some(text.clone()),
-        Value::Option(Some(inner)) => match inner.as_ref() {
-            Value::String(text) => Some(text.clone()),
-            _ => None,
-        },
-        _ => None,
     }
 }
 
