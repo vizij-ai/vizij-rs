@@ -69,6 +69,7 @@ serves it); this table summarizes it.
 | `standard/ros4hri/expression/arousal` | f32 `[-1,1]` | `hri_msgs/Expression.arousal` | as above |
 | `standard/ros4hri/gaze/target` | vec3 (m) | a look-at point (face frame: x forward, y left, z up) | per-eye gaze with vergence |
 | `standard/ros4hri/gaze/frame` | string | the look-at point's frame id | consumed by the `look_at` skill, not the mapping |
+| `standard/ros4hri/viseme` | u8 `[0,14]` | `hri_msgs/Viseme.value`, from `/tts/viseme` or `/tts/visemes` | the lip shape at the audio playhead — **nothing consumes it yet** (see Lips below) |
 | `standard/ros4hri/au/<code>` | f32 `[0,1]` | `hri_msgs/FacialActionUnits` | FACS action-unit intensity → muscle controls |
 | `standard/ros4hri/speech/text` | string | `/robot_face/tts`, `/expressive_face/speech` | the utterance to lip-sync — **nothing consumes it yet** (see Lips below) |
 
@@ -85,9 +86,13 @@ serves it); this table summarizes it.
   ([`FACE_CONTROLS`](face-standard.md#muscle-tier)); the eyes-closed unit also
   drives the eyelids, and jaw-open additionally drives the de-facto
   `mouth/morph/jaw_open` control.
-- **Lips** — not the mapping's: ROS4HRI defines no viseme channel, and the
-  face's lipsync is the viseme players' ([skills](skills.md): `play_viseme`,
-  `say`), which write the face standard's viseme weights themselves. The
+- **Lips** — not the mapping's: the face's lipsync is the viseme players'
+  ([skills](skills.md): `play_viseme`, `say`), which write the face
+  standard's viseme weights themselves, and a mapping cannot share those
+  weights with a run — both would write them every tick and the loser's
+  motion would vanish. So a viseme streamed on `/tts/viseme` reaches
+  `standard/ros4hri/viseme` and stops there: driving the lips from it means
+  giving the stream a player, not a mapping channel. The
   standard's lipsync input is a *text* topic, so `speech/text` is a
   speech-synthesis request, not a face command: turning it into lip motion
   means spawning a `say` run for the text. Nothing does that today — the key

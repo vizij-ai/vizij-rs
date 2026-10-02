@@ -47,6 +47,13 @@ pub const EXPRESSION_VALENCE_KEY: &str = "standard/ros4hri/expression/valence";
 pub const EXPRESSION_AROUSAL_KEY: &str = "standard/ros4hri/expression/arousal";
 pub const GAZE_TARGET_KEY: &str = "standard/ros4hri/gaze/target";
 pub const GAZE_FRAME_KEY: &str = "standard/ros4hri/gaze/frame";
+/// The lip shape at the audio playhead, as ROS4HRI's `hri_msgs/Viseme.value`
+/// — an index into [`crate::standard::VISEME_SHAPES`], whose order is
+/// ROS4HRI's own (`SIL`, `PP`, `FF`, … `OU`), `0` (`sil`) at rest. Part of
+/// the interface a bridge writes; no channel of this mapping reads it yet,
+/// because the face's lips belong to whichever viseme player is running and
+/// a mapping is not one (VIZ-162).
+pub const VISEME_KEY: &str = "standard/ros4hri/viseme";
 
 /// The key carrying a FACS action-unit intensity, [0, 1].
 pub fn au_key(code: u8) -> String {
