@@ -15,6 +15,26 @@ cargo run -p vizij
 cargo run -p vizij -- --glb face.glb --snapshot out.png --size 763x760
 ```
 
+## Installing a release
+
+Each version of this crate that reaches `main` is released by
+[`release-vizij.yml`](../../.github/workflows/release-vizij.yml) as the GitHub
+release `vizij-v<version>`. The release carries a binary and an installer per
+desktop OS, built with the Studio bridge (`--features studio`), and the
+browser module. Its notes are the version's [CHANGELOG](CHANGELOG.md) section.
+
+| OS | Installer | Binary |
+|---|---|---|
+| macOS (Apple silicon) | `vizij-<version>-macos-arm64.dmg` | `vizij-<version>-macos-arm64.tar.gz` |
+| Linux (x86_64) | `vizij_<version>-1_amd64.deb`, `vizij-<version>-1.x86_64.rpm` | `vizij-<version>-linux-x86_64.tar.gz` |
+| Windows (x86_64) | `vizij-<version>-windows-x86_64.exe` (the binary itself) | |
+
+The installers are not signed. macOS quarantines the app until it is opened
+once from the context menu (or `xattr -dr com.apple.quarantine
+/Applications/vizij.app`), and Windows SmartScreen asks to confirm it. The
+local Piper voice (`tts-piper`) is not in a release, because it links GPLv3
+code; build it from source.
+
 ## One crate, every target
 
 The crate is a library plus the desktop binary. The library is the

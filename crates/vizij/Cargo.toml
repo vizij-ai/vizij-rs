@@ -5,6 +5,28 @@ edition = { workspace = true }
 publish = false
 description = "Vizij: an arora with a head. One crate: the Bevy view rendering a GLB face and the arora device driving it, as a library on every target (desktop, browser, Android) and as the `vizij` binary on desktop."
 
+# The desktop packages the release workflow builds (release-vizij.yml): a .deb
+# through cargo-deb and an .rpm through cargo-generate-rpm, from the binary built
+# with `--features studio`. Both name the repository's licence file.
+[package.metadata.deb]
+extended-description = """\
+Vizij shows a face from its GLB file and drives it as an Arora device: a \
+window over the Bevy view, a local WebSocket bridge with its control panel, \
+and the Semio Studio connection."""
+license-file = ["../../LICENSE", "0"]
+depends = "$auto"
+section = "graphics"
+
+[package.metadata.generate-rpm]
+license = "Apache-2.0"
+assets = [
+    { source = "target/release/vizij", dest = "/usr/bin/vizij", mode = "0755" },
+    { source = "../../LICENSE", dest = "/usr/share/doc/vizij/LICENSE", mode = "0644" },
+    { source = "README.md", dest = "/usr/share/doc/vizij/README.md", mode = "0644" },
+]
+# rpmbuild discovers the shared libraries the binary links (alsa, udev, …).
+auto-req = "auto"
+
 # The library is the view + face + modules every entry point composes: the desktop
 # binary below, the browser module (a wasm-bindgen cdylib) and the Android
 # activity (a cdylib the activity loads).
