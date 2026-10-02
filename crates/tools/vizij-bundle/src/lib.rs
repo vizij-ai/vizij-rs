@@ -209,11 +209,16 @@ pub struct TierCoverage {
     pub missing: Vec<String>,
 }
 
+/// The tiers the compliance level climbs, coarse to fine: L0 gaze & lids, L1
+/// expressions, L2 visemes, L3 the muscle tier. The profile's other tiers —
+/// the conversation state — are reported but not climbed: they say what a
+/// face reacts to, not how finely it can be posed.
+const LEVEL_TIERS: [&str; 4] = ["gaze", "expression", "viseme", "muscle"];
+
 /// A face's coverage of the Vizij standard: which paths of each tier of the
-/// `vizij-face` profile its graphs listen on. `level` is the highest tier the
-/// face fully covers, in the profile's progression — L0 gaze & lids, L1
-/// expressions, L2 visemes, L3 the muscle tier (half is enough there: faces
-/// rig the muscles they have).
+/// `vizij-face` profile its graphs listen on. `level` is the highest tier of
+/// [`LEVEL_TIERS`] the face fully covers, in order (half is enough for the
+/// muscle tier: faces rig the muscles they have).
 pub struct Coverage {
     pub face_id: Option<String>,
     pub level: u8,
@@ -248,7 +253,10 @@ pub fn coverage(face: &Face) -> Coverage {
     // Each level requires every tier before it in full, and its own tier in
     // full — or, for the muscle tier, at least half.
     let mut level = 0;
-    for (i, tier) in tiers.iter().enumerate() {
+    let ladder = tiers
+        .iter()
+        .filter(|t| LEVEL_TIERS.contains(&t.tier.as_str()));
+    for (i, tier) in ladder.enumerate() {
         let full = tier.missing.is_empty();
         let enough = tier.tier == "muscle" && tier.covered.len() >= tier.missing.len();
         if !(full || enough) {
@@ -537,12 +545,9 @@ mod tests {
             standard::RIGHT_EYE_POS_Y.into(),
             standard::LEFT_EYE_TOP_EYELID_POS_Y.into(),
             standard::RIGHT_EYE_TOP_EYELID_POS_Y.into(),
+            standard::BLINK.into(),
         ];
-        paths.extend(
-            standard::EXPRESSION_NAMES
-                .iter()
-                .map(|n| standard::expression_path(n)),
-        );
+        paths.extend(standard::expression_names().map(standard::expression_path));
         paths.extend(
             standard::VISEME_SHAPES
                 .iter()
@@ -553,5 +558,22 @@ mod tests {
         let cov = coverage(&Face::parse(&face_bytes(&refs)).unwrap());
         assert_eq!(cov.level, 2);
         assert_eq!(cov.face_id.as_deref(), Some("test_face"));
+
+        // Plus the muscle tier: L3. The conversation state is reported, all
+        // of it missing, without holding the level back.
+        paths.extend(
+            standard::FACE_CONTROLS
+                .iter()
+                .map(|c| standard::face_path(c.name)),
+        );
+        paths.push(standard::MOUTH_JAW_OPEN.into());
+        let prefixed: Vec<String> = paths.iter().map(|p| format!("rig/test_face/{p}")).collect();
+        let refs: Vec<&str> = prefixed.iter().map(String::as_str).collect();
+        let cov = coverage(&Face::parse(&face_bytes(&refs)).unwrap());
+        assert_eq!(cov.level, 3);
+        let report = cov.to_json();
+        assert_eq!(report["level"], "L3");
+        assert_eq!(report["tiers"]["conversation"]["covered"], 0);
+        assert_eq!(report["tiers"]["conversation"]["of"], 3);
     }
 }
