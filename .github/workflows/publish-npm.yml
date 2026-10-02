@@ -46,6 +46,10 @@ jobs:
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
+          # setup-node caches for the `packageManager` in package.json unless
+          # told not to, and that needs pnpm on PATH; pnpm is installed below,
+          # only when something will be published.
+          package-manager-cache: false
 
       # Trusted publishing needs npm >= 11.5.1; node 24 ships a recent npm but
       # pin the latest to be safe.
