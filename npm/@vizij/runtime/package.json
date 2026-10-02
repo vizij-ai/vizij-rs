@@ -1,7 +1,7 @@
 {
   "name": "@vizij/runtime",
-  "version": "3.0.0-alpha.0",
-  "description": "Vizij faces in the browser: the Bevy view and the Arora device in one wasm module \u2014 mount a canvas, load faces, step or run their devices.",
+  "version": "3.0.0",
+  "description": "Vizij faces in the browser: the Bevy view and the Arora device in one wasm module — mount a canvas, load faces, step or run their devices.",
   "license": "MIT",
   "repository": {
     "type": "git",
