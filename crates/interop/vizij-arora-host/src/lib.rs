@@ -5,8 +5,10 @@
 //! - [`compose_sources`] unions several graph sources into the one graph a
 //!   device runs (the rig, the pose-driver, a playing program, …).
 //! - [`Bundle`] reads the face's `VIZIJ_bundle`: its graphs, its motiongraph
-//!   programs, the profiles it declares, the program to autoplay, and the
-//!   neutral-pose config.
+//!   programs, the profiles it declares, the program to autoplay, the
+//!   neutral-pose config, and what an app builds its controls from — the
+//!   poses and their groups, the rig's inputs, the clips ([`contents`]) and
+//!   the bundle's open-ended metadata.
 //! - [`ProgramSelect`] picks which program plays; [`Bundle::compose`] composes
 //!   the base graphs plus that program.
 //! - [`Bundle::neutral_stage_writes`] resolves the neutral inputs to the store
@@ -17,6 +19,7 @@
 //! This is only the logic both hosts would otherwise write twice, once in Rust
 //! and once in TypeScript.
 
+pub mod contents;
 #[cfg(feature = "publish-frames")]
 pub mod frames;
 mod graph_builder;
@@ -64,6 +67,9 @@ pub struct Bundle {
     /// The motiongraph programs, `(id, spec)` — the graphs the face can play on
     /// top of its rig (e.g. Quori's "Speaks").
     pub programs: Vec<(String, Json)>,
+    /// Program id → the `label` its graph entry carries, for the programs
+    /// that have one.
+    pub program_labels: HashMap<String, String>,
     /// The profiles this face declares it implements — the interfaces its
     /// graphs are authored against, carried in the bundle's top-level
     /// `profiles` array. A profile is an interface, not a graph, so it sits
@@ -77,6 +83,19 @@ pub struct Bundle {
     /// `metadata.faceId` — the rig's namespace (its input paths live under
     /// `rig/<faceId>/`).
     pub face_id: Option<String>,
+    /// `poses.config.poses`.
+    pub poses: Vec<contents::Pose>,
+    /// `poses.config.poseGroups`.
+    pub pose_groups: Vec<contents::PoseGroup>,
+    /// The inputs the first `rig` graph declares (its spec's
+    /// `metadata.vizij.inputs`).
+    pub rig_inputs: Vec<contents::RigInput>,
+    /// The authored animation clips (`animations`).
+    pub clips: Vec<contents::Clip>,
+    /// `metadata` as authored — open-ended: the face id, the speech
+    /// configuration (`speechConfig`), the active motion graph, exporter
+    /// details. `None` when the bundle has none.
+    pub metadata: Option<Json>,
 }
 
 impl Bundle {
@@ -113,6 +132,7 @@ impl Bundle {
 
         let mut graphs = Vec::new();
         let mut programs = Vec::new();
+        let mut program_labels = HashMap::new();
         let mut standard_mappings = Vec::new();
         let mut skills = Vec::new();
         for entry in bundle
@@ -136,6 +156,9 @@ impl Bundle {
             if kind == "motiongraph" {
                 if let Some(id) = entry.get("id").and_then(Json::as_str) {
                     programs.push((id.to_string(), spec.clone()));
+                    if let Some(label) = entry.get("label").and_then(Json::as_str) {
+                        program_labels.insert(id.to_string(), label.to_string());
+                    }
                 }
             }
             if kind == mappings::STANDARD_MAPPING_KIND {
@@ -191,15 +214,29 @@ impl Bundle {
             .and_then(Json::as_str)
             .map(str::to_string);
 
+        let pose_groups = contents::pose_groups(bundle);
+        let poses = contents::poses(bundle, &pose_groups);
+        let rig_inputs = graphs
+            .iter()
+            .find(|(kind, _)| kind == "rig")
+            .map(|(_, spec)| contents::rig_inputs(spec))
+            .unwrap_or_default();
+
         Bundle {
             graphs,
             standard_mappings,
             skills,
             programs,
+            program_labels,
             profiles,
             active_program_id,
             neutral_inputs,
             face_id,
+            poses,
+            pose_groups,
+            rig_inputs,
+            clips: contents::clips(bundle),
+            metadata: metadata.cloned(),
         }
     }
 
@@ -561,6 +598,42 @@ mod tests {
         );
         assert!(b.program(&ProgramSelect::None).is_none());
         assert!(b.program(&ProgramSelect::Id("nope".into())).is_none());
+    }
+
+    /// What an app reads beside the graphs: program labels, the pose
+    /// config, the rig's declared inputs, the clips, and the metadata as
+    /// authored.
+    #[test]
+    fn bundle_reads_what_an_app_builds_its_controls_from() {
+        let mut bundle = bundle_json();
+        bundle["graphs"][1]["label"] = json!("Speaks");
+        bundle["graphs"][0]["spec"]["metadata"] = json!({ "vizij": { "inputs": [
+            { "id": "gaze_x", "path": "/gaze/x", "range": { "min": -1, "max": 1 } },
+        ] } });
+        bundle["metadata"]["speechConfig"] = json!({ "voice": "Ruth", "visemeGroupId": "v" });
+        bundle["poses"]["config"]["poseGroups"] =
+            json!([{ "id": "v", "name": "Visemes", "path": "visemes" }]);
+        bundle["poses"]["config"]["poses"] =
+            json!([{ "id": "pose_a", "name": "A", "group": "visemes" }]);
+        bundle["animations"] =
+            json!([{ "id": "clip", "clip": { "name": "Clip", "duration": 5, "tracks": [] } }]);
+        let b = Bundle::from_bundle_json(&bundle);
+
+        assert_eq!(b.program_labels.len(), 1);
+        assert_eq!(b.program_labels["prog.speaks"], "Speaks");
+        assert_eq!(b.rig_inputs.len(), 1);
+        assert_eq!(b.rig_inputs[0].path, "gaze/x");
+        assert_eq!(b.pose_groups[0].id, "v");
+        assert_eq!(b.poses[0].group_ids, ["v"]);
+        assert_eq!(b.clips[0].id, "clip");
+        let metadata = b.metadata.unwrap();
+        assert_eq!(metadata["speechConfig"]["voice"], "Ruth");
+        assert_eq!(metadata["activeMotionGraphId"], "prog.speaks");
+
+        // A bundle without them reads empty.
+        let bare = Bundle::from_bundle_json(&json!({}));
+        assert!(bare.poses.is_empty() && bare.rig_inputs.is_empty() && bare.clips.is_empty());
+        assert!(bare.metadata.is_none());
     }
 
     #[test]

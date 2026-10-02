@@ -233,6 +233,72 @@ export interface VizijOptions extends ComposeVizijOptions {
   modules?: AroraModule[];
 }
 
+/** A pose a face's bundle declares: a named set of rig input values, driven
+ * through its weight at `path("poses/<id>.weight")`. */
+export interface Pose {
+  id: string;
+  name: string | null;
+  description: string | null;
+  /** The ids of the {@link PoseGroup}s the pose belongs to, in the bundle's
+   * order: its `groupIds`, its `groupId`, and the group whose `path` (or id)
+   * its `group` names. */
+  groupIds: string[];
+  /** Rig input id → the value the pose sets it to at full weight. */
+  values: Record<string, number>;
+}
+
+/** A group of poses a face's bundle declares — e.g. visemes or emotions. */
+export interface PoseGroup {
+  id: string;
+  name: string | null;
+  /** The group's path segment (`visemes`, `emotions`). */
+  path: string | null;
+}
+
+/** An input of a face's rig, with its range and default — what a generic
+ * slider or a face control is built from. */
+export interface RigInput {
+  id: string | null;
+  /** Relative to the face's rig prefix, without a leading slash:
+   * `runtime.path(input.path)` is its store key. */
+  path: string;
+  label: string | null;
+  group: string | null;
+  defaultValue: number | null;
+  min: number | null;
+  max: number | null;
+}
+
+/** A point of a {@link ClipTrack}. */
+export interface ClipKeyframe {
+  /** Seconds from the clip's start. */
+  time: number;
+  value: number;
+  /** Overrides the track's interpolation for the segment from this point. */
+  interpolation: string | null;
+}
+
+/** One animated channel of a {@link Clip}. */
+export interface ClipTrack {
+  /** The rig-relative path the track drives (`gaze/left_right`,
+   * `poses/<id>.weight`). */
+  channel: string;
+  /** `linear`, `step` or `cubic`, as authored. */
+  interpolation: string | null;
+  /** In time order. */
+  keyframes: ClipKeyframe[];
+}
+
+/** An animation clip a face's bundle carries. */
+export interface Clip {
+  id: string;
+  name: string | null;
+  /** Seconds: the clip's declared duration, or its last keyframe's time when
+   * it declares none. */
+  duration: number;
+  tracks: ClipTrack[];
+}
+
 /** What {@link describe} reads from a GLB without loading it. */
 export interface VizijDescription {
   /** The `faceId` the GLB's bundle declares, if any. */
@@ -251,9 +317,25 @@ export interface VizijDescription {
    * `rotation`, `scale`, `color`, `opacity`, or a morph target's name). */
   animatables: Record<string, { node: string; feature: string }>;
   graphs: { kind: string }[];
+  /** The ids of the motion-graph programs the Vizij can play. */
   programs: string[];
+  /** Program id → its label, for the programs that carry one. */
+  programLabels: Record<string, string>;
+  /** The program the bundle boots playing: `metadata.activeMotionGraphId`,
+   * or the first of `metadata.activeMotionGraphIds`. */
   activeProgramId: string | null;
+  /** Rig input id → its neutral value. */
   neutralInputs: Record<string, number>;
+  poses: Pose[];
+  poseGroups: PoseGroup[];
+  /** The inputs the rig declares. */
+  rigInputs: RigInput[];
+  clips: Clip[];
+  /** The bundle's `metadata`, as authored — open-ended: `faceId`, the speech
+   * configuration (`speechConfig`: `voice`, `visemeGroupId`,
+   * `emotionGroupId`, …), `activeMotionGraphId` / `activeMotionGraphIds`,
+   * exporter details. `null` when the bundle has none. */
+  metadata: Record<string, unknown> | null;
 }
 
 interface WasmVizijRuntime {
@@ -711,7 +793,8 @@ export function memoryBytes(): number {
 }
 
 /** What a GLB declares — its elements, animatables, bounds, graphs and
- * programs — without loading it. Calls {@link init} if it has not run yet. */
+ * programs, and its bundle's poses, rig inputs, clips and metadata — without
+ * loading it. Calls {@link init} if it has not run yet. */
 export async function describe(
   glb: Uint8Array | ArrayBuffer,
   input?: InitInput,
