@@ -2,7 +2,7 @@
   "id": "vizij-face",
   "version": "v1",
   "title": "Vizij face standard",
-  "description": "The portable face interface: gaze and lids, 25 named expressions, 15 visemes, and 36 muscle controls keyed to FACS action units and ARKit blendshapes (35 named per FACS/ARKit, plus the de-facto jaw-open path).",
+  "description": "The portable face interface: gaze, lids and blink, 27 named expressions, 15 visemes, 36 muscle controls keyed to FACS action units and ARKit blendshapes (35 named per FACS/ARKit, plus the de-facto jaw-open path), and the conversation state (speaking, user speaking, thinking).",
   "scope": "face",
   "keys": [
     {
@@ -72,6 +72,19 @@
     },
     {
       "path": "standard/vizij/right_eye_top_eyelid/pos/y",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "gaze"
+      }
+    },
+    {
+      "path": "standard/vizij/blink",
       "kind": "input",
       "value_type": "f32",
       "min": 0.0,
@@ -397,6 +410,32 @@
     },
     {
       "path": "standard/vizij/expression/excited",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/concerned",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "expression"
+      }
+    },
+    {
+      "path": "standard/vizij/expression/sleepy",
       "kind": "input",
       "value_type": "f32",
       "min": 0.0,
@@ -1139,6 +1178,45 @@
         "au": 26,
         "arkit": "jawOpen",
         "tier": "muscle"
+      }
+    },
+    {
+      "path": "standard/vizij/conversation/speaking",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "conversation"
+      }
+    },
+    {
+      "path": "standard/vizij/conversation/user_speaking",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "conversation"
+      }
+    },
+    {
+      "path": "standard/vizij/conversation/thinking",
+      "kind": "input",
+      "value_type": "f32",
+      "min": 0.0,
+      "max": 1.0,
+      "default_value": {
+        "f32": 0.0
+      },
+      "meta": {
+        "tier": "conversation"
       }
     }
   ]

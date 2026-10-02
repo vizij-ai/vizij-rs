@@ -215,6 +215,22 @@
       }
     },
     {
+      "id": "in_expr_concerned",
+      "type": "input",
+      "params": {
+        "path": "rig/quori_latest/standard/vizij/expression/concerned",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "in_expr_sleepy",
+      "type": "input",
+      "params": {
+        "path": "rig/quori_latest/standard/vizij/expression/sleepy",
+        "value": 0.0
+      }
+    },
+    {
       "id": "in_vis_sil",
       "type": "input",
       "params": {
@@ -331,6 +347,38 @@
       "type": "input",
       "params": {
         "path": "rig/quori_latest/standard/vizij/viseme/ou",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "in_blink",
+      "type": "input",
+      "params": {
+        "path": "rig/quori_latest/standard/vizij/blink",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "in_conv_speaking",
+      "type": "input",
+      "params": {
+        "path": "rig/quori_latest/standard/vizij/conversation/speaking",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "in_conv_user_speaking",
+      "type": "input",
+      "params": {
+        "path": "rig/quori_latest/standard/vizij/conversation/user_speaking",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "in_conv_thinking",
+      "type": "input",
+      "params": {
+        "path": "rig/quori_latest/standard/vizij/conversation/thinking",
         "value": 0.0
       }
     },
@@ -656,6 +704,54 @@
       "params": {
         "path": "rig/quori_latest/poses/pose_u.weight"
       }
+    },
+    {
+      "id": "clamp_blink",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "out_blink",
+      "type": "output",
+      "params": {
+        "path": "rig/quori_latest/lids/blink"
+      }
+    },
+    {
+      "id": "clamp_conv_speaking",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "out_conv_speaking",
+      "type": "output",
+      "params": {
+        "path": "rig/quori_latest/speech/speaking"
+      }
+    },
+    {
+      "id": "clamp_conv_user_speaking",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "out_conv_user_speaking",
+      "type": "output",
+      "params": {
+        "path": "rig/quori_latest/speech/user_speaking"
+      }
+    },
+    {
+      "id": "clamp_conv_thinking",
+      "type": "clamp",
+      "params": {}
+    },
+    {
+      "id": "out_conv_thinking",
+      "type": "output",
+      "params": {
+        "path": "rig/quori_latest/speech/thinking"
+      }
     }
   ],
   "edges": [
@@ -886,6 +982,15 @@
     },
     {
       "from": {
+        "node_id": "in_expr_concerned"
+      },
+      "to": {
+        "node_id": "sum_d_concerned",
+        "input": "operand_5"
+      }
+    },
+    {
+      "from": {
         "node_id": "sum_d_concerned"
       },
       "to": {
@@ -1053,6 +1158,15 @@
       "to": {
         "node_id": "sum_d_sleepy",
         "input": "operand_2"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_expr_sleepy"
+      },
+      "to": {
+        "node_id": "sum_d_sleepy",
+        "input": "operand_3"
       }
     },
     {
@@ -1691,6 +1805,150 @@
       },
       "to": {
         "node_id": "out_u",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_blink"
+      },
+      "to": {
+        "node_id": "clamp_blink",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c0"
+      },
+      "to": {
+        "node_id": "clamp_blink",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "clamp_blink",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "clamp_blink"
+      },
+      "to": {
+        "node_id": "out_blink",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_conv_speaking"
+      },
+      "to": {
+        "node_id": "clamp_conv_speaking",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c0"
+      },
+      "to": {
+        "node_id": "clamp_conv_speaking",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "clamp_conv_speaking",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "clamp_conv_speaking"
+      },
+      "to": {
+        "node_id": "out_conv_speaking",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_conv_user_speaking"
+      },
+      "to": {
+        "node_id": "clamp_conv_user_speaking",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c0"
+      },
+      "to": {
+        "node_id": "clamp_conv_user_speaking",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "clamp_conv_user_speaking",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "clamp_conv_user_speaking"
+      },
+      "to": {
+        "node_id": "out_conv_user_speaking",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "in_conv_thinking"
+      },
+      "to": {
+        "node_id": "clamp_conv_thinking",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c0"
+      },
+      "to": {
+        "node_id": "clamp_conv_thinking",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "c1"
+      },
+      "to": {
+        "node_id": "clamp_conv_thinking",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
+        "node_id": "clamp_conv_thinking"
+      },
+      "to": {
+        "node_id": "out_conv_thinking",
         "input": "in"
       }
     }
