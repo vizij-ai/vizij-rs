@@ -4,6 +4,35 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [5.1.0] - 2026-10-04
+
+### Added
+
+- The `vizij-face` profile declares the blink, two more expressions and the
+  conversation state, 88 keys in all:
+  - `standard/vizij/blink` (`standard::BLINK`), tier `gaze`: a weight in
+    [0, 1], 0 open, 1 both eyes closed, resting at 0. A level the writer
+    shapes over time, independent of the eyelid positions; a face closes
+    each lid at least as far as the stronger of the two.
+  - `standard/vizij/expression/concerned` and `…/sleepy`, tier `expression`:
+    `standard::VIZIJ_EXPRESSION_NAMES`, the expressions beyond ROS4HRI's
+    vocabulary. `standard::expression_names()` is the standard's whole set,
+    `standard::ROS4HRI_EXPRESSION_NAMES` then these.
+  - `standard/vizij/conversation/{speaking,user_speaking,thinking}`
+    (`standard::CONVERSATION_STATES`, `standard::conversation_path`), tier
+    `conversation`: weights written 0 or 1 by the agent the face speaks
+    for, resting at 0.
+- `standard::ROS4HRI_EXPRESSION_NAMES`: the 25 names of
+  `hri_msgs/Expression`, which the ROS4HRI mapping commands.
+
+### Deprecated
+
+- `standard::EXPRESSION_NAMES`: ROS4HRI's subset of the standard's
+  expressions. Use `ROS4HRI_EXPRESSION_NAMES`, or `expression_names()` for
+  the whole set.
+
+The ROS4HRI mapping is unchanged: it writes none of the new keys.
+
 ## [5.0.0] - 2026-10-04
 
 ### Changed

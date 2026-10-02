@@ -63,7 +63,7 @@ Vizij ships two:
 
 | profile | scope | keys | declared by |
 |---|---|---|---|
-| `vizij-face` | face | 82 — gaze & lids, 25 expressions, 15 visemes, 36 muscle-tier controls | the [face standard](face-standard.md) |
+| `vizij-face` | face | 88 — gaze, lids & blink, 27 expressions, 15 visemes, 36 muscle-tier controls, 3 conversation states | the [face standard](face-standard.md) |
 | `ros4hri` | device | 25 — expression name/valence/arousal, gaze target and frame, 20 action units | the [ROS4HRI key contract](ros4hri.md#the-standardros4hri-key-contract) |
 
 Both are generated from the Rust constants
@@ -118,7 +118,7 @@ the declared profiles, the shipped ROS4HRI mapping shows:
 | profile | declares | mapping touches | |
 |---|---|---|---|
 | `ros4hri` | 25 | 24 | `gaze/frame` is consumed by the `look_at` skill, not the mapping |
-| `vizij-face` | 82 | 80 | `jaw_left` / `jaw_right` have no FACS code, so the action-unit channel cannot reach them |
+| `vizij-face` | 88 | 65 | the 15 viseme weights belong to the viseme players; `jaw_left` / `jaw_right` have no FACS code, so the action-unit channel cannot reach them; the blink, `concerned`, `sleepy` and the 3 conversation states have no ROS4HRI counterpart the mapping reads |
 
 Every path the mapping writes is declared.
 

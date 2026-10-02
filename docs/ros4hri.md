@@ -77,7 +77,9 @@ serves it); this table summarizes it.
 - **Expression** — a non-empty `expression/name` one-hots the named weight.
   Otherwise `valence`/`arousal` blend the named weights by proximity to each
   expression's circumplex anchor. Weights are smoothed and written to
-  `standard/vizij/expression/<name>`.
+  `standard/vizij/expression/<name>` for ROS4HRI's 25 names; the standard's
+  expressions beyond them (`concerned`, `sleepy`) have no ROS4HRI name and are
+  left to other writers.
 - **Gaze** — `gaze/target` maps to per-eye positions with vergence, the
   incumbent ±0.78 rad → ±1 normalization, and a center fallback for targets at
   or behind the face plane (x ≤ 0.1 m).
@@ -397,16 +399,18 @@ is a diff of the behavior.
   authoring app to embed.
 - **Reconcile it against the profiles** with `vizij-bundle surface`: the
   mapping reads 24 of the profile's 25 keys (`gaze/frame` belongs to the
-  `look_at` skill) and writes 65 of the face standard's 82 (`jaw_left` and
-  `jaw_right` have no FACS code, and the 15 viseme weights belong to the
-  players).
+  `look_at` skill) and writes 65 of the face standard's 88 (`jaw_left` and
+  `jaw_right` have no FACS code, the 15 viseme weights belong to the
+  players, and the blink, the expressions beyond ROS4HRI's and the
+  conversation state have no ROS4HRI counterpart the mapping reads).
 
 ## Progressive compliance
 
 A face implements the standard tiers it covers, and the mapping degrades to
 them: gaze & lids (L0), expressions (L1), visemes (L2), muscle/AU (L3).
 `vizij-bundle validate --min-level <n>` reports and gates a face's coverage of
-the `vizij-face` profile.
+the `vizij-face` profile; it reports the conversation state without grading
+it.
 
 ## See also
 
