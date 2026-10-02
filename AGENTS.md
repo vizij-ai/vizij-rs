@@ -72,11 +72,10 @@ Install the watcher dependency once with `cargo install cargo-watch`.
 |------|---------|
 | Install git hooks (fmt/clippy/test) | `bash scripts/install-git-hooks.sh` |
 | Run hook jobs manually | `./.githooks/pre-commit` / `./.githooks/pre-push` |
-| Dry-run crates + npm release | `bash scripts/dry-run-release.sh` |
 | Create a Changeset entry | `pnpm changeset` |
-| CI version bump (Changesets action) | `pnpm ci:version` |
-| Validate wasm/shared builds before tagging | `pnpm release` |
-| CI publish (build wasm + `changeset publish`) | `pnpm ci:publish` |
+| Apply pending changesets (what the Version Packages PR runs) | `pnpm ci:version` |
+| List the npm versions CI would publish | `node scripts/ci-publish.mjs --dry-run` |
+| Publish what npm is missing (what `publish-npm` runs) | `pnpm ci:publish` |
 | Link npm packages for vizij-web | Build locally, then use temporary `link:` deps in `vizij-web` (see its README) |
 | Rebuild after ABI bumps | `cargo build -p <wasm-crate> --target wasm32-unknown-unknown && pnpm run build:wasm:<stack>` |
 | WASM perf harness (full) | `pnpm run perf:wasm` |
