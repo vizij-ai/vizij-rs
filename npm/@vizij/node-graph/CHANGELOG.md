@@ -2,15 +2,12 @@
 
 ## 0.9.0
 
-### Minor Changes
-
-- ff79135: A `taskrun` node calls with its `value` param's fields, then the fields of its `args` input, which win for a parameter both name; the `args` input used to replace `value` whole. The skills are declared from contracts: `say`'s `voice` is optional, and its fragment states the `viseme` it passes to the provider (`sil`) in its task-run node's `value`. `look_at` and `play_viseme` are described by the device's interpreter and listed under the interpreter module, with no gaze or viseme module of their own; `spawnSkill` spawns them through it.
-
-## 0.8.0
+0.9.0 follows 0.7.1: 0.8.0 was never published, and its changes ship here.
 
 ### Minor Changes
 
-- 3d89902: Visemes leave the ROS4HRI profile and become the viseme players' business. `skills()` lists `play_viseme` (one shape through a lipsync envelope; a new call takes the lips over) and `say` (text-to-speech with the lips driven from the streamed visemes) next to `look_at`, with `skillSource(id)` serving their fragments; the `ros4hri` profile no longer declares `standard/ros4hri/viseme/*`, and the mapping no longer writes the lipsync surface. The face standard's `standard/vizij/viseme/<shape>` weights stay raw, the current viseme is state at `standard/vizij/viseme`, and a player's run feeds back `{viseme, intensity}` — the pair ROS4HRI's `Say` feedback carries as Vizij extends it. In the node graph, the `taskrun` node gains keyed `mutated` outputs (one per out parameter named in `record_keys`, by parameter id) and a `done` (terminality) output, and integer values count as scalars to the arithmetic nodes.
+- A `taskrun` node calls with its `value` param's fields, then the fields of its `args` input, which win for a parameter both name; the `args` input used to replace `value` whole.
+- Visemes leave the ROS4HRI profile and become the viseme players' business. `skills()` lists `play_viseme` (one shape through a lipsync envelope; a new call takes the lips over) and `say` (text-to-speech with the lips driven from the streamed visemes) next to `look_at`, with `skillSource(id)` serving their fragments; the `ros4hri` profile no longer declares `standard/ros4hri/viseme/*`, and the mapping no longer writes the lipsync surface. The face standard's `standard/vizij/viseme/<shape>` weights stay raw, the current viseme is state at `standard/vizij/viseme`, and a player's run feeds back `{viseme, intensity}` — the pair ROS4HRI's `Say` feedback carries as Vizij extends it. In the node graph, the `taskrun` node gains keyed `mutated` outputs (one per out parameter named in `record_keys`, by parameter id) and a `done` (terminality) output, and integer values count as scalars to the arithmetic nodes.
 
 ## 0.7.1
 
