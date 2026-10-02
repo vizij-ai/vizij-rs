@@ -1,0 +1,258 @@
+name: release-vizij
+
+# Releases the `vizij` desktop app when its version reaches main: a version of
+# crates/vizij/Cargo.toml with no `vizij-v<version>` tag yet is tagged, built on
+# each desktop OS with the Studio bridge, and attached to a GitHub release — a
+# binary and an installer per OS (dmg; deb and rpm; exe), and the browser
+# module. The release notes are the version's CHANGELOG.md section.
+#
+# A pull request that changes this release builds and packages everything the
+# same way, tagging and releasing nothing: the packages are the run's artifacts,
+# to try before the version reaches main.
+#
+# Tagging and releasing share this run because a tag pushed with GITHUB_TOKEN
+# triggers no other workflow. The local Piper voice (`tts-piper`) stays out: it
+# links GPLv3 code. The installers are unsigned: macOS quarantines the app until
+# it is opened once from the context menu (the release notes say so).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/vizij/Cargo.toml"
+      - ".github/workflows/release-vizij.yml"
+      - "scripts/package_macos.sh"
+  pull_request:
+    paths:
+      - "crates/vizij/Cargo.toml"
+      - ".github/workflows/release-vizij.yml"
+      - "scripts/package_macos.sh"
+  # (Re)build the artifacts of an existing tag.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing vizij-vX.Y.Z tag to (re)build artifacts for"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-vizij-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      created: ${{ steps.tag.outputs.created }}
+      # Whether to build: a release being made, or a pull request's trial.
+      build: ${{ steps.tag.outputs.created == 'true' || github.event_name == 'pull_request' }}
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag crates/vizij's version if new
+        id: tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "created=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+            echo "version=${INPUT_TAG#vizij-v}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/vizij/Cargo.toml | head -n1)
+          tag="vizij-v$version"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git ls-remote --tags origin "refs/tags/$tag" | grep -q "refs/tags/$tag"; then
+            echo "$tag already exists; nothing to release."
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "vizij $version"
+          git push origin "$tag"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+  github-release:
+    needs: tag
+    if: needs.tag.outputs.created == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.sha || needs.tag.outputs.tag }}
+      - name: Create the release from the CHANGELOG section
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+          VERSION: ${{ needs.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" >/dev/null 2>&1 && exit 0
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { on = 1; next }
+            on && /^## / { exit }
+            on { print }
+          ' crates/vizij/CHANGELOG.md > notes.md
+          cat >> notes.md <<'NOTES'
+
+          ### Install
+
+          - **macOS (Apple silicon):** open the `.dmg` and drag Vizij to Applications. The app is not notarized: open it once with right-click → Open, or run `xattr -dr com.apple.quarantine /Applications/vizij.app`.
+          - **Linux:** `sudo apt install ./vizij_*.deb`, or `sudo dnf install ./vizij-*.rpm`; or run the binary from the `.tar.gz`.
+          - **Windows:** run `vizij-*-windows-x86_64.exe`; SmartScreen asks to confirm an unsigned app.
+          - **Browser:** `vizij-*-web.tar.gz` is the wasm-bindgen module `@vizij/runtime` ships (`vizij.js` and `vizij_bg.wasm`).
+          NOTES
+          gh release create "$TAG" --title "vizij $VERSION" --notes-file notes.md
+
+  macos:
+    needs: [tag, github-release]
+    if: ${{ !cancelled() && needs.tag.outputs.build == 'true' && needs.github-release.result != 'failure' }}
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.sha || needs.tag.outputs.tag }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build -p vizij --release --features studio
+      - name: Package the .app in a .dmg, and the binary
+        env:
+          VERSION: ${{ needs.tag.outputs.version }}
+        run: |
+          ./scripts/package_macos.sh "$VERSION" arm64
+          tar -czf "vizij-$VERSION-macos-arm64.tar.gz" -C target/release vizij
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vizij-macos
+          path: vizij-*-macos-arm64.*
+      - name: Upload to the release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+        run: gh release upload "$TAG" vizij-*-macos-arm64.dmg vizij-*-macos-arm64.tar.gz --clobber
+
+  linux:
+    needs: [tag, github-release]
+    if: ${{ !cancelled() && needs.tag.outputs.build == 'true' && needs.github-release.result != 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.sha || needs.tag.outputs.tag }}
+      - name: Install Bevy's system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config rpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build -p vizij --release --features studio
+      # Both packagers take the binary just built rather than building again.
+      - name: Package the .deb, the .rpm and the binary
+        env:
+          VERSION: ${{ needs.tag.outputs.version }}
+        run: |
+          cargo install cargo-deb cargo-generate-rpm --locked
+          cargo deb -p vizij --no-build
+          cargo generate-rpm -p crates/vizij
+          tar -czf "vizij-$VERSION-linux-x86_64.tar.gz" -C target/release vizij
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vizij-linux
+          path: |
+            target/debian/*.deb
+            target/generate-rpm/*.rpm
+            vizij-*-linux-x86_64.tar.gz
+      - name: Upload to the release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+        run: gh release upload "$TAG" target/debian/*.deb target/generate-rpm/*.rpm vizij-*-linux-x86_64.tar.gz --clobber
+
+  windows:
+    needs: [tag, github-release]
+    if: ${{ !cancelled() && needs.tag.outputs.build == 'true' && needs.github-release.result != 'failure' }}
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.sha || needs.tag.outputs.tag }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # aws-lc-sys (rustls' provider, through the TTS client and the Studio
+      # bridge) assembles with NASM on Windows.
+      - uses: ilammy/setup-nasm@v1
+      - name: Build
+        run: cargo build -p vizij --release --features studio
+      - name: Name the executable
+        shell: bash
+        env:
+          VERSION: ${{ needs.tag.outputs.version }}
+        run: cp target/release/vizij.exe "vizij-$VERSION-windows-x86_64.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vizij-windows
+          path: vizij-*-windows-x86_64.exe
+      - name: Upload to the release
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+        run: gh release upload "$TAG" vizij-*-windows-x86_64.exe --clobber
+
+  web:
+    needs: [tag, github-release]
+    if: ${{ !cancelled() && needs.tag.outputs.build == 'true' && needs.github-release.result != 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.sha || needs.tag.outputs.tag }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Build the browser module
+        run: |
+          cargo install wasm-pack --locked
+          node scripts/build-runtime-wasm.mjs
+      - name: Package the module
+        env:
+          VERSION: ${{ needs.tag.outputs.version }}
+        run: tar -czf "vizij-$VERSION-web.tar.gz" -C npm/@vizij/runtime/pkg vizij.js vizij_bg.wasm vizij.d.ts vizij_bg.wasm.d.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vizij-web
+          path: vizij-*-web.tar.gz
+      - name: Upload to the release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+        run: gh release upload "$TAG" vizij-*-web.tar.gz --clobber
