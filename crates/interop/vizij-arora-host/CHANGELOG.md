@@ -4,6 +4,23 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [4.1.0] - 2026-10-02
+
+### Added
+
+- `Bundle` reads what an app builds its controls from, typed in the new
+  `contents` module: `poses` (`Pose`: id, name, description, the ids of the
+  groups it belongs to — its `groupIds`, its `groupId`, and the group its
+  `group` path names — and its input values), `pose_groups` (`PoseGroup`),
+  `rig_inputs` (`RigInput`: the rig graph's `metadata.vizij.inputs`, each
+  path relative to the rig prefix, with its label, group, default and range),
+  `clips` (`Clip`, `ClipTrack`, `Keyframe`: the authored `animations`,
+  keyframes in time order), `program_labels` (program id → its graph entry's
+  `label`), and `metadata`, the bundle's open-ended `metadata` as authored.
+  The `contents` types serialize in camelCase.
+- A `Bundle` built with a struct literal that names every field must name the
+  new ones, or end in `..Default::default()`.
+
 ## [4.0.0] - 2026-09-28
 
 ### Changed

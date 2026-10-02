@@ -44,8 +44,11 @@ A Vizij's paths are its own: `quori.rigPrefix` is `rig/<faceId>/` (the
 bundle's `faceId`) and `quori.path(relative)` builds one. `drainPicks()`
 reports pointer presses as `{ vizijId, elementId }` — the slot and the
 element id the GLB's RobotData declares;
-`describe(glb)` reads a GLB's elements, animatables, bounds and programs
-without loading it.
+`describe(glb)` reads what a GLB declares without loading it: its elements,
+animatables, bounds and programs (with their labels), and from its bundle the
+poses and their groups, the rig's inputs with their ranges and defaults, the
+animation clips, and the bundle's metadata as authored (`speechConfig`,
+`activeMotionGraphId`, …) — everything a page builds its controls from.
 
 `startRuntime(graphSpec)` gives a device with no Vizij — a graph on a store,
 nothing drawn — for a bench or a graph run in Node; every `Runtime` method

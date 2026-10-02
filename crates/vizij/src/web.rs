@@ -293,8 +293,11 @@ pub fn memory_bytes() -> f64 {
 /// What a GLB declares, without loading it: `{ faceId, rigPrefix, rootBounds,
 /// elements: [{ id, name, kind, material, morphTargets }], animatables:
 /// { <uuid>: { node, feature } }, graphs: [{ kind }], programs: [id],
-/// activeProgramId, neutralInputs }` — what a page needs to build its
-/// controls and name the face's paths.
+/// programLabels: { <id>: label }, activeProgramId, neutralInputs, poses,
+/// poseGroups, rigInputs, clips, metadata }` — what a page needs to build its
+/// controls and name the face's paths. `poses`, `poseGroups`, `rigInputs` and
+/// `clips` are [`vizij_arora_host::contents`]'s types; `metadata` is the
+/// bundle's own, as authored.
 #[wasm_bindgen]
 pub fn describe(glb: &[u8]) -> Result<JsValue, JsValue> {
     let meta = FaceMeta::from_glb_bytes(glb).map_err(|e| JsValue::from_str(&format!("{e:#}")))?;
@@ -321,6 +324,8 @@ fn describe_json(meta: &FaceMeta) -> serde_json::Value {
         .map(|(name, value)| (name.clone(), serde_json::json!(value)))
         .collect();
     neutral.sort_by(|a, b| a.0.cmp(&b.0));
+    let program_labels: std::collections::BTreeMap<&String, &String> =
+        meta.bundle.program_labels.iter().collect();
     serde_json::json!({
         "faceId": meta.bundle.face_id,
         "rigPrefix": meta.bundle.rig_prefix(),
@@ -337,8 +342,14 @@ fn describe_json(meta: &FaceMeta) -> serde_json::Value {
         "animatables": animatables.into_iter().collect::<serde_json::Map<String, serde_json::Value>>(),
         "graphs": meta.bundle.graphs.iter().map(|(kind, _)| serde_json::json!({ "kind": kind })).collect::<Vec<_>>(),
         "programs": meta.bundle.programs.iter().map(|(id, _)| id).collect::<Vec<_>>(),
+        "programLabels": program_labels,
         "activeProgramId": meta.bundle.active_program_id,
         "neutralInputs": neutral.into_iter().collect::<serde_json::Map<String, serde_json::Value>>(),
+        "poses": meta.bundle.poses,
+        "poseGroups": meta.bundle.pose_groups,
+        "rigInputs": meta.bundle.rig_inputs,
+        "clips": meta.bundle.clips,
+        "metadata": meta.bundle.metadata,
     })
 }
 
