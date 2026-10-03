@@ -84,8 +84,17 @@
     };
   };
 
+  // Resolves on the first animation frame where `ready(id)` reads true.
+  const nextReady = (id) =>
+    new Promise((resolve) => {
+      const poll = () => (vizij.ready(id) ? resolve() : requestAnimationFrame(poll));
+      poll();
+    });
+
   window.vizijHarness = {
     memory: () => vizij.memoryBytes(),
+    // Loading under an id already shown is a reload: the new device takes
+    // over and the previous one is disposed.
     async load(id, url, options) {
       const scripted = options && options.audio === "scripted";
       const device = await vizij.loadVizij(id, await glb(url), {
@@ -93,9 +102,39 @@
         audio: scripted ? scriptedPlay : options?.audio,
         speechApiUrl: scripted ? location.origin : options?.speechApiUrl,
       });
+      devices.get(id)?.dispose();
       devices.set(id, device);
       return { rigPrefix: device.rigPrefix };
     },
+    // A reload from GLB bytes, timed: `loadMs` until `loadVizij` returns
+    // (the GLB read, the graphs composed, the device built), `readyMs`
+    // until the new scene is indexed and posed — the frame the swap lands.
+    async reload(id, url, options) {
+      const bytes = await glb(url);
+      const start = performance.now();
+      const device = await vizij.loadVizij(id, bytes, { audio: false, ...options });
+      const loadMs = performance.now() - start;
+      devices.get(id)?.dispose();
+      devices.set(id, device);
+      const readyAt = vizij.ready(id);
+      await nextReady(id);
+      return { loadMs, readyMs: performance.now() - start, readyAt };
+    },
+    // A Vizij from bytes the page built (an edited or exported GLB).
+    async loadBytes(id, bytes, options) {
+      const device = await vizij.loadVizij(id, bytes, { audio: false, ...options });
+      devices.get(id)?.dispose();
+      devices.set(id, device);
+      return { rigPrefix: device.rigPrefix };
+    },
+    describe: async (url) => vizij.describe(await glb(url)),
+    describeBytes: (bytes) => vizij.describe(bytes),
+    rigPrefix: (id) => ({ rigPrefix: devices.get(id).rigPrefix }),
+    select: (id, elementIds) => vizij.setSelection(id, elementIds),
+    setStatic: (id, elementId, feature, value) =>
+      vizij.setStaticFeature(id, elementId, feature, value),
+    hold: (id, paths) => devices.get(id).hold(paths),
+    release: (id, paths) => devices.get(id).release(paths),
     spawn: (id, call) => devices.get(id).spawn(call),
     spawnSkill: (id, name, args) => devices.get(id).spawnSkill(name, args),
     runStatus: (value) => vizij.runStatus(value),

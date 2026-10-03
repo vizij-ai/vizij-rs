@@ -57,14 +57,16 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 uuid = { version = "1", features = ["serde"] }
 
 # The engine, named crate by crate rather than through the `3d_bevy_render`
-# umbrella: that umbrella also brings text, gizmos, glTF animation, anti-
+# umbrella: that umbrella also brings text, glTF animation, anti-
 # aliasing, post-processing, tonemapping and SMAA lookup textures, ktx2/zstd
 # and hdr/png decoders, none of which a face uses, and `default_app` adds
 # reflection auto-registration; a browser page pays every one of them in
 # download. What stays is the 3D render path (glTF, PBR, morph targets —
 # 0.19 batches morph-target rendering, the faces' main workload), scene
-# spawning, winit windowing, mesh picking, WebGL2 as the browser backend,
-# and the log plugin the apps disable in favor of `log`. The face GLBs embed
+# spawning, winit windowing, picking (the pointer events, and the mesh ray
+# cast a pick runs over morphed positions), line gizmos (the selection glow:
+# wireframes are unavailable on WebGL2), WebGL2 as the browser backend, and
+# the log plugin the apps disable in favor of `log`. The face GLBs embed
 # no textures, so no image codec. The per-platform windowing backends are in
 # the target tables below.
 bevy = { version = "0.19", default-features = false, features = [
@@ -90,6 +92,7 @@ bevy = { version = "0.19", default-features = false, features = [
     "bevy_winit",
     "bevy_picking",
     "mesh_picking",
+    "bevy_gizmos_render",
     "webgl2",
 ] }
 # The device: an arora over the Vizij interop seams, run through the standard

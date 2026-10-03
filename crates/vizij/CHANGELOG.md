@@ -23,6 +23,16 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   it. The browser module's `loadVizij` takes `animations: false` to leave
   them out.
 
+### Changed
+
+- Opening another face (`O`, a dropped `.glb`, a reload) keeps the current one
+  on screen until the new one is ready, instead of an empty window meanwhile.
+
+### Fixed
+
+- A face whose RobotData carries static features (a value in place of an
+  animatable) loads; it was refused as bad RobotData.
+
 ## [0.1.0] - 2026-10-02
 
 ### Added
