@@ -113,6 +113,7 @@
     setValue: (id, path, value) => devices.get(id).setValue(path, value),
     readValues: (id, paths) => devices.get(id).readValues(paths),
     path: (id, relative) => devices.get(id).path(relative),
+    device: (id) => devices.get(id),
     picks: () => vizij.drainPicks(),
     state: () => {
       const gl = canvas.getContext("webgl2");

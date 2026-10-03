@@ -34,6 +34,7 @@ import {
 } from "@vizij/wasm-loader";
 import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 import { play as defaultPlay, type Play } from "./audio.js";
+import { ANIMATION_IDS, ANIMATION_PLAYERS_PATH, decodePlayerStates } from "./clips.js";
 
 /** A Vizij graph spec, as an object or already-serialized JSON. */
 export type GraphSpecInput = object | string;
@@ -338,6 +339,66 @@ export interface VizijDescription {
   metadata: Record<string, unknown> | null;
 }
 
+/** A clip loaded into a Vizij's device, as {@link Runtime.clips} lists it. */
+export interface LoadedClip {
+  id: string;
+  name: string | null;
+  /** Seconds. */
+  duration: number;
+}
+
+/** A loaded clip as the wasm lists it: with the player it plays on and its
+ * instance there, what the module's transport functions take. */
+interface WasmLoadedClip extends LoadedClip {
+  player: number;
+  instance: number;
+}
+
+/** A clip's playback, as {@link Runtime.clipState} reads it. */
+export interface ClipState {
+  /** Seconds: the playhead. */
+  time: number;
+  /** Seconds. */
+  duration: number;
+  /** Advancing: played, neither paused, stopped nor completed. */
+  playing: boolean;
+  /** Wraps at its end (the default) rather than stopping there. */
+  loop: boolean;
+  /** The speed multiplier it plays at — kept while paused. */
+  speed: number;
+  /** Played to its end without looping: it holds its last pose there. */
+  completed: boolean;
+}
+
+/** Options for {@link Runtime.playClip}. */
+export interface PlayClipOptions {
+  /** Start from the beginning rather than from the playhead. Default `false`. */
+  reset?: boolean;
+  /** The speed multiplier to play at, kept from then on (as
+   * {@link Runtime.setClipSpeed}). Default: the clip's current one, 1 at load. */
+  speed?: number;
+}
+
+/** Options for {@link Runtime.stopClip}. */
+export interface StopClipOptions {
+  /** Return the clip's keys to its first frame before it falls silent.
+   * `false` leaves them where the clip last wrote them. Default `true`. */
+  clearOutputs?: boolean;
+}
+
+/** What the transport remembers of a clip the module does not report: its
+ * loop mode, the speed a pause zeroes, whether it was last played — for the
+ * player it was set on. */
+interface ClipTransport {
+  player: number;
+  loop: boolean;
+  speed: number;
+  playing: boolean;
+  /** Bumped by every play, pause and stop, so a stop's deferred silence
+   * yields to a later command. */
+  epoch: number;
+}
+
 interface WasmVizijRuntime {
   readonly vizijId: string;
   readonly rigPrefix: string;
@@ -358,6 +419,9 @@ interface WasmVizijRuntime {
   readValues(paths: string[]): Record<string, ValueJSON | null>;
   snapshot(): Record<string, ValueJSON>;
   drainChanges(): Record<string, ValueJSON | null>;
+  clips(): WasmLoadedClip[];
+  setClip(clip_json: string): WasmLoadedClip;
+  removeClip(id: string): boolean;
   free(): void;
 }
 
@@ -484,6 +548,7 @@ export function init(input?: InitInput): Promise<void> {
  */
 export class Runtime {
   private inner: WasmVizijRuntime;
+  private transports = new Map<string, ClipTransport>();
 
   constructor(inner: WasmVizijRuntime) {
     this.inner = inner;
@@ -666,6 +731,189 @@ export class Runtime {
    */
   drainChanges(): Record<string, ValueJSON | null> {
     return this.inner.drainChanges();
+  }
+
+  /**
+   * The clips loaded into the device's animation module, in load order: the
+   * Vizij's own (its bundle's `animations`, loaded with the device), then
+   * those {@link setClip} added. A clip writes the keys its tracks' channels
+   * name through the Vizij's rig (`gaze/left_right` drives
+   * `path("gaze/left_right")`) — while it plays, is paused or has completed;
+   * it loads silent, stopped at its start, looping at speed 1.
+   */
+  clips(): LoadedClip[] {
+    return this.inner.clips().map(({ id, name, duration }) => ({ id, name, duration }));
+  }
+
+  /**
+   * Load a clip, or replace the loaded clip of its id, at once — the
+   * authoring timeline's live edit. `clip` is in {@link describe}'s `clips`
+   * shape, its channels resolved through the Vizij's rig like the bundle's.
+   * A replaced clip keeps its playback (playhead, speed, loop, playing or
+   * not) and plays on with the new tracks; a new one loads silent and
+   * stopped.
+   */
+  setClip(clip: Clip): LoadedClip {
+    const { id, name, duration } = this.inner.setClip(JSON.stringify(clip));
+    return { id, name, duration };
+  }
+
+  /** Unload a clip; its keys keep the values it last wrote. Returns whether
+   * it was loaded. */
+  removeClip(id: string): boolean {
+    this.transports.delete(id);
+    return this.inner.removeClip(id);
+  }
+
+  /**
+   * Play a clip from its playhead, or from its start with `reset`. Applied
+   * at the device's next step, which the promise waits for. Its state
+   * reports `completed` once a non-looping clip reaches its end; it holds
+   * its last pose there until stopped or played again with `reset`.
+   */
+  playClip(id: string, options: PlayClipOptions = {}): Promise<void> {
+    const [clip, transport] = this.clipTransport(id);
+    if (options.speed !== undefined) {
+      transport.speed = options.speed;
+    }
+    transport.playing = true;
+    transport.epoch += 1;
+    const calls = [this.clipWeight(clip, 1)];
+    if (options.reset) {
+      calls.push(this.clipCall("seek", clip, { time_ns: { u64: 0 } }));
+    }
+    calls.push(this.clipCall("play", clip));
+    // `play` resumes at speed 1: the clip's own speed follows it.
+    calls.push(this.clipCall("set_speed", clip, { speed: { f32: transport.speed } }));
+    return Promise.all(calls).then(() => undefined);
+  }
+
+  /** Hold a clip's playhead, and its pose. Applied at the next step. */
+  pauseClip(id: string): Promise<void> {
+    const [clip, transport] = this.clipTransport(id);
+    transport.playing = false;
+    transport.epoch += 1;
+    return this.clipCall("pause", clip);
+  }
+
+  /**
+   * Stop a clip: its playhead back to the start, and the clip silent — it
+   * no longer writes its keys. With `clearOutputs` (the default) its keys
+   * first return to its first frame, one step before it falls silent; the
+   * promise resolves once silent. A play before then wins.
+   */
+  stopClip(id: string, options: StopClipOptions = {}): Promise<void> {
+    const [clip, transport] = this.clipTransport(id);
+    transport.playing = false;
+    const epoch = (transport.epoch += 1);
+    const stopped = this.clipCall("stop", clip);
+    if (options.clearOutputs === false) {
+      return Promise.all([stopped, this.clipWeight(clip, 0)]).then(() => undefined);
+    }
+    return stopped.then(() =>
+      transport.epoch === epoch ? this.clipWeight(clip, 0) : undefined,
+    );
+  }
+
+  /** Move a clip's playhead to `seconds`. Applied at the next step; a
+   * silent clip moves without writing. */
+  seekClip(id: string, seconds: number): Promise<void> {
+    const [clip] = this.clipTransport(id);
+    const ns = Math.max(0, Math.round(seconds * 1e9));
+    return this.clipCall("seek", clip, { time_ns: { u64: ns } });
+  }
+
+  /** Loop a clip at its end (the default), or stop it there: `false` lets it
+   * complete. Applied at the next step. */
+  setClipLoop(id: string, loop: boolean): Promise<void> {
+    const [clip, transport] = this.clipTransport(id);
+    transport.loop = loop;
+    return this.clipCall("set_loop", clip, { mode: { str: loop ? "loop" : "once" } });
+  }
+
+  /** Set a clip's speed multiplier: at once while it plays (at the next
+   * step), else from its next play. */
+  setClipSpeed(id: string, speed: number): Promise<void> {
+    const [clip, transport] = this.clipTransport(id);
+    transport.speed = speed;
+    return transport.playing
+      ? this.clipCall("set_speed", clip, { speed: { f32: speed } })
+      : Promise.resolve();
+  }
+
+  /**
+   * A clip's playback as the animation source last reported it — the player
+   * states it writes to `vizij/animations/players` each step, which may lag
+   * a transport call by a step — or `null` for a clip that is not loaded.
+   * Cheap enough to poll every frame.
+   */
+  clipState(id: string): ClipState | null {
+    const clip = this.inner.clips().find((loaded) => loaded.id === id);
+    if (!clip) {
+      return null;
+    }
+    const transport = this.transportOf(clip);
+    const player = decodePlayerStates(
+      this.inner.readValues([ANIMATION_PLAYERS_PATH])[ANIMATION_PLAYERS_PATH],
+    ).find((state) => state.player === clip.player);
+    const duration = player && player.duration > 0 ? player.duration : clip.duration;
+    const time = player?.time ?? 0;
+    // A non-looping player clamps its playhead at the end, still advancing.
+    const completed = !transport.loop && duration > 0 && time >= duration - 1e-3;
+    return {
+      time,
+      duration,
+      playing: player?.state === "playing" && !completed,
+      loop: transport.loop,
+      speed: transport.speed,
+      completed,
+    };
+  }
+
+  /** The loaded clip `id` and its transport memory; throws for a clip that
+   * is not loaded. */
+  private clipTransport(id: string): [WasmLoadedClip, ClipTransport] {
+    const clip = this.inner.clips().find((loaded) => loaded.id === id);
+    if (!clip) {
+      throw new Error(`@vizij/runtime: no clip ${JSON.stringify(id)} is loaded`);
+    }
+    return [clip, this.transportOf(clip)];
+  }
+
+  /** What the transport remembers of `clip`, fresh for a player it has not
+   * seen (a clip loaded anew starts looping at speed 1, stopped). */
+  private transportOf(clip: WasmLoadedClip): ClipTransport {
+    let transport = this.transports.get(clip.id);
+    if (!transport || transport.player !== clip.player) {
+      transport = { player: clip.player, loop: true, speed: 1, playing: false, epoch: 0 };
+      this.transports.set(clip.id, transport);
+    }
+    return transport;
+  }
+
+  /** Call one of the module's transport functions on `clip`'s player, with
+   * its other arguments by parameter name. */
+  private clipCall<F extends keyof typeof ANIMATION_IDS>(
+    name: F,
+    clip: WasmLoadedClip,
+    args: Record<string, object> = {},
+  ): Promise<void> {
+    const ids = ANIMATION_IDS[name] as Record<string, string>;
+    return this.call({
+      id: ids.function,
+      args: [
+        { id: ids.player, value: { u32: clip.player } },
+        ...Object.entries(args).map(([parameter, value]) => ({ id: ids[parameter], value })),
+      ],
+    }).then(() => undefined);
+  }
+
+  /** Give `clip`'s instance `weight`: 0 silences it, 1 lets it write. */
+  private clipWeight(clip: WasmLoadedClip, weight: number): Promise<void> {
+    return this.clipCall("set_weight", clip, {
+      instance: { u32: clip.instance },
+      weight: { f32: weight },
+    });
   }
 
   /** Release the wasm-side device. The instance is unusable afterwards; a

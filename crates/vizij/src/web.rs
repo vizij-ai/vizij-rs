@@ -42,6 +42,7 @@ use vizij_arora_store::BlackboardStore;
 use wasm_bindgen::prelude::*;
 
 use crate::face::{self, FaceConfig, LoadedFace};
+use crate::modules::animation::Clips;
 use crate::view::meta::FaceMeta;
 use crate::view::{self, FaceAssets, Fit, Picked, Picks, ViewEvent, ViewEvents, ViewOptions};
 
@@ -186,15 +187,11 @@ pub fn load_vizij(
     }
     let speech = config.speech.as_ref().map(|build| build());
     let guests = parse_modules(modules)?;
-    let (builder, function_modules) = face::builder_with_guests(
-        &spec,
-        rig.clone(),
-        store,
-        &meta.bundle.skills,
-        speech,
-        guests,
-    )
-    .ok_or_else(|| JsValue::from_str("the composed graph does not encode (see the console)"))?;
+    let (builder, function_modules, clips) =
+        face::builder_with_guests(&spec, rig.clone(), store, &meta.bundle, speech, guests)
+            .ok_or_else(|| {
+                JsValue::from_str("the composed graph does not encode (see the console)")
+            })?;
     let arora = builder
         .build()
         .map_err(|e| JsValue::from_str(&format!("arora build failed: {e:?}")))?;
@@ -215,6 +212,7 @@ pub fn load_vizij(
         inner: AroraWeb::from(arora),
         caller,
         function_modules,
+        clips,
     })
 }
 
@@ -371,6 +369,8 @@ pub struct VizijRuntime {
     /// function id -> module id over the host modules, so a call can name
     /// just the function.
     function_modules: HashMap<Uuid, Uuid>,
+    /// The clips loaded into the device's animation module.
+    clips: Clips,
 }
 
 #[wasm_bindgen]
@@ -392,11 +392,11 @@ impl VizijRuntime {
         };
         parse_spec(&spec).map_err(|e| JsValue::from_str(&e))?;
         let guests = parse_modules(modules)?;
-        let (builder, function_modules) = face::builder_with_guests(
+        let (builder, function_modules, clips) = face::builder_with_guests(
             &spec,
             RigHal::new(),
             BlackboardStore::new(),
-            &[],
+            &face::Bundle::default(),
             None,
             guests,
         )
@@ -412,6 +412,7 @@ impl VizijRuntime {
             inner: AroraWeb::from(arora),
             caller,
             function_modules,
+            clips,
         })
     }
 
@@ -646,6 +647,45 @@ impl VizijRuntime {
     pub fn drain_changes(&self) -> Result<JsValue, JsValue> {
         self.inner.drain_changes()
     }
+
+    /// The clips loaded into the device's animation module, in load order —
+    /// the Vizij's own, then those set since — as `[{ id, name, duration,
+    /// player, instance }]`: `duration` in seconds, `player` the clip's own
+    /// player and `instance` its instance on it, what the module's transport
+    /// functions take. A clip loads silent (its instance at weight 0) and
+    /// stopped at its start.
+    pub fn clips(&self) -> Result<JsValue, JsValue> {
+        to_js(self.clips.list())
+    }
+
+    /// Load a clip, or replace the loaded clip of its id, at once: `clip_json`
+    /// is a clip as [`describe`] lists them (`{ id, name, duration, tracks }`)
+    /// or a bundle `animations` entry (`{ id, clip }`), its tracks' channels
+    /// resolved to store keys through the Vizij's rig. Returns the clip as
+    /// loaded (as [`clips`](Self::clips) lists it). A replaced clip keeps its
+    /// player — playhead, speed, loop mode — and its weight, so a playing
+    /// clip plays on with the new tracks.
+    #[wasm_bindgen(js_name = setClip)]
+    pub fn set_clip(&mut self, clip_json: &str) -> Result<JsValue, JsValue> {
+        let json: serde_json::Value = serde_json::from_str(clip_json)
+            .map_err(|e| JsValue::from_str(&format!("clip is not JSON: {e}")))?;
+        let clip = vizij_arora_host::contents::clip(&json)
+            .ok_or_else(|| JsValue::from_str("a clip needs an id"))?;
+        to_js(&self.clips.set(&clip))
+    }
+
+    /// Unload the clip `id` and its player, at once; its keys keep the
+    /// values it last wrote. Returns whether it was loaded.
+    #[wasm_bindgen(js_name = removeClip)]
+    pub fn remove_clip(&mut self, id: &str) -> bool {
+        self.clips.remove(id)
+    }
+}
+
+/// `value` as a JS value, through JSON.
+fn to_js<T: serde::Serialize + ?Sized>(value: &T) -> Result<JsValue, JsValue> {
+    let json = serde_json::to_string(value).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    js_sys::JSON::parse(&json)
 }
 
 /// Dispatch `call` through `caller`; `finish` turns the reply into the JSON

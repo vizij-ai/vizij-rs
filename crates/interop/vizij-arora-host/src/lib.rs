@@ -332,6 +332,70 @@ impl Bundle {
             .filter_map(|(name, value)| map.get(name).map(|path| (path.clone(), *value as f32)))
             .collect()
     }
+
+    /// How this face's clip channels name store keys: through its first
+    /// `rig` graph's input nodes, under its [`rig_prefix`](Bundle::rig_prefix).
+    pub fn channel_keys(&self) -> ChannelKeys {
+        let rig = self.graphs.iter().find(|(kind, _)| kind == "rig");
+        ChannelKeys {
+            prefix: self.rig_prefix(),
+            inputs: rig
+                .map(|(_, spec)| {
+                    nodes_of(spec)
+                        .filter(|node| {
+                            node.get("type")
+                                .and_then(Json::as_str)
+                                .is_some_and(|t| t.eq_ignore_ascii_case("input"))
+                        })
+                        .filter_map(|node| node.pointer("/params/path").and_then(Json::as_str))
+                        .map(|path| path.trim().to_string())
+                        .collect()
+                })
+                .unwrap_or_default(),
+            by_name: rig
+                .map(|(_, spec)| collect_input_path_map(spec))
+                .unwrap_or_default(),
+        }
+    }
+}
+
+/// How a clip track's `channel` names the store key it drives on one face,
+/// resolved through the face's rig — [`Bundle::channel_keys`].
+///
+/// A channel is rig-relative (`gaze/left_right`, `poses/<id>.weight`), so its
+/// key is the rig input at `<rig prefix><channel>`. A channel that is no such
+/// input resolves, in order: to itself when it already is a rig input path;
+/// to the input the rig names it by (its node id, as
+/// [`collect_input_path_map`] reads them); else to `<rig prefix><channel>`
+/// regardless, a key some other graph may read. A channel already under
+/// `rig/` is never prefixed again.
+#[derive(Debug, Clone, Default)]
+pub struct ChannelKeys {
+    prefix: String,
+    inputs: std::collections::HashSet<String>,
+    by_name: HashMap<String, String>,
+}
+
+impl ChannelKeys {
+    /// The store key `channel` drives.
+    pub fn key(&self, channel: &str) -> String {
+        let channel = channel.trim().trim_start_matches('/');
+        if self.inputs.contains(channel) {
+            return channel.to_string();
+        }
+        let prefixed = format!("{}{channel}", self.prefix);
+        if self.inputs.contains(&prefixed) {
+            return prefixed;
+        }
+        if let Some(path) = self.by_name.get(channel) {
+            return path.clone();
+        }
+        if channel.starts_with("rig/") {
+            channel.to_string()
+        } else {
+            prefixed
+        }
+    }
 }
 
 /// Source id of the animation source (see [`compose_sources`] for how source
@@ -362,9 +426,10 @@ const FIELD_OUTPUT_VALUE: &str = "76697a69-6a00-0000-0110-000000000003";
 /// `default_key`, the final rig paths decided at clip load. A second
 /// `ExternalFunction` node writes `player_states()` to [`ANIMATION_PLAYERS_PATH`].
 ///
-/// The source is inert until a clip plays: with no instances the module's `step`
-/// returns nothing, so the `output` writes nothing and the rig/program pose
-/// stands. Transport (load a clip, play/pause/seek/…) is driven through the
+/// The source is inert until a clip plays: with no instance of weight the
+/// module's `step` returns nothing — a host loads a face's clips silent, at
+/// weight 0 — so the `output` writes nothing and the rig/program pose stands.
+/// Transport (play/pause/seek/…, an instance's weight) is driven through the
 /// module's exported functions — over a bridge, or in-process — not from here.
 pub fn animations_source() -> (String, Json) {
     let spec = json!({
@@ -584,6 +649,37 @@ mod tests {
             ],
             "poses": { "config": { "neutralInputs": { "gaze_x": 0.25, "missing": 1.0 } } }
         })
+    }
+
+    /// A clip channel resolves through the face's rig: the rig input under
+    /// the rig prefix, an input path as is, an input by its node name, else
+    /// the prefixed path.
+    #[test]
+    fn a_channel_resolves_to_the_rig_input_it_names() {
+        let mut bundle = bundle_json();
+        bundle["metadata"]["faceId"] = json!("quori");
+        bundle["graphs"][0]["spec"] = graph(
+            json!([
+                { "id": "input_direct_gaze_left_right", "type": "input",
+                  "params": { "path": "rig/quori/gaze/left_right" } },
+                { "id": "input_mouth_smile", "type": "input",
+                  "params": { "path": "rig/quori/mouth/smile_amount" } },
+            ]),
+            json!([]),
+        );
+        let keys = Bundle::from_bundle_json(&bundle).channel_keys();
+        assert_eq!(keys.key("gaze/left_right"), "rig/quori/gaze/left_right");
+        assert_eq!(keys.key("/gaze/left_right"), "rig/quori/gaze/left_right");
+        assert_eq!(
+            keys.key("rig/quori/gaze/left_right"),
+            "rig/quori/gaze/left_right"
+        );
+        assert_eq!(keys.key("mouth_smile"), "rig/quori/mouth/smile_amount");
+        assert_eq!(keys.key("gaze_left_right"), "rig/quori/gaze/left_right");
+        assert_eq!(keys.key("poses/p.weight"), "rig/quori/poses/p.weight");
+        assert_eq!(keys.key("rig/other/x"), "rig/other/x");
+        // No rig, no prefix: a channel is its own key.
+        assert_eq!(Bundle::default().channel_keys().key("gaze/x"), "gaze/x");
     }
 
     #[test]
