@@ -138,11 +138,13 @@ jobs:
           pnpm --filter @vizij/animation-module run test
           pnpm --filter @vizij/runtime run test
       # The bundle on a page: Quori and Toasty against the native references
-      # under the same metric, and 25 load/unload cycles with a flat memory.
+      # under the same metric, the authoring viewport's calls, and 25
+      # load/unload cycles with a flat memory.
       - name: Fetch the face GLBs from vizij-web
         run: |
           mkdir -p fixtures
           base="https://raw.githubusercontent.com/vizij-ai/vizij-web/main/apps/vizij-authoring/public/assets"
+          curl -fsSL "$base/Quori_Current.glb" -o fixtures/Quori_Current.glb
           curl -fsSL "$base/Quori_Current_Extended.glb" -o fixtures/Quori_Current_Extended.glb
           curl -fsSL "$base/Toasty_Current.glb" -o fixtures/Toasty_Current.glb
       - name: Install Chromium for Playwright

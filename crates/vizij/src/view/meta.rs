@@ -59,6 +59,28 @@ impl FeatureKind {
             FeatureKind::Morph(target) => target,
         }
     }
+
+    /// The feature RobotData names `name` on an element whose morph targets
+    /// are `morph_targets`: a name that is none of the transform or material
+    /// features is a morph influence iff the element declares a target of
+    /// that name.
+    pub fn from_name(name: &str, morph_targets: &[String]) -> Option<Self> {
+        Some(match name {
+            "translation" => FeatureKind::Translation,
+            "rotation" => FeatureKind::Rotation,
+            "scale" => FeatureKind::Scale,
+            "color" => FeatureKind::Color,
+            "opacity" => FeatureKind::Opacity,
+            "metalness" => FeatureKind::Metalness,
+            "roughness" => FeatureKind::Roughness,
+            "emissive" => FeatureKind::Emissive,
+            "emissiveIntensity" => FeatureKind::EmissiveIntensity,
+            other if morph_targets.iter().any(|m| m == other) => {
+                FeatureKind::Morph(other.to_string())
+            }
+            _ => return None,
+        })
+    }
 }
 
 /// One binding: a store write to the animatable moves `feature` of the
@@ -102,17 +124,25 @@ pub struct FaceMeta {
     pub bundle: Bundle,
 }
 
-/// Raw `RobotData` feature entry (only what the app needs).
+/// Raw `RobotData` feature entry (only what the app needs): an animated
+/// feature's value is its animatable (`{ id, … }`), a static feature's is the
+/// value itself (a number, `{x, y, z}`, `{r, g, b}`, …), which the GLB's
+/// node and material already carry.
 #[derive(Deserialize)]
 struct RawFeature {
     #[serde(default)]
     animated: bool,
-    value: Option<RawAnimatable>,
+    value: Option<Json>,
 }
 
-#[derive(Deserialize)]
-struct RawAnimatable {
-    id: Uuid,
+impl RawFeature {
+    /// The animatable an animated feature is driven through.
+    fn animatable(&self) -> Option<Uuid> {
+        if !self.animated {
+            return None;
+        }
+        Uuid::parse_str(self.value.as_ref()?.get("id")?.as_str()?).ok()
+    }
 }
 
 #[derive(Deserialize)]
@@ -180,34 +210,15 @@ impl FaceMeta {
             }
 
             for (feature_name, feature) in &rd.features {
-                if !feature.animated {
-                    continue;
-                }
-                let Some(value) = &feature.value else {
+                let Some(animatable) = feature.animatable() else {
                     continue;
                 };
-                let kind = match feature_name.as_str() {
-                    "translation" => FeatureKind::Translation,
-                    "rotation" => FeatureKind::Rotation,
-                    "scale" => FeatureKind::Scale,
-                    "color" => FeatureKind::Color,
-                    "opacity" => FeatureKind::Opacity,
-                    "metalness" => FeatureKind::Metalness,
-                    "roughness" => FeatureKind::Roughness,
-                    "emissive" => FeatureKind::Emissive,
-                    "emissiveIntensity" => FeatureKind::EmissiveIntensity,
-                    // Any other feature is a morph influence iff the node
-                    // declares a morph target of that name.
-                    other if rd.morph_targets.iter().any(|m| m == other) => {
-                        FeatureKind::Morph(other.to_string())
-                    }
-                    other => {
-                        log::debug!("{node_name}: unmapped feature {other:?} — skipped");
-                        continue;
-                    }
+                let Some(kind) = FeatureKind::from_name(feature_name, &rd.morph_targets) else {
+                    log::debug!("{node_name}: unmapped feature {feature_name:?} — skipped");
+                    continue;
                 };
                 animatables.insert(
-                    value.id,
+                    animatable,
                     Binding {
                         node_name: node_name.clone(),
                         feature: kind,
@@ -313,6 +324,38 @@ mod tests {
                 "Opacity",
                 "Roughness"
             ]
+        );
+    }
+
+    /// A static feature carries its value, not an animatable: the element
+    /// reads, and only its animated features bind.
+    #[test]
+    fn a_static_feature_reads_and_binds_nothing() {
+        let animated = Uuid::new_v4();
+        let gltf = serde_json::json!({
+            "nodes": [{
+                "name": "Plate",
+                "extensions": { "RobotData": {
+                    "id": Uuid::new_v4().to_string(),
+                    "name": "Plate",
+                    "type": "shape",
+                    "features": {
+                        "color": { "animated": false, "value": { "r": 1, "g": 0.5, "b": 0 } },
+                        "opacity": { "animated": false, "value": 0.5 },
+                        "translation": {
+                            "animated": true,
+                            "value": { "id": animated.to_string(), "type": "vector3" }
+                        },
+                    }
+                } }
+            }]
+        });
+        let meta = FaceMeta::from_gltf_json(&gltf).expect("parses");
+        assert_eq!(meta.elements.len(), 1);
+        assert_eq!(meta.animatables.len(), 1);
+        assert_eq!(
+            meta.animatables[&animated].feature,
+            FeatureKind::Translation
         );
     }
 }

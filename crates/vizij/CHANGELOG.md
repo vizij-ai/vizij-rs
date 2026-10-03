@@ -17,6 +17,16 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   `play`, `pause`, `stop`, `seek`, `set_speed`, `set_loop`), its players in
   the bundle's order.
 
+### Changed
+
+- Opening another face (`O`, a dropped `.glb`, a reload) keeps the current one
+  on screen until the new one is ready, instead of an empty window meanwhile.
+
+### Fixed
+
+- A face whose RobotData carries static features (a value in place of an
+  animatable) loads; it was refused as bad RobotData.
+
 ## [0.1.0] - 2026-10-02
 
 ### Added
