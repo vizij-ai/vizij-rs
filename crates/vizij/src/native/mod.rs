@@ -302,8 +302,7 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
                         stage_neutral_pose(&store, &meta);
                     }
                     let speech = config.speech.as_ref().map(|build| build());
-                    let Some(builder) = builder_for(&spec, rig, store, &meta.bundle.skills, speech)
-                    else {
+                    let Some(builder) = builder_for(&spec, rig, store, &meta.bundle, speech) else {
                         return;
                     };
                     match builder.build() {
@@ -375,8 +374,7 @@ fn supervise(
         // each rests — said to the store, which every bridge relays.
         declare_keys(&store, &spec, &meta.bundle.neutral_stage_writes());
         let speech = config.speech.as_ref().map(|build| build());
-        let Some(builder) = builder_for(&spec, rig, store.clone(), &meta.bundle.skills, speech)
-        else {
+        let Some(builder) = builder_for(&spec, rig, store.clone(), &meta.bundle, speech) else {
             return;
         };
         let builder = builder.with_host_module(rest::host_module(Box::new(store.clone())));
