@@ -210,19 +210,54 @@ export interface Rect {
   height: number;
 }
 
-/** Options for {@link mount}: how every Vizij is rendered. */
+/** How a Vizij's framed bounds fit its rectangle: whole and letterboxed
+ * (`contain`), filling it and cropped (`cover`), or filling it and
+ * distorted (`stretch`). */
+export type Fit = "contain" | "cover" | "stretch";
+
+/** Options for {@link mount}: how every Vizij is rendered. `fit` and `zoom`
+ * are every Vizij's defaults; {@link setView} overrides them for one. */
 export interface MountOptions {
   /** `RRGGBB` clear colour of each Vizij's rectangle; absent, the canvas
    * stays transparent wherever nothing is drawn. */
   background?: string;
   /** How a Vizij fits its rectangle: `contain` (default), `cover`, `stretch`. */
-  fit?: "contain" | "cover" | "stretch";
+  fit?: Fit;
   /** Magnification after the fit: one factor, or `[x, y]`. */
   zoom?: number | [number, number];
   /** three.js-style ambient intensity (default π/2). */
   ambient?: number;
   /** Render pure albedo. */
   unlit?: boolean;
+}
+
+/** A world rectangle in the face's plane, the shape {@link describe} reports
+ * the authored `rootBounds` in. */
+export interface Bounds {
+  center: { x: number; y: number };
+  size: { x: number; y: number };
+}
+
+/**
+ * A tone-mapping curve, by the names the authoring app stores in a bundle:
+ * `none` (colors as shaded, the default), `agx` (Blender's AgX), `aces`
+ * (ACES Filmic) or `neutral` (Khronos PBR Neutral) — three.js's curves.
+ */
+export type ToneMapping = "none" | "agx" | "aces" | "neutral";
+
+/** One Vizij's view, for {@link setView}: its framing over the page's
+ * {@link MountOptions}, and its tone mapping. */
+export interface VizijView {
+  /** The world rectangle the camera frames, in place of the GLB's authored
+   * `rootBounds`. Positive sizes. */
+  bounds?: Bounds;
+  /** How the bounds fit the Vizij's rectangle; the page's when absent. */
+  fit?: Fit;
+  /** Magnification after the fit, one factor or `[x, y]`; the page's when
+   * absent. */
+  zoom?: number | [number, number];
+  /** The curve the Vizij's colors go through; `none` when absent. */
+  toneMapping?: ToneMapping;
 }
 
 /**
@@ -241,7 +276,8 @@ export interface AroraModule {
 /** Options for {@link loadVizij}: the composition, as {@link composeVizij}'s
  * — its `program` is the one playing at load, the others wait for
  * {@link Runtime.startProgram} — whether the bundle's neutral pose is staged
- * (default `true`), the speech —
+ * at load (default `true`; {@link Runtime.reset} returns to it at any time),
+ * the speech —
  * `audio` is the playback hook the `say` provider hands its audio to: the
  * page's Web Audio player by default, `false` for a device that plays no
  * speech — and `speechApiUrl` the TTS deployment, and the wasm modules to
@@ -431,6 +467,7 @@ interface WasmVizijRuntime {
   spawn(call_json: string): Promise<string>;
   spawnSkill(name: string, args_json: string): Promise<string>;
   halt(handle_json: string): Promise<string>;
+  reset(): Promise<string>;
   loadGraph(graph_json: string): Promise<string>;
   applyGraphEdits(edits_json: string): Promise<string>;
   startProgram(id: string): Promise<unknown>;
@@ -465,6 +502,8 @@ interface WasmBindings {
   unloadVizij(vizij_id: string): void;
   placeVizij(vizij_id: string, x: number, y: number, width: number, height: number): void;
   fillCanvas(vizij_id: string): void;
+  setView(vizij_id: string, view_json?: string): void;
+  safeArea(vizij_id: string): Rect | null;
   ready(vizij_id: string): boolean;
   drainPicks(): Pick[];
   describe(glb: Uint8Array): VizijDescription;
@@ -690,6 +729,23 @@ export class Runtime {
    * reads terminal). */
   halt(handle: TaskHandle): Promise<void> {
     return this.inner.halt(JSON.stringify(handle)).then(() => undefined);
+  }
+
+  /**
+   * Return the face to rest: every key the device describes goes back to
+   * the value it rests at — each free input of its graph to its authored
+   * default, each input the bundle's neutral pose names to its neutral — and
+   * the graph carries the face there on its next tick. Keys with no
+   * declared rest keep their values. The writes go through the device's
+   * store, so every bridge sees them. Resolves once applied; on a device
+   * not under `run()` a zero-dt step lands it.
+   */
+  reset(): Promise<void> {
+    const done = this.inner.reset();
+    if (!this.inner.running) {
+      this.inner.step(0);
+    }
+    return done.then(() => undefined);
   }
 
   /**
@@ -1056,8 +1112,8 @@ export async function mount(
 /**
  * Show a Vizij under `vizijId` and start its device: the GLB's bindings and
  * bundle are read, its graphs composed (`options` as {@link composeVizij}'s,
- * plus `stageNeutral`), the device built with the animation, gaze and viseme
- * modules, and the scene queued for the App — {@link whenReady} resolves
+ * plus `stageNeutral`), the device built with the animation, rest, gaze and
+ * viseme modules, and the scene queued for the App — {@link whenReady} resolves
  * once it shows. A Vizij already shown under `vizijId` is replaced. Requires
  * {@link mount}.
  */
@@ -1100,6 +1156,29 @@ export function placeVizijIn(vizijId: string, element: Element, canvas: Element)
 /** Give the Vizij's camera the whole canvas again. */
 export function fillCanvas(vizijId: string): void {
   bindings().fillCanvas(vizijId);
+}
+
+/**
+ * Frame and tone-map one Vizij: `view`'s framing fields override the
+ * page's {@link MountOptions} for this Vizij alone, its `bounds` the GLB's
+ * authored `rootBounds`. Each call replaces the Vizij's previous view — a
+ * field left out takes the page's (tone mapping: `none`), and `{}` hands the
+ * Vizij back to the page. Kept across the Vizij's reloads; may be set before
+ * it loads. Shows from the next frame.
+ */
+export function setView(vizijId: string, view: VizijView): void {
+  bindings().setView(vizijId, JSON.stringify(view));
+}
+
+/**
+ * Where the Vizij's safe area — the bounds its camera frames — lies on the
+ * canvas, in CSS pixels from the canvas's top-left corner (the frame
+ * {@link placeVizij} takes), as of the last frame drawn: what a DOM overlay
+ * outlining it is positioned by. A zoom that crops the bounds reaches past
+ * the Vizij's rectangle. `null` until the Vizij's camera has drawn.
+ */
+export function safeArea(vizijId: string): Rect | null {
+  return bindings().safeArea(vizijId);
 }
 
 /** Whether the Vizij's scene has spawned and its bindings are joined — from
@@ -1151,9 +1230,10 @@ export async function describe(
 
 /**
  * A device with no Vizij: `graph` (a graph spec, in any form the spec
- * normalizer accepts) as its behavior over a fresh store and rig, the
- * animation module host-linked and `modules` loaded as guests. Nothing is
- * drawn — a bench, or a graph run in Node. Omit `graph` for the built-in
+ * normalizer accepts) as its behavior over a fresh store and rig, its free
+ * inputs resting at their authored defaults ({@link Runtime.reset}), the
+ * animation and rest modules host-linked and `modules` loaded as guests.
+ * Nothing is drawn — a bench, or a graph run in Node. Omit `graph` for the built-in
  * passthrough proof graph (`sensor/x` → `actuator/y`). Calls {@link init}
  * if it has not run yet.
  */

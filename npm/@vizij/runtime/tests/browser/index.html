@@ -106,7 +106,11 @@
     stopProgram: (id, program, options) => devices.get(id).stopProgram(program, options),
     setProgram: (id, program, graph) => devices.get(id).setProgram(program, graph),
     programState: (id, program) => devices.get(id).programState(program),
+    reset: (id) => devices.get(id).reset(),
+    snapshot: (id) => devices.get(id).snapshot(),
     place: (id, rect) => vizij.placeVizij(id, rect),
+    setView: (id, view) => vizij.setView(id, view),
+    safeArea: (id) => vizij.safeArea(id),
     ready: (id) => vizij.ready(id),
     unload(id) {
       const device = devices.get(id);
