@@ -18,19 +18,37 @@ const listed = await profiles();
 assert.deepEqual(
   listed.map((p) => [p.id, p.scope, p.keys]),
   [
-    ["vizij-face", "face", 82],
+    ["vizij-face", "face", 88],
     ["ros4hri", "device", 25],
   ],
 );
 
 // A face-scoped profile is addressed to the face: every path takes the prefix.
 const face = await profile("vizij-face", "rig/quori/");
-assert.equal(face.keys.length, 82);
+assert.equal(face.keys.length, 88);
 assert.ok(face.keys.every((k) => k.path.startsWith("rig/quori/standard/vizij/")));
 const jaw = face.keys.find((k) => k.path.endsWith("/face/jaw_open"));
 assert.deepEqual(jaw.meta, { au: 26, arkit: "jawOpen", tier: "muscle" });
 assert.equal(jaw.value_type, "f32");
 assert.deepEqual(jaw.default_value, { f32: 0 });
+
+// The blink, the expressions beyond ROS4HRI's and the conversation state are
+// weights resting at zero, in their tiers.
+for (const [suffix, tier] of [
+  ["/blink", "gaze"],
+  ["/expression/concerned", "expression"],
+  ["/expression/sleepy", "expression"],
+  ["/conversation/speaking", "conversation"],
+  ["/conversation/user_speaking", "conversation"],
+  ["/conversation/thinking", "conversation"],
+]) {
+  const key = face.keys.find((k) => k.path === `rig/quori/standard/vizij${suffix}`);
+  assert.ok(key, `vizij-face declares ${suffix}`);
+  assert.deepEqual(
+    [key.kind, key.value_type, key.min, key.max, key.default_value, key.meta],
+    ["input", "f32", 0, 1, { f32: 0 }, { tier }],
+  );
+}
 
 // A device-scoped profile ignores the prefix: its paths are absolute.
 const ros = await profile("ros4hri", "rig/quori/");

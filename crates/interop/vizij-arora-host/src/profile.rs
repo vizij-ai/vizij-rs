@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as Json};
 
 use crate::ros4hri;
-use crate::standard::{self, EXPRESSION_NAMES, FACE_CONTROLS, VISEME_SHAPES};
+use crate::standard::{self, CONVERSATION_STATES, FACE_CONTROLS, VISEME_SHAPES};
 
 /// Where a profile's paths live on the device's store.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -180,9 +180,11 @@ impl Profile {
 
 // --- The Vizij face standard ------------------------------------------------
 
-/// The `vizij-face` profile: the standard's own interface — gaze and lids,
-/// the named expressions, the visemes, and the muscle tier — generated from
-/// [`crate::standard`].
+/// The `vizij-face` profile: the standard's own interface — gaze, lids and
+/// blink, the named expressions, the visemes, the muscle tier, and the
+/// conversation state — generated from [`crate::standard`]. The keys run in
+/// tier order, so [`Profile::tiers`] lists `gaze`, `expression`, `viseme`,
+/// `muscle`, `conversation`.
 ///
 /// This is the full standard, not the subset any one mapping happens to reach.
 /// The ROS4HRI mapping covers 34 of the 36 muscle-tier keys (`jaw_left` and
@@ -207,7 +209,8 @@ pub fn vizij_face_profile() -> Profile {
     ] {
         keys.push(ProfileKey::weight(path).with_tier("gaze"));
     }
-    for name in EXPRESSION_NAMES {
+    keys.push(ProfileKey::weight(standard::BLINK).with_tier("gaze"));
+    for name in standard::expression_names() {
         keys.push(ProfileKey::weight(standard::expression_path(name)).with_tier("expression"));
     }
     for shape in VISEME_SHAPES {
@@ -231,15 +234,19 @@ pub fn vizij_face_profile() -> Profile {
             tier: Some("muscle".into()),
         }),
     );
+    for state in CONVERSATION_STATES {
+        keys.push(ProfileKey::weight(standard::conversation_path(state)).with_tier("conversation"));
+    }
 
     Profile {
         id: "vizij-face".into(),
         version: "v1".into(),
         title: "Vizij face standard".into(),
-        description: "The portable face interface: gaze and lids, 25 named expressions, \
-                      15 visemes, and 36 muscle controls keyed to FACS action units and \
-                      ARKit blendshapes (35 named per FACS/ARKit, plus the de-facto \
-                      jaw-open path)."
+        description: "The portable face interface: gaze, lids and blink, 27 named \
+                      expressions, 15 visemes, 36 muscle controls keyed to FACS action \
+                      units and ARKit blendshapes (35 named per FACS/ARKit, plus the \
+                      de-facto jaw-open path), and the conversation state (speaking, \
+                      user speaking, thinking)."
             .into(),
         scope: Scope::Face,
         keys,
@@ -471,13 +478,49 @@ mod tests {
     fn the_vizij_face_profile_covers_every_tier_in_full() {
         let face = vizij_face_profile();
         let tier = |name: &str| face.keys.iter().filter(|k| k.tier() == Some(name)).count();
-        assert_eq!(tier("gaze"), 6);
-        assert_eq!(tier("expression"), 25);
+        assert_eq!(tier("gaze"), 7);
+        assert_eq!(tier("expression"), 27);
         assert_eq!(tier("viseme"), 15);
         assert_eq!(tier("muscle"), 36);
-        assert_eq!(face.keys.len(), 82);
-        assert_eq!(face.tiers(), ["gaze", "expression", "viseme", "muscle"]);
+        assert_eq!(tier("conversation"), 3);
+        assert_eq!(face.keys.len(), 88);
+        assert_eq!(
+            face.tiers(),
+            ["gaze", "expression", "viseme", "muscle", "conversation"]
+        );
         assert_eq!(face.scope, Scope::Face);
+    }
+
+    /// The blink and the conversation state are weights resting at zero —
+    /// open eyes, nobody speaking, nothing pending — in their tiers.
+    #[test]
+    fn blink_and_conversation_keys_are_weights_resting_at_zero() {
+        let face = vizij_face_profile();
+        let key = |path: &str| {
+            face.keys
+                .iter()
+                .find(|k| k.path == path)
+                .unwrap_or_else(|| panic!("{path} is declared"))
+        };
+        let mut expected = vec![(standard::BLINK.to_string(), "gaze")];
+        expected.extend(
+            standard::VIZIJ_EXPRESSION_NAMES
+                .iter()
+                .map(|n| (standard::expression_path(n), "expression")),
+        );
+        expected.extend(
+            CONVERSATION_STATES
+                .iter()
+                .map(|s| (standard::conversation_path(s), "conversation")),
+        );
+        for (path, tier) in expected {
+            let k = key(&path);
+            assert_eq!(k.tier(), Some(tier), "{path}");
+            assert_eq!(k.kind.as_deref(), Some("input"), "{path}");
+            assert_eq!(k.value_type, Some(Type::F32), "{path}");
+            assert_eq!((k.min, k.max), (Some(0.0), Some(1.0)), "{path}");
+            assert_eq!(k.default_value, Some(Value::F32(0.0)), "{path}");
+        }
     }
 
     /// Every muscle-tier key carries the ARKit name it corresponds to; the AU
@@ -549,7 +592,7 @@ mod tests {
 
     /// The shipped mapping reads the whole `ros4hri` profile but `gaze/frame`
     /// (the look_at skill consumes it) and writes the whole `vizij-face`
-    /// profile but the two AU-less jaw controls — and nothing the profile
+    /// profile but what ROS4HRI has no channel for — and nothing the profile
     /// does not declare.
     #[test]
     fn surface_reconciles_the_ros4hri_mapping_against_the_profiles() {
@@ -575,15 +618,24 @@ mod tests {
             .into_iter()
             .filter(|p| !produced.paths().contains(p))
             .collect();
-        // The lipsync surface is unwritten here by design — the viseme
-        // players own it — and the two jaw shifts have no action unit to
-        // drive them.
-        let mut expected: Vec<String> = VISEME_SHAPES
-            .iter()
-            .map(|s| standard::viseme_path(s))
-            .collect();
+        // Unwritten, in profile order: the caller's blink (the mapping's
+        // idle blink drives the lids), the expressions ROS4HRI does not name,
+        // the lipsync surface (the viseme players own it), the two jaw shifts
+        // (no action unit drives them), and the conversation state.
+        let mut expected: Vec<String> = vec![standard::BLINK.into()];
+        expected.extend(
+            standard::VIZIJ_EXPRESSION_NAMES
+                .iter()
+                .map(|n| standard::expression_path(n)),
+        );
+        expected.extend(VISEME_SHAPES.iter().map(|s| standard::viseme_path(s)));
         expected.push("standard/vizij/face/jaw_left".into());
         expected.push("standard/vizij/face/jaw_right".into());
+        expected.extend(
+            CONVERSATION_STATES
+                .iter()
+                .map(|s| standard::conversation_path(s)),
+        );
         assert_eq!(unwritten, expected);
         let undeclared: Vec<&str> = produced
             .paths()

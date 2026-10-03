@@ -1272,6 +1272,29 @@ mod tests {
         step_for(&mut arora, 0.45);
         let mouth = read_f32(&arora, "rig/quori_latest/poses/pose_a.weight");
         assert!(mouth < 0.1, "the envelope closes (pose_a = {mouth})");
+
+        // The keys beyond ROS4HRI, written directly: an expression it does
+        // not name, the blink, and a conversation state each reach the input
+        // Quori's adaptation maps them onto.
+        for (control, rig_input) in [
+            (
+                standard::expression_path("concerned"),
+                "rig/quori_latest/poses/pose_d_concerned_d.weight",
+            ),
+            (standard::BLINK.to_string(), "rig/quori_latest/lids/blink"),
+            (
+                standard::conversation_path("speaking"),
+                "rig/quori_latest/speech/speaking",
+            ),
+        ] {
+            stage(&arora, &format!("rig/quori_latest/{control}"), float(1.0));
+            settle(&mut arora);
+            let value = read_f32(&arora, rig_input);
+            assert!(
+                value > 0.95,
+                "{control} does not reach {rig_input} ({value})"
+            );
+        }
     }
 }
 
