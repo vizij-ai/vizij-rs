@@ -100,7 +100,11 @@
     spawnSkill: (id, name, args) => devices.get(id).spawnSkill(name, args),
     runStatus: (value) => vizij.runStatus(value),
     halt: (id, handle) => devices.get(id).halt(handle),
+    reset: (id) => devices.get(id).reset(),
+    snapshot: (id) => devices.get(id).snapshot(),
     place: (id, rect) => vizij.placeVizij(id, rect),
+    setView: (id, view) => vizij.setView(id, view),
+    safeArea: (id) => vizij.safeArea(id),
     ready: (id) => vizij.ready(id),
     unload(id) {
       const device = devices.get(id);

@@ -4,8 +4,10 @@
 //! in the XY plane layered along Z, orthographic camera fit to the authored
 //! `rootBounds`, ambient-only lighting composed into unlit materials
 //! ([`Surface`]: diffuse scaled by `1 − metalness`, plus emissive), sRGB
-//! output with no tonemapping, double-sided materials, opacity-driven alpha
-//! blending.
+//! output, no tone mapping unless a face asks for one ([`tone`], composed into
+//! the same materials), double-sided materials, opacity-driven alpha
+//! blending. The page's [`ViewOptions`] frame every face; a face's own
+//! [`FaceView`] overrides them for that face.
 //!
 //! A face enters as GLB bytes: [`meta`] reads the bindings and the bundle
 //! from them, and the scene loads them through the in-memory asset source
@@ -17,6 +19,7 @@
 pub mod frames;
 pub mod meta;
 pub mod snapshot;
+pub mod tone;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -42,6 +45,7 @@ use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector
 use vizij_api_core::{TypedPath, Value};
 
 use meta::{Binding, FaceMeta, FeatureKind};
+pub use tone::ToneMapping;
 
 /// The in-memory asset source the faces' GLBs are served from: a loaded
 /// face's bytes live here under a path of their own until the face is
@@ -158,6 +162,64 @@ pub enum ViewEvent {
     },
     /// A new background color, as sRGB bytes.
     Background([u8; 3]),
+    /// Frame and tone-map the face by `view`, in place of the face's previous
+    /// view. Kept across the face's reloads, like its placement.
+    SetFaceView { face_id: String, view: FaceView },
+}
+
+/// How one face is framed and tone-mapped, over the page's [`ViewOptions`]:
+/// a framing field left `None` takes the page's (and the GLB's authored
+/// rootBounds), so several faces on one target can each be framed their own
+/// way.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct FaceView {
+    /// The world rectangle the camera frames instead of the authored
+    /// rootBounds: `(center x, center y, width, height)`, as
+    /// [`FaceMeta::root_bounds`]. Positive sizes.
+    pub bounds: Option<(f32, f32, f32, f32)>,
+    /// How the bounds fit the face's rectangle.
+    pub fit: Option<Fit>,
+    /// Magnification after the fit, per axis. Positive.
+    pub zoom: Option<Vec2>,
+    /// The curve the face's colors go through; none by default.
+    pub tone_mapping: ToneMapping,
+}
+
+/// Each face's own view ([`ViewEvent::SetFaceView`]), by face id; kept apart
+/// from the faces so a view survives the face's reload.
+#[derive(Resource, Default)]
+struct FaceViews(HashMap<String, FaceView>);
+
+/// Where each face's safe area — the bounds its camera frames — lies on the
+/// target, in logical pixels from the target's top-left corner, as of the
+/// last frame; by face id. The rectangle can reach past the face's own
+/// rectangle when a zoom crops the bounds.
+#[derive(Resource, Default)]
+pub struct SafeAreas(pub HashMap<String, Rect>);
+
+/// What a face's camera frames, in effect: its own view's fields where set,
+/// else the page's options and the GLB's authored rootBounds.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Framing {
+    center: Vec2,
+    size: Vec2,
+    fit: Fit,
+    zoom: Vec2,
+}
+
+impl Framing {
+    fn of(meta: &FaceMeta, options: &ViewOptions, view: Option<&FaceView>) -> Self {
+        let (cx, cy, width, height) = view
+            .and_then(|view| view.bounds)
+            .or(meta.root_bounds)
+            .unwrap_or((0.0, 0.0, 5.0, 4.0));
+        Self {
+            center: Vec2::new(cx, cy),
+            size: Vec2::new(width, height),
+            fit: view.and_then(|view| view.fit).unwrap_or(options.fit),
+            zoom: view.and_then(|view| view.zoom).unwrap_or(options.zoom),
+        }
+    }
 }
 
 /// The front ends' requests, drained each frame ([`ViewEvent`]).
@@ -266,11 +328,18 @@ pub struct Surface {
     pub factor: f32,
     /// A `basic` material: full albedo, no metalness, no emissive.
     pub basic: bool,
+    /// The face's tone mapping, applied to the composed color.
+    pub tone: ToneMapping,
 }
 
 impl Surface {
     /// The material as the GLB loader read it.
-    fn from_material(material: &StandardMaterial, factor: f32, basic: bool) -> Self {
+    fn from_material(
+        material: &StandardMaterial,
+        factor: f32,
+        basic: bool,
+        tone: ToneMapping,
+    ) -> Self {
         let base = material.base_color.to_linear();
         Self {
             base: [base.red, base.green, base.blue],
@@ -284,10 +353,11 @@ impl Surface {
             emissive_intensity: 1.0,
             factor,
             basic,
+            tone,
         }
     }
 
-    /// The unlit color the material renders with.
+    /// The unlit color the material renders with, tone-mapped.
     pub fn color(&self) -> Color {
         let rgb = if self.basic {
             self.base
@@ -299,6 +369,7 @@ impl Surface {
             }
             rgb
         };
+        let rgb = self.tone.apply(rgb);
         Color::LinearRgba(LinearRgba {
             red: rgb[0],
             green: rgb[1],
@@ -391,18 +462,29 @@ impl Plugin for ViewPlugin {
             .register_type::<bevy::gltf::GltfMaterialExtras>();
         app.init_resource::<Slots>()
             .init_resource::<Placements>()
+            .init_resource::<FaceViews>()
+            .init_resource::<SafeAreas>()
             .init_resource::<Picks>()
             .add_plugins(MeshPickingPlugin)
             .add_observer(on_press)
             .add_systems(
                 Update,
-                (apply_view_events, place_cameras, index_faces, apply_poses).chain(),
+                (
+                    apply_view_events,
+                    place_cameras,
+                    frame_cameras,
+                    index_faces,
+                    tone_faces,
+                    apply_poses,
+                    measure_safe_areas,
+                )
+                    .chain(),
             );
     }
 }
 
-/// Apply the front ends' requests: load, replace or unload a face, or
-/// recolor the background of every face camera.
+/// Apply the front ends' requests: load, replace or unload a face, place it
+/// or set its view, or recolor the background of every face camera.
 #[allow(clippy::too_many_arguments)]
 fn apply_view_events(
     events: Option<Res<ViewEvents>>,
@@ -412,6 +494,7 @@ fn apply_view_events(
     mut frame_config: Option<ResMut<frames::FrameConfig>>,
     mut slots: ResMut<Slots>,
     mut placements: ResMut<Placements>,
+    mut views: ResMut<FaceViews>,
     mut commands: Commands,
     faces: Query<(Entity, &Face)>,
     mut cameras: Query<&mut Camera, With<FaceCamera>>,
@@ -452,7 +535,7 @@ fn apply_view_events(
                 );
                 let camera = commands
                     .spawn(camera_for(
-                        &meta,
+                        Framing::of(&meta, &options, views.0.get(&face_id)),
                         &options,
                         slot,
                         offscreen.as_deref(),
@@ -484,6 +567,9 @@ fn apply_view_events(
             }
             ViewEvent::PlaceFace { face_id, rect } => {
                 placements.0.insert(face_id, rect);
+            }
+            ViewEvent::SetFaceView { face_id, view } => {
+                views.0.insert(face_id, view);
             }
         }
     }
@@ -523,6 +609,95 @@ fn place_cameras(
     }
 }
 
+/// Keep each face's camera on its framing: the projection and the position
+/// follow the face's view as it changes.
+fn frame_cameras(
+    views: Res<FaceViews>,
+    options: Res<ViewOptions>,
+    faces: Query<&Face>,
+    mut cameras: Query<(&mut Projection, &mut Transform), With<FaceCamera>>,
+) {
+    for face in &faces {
+        let Ok((mut projection, mut transform)) = cameras.get_mut(face.camera) else {
+            continue;
+        };
+        let framing = Framing::of(&face.meta, &options, views.0.get(&face.id));
+        let current = match &*projection {
+            Projection::Custom(custom) => custom
+                .get::<FitProjection>()
+                .map(|fit| (fit.bounds, fit.fit, fit.zoom)),
+            _ => None,
+        };
+        if current != Some((framing.size, framing.fit, framing.zoom)) {
+            *projection = fit_projection(&framing);
+        }
+        let position = slot_origin(face.slot) + framing.center.extend(CAMERA_HEIGHT);
+        if transform.translation != position {
+            transform.translation = position;
+        }
+    }
+}
+
+/// Keep each indexed face's materials on its tone mapping as its view
+/// changes.
+fn tone_faces(
+    views: Res<FaceViews>,
+    faces: Query<&Face>,
+    mut surfaces: Query<(&MeshMaterial3d<StandardMaterial>, &mut Surface)>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for face in &faces {
+        let tone = views
+            .0
+            .get(&face.id)
+            .map(|view| view.tone_mapping)
+            .unwrap_or_default();
+        for mesh in face.bindings.element_of.keys() {
+            let Ok((handle, mut surface)) = surfaces.get_mut(*mesh) else {
+                continue;
+            };
+            if surface.tone != tone {
+                surface.tone = tone;
+                if let Some(mut material) = materials.get_mut(&handle.0) {
+                    surface.apply(&mut material);
+                }
+            }
+        }
+    }
+}
+
+/// Measure where each face's safe area lies ([`SafeAreas`]).
+fn measure_safe_areas(
+    views: Res<FaceViews>,
+    options: Res<ViewOptions>,
+    faces: Query<&Face>,
+    cameras: Query<&Camera, With<FaceCamera>>,
+    mut areas: ResMut<SafeAreas>,
+) {
+    areas.0.clear();
+    for face in &faces {
+        let Some(viewport) = cameras
+            .get(face.camera)
+            .ok()
+            .and_then(Camera::logical_viewport_rect)
+        else {
+            continue;
+        };
+        let framing = Framing::of(&face.meta, &options, views.0.get(&face.id));
+        areas
+            .0
+            .insert(face.id.clone(), safe_area(&framing, viewport));
+    }
+}
+
+/// The part of `viewport` the framed bounds cover: centered, as the camera
+/// is on them, and scaled as the projection scales them.
+fn safe_area(framing: &Framing, viewport: Rect) -> Rect {
+    let size = viewport.size();
+    let extent = visible_extent(framing.size, framing.fit, framing.zoom, size.x, size.y);
+    Rect::from_center_size(viewport.center(), framing.size / extent * size)
+}
+
 /// Take the face shown under `face_id` down, if any: its scene, its camera,
 /// its GLB, its slot.
 fn unload(
@@ -547,7 +722,7 @@ fn unload(
 /// first camera clears the target with the background, the others draw over
 /// it.
 fn camera_for(
-    meta: &FaceMeta,
+    framing: Framing,
     options: &ViewOptions,
     slot: usize,
     offscreen: Option<&OffscreenTarget>,
@@ -555,8 +730,10 @@ fn camera_for(
 ) -> impl Bundle {
     // Lighting is baked into the materials (see `ViewOptions::albedo_factor`);
     // no scene light is spawned.
-    let (projection, mut transform) = camera_fit(meta, options);
-    transform.translation += slot_origin(slot);
+    let projection = fit_projection(&framing);
+    let transform =
+        Transform::from_translation(slot_origin(slot) + framing.center.extend(CAMERA_HEIGHT))
+            .looking_to(Vec3::NEG_Z, Vec3::Y);
     (
         Camera3d::default(),
         Camera {
@@ -581,18 +758,16 @@ fn camera_for(
     )
 }
 
-fn camera_fit(meta: &FaceMeta, options: &ViewOptions) -> (Projection, Transform) {
-    let (cx, cy, bw, bh) = meta.root_bounds.unwrap_or((0.0, 0.0, 5.0, 4.0));
-    let projection = Projection::custom(FitProjection {
-        bounds: Vec2::new(bw, bh),
-        fit: options.fit,
-        zoom: options.zoom,
+/// How far in front of the faces' plane a camera stands, looking down −Z.
+const CAMERA_HEIGHT: f32 = 100.0;
+
+fn fit_projection(framing: &Framing) -> Projection {
+    Projection::custom(FitProjection {
+        bounds: framing.size,
+        fit: framing.fit,
+        zoom: framing.zoom,
         ortho: OrthographicProjection::default_3d(),
-    });
-    (
-        projection,
-        Transform::from_xyz(cx, cy, 100.0).looking_at(Vec3::new(cx, cy, 0.0), Vec3::Y),
-    )
+    })
 }
 
 /// The view camera's projection: orthographic, showing the face's authored
@@ -688,6 +863,7 @@ fn visible_extent(bounds: Vec2, fit: Fit, zoom: Vec2, width: f32, height: f32) -
 fn index_faces(
     mut faces: Query<(Entity, &mut Face)>,
     options: Res<ViewOptions>,
+    views: Res<FaceViews>,
     names: Query<&Name>,
     children: Query<&Children>,
     meshes: Query<(Entity, &MeshMaterial3d<StandardMaterial>), With<Mesh3d>>,
@@ -733,6 +909,11 @@ fn index_faces(
         let mut mesh_of: HashMap<String, (Entity, Handle<StandardMaterial>)> = HashMap::new();
         let mut morph_of: HashMap<String, Entity> = HashMap::new();
         let mut element_of = HashMap::new();
+        let tone = views
+            .0
+            .get(&face.id)
+            .map(|view| view.tone_mapping)
+            .unwrap_or_default();
         for element in &face.meta.elements {
             let node = by_name[element.node_name.as_str()].0;
             // three's MeshBasicMaterial ignores lights: full albedo. `standard`
@@ -752,7 +933,7 @@ fn index_faces(
                     mat.double_sided = true;
                     mat.cull_mode = None;
                     mat.unlit = true;
-                    let surface = Surface::from_material(&mat, factor, basic);
+                    let surface = Surface::from_material(&mat, factor, basic, tone);
                     surface.apply(&mut mat);
                     let handle = materials.add(mat);
                     commands
@@ -1004,6 +1185,7 @@ mod tests {
             emissive_intensity: 1.0,
             factor: 0.5,
             basic: false,
+            tone: ToneMapping::None,
         }
     }
 
@@ -1053,10 +1235,86 @@ mod tests {
             emissive: LinearRgba::rgb(0.3, 0.3, 0.0),
             ..StandardMaterial::default()
         };
-        let surface = Surface::from_material(&material, 0.5, false);
+        let surface = Surface::from_material(&material, 0.5, false, ToneMapping::None);
         assert_eq!(surface.metalness, 1.0);
         assert_eq!(surface.emissive, [0.3, 0.3, 0.0]);
         assert_eq!(rgb(surface.color()), [0.3, 0.3, 0.0]);
+    }
+
+    /// A face's tone mapping goes over the composed color, not the inputs.
+    #[test]
+    fn a_surface_is_tone_mapped_after_composition() {
+        let mut surface = standard([0.2, 0.4, 0.8], 0.0, [0.0, 0.0, 0.0]);
+        surface.tone = ToneMapping::Aces;
+        assert_eq!(
+            rgb(surface.color()),
+            ToneMapping::Aces.apply([0.1, 0.2, 0.4])
+        );
+    }
+
+    fn framing(fit: Fit, zoom: Vec2) -> Framing {
+        Framing {
+            center: Vec2::new(1.0, -1.0),
+            size: BOUNDS,
+            fit,
+            zoom,
+        }
+    }
+
+    /// The safe area is the framed bounds where the camera draws them:
+    /// centered on the face's rectangle, the size the fit gives them, and
+    /// past the rectangle when a zoom crops them.
+    #[test]
+    fn the_safe_area_is_the_bounds_as_drawn() {
+        let viewport = Rect::new(10.0, 20.0, 810.0, 220.0);
+        // Contain on 800×200 shows 8×2: the 4×2 bounds cover half the width.
+        assert_eq!(
+            safe_area(&framing(Fit::Contain, NO_ZOOM), viewport),
+            Rect::new(210.0, 20.0, 610.0, 220.0)
+        );
+        // Cover shows 4×1: the bounds span the width and twice the height.
+        assert_eq!(
+            safe_area(&framing(Fit::Cover, NO_ZOOM), viewport),
+            Rect::new(10.0, -80.0, 810.0, 320.0)
+        );
+        assert_eq!(
+            safe_area(&framing(Fit::Contain, Vec2::splat(2.0)), viewport),
+            Rect::new(10.0, -80.0, 810.0, 320.0)
+        );
+        assert_eq!(
+            safe_area(&framing(Fit::Stretch, NO_ZOOM), viewport),
+            viewport
+        );
+    }
+
+    /// A face's view overrides the page's framing field by field, and its
+    /// bounds the authored ones.
+    #[test]
+    fn a_face_view_overrides_the_page_field_by_field() {
+        let options = ViewOptions {
+            background: Color::NONE,
+            fit: Fit::Cover,
+            zoom: Vec2::splat(3.0),
+            ambient: 1.0,
+            unlit: false,
+        };
+        let meta = FaceMeta {
+            root_bounds: Some((1.0, 2.0, 3.0, 4.0)),
+            ..FaceMeta::default()
+        };
+        let page = Framing::of(&meta, &options, None);
+        assert_eq!(page.center, Vec2::new(1.0, 2.0));
+        assert_eq!(page.size, Vec2::new(3.0, 4.0));
+        assert_eq!((page.fit, page.zoom), (Fit::Cover, Vec2::splat(3.0)));
+        let view = FaceView {
+            bounds: Some((0.0, 0.0, 10.0, 8.0)),
+            zoom: Some(Vec2::ONE),
+            ..FaceView::default()
+        };
+        let own = Framing::of(&meta, &options, Some(&view));
+        assert_eq!(own.center, Vec2::ZERO);
+        assert_eq!(own.size, Vec2::new(10.0, 8.0));
+        assert_eq!((own.fit, own.zoom), (Fit::Cover, Vec2::ONE));
     }
 
     #[test]
