@@ -587,9 +587,10 @@ fn apply_view_events(
     let Ok(receiver) = events.0.lock() else {
         return;
     };
-    // The faces taken down by this drain: their despawn is queued, and the
-    // query still yields them until it applies.
+    // What this drain changed that the query does not show until the
+    // drain's commands apply: the faces it took down, and those it spawned.
     let mut gone = HashSet::new();
+    let mut spawned: Vec<(String, Entity, Entity, String, usize)> = Vec::new();
     while let Ok(event) = receiver.try_recv() {
         match event {
             ViewEvent::Background([r, g, b]) => {
@@ -604,6 +605,11 @@ fn apply_view_events(
                 for (entity, face) in &faces {
                     if face.id == face_id && !gone.contains(&entity) {
                         commands.entity(entity).insert(Superseded);
+                    }
+                }
+                for (id, entity, ..) in &spawned {
+                    if *id == face_id {
+                        commands.entity(*entity).insert(Superseded);
                     }
                 }
                 let slot = slots.take();
@@ -628,7 +634,7 @@ fn apply_view_events(
                 let face = commands
                     .spawn((
                         Face {
-                            id: face_id,
+                            id: face_id.clone(),
                             meta: *meta,
                             asset_path: asset_path.clone(),
                             rig,
@@ -644,6 +650,7 @@ fn apply_view_events(
                     ))
                     .id();
                 commands.entity(camera).insert(FaceCamera(face));
+                spawned.push((face_id, face, camera, asset_path, slot));
             }
             ViewEvent::UnloadFace { face_id } => {
                 for (entity, face) in &faces {
@@ -652,6 +659,16 @@ fn apply_view_events(
                         log::info!("face {face_id}: unloaded");
                     }
                 }
+                spawned.retain(|(id, entity, camera, asset_path, slot)| {
+                    if *id != face_id {
+                        return true;
+                    }
+                    commands.entity(*camera).despawn();
+                    commands.entity(*entity).despawn();
+                    assets.remove(asset_path);
+                    slots.release(*slot);
+                    false
+                });
                 selections.0.remove(&face_id);
                 holds.clear(&face_id);
                 statics.0.remove(&face_id);
