@@ -30,9 +30,11 @@ use std::sync::Mutex;
 use arora::{Caller, LocalCaller};
 use arora_behavior::{interpreter_module, RunPolicy, TaskHandle};
 use arora_types::call::Call;
+use arora_types::data::DataStore;
 use arora_web::AroraWeb;
 use bevy::prelude::*;
 use uuid::Uuid;
+use vizij_arora_behavior::graph_codec::GraphSpecDiff;
 use vizij_arora_behavior::{
     encode_edit_call, encode_load_call, gaze, parse_spec, parse_spec_diff, speech, viseme,
 };
@@ -43,6 +45,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::face::{self, FaceConfig, LoadedFace};
 use crate::modules::animation::Clips;
+use crate::programs::Programs;
 use crate::view::meta::FaceMeta;
 use crate::view::{self, FaceAssets, Fit, Picked, Picks, ViewEvent, ViewEvents, ViewOptions};
 
@@ -185,13 +188,33 @@ pub fn load_vizij(
     if stage_neutral {
         face::stage_neutral_pose(&store, &meta);
     }
+    // The programs: the one the composition holds plays; the others wait.
+    // Their outputs rest where the face was staged.
+    let rest = if stage_neutral {
+        meta.bundle
+            .neutral_stage_writes()
+            .into_iter()
+            .map(|(path, value)| (path, vizij_api_core::value::float(value)))
+            .collect()
+    } else {
+        HashMap::new()
+    };
+    let playing = meta
+        .bundle
+        .program(&config.program)
+        .map(|(id, _)| id.as_str());
+    let programs = Programs::new(&meta.bundle.programs, playing, rest);
     let speech = config.speech.as_ref().map(|build| build());
     let guests = parse_modules(modules)?;
-    let (builder, function_modules, clips) =
-        face::builder_with_guests(&spec, rig.clone(), store, &meta.bundle, speech, guests)
-            .ok_or_else(|| {
-                JsValue::from_str("the composed graph does not encode (see the console)")
-            })?;
+    let (builder, function_modules, clips) = face::builder_with_guests(
+        &spec,
+        rig.clone(),
+        store.clone(),
+        &meta.bundle,
+        speech,
+        guests,
+    )
+    .ok_or_else(|| JsValue::from_str("the composed graph does not encode (see the console)"))?;
     let arora = builder
         .build()
         .map_err(|e| JsValue::from_str(&format!("arora build failed: {e:?}")))?;
@@ -213,6 +236,8 @@ pub fn load_vizij(
         caller,
         function_modules,
         clips,
+        store,
+        programs: RefCell::new(programs),
     })
 }
 
@@ -354,7 +379,7 @@ fn describe_json(meta: &FaceMeta) -> serde_json::Value {
 /// A Vizij's device, JS-owned: the composed [`Arora`] behind
 /// [`arora_web::AroraWeb`]'s surface (`step`, `run`, `stop`, the store
 /// accessors), the in-process caller behind `call`, `loadGraph`,
-/// `applyGraphEdits`, `spawn` and `halt`.
+/// `applyGraphEdits`, `spawn`, `halt` and the program controls.
 #[wasm_bindgen]
 pub struct VizijRuntime {
     vizij_id: String,
@@ -371,6 +396,11 @@ pub struct VizijRuntime {
     function_modules: HashMap<Uuid, Uuid>,
     /// The clips loaded into the device's animation module.
     clips: Clips,
+    /// A handle on the device's store, for the writes that return a stopped
+    /// program's outputs to rest.
+    store: BlackboardStore,
+    /// The programs the device can play, and where each stands.
+    programs: RefCell<Programs>,
 }
 
 #[wasm_bindgen]
@@ -392,10 +422,11 @@ impl VizijRuntime {
         };
         parse_spec(&spec).map_err(|e| JsValue::from_str(&e))?;
         let guests = parse_modules(modules)?;
+        let store = BlackboardStore::new();
         let (builder, function_modules, clips) = face::builder_with_guests(
             &spec,
             RigHal::new(),
-            BlackboardStore::new(),
+            store.clone(),
             &face::Bundle::default(),
             None,
             guests,
@@ -413,6 +444,8 @@ impl VizijRuntime {
             caller,
             function_modules,
             clips,
+            store,
+            programs: RefCell::new(Programs::empty()),
         })
     }
 
@@ -585,13 +618,100 @@ impl VizijRuntime {
 
     /// Replace the device's running graph **in place**: the store, the
     /// modules and the device survive the swap. Applied at the next step.
+    /// A program plays afterwards when the new graph holds its nodes (a
+    /// composition that selected it), and is out of the graph otherwise.
     #[wasm_bindgen(js_name = loadGraph)]
     pub fn load_graph(&self, graph_json: &str) -> js_sys::Promise {
-        let call = match parse_spec(graph_json).and_then(|spec| encode_load_call(&spec)) {
-            Ok(call) => call,
+        let loaded = parse_spec(graph_json)
+            .and_then(|spec| encode_load_call(&spec).map(|call| (spec, call)));
+        let (spec, call) = match loaded {
+            Ok(loaded) => loaded,
             Err(e) => return js_sys::Promise::reject(&JsValue::from_str(&e)),
         };
+        self.programs.borrow_mut().loaded(&spec);
         self.dispatch(call)
+    }
+
+    /// Play program `id` — one of the bundle's motiongraphs, or a graph
+    /// [`setProgram`](Self::set_program) defined: its nodes join the running
+    /// graph at the next step, beside the base composition and any other
+    /// playing program. Resolves once they have; at once when it already
+    /// plays. Rejects for an unknown id.
+    #[wasm_bindgen(js_name = startProgram)]
+    pub fn start_program(&self, id: &str) -> js_sys::Promise {
+        let edit = self.programs.borrow_mut().start(id);
+        self.edit(edit)
+    }
+
+    /// Pause program `id`: its nodes leave the running graph at the next
+    /// step and its outputs hold their last values, until
+    /// [`startProgram`](Self::start_program) plays it again (its stateful
+    /// nodes starting afresh). Resolves once applied; at once when it does
+    /// not play. Rejects for an unknown id.
+    #[wasm_bindgen(js_name = pauseProgram)]
+    pub fn pause_program(&self, id: &str) -> js_sys::Promise {
+        let edit = self.programs.borrow_mut().pause(id);
+        self.edit(edit)
+    }
+
+    /// Stop program `id`: its nodes leave the running graph at the next
+    /// step. With `reset_outputs`, each key it writes returns to rest at
+    /// once — to the value the face staged for it at load (its neutral
+    /// pose), or cleared, so every input that reads it falls back to its own
+    /// default; the program is gone before it could write them again.
+    /// Resolves once applied. Rejects for an unknown id.
+    #[wasm_bindgen(js_name = stopProgram)]
+    pub fn stop_program(&self, id: &str, reset_outputs: bool) -> js_sys::Promise {
+        let stopped = self.programs.borrow_mut().stop(id, reset_outputs);
+        let (edit, reset) = match stopped {
+            Ok(stopped) => stopped,
+            Err(e) => return js_sys::Promise::reject(&JsValue::from_str(&e)),
+        };
+        // The edit is dispatched whatever the reset does: the program reads
+        // stopped, so it leaves the graph.
+        let stopped = self.edit(Ok(edit));
+        match reset.map(|change| self.store.write(change)) {
+            Some(Err(e)) => js_sys::Promise::reject(&JsValue::from_str(&format!(
+                "reset the outputs of {id:?}: {e}"
+            ))),
+            _ => stopped,
+        }
+    }
+
+    /// Program `id`'s state: `playing`, `paused` or `stopped`; `undefined`
+    /// for an id the device does not know. The state is the one last
+    /// requested: a request's graph change lands at the next step.
+    #[wasm_bindgen(js_name = programState)]
+    pub fn program_state(&self, id: &str) -> Option<String> {
+        self.programs
+            .borrow()
+            .state(id)
+            .map(|state| state.name().to_string())
+    }
+
+    /// Give program `id` the graph `graph_json` (any form the spec
+    /// normalizer accepts), defining the program when the device does not
+    /// know `id`. A playing program changes in place at the next step: nodes
+    /// the new graph keeps keep their runtime state, the store keeps every
+    /// value. Resolves once applied; at once when the program does not play.
+    /// Rejects, changing nothing, when the graph does not parse.
+    #[wasm_bindgen(js_name = setProgram)]
+    pub fn set_program(&self, id: &str, graph_json: &str) -> js_sys::Promise {
+        let edit = serde_json::from_str(graph_json)
+            .map_err(|e| format!("program {id:?}: the graph is not JSON: {e}"))
+            .and_then(|spec| self.programs.borrow_mut().set(id, &spec));
+        self.edit(edit)
+    }
+
+    /// Dispatch a program request's graph edit; the promise resolves after
+    /// the step that applies it, at once when there is none, and rejects
+    /// with the request's error.
+    fn edit(&self, edit: Result<Option<GraphSpecDiff>, String>) -> js_sys::Promise {
+        match edit.and_then(|edit| edit.map(|diff| encode_edit_call(&diff)).transpose()) {
+            Ok(Some(call)) => self.dispatch(call),
+            Ok(None) => js_sys::Promise::resolve(&JsValue::UNDEFINED),
+            Err(e) => js_sys::Promise::reject(&JsValue::from_str(&e)),
+        }
     }
 
     /// Edit the running graph **in place**: `edits_json` is a spec-level

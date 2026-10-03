@@ -51,7 +51,7 @@ piece of it, not a second device.
 | `face` | the composition: the GLB's bindings and bundle into one graph spec, folded with `RigHal` + `BlackboardStore` and the modules into an `AroraBuilder` a host may extend (`builder_for`), the bundle's clips loaded into its animation module; the free inputs and what the store says of them (`declare_keys`), the neutral pose, the skills' fragments | everywhere |
 | `modules` | the host modules any Arora loads: `animation` (with a face's clips, `Clips`), `rest` (`reset`), `tts_piper` (feature) | everywhere (Piper native) |
 | `native` | the stand-alone device: the face's Arora on a worker thread under arora's operator flow, the bridges the build adds, the `RuntimeHandle` front ends speak through | every target but the browser |
-| `web` | the browser module behind [`@vizij/runtime`](../../npm/@vizij/runtime/README.md): one App per page (`mount`), a JS-paced Arora per Vizij (`loadVizij`, a `VizijRuntime`), Vizijs as rectangles of the canvas (`placeVizij`), picks, `describe` | `wasm32` |
+| `web` | the browser module behind [`@vizij/runtime`](../../npm/@vizij/runtime/README.md): one App per page (`mount`), a JS-paced Arora per Vizij (`loadVizij`, a `VizijRuntime`, its programs played, paused, stopped and replaced in its running graph), Vizijs as rectangles of the canvas (`placeVizij`), picks, `describe` | `wasm32` |
 | `main.rs`, `open.rs` | the CLI, the window, the terminal operator UI, opening a face by drop or dialog | feature `desktop` (default) |
 
 Features: `desktop` (default) is the CLI and the terminal UI; `studio`,
