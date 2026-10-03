@@ -42,8 +42,12 @@ use vizij_arora_store::BlackboardStore;
 use wasm_bindgen::prelude::*;
 
 use crate::face::{self, FaceConfig, LoadedFace};
+use crate::modules::rest;
 use crate::view::meta::FaceMeta;
-use crate::view::{self, FaceAssets, Fit, Picked, Picks, ViewEvent, ViewEvents, ViewOptions};
+use crate::view::{
+    self, FaceAssets, FaceView, Fit, Picked, Picks, SafeAreas, ToneMapping, ViewEvent, ViewEvents,
+    ViewOptions,
+};
 
 /// The mounted page: the way into the App.
 struct Page {
@@ -55,12 +59,14 @@ thread_local! {
 }
 
 /// What the App reports back each frame: the Vizijs whose scene is indexed,
-/// and the picks since the page last drained them.
+/// the picks since the page last drained them, and where each Vizij's safe
+/// area lies (CSS pixels, `[x, y, width, height]` from the canvas's corner).
 static READY: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static PICKS: Mutex<Vec<Picked>> = Mutex::new(Vec::new());
+static SAFE_AREAS: Mutex<Vec<(String, [f32; 4])>> = Mutex::new(Vec::new());
 
 /// The App's report to the page.
-fn report(faces: Query<&view::Face>, mut picks: ResMut<Picks>) {
+fn report(faces: Query<&view::Face>, mut picks: ResMut<Picks>, areas: Res<SafeAreas>) {
     if let Ok(mut ready) = READY.lock() {
         ready.clear();
         ready.extend(
@@ -75,6 +81,17 @@ fn report(faces: Query<&view::Face>, mut picks: ResMut<Picks>) {
             out.append(&mut picks.0);
         }
     }
+    if areas.is_changed() {
+        if let Ok(mut out) = SAFE_AREAS.lock() {
+            out.clear();
+            out.extend(areas.0.iter().map(|(id, area)| {
+                (
+                    id.clone(),
+                    [area.min.x, area.min.y, area.width(), area.height()],
+                )
+            }));
+        }
+    }
 }
 
 /// Create the page's one App over `canvas` (a CSS selector): the view, its
@@ -86,7 +103,8 @@ fn report(faces: Query<&view::Face>, mut picks: ResMut<Picks>) {
 /// - `ambient`: the three.js-style ambient intensity (default π/2);
 /// - `unlit`: render pure albedo.
 ///
-/// Mounting twice is an error; a page has one App.
+/// `fit` and `zoom` are every Vizij's defaults; [`set_view`] overrides them
+/// for one. Mounting twice is an error; a page has one App.
 #[wasm_bindgen]
 pub fn mount(canvas: String, options_json: Option<String>) -> Result<(), JsValue> {
     if PAGE.with(|page| page.borrow().is_some()) {
@@ -149,9 +167,10 @@ fn send(event: ViewEvent) -> Result<(), JsValue> {
 /// [`compose_vizij`]'s: `graphs`, `program`, `ros4hri`, plus `stageNeutral`,
 /// default `true`, `animations`, default `true`, and `speechApiUrl`, the TTS
 /// deployment), the device built over `RigHal` + `BlackboardStore` with the
-/// animation module and the skills, the bundle's animations loaded into it
-/// unless `animations` is `false` ([`face::load_animations`]), and — given
-/// `play`, the page's playback hook
+/// animation module, the rest module behind [`VizijRuntime::reset`] and the
+/// skills, its keys declared with where they rest, the bundle's animations
+/// loaded into it unless `animations` is `false` ([`face::load_animations`]),
+/// and — given `play`, the page's playback hook
 /// ([`vizij_arora_tts::Config::play`]) — the speech provider, and the scene
 /// queued for the App. `modules` optionally loads Arora wasm modules into
 /// the device's engine as guests: a JS array of `{ headerJson, wasmBytes }`
@@ -186,18 +205,20 @@ pub fn load_vizij(
     if stage_neutral {
         face::stage_neutral_pose(&store, &meta);
     }
+    face::declare_keys(&store, &spec, &meta.bundle.neutral_stage_writes());
     let speech = config.speech.as_ref().map(|build| build());
     let guests = parse_modules(modules)?;
     let (builder, function_modules) = face::builder_with_guests(
         &spec,
         rig.clone(),
-        store,
+        store.clone(),
         &meta.bundle.skills,
         speech,
         guests,
     )
     .ok_or_else(|| JsValue::from_str("the composed graph does not encode (see the console)"))?;
     let mut arora = builder
+        .with_host_module(rest::host_module(Box::new(store)))
         .build()
         .map_err(|e| JsValue::from_str(&format!("arora build failed: {e:?}")))?;
     if loads_animations(options_json.as_deref()) {
@@ -259,6 +280,49 @@ pub fn fill_canvas(vizij_id: String) -> Result<(), JsValue> {
         face_id: vizij_id,
         rect: None,
     })
+}
+
+/// Frame and tone-map one Vizij, over the page's [`mount`] options.
+/// `view_json`, every field optional:
+/// - `bounds`: `{ center: { x, y }, size: { x, y } }`, the world rectangle
+///   the camera frames in place of the GLB's authored rootBounds (the shape
+///   [`describe`] reports them in);
+/// - `fit`: `contain`, `cover` or `stretch`;
+/// - `zoom`: one factor, or `[x, y]`;
+/// - `toneMapping`: `none` (default), `agx`, `aces` or `neutral` — the
+///   authoring app's curves, as three.js computes them.
+///
+/// Each call replaces the Vizij's previous view: a framing field left out
+/// takes the page's, and `{}` hands the Vizij back to the page. The view is
+/// kept across the Vizij's reloads, and can be set before it loads.
+#[wasm_bindgen(js_name = setView)]
+pub fn set_view(vizij_id: String, view_json: Option<String>) -> Result<(), JsValue> {
+    let view = parse_face_view(view_json.as_deref())?;
+    send(ViewEvent::SetFaceView {
+        face_id: vizij_id,
+        view,
+    })
+}
+
+/// Where the Vizij's safe area — the bounds its camera frames — lies on the
+/// canvas, as `{ x, y, width, height }` in CSS pixels from the canvas's
+/// top-left corner (the frame [`place_vizij`] takes), as of the last frame
+/// drawn; `null` before the Vizij's camera has drawn. A zoom that crops the
+/// bounds reaches past the Vizij's rectangle.
+#[wasm_bindgen(js_name = safeArea)]
+pub fn safe_area(vizij_id: String) -> Result<JsValue, JsValue> {
+    let area = SAFE_AREAS.lock().ok().and_then(|areas| {
+        areas
+            .iter()
+            .find(|(id, _)| *id == vizij_id)
+            .map(|(_, area)| *area)
+    });
+    match area {
+        Some([x, y, width, height]) => js_sys::JSON::parse(
+            &serde_json::json!({ "x": x, "y": y, "width": width, "height": height }).to_string(),
+        ),
+        None => Ok(JsValue::NULL),
+    }
 }
 
 /// Whether the Vizij's scene has spawned and its bindings are joined — from
@@ -386,8 +450,9 @@ pub struct VizijRuntime {
 #[wasm_bindgen]
 impl VizijRuntime {
     /// A device with no Vizij: `graph_json` (any form the spec normalizer
-    /// accepts) as its behavior over a fresh store and rig, the animation
-    /// module host-linked and `modules` loaded as guests (as
+    /// accepts) as its behavior over a fresh store and rig, its free inputs
+    /// declared resting at their authored defaults, the animation and rest
+    /// modules host-linked and `modules` loaded as guests (as
     /// [`load_vizij`]'s). Nothing to draw; a test bench, a graph run in
     /// Node. Omit the graph for the passthrough proof graph
     /// (`sensor/x` → `actuator/y`).
@@ -401,17 +466,14 @@ impl VizijRuntime {
             None => passthrough_json("sensor/x", "actuator/y"),
         };
         parse_spec(&spec).map_err(|e| JsValue::from_str(&e))?;
+        let store = BlackboardStore::new();
+        face::declare_keys(&store, &spec, &[]);
         let guests = parse_modules(modules)?;
-        let (builder, function_modules) = face::builder_with_guests(
-            &spec,
-            RigHal::new(),
-            BlackboardStore::new(),
-            &[],
-            None,
-            guests,
-        )
-        .ok_or_else(|| JsValue::from_str("the graph does not encode (see the console)"))?;
+        let (builder, function_modules) =
+            face::builder_with_guests(&spec, RigHal::new(), store.clone(), &[], None, guests)
+                .ok_or_else(|| JsValue::from_str("the graph does not encode (see the console)"))?;
         let arora = builder
+            .with_host_module(rest::host_module(Box::new(store)))
             .build()
             .map_err(|e| JsValue::from_str(&format!("arora build failed: {e:?}")))?;
         let caller = arora.caller();
@@ -584,6 +646,20 @@ impl VizijRuntime {
         self.spawn(&serde_json::to_string(&call).map_err(|e| JsValue::from_str(&e.to_string()))?)
     }
 
+    /// Return the device to rest: every key its store describes goes back to
+    /// the value it rests at — a free input to its authored default, an
+    /// input the bundle's neutral pose names to its neutral — through the
+    /// rest module's `reset`, so every bridge sees the writes. Keys with no
+    /// declared rest keep their values. Applied at the next step; resolves
+    /// to the `CallResult` as JSON once it has.
+    pub fn reset(&self) -> js_sys::Promise {
+        self.dispatch(Call {
+            module_id: Some(rest::MODULE_ID),
+            id: rest::rest::ids::reset::FUNCTION,
+            args: Vec::new(),
+        })
+    }
+
     /// Halt a run: `handle_json` is the `TaskHandle` `spawn` resolved to.
     /// Resolves once the halt has been applied (the run's status key then
     /// reads terminal).
@@ -751,18 +827,96 @@ fn parse_view_options(json: Option<&str>) -> Result<ViewOptions, JsValue> {
         }
         None => Color::NONE,
     };
-    let fit = match options.get("fit").and_then(serde_json::Value::as_str) {
-        None | Some("contain") => Fit::Contain,
-        Some("cover") => Fit::Cover,
-        Some("stretch") => Fit::Stretch,
-        Some(other) => {
-            return Err(JsValue::from_str(&format!(
-                "fit must be contain, cover or stretch, got {other:?}"
-            )))
+    Ok(ViewOptions {
+        background,
+        fit: parse_fit(&options)?.unwrap_or(Fit::Contain),
+        zoom: parse_zoom(&options)?.unwrap_or(Vec2::ONE),
+        ambient: options
+            .get("ambient")
+            .and_then(serde_json::Value::as_f64)
+            .map(|a| a as f32)
+            .unwrap_or(std::f32::consts::FRAC_PI_2),
+        unlit: options
+            .get("unlit")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
+    })
+}
+
+/// [`set_view`]'s view.
+fn parse_face_view(json: Option<&str>) -> Result<FaceView, JsValue> {
+    let view: serde_json::Value = match json {
+        None | Some("") => serde_json::Value::Null,
+        Some(json) => {
+            serde_json::from_str(json).map_err(|e| JsValue::from_str(&format!("view JSON: {e}")))?
         }
     };
+    let bounds = match view.get("bounds") {
+        None | Some(serde_json::Value::Null) => None,
+        Some(bounds) => {
+            let number = |field: &str, axis: &str| {
+                bounds
+                    .get(field)
+                    .and_then(|v| v.get(axis))
+                    .and_then(serde_json::Value::as_f64)
+                    .filter(|v| v.is_finite())
+                    .map(|v| v as f32)
+            };
+            let (Some(cx), Some(cy), Some(width), Some(height)) = (
+                number("center", "x"),
+                number("center", "y"),
+                number("size", "x"),
+                number("size", "y"),
+            ) else {
+                return Err(JsValue::from_str(
+                    "bounds must be { center: { x, y }, size: { x, y } }",
+                ));
+            };
+            if !(width > 0.0 && height > 0.0) {
+                return Err(JsValue::from_str("bounds sizes must be positive"));
+            }
+            Some((cx, cy, width, height))
+        }
+    };
+    let tone_mapping = match view.get("toneMapping") {
+        None | Some(serde_json::Value::Null) => ToneMapping::None,
+        Some(name) => name
+            .as_str()
+            .and_then(ToneMapping::from_name)
+            .ok_or_else(|| {
+                JsValue::from_str(&format!(
+                    "toneMapping must be none, agx, aces or neutral, got {name}"
+                ))
+            })?,
+    };
+    Ok(FaceView {
+        bounds,
+        fit: parse_fit(&view)?,
+        zoom: parse_zoom(&view)?,
+        tone_mapping,
+    })
+}
+
+/// An options object's `fit`, if it sets one.
+fn parse_fit(options: &serde_json::Value) -> Result<Option<Fit>, JsValue> {
+    match options.get("fit") {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(fit) => match fit.as_str() {
+            Some("contain") => Ok(Some(Fit::Contain)),
+            Some("cover") => Ok(Some(Fit::Cover)),
+            Some("stretch") => Ok(Some(Fit::Stretch)),
+            _ => Err(JsValue::from_str(&format!(
+                "fit must be contain, cover or stretch, got {fit}"
+            ))),
+        },
+    }
+}
+
+/// An options object's `zoom` — one factor or `[x, y]`, positive — if it
+/// sets one.
+fn parse_zoom(options: &serde_json::Value) -> Result<Option<Vec2>, JsValue> {
     let zoom = match options.get("zoom") {
-        None | Some(serde_json::Value::Null) => Vec2::ONE,
+        None | Some(serde_json::Value::Null) => return Ok(None),
         Some(serde_json::Value::Number(n)) => Vec2::splat(n.as_f64().unwrap_or(1.0) as f32),
         Some(serde_json::Value::Array(xy)) if xy.len() == 2 => Vec2::new(
             xy[0].as_f64().unwrap_or(1.0) as f32,
@@ -777,20 +931,7 @@ fn parse_view_options(json: Option<&str>) -> Result<ViewOptions, JsValue> {
     if !(zoom.x > 0.0 && zoom.y > 0.0) {
         return Err(JsValue::from_str("zoom factors must be positive"));
     }
-    Ok(ViewOptions {
-        background,
-        fit,
-        zoom,
-        ambient: options
-            .get("ambient")
-            .and_then(serde_json::Value::as_f64)
-            .map(|a| a as f32)
-            .unwrap_or(std::f32::consts::FRAC_PI_2),
-        unlit: options
-            .get("unlit")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false),
-    })
+    Ok(Some(zoom))
 }
 
 /// [`load_vizij`]'s `speechApiUrl`, else the cloud provider's default.

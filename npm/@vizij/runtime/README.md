@@ -50,6 +50,13 @@ poses and their groups, the rig's inputs with their ranges and defaults, the
 animations, and the bundle's metadata as authored (`speechConfig`,
 `activeMotionGraphId`, …) — everything a page builds its controls from.
 
+`quori.reset()` returns the face to rest: each free input of its graphs to
+its authored default, each input the bundle's neutral pose names to its
+neutral. Vizijs share the page's canvas, not its framing:
+`setView("quori", { bounds, fit, zoom, toneMapping })` frames and tone-maps
+one Vizij over `mount`'s options, and `safeArea("quori")` says where its
+framed bounds lie on the canvas, in CSS pixels, for a DOM overlay.
+
 `startRuntime(graphSpec)` gives a device with no Vizij — a graph on a store,
 nothing drawn — for a bench or a graph run in Node; every `Runtime` method
 works on it.
