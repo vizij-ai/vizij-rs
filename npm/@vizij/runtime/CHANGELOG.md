@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.0
+
+### Minor Changes
+
+- cab6392: `describe(glb)` returns what a face's bundle carries for an app to build its controls from, parsed once in the wasm: `poses` and `poseGroups` (each pose with its description, the ids of the groups it belongs to and its input values), `rigInputs` (each rig input's path relative to the rig prefix, label, group, default and range), `programLabels` (program id → label), `clips` (ids, names, durations in seconds, tracks of time-ordered keyframes) and `metadata`, the bundle's open-ended metadata as authored (`speechConfig`, `activeMotionGraphId`, …). `Pose`, `PoseGroup`, `RigInput`, `Clip`, `ClipTrack` and `ClipKeyframe` are exported types, and `VizijDescription` documents every field.
+
 ## 3.0.0
 
 3.0.0 follows 2.4.0: 2.5.0 was never published, and its changes ship here.
@@ -41,6 +47,7 @@
   A **mapping** is a graph that implements one profile in terms of another. `mappings()` and `mapping(id, rigPrefix)` are the renamed `standardProfiles()` / `standardProfile(id, rigPrefix)`, which stay as deprecated aliases (with `StandardProfile` aliasing `Mapping`); nothing that consumes them moves.
 
   This is the API an authoring app's profile import consumes: pick a profile, get its paths already addressed to the open face, and declare it on the GLB (`bundle.profiles`) so the interface a face is authored against travels with the asset.
+
 - Visemes leave the ROS4HRI profile and become the viseme players' business. `skills()` lists `play_viseme` (one shape through a lipsync envelope; a new call takes the lips over) and `say` (text-to-speech with the lips driven from the streamed visemes) next to `look_at`, with `skillSource(id)` serving their fragments; the `ros4hri` profile no longer declares `standard/ros4hri/viseme/*`, and the mapping no longer writes the lipsync surface. The face standard's `standard/vizij/viseme/<shape>` weights stay raw, the current viseme is state at `standard/vizij/viseme`, and a player's run feeds back `{viseme, intensity}` — the pair ROS4HRI's `Say` feedback carries as Vizij extends it. In the node graph, the `taskrun` node gains keyed `mutated` outputs (one per out parameter named in `record_keys`, by parameter id) and a `done` (terminality) output, and integer values count as scalars to the arithmetic nodes.
 - The `vizij-face` profile declares `standard/vizij/mouth/morph/jaw_open` — the de-facto jaw-open path every current face implements, the same muscle as `face/jaw_open` (AU 26, ARKit `jawOpen`) — so `profile("vizij-face")` lists 82 keys and every path the ROS4HRI mapping writes is declared.
 
@@ -55,7 +62,7 @@
 - The animation module is host-linked into every device, its functions
   called by id: `composeVizij({ animations: true })` dispatches without a
   guest. Arora wasm modules still load as guests — `startRuntime(graph, init,
-  modules)` and `loadVizij`'s `options.modules` take `AroraModule`s — and a
+modules)` and `loadVizij`'s `options.modules` take `AroraModule`s — and a
   guest under a host-linked module's id (`@vizij/animation-module`'s) is
   served by the host-linked one.
 - The skills are declared from contracts: `say`'s `voice` is optional, and
