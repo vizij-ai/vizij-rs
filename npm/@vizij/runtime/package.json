@@ -36,7 +36,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node ../../../scripts/copy-wasm-pkg.mjs runtime",
     "test": "pnpm run build && node tests/smoke.mjs && node tests/apply-graph-edits.mjs && node tests/animation-module.mjs && node tests/animations.mjs && node tests/guest-module.mjs && node tests/compose-vizij.mjs && node tests/registries.mjs && node tests/reset.mjs",
-    "test:browser": "node tests/browser/describe.mjs && node tests/browser/animations.mjs && node tests/browser/snapshot.mjs && node tests/browser/faces.mjs && node tests/browser/speech.mjs && node tests/browser/memory.mjs && node tests/browser/rest.mjs && node tests/browser/view.mjs",
+    "test:browser": "node tests/browser/describe.mjs && node tests/browser/animations.mjs && node tests/browser/snapshot.mjs && node tests/browser/faces.mjs && node tests/browser/authoring.mjs && node tests/browser/speech.mjs && node tests/browser/memory.mjs && node tests/browser/rest.mjs && node tests/browser/view.mjs",
     "prepack": "pnpm run build",
     "prepublishOnly": "node -e \"const fs=require('fs');if(!fs.existsSync('pkg')){console.error('Missing pkg/. Run wasm-pack build.');process.exit(1);}\""
   },

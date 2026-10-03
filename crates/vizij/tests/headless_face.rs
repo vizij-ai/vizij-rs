@@ -69,7 +69,7 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
     // The face is the device's slot, on a layer of its own, with its scene
     // joined: every animatable is a pose entry the rig holds and a binding
     // the view indexed, one of them a transform the scene carries, and every
-    // mesh maps back to the RobotData element a pick would report.
+    // element a pick would report is a RobotData element.
     let mut faces = app.world_mut().query::<&Face>();
     let face = faces.single(app.world()).expect("one face");
     assert_eq!(face.id, FACE);
@@ -103,10 +103,10 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
     let element_ids: std::collections::HashSet<Uuid> =
         face.meta.elements.iter().map(|e| e.id).collect();
     assert!(
-        !face.bindings.element_of.is_empty(),
-        "no mesh maps to an element"
+        face.bindings.elements.values().any(|e| e.mesh.is_some()),
+        "no element has a mesh"
     );
-    for element_id in face.bindings.element_of.values() {
+    for element_id in face.bindings.elements.keys() {
         assert!(
             element_ids.contains(element_id),
             "{element_id} is no element id"

@@ -20,7 +20,14 @@
 //! What the App holds is reachable only through this module's statics: on
 //! the web `App::run` hands the App to winit and returns at once, so the
 //! page's requests travel as [`ViewEvent`]s and the App's answers (which
-//! Vizijs are ready, what was picked) are copied out each frame.
+//! Vizijs are ready, what was pressed) are copied out each frame.
+//!
+//! An authoring page edits what it shows through the same channel: it
+//! selects elements ([`set_selection`]), holds rig outputs against the
+//! device ([`VizijRuntime::hold`]), sets static features in place
+//! ([`set_static_feature`]), and reloads a structurally edited Vizij from
+//! its exported bytes with [`load_vizij`], whose previous scene draws until
+//! the new one is ready.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -43,6 +50,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::face::{self, FaceConfig, LoadedFace};
 use crate::modules::rest;
+use crate::view::hold::HoldTarget;
 use crate::view::meta::FaceMeta;
 use crate::view::{
     self, FaceAssets, FaceView, Fit, Picked, Picks, SafeAreas, ToneMapping, ViewEvent, ViewEvents,
@@ -65,8 +73,13 @@ static READY: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static PICKS: Mutex<Vec<Picked>> = Mutex::new(Vec::new());
 static SAFE_AREAS: Mutex<Vec<(String, [f32; 4])>> = Mutex::new(Vec::new());
 
-/// The App's report to the page.
-fn report(faces: Query<&view::Face>, mut picks: ResMut<Picks>, areas: Res<SafeAreas>) {
+/// The App's report to the page. A Vizij being reloaded is not ready until
+/// its new scene is.
+fn report(
+    faces: Query<&view::Face, Without<view::Superseded>>,
+    mut picks: ResMut<Picks>,
+    areas: Res<SafeAreas>,
+) {
     if let Ok(mut ready) = READY.lock() {
         ready.clear();
         ready.extend(
@@ -177,8 +190,12 @@ fn send(event: ViewEvent) -> Result<(), JsValue> {
 /// (the module's header as JSON, its `.wasm` bytes as a `Uint8Array`); their
 /// functions are then reachable by id from `call` and from the graph's
 /// `ExternalFunction` nodes. The module set is fixed at build. A Vizij
-/// already shown under `vizij_id` is replaced. The device comes back
-/// JS-owned: step it, or `run` it, and `free` it after [`unload_vizij`].
+/// already shown under `vizij_id` is replaced — how an authoring page
+/// reloads a structurally edited Vizij from its exported bytes: the previous
+/// scene keeps drawing until the new one is indexed, then [`ready`] holds
+/// again; its placement, selection and holds carry over, and the page frees
+/// the previous device. The device comes back JS-owned: step it, or `run`
+/// it, and `free` it after [`unload_vizij`].
 #[wasm_bindgen(js_name = loadVizij)]
 pub fn load_vizij(
     vizij_id: String,
@@ -236,6 +253,7 @@ pub fn load_vizij(
         glb,
         rig,
     })?;
+    not_ready(&vizij_id);
     Ok(VizijRuntime {
         vizij_id,
         rig_prefix,
@@ -247,11 +265,24 @@ pub fn load_vizij(
     })
 }
 
-/// Take the Vizij down: its scene, its camera, its GLB. The device the page
-/// holds keeps stepping until the page frees it.
+/// Take the Vizij down: its scene, its camera, its GLB, its selection and
+/// holds. The device the page holds keeps stepping until the page frees it.
 #[wasm_bindgen(js_name = unloadVizij)]
 pub fn unload_vizij(vizij_id: String) -> Result<(), JsValue> {
-    send(ViewEvent::UnloadFace { face_id: vizij_id })
+    send(ViewEvent::UnloadFace {
+        face_id: vizij_id.clone(),
+    })?;
+    not_ready(&vizij_id);
+    Ok(())
+}
+
+/// Read the Vizij as not ready from now on, rather than from the App's next
+/// report: the page's next [`ready`] would otherwise still see the face the
+/// request replaces or takes down.
+fn not_ready(vizij_id: &str) {
+    if let Ok(mut ready) = READY.lock() {
+        ready.retain(|id| id != vizij_id);
+    }
 }
 
 /// Confine the Vizij's camera to a rectangle of the canvas, in CSS pixels
@@ -326,7 +357,7 @@ pub fn safe_area(vizij_id: String) -> Result<JsValue, JsValue> {
 }
 
 /// Whether the Vizij's scene has spawned and its bindings are joined — from
-/// then on its device's pose shows.
+/// then on its device's pose shows. False while a reload's new scene loads.
 #[wasm_bindgen]
 pub fn ready(vizij_id: String) -> bool {
     READY
@@ -335,8 +366,12 @@ pub fn ready(vizij_id: String) -> bool {
         .unwrap_or(false)
 }
 
-/// The pointer presses on faces since the last drain, oldest first, as
-/// `{ vizijId, elementId }` — the slot and the element id the GLB's RobotData declares.
+/// The pointer presses on Vizijs since the last drain, oldest first, as
+/// `{ vizijId, elementId }`: the slot whose rectangle the press was in, and
+/// the element under the pointer by the id the GLB's RobotData declares —
+/// `null` for a press that hit no element (a miss). The element is found
+/// over its mesh as drawn, morphs applied; a press outside every Vizij's
+/// rectangle is not reported.
 #[wasm_bindgen(js_name = drainPicks)]
 pub fn drain_picks() -> Result<JsValue, JsValue> {
     let picks: Vec<Picked> = PICKS
@@ -352,6 +387,62 @@ pub fn drain_picks() -> Result<JsValue, JsValue> {
             .collect(),
     );
     js_sys::JSON::parse(&json.to_string())
+}
+
+/// Outline the Vizij's elements `element_ids` (the ids its RobotData
+/// declares, as [`describe`] lists them) with the selection glow, replacing
+/// the previous selection; an empty list clears it. A selected group glows
+/// every element mesh under it. Kept across the Vizij's reloads; an id the
+/// Vizij does not declare glows nothing.
+#[wasm_bindgen(js_name = setSelection)]
+pub fn set_selection(vizij_id: String, element_ids: Vec<String>) -> Result<(), JsValue> {
+    let elements = element_ids
+        .iter()
+        .map(|id| parse_uuid(id, "element id"))
+        .collect::<Result<_, _>>()?;
+    send(ViewEvent::SetSelection {
+        face_id: vizij_id,
+        elements,
+    })
+}
+
+/// Set `feature` of the Vizij's element `element_id` to `value_json` in
+/// place, with no reload: a static feature, which no device output drives,
+/// edited while the page scrubs it. `feature` is its RobotData name —
+/// `translation`, `rotation` (an euler, radians), `scale` (`{x, y, z}`, or
+/// a number scaling evenly), `color`, `emissive` (linear `{r, g, b}`),
+/// `opacity`, `metalness`, `emissiveIntensity` (numbers), or one of the
+/// element's morph target names (a weight). `value_json` is the feature's
+/// value as RobotData stores a static one, or any accepted vizij payload
+/// form. Applied once the Vizij is ready; a reload shows what its GLB
+/// carries.
+#[wasm_bindgen(js_name = setStaticFeature)]
+pub fn set_static_feature(
+    vizij_id: String,
+    element_id: &str,
+    feature: String,
+    value_json: &str,
+) -> Result<(), JsValue> {
+    let value = serde_json::from_str(&normalize_value_str(value_json)?)
+        .map_err(|e| JsValue::from_str(&format!("{feature}: {e}")))?;
+    send(ViewEvent::SetStaticFeature {
+        face_id: vizij_id,
+        element_id: parse_uuid(element_id, "element id")?,
+        feature,
+        value,
+    })
+}
+
+fn parse_uuid(id: &str, what: &str) -> Result<Uuid, JsValue> {
+    Uuid::parse_str(id).map_err(|_| JsValue::from_str(&format!("{id:?} is no {what}")))
+}
+
+/// Parse hold targets (`<animatable id>` or `<animatable id>:<component>`).
+fn parse_hold_targets(paths: &[String]) -> Result<Vec<HoldTarget>, JsValue> {
+    paths
+        .iter()
+        .map(|path| path.parse().map_err(|e: String| JsValue::from_str(&e)))
+        .collect()
 }
 
 /// The module's linear memory, in bytes — what a page watches across Vizij
@@ -499,6 +590,41 @@ impl VizijRuntime {
     #[wasm_bindgen(getter, js_name = rigPrefix)]
     pub fn rig_prefix(&self) -> String {
         self.rig_prefix.clone()
+    }
+
+    /// Hold rig outputs of the Vizij against this device: each path is an
+    /// animatable id (bare, or as its rig path `rig/<faceId>/<id>`), held
+    /// whole, or `<id>:<component>` — `x`, `y`, `z` of a vector or euler,
+    /// `r`, `g`, `b` of a colour — held alone while the other components
+    /// follow the device. A held output keeps the value the Vizij shows
+    /// while the device writes on; the device and its store are untouched.
+    /// Holds are the view's, kept per Vizij across its reloads.
+    pub fn hold(&self, paths: Vec<String>) -> Result<(), JsValue> {
+        let targets = parse_hold_targets(&paths)?;
+        send(ViewEvent::Hold {
+            face_id: self.shown_vizij()?,
+            targets,
+        })
+    }
+
+    /// Let held outputs follow the device again: `paths` as [`hold`](Self::hold)'s,
+    /// each released as it was held (releasing an animatable leaves its held
+    /// components held); omitted, every hold of the Vizij is released.
+    pub fn release(&self, paths: Option<Vec<String>>) -> Result<(), JsValue> {
+        let targets = paths.as_deref().map(parse_hold_targets).transpose()?;
+        send(ViewEvent::Release {
+            face_id: self.shown_vizij()?,
+            targets,
+        })
+    }
+
+    /// The slot this device's Vizij is shown under; an error for a device
+    /// with none.
+    fn shown_vizij(&self) -> Result<String, JsValue> {
+        if self.vizij_id.is_empty() {
+            return Err(JsValue::from_str("this device shows no Vizij"));
+        }
+        Ok(self.vizij_id.clone())
     }
 
     /// Advance the device one step. `dt_ms` is the wall time elapsed since
