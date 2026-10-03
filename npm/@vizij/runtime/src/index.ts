@@ -26,6 +26,13 @@
  * A host with its own clock skips `run()` and calls `quori.step(dtMs)` per
  * animation frame instead. {@link startRuntime} gives a device with no Vizij
  * (a graph on a store, nothing drawn) — a bench, or a graph run in Node.
+ *
+ * An authoring page edits what it shows in place: {@link drainPicks}
+ * reports presses on elements and misses, {@link setSelection} glows the
+ * selected elements, {@link Runtime.hold} keeps rig outputs against the
+ * device, {@link setStaticFeature} sets a static feature without a reload,
+ * and a structural edit reloads the Vizij from its exported GLB bytes with
+ * {@link loadVizij}, the previous scene drawing until the new one is ready.
  */
 import { toValueJSON, type ValueJSON, type ValueInput } from "@vizij/value-json";
 import {
@@ -195,11 +202,12 @@ export function runStatus(value: unknown): RunStatus | undefined {
   return variant ? RUN_STATUS_VARIANTS[variant] : undefined;
 }
 
-/** A pointer press on a Vizij: the slot it is shown under and the element
- * id its GLB's RobotData declares. */
+/** A pointer press on a Vizij: the slot whose rectangle it was in, and the
+ * element under the pointer by the id its GLB's RobotData declares — `null`
+ * for a press that hit no element (a miss). */
 export interface Pick {
   vizijId: string;
-  elementId: string;
+  elementId: string | null;
 }
 
 /** A rectangle of the canvas, in CSS pixels from its top-left corner. */
@@ -483,6 +491,8 @@ interface WasmVizijRuntime {
   clips(): WasmLoadedClip[];
   setClip(clip_json: string): WasmLoadedClip;
   removeClip(id: string): boolean;
+  hold(paths: string[]): void;
+  release(paths?: string[]): void;
   free(): void;
 }
 
@@ -506,6 +516,8 @@ interface WasmBindings {
   safeArea(vizij_id: string): Rect | null;
   ready(vizij_id: string): boolean;
   drainPicks(): Pick[];
+  setSelection(vizij_id: string, element_ids: string[]): void;
+  setStaticFeature(vizij_id: string, element_id: string, feature: string, value_json: string): void;
   describe(glb: Uint8Array): VizijDescription;
   memoryBytes(): number;
   mappings(): Mapping[];
@@ -1069,6 +1081,28 @@ export class Runtime {
     });
   }
 
+  /**
+   * Hold rig outputs of the Vizij against this device — the inspector's
+   * lock. Each path is an animatable id (bare, or as its rig path
+   * `rig/<faceId>/<id>`), held whole, or `<id>:<component>` — `x`, `y`, `z`
+   * of a vector or euler, `r`, `g`, `b` of a colour — held alone while the
+   * other components follow the device. A held output keeps the value the
+   * Vizij shows while the device writes on; the device and its store are
+   * untouched, so {@link release} shows the device's current value at once.
+   * Holds are kept per Vizij across its reloads, and dropped by
+   * {@link unloadVizij}.
+   */
+  hold(paths: string[]): void {
+    this.inner.hold(paths);
+  }
+
+  /** Let held outputs follow the device again: `paths` as {@link hold}'s,
+   * each released as it was held (releasing an animatable leaves its held
+   * components held); omitted, every hold of the Vizij is released. */
+  release(paths?: string[]): void {
+    this.inner.release(paths);
+  }
+
   /** Release the wasm-side device. The instance is unusable afterwards; a
    * Vizij's device is disposed after {@link unloadVizij}. */
   dispose(): void {
@@ -1114,8 +1148,13 @@ export async function mount(
  * bundle are read, its graphs composed (`options` as {@link composeVizij}'s,
  * plus `stageNeutral`), the device built with the animation, rest, gaze and
  * viseme modules, and the scene queued for the App — {@link whenReady} resolves
- * once it shows. A Vizij already shown under `vizijId` is replaced. Requires
- * {@link mount}.
+ * once it shows. Requires {@link mount}.
+ *
+ * A Vizij already shown under `vizijId` is replaced — how an authoring page
+ * reloads a structurally edited Vizij from its exported GLB bytes: the
+ * previous scene keeps drawing until the new one is ready (so
+ * {@link ready} reads false meanwhile), its placement, view, selection and
+ * holds carry over, and the page disposes the previous {@link Runtime}.
  */
 export async function loadVizij(
   vizijId: string,
@@ -1132,8 +1171,8 @@ export async function loadVizij(
   );
 }
 
-/** Take the Vizij down: its scene, its camera, its GLB. Dispose its
- * {@link Runtime} afterwards. */
+/** Take the Vizij down: its scene, its camera, its GLB, its selection and
+ * holds. Dispose its {@link Runtime} afterwards. */
 export function unloadVizij(vizijId: string): void {
   bindings().unloadVizij(vizijId);
 }
@@ -1182,7 +1221,7 @@ export function safeArea(vizijId: string): Rect | null {
 }
 
 /** Whether the Vizij's scene has spawned and its bindings are joined — from
- * then on its device's pose shows. */
+ * then on its device's pose shows. False while a reload's new scene loads. */
 export function ready(vizijId: string): boolean {
   return bindings().ready(vizijId);
 }
@@ -1205,9 +1244,48 @@ export function whenReady(vizijId: string, timeoutMs = 60_000): Promise<void> {
   });
 }
 
-/** The pointer presses on Vizijs since the last drain, oldest first. */
+/**
+ * The pointer presses on Vizijs since the last drain, oldest first: each
+ * names the Vizij whose rectangle it was in and the element under the
+ * pointer, or `null` for a press that hit no element — what clears an
+ * authoring selection. The element is found over its mesh as drawn, morphs
+ * applied, the nearest along the ray. A press outside every Vizij's
+ * rectangle is not reported.
+ */
 export function drainPicks(): Pick[] {
   return bindings().drainPicks();
+}
+
+/**
+ * Glow the outlines of the Vizij's elements `elementIds` (the ids its
+ * RobotData declares, as {@link describe} lists them), replacing the
+ * previous selection; an empty list clears it. The outline is each mesh's
+ * feature edges, drawn over the face in the selection red; a selected group
+ * glows every element mesh under it. Kept across the Vizij's reloads.
+ */
+export function setSelection(vizijId: string, elementIds: string[]): void {
+  bindings().setSelection(vizijId, elementIds);
+}
+
+/**
+ * Set a static feature of one of the Vizij's elements in place — no export,
+ * no reload — as an authoring page does while it scrubs one. `feature` is
+ * the RobotData feature name: `translation`, `rotation` (an euler,
+ * radians), `scale` (`{ x, y, z }`, or a number scaling evenly), `color`,
+ * `emissive` (linear `{ r, g, b }`), `opacity`, `metalness`,
+ * `emissiveIntensity` (numbers), or one of the element's morph target names
+ * (a weight) — the value as RobotData stores a static feature, or any
+ * `ValueInput`. Applied once the Vizij is ready; a reload shows what its GLB
+ * carries. A feature a device output drives is the device's again at its
+ * next write.
+ */
+export function setStaticFeature(
+  vizijId: string,
+  elementId: string,
+  feature: string,
+  value: ValueInput,
+): void {
+  bindings().setStaticFeature(vizijId, elementId, feature, JSON.stringify(toValueJSON(value)));
 }
 
 /** The module's linear memory in bytes; it never shrinks, so a flat reading

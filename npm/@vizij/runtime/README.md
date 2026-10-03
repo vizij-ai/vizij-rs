@@ -43,7 +43,7 @@ quori.dispose();
 A Vizij's paths are its own: `quori.rigPrefix` is `rig/<faceId>/` (the
 bundle's `faceId`) and `quori.path(relative)` builds one. `drainPicks()`
 reports pointer presses as `{ vizijId, elementId }` — the slot and the
-element id the GLB's RobotData declares;
+element id the GLB's RobotData declares, `null` for a press on no element;
 `describe(glb)` reads what a GLB declares without loading it: its elements,
 animatables, bounds and programs (with their labels), and from its bundle the
 poses and their groups, the rig's inputs with their ranges and defaults, the
@@ -85,6 +85,37 @@ neutral. Vizijs share the page's canvas, not its framing:
 `setView("quori", { bounds, fit, zoom, toneMapping })` frames and tone-maps
 one Vizij over `mount`'s options, and `safeArea("quori")` says where its
 framed bounds lie on the canvas, in CSS pixels, for a DOM overlay.
+
+### Authoring
+
+An authoring viewport edits what the view shows while the device runs:
+
+```ts
+import { drainPicks, setSelection, setStaticFeature, loadVizij } from "@vizij/runtime";
+
+for (const { vizijId, elementId } of drainPicks()) {
+  setSelection(vizijId, elementId ? [elementId] : []); // a miss clears the selection
+}
+quori.hold([mouthOpenId, `${eyeOffsetId}:x`]); // keep what shows while the device writes on
+quori.release();                               // follow the device again
+setStaticFeature("quori", plateId, "color", { r: 0.2, g: 0.4, b: 0.8 }); // in place, no reload
+
+// A structural edit: the authoring world exported to GLB bytes, reloaded.
+const next = await loadVizij("quori", exportedGlb);
+quori.dispose(); // the previous scene drew until the new one was ready
+```
+
+- A pick is found over each element's mesh as drawn, its morph targets
+  applied, the nearest along the pointer's ray; a press in a Vizij's
+  rectangle that meets no element is that Vizij's miss.
+- The selection glow outlines each selected element's mesh along its
+  feature edges (its boundary and its creases), drawn over the face in the
+  selection red; a selected group glows every element mesh under it.
+- A hold is the view declining the device's writes to an output, whole
+  (`<animatableId>`) or per component (`<animatableId>:x` … `:z`, `:r` …
+  `:b`); the device and its store run on untouched.
+- Selection and holds belong to the Vizij's slot: they carry over a reload
+  and go with `unloadVizij`.
 
 `startRuntime(graphSpec)` gives a device with no Vizij — a graph on a store,
 nothing drawn — for a bench or a graph run in Node; every `Runtime` method

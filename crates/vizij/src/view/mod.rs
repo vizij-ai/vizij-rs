@@ -15,13 +15,22 @@
 //! on desktop, in the browser and on Android. [`snapshot`] renders offscreen
 //! and reads the pixels back; [`frames`] publishes what is rendered into the
 //! device's store.
+//!
+//! What an authoring front end asks of the view beyond the device's pose:
+//! a press resolved to the element under it or to a miss ([`pick`]), a glow
+//! on the elements it has selected ([`glow`]), rig outputs held against the
+//! device ([`hold`]), and a static feature set in place
+//! ([`ViewEvent::SetStaticFeature`]).
 
 pub mod frames;
+mod glow;
+pub mod hold;
 pub mod meta;
+mod pick;
 pub mod snapshot;
 pub mod tone;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::Receiver;
@@ -34,16 +43,16 @@ use bevy::camera::{
     CameraProjection, Projection, RenderTarget, ScalingMode, SubCameraView, Viewport,
 };
 use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
+use bevy::ecs::system::SystemParam;
 use bevy::gltf::GltfAssetLabel;
 use bevy::math::Vec3A;
 use bevy::mesh::morph::MorphWeights;
-use bevy::picking::events::{Pointer, Press};
-use bevy::picking::mesh_picking::MeshPickingPlugin;
 use bevy::prelude::*;
 use uuid::Uuid;
 use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector};
 use vizij_api_core::{TypedPath, Value};
 
+use hold::{HoldTarget, Holds};
 use meta::{Binding, FaceMeta, FeatureKind};
 pub use tone::ToneMapping;
 
@@ -100,7 +109,7 @@ impl FaceAssets {
     }
 }
 
-/// The face the view shows, as a Bevy resource./// A face shown by the view: an entity carrying the metadata, the GLB served
+/// A face shown by the view: an entity carrying the metadata, the GLB served
 /// from memory, the device's rig feed, its slot and the joins to the spawned
 /// scene once indexed. Its scene is a child; its camera is its own
 /// entity ([`FaceCamera`]).
@@ -130,10 +139,36 @@ pub struct Face {
 pub struct Bindings {
     /// animatable id → (target entity, feature, morph index, material shade factor).
     pub by_uuid: HashMap<Uuid, (Entity, FeatureKind, Option<usize>, f32)>,
-    /// mesh entity → the id of the element it belongs to, for picks.
-    pub element_of: HashMap<Entity, Uuid>,
+    /// element id → the entities its features land on: what a pick tests,
+    /// what the glow outlines, what a static feature is set on.
+    pub elements: HashMap<Uuid, ElementTargets>,
+    /// animatable id → the value last applied to the scene, what a held
+    /// component keeps ([`hold`]).
+    shown: HashMap<Uuid, Decoded>,
+    /// The meshes whose materials the view composes ([`Surface`]): what the
+    /// face's tone mapping goes over.
+    surfaces: Vec<Entity>,
     pub ready: bool,
 }
+
+/// The entities one element's features land on.
+#[derive(Debug, Clone, Copy)]
+pub struct ElementTargets {
+    /// Its glTF node: the transform features.
+    pub node: Entity,
+    /// Its own mesh — the node's, or its first primitive's: the static
+    /// material features, the pick, the glow. `None` for a group.
+    pub mesh: Option<Entity>,
+    /// The descendant carrying its morph weights, if it has morph targets.
+    pub morph: Option<Entity>,
+}
+
+/// A face being replaced by a reload under the same id: it keeps drawing
+/// until its successor is indexed, then goes ([`retire_superseded`]), so a
+/// reload never shows an empty rectangle. It is not reported ready and
+/// reports no picks.
+#[derive(Component)]
+pub struct Superseded;
 
 /// A face's camera: orthographic over the face's authored bounds, over the
 /// face's slot.
@@ -165,6 +200,35 @@ pub enum ViewEvent {
     /// Frame and tone-map the face by `view`, in place of the face's previous
     /// view. Kept across the face's reloads, like its placement.
     SetFaceView { face_id: String, view: FaceView },
+    /// Outline these elements of the face (RobotData element ids) with the
+    /// selection glow; an empty list clears it. Kept across the face's
+    /// reloads.
+    SetSelection {
+        face_id: String,
+        elements: Vec<Uuid>,
+    },
+    /// Hold rig outputs of the face against its device: a held animatable,
+    /// or one component of it, keeps the value it shows while the device
+    /// writes on ([`hold`]). Kept across the face's reloads.
+    Hold {
+        face_id: String,
+        targets: Vec<HoldTarget>,
+    },
+    /// Let held outputs follow the device again; `None` releases them all.
+    Release {
+        face_id: String,
+        targets: Option<Vec<HoldTarget>>,
+    },
+    /// Set one feature of an element in place — a static feature, which no
+    /// device output drives — by its RobotData name (`translation`,
+    /// `color`, a morph target's name, …). Applied once the face is
+    /// indexed; a reload shows whatever its GLB carries.
+    SetStaticFeature {
+        face_id: String,
+        element_id: Uuid,
+        feature: String,
+        value: Value,
+    },
 }
 
 /// How one face is framed and tone-mapped, over the page's [`ViewOptions`]:
@@ -226,11 +290,12 @@ impl Framing {
 #[derive(Resource)]
 pub struct ViewEvents(pub Mutex<Receiver<ViewEvent>>);
 
-/// An element a pointer clicked, by the ids its face's RobotData declares.
+/// A pointer press on a face: the element under it, by the ids its face's
+/// RobotData declares, or `None` for a press that hit no element.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Picked {
     pub face_id: String,
-    pub element_id: Uuid,
+    pub element_id: Option<Uuid>,
 }
 
 /// The picks (pointer presses on faces) since a consumer last drained them.
@@ -242,6 +307,11 @@ pub struct Picks(pub Vec<Picked>);
 /// apart from the faces so a placement survives the face's reload.
 #[derive(Resource, Default)]
 struct Placements(HashMap<String, Option<[u32; 4]>>);
+
+/// Static feature values waiting for their face to be indexed, by face id
+/// ([`ViewEvent::SetStaticFeature`]).
+#[derive(Resource, Default)]
+struct PendingStatics(HashMap<String, Vec<(Uuid, String, Value)>>);
 
 /// Whether every requested face is shown and indexed — and at least one is.
 /// What a snapshot waits for before it captures.
@@ -460,13 +530,19 @@ impl Plugin for ViewPlugin {
             .register_type::<bevy::gltf::GltfExtras>()
             .register_type::<bevy::gltf::GltfMeshExtras>()
             .register_type::<bevy::gltf::GltfMaterialExtras>();
+        // Picking runs its own ray cast over the morphed meshes on a press
+        // ([`pick`]); Bevy's picking only delivers the press, through the
+        // window backend every press reaches when no other backend reports
+        // a hit.
         app.init_resource::<Slots>()
             .init_resource::<Placements>()
             .init_resource::<FaceViews>()
             .init_resource::<SafeAreas>()
             .init_resource::<Picks>()
-            .add_plugins(MeshPickingPlugin)
-            .add_observer(on_press)
+            .init_resource::<PendingStatics>()
+            .init_resource::<Holds>()
+            .add_plugins(glow::GlowPlugin)
+            .add_observer(pick::on_press)
             .add_systems(
                 Update,
                 (
@@ -474,6 +550,8 @@ impl Plugin for ViewPlugin {
                     place_cameras,
                     frame_cameras,
                     index_faces,
+                    retire_superseded,
+                    apply_statics,
                     tone_faces,
                     apply_poses,
                     measure_safe_areas,
@@ -483,36 +561,40 @@ impl Plugin for ViewPlugin {
     }
 }
 
-/// Apply the front ends' requests: load, replace or unload a face, place it
-/// or set its view, or recolor the background of every face camera.
+/// Apply the front ends' requests: load, reload or unload a face, place it
+/// or set its view, recolor the background, and the authoring requests —
+/// selection, holds, static features. A load under an id already shown
+/// supersedes the face there rather than unloading it: the old scene draws
+/// until the new one is indexed ([`retire_superseded`]).
 #[allow(clippy::too_many_arguments)]
 fn apply_view_events(
     events: Option<Res<ViewEvents>>,
     assets: Res<FaceAssets>,
-    options: Res<ViewOptions>,
+    mut options: ResMut<ViewOptions>,
     offscreen: Option<Res<OffscreenTarget>>,
     mut frame_config: Option<ResMut<frames::FrameConfig>>,
     mut slots: ResMut<Slots>,
     mut placements: ResMut<Placements>,
     mut views: ResMut<FaceViews>,
+    mut selections: ResMut<glow::Selections>,
+    mut holds: ResMut<Holds>,
+    mut statics: ResMut<PendingStatics>,
     mut commands: Commands,
     faces: Query<(Entity, &Face)>,
-    mut cameras: Query<&mut Camera, With<FaceCamera>>,
     asset_server: Res<AssetServer>,
 ) {
     let Some(events) = events else { return };
     let Ok(receiver) = events.0.lock() else {
         return;
     };
+    // What this drain changed that the query does not show until the
+    // drain's commands apply: the faces it took down, and those it spawned.
+    let mut gone = HashSet::new();
+    let mut spawned: Vec<(String, Entity, Entity, String, usize)> = Vec::new();
     while let Ok(event) = receiver.try_recv() {
         match event {
             ViewEvent::Background([r, g, b]) => {
-                let background = Color::srgb_u8(r, g, b);
-                for mut camera in &mut cameras {
-                    if let ClearColorConfig::Custom(color) = &mut camera.clear_color {
-                        *color = background;
-                    }
-                }
+                options.background = Color::srgb_u8(r, g, b);
             }
             ViewEvent::LoadFace {
                 face_id,
@@ -520,7 +602,16 @@ fn apply_view_events(
                 glb,
                 rig,
             } => {
-                unload(&face_id, &faces, &assets, &mut slots, &mut commands);
+                for (entity, face) in &faces {
+                    if face.id == face_id && !gone.contains(&entity) {
+                        commands.entity(entity).insert(Superseded);
+                    }
+                }
+                for (id, entity, ..) in &spawned {
+                    if *id == face_id {
+                        commands.entity(*entity).insert(Superseded);
+                    }
+                }
                 let slot = slots.take();
                 let asset_path = assets.push(&face_id, glb);
                 // The published frames are stamped in the loaded face's own
@@ -536,16 +627,14 @@ fn apply_view_events(
                 let camera = commands
                     .spawn(camera_for(
                         Framing::of(&meta, &options, views.0.get(&face_id)),
-                        &options,
                         slot,
                         offscreen.as_deref(),
-                        faces.is_empty(),
                     ))
                     .id();
                 let face = commands
                     .spawn((
                         Face {
-                            id: face_id,
+                            id: face_id.clone(),
                             meta: *meta,
                             asset_path: asset_path.clone(),
                             rig,
@@ -561,9 +650,28 @@ fn apply_view_events(
                     ))
                     .id();
                 commands.entity(camera).insert(FaceCamera(face));
+                spawned.push((face_id, face, camera, asset_path, slot));
             }
             ViewEvent::UnloadFace { face_id } => {
-                unload(&face_id, &faces, &assets, &mut slots, &mut commands);
+                for (entity, face) in &faces {
+                    if face.id == face_id && gone.insert(entity) {
+                        despawn_face(entity, face, &assets, &mut slots, &mut commands);
+                        log::info!("face {face_id}: unloaded");
+                    }
+                }
+                spawned.retain(|(id, entity, camera, asset_path, slot)| {
+                    if *id != face_id {
+                        return true;
+                    }
+                    commands.entity(*camera).despawn();
+                    commands.entity(*entity).despawn();
+                    assets.remove(asset_path);
+                    slots.release(*slot);
+                    false
+                });
+                selections.0.remove(&face_id);
+                holds.clear(&face_id);
+                statics.0.remove(&face_id);
             }
             ViewEvent::PlaceFace { face_id, rect } => {
                 placements.0.insert(face_id, rect);
@@ -571,13 +679,35 @@ fn apply_view_events(
             ViewEvent::SetFaceView { face_id, view } => {
                 views.0.insert(face_id, view);
             }
+            ViewEvent::SetSelection { face_id, elements } => {
+                if elements.is_empty() {
+                    selections.0.remove(&face_id);
+                } else {
+                    selections.0.insert(face_id, elements);
+                }
+            }
+            ViewEvent::Hold { face_id, targets } => holds.hold(&face_id, targets),
+            ViewEvent::Release { face_id, targets } => holds.release(&face_id, targets),
+            ViewEvent::SetStaticFeature {
+                face_id,
+                element_id,
+                feature,
+                value,
+            } => statics
+                .0
+                .entry(face_id)
+                .or_default()
+                .push((element_id, feature, value)),
         }
     }
 }
 
-/// Confine each face's camera to its placement, when it has one.
+/// Confine each face's camera to its placement, when it has one, and let
+/// the lowest camera clear the target with the background — whichever face
+/// that is as faces come and go — while the others draw over it.
 fn place_cameras(
     placements: Res<Placements>,
+    options: Res<ViewOptions>,
     faces: Query<&Face>,
     mut cameras: Query<&mut Camera, With<FaceCamera>>,
 ) {
@@ -605,6 +735,21 @@ fn place_cameras(
         };
         if !same {
             camera.viewport = wanted;
+        }
+    }
+    let lowest = cameras.iter().map(|camera| camera.order).min();
+    for mut camera in &mut cameras {
+        let clears = Some(camera.order) == lowest;
+        let current = match camera.clear_color {
+            ClearColorConfig::Custom(color) => Some(color),
+            _ => None,
+        };
+        let wanted = clears.then_some(options.background);
+        if current != wanted {
+            camera.clear_color = match wanted {
+                Some(color) => ClearColorConfig::Custom(color),
+                None => ClearColorConfig::None,
+            };
         }
     }
 }
@@ -652,7 +797,7 @@ fn tone_faces(
             .get(&face.id)
             .map(|view| view.tone_mapping)
             .unwrap_or_default();
-        for mesh in face.bindings.element_of.keys() {
+        for mesh in &face.bindings.surfaces {
             let Ok((handle, mut surface)) = surfaces.get_mut(*mesh) else {
                 continue;
             };
@@ -670,7 +815,7 @@ fn tone_faces(
 fn measure_safe_areas(
     views: Res<FaceViews>,
     options: Res<ViewOptions>,
-    faces: Query<&Face>,
+    faces: Query<&Face, Without<Superseded>>,
     cameras: Query<&Camera, With<FaceCamera>>,
     mut areas: ResMut<SafeAreas>,
 ) {
@@ -698,36 +843,44 @@ fn safe_area(framing: &Framing, viewport: Rect) -> Rect {
     Rect::from_center_size(viewport.center(), framing.size / extent * size)
 }
 
-/// Take the face shown under `face_id` down, if any: its scene, its camera,
-/// its GLB, its slot.
-fn unload(
-    face_id: &str,
-    faces: &Query<(Entity, &Face)>,
+/// Take a face down: its scene, its camera, its GLB, its slot.
+fn despawn_face(
+    entity: Entity,
+    face: &Face,
     assets: &FaceAssets,
     slots: &mut Slots,
     commands: &mut Commands,
 ) {
-    for (entity, face) in faces {
-        if face.id == face_id {
-            commands.entity(face.camera).despawn();
-            commands.entity(entity).despawn();
-            assets.remove(&face.asset_path);
-            slots.release(face.slot);
-            log::info!("face {face_id}: unloaded");
+    commands.entity(face.camera).despawn();
+    commands.entity(entity).despawn();
+    assets.remove(&face.asset_path);
+    slots.release(face.slot);
+}
+
+/// Once a reloaded face is indexed, the faces it supersedes go: the swap
+/// lands in one frame, the new scene posed before it draws.
+fn retire_superseded(
+    faces: Query<(Entity, &Face, Has<Superseded>)>,
+    assets: Res<FaceAssets>,
+    mut slots: ResMut<Slots>,
+    mut commands: Commands,
+) {
+    for (_, face, superseded) in &faces {
+        if superseded || !face.bindings.ready {
+            continue;
+        }
+        for (old, old_face, old_superseded) in &faces {
+            if old_superseded && old_face.id == face.id {
+                despawn_face(old, old_face, &assets, &mut slots, &mut commands);
+                log::info!("face {}: reloaded, slot {} retired", face.id, old_face.slot);
+            }
         }
     }
 }
 
-/// A face's camera: the fit over its authored bounds, over its slot; the
-/// first camera clears the target with the background, the others draw over
-/// it.
-fn camera_for(
-    framing: Framing,
-    options: &ViewOptions,
-    slot: usize,
-    offscreen: Option<&OffscreenTarget>,
-    clears: bool,
-) -> impl Bundle {
+/// A face's camera: the fit over its framing, over its slot. Which camera
+/// clears the target is [`place_cameras`]'.
+fn camera_for(framing: Framing, slot: usize, offscreen: Option<&OffscreenTarget>) -> impl Bundle {
     // Lighting is baked into the materials (see `ViewOptions::albedo_factor`);
     // no scene light is spawned.
     let projection = fit_projection(&framing);
@@ -737,11 +890,7 @@ fn camera_for(
     (
         Camera3d::default(),
         Camera {
-            clear_color: if clears {
-                ClearColorConfig::Custom(options.background)
-            } else {
-                ClearColorConfig::None
-            },
+            clear_color: ClearColorConfig::None,
             order: slot as isize,
             ..default()
         },
@@ -908,7 +1057,7 @@ fn index_faces(
         // material/morph target is its first mesh-bearing descendant.
         let mut mesh_of: HashMap<String, (Entity, Handle<StandardMaterial>)> = HashMap::new();
         let mut morph_of: HashMap<String, Entity> = HashMap::new();
-        let mut element_of = HashMap::new();
+        let mut elements = HashMap::new();
         let tone = views
             .0
             .get(&face.id)
@@ -940,7 +1089,6 @@ fn index_faces(
                         .entity(mesh_entity)
                         .insert((MeshMaterial3d(handle.clone()), surface));
                     mesh_of.insert(element.node_name.clone(), (mesh_entity, handle));
-                    element_of.insert(mesh_entity, element.id);
                     break;
                 }
             }
@@ -950,6 +1098,19 @@ fn index_faces(
                     break;
                 }
             }
+            // The element's own mesh is the node's or one of its primitives
+            // (the node's children); a deeper mesh is another element's.
+            let own_mesh = std::iter::once(node)
+                .chain(children.get(node).into_iter().flat_map(|kids| kids.iter()))
+                .find(|entity| meshes.contains(*entity));
+            elements.insert(
+                element.id,
+                ElementTargets {
+                    node,
+                    mesh: own_mesh,
+                    morph: morph_of.get(&element.node_name).copied(),
+                },
+            );
         }
 
         let mut by_uuid = HashMap::new();
@@ -1005,139 +1166,263 @@ fn index_faces(
         );
         face.bindings = Bindings {
             by_uuid,
-            element_of,
+            elements,
+            shown: HashMap::new(),
+            surfaces: mesh_of.values().map(|(mesh, _)| *mesh).collect(),
             ready: true,
         };
     }
 }
 
-/// Applies each device's current pose (the HAL's actuation state) onto its
-/// face's scene: transforms, material surfaces, morph influences.
-fn apply_poses(
-    faces: Query<&Face>,
-    mut transforms: Query<&mut Transform>,
-    mut surfaces: Query<(&MeshMaterial3d<StandardMaterial>, &mut Surface)>,
-    mut morph_weights: Query<&mut MorphWeights>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+/// Set the static features waiting for their face, once it is indexed.
+fn apply_statics(
+    mut pending: ResMut<PendingStatics>,
+    faces: Query<&Face, Without<Superseded>>,
+    mut scene: SceneFeatures,
 ) {
+    if pending.0.is_empty() {
+        return;
+    }
     for face in &faces {
         if !face.bindings.ready {
             continue;
         }
-        for (path, value) in face.rig.pose() {
-            let Some((entity, feature, morph_index, _factor)) =
-                animatable_of(&path).and_then(|id| face.bindings.by_uuid.get(&id))
-            else {
+        let Some(edits) = pending.0.remove(&face.id) else {
+            continue;
+        };
+        for (element_id, feature, value) in edits {
+            let target = face
+                .meta
+                .elements
+                .iter()
+                .find(|element| element.id == element_id)
+                .zip(face.bindings.elements.get(&element_id));
+            let Some((element, targets)) = target else {
+                log::warn!("face {}: no element {element_id}", face.id);
                 continue;
             };
-            // A material feature lands on the mesh's surface, and the
-            // surface recomposes the material's color.
-            let mut surface_edit = |edit: &dyn Fn(&mut Surface) -> bool| {
-                if let Ok((handle, mut surface)) = surfaces.get_mut(*entity) {
-                    if edit(&mut surface) {
-                        if let Some(mut mat) = materials.get_mut(&handle.0) {
-                            surface.apply(&mut mat);
-                        }
-                    }
-                }
+            let Some(kind) = FeatureKind::from_name(&feature, &element.morph_targets) else {
+                log::warn!("face {}: {element_id} has no feature {feature:?}", face.id);
+                continue;
             };
-            match feature {
-                FeatureKind::Translation => {
-                    if let (Ok(mut transform), Some(v)) =
-                        (transforms.get_mut(*entity), as_xyz(&value))
-                    {
-                        transform.translation = Vec3::from_array(v);
-                    }
+            let (entity, morph_index) = match &kind {
+                FeatureKind::Translation | FeatureKind::Rotation | FeatureKind::Scale => {
+                    (Some(targets.node), None)
                 }
-                FeatureKind::Rotation => {
-                    if let (Ok(mut transform), Some(v)) =
-                        (transforms.get_mut(*entity), as_xyz(&value))
-                    {
-                        // three.js euler order ZYX: R = Rz·Ry·Rx, composed
-                        // explicitly — EulerRot naming conventions moved between
-                        // glam versions, this cannot. Validated pixel-wise against
-                        // the web renderer on Toasty, whose tilts are
-                        // order-sensitive.
-                        transform.rotation = Quat::from_rotation_z(v[2])
-                            * Quat::from_rotation_y(v[1])
-                            * Quat::from_rotation_x(v[0]);
-                    }
-                }
-                FeatureKind::Scale => {
-                    if let Ok(mut transform) = transforms.get_mut(*entity) {
-                        if let Some(v) = as_xyz(&value) {
-                            transform.scale = Vec3::from_array(v);
-                        } else if let Some(s) = as_f32(&value) {
-                            transform.scale = Vec3::splat(s);
-                        }
-                    }
-                }
-                // Graph color components are linear working-space floats
-                // (three's `Color.setRGB` semantics), not sRGB.
-                FeatureKind::Color => {
-                    surface_edit(&|s| as_rgb(&value).map(|rgb| s.base = rgb).is_some())
-                }
-                FeatureKind::Opacity => {
-                    surface_edit(&|s| as_f32(&value).map(|o| s.opacity = o).is_some())
-                }
-                FeatureKind::Metalness => {
-                    surface_edit(&|s| as_f32(&value).map(|m| s.metalness = m).is_some())
-                }
-                // No direct light and no environment map: roughness has
-                // nothing to shape.
-                FeatureKind::Roughness => {}
-                FeatureKind::Emissive => {
-                    surface_edit(&|s| as_rgb(&value).map(|rgb| s.emissive = rgb).is_some())
-                }
-                FeatureKind::EmissiveIntensity => {
-                    surface_edit(&|s| as_f32(&value).map(|i| s.emissive_intensity = i).is_some())
-                }
-                FeatureKind::Morph(_) => {
-                    if let (Ok(mut weights), Some(w), Some(i)) =
-                        (morph_weights.get_mut(*entity), as_f32(&value), *morph_index)
-                    {
-                        if let Some(slot) = weights.weights_mut().get_mut(i) {
-                            *slot = w;
-                        }
-                    }
-                }
-            }
+                FeatureKind::Morph(target) => (
+                    targets.morph,
+                    element.morph_targets.iter().position(|m| m == target),
+                ),
+                _ => (targets.mesh, None),
+            };
+            let (Some(entity), Some(decoded)) = (entity, decode(&kind, &value)) else {
+                log::warn!(
+                    "face {}: {feature} of {element_id} does not take {value:?}",
+                    face.id
+                );
+                continue;
+            };
+            scene.apply(entity, &kind, morph_index, decoded);
         }
     }
 }
 
-/// A pointer pressed on a face's mesh, reported as the RobotData ids of the
-/// face and the element the mesh belongs to. The press, not the click: a
-/// click needs the press and the release to land on one entity, which a
-/// face moving between the two (a blink) denies. The event bubbles up the
-/// hierarchy; it is recorded once, at its origin.
-fn on_press(
-    press: On<Pointer<Press>>,
-    parents: Query<&ChildOf>,
-    faces: Query<&Face>,
-    mut picks: ResMut<Picks>,
-) {
-    let target = press.original_event_target();
-    if press.entity != target {
-        return;
-    }
-    let mut current = target;
-    let face = loop {
-        if let Ok(face) = faces.get(current) {
-            break face;
+/// Applies each device's current pose (the HAL's actuation state) onto its
+/// face's scene: transforms, material surfaces, morph influences — except
+/// what is held against the device ([`hold`]).
+fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneFeatures) {
+    for mut face in &mut faces {
+        if !face.bindings.ready {
+            continue;
         }
-        match parents.get(current) {
-            Ok(parent) => current = parent.parent(),
-            Err(_) => return,
+        let face = &mut *face;
+        let held = holds.of(&face.id);
+        let bindings = &mut face.bindings;
+        for (path, value) in face.rig.pose() {
+            let Some(id) = animatable_of(&path) else {
+                continue;
+            };
+            let Some((entity, feature, morph_index, _factor)) = bindings.by_uuid.get(&id) else {
+                continue;
+            };
+            let Some(mut decoded) = decode(feature, &value) else {
+                continue;
+            };
+            if let Some(held) = held {
+                let shown = || {
+                    bindings
+                        .shown
+                        .get(&id)
+                        .copied()
+                        .or_else(|| scene.read(*entity, feature, *morph_index))
+                };
+                match hold::resolve(held, id, decoded, shown) {
+                    Some(kept) => decoded = kept,
+                    None => continue,
+                }
+            }
+            scene.apply(*entity, feature, *morph_index, decoded);
+            bindings.shown.insert(id, decoded);
         }
-    };
-    if let Some(element_id) = face.bindings.element_of.get(&target) {
-        log::info!("face {}: picked element {element_id}", face.id);
-        picks.0.push(Picked {
-            face_id: face.id.clone(),
-            element_id: *element_id,
-        });
     }
+}
+
+/// A feature value in the form the scene takes it: a triple (a vector, an
+/// euler, a linear RGB colour) or a scalar.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum Decoded {
+    Triple([f32; 3]),
+    Scalar(f32),
+}
+
+/// `value` read as what `feature` takes; `None` when it is no such value.
+fn decode(feature: &FeatureKind, value: &Value) -> Option<Decoded> {
+    match feature {
+        FeatureKind::Translation | FeatureKind::Rotation => as_xyz(value).map(Decoded::Triple),
+        FeatureKind::Scale => as_xyz(value)
+            .map(Decoded::Triple)
+            .or_else(|| as_f32(value).map(Decoded::Scalar)),
+        // Graph color components are linear working-space floats (three's
+        // `Color.setRGB` semantics), not sRGB.
+        FeatureKind::Color | FeatureKind::Emissive => as_rgb(value).map(Decoded::Triple),
+        FeatureKind::Opacity
+        | FeatureKind::Metalness
+        | FeatureKind::Roughness
+        | FeatureKind::EmissiveIntensity
+        | FeatureKind::Morph(_) => as_f32(value).map(Decoded::Scalar),
+    }
+}
+
+/// The scene state the features land on: node transforms, mesh surfaces
+/// (and the materials they compose), morph weights.
+#[derive(SystemParam)]
+struct SceneFeatures<'w, 's> {
+    transforms: Query<'w, 's, &'static mut Transform>,
+    surfaces: Query<
+        'w,
+        's,
+        (
+            &'static MeshMaterial3d<StandardMaterial>,
+            &'static mut Surface,
+        ),
+    >,
+    morph_weights: Query<'w, 's, &'static mut MorphWeights>,
+    materials: ResMut<'w, Assets<StandardMaterial>>,
+}
+
+impl SceneFeatures<'_, '_> {
+    /// Set `feature` of `entity` to `value`; a value of the wrong shape for
+    /// the feature changes nothing.
+    fn apply(
+        &mut self,
+        entity: Entity,
+        feature: &FeatureKind,
+        morph_index: Option<usize>,
+        value: Decoded,
+    ) {
+        use Decoded::{Scalar, Triple};
+        match (feature, value) {
+            (FeatureKind::Translation, Triple(v)) => {
+                if let Ok(mut transform) = self.transforms.get_mut(entity) {
+                    transform.translation = Vec3::from_array(v);
+                }
+            }
+            (FeatureKind::Rotation, Triple(v)) => {
+                if let Ok(mut transform) = self.transforms.get_mut(entity) {
+                    transform.rotation = euler_zyx(v);
+                }
+            }
+            (FeatureKind::Scale, Triple(v)) => {
+                if let Ok(mut transform) = self.transforms.get_mut(entity) {
+                    transform.scale = Vec3::from_array(v);
+                }
+            }
+            (FeatureKind::Scale, Scalar(s)) => {
+                if let Ok(mut transform) = self.transforms.get_mut(entity) {
+                    transform.scale = Vec3::splat(s);
+                }
+            }
+            // A material feature lands on the mesh's surface, and the surface
+            // recomposes the material's color.
+            (FeatureKind::Color, Triple(rgb)) => self.edit_surface(entity, |s| s.base = rgb),
+            (FeatureKind::Opacity, Scalar(o)) => self.edit_surface(entity, |s| s.opacity = o),
+            (FeatureKind::Metalness, Scalar(m)) => self.edit_surface(entity, |s| s.metalness = m),
+            (FeatureKind::Emissive, Triple(rgb)) => self.edit_surface(entity, |s| s.emissive = rgb),
+            (FeatureKind::EmissiveIntensity, Scalar(i)) => {
+                self.edit_surface(entity, |s| s.emissive_intensity = i)
+            }
+            // No direct light and no environment map: roughness has nothing
+            // to shape.
+            (FeatureKind::Roughness, _) => {}
+            (FeatureKind::Morph(_), Scalar(w)) => {
+                if let (Ok(mut weights), Some(i)) =
+                    (self.morph_weights.get_mut(entity), morph_index)
+                {
+                    if let Some(slot) = weights.weights_mut().get_mut(i) {
+                        *slot = w;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Edit `entity`'s surface and recompose its material when the edit
+    /// changed it.
+    fn edit_surface(&mut self, entity: Entity, edit: impl FnOnce(&mut Surface)) {
+        let Ok((handle, mut surface)) = self.surfaces.get_mut(entity) else {
+            return;
+        };
+        let mut edited = surface.clone();
+        edit(&mut edited);
+        if edited != *surface {
+            if let Some(mut material) = self.materials.get_mut(&handle.0) {
+                edited.apply(&mut material);
+            }
+            *surface = edited;
+        }
+    }
+
+    /// What `feature` of `entity` currently shows.
+    fn read(
+        &self,
+        entity: Entity,
+        feature: &FeatureKind,
+        morph_index: Option<usize>,
+    ) -> Option<Decoded> {
+        let transform = || self.transforms.get(entity).ok();
+        let surface = || self.surfaces.get(entity).ok().map(|(_, surface)| surface);
+        Some(match feature {
+            FeatureKind::Translation => Decoded::Triple(transform()?.translation.to_array()),
+            FeatureKind::Rotation => {
+                let (z, y, x) = transform()?.rotation.to_euler(EulerRot::ZYX);
+                Decoded::Triple([x, y, z])
+            }
+            FeatureKind::Scale => Decoded::Triple(transform()?.scale.to_array()),
+            FeatureKind::Color => Decoded::Triple(surface()?.base),
+            FeatureKind::Emissive => Decoded::Triple(surface()?.emissive),
+            FeatureKind::Opacity => Decoded::Scalar(surface()?.opacity),
+            FeatureKind::Metalness => Decoded::Scalar(surface()?.metalness),
+            FeatureKind::EmissiveIntensity => Decoded::Scalar(surface()?.emissive_intensity),
+            FeatureKind::Roughness => return None,
+            FeatureKind::Morph(_) => Decoded::Scalar(
+                *self
+                    .morph_weights
+                    .get(entity)
+                    .ok()?
+                    .weights()
+                    .get(morph_index?)?,
+            ),
+        })
+    }
+}
+
+/// An euler triple as a rotation, in three.js's default order: R = Rz·Ry·Rx,
+/// composed explicitly — EulerRot naming conventions moved between glam
+/// versions, this cannot. Validated pixel-wise against the web renderer on
+/// Toasty, whose tilts are order-sensitive.
+fn euler_zyx([x, y, z]: [f32; 3]) -> Quat {
+    Quat::from_rotation_z(z) * Quat::from_rotation_y(y) * Quat::from_rotation_x(x)
 }
 
 /// The animatable a rig key names: the rig keys its pose by bare animatable
@@ -1315,6 +1600,46 @@ mod tests {
         assert_eq!(own.center, Vec2::ZERO);
         assert_eq!(own.size, Vec2::new(10.0, 8.0));
         assert_eq!((own.fit, own.zoom), (Fit::Cover, Vec2::ONE));
+    }
+
+    /// What a held rotation component keeps is read back off the scene's
+    /// quaternion in the order the rig writes it: the triple round-trips.
+    #[test]
+    fn a_rotation_reads_back_the_euler_it_was_set_from() {
+        for v in [[0.3, -0.2, 1.1], [0.0, 0.0, 0.0], [-1.2, 0.4, -2.5]] {
+            let (z, y, x) = euler_zyx(v).to_euler(EulerRot::ZYX);
+            for (got, want) in [x, y, z].iter().zip(v) {
+                assert!(
+                    (got - want).abs() < 1e-5,
+                    "{v:?} read back as {:?}",
+                    [x, y, z]
+                );
+            }
+        }
+    }
+
+    /// A feature takes the value shapes it can show, and nothing else.
+    #[test]
+    fn a_value_decodes_to_what_its_feature_takes() {
+        let vec3 = vizij_api_core::value::vec3([1.0, 2.0, 3.0]);
+        let float = vizij_api_core::value::float(0.5);
+        assert_eq!(
+            decode(&FeatureKind::Translation, &vec3),
+            Some(Decoded::Triple([1.0, 2.0, 3.0]))
+        );
+        assert_eq!(decode(&FeatureKind::Translation, &float), None);
+        assert_eq!(
+            decode(&FeatureKind::Scale, &float),
+            Some(Decoded::Scalar(0.5))
+        );
+        assert_eq!(
+            decode(&FeatureKind::Morph("open".into()), &float),
+            Some(Decoded::Scalar(0.5))
+        );
+        assert_eq!(
+            decode(&FeatureKind::Color, &vec3),
+            Some(Decoded::Triple([1.0, 2.0, 3.0]))
+        );
     }
 
     #[test]

@@ -1704,6 +1704,7 @@ dependencies = [
  "bevy_camera",
  "bevy_color",
  "bevy_ecs",
+ "bevy_gizmos",
  "bevy_image",
  "bevy_log",
  "bevy_math",
