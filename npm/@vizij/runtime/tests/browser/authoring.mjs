@@ -259,6 +259,21 @@ try {
       assert.ok(diffAfter < 1, `the reloaded face differs (${diffAfter})`);
       timings.push(timing);
     }
+    // Two reloads in one turn: the second supersedes the first's pending
+    // scene too, and the one face left is the last loaded.
+    const retired = () => logs.filter((l) => l.includes("face r: reloaded")).length;
+    const retiredBefore = retired();
+    await page.evaluate(
+      ([url]) =>
+        Promise.all([
+          window.vizijHarness.reload("r", url, { program: "none" }),
+          window.vizijHarness.reload("r", url, { program: "none" }),
+        ]),
+      [`/fixtures/${QUORI}`],
+    );
+    await frames(30);
+    assert.equal(retired() - retiredBefore, 2, "a back-to-back reload left a face behind");
+    assert.ok(meanDiff32(settled, await shotBuffer()) < 1, "the face after a double reload differs");
     const ms = (key) => timings.map((t) => t[key].toFixed(0)).join(", ");
     console.log(`reload of ${QUORI} (ms): device built ${ms("loadMs")}; scene ready ${ms("readyMs")}`);
 
