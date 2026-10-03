@@ -6,6 +6,17 @@ All notable changes to `vizij`, the desktop app. The format follows
 released by `release-vizij.yml`: a binary and an installer per desktop OS, and
 the browser module, attached to the `vizij-v<version>` GitHub release.
 
+## [Unreleased]
+
+### Added
+
+- A face's animation clips (its bundle's `animations`) load into the device's
+  animation module, each on a player of its own, its tracks writing the rig
+  inputs their channels name. A loaded clip is silent until played: a client
+  plays it through the module's functions (`set_weight` on its instance, then
+  `play`, `pause`, `stop`, `seek`, `set_speed`, `set_loop`), its players in
+  the bundle's order.
+
 ## [0.1.0] - 2026-10-02
 
 ### Added

@@ -63,6 +63,33 @@ from the graph's `ExternalFunction` nodes, like the host-linked modules'. A
 guest under a host-linked module's id — the animation module's — is served
 by the host-linked one.
 
+### Clips
+
+A Vizij's animation clips (its bundle's `animations`, what `describe(glb).clips`
+lists) load into its device's animation module with the device, each track
+writing the rig input its channel names (`gaze/left_right` drives
+`quori.path("gaze/left_right")`). A clip loads silent, stopped at its start,
+looping at speed 1; it writes its keys while it plays, is paused or has
+completed, and stops writing once stopped.
+
+```ts
+quori.clips();                                  // [{ id, name, duration }] — seconds
+await quori.playClip(id, { reset: true });      // from the start; { speed } too
+quori.pauseClip(id);                            // holds the pose
+quori.seekClip(id, 1.5);                        // seconds
+quori.setClipLoop(id, false);                   // completes at its end instead of wrapping
+quori.setClipSpeed(id, 2);
+quori.clipState(id);                            // { time, duration, playing, loop, speed, completed }
+quori.stopClip(id, { clearOutputs: true });     // back to its first frame, then silent
+quori.setClip(clip);                            // add, or replace live by id (describe's shape)
+quori.removeClip(id);
+```
+
+Transport calls are the module's declared functions through `runtime.call`:
+each applies at the device's next step, which its promise waits for.
+`clipState` reads the player states the animation source writes to
+`vizij/animations/players` each step.
+
 ### Profiles and mappings
 
 A **profile** is an interface: the set of store paths one party exposes to

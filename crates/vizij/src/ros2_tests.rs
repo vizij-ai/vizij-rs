@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
-use crate::face::{builder_for, declare_keys, free_inputs};
+use crate::face::{builder_for, declare_keys, free_inputs, Bundle};
 
 // The typed client's view of `interaction_skills/LookAt` — local mirrors of
 // the standard messages (`ros2_client::Message` is a foreign marker trait).
@@ -154,7 +154,7 @@ async fn the_look_at_skill_serves_the_standard_contract_on_the_vizij_device() {
         r#"{ "nodes": [], "edges": [] }"#,
         RigHal::new(),
         store.clone(),
-        &[],
+        &Bundle::default(),
         None,
     )
     .expect("build the device")
@@ -400,7 +400,7 @@ async fn a_free_input_takes_a_published_data_topic() {
         .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
     let bridge = arora_bridge_ros2::Ros2Bridge::new(config).await;
 
-    let mut arora = builder_for(spec, RigHal::new(), store.clone(), &[], None)
+    let mut arora = builder_for(spec, RigHal::new(), store.clone(), &Bundle::default(), None)
         .expect("build the device")
         .with_bridge(Box::new(bridge))
         .build()
@@ -512,7 +512,7 @@ async fn the_device_keeps_a_flat_heap_in_a_ros_graph() {
     let bridge = arora_bridge_ros2::Ros2Bridge::new(config).await;
 
     let rig = RigHal::new();
-    let mut arora = builder_for(&spec, rig.clone(), store.clone(), &[], None)
+    let mut arora = builder_for(&spec, rig.clone(), store.clone(), &Bundle::default(), None)
         .expect("build the device")
         .with_bridge(Box::new(bridge))
         .build()

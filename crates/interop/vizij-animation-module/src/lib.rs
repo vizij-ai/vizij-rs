@@ -307,6 +307,57 @@ impl AnimationModule {
             .remove_instance(PlayerId(player), InstId(instance)) as u32
     }
 
+    /// Swap the clip `instance` plays on `player` for `clip`, immediately: a
+    /// new instance of it takes the old one's place with the same settings
+    /// (weight, time scale, offset), the updates buffered for the old instance
+    /// apply to the new one at the next step, and the old instance's
+    /// animation is unloaded with every instance of it. The player keeps its
+    /// playhead, speed and loop mode. Returns the new `(AnimId, InstId)`, or
+    /// `None` when `instance` is not on `player` (nothing is loaded then).
+    ///
+    /// Not a declared function: a host that owns an [`AnimationModule`] edits
+    /// its clips in place with it.
+    pub fn replace_instance(
+        &mut self,
+        player: u32,
+        instance: u32,
+        clip: AnimationClip,
+    ) -> Option<(u32, u32)> {
+        let old = self
+            .engine
+            .list_instances(PlayerId(player))
+            .into_iter()
+            .find(|info| info.id == instance)?;
+        let anim = self.load_animation(clip);
+        let new = self
+            .engine
+            .add_instance(PlayerId(player), AnimId(anim), old.cfg)
+            .0;
+        for update in &mut self.pending.instance_updates {
+            if update.inst == InstId(instance) {
+                update.inst = InstId(new);
+            }
+        }
+        self.engine.unload_animation(AnimId(old.animation));
+        Some((anim, new))
+    }
+
+    /// Remove a player and its instances, immediately; its commands still
+    /// buffered are dropped at the next step. Returns whether it existed.
+    ///
+    /// Not a declared function, like [`replace_instance`](Self::replace_instance).
+    pub fn remove_player(&mut self, player: u32) -> bool {
+        self.engine.remove_player(PlayerId(player))
+    }
+
+    /// Unload an animation and every instance of it, immediately. Returns
+    /// whether it was loaded.
+    ///
+    /// Not a declared function, like [`replace_instance`](Self::replace_instance).
+    pub fn unload_animation(&mut self, anim: u32) -> bool {
+        self.engine.unload_animation(AnimId(anim))
+    }
+
     /// One `PlayerState` per player: the engine's derived playback state, the
     /// playhead and full length in nanoseconds (the `dt_ns` time base), and the
     /// speed multiplier.
@@ -713,6 +764,48 @@ mod tests {
             (v1 - 0.5).abs() < 1e-3,
             "expected ~0.5 at t=0.5 s, got {v1}"
         );
+    }
+
+    /// A clip swapped in place: the player keeps its playhead, the new
+    /// instance its predecessor's weight and the updates buffered for it, and
+    /// the old animation is gone.
+    #[test]
+    fn a_replaced_instance_keeps_the_player_and_its_buffered_updates() {
+        let mut a = AnimationModule::new();
+        let anim = a.load_animation(constant_clip("old", "x", 0.25));
+        let player = a.create_player(Some("p".into()));
+        let inst = a.add_instance(player, anim);
+        a.pause(player);
+        a.seek(player, 400_000_000);
+        a.step(0);
+        a.set_weight(player, inst, 0.0); // buffered for the old instance
+
+        let (new_anim, new_inst) = a
+            .replace_instance(player, inst, constant_clip("new", "x", 0.75))
+            .expect("the instance is on the player");
+        assert_ne!(new_anim, anim);
+        assert!(!a.unload_animation(anim), "the old animation is unloaded");
+        assert!(
+            a.step(0).is_empty(),
+            "the weight buffered for the old instance silences the new one"
+        );
+        let time = state_of(&a, player).time_ns;
+        assert!(
+            time.abs_diff(400_000_000) < 1_000,
+            "the playhead stands, at {time} ns"
+        );
+
+        a.set_weight(player, new_inst, 1.0);
+        let out = a.step(0);
+        assert_eq!(as_f32(value_of(&out, "x").expect("x output")), 0.75);
+
+        assert_eq!(
+            a.replace_instance(player, inst, constant_clip("gone", "x", 0.0)),
+            None
+        );
+        assert!(a.remove_player(player));
+        assert!(a.step(0).is_empty());
+        assert!(a.player_states().is_empty());
     }
 
     #[test]

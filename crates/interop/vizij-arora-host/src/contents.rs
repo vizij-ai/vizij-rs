@@ -194,43 +194,50 @@ pub(crate) fn rig_inputs(rig_spec: &Json) -> Vec<RigInput> {
 /// The bundle's `animations`: `[{ id, clip: { id, name, duration, tracks } }]`.
 pub(crate) fn clips(bundle: &Json) -> Vec<Clip> {
     array(bundle.get("animations"))
-        .filter_map(|entry| {
-            let clip = entry.get("clip")?;
-            let id = string(entry, "id").or_else(|| string(clip, "id"))?;
-            let tracks: Vec<ClipTrack> = array(clip.get("tracks"))
-                .filter_map(|track| {
-                    let mut keyframes: Vec<Keyframe> = array(track.get("keyframes"))
-                        .filter_map(|keyframe| {
-                            Some(Keyframe {
-                                time: number(keyframe, "time")?,
-                                value: number(keyframe, "value")?,
-                                interpolation: string(keyframe, "interpolation"),
-                            })
-                        })
-                        .collect();
-                    keyframes.sort_by(|a, b| a.time.total_cmp(&b.time));
-                    Some(ClipTrack {
-                        channel: string(track, "channel")?,
-                        interpolation: string(track, "interpolation"),
-                        keyframes,
+        .filter(|entry| entry.get("clip").is_some())
+        .filter_map(clip)
+        .collect()
+}
+
+/// One clip, read as the bundle reads it: an `animations` entry
+/// (`{ id, clip: { id, name, duration, tracks } }`, the entry's `id` first),
+/// or a clip on its own in the shape [`Clip`] serializes to — what a host
+/// hands back to replace a clip live. `None` without an id.
+pub fn clip(json: &Json) -> Option<Clip> {
+    let clip = json.get("clip").unwrap_or(json);
+    let id = string(json, "id").or_else(|| string(clip, "id"))?;
+    let tracks: Vec<ClipTrack> = array(clip.get("tracks"))
+        .filter_map(|track| {
+            let mut keyframes: Vec<Keyframe> = array(track.get("keyframes"))
+                .filter_map(|keyframe| {
+                    Some(Keyframe {
+                        time: number(keyframe, "time")?,
+                        value: number(keyframe, "value")?,
+                        interpolation: string(keyframe, "interpolation"),
                     })
                 })
                 .collect();
-            let duration = number(clip, "duration").unwrap_or_else(|| {
-                tracks
-                    .iter()
-                    .filter_map(|t| t.keyframes.last())
-                    .map(|k| k.time)
-                    .fold(0.0, f64::max)
-            });
-            Some(Clip {
-                id,
-                name: string(clip, "name"),
-                duration,
-                tracks,
+            keyframes.sort_by(|a, b| a.time.total_cmp(&b.time));
+            Some(ClipTrack {
+                channel: string(track, "channel")?,
+                interpolation: string(track, "interpolation"),
+                keyframes,
             })
         })
-        .collect()
+        .collect();
+    let duration = number(clip, "duration").unwrap_or_else(|| {
+        tracks
+            .iter()
+            .filter_map(|t| t.keyframes.last())
+            .map(|k| k.time)
+            .fold(0.0, f64::max)
+    });
+    Some(Clip {
+        id,
+        name: string(clip, "name"),
+        duration,
+        tracks,
+    })
 }
 
 #[cfg(test)]
@@ -343,6 +350,23 @@ mod tests {
         );
         assert_eq!(clips[1].id, "timed");
         assert_eq!(clips[1].duration, 5.0);
+    }
+
+    /// A clip as [`Clip`] serializes reads back as itself: what a host hands
+    /// back to replace a clip live is what `describe()` gave it.
+    #[test]
+    fn a_clip_on_its_own_reads_back_as_itself() {
+        let bundle = json!({ "animations": [
+            { "id": "wave", "clip": { "name": "Wave", "duration": 2, "tracks": [
+                { "channel": "gaze/x", "interpolation": "step", "keyframes": [
+                    { "time": 0, "value": 0 }, { "time": 2, "value": 1, "interpolation": "linear" },
+                ] },
+            ] } },
+        ] });
+        let parsed = clips(&bundle).remove(0);
+        let alone = serde_json::to_value(&parsed).unwrap();
+        assert_eq!(clip(&alone), Some(parsed));
+        assert_eq!(clip(&json!({ "name": "no id" })), None);
     }
 
     #[test]
