@@ -18,6 +18,9 @@ pub mod face;
 pub mod modules;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod native;
+// The browser module's program control; built natively only for its tests.
+#[cfg(any(target_arch = "wasm32", test))]
+mod programs;
 pub mod view;
 #[cfg(target_arch = "wasm32")]
 pub mod web;

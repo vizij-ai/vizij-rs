@@ -159,6 +159,23 @@ export interface TaskHandle {
   update?: string[];
 }
 
+/**
+ * Where a program stands, as {@link Runtime.programState} reads it: `playing`
+ * — its nodes are in the running graph and write its outputs every step;
+ * `paused` — out of the graph, its outputs holding their last values until it
+ * plays again; `stopped` — out of the graph.
+ */
+export type ProgramState = "playing" | "paused" | "stopped";
+
+/** Options for {@link Runtime.stopProgram}. */
+export interface StopProgramOptions {
+  /** Return each key the program writes to rest: to the value the face
+   * staged for it at load (its neutral pose), or cleared, so every input that
+   * reads it falls back to its own default. Default `false`: the outputs hold
+   * their last values. */
+  resetOutputs?: boolean;
+}
+
 /** A task run's lifecycle status, read off its `status` key. */
 export type RunStatus = "running" | "success" | "failure";
 
@@ -221,8 +238,10 @@ export interface AroraModule {
   wasmBytes: Uint8Array;
 }
 
-/** Options for {@link loadVizij}: the composition, as {@link composeVizij}'s,
- * whether the bundle's neutral pose is staged (default `true`), the speech —
+/** Options for {@link loadVizij}: the composition, as {@link composeVizij}'s
+ * — its `program` is the one playing at load, the others wait for
+ * {@link Runtime.startProgram} — whether the bundle's neutral pose is staged
+ * (default `true`), the speech —
  * `audio` is the playback hook the `say` provider hands its audio to: the
  * page's Web Audio player by default, `false` for a device that plays no
  * speech — and `speechApiUrl` the TTS deployment, and the wasm modules to
@@ -414,6 +433,11 @@ interface WasmVizijRuntime {
   halt(handle_json: string): Promise<string>;
   loadGraph(graph_json: string): Promise<string>;
   applyGraphEdits(edits_json: string): Promise<string>;
+  startProgram(id: string): Promise<unknown>;
+  pauseProgram(id: string): Promise<unknown>;
+  stopProgram(id: string, reset_outputs: boolean): Promise<unknown>;
+  programState(id: string): ProgramState | undefined;
+  setProgram(id: string, graph_json: string): Promise<unknown>;
   setValue(path: string, value_json: string): void;
   writeValues(values_json: string): void;
   readValues(paths: string[]): Record<string, ValueJSON | null>;
@@ -698,6 +722,79 @@ export class Runtime {
       this.inner.step(0);
     }
     return applied.then(() => undefined);
+  }
+
+  /**
+   * Play a program: one of the face's motiongraphs (its ids are
+   * {@link describe}'s `programs`), or a graph {@link setProgram} defined.
+   * Its nodes join the running graph beside the base composition and every
+   * other playing program; the store and the device are untouched. Resolves
+   * once they have joined — at once when it already plays; on a device not
+   * under `run()` a zero-dt step lands the change. Rejects for an unknown id.
+   *
+   * The program the face was loaded with (`loadVizij`'s `program` option,
+   * the bundle's active one by default) already plays.
+   */
+  startProgram(id: string): Promise<void> {
+    return this.landed(this.inner.startProgram(id));
+  }
+
+  /**
+   * Pause a playing program: its nodes leave the running graph and its
+   * outputs hold their last values until {@link startProgram} plays it again
+   * — its stateful nodes (springs, smoothing) then start afresh. Resolves
+   * once applied — at once when it does not play; on a device not under
+   * `run()` a zero-dt step lands the change. Rejects for an unknown id.
+   */
+  pauseProgram(id: string): Promise<void> {
+    return this.landed(this.inner.pauseProgram(id));
+  }
+
+  /**
+   * Stop a program: its nodes leave the running graph. With
+   * `{ resetOutputs: true }` each key it writes returns to rest (see
+   * {@link StopProgramOptions}) — also when it was already paused or
+   * stopped. Resolves once applied; on a device not under `run()` a zero-dt
+   * step lands the change. Rejects for an unknown id.
+   */
+  stopProgram(id: string, options?: StopProgramOptions): Promise<void> {
+    return this.landed(this.inner.stopProgram(id, options?.resetOutputs ?? false));
+  }
+
+  /**
+   * Where a program stands, `undefined` for an id the device does not know.
+   * It reads the latest request at once; the graph change lands at the next
+   * step. A {@link loadGraph} sets every program from the graph it loads: a
+   * program plays when that graph holds its nodes (a {@link composeVizij}
+   * composition that selected it), and is otherwise out of the graph.
+   */
+  programState(id: string): ProgramState | undefined {
+    return this.inner.programState(id);
+  }
+
+  /**
+   * Give a program a graph — define it under a new `id`, or replace the
+   * graph of an existing one, the face's motiongraphs included. A playing
+   * program changes in place: the nodes the new graph no longer has leave the
+   * running graph, the others are upserted, and a node it keeps (same id)
+   * keeps its runtime state; the store keeps every value. A program that does
+   * not play keeps its state and plays the new graph when started. Resolves
+   * once applied — at once when it does not play; on a device not under
+   * `run()` a zero-dt step lands the change. Rejects, changing nothing, when
+   * the graph does not parse.
+   */
+  setProgram(id: string, graph: GraphSpecInput): Promise<void> {
+    const json = typeof graph === "string" ? graph : JSON.stringify(graph);
+    return this.landed(this.inner.setProgram(id, json));
+  }
+
+  /** A graph change's promise, the change landed by a zero-dt step on a
+   * device not under `run()`. */
+  private landed(change: Promise<unknown>): Promise<void> {
+    if (!this.inner.running) {
+      this.inner.step(0);
+    }
+    return change.then(() => undefined);
   }
 
   /** Write one store key. Accepts any `ValueInput` shorthand. */

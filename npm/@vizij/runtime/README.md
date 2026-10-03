@@ -50,6 +50,35 @@ poses and their groups, the rig's inputs with their ranges and defaults, the
 animation clips, and the bundle's metadata as authored (`speechConfig`,
 `activeMotionGraphId`, …) — everything a page builds its controls from.
 
+### Programs
+
+A Vizij's programs are the motiongraphs its bundle carries (`describe(glb)`
+lists their ids). The one `loadVizij`'s `program` option selects — the
+bundle's active program by default — plays from load; any of them plays,
+pauses and stops while the device runs, several at once, and a page can define
+its own:
+
+```ts
+await quori.startProgram("authoring.motiongraph.main"); // beside the one already playing
+quori.programState("authoring.motiongraph.main");        // "playing" | "paused" | "stopped"
+await quori.pauseProgram("authoring.motiongraph.main");  // outputs hold their last values
+await quori.stopProgram("authoring.motiongraph.program.1", { resetOutputs: true }); // outputs back to rest
+
+await quori.setProgram("editor", graphSpec); // define a program, or replace a program's graph
+await quori.startProgram("editor");
+await quori.setProgram("editor", editedSpec); // a playing program changes in place
+```
+
+A playing program's nodes are part of the device's one running graph, beside
+the base composition; starting, pausing, stopping and replacing edit that
+graph in place, so the face is not reloaded and the store keeps every other
+value. A replaced program keeps the runtime state of the nodes its new graph
+keeps; a paused program plays again from fresh node state. `resetOutputs`
+returns each key the program writes to the value the face staged for it at
+load (its neutral pose), or clears it, so every input that reads it falls back
+to its own default. Each call resolves once its change has landed, at the next
+step.
+
 `startRuntime(graphSpec)` gives a device with no Vizij — a graph on a store,
 nothing drawn — for a bench or a graph run in Node; every `Runtime` method
 works on it.

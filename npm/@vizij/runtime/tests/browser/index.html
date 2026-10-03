@@ -100,6 +100,12 @@
     spawnSkill: (id, name, args) => devices.get(id).spawnSkill(name, args),
     runStatus: (value) => vizij.runStatus(value),
     halt: (id, handle) => devices.get(id).halt(handle),
+    step: (id, dtMs) => devices.get(id).step(dtMs),
+    startProgram: (id, program) => devices.get(id).startProgram(program),
+    pauseProgram: (id, program) => devices.get(id).pauseProgram(program),
+    stopProgram: (id, program, options) => devices.get(id).stopProgram(program, options),
+    setProgram: (id, program, graph) => devices.get(id).setProgram(program, graph),
+    programState: (id, program) => devices.get(id).programState(program),
     place: (id, rect) => vizij.placeVizij(id, rect),
     ready: (id) => vizij.ready(id),
     unload(id) {
