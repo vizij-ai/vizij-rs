@@ -42,7 +42,7 @@ use vizij_arora_store::BlackboardStore;
 use wasm_bindgen::prelude::*;
 
 use crate::face::{self, FaceConfig, LoadedFace};
-use crate::modules::animation::Clips;
+use crate::modules::animation::Animations;
 use crate::view::meta::FaceMeta;
 use crate::view::{self, FaceAssets, Fit, Picked, Picks, ViewEvent, ViewEvents, ViewOptions};
 
@@ -187,7 +187,7 @@ pub fn load_vizij(
     }
     let speech = config.speech.as_ref().map(|build| build());
     let guests = parse_modules(modules)?;
-    let (builder, function_modules, clips) =
+    let (builder, function_modules, animations) =
         face::builder_with_guests(&spec, rig.clone(), store, &meta.bundle, speech, guests)
             .ok_or_else(|| {
                 JsValue::from_str("the composed graph does not encode (see the console)")
@@ -212,7 +212,7 @@ pub fn load_vizij(
         inner: AroraWeb::from(arora),
         caller,
         function_modules,
-        clips,
+        animations,
     })
 }
 
@@ -292,10 +292,10 @@ pub fn memory_bytes() -> f64 {
 /// elements: [{ id, name, kind, material, morphTargets }], animatables:
 /// { <uuid>: { node, feature } }, graphs: [{ kind }], programs: [id],
 /// programLabels: { <id>: label }, activeProgramId, neutralInputs, poses,
-/// poseGroups, rigInputs, clips, metadata }` — what a page needs to build its
-/// controls and name the face's paths. `poses`, `poseGroups`, `rigInputs` and
-/// `clips` are [`vizij_arora_host::contents`]'s types; `metadata` is the
-/// bundle's own, as authored.
+/// poseGroups, rigInputs, animations, metadata }` — what a page needs to build
+/// its controls and name the face's paths. `poses`, `poseGroups`, `rigInputs`
+/// and `animations` are [`vizij_arora_host::contents`]'s types; `metadata` is
+/// the bundle's own, as authored.
 #[wasm_bindgen]
 pub fn describe(glb: &[u8]) -> Result<JsValue, JsValue> {
     let meta = FaceMeta::from_glb_bytes(glb).map_err(|e| JsValue::from_str(&format!("{e:#}")))?;
@@ -346,7 +346,7 @@ fn describe_json(meta: &FaceMeta) -> serde_json::Value {
         "poses": meta.bundle.poses,
         "poseGroups": meta.bundle.pose_groups,
         "rigInputs": meta.bundle.rig_inputs,
-        "clips": meta.bundle.clips,
+        "animations": meta.bundle.animations,
         "metadata": meta.bundle.metadata,
     })
 }
@@ -369,8 +369,8 @@ pub struct VizijRuntime {
     /// function id -> module id over the host modules, so a call can name
     /// just the function.
     function_modules: HashMap<Uuid, Uuid>,
-    /// The clips loaded into the device's animation module.
-    clips: Clips,
+    /// The animations loaded into the device's animation module.
+    animations: Animations,
 }
 
 #[wasm_bindgen]
@@ -392,7 +392,7 @@ impl VizijRuntime {
         };
         parse_spec(&spec).map_err(|e| JsValue::from_str(&e))?;
         let guests = parse_modules(modules)?;
-        let (builder, function_modules, clips) = face::builder_with_guests(
+        let (builder, function_modules, animations) = face::builder_with_guests(
             &spec,
             RigHal::new(),
             BlackboardStore::new(),
@@ -412,7 +412,7 @@ impl VizijRuntime {
             inner: AroraWeb::from(arora),
             caller,
             function_modules,
-            clips,
+            animations,
         })
     }
 
@@ -648,37 +648,38 @@ impl VizijRuntime {
         self.inner.drain_changes()
     }
 
-    /// The clips loaded into the device's animation module, in load order —
-    /// the Vizij's own, then those set since — as `[{ id, name, duration,
-    /// player, instance }]`: `duration` in seconds, `player` the clip's own
-    /// player and `instance` its instance on it, what the module's transport
-    /// functions take. A clip loads silent (its instance at weight 0) and
-    /// stopped at its start.
-    pub fn clips(&self) -> Result<JsValue, JsValue> {
-        to_js(self.clips.list())
+    /// The animations loaded into the device's animation module, in load
+    /// order — the Vizij's own, then those set since — as `[{ id, name,
+    /// duration, player, instance }]`: `duration` in seconds, `player` the
+    /// animation's own player and `instance` its instance on it, what the
+    /// module's transport functions take. An animation loads silent (its
+    /// instance at weight 0) and stopped at its start.
+    pub fn animations(&self) -> Result<JsValue, JsValue> {
+        to_js(self.animations.list())
     }
 
-    /// Load a clip, or replace the loaded clip of its id, at once: `clip_json`
-    /// is a clip as [`describe`] lists them (`{ id, name, duration, tracks }`)
-    /// or a bundle `animations` entry (`{ id, clip }`), its tracks' channels
-    /// resolved to store keys through the Vizij's rig. Returns the clip as
-    /// loaded (as [`clips`](Self::clips) lists it). A replaced clip keeps its
-    /// player — playhead, speed, loop mode — and its weight, so a playing
-    /// clip plays on with the new tracks.
-    #[wasm_bindgen(js_name = setClip)]
-    pub fn set_clip(&mut self, clip_json: &str) -> Result<JsValue, JsValue> {
-        let json: serde_json::Value = serde_json::from_str(clip_json)
-            .map_err(|e| JsValue::from_str(&format!("clip is not JSON: {e}")))?;
-        let clip = vizij_arora_host::contents::clip(&json)
-            .ok_or_else(|| JsValue::from_str("a clip needs an id"))?;
-        to_js(&self.clips.set(&clip))
+    /// Load an animation, or replace the loaded animation of its id, at once:
+    /// `animation_json` is an animation as [`describe`] lists them
+    /// (`{ id, name, duration, tracks }`) or a bundle `animations` entry
+    /// (`{ id, clip }`), its tracks' channels resolved to store keys through
+    /// the Vizij's rig. Returns the animation as loaded (as
+    /// [`animations`](Self::animations) lists it). A replaced animation keeps
+    /// its player — playhead, speed, loop mode — and its weight, so a playing
+    /// animation plays on with the new tracks.
+    #[wasm_bindgen(js_name = setAnimation)]
+    pub fn set_animation(&mut self, animation_json: &str) -> Result<JsValue, JsValue> {
+        let json: serde_json::Value = serde_json::from_str(animation_json)
+            .map_err(|e| JsValue::from_str(&format!("animation is not JSON: {e}")))?;
+        let animation = vizij_arora_host::contents::animation(&json)
+            .ok_or_else(|| JsValue::from_str("an animation needs an id"))?;
+        to_js(&self.animations.set(&animation))
     }
 
-    /// Unload the clip `id` and its player, at once; its keys keep the
+    /// Unload the animation `id` and its player, at once; its keys keep the
     /// values it last wrote. Returns whether it was loaded.
-    #[wasm_bindgen(js_name = removeClip)]
-    pub fn remove_clip(&mut self, id: &str) -> bool {
-        self.clips.remove(id)
+    #[wasm_bindgen(js_name = removeAnimation)]
+    pub fn remove_animation(&mut self, id: &str) -> bool {
+        self.animations.remove(id)
     }
 }
 

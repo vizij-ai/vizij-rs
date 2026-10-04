@@ -4,6 +4,15 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [4.0.0] - 2026-10-05
+
+### Changed
+
+- **Breaking:** built on vizij-arora-host 5. The skill contracts re-exported
+  here (`speech::{say, Say}`, `viseme::{play_viseme, PlayViseme}`,
+  `gaze::{look_at, LookAt}`) are vizij-arora-host 5's types, so they do not
+  unify with those of a crate built on vizij-arora-host 4.
+
 ## [3.0.0] - 2026-09-28
 
 ### Changed

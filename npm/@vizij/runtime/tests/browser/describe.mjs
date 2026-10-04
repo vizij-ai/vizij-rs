@@ -1,6 +1,7 @@
 // describe(glb) on a page reads what Quori's bundle carries for an app: its
-// poses and pose groups, its rig inputs, its programs' labels, its clips and
-// its metadata. Toasty's bundle declares no poses or clips, and reads empty.
+// poses and pose groups, its rig inputs, its programs' labels, its
+// animations and its metadata. Toasty's bundle declares no poses or
+// animations, and reads empty.
 // Needs `VIZIJ_FIXTURES`; skips without.
 import assert from "node:assert/strict";
 import { FIXTURES, open } from "./common.mjs";
@@ -68,23 +69,23 @@ try {
   });
   assert.equal(quori.activeProgramId, "authoring.motiongraph.program.1");
 
-  // Clips: ids, names, durations, tracks of time-ordered keyframes.
+  // Animations: ids, names, durations, tracks of time-ordered keyframes.
   assert.deepEqual(
-    quori.clips.map((c) => [c.id, c.name, c.duration, c.tracks.length]),
+    quori.animations.map((a) => [a.id, a.name, a.duration, a.tracks.length]),
     [
       ["authoring.timeline.clip.1", "Nonesense", 5, 4],
       ["authoring.timeline.main", "Stages", 15, 5],
     ],
   );
-  const gaze = quori.clips[0].tracks[0];
+  const gaze = quori.animations[0].tracks[0];
   assert.equal(gaze.channel, "gaze/left_right");
   assert.equal(gaze.interpolation, "linear");
   assert.equal(gaze.keyframes.length, 4);
   assert.deepEqual(gaze.keyframes[0], { time: 0, value: -0.04, interpolation: "linear" });
-  for (const clip of quori.clips) {
-    for (const track of clip.tracks) {
+  for (const animation of quori.animations) {
+    for (const track of animation.tracks) {
       const times = track.keyframes.map((k) => k.time);
-      assert.deepEqual(times, [...times].sort((a, b) => a - b), `${clip.id}/${track.channel}`);
+      assert.deepEqual(times, [...times].sort((a, b) => a - b), `${animation.id}/${track.channel}`);
     }
   }
 
@@ -94,17 +95,18 @@ try {
   assert.equal(quori.metadata.speechConfig.voice, "Ruth");
   assert.equal(quori.metadata.speechConfig.visemeGroupId, "default");
 
-  // A bundle without poses, clips or labelled programs reads empty, not absent.
+  // A bundle without poses, animations or labelled programs reads empty, not
+  // absent.
   assert.deepEqual(toasty.poses, []);
   assert.deepEqual(toasty.poseGroups, []);
-  assert.deepEqual(toasty.clips, []);
+  assert.deepEqual(toasty.animations, []);
   assert.deepEqual(toasty.programLabels, {});
   assert.ok(toasty.rigInputs.length > 0);
   assert.equal(toasty.metadata.faceId, toasty.faceId);
 
   console.log(
     `@vizij/runtime browser describe: ok (${quori.poses.length} poses, ` +
-      `${quori.rigInputs.length} rig inputs, ${quori.clips.length} clips)`,
+      `${quori.rigInputs.length} rig inputs, ${quori.animations.length} animations)`,
   );
 } catch (e) {
   console.error(logs.slice(-30).join("\n"));

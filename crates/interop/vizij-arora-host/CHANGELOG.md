@@ -4,15 +4,23 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [4.2.0] - 2026-10-03
+## [5.0.0] - 2026-10-04
+
+### Changed
+
+- **Breaking:** the bundle's authored animations are `contents::Animation`
+  and `contents::AnimationTrack`, held in `Bundle::animations` (serialized
+  `animations`) — named as the bundle and Semio Studio name them. They
+  replace `contents::Clip`, `contents::ClipTrack` and `Bundle::clips`;
+  `Keyframe` keeps its name.
 
 ### Added
 
-- `contents::clip` reads one clip: a bundle `animations` entry, or a clip in
-  the shape `Clip` serializes to — what a host hands back to replace a clip
-  live.
-- `Bundle::channel_keys` resolves a clip track's channel to the store key it
-  drives on the face (`ChannelKeys::key`): the rig input at
+- `contents::animation` reads one animation: a bundle `animations` entry, or
+  an animation in the shape `Animation` serializes to — what a host hands
+  back to replace an animation live.
+- `Bundle::channel_keys` resolves an animation track's channel to the store
+  key it drives on the face (`ChannelKeys::key`): the rig input at
   `<rig prefix><channel>`, a rig input path as is, an input by the name the
   rig's node gives it, else the prefixed path.
 
