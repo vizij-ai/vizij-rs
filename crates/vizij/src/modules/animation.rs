@@ -14,13 +14,13 @@
 //! players. Each closure reads its arguments by parameter id: the order a
 //! caller sends them in carries no meaning.
 //!
-//! A face's clips (its bundle's `animations`) load into that engine when the
-//! device is built ([`host_module_with_clips`]): each its own player, playing
-//! one instance of it, every track keyed by the store key its channel names
-//! through the face's rig. A loaded clip is silent — its instance has no
-//! weight — and stopped at its start; playing it is the transport's (the
-//! declared functions), which gives the instance weight. [`Clips`] lists them
-//! and edits them in place.
+//! A face's animations (its bundle's `animations`) load into that engine when
+//! the device is built ([`host_module_with_animations`]): each its own player,
+//! playing one instance of it, every track keyed by the store key its channel
+//! names through the face's rig. A loaded animation is silent — its instance
+//! has no weight — and stopped at its start; playing it is the transport's
+//! (the declared functions), which gives the instance weight. [`Animations`]
+//! lists them and edits them in place.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -38,32 +38,32 @@ use vizij_animation_module::animation::{self, ids};
 use vizij_animation_module::{
     AnimTrack, AnimationClip, AnimationModule, Keypoint, PlayerState, TrackOutput, TransitionHandle,
 };
-use vizij_arora_host::contents::{Clip, ClipTrack};
+use vizij_arora_host::contents::{Animation, AnimationTrack};
 use vizij_arora_host::{Bundle, ChannelKeys};
 
 /// A registered function's body: the call's arguments in, its return out.
 type Body = Box<dyn FnMut(&Call) -> Result<Value, CallError>>;
 
 /// The animation module as a host module over an engine of its own: every
-/// declared function, dispatched in-process under its declared id. No clip is
-/// loaded.
+/// declared function, dispatched in-process under its declared id. No
+/// animation is loaded.
 pub fn host_module() -> HostModule {
     host_module_over(Rc::new(RefCell::new(AnimationModule::new())))
 }
 
-/// [`host_module`] with `bundle`'s clips loaded into its engine, and the
+/// [`host_module`] with `bundle`'s animations loaded into its engine, and the
 /// handle that lists and edits them.
-pub fn host_module_with_clips(bundle: &Bundle) -> (HostModule, Clips) {
+pub fn host_module_with_animations(bundle: &Bundle) -> (HostModule, Animations) {
     let state = Rc::new(RefCell::new(AnimationModule::new()));
-    let mut clips = Clips {
+    let mut animations = Animations {
         module: state.clone(),
         keys: bundle.channel_keys(),
         loaded: Vec::new(),
     };
-    for clip in &bundle.clips {
-        clips.set(clip);
+    for authored in &bundle.animations {
+        animations.set(authored);
     }
-    (host_module_over(state), clips)
+    (host_module_over(state), animations)
 }
 
 /// The host module dispatching every declared function to `state`.
@@ -215,62 +215,66 @@ fn host_module_over(state: Rc<RefCell<AnimationModule>>) -> HostModule {
         .build()
 }
 
-// --- The face's clips ----------------------------------------------------------
+// --- The face's animations ---------------------------------------------------
 
-/// A clip loaded into a device's animation engine: what a transport plays it
-/// by. Serializes in camelCase.
+/// An animation loaded into a device's animation engine: what a transport
+/// plays it by. Serializes in camelCase.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LoadedClip {
-    /// The clip's id in the bundle.
+pub struct LoadedAnimation {
+    /// The animation's id in the bundle.
     pub id: String,
     pub name: Option<String>,
     /// In seconds.
     pub duration: f64,
-    /// The player the clip plays on, its own: `play`, `pause`, `stop`,
+    /// The player the animation plays on, its own: `play`, `pause`, `stop`,
     /// `seek`, `set_speed` and `set_loop` take it, and its `PlayerState`
     /// carries it.
     pub player: u32,
-    /// The clip's instance on its player: `set_weight` takes it. Weight 0
-    /// (as loaded) silences the clip; any other weight lets it write its
-    /// keys. Changes when the clip is edited.
+    /// The animation's instance on its player: `set_weight` takes it.
+    /// Weight 0 (as loaded) silences the animation; any other weight lets it
+    /// write its keys. Changes when the animation is edited.
     pub instance: u32,
     #[serde(skip)]
     anim: u32,
 }
 
-/// The clips loaded into one device's animation engine, in load order: the
-/// face's own, then those added since. Edits apply to the engine at once, so
-/// between two steps: on the thread the device steps on.
-pub struct Clips {
+/// The animations loaded into one device's animation engine, in load order:
+/// the face's own, then those added since. Edits apply to the engine at once,
+/// so between two steps: on the thread the device steps on.
+pub struct Animations {
     module: Rc<RefCell<AnimationModule>>,
     keys: ChannelKeys,
-    loaded: Vec<LoadedClip>,
+    loaded: Vec<LoadedAnimation>,
 }
 
-impl Clips {
-    /// The loaded clips, in load order.
-    pub fn list(&self) -> &[LoadedClip] {
+impl Animations {
+    /// The loaded animations, in load order.
+    pub fn list(&self) -> &[LoadedAnimation] {
         &self.loaded
     }
 
-    /// Load `clip`, or replace the loaded clip of its id, and return it as
-    /// loaded. A new clip gets a player of its own and loads silent and
-    /// stopped at its start (both at the next step). A replaced clip keeps
-    /// its player — its playhead, speed, loop mode — and its instance's
-    /// weight: playing, it plays on with the new tracks.
-    pub fn set(&mut self, clip: &Clip) -> LoadedClip {
-        let converted = module_clip(clip, &self.keys);
+    /// Load `animation`, or replace the loaded animation of its id, and
+    /// return it as loaded. A new animation gets a player of its own and
+    /// loads silent and stopped at its start (both at the next step). A
+    /// replaced animation keeps its player — its playhead, speed, loop mode —
+    /// and its instance's weight: playing, it plays on with the new tracks.
+    pub fn set(&mut self, animation: &Animation) -> LoadedAnimation {
+        let converted = module_animation(animation, &self.keys);
         let mut module = self.module.borrow_mut();
-        if let Some(index) = self.loaded.iter().position(|loaded| loaded.id == clip.id) {
+        if let Some(index) = self
+            .loaded
+            .iter()
+            .position(|loaded| loaded.id == animation.id)
+        {
             let loaded = &mut self.loaded[index];
             if let Some((anim, instance)) =
                 module.replace_instance(loaded.player, loaded.instance, converted.clone())
             {
                 loaded.anim = anim;
                 loaded.instance = instance;
-                loaded.name = clip.name.clone();
-                loaded.duration = clip.duration;
+                loaded.name = animation.name.clone();
+                loaded.duration = animation.duration;
                 return loaded.clone();
             }
             // Its instance went out from under it (a caller removed it
@@ -280,14 +284,14 @@ impl Clips {
             module.remove_player(stale.player);
         }
         let anim = module.load_animation(converted);
-        let player = module.create_player(Some(clip.id.clone()));
+        let player = module.create_player(Some(animation.id.clone()));
         let instance = module.add_instance(player, anim);
         module.set_weight(player, instance, 0.0);
         module.stop(player);
-        let loaded = LoadedClip {
-            id: clip.id.clone(),
-            name: clip.name.clone(),
-            duration: clip.duration,
+        let loaded = LoadedAnimation {
+            id: animation.id.clone(),
+            name: animation.name.clone(),
+            duration: animation.duration,
             player,
             instance,
             anim,
@@ -296,8 +300,8 @@ impl Clips {
         loaded
     }
 
-    /// Unload the clip `id` and its player. Its keys keep the values it last
-    /// wrote. Returns whether it was loaded.
+    /// Unload the animation `id` and its player. Its keys keep the values it
+    /// last wrote. Returns whether it was loaded.
     pub fn remove(&mut self, id: &str) -> bool {
         let Some(index) = self.loaded.iter().position(|loaded| loaded.id == id) else {
             return false;
@@ -310,29 +314,32 @@ impl Clips {
     }
 }
 
-/// `clip` as the animation module's [`AnimationClip`]: each track keyed by
-/// the store key its channel names (`keys`), its keyframes stamped over the
-/// clip's duration, and each segment timed as its left keyframe's
+/// `animation` as the animation module's [`AnimationClip`]: each track keyed
+/// by the store key its channel names (`keys`), its keyframes stamped over the
+/// animation's duration, and each segment timed as its left keyframe's
 /// interpolation says (the track's when the keyframe says none): `linear`
 /// (the default), `step` (the left value held to the next keyframe), or
 /// `cubic` (the engine's default ease — the bundle carries no tangents). A
 /// track without keyframes is left out.
-pub fn module_clip(clip: &Clip, keys: &ChannelKeys) -> AnimationClip {
-    let duration = if clip.duration > 0.0 {
-        clip.duration
+pub fn module_animation(animation: &Animation, keys: &ChannelKeys) -> AnimationClip {
+    let duration = if animation.duration > 0.0 {
+        animation.duration
     } else {
         1.0
     };
     AnimationClip {
-        name: clip.name.clone().unwrap_or_else(|| clip.id.clone()),
-        duration: (clip.duration * 1000.0).round().max(1.0) as u32,
-        tracks: clip
+        name: animation
+            .name
+            .clone()
+            .unwrap_or_else(|| animation.id.clone()),
+        duration: (animation.duration * 1000.0).round().max(1.0) as u32,
+        tracks: animation
             .tracks
             .iter()
             .enumerate()
             .filter(|(_, track)| !track.keyframes.is_empty())
             .map(|(index, track)| {
-                let id = format!("{}:{index}", clip.id);
+                let id = format!("{}:{index}", animation.id);
                 AnimTrack {
                     points: keypoints(track, duration, &id),
                     id,
@@ -344,11 +351,12 @@ pub fn module_clip(clip: &Clip, keys: &ChannelKeys) -> AnimationClip {
     }
 }
 
-/// A track's keyframes as the module's keypoints (see [`module_clip`]): a
+/// A track's keyframes as the module's keypoints (see [`module_animation`]): a
 /// `step` segment gains a keypoint just before its right end, holding the
 /// left value.
-fn keypoints(track: &ClipTrack, duration: f64, track_id: &str) -> Vec<Keypoint> {
-    /// How far before a step's end its held value gives way, in clip-normalized time.
+fn keypoints(track: &AnimationTrack, duration: f64, track_id: &str) -> Vec<Keypoint> {
+    /// How far before a step's end its held value gives way, in
+    /// animation-normalized time.
     const STEP_EDGE: f32 = 1e-5;
     let handle = |x: f32, y: f32| vec![TransitionHandle { x, y }];
     let point = |id: String, stamp: f32, value: f64| Keypoint {
@@ -617,22 +625,23 @@ mod tests {
         assert_eq!(apply["params"]["value_field"], field("value"));
     }
 
-    fn clip(json: serde_json::Value) -> Clip {
-        vizij_arora_host::contents::clip(&json).expect("a clip")
+    fn authored(json: serde_json::Value) -> Animation {
+        vizij_arora_host::contents::animation(&json).expect("an animation")
     }
 
-    /// Tracks key through the face's rig; keyframes stamp over the clip's
-    /// duration; a segment is timed by its left keyframe's interpolation.
+    /// Tracks key through the face's rig; keyframes stamp over the
+    /// animation's duration; a segment is timed by its left keyframe's
+    /// interpolation.
     #[test]
-    fn a_clip_keys_its_tracks_through_the_rig_and_times_its_segments() {
+    fn an_animation_keys_its_tracks_through_the_rig_and_times_its_segments() {
         let bundle = Bundle::from_bundle_json(&serde_json::json!({
             "metadata": { "faceId": "f" },
             "graphs": [{ "kind": "rig", "spec": { "nodes": [
                 { "id": "input_x", "type": "input", "params": { "path": "rig/f/x" } },
             ], "edges": [] } }],
         }));
-        let converted = module_clip(
-            &clip(serde_json::json!({ "id": "c", "duration": 2, "tracks": [
+        let converted = module_animation(
+            &authored(serde_json::json!({ "id": "c", "duration": 2, "tracks": [
                 { "channel": "x", "interpolation": "step", "keyframes": [
                     { "time": 0, "value": 0 },
                     { "time": 1, "value": 1, "interpolation": "linear" },
@@ -669,10 +678,10 @@ mod tests {
         assert_eq!(points[3], (1.0, 0.0, 1, 0));
     }
 
-    /// Clips load silent and stopped, one player each; an edit keeps the
+    /// Animations load silent and stopped, one player each; an edit keeps the
     /// player and swaps the instance; a removal takes the player.
     #[test]
-    fn clips_load_silent_and_are_edited_in_place() {
+    fn animations_load_silent_and_are_edited_in_place() {
         let bundle = Bundle::from_bundle_json(&serde_json::json!({ "animations": [
             { "id": "a", "clip": { "duration": 1, "tracks": [
                 { "channel": "a/x", "keyframes": [{ "time": 0, "value": 1 }] },
@@ -681,16 +690,16 @@ mod tests {
                 { "channel": "b/x", "keyframes": [{ "time": 0, "value": 1 }] },
             ] } },
         ] }));
-        let (module, mut clips) = host_module_with_clips(&bundle);
+        let (module, mut animations) = host_module_with_animations(&bundle);
         let mut device = arora::Arora::builder()
             .with_data_store(Box::new(BlackboardStore::new()))
             .with_host_module(module)
             .build()
             .expect("build arora");
-        let loaded: Vec<&str> = clips.list().iter().map(|c| c.id.as_str()).collect();
+        let loaded: Vec<&str> = animations.list().iter().map(|a| a.id.as_str()).collect();
         assert_eq!(loaded, ["a", "b"]);
-        let a = clips.list()[0].clone();
-        assert_ne!(a.player, clips.list()[1].player, "a player each");
+        let a = animations.list()[0].clone();
+        assert_ne!(a.player, animations.list()[1].player, "a player each");
 
         let step = |device: &mut arora::Arora| {
             call(
@@ -721,7 +730,7 @@ mod tests {
         );
         assert_eq!(outputs(step(&mut device)), 1, "weighted, it writes");
 
-        let edited = clips.set(&clip(
+        let edited = animations.set(&authored(
             serde_json::json!({ "id": "a", "duration": 3, "tracks": [
             { "channel": "a/y", "keyframes": [{ "time": 0, "value": 2 }] },
         ] }),
@@ -735,10 +744,10 @@ mod tests {
             "the new tracks play: {out}"
         );
 
-        assert!(clips.remove("b"));
-        assert!(!clips.remove("b"));
-        let added = clips.set(&clip(serde_json::json!({ "id": "c", "tracks": [] })));
-        assert_eq!(clips.list().len(), 2);
+        assert!(animations.remove("b"));
+        assert!(!animations.remove("b"));
+        let added = animations.set(&authored(serde_json::json!({ "id": "c", "tracks": [] })));
+        assert_eq!(animations.list().len(), 2);
         assert_eq!(added.duration, 0.0);
         assert_eq!(player_count(&mut device), 2);
     }

@@ -1,12 +1,12 @@
 //! The parts of a face's `VIZIJ_bundle` an app reads to build its controls:
 //! the poses and the groups they sort into, the rig's inputs with their
-//! ranges, and the authored animation clips. [`Bundle`](crate::Bundle) holds
+//! ranges, and the authored animations. [`Bundle`](crate::Bundle) holds
 //! them typed, parsed from the bundle once.
 //!
 //! Each type serializes in camelCase, the names `@vizij/runtime`'s
 //! `describe()` returns. Entries missing what identifies them (a pose or a
-//! group without an `id`, a rig input without a `path`, a clip without an id,
-//! a track without a `channel`, a keyframe without a finite `time` and
+//! group without an `id`, a rig input without a `path`, an animation without
+//! an id, a track without a `channel`, a keyframe without a finite `time` and
 //! `value`) are skipped; every other field is optional in the bundle and
 //! `None` when absent.
 
@@ -58,22 +58,22 @@ pub struct RigInput {
     pub max: Option<f64>,
 }
 
-/// An authored animation clip.
+/// An authored animation: an entry of the bundle's `animations`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Clip {
+pub struct Animation {
     pub id: String,
     pub name: Option<String>,
-    /// In seconds: the clip's `duration`, or its last keyframe's time when it
-    /// declares none.
+    /// In seconds: the animation's `duration`, or its last keyframe's time
+    /// when it declares none.
     pub duration: f64,
-    pub tracks: Vec<ClipTrack>,
+    pub tracks: Vec<AnimationTrack>,
 }
 
-/// One animated channel of a [`Clip`].
+/// One animated channel of an [`Animation`].
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ClipTrack {
+pub struct AnimationTrack {
     /// The rig-relative path the track drives (`gaze/left_right`,
     /// `poses/<id>.weight`).
     pub channel: String,
@@ -84,11 +84,11 @@ pub struct ClipTrack {
     pub keyframes: Vec<Keyframe>,
 }
 
-/// A point of a [`ClipTrack`].
+/// A point of an [`AnimationTrack`].
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Keyframe {
-    /// In seconds from the clip's start.
+    /// In seconds from the animation's start.
     pub time: f64,
     pub value: f64,
     pub interpolation: Option<String>,
@@ -192,21 +192,21 @@ pub(crate) fn rig_inputs(rig_spec: &Json) -> Vec<RigInput> {
 }
 
 /// The bundle's `animations`: `[{ id, clip: { id, name, duration, tracks } }]`.
-pub(crate) fn clips(bundle: &Json) -> Vec<Clip> {
+pub(crate) fn animations(bundle: &Json) -> Vec<Animation> {
     array(bundle.get("animations"))
         .filter(|entry| entry.get("clip").is_some())
-        .filter_map(clip)
+        .filter_map(animation)
         .collect()
 }
 
-/// One clip, read as the bundle reads it: an `animations` entry
+/// One animation, read as the bundle reads it: an `animations` entry
 /// (`{ id, clip: { id, name, duration, tracks } }`, the entry's `id` first),
-/// or a clip on its own in the shape [`Clip`] serializes to — what a host
-/// hands back to replace a clip live. `None` without an id.
-pub fn clip(json: &Json) -> Option<Clip> {
-    let clip = json.get("clip").unwrap_or(json);
-    let id = string(json, "id").or_else(|| string(clip, "id"))?;
-    let tracks: Vec<ClipTrack> = array(clip.get("tracks"))
+/// or an animation on its own in the shape [`Animation`] serializes to —
+/// what a host hands back to replace an animation live. `None` without an id.
+pub fn animation(json: &Json) -> Option<Animation> {
+    let body = json.get("clip").unwrap_or(json);
+    let id = string(json, "id").or_else(|| string(body, "id"))?;
+    let tracks: Vec<AnimationTrack> = array(body.get("tracks"))
         .filter_map(|track| {
             let mut keyframes: Vec<Keyframe> = array(track.get("keyframes"))
                 .filter_map(|keyframe| {
@@ -218,23 +218,23 @@ pub fn clip(json: &Json) -> Option<Clip> {
                 })
                 .collect();
             keyframes.sort_by(|a, b| a.time.total_cmp(&b.time));
-            Some(ClipTrack {
+            Some(AnimationTrack {
                 channel: string(track, "channel")?,
                 interpolation: string(track, "interpolation"),
                 keyframes,
             })
         })
         .collect();
-    let duration = number(clip, "duration").unwrap_or_else(|| {
+    let duration = number(body, "duration").unwrap_or_else(|| {
         tracks
             .iter()
             .filter_map(|t| t.keyframes.last())
             .map(|k| k.time)
             .fold(0.0, f64::max)
     });
-    Some(Clip {
+    Some(Animation {
         id,
-        name: string(clip, "name"),
+        name: string(body, "name"),
         duration,
         tracks,
     })
@@ -312,7 +312,7 @@ mod tests {
     }
 
     #[test]
-    fn a_clip_without_a_duration_lasts_to_its_last_keyframe() {
+    fn an_animation_without_a_duration_lasts_to_its_last_keyframe() {
         let bundle = json!({ "animations": [
             { "id": "wave", "clip": { "id": "inner", "name": "Wave", "tracks": [
                 { "channel": "gaze/x", "interpolation": "cubic", "keyframes": [
@@ -323,13 +323,13 @@ mod tests {
                 { "keyframes": [] },
             ] } },
             { "clip": { "id": "timed", "duration": 5, "tracks": [] } },
-            { "id": "no clip" },
+            { "id": "empty" },
         ] });
-        let clips = clips(&bundle);
-        assert_eq!(clips.len(), 2);
-        assert_eq!(clips[0].id, "wave");
-        assert_eq!(clips[0].duration, 2.5);
-        let tracks = &clips[0].tracks;
+        let animations = animations(&bundle);
+        assert_eq!(animations.len(), 2);
+        assert_eq!(animations[0].id, "wave");
+        assert_eq!(animations[0].duration, 2.5);
+        let tracks = &animations[0].tracks;
         assert_eq!(tracks.len(), 1);
         assert_eq!(tracks[0].channel, "gaze/x");
         assert_eq!(tracks[0].interpolation.as_deref(), Some("cubic"));
@@ -348,14 +348,15 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(clips[1].id, "timed");
-        assert_eq!(clips[1].duration, 5.0);
+        assert_eq!(animations[1].id, "timed");
+        assert_eq!(animations[1].duration, 5.0);
     }
 
-    /// A clip as [`Clip`] serializes reads back as itself: what a host hands
-    /// back to replace a clip live is what `describe()` gave it.
+    /// An animation as [`Animation`] serializes reads back as itself: what a
+    /// host hands back to replace an animation live is what `describe()` gave
+    /// it.
     #[test]
-    fn a_clip_on_its_own_reads_back_as_itself() {
+    fn an_animation_on_its_own_reads_back_as_itself() {
         let bundle = json!({ "animations": [
             { "id": "wave", "clip": { "name": "Wave", "duration": 2, "tracks": [
                 { "channel": "gaze/x", "interpolation": "step", "keyframes": [
@@ -363,10 +364,10 @@ mod tests {
                 ] },
             ] } },
         ] });
-        let parsed = clips(&bundle).remove(0);
+        let parsed = animations(&bundle).remove(0);
         let alone = serde_json::to_value(&parsed).unwrap();
-        assert_eq!(clip(&alone), Some(parsed));
-        assert_eq!(clip(&json!({ "name": "no id" })), None);
+        assert_eq!(animation(&alone), Some(parsed));
+        assert_eq!(animation(&json!({ "name": "no id" })), None);
     }
 
     #[test]

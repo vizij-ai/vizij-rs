@@ -158,7 +158,7 @@ vizij-animation-module = { path = "../interop/vizij-animation-module" }
 
 # The speech provider — the say skill's `say` — over the Vizij TTS cloud
 # function: rodio plays it natively, the page's hook in the browser.
-vizij-arora-tts = { version = "4", path = "../interop/vizij-arora-tts" }
+vizij-arora-tts = { version = "5", path = "../interop/vizij-arora-tts" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The native driver (`native`): the stand-alone device on a worker thread under

@@ -34,7 +34,7 @@ import {
 } from "@vizij/wasm-loader";
 import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 import { play as defaultPlay, type Play } from "./audio.js";
-import { ANIMATION_IDS, ANIMATION_PLAYERS_PATH, decodePlayerStates } from "./clips.js";
+import { ANIMATION_IDS, ANIMATION_PLAYERS_PATH, decodePlayerStates } from "./animations.js";
 
 /** A Vizij graph spec, as an object or already-serialized JSON. */
 export type GraphSpecInput = object | string;
@@ -270,34 +270,38 @@ export interface RigInput {
   max: number | null;
 }
 
-/** A point of a {@link ClipTrack}. */
-export interface ClipKeyframe {
-  /** Seconds from the clip's start. */
+/** A point of a {@link AnimationTrack}. */
+export interface AnimationKeyframe {
+  /** Seconds from the animation's start. */
   time: number;
   value: number;
   /** Overrides the track's interpolation for the segment from this point. */
   interpolation: string | null;
 }
 
-/** One animated channel of a {@link Clip}. */
-export interface ClipTrack {
+/** One animated channel of a {@link Animation}. */
+export interface AnimationTrack {
   /** The rig-relative path the track drives (`gaze/left_right`,
    * `poses/<id>.weight`). */
   channel: string;
   /** `linear`, `step` or `cubic`, as authored. */
   interpolation: string | null;
   /** In time order. */
-  keyframes: ClipKeyframe[];
+  keyframes: AnimationKeyframe[];
 }
 
-/** An animation clip a face's bundle carries. */
-export interface Clip {
+/**
+ * An animation a face's bundle carries (an entry of its `animations`).
+ * `@vizij/runtime`'s `Animation`, which shadows the DOM's Web Animations
+ * `Animation` where it is imported.
+ */
+export interface Animation {
   id: string;
   name: string | null;
-  /** Seconds: the clip's declared duration, or its last keyframe's time when
-   * it declares none. */
+  /** Seconds: the animation's declared duration, or its last keyframe's time
+   * when it declares none. */
   duration: number;
-  tracks: ClipTrack[];
+  tracks: AnimationTrack[];
 }
 
 /** What {@link describe} reads from a GLB without loading it. */
@@ -331,7 +335,7 @@ export interface VizijDescription {
   poseGroups: PoseGroup[];
   /** The inputs the rig declares. */
   rigInputs: RigInput[];
-  clips: Clip[];
+  animations: Animation[];
   /** The bundle's `metadata`, as authored — open-ended: `faceId`, the speech
    * configuration (`speechConfig`: `voice`, `visemeGroupId`,
    * `emotionGroupId`, …), `activeMotionGraphId` / `activeMotionGraphIds`,
@@ -339,23 +343,24 @@ export interface VizijDescription {
   metadata: Record<string, unknown> | null;
 }
 
-/** A clip loaded into a Vizij's device, as {@link Runtime.clips} lists it. */
-export interface LoadedClip {
+/** An animation loaded into a Vizij's device, as {@link Runtime.animations}
+ * lists it. */
+export interface LoadedAnimation {
   id: string;
   name: string | null;
   /** Seconds. */
   duration: number;
 }
 
-/** A loaded clip as the wasm lists it: with the player it plays on and its
+/** A loaded animation as the wasm lists it: with the player it plays on and its
  * instance there, what the module's transport functions take. */
-interface WasmLoadedClip extends LoadedClip {
+interface WasmLoadedAnimation extends LoadedAnimation {
   player: number;
   instance: number;
 }
 
-/** A clip's playback, as {@link Runtime.clipState} reads it. */
-export interface ClipState {
+/** An animation's playback, as {@link Runtime.animationState} reads it. */
+export interface AnimationState {
   /** Seconds: the playhead. */
   time: number;
   /** Seconds. */
@@ -370,26 +375,28 @@ export interface ClipState {
   completed: boolean;
 }
 
-/** Options for {@link Runtime.playClip}. */
-export interface PlayClipOptions {
+/** Options for {@link Runtime.playAnimation}. */
+export interface PlayAnimationOptions {
   /** Start from the beginning rather than from the playhead. Default `false`. */
   reset?: boolean;
   /** The speed multiplier to play at, kept from then on (as
-   * {@link Runtime.setClipSpeed}). Default: the clip's current one, 1 at load. */
+   * {@link Runtime.setAnimationSpeed}). Default: the animation's current one,
+   * 1 at load. */
   speed?: number;
 }
 
-/** Options for {@link Runtime.stopClip}. */
-export interface StopClipOptions {
-  /** Return the clip's keys to its first frame before it falls silent.
-   * `false` leaves them where the clip last wrote them. Default `true`. */
+/** Options for {@link Runtime.stopAnimation}. */
+export interface StopAnimationOptions {
+  /** Return the animation's keys to its first frame before it falls silent.
+   * `false` leaves them where the animation last wrote them. Default
+   * `true`. */
   clearOutputs?: boolean;
 }
 
-/** What the transport remembers of a clip the module does not report: its
+/** What the transport remembers of an animation the module does not report: its
  * loop mode, the speed a pause zeroes, whether it was last played — for the
  * player it was set on. */
-interface ClipTransport {
+interface AnimationTransport {
   player: number;
   loop: boolean;
   speed: number;
@@ -419,9 +426,9 @@ interface WasmVizijRuntime {
   readValues(paths: string[]): Record<string, ValueJSON | null>;
   snapshot(): Record<string, ValueJSON>;
   drainChanges(): Record<string, ValueJSON | null>;
-  clips(): WasmLoadedClip[];
-  setClip(clip_json: string): WasmLoadedClip;
-  removeClip(id: string): boolean;
+  animations(): WasmLoadedAnimation[];
+  setAnimation(animation_json: string): WasmLoadedAnimation;
+  removeAnimation(id: string): boolean;
   free(): void;
 }
 
@@ -548,7 +555,7 @@ export function init(input?: InitInput): Promise<void> {
  */
 export class Runtime {
   private inner: WasmVizijRuntime;
-  private transports = new Map<string, ClipTransport>();
+  private transports = new Map<string, AnimationTransport>();
 
   constructor(inner: WasmVizijRuntime) {
     this.inner = inner;
@@ -734,129 +741,130 @@ export class Runtime {
   }
 
   /**
-   * The clips loaded into the device's animation module, in load order: the
-   * Vizij's own (its bundle's `animations`, loaded with the device), then
-   * those {@link setClip} added. A clip writes the keys its tracks' channels
-   * name through the Vizij's rig (`gaze/left_right` drives
+   * The animations loaded into the device's animation module, in load order:
+   * the Vizij's own (its bundle's `animations`, loaded with the device), then
+   * those {@link setAnimation} added. An animation writes the keys its
+   * tracks' channels name through the Vizij's rig (`gaze/left_right` drives
    * `path("gaze/left_right")`) — while it plays, is paused or has completed;
    * it loads silent, stopped at its start, looping at speed 1.
    */
-  clips(): LoadedClip[] {
-    return this.inner.clips().map(({ id, name, duration }) => ({ id, name, duration }));
+  animations(): LoadedAnimation[] {
+    return this.inner.animations().map(({ id, name, duration }) => ({ id, name, duration }));
   }
 
   /**
-   * Load a clip, or replace the loaded clip of its id, at once — the
-   * authoring timeline's live edit. `clip` is in {@link describe}'s `clips`
-   * shape, its channels resolved through the Vizij's rig like the bundle's.
-   * A replaced clip keeps its playback (playhead, speed, loop, playing or
-   * not) and plays on with the new tracks; a new one loads silent and
-   * stopped.
+   * Load an animation, or replace the loaded animation of its id, at once —
+   * the authoring timeline's live edit. `animation` is in
+   * {@link describe}'s `animations` shape, its channels resolved through the
+   * Vizij's rig like the bundle's. A replaced animation keeps its playback
+   * (playhead, speed, loop, playing or not) and plays on with the new tracks;
+   * a new one loads silent and stopped.
    */
-  setClip(clip: Clip): LoadedClip {
-    const { id, name, duration } = this.inner.setClip(JSON.stringify(clip));
+  setAnimation(animation: Animation): LoadedAnimation {
+    const { id, name, duration } = this.inner.setAnimation(JSON.stringify(animation));
     return { id, name, duration };
   }
 
-  /** Unload a clip; its keys keep the values it last wrote. Returns whether
-   * it was loaded. */
-  removeClip(id: string): boolean {
+  /** Unload an animation; its keys keep the values it last wrote. Returns
+   * whether it was loaded. */
+  removeAnimation(id: string): boolean {
     this.transports.delete(id);
-    return this.inner.removeClip(id);
+    return this.inner.removeAnimation(id);
   }
 
   /**
-   * Play a clip from its playhead, or from its start with `reset`. Applied
-   * at the device's next step, which the promise waits for. Its state
-   * reports `completed` once a non-looping clip reaches its end; it holds
+   * Play an animation from its playhead, or from its start with `reset`.
+   * Applied at the device's next step, which the promise waits for. Its state
+   * reports `completed` once a non-looping animation reaches its end; it holds
    * its last pose there until stopped or played again with `reset`.
    */
-  playClip(id: string, options: PlayClipOptions = {}): Promise<void> {
-    const [clip, transport] = this.clipTransport(id);
+  playAnimation(id: string, options: PlayAnimationOptions = {}): Promise<void> {
+    const [animation, transport] = this.animationTransport(id);
     if (options.speed !== undefined) {
       transport.speed = options.speed;
     }
     transport.playing = true;
     transport.epoch += 1;
-    const calls = [this.clipWeight(clip, 1)];
+    const calls = [this.animationWeight(animation, 1)];
     if (options.reset) {
-      calls.push(this.clipCall("seek", clip, { time_ns: { u64: 0 } }));
+      calls.push(this.animationCall("seek", animation, { time_ns: { u64: 0 } }));
     }
-    calls.push(this.clipCall("play", clip));
-    // `play` resumes at speed 1: the clip's own speed follows it.
-    calls.push(this.clipCall("set_speed", clip, { speed: { f32: transport.speed } }));
+    calls.push(this.animationCall("play", animation));
+    // `play` resumes at speed 1: the animation's own speed follows it.
+    calls.push(this.animationCall("set_speed", animation, { speed: { f32: transport.speed } }));
     return Promise.all(calls).then(() => undefined);
   }
 
-  /** Hold a clip's playhead, and its pose. Applied at the next step. */
-  pauseClip(id: string): Promise<void> {
-    const [clip, transport] = this.clipTransport(id);
+  /** Hold an animation's playhead, and its pose. Applied at the next step. */
+  pauseAnimation(id: string): Promise<void> {
+    const [animation, transport] = this.animationTransport(id);
     transport.playing = false;
     transport.epoch += 1;
-    return this.clipCall("pause", clip);
+    return this.animationCall("pause", animation);
   }
 
   /**
-   * Stop a clip: its playhead back to the start, and the clip silent — it
-   * no longer writes its keys. With `clearOutputs` (the default) its keys
-   * first return to its first frame, one step before it falls silent; the
-   * promise resolves once silent. A play before then wins.
+   * Stop an animation: its playhead back to the start, and the animation
+   * silent — it no longer writes its keys. With `clearOutputs` (the default)
+   * its keys first return to its first frame, one step before it falls
+   * silent; the promise resolves once silent. A play before then wins.
    */
-  stopClip(id: string, options: StopClipOptions = {}): Promise<void> {
-    const [clip, transport] = this.clipTransport(id);
+  stopAnimation(id: string, options: StopAnimationOptions = {}): Promise<void> {
+    const [animation, transport] = this.animationTransport(id);
     transport.playing = false;
     const epoch = (transport.epoch += 1);
-    const stopped = this.clipCall("stop", clip);
+    const stopped = this.animationCall("stop", animation);
     if (options.clearOutputs === false) {
-      return Promise.all([stopped, this.clipWeight(clip, 0)]).then(() => undefined);
+      return Promise.all([stopped, this.animationWeight(animation, 0)]).then(() => undefined);
     }
     return stopped.then(() =>
-      transport.epoch === epoch ? this.clipWeight(clip, 0) : undefined,
+      transport.epoch === epoch ? this.animationWeight(animation, 0) : undefined,
     );
   }
 
-  /** Move a clip's playhead to `seconds`. Applied at the next step; a
-   * silent clip moves without writing. */
-  seekClip(id: string, seconds: number): Promise<void> {
-    const [clip] = this.clipTransport(id);
+  /** Move an animation's playhead to `seconds`. Applied at the next step; a
+   * silent animation moves without writing. */
+  seekAnimation(id: string, seconds: number): Promise<void> {
+    const [animation] = this.animationTransport(id);
     const ns = Math.max(0, Math.round(seconds * 1e9));
-    return this.clipCall("seek", clip, { time_ns: { u64: ns } });
+    return this.animationCall("seek", animation, { time_ns: { u64: ns } });
   }
 
-  /** Loop a clip at its end (the default), or stop it there: `false` lets it
-   * complete. Applied at the next step. */
-  setClipLoop(id: string, loop: boolean): Promise<void> {
-    const [clip, transport] = this.clipTransport(id);
+  /** Loop an animation at its end (the default), or stop it there: `false`
+   * lets it complete. Applied at the next step. */
+  setAnimationLoop(id: string, loop: boolean): Promise<void> {
+    const [animation, transport] = this.animationTransport(id);
     transport.loop = loop;
-    return this.clipCall("set_loop", clip, { mode: { str: loop ? "loop" : "once" } });
+    return this.animationCall("set_loop", animation, { mode: { str: loop ? "loop" : "once" } });
   }
 
-  /** Set a clip's speed multiplier: at once while it plays (at the next
+  /** Set an animation's speed multiplier: at once while it plays (at the next
    * step), else from its next play. */
-  setClipSpeed(id: string, speed: number): Promise<void> {
-    const [clip, transport] = this.clipTransport(id);
+  setAnimationSpeed(id: string, speed: number): Promise<void> {
+    const [animation, transport] = this.animationTransport(id);
     transport.speed = speed;
     return transport.playing
-      ? this.clipCall("set_speed", clip, { speed: { f32: speed } })
+      ? this.animationCall("set_speed", animation, { speed: { f32: speed } })
       : Promise.resolve();
   }
 
   /**
-   * A clip's playback as the animation source last reported it — the player
-   * states it writes to `vizij/animations/players` each step, which may lag
-   * a transport call by a step — or `null` for a clip that is not loaded.
+   * An animation's playback as the animation source last reported it — the
+   * player states it writes to `vizij/animations/players` each step, which
+   * may lag a transport call by a step — or `null` for an animation that is
+   * not loaded.
    * Cheap enough to poll every frame.
    */
-  clipState(id: string): ClipState | null {
-    const clip = this.inner.clips().find((loaded) => loaded.id === id);
-    if (!clip) {
+  animationState(id: string): AnimationState | null {
+    const animation = this.inner.animations().find((loaded) => loaded.id === id);
+    if (!animation) {
       return null;
     }
-    const transport = this.transportOf(clip);
+    const transport = this.transportOf(animation);
     const player = decodePlayerStates(
       this.inner.readValues([ANIMATION_PLAYERS_PATH])[ANIMATION_PLAYERS_PATH],
-    ).find((state) => state.player === clip.player);
-    const duration = player && player.duration > 0 ? player.duration : clip.duration;
+    ).find((state) => state.player === animation.player);
+    const duration = player && player.duration > 0 ? player.duration : animation.duration;
     const time = player?.time ?? 0;
     // A non-looping player clamps its playhead at the end, still advancing.
     const completed = !transport.loop && duration > 0 && time >= duration - 1e-3;
@@ -870,48 +878,48 @@ export class Runtime {
     };
   }
 
-  /** The loaded clip `id` and its transport memory; throws for a clip that
-   * is not loaded. */
-  private clipTransport(id: string): [WasmLoadedClip, ClipTransport] {
-    const clip = this.inner.clips().find((loaded) => loaded.id === id);
-    if (!clip) {
-      throw new Error(`@vizij/runtime: no clip ${JSON.stringify(id)} is loaded`);
+  /** The loaded animation `id` and its transport memory; throws for an
+   * animation that is not loaded. */
+  private animationTransport(id: string): [WasmLoadedAnimation, AnimationTransport] {
+    const animation = this.inner.animations().find((loaded) => loaded.id === id);
+    if (!animation) {
+      throw new Error(`@vizij/runtime: no animation ${JSON.stringify(id)} is loaded`);
     }
-    return [clip, this.transportOf(clip)];
+    return [animation, this.transportOf(animation)];
   }
 
-  /** What the transport remembers of `clip`, fresh for a player it has not
-   * seen (a clip loaded anew starts looping at speed 1, stopped). */
-  private transportOf(clip: WasmLoadedClip): ClipTransport {
-    let transport = this.transports.get(clip.id);
-    if (!transport || transport.player !== clip.player) {
-      transport = { player: clip.player, loop: true, speed: 1, playing: false, epoch: 0 };
-      this.transports.set(clip.id, transport);
+  /** What the transport remembers of `animation`, fresh for a player it has
+   * not seen (an animation loaded anew starts looping at speed 1, stopped). */
+  private transportOf(animation: WasmLoadedAnimation): AnimationTransport {
+    let transport = this.transports.get(animation.id);
+    if (!transport || transport.player !== animation.player) {
+      transport = { player: animation.player, loop: true, speed: 1, playing: false, epoch: 0 };
+      this.transports.set(animation.id, transport);
     }
     return transport;
   }
 
-  /** Call one of the module's transport functions on `clip`'s player, with
+  /** Call one of the module's transport functions on `animation`'s player, with
    * its other arguments by parameter name. */
-  private clipCall<F extends keyof typeof ANIMATION_IDS>(
+  private animationCall<F extends keyof typeof ANIMATION_IDS>(
     name: F,
-    clip: WasmLoadedClip,
+    animation: WasmLoadedAnimation,
     args: Record<string, object> = {},
   ): Promise<void> {
     const ids = ANIMATION_IDS[name] as Record<string, string>;
     return this.call({
       id: ids.function,
       args: [
-        { id: ids.player, value: { u32: clip.player } },
+        { id: ids.player, value: { u32: animation.player } },
         ...Object.entries(args).map(([parameter, value]) => ({ id: ids[parameter], value })),
       ],
     }).then(() => undefined);
   }
 
-  /** Give `clip`'s instance `weight`: 0 silences it, 1 lets it write. */
-  private clipWeight(clip: WasmLoadedClip, weight: number): Promise<void> {
-    return this.clipCall("set_weight", clip, {
-      instance: { u32: clip.instance },
+  /** Give `animation`'s instance `weight`: 0 silences it, 1 lets it write. */
+  private animationWeight(animation: WasmLoadedAnimation, weight: number): Promise<void> {
+    return this.animationCall("set_weight", animation, {
+      instance: { u32: animation.instance },
       weight: { f32: weight },
     });
   }
@@ -1041,8 +1049,8 @@ export function memoryBytes(): number {
 }
 
 /** What a GLB declares — its elements, animatables, bounds, graphs and
- * programs, and its bundle's poses, rig inputs, clips and metadata — without
- * loading it. Calls {@link init} if it has not run yet. */
+ * programs, and its bundle's poses, rig inputs, animations and metadata —
+ * without loading it. Calls {@link init} if it has not run yet. */
 export async function describe(
   glb: Uint8Array | ArrayBuffer,
   input?: InitInput,

@@ -48,8 +48,8 @@ piece of it, not a second device.
 | Module | What it is | Where it builds |
 |---|---|---|
 | `view` | the Bevy rendering of a face from its GLB bytes, applying a device's pose each frame; `view::meta` (the bindings and the bundle read from the GLB), `view::snapshot` (offscreen rendering and readback), `view::frames` (rendered frames into the store) | everywhere |
-| `face` | the composition: the GLB's bindings and bundle into one graph spec, folded with `RigHal` + `BlackboardStore` and the modules into an `AroraBuilder` a host may extend (`builder_for`), the bundle's clips loaded into its animation module; the free inputs and what the store says of them (`declare_keys`), the neutral pose, the skills' fragments | everywhere |
-| `modules` | the host modules any Arora loads: `animation` (with a face's clips, `Clips`), `rest` (`reset`), `tts_piper` (feature) | everywhere (Piper native) |
+| `face` | the composition: the GLB's bindings and bundle into one graph spec, folded with `RigHal` + `BlackboardStore` and the modules into an `AroraBuilder` a host may extend (`builder_for`), the bundle's animations loaded into its animation module; the free inputs and what the store says of them (`declare_keys`), the neutral pose, the skills' fragments | everywhere |
+| `modules` | the host modules any Arora loads: `animation` (with a face's animations, `Animations`), `rest` (`reset`), `tts_piper` (feature) | everywhere (Piper native) |
 | `native` | the stand-alone device: the face's Arora on a worker thread under arora's operator flow, the bridges the build adds, the `RuntimeHandle` front ends speak through | every target but the browser |
 | `web` | the browser module behind [`@vizij/runtime`](../../npm/@vizij/runtime/README.md): one App per page (`mount`), a JS-paced Arora per Vizij (`loadVizij`, a `VizijRuntime`), Vizijs as rectangles of the canvas (`placeVizij`), picks, `describe` | `wasm32` |
 | `main.rs`, `open.rs` | the CLI, the window, the terminal operator UI, opening a face by drop or dialog | feature `desktop` (default) |
@@ -76,8 +76,8 @@ device its bytes (`RuntimeHandle::reload`).
 
 - **`view::meta`** reads what Bevy's GLB loader does not surface: the
   per-node `RobotData` extension (the animatables — UUID-identified
-  features) and the scene-root `VIZIJ_bundle` (graphs, poses, clips,
-  metadata). Bevy loads the same GLB for meshes/materials/morphs; the two
+  features) and the scene-root `VIZIJ_bundle` (graphs, poses,
+  animations, metadata). Bevy loads the same GLB for meshes/materials/morphs; the two
   worlds join on the glTF node name.
 - **`face`** composes the bundle's graphs into one spec (node ids namespaced
   per source, store paths shared — the cross-source contract) and runs
@@ -359,7 +359,7 @@ Zenoh backend does not. Run it with `--ignored` to re-measure.
 
 ## Not yet here
 
-The native app is otherwise complete (VIZ-47): the animation module + clip
+The native app is otherwise complete (VIZ-47): the animation module + animation
 transport, the bridges, and `--headless` frames-to-store all landed. The
 operator surface is the arora TUI + the store: an in-window operator panel
 (egui) — the Studio registration prompt where there is no terminal, as on

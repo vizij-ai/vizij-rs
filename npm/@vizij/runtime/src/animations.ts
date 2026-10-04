@@ -1,10 +1,10 @@
 /**
- * What the clip transport of {@link Runtime} speaks to the animation module:
- * the module's declared function, parameter and field ids (its Rust
- * declaration, `animation` in `vizij-animation-module`; `tests/clips.mjs`
- * checks them against the header `@vizij/animation-module` ships), and the
- * decoding of the `[PlayerState]` the composed animation source writes each
- * step.
+ * What the animation transport of {@link Runtime} speaks to the animation
+ * module: the module's declared function, parameter and field ids (its Rust
+ * declaration, `animation` in `vizij-animation-module`;
+ * `tests/animations.mjs` checks them against the header
+ * `@vizij/animation-module` ships), and the decoding of the `[PlayerState]`
+ * the composed animation source writes each step.
  *
  * @module
  */

@@ -60,7 +60,7 @@ const TO_TRACK_ID = "76697a69-6a00-0000-0110-000000000001";
 const TO_DEFAULT_KEY = "76697a69-6a00-0000-0110-000000000002";
 const TO_VALUE = "76697a69-6a00-0000-0110-000000000003";
 
-// --- the ramp clip, in the Arora Value JSON vocabulary -----------------------
+// --- the ramp AnimationClip, in the Arora Value JSON vocabulary --------------
 const field = (id, value) => ({ id, value });
 // Empty timing-handle arrays select the engine's default ease.
 const noHandles = () => ({ structs: { id: TRANSITION_HANDLE_TYPE, elements: [] } });
@@ -107,7 +107,7 @@ const clip = {
 // Each tick: read the runtime's built-in dt (arora/dt, nanoseconds) from the
 // store, call the module's step(dt) through the engine, and write the returned
 // [TrackOutput] to anim/out — the Stage-B shape (the graph drives the
-// animation module; no JS clip pipeline).
+// animation module; no JS animation pipeline).
 const graph = {
   nodes: [
     { id: "dt", type: "input", params: { path: "arora/dt" } },

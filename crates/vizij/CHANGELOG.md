@@ -10,12 +10,12 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Added
 
-- A face's animation clips (its bundle's `animations`) load into the device's
+- A face's animations (its bundle's `animations`) load into the device's
   animation module, each on a player of its own, its tracks writing the rig
-  inputs their channels name. A loaded clip is silent until played: a client
-  plays it through the module's functions (`set_weight` on its instance, then
-  `play`, `pause`, `stop`, `seek`, `set_speed`, `set_loop`), its players in
-  the bundle's order.
+  inputs their channels name. A loaded animation is silent until played: a
+  client plays it through the module's functions (`set_weight` on its
+  instance, then `play`, `pause`, `stop`, `seek`, `set_speed`, `set_loop`),
+  its players in the bundle's order.
 
 ## [0.1.0] - 2026-10-02
 

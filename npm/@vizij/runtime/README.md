@@ -47,7 +47,7 @@ element id the GLB's RobotData declares;
 `describe(glb)` reads what a GLB declares without loading it: its elements,
 animatables, bounds and programs (with their labels), and from its bundle the
 poses and their groups, the rig's inputs with their ranges and defaults, the
-animation clips, and the bundle's metadata as authored (`speechConfig`,
+animations, and the bundle's metadata as authored (`speechConfig`,
 `activeMotionGraphId`, …) — everything a page builds its controls from.
 
 `startRuntime(graphSpec)` gives a device with no Vizij — a graph on a store,
@@ -63,32 +63,38 @@ from the graph's `ExternalFunction` nodes, like the host-linked modules'. A
 guest under a host-linked module's id — the animation module's — is served
 by the host-linked one.
 
-### Clips
+### Animations
 
-A Vizij's animation clips (its bundle's `animations`, what `describe(glb).clips`
-lists) load into its device's animation module with the device, each track
-writing the rig input its channel names (`gaze/left_right` drives
-`quori.path("gaze/left_right")`). A clip loads silent, stopped at its start,
-looping at speed 1; it writes its keys while it plays, is paused or has
+A Vizij's animations (its bundle's `animations`, what
+`describe(glb).animations` lists) load into its device's animation module
+with the device, each track writing the rig input its channel names
+(`gaze/left_right` drives `quori.path("gaze/left_right")`). An animation
+loads silent, stopped at its start, looping at speed 1; it writes its keys while it plays, is paused or has
 completed, and stops writing once stopped.
 
 ```ts
-quori.clips();                                  // [{ id, name, duration }] — seconds
-await quori.playClip(id, { reset: true });      // from the start; { speed } too
-quori.pauseClip(id);                            // holds the pose
-quori.seekClip(id, 1.5);                        // seconds
-quori.setClipLoop(id, false);                   // completes at its end instead of wrapping
-quori.setClipSpeed(id, 2);
-quori.clipState(id);                            // { time, duration, playing, loop, speed, completed }
-quori.stopClip(id, { clearOutputs: true });     // back to its first frame, then silent
-quori.setClip(clip);                            // add, or replace live by id (describe's shape)
-quori.removeClip(id);
+quori.animations();                                  // [{ id, name, duration }] — seconds
+await quori.playAnimation(id, { reset: true });      // from the start; { speed } too
+quori.pauseAnimation(id);                            // holds the pose
+quori.seekAnimation(id, 1.5);                        // seconds
+quori.setAnimationLoop(id, false);                   // completes at its end instead of wrapping
+quori.setAnimationSpeed(id, 2);
+quori.animationState(id);                            // { time, duration, playing, loop, speed, completed }
+quori.stopAnimation(id, { clearOutputs: true });     // back to its first frame, then silent
+quori.setAnimation(animation);                       // add, or replace live by id (describe's shape)
+quori.removeAnimation(id);
 ```
 
 Transport calls are the module's declared functions through `runtime.call`:
 each applies at the device's next step, which its promise waits for.
-`clipState` reads the player states the animation source writes to
+`animationState` reads the player states the animation source writes to
 `vizij/animations/players` each step.
+
+The types are `Animation`, `AnimationTrack` and `AnimationKeyframe` (what
+`describe` lists), `LoadedAnimation`, `AnimationState`,
+`PlayAnimationOptions` and `StopAnimationOptions`. `Animation` is
+`@vizij/runtime`'s: importing it shadows the DOM's Web Animations
+`Animation` in that module.
 
 ### Profiles and mappings
 

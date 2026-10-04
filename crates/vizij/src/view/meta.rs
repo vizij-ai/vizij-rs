@@ -4,8 +4,8 @@
 //! Bevy's loader does not surface: the per-node `RobotData` glTF extension
 //! (the animatables — UUID-identified features the runtime drives) and the
 //! scene-root node's `VIZIJ_bundle` extension (the face's graphs, poses,
-//! clips). The two worlds join on the glTF node name, which Bevy preserves as
-//! the spawned entity's `Name`.
+//! animations). The two worlds join on the glTF node name, which Bevy
+//! preserves as the spawned entity's `Name`.
 
 use std::collections::HashMap;
 
