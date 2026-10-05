@@ -3,8 +3,9 @@
 //! [`animation::header`], the calls through the declaration's own client
 //! stubs over the real buffer ABI — and assert a one-track 0->1 ramp advances,
 //! the player states come back with their instances and weights, a paused
-//! player keeps its speed, a reloaded animation writes its new tracks, and the
-//! animation unloads.
+//! player keeps its speed, a reloaded animation writes its new tracks, the
+//! animation unloads, and the transport (a window, a reversed speed, instance
+//! timing, an anchored start) reaches the guest.
 //!
 //! What it proves is the `arora_call` boundary contract: the guest entry points
 //! the declaration generates and the client stubs it generates agree, arrays of
@@ -21,8 +22,9 @@
 //! ```
 
 use std::path::PathBuf;
+use std::pin::Pin;
 
-use arora_engine::engine::EngineBuilder;
+use arora_engine::engine::{Engine, EngineBuilder};
 use arora_engine::executor::wasm::WebAssemblyExecutor;
 use arora_types::module::low::{Executor, ModuleDefinition};
 use arora_types::value::Value;
@@ -68,9 +70,8 @@ fn sampled(output: &TrackOutput) -> f32 {
     }
 }
 
-#[ignore = "needs the wasm artifact pre-built (a nested cargo build deadlocks on the build lock); run with --ignored after `cargo build -p vizij-animation-module --target wasm32-wasip1`"]
-#[test]
-fn ramp_advances_through_the_wasm_module() {
+/// An engine with the built guest loaded under its declared header.
+fn engine_with_the_guest() -> Pin<Box<Engine>> {
     let mut engine = EngineBuilder::new()
         .add_executor(WebAssemblyExecutor::new().expect("wasm executor"))
         .build();
@@ -89,6 +90,13 @@ fn ramp_advances_through_the_wasm_module() {
             executable: wasm.into_boxed_slice(),
         })
         .expect("load module");
+    engine
+}
+
+#[ignore = "needs the wasm artifact pre-built (a nested cargo build deadlocks on the build lock); run with --ignored after `cargo build -p vizij-animation-module --target wasm32-wasip1`"]
+#[test]
+fn ramp_advances_through_the_wasm_module() {
+    let mut engine = engine_with_the_guest();
 
     // --- setup: load the clip, create a player, attach an instance ----------
     let anim = animation::client::load_animation(&mut engine, ramp_clip()).expect("load_animation");
@@ -99,11 +107,11 @@ fn ramp_advances_through_the_wasm_module() {
 
     // --- step twice by 0.25 s: the ramp advances 0 -> 0.25 -> 0.5 -----------
     let quarter_s = 250_000_000u64;
-    let first = animation::client::step(&mut engine, quarter_s).expect("step");
+    let first = animation::client::step(&mut engine, quarter_s, None).expect("step");
     let first = first.first().expect("one track output");
     assert_eq!(first.track_id, "t0");
     assert_eq!(first.default_key, "node/x");
-    let second = animation::client::step(&mut engine, quarter_s).expect("step");
+    let second = animation::client::step(&mut engine, quarter_s, None).expect("step");
     let second = second.first().expect("one track output");
     assert_eq!(second.default_key, "node/x");
 
@@ -140,7 +148,7 @@ fn ramp_advances_through_the_wasm_module() {
     // --- a paused player keeps the speed it was given -------------------------
     animation::client::set_speed(&mut engine, player, 0.5).expect("set_speed");
     animation::client::pause(&mut engine, player).expect("pause");
-    animation::client::step(&mut engine, quarter_s).expect("step");
+    animation::client::step(&mut engine, quarter_s, None).expect("step");
     let states = animation::client::player_states(&mut engine).expect("player_states");
     assert_eq!((states[0].state.as_str(), states[0].speed), ("paused", 0.5));
 
@@ -154,7 +162,7 @@ fn ramp_advances_through_the_wasm_module() {
     assert!(
         animation::client::reload_animation(&mut engine, anim, reloaded).expect("reload_animation")
     );
-    let outputs = animation::client::step(&mut engine, 0).expect("step");
+    let outputs = animation::client::step(&mut engine, 0, None).expect("step");
     let y = outputs
         .iter()
         .find(|o| o.default_key == "node/y")
@@ -171,4 +179,57 @@ fn ramp_advances_through_the_wasm_module() {
     assert!(animation::client::player_states(&mut engine)
         .expect("player_states")
         .is_empty());
+}
+
+/// The transport exports through the guest: a `once` window held at its end,
+/// a reversed speed, an instance's timing read back, and a start anchored in
+/// the step time.
+#[ignore = "needs the wasm artifact pre-built (a nested cargo build deadlocks on the build lock); run with --ignored after `cargo build -p vizij-animation-module --target wasm32-wasip1`"]
+#[test]
+fn the_transport_reaches_the_wasm_module() {
+    use animation::client;
+    let mut engine = engine_with_the_guest();
+    let anim = client::load_animation(&mut engine, ramp_clip()).expect("load_animation");
+    let player = client::create_player(&mut engine, None).expect("create_player");
+    let instance = client::add_instance(&mut engine, player, anim).expect("add_instance");
+    let state = |engine: &mut Pin<Box<Engine>>| {
+        client::player_states(engine)
+            .expect("player_states")
+            .remove(0)
+    };
+
+    client::set_loop(&mut engine, player, "once".into()).expect("set_loop");
+    client::set_window(&mut engine, player, 0, Some(500_000_000)).expect("set_window");
+    client::step(&mut engine, 750_000_000, None).expect("step");
+    let held = state(&mut engine);
+    assert!(held.ended, "held at the window end");
+    assert_eq!(held.window_end_ns, Some(500_000_000));
+
+    client::set_speed(&mut engine, player, -1.0).expect("set_speed");
+    client::step(&mut engine, 250_000_000, None).expect("step");
+    let reversed = state(&mut engine);
+    assert!(!reversed.ended);
+    assert!(reversed.time_ns.abs_diff(250_000_000) < 1_000);
+
+    client::set_start_offset(&mut engine, player, instance, -100_000_000)
+        .expect("set_start_offset");
+    client::set_time_scale(&mut engine, player, instance, 2.0).expect("set_time_scale");
+    assert_eq!(
+        client::set_time_scale(&mut engine, player, instance, 0.0).expect("set_time_scale"),
+        u32::MAX
+    );
+    client::stop(&mut engine, player).expect("stop");
+    client::step(&mut engine, 0, Some(1_000_000_000)).expect("step");
+    let timed = state(&mut engine);
+    assert!(timed.instances[0].start_offset_ns.abs_diff(-100_000_000) < 1_000);
+    assert_eq!(timed.instances[0].time_scale, 2.0);
+
+    client::set_speed(&mut engine, player, 1.0).expect("set_speed");
+    client::play_at(&mut engine, player, 1_150_000_000).expect("play_at");
+    client::step(&mut engine, 100_000_000, Some(1_100_000_000)).expect("step");
+    assert_eq!(state(&mut engine).state, "stopped", "waits for its start");
+    client::step(&mut engine, 100_000_000, Some(1_200_000_000)).expect("step");
+    let started = state(&mut engine);
+    assert_eq!(started.state, "playing");
+    assert!(started.time_ns.abs_diff(50_000_000) < 1_000);
 }
