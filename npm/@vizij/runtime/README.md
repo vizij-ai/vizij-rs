@@ -65,15 +65,22 @@ by the host-linked one.
 
 ### Animations
 
-A Vizij's animations (its bundle's `animations`, what
-`describe(glb).animations` lists) load into its device's animation module
-with the device, each track writing the rig input its channel names
-(`gaze/left_right` drives `quori.path("gaze/left_right")`). An animation
-loads silent, stopped at its start, looping at speed 1; it writes its keys while it plays, is paused or has
-completed, and stops writing once stopped.
+A device's animations live in its animation module, and every client loads,
+plays and unloads them through the module's declared functions: the
+`Runtime`, a client on a bridge, Semio Studio. Each animation plays on a
+player of its own, named after the animation's id, so any client finds it in
+the player states the animation source writes to `vizij/animations/players`
+each step. A Vizij's own animations (its bundle's `animations`, what
+`describe(glb).animations` lists) load when the face loads, unless
+`loadVizij(id, glb, { animations: false })`; more load at any time. Each
+track writes the rig input its channel names (`gaze/left_right` drives
+`quori.path("gaze/left_right")`). An animation loads silent, stopped at its
+start, looping at speed 1; it writes its keys while it plays, is paused or
+has completed, and stops writing once stopped.
 
 ```ts
-quori.animations();                                  // [{ id, name, duration }] — seconds
+quori.animations();                                  // [{ id, duration }] — seconds; whoever loaded them
+await quori.loadAnimation(animation);                // describe's shape → { id, name, duration }
 await quori.playAnimation(id, { reset: true });      // from the start; { speed } too
 quori.pauseAnimation(id);                            // holds the pose
 quori.seekAnimation(id, 1.5);                        // seconds
@@ -81,14 +88,20 @@ quori.setAnimationLoop(id, false);                   // completes at its end ins
 quori.setAnimationSpeed(id, 2);
 quori.animationState(id);                            // { time, duration, playing, loop, speed, completed }
 quori.stopAnimation(id, { clearOutputs: true });     // back to its first frame, then silent
-quori.setAnimation(animation);                       // add, or replace live by id (describe's shape)
-quori.removeAnimation(id);
+await quori.unloadAnimation(id);                     // its keys keep their last values
 ```
 
-Transport calls are the module's declared functions through `runtime.call`:
-each applies at the device's next step, which its promise waits for.
-`animationState` reads the player states the animation source writes to
-`vizij/animations/players` each step.
+`loadAnimation` sends `load_animation`, `create_player`, `add_instance` (at
+weight 0) and `stop`; loading an id already loaded replaces it in one step,
+keeping the playback the module reports for it — playhead, loop mode, speed,
+weight, and whether it plays, is paused or is stopped — whoever set it: the
+authoring timeline's live edit. `unloadAnimation` sends `remove_player` and
+`unload_animation`. The transport sends `set_weight`, `play`, `pause`,
+`stop`, `seek`, `set_speed` and `set_loop`, and rejects for an id the device
+does not hold. Each call applies at the device's next step, which its
+promise waits for; a load or unload waits for the transport calls in flight
+on its id, and they for it. `animations` and `animationState` read the
+player states.
 
 The types are `Animation`, `AnimationTrack` and `AnimationKeyframe` (what
 `describe` lists), `LoadedAnimation`, `AnimationState`,

@@ -37,12 +37,11 @@ use vizij_arora_behavior::{
     encode_edit_call, encode_load_call, gaze, parse_spec, parse_spec_diff, speech, viseme,
 };
 use vizij_arora_hal::RigHal;
-use vizij_arora_host::ProgramSelect;
+use vizij_arora_host::{ChannelKeys, ProgramSelect};
 use vizij_arora_store::BlackboardStore;
 use wasm_bindgen::prelude::*;
 
 use crate::face::{self, FaceConfig, LoadedFace};
-use crate::modules::animation::Animations;
 use crate::view::meta::FaceMeta;
 use crate::view::{self, FaceAssets, Fit, Picked, Picks, ViewEvent, ViewEvents, ViewOptions};
 
@@ -148,9 +147,11 @@ fn send(event: ViewEvent) -> Result<(), JsValue> {
 /// Show a Vizij under `vizij_id` and start its device: the GLB's bindings and
 /// bundle are read, its graphs composed (`options_json` as
 /// [`compose_vizij`]'s: `graphs`, `program`, `ros4hri`, plus `stageNeutral`,
-/// default `true`, and `speechApiUrl`, the TTS deployment), the device built
-/// over `RigHal` + `BlackboardStore` with the animation module and the
-/// skills, and — given `play`, the page's playback hook
+/// default `true`, `animations`, default `true`, and `speechApiUrl`, the TTS
+/// deployment), the device built over `RigHal` + `BlackboardStore` with the
+/// animation module and the skills, the bundle's animations loaded into it
+/// unless `animations` is `false` ([`face::load_animations`]), and — given
+/// `play`, the page's playback hook
 /// ([`vizij_arora_tts::Config::play`]) — the speech provider, and the scene
 /// queued for the App. `modules` optionally loads Arora wasm modules into
 /// the device's engine as guests: a JS array of `{ headerJson, wasmBytes }`
@@ -187,16 +188,25 @@ pub fn load_vizij(
     }
     let speech = config.speech.as_ref().map(|build| build());
     let guests = parse_modules(modules)?;
-    let (builder, function_modules, animations) =
-        face::builder_with_guests(&spec, rig.clone(), store, &meta.bundle, speech, guests)
-            .ok_or_else(|| {
-                JsValue::from_str("the composed graph does not encode (see the console)")
-            })?;
-    let arora = builder
+    let (builder, function_modules) = face::builder_with_guests(
+        &spec,
+        rig.clone(),
+        store,
+        &meta.bundle.skills,
+        speech,
+        guests,
+    )
+    .ok_or_else(|| JsValue::from_str("the composed graph does not encode (see the console)"))?;
+    let mut arora = builder
         .build()
         .map_err(|e| JsValue::from_str(&format!("arora build failed: {e:?}")))?;
+    if loads_animations(options_json.as_deref()) {
+        face::load_animations(&mut arora, &meta.bundle)
+            .map_err(|e| JsValue::from_str(&format!("loading the Vizij's animations: {e:#}")))?;
+    }
     let caller = arora.caller();
     let rig_prefix = meta.bundle.rig_prefix();
+    let channel_keys = meta.bundle.channel_keys();
     // The bytes move into the App's asset source; the copy wasm-bindgen made
     // from the page's buffer is the only one.
     send(ViewEvent::LoadFace {
@@ -212,7 +222,7 @@ pub fn load_vizij(
         inner: AroraWeb::from(arora),
         caller,
         function_modules,
-        animations,
+        channel_keys,
     })
 }
 
@@ -369,8 +379,8 @@ pub struct VizijRuntime {
     /// function id -> module id over the host modules, so a call can name
     /// just the function.
     function_modules: HashMap<Uuid, Uuid>,
-    /// The animations loaded into the device's animation module.
-    animations: Animations,
+    /// How the Vizij's animation channels name store keys, through its rig.
+    channel_keys: ChannelKeys,
 }
 
 #[wasm_bindgen]
@@ -392,11 +402,11 @@ impl VizijRuntime {
         };
         parse_spec(&spec).map_err(|e| JsValue::from_str(&e))?;
         let guests = parse_modules(modules)?;
-        let (builder, function_modules, animations) = face::builder_with_guests(
+        let (builder, function_modules) = face::builder_with_guests(
             &spec,
             RigHal::new(),
             BlackboardStore::new(),
-            &face::Bundle::default(),
+            &[],
             None,
             guests,
         )
@@ -412,7 +422,7 @@ impl VizijRuntime {
             inner: AroraWeb::from(arora),
             caller,
             function_modules,
-            animations,
+            channel_keys: ChannelKeys::default(),
         })
     }
 
@@ -648,38 +658,28 @@ impl VizijRuntime {
         self.inner.drain_changes()
     }
 
-    /// The animations loaded into the device's animation module, in load
-    /// order — the Vizij's own, then those set since — as `[{ id, name,
-    /// duration, player, instance }]`: `duration` in seconds, `player` the
-    /// animation's own player and `instance` its instance on it, what the
-    /// module's transport functions take. An animation loads silent (its
-    /// instance at weight 0) and stopped at its start.
-    pub fn animations(&self) -> Result<JsValue, JsValue> {
-        to_js(self.animations.list())
-    }
-
-    /// Load an animation, or replace the loaded animation of its id, at once:
+    /// An animation as the animation module's `load_animation` takes it:
     /// `animation_json` is an animation as [`describe`] lists them
     /// (`{ id, name, duration, tracks }`) or a bundle `animations` entry
-    /// (`{ id, clip }`), its tracks' channels resolved to store keys through
-    /// the Vizij's rig. Returns the animation as loaded (as
-    /// [`animations`](Self::animations) lists it). A replaced animation keeps
-    /// its player — playhead, speed, loop mode — and its weight, so a playing
-    /// animation plays on with the new tracks.
-    #[wasm_bindgen(js_name = setAnimation)]
-    pub fn set_animation(&mut self, animation_json: &str) -> Result<JsValue, JsValue> {
+    /// (`{ id, clip }`). Returns `{ id, name, duration, moduleAnimation }`: the
+    /// animation's id, name and duration in seconds, and `moduleAnimation`,
+    /// its `AnimationClip` as an Arora `Value` — each track keyed by the store key
+    /// its channel names through the Vizij's rig, as the Vizij's own
+    /// animations are ([`face::load_animations`]).
+    #[wasm_bindgen(js_name = moduleAnimation)]
+    pub fn module_animation(&self, animation_json: &str) -> Result<JsValue, JsValue> {
         let json: serde_json::Value = serde_json::from_str(animation_json)
             .map_err(|e| JsValue::from_str(&format!("animation is not JSON: {e}")))?;
         let animation = vizij_arora_host::contents::animation(&json)
             .ok_or_else(|| JsValue::from_str("an animation needs an id"))?;
-        to_js(&self.animations.set(&animation))
-    }
-
-    /// Unload the animation `id` and its player, at once; its keys keep the
-    /// values it last wrote. Returns whether it was loaded.
-    #[wasm_bindgen(js_name = removeAnimation)]
-    pub fn remove_animation(&mut self, id: &str) -> bool {
-        self.animations.remove(id)
+        let module_animation: arora_types::value::Value =
+            crate::modules::animation::module_animation(&animation, &self.channel_keys).into();
+        to_js(&serde_json::json!({
+            "id": animation.id,
+            "name": animation.name,
+            "duration": animation.duration,
+            "moduleAnimation": module_animation,
+        }))
     }
 }
 
@@ -803,6 +803,18 @@ fn speech_api_url(json: Option<&str>) -> String {
                 .map(str::to_string)
         })
         .unwrap_or_else(|| vizij_arora_tts::DEFAULT_API_BASE.to_string())
+}
+
+/// [`load_vizij`]'s `animations` option: whether the face's own animations
+/// load into its device (default `true`).
+fn loads_animations(json: Option<&str>) -> bool {
+    json.and_then(|json| serde_json::from_str::<serde_json::Value>(json).ok())
+        .and_then(|options| {
+            options
+                .get("animations")
+                .and_then(serde_json::Value::as_bool)
+        })
+        .unwrap_or(true)
 }
 
 /// [`load_vizij`]'s options: the composition ([`compose_vizij`]'s fields) and

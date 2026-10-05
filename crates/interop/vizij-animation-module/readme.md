@@ -36,7 +36,8 @@ There is no `module.yaml`, `build.rs` or generated source in the crate.
 | `Keypoint` | `{ id: str, stamp: f32, value: <dynamic Value>, transitions_in: [TransitionHandle], transitions_out: [TransitionHandle] }` |
 | `TransitionHandle` | `{ x: f32, y: f32 }` — a cubic-bezier timing handle in normalized segment space; a keypoint carries zero or one per side (empty = the engine's default ease) |
 | `TrackOutput` | `{ track_id: str, default_key: str, value: <dynamic Value> }` |
-| `PlayerState` | `{ player: u32, state: str, time_ns: u64, duration_ns: u64, speed: f32 }` — `state` is `"playing" \| "paused" \| "stopped"` |
+| `PlayerState` (record `1.1.0`) | `{ player: u32, state: str, time_ns: u64, duration_ns: u64, speed: f32, name: str, instances: [InstanceState], loop_mode: str }` — `state` is `"playing" \| "paused" \| "stopped"`; `name` is the one `create_player` gave it (empty without one); `loop_mode` is `"once" \| "loop" \| "ping_pong"` |
+| `InstanceState` | `{ instance: u32, anim: u32, weight: f32 }` — an instance on a player, the animation it plays, its blend weight |
 
 A keyframe/output `value` is a **dynamic `Value`** (the `KEY_VALUE_ID` escape
 hatch), so Vizij composites (`Vec3`/`Quat`/`Transform`/`ColorRgba`) ride through
@@ -45,10 +46,24 @@ per-composite type is declared here; the runtime `Value` carries the identity.
 
 ### Exports
 
+Loading and unloading are structural edits, applied immediately:
+
 - `load_animation(clip: AnimationClip) -> u32` — load a clip, return its `AnimId`.
 - `create_player(name: Option<str>) -> u32` — return a `PlayerId`; the name
-  defaults to empty.
-- `add_instance(player: u32, anim: u32) -> u32` — return an `InstId`.
+  defaults to empty. A player plays from its creation, at speed 1, looping.
+- `add_instance(player: u32, anim: u32, weight: Option<f32>) -> u32` — attach
+  an instance of `anim` to `player`, blending at `weight` (1 when left out),
+  and return its `InstId`. At weight 0 it writes nothing until `set_weight`
+  gives it one.
+- `remove_instance(player: u32, instance: u32) -> u32` — 1 when the instance
+  was on the player, 0 otherwise.
+- `remove_player(player: u32) -> bool` — the player and its instances; the
+  animations it played stay loaded.
+- `unload_animation(anim: u32) -> bool` — the animation and every instance of
+  it, on every player.
+
+Per tick and transport:
+
 - `step(dt_ns: u64) -> [TrackOutput]` — advance by the `arora/dt` built-in key
   nanoseconds and return **per-track outputs keyed by track identity**, each
   carrying the track's **default authored key** (`animatable_id`) plus its
@@ -59,11 +74,12 @@ per-composite type is declared here; the runtime `Value` carries the identity.
   `set_loop(player, mode)` (`"once" | "loop" | "ping_pong"`), and
   `set_weight(player, instance, weight)` buffer into the engine's **next**
   `step`, in issue order — the same phase a device applies external calls in.
-  `remove_instance(player, instance)` is a structural edit, applied
-  immediately like `add_instance`.
-- `player_states() -> [PlayerState]` — playback feedback, one entry per
-  player. A **patch**: the vision is state changes as first-class,
-  combinable values the behavior conveys, not a second feedback channel.
+- `player_states() -> [PlayerState]` — one entry per player, in creation
+  order: its name, its playback, its loop mode and its instances. A client that did not
+  load an animation finds it here: Vizij names an animation's player after
+  the animation's id. A **patch**: the vision is state changes as
+  first-class, combinable values the behavior conveys, not a second feedback
+  channel.
 - `bake(anim, frame_rate?, start_time?, end_time?) -> str` and
   `bake_with_derivatives(…)` — the sampled clip as JSON; the optional window
   defaults to 60 Hz over the whole clip.

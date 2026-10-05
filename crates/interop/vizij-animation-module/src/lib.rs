@@ -23,18 +23,21 @@
 //! handles (zero or one each; empty = the engine's default ease).
 //!
 //! Exports:
-//! - setup — `load_animation` / `create_player` / `add_instance`;
+//! - loading — `load_animation` / `create_player` / `add_instance`, and
+//!   unloading — `remove_instance` / `remove_player` / `unload_animation`:
+//!   structural edits, applied immediately;
 //! - per tick — `step(dt_ns)`, returning **per-track outputs keyed by track
 //!   identity**, each carrying the track's **default authored key** plus its
 //!   sampled value; the consumer (a runner, or a graph node) decides the final
 //!   store key — default = the authored key, overridable;
 //! - transport — `play` / `pause` / `stop` / `seek(time_ns)` / `set_speed` /
 //!   `set_loop` / `set_weight`, buffered into the engine's **next** `step`
-//!   (issue order preserved), and `remove_instance`, applied immediately like
-//!   `add_instance`;
-//! - feedback — `player_states()`, one `PlayerState` per player. This call is
-//!   a **patch**: the vision is state changes as first-class, combinable
-//!   values the behavior conveys, not a second feedback channel;
+//!   (issue order preserved);
+//! - feedback — `player_states()`, one `PlayerState` per player: its name,
+//!   its playback, its loop mode and its instances, so any client finds a
+//!   player by the name it was created under and reads where it stands. This call is a **patch**: the vision is state
+//!   changes as first-class, combinable values the behavior conveys, not a
+//!   second feedback channel;
 //! - baking — `bake` / `bake_with_derivatives`, the sampled clip as JSON.
 
 use std::collections::HashMap;
@@ -119,11 +122,16 @@ pub struct TrackOutput {
     pub value: Value,
 }
 
-/// One player's playback state: `"playing"`, `"paused"` or `"stopped"`, the
-/// playhead and full length in nanoseconds (the `dt_ns` time base), and the
-/// speed multiplier.
+/// One player's state: its name (as `create_player` gave it, empty when it
+/// gave none), its playback — `"playing"`, `"paused"` or `"stopped"`, the
+/// playhead and full length in nanoseconds (the `dt_ns` time base), the speed
+/// multiplier, the loop mode (`"once"`, `"loop"` or `"ping_pong"`, as
+/// `set_loop` takes it) — and its instances, in evaluation order.
+///
+/// Record `1.1.0` adds `name`, `instances` and `loop_mode` to `1.0.0`'s five
+/// fields.
 #[derive(Debug, Clone, PartialEq, AroraType)]
-#[arora(id = "76697a69-6a00-0000-0000-000000000111")]
+#[arora(id = "76697a69-6a00-0000-0000-000000000111", version = "1.1.0")]
 pub struct PlayerState {
     #[arora(id = "76697a69-6a00-0000-0111-000000000001")]
     pub player: u32,
@@ -135,6 +143,25 @@ pub struct PlayerState {
     pub duration_ns: u64,
     #[arora(id = "76697a69-6a00-0000-0111-000000000005")]
     pub speed: f32,
+    #[arora(id = "76697a69-6a00-0000-0111-000000000006")]
+    pub name: String,
+    #[arora(id = "76697a69-6a00-0000-0111-000000000007")]
+    pub instances: Vec<InstanceState>,
+    #[arora(id = "76697a69-6a00-0000-0111-000000000008")]
+    pub loop_mode: String,
+}
+
+/// One instance on a player: its id, the animation it plays (what
+/// `unload_animation` takes) and its blend weight.
+#[derive(Debug, Clone, PartialEq, AroraType)]
+#[arora(id = "76697a69-6a00-0000-0000-000000000112")]
+pub struct InstanceState {
+    #[arora(id = "76697a69-6a00-0000-0112-000000000001")]
+    pub instance: u32,
+    #[arora(id = "76697a69-6a00-0000-0112-000000000002")]
+    pub anim: u32,
+    #[arora(id = "76697a69-6a00-0000-0112-000000000003")]
+    pub weight: f32,
 }
 
 /// One load's state: the engine, the key-to-track index and the
@@ -202,10 +229,17 @@ impl AnimationModule {
         self.engine.create_player(&name.unwrap_or_default()).0
     }
 
-    /// Attach an animation instance to a player and return its `InstId`.
-    pub fn add_instance(&mut self, player: u32, anim: u32) -> u32 {
+    /// Attach an instance of animation `anim` to a player, immediately, and
+    /// return its `InstId`. It blends at `weight` (1 when `None`) from the
+    /// next step on: an instance added at weight 0 writes nothing until a
+    /// `set_weight` gives it one.
+    pub fn add_instance(&mut self, player: u32, anim: u32, weight: Option<f32>) -> u32 {
+        let cfg = InstanceCfg {
+            weight: weight.unwrap_or(1.0),
+            ..InstanceCfg::default()
+        };
         self.engine
-            .add_instance(PlayerId(player), AnimId(anim), InstanceCfg::default())
+            .add_instance(PlayerId(player), AnimId(anim), cfg)
             .0
     }
 
@@ -307,60 +341,24 @@ impl AnimationModule {
             .remove_instance(PlayerId(player), InstId(instance)) as u32
     }
 
-    /// Swap the clip `instance` plays on `player` for `clip`, immediately: a
-    /// new instance of it takes the old one's place with the same settings
-    /// (weight, time scale, offset), the updates buffered for the old instance
-    /// apply to the new one at the next step, and the old instance's
-    /// animation is unloaded with every instance of it. The player keeps its
-    /// playhead, speed and loop mode. Returns the new `(AnimId, InstId)`, or
-    /// `None` when `instance` is not on `player` (nothing is loaded then).
-    ///
-    /// Not a declared function: a host that owns an [`AnimationModule`] edits
-    /// its clips in place with it.
-    pub fn replace_instance(
-        &mut self,
-        player: u32,
-        instance: u32,
-        clip: AnimationClip,
-    ) -> Option<(u32, u32)> {
-        let old = self
-            .engine
-            .list_instances(PlayerId(player))
-            .into_iter()
-            .find(|info| info.id == instance)?;
-        let anim = self.load_animation(clip);
-        let new = self
-            .engine
-            .add_instance(PlayerId(player), AnimId(anim), old.cfg)
-            .0;
-        for update in &mut self.pending.instance_updates {
-            if update.inst == InstId(instance) {
-                update.inst = InstId(new);
-            }
-        }
-        self.engine.unload_animation(AnimId(old.animation));
-        Some((anim, new))
-    }
-
-    /// Remove a player and its instances, immediately; its commands still
-    /// buffered are dropped at the next step. Returns whether it existed.
-    ///
-    /// Not a declared function, like [`replace_instance`](Self::replace_instance).
+    /// Remove a player and its instances, immediately (a structural edit,
+    /// like `add_instance`); commands still buffered for it are dropped at
+    /// the next step. The animations it played stay loaded. Returns whether
+    /// it existed.
     pub fn remove_player(&mut self, player: u32) -> bool {
         self.engine.remove_player(PlayerId(player))
     }
 
-    /// Unload an animation and every instance of it, immediately. Returns
-    /// whether it was loaded.
-    ///
-    /// Not a declared function, like [`replace_instance`](Self::replace_instance).
+    /// Unload an animation and every instance of it, on every player,
+    /// immediately. Returns whether it was loaded.
     pub fn unload_animation(&mut self, anim: u32) -> bool {
         self.engine.unload_animation(AnimId(anim))
     }
 
-    /// One `PlayerState` per player: the engine's derived playback state, the
-    /// playhead and full length in nanoseconds (the `dt_ns` time base), and the
-    /// speed multiplier.
+    /// One `PlayerState` per player, in creation order: its name, the
+    /// engine's derived playback state, the playhead and full length in
+    /// nanoseconds (the `dt_ns` time base), the speed multiplier, the loop
+    /// mode, and its instances.
     pub fn player_states(&self) -> Vec<PlayerState> {
         self.engine
             .list_players()
@@ -375,6 +373,23 @@ impl AnimationModule {
                 time_ns: seconds_to_ns(info.time),
                 duration_ns: seconds_to_ns(info.length),
                 speed: info.speed,
+                loop_mode: match info.loop_mode {
+                    LoopMode::Once => "once",
+                    LoopMode::Loop => "loop",
+                    LoopMode::PingPong => "ping_pong",
+                }
+                .to_string(),
+                instances: self
+                    .engine
+                    .list_instances(PlayerId(info.id))
+                    .into_iter()
+                    .map(|instance| InstanceState {
+                        instance: instance.id,
+                        anim: instance.animation,
+                        weight: instance.cfg.weight,
+                    })
+                    .collect(),
+                name: info.name,
             })
             .collect()
     }
@@ -466,7 +481,7 @@ fn guest<T>(f: impl FnOnce(&mut AnimationModule) -> T) -> T {
 #[arora_module::module(
     id = "76697a69-6a00-0000-0d00-000000000000",
     name = "vizij-animation",
-    version = "0.2.0",
+    version = "0.3.0",
     author = "Semio",
     license = "Proprietary",
     description = "vizij-animation-core as an Arora wasm module",
@@ -496,8 +511,9 @@ pub mod animation {
     pub fn add_instance(
         #[param(id = "76697a69-6a00-0000-0f03-000000000001")] player: u32,
         #[param(id = "76697a69-6a00-0000-0f03-000000000002")] anim: u32,
+        #[param(id = "76697a69-6a00-0000-0f03-000000000003")] weight: Option<f32>,
     ) -> u32 {
-        guest(|a| a.add_instance(player, anim))
+        guest(|a| a.add_instance(player, anim, weight))
     }
 
     /// [`AnimationModule::step`](super::AnimationModule::step). `dt_ns` is the
@@ -599,6 +615,22 @@ pub mod animation {
         #[param(id = "76697a69-6a00-0000-0f0f-000000000004")] end_time: Option<f32>,
     ) -> String {
         guest(|a| a.bake_with_derivatives(anim, frame_rate, start_time, end_time))
+    }
+
+    /// [`AnimationModule::unload_animation`](super::AnimationModule::unload_animation).
+    #[export(id = "76697a69-6a00-0000-0f00-000000000010")]
+    pub fn unload_animation(
+        #[param(id = "76697a69-6a00-0000-0f10-000000000001")] anim: u32,
+    ) -> bool {
+        guest(|a| a.unload_animation(anim))
+    }
+
+    /// [`AnimationModule::remove_player`](super::AnimationModule::remove_player).
+    #[export(id = "76697a69-6a00-0000-0f00-000000000011")]
+    pub fn remove_player(
+        #[param(id = "76697a69-6a00-0000-0f11-000000000001")] player: u32,
+    ) -> bool {
+        guest(|a| a.remove_player(player))
     }
 }
 
@@ -739,7 +771,7 @@ mod tests {
         let mut a = AnimationModule::new();
         let anim = a.load_animation(ramp_clip("ease-ramp", "ease/x", false));
         let player = a.create_player(Some("p-ease".into()));
-        let inst = a.add_instance(player, anim);
+        let inst = a.add_instance(player, anim, None);
         assert_ne!(inst, u32::MAX);
 
         // The clip eases (default S-curve), so it is antisymmetric about the
@@ -766,46 +798,114 @@ mod tests {
         );
     }
 
-    /// A clip swapped in place: the player keeps its playhead, the new
-    /// instance its predecessor's weight and the updates buffered for it, and
-    /// the old animation is gone.
+    /// An instance added at weight 0 is silent until weighted.
     #[test]
-    fn a_replaced_instance_keeps_the_player_and_its_buffered_updates() {
+    fn an_instance_added_at_weight_zero_writes_nothing_until_weighted() {
         let mut a = AnimationModule::new();
-        let anim = a.load_animation(constant_clip("old", "x", 0.25));
-        let player = a.create_player(Some("p".into()));
-        let inst = a.add_instance(player, anim);
-        a.pause(player);
-        a.seek(player, 400_000_000);
-        a.step(0);
-        a.set_weight(player, inst, 0.0); // buffered for the old instance
-
-        let (new_anim, new_inst) = a
-            .replace_instance(player, inst, constant_clip("new", "x", 0.75))
-            .expect("the instance is on the player");
-        assert_ne!(new_anim, anim);
-        assert!(!a.unload_animation(anim), "the old animation is unloaded");
-        assert!(
-            a.step(0).is_empty(),
-            "the weight buffered for the old instance silences the new one"
-        );
-        let time = state_of(&a, player).time_ns;
-        assert!(
-            time.abs_diff(400_000_000) < 1_000,
-            "the playhead stands, at {time} ns"
-        );
-
-        a.set_weight(player, new_inst, 1.0);
+        let anim = a.load_animation(constant_clip("quiet", "x", 0.25));
+        let player = a.create_player(Some("quiet".into()));
+        let inst = a.add_instance(player, anim, Some(0.0));
+        assert!(a.step(100_000_000).is_empty(), "silent at weight 0");
+        a.set_weight(player, inst, 1.0);
         let out = a.step(0);
-        assert_eq!(as_f32(value_of(&out, "x").expect("x output")), 0.75);
+        assert_eq!(as_f32(value_of(&out, "x").expect("x output")), 0.25);
+    }
 
+    /// A player's state names it, says its loop mode and lists its
+    /// instances, each with the animation it plays and its weight; an
+    /// unnamed player's name is empty.
+    #[test]
+    fn player_states_name_each_player_and_list_its_instances() {
+        let mut a = AnimationModule::new();
+        let anim = a.load_animation(constant_clip("wave", "x", 0.5));
+        let player = a.create_player(Some("wave".into()));
+        let inst = a.add_instance(player, anim, Some(0.0));
+        let unnamed = a.create_player(None);
+
+        let states = a.player_states();
+        assert_eq!(states.len(), 2);
+        let wave = &states[0];
+        assert_eq!((wave.player, wave.name.as_str()), (player, "wave"));
         assert_eq!(
-            a.replace_instance(player, inst, constant_clip("gone", "x", 0.0)),
-            None
+            wave.instances,
+            vec![InstanceState {
+                instance: inst,
+                anim,
+                weight: 0.0
+            }]
         );
-        assert!(a.remove_player(player));
-        assert!(a.step(0).is_empty());
-        assert!(a.player_states().is_empty());
+        assert_eq!(wave.duration_ns, 1_000_000_000);
+        assert_eq!((states[1].player, states[1].name.as_str()), (unnamed, ""));
+        assert!(states[1].instances.is_empty());
+
+        assert_eq!(wave.loop_mode, "loop", "a player loops from its creation");
+
+        a.set_weight(player, inst, 0.5);
+        a.set_loop(player, "ping_pong".into());
+        a.step(0);
+        let wave = state_of(&a, player);
+        assert_eq!(wave.instances[0].weight, 0.5);
+        assert_eq!(wave.loop_mode, "ping_pong");
+    }
+
+    /// `PlayerState` crosses the value plane as its 1.1.0 record: a structure
+    /// under its id, its instances an array of `InstanceState` structures.
+    #[test]
+    fn a_player_state_round_trips_through_its_record() {
+        let state = PlayerState {
+            player: 3,
+            state: "paused".into(),
+            time_ns: 250_000_000,
+            duration_ns: 1_000_000_000,
+            speed: 0.0,
+            name: "wave".into(),
+            instances: vec![InstanceState {
+                instance: 7,
+                anim: 2,
+                weight: 1.0,
+            }],
+            loop_mode: "once".into(),
+        };
+        assert_eq!(PlayerState::arora_type_version().to_string(), "1.1.0");
+        let value = Value::from(state.clone());
+        let Value::Structure(structure) = &value else {
+            panic!("a structure, got {value:?}");
+        };
+        assert_eq!(structure.id, PlayerState::arora_type_id());
+        assert_eq!(structure.fields.len(), 8);
+        assert_eq!(PlayerState::try_from(value).expect("decodes"), state);
+    }
+
+    /// Removing a player takes its instances and leaves the animation loaded
+    /// for another player; unloading an animation takes every instance of it.
+    #[test]
+    fn removing_a_player_and_unloading_an_animation() {
+        let mut a = AnimationModule::new();
+        let anim = a.load_animation(constant_clip("shared", "x", 0.75));
+        let first = a.create_player(Some("first".into()));
+        a.add_instance(first, anim, None);
+        let second = a.create_player(Some("second".into()));
+        a.add_instance(second, anim, None);
+        a.pause(first); // buffered for a player about to go
+
+        assert!(a.remove_player(first));
+        assert!(!a.remove_player(first), "already gone");
+        let out = a.step(0);
+        assert_eq!(
+            as_f32(value_of(&out, "x").expect("the other player still writes")),
+            0.75
+        );
+        let names: Vec<String> = a.player_states().into_iter().map(|s| s.name).collect();
+        assert_eq!(names, ["second"]);
+
+        assert!(a.unload_animation(anim));
+        assert!(!a.unload_animation(anim), "already unloaded");
+        assert!(a.step(0).is_empty(), "no animation, no output");
+        assert!(
+            state_of(&a, second).instances.is_empty(),
+            "the player stays, without the instance"
+        );
+        assert!(a.bake(anim, None, None, None).is_empty());
     }
 
     #[test]
@@ -814,7 +914,7 @@ mod tests {
         // Linear handles: value == normalized time, exactly.
         let anim = a.load_animation(ramp_clip("lin-ramp", "lin/x", true));
         let player = a.create_player(Some("p-lin".into()));
-        a.add_instance(player, anim);
+        a.add_instance(player, anim, None);
 
         let outputs = a.step(250_000_000);
         let v = as_f32(value_of(&outputs, "lin/x").expect("lin/x output"));
@@ -828,7 +928,7 @@ mod tests {
         slow.tracks[0].points[0].transitions_out = vec![TransitionHandle { x: 1.0, y: 0.0 }];
         let anim = a.load_animation(slow);
         let player = a.create_player(Some("p-slow".into()));
-        a.add_instance(player, anim);
+        a.add_instance(player, anim, None);
 
         let outputs = a.step(250_000_000);
         let v_slow = as_f32(value_of(&outputs, "slow/x").expect("slow/x output"));
@@ -843,7 +943,7 @@ mod tests {
         let mut a = AnimationModule::new();
         let anim = a.load_animation(ramp_clip("tr-ramp", "tr/x", true));
         let player = a.create_player(Some("p-transport".into()));
-        a.add_instance(player, anim);
+        a.add_instance(player, anim, None);
 
         // Advance to 0.25 s.
         let outputs = a.step(250_000_000);
@@ -891,7 +991,7 @@ mod tests {
         let mut a = AnimationModule::new();
         let anim = a.load_animation(ramp_clip("once-ramp", "once/x", true));
         let player = a.create_player(Some("p-once".into()));
-        a.add_instance(player, anim);
+        a.add_instance(player, anim, None);
 
         assert_eq!(a.set_loop(player, "once".into()), player);
         assert_eq!(a.seek(player, 900_000_000), player);
@@ -913,8 +1013,8 @@ mod tests {
         let zero = a.load_animation(constant_clip("mix-zero", "mix/x", 0.0));
         let one = a.load_animation(constant_clip("mix-one", "mix/x", 1.0));
         let player = a.create_player(Some("p-mix".into()));
-        let inst_zero = a.add_instance(player, zero);
-        let inst_one = a.add_instance(player, one);
+        let inst_zero = a.add_instance(player, zero, None);
+        let inst_one = a.add_instance(player, one, None);
 
         // Equal weights: the normalized blend of 0 and 1.
         let outputs = a.step(100_000_000);

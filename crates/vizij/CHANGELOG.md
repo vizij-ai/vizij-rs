@@ -10,12 +10,18 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Added
 
-- A face's animations (its bundle's `animations`) load into the device's
-  animation module, each on a player of its own, its tracks writing the rig
-  inputs their channels name. A loaded animation is silent until played: a
-  client plays it through the module's functions (`set_weight` on its
-  instance, then `play`, `pause`, `stop`, `seek`, `set_speed`, `set_loop`),
-  its players in the bundle's order.
+- A face's animations (its bundle's `animations`) load into its device when
+  the face loads, natively and in the browser, through the animation
+  module's declared functions — the calls any client sends
+  (`face::load_animations`): `load_animation`, `create_player` named after
+  the animation's id, `add_instance` at weight 0, `stop`. Each track writes
+  the rig input its channel names. A loaded animation is silent until
+  played: a client finds its player by name in `player_states` (the
+  `vizij/animations/players` key), gives its instance weight with
+  `set_weight`, then drives it with `play`, `pause`, `stop`, `seek`,
+  `set_speed` and `set_loop`; `remove_player` and `unload_animation` unload
+  it. The browser module's `loadVizij` takes `animations: false` to leave
+  them out.
 
 ## [0.1.0] - 2026-10-02
 

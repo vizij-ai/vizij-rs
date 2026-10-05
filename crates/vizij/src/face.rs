@@ -11,7 +11,8 @@ use vizij_api_core::value::{float, Value};
 use vizij_arora_behavior::{gaze, speech, viseme};
 use vizij_arora_behavior::{parse_spec, ProcessingGraph};
 use vizij_arora_hal::RigHal;
-pub use vizij_arora_host::{Bundle, ProgramSelect};
+use vizij_arora_host::Bundle;
+pub use vizij_arora_host::ProgramSelect;
 use vizij_arora_store::BlackboardStore;
 
 use crate::view::meta::FaceMeta;
@@ -77,8 +78,8 @@ pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
     }
     // `with_animations`: the device always loads the animation module (see
     // `builder_for`), so the animation source it dispatches to is always
-    // composed — inert until an animation plays (the face's animations load
-    // silent).
+    // composed — inert until an animation plays (an animation loads silent,
+    // see `load_animations`).
     let spec = meta
         .bundle
         .compose(&wanted, &config.program, true, &mappings)?
@@ -236,38 +237,35 @@ pub fn parse_rgb(hex: &str) -> Result<[u8; 3]> {
 pub type GuestModule = (arora_types::module::low::Header, Vec<u8>);
 
 /// The device builder over the Vizij seams: the composed graph as the behavior,
-/// with the animation module loaded — `bundle`'s animations in it — so the
-/// composed animation source's `ExternalFunction` nodes dispatch and its
-/// transport is callable, `bundle`'s embedded skills as the skills'
-/// fragments, and `speech` as the say skill's provider when there is one.
-/// `None` (logged) when the spec does not encode. A device with no face
-/// passes `Bundle::default()`.
+/// with the animation module loaded so the composed animation source's
+/// `ExternalFunction` nodes dispatch and its transport is callable, and
+/// `speech` as the say skill's provider when there is one. `None` (logged)
+/// when the spec does not encode.
 pub fn builder_for(
     spec: &str,
     rig: RigHal,
     store: BlackboardStore,
-    bundle: &Bundle,
+    embedded_skills: &[(String, serde_json::Value)],
     speech: Option<arora::HostModule>,
 ) -> Option<arora::AroraBuilder> {
-    builder_with_guests(spec, rig, store, bundle, speech, Vec::new()).map(|(builder, _, _)| builder)
+    builder_with_guests(spec, rig, store, embedded_skills, speech, Vec::new())
+        .map(|(builder, _)| builder)
 }
 
 /// [`builder_for`] with wasm modules loaded as guests besides the host-linked
 /// ones: their functions dispatch by id, from a call and from the graph's
 /// `ExternalFunction` nodes, like the host modules'. Comes back with the
-/// function → module routing table the device resolves bare calls through,
-/// and the animations loaded into its animation module.
+/// function → module routing table the device resolves bare calls through.
 pub fn builder_with_guests(
     spec: &str,
     rig: RigHal,
     store: BlackboardStore,
-    bundle: &Bundle,
+    embedded_skills: &[(String, serde_json::Value)],
     speech: Option<arora::HostModule>,
     guests: Vec<GuestModule>,
 ) -> Option<(
     arora::AroraBuilder,
     std::collections::HashMap<uuid::Uuid, uuid::Uuid>,
-    animation::Animations,
 )> {
     let rig_prefix = rig_prefix_of(spec);
     let spec = match parse_spec(spec) {
@@ -308,22 +306,21 @@ pub fn builder_with_guests(
     // face's standard controls, so they take its rig prefix.
     graph.set_task_fragment(
         gaze::look_at::ids::look_at::FUNCTION,
-        gaze::look_at_fragment_from(&bundle.skills),
+        gaze::look_at_fragment_from(embedded_skills),
     );
     graph.set_task_fragment(
         viseme::play_viseme::ids::play_viseme::FUNCTION,
-        viseme::play_viseme_fragment_from(&bundle.skills, &rig_prefix),
+        viseme::play_viseme_fragment_from(embedded_skills, &rig_prefix),
     );
     graph.set_task_fragment(
         speech::say::ids::say::FUNCTION,
-        speech::say_fragment_from(&bundle.skills, &rig_prefix),
+        speech::say_fragment_from(embedded_skills, &rig_prefix),
     );
-    let (animation, animations) = animation::host_module_with_animations(bundle);
     let builder = arora::Arora::builder()
         .with_hal(Box::new(rig))
         .with_data_store(Box::new(store))
         .with_behavior_interpreter(Box::new(graph))
-        .with_host_module(animation);
+        .with_host_module(animation::host_module());
     // The speech provider: the `say` behind the say skill (poll-on-tick,
     // viseme out-parameter) — one per device, same contract whichever
     // synthesizes and plays.
@@ -334,7 +331,71 @@ pub fn builder_with_guests(
     let builder = guests.into_iter().fold(builder, |builder, (header, wasm)| {
         builder.with_module(header, wasm)
     });
-    Some((builder, function_modules, animations))
+    Some((builder, function_modules))
+}
+
+/// Load `bundle`'s animations into a built device's animation module, through
+/// the module's declared functions — the calls any client sends to load an
+/// animation. Per animation, in the bundle's order: `load_animation` (its
+/// tracks keyed by the store keys their channels name through the face's
+/// rig, [`animation::module_animation`]), `create_player` named after the
+/// animation's id, `add_instance` at weight 0, and `stop`. Each is then
+/// silent, stopped at its start, until a client plays it — `set_weight` on
+/// its instance, then `play` — finding its player by name in
+/// `player_states`. Call it before the device's first step.
+pub fn load_animations(arora: &mut arora::Arora, bundle: &Bundle) -> Result<()> {
+    use arora_types::call::Call;
+    use arora_types::value::{StructureField, Value as AValue};
+    use vizij_animation_module::animation::ids;
+
+    let mut call = |function: uuid::Uuid, args: Vec<(uuid::Uuid, AValue)>| {
+        let ret = arora
+            .call(Call {
+                module_id: Some(ids::MODULE),
+                id: function,
+                args: args
+                    .into_iter()
+                    .map(|(id, value)| StructureField {
+                        id,
+                        value: Box::new(value),
+                    })
+                    .collect(),
+            })
+            .map_err(|e| anyhow!("{e}"))?
+            .ret;
+        match ret {
+            AValue::U32(id) => Ok(id),
+            other => Err(anyhow!("expected an id, got {other}")),
+        }
+    };
+    let keys = bundle.channel_keys();
+    for authored in &bundle.animations {
+        let clip = animation::module_animation(authored, &keys);
+        let anim = call(
+            ids::load_animation::FUNCTION,
+            vec![(ids::load_animation::CLIP, clip.into())],
+        )?;
+        let player = call(
+            ids::create_player::FUNCTION,
+            vec![(
+                ids::create_player::NAME,
+                AValue::String(authored.id.clone()),
+            )],
+        )?;
+        call(
+            ids::add_instance::FUNCTION,
+            vec![
+                (ids::add_instance::PLAYER, AValue::U32(player)),
+                (ids::add_instance::ANIM, AValue::U32(anim)),
+                (ids::add_instance::WEIGHT, AValue::F32(0.0)),
+            ],
+        )?;
+        call(
+            ids::stop::FUNCTION,
+            vec![(ids::stop::PLAYER, AValue::U32(player))],
+        )?;
+    }
+    Ok(())
 }
 
 /// The prefix the face's standard controls live under in `spec` —
@@ -469,16 +530,10 @@ mod tests {
         let spec = compose_sources(&[animations_source()])
             .expect("compose the animation source")
             .to_string();
-        let mut arora = builder_for(
-            &spec,
-            RigHal::new(),
-            BlackboardStore::new(),
-            &Bundle::default(),
-            None,
-        )
-        .expect("build the device over the loaded animation module")
-        .build()
-        .expect("build arora");
+        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
+            .expect("build the device over the loaded animation module")
+            .build()
+            .expect("build arora");
         for _ in 0..3 {
             arora.step(Duration::from_millis(16)).expect("step");
         }
@@ -526,7 +581,7 @@ mod tests {
             r#"{ "nodes": [], "edges": [] }"#,
             RigHal::new(),
             BlackboardStore::new(),
-            &Bundle::default(),
+            &[],
             None,
         )
         .expect("build the device")
@@ -589,7 +644,7 @@ mod tests {
             r#"{ "nodes": [], "edges": [] }"#,
             RigHal::new(),
             BlackboardStore::new(),
-            &Bundle::default(),
+            &[],
             None,
         )
         .expect("build the device")
@@ -679,10 +734,7 @@ mod tests {
             r#"{ "nodes": [], "edges": [] }"#,
             RigHal::new(),
             BlackboardStore::new(),
-            &Bundle {
-                skills: embedded,
-                ..Bundle::default()
-            },
+            &embedded,
             None,
         )
         .expect("build the device")
@@ -736,16 +788,10 @@ mod tests {
         let spec = compose_sources(&[ros4hri_source("")])
             .expect("compose the ros4hri mapping")
             .to_string();
-        builder_for(
-            &spec,
-            RigHal::new(),
-            BlackboardStore::new(),
-            &Bundle::default(),
-            None,
-        )
-        .expect("build the device over the mapping")
-        .build()
-        .expect("build arora")
+        builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
+            .expect("build the device over the mapping")
+            .build()
+            .expect("build arora")
     }
 
     fn stage(arora: &arora::Arora, path: &str, value: Value) {
@@ -806,16 +852,10 @@ mod tests {
             )
             .expect("compose the face with its embedded mapping")
             .to_string();
-        let mut arora = builder_for(
-            &spec,
-            RigHal::new(),
-            BlackboardStore::new(),
-            &Bundle::default(),
-            None,
-        )
-        .expect("build the device over the composed face")
-        .build()
-        .expect("build arora");
+        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
+            .expect("build the device over the composed face")
+            .build()
+            .expect("build arora");
         // The built-in would one-hot "sad" (happy ≈ 0, smoothed); the embedded
         // verbatim mapping ignores the name and rides valence straight through.
         stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("sad"));
@@ -1248,7 +1288,7 @@ mod tests {
             load_face(&adapted, &config).expect("load the adapted face");
         let store = BlackboardStore::new();
         stage_neutral_pose(&store, &meta);
-        let mut arora = builder_for(&spec, RigHal::new(), store, &Bundle::default(), None)
+        let mut arora = builder_for(&spec, RigHal::new(), store, &[], None)
             .expect("build the device")
             .build()
             .expect("build arora");
@@ -1278,8 +1318,9 @@ mod tests {
 }
 
 /// A face's animations on the device its composition builds — the same on
-/// every target: loaded silent, played through the animation module's declared
-/// transport, writing the rig keys their channels name.
+/// every target: loaded through the animation module's declared functions,
+/// silent until played, found by any client through the player states,
+/// writing the rig keys their channels name.
 #[cfg(test)]
 mod animation_tests {
     use std::time::Duration;
@@ -1287,12 +1328,16 @@ mod animation_tests {
     use arora_types::call::Call;
     use arora_types::value::{StructureField, Value as AValue};
     use vizij_animation_module::animation::ids;
+    use vizij_animation_module::PlayerState;
     use vizij_api_core::value::as_float;
 
     use super::*;
-    use crate::modules::animation::LoadedAnimation;
 
-    fn call(arora: &mut arora::Arora, function: uuid::Uuid, args: Vec<(uuid::Uuid, AValue)>) {
+    fn call(
+        arora: &mut arora::Arora,
+        function: uuid::Uuid,
+        args: Vec<(uuid::Uuid, AValue)>,
+    ) -> AValue {
         arora
             .call(Call {
                 module_id: Some(ids::MODULE),
@@ -1305,24 +1350,47 @@ mod animation_tests {
                     })
                     .collect(),
             })
-            .expect("the call dispatches");
+            .expect("the call dispatches")
+            .ret
     }
 
-    /// What a transport sends to play a loaded animation: weight, then play.
-    fn play(arora: &mut arora::Arora, animation: &LoadedAnimation) {
+    /// The module's players, as any client reads them.
+    fn players(arora: &mut arora::Arora) -> Vec<PlayerState> {
+        call(arora, ids::player_states::FUNCTION, Vec::new())
+            .into_elements()
+            .expect("an array of PlayerState")
+            .into_iter()
+            .map(|state| PlayerState::try_from(state).expect("a PlayerState"))
+            .collect()
+    }
+
+    /// The player named `id`, as a client finds an animation's.
+    fn player(arora: &mut arora::Arora, id: &str) -> PlayerState {
+        players(arora)
+            .into_iter()
+            .find(|state| state.name == id)
+            .unwrap_or_else(|| panic!("no player named {id}"))
+    }
+
+    /// What a transport sends to play an animation: weight, then play.
+    fn play(arora: &mut arora::Arora, id: &str) {
+        let state = player(arora, id);
         call(
             arora,
             ids::set_weight::FUNCTION,
             vec![
-                (ids::set_weight::PLAYER, AValue::U32(animation.player)),
-                (ids::set_weight::INSTANCE, AValue::U32(animation.instance)),
+                (ids::set_weight::PLAYER, AValue::U32(state.player)),
+                (
+                    ids::set_weight::INSTANCE,
+                    AValue::U32(state.instances[0].instance),
+                ),
                 (ids::set_weight::WEIGHT, AValue::F32(1.0)),
             ],
         );
         call(
             arora,
             ids::play::FUNCTION,
-            vec![(ids::play::PLAYER, AValue::U32(animation.player))],
+            vec![(ids::play::PLAYER, AValue::U32(state.player))],
         );
     }
 
@@ -1343,48 +1411,96 @@ mod animation_tests {
         }
     }
 
-    /// An animation of a composed face: silent until played, then writing
-    /// the rig input its channel names, under the face's rig prefix.
-    #[test]
-    fn a_face_animation_writes_its_rig_key_once_played() {
+    /// A one-rig-input face whose animation ramps it, composed and built,
+    /// its animations loaded.
+    fn ramp_face() -> arora::Arora {
         let bundle = Bundle::from_bundle_json(&serde_json::json!({
             "metadata": { "faceId": "f" },
             "graphs": [{ "kind": "rig", "spec": { "nodes": [
                 { "id": "input_x", "type": "input", "params": { "path": "rig/f/x", "value": 0.0 } },
             ], "edges": [] } }],
-            "animations": [{ "id": "ramp", "clip": { "duration": 1, "tracks": [
-                { "channel": "x", "keyframes": [
-                    { "time": 0, "value": 0 }, { "time": 1, "value": 1 },
-                ] },
-            ] } }],
+            "animations": [
+                { "id": "ramp", "clip": { "duration": 1, "tracks": [
+                    { "channel": "x", "keyframes": [
+                        { "time": 0, "value": 0 }, { "time": 1, "value": 1 },
+                    ] },
+                ] } },
+                { "id": "hold", "clip": { "duration": 2, "tracks": [
+                    { "channel": "x", "keyframes": [{ "time": 0, "value": 0.5 }] },
+                ] } },
+            ],
         }));
         let spec = bundle
             .compose(&["rig"], &ProgramSelect::None, true, &[])
             .expect("compose")
             .to_string();
-        let (builder, _, animations) = builder_with_guests(
-            &spec,
-            RigHal::new(),
-            BlackboardStore::new(),
-            &bundle,
-            None,
-            Vec::new(),
-        )
-        .expect("build the device");
-        let mut arora = builder.build().expect("build arora");
-        let ramp = animations.list()[0].clone();
+        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
+            .expect("build the device")
+            .build()
+            .expect("build arora");
+        load_animations(&mut arora, &bundle).expect("load the face's animations");
+        arora
+    }
 
+    /// Each animation gets a player named after its id, holding one
+    /// instance of it at weight 0, stopped at its start.
+    #[test]
+    fn a_face_s_animations_load_silent_on_players_named_after_them() {
+        let mut arora = ramp_face();
         step_for(&mut arora, 0.1);
+        let players = players(&mut arora);
+        let names: Vec<&str> = players.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["ramp", "hold"]);
+        for state in &players {
+            assert_eq!(state.state, "stopped", "{state:?}");
+            assert_eq!(state.time_ns, 0);
+            assert_eq!(state.instances.len(), 1);
+            assert_eq!(state.instances[0].weight, 0.0, "silent");
+        }
+        assert_eq!(players[1].duration_ns, 2_000_000_000);
         assert_eq!(
             read(&arora, "rig/f/x"),
             None,
-            "a loaded animation is silent"
+            "a loaded animation writes nothing"
         );
+    }
 
-        play(&mut arora, &ramp);
+    /// Played by name, an animation writes the rig input its channel names;
+    /// unloaded through the declared calls, it writes no more.
+    #[test]
+    fn a_face_animation_plays_by_name_and_unloads() {
+        let mut arora = ramp_face();
+        step_for(&mut arora, 0.1);
+        play(&mut arora, "ramp");
         step_for(&mut arora, 0.5);
         let x = read(&arora, "rig/f/x").expect("the animation writes rig/f/x");
         assert!((0.4..0.6).contains(&x), "linear ramp at ~0.5 s, got {x}");
+
+        let ramp = player(&mut arora, "ramp");
+        let removed = call(
+            &mut arora,
+            ids::remove_player::FUNCTION,
+            vec![(ids::remove_player::PLAYER, AValue::U32(ramp.player))],
+        );
+        assert_eq!(removed, AValue::Boolean(true));
+        let unloaded = call(
+            &mut arora,
+            ids::unload_animation::FUNCTION,
+            vec![(
+                ids::unload_animation::ANIM,
+                AValue::U32(ramp.instances[0].anim),
+            )],
+        );
+        assert_eq!(unloaded, AValue::Boolean(true));
+        let names: Vec<String> = players(&mut arora).into_iter().map(|p| p.name).collect();
+        assert_eq!(names, ["hold"]);
+        let held = read(&arora, "rig/f/x");
+        step_for(&mut arora, 0.3);
+        assert_eq!(
+            read(&arora, "rig/f/x"),
+            held,
+            "its key keeps its last value"
+        );
     }
 
     /// The native device plays the animations the bundle of the demo face
@@ -1410,13 +1526,14 @@ mod animation_tests {
         let LoadedFace { meta, spec } = load_face(&glb, &config).expect("load Quori");
         let store = BlackboardStore::new();
         stage_neutral_pose(&store, &meta);
-        let (builder, _, animations) =
-            builder_with_guests(&spec, RigHal::new(), store, &meta.bundle, None, Vec::new())
-                .expect("build the device");
-        let mut arora = builder.build().expect("build arora");
-        let loaded: Vec<&str> = animations.list().iter().map(|a| a.id.as_str()).collect();
+        let mut arora = builder_for(&spec, RigHal::new(), store, &meta.bundle.skills, None)
+            .expect("build the device")
+            .build()
+            .expect("build arora");
+        load_animations(&mut arora, &meta.bundle).expect("load Quori's animations");
+        let names: Vec<String> = players(&mut arora).into_iter().map(|p| p.name).collect();
         assert_eq!(
-            loaded,
+            names,
             ["authoring.timeline.clip.1", "authoring.timeline.main"]
         );
 
@@ -1424,7 +1541,7 @@ mod animation_tests {
         step_for(&mut arora, 0.2);
         let resting = read(&arora, gaze).unwrap_or(0.0);
         // "Nonesense" moves the gaze from -0.04 to -0.43 over its first 1.26 s.
-        play(&mut arora, &animations.list()[0].clone());
+        play(&mut arora, "authoring.timeline.clip.1");
         step_for(&mut arora, 1.0);
         let played = read(&arora, gaze).expect("the animation writes the gaze");
         assert!(
