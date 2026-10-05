@@ -429,11 +429,11 @@ const FIELD_OUTPUT_VALUE: &str = "76697a69-6a00-0000-0110-000000000003";
 /// [`ANIMATION_PLAYERS_PATH`].
 ///
 /// The source is inert until an animation plays: with no instance of weight
-/// the module's `step` returns nothing — a host loads a face's animations
-/// silent, at weight 0 — so the `output` writes nothing and the rig/program
-/// pose stands.
-/// Transport (play/pause/seek/…, an instance's weight) is driven through the
-/// module's exported functions — over a bridge, or in-process — not from here.
+/// the module's `step` returns nothing — an animation loads silent, its
+/// instance at weight 0 — so the `output` writes nothing and the
+/// rig/program pose stands. Loading and transport (load/unload, play/pause/
+/// seek/…, an instance's weight) are driven through the module's declared
+/// functions — over a bridge, or in-process — not from here.
 pub fn animations_source() -> (String, Json) {
     let spec = json!({
         "nodes": [

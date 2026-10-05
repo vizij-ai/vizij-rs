@@ -17,8 +17,8 @@ All notable changes to `vizij-arora-host`. The format follows
 ### Added
 
 - `contents::animation` reads one animation: a bundle `animations` entry, or
-  an animation in the shape `Animation` serializes to — what a host hands
-  back to replace an animation live.
+  an animation in the shape `Animation` serializes to — what a client hands a
+  device to load at run time.
 - `Bundle::channel_keys` resolves an animation track's channel to the store
   key it drives on the face (`ChannelKeys::key`): the rig input at
   `<rig prefix><channel>`, a rig input path as is, an input by the name the

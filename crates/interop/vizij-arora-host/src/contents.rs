@@ -202,7 +202,7 @@ pub(crate) fn animations(bundle: &Json) -> Vec<Animation> {
 /// One animation, read as the bundle reads it: an `animations` entry
 /// (`{ id, clip: { id, name, duration, tracks } }`, the entry's `id` first),
 /// or an animation on its own in the shape [`Animation`] serializes to —
-/// what a host hands back to replace an animation live. `None` without an id.
+/// what a client hands a device to load at run time. `None` without an id.
 pub fn animation(json: &Json) -> Option<Animation> {
     let body = json.get("clip").unwrap_or(json);
     let id = string(json, "id").or_else(|| string(body, "id"))?;
@@ -353,8 +353,7 @@ mod tests {
     }
 
     /// An animation as [`Animation`] serializes reads back as itself: what a
-    /// host hands back to replace an animation live is what `describe()` gave
-    /// it.
+    /// client hands a device to load is what `describe()` gave it.
     #[test]
     fn an_animation_on_its_own_reads_back_as_itself() {
         let bundle = json!({ "animations": [

@@ -34,7 +34,12 @@ import {
 } from "@vizij/wasm-loader";
 import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 import { play as defaultPlay, type Play } from "./audio.js";
-import { ANIMATION_IDS, ANIMATION_PLAYERS_PATH, decodePlayerStates } from "./animations.js";
+import {
+  ANIMATION_IDS,
+  ANIMATION_PLAYERS_PATH,
+  decodePlayerStates,
+  type PlayerState,
+} from "./animations.js";
 
 /** A Vizij graph spec, as an object or already-serialized JSON. */
 export type GraphSpecInput = object | string;
@@ -227,7 +232,13 @@ export interface AroraModule {
  * page's Web Audio player by default, `false` for a device that plays no
  * speech — and `speechApiUrl` the TTS deployment, and the wasm modules to
  * load into the device as guests. */
-export interface VizijOptions extends ComposeVizijOptions {
+export interface VizijOptions extends Omit<ComposeVizijOptions, "animations"> {
+  /** Load the face's own animations (its bundle's `animations`) into its
+   * device, silent until played. Default `true`; `false` leaves the device's
+   * animation module empty for {@link Runtime.loadAnimation}. Unlike
+   * {@link composeVizij}'s option of the same name, it does not choose
+   * whether the animation source is composed: a Vizij always composes it. */
+  animations?: boolean;
   stageNeutral?: boolean;
   audio?: Play | false;
   speechApiUrl?: string;
@@ -343,20 +354,21 @@ export interface VizijDescription {
   metadata: Record<string, unknown> | null;
 }
 
-/** An animation loaded into a Vizij's device, as {@link Runtime.animations}
- * lists it. */
+/** An animation a Vizij's device holds, as {@link Runtime.animations} lists
+ * it: the id its player is named after, and the player's length. */
 export interface LoadedAnimation {
   id: string;
-  name: string | null;
   /** Seconds. */
   duration: number;
 }
 
-/** A loaded animation as the wasm lists it: with the player it plays on and its
- * instance there, what the module's transport functions take. */
-interface WasmLoadedAnimation extends LoadedAnimation {
-  player: number;
-  instance: number;
+/** What the wasm makes of an animation for the module's `load_animation`. */
+interface WasmModuleAnimation {
+  id: string;
+  name: string | null;
+  duration: number;
+  /** The module's `AnimationClip`, as an Arora `Value`. */
+  moduleAnimation: object;
 }
 
 /** An animation's playback, as {@link Runtime.animationState} reads it. */
@@ -393,14 +405,29 @@ export interface StopAnimationOptions {
   clearOutputs?: boolean;
 }
 
-/** What the transport remembers of an animation the module does not report: its
- * loop mode, the speed a pause zeroes, whether it was last played — for the
- * player it was set on. */
+/** The module's transport functions that take a player. */
+type TransportFunction = "play" | "pause" | "stop" | "seek" | "set_speed" | "set_loop";
+
+/** A transport method's body: the animation's player, what the runtime
+ * remembers of it, and whether its earlier transport calls are in flight. */
+type TransportCommand = (
+  player: PlayerState,
+  transport: AnimationTransport,
+  settling: boolean,
+) => Promise<void>;
+
+/** What a player's state says a runtime last asked of it. */
+function askedOf(player: PlayerState): AnimationTransport["asked"] {
+  return player.state === "playing" || player.state === "paused" ? player.state : "stopped";
+}
+
+/** What a {@link Runtime} remembers of an animation it drives, for the player
+ * it drives: the speed a pause or stop zeroes (the module reports 0 then),
+ * and what it last asked of the animation. */
 interface AnimationTransport {
   player: number;
-  loop: boolean;
   speed: number;
-  playing: boolean;
+  asked: "playing" | "paused" | "stopped";
   /** Bumped by every play, pause and stop, so a stop's deferred silence
    * yields to a later command. */
   epoch: number;
@@ -426,9 +453,7 @@ interface WasmVizijRuntime {
   readValues(paths: string[]): Record<string, ValueJSON | null>;
   snapshot(): Record<string, ValueJSON>;
   drainChanges(): Record<string, ValueJSON | null>;
-  animations(): WasmLoadedAnimation[];
-  setAnimation(animation_json: string): WasmLoadedAnimation;
-  removeAnimation(id: string): boolean;
+  moduleAnimation(animation_json: string): WasmModuleAnimation;
   free(): void;
 }
 
@@ -547,6 +572,17 @@ export function init(input?: InitInput): Promise<void> {
   return _initPromise;
 }
 
+/** The id a module function returned (`{ u32: 3 }`). */
+function returnedId(ret: unknown): number {
+  const id = (ret as { u32?: unknown } | null)?.u32;
+  if (typeof id !== "number") {
+    throw new Error(
+      `@vizij/runtime: expected an id from the animation module, got ${JSON.stringify(ret)}`,
+    );
+  }
+  return id;
+}
+
 /**
  * A Vizij's device — or, from {@link startRuntime}, a device with no Vizij.
  * All methods talk to the device's own store; the graph it runs reads and
@@ -556,6 +592,12 @@ export function init(input?: InitInput): Promise<void> {
 export class Runtime {
   private inner: WasmVizijRuntime;
   private transports = new Map<string, AnimationTransport>();
+  /** Per animation id, the load or unload in flight: the next one, and the
+   * transport, wait for it. */
+  private loads = new Map<string, Promise<void>>();
+  /** Per animation id, the transport calls in flight: a load or unload waits
+   * for them, so it reads the playback they leave. */
+  private inflight = new Map<string, Set<Promise<void>>>();
 
   constructor(inner: WasmVizijRuntime) {
     this.inner = inner;
@@ -741,35 +783,73 @@ export class Runtime {
   }
 
   /**
-   * The animations loaded into the device's animation module, in load order:
-   * the Vizij's own (its bundle's `animations`, loaded with the device), then
-   * those {@link setAnimation} added. An animation writes the keys its
-   * tracks' channels name through the Vizij's rig (`gaze/left_right` drives
-   * `path("gaze/left_right")`) — while it plays, is paused or has completed;
-   * it loads silent, stopped at its start, looping at speed 1.
+   * The animations the device's animation module holds, whoever loaded them
+   * — the Vizij's own, loaded with it, those {@link loadAnimation} loaded,
+   * and those another client loaded through the module's functions — read
+   * from the module: one per named player holding an instance, in the player
+   * states the animation source writes to `vizij/animations/players` each
+   * step, in load order. An animation writes the keys its tracks' channels
+   * name — while it plays, is paused or has completed.
    */
   animations(): LoadedAnimation[] {
-    return this.inner.animations().map(({ id, name, duration }) => ({ id, name, duration }));
+    const players = this.players();
+    const ids = [...new Set(players.map((player) => player.name))].filter((id) => id !== "");
+    return ids.flatMap((id) => {
+      const player = this.playerOf(id, players);
+      return player ? [{ id, duration: player.duration }] : [];
+    });
   }
 
   /**
-   * Load an animation, or replace the loaded animation of its id, at once —
-   * the authoring timeline's live edit. `animation` is in
-   * {@link describe}'s `animations` shape, its channels resolved through the
-   * Vizij's rig like the bundle's. A replaced animation keeps its playback
-   * (playhead, speed, loop, playing or not) and plays on with the new tracks;
-   * a new one loads silent and stopped.
+   * Load an animation into the device's animation module through the
+   * module's declared functions — what any client sends: `load_animation`,
+   * `create_player` named after the animation's id, `add_instance` at weight
+   * 0 and `stop`. It loads silent, stopped at its start, looping at speed 1.
+   * `animation` is in {@link describe}'s `animations` shape (or a bundle
+   * `animations` entry), its channels resolved through the Vizij's rig like
+   * its own animations'.
+   *
+   * Loading an id already loaded replaces it — the old player and animation
+   * out and the new ones in, in one step — keeping its playback as the
+   * module reports it once the transport calls in flight have landed: the
+   * playhead, loop mode, speed, weight, and whether it plays, is paused or
+   * is stopped. That is the authoring timeline's live edit. Resolves once
+   * the device holds it (two steps, after those calls).
    */
-  setAnimation(animation: Animation): LoadedAnimation {
-    const { id, name, duration } = this.inner.setAnimation(JSON.stringify(animation));
-    return { id, name, duration };
+  loadAnimation(animation: Animation): Promise<LoadedAnimation & { name: string | null }> {
+    const { id, name, duration, moduleAnimation } = this.inner.moduleAnimation(
+      JSON.stringify(animation),
+    );
+    return this.inOrder(id, () => this.load(id, moduleAnimation)).then(() => ({ id, name, duration }));
   }
 
-  /** Unload an animation; its keys keep the values it last wrote. Returns
-   * whether it was loaded. */
-  removeAnimation(id: string): boolean {
-    this.transports.delete(id);
-    return this.inner.removeAnimation(id);
+  /**
+   * Unload an animation through the module's declared functions, once the
+   * transport calls in flight on it have landed: `remove_player` on its
+   * player and `unload_animation` on what it plays. Its keys keep the values
+   * it last wrote — a `stopAnimation` issued before returns them to its first
+   * frame. Resolves (after the step that applies it) to whether it was
+   * loaded.
+   */
+  unloadAnimation(id: string): Promise<boolean> {
+    return this.inOrder(id, async () => {
+      const transport = this.transports.get(id);
+      if (transport) {
+        transport.epoch += 1;
+        this.transports.delete(id);
+      }
+      const player = this.playerOf(id);
+      if (!player) {
+        return false;
+      }
+      await Promise.all([
+        this.animationCall("remove_player", { player: { u32: player.player } }),
+        ...player.instances.map(({ anim }) =>
+          this.animationCall("unload_animation", { anim: { u32: anim } }),
+        ),
+      ]);
+      return true;
+    });
   }
 
   /**
@@ -779,28 +859,30 @@ export class Runtime {
    * its last pose there until stopped or played again with `reset`.
    */
   playAnimation(id: string, options: PlayAnimationOptions = {}): Promise<void> {
-    const [animation, transport] = this.animationTransport(id);
-    if (options.speed !== undefined) {
-      transport.speed = options.speed;
-    }
-    transport.playing = true;
-    transport.epoch += 1;
-    const calls = [this.animationWeight(animation, 1)];
-    if (options.reset) {
-      calls.push(this.animationCall("seek", animation, { time_ns: { u64: 0 } }));
-    }
-    calls.push(this.animationCall("play", animation));
-    // `play` resumes at speed 1: the animation's own speed follows it.
-    calls.push(this.animationCall("set_speed", animation, { speed: { f32: transport.speed } }));
-    return Promise.all(calls).then(() => undefined);
+    return this.transport(id, (player, transport) => {
+      if (options.speed !== undefined) {
+        transport.speed = options.speed;
+      }
+      transport.asked = "playing";
+      transport.epoch += 1;
+      const calls = [this.weigh(player, 1)];
+      if (options.reset) {
+        calls.push(this.playerCall("seek", player, { time_ns: { u64: 0 } }));
+      }
+      calls.push(this.playerCall("play", player));
+      // `play` resumes at speed 1: the animation's own speed follows it.
+      calls.push(this.playerCall("set_speed", player, { speed: { f32: transport.speed } }));
+      return Promise.all(calls).then(() => undefined);
+    });
   }
 
   /** Hold an animation's playhead, and its pose. Applied at the next step. */
   pauseAnimation(id: string): Promise<void> {
-    const [animation, transport] = this.animationTransport(id);
-    transport.playing = false;
-    transport.epoch += 1;
-    return this.animationCall("pause", animation);
+    return this.transport(id, (player, transport) => {
+      transport.asked = "paused";
+      transport.epoch += 1;
+      return this.playerCall("pause", player);
+    });
   }
 
   /**
@@ -810,118 +892,245 @@ export class Runtime {
    * silent; the promise resolves once silent. A play before then wins.
    */
   stopAnimation(id: string, options: StopAnimationOptions = {}): Promise<void> {
-    const [animation, transport] = this.animationTransport(id);
-    transport.playing = false;
-    const epoch = (transport.epoch += 1);
-    const stopped = this.animationCall("stop", animation);
-    if (options.clearOutputs === false) {
-      return Promise.all([stopped, this.animationWeight(animation, 0)]).then(() => undefined);
-    }
-    return stopped.then(() =>
-      transport.epoch === epoch ? this.animationWeight(animation, 0) : undefined,
-    );
+    return this.transport(id, (player, transport) => {
+      transport.asked = "stopped";
+      const epoch = (transport.epoch += 1);
+      const stopped = this.playerCall("stop", player);
+      if (options.clearOutputs === false) {
+        return Promise.all([stopped, this.weigh(player, 0)]).then(() => undefined);
+      }
+      return stopped.then(() => (transport.epoch === epoch ? this.weigh(player, 0) : undefined));
+    });
   }
 
   /** Move an animation's playhead to `seconds`. Applied at the next step; a
    * silent animation moves without writing. */
   seekAnimation(id: string, seconds: number): Promise<void> {
-    const [animation] = this.animationTransport(id);
-    const ns = Math.max(0, Math.round(seconds * 1e9));
-    return this.animationCall("seek", animation, { time_ns: { u64: ns } });
+    return this.transport(id, (player) => {
+      const ns = Math.max(0, Math.round(seconds * 1e9));
+      return this.playerCall("seek", player, { time_ns: { u64: ns } });
+    });
   }
 
   /** Loop an animation at its end (the default), or stop it there: `false`
    * lets it complete. Applied at the next step. */
   setAnimationLoop(id: string, loop: boolean): Promise<void> {
-    const [animation, transport] = this.animationTransport(id);
-    transport.loop = loop;
-    return this.animationCall("set_loop", animation, { mode: { str: loop ? "loop" : "once" } });
+    return this.transport(id, (player) =>
+      this.playerCall("set_loop", player, { mode: { str: loop ? "loop" : "once" } }),
+    );
   }
 
   /** Set an animation's speed multiplier: at once while it plays (at the next
    * step), else from its next play. */
   setAnimationSpeed(id: string, speed: number): Promise<void> {
-    const [animation, transport] = this.animationTransport(id);
-    transport.speed = speed;
-    return transport.playing
-      ? this.animationCall("set_speed", animation, { speed: { f32: speed } })
-      : Promise.resolve();
+    return this.transport(id, (player, transport, settling) => {
+      transport.speed = speed;
+      // While this runtime's own calls are in flight the player states lag
+      // them: what it last asked stands for the module's state.
+      const playing = settling ? transport.asked === "playing" : player.state === "playing";
+      return playing
+        ? this.playerCall("set_speed", player, { speed: { f32: speed } })
+        : Promise.resolve();
+    });
   }
 
   /**
    * An animation's playback as the animation source last reported it — the
    * player states it writes to `vizij/animations/players` each step, which
-   * may lag a transport call by a step — or `null` for an animation that is
-   * not loaded.
-   * Cheap enough to poll every frame.
+   * may lag a transport call by a step — or `null` for an animation the
+   * device does not hold. The speed of a paused or stopped animation, which
+   * the module reports as 0, is the one this runtime last set (1 when it set
+   * none). Cheap enough to poll every frame.
    */
   animationState(id: string): AnimationState | null {
-    const animation = this.inner.animations().find((loaded) => loaded.id === id);
-    if (!animation) {
+    const player = this.playerOf(id);
+    if (!player) {
       return null;
     }
-    const transport = this.transportOf(animation);
-    const player = decodePlayerStates(
-      this.inner.readValues([ANIMATION_PLAYERS_PATH])[ANIMATION_PLAYERS_PATH],
-    ).find((state) => state.player === animation.player);
-    const duration = player && player.duration > 0 ? player.duration : animation.duration;
-    const time = player?.time ?? 0;
+    const loop = player.loopMode !== "once";
     // A non-looping player clamps its playhead at the end, still advancing.
-    const completed = !transport.loop && duration > 0 && time >= duration - 1e-3;
+    const completed = !loop && player.duration > 0 && player.time >= player.duration - 1e-3;
     return {
-      time,
-      duration,
-      playing: player?.state === "playing" && !completed,
-      loop: transport.loop,
-      speed: transport.speed,
+      time: player.time,
+      duration: player.duration,
+      playing: player.state === "playing" && !completed,
+      loop,
+      speed: player.speed !== 0 ? player.speed : (this.remembered(id, player)?.speed ?? 1),
       completed,
     };
   }
 
-  /** The loaded animation `id` and its transport memory; throws for an
-   * animation that is not loaded. */
-  private animationTransport(id: string): [WasmLoadedAnimation, AnimationTransport] {
-    const animation = this.inner.animations().find((loaded) => loaded.id === id);
-    if (!animation) {
-      throw new Error(`@vizij/runtime: no animation ${JSON.stringify(id)} is loaded`);
+  /** Load `moduleAnimation` as animation `id`, replacing the one loaded under it: the new
+   * player and animation first (one step), then — in one step, so no frame
+   * goes without either — the old player and animation out, the new instance
+   * in at the old one's weight, and the old playback restored as the module
+   * reports it after the first step. */
+  private async load(id: string, moduleAnimation: object): Promise<void> {
+    const before = this.playerOf(id);
+    const [anim, player] = await Promise.all([
+      this.animationCall("load_animation", { clip: moduleAnimation }).then(returnedId),
+      this.animationCall("create_player", { name: { str: id } }).then(returnedId),
+    ]);
+    // The old player as the module reports it now: after every transport
+    // call issued before this load, and the step that loaded the new one.
+    const old = before && (this.players().find((p) => p.player === before.player) ?? before);
+    const kept = old ? this.remembered(id, old) : undefined;
+    const calls: Promise<unknown>[] = [];
+    if (old) {
+      calls.push(this.animationCall("remove_player", { player: { u32: old.player } }));
+      for (const instance of old.instances) {
+        calls.push(this.animationCall("unload_animation", { anim: { u32: instance.anim } }));
+      }
     }
-    return [animation, this.transportOf(animation)];
+    calls.push(
+      this.animationCall("add_instance", {
+        player: { u32: player },
+        anim: { u32: anim },
+        weight: { f32: old?.instances[0]?.weight ?? 0 },
+      }),
+    );
+    const command = (name: TransportFunction, args = {}) =>
+      calls.push(this.animationCall(name, { player: { u32: player }, ...args }));
+    if (old && old.loopMode !== "loop") {
+      command("set_loop", { mode: { str: old.loopMode } });
+    }
+    if (old && old.state !== "stopped") {
+      command("seek", { time_ns: { u64: Math.round(old.time * 1e9) } });
+      if (old.state === "playing") {
+        command("play");
+        command("set_speed", { speed: { f32: old.speed } });
+      } else {
+        command("pause");
+      }
+    } else {
+      command("stop");
+    }
+    await Promise.all(calls);
+    const speed = old && old.speed !== 0 ? old.speed : (kept?.speed ?? 1);
+    const asked = old ? askedOf(old) : "stopped";
+    this.transports.set(id, { player, speed, asked, epoch: kept?.epoch ?? 0 });
   }
 
-  /** What the transport remembers of `animation`, fresh for a player it has
-   * not seen (an animation loaded anew starts looping at speed 1, stopped). */
-  private transportOf(animation: WasmLoadedAnimation): AnimationTransport {
-    let transport = this.transports.get(animation.id);
-    if (!transport || transport.player !== animation.player) {
-      transport = { player: animation.player, loop: true, speed: 1, playing: false, epoch: 0 };
-      this.transports.set(animation.id, transport);
-    }
-    return transport;
+  /** Run `task` once the load or unload of `id` in flight, and the transport
+   * calls in flight on it, have settled; the next load or unload, and the
+   * transport, wait for it in turn. */
+  private inOrder<T>(id: string, task: () => Promise<T>): Promise<T> {
+    const before = [this.loads.get(id), ...(this.inflight.get(id) ?? [])].map((pending) =>
+      pending?.catch(() => undefined),
+    );
+    const run = Promise.all(before).then(task);
+    const settled = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.loads.set(id, settled);
+    void settled.then(() => {
+      if (this.loads.get(id) === settled) {
+        this.loads.delete(id);
+      }
+    });
+    return run;
   }
 
-  /** Call one of the module's transport functions on `animation`'s player, with
-   * its other arguments by parameter name. */
+  /**
+   * Run a transport `command` on animation `id`'s player — now, so its calls
+   * enqueue before this returns, or after the load or unload of `id` in
+   * flight. It rejects for an animation the device does not hold. `settling`
+   * says whether this runtime's earlier transport calls on `id` are still in
+   * flight.
+   */
+  private transport(id: string, command: TransportCommand): Promise<void> {
+    const issue = (): Promise<void> => {
+      try {
+        const player = this.playerOf(id);
+        if (!player) {
+          throw new Error(`@vizij/runtime: no animation ${JSON.stringify(id)} is loaded`);
+        }
+        let transport = this.remembered(id, player);
+        if (!transport) {
+          const speed = player.speed || 1;
+          transport = { player: player.player, speed, asked: askedOf(player), epoch: 0 };
+          this.transports.set(id, transport);
+        }
+        return command(player, transport, (this.inflight.get(id)?.size ?? 0) > 0);
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    };
+    const pending = this.loads.get(id);
+    const run = pending ? pending.then(issue) : issue();
+    const inflight = this.inflight.get(id) ?? new Set<Promise<void>>();
+    this.inflight.set(id, inflight);
+    inflight.add(run);
+    const done = () => {
+      inflight.delete(run);
+      if (inflight.size === 0 && this.inflight.get(id) === inflight) {
+        this.inflight.delete(id);
+      }
+    };
+    run.then(done, done);
+    return run;
+  }
+
+  /** The module's players, as the animation source last wrote them. */
+  private players(): PlayerState[] {
+    return decodePlayerStates(
+      this.inner.readValues([ANIMATION_PLAYERS_PATH])[ANIMATION_PLAYERS_PATH],
+    );
+  }
+
+  /** The player animation `id` plays on, among `players`: the newest named
+   * `id` that holds an instance. */
+  private playerOf(id: string, players = this.players()): PlayerState | undefined {
+    return players.filter((player) => player.name === id && player.instances.length > 0).pop();
+  }
+
+  /** What this runtime remembers of animation `id`, when it is about `player`
+   * — or while a load of `id` is in flight, which moves it to the new player
+   * once done. */
+  private remembered(id: string, player: PlayerState): AnimationTransport | undefined {
+    const transport = this.transports.get(id);
+    return transport && (transport.player === player.player || this.loads.has(id))
+      ? transport
+      : undefined;
+  }
+
+  /** Call one of the animation module's declared functions, with its
+   * arguments by parameter name; resolves to what it returns. */
   private animationCall<F extends keyof typeof ANIMATION_IDS>(
     name: F,
-    animation: WasmLoadedAnimation,
     args: Record<string, object> = {},
-  ): Promise<void> {
+  ): Promise<unknown> {
     const ids = ANIMATION_IDS[name] as Record<string, string>;
     return this.call({
       id: ids.function,
-      args: [
-        { id: ids.player, value: { u32: animation.player } },
-        ...Object.entries(args).map(([parameter, value]) => ({ id: ids[parameter], value })),
-      ],
-    }).then(() => undefined);
+      args: Object.entries(args).map(([parameter, value]) => ({ id: ids[parameter], value })),
+    }).then((result) => result.ret);
   }
 
-  /** Give `animation`'s instance `weight`: 0 silences it, 1 lets it write. */
-  private animationWeight(animation: WasmLoadedAnimation, weight: number): Promise<void> {
-    return this.animationCall("set_weight", animation, {
-      instance: { u32: animation.instance },
-      weight: { f32: weight },
-    });
+  /** Call one of the module's transport functions on `player`. */
+  private playerCall(
+    name: TransportFunction,
+    player: PlayerState,
+    args: Record<string, object> = {},
+  ): Promise<void> {
+    return this.animationCall(name, { player: { u32: player.player }, ...args }).then(
+      () => undefined,
+    );
+  }
+
+  /** Give `player`'s instances `weight`: 0 silences the animation, 1 lets it
+   * write. */
+  private weigh(player: PlayerState, weight: number): Promise<void> {
+    return Promise.all(
+      player.instances.map(({ instance }) =>
+        this.animationCall("set_weight", {
+          player: { u32: player.player },
+          instance: { u32: instance },
+          weight: { f32: weight },
+        }),
+      ),
+    ).then(() => undefined);
   }
 
   /** Release the wasm-side device. The instance is unusable afterwards; a

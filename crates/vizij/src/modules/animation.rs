@@ -14,13 +14,10 @@
 //! players. Each closure reads its arguments by parameter id: the order a
 //! caller sends them in carries no meaning.
 //!
-//! A face's animations (its bundle's `animations`) load into that engine when
-//! the device is built ([`host_module_with_animations`]): each its own player,
-//! playing one instance of it, every track keyed by the store key its channel
-//! names through the face's rig. A loaded animation is silent — its instance
-//! has no weight — and stopped at its start; playing it is the transport's
-//! (the declared functions), which gives the instance weight. [`Animations`]
-//! lists them and edits them in place.
+//! An animation loads through the declared functions, whoever the client:
+//! [`module_animation`] converts a face's authored animation into the
+//! `AnimationClip` that `load_animation` takes, its tracks keyed through the
+//! face's rig.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -32,42 +29,21 @@ use arora_types::module::declared::AroraModule;
 use arora_types::record::module::frozen::{ExportKind, Function};
 use arora_types::value::Value;
 use arora_types::AroraType;
-use serde::Serialize;
 use uuid::Uuid;
 use vizij_animation_module::animation::{self, ids};
 use vizij_animation_module::{
     AnimTrack, AnimationClip, AnimationModule, Keypoint, PlayerState, TrackOutput, TransitionHandle,
 };
 use vizij_arora_host::contents::{Animation, AnimationTrack};
-use vizij_arora_host::{Bundle, ChannelKeys};
+use vizij_arora_host::ChannelKeys;
 
 /// A registered function's body: the call's arguments in, its return out.
 type Body = Box<dyn FnMut(&Call) -> Result<Value, CallError>>;
 
 /// The animation module as a host module over an engine of its own: every
-/// declared function, dispatched in-process under its declared id. No
-/// animation is loaded.
+/// declared function, dispatched in-process under its declared id.
 pub fn host_module() -> HostModule {
-    host_module_over(Rc::new(RefCell::new(AnimationModule::new())))
-}
-
-/// [`host_module`] with `bundle`'s animations loaded into its engine, and the
-/// handle that lists and edits them.
-pub fn host_module_with_animations(bundle: &Bundle) -> (HostModule, Animations) {
     let state = Rc::new(RefCell::new(AnimationModule::new()));
-    let mut animations = Animations {
-        module: state.clone(),
-        keys: bundle.channel_keys(),
-        loaded: Vec::new(),
-    };
-    for authored in &bundle.animations {
-        animations.set(authored);
-    }
-    (host_module_over(state), animations)
-}
-
-/// The host module dispatching every declared function to `state`.
-fn host_module_over(state: Rc<RefCell<AnimationModule>>) -> HostModule {
     let a = |_: ()| state.clone();
     let bodies: Vec<(Uuid, Body)> = vec![
         (ids::load_animation::FUNCTION, {
@@ -89,7 +65,10 @@ fn host_module_over(state: Rc<RefCell<AnimationModule>>) -> HostModule {
             Box::new(move |call| {
                 let player = arg(call, ids::add_instance::PLAYER, "player")?;
                 let anim = arg(call, ids::add_instance::ANIM, "anim")?;
-                Ok(Value::from(a.borrow_mut().add_instance(player, anim)))
+                let weight = arg(call, ids::add_instance::WEIGHT, "weight")?;
+                Ok(Value::from(
+                    a.borrow_mut().add_instance(player, anim, weight),
+                ))
             })
         }),
         (ids::step::FUNCTION, {
@@ -193,6 +172,20 @@ fn host_module_over(state: Rc<RefCell<AnimationModule>>) -> HostModule {
                 )))
             })
         }),
+        (ids::unload_animation::FUNCTION, {
+            let a = a(());
+            Box::new(move |call| {
+                let anim = arg(call, ids::unload_animation::ANIM, "anim")?;
+                Ok(Value::from(a.borrow_mut().unload_animation(anim)))
+            })
+        }),
+        (ids::remove_player::FUNCTION, {
+            let a = a(());
+            Box::new(move |call| {
+                let player = arg(call, ids::remove_player::PLAYER, "player")?;
+                Ok(Value::from(a.borrow_mut().remove_player(player)))
+            })
+        }),
     ];
 
     let mut signatures = signatures();
@@ -215,104 +208,7 @@ fn host_module_over(state: Rc<RefCell<AnimationModule>>) -> HostModule {
         .build()
 }
 
-// --- The face's animations ---------------------------------------------------
-
-/// An animation loaded into a device's animation engine: what a transport
-/// plays it by. Serializes in camelCase.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LoadedAnimation {
-    /// The animation's id in the bundle.
-    pub id: String,
-    pub name: Option<String>,
-    /// In seconds.
-    pub duration: f64,
-    /// The player the animation plays on, its own: `play`, `pause`, `stop`,
-    /// `seek`, `set_speed` and `set_loop` take it, and its `PlayerState`
-    /// carries it.
-    pub player: u32,
-    /// The animation's instance on its player: `set_weight` takes it.
-    /// Weight 0 (as loaded) silences the animation; any other weight lets it
-    /// write its keys. Changes when the animation is edited.
-    pub instance: u32,
-    #[serde(skip)]
-    anim: u32,
-}
-
-/// The animations loaded into one device's animation engine, in load order:
-/// the face's own, then those added since. Edits apply to the engine at once,
-/// so between two steps: on the thread the device steps on.
-pub struct Animations {
-    module: Rc<RefCell<AnimationModule>>,
-    keys: ChannelKeys,
-    loaded: Vec<LoadedAnimation>,
-}
-
-impl Animations {
-    /// The loaded animations, in load order.
-    pub fn list(&self) -> &[LoadedAnimation] {
-        &self.loaded
-    }
-
-    /// Load `animation`, or replace the loaded animation of its id, and
-    /// return it as loaded. A new animation gets a player of its own and
-    /// loads silent and stopped at its start (both at the next step). A
-    /// replaced animation keeps its player — its playhead, speed, loop mode —
-    /// and its instance's weight: playing, it plays on with the new tracks.
-    pub fn set(&mut self, animation: &Animation) -> LoadedAnimation {
-        let converted = module_animation(animation, &self.keys);
-        let mut module = self.module.borrow_mut();
-        if let Some(index) = self
-            .loaded
-            .iter()
-            .position(|loaded| loaded.id == animation.id)
-        {
-            let loaded = &mut self.loaded[index];
-            if let Some((anim, instance)) =
-                module.replace_instance(loaded.player, loaded.instance, converted.clone())
-            {
-                loaded.anim = anim;
-                loaded.instance = instance;
-                loaded.name = animation.name.clone();
-                loaded.duration = animation.duration;
-                return loaded.clone();
-            }
-            // Its instance went out from under it (a caller removed it
-            // through the declared `remove_instance`): load it afresh.
-            let stale = self.loaded.remove(index);
-            module.unload_animation(stale.anim);
-            module.remove_player(stale.player);
-        }
-        let anim = module.load_animation(converted);
-        let player = module.create_player(Some(animation.id.clone()));
-        let instance = module.add_instance(player, anim);
-        module.set_weight(player, instance, 0.0);
-        module.stop(player);
-        let loaded = LoadedAnimation {
-            id: animation.id.clone(),
-            name: animation.name.clone(),
-            duration: animation.duration,
-            player,
-            instance,
-            anim,
-        };
-        self.loaded.push(loaded.clone());
-        loaded
-    }
-
-    /// Unload the animation `id` and its player. Its keys keep the values it
-    /// last wrote. Returns whether it was loaded.
-    pub fn remove(&mut self, id: &str) -> bool {
-        let Some(index) = self.loaded.iter().position(|loaded| loaded.id == id) else {
-            return false;
-        };
-        let loaded = self.loaded.remove(index);
-        let mut module = self.module.borrow_mut();
-        module.unload_animation(loaded.anim);
-        module.remove_player(loaded.player);
-        true
-    }
-}
+// --- A face's animations, as the module takes them ---------------------------
 
 /// `animation` as the animation module's [`AnimationClip`]: each track keyed
 /// by the store key its channel names (`keys`), its keyframes stamped over the
@@ -492,6 +388,7 @@ fn array_of<T: AroraType + Into<Value>>(records: Vec<T>) -> Value {
 mod tests {
     use super::*;
     use arora_types::value::StructureField;
+    use vizij_arora_host::Bundle;
     use vizij_arora_store::BlackboardStore;
 
     fn device() -> arora::Arora {
@@ -678,84 +575,55 @@ mod tests {
         assert_eq!(points[3], (1.0, 0.0, 1, 0));
     }
 
-    /// Animations load silent and stopped, one player each; an edit keeps the
-    /// player and swaps the instance; a removal takes the player.
+    /// `add_instance`'s optional weight: left out, the instance blends at 1;
+    /// at 0 it writes nothing.
     #[test]
-    fn animations_load_silent_and_are_edited_in_place() {
-        let bundle = Bundle::from_bundle_json(&serde_json::json!({ "animations": [
-            { "id": "a", "clip": { "duration": 1, "tracks": [
-                { "channel": "a/x", "keyframes": [{ "time": 0, "value": 1 }] },
-            ] } },
-            { "id": "b", "clip": { "duration": 1, "tracks": [
-                { "channel": "b/x", "keyframes": [{ "time": 0, "value": 1 }] },
-            ] } },
-        ] }));
-        let (module, mut animations) = host_module_with_animations(&bundle);
-        let mut device = arora::Arora::builder()
-            .with_data_store(Box::new(BlackboardStore::new()))
-            .with_host_module(module)
-            .build()
-            .expect("build arora");
-        let loaded: Vec<&str> = animations.list().iter().map(|a| a.id.as_str()).collect();
-        assert_eq!(loaded, ["a", "b"]);
-        let a = animations.list()[0].clone();
-        assert_ne!(a.player, animations.list()[1].player, "a player each");
-
-        let step = |device: &mut arora::Arora| {
+    fn an_instance_added_through_a_call_takes_its_weight() {
+        let mut device = device();
+        let clip = |key: &str| {
+            module_animation(
+                &authored(serde_json::json!({ "id": key, "duration": 1, "tracks": [
+                    { "channel": key, "keyframes": [{ "time": 0, "value": 1 }] },
+                ] })),
+                &ChannelKeys::default(),
+            )
+        };
+        let player = create_player(&mut device, "p");
+        for (key, weight) in [("loud", None), ("quiet", Some(0.0))] {
+            let Value::U32(anim) = call(
+                &mut device,
+                ids::load_animation::FUNCTION,
+                vec![field(ids::load_animation::CLIP, clip(key).into())],
+            ) else {
+                panic!("an animation id");
+            };
+            let mut args = vec![
+                field(ids::add_instance::PLAYER, Value::U32(player)),
+                field(ids::add_instance::ANIM, Value::U32(anim)),
+            ];
+            if let Some(weight) = weight {
+                args.push(field(ids::add_instance::WEIGHT, Value::F32(weight)));
+            }
+            call(&mut device, ids::add_instance::FUNCTION, args);
+        }
+        let out = format!(
+            "{:?}",
             call(
-                device,
+                &mut device,
                 ids::step::FUNCTION,
                 vec![field(ids::step::DT_NS, Value::U64(0))],
             )
-        };
-        let outputs = |value: Value| match value {
-            Value::ArrayStructure { elements, .. } => elements.len(),
-            other => panic!("expected an array of TrackOutput, got {other:?}"),
-        };
-        assert_eq!(outputs(step(&mut device)), 0, "loaded silent");
-        let states = call(&mut device, ids::player_states::FUNCTION, Vec::new());
+        );
         assert!(
-            format!("{states:?}").matches("stopped").count() == 2,
-            "loaded stopped: {states:?}"
+            out.contains("loud") && !out.contains("quiet"),
+            "only the weighted instance writes: {out}"
         );
-
-        call(
-            &mut device,
-            ids::set_weight::FUNCTION,
-            vec![
-                field(ids::set_weight::PLAYER, Value::U32(a.player)),
-                field(ids::set_weight::INSTANCE, Value::U32(a.instance)),
-                field(ids::set_weight::WEIGHT, Value::F32(1.0)),
-            ],
-        );
-        assert_eq!(outputs(step(&mut device)), 1, "weighted, it writes");
-
-        let edited = animations.set(&authored(
-            serde_json::json!({ "id": "a", "duration": 3, "tracks": [
-            { "channel": "a/y", "keyframes": [{ "time": 0, "value": 2 }] },
-        ] }),
-        ));
-        assert_eq!(edited.player, a.player, "an edit keeps the player");
-        assert_ne!(edited.instance, a.instance);
-        assert_eq!(edited.duration, 3.0);
-        let out = format!("{:?}", step(&mut device));
-        assert!(
-            out.contains("a/y") && !out.contains("a/x"),
-            "the new tracks play: {out}"
-        );
-
-        assert!(animations.remove("b"));
-        assert!(!animations.remove("b"));
-        let added = animations.set(&authored(serde_json::json!({ "id": "c", "tracks": [] })));
-        assert_eq!(animations.list().len(), 2);
-        assert_eq!(added.duration, 0.0);
-        assert_eq!(player_count(&mut device), 2);
     }
 
     #[test]
     fn every_declared_function_is_registered_and_described() {
         let declared = function_modules();
-        assert_eq!(declared.len(), 15);
+        assert_eq!(declared.len(), 17);
         let module = host_module();
         let described: Vec<Uuid> = module.descriptions().iter().map(|d| d.id).collect();
         for function in declared.keys() {

@@ -19,7 +19,8 @@ use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
 use crate::face::{
-    builder_for, declare_keys, load_face, stage_neutral_pose, FaceConfig, LoadedFace,
+    builder_for, declare_keys, load_animations, load_face, stage_neutral_pose, FaceConfig,
+    LoadedFace,
 };
 use crate::modules::rest;
 use crate::view::meta::FaceMeta;
@@ -302,11 +303,15 @@ pub fn start(glb: &[u8], config: FaceConfig, bridges: BridgeConfig, mode: Mode) 
                         stage_neutral_pose(&store, &meta);
                     }
                     let speech = config.speech.as_ref().map(|build| build());
-                    let Some(builder) = builder_for(&spec, rig, store, &meta.bundle, speech) else {
+                    let Some(builder) = builder_for(&spec, rig, store, &meta.bundle.skills, speech)
+                    else {
                         return;
                     };
                     match builder.build() {
-                        Ok(mut arora) => step_forever(&mut arora),
+                        Ok(mut arora) => {
+                            load_face_animations(&mut arora, &meta);
+                            step_forever(&mut arora)
+                        }
                         Err(e) => log::error!("building the arora device: {e:?}"),
                     }
                 }
@@ -374,7 +379,8 @@ fn supervise(
         // each rests — said to the store, which every bridge relays.
         declare_keys(&store, &spec, &meta.bundle.neutral_stage_writes());
         let speech = config.speech.as_ref().map(|build| build());
-        let Some(builder) = builder_for(&spec, rig, store.clone(), &meta.bundle, speech) else {
+        let Some(builder) = builder_for(&spec, rig, store.clone(), &meta.bundle.skills, speech)
+        else {
             return;
         };
         let builder = builder.with_host_module(rest::host_module(Box::new(store.clone())));
@@ -386,7 +392,7 @@ fn supervise(
             // teardown is complete and synchronous (front end released, local
             // bridge's port freed) before the next generation starts.
             tokio::select! {
-                result = run_generation(builder, frontend) => {
+                result = run_generation(builder, frontend, &meta) => {
                     if let Err(e) = result {
                         log::error!("arora device stopped: {e:?}");
                     }
@@ -412,8 +418,10 @@ fn supervise(
 async fn run_generation(
     builder: arora::AroraBuilder,
     frontend: Option<arora::operator::Frontend>,
+    meta: &FaceMeta,
 ) -> Result<()> {
     let mut arora = builder.build().context("failed to build the device")?;
+    load_face_animations(&mut arora, meta);
     if let Some(frontend) = frontend {
         (frontend.on_ready)(arora.store().subscribe(), None, None);
     }
@@ -511,6 +519,15 @@ fn tui_command(event: arora::tui::TuiCommandEvent) -> Option<Command> {
             }
         },
         _ => None,
+    }
+}
+
+/// Load the face's animations into its freshly built device
+/// ([`load_animations`]). A failure is logged and the device runs on without
+/// them: every other skill still serves.
+fn load_face_animations(arora: &mut arora::Arora, meta: &FaceMeta) {
+    if let Err(e) = load_animations(arora, &meta.bundle) {
+        log::error!("loading the face's animations: {e:#}");
     }
 }
 

@@ -19,7 +19,7 @@ use arora_types::value::Value;
 use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
-use crate::face::{builder_for, Bundle};
+use crate::face::builder_for;
 use crate::view::frames::{encode_frame, FrameFormat};
 
 /// Bytes the process has been handed and has not given back.
@@ -195,16 +195,10 @@ async fn the_device_alone_keeps_a_flat_heap_under_a_frame_feed() {
 
     let rig = RigHal::new();
     let store = BlackboardStore::new();
-    let mut arora = builder_for(
-        &fan_out_spec(),
-        rig.clone(),
-        store.clone(),
-        &Bundle::default(),
-        None,
-    )
-    .expect("build the device")
-    .build()
-    .expect("build arora");
+    let mut arora = builder_for(&fan_out_spec(), rig.clone(), store.clone(), &[], None)
+        .expect("build the device")
+        .build()
+        .expect("build arora");
 
     let device = async {
         loop {
