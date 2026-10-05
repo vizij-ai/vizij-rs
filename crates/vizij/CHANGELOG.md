@@ -14,8 +14,8 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   the face loads, natively and in the browser, through the animation
   module's declared functions — the calls any client sends
   (`face::load_animations`): `load_animation`, `create_player` named after
-  the animation's id, `add_instance` at weight 0, `stop`. Each track writes
-  the rig input its channel names. A loaded animation is silent until
+  the animation's id, `add_instance_with_weight` at 0, `stop`. Each track
+  writes the rig input its channel names. A loaded animation is silent until
   played: a client finds its player by name in `player_states` (the
   `vizij/animations/players` key), gives its instance weight with
   `set_weight`, then drives it with `play`, `pause`, `stop`, `seek`,

@@ -339,7 +339,7 @@ pub fn builder_with_guests(
 /// animation. Per animation, in the bundle's order: `load_animation` (its
 /// tracks keyed by the store keys their channels name through the face's
 /// rig, [`animation::module_animation`]), `create_player` named after the
-/// animation's id, `add_instance` at weight 0, and `stop`. Each is then
+/// animation's id, `add_instance_with_weight` at 0, and `stop`. Each is then
 /// silent, stopped at its start, until a client plays it — `set_weight` on
 /// its instance, then `play` — finding its player by name in
 /// `player_states`. Call it before the device's first step.
@@ -383,11 +383,11 @@ pub fn load_animations(arora: &mut arora::Arora, bundle: &Bundle) -> Result<()> 
             )],
         )?;
         call(
-            ids::add_instance::FUNCTION,
+            ids::add_instance_with_weight::FUNCTION,
             vec![
-                (ids::add_instance::PLAYER, AValue::U32(player)),
-                (ids::add_instance::ANIM, AValue::U32(anim)),
-                (ids::add_instance::WEIGHT, AValue::F32(0.0)),
+                (ids::add_instance_with_weight::PLAYER, AValue::U32(player)),
+                (ids::add_instance_with_weight::ANIM, AValue::U32(anim)),
+                (ids::add_instance_with_weight::WEIGHT, AValue::F32(0.0)),
             ],
         )?;
         call(

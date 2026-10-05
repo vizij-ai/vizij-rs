@@ -51,10 +51,12 @@ Loading and unloading are structural edits, applied immediately:
 - `load_animation(clip: AnimationClip) -> u32` — load a clip, return its `AnimId`.
 - `create_player(name: Option<str>) -> u32` — return a `PlayerId`; the name
   defaults to empty. A player plays from its creation, at speed 1, looping.
-- `add_instance(player: u32, anim: u32, weight: Option<f32>) -> u32` — attach
-  an instance of `anim` to `player`, blending at `weight` (1 when left out),
-  and return its `InstId`. At weight 0 it writes nothing until `set_weight`
-  gives it one.
+- `add_instance(player: u32, anim: u32) -> u32` — attach an instance of
+  `anim` to `player`, blending at weight 1, and return its `InstId`.
+- `add_instance_with_weight(player: u32, anim: u32, weight: f32) -> u32` — the
+  same, blending at `weight`. Added at 0, it writes nothing until `set_weight`
+  gives it a weight: a client learns the instance's id only from the reply, so
+  its own `set_weight` lands a step after the instance.
 - `remove_instance(player: u32, instance: u32) -> u32` — 1 when the instance
   was on the player, 0 otherwise.
 - `remove_player(player: u32) -> bool` — the player and its instances; the

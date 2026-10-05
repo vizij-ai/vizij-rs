@@ -2,8 +2,8 @@
 //! drive the module through its declared interface — the header from
 //! [`animation::header`], the calls through the declaration's own client
 //! stubs over the real buffer ABI — and assert a one-track 0->1 ramp advances,
-//! the player states come back with their instances, and the animation
-//! unloads.
+//! the player states come back with their instances and weights, and the
+//! animation unloads.
 //!
 //! What it proves is the `arora_call` boundary contract: the guest entry points
 //! the declaration generates and the client stubs it generates agree, arrays of
@@ -91,7 +91,7 @@ fn ramp_advances_through_the_wasm_module() {
     let player =
         animation::client::create_player(&mut engine, Some("p".into())).expect("create_player");
     let instance =
-        animation::client::add_instance(&mut engine, player, anim, None).expect("add_instance");
+        animation::client::add_instance(&mut engine, player, anim).expect("add_instance");
 
     // --- step twice by 0.25 s: the ramp advances 0 -> 0.25 -> 0.5 -----------
     let quarter_s = 250_000_000u64;
@@ -118,15 +118,20 @@ fn ramp_advances_through_the_wasm_module() {
         sampled(second)
     );
 
+    // --- a second instance, added at weight 0 --------------------------------
+    let silent = animation::client::add_instance_with_weight(&mut engine, player, anim, 0.0)
+        .expect("add_instance_with_weight");
+
     // --- the player states come back as records, nested instances included --
     let states = animation::client::player_states(&mut engine).expect("player_states");
     assert_eq!(states.len(), 1);
     assert_eq!((states[0].player, states[0].name.as_str()), (player, "p"));
-    assert_eq!(states[0].instances.len(), 1);
-    assert_eq!(
-        (states[0].instances[0].instance, states[0].instances[0].anim),
-        (instance, anim)
-    );
+    let instances: Vec<(u32, u32, f32)> = states[0]
+        .instances
+        .iter()
+        .map(|i| (i.instance, i.anim, i.weight))
+        .collect();
+    assert_eq!(instances, [(instance, anim, 1.0), (silent, anim, 0.0)]);
 
     // --- unloading: the player, then the animation ---------------------------
     assert!(animation::client::remove_player(&mut engine, player).expect("remove_player"));

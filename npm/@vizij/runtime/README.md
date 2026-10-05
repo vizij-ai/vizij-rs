@@ -91,17 +91,17 @@ quori.stopAnimation(id, { clearOutputs: true });     // back to its first frame,
 await quori.unloadAnimation(id);                     // its keys keep their last values
 ```
 
-`loadAnimation` sends `load_animation`, `create_player`, `add_instance` (at
-weight 0) and `stop`; loading an id already loaded replaces it in one step,
-keeping the playback the module reports for it — playhead, loop mode, speed,
-weight, and whether it plays, is paused or is stopped — whoever set it: the
-authoring timeline's live edit. `unloadAnimation` sends `remove_player` and
-`unload_animation`. The transport sends `set_weight`, `play`, `pause`,
-`stop`, `seek`, `set_speed` and `set_loop`, and rejects for an id the device
-does not hold. Each call applies at the device's next step, which its
-promise waits for; a load or unload waits for the transport calls in flight
-on its id, and they for it. `animations` and `animationState` read the
-player states.
+`loadAnimation` sends `load_animation`, `create_player`,
+`add_instance_with_weight` (at 0) and `stop`; loading an id already loaded
+replaces it in one step, keeping the playback the module reports for it —
+playhead, loop mode, speed, weight, and whether it plays, is paused or is
+stopped — whoever set it: the authoring timeline's live edit.
+`unloadAnimation` sends `remove_player` and `unload_animation`. The transport
+sends `set_weight`, `play`, `pause`, `stop`, `seek`, `set_speed` and
+`set_loop`, and rejects for an id the device does not hold. Each call applies
+at the device's next step, which its promise waits for; a load or unload waits
+for the transport calls in flight on its id, and they for it. `animations` and
+`animationState` read the player states.
 
 The types are `Animation`, `AnimationTrack` and `AnimationKeyframe` (what
 `describe` lists), `LoadedAnimation`, `AnimationState`,

@@ -23,9 +23,10 @@
 //! handles (zero or one each; empty = the engine's default ease).
 //!
 //! Exports:
-//! - loading — `load_animation` / `create_player` / `add_instance`, and
-//!   unloading — `remove_instance` / `remove_player` / `unload_animation`:
-//!   structural edits, applied immediately;
+//! - loading — `load_animation` / `create_player` / `add_instance` /
+//!   `add_instance_with_weight`, and unloading — `remove_instance` /
+//!   `remove_player` / `unload_animation`: structural edits, applied
+//!   immediately;
 //! - per tick — `step(dt_ns)`, returning **per-track outputs keyed by track
 //!   identity**, each carrying the track's **default authored key** plus its
 //!   sampled value; the consumer (a runner, or a graph node) decides the final
@@ -230,12 +231,21 @@ impl AnimationModule {
     }
 
     /// Attach an instance of animation `anim` to a player, immediately, and
-    /// return its `InstId`. It blends at `weight` (1 when `None`) from the
-    /// next step on: an instance added at weight 0 writes nothing until a
-    /// `set_weight` gives it one.
-    pub fn add_instance(&mut self, player: u32, anim: u32, weight: Option<f32>) -> u32 {
+    /// return its `InstId`. It blends at weight 1 from the next step on.
+    pub fn add_instance(&mut self, player: u32, anim: u32) -> u32 {
+        self.engine
+            .add_instance(PlayerId(player), AnimId(anim), InstanceCfg::default())
+            .0
+    }
+
+    /// [`add_instance`](Self::add_instance) at `weight`: the instance blends
+    /// at it from the next step on, so one added at 0 writes nothing until a
+    /// `set_weight` gives it a weight. A client learns an instance's id only
+    /// from the call's reply, so a `set_weight` it sends after lands a step
+    /// later than the instance.
+    pub fn add_instance_with_weight(&mut self, player: u32, anim: u32, weight: f32) -> u32 {
         let cfg = InstanceCfg {
-            weight: weight.unwrap_or(1.0),
+            weight,
             ..InstanceCfg::default()
         };
         self.engine
@@ -511,9 +521,8 @@ pub mod animation {
     pub fn add_instance(
         #[param(id = "76697a69-6a00-0000-0f03-000000000001")] player: u32,
         #[param(id = "76697a69-6a00-0000-0f03-000000000002")] anim: u32,
-        #[param(id = "76697a69-6a00-0000-0f03-000000000003")] weight: Option<f32>,
     ) -> u32 {
-        guest(|a| a.add_instance(player, anim, weight))
+        guest(|a| a.add_instance(player, anim))
     }
 
     /// [`AnimationModule::step`](super::AnimationModule::step). `dt_ns` is the
@@ -631,6 +640,16 @@ pub mod animation {
         #[param(id = "76697a69-6a00-0000-0f11-000000000001")] player: u32,
     ) -> bool {
         guest(|a| a.remove_player(player))
+    }
+
+    /// [`AnimationModule::add_instance_with_weight`](super::AnimationModule::add_instance_with_weight).
+    #[export(id = "76697a69-6a00-0000-0f00-000000000012")]
+    pub fn add_instance_with_weight(
+        #[param(id = "76697a69-6a00-0000-0f12-000000000001")] player: u32,
+        #[param(id = "76697a69-6a00-0000-0f12-000000000002")] anim: u32,
+        #[param(id = "76697a69-6a00-0000-0f12-000000000003")] weight: f32,
+    ) -> u32 {
+        guest(|a| a.add_instance_with_weight(player, anim, weight))
     }
 }
 
@@ -771,7 +790,7 @@ mod tests {
         let mut a = AnimationModule::new();
         let anim = a.load_animation(ramp_clip("ease-ramp", "ease/x", false));
         let player = a.create_player(Some("p-ease".into()));
-        let inst = a.add_instance(player, anim, None);
+        let inst = a.add_instance(player, anim);
         assert_ne!(inst, u32::MAX);
 
         // The clip eases (default S-curve), so it is antisymmetric about the
@@ -804,7 +823,7 @@ mod tests {
         let mut a = AnimationModule::new();
         let anim = a.load_animation(constant_clip("quiet", "x", 0.25));
         let player = a.create_player(Some("quiet".into()));
-        let inst = a.add_instance(player, anim, Some(0.0));
+        let inst = a.add_instance_with_weight(player, anim, 0.0);
         assert!(a.step(100_000_000).is_empty(), "silent at weight 0");
         a.set_weight(player, inst, 1.0);
         let out = a.step(0);
@@ -819,7 +838,7 @@ mod tests {
         let mut a = AnimationModule::new();
         let anim = a.load_animation(constant_clip("wave", "x", 0.5));
         let player = a.create_player(Some("wave".into()));
-        let inst = a.add_instance(player, anim, Some(0.0));
+        let inst = a.add_instance_with_weight(player, anim, 0.0);
         let unnamed = a.create_player(None);
 
         let states = a.player_states();
@@ -883,9 +902,9 @@ mod tests {
         let mut a = AnimationModule::new();
         let anim = a.load_animation(constant_clip("shared", "x", 0.75));
         let first = a.create_player(Some("first".into()));
-        a.add_instance(first, anim, None);
+        a.add_instance(first, anim);
         let second = a.create_player(Some("second".into()));
-        a.add_instance(second, anim, None);
+        a.add_instance(second, anim);
         a.pause(first); // buffered for a player about to go
 
         assert!(a.remove_player(first));
@@ -914,7 +933,7 @@ mod tests {
         // Linear handles: value == normalized time, exactly.
         let anim = a.load_animation(ramp_clip("lin-ramp", "lin/x", true));
         let player = a.create_player(Some("p-lin".into()));
-        a.add_instance(player, anim, None);
+        a.add_instance(player, anim);
 
         let outputs = a.step(250_000_000);
         let v = as_f32(value_of(&outputs, "lin/x").expect("lin/x output"));
@@ -928,7 +947,7 @@ mod tests {
         slow.tracks[0].points[0].transitions_out = vec![TransitionHandle { x: 1.0, y: 0.0 }];
         let anim = a.load_animation(slow);
         let player = a.create_player(Some("p-slow".into()));
-        a.add_instance(player, anim, None);
+        a.add_instance(player, anim);
 
         let outputs = a.step(250_000_000);
         let v_slow = as_f32(value_of(&outputs, "slow/x").expect("slow/x output"));
@@ -943,7 +962,7 @@ mod tests {
         let mut a = AnimationModule::new();
         let anim = a.load_animation(ramp_clip("tr-ramp", "tr/x", true));
         let player = a.create_player(Some("p-transport".into()));
-        a.add_instance(player, anim, None);
+        a.add_instance(player, anim);
 
         // Advance to 0.25 s.
         let outputs = a.step(250_000_000);
@@ -991,7 +1010,7 @@ mod tests {
         let mut a = AnimationModule::new();
         let anim = a.load_animation(ramp_clip("once-ramp", "once/x", true));
         let player = a.create_player(Some("p-once".into()));
-        a.add_instance(player, anim, None);
+        a.add_instance(player, anim);
 
         assert_eq!(a.set_loop(player, "once".into()), player);
         assert_eq!(a.seek(player, 900_000_000), player);
@@ -1013,8 +1032,8 @@ mod tests {
         let zero = a.load_animation(constant_clip("mix-zero", "mix/x", 0.0));
         let one = a.load_animation(constant_clip("mix-one", "mix/x", 1.0));
         let player = a.create_player(Some("p-mix".into()));
-        let inst_zero = a.add_instance(player, zero, None);
-        let inst_one = a.add_instance(player, one, None);
+        let inst_zero = a.add_instance(player, zero);
+        let inst_one = a.add_instance(player, one);
 
         // Equal weights: the normalized blend of 0 and 1.
         let outputs = a.step(100_000_000);

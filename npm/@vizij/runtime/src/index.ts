@@ -803,11 +803,11 @@ export class Runtime {
   /**
    * Load an animation into the device's animation module through the
    * module's declared functions — what any client sends: `load_animation`,
-   * `create_player` named after the animation's id, `add_instance` at weight
-   * 0 and `stop`. It loads silent, stopped at its start, looping at speed 1.
-   * `animation` is in {@link describe}'s `animations` shape (or a bundle
-   * `animations` entry), its channels resolved through the Vizij's rig like
-   * its own animations'.
+   * `create_player` named after the animation's id,
+   * `add_instance_with_weight` at 0 and `stop`. It loads silent, stopped at
+   * its start, looping at speed 1. `animation` is in {@link describe}'s
+   * `animations` shape (or a bundle `animations` entry), its channels
+   * resolved through the Vizij's rig like its own animations'.
    *
    * Loading an id already loaded replaces it — the old player and animation
    * out and the new ones in, in one step — keeping its playback as the
@@ -983,7 +983,7 @@ export class Runtime {
       }
     }
     calls.push(
-      this.animationCall("add_instance", {
+      this.animationCall("add_instance_with_weight", {
         player: { u32: player },
         anim: { u32: anim },
         weight: { f32: old?.instances[0]?.weight ?? 0 },
