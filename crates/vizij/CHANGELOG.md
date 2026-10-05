@@ -35,6 +35,11 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   `set_speed` and `set_loop`; `remove_player` and `unload_animation` unload
   it. The browser module's `loadVizij` takes `animations: false` to leave
   them out.
+- The animation module's `reload_animation(anim, clip)` replaces a loaded
+  animation's tracks under the same id, its players keeping their playback
+  and its instances their weights. A player keeps the speed `set_speed`
+  gave it through `pause` and `stop`, and `set_speed` neither resumes nor
+  pauses it.
 
 ### Changed
 

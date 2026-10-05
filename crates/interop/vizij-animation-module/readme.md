@@ -36,7 +36,7 @@ There is no `module.yaml`, `build.rs` or generated source in the crate.
 | `Keypoint` | `{ id: str, stamp: f32, value: <dynamic Value>, transitions_in: [TransitionHandle], transitions_out: [TransitionHandle] }` |
 | `TransitionHandle` | `{ x: f32, y: f32 }` — a cubic-bezier timing handle in normalized segment space; a keypoint carries zero or one per side (empty = the engine's default ease) |
 | `TrackOutput` | `{ track_id: str, default_key: str, value: <dynamic Value> }` |
-| `PlayerState` (record `1.1.0`) | `{ player: u32, state: str, time_ns: u64, duration_ns: u64, speed: f32, name: str, instances: [InstanceState], loop_mode: str }` — `state` is `"playing" \| "paused" \| "stopped"`; `name` is the one `create_player` gave it (empty without one); `loop_mode` is `"once" \| "loop" \| "ping_pong"` |
+| `PlayerState` (record `1.1.0`) | `{ player: u32, state: str, time_ns: u64, duration_ns: u64, speed: f32, name: str, instances: [InstanceState], loop_mode: str }` — `state` is `"playing" \| "paused" \| "stopped"`, as the last `play`, `pause` or `stop` left it, and `speed` the multiplier as `set_speed` set it; `name` is the one `create_player` gave it (empty without one); `loop_mode` is `"once" \| "loop" \| "ping_pong"` |
 | `InstanceState` | `{ instance: u32, anim: u32, weight: f32 }` — an instance on a player, the animation it plays, its blend weight |
 
 A keyframe/output `value` is a **dynamic `Value`** (the `KEY_VALUE_ID` escape
@@ -49,6 +49,12 @@ per-composite type is declared here; the runtime `Value` carries the identity.
 Loading and unloading are structural edits, applied immediately:
 
 - `load_animation(clip: AnimationClip) -> u32` — load a clip, return its `AnimId`.
+- `reload_animation(anim: u32, clip: AnimationClip) -> bool` — replace a loaded
+  animation's tracks and duration under the same id. Every instance of it
+  stays on its player with its weight and samples the new tracks from the
+  next step, each output naming its new track; the players keep their state,
+  playhead, speed and loop mode. `false`, changing nothing, when `anim` is not
+  loaded.
 - `create_player(name: Option<str>) -> u32` — return a `PlayerId`; the name
   defaults to empty. A player plays from its creation, at speed 1, looping.
 - `add_instance(player: u32, anim: u32) -> u32` — attach an instance of
@@ -76,6 +82,11 @@ Per tick and transport:
   `set_loop(player, mode)` (`"once" | "loop" | "ping_pong"`), and
   `set_weight(player, instance, weight)` buffer into the engine's **next**
   `step`, in issue order — the same phase a device applies external calls in.
+  `play`, `pause` and `stop` set whether a player's time advances; `set_speed`
+  only sets the multiplier it advances at while playing. A player keeps its
+  speed through `pause` and `stop`, so `play` resumes at it; `set_speed`
+  neither resumes a paused player nor pauses a playing one; a `seek` leaves a
+  stopped player paused where it seeks.
 - `player_states() -> [PlayerState]` — one entry per player, in creation
   order: its name, its playback, its loop mode and its instances. A client that did not
   load an animation finds it here: Vizij names an animation's player after

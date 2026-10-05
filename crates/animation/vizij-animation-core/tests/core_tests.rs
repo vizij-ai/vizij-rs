@@ -5,7 +5,7 @@ use vizij_animation_core::{
     binding::TargetResolver,
     config::Config,
     data::{AnimationData, Keypoint, Track, Transitions, Vec2},
-    engine::{Engine, InstanceCfg},
+    engine::{Engine, InstanceCfg, PlaybackState},
     ids::{AnimId, IdAllocator, PlayerId},
     inputs::{Inputs, InstanceUpdate, LoopMode, PlayerCommand},
     outputs::{CoreEvent, Outputs},
@@ -953,7 +953,7 @@ fn recompute_total_duration_on_window_and_updates() {
     assert!(eng.player_total_duration(p).unwrap() <= 3.0 + 1e-6);
 }
 
-/// it should pause with SetSpeed(0), Play restore to 1.0 if paused, Stop reset to start_time
+/// it should hold time at speed 0 while playing, keep the speed through Play, and Stop reset to start_time
 #[test]
 fn speed_play_stop_controls() {
     let t = mk_scalar_track_linear("node.t", &[(0.0, 0.0), (1.0, 1.0)]);
@@ -962,8 +962,18 @@ fn speed_play_stop_controls() {
     let aid = eng.load_animation(anim);
     let p = eng.create_player("p");
     let _ = eng.add_instance(p, aid, InstanceCfg::default());
+    let sample = |out: &Outputs| match out
+        .changes
+        .iter()
+        .find(|c| c.key == "node.t")
+        .unwrap()
+        .value
+    {
+        Value::F32(s) => s,
+        ref other => panic!("expected F32, got {other:?}"),
+    };
 
-    // Set speed 0 pauses time advance
+    // Speed 0 holds time, the player still playing.
     let mut inputs = Inputs::default();
     inputs.player_cmds.push(PlayerCommand::SetSpeed {
         player: p,
@@ -971,57 +981,29 @@ fn speed_play_stop_controls() {
     });
     let _ = eng.update(0.0, inputs);
     let _ = eng.update(1.0, Inputs::default());
-    let out = eng.update(0.0, Inputs::default());
-    let v = out
-        .changes
-        .iter()
-        .find(|c| c.key == "node.t")
-        .unwrap()
-        .value
-        .clone();
-    if let Value::F32(s) = v {
-        approx(s, 0.0, 1e-6);
-    } else {
-        panic!();
-    }
+    approx(sample(eng.update(0.0, Inputs::default())), 0.0, 1e-6);
+    assert_eq!(eng.list_players()[0].state, PlaybackState::Playing);
 
-    // Play restores to speed 1.0 if paused
+    // Play keeps the speed it was given: time still holds.
     let mut inputs2 = Inputs::default();
     inputs2.player_cmds.push(PlayerCommand::Play { player: p });
-    let _ = eng.update(0.0, inputs2);
-    let _ = eng.update(1.0, Inputs::default());
-    let out2 = eng.update(0.0, Inputs::default());
-    let v2 = out2
-        .changes
-        .iter()
-        .find(|c| c.key == "node.t")
-        .unwrap()
-        .value
-        .clone();
-    // With duration_ms=10s and dt=1s after Play, normalized u ~= 0.1
-    if let Value::F32(s2) = v2 {
-        approx(s2, 0.1, 1e-3);
-    } else {
-        panic!();
-    }
+    let _ = eng.update(1.0, inputs2);
+    approx(sample(eng.update(0.0, Inputs::default())), 0.0, 1e-6);
+
+    // Speed 1 advances it: with duration_ms=10s and dt=1s, normalized u ~= 0.1.
+    let mut inputs3 = Inputs::default();
+    inputs3.player_cmds.push(PlayerCommand::SetSpeed {
+        player: p,
+        speed: 1.0,
+    });
+    let _ = eng.update(1.0, inputs3);
+    approx(sample(eng.update(0.0, Inputs::default())), 0.1, 1e-3);
 
     // Stop resets to start_time (0.0)
-    let mut inputs3 = Inputs::default();
-    inputs3.player_cmds.push(PlayerCommand::Stop { player: p });
-    let _ = eng.update(0.0, inputs3);
-    let out3 = eng.update(0.0, Inputs::default());
-    let v3 = out3
-        .changes
-        .iter()
-        .find(|c| c.key == "node.t")
-        .unwrap()
-        .value
-        .clone();
-    if let Value::F32(s3) = v3 {
-        approx(s3, 0.0, 1e-6);
-    } else {
-        panic!();
-    }
+    let mut inputs4 = Inputs::default();
+    inputs4.player_cmds.push(PlayerCommand::Stop { player: p });
+    let _ = eng.update(0.0, inputs4);
+    approx(sample(eng.update(0.0, Inputs::default())), 0.0, 1e-6);
 }
 
 /// it should produce empty Outputs on update when engine has no data

@@ -34,12 +34,19 @@ pub struct PrebindReport {
 
 /// Per-player controller and instance list.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct Player {
     /// Stable player identifier.
     pub id: PlayerId,
     /// Human-readable display name.
     pub name: String,
-    /// Playback speed multiplier. A zero value is treated as paused/stopped.
+    /// Whether the player's time advances: only a [`PlaybackState::Playing`]
+    /// player's does. Set by `Play`, `Pause` and `Stop`, independent of
+    /// [`Self::speed`].
+    pub state: PlaybackState,
+    /// Multiplier on the time a playing player advances by per update. Set by
+    /// `SetSpeed` alone: pausing, stopping and playing keep it, so a player
+    /// resumes at the speed it was given.
     pub speed: f32,
     /// Internal accumulated player time in seconds.
     pub time: f32,
@@ -60,6 +67,7 @@ impl Player {
         Self {
             id,
             name,
+            state: PlaybackState::Playing,
             speed: 1.0,
             time: 0.0,
             mode: LoopMode::Loop,
@@ -125,6 +133,16 @@ impl AnimLib {
     fn iter(&self) -> impl Iterator<Item = &(AnimId, AnimationData)> {
         self.items.iter()
     }
+    /// Swap the data under `id`; `false` when `id` is not loaded.
+    fn replace(&mut self, id: AnimId, data: AnimationData) -> bool {
+        match self.items.iter_mut().find(|(a, _)| *a == id) {
+            Some((_, slot)) => {
+                *slot = data;
+                true
+            }
+            None => false,
+        }
+    }
     fn remove(&mut self, id: AnimId) -> bool {
         let before = self.items.len();
         self.items.retain(|(a, _)| *a != id);
@@ -189,13 +207,16 @@ fn ping_pong(t: f32, span: f32) -> f32 {
     }
 }
 
+/// Whether a player's time advances, as `Play`, `Pause` and `Stop` set it.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub enum PlaybackState {
-    /// Player time is advancing.
+    /// Player time advances by the update's `dt` times the player's speed. A
+    /// new player plays.
     Playing,
-    /// Player time is held at a non-start position.
+    /// Player time is held where it is; `Play` resumes from it.
     Paused,
-    /// Player is stopped at the start of its window.
+    /// Player time is held at the start of its window; `Play` starts from
+    /// it, and a `Seek` leaves the player paused at the time it seeks to.
     Stopped,
 }
 
@@ -219,11 +240,11 @@ pub struct PlayerInfo {
     pub id: u32,
     /// Player display name.
     pub name: String,
-    /// Derived playback state.
+    /// Playback state, as the last `Play`, `Pause` or `Stop` left it.
     pub state: PlaybackState,
     /// Display/playhead time in seconds after loop/window mapping.
     pub time: f32,
-    /// Playback speed multiplier.
+    /// Playback speed multiplier, as `SetSpeed` set it, whatever the state.
     pub speed: f32,
     /// Active loop mode.
     pub loop_mode: LoopMode,
@@ -332,6 +353,43 @@ impl Engine {
         id
     }
 
+    /// Replace the data of loaded animation `anim` in place, keeping its id.
+    ///
+    /// Every instance of `anim` stays on its player, with its weight, time scale, offset and
+    /// enabled flag, and samples every track of `data` from the next update on; the players
+    /// keep their state, time, speed, loop mode and window, and their lengths follow the new
+    /// duration. `anim`'s host bindings are dropped, because a binding names a track by its
+    /// index and `data`'s tracks need not match the old ones: its tracks write their canonical
+    /// paths until the next [`Self::prebind`]. The engine stamps `anim` into `data.id`.
+    ///
+    /// Returns `false`, changing nothing, when `anim` is not loaded.
+    pub fn replace_animation(&mut self, anim: AnimId, mut data: AnimationData) -> bool {
+        data.id = Some(anim);
+        let channels = Self::channels_of(anim, &data);
+        if !self.anims.replace(anim, data) {
+            return false;
+        }
+        self.binds.remove_animation(anim);
+        for inst in self.instances.iter_mut().filter(|i| i.anim == anim) {
+            inst.binding_set.channels = channels.clone();
+        }
+        let player_ids: Vec<PlayerId> = self.players.iter().map(|p| p.id).collect();
+        for pid in player_ids {
+            self.recalc_player_duration(pid);
+        }
+        true
+    }
+
+    /// One channel per track of `data`, loaded as `anim`.
+    fn channels_of(anim: AnimId, data: &AnimationData) -> Vec<ChannelKey> {
+        (0..data.tracks.len())
+            .map(|idx| ChannelKey {
+                anim,
+                track_idx: idx as u32,
+            })
+            .collect()
+    }
+
     /// Bake a loaded animation into per-frame samples using the provided config.
     ///
     /// Returns `None` when `anim` is not currently loaded.
@@ -369,15 +427,13 @@ impl Engine {
         let iid = self.ids.alloc_inst();
 
         // Build binding set for this instance (all channels of the animation).
-        let mut binding_set = BindingSet::default();
-        if let Some(anim_data) = self.anims.get(anim) {
-            for (idx, _) in anim_data.tracks.iter().enumerate() {
-                binding_set.channels.push(ChannelKey {
-                    anim,
-                    track_idx: idx as u32,
-                });
-            }
-        }
+        let binding_set = BindingSet {
+            channels: self
+                .anims
+                .get(anim)
+                .map(|data| Self::channels_of(anim, data))
+                .unwrap_or_default(),
+        };
 
         let instance = Instance {
             id: iid,
@@ -463,19 +519,17 @@ impl Engine {
             match cmd {
                 crate::inputs::PlayerCommand::Play { player } => {
                     if let Some(p) = self.players.iter_mut().find(|p| p.id == player) {
-                        if p.speed == 0.0 {
-                            p.speed = 1.0;
-                        }
+                        p.state = PlaybackState::Playing;
                     }
                 }
                 crate::inputs::PlayerCommand::Pause { player } => {
                     if let Some(p) = self.players.iter_mut().find(|p| p.id == player) {
-                        p.speed = 0.0;
+                        p.state = PlaybackState::Paused;
                     }
                 }
                 crate::inputs::PlayerCommand::Stop { player } => {
                     if let Some(p) = self.players.iter_mut().find(|p| p.id == player) {
-                        p.speed = 0.0;
+                        p.state = PlaybackState::Stopped;
                         p.time = p.start_time;
                     }
                 }
@@ -487,6 +541,11 @@ impl Engine {
                 crate::inputs::PlayerCommand::Seek { player, time } => {
                     if let Some(p) = self.players.iter_mut().find(|p| p.id == player) {
                         p.time = time;
+                        // A stopped player is at its window start: one moved
+                        // off it holds there, paused.
+                        if p.state == PlaybackState::Stopped {
+                            p.state = PlaybackState::Paused;
+                        }
                     }
                 }
                 crate::inputs::PlayerCommand::SetLoopMode { player, mode } => {
@@ -502,8 +561,8 @@ impl Engine {
                     if let Some(p) = self.players.iter_mut().find(|p| p.id == player) {
                         p.start_time = start_time.max(0.0);
                         p.end_time = end_time.map(|e| e.max(p.start_time));
-                        // Optionally clamp current time into window
-                        if p.time < p.start_time {
+                        // A stopped player stays at its window start.
+                        if p.state == PlaybackState::Stopped || p.time < p.start_time {
                             p.time = p.start_time;
                         }
                         if let Some(e) = p.end_time {
@@ -541,10 +600,13 @@ impl Engine {
         // consistent player+inst pairs. Validation can be added later.
     }
 
-    /// Advance logical time. Loop/windowing is applied when mapping to instance local time.
+    /// Advance logical time of the playing players. Loop/windowing is applied when mapping to
+    /// instance local time.
     fn advance_player_times(&mut self, dt: f32) {
         for p in &mut self.players {
-            p.time += dt * p.speed;
+            if p.state == PlaybackState::Playing {
+                p.time += dt * p.speed;
+            }
             // Clamp into window for Once mode convenience (optional; local mapping will also enforce)
             if let Some(end) = p.end_time {
                 if p.time > end && matches!(p.mode, crate::inputs::LoopMode::Once) {
@@ -820,18 +882,6 @@ impl Engine {
             .collect()
     }
 
-    fn derive_playback_state(p: &Player) -> PlaybackState {
-        if p.speed == 0.0 {
-            if (p.time - p.start_time).abs() < 1e-6 {
-                PlaybackState::Stopped
-            } else {
-                PlaybackState::Paused
-            }
-        } else {
-            PlaybackState::Playing
-        }
-    }
-
     /// List all players with playback info and computed length.
     pub fn list_players(&self) -> Vec<PlayerInfo> {
         self.players
@@ -839,7 +889,7 @@ impl Engine {
             .map(|p| PlayerInfo {
                 id: p.id.0,
                 name: p.name.clone(),
-                state: Self::derive_playback_state(p),
+                state: p.state,
                 time: self.map_player_time_for_display(p),
                 speed: p.speed,
                 loop_mode: p.mode,
@@ -926,5 +976,216 @@ impl Engine {
             .iter()
             .find(|i| i.id == inst)
             .map(|i| i.binding_set.channels.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::binding::TargetHandle;
+    use crate::data::{Keypoint, Track};
+    use crate::inputs::PlayerCommand;
+    use crate::value::TrackValue;
+    use vizij_api_core::Value;
+
+    /// A track holding `value` at every time.
+    fn constant_track(key: &str, value: f32) -> Track {
+        Track {
+            id: format!("{key}-track"),
+            name: key.into(),
+            animatable_id: key.into(),
+            points: vec![Keypoint {
+                id: format!("{key}-k0"),
+                stamp: 0.0,
+                value: TrackValue::Float(value),
+                transitions: None,
+            }],
+            settings: None,
+        }
+    }
+
+    fn animation(duration_ms: u32, tracks: Vec<Track>) -> AnimationData {
+        AnimationData {
+            id: None,
+            name: "a".into(),
+            tracks,
+            groups: Default::default(),
+            duration_ms,
+        }
+    }
+
+    /// An engine with one 10 s animation on one player.
+    fn engine() -> (Engine, AnimId, PlayerId, InstId) {
+        let mut eng = Engine::new(Config::default());
+        let anim = eng.load_animation(animation(10_000, vec![constant_track("x", 0.5)]));
+        let player = eng.create_player("p");
+        let inst = eng.add_instance(player, anim, InstanceCfg::default());
+        (eng, anim, player, inst)
+    }
+
+    fn command(eng: &mut Engine, cmd: PlayerCommand) {
+        eng.update(
+            0.0,
+            Inputs {
+                player_cmds: vec![cmd],
+                instance_updates: Vec::new(),
+            },
+        );
+    }
+
+    fn info(eng: &Engine, player: PlayerId) -> PlayerInfo {
+        eng.list_players()
+            .into_iter()
+            .find(|p| p.id == player.0)
+            .expect("player")
+    }
+
+    fn approx(a: f32, b: f32) {
+        assert!((a - b).abs() < 1e-5, "{a} != {b}");
+    }
+
+    #[test]
+    fn a_new_player_plays_at_speed_1() {
+        let (mut eng, _, player, _) = engine();
+        let p = info(&eng, player);
+        assert_eq!((p.state, p.speed), (PlaybackState::Playing, 1.0));
+        eng.update(1.0, Inputs::default());
+        approx(info(&eng, player).time, 1.0);
+    }
+
+    #[test]
+    fn pause_keeps_the_speed_and_play_resumes_at_it() {
+        let (mut eng, _, player, _) = engine();
+        command(&mut eng, PlayerCommand::SetSpeed { player, speed: 0.5 });
+        eng.update(1.0, Inputs::default());
+        approx(info(&eng, player).time, 0.5);
+
+        command(&mut eng, PlayerCommand::Pause { player });
+        eng.update(1.0, Inputs::default());
+        let p = info(&eng, player);
+        assert_eq!((p.state, p.speed), (PlaybackState::Paused, 0.5));
+        approx(p.time, 0.5);
+
+        command(&mut eng, PlayerCommand::Play { player });
+        eng.update(1.0, Inputs::default());
+        let p = info(&eng, player);
+        assert_eq!((p.state, p.speed), (PlaybackState::Playing, 0.5));
+        approx(p.time, 1.0);
+    }
+
+    #[test]
+    fn stop_resets_the_time_and_reads_stopped() {
+        let (mut eng, _, player, _) = engine();
+        command(&mut eng, PlayerCommand::SetSpeed { player, speed: 2.0 });
+        eng.update(1.0, Inputs::default());
+        command(&mut eng, PlayerCommand::Stop { player });
+        eng.update(1.0, Inputs::default());
+        let p = info(&eng, player);
+        assert_eq!((p.state, p.speed), (PlaybackState::Stopped, 2.0));
+        approx(p.time, 0.0);
+
+        command(&mut eng, PlayerCommand::Play { player });
+        eng.update(1.0, Inputs::default());
+        approx(info(&eng, player).time, 2.0);
+    }
+
+    #[test]
+    fn set_speed_while_paused_does_not_resume() {
+        let (mut eng, _, player, _) = engine();
+        eng.update(1.0, Inputs::default());
+        command(&mut eng, PlayerCommand::Pause { player });
+        command(&mut eng, PlayerCommand::SetSpeed { player, speed: 3.0 });
+        eng.update(1.0, Inputs::default());
+        let p = info(&eng, player);
+        assert_eq!((p.state, p.speed), (PlaybackState::Paused, 3.0));
+        approx(p.time, 1.0);
+
+        command(&mut eng, PlayerCommand::Play { player });
+        eng.update(1.0, Inputs::default());
+        approx(info(&eng, player).time, 4.0);
+    }
+
+    #[test]
+    fn a_seek_leaves_a_stopped_player_paused_where_it_seeks() {
+        let (mut eng, _, player, _) = engine();
+        command(&mut eng, PlayerCommand::Stop { player });
+        command(&mut eng, PlayerCommand::Seek { player, time: 2.0 });
+        eng.update(1.0, Inputs::default());
+        let p = info(&eng, player);
+        assert_eq!(p.state, PlaybackState::Paused);
+        approx(p.time, 2.0);
+    }
+
+    struct Prefix;
+    impl TargetResolver for Prefix {
+        fn resolve(&mut self, path: &str) -> Option<TargetHandle> {
+            Some(format!("bound/{path}"))
+        }
+    }
+
+    #[test]
+    fn replace_animation_keeps_the_playback_and_samples_the_new_tracks() {
+        let (mut eng, anim, player, inst) = engine();
+        eng.prebind(&mut Prefix);
+        eng.update(
+            0.0,
+            Inputs {
+                player_cmds: vec![PlayerCommand::SetSpeed { player, speed: 0.5 }],
+                instance_updates: vec![crate::inputs::InstanceUpdate {
+                    player,
+                    inst,
+                    weight: Some(0.25),
+                    time_scale: None,
+                    start_offset: None,
+                    enabled: None,
+                }],
+            },
+        );
+        eng.update(2.0, Inputs::default());
+        command(&mut eng, PlayerCommand::Pause { player });
+        let before = info(&eng, player);
+        approx(before.time, 1.0);
+        approx(before.length, 10.0);
+
+        let replacement = animation(
+            20_000,
+            vec![constant_track("x", 0.5), constant_track("y", 0.75)],
+        );
+        assert!(eng.replace_animation(anim, replacement));
+
+        let after = info(&eng, player);
+        assert_eq!((after.state, after.speed), (PlaybackState::Paused, 0.5));
+        approx(after.time, 1.0);
+        approx(after.length, 20.0);
+        let instances = eng.list_instances(player);
+        assert_eq!(instances.len(), 1);
+        assert_eq!((instances[0].id, instances[0].cfg.weight), (inst.0, 0.25));
+        assert_eq!(eng.get_instance_channels(inst).map(|c| c.len()), Some(2));
+        assert_eq!(eng.list_animations()[0].id, anim.0);
+        assert_eq!(eng.list_animations()[0].track_count, 2);
+
+        // The bindings named the old tracks: the new ones write their paths.
+        assert!(eng.binds.rows.iter().all(|r| r.channel.anim != anim));
+        let out = eng.update(0.0, Inputs::default());
+        let value = |key: &str| {
+            out.changes
+                .iter()
+                .find(|c| c.key == key)
+                .map(|c| c.value.clone())
+        };
+        assert_eq!(
+            value("y"),
+            Some(Value::F32(0.75)),
+            "the added track samples"
+        );
+        assert_eq!(value("x"), Some(Value::F32(0.5)));
+        assert_eq!(value("bound/x"), None);
+    }
+
+    #[test]
+    fn replacing_an_animation_not_loaded_changes_nothing() {
+        let (mut eng, anim, player, _) = engine();
+        assert!(!eng.replace_animation(AnimId(anim.0 + 1), animation(1_000, Vec::new())));
+        approx(info(&eng, player).length, 10.0);
     }
 }

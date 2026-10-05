@@ -2,7 +2,8 @@
 //! drive the module through its declared interface — the header from
 //! [`animation::header`], the calls through the declaration's own client
 //! stubs over the real buffer ABI — and assert a one-track 0->1 ramp advances,
-//! the player states come back with their instances and weights, and the
+//! the player states come back with their instances and weights, a paused
+//! player keeps its speed, a reloaded animation writes its new tracks, and the
 //! animation unloads.
 //!
 //! What it proves is the `arora_call` boundary contract: the guest entry points
@@ -50,10 +51,13 @@ fn ramp_clip() -> AnimationClip {
     }
 }
 
+/// The debug wasm artifact, under `CARGO_TARGET_DIR` when the environment
+/// sets it (cargo builds there), else the workspace's `target/`.
 fn workspace_target_wasm() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../..")
-        .join("target/wasm32-wasip1/debug/vizij_animation_module.wasm")
+    std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../target"))
+        .join("wasm32-wasip1/debug/vizij_animation_module.wasm")
 }
 
 fn sampled(output: &TrackOutput) -> f32 {
@@ -132,6 +136,33 @@ fn ramp_advances_through_the_wasm_module() {
         .map(|i| (i.instance, i.anim, i.weight))
         .collect();
     assert_eq!(instances, [(instance, anim, 1.0), (silent, anim, 0.0)]);
+
+    // --- a paused player keeps the speed it was given -------------------------
+    animation::client::set_speed(&mut engine, player, 0.5).expect("set_speed");
+    animation::client::pause(&mut engine, player).expect("pause");
+    animation::client::step(&mut engine, quarter_s).expect("step");
+    let states = animation::client::player_states(&mut engine).expect("player_states");
+    assert_eq!((states[0].state.as_str(), states[0].speed), ("paused", 0.5));
+
+    // --- reloading: the same id, a track more, the playback kept --------------
+    let mut reloaded = ramp_clip();
+    reloaded.tracks.push(AnimTrack {
+        id: "t1".into(),
+        animatable_id: "node/y".into(),
+        ..reloaded.tracks[0].clone()
+    });
+    assert!(
+        animation::client::reload_animation(&mut engine, anim, reloaded).expect("reload_animation")
+    );
+    let outputs = animation::client::step(&mut engine, 0).expect("step");
+    let y = outputs
+        .iter()
+        .find(|o| o.default_key == "node/y")
+        .expect("the added track writes");
+    assert_eq!(y.track_id, "t1");
+    let states = animation::client::player_states(&mut engine).expect("player_states");
+    assert_eq!((states[0].state.as_str(), states[0].speed), ("paused", 0.5));
+    assert_eq!(states[0].instances.len(), 2, "the instances stay");
 
     // --- unloading: the player, then the animation ---------------------------
     assert!(animation::client::remove_player(&mut engine, player).expect("remove_player"));
