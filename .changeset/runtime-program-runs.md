@@ -1,9 +1,0 @@
----
-"@vizij/runtime": major
----
-
-`Runtime` is a client of the Vizij's device with the surface any client of an Arora device has: `call(call)` (a `Call` names its `module_id`), `invoke(method, args, moduleId?)` — a described method by name, its arguments by parameter name; a task method starts a run and resolves to its `RunHandle` (`{ run, status, feedback, result, update }`, as any Arora client is given it) — `spawn(call)`, `halt(runId)`, `listKeys(prefix?)` (each key with its meta, `KeyInfo`), `describeMethods(prefix?)` (`MethodDescription`), the store's reads and writes, and the interpreter's LOAD and EDIT as `loadGraph` and `applyGraphEdits`. Every operation that reaches the device applies at its next step, which its promise waits for; none steps the device itself.
-
-What the face does goes through the methods its modules and interpreter declare, by name: the skills (`invoke("say", { text })`, `look_at`, `play_viseme`), the rest module's `reset` and `reset_keys`, the animation module's functions, and programs. A face's programs are runs of its interpreter's `run_behavior(name, behavior)`: `behaviorValue(graph)` makes a graph spec its `behavior` argument, `runEdits(runId, from, to)` builds the `applyGraphEdits` edits that change a run's behavior in place (the nodes it keeps keep their state), and `BEHAVIOR_RUNS` is the key prefix under which every run's `status` and `name` are listed. `loadVizij`'s `program` option starts its program as such a run, beside the face's graph rather than composed into it.
-
-Breaking, against 3.0.0: `spawnSkill(name, args)` is `invoke(name, args)`; a run handle is `RunHandle` rather than `TaskHandle`, and `halt` takes its `run` id; `call` no longer infers a missing `module_id`; `loadGraph` and `applyGraphEdits` no longer step a device that is not under `run()`.
