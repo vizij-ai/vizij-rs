@@ -1,5 +1,0 @@
----
-"@vizij/animation-module": major
----
-
-The module (1.0.0) keeps a player's speed through `pause` and `stop`, and reloads an animation in place. `play`, `pause` and `stop` set whether a player's time advances; `set_speed` only sets the multiplier: `play` resumes at the speed the player was given, `set_speed` on a paused player leaves it paused, and `set_speed(player, 0)` holds a playing player's time while its state stays `"playing"`. `player_states` reports `state` as the last `play`, `pause` or `stop` left it and `speed` as set, so a paused player's `speed` is its multiplier, not 0; a `seek` leaves a stopped player `"paused"`. `reload_animation(anim, clip) -> bool` replaces a loaded animation's tracks and duration under the same id, immediately: every instance of it stays on its player with its weight and samples the new tracks from the next step, each output naming its new track, and the players keep their state, playhead, speed and loop mode; it returns `false`, changing nothing, for an animation not loaded.
