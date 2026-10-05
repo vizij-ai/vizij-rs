@@ -12,7 +12,8 @@
 //! global**, in the linear memory of the `Store` the executor creates per
 //! `load_module` — so each engine that loads the module gets its own, and it
 //! persists across `dispatch` calls; the declared functions act on that
-//! global. A host that links this crate has no executor to scope it, so it
+//! global, with no lock, so the call after a trap still reaches the state.
+//! A host that links this crate has no executor to scope it, so it
 //! builds one [`AnimationModule`] per registration and dispatches to it under
 //! the declared ids — two devices in one process never share an engine.
 //!
@@ -48,8 +49,8 @@
 //!   the behavior conveys, not a second feedback channel;
 //! - baking — `bake` / `bake_with_derivatives`, the sampled clip as JSON.
 
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
-use std::sync::Mutex;
 
 use arora_types::value::Value;
 use arora_types::AroraType;
@@ -294,8 +295,12 @@ impl AnimationModule {
     /// at it from the next step on, so one added at 0 writes nothing until a
     /// `set_weight` gives it a weight. A client learns an instance's id only
     /// from the call's reply, so a `set_weight` it sends after lands a step
-    /// later than the instance.
+    /// later than the instance. A weight that is not finite and non-negative
+    /// is rejected with `u32::MAX`, adding nothing.
     pub fn add_instance_with_weight(&mut self, player: u32, anim: u32, weight: f32) -> u32 {
+        if !valid_weight(weight) {
+            return u32::MAX;
+        }
         let cfg = InstanceCfg {
             weight,
             ..InstanceCfg::default()
@@ -362,9 +367,13 @@ impl AnimationModule {
     /// negative plays backwards — `once` then holds at the window start,
     /// `loop` wraps from the window start to its end, `ping_pong` reflects —
     /// and 0 holds the playhead. It does not play, pause or stop the player:
-    /// a paused player stays paused at its new speed. Applied at the next
-    /// `step`.
+    /// a paused player stays paused at its new speed. A speed that is not
+    /// finite is rejected with `u32::MAX`, as it would make the playhead NaN
+    /// or infinite. Applied at the next `step`.
     pub fn set_speed(&mut self, player: u32, speed: f32) -> u32 {
+        if !speed.is_finite() {
+            return u32::MAX;
+        }
         self.buffer_command(
             player,
             PlayerCommand::SetSpeed {
@@ -430,8 +439,13 @@ impl AnimationModule {
     }
 
     /// Set an instance's blend weight (weights normalize across a player's
-    /// instances). Applied at the next `step`. Returns the echoed instance id.
+    /// instances; at 0 the instance writes nothing). A weight that is not
+    /// finite and non-negative is rejected with `u32::MAX`. Applied at the
+    /// next `step`. Returns the echoed instance id.
     pub fn set_weight(&mut self, player: u32, instance: u32, weight: f32) -> u32 {
+        if !valid_weight(weight) {
+            return u32::MAX;
+        }
         self.update_instance(InstanceUpdate {
             weight: Some(weight),
             ..instance_update(player, instance)
@@ -624,18 +638,26 @@ impl AnimationModule {
     }
 }
 
-// The wasm guest's module state: one per wasm instance. The declared
-// functions act on it; a host that links the crate as an rlib builds its own
-// [`AnimationModule`] instead.
-
-lazy_static::lazy_static! {
-    static ref GUEST: Mutex<AnimationModule> = Mutex::new(AnimationModule::new());
+thread_local! {
+    /// The module state the declared functions act on: in the wasm guest,
+    /// one per wasm instance (its single thread); in a native build, one per
+    /// thread. A host that links the crate as an rlib builds its own
+    /// [`AnimationModule`] instead.
+    static GUEST: UnsafeCell<AnimationModule> = UnsafeCell::new(AnimationModule::new());
 }
 
 /// Run `f` on the guest global.
+///
+/// The access takes no lock: a trap runs no destructor, so a lock the
+/// trapping call held would stay held and fail every later call.
 fn guest<T>(f: impl FnOnce(&mut AnimationModule) -> T) -> T {
-    let mut guest = GUEST.lock().unwrap_or_else(|e| e.into_inner());
-    f(&mut guest)
+    GUEST.with(|state| {
+        // SAFETY: the state is thread-local, so no other thread reaches it,
+        // and `f` is a declared function's body, an `AnimationModule` method
+        // that never calls back into `guest`: this is the only reference to
+        // the state while `f` runs, and none outlives the call.
+        f(unsafe { &mut *state.get() })
+    })
 }
 
 /// The module's interface: every function and parameter pinned by id, each
@@ -643,7 +665,7 @@ fn guest<T>(f: impl FnOnce(&mut AnimationModule) -> T) -> T {
 #[arora_module::module(
     id = "76697a69-6a00-0000-0d00-000000000000",
     name = "vizij-animation",
-    version = "1.1.0",
+    version = "1.1.1",
     author = "Semio",
     license = "Proprietary",
     description = "vizij-animation-core as an Arora wasm module",
@@ -902,6 +924,11 @@ fn to_core_animation(clip: AnimationClip) -> (AnimationData, Vec<(String, String
         duration_ms: clip.duration,
     };
     (data, keys)
+}
+
+/// Whether `weight` is a blend weight: finite and not negative.
+fn valid_weight(weight: f32) -> bool {
+    weight.is_finite() && weight >= 0.0
 }
 
 fn seconds_to_ns(seconds: f32) -> u64 {
@@ -1564,6 +1591,42 @@ mod tests {
         for rejected in [0.0, -1.0, f32::NAN, f32::INFINITY] {
             assert_eq!(a.set_time_scale(player, shifted, rejected), u32::MAX);
         }
+    }
+
+    /// A speed that is not finite and a weight that is not finite and
+    /// non-negative are rejected before they reach the engine: the playhead
+    /// and the blend stay what they were.
+    #[test]
+    fn a_speed_or_a_weight_out_of_range_is_rejected() {
+        let mut a = AnimationModule::new();
+        let anim = a.load_animation(ramp_clip("guard", "guard/x", true));
+        let player = a.create_player(None);
+        let inst = a.add_instance(player, anim);
+        for speed in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(a.set_speed(player, speed), u32::MAX, "speed {speed}");
+        }
+        for weight in [f32::NAN, f32::INFINITY, -0.5] {
+            assert_eq!(
+                a.set_weight(player, inst, weight),
+                u32::MAX,
+                "weight {weight}"
+            );
+            assert_eq!(
+                a.add_instance_with_weight(player, anim, weight),
+                u32::MAX,
+                "weight {weight}"
+            );
+        }
+        let out = a.step(250_000_000, None);
+        near(as_f32(value_of(&out, "guard/x").unwrap()), 0.25);
+        let s = state_of(&a, player);
+        assert_eq!((s.speed, s.instances.len()), (1.0, 1));
+        assert_eq!(s.instances[0].weight, 1.0);
+        assert_eq!(
+            a.set_weight(player, inst, 0.0),
+            inst,
+            "0 silences, it is a weight"
+        );
     }
 
     #[test]

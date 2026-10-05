@@ -10426,7 +10426,6 @@ dependencies = [
  "arora-engine",
  "arora-module",
  "arora-types",
- "lazy_static",
  "serde_json",
  "vizij-animation-core",
  "vizij-api-core",
