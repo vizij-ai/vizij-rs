@@ -1,18 +1,15 @@
-// A face written away from rest and reset() back: every key its store held
+// A face written away from rest and back through the rest module's `reset`: every key its store held
 // at rest reads its rest value again, and the face draws as it did at rest.
 // Rest is the face as loaded with its neutral pose staged. Needs
 // `VIZIJ_FIXTURES`; skips without.
 import assert from "node:assert/strict";
-import { FIXTURES, loadVizij, meanDiff32, open } from "./common.mjs";
+import { FIXTURES, loadVizij, meanDiff32, open, settled } from "./common.mjs";
 
 if (!FIXTURES) {
   console.log("VIZIJ_FIXTURES unset — skipping the browser rest test");
   process.exit(0);
 }
 const CLIP = { x: 0, y: 0, width: 763, height: 486 };
-// The settling time a write needs to reach the scene: the device steps on
-// the page's frames, the view draws the pose a frame later.
-const SETTLE_MS = 1500;
 
 /** The keys of a snapshot that are the face's, without the runtime's own
  * (`arora/` built-ins: the clock, the tick). */
@@ -38,7 +35,7 @@ try {
     ros4hri: false,
     animations: false,
   });
-  await page.waitForTimeout(SETTLE_MS);
+  await settled(page);
   const rest = await page.evaluate(() => window.vizijHarness.snapshot("quori"));
   const restShot = await page.screenshot({ clip: CLIP });
   assert.ok(faceKeys(rest).length > 0, "the face holds keys at rest");
@@ -57,7 +54,7 @@ try {
     return writes;
   }, rest);
   assert.ok(Object.keys(writes).length > 0, "the face holds numbers to write");
-  await page.waitForTimeout(SETTLE_MS);
+  await settled(page);
   const moved = await page.evaluate(() => window.vizijHarness.snapshot("quori"));
   const movedKeys = faceKeys(rest).filter((path) => !same(rest[path], moved[path]));
   const awayDiff = meanDiff32(await page.screenshot({ clip: CLIP }), restShot);
@@ -67,8 +64,11 @@ try {
   assert.ok(movedKeys.length > 0, "the writes moved keys the face holds at rest");
   assert.ok(awayDiff > 2, `the writes changed how the face draws (diff ${awayDiff.toFixed(2)})`);
 
-  await page.evaluate(() => window.vizijHarness.reset("quori"));
-  await page.waitForTimeout(SETTLE_MS);
+  await page.evaluate(() => {
+    const h = window.vizijHarness;
+    return h.settle(h.invoke("quori", "reset"));
+  });
+  await settled(page);
   const back = await page.evaluate(() => window.vizijHarness.snapshot("quori"));
   const astray = faceKeys(rest)
     .filter((path) => !same(rest[path], back[path]))

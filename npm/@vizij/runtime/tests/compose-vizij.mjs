@@ -54,7 +54,9 @@ assert.ok(
 
 // Deploy the composed face and drive it over the ROS4HRI keys.
 const runtime = await startRuntime();
-await runtime.loadGraph(spec);
+const loaded = runtime.loadGraph(spec);
+runtime.step(0); // the LOAD applies at the device's next step
+await loaded;
 runtime.setValue("standard/ros4hri/expression/name", { text: "sad" });
 runtime.setValue("standard/ros4hri/expression/valence", { f32: 0.8 });
 for (let i = 0; i < 5; i += 1) {

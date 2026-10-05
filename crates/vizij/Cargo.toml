@@ -193,7 +193,7 @@ bevy = { version = "0.19", default-features = false, features = ["android-native
 # The browser module (`web`): the shared JS surface of a device — `step`,
 # the self-pacing `run`, the Value<->JSON store accessors — wraps each face's
 # device; wasm-bindgen carries the module's own surface.
-arora-web = "8"
+arora-web = "8.1"
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4"
 js-sys = { workspace = true }

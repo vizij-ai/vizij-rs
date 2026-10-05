@@ -1,8 +1,8 @@
 // The animation module is host-linked into every device: JS sets up a
 // one-track ramp through the call surface (load_animation / create_player /
-// add_instance, no module_id needed), and a graph ExternalFunction node
-// calls the module's step each tick, landing the sampled outputs in the
-// device's store. Mirrors the Rust boundary proof
+// add_instance, each call naming the module and the function by id), and a
+// graph ExternalFunction node calls the module's step each tick, landing the
+// sampled outputs in the device's store. Mirrors the Rust boundary proof
 // (crates/interop/vizij-animation-module/tests/host_ramp.rs) through the
 // public JS surface.
 import assert from "node:assert/strict";
@@ -135,8 +135,8 @@ const runtime = await startRuntime(graph);
 
 // Setup through the call surface. Each call dispatches inside the next step.
 const pending = [
-  runtime.call({ id: FN_LOAD, args: [field(P_CLIP, clip)] }),
-  runtime.call({ id: FN_CREATE_PLAYER, args: [field(P_NAME, { str: "p" })] }),
+  runtime.call({ module_id: header.id, id: FN_LOAD, args: [field(P_CLIP, clip)] }),
+  runtime.call({ module_id: header.id, id: FN_CREATE_PLAYER, args: [field(P_NAME, { str: "p" })] }),
 ];
 runtime.step(0);
 const [anim, player] = await Promise.all(pending);
@@ -144,6 +144,7 @@ assert.ok("u32" in anim.ret, "load_animation returns an animation id");
 assert.ok("u32" in player.ret, "create_player returns a player id");
 
 const pInstance = runtime.call({
+  module_id: header.id,
   id: FN_ADD_INSTANCE,
   args: [field(P_PLAYER, player.ret), field(P_ANIM, anim.ret)],
 });

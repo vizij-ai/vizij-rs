@@ -100,12 +100,20 @@ pub fn handle(task: TaskId) -> TaskHandle {
     }
 }
 
+/// `spec` as `run_behavior`'s `behavior` argument: the graph the interpreter
+/// module's LOAD carries, as a `Value`. A client calling `run_behavior` by
+/// name (Arora's by-name invoke) passes this. Errors when the spec does not
+/// encode.
+pub fn behavior(spec: &GraphSpec) -> Result<Value, String> {
+    let graph = graph_codec::encode(spec)?;
+    value_serde::to_value(&graph).map_err(|e| format!("the graph: {e}"))
+}
+
 /// The call that runs `behavior` under `name` — what the interpreter
 /// module's SPAWN takes (`interpreter_module::encode_spawn`). Errors when the
 /// spec does not encode.
 pub fn call(name: &str, behavior: &GraphSpec) -> Result<Call, String> {
-    let graph = graph_codec::encode(behavior)?;
-    let behavior = value_serde::to_value(&graph).map_err(|e| format!("the graph: {e}"))?;
+    let behavior = self::behavior(behavior)?;
     Ok(Call {
         module_id: Some(interpreter_module::ID),
         id: FUNCTION,

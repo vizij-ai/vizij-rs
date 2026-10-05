@@ -13,9 +13,9 @@
 //! `run` keeps stepping on its timer.
 //!
 //! Values cross the boundary as JSON in the Arora `Value` vocabulary
-//! (`{"f32": 0.75}`), calls as Arora `Call`s, and a task run as the
-//! interpreter's `TaskHandle`; the wrapper package `@vizij/runtime` gives it
-//! all idiomatic JS types.
+//! (`{"f32": 0.75}`), calls as Arora `Call`s, and a task run as the run
+//! handle every Arora client is given (`{ run, status, feedback, result,
+//! update }`); the wrapper package `@vizij/runtime` types them.
 //!
 //! What the App holds is reachable only through this module's statics: on
 //! the web `App::run` hands the App to winit and returns at once, so the
@@ -30,19 +30,15 @@
 //! the new one is ready.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::sync::Mutex;
 
 use arora::{Caller, LocalCaller};
-use arora_behavior::{interpreter_module, RunPolicy, TaskHandle};
 use arora_types::call::Call;
 use arora_web::AroraWeb;
 use bevy::prelude::*;
 use uuid::Uuid;
-use vizij_arora_behavior::{
-    encode_edit_call, encode_load_call, gaze, parse_spec, parse_spec_diff, speech, viseme,
-};
+use vizij_arora_behavior::{encode_edit_call, encode_load_call, parse_spec, parse_spec_diff};
 use vizij_arora_hal::RigHal;
 use vizij_arora_host::{ChannelKeys, ProgramSelect};
 use vizij_arora_store::BlackboardStore;
@@ -233,7 +229,7 @@ pub fn load_vizij(
     );
     let speech = config.speech.as_ref().map(|build| build());
     let guests = parse_modules(modules)?;
-    let (builder, function_modules) = face::builder_with_guests(
+    let builder = face::builder_with_guests(
         &spec,
         rig.clone(),
         store.clone(),
@@ -255,7 +251,6 @@ pub fn load_vizij(
     let caller = arora.caller();
     let rig_prefix = meta.bundle.rig_prefix();
     let channel_keys = meta.bundle.channel_keys();
-    let programs = meta.bundle.programs.clone();
     // The bytes move into the App's asset source; the copy wasm-bindgen made
     // from the page's buffer is the only one.
     send(ViewEvent::LoadFace {
@@ -268,13 +263,9 @@ pub fn load_vizij(
     Ok(VizijRuntime {
         vizij_id,
         rig_prefix,
-        speaks: config.speech.is_some(),
         inner: AroraWeb::from(arora),
         caller,
-        function_modules,
         channel_keys,
-        store,
-        programs,
     })
 }
 
@@ -468,8 +459,8 @@ pub fn memory_bytes() -> f64 {
 
 /// What a GLB declares, without loading it: `{ faceId, rigPrefix, rootBounds,
 /// elements: [{ id, name, kind, material, morphTargets }], animatables:
-/// { <uuid>: { node, feature } }, graphs: [{ kind }], programs: [id],
-/// programLabels: { <id>: label }, activeProgramId, neutralInputs, poses,
+/// { <uuid>: { node, feature } }, graphs: [{ kind }], programs: [{ id,
+/// label, graph }], activeProgramId, neutralInputs, poses,
 /// poseGroups, rigInputs, animations, metadata }` — what a page needs to build
 /// its controls and name the face's paths. `poses`, `poseGroups`, `rigInputs`
 /// and `animations` are [`vizij_arora_host::contents`]'s types; `metadata` is
@@ -500,8 +491,6 @@ fn describe_json(meta: &FaceMeta) -> serde_json::Value {
         .map(|(name, value)| (name.clone(), serde_json::json!(value)))
         .collect();
     neutral.sort_by(|a, b| a.0.cmp(&b.0));
-    let program_labels: std::collections::BTreeMap<&String, &String> =
-        meta.bundle.program_labels.iter().collect();
     serde_json::json!({
         "faceId": meta.bundle.face_id,
         "rigPrefix": meta.bundle.rig_prefix(),
@@ -517,8 +506,11 @@ fn describe_json(meta: &FaceMeta) -> serde_json::Value {
         })).collect::<Vec<_>>(),
         "animatables": animatables.into_iter().collect::<serde_json::Map<String, serde_json::Value>>(),
         "graphs": meta.bundle.graphs.iter().map(|(kind, _)| serde_json::json!({ "kind": kind })).collect::<Vec<_>>(),
-        "programs": meta.bundle.programs.iter().map(|(id, _)| id).collect::<Vec<_>>(),
-        "programLabels": program_labels,
+        "programs": meta.bundle.programs.iter().map(|(id, graph)| serde_json::json!({
+            "id": id,
+            "label": meta.bundle.program_labels.get(id),
+            "graph": graph,
+        })).collect::<Vec<_>>(),
         "activeProgramId": meta.bundle.active_program_id,
         "neutralInputs": neutral.into_iter().collect::<serde_json::Map<String, serde_json::Value>>(),
         "poses": meta.bundle.poses,
@@ -529,30 +521,51 @@ fn describe_json(meta: &FaceMeta) -> serde_json::Value {
     })
 }
 
+/// `graph_json` (any form the spec normalizer accepts) as `run_behavior`'s
+/// `behavior` argument: the graph as the interpreter module's LOAD carries
+/// one, as an Arora `Value`. `invoke("run_behavior", { name, behavior })`
+/// runs it beside the device's graph.
+#[wasm_bindgen(js_name = behaviorValue)]
+pub fn behavior_value(graph_json: &str) -> Result<JsValue, JsValue> {
+    let value = parse_spec(graph_json)
+        .and_then(|spec| vizij_arora_behavior::run::behavior(&spec))
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_js(&value)
+}
+
+/// The graph edits that change run `run`'s behavior in place from
+/// `from_json`, the graph it runs (what it was spawned with, or the `to` of
+/// the edit before), to `to_json`: what `applyGraphEdits` takes. A run's
+/// nodes live in the device's graph under ids the interpreter derives from
+/// the run; these edits name them, so the nodes `to` keeps keep their
+/// runtime state.
+#[wasm_bindgen(js_name = runEdits)]
+pub fn run_edits(run: &str, from_json: &str, to_json: &str) -> Result<JsValue, JsValue> {
+    let run = Uuid::parse_str(run).map_err(|e| JsValue::from_str(&format!("run id: {e}")))?;
+    let from = parse_spec(from_json).map_err(|e| JsValue::from_str(&e))?;
+    let to = parse_spec(to_json).map_err(|e| JsValue::from_str(&e))?;
+    let edits = vizij_arora_behavior::run::edit(arora_behavior::TaskId(run), &from, &to)
+        .map_err(|e| JsValue::from_str(&e))?;
+    to_js(&edits)
+}
+
 /// A Vizij's device, JS-owned: the composed [`Arora`] behind
-/// [`arora_web::AroraWeb`]'s surface (`step`, `run`, `stop`, the store
-/// accessors), the in-process caller behind `call`, `loadGraph`,
-/// `applyGraphEdits`, `spawn` and `halt`.
+/// [`arora_web::AroraWeb`]'s surface — `step`, `run`, `stop`, the store
+/// accessors, and the calls any client of the device makes (`call`,
+/// `invoke`, `spawn`, `halt`, `listKeys`, `describeMethods`) — plus the
+/// interpreter module's LOAD and EDIT of a Vizij graph (`loadGraph`,
+/// `applyGraphEdits`).
 #[wasm_bindgen]
 pub struct VizijRuntime {
     vizij_id: String,
     rig_prefix: String,
-    /// Whether a speech provider was registered (a playback hook given).
-    speaks: bool,
     inner: AroraWeb,
-    /// Dispatches in-process `Call`s into the device — enqueued at once,
-    /// applied at the next step, resolved on that step's reply. Usable while
-    /// `run` owns the device.
+    /// Dispatches the interpreter module's LOAD and EDIT calls into the
+    /// device — enqueued at once, applied at the next step, resolved on that
+    /// step's reply. Usable while `run` owns the device.
     caller: LocalCaller,
-    /// function id -> module id over the host modules, so a call can name
-    /// just the function.
-    function_modules: HashMap<Uuid, Uuid>,
     /// How the Vizij's animation channels name store keys, through its rig.
     channel_keys: ChannelKeys,
-    /// A handle on the device's store, where any client reads the runs.
-    store: BlackboardStore,
-    /// The bundle's programs, `(id, spec)`: the graphs a program id names.
-    programs: Vec<(String, serde_json::Value)>,
 }
 
 #[wasm_bindgen]
@@ -577,7 +590,7 @@ impl VizijRuntime {
         let store = BlackboardStore::new();
         face::declare_keys(&store, &spec, &[], &[]);
         let guests = parse_modules(modules)?;
-        let (builder, function_modules) =
+        let builder =
             face::builder_with_guests(&spec, RigHal::new(), store.clone(), &[], None, guests)
                 .ok_or_else(|| JsValue::from_str("the graph does not encode (see the console)"))?;
         let arora = builder
@@ -588,13 +601,9 @@ impl VizijRuntime {
         Ok(VizijRuntime {
             vizij_id: String::new(),
             rig_prefix: String::new(),
-            speaks: false,
             inner: AroraWeb::from(arora),
             caller,
-            function_modules,
             channel_keys: ChannelKeys::default(),
-            store,
-            programs: Vec::new(),
         })
     }
 
@@ -688,219 +697,56 @@ impl VizijRuntime {
         self.inner.behavior_error_changed()
     }
 
-    /// Call a module function through the device. `call_json` is an Arora
-    /// `Call` as JSON; `module_id` may be omitted for the animation module's
-    /// functions. Dispatched inside the **next** step, so the promise (of the
-    /// `CallResult` as JSON) resolves once that step has run.
-    pub fn call(&self, call_json: &str) -> Result<js_sys::Promise, JsValue> {
-        let mut call: Call = serde_json::from_str(call_json)
-            .map_err(|e| JsValue::from_str(&format!("invalid call json: {e}")))?;
-        if call.module_id.is_none() {
-            call.module_id = self.function_modules.get(&call.id).copied();
-        }
-        if call.module_id.is_none() {
-            return Err(JsValue::from_str(&format!(
-                "no host module exports function {}; pass module_id explicitly",
-                call.id
-            )));
-        }
-        Ok(self.dispatch(call))
+    /// Call a module function through the device: `call_json` is an Arora
+    /// `Call` as JSON, naming its module and its function by id. Dispatched
+    /// inside the **next** step, so the promise (of the `CallResult` as
+    /// JSON) resolves once that step has run.
+    pub fn call(&self, call_json: &str) -> js_sys::Promise {
+        self.inner.call(call_json)
     }
 
-    /// Spawn `call_json` (an Arora `Call` naming a described function, `say`
-    /// or `look_at` or `play_viseme`) as a task run on the device's
-    /// interpreter — what a bridge does for a remote. Resolves to the run's
-    /// `TaskHandle` as JSON: its `status` key to watch, its `feedback` keys,
-    /// and the `stop` call [`halt`](Self::halt) issues.
-    pub fn spawn(&self, call_json: &str) -> Result<js_sys::Promise, JsValue> {
-        let call: Call = serde_json::from_str(call_json)
-            .map_err(|e| JsValue::from_str(&format!("invalid call json: {e}")))?;
-        let spawn = interpreter_module::encode_spawn(&call, RunPolicy::Concurrent);
-        let caller = self.caller.clone();
-        Ok(dispatch_with(caller, spawn, |result| {
-            let handle = interpreter_module::decode_spawn_result(&result.ret)?;
-            serde_json::to_string(&handle).map_err(|e| format!("serialize the handle: {e}"))
-        }))
-    }
-
-    /// Spawn one of the device's skills by name — `say` (`text`, `voice`),
-    /// `look_at` (`policy`, `target`, `frame`), `play_viseme` (`shape`,
-    /// `weight`) — with `args_json` an object of parameter name to value in
-    /// any accepted vizij payload form (`{"text": {"str": "Hello"}}`, or the
-    /// `{"text": …}` / `{"float": …}` shorthands); parameters left out are
-    /// left out of the call. Resolves like [`spawn`](Self::spawn). `say` needs the
-    /// face loaded with a playback hook.
-    #[wasm_bindgen(js_name = spawnSkill)]
-    pub fn spawn_skill(&self, name: &str, args_json: &str) -> Result<js_sys::Promise, JsValue> {
-        let args: serde_json::Map<String, serde_json::Value> = serde_json::from_str(args_json)
-            .map_err(|e| JsValue::from_str(&format!("invalid skill arguments: {e}")))?;
-        let (module_id, function, parameters): (Uuid, Uuid, HashMap<Uuid, String>) = match name {
-            "say" => {
-                if !self.speaks {
-                    return Err(JsValue::from_str(
-                        "this device plays no speech: load the face with a playback hook",
-                    ));
-                }
-                (
-                    vizij_arora_tts::MODULE_ID,
-                    speech::say::ids::say::FUNCTION,
-                    speech::say_parameters(),
-                )
-            }
-            "look_at" => (
-                interpreter_module::ID,
-                gaze::look_at::ids::look_at::FUNCTION,
-                gaze::look_at_parameters(),
-            ),
-            "play_viseme" => (
-                interpreter_module::ID,
-                viseme::play_viseme::ids::play_viseme::FUNCTION,
-                viseme::play_viseme_parameters(),
-            ),
-            other => {
-                return Err(JsValue::from_str(&format!(
-                    "unknown skill {other:?}: say, look_at or play_viseme"
-                )))
-            }
-        };
-        let mut fields = Vec::new();
-        for (id, parameter) in &parameters {
-            if let Some(value) = args.get(parameter) {
-                let value: arora_types::value::Value = serde_json::from_value(
-                    vizij_api_core::json::normalize_value_json(value.clone()),
-                )
-                .map_err(|e| JsValue::from_str(&format!("{parameter}: {e}")))?;
-                fields.push(arora_types::value::StructureField {
-                    id: *id,
-                    value: Box::new(value),
-                });
-            }
-        }
-        for parameter in args.keys() {
-            if !parameters.values().any(|p| p == parameter) {
-                return Err(JsValue::from_str(&format!(
-                    "{name} has no parameter {parameter:?}"
-                )));
-            }
-        }
-        let call = Call {
-            module_id: Some(module_id),
-            id: function,
-            args: fields,
-        };
-        self.spawn(&serde_json::to_string(&call).map_err(|e| JsValue::from_str(&e.to_string()))?)
-    }
-
-    /// Return the device to rest: every key its store describes goes back to
-    /// the value it rests at — a free input to its authored default, an
-    /// input the bundle's neutral pose names to its neutral — through the
-    /// rest module's `reset`, so every bridge sees the writes. Keys with no
-    /// declared rest keep their values. Applied at the next step; resolves
-    /// to the `CallResult` as JSON once it has.
-    pub fn reset(&self) -> js_sys::Promise {
-        self.dispatch(Call {
-            module_id: Some(rest::MODULE_ID),
-            id: rest::rest::ids::reset::FUNCTION,
-            args: Vec::new(),
-        })
-    }
-
-    /// Return each of `keys` (store paths) to the value it rests at, through
-    /// the rest module's `reset_keys`; a key with no declared rest keeps its
-    /// value. Applied at the next step; resolves to the `CallResult` as JSON
-    /// once it has.
-    #[wasm_bindgen(js_name = resetKeys)]
-    pub fn reset_keys(&self, keys: Vec<String>) -> js_sys::Promise {
-        use rest::rest::ids::reset_keys as ids;
-        self.dispatch(Call {
-            module_id: Some(rest::MODULE_ID),
-            id: ids::FUNCTION,
-            args: vec![arora_types::value::StructureField {
-                id: ids::KEYS,
-                value: Box::new(arora_types::value::Value::ArrayString(keys)),
-            }],
-        })
-    }
-
-    /// The graph of the bundle's program `id`, as authored (a graph spec's
-    /// JSON); `undefined` for an id the bundle does not carry.
-    #[wasm_bindgen(js_name = programGraph)]
-    pub fn program_graph(&self, id: &str) -> Option<String> {
-        self.programs
-            .iter()
-            .find(|(program, _)| program == id)
-            .map(|(_, spec)| spec.to_string())
-    }
-
-    /// Run `graph_json` (any form the spec normalizer accepts) beside the
-    /// device's graph under `name`: the interpreter module's SPAWN of the
-    /// interpreter's `run_behavior` ([`vizij_arora_behavior::run`]). Resolves
-    /// (after the next step) to the run's `TaskHandle` as JSON; rejects when
-    /// the graph does not parse.
-    #[wasm_bindgen(js_name = spawnBehavior)]
-    pub fn spawn_behavior(&self, name: &str, graph_json: &str) -> Result<js_sys::Promise, JsValue> {
-        let call = parse_spec(graph_json)
-            .and_then(|spec| vizij_arora_behavior::run::call(name, &spec))
-            .map_err(|e| JsValue::from_str(&e))?;
-        self.spawn(&serde_json::to_string(&call).map_err(|e| JsValue::from_str(&e.to_string()))?)
-    }
-
-    /// Change a running `run_behavior` run's graph in place: the EDIT
-    /// ([`vizij_arora_behavior::run::edit`]) that takes the run from
-    /// `from_json`, the graph it runs, to `to_json`. Nodes the new graph keeps
-    /// keep their state. Applied at the next step; rejects when a graph does
-    /// not parse.
-    #[wasm_bindgen(js_name = editBehavior)]
-    pub fn edit_behavior(
+    /// Call a method the device describes, by name, with `args_json` an
+    /// object of parameter name to value in any accepted vizij payload form:
+    /// Arora's by-name invoke, as a bridge client sends it. A method that
+    /// returns a task status starts a run, and the promise resolves to its
+    /// run handle (`{ run, status, … }`); any other resolves to its return
+    /// value. A name two modules export needs `module_id` to choose one.
+    pub fn invoke(
         &self,
-        handle_json: &str,
-        from_json: &str,
-        to_json: &str,
+        method: &str,
+        args_json: &str,
+        module_id: Option<String>,
     ) -> Result<js_sys::Promise, JsValue> {
-        let handle: TaskHandle = serde_json::from_str(handle_json)
-            .map_err(|e| JsValue::from_str(&format!("invalid task handle: {e}")))?;
-        let from = parse_spec(from_json).map_err(|e| JsValue::from_str(&e))?;
-        let to = parse_spec(to_json).map_err(|e| JsValue::from_str(&e))?;
-        let call = vizij_arora_behavior::run::edit(handle.id, &from, &to)
-            .and_then(|diff| encode_edit_call(&diff))
-            .map_err(|e| JsValue::from_str(&e))?;
-        Ok(self.dispatch(call))
+        let args = normalize_values_map_str(args_json)?;
+        Ok(self.inner.invoke(method, &args, module_id))
     }
 
-    /// The `run_behavior` runs the device's store holds keys of, as a JS
-    /// array of `{ handle, name }` — each run's `TaskHandle` and the name it
-    /// runs under — ended runs included (their status key terminal).
-    #[wasm_bindgen(js_name = behaviorRuns)]
-    pub fn behavior_runs(&self) -> Result<JsValue, JsValue> {
-        let runs: Vec<serde_json::Value> = vizij_arora_behavior::run::runs(&self.store)
-            .into_iter()
-            .map(|(handle, name)| serde_json::json!({ "handle": handle, "name": name }))
-            .collect();
-        js_sys::JSON::parse(&serde_json::Value::Array(runs).to_string())
+    /// Start a task run of `call_json` (an Arora `Call` naming a described
+    /// task method) through the interpreter module's SPAWN. Resolves to the
+    /// run's handle (`{ run, status, … }`).
+    pub fn spawn(&self, call_json: &str) -> js_sys::Promise {
+        self.inner.spawn(call_json)
     }
 
-    /// The store keys `graph_json` writes: its outputs' paths, sorted.
-    #[wasm_bindgen(js_name = outputKeys)]
-    pub fn output_keys(&self, graph_json: &str) -> Result<Vec<String>, JsValue> {
-        let spec = parse_spec(graph_json).map_err(|e| JsValue::from_str(&e))?;
-        let mut keys: Vec<String> = spec
-            .nodes
-            .iter()
-            .filter(|node| matches!(node.kind, vizij_graph_core::NodeType::Output))
-            .filter_map(|node| node.params.path.as_ref().map(ToString::to_string))
-            .collect();
-        keys.sort();
-        keys.dedup();
-        Ok(keys)
+    /// Halt run `run` (its handle's `run`) through the interpreter
+    /// module's HALT. Resolves once the halt has been applied: the run's
+    /// status key then reads terminal.
+    pub fn halt(&self, run: &str) -> js_sys::Promise {
+        self.inner.halt(run)
     }
 
-    /// Halt a run: `handle_json` is the `TaskHandle` `spawn` resolved to.
-    /// Resolves once the halt has been applied (the run's status key then
-    /// reads terminal).
-    pub fn halt(&self, handle_json: &str) -> Result<js_sys::Promise, JsValue> {
-        let handle: TaskHandle = serde_json::from_str(handle_json)
-            .map_err(|e| JsValue::from_str(&format!("invalid task handle: {e}")))?;
-        Ok(self.dispatch(handle.stop))
+    /// The keys the device holds or describes, under `prefix` when given,
+    /// each with its meta: Arora's ListKeys.
+    #[wasm_bindgen(js_name = listKeys)]
+    pub fn list_keys(&self, prefix: Option<String>) -> js_sys::Promise {
+        self.inner.list_keys(prefix)
+    }
+
+    /// The methods the device describes, under `prefix` when given, with
+    /// their signatures: Arora's DescribeMethods.
+    #[wasm_bindgen(js_name = describeMethods)]
+    pub fn describe_methods(&self, prefix: Option<String>) -> js_sys::Promise {
+        self.inner.describe_methods(prefix)
     }
 
     /// Replace the device's running graph **in place**: the store, the

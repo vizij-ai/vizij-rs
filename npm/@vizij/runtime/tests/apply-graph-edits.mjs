@@ -23,7 +23,7 @@ assert.deepEqual(
 // Edit: insert a constant `k = 0.5` and rewire the sink to it. `out` is upserted,
 // so its incident edge rides along (the diff contract) — the old `in -> out`
 // edge is dropped, `k -> out` replaces it.
-await runtime.applyGraphEdits({
+const edited = runtime.applyGraphEdits({
   upsert_nodes: [
     { id: "k", type: "constant", params: { value: { f32: 0.5 } } },
     { id: "out", type: "output", params: { path: "actuator/y" } },
@@ -32,6 +32,8 @@ await runtime.applyGraphEdits({
     { from: { node_id: "k", output: "out" }, to: { node_id: "out", input: "in" } },
   ],
 });
+runtime.step(0); // the EDIT applies at the device's next step
+await edited;
 
 // The running graph was patched: the sink now writes the constant, not the
 // sensor — no whole-graph reload, and the store carried across the edit.

@@ -59,7 +59,7 @@ const { page, logs, close } = await open(FIXTURES);
 try {
   await loadVizij(page, "face", "Quori_Current_Extended.glb", { ros4hri: false, audio: false });
   const result = await page.evaluate(
-    async ({ speaksId, liveId, speaksKeys, liveKeys, edited }) => {
+    async ({ speaksId, liveId, speaksKeys, liveKeys, edited, graphs }) => {
       const h = window.vizijHarness;
       const float = (value) => (value ? (value.f32 ?? value.float ?? null) : null);
       const read = (keys) =>
@@ -71,9 +71,7 @@ try {
         h.setValue("face", h.path("face", `standard/vmotion/idle/${input}`), 1);
       }
       h.setValue("face", h.path("face", "speech/speaking"), 1);
-      // Sampled over a second of device time, stepped here rather than left
-      // to the page's frames (a software-rendered frame of a face can take
-      // longer than that).
+      // Sampled over a second of device time.
       const watch = () => {
         const samples = [];
         for (let i = 0; i < 10; i++) {
@@ -82,29 +80,51 @@ try {
         }
         return samples;
       };
-      const runs = () => Object.fromEntries(h.programRuns("face").map((run) => [run.name, run.status]));
-      const settle = async (pending) => {
-        h.step("face", 16);
-        return pending;
+      // The test owns the device clock: an operation applies at the
+      // device's next step, an invoke over two, and `settle` steps it until
+      // the operation lands.
+      h.manual();
+      const settle = (pending) => h.settle(pending);
+      // The runs, as any client reads them: their names and statuses under
+      // the run_behavior prefix.
+      const runList = async () => {
+        const names = (await settle(h.listKeys("face", h.behaviorRuns)))
+          .map((key) => key.path)
+          .filter((path) => path.endsWith("/name"));
+        const values = h.readValues("face", names.flatMap((path) => [path, path.replace(/name$/, "status")]));
+        return names.map((path) => ({
+          run: path.slice(h.behaviorRuns.length, -"/name".length),
+          name: values[path]?.str,
+          status: h.runStatus(values[path.replace(/name$/, "status")]),
+        }));
       };
+      const runs = async () => Object.fromEntries((await runList()).map((run) => [run.name, run.status]));
 
       h.step("face", 16);
-      const atLoad = runs();
-      const speaksHandle = h.programRuns("face").find((run) => run.name === speaksId).handle;
-      const liveHandle = await settle(h.spawnProgram("face", liveId));
-      const together = { runs: runs(), samples: watch() };
+      const atLoad = await runs();
+      const speaksRun = (await runList()).find((run) => run.name === speaksId).run;
+      const liveHandle = await settle(
+        h.invoke("face", "run_behavior", { name: liveId, behavior: await h.behaviorValue(graphs[liveId]) }),
+      );
+      const together = { runs: await runs(), samples: watch() };
 
-      await settle(h.halt("face", speaksHandle));
-      const halted = { runs: runs(), samples: watch() };
-      const outputs = h.programOutputs("face", speaksId);
-      await h.reset("face", outputs);
-      const rested = { outputs, samples: watch() };
+      await settle(h.halt("face", speaksRun));
+      const halted = { runs: await runs(), samples: watch() };
+      await settle(h.invoke("face", "reset_keys", { keys: { strs: speaksKeys } }));
+      const rested = { outputs: speaksKeys, samples: watch() };
 
-      await settle(h.editProgram("face", liveHandle, liveId, edited));
-      const afterEdit = { runs: runs(), samples: watch() };
+      await settle(h.applyGraphEdits("face", await h.runEdits(liveHandle.run, graphs[liveId], edited)));
+      const afterEdit = { runs: await runs(), samples: watch() };
       return { atLoad, together, halted, rested, afterEdit };
     },
-    { speaksId: speaks.id, liveId: live.id, speaksKeys, liveKeys, edited },
+    {
+      speaksId: speaks.id,
+      liveId: live.id,
+      speaksKeys,
+      liveKeys,
+      edited,
+      graphs: { [speaks.id]: speaks.spec, [live.id]: live.spec },
+    },
   );
 
   const varies = (samples, program, key) => new Set(samples.map((s) => s[program][key])).size > 1;

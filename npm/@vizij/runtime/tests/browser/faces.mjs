@@ -2,7 +2,7 @@
 // reported as a pick naming the face and the element the GLB declares.
 // Needs `VIZIJ_FIXTURES`; skips without.
 import assert from "node:assert/strict";
-import { FIXTURES, loadVizij, open } from "./common.mjs";
+import { FIXTURES, loadVizij, open, settled } from "./common.mjs";
 
 if (!FIXTURES) {
   console.log("VIZIJ_FIXTURES unset — skipping the browser faces test");
@@ -17,7 +17,7 @@ try {
     window.vizijHarness.place("left", { x: 0, y: 0, width: 381, height: 486 });
     window.vizijHarness.place("right", { x: 382, y: 0, width: 381, height: 486 });
   });
-  await page.waitForTimeout(1000);
+  await settled(page);
 
   // The elements each GLB declares, to check the picks against.
   const elements = await page.evaluate(async () => {
@@ -31,18 +31,19 @@ try {
   assert.ok(elements.left.length > 0 && elements.right.length > 0);
 
   // A press in the middle of each rectangle lands on that face. The pointer
-  // settles over the face before the press, and the press is held over a
-  // frame: picking hovers from the pointer's last position, and a frame of
+  // settles over the face before the press, and the press is held over
+  // frames: picking hovers from the pointer's last position, and a frame of
   // two faces under a software GPU can take longer than a click.
   await page.evaluate(() => window.vizijHarness.picks());
+  const frames = (n) => page.evaluate((n) => window.vizijHarness.frames(n), n);
   const press = async (face, x, y) => {
     for (let attempt = 0; attempt < 5; attempt++) {
       await page.mouse.move(x, y);
-      await page.waitForTimeout(500);
+      await frames(3);
       await page.mouse.down();
-      await page.waitForTimeout(500);
+      await frames(3);
       await page.mouse.up();
-      await page.waitForTimeout(300);
+      await frames(3);
       const picks = await page.evaluate(() => window.vizijHarness.picks());
       if (picks.some((p) => p.vizijId === face)) return picks;
     }

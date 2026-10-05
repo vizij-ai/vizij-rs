@@ -1,9 +1,17 @@
-// Programs are runs of the device's interpreter: spawned beside its graph,
-// found in its store by name, edited in place, halted, and returned to rest
-// only when the page says so — through the published wrapper surface
-// (dist/), on a device with no Vizij.
+// Programs are runs of the device's interpreter, driven the way any client of
+// the device drives them: `run_behavior` invoked by name, the runs listed off
+// the store, edited in place with the interpreter's EDIT, halted, and
+// returned to rest by the rest module's `reset_keys` only when the page says
+// so — through the published wrapper surface (dist/), on a device with no
+// Vizij.
 import assert from "node:assert/strict";
-import { startRuntime } from "../dist/runtime/src/index.js";
+import {
+  startRuntime,
+  behaviorValue,
+  runEdits,
+  runStatus,
+  BEHAVIOR_RUNS,
+} from "../dist/runtime/src/index.js";
 
 const number = (value) => (value ? Object.values(value)[0] : value);
 const close = (actual, expected, message) =>
@@ -18,12 +26,41 @@ const runtime = await startRuntime({
   edges: [{ from: { node_id: "in" }, to: { node_id: "out", input: "in" } }],
 });
 const read = (path) => runtime.readValues([path])[path];
-/** Step the device once, then settle what was waiting on that step. */
+/** Step the device until `pending` settles: an operation applies at the
+ * next step, and an invoke reads the method's signature on one step and
+ * applies its call on the next. */
 const stepped = async (pending) => {
-  runtime.step(100);
+  let done = false;
+  pending.then(
+    () => (done = true),
+    () => (done = true),
+  );
+  for (let i = 0; i < 8 && !done; i++) {
+    runtime.step(100);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
   return pending;
 };
-const status = (name) => runtime.programRuns().find((run) => run.name === name)?.status;
+/** Run `graph` under `name`, as any client does. */
+const spawn = async (graph, name) =>
+  stepped(runtime.invoke("run_behavior", { name, behavior: await behaviorValue(graph) }));
+/** The runs the store holds, as any client reads them: `[name, status, id]`. */
+const runs = async () => {
+  const names = (await stepped(runtime.listKeys(BEHAVIOR_RUNS)))
+    .map((key) => key.path)
+    .filter((path) => path.endsWith("/name"));
+  const values = runtime.readValues(names.flatMap((path) => [path, path.replace(/name$/, "status")]));
+  return names
+    .map((path) => [
+      number(values[path]),
+      runStatus(values[path.replace(/name$/, "status")]),
+      path.slice(BEHAVIOR_RUNS.length, -"/name".length),
+    ])
+    .sort();
+};
+/** The keys `graph`'s output nodes write: what a page returns to rest. */
+const outputs = (graph) =>
+  graph.nodes.filter((node) => node.type === "output").map((node) => node.params.path);
 
 /** A program writing `value` to `path`. */
 const writes = (path, value) => ({
@@ -49,25 +86,25 @@ const damped = (...outputs) => ({
 runtime.setValue("unrelated/kept", 0.375);
 runtime.step(16);
 
-// A page's program needs a name; a bundle id must name a program.
-await assert.rejects(runtime.spawnProgram(writes("program/a", 1)), /needs a name/);
-await assert.rejects(runtime.spawnProgram("nope"), /no program "nope"/);
+// The interpreter describes run_behavior: any client finds it by name.
+const methods = await stepped(runtime.describeMethods("run_behavior"));
+assert.equal(methods.length, 1, JSON.stringify(methods));
 
 // Two programs run at once, beside the graph; one drives the graph's input.
 const drive = writes("sensor/x", 1);
-const driver = await stepped(runtime.spawnProgram(drive, "driver"));
-const mover = await stepped(runtime.spawnProgram(damped("program/moving"), "mover"));
+const driver = await spawn(drive, "driver");
+const mover = await spawn(damped("program/moving"), "mover");
 runtime.step(100);
 close(read("actuator/y"), 1, "the driver writes the graph's input");
 assert.deepEqual(
-  runtime.programRuns().map(({ name, status }) => [name, status]),
+  (await runs()).map(([name, status]) => [name, status]),
   [
     ["driver", "running"],
     ["mover", "running"],
   ],
   "any client reads the runs off the store",
 );
-assert.equal(runtime.programRuns()[0].handle.id, driver.id);
+assert.equal((await runs())[0][2], driver.run);
 
 // The mover moves: its damp heads for the target.
 runtime.setValue("in/target", 1);
@@ -76,22 +113,24 @@ const moving = number(read("program/moving"));
 assert.ok(moving > 0.1 && moving < 0.9, `on its way: ${moving}`);
 
 // Edited live: the damp it keeps keeps its state, the output it adds runs.
-await stepped(runtime.editProgram(mover, damped("program/moving"), damped("program/moving", "program/copy")));
+const edits = await runEdits(mover.run, damped("program/moving"), damped("program/moving", "program/copy"));
+await stepped(runtime.applyGraphEdits(edits));
 const next = number(read("program/moving"));
 assert.ok(next > moving && next < 0.9, `the kept damp carried on: ${moving} -> ${next}`);
 close(read("program/copy"), next, "the added output runs");
 
 // Halted, the driver ends and its output holds; the mover runs on.
-await stepped(runtime.halt(driver));
+await stepped(runtime.halt(driver.run));
 runtime.step(100);
-assert.equal(status("driver"), "failure");
-assert.equal(status("mover"), "running");
+const status = async (name) => (await runs()).find(([n]) => n === name)?.[1];
+assert.equal(await status("driver"), "failure");
+assert.equal(await status("mover"), "running");
 close(read("sensor/x"), 1, "a halted program's output holds");
 close(read("actuator/y"), 1, "and the graph reads it");
 
 // Returned to rest only when asked: its outputs go back to where they rest.
-assert.deepEqual(runtime.programOutputs(drive), ["sensor/x"]);
-await runtime.reset(runtime.programOutputs(drive));
+assert.deepEqual(outputs(drive), ["sensor/x"]);
+await stepped(runtime.invoke("reset_keys", { keys: { strs: outputs(drive) } }));
 close(read("sensor/x"), 0, "the driven input is back at rest");
 runtime.step(100);
 close(read("actuator/y"), 0, "the graph carried it");
@@ -99,12 +138,15 @@ close(read("unrelated/kept"), 0.375, "an unrelated key keeps its value");
 assert.ok(number(read("program/moving")) > next, "the other program runs on");
 
 // Spawning again is a new run, from fresh node state.
-const again = await stepped(runtime.spawnProgram(drive, "driver"));
-assert.notEqual(again.id, driver.id);
+const again = await spawn(drive, "driver");
+assert.notEqual(again.run, driver.run);
 runtime.step(100);
 close(read("sensor/x"), 1, "the new run writes again");
 assert.deepEqual(
-  runtime.programRuns().filter((run) => run.name === "driver").map((run) => run.status).sort(),
+  (await runs())
+    .filter(([name]) => name === "driver")
+    .map(([, status]) => status)
+    .sort(),
   ["failure", "running"],
   "the ended run and the new one",
 );

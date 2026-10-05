@@ -10,6 +10,17 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Added
 
+- The browser module's device (`VizijRuntime`) has the surface any client
+  of an Arora device has, through `arora-web`: `call`, `invoke` (a described
+  method by name), `spawn`, `halt` (by run id), `listKeys` and
+  `describeMethods`, beside the store accessors and the interpreter's LOAD
+  and EDIT (`loadGraph`, `applyGraphEdits`). What a face does goes through
+  its modules' and interpreter's declared methods by name. Two codecs stay
+  the module's own: `behaviorValue(graph)`, a graph spec as `run_behavior`'s
+  `behavior` argument, and `runEdits(run, from, to)`, the edits that change
+  a run's behavior in place. `describe` lists each program with its label
+  and graph.
+
 - A face's program runs beside its graph as a task run of the device's
   interpreter — its `run_behavior` method, spawned through the interpreter
   module like the skills — natively and in the browser
@@ -45,6 +56,13 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 - Opening another face (`O`, a dropped `.glb`, a reload) keeps the current one
   on screen until the new one is ready, instead of an empty window meanwhile.
+
+### Removed
+
+- The browser module's device no longer carries calls of its own for what
+  Arora's client surface does: `spawnSkill` (`invoke` the skill by name),
+  `reset` (`invoke("reset")`), and `call`'s inference of a missing
+  `module_id`. A run is halted by its id (`halt(run)`).
 
 ### Fixed
 

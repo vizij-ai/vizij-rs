@@ -32,13 +32,16 @@
   await vizij.init();
   await vizij.mount("#faces", { background });
 
-  // The page owns every device and steps it on its own frames.
+  // The page owns every device and steps it on the device clock: by default
+  // on the page's frames, each by the frame's wall time; once a test takes
+  // the clock (`manual()`), only the test's `advance(dtMs)` steps them, so
+  // what a test reads after its steps does not depend on how fast the page
+  // runs. The scripted playback below reads the same clock.
   const devices = new Map();
   const stepErrors = [];
-  let last = performance.now();
-  function loop(t) {
-    const dt = Math.min(t - last, 100);
-    last = t;
+  const clock = { manual: false, now: 0 };
+  function stepAll(dt) {
+    clock.now += dt;
     for (const [id, device] of devices) {
       try {
         device.step(dt);
@@ -46,10 +49,15 @@
         stepErrors.push(`${id}: ${e}`);
       }
     }
+  }
+  let last = performance.now();
+  function loop(t) {
+    const dt = Math.min(t - last, 100);
+    last = t;
+    if (!clock.manual) stepAll(dt);
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
-
   const glbs = new Map();
   async function glb(url) {
     if (!glbs.has(url)) {
@@ -59,27 +67,21 @@
   }
 
   // A scripted playback hook for the speech tests: no audio output, a
-  // playhead at a quarter of the wall clock from the first poll, advancing
-  // at most 10 ms per poll, ending after 260 ms; what it received is kept
-  // for the test to read. The crossfade smoother runs on `arora/dt`, so a
-  // shape's weight rises with the wall time it stays current, and the test
-  // reads the weights from JavaScript at whatever cadence a busy page
-  // grants it: a 100 ms mark has to span several of those reads at its
-  // full weight. At a quarter speed a mark lasts 400 ms on a page stepping
-  // every few milliseconds; bounded per poll, it lasts ten polls on a page
-  // stepping every 200 ms rather than being skipped.
+  // playhead at a quarter of the device clock's time since the first poll,
+  // ending after 260 ms; what it received is kept for the test to read. The
+  // crossfade smoother runs on `arora/dt`, so a shape's weight rises with the
+  // device time it stays current: at a quarter speed a 100 ms mark lasts
+  // 400 ms of it.
   window.vizijPlayback = { calls: [] };
   const scriptedPlay = (bytes, marks) => {
-    let t = 0;
-    let last;
+    let start;
     const call = { bytes: bytes.length, marks: marks.length, polls: 0, at: [] };
     window.vizijPlayback.calls.push(call);
     return () => {
-      const now = performance.now();
-      if (last !== undefined) t += Math.min(10, (now - last) / 4);
-      last = now;
+      start ??= clock.now;
+      const t = (clock.now - start) / 4;
       call.polls += 1;
-      call.at.push([Math.round(now), Math.round(t)]);
+      call.at.push([Math.round(clock.now), Math.round(t)]);
       return t > 260 ? null : t;
     };
   };
@@ -136,16 +138,53 @@
     hold: (id, paths) => devices.get(id).hold(paths),
     release: (id, paths) => devices.get(id).release(paths),
     spawn: (id, call) => devices.get(id).spawn(call),
-    spawnSkill: (id, name, args) => devices.get(id).spawnSkill(name, args),
+    invoke: (id, method, args, moduleId) => devices.get(id).invoke(method, args, moduleId),
     runStatus: (value) => vizij.runStatus(value),
-    halt: (id, handle) => devices.get(id).halt(handle),
-    reset: (id, keys) => devices.get(id).reset(keys),
+    halt: (id, run) => devices.get(id).halt(run),
+    listKeys: (id, prefix) => devices.get(id).listKeys(prefix),
+    describeMethods: (id, prefix) => devices.get(id).describeMethods(prefix),
+    applyGraphEdits: (id, edits) => devices.get(id).applyGraphEdits(edits),
+    behaviorValue: (graph) => vizij.behaviorValue(graph),
+    runEdits: (run, from, to) => vizij.runEdits(run, from, to),
+    behaviorRuns: vizij.BEHAVIOR_RUNS,
+    // The animation module's player states, as any client reads them.
+    players: (id) =>
+      vizij.decodePlayerStates(
+        devices.get(id).readValues([vizij.ANIMATION_PLAYERS_PATH])[vizij.ANIMATION_PLAYERS_PATH],
+      ),
+    moduleAnimation: (id, animation) => devices.get(id).moduleAnimation(animation),
     step: (id, dtMs) => devices.get(id).step(dtMs),
-    spawnProgram: (id, program, name) => devices.get(id).spawnProgram(program, name),
-    editProgram: (id, handle, from, to) => devices.get(id).editProgram(handle, from, to),
-    programRuns: (id) => devices.get(id).programRuns(),
-    programOutputs: (id, program) => devices.get(id).programOutputs(program),
-    programGraph: (id, program) => devices.get(id).programGraph(program),
+    // Take the device clock from the page's frames (`manual(false)` hands
+    // it back): while the test holds it, only `advance` steps the devices.
+    manual: (on = true) => {
+      clock.manual = on;
+    },
+    // Step every device `steps` times by `dtMs` on the device clock.
+    advance: (dtMs, steps = 1) => {
+      for (let i = 0; i < steps; i++) stepAll(dtMs);
+    },
+    now: () => clock.now,
+    // Resolves with `pending` once it settles, stepping the devices on the
+    // device clock meanwhile when the test owns it (an operation applies at
+    // the next step, an invoke over two), yielding to the page between steps.
+    settle: async (pending, dtMs = 16) => {
+      let done = false;
+      pending.then(
+        () => (done = true),
+        () => (done = true),
+      );
+      for (let i = 0; i < 200 && !done; i++) {
+        if (clock.manual) stepAll(dtMs);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      return pending;
+    },
+    // Resolves after `n` of the page's frames: the view draws on them.
+    frames: (n = 1) =>
+      new Promise((resolve) => {
+        const next = () => (--n <= 0 ? resolve() : requestAnimationFrame(next));
+        requestAnimationFrame(next);
+      }),
     snapshot: (id) => devices.get(id).snapshot(),
     place: (id, rect) => vizij.placeVizij(id, rect),
     setView: (id, view) => vizij.setView(id, view),

@@ -17,38 +17,47 @@ try {
   await loadVizij(page, "face", "Quori_Current_Extended.glb", { program: "none", audio: "scripted" });
   const result = await page.evaluate(async () => {
     const h = window.vizijHarness;
+    // The test owns the device clock: 16 ms steps, the page yielding between
+    // them for what is not the device's (the stand-in's fetch, a promise).
+    h.manual();
+    const step = async () => {
+      h.advance(16);
+      await new Promise((r) => setTimeout(r, 0));
+    };
+    const settle = async (pending) => {
+      let done = false;
+      pending.then(
+        () => (done = true),
+        () => (done = true),
+      );
+      for (let i = 0; i < 100 && !done; i++) await step();
+      return pending;
+    };
     const shape = (s) => h.path("face", `standard/vizij/viseme/${s}`);
     const paths = [shape("PP"), shape("aa"), h.path("face", "standard/vizij/viseme")];
     const sample = (status) => ({
-      at: Math.round(performance.now()),
+      at: Math.round(h.now()),
       values: h.readValues("face", paths),
       status: h.runStatus(h.readValues("face", [status])[status]),
       polls: window.vizijPlayback.calls[0]?.polls ?? 0,
     });
-    const handle = await h.spawnSkill("face", "say", { text: "hello", voice: "Ruth" });
-    // Sampled until the run ends (bounded): the script's 260 ms take as
-    // many polls as the page steps in them, a slow page many seconds.
+    const handle = await settle(h.invoke("face", "say", { text: "hello", voice: "Ruth" }));
+    // Sampled every step until the run ends (bounded): the fetch completes
+    // in its own time, the playback then runs 1040 ms of device time.
     const samples = [];
-    for (let i = 0; i < 200; i++) {
-      await new Promise((r) => setTimeout(r, 50));
+    for (let i = 0; i < 2000; i++) {
+      await step();
       samples.push(sample(handle.status));
-      if (samples[samples.length - 1].status === "success" && i >= 5) break;
+      if (samples[samples.length - 1].status === "success") break;
     }
-    // A second run, halted while it plays: it is never polled again. The
-    // run fetches before it plays, and a slow page takes its time to the
-    // first poll, so the halt waits for one (bounded).
-    const halted = await h.spawnSkill("face", "say", { text: "and again", voice: "Ruth" });
+    // A second run, halted while it plays: it is never polled again.
+    const halted = await settle(h.invoke("face", "say", { text: "and again", voice: "Ruth" }));
     const polls = () => window.vizijPlayback.calls[1]?.polls ?? 0;
-    for (let i = 0; i < 100 && polls() === 0; i++) {
-      await new Promise((r) => setTimeout(r, 50));
-    }
+    for (let i = 0; i < 2000 && polls() === 0; i++) await step();
     const pollsBeforeHalt = polls();
-    await h.halt("face", halted);
-    // The halt lands on the run's next step; the count is compared once it
-    // has, over a window of steps.
-    await new Promise((r) => setTimeout(r, 300));
+    await settle(h.halt("face", halted.run));
     const pollsAtHalt = polls();
-    await new Promise((r) => setTimeout(r, 300));
+    for (let i = 0; i < 20; i++) await step();
     const pollsAfterHalt = polls();
     return {
       samples,
