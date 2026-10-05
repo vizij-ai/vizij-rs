@@ -140,7 +140,7 @@ fn total_duration_with_offsets_and_negative_scale() {
         },
     );
 
-    // Apply small window to force total_duration to be min(window_len, max_span)
+    // A window shorter than the instances bounds the playhead, not the length.
     eng.update(
         0.0,
         vizij_animation_core::Inputs {
@@ -153,11 +153,11 @@ fn total_duration_with_offsets_and_negative_scale() {
         },
     );
 
-    // After window (0.4), total duration should be 0.4 (min(0.4, max_span=0.5))
+    // The length is the latest instance end: 1.5 + 2.0.
     let durw = eng.player_total_duration(p).expect("player duration");
     assert!(
-        (durw - 0.4).abs() < 1e-6,
-        "total duration should be 0.4 after window"
+        (durw - 3.5).abs() < 1e-6,
+        "total duration stays the instances' 3.5 under a window"
     );
     // Flip to Once mode
     eng.update(

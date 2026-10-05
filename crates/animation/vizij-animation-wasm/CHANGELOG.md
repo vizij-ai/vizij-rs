@@ -4,6 +4,15 @@ All notable changes to `vizij-animation-wasm`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] - 2026-10-06
+
+### Breaking
+
+- Built on `vizij-animation-core` 3: the play window bounds `Loop` and
+  `PingPong` as it bounds `Once`, a player's length ignores the window,
+  players report `ended`, and `PlayAfter` starts playback a delay into an
+  update.
+
 ## [2.0.0] - 2026-10-05
 
 ### Breaking

@@ -24,39 +24,49 @@ pub struct Inputs {
 /// same player observe the effects of earlier ones in the same tick.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PlayerCommand {
-    /// Start or resume playback for `player`, at its speed, from its time.
+    /// Start or resume playback for `player`, at its speed, from its time; one waiting for a
+    /// [`PlayerCommand::PlayAfter`] start plays at once.
     Play { player: PlayerId },
     /// Hold the player's time where it is. The speed is kept for the next `Play`.
     Pause { player: PlayerId },
     /// Stop playback and reset time to the player's window start. The speed is kept for the
     /// next `Play`.
     Stop { player: PlayerId },
-    /// Set the multiplier a playing player's time advances at. It does not start, pause or
-    /// stop the player: a paused player stays paused, and a playing one at speed 0 holds its
-    /// time while it reads as playing.
+    /// Set the multiplier a playing player's time advances at; a negative speed plays backwards
+    /// through the window. It does not start, pause or stop the player: a paused player stays
+    /// paused, and a playing one at speed 0 holds its time while it reads as playing.
     SetSpeed { player: PlayerId, speed: f32 },
     /// Set the player's internal time in seconds. A stopped player is left paused there.
     Seek { player: PlayerId, time: f32 },
     /// Change how player time maps into clip-local time.
     SetLoopMode { player: PlayerId, mode: LoopMode },
-    /// Update the one-shot playback window in seconds.
+    /// Set the play window, in seconds of player time: [`LoopMode::Once`] clamps the playhead
+    /// into it, [`LoopMode::Loop`] wraps within it and [`LoopMode::PingPong`] reflects within it.
     ///
-    /// `end_time: None` clears the explicit end bound.
+    /// `end_time: None` ends the window at the player's length. A playhead outside the new
+    /// window moves to its nearest bound.
     SetWindow {
         player: PlayerId,
         start_time: f32,
         end_time: Option<f32>,
     },
+    /// Start playback `delay` seconds after the start of the update that applies the command,
+    /// holding the playhead until then: that update, or a later one, advances the player only by
+    /// the time after the start. A negative `delay` starts it that long before the update, which
+    /// then advances it by the extra time. The player keeps its state until the start, then
+    /// plays at its speed, as [`PlayerCommand::Play`] leaves it; a later `Play`, `Pause` or
+    /// `Stop` cancels the wait.
+    PlayAfter { player: PlayerId, delay: f32 },
 }
 
 /// Loop policy used when mapping player time into clip-local time.
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum LoopMode {
-    /// Clamp to the configured window or clip end.
+    /// Clamp to the play window, holding at the bound playback reaches.
     Once,
-    /// Wrap around the clip duration.
+    /// Wrap around the play window.
     Loop,
-    /// Reflect back and forth across the clip duration.
+    /// Reflect back and forth across the play window.
     PingPong,
 }
 

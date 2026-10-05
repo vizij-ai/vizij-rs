@@ -98,11 +98,16 @@ export type PlayerCommand =
   | { Play: { player: PlayerId } }
   | { Pause: { player: PlayerId } }
   | { Stop: { player: PlayerId } }
+  /** A negative speed plays backwards; zero holds the playhead. */
   | { SetSpeed: { player: PlayerId; speed: number } }
   | { Seek: { player: PlayerId; time: number } }
   | { SetLoopMode: { player: PlayerId; mode: LoopMode } }
-  /** `end_time: null` clears the explicit end bound and reuses the player's natural end. */
-  | { SetWindow: { player: PlayerId; start_time: number; end_time?: number | null } };
+  /** The play window, in seconds: `Once` clamps into it, `Loop` wraps within it, `PingPong`
+   * reflects within it. `end_time: null` ends it at the player's length. */
+  | { SetWindow: { player: PlayerId; start_time: number; end_time?: number | null } }
+  /** Start playback `delay` seconds into the update that applies it (a negative delay, that long
+   * before), holding the playhead until then. `Play`, `Pause` and `Stop` cancel the wait. */
+  | { PlayAfter: { player: PlayerId; delay: number } };
 
 /** Partial instance update applied before stepping. Omitted fields leave the current value unchanged. */
 export interface InstanceUpdate {
@@ -329,6 +334,8 @@ export interface PlayerInfo {
   loop_mode: LoopMode;
   start_time: number; // seconds
   end_time?: number | null; // seconds or null/undefined
-  length: number; // seconds (computed: max over instances of start_offset + anim_duration/|time_scale|)
+  length: number; // seconds (computed: max over instances of start_offset + anim_duration*|time_scale|)
+  /** A `Once` player advancing at a non-zero speed holds at the window bound it plays toward. */
+  ended: boolean;
 }
 import type { NormalizedValue, ValueJSON as SharedValueJSON } from "@vizij/value-json";

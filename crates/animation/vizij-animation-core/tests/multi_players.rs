@@ -92,7 +92,7 @@ fn durations_are_independent_per_player() {
     assert!((d1 - 3.0).abs() < 1e-6, "P1 total_duration should be 3.0");
     assert!((d2 - 6.0).abs() < 1e-6, "P2 total_duration should be 6.0");
 
-    // Apply window to P2 that is smaller than span; duration should clamp to window
+    // A window smaller than P2's span bounds its playhead, not its length
     let _ = eng.update(
         0.0,
         vizij_animation_core::Inputs {
@@ -106,7 +106,7 @@ fn durations_are_independent_per_player() {
     );
     let d2w = eng.player_total_duration(p2).unwrap();
     assert!(
-        (d2w - 2.5).abs() < 1e-6,
-        "P2 duration should clamp to window 2.5"
+        (d2w - 6.0).abs() < 1e-6,
+        "P2 duration stays 6.0 under a window"
     );
 }
