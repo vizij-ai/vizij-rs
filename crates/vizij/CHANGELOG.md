@@ -10,6 +10,19 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Added
 
+- A face's program runs beside its graph as a task run of the device's
+  interpreter — its `run_behavior` method, spawned through the interpreter
+  module like the skills — natively and in the browser
+  (`face::spawn_program`), instead of being composed into the graph. Any
+  client finds the run by the program's id in the store and halts it; its
+  outputs then hold their last values. `--program` and `--no-autoplay` choose
+  the program that runs from launch, as before.
+- The `rest` module's `reset_keys(keys)` returns only the keys it names to
+  rest — how a client returns a halted program's outputs to rest.
+- The keys a face declares cover its programs: the inputs each program reads
+  are opened like the graph's free inputs, and a key a program writes stays
+  an input, resting at its authored default.
+
 - A face's animations (its bundle's `animations`) load into its device when
   the face loads, natively and in the browser, through the animation
   module's declared functions — the calls any client sends

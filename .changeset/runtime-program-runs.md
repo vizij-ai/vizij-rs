@@ -1,0 +1,5 @@
+---
+"@vizij/runtime": minor
+---
+
+A face's programs are runs of its device's interpreter, started and stopped the way any client of the device starts and stops a task run. `spawnProgram(program, name?)` runs one of the bundle's programs (by id) or a graph the page defines beside the face's graph and resolves to its `TaskHandle`; `halt(handle)` stops it, its outputs holding their last values. `programRuns()` reads every program run off the device's store — its handle, its name and its `RunStatus` — including the one `loadVizij`'s `program` option starts at load, which now runs beside the face's graph instead of being composed into it. `editProgram(handle, from, to)` changes a running program in place, the nodes it keeps keeping their state. `reset(keys)` returns only the keys it names to rest, and `programOutputs(program)` lists the keys a program writes, so `reset(programOutputs(program))` returns a halted program's outputs to rest. `programGraph(id)` reads a bundle program's graph. `ProgramInput` and `ProgramRun` are exported types.

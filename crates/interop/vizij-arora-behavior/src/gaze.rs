@@ -86,7 +86,8 @@ mod tests {
             .unwrap();
             graph.set_task_fragment(look_at::ids::look_at::FUNCTION, fragment);
             let described = graph.described_methods();
-            assert_eq!(described.len(), 1);
+            // look_at, beside the interpreter's own run_behavior.
+            assert_eq!(described.len(), 2);
             assert_eq!(
                 described[&look_at::ids::look_at::FUNCTION],
                 look_at_description()

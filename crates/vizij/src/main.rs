@@ -136,13 +136,16 @@ struct Cli {
     #[arg(long)]
     frame_id: Option<String>,
 
-    /// Autoplay this motiongraph program id instead of the bundle's own
-    /// `activeMotionGraphId`. Window mode plays the active program by default;
-    /// `--snapshot` stays on the neutral face unless a program is named.
+    /// Run this motiongraph program from launch instead of the bundle's own
+    /// `activeMotionGraphId`: beside the face's graph, as a task run any
+    /// client of the device halts. Window mode runs the active program by
+    /// default; `--snapshot` stays on the neutral face unless a program is
+    /// named.
     #[arg(long)]
     program: Option<String>,
 
-    /// Don't autoplay any program — hold the rig's authored/neutral pose.
+    /// Don't run any program from launch — hold the rig's authored/neutral
+    /// pose.
     #[arg(long)]
     no_autoplay: bool,
 
