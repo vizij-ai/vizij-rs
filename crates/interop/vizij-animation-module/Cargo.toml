@@ -14,7 +14,6 @@ arora-types = "3"
 vizij-animation-core = { path = "../../animation/vizij-animation-core" }
 vizij-arora = { path = "../vizij-arora" }
 vizij-api-core = { path = "../../api/vizij-api-core" }
-lazy_static = "1"
 
 [dev-dependencies]
 arora-engine = "5"

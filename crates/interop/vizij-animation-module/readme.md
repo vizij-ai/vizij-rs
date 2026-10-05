@@ -13,7 +13,10 @@ load. The wasm guest owns one in a **guest global**, in the linear memory of
 the `Store` the executor creates per `load_module` — each engine that loads
 the module gets its own, persisting across `dispatch` calls (no engine state
 round-trips through the data store); the declared functions act on that
-global. A host that links this crate as an rlib
+global, without a lock, so the call after a trap still reaches the state. A
+trap still leaves the instance unsound to keep: what the trapped call had
+changed of the state stays changed, and its stack frames and argument buffer
+are not reclaimed. A host that sees a trap retires the instance. A host that links this crate as an rlib
 (`vizij`'s native and browser devices) has no executor to scope it, so it
 builds one `AnimationModule` per `host_module()` — the host-linked
 counterpart of a load — and two devices in one process never share an
@@ -62,7 +65,8 @@ Loading and unloading are structural edits, applied immediately:
 - `add_instance_with_weight(player: u32, anim: u32, weight: f32) -> u32` — the
   same, blending at `weight`. Added at 0, it writes nothing until `set_weight`
   gives it a weight: a client learns the instance's id only from the reply, so
-  its own `set_weight` lands a step after the instance.
+  its own `set_weight` lands a step after the instance. A weight that is not
+  finite and non-negative adds nothing and returns `u32::MAX`.
 - `remove_instance(player: u32, instance: u32) -> u32` — 1 when the instance
   was on the player, 0 otherwise.
 - `remove_player(player: u32) -> bool` — the player and its instances; the
@@ -97,14 +101,16 @@ Per tick and transport:
   - `pause(player)`, `stop(player)` — hold, or return to the window start;
     both keep the speed.
   - `seek(player, time_ns)`.
-  - `set_speed(player, speed)` — negative plays backwards, 0 holds.
+  - `set_speed(player, speed)` — negative plays backwards, 0 holds. Not
+    finite, rejected.
   - `set_loop(player, mode)` — `"once" | "loop" | "ping_pong"`.
   - `set_window(player, start_ns, end_ns?)` — the play window: `once`
     clamps into it and holds at the bound it reaches, `loop` wraps within it,
     `ping_pong` reflects within it, `stop` returns to its start. Without
     `end_ns` it ends at the player's length. A playhead outside the new
     window moves to its nearest bound.
-  - `set_weight(player, instance, weight)` — the blend weight.
+  - `set_weight(player, instance, weight)` — the blend weight, finite and
+    non-negative, else rejected; at 0 the instance writes nothing.
   - `set_start_offset(player, instance, offset_ns: i64)` — where the
     instance starts on its player's timeline; before it, the instance holds
     its clip's start, and a negative offset starts it partway in.
