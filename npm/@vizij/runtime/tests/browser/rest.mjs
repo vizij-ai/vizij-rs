@@ -30,7 +30,14 @@ function same(a, b) {
 
 const { page, logs, close } = await open(FIXTURES);
 try {
-  await loadVizij(page, "quori", "Quori_Current_Extended.glb", { program: "none" });
+  // A static face: no program, no ROS4HRI mapping (its idle blink runs on the
+  // device's own clock) and no animations, so the rest frame and the frame
+  // after reset compare pixel for pixel.
+  await loadVizij(page, "quori", "Quori_Current_Extended.glb", {
+    program: "none",
+    ros4hri: false,
+    animations: false,
+  });
   await page.waitForTimeout(SETTLE_MS);
   const rest = await page.evaluate(() => window.vizijHarness.snapshot("quori"));
   const restShot = await page.screenshot({ clip: CLIP });
