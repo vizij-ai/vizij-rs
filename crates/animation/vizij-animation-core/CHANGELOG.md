@@ -4,7 +4,35 @@ All notable changes to `vizij-animation-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.0.0] - 2026-10-05
+
+### Breaking
+
+- A player's playback state is explicit and independent of its speed:
+  `Player::state` (a `PlaybackState`) is what `Play`, `Pause` and `Stop` set,
+  and `speed` is what `SetSpeed` alone sets. Only a playing player's time
+  advances, by `dt * speed`. `Pause` and `Stop` keep the speed, so `Play`
+  resumes at the speed the player was given; `SetSpeed` does not start,
+  pause or stop a player (a paused player stays paused, a playing one at
+  speed 0 holds its time while it reads as playing). `Seek` leaves a stopped
+  player paused at the time it seeks to; `SetWindow` keeps a stopped player
+  at its window start. `PlayerInfo::state` reports the state as the last
+  `Play`, `Pause` or `Stop` left it, and `PlayerInfo::speed` the multiplier
+  as set. A new player plays at speed 1.
+- `Player` is `#[non_exhaustive]`.
+
+### Added
+
+- `Engine::replace_animation(anim, data) -> bool` replaces a loaded
+  animation's data in place, under the same id: its instances stay on their
+  players with their configuration and sample every track of the new data,
+  the players keep their playback, and their lengths follow the new
+  duration. The animation's host bindings are dropped (a binding names a
+  track by index); its tracks write their canonical paths until the next
+  `prebind`.
+- `BindingTable::remove_animation(anim)` removes every row bound to a
+  channel of `anim`.
+- `PlaybackState` is re-exported at the crate root.
 
 ### Changed
 

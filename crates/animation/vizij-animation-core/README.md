@@ -126,6 +126,7 @@ Instances are blended in insertion order. Adjust `weight`, `time_scale`, and `st
    - `Engine::new(Config)` (or `Engine::default()`) accepts buffer sizing hints via [`Config`](#engineconfig-tuning): adjust scratch capacities when sampling dense rigs, raise `max_events_per_tick` for verbose telemetry, or carry feature toggles.
 3. **Load Animations**
    - `Engine::load_animation(data)` stores animation content and returns an `AnimId` handle.
+   - `Engine::replace_animation(anim, data)` swaps a loaded animation's content under the same id: its instances and players keep their playback and configuration.
 4. **Create Players**
    - `Engine::create_player(name)` returns a `PlayerId`. Players track playback time, speed, loop mode, and instance membership.
 5. **Attach Instances**
@@ -150,7 +151,7 @@ Instances are blended in insertion order. Adjust `weight`, `time_scale`, and `st
 ### Engine Components
 
 - **Animations** – Stored in an internal library keyed by `AnimId`.
-- **Players** – Manage playback state, mode (`Loop`, `Once`, `PingPong`), speed, time window, and attached instances.
+- **Players** – Manage playback state, mode (`Loop`, `Once`, `PingPong`), speed, time window, and attached instances. The state (`Playing`, `Paused`, `Stopped`) and the speed are independent: `Play`, `Pause` and `Stop` set the state, `SetSpeed` the speed, and only a playing player's time advances, by `dt * speed`.
 - **Instances** – Bind an animation to a player with weight/time-scale/start offset/enabled flags and a `BindingSet`.
 - **Bindings** – Map canonical target paths to host IDs via a `TargetResolver`. Prevents string comparisons during updates.
 - **Outputs** – Provide a list of `Change { player, key, value }` and associated events. `OutputsWithDerivatives` adds optional derivative values per change.
@@ -171,7 +172,7 @@ Most projects can rely on `Config::default()`, but headless baking tools or orch
 
 ### Events & Inputs
 
-- **Inputs** – Aggregate player commands (`Play`, `Pause`, `Seek`, `SetSpeed`, `SetLoopMode`) and per-instance updates (weight/time-scale/start offset/enabled).
+- **Inputs** – Aggregate player commands (`Play`, `Pause`, `Stop`, `Seek`, `SetSpeed`, `SetLoopMode`, `SetWindow`) and per-instance updates (weight/time-scale/start offset/enabled).
 - **Events** – Emitted for playback state transitions, loop completions, custom animation events, and warnings (e.g., binding failures).
 
 ### Outputs & derivatives

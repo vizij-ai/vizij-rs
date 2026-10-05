@@ -46,8 +46,10 @@ writeFileSync(
     `export const headerJson: string = ${JSON.stringify(JSON.stringify(header))};\n`,
 );
 
+// cargo builds under CARGO_TARGET_DIR when the environment sets it.
+const targetDir = resolve(repoRoot, process.env.CARGO_TARGET_DIR ?? "target");
 copyFileSync(
-  resolve(repoRoot, "target/wasm32-wasip1/release/vizij_animation_module.wasm"),
+  resolve(targetDir, "wasm32-wasip1/release/vizij_animation_module.wasm"),
   resolve(artifactDir, "vizij_animation_module.wasm"),
 );
 

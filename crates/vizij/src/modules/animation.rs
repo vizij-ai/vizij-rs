@@ -195,6 +195,14 @@ pub fn host_module() -> HostModule {
                 ))
             })
         }),
+        (ids::reload_animation::FUNCTION, {
+            let a = a(());
+            Box::new(move |call| {
+                let anim = arg(call, ids::reload_animation::ANIM, "anim")?;
+                let clip = arg(call, ids::reload_animation::CLIP, "clip")?;
+                Ok(Value::from(a.borrow_mut().reload_animation(anim, clip)))
+            })
+        }),
     ];
 
     let mut signatures = signatures();
@@ -655,9 +663,62 @@ mod tests {
     }
 
     #[test]
+    fn an_animation_reloads_through_a_call() {
+        let mut device = device();
+        let clip = |key: &str| {
+            module_animation(
+                &authored(serde_json::json!({ "id": "wave", "duration": 1, "tracks": [
+                    { "channel": key, "keyframes": [{ "time": 0, "value": 1 }] },
+                ] })),
+                &ChannelKeys::default(),
+            )
+        };
+        let player = create_player(&mut device, "p");
+        let Value::U32(anim) = call(
+            &mut device,
+            ids::load_animation::FUNCTION,
+            vec![field(ids::load_animation::CLIP, clip("before").into())],
+        ) else {
+            panic!("an animation id");
+        };
+        call(
+            &mut device,
+            ids::add_instance::FUNCTION,
+            vec![
+                field(ids::add_instance::PLAYER, Value::U32(player)),
+                field(ids::add_instance::ANIM, Value::U32(anim)),
+            ],
+        );
+        let reload = |device: &mut arora::Arora, anim: u32| {
+            call(
+                device,
+                ids::reload_animation::FUNCTION,
+                vec![
+                    field(ids::reload_animation::CLIP, clip("after").into()),
+                    field(ids::reload_animation::ANIM, Value::U32(anim)),
+                ],
+            )
+        };
+        assert_eq!(reload(&mut device, anim), Value::Boolean(true));
+        assert_eq!(reload(&mut device, anim + 1), Value::Boolean(false));
+        let out = format!(
+            "{:?}",
+            call(
+                &mut device,
+                ids::step::FUNCTION,
+                vec![field(ids::step::DT_NS, Value::U64(0))],
+            )
+        );
+        assert!(
+            out.contains("after") && !out.contains("before"),
+            "the instance plays the reloaded tracks: {out}"
+        );
+    }
+
+    #[test]
     fn every_declared_function_is_registered_and_described() {
         let declared = function_modules();
-        assert_eq!(declared.len(), 18);
+        assert_eq!(declared.len(), 19);
         let module = host_module();
         let described: Vec<Uuid> = module.descriptions().iter().map(|d| d.id).collect();
         for function in declared.keys() {

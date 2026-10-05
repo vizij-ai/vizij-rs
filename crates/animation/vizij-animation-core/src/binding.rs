@@ -55,6 +55,11 @@ impl BindingTable {
             self.rows.push(BindingRow { channel, handle });
         }
     }
+
+    /// Remove every row bound to a channel of `anim`.
+    pub fn remove_animation(&mut self, anim: AnimId) {
+        self.rows.retain(|r| r.channel.anim != anim);
+    }
 }
 
 /// Per-instance view over a set of bound channels (indices into BindingTable.rows).

@@ -48,7 +48,7 @@ pub use config::Config;
 /// Canonical animation clip data types.
 pub use data::{AnimationData, Keypoint, Track, Transitions, Vec2};
 /// Playback engine and its inspection/configuration helpers.
-pub use engine::{Engine, InstanceCfg, Player, PrebindReport};
+pub use engine::{Engine, InstanceCfg, PlaybackState, Player, PrebindReport};
 /// Strongly typed ids for the animation runtime.
 pub use ids::{AnimId, InstId, PlayerId};
 /// Per-tick command/update inputs.

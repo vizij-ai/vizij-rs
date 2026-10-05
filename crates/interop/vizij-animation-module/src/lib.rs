@@ -23,17 +23,19 @@
 //! handles (zero or one each; empty = the engine's default ease).
 //!
 //! Exports:
-//! - loading — `load_animation` / `create_player` / `add_instance` /
-//!   `add_instance_with_weight`, and unloading — `remove_instance` /
-//!   `remove_player` / `unload_animation`: structural edits, applied
-//!   immediately;
+//! - loading — `load_animation` / `reload_animation` / `create_player` /
+//!   `add_instance` / `add_instance_with_weight`, and unloading —
+//!   `remove_instance` / `remove_player` / `unload_animation`: structural
+//!   edits, applied immediately;
 //! - per tick — `step(dt_ns)`, returning **per-track outputs keyed by track
 //!   identity**, each carrying the track's **default authored key** plus its
 //!   sampled value; the consumer (a runner, or a graph node) decides the final
 //!   store key — default = the authored key, overridable;
 //! - transport — `play` / `pause` / `stop` / `seek(time_ns)` / `set_speed` /
 //!   `set_loop` / `set_weight`, buffered into the engine's **next** `step`
-//!   (issue order preserved);
+//!   (issue order preserved). `play`, `pause` and `stop` set whether a
+//!   player's time advances and `set_speed` only the rate it advances at, so
+//!   a player resumes at the speed it was given;
 //! - feedback — `player_states()`, one `PlayerState` per player: its name,
 //!   its playback, its loop mode and its instances, so any client finds a
 //!   player by the name it was created under and reads where it stands. This call is a **patch**: the vision is state
@@ -169,8 +171,12 @@ pub struct InstanceState {
 /// transport commands waiting for the next step.
 pub struct AnimationModule {
     engine: Engine,
+    /// Each loaded animation's tracks as (canonical output key, authored track
+    /// id), in load order: what `key_to_track` is built from.
+    tracks: Vec<(u32, Vec<(String, String)>)>,
     /// Canonical output key (a track's `animatable_id`) -> the authored track id,
-    /// so `step` can report per-track identity alongside the default key.
+    /// so `step` can report per-track identity alongside the default key. A
+    /// key two animations write maps to the track of the later-loaded one.
     key_to_track: HashMap<String, String>,
     /// Player commands and instance updates issued since the previous step,
     /// drained (in issue order) into the next `step`'s engine update.
@@ -188,6 +194,7 @@ impl AnimationModule {
     pub fn new() -> Self {
         Self {
             engine: Engine::new(Config::default()),
+            tracks: Vec::new(),
             key_to_track: HashMap::new(),
             pending: Inputs::default(),
         }
@@ -198,31 +205,39 @@ impl AnimationModule {
     /// The keyframe `value`s arrive as raw Arora `Value`s (vizij-arora encoding)
     /// and are converted back to Vizij values for the core model.
     pub fn load_animation(&mut self, clip: AnimationClip) -> u32 {
-        let tracks = clip
+        let (data, tracks) = to_core_animation(clip);
+        let anim = self.engine.load_animation(data).0;
+        self.tracks.push((anim, tracks));
+        self.index_tracks();
+        anim
+    }
+
+    /// Replace the data of loaded animation `anim` with `clip`, immediately
+    /// (a structural edit, like `load_animation`), keeping its id. Every
+    /// instance of it stays on its player with its weight, and samples
+    /// `clip`'s tracks from the next step on; the players keep their
+    /// playback — state, playhead, speed and loop mode — and their length
+    /// follows `clip`'s duration. Returns whether `anim` was loaded; when it
+    /// was not, nothing changes.
+    pub fn reload_animation(&mut self, anim: u32, clip: AnimationClip) -> bool {
+        let (data, tracks) = to_core_animation(clip);
+        if !self.engine.replace_animation(AnimId(anim), data) {
+            return false;
+        }
+        if let Some((_, loaded)) = self.tracks.iter_mut().find(|(a, _)| *a == anim) {
+            *loaded = tracks;
+        }
+        self.index_tracks();
+        true
+    }
+
+    /// Rebuild `key_to_track` from the loaded animations' tracks.
+    fn index_tracks(&mut self) {
+        self.key_to_track = self
             .tracks
-            .into_iter()
-            .map(|t| {
-                self.key_to_track
-                    .insert(t.animatable_id.clone(), t.id.clone());
-                CoreTrack {
-                    id: t.id,
-                    name: t.name,
-                    animatable_id: t.animatable_id,
-                    points: t.points.into_iter().map(to_core_keypoint).collect(),
-                    settings: None,
-                }
-            })
+            .iter()
+            .flat_map(|(_, tracks)| tracks.iter().cloned())
             .collect();
-
-        let data = AnimationData {
-            id: None,
-            name: clip.name,
-            tracks,
-            groups: Default::default(),
-            duration_ms: clip.duration,
-        };
-
-        self.engine.load_animation(data).0
     }
 
     /// Create a player and return its `PlayerId`.
@@ -259,7 +274,8 @@ impl AnimationModule {
         player
     }
 
-    /// Resume or start playback. Applied at the next `step`.
+    /// Start or resume advancing the player's time, at the speed `set_speed`
+    /// gave it (1 unless set). Applied at the next `step`.
     pub fn play(&mut self, player: u32) -> u32 {
         self.buffer_command(
             player,
@@ -269,7 +285,8 @@ impl AnimationModule {
         )
     }
 
-    /// Hold the playhead where it is. Applied at the next `step`.
+    /// Hold the playhead where it is; the player keeps its speed for the next
+    /// `play`. Applied at the next `step`.
     pub fn pause(&mut self, player: u32) -> u32 {
         self.buffer_command(
             player,
@@ -279,7 +296,8 @@ impl AnimationModule {
         )
     }
 
-    /// Stop playback and reset to the window start. Applied at the next `step`.
+    /// Stop playback and reset to the window start; the player keeps its
+    /// speed for the next `play`. Applied at the next `step`.
     pub fn stop(&mut self, player: u32) -> u32 {
         self.buffer_command(
             player,
@@ -289,8 +307,8 @@ impl AnimationModule {
         )
     }
 
-    /// Move the playhead to `time_ns` (nanoseconds, the `dt_ns` time base).
-    /// Applied at the next `step`.
+    /// Move the playhead to `time_ns` (nanoseconds, the `dt_ns` time base); a
+    /// stopped player is left paused there. Applied at the next `step`.
     pub fn seek(&mut self, player: u32, time_ns: u64) -> u32 {
         self.buffer_command(
             player,
@@ -301,7 +319,9 @@ impl AnimationModule {
         )
     }
 
-    /// Set the playback speed multiplier. Applied at the next `step`.
+    /// Set the multiplier the player's time advances at while it plays. It
+    /// does not play, pause or stop the player: a paused player stays paused
+    /// at its new speed. Applied at the next `step`.
     pub fn set_speed(&mut self, player: u32, speed: f32) -> u32 {
         self.buffer_command(
             player,
@@ -362,13 +382,19 @@ impl AnimationModule {
     /// Unload an animation and every instance of it, on every player,
     /// immediately. Returns whether it was loaded.
     pub fn unload_animation(&mut self, anim: u32) -> bool {
-        self.engine.unload_animation(AnimId(anim))
+        if !self.engine.unload_animation(AnimId(anim)) {
+            return false;
+        }
+        self.tracks.retain(|(a, _)| *a != anim);
+        self.index_tracks();
+        true
     }
 
-    /// One `PlayerState` per player, in creation order: its name, the
-    /// engine's derived playback state, the playhead and full length in
-    /// nanoseconds (the `dt_ns` time base), the speed multiplier, the loop
-    /// mode, and its instances.
+    /// One `PlayerState` per player, in creation order: its name, its
+    /// playback state as the last `play`, `pause` or `stop` left it (a new
+    /// player plays), the playhead and full length in nanoseconds (the `dt_ns`
+    /// time base), the speed multiplier as `set_speed` set it, the loop mode,
+    /// and its instances.
     pub fn player_states(&self) -> Vec<PlayerState> {
         self.engine
             .list_players()
@@ -491,7 +517,7 @@ fn guest<T>(f: impl FnOnce(&mut AnimationModule) -> T) -> T {
 #[arora_module::module(
     id = "76697a69-6a00-0000-0d00-000000000000",
     name = "vizij-animation",
-    version = "0.3.0",
+    version = "1.0.0",
     author = "Semio",
     license = "Proprietary",
     description = "vizij-animation-core as an Arora wasm module",
@@ -651,6 +677,15 @@ pub mod animation {
     ) -> u32 {
         guest(|a| a.add_instance_with_weight(player, anim, weight))
     }
+
+    /// [`AnimationModule::reload_animation`](super::AnimationModule::reload_animation).
+    #[export(id = "76697a69-6a00-0000-0f00-000000000013")]
+    pub fn reload_animation(
+        #[param(id = "76697a69-6a00-0000-0f13-000000000001")] anim: u32,
+        #[param(id = "76697a69-6a00-0000-0f13-000000000002")] clip: AnimationClip,
+    ) -> bool {
+        guest(|a| a.reload_animation(anim, clip))
+    }
 }
 
 // baking ---------------------------------------------------------------------
@@ -670,6 +705,37 @@ fn baking_config(
         end_time: end_time.or(defaults.end_time),
         derivative_epsilon: defaults.derivative_epsilon,
     }
+}
+
+/// An [`AnimationClip`] as the core's animation data, with its tracks as
+/// (canonical output key, authored track id). The keyframe `value`s arrive as
+/// raw Arora `Value`s (vizij-arora encoding) and are converted back to Vizij
+/// values for the core model.
+fn to_core_animation(clip: AnimationClip) -> (AnimationData, Vec<(String, String)>) {
+    let keys = clip
+        .tracks
+        .iter()
+        .map(|t| (t.animatable_id.clone(), t.id.clone()))
+        .collect();
+    let tracks = clip
+        .tracks
+        .into_iter()
+        .map(|t| CoreTrack {
+            id: t.id,
+            name: t.name,
+            animatable_id: t.animatable_id,
+            points: t.points.into_iter().map(to_core_keypoint).collect(),
+            settings: None,
+        })
+        .collect();
+    let data = AnimationData {
+        id: None,
+        name: clip.name,
+        tracks,
+        groups: Default::default(),
+        duration_ms: clip.duration,
+    };
+    (data, keys)
 }
 
 fn seconds_to_ns(seconds: f32) -> u64 {
@@ -1003,6 +1069,108 @@ mod tests {
         let s = state_of(&a, player);
         assert_eq!(s.state, "stopped");
         assert_eq!(s.time_ns, 0);
+    }
+
+    /// `play`, `pause` and `stop` say whether time advances, `set_speed` how
+    /// fast: the speed a client set survives a pause and a stop, and setting
+    /// it on a paused player does not resume it.
+    #[test]
+    fn the_speed_survives_pause_and_play() {
+        let mut a = AnimationModule::new();
+        let anim = a.load_animation(ramp_clip("speed-ramp", "speed/x", true));
+        let player = a.create_player(Some("p-speed".into()));
+        a.add_instance(player, anim);
+
+        a.set_speed(player, 0.5);
+        a.step(500_000_000); // 0.25 s at half speed
+        a.pause(player);
+        a.step(500_000_000);
+        let s = state_of(&a, player);
+        assert_eq!((s.state.as_str(), s.speed), ("paused", 0.5));
+        assert!(
+            (s.time_ns as f64 - 0.25e9).abs() < 2e6,
+            "paused playhead holds"
+        );
+
+        a.set_speed(player, 0.25);
+        a.step(500_000_000);
+        let s = state_of(&a, player);
+        assert_eq!(
+            (s.state.as_str(), s.speed),
+            ("paused", 0.25),
+            "still paused"
+        );
+        assert!((s.time_ns as f64 - 0.25e9).abs() < 2e6);
+
+        a.play(player);
+        let outputs = a.step(400_000_000); // + 0.1 s at quarter speed
+        assert!((as_f32(value_of(&outputs, "speed/x").unwrap()) - 0.35).abs() < 1e-3);
+        assert_eq!(state_of(&a, player).speed, 0.25);
+
+        a.stop(player);
+        a.step(0);
+        a.play(player);
+        a.step(400_000_000);
+        let s = state_of(&a, player);
+        assert_eq!((s.state.as_str(), s.speed), ("playing", 0.25));
+        assert!(
+            (s.time_ns as f64 - 0.1e9).abs() < 2e6,
+            "replays at its speed"
+        );
+    }
+
+    /// Reloading an animation swaps its tracks under the same id: the player
+    /// keeps its playback and the instance its weight, a track the new
+    /// animation adds writes from the next step, and outputs name the new
+    /// tracks.
+    #[test]
+    fn reload_animation_keeps_the_playback() {
+        let mut a = AnimationModule::new();
+        let anim = a.load_animation(ramp_clip("re-ramp", "re/x", true));
+        let player = a.create_player(Some("p-reload".into()));
+        let inst = a.add_instance_with_weight(player, anim, 0.5);
+        a.set_speed(player, 0.5);
+        a.step(500_000_000); // playhead 0.25 s
+        a.pause(player);
+        a.step(0);
+
+        let mut clip = ramp_clip("re-ramp", "re/x", true);
+        clip.duration = 2000;
+        clip.tracks[0].id = "reloaded-x".into();
+        clip.tracks
+            .push(constant_clip("added", "re/y", 0.75).tracks.remove(0));
+        assert!(a.reload_animation(anim, clip));
+        assert!(
+            !a.reload_animation(anim + 1, constant_clip("none", "z", 0.0)),
+            "an animation not loaded is not reloaded"
+        );
+
+        let s = state_of(&a, player);
+        assert_eq!((s.state.as_str(), s.speed), ("paused", 0.5));
+        assert!(
+            (s.time_ns as f64 - 0.25e9).abs() < 2e6,
+            "the playhead holds"
+        );
+        assert_eq!(s.duration_ns, 2_000_000_000, "the new duration");
+        assert_eq!(
+            s.instances,
+            vec![InstanceState {
+                instance: inst,
+                anim,
+                weight: 0.5
+            }]
+        );
+
+        let outputs = a.step(0);
+        let y = outputs
+            .iter()
+            .find(|o| o.default_key == "re/y")
+            .expect("the added track writes");
+        assert_eq!((y.track_id.as_str(), as_f32(&y.value)), ("added-t0", 0.75));
+        let x = outputs.iter().find(|o| o.default_key == "re/x").unwrap();
+        assert_eq!(x.track_id, "reloaded-x");
+        // 0.25 s into the 2 s linear ramp.
+        assert!((as_f32(&x.value) - 0.125).abs() < 1e-3);
     }
 
     #[test]
