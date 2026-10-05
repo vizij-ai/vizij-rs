@@ -50,12 +50,46 @@ poses and their groups, the rig's inputs with their ranges and defaults, the
 animations, and the bundle's metadata as authored (`speechConfig`,
 `activeMotionGraphId`, …) — everything a page builds its controls from.
 
-`quori.reset()` returns the face to rest: each free input of its graphs to
-its authored default, each input the bundle's neutral pose names to its
-neutral. Vizijs share the page's canvas, not its framing:
+`quori.reset()` returns the face to rest: each free input of its graphs and
+programs to its authored default, each input the bundle's neutral pose names
+to its neutral; `quori.reset(keys)` returns only the keys it names. Vizijs
+share the page's canvas, not its framing:
 `setView("quori", { bounds, fit, zoom, toneMapping })` frames and tone-maps
 one Vizij over `mount`'s options, and `safeArea("quori")` says where its
 framed bounds lie on the canvas, in CSS pixels, for a DOM overlay.
+
+### Programs
+
+A Vizij's programs are the motiongraphs its bundle carries (`describe(glb)`
+lists their ids), and any graph a page defines. A program runs beside the
+face's graph as a task run of the device's interpreter — its
+`run_behavior` method, spawned and halted like any task run — so every
+client of the device starts, stops and watches programs the same way: a
+page through this package, a remote through a bridge.
+
+```ts
+const live = await quori.spawnProgram("authoring.motiongraph.main"); // a TaskHandle; several run at once
+const editor = await quori.spawnProgram(editorGraph, "editor");       // a page's graph, named
+quori.programRuns();             // [{ handle, name, status }] — read off the device's store
+await quori.editProgram(editor, editorGraph, editedGraph);           // in place
+await quori.halt(live);          // its outputs hold their last values
+await quori.reset(quori.programOutputs("authoring.motiongraph.main")); // back to rest, when the page says so
+```
+
+- `loadVizij`'s `program` option (the bundle's active program by default)
+  names the program that runs from load; `programRuns()` finds its run by
+  the program's id, to halt it like any other.
+- A run's state is its status key: `running` until halted, `failure` once
+  halted. Its name is a key of its own beside it, so any client tells which
+  program a run runs.
+- Halting removes the program's nodes and leaves the store as it is.
+  Starting it again is a new run, its stateful nodes (springs, smoothing)
+  starting afresh. A program that wants to act on its start does so itself;
+  returning its outputs to rest is the page's explicit `reset(keys)`.
+- `editProgram(handle, from, to)` takes the run from `from` — the program it
+  runs — to `to`: the nodes `to` keeps keep their runtime state.
+- Two programs that write one key both write it each step; which value
+  stands is not defined yet.
 
 ### Authoring
 

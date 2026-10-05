@@ -48,8 +48,8 @@ piece of it, not a second device.
 | Module | What it is | Where it builds |
 |---|---|---|
 | `view` | the Bevy rendering of a face from its GLB bytes, applying a device's pose each frame; `view::meta` (the bindings and the bundle read from the GLB), `view::snapshot` (offscreen rendering and readback), `view::frames` (rendered frames into the store) | everywhere |
-| `face` | the composition: the GLB's bindings and bundle into one graph spec, folded with `RigHal` + `BlackboardStore` and the modules into an `AroraBuilder` a host may extend (`builder_for`); the bundle's animations loaded into the built device through the animation module's declared functions (`load_animations`); the free inputs and what the store says of them (`declare_keys`), the neutral pose, the skills' fragments | everywhere |
-| `modules` | the host modules any Arora loads: `animation`, `rest` (`reset`), `tts_piper` (feature) | everywhere (Piper native) |
+| `face` | the composition: the GLB's bindings and bundle into one graph spec, folded with `RigHal` + `BlackboardStore` and the modules into an `AroraBuilder` a host may extend (`builder_for`); the bundle's animations loaded into the built device through the animation module's declared functions (`load_animations`); the program that runs from load, spawned beside the graph as a run of the interpreter's `run_behavior` (`spawn_program`); the free inputs and what the store says of them (`declare_keys`), the neutral pose, the skills' fragments | everywhere |
+| `modules` | the host modules any Arora loads: `animation`, `rest` (`reset`, `reset_keys`), `tts_piper` (feature) | everywhere (Piper native) |
 | `native` | the stand-alone device: the face's Arora on a worker thread under arora's operator flow, the bridges the build adds, the `RuntimeHandle` front ends speak through | every target but the browser |
 | `web` | the browser module behind [`@vizij/runtime`](../../npm/@vizij/runtime/README.md): one App per page (`mount`), a JS-paced Arora per Vizij (`loadVizij`, a `VizijRuntime`), Vizijs as rectangles of the canvas (`placeVizij`), picks, `describe` | `wasm32` |
 | `main.rs`, `open.rs` | the CLI, the window, the terminal operator UI, opening a face by drop or dialog | feature `desktop` (default) |
@@ -117,8 +117,8 @@ device its bytes (`RuntimeHandle::reload`).
 | `--always-on-top` | off | the window stays above the others |
 | `--graphs <kinds>` | `rig,pose-driver,pose,standard-adaptation` | compose only these bundle graph kinds |
 | `--no-ros4hri` | off (ROS4HRI **on**) | drop the built-in [ROS4HRI](../../docs/ros4hri.md) mapping and, under `--ros2`, the ROS4HRI exposure (typed topics, face image, skills) |
-| `--program <id>` | bundle's active program | autoplay this motiongraph program |
-| `--no-autoplay` | off | hold the rig's authored/neutral pose |
+| `--program <id>` | bundle's active program | run this motiongraph program from launch, beside the face's graph (a task run any client halts) |
+| `--no-autoplay` | off | run no program from launch: hold the rig's authored/neutral pose |
 | `--no-stage-neutral` | off | don't stage the bundle's `neutralInputs` at boot |
 | `--snapshot <png>` | — | render one frame offscreen and exit (no window) |
 | `--headless` | off | run windowless; streams frames when exposed as ROS4HRI or given `--frame-rate` |
@@ -197,12 +197,14 @@ with its ROS4HRI exposure preset:
   `display/face` as a `sensor_msgs/Image` on `/robot_face/image_raw` (`raw`);
 - data topics under `/<namespace>/keys/<path>`: every store key **published**,
   and the keys the store opens to remote writers — the face's **free inputs**,
-  input paths no graph in the composition writes — **subscribed** as
-  `std_msgs` (`Float64` for numeric controls, `String`/`Bool` by the input's
-  default; `ros2 topic info -v` shows each).
+  input paths no graph in the composition writes, and the inputs its
+  programs read — **subscribed** as `std_msgs` (`Float64` for numeric
+  controls, `String`/`Bool` by the input's default; `ros2 topic info -v`
+  shows each).
   Keys a graph writes every step (the ROS4HRI profile's `standard/vizij/*`
-  outputs, the autoplaying program's outputs) are not inputs: drive them
-  through the ROS4HRI topics or the program's own inputs.
+  outputs) are not inputs: drive them through the ROS4HRI topics. A program
+  runs beside the graph as a task run, so the keys it writes stay inputs; a
+  running program writes over them every step.
 
 The two RMW backends are mutually exclusive per build. `ros2-dds` speaks
 DDS, ROS 2's default (`ros2` is its alias). `ros2-zenoh` speaks rmw_zenoh's

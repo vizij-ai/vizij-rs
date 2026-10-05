@@ -395,7 +395,7 @@ async fn a_free_input_takes_a_published_data_topic() {
     );
     // The store opens it; the bridge subscribes what the store opens.
     let store = BlackboardStore::new();
-    declare_keys(&store, spec, &[]);
+    declare_keys(&store, spec, &[], &[]);
     let config = arora_bridge_ros2::Ros2BridgeConfig::new("robot", domain_id)
         .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
     let bridge = arora_bridge_ros2::Ros2Bridge::new(config).await;
@@ -501,7 +501,7 @@ async fn the_device_keeps_a_flat_heap_in_a_ros_graph() {
     // key each step, its free input subscribed, and the ROS4HRI profile.
     let spec = fan_out_spec();
     let store = BlackboardStore::new();
-    declare_keys(&store, &spec, &[]);
+    declare_keys(&store, &spec, &[], &[]);
     let config = arora_bridge_ros2::Ros2BridgeConfig::new("robot", domain_id)
         .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
     // The frame publishes as the `sensor_msgs` image it already is, on the

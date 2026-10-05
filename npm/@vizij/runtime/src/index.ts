@@ -174,6 +174,24 @@ export interface TaskHandle {
 /** A task run's lifecycle status, read off its `status` key. */
 export type RunStatus = "running" | "success" | "failure";
 
+/** A program, for {@link Runtime.spawnProgram} and its kin: the id of one of
+ * the face's bundle programs, or a graph spec the page defines (as an
+ * object). */
+export type ProgramInput = string | object;
+
+/**
+ * A program's run, as {@link Runtime.programRuns} reads it off the device's
+ * store: its {@link TaskHandle} (halt it with {@link Runtime.halt}), the
+ * `name` it runs under — a bundle program's id, or the name its spawner gave
+ * — and its {@link RunStatus}: `running` until halted, `failure` once
+ * halted.
+ */
+export interface ProgramRun {
+  handle: TaskHandle;
+  name: string;
+  status: RunStatus | undefined;
+}
+
 const RUN_STATUS_VARIANTS: Record<string, RunStatus> = {
   "acd79ec6-0c44-401a-82f8-5da5422d3eec": "running",
   "766e9e9a-446d-4e46-83e6-14b7ca101169": "success",
@@ -270,13 +288,19 @@ export interface AroraModule {
 }
 
 /** Options for {@link loadVizij}: the composition, as {@link composeVizij}'s,
- * whether the bundle's neutral pose is staged at load (default `true`;
- * {@link Runtime.reset} returns to it at any time), the speech —
- * `audio` is the playback hook the `say` provider hands its audio to: the
- * page's Web Audio player by default, `false` for a device that plays no
- * speech — and `speechApiUrl` the TTS deployment, and the wasm modules to
- * load into the device as guests. */
-export interface VizijOptions extends Omit<ComposeVizijOptions, "animations"> {
+ * the program that runs from load, whether the bundle's neutral pose is
+ * staged at load (default `true`; {@link Runtime.reset} returns to it at any
+ * time), the speech — `audio` is the playback hook the `say` provider hands
+ * its audio to: the page's Web Audio player by default, `false` for a device
+ * that plays no speech — and `speechApiUrl` the TTS deployment, and the wasm
+ * modules to load into the device as guests. */
+export interface VizijOptions extends Omit<ComposeVizijOptions, "animations" | "program"> {
+  /** The program that runs from load: `"auto"` (the bundle's active program
+   * — default), `"none"`, or a program id. It runs beside the face's graph,
+   * as {@link Runtime.spawnProgram} starts a program — not composed into the
+   * graph as {@link composeVizij} composes it — so a page halts it like any
+   * other: find its run with {@link Runtime.programRuns}. */
+  program?: string;
   /** Load the face's own animations (its bundle's `animations`) into its
    * device, silent until played. Default `true`; `false` leaves the device's
    * animation module empty for {@link Runtime.loadAnimation}. Unlike
@@ -491,6 +515,12 @@ interface WasmVizijRuntime {
   spawnSkill(name: string, args_json: string): Promise<string>;
   halt(handle_json: string): Promise<string>;
   reset(): Promise<string>;
+  resetKeys(keys: string[]): Promise<string>;
+  programGraph(id: string): string | undefined;
+  spawnBehavior(name: string, graph_json: string): Promise<string>;
+  editBehavior(handle_json: string, from_json: string, to_json: string): Promise<string>;
+  behaviorRuns(): { handle: TaskHandle; name: string }[];
+  outputKeys(graph_json: string): string[];
   loadGraph(graph_json: string): Promise<string>;
   applyGraphEdits(edits_json: string): Promise<string>;
   setValue(path: string, value_json: string): void;
@@ -770,19 +800,117 @@ export class Runtime {
 
   /**
    * Return the face to rest: every key the device describes goes back to
-   * the value it rests at — each free input of its graph to its authored
-   * default, each input the bundle's neutral pose names to its neutral — and
-   * the graph carries the face there on its next tick. Keys with no
-   * declared rest keep their values. The writes go through the device's
-   * store, so every bridge sees them. Resolves once applied; on a device
-   * not under `run()` a zero-dt step lands it.
+   * the value it rests at — each free input of its graphs and programs to
+   * its authored default, each input the bundle's neutral pose names to its
+   * neutral — and the graph carries the face there on its next tick. Given
+   * `keys`, only those go back: `reset(programOutputs(program))` is how a
+   * page returns a halted program's outputs to rest. Keys with no declared
+   * rest keep their values. The writes go through the device's store, so
+   * every bridge sees them. Resolves once applied; on a device not under
+   * `run()` a zero-dt step lands it.
    */
-  reset(): Promise<void> {
-    const done = this.inner.reset();
+  reset(keys?: string[]): Promise<void> {
+    const done = keys === undefined ? this.inner.reset() : this.inner.resetKeys(keys);
     if (!this.inner.running) {
       this.inner.step(0);
     }
     return done.then(() => undefined);
+  }
+
+  /** The graph of the face's bundle program `id`, as authored; `undefined`
+   * for an id its bundle does not carry. */
+  programGraph(id: string): object | undefined {
+    const graph = this.inner.programGraph(id);
+    return graph === undefined ? undefined : (JSON.parse(graph) as object);
+  }
+
+  /** `program`'s graph as JSON: a bundle program's, by id, or the page's.
+   * Throws for an id the bundle does not carry. */
+  private programJson(program: ProgramInput): string {
+    if (typeof program !== "string") {
+      return JSON.stringify(program);
+    }
+    const graph = this.inner.programGraph(program);
+    if (graph === undefined) {
+      throw new Error(`the face has no program ${JSON.stringify(program)}`);
+    }
+    return graph;
+  }
+
+  /**
+   * Start a program: run it beside the device's graph until it is
+   * {@link halt}ed — the interpreter module's SPAWN of the interpreter's
+   * `run_behavior`, the call any client of the device starts a program
+   * with. `program` is one of the face's bundle programs, by id, or a graph
+   * the page defines. The run goes by `name` — the program's id by default;
+   * a page graph needs one — which every client reads off the device's
+   * store ({@link programRuns}). Several programs run at once.
+   *
+   * Resolves (after the next step) to the run's {@link TaskHandle}: its
+   * status reads `running` until a halt. A halted program's outputs hold
+   * their last values ({@link reset} returns them to rest), and starting it
+   * again is a new run, its stateful nodes starting afresh.
+   */
+  spawnProgram(program: ProgramInput, name?: string): Promise<TaskHandle> {
+    let runName = name;
+    if (runName === undefined) {
+      if (typeof program !== "string") {
+        return Promise.reject(new Error("a page's program needs a name"));
+      }
+      runName = program;
+    }
+    let graph: string;
+    try {
+      graph = this.programJson(program);
+    } catch (e) {
+      return Promise.reject(e);
+    }
+    return this.inner
+      .spawnBehavior(runName, graph)
+      .then((handle) => JSON.parse(handle) as TaskHandle);
+  }
+
+  /**
+   * Change a running program in place: the EDIT that takes `handle`'s run
+   * from `from`, the program it runs (what it was spawned with, or the `to`
+   * of the edit before), to `to`. The nodes `to` keeps keep their runtime
+   * state; the store keeps every value. Applied at the device's next step,
+   * which the promise waits for — like {@link spawnProgram} and
+   * {@link halt}, and unlike {@link applyGraphEdits}, no zero-dt step is
+   * taken: one would settle the program's smoothing nodes on their targets
+   * at once, which is what keeping their state avoids.
+   */
+  editProgram(handle: TaskHandle, from: ProgramInput, to: object): Promise<void> {
+    try {
+      return this.inner
+        .editBehavior(JSON.stringify(handle), this.programJson(from), JSON.stringify(to))
+        .then(() => undefined);
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  }
+
+  /**
+   * The program runs the device's store holds, read the way any client of
+   * the device reads them: each run's handle, the name it runs under and its
+   * status. A program started at load ({@link VizijOptions.program}) is one.
+   * A run is listed from the step it starts on, and an ended one stays
+   * listed, its status `failure`. Sorted by name.
+   */
+  programRuns(): ProgramRun[] {
+    const runs = this.inner.behaviorRuns();
+    const statuses = this.inner.readValues(runs.map((run) => run.handle.status));
+    return runs.map(({ handle, name }) => ({
+      handle,
+      name,
+      status: runStatus(statuses[handle.status]),
+    }));
+  }
+
+  /** The store keys `program` writes — its output nodes' paths, sorted: what
+   * {@link reset} takes to return a halted program's outputs to rest. */
+  programOutputs(program: ProgramInput): string[] {
+    return this.inner.outputKeys(this.programJson(program));
   }
 
   /**

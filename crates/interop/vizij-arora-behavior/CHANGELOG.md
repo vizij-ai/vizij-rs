@@ -4,6 +4,28 @@ All notable changes to `vizij-arora-behavior`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [4.1.0] - 2026-10-05
+
+### Added
+
+- `run::RunBehavior::run_behavior(name, behavior) -> Status`, a task method
+  the `ProcessingGraph` implements itself and lists among its
+  `described_methods`: spawned, it runs `behavior` — a Vizij graph as the
+  interpreter module's LOAD carries one (`run::call` builds the call from a
+  spec) — beside the main behavior until halted. The graph grafts as the
+  run's fragment; the run writes `Running` on its status key (unless the
+  graph writes `task/status` itself) and its `name` on `run::name_key`.
+  `run::runs(store)` lists the runs a store holds keys of, by name, with
+  their handles (`run::handle`); `run::edit(task, from, to)` is the EDIT
+  that changes a running behavior in place.
+
+### Fixed
+
+- A LOAD of the main behavior leaves the live task runs in place: their
+  nodes carry over, with their state. A run's nodes are the graph's nodes
+  under `task/<run id>`, so an EDIT that adds or removes nodes there changes
+  the run, and a halt prunes the run's nodes as they stand.
+
 ## [4.0.0] - 2026-10-05
 
 ### Changed

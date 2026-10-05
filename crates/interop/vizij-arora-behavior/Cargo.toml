@@ -1,6 +1,6 @@
 [package]
 name = "vizij-arora-behavior"
-version = "4.0.0"
+version = "4.1.0"
 edition.workspace = true
 license = "MIT OR Apache-2.0"
 description = "A Vizij node graph driven as an Arora behavior interpreter (ProcessingGraph)."
@@ -11,6 +11,8 @@ arora-behavior = "9.1"
 # Declares the `Status` enumeration id the gaze contract's signature returns.
 arora-behavior-tree-types = "2"
 arora-types = "3"
+# Declares the run_behavior contract the interpreter describes.
+arora-module = "2.1"
 log = "0.4"
 serde = { workspace = true }
 serde_json = { workspace = true }

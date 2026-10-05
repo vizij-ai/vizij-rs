@@ -1,9 +1,9 @@
 //! The arora device behind the view: `RigHal` + `BlackboardStore` + the
 //! face's composed graph as the behavior, with the animation, gaze, viseme
-//! and speech modules registered. This module is the composition, the same
-//! on every target; how a device is driven — a worker thread and the
-//! operator flow on desktop ([`native`]), a JS-paced step in the browser — is
-//! each entry point's.
+//! and speech modules registered, and the face's program running beside it
+//! as a task run. This module is the composition, the same on every target;
+//! how a device is driven — a worker thread and the operator flow on desktop
+//! ([`native`]), a JS-paced step in the browser — is each entry point's.
 
 use anyhow::{anyhow, Result};
 use arora_types::data::{DataStore, Key, StateChange};
@@ -37,7 +37,7 @@ pub type SpeechProvider = std::rc::Rc<dyn Fn() -> arora::HostModule>;
 pub struct FaceConfig {
     /// Bundle graph kinds to compose into the base behavior (rig, pose-driver).
     pub wanted: Vec<String>,
-    /// Which program to autoplay on top of the rig.
+    /// Which of the bundle's programs runs from load ([`spawn_program`]).
     pub program: ProgramSelect,
     /// Stage the bundle's neutral inputs into the store at boot.
     pub stage_neutral: bool,
@@ -62,8 +62,10 @@ pub struct LoadedFace {
 }
 
 /// Load a face for the device from its GLB bytes: parse the metadata, compose
-/// its bundle graphs (the base kinds plus the chosen program) into the one
-/// behavior graph, and validate it.
+/// its bundle graphs (the base kinds, the standard mappings, the animation
+/// source) into the one behavior graph, and validate it. No program is
+/// composed: a program runs beside that graph, as a task run
+/// ([`spawn_program`]).
 pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
     let meta = FaceMeta::from_glb_bytes(glb)?;
     let wanted: Vec<&str> = config.wanted.iter().map(String::as_str).collect();
@@ -82,7 +84,7 @@ pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
     // see `load_animations`).
     let spec = meta
         .bundle
-        .compose(&wanted, &config.program, true, &mappings)?
+        .compose(&wanted, &ProgramSelect::None, true, &mappings)?
         .to_string();
     parse_spec(&spec).map_err(|e| anyhow!("composed spec does not parse: {e}"))?;
     Ok(LoadedFace { meta, spec })
@@ -109,18 +111,49 @@ pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
 /// Say in the store what the face's keys are — what every bridge relays, and
 /// what `reset` returns them to.
 ///
-/// Each free input (see [`free_inputs`]) is open to remote writers, of its
-/// type — a number in `[0, 1]` — and rests at its authored default. `neutral`
-/// (the bundle's neutral pose, [`Bundle::neutral_stage_writes`]) moves the rest
-/// of the keys it names, and gives a rig key that is no free input its rest
-/// alone: the standard inputs feed the rig through the adaptation, so a reset
-/// that left the rig out would be undone on the next tick.
+/// The keys are the free inputs (see [`free_inputs`]) of everything the face
+/// runs: its composed graph `spec`, and each of `programs` (the bundle's,
+/// `(id, spec)`) over it — a program runs beside the graph whenever a client
+/// spawns it, so the inputs it reads are the face's too. An input a program
+/// writes stays declared: the program runs only while it runs. Each is open
+/// to remote writers, of its type — a number in `[0, 1]` — and rests at its
+/// authored default. `neutral` (the bundle's neutral pose,
+/// [`Bundle::neutral_stage_writes`]) moves the rest of the keys it names, and
+/// gives a rig key that is no free input its rest alone: the standard inputs
+/// feed the rig through the adaptation, so a reset that left the rig out
+/// would be undone on the next tick.
 ///
 /// [`Bundle::neutral_stage_writes`]: vizij_arora_host::Bundle::neutral_stage_writes
-pub fn declare_keys(store: &dyn DataStore, spec: &str, neutral: &[(String, f32)]) {
+pub fn declare_keys(
+    store: &dyn DataStore,
+    spec: &str,
+    programs: &[(String, serde_json::Value)],
+    neutral: &[(String, f32)],
+) {
     use arora_types::data::KeyMeta;
     use arora_types::value::Type;
-    let mut meta: std::collections::HashMap<Key, KeyMeta> = walk_free_inputs(spec)
+    let mut inputs = walk_free_inputs(spec);
+    // A program's inputs over the graph: the free inputs of the two composed,
+    // which the graph's own already hold but for the program's.
+    match serde_json::from_str::<serde_json::Value>(spec) {
+        Ok(base) => {
+            for (id, program) in programs {
+                let composed = vizij_arora_host::compose_sources(&[
+                    ("base".to_string(), base.clone()),
+                    (format!("program::{id}"), program.clone()),
+                ]);
+                match composed {
+                    Ok(composed) => inputs.extend(walk_free_inputs(&composed.to_string())),
+                    Err(e) => log::warn!("program {id:?} declares no keys: {e:#}"),
+                }
+            }
+        }
+        Err(e) if !programs.is_empty() => {
+            log::warn!("the graph is not JSON ({e}): its programs declare no keys")
+        }
+        Err(_) => {}
+    }
+    let mut meta: std::collections::HashMap<Key, KeyMeta> = inputs
         .into_iter()
         .map(|(path, ty, rest)| {
             let mut input = KeyMeta::new().editable().of_type(ty.clone());
@@ -398,6 +431,42 @@ pub fn load_animations(arora: &mut arora::Arora, bundle: &Bundle) -> Result<()> 
     Ok(())
 }
 
+/// The call that runs one of a bundle's programs, `(id, spec)`: the
+/// interpreter's `run_behavior` ([`vizij_arora_behavior::run`]) on the
+/// program's graph, under its id — the name any client reads off the run.
+pub fn program_call(id: &str, spec: &serde_json::Value) -> Result<arora_types::call::Call> {
+    let spec = parse_spec(&spec.to_string()).map_err(|e| anyhow!("program {id:?}: {e}"))?;
+    vizij_arora_behavior::run::call(id, &spec).map_err(|e| anyhow!("program {id:?}: {e}"))
+}
+
+/// Run the program `select` names (the face's [`FaceConfig::program`]) on a
+/// built device: the interpreter module's SPAWN of [`program_call`] — the
+/// call any client sends to start a program. The program runs beside the
+/// face's graph until a client halts it; its run is found by the program's
+/// id ([`vizij_arora_behavior::run::runs`]). `None` when `select` names no
+/// program of the bundle. Call it before the device's first step.
+pub fn spawn_program(
+    arora: &mut arora::Arora,
+    bundle: &Bundle,
+    select: &ProgramSelect,
+) -> Result<Option<arora_behavior::TaskHandle>> {
+    use arora_behavior::{interpreter_module, RunPolicy};
+    let Some((id, spec)) = bundle.program(select) else {
+        return Ok(None);
+    };
+    let call = program_call(id, spec)?;
+    let spawned = arora
+        .call(interpreter_module::encode_spawn(
+            &call,
+            RunPolicy::Concurrent,
+        ))
+        .map_err(|e| anyhow!("spawning program {id:?}: {e}"))?;
+    let handle = interpreter_module::decode_spawn_result(&spawned.ret)
+        .map_err(|e| anyhow!("spawning program {id:?}: {e}"))?;
+    log::info!("running program {id}");
+    Ok(Some(handle))
+}
+
 /// The prefix the face's standard controls live under in `spec` —
 /// `rig/<faceId>/` out of the first `…/standard/vizij/…` path it reads or
 /// writes — or empty when the face has no standard coverage (the players
@@ -490,6 +559,7 @@ mod tests {
         declare_keys(
             &store,
             spec,
+            &[],
             &[("face/brow".to_string(), 0.5), ("rig/jaw".to_string(), 0.1)],
         );
         let number = || KeyMeta::new().editable().of_type(Type::F64).range(0.0, 1.0);
@@ -519,6 +589,109 @@ mod tests {
     use super::*;
     use std::time::Duration;
     use vizij_arora_host::{animations_source, compose_sources, ANIMATION_PLAYERS_PATH};
+
+    /// A program's inputs are the face's keys: declared over the face's
+    /// graph, the inputs it reads join the graph's free inputs, and a rig
+    /// input it writes stays declared — the program runs only while it runs.
+    #[test]
+    fn declared_keys_cover_the_programs_inputs() {
+        use arora_types::data::KeyMeta;
+        use arora_types::value::Type;
+        let spec = r#"{"nodes": [
+            {"id": "a", "type": "input", "params": {"path": "rig/f/x", "value": {"f32": 0.25}}}
+        ], "edges": []}"#;
+        let program = serde_json::json!({"nodes": [
+            {"id": "speed", "type": "input", "params": {"path": "program/speed", "value": 0.5}},
+            {"id": "x", "type": "output", "params": {"path": "rig/f/x"}}
+        ], "edges": [
+            {"from": {"node_id": "speed"}, "to": {"node_id": "x", "input": "in"}}
+        ]});
+        let store = BlackboardStore::new();
+        declare_keys(&store, spec, &[("p".to_string(), program)], &[]);
+        let number = || KeyMeta::new().editable().of_type(Type::F64).range(0.0, 1.0);
+        assert_eq!(
+            store.meta(&[Key::from("rig/f/x"), Key::from("program/speed")]),
+            vec![
+                Some(number().resting_at(float(0.25))),
+                Some(number().resting_at(float(0.5))),
+            ]
+        );
+    }
+
+    /// The face's program runs beside its graph, not in it: `load_face`
+    /// composes none, and `spawn_program` starts the one `program` names as
+    /// a run of the interpreter's `run_behavior` — found in the store by the
+    /// program's id, `Running`, writing the rig. Halted, it ends and its
+    /// output holds.
+    #[test]
+    fn the_face_runs_its_program_beside_its_graph() {
+        use vizij_arora_behavior::{run, task};
+        let read = |arora: &arora::Arora, path: &str| {
+            arora
+                .store()
+                .read(&[Key::from(path)])
+                .into_iter()
+                .next()
+                .flatten()
+        };
+        let bundle = Bundle::from_bundle_json(&serde_json::json!({
+            "metadata": { "faceId": "f", "activeMotionGraphId": "wave" },
+            "graphs": [
+                { "kind": "rig", "spec": { "nodes": [
+                    { "id": "x", "type": "input", "params": { "path": "rig/f/x", "value": 0.0 } },
+                ], "edges": [] } },
+                { "kind": "motiongraph", "id": "wave", "spec": { "nodes": [
+                    { "id": "c", "type": "constant", "params": { "value": 0.75 } },
+                    { "id": "out", "type": "output", "params": { "path": "rig/f/x" } },
+                ], "edges": [
+                    { "from": { "node_id": "c" }, "to": { "node_id": "out", "input": "in" } },
+                ] } },
+            ],
+        }));
+        let spec = bundle
+            .compose(&["rig"], &ProgramSelect::None, true, &[])
+            .expect("compose")
+            .to_string();
+        let store = BlackboardStore::new();
+        let mut arora = builder_for(&spec, RigHal::new(), store.clone(), &[], None)
+            .expect("build the device")
+            .build()
+            .expect("build arora");
+        assert!(spawn_program(&mut arora, &bundle, &ProgramSelect::None)
+            .expect("no program")
+            .is_none());
+        let handle = spawn_program(&mut arora, &bundle, &ProgramSelect::Auto)
+            .expect("spawn the active program")
+            .expect("the bundle names one");
+        step_for(&mut arora, 0.05);
+        assert_eq!(
+            read(&arora, "rig/f/x"),
+            Some(float(0.75)),
+            "the program writes the rig"
+        );
+        assert_eq!(
+            run::runs(&store),
+            vec![(handle.clone(), "wave".to_string())]
+        );
+        let status = |arora: &arora::Arora| {
+            arora
+                .store()
+                .read(std::slice::from_ref(&handle.status))
+                .into_iter()
+                .next()
+                .flatten()
+        };
+        assert_eq!(status(&arora), Some(task::running()));
+
+        arora.call(handle.stop.clone()).expect("halt");
+        step_for(&mut arora, 0.05);
+        assert_eq!(status(&arora), Some(task::failure()));
+        assert_eq!(
+            read(&arora, "rig/f/x"),
+            Some(float(0.75)),
+            "its output holds"
+        );
+    }
 
     /// The composed animation source ticks the loaded module: `builder_for`
     /// loads the baked-in wasm and wires `set_function_modules`, so the source's
