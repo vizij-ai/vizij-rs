@@ -35,6 +35,12 @@ const P_PLAYER = param("add_instance", "player");
 const P_ANIM = param("add_instance", "anim");
 const P_DT_NS = param("step", "dt_ns");
 
+// add_instance takes the player and the animation; add_instance_with_weight
+// takes the instance's weight too.
+const parameters = (fnName) => fn(fnName).parameters.map((p) => p.name);
+assert.deepEqual(parameters("add_instance"), ["player", "anim"]);
+assert.deepEqual(parameters("add_instance_with_weight"), ["player", "anim", "weight"]);
+
 // --- structure and field ids (the module's type records) ---------------------
 const CLIP_TYPE = "76697a69-6a00-0000-0000-000000000100";
 const CLIP_NAME = "76697a69-6a00-0000-0100-000000000001";

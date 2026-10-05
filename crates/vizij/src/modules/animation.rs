@@ -65,10 +65,7 @@ pub fn host_module() -> HostModule {
             Box::new(move |call| {
                 let player = arg(call, ids::add_instance::PLAYER, "player")?;
                 let anim = arg(call, ids::add_instance::ANIM, "anim")?;
-                let weight = arg(call, ids::add_instance::WEIGHT, "weight")?;
-                Ok(Value::from(
-                    a.borrow_mut().add_instance(player, anim, weight),
-                ))
+                Ok(Value::from(a.borrow_mut().add_instance(player, anim)))
             })
         }),
         (ids::step::FUNCTION, {
@@ -184,6 +181,18 @@ pub fn host_module() -> HostModule {
             Box::new(move |call| {
                 let player = arg(call, ids::remove_player::PLAYER, "player")?;
                 Ok(Value::from(a.borrow_mut().remove_player(player)))
+            })
+        }),
+        (ids::add_instance_with_weight::FUNCTION, {
+            let a = a(());
+            Box::new(move |call| {
+                let player = arg(call, ids::add_instance_with_weight::PLAYER, "player")?;
+                let anim = arg(call, ids::add_instance_with_weight::ANIM, "anim")?;
+                let weight = arg(call, ids::add_instance_with_weight::WEIGHT, "weight")?;
+                Ok(Value::from(
+                    a.borrow_mut()
+                        .add_instance_with_weight(player, anim, weight),
+                ))
             })
         }),
     ];
@@ -481,6 +490,20 @@ mod tests {
             error.to_string().contains("missing parameter `player`"),
             "{error}"
         );
+        let error = device
+            .call(Call {
+                module_id: Some(ids::MODULE),
+                id: ids::add_instance_with_weight::FUNCTION,
+                args: vec![
+                    field(ids::add_instance_with_weight::PLAYER, Value::U32(0)),
+                    field(ids::add_instance_with_weight::ANIM, Value::U32(0)),
+                ],
+            })
+            .expect_err("add_instance_with_weight without its weight");
+        assert!(
+            error.to_string().contains("missing parameter `weight`"),
+            "{error}"
+        );
     }
 
     /// `vizij-arora-host`'s animation source names the module's functions, the
@@ -575,8 +598,8 @@ mod tests {
         assert_eq!(points[3], (1.0, 0.0, 1, 0));
     }
 
-    /// `add_instance`'s optional weight: left out, the instance blends at 1;
-    /// at 0 it writes nothing.
+    /// `add_instance` adds an instance blending at 1;
+    /// `add_instance_with_weight` at its weight, at 0 writing nothing.
     #[test]
     fn an_instance_added_through_a_call_takes_its_weight() {
         let mut device = device();
@@ -597,14 +620,25 @@ mod tests {
             ) else {
                 panic!("an animation id");
             };
-            let mut args = vec![
-                field(ids::add_instance::PLAYER, Value::U32(player)),
-                field(ids::add_instance::ANIM, Value::U32(anim)),
-            ];
-            if let Some(weight) = weight {
-                args.push(field(ids::add_instance::WEIGHT, Value::F32(weight)));
-            }
-            call(&mut device, ids::add_instance::FUNCTION, args);
+            match weight {
+                None => call(
+                    &mut device,
+                    ids::add_instance::FUNCTION,
+                    vec![
+                        field(ids::add_instance::PLAYER, Value::U32(player)),
+                        field(ids::add_instance::ANIM, Value::U32(anim)),
+                    ],
+                ),
+                Some(weight) => call(
+                    &mut device,
+                    ids::add_instance_with_weight::FUNCTION,
+                    vec![
+                        field(ids::add_instance_with_weight::PLAYER, Value::U32(player)),
+                        field(ids::add_instance_with_weight::ANIM, Value::U32(anim)),
+                        field(ids::add_instance_with_weight::WEIGHT, Value::F32(weight)),
+                    ],
+                ),
+            };
         }
         let out = format!(
             "{:?}",
@@ -623,7 +657,7 @@ mod tests {
     #[test]
     fn every_declared_function_is_registered_and_described() {
         let declared = function_modules();
-        assert_eq!(declared.len(), 17);
+        assert_eq!(declared.len(), 18);
         let module = host_module();
         let described: Vec<Uuid> = module.descriptions().iter().map(|d| d.id).collect();
         for function in declared.keys() {

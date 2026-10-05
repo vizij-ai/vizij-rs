@@ -55,13 +55,17 @@ const settle = async (promise) => {
   return value;
 };
 // A client that knows only the module's declared functions: a call by
-// function and parameter names, and the players it reads from the store.
+// function and parameter names, resolved through the module's header, and the
+// players it reads from the store.
 const call = async (name, args) => {
-  const ids = ANIMATION_IDS[name];
+  const declared = header.exports.find((e) => e.name === name);
   const result = await settle(
     runtime.call({
-      id: ids.function,
-      args: Object.entries(args).map(([parameter, value]) => ({ id: ids[parameter], value })),
+      id: declared.id,
+      args: Object.entries(args).map(([parameter, value]) => ({
+        id: declared.parameters.find((p) => p.name === parameter).id,
+        value,
+      })),
     }),
   );
   return result.ret;
@@ -101,6 +105,7 @@ assert.deepEqual(runtime.animations(), [{ id: "ramp", duration: 1 }]);
 assert.equal(runtime.animationState("nope"), null);
 stepFor(50);
 assert.equal(x(), undefined, "a loaded animation is silent");
+assert.equal(playerNamed("ramp").instances[0].weight, 0, "its instance is added at weight 0");
 let state = runtime.animationState("ramp");
 assert.equal(state.playing, false);
 assert.equal(state.loop, true);
@@ -167,6 +172,7 @@ assert.ok(
 );
 assert.equal(state.loop, true);
 assert.equal(state.speed, 1);
+assert.equal(playerNamed("ramp").instances[0].weight, 1, "the new instance at the old one's weight");
 stepFor(100);
 assert.ok(x() < -0.1, `the new tracks play: ${x()}`);
 assert.deepEqual(
