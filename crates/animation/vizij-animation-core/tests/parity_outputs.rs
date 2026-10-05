@@ -162,7 +162,7 @@ fn parity_window_and_seek() {
         panic!("expected Float");
     }
 
-    // Loop mode wrapping on a 10s clip: seek -0.25 wraps to 9.75 (absolute seconds)
+    // Loop mode wraps within the window [0.2, 0.8) of the 10s clip: seek -0.25 wraps to 0.35
     let mut inputs2 = Inputs::default();
     inputs2.player_cmds.push(PlayerCommand::SetLoopMode {
         player: pid,
@@ -181,7 +181,7 @@ fn parity_window_and_seek() {
         .value
         .clone();
     if let Some(s) = as_float(&v2) {
-        approx(s, 9.75, 1e-5);
+        approx(s, 0.35, 1e-5);
     } else {
         panic!("expected Float");
     }

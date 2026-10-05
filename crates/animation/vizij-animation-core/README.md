@@ -151,7 +151,7 @@ Instances are blended in insertion order. Adjust `weight`, `time_scale`, and `st
 ### Engine Components
 
 - **Animations** – Stored in an internal library keyed by `AnimId`.
-- **Players** – Manage playback state, mode (`Loop`, `Once`, `PingPong`), speed, time window, and attached instances. The state (`Playing`, `Paused`, `Stopped`) and the speed are independent: `Play`, `Pause` and `Stop` set the state, `SetSpeed` the speed, and only a playing player's time advances, by `dt * speed`.
+- **Players** – Manage playback state, mode (`Loop`, `Once`, `PingPong`), signed speed (negative plays backwards), play window, and attached instances. The state (`Playing`, `Paused`, `Stopped`) and the speed are independent: `Play`, `Pause` and `Stop` set the state, `SetSpeed` the speed, and only a playing player's time advances, by `dt * speed`. A player's length is the latest end over its instances, `start_offset + duration * |time_scale|`. The play window `[start, end]` (its end defaults to the length) bounds the playhead in every mode: `Once` clamps into it and reports `ended` once it holds at the bound it plays toward, `Loop` wraps within it, `PingPong` reflects within it.
 - **Instances** – Bind an animation to a player with weight/time-scale/start offset/enabled flags and a `BindingSet`.
 - **Bindings** – Map canonical target paths to host IDs via a `TargetResolver`. Prevents string comparisons during updates.
 - **Outputs** – Provide a list of `Change { player, key, value }` and associated events. `OutputsWithDerivatives` adds optional derivative values per change.
@@ -172,7 +172,7 @@ Most projects can rely on `Config::default()`, but headless baking tools or orch
 
 ### Events & Inputs
 
-- **Inputs** – Aggregate player commands (`Play`, `Pause`, `Stop`, `Seek`, `SetSpeed`, `SetLoopMode`, `SetWindow`) and per-instance updates (weight/time-scale/start offset/enabled).
+- **Inputs** – Aggregate player commands (`Play`, `Pause`, `Stop`, `Seek`, `SetSpeed`, `SetLoopMode`, `SetWindow`, and `PlayAfter`, which starts playback a delay into the update that applies it, so the playhead depends only on the time since that instant) and per-instance updates (weight/time-scale/start offset/enabled).
 - **Events** – Emitted for playback state transitions, loop completions, custom animation events, and warnings (e.g., binding failures).
 
 ### Outputs & derivatives

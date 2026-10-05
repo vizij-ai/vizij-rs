@@ -382,7 +382,7 @@ fn engine_loop_modes_and_window_and_seek() {
         panic!();
     }
 
-    // Loop mode wrapping: seek -0.25 wraps to 0.75
+    // Loop mode wraps within the window [0.2, 0.8): seek -0.25 wraps to 0.35
     let mut inputs2 = Inputs::default();
     inputs2.player_cmds.push(PlayerCommand::SetLoopMode {
         player: pid,
@@ -401,7 +401,7 @@ fn engine_loop_modes_and_window_and_seek() {
         .value
         .clone();
     if let Value::F32(v) = val2 {
-        approx(v, 0.75, 1e-6);
+        approx(v, 0.35, 1e-6);
     } else {
         panic!();
     }
@@ -908,9 +908,9 @@ fn binding_set_channels_len_and_indices() {
     assert_eq!(chs[1].track_idx, 1);
 }
 
-/// it should recompute player_total_duration on SetWindow and instance updates
+/// it should recompute player_total_duration on instance updates, and leave it under a window
 #[test]
-fn recompute_total_duration_on_window_and_updates() {
+fn total_duration_follows_instances_not_the_window() {
     let t = mk_scalar_track_linear("node.t", &[(0.0, 0.0), (1.0, 1.0)]);
     let anim = mk_anim("clip", 10.0, vec![t]);
 
@@ -929,7 +929,7 @@ fn recompute_total_duration_on_window_and_updates() {
     // Full span is 10s
     assert!((eng.player_total_duration(p).unwrap() - 10.0).abs() < 1e-6);
 
-    // Narrow window to [2,5] => duration limited to 3s
+    // A window [2,5] bounds the playhead; the length stays 10s
     let mut inputs = Inputs::default();
     inputs.player_cmds.push(PlayerCommand::SetWindow {
         player: p,
@@ -937,9 +937,9 @@ fn recompute_total_duration_on_window_and_updates() {
         end_time: Some(5.0),
     });
     let _ = eng.update(0.0, inputs);
-    assert!((eng.player_total_duration(p).unwrap() - 3.0).abs() < 1e-6);
+    assert!((eng.player_total_duration(p).unwrap() - 10.0).abs() < 1e-6);
 
-    // Change instance start_offset reduces remaining_local; duration should decrease
+    // An instance starting at 9s ends at 9 + 10
     let mut inputs2 = Inputs::default();
     inputs2.instance_updates.push(InstanceUpdate {
         player: p,
@@ -950,7 +950,7 @@ fn recompute_total_duration_on_window_and_updates() {
         enabled: None,
     });
     let _ = eng.update(0.0, inputs2);
-    assert!(eng.player_total_duration(p).unwrap() <= 3.0 + 1e-6);
+    assert!((eng.player_total_duration(p).unwrap() - 19.0).abs() < 1e-6);
 }
 
 /// it should hold time at speed 0 while playing, keep the speed through Play, and Stop reset to start_time

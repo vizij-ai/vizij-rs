@@ -41,8 +41,9 @@ pub struct Player {
     /// Human-readable display name.
     pub name: String,
     /// Whether the player's time advances: only a [`PlaybackState::Playing`]
-    /// player's does. Set by `Play`, `Pause` and `Stop`, independent of
-    /// [`Self::speed`].
+    /// player's does, and not while a [`Self::starts_in`] wait runs. Set by
+    /// `Play`, `Pause` and `Stop`, and to playing when a `PlayAfter` wait ends;
+    /// independent of [`Self::speed`].
     pub state: PlaybackState,
     /// Multiplier on the time a playing player advances by per update. Set by
     /// `SetSpeed` alone: pausing, stopping and playing keep it, so a player
@@ -52,13 +53,18 @@ pub struct Player {
     pub time: f32,
     /// Looping mode used when mapping player time into clip-local time.
     pub mode: LoopMode,
-    /// Window start in seconds for `LoopMode::Once`.
+    /// Play window start in seconds of player time.
     pub start_time: f32,
-    /// Optional window end in seconds for `LoopMode::Once`.
+    /// Play window end in seconds of player time; `None` ends the window at `total_duration`.
     pub end_time: Option<f32>,
+    /// Seconds until a [`PlayerCommand::PlayAfter`](crate::PlayerCommand::PlayAfter) start,
+    /// counted down by each update whatever the state; the playhead holds while it is set, and
+    /// the player plays when it runs out. `Play`, `Pause` and `Stop` clear it.
+    pub starts_in: Option<f64>,
     /// Attached instance ids in evaluation order.
     pub instances: Vec<InstId>,
-    /// Effective total duration in player time, computed from instances (offsets/scales) and window.
+    /// Player length in seconds: the latest end over its instances,
+    /// `start_offset + anim_duration * |time_scale|`.
     pub total_duration: f32,
 }
 
@@ -73,8 +79,49 @@ impl Player {
             mode: LoopMode::Loop,
             start_time: 0.0,
             end_time: None,
+            starts_in: None,
             instances: Vec::new(),
             total_duration: 0.0,
+        }
+    }
+
+    /// The play window `[start, end]` in player time.
+    fn window(&self) -> (f32, f32) {
+        let start = self.start_time.max(0.0);
+        let end = self.end_time.unwrap_or(self.total_duration).max(start);
+        (start, end)
+    }
+
+    /// The playhead: player time mapped into the play window by the loop mode.
+    fn playhead(&self) -> f32 {
+        let (start, end) = self.window();
+        let span = end - start;
+        if span <= 0.0 {
+            return start;
+        }
+        match self.mode {
+            LoopMode::Once => self.time.clamp(start, end),
+            LoopMode::Loop => start + fmod(self.time - start, span),
+            LoopMode::PingPong => start + ping_pong(self.time - start, span),
+        }
+    }
+
+    /// Whether updates advance the playhead: a playing player not waiting for its start, at
+    /// a non-zero speed.
+    fn advancing(&self) -> bool {
+        self.state == PlaybackState::Playing && self.starts_in.is_none() && self.speed != 0.0
+    }
+
+    /// Whether a `Once` player has played to the window bound its speed heads for.
+    fn ended(&self) -> bool {
+        if self.mode != LoopMode::Once || !self.advancing() {
+            return false;
+        }
+        let (start, end) = self.window();
+        if self.speed > 0.0 {
+            self.time >= end
+        } else {
+            self.time <= start
         }
     }
 }
@@ -248,12 +295,15 @@ pub struct PlayerInfo {
     pub speed: f32,
     /// Active loop mode.
     pub loop_mode: LoopMode,
-    /// Window start in seconds.
+    /// Play window start in seconds.
     pub start_time: f32,
-    /// Optional window end in seconds.
+    /// Play window end in seconds; `None` ends the window at `length`.
     pub end_time: Option<f32>,
     /// Full player length (seconds): max over instances of start_offset + (anim_duration * |time_scale|)
     pub length: f32,
+    /// A [`LoopMode::Once`] player advancing at a non-zero speed has reached the window bound
+    /// it heads for (the end, or the start when playing backwards) and holds there.
+    pub ended: bool,
 }
 
 /// Inspection snapshot for one instance attached to a player.
@@ -268,57 +318,6 @@ pub struct InstanceInfo {
 }
 
 impl Engine {
-    /// Map player's internal time to a display/playhead time according to loop mode.
-    /// Semantics:
-    /// - Once: apply window clamp [start_time, end_time?], otherwise [start_time, start_time+total_duration]
-    /// - Loop: ignore window, wrap over full clip [0, total_duration)
-    /// - PingPong: ignore window, reflect over full clip [0, total_duration]
-    fn map_player_time_for_display(&self, p: &Player) -> f32 {
-        match p.mode {
-            LoopMode::Once => {
-                let start = p.start_time.max(0.0);
-                let span = if let Some(end) = p.end_time {
-                    (end - start).max(0.0)
-                } else {
-                    (p.total_duration - start).max(0.0)
-                };
-                if span <= 0.0 {
-                    start
-                } else {
-                    p.time.clamp(start, start + span)
-                }
-            }
-            LoopMode::Loop | LoopMode::PingPong => {
-                // Compute full (unwindowed) span across instances
-                let mut full_span = 0.0f32;
-                for iid in &p.instances {
-                    if let Some(inst) = self.instances.iter().find(|ii| ii.id == *iid) {
-                        if let Some(anim) = self.anims.get(inst.anim) {
-                            let anim_duration = anim.duration_ms as f32 / 1000.0;
-                            let ts_abs = inst.time_scale.abs().max(1e-6);
-                            let end_time = inst.start_offset + (anim_duration * ts_abs);
-                            if end_time > full_span {
-                                full_span = end_time;
-                            }
-                        }
-                    }
-                }
-                if full_span <= 0.0 {
-                    0.0
-                } else if matches!(p.mode, LoopMode::Loop) {
-                    let m = fmod(p.time, full_span);
-                    if m < 0.0 {
-                        m + full_span
-                    } else {
-                        m
-                    }
-                } else {
-                    // PingPong over full span
-                    ping_pong(p.time, full_span)
-                }
-            }
-        }
-    }
     /// Public accessor for a player's computed total duration (in player time).
     pub fn player_total_duration(&self, player: PlayerId) -> Option<f32> {
         self.players
@@ -502,13 +501,7 @@ impl Engine {
                     }
                 }
             }
-            // Apply window clamp if configured
-            if let Some(end) = p.end_time {
-                let window_len = (end - p.start_time).max(0.0);
-                p.total_duration = max_end.min(window_len);
-            } else {
-                p.total_duration = max_end;
-            }
+            p.total_duration = max_end;
         }
     }
 
@@ -520,16 +513,19 @@ impl Engine {
                 crate::inputs::PlayerCommand::Play { player } => {
                     if let Some(p) = self.players.iter_mut().find(|p| p.id == player) {
                         p.state = PlaybackState::Playing;
+                        p.starts_in = None;
                     }
                 }
                 crate::inputs::PlayerCommand::Pause { player } => {
                     if let Some(p) = self.players.iter_mut().find(|p| p.id == player) {
                         p.state = PlaybackState::Paused;
+                        p.starts_in = None;
                     }
                 }
                 crate::inputs::PlayerCommand::Stop { player } => {
                     if let Some(p) = self.players.iter_mut().find(|p| p.id == player) {
                         p.state = PlaybackState::Stopped;
+                        p.starts_in = None;
                         p.time = p.start_time;
                     }
                 }
@@ -559,20 +555,22 @@ impl Engine {
                     end_time,
                 } => {
                     if let Some(p) = self.players.iter_mut().find(|p| p.id == player) {
+                        let playhead = p.playhead();
                         p.start_time = start_time.max(0.0);
                         p.end_time = end_time.map(|e| e.max(p.start_time));
+                        let (start, end) = p.window();
                         // A stopped player stays at its window start.
-                        if p.state == PlaybackState::Stopped || p.time < p.start_time {
-                            p.time = p.start_time;
-                        }
-                        if let Some(e) = p.end_time {
-                            if p.time > e {
-                                p.time = e;
-                            }
-                        }
+                        p.time = if p.state == PlaybackState::Stopped {
+                            start
+                        } else {
+                            playhead.clamp(start, end)
+                        };
                     }
-                    // Recompute player's duration when window changes
-                    self.recalc_player_duration(player);
+                }
+                crate::inputs::PlayerCommand::PlayAfter { player, delay } => {
+                    if let Some(p) = self.players.iter_mut().find(|p| p.id == player) {
+                        p.starts_in = Some(f64::from(delay));
+                    }
                 }
             }
         }
@@ -600,21 +598,29 @@ impl Engine {
         // consistent player+inst pairs. Validation can be added later.
     }
 
-    /// Advance logical time of the playing players. Loop/windowing is applied when mapping to
-    /// instance local time.
+    /// Advance logical time of the playing players. A player waiting for its start, whatever
+    /// its state, holds until the start, then plays and advances only by the time after it.
+    /// `Once` holds the time inside the play window, so playback reverses from the bound it
+    /// reached; `Loop` and `PingPong` map it into the window when sampling.
     fn advance_player_times(&mut self, dt: f32) {
         for p in &mut self.players {
-            if p.state == PlaybackState::Playing {
-                p.time += dt * p.speed;
-            }
-            // Clamp into window for Once mode convenience (optional; local mapping will also enforce)
-            if let Some(end) = p.end_time {
-                if p.time > end && matches!(p.mode, crate::inputs::LoopMode::Once) {
-                    p.time = end;
+            let run = match p.starts_in {
+                Some(wait) if wait > f64::from(dt) => {
+                    p.starts_in = Some(wait - f64::from(dt));
+                    continue;
                 }
-            }
-            if p.time < p.start_time && matches!(p.mode, crate::inputs::LoopMode::Once) {
-                p.time = p.start_time;
+                Some(wait) => {
+                    p.starts_in = None;
+                    p.state = PlaybackState::Playing;
+                    (f64::from(dt) - wait) as f32
+                }
+                None if p.state == PlaybackState::Playing => dt,
+                None => continue,
+            };
+            p.time += run * p.speed;
+            if p.mode == LoopMode::Once {
+                let (start, end) = p.window();
+                p.time = p.time.clamp(start, end);
             }
         }
     }
@@ -623,9 +629,9 @@ impl Engine {
     fn local_time_for_instance(&self, player: &Player, inst: &Instance, anim_duration: f32) -> f32 {
         // Interpret start_offset as a player-time shift (when the instance starts).
         // Interpret time_scale as a duration multiplier (|ts| > 1 => longer, |ts| < 1 => shorter).
-        // Mapping from player time to clip local time:
-        //   base = (player.time - inst.start_offset) / inst.time_scale
-        // Before the instance starts (player.time < start_offset), we must NOT wrap:
+        // Mapping from the playhead to clip local time:
+        //   base = (playhead - inst.start_offset) / inst.time_scale
+        // Before the instance starts (playhead < start_offset), we must NOT wrap:
         //   return 0.0 so the instance outputs its initial values until start.
         // After start, apply Once/Loop/PingPong in the clip's [0, anim_duration] domain.
         if anim_duration <= 0.0 {
@@ -637,14 +643,7 @@ impl Engine {
         }
         // Guard against division by zero while preserving sign semantics
         let ts = inst.time_scale;
-        // Compute display-mapped player time (already windowed/looped)
-        let t_display = self.map_player_time_for_display(player);
-        let rel_cycle = t_display;
-        if rel_cycle <= 0.0 {
-            // At the very start of a cycle, hold initial value before any instance starts.
-            return 0.0;
-        }
-        let rel = rel_cycle - inst.start_offset;
+        let rel = player.playhead() - inst.start_offset;
         if rel <= 0.0 {
             // Hold initial value up to the instance start within each cycle.
             return 0.0;
@@ -890,12 +889,13 @@ impl Engine {
                 id: p.id.0,
                 name: p.name.clone(),
                 state: p.state,
-                time: self.map_player_time_for_display(p),
+                time: p.playhead(),
                 speed: p.speed,
                 loop_mode: p.mode,
                 start_time: p.start_time,
                 end_time: p.end_time,
                 length: p.total_duration,
+                ended: p.ended(),
             })
             .collect()
     }

@@ -4,6 +4,39 @@ All notable changes to `vizij-animation-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] - 2026-10-06
+
+### Breaking
+
+- The play window bounds the playhead in every loop mode: `Loop` wraps within
+  `[start_time, end_time]` and `PingPong` reflects within it, as `Once` clamps
+  into it. `end_time: None` ends the window at the player's length. A player
+  with no window set plays as before.
+- A player's length (`PlayerInfo::length`, `Engine::player_total_duration`)
+  is the latest end over its instances; a window does not shorten it.
+- `PlayerCommand` gains `PlayAfter`, `Player` gains `starts_in` and
+  `PlayerInfo` gains `ended` (below): code matching `PlayerCommand`
+  exhaustively or building `PlayerInfo` literals must add them.
+
+### Added
+
+- `PlayerCommand::PlayAfter { player, delay }`: playback starts `delay`
+  seconds into the update that applies it — a negative `delay` that long
+  before — and the playhead holds until then, so it depends only on the time
+  since that instant, wherever update boundaries fall. The player keeps its
+  state until the start, then plays at its speed. `Play`, `Pause` and `Stop`
+  cancel the wait; `Player::starts_in` holds what remains of it.
+- `PlayerInfo::ended`: a playing `Once` player advancing at a non-zero speed
+  has reached the window bound it plays toward (the start when playing
+  backwards) and holds there.
+
+### Fixed
+
+- `Once` keeps the player time inside the window, so a player reversed after
+  reaching the end moves back at once.
+- An instance with a negative `start_offset` starts partway into its clip at
+  playhead 0.
+
 ## [2.0.0] - 2026-10-05
 
 ### Breaking
