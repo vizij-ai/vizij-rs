@@ -72,7 +72,8 @@ pub fn host_module() -> HostModule {
             let a = a(());
             Box::new(move |call| {
                 let dt_ns = arg(call, ids::step::DT_NS, "dt_ns")?;
-                Ok(array_of::<TrackOutput>(a.borrow_mut().step(dt_ns)))
+                let time_ns = arg(call, ids::step::TIME_NS, "time_ns")?;
+                Ok(array_of::<TrackOutput>(a.borrow_mut().step(dt_ns, time_ns)))
             })
         }),
         (ids::play::FUNCTION, {
@@ -201,6 +202,47 @@ pub fn host_module() -> HostModule {
                 let anim = arg(call, ids::reload_animation::ANIM, "anim")?;
                 let clip = arg(call, ids::reload_animation::CLIP, "clip")?;
                 Ok(Value::from(a.borrow_mut().reload_animation(anim, clip)))
+            })
+        }),
+        (ids::set_window::FUNCTION, {
+            let a = a(());
+            Box::new(move |call| {
+                let player = arg(call, ids::set_window::PLAYER, "player")?;
+                let start_ns = arg(call, ids::set_window::START_NS, "start_ns")?;
+                let end_ns = arg(call, ids::set_window::END_NS, "end_ns")?;
+                Ok(Value::from(
+                    a.borrow_mut().set_window(player, start_ns, end_ns),
+                ))
+            })
+        }),
+        (ids::play_at::FUNCTION, {
+            let a = a(());
+            Box::new(move |call| {
+                let player = arg(call, ids::play_at::PLAYER, "player")?;
+                let time_ns = arg(call, ids::play_at::TIME_NS, "time_ns")?;
+                Ok(Value::from(a.borrow_mut().play_at(player, time_ns)))
+            })
+        }),
+        (ids::set_start_offset::FUNCTION, {
+            let a = a(());
+            Box::new(move |call| {
+                let player = arg(call, ids::set_start_offset::PLAYER, "player")?;
+                let instance = arg(call, ids::set_start_offset::INSTANCE, "instance")?;
+                let offset_ns = arg(call, ids::set_start_offset::OFFSET_NS, "offset_ns")?;
+                Ok(Value::from(
+                    a.borrow_mut().set_start_offset(player, instance, offset_ns),
+                ))
+            })
+        }),
+        (ids::set_time_scale::FUNCTION, {
+            let a = a(());
+            Box::new(move |call| {
+                let player = arg(call, ids::set_time_scale::PLAYER, "player")?;
+                let instance = arg(call, ids::set_time_scale::INSTANCE, "instance")?;
+                let time_scale = arg(call, ids::set_time_scale::TIME_SCALE, "time_scale")?;
+                Ok(Value::from(
+                    a.borrow_mut().set_time_scale(player, instance, time_scale),
+                ))
             })
         }),
     ];
@@ -360,7 +402,7 @@ macro_rules! from_arg {
         }
     )*};
 }
-from_arg!(u32 => U32, u64 => U64, f32 => F32, String => String);
+from_arg!(u32 => U32, u64 => U64, i64 => I64, f32 => F32, String => String);
 
 impl FromArg for AnimationClip {
     fn from_arg(value: Value) -> Option<Self> {
@@ -404,7 +446,7 @@ fn array_of<T: AroraType + Into<Value>>(records: Vec<T>) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arora_types::value::StructureField;
+    use arora_types::value::{Structure, StructureField};
     use vizij_arora_host::Bundle;
     use vizij_arora_store::BlackboardStore;
 
@@ -662,6 +704,82 @@ mod tests {
         );
     }
 
+    /// A `play_at` anchored in the `time_ns` that `step` is given starts the
+    /// player at that instant, through the declared functions.
+    #[test]
+    fn play_at_starts_at_the_step_time_it_names() {
+        let mut device = device();
+        let player = create_player(&mut device, "anchored");
+        let clip = module_animation(
+            &authored(serde_json::json!({ "id": "a", "duration": 1, "tracks": [
+                { "channel": "a", "keyframes": [
+                    { "time": 0, "value": 0 }, { "time": 1, "value": 1 },
+                ] },
+            ] })),
+            &ChannelKeys::default(),
+        );
+        let Value::U32(anim) = call(
+            &mut device,
+            ids::load_animation::FUNCTION,
+            vec![field(ids::load_animation::CLIP, clip.into())],
+        ) else {
+            panic!("an animation id");
+        };
+        call(
+            &mut device,
+            ids::add_instance::FUNCTION,
+            vec![
+                field(ids::add_instance::PLAYER, Value::U32(player)),
+                field(ids::add_instance::ANIM, Value::U32(anim)),
+            ],
+        );
+        let step = |device: &mut arora::Arora, time_ns: u64| {
+            call(
+                device,
+                ids::step::FUNCTION,
+                vec![
+                    field(ids::step::DT_NS, Value::U64(100_000_000)),
+                    field(ids::step::TIME_NS, Value::U64(time_ns)),
+                ],
+            );
+        };
+        let playhead = |device: &mut arora::Arora| -> PlayerState {
+            let Value::ArrayStructure { id, mut elements } =
+                call(device, ids::player_states::FUNCTION, Vec::new())
+            else {
+                panic!("an array of PlayerState");
+            };
+            let fields = elements.remove(0).fields;
+            PlayerState::try_from(Value::Structure(Structure { id, fields }))
+                .expect("a PlayerState")
+        };
+        call(
+            &mut device,
+            ids::stop::FUNCTION,
+            vec![field(ids::stop::PLAYER, Value::U32(player))],
+        );
+        step(&mut device, 1_000_000_000);
+        let anchored = call(
+            &mut device,
+            ids::play_at::FUNCTION,
+            vec![
+                field(ids::play_at::PLAYER, Value::U32(player)),
+                field(ids::play_at::TIME_NS, Value::U64(1_150_000_000)),
+            ],
+        );
+        assert_eq!(anchored, Value::U32(player));
+        step(&mut device, 1_100_000_000);
+        assert_eq!(playhead(&mut device).state, "stopped");
+        step(&mut device, 1_200_000_000);
+        let state = playhead(&mut device);
+        assert_eq!(state.state, "playing");
+        assert!(
+            state.time_ns.abs_diff(50_000_000) < 1_000,
+            "50 ms after the anchor, got {} ns",
+            state.time_ns
+        );
+    }
+
     #[test]
     fn an_animation_reloads_through_a_call() {
         let mut device = device();
@@ -718,7 +836,7 @@ mod tests {
     #[test]
     fn every_declared_function_is_registered_and_described() {
         let declared = function_modules();
-        assert_eq!(declared.len(), 19);
+        assert_eq!(declared.len(), 23);
         let module = host_module();
         let described: Vec<Uuid> = module.descriptions().iter().map(|d| d.id).collect();
         for function in declared.keys() {

@@ -27,20 +27,25 @@
 //!   `add_instance` / `add_instance_with_weight`, and unloading —
 //!   `remove_instance` / `remove_player` / `unload_animation`: structural
 //!   edits, applied immediately;
-//! - per tick — `step(dt_ns)`, returning **per-track outputs keyed by track
-//!   identity**, each carrying the track's **default authored key** plus its
-//!   sampled value; the consumer (a runner, or a graph node) decides the final
-//!   store key — default = the authored key, overridable;
-//! - transport — `play` / `pause` / `stop` / `seek(time_ns)` / `set_speed` /
-//!   `set_loop` / `set_weight`, buffered into the engine's **next** `step`
-//!   (issue order preserved). `play`, `pause` and `stop` set whether a
-//!   player's time advances and `set_speed` only the rate it advances at, so
-//!   a player resumes at the speed it was given;
+//! - per tick — `step(dt_ns, time_ns?)`, returning **per-track outputs keyed
+//!   by track identity**, each carrying the track's **default authored key**
+//!   plus its sampled value; the consumer (a runner, or a graph node) decides
+//!   the final store key — default = the authored key, overridable;
+//! - transport — `play` / `play_at(time_ns)` / `pause` / `stop` /
+//!   `seek(time_ns)` / `set_speed` (negative plays backwards) / `set_loop` /
+//!   `set_window`, and per instance `set_weight` / `set_start_offset` /
+//!   `set_time_scale`, buffered into the engine's **next** `step` (issue order
+//!   preserved). `play`, `play_at`, `pause` and `stop` set whether a player's
+//!   time advances and `set_speed` only the rate it advances at, so a player
+//!   resumes at the speed it was given;
 //! - feedback — `player_states()`, one `PlayerState` per player: its name,
-//!   its playback, its loop mode and its instances, so any client finds a
-//!   player by the name it was created under and reads where it stands. This call is a **patch**: the vision is state
-//!   changes as first-class, combinable values the behavior conveys, not a
-//!   second feedback channel;
+//!   its playback (including whether a `once` player has ended), its loop
+//!   mode, its play window and its instances, so any client finds a player by
+//!   the name it was created under and reads where it stands. The behavior
+//!   that steps the module conveys it as a state value each step (Vizij's
+//!   animation source writes it to `vizij/animations/players`); this call is a
+//!   **patch**: the vision is state changes as first-class, combinable values
+//!   the behavior conveys, not a second feedback channel;
 //! - baking — `bake` / `bake_with_derivatives`, the sampled clip as JSON.
 
 use std::collections::HashMap;
@@ -128,13 +133,18 @@ pub struct TrackOutput {
 /// One player's state: its name (as `create_player` gave it, empty when it
 /// gave none), its playback — `"playing"`, `"paused"` or `"stopped"`, the
 /// playhead and full length in nanoseconds (the `dt_ns` time base), the speed
-/// multiplier, the loop mode (`"once"`, `"loop"` or `"ping_pong"`, as
-/// `set_loop` takes it) — and its instances, in evaluation order.
+/// multiplier as `set_speed` set it (negative backwards), the loop mode
+/// (`"once"`, `"loop"` or `"ping_pong"`, as `set_loop` takes it), whether it
+/// has ended, its play window — and its instances, in evaluation order.
+///
+/// A player waiting for its `play_at` start holds its playhead and reports the
+/// state it had, `"playing"` from its start on. The engine keeps times in single-precision
+/// seconds, so a time read back may differ from the one set by that rounding.
 ///
 /// Record `1.1.0` adds `name`, `instances` and `loop_mode` to `1.0.0`'s five
-/// fields.
+/// fields; `1.2.0` adds `ended`, `window_start_ns` and `window_end_ns`.
 #[derive(Debug, Clone, PartialEq, AroraType)]
-#[arora(id = "76697a69-6a00-0000-0000-000000000111", version = "1.1.0")]
+#[arora(id = "76697a69-6a00-0000-0000-000000000111", version = "1.2.0")]
 pub struct PlayerState {
     #[arora(id = "76697a69-6a00-0000-0111-000000000001")]
     pub player: u32,
@@ -152,12 +162,28 @@ pub struct PlayerState {
     pub instances: Vec<InstanceState>,
     #[arora(id = "76697a69-6a00-0000-0111-000000000008")]
     pub loop_mode: String,
+    /// A `"once"` player playing at a non-zero speed has reached the window
+    /// bound it heads for — the end, or the start when playing backwards —
+    /// and holds there until it is played again, sought or reversed.
+    #[arora(id = "76697a69-6a00-0000-0111-000000000009")]
+    pub ended: bool,
+    /// The play window's start, in nanoseconds.
+    #[arora(id = "76697a69-6a00-0000-0111-00000000000a")]
+    pub window_start_ns: u64,
+    /// The play window's end, in nanoseconds; none ends it at the player's
+    /// length (`duration_ns`).
+    #[arora(id = "76697a69-6a00-0000-0111-00000000000b")]
+    pub window_end_ns: Option<u64>,
 }
 
 /// One instance on a player: its id, the animation it plays (what
-/// `unload_animation` takes) and its blend weight.
+/// `unload_animation` takes), its blend weight, and its timing on the player
+/// timeline (as `set_start_offset` and `set_time_scale` take them).
+///
+/// Record `1.1.0` adds `start_offset_ns` and `time_scale` to `1.0.0`'s three
+/// fields.
 #[derive(Debug, Clone, PartialEq, AroraType)]
-#[arora(id = "76697a69-6a00-0000-0000-000000000112")]
+#[arora(id = "76697a69-6a00-0000-0000-000000000112", version = "1.1.0")]
 pub struct InstanceState {
     #[arora(id = "76697a69-6a00-0000-0112-000000000001")]
     pub instance: u32,
@@ -165,10 +191,14 @@ pub struct InstanceState {
     pub anim: u32,
     #[arora(id = "76697a69-6a00-0000-0112-000000000003")]
     pub weight: f32,
+    #[arora(id = "76697a69-6a00-0000-0112-000000000004")]
+    pub start_offset_ns: i64,
+    #[arora(id = "76697a69-6a00-0000-0112-000000000005")]
+    pub time_scale: f32,
 }
 
-/// One load's state: the engine, the key-to-track index and the
-/// transport commands waiting for the next step.
+/// One load's state: the engine, the key-to-track index, the transport
+/// commands waiting for the next step and the clock `play_at` reads.
 pub struct AnimationModule {
     engine: Engine,
     /// Each loaded animation's tracks as (canonical output key, authored track
@@ -181,6 +211,11 @@ pub struct AnimationModule {
     /// Player commands and instance updates issued since the previous step,
     /// drained (in issue order) into the next `step`'s engine update.
     pending: Inputs,
+    /// Each `play_at` in `pending`: its command's index and its start time,
+    /// which the next step turns into the command's delay.
+    anchors: Vec<(usize, u64)>,
+    /// The time the previous step ended at, in nanoseconds.
+    clock_ns: u64,
 }
 
 impl Default for AnimationModule {
@@ -197,6 +232,8 @@ impl AnimationModule {
             tracks: Vec::new(),
             key_to_track: HashMap::new(),
             pending: Inputs::default(),
+            anchors: Vec::new(),
+            clock_ns: 0,
         }
     }
 
@@ -275,7 +312,8 @@ impl AnimationModule {
     }
 
     /// Start or resume advancing the player's time, at the speed `set_speed`
-    /// gave it (1 unless set). Applied at the next `step`.
+    /// gave it (1 unless set). Cancels a pending `play_at`. Applied at the
+    /// next `step`.
     pub fn play(&mut self, player: u32) -> u32 {
         self.buffer_command(
             player,
@@ -286,7 +324,7 @@ impl AnimationModule {
     }
 
     /// Hold the playhead where it is; the player keeps its speed for the next
-    /// `play`. Applied at the next `step`.
+    /// `play`. Cancels a pending `play_at`. Applied at the next `step`.
     pub fn pause(&mut self, player: u32) -> u32 {
         self.buffer_command(
             player,
@@ -297,7 +335,8 @@ impl AnimationModule {
     }
 
     /// Stop playback and reset to the window start; the player keeps its
-    /// speed for the next `play`. Applied at the next `step`.
+    /// speed for the next `play`. Cancels a pending `play_at`. Applied at the
+    /// next `step`.
     pub fn stop(&mut self, player: u32) -> u32 {
         self.buffer_command(
             player,
@@ -314,14 +353,17 @@ impl AnimationModule {
             player,
             PlayerCommand::Seek {
                 player: PlayerId(player),
-                time: (time_ns as f64 / 1e9) as f32,
+                time: ns_to_seconds(time_ns),
             },
         )
     }
 
-    /// Set the multiplier the player's time advances at while it plays. It
-    /// does not play, pause or stop the player: a paused player stays paused
-    /// at its new speed. Applied at the next `step`.
+    /// Set the multiplier the player's time advances at while it plays:
+    /// negative plays backwards — `once` then holds at the window start,
+    /// `loop` wraps from the window start to its end, `ping_pong` reflects —
+    /// and 0 holds the playhead. It does not play, pause or stop the player:
+    /// a paused player stays paused at its new speed. Applied at the next
+    /// `step`.
     pub fn set_speed(&mut self, player: u32, speed: f32) -> u32 {
         self.buffer_command(
             player,
@@ -350,17 +392,84 @@ impl AnimationModule {
         )
     }
 
+    /// Start playback at `time_ns`, in the time base `step` is given — the
+    /// device's `arora/time`: the player holds its playhead until then, and
+    /// from then on it stands where it would had it started at that instant,
+    /// whichever steps it falls between, so players anchored at one instant on
+    /// devices sharing a clock reference play in lockstep. A `time_ns` already
+    /// past starts it there too: its next step advances it by the time since.
+    /// The player starts at its speed (1 unless `set_speed` set another); a
+    /// `set_speed` while it waits sets the speed it starts at. A later `play`,
+    /// `pause` or `stop` cancels the wait. Applied at the next `step`.
+    pub fn play_at(&mut self, player: u32, time_ns: u64) -> u32 {
+        self.anchors.push((self.pending.player_cmds.len(), time_ns));
+        self.buffer_command(
+            player,
+            PlayerCommand::PlayAfter {
+                player: PlayerId(player),
+                delay: 0.0,
+            },
+        )
+    }
+
+    /// Set the play window, in nanoseconds of player time: `once` clamps the
+    /// playhead into it, `loop` wraps within it, `ping_pong` reflects within
+    /// it, and `stop` returns to its start. `end_ns` left out ends it at the
+    /// player's length; an end before the start is the start. A playhead
+    /// outside the new window moves to its nearest bound. Applied at the next
+    /// `step`.
+    pub fn set_window(&mut self, player: u32, start_ns: u64, end_ns: Option<u64>) -> u32 {
+        self.buffer_command(
+            player,
+            PlayerCommand::SetWindow {
+                player: PlayerId(player),
+                start_time: ns_to_seconds(start_ns),
+                end_time: end_ns.map(ns_to_seconds),
+            },
+        )
+    }
+
     /// Set an instance's blend weight (weights normalize across a player's
     /// instances). Applied at the next `step`. Returns the echoed instance id.
     pub fn set_weight(&mut self, player: u32, instance: u32, weight: f32) -> u32 {
-        self.pending.instance_updates.push(InstanceUpdate {
-            player: PlayerId(player),
-            inst: InstId(instance),
+        self.update_instance(InstanceUpdate {
             weight: Some(weight),
-            time_scale: None,
-            start_offset: None,
-            enabled: None,
-        });
+            ..instance_update(player, instance)
+        })
+    }
+
+    /// Set when an instance starts on its player's timeline, in nanoseconds:
+    /// before it, the instance holds its clip's start; a negative offset
+    /// starts it partway into its clip. Applied at the next `step`. Returns
+    /// the echoed instance id.
+    pub fn set_start_offset(&mut self, player: u32, instance: u32, offset_ns: i64) -> u32 {
+        self.update_instance(InstanceUpdate {
+            start_offset: Some((offset_ns as f64 / 1e9) as f32),
+            ..instance_update(player, instance)
+        })
+    }
+
+    /// Set how an instance's clip stretches on its player's timeline: the
+    /// clip's local time is (playhead − start offset) / `time_scale`, so 2
+    /// plays it over twice its duration and 0.5 over half. It must be finite
+    /// and positive (playing backwards is the player's negative speed);
+    /// another value is rejected with `u32::MAX`. Applied at the next `step`.
+    /// Returns the echoed instance id.
+    pub fn set_time_scale(&mut self, player: u32, instance: u32, time_scale: f32) -> u32 {
+        if !(time_scale.is_finite() && time_scale > 0.0) {
+            return u32::MAX;
+        }
+        self.update_instance(InstanceUpdate {
+            time_scale: Some(time_scale),
+            ..instance_update(player, instance)
+        })
+    }
+
+    /// Buffer an instance update for the next `step`. Returns the echoed
+    /// instance id.
+    fn update_instance(&mut self, update: InstanceUpdate) -> u32 {
+        let instance = update.inst.0;
+        self.pending.instance_updates.push(update);
         instance
     }
 
@@ -392,9 +501,10 @@ impl AnimationModule {
 
     /// One `PlayerState` per player, in creation order: its name, its
     /// playback state as the last `play`, `pause` or `stop` left it (a new
-    /// player plays), the playhead and full length in nanoseconds (the `dt_ns`
-    /// time base), the speed multiplier as `set_speed` set it, the loop mode,
-    /// and its instances.
+    /// player plays; a `play_at` plays it once its start comes), the playhead
+    /// and full length in nanoseconds (the `dt_ns` time base), the speed
+    /// multiplier as `set_speed` set it, the loop mode, whether it has ended,
+    /// its play window, and its instances.
     pub fn player_states(&self) -> Vec<PlayerState> {
         self.engine
             .list_players()
@@ -423,8 +533,14 @@ impl AnimationModule {
                         instance: instance.id,
                         anim: instance.animation,
                         weight: instance.cfg.weight,
+                        start_offset_ns: (f64::from(instance.cfg.start_offset) * 1e9).round()
+                            as i64,
+                        time_scale: instance.cfg.time_scale,
                     })
                     .collect(),
+                ended: info.ended,
+                window_start_ns: seconds_to_ns(info.start_time),
+                window_end_ns: info.end_time.map(seconds_to_ns),
                 name: info.name,
             })
             .collect()
@@ -474,14 +590,24 @@ impl AnimationModule {
 
     /// Advance the engine by `dt_ns` nanoseconds and return per-track outputs.
     ///
-    /// `dt_ns` is the runtime's `arora/dt` built-in key. The transport commands
+    /// `dt_ns` is the runtime's `arora/dt` built-in key and `time_ns` its
+    /// `arora/time`, the time this step ends at: the time base of `play_at`.
+    /// Left out, that time is the previous step's plus `dt_ns` (from 0, so
+    /// the time since the module's first step). The transport commands
     /// buffered since the previous step apply first, in issue order. Each
     /// output carries the track's authored key as `default_key` and its stable
     /// id as `track_id`; the value uses the vizij-arora `Value` encoding.
-    pub fn step(&mut self, dt_ns: u64) -> Vec<TrackOutput> {
-        let dt = dt_ns as f64 / 1e9;
-        let inputs = std::mem::take(&mut self.pending);
-        let outputs = self.engine.update(dt as f32, inputs);
+    pub fn step(&mut self, dt_ns: u64, time_ns: Option<u64>) -> Vec<TrackOutput> {
+        let now = time_ns.unwrap_or(self.clock_ns.saturating_add(dt_ns));
+        let start = i128::from(now) - i128::from(dt_ns);
+        let mut inputs = std::mem::take(&mut self.pending);
+        for (index, at) in self.anchors.drain(..) {
+            if let PlayerCommand::PlayAfter { delay, .. } = &mut inputs.player_cmds[index] {
+                *delay = ((i128::from(at) - start) as f64 / 1e9) as f32;
+            }
+        }
+        self.clock_ns = now;
+        let outputs = self.engine.update(ns_to_seconds(dt_ns), inputs);
         outputs
             .changes
             .iter()
@@ -517,7 +643,7 @@ fn guest<T>(f: impl FnOnce(&mut AnimationModule) -> T) -> T {
 #[arora_module::module(
     id = "76697a69-6a00-0000-0d00-000000000000",
     name = "vizij-animation",
-    version = "1.0.0",
+    version = "1.1.0",
     author = "Semio",
     license = "Proprietary",
     description = "vizij-animation-core as an Arora wasm module",
@@ -552,12 +678,13 @@ pub mod animation {
     }
 
     /// [`AnimationModule::step`](super::AnimationModule::step). `dt_ns` is the
-    /// runtime's `arora/dt` built-in key.
+    /// runtime's `arora/dt` built-in key and `time_ns` its `arora/time`.
     #[export(id = "76697a69-6a00-0000-0f00-000000000004")]
     pub fn step(
         #[param(id = "76697a69-6a00-0000-0f04-000000000001")] dt_ns: u64,
+        #[param(id = "76697a69-6a00-0000-0f04-000000000002")] time_ns: Option<u64>,
     ) -> Vec<TrackOutput> {
-        guest(|a| a.step(dt_ns))
+        guest(|a| a.step(dt_ns, time_ns))
     }
 
     /// [`AnimationModule::play`](super::AnimationModule::play).
@@ -686,6 +813,45 @@ pub mod animation {
     ) -> bool {
         guest(|a| a.reload_animation(anim, clip))
     }
+
+    /// [`AnimationModule::set_window`](super::AnimationModule::set_window).
+    #[export(id = "76697a69-6a00-0000-0f00-000000000014")]
+    pub fn set_window(
+        #[param(id = "76697a69-6a00-0000-0f14-000000000001")] player: u32,
+        #[param(id = "76697a69-6a00-0000-0f14-000000000002")] start_ns: u64,
+        #[param(id = "76697a69-6a00-0000-0f14-000000000003")] end_ns: Option<u64>,
+    ) -> u32 {
+        guest(|a| a.set_window(player, start_ns, end_ns))
+    }
+
+    /// [`AnimationModule::play_at`](super::AnimationModule::play_at).
+    #[export(id = "76697a69-6a00-0000-0f00-000000000015")]
+    pub fn play_at(
+        #[param(id = "76697a69-6a00-0000-0f15-000000000001")] player: u32,
+        #[param(id = "76697a69-6a00-0000-0f15-000000000002")] time_ns: u64,
+    ) -> u32 {
+        guest(|a| a.play_at(player, time_ns))
+    }
+
+    /// [`AnimationModule::set_start_offset`](super::AnimationModule::set_start_offset).
+    #[export(id = "76697a69-6a00-0000-0f00-000000000016")]
+    pub fn set_start_offset(
+        #[param(id = "76697a69-6a00-0000-0f16-000000000001")] player: u32,
+        #[param(id = "76697a69-6a00-0000-0f16-000000000002")] instance: u32,
+        #[param(id = "76697a69-6a00-0000-0f16-000000000003")] offset_ns: i64,
+    ) -> u32 {
+        guest(|a| a.set_start_offset(player, instance, offset_ns))
+    }
+
+    /// [`AnimationModule::set_time_scale`](super::AnimationModule::set_time_scale).
+    #[export(id = "76697a69-6a00-0000-0f00-000000000017")]
+    pub fn set_time_scale(
+        #[param(id = "76697a69-6a00-0000-0f17-000000000001")] player: u32,
+        #[param(id = "76697a69-6a00-0000-0f17-000000000002")] instance: u32,
+        #[param(id = "76697a69-6a00-0000-0f17-000000000003")] time_scale: f32,
+    ) -> u32 {
+        guest(|a| a.set_time_scale(player, instance, time_scale))
+    }
 }
 
 // baking ---------------------------------------------------------------------
@@ -740,6 +906,22 @@ fn to_core_animation(clip: AnimationClip) -> (AnimationData, Vec<(String, String
 
 fn seconds_to_ns(seconds: f32) -> u64 {
     (seconds.max(0.0) as f64 * 1e9).round() as u64
+}
+
+fn ns_to_seconds(ns: u64) -> f32 {
+    (ns as f64 / 1e9) as f32
+}
+
+/// An update of `instance` on `player` that changes nothing.
+fn instance_update(player: u32, instance: u32) -> InstanceUpdate {
+    InstanceUpdate {
+        player: PlayerId(player),
+        inst: InstId(instance),
+        weight: None,
+        time_scale: None,
+        start_offset: None,
+        enabled: None,
+    }
 }
 
 /// Convert a boundary keyframe (dynamic Arora `Value`) into a core keyframe:
@@ -862,7 +1044,7 @@ mod tests {
         // The clip eases (default S-curve), so it is antisymmetric about the
         // midpoint: at t = 0.5 s (half of the 1 s clip) the value is ~0.5, and it
         // advances monotonically toward it.
-        let first = a.step(250_000_000); // t = 0.25 s
+        let first = a.step(250_000_000, None); // t = 0.25 s
         let out = first
             .iter()
             .find(|o| o.default_key == "ease/x")
@@ -874,7 +1056,7 @@ mod tests {
             "expected advance into (0, 0.5), got {v0}"
         );
 
-        let second = a.step(250_000_000); // t = 0.5 s
+        let second = a.step(250_000_000, None); // t = 0.5 s
         let v1 = as_f32(value_of(&second, "ease/x").expect("ease/x output"));
         assert!(v1 > v0, "expected monotonic advance, {v1} !> {v0}");
         assert!(
@@ -890,9 +1072,9 @@ mod tests {
         let anim = a.load_animation(constant_clip("quiet", "x", 0.25));
         let player = a.create_player(Some("quiet".into()));
         let inst = a.add_instance_with_weight(player, anim, 0.0);
-        assert!(a.step(100_000_000).is_empty(), "silent at weight 0");
+        assert!(a.step(100_000_000, None).is_empty(), "silent at weight 0");
         a.set_weight(player, inst, 1.0);
-        let out = a.step(0);
+        let out = a.step(0, None);
         assert_eq!(as_f32(value_of(&out, "x").expect("x output")), 0.25);
     }
 
@@ -916,7 +1098,9 @@ mod tests {
             vec![InstanceState {
                 instance: inst,
                 anim,
-                weight: 0.0
+                weight: 0.0,
+                start_offset_ns: 0,
+                time_scale: 1.0,
             }]
         );
         assert_eq!(wave.duration_ns, 1_000_000_000);
@@ -927,13 +1111,13 @@ mod tests {
 
         a.set_weight(player, inst, 0.5);
         a.set_loop(player, "ping_pong".into());
-        a.step(0);
+        a.step(0, None);
         let wave = state_of(&a, player);
         assert_eq!(wave.instances[0].weight, 0.5);
         assert_eq!(wave.loop_mode, "ping_pong");
     }
 
-    /// `PlayerState` crosses the value plane as its 1.1.0 record: a structure
+    /// `PlayerState` crosses the value plane as its 1.2.0 record: a structure
     /// under its id, its instances an array of `InstanceState` structures.
     #[test]
     fn a_player_state_round_trips_through_its_record() {
@@ -948,16 +1132,22 @@ mod tests {
                 instance: 7,
                 anim: 2,
                 weight: 1.0,
+                start_offset_ns: -250_000_000,
+                time_scale: 2.0,
             }],
             loop_mode: "once".into(),
+            ended: true,
+            window_start_ns: 100_000_000,
+            window_end_ns: Some(900_000_000),
         };
-        assert_eq!(PlayerState::arora_type_version().to_string(), "1.1.0");
+        assert_eq!(PlayerState::arora_type_version().to_string(), "1.2.0");
+        assert_eq!(InstanceState::arora_type_version().to_string(), "1.1.0");
         let value = Value::from(state.clone());
         let Value::Structure(structure) = &value else {
             panic!("a structure, got {value:?}");
         };
         assert_eq!(structure.id, PlayerState::arora_type_id());
-        assert_eq!(structure.fields.len(), 8);
+        assert_eq!(structure.fields.len(), 11);
         assert_eq!(PlayerState::try_from(value).expect("decodes"), state);
     }
 
@@ -975,7 +1165,7 @@ mod tests {
 
         assert!(a.remove_player(first));
         assert!(!a.remove_player(first), "already gone");
-        let out = a.step(0);
+        let out = a.step(0, None);
         assert_eq!(
             as_f32(value_of(&out, "x").expect("the other player still writes")),
             0.75
@@ -985,7 +1175,7 @@ mod tests {
 
         assert!(a.unload_animation(anim));
         assert!(!a.unload_animation(anim), "already unloaded");
-        assert!(a.step(0).is_empty(), "no animation, no output");
+        assert!(a.step(0, None).is_empty(), "no animation, no output");
         assert!(
             state_of(&a, second).instances.is_empty(),
             "the player stays, without the instance"
@@ -1001,7 +1191,7 @@ mod tests {
         let player = a.create_player(Some("p-lin".into()));
         a.add_instance(player, anim);
 
-        let outputs = a.step(250_000_000);
+        let outputs = a.step(250_000_000, None);
         let v = as_f32(value_of(&outputs, "lin/x").expect("lin/x output"));
         assert!(
             (v - 0.25).abs() < 1e-3,
@@ -1015,7 +1205,7 @@ mod tests {
         let player = a.create_player(Some("p-slow".into()));
         a.add_instance(player, anim);
 
-        let outputs = a.step(250_000_000);
+        let outputs = a.step(250_000_000, None);
         let v_slow = as_f32(value_of(&outputs, "slow/x").expect("slow/x output"));
         assert!(
             v_slow < 0.25 - 1e-3,
@@ -1031,7 +1221,7 @@ mod tests {
         a.add_instance(player, anim);
 
         // Advance to 0.25 s.
-        let outputs = a.step(250_000_000);
+        let outputs = a.step(250_000_000, None);
         assert!((as_f32(value_of(&outputs, "tr/x").unwrap()) - 0.25).abs() < 1e-3);
         let s = state_of(&a, player);
         assert_eq!(s.state, "playing");
@@ -1040,7 +1230,7 @@ mod tests {
 
         // pause: the playhead holds through further steps.
         assert_eq!(a.pause(player), player);
-        a.step(250_000_000);
+        a.step(250_000_000, None);
         let s = state_of(&a, player);
         assert_eq!(s.state, "paused");
         assert!(
@@ -1050,22 +1240,22 @@ mod tests {
 
         // play resumes from where it held.
         assert_eq!(a.play(player), player);
-        let outputs = a.step(250_000_000);
+        let outputs = a.step(250_000_000, None);
         assert!((as_f32(value_of(&outputs, "tr/x").unwrap()) - 0.5).abs() < 1e-3);
 
         // seek lands exactly (u64 nanoseconds in).
         assert_eq!(a.seek(player, 100_000_000), player);
-        let outputs = a.step(0);
+        let outputs = a.step(0, None);
         assert!((as_f32(value_of(&outputs, "tr/x").unwrap()) - 0.1).abs() < 1e-3);
 
         // set_speed scales dt: 0.2 s of wall clock at 2x advances 0.4 s.
         assert_eq!(a.set_speed(player, 2.0), player);
-        let outputs = a.step(200_000_000);
+        let outputs = a.step(200_000_000, None);
         assert!((as_f32(value_of(&outputs, "tr/x").unwrap()) - 0.5).abs() < 1e-3);
 
         // stop resets to the window start.
         assert_eq!(a.stop(player), player);
-        a.step(0);
+        a.step(0, None);
         let s = state_of(&a, player);
         assert_eq!(s.state, "stopped");
         assert_eq!(s.time_ns, 0);
@@ -1082,9 +1272,9 @@ mod tests {
         a.add_instance(player, anim);
 
         a.set_speed(player, 0.5);
-        a.step(500_000_000); // 0.25 s at half speed
+        a.step(500_000_000, None); // 0.25 s at half speed
         a.pause(player);
-        a.step(500_000_000);
+        a.step(500_000_000, None);
         let s = state_of(&a, player);
         assert_eq!((s.state.as_str(), s.speed), ("paused", 0.5));
         assert!(
@@ -1093,7 +1283,7 @@ mod tests {
         );
 
         a.set_speed(player, 0.25);
-        a.step(500_000_000);
+        a.step(500_000_000, None);
         let s = state_of(&a, player);
         assert_eq!(
             (s.state.as_str(), s.speed),
@@ -1103,14 +1293,14 @@ mod tests {
         assert!((s.time_ns as f64 - 0.25e9).abs() < 2e6);
 
         a.play(player);
-        let outputs = a.step(400_000_000); // + 0.1 s at quarter speed
+        let outputs = a.step(400_000_000, None); // + 0.1 s at quarter speed
         assert!((as_f32(value_of(&outputs, "speed/x").unwrap()) - 0.35).abs() < 1e-3);
         assert_eq!(state_of(&a, player).speed, 0.25);
 
         a.stop(player);
-        a.step(0);
+        a.step(0, None);
         a.play(player);
-        a.step(400_000_000);
+        a.step(400_000_000, None);
         let s = state_of(&a, player);
         assert_eq!((s.state.as_str(), s.speed), ("playing", 0.25));
         assert!(
@@ -1130,9 +1320,9 @@ mod tests {
         let player = a.create_player(Some("p-reload".into()));
         let inst = a.add_instance_with_weight(player, anim, 0.5);
         a.set_speed(player, 0.5);
-        a.step(500_000_000); // playhead 0.25 s
+        a.step(500_000_000, None); // playhead 0.25 s
         a.pause(player);
-        a.step(0);
+        a.step(0, None);
 
         let mut clip = ramp_clip("re-ramp", "re/x", true);
         clip.duration = 2000;
@@ -1157,11 +1347,13 @@ mod tests {
             vec![InstanceState {
                 instance: inst,
                 anim,
-                weight: 0.5
+                weight: 0.5,
+                start_offset_ns: 0,
+                time_scale: 1.0,
             }]
         );
 
-        let outputs = a.step(0);
+        let outputs = a.step(0, None);
         let y = outputs
             .iter()
             .find(|o| o.default_key == "re/y")
@@ -1182,8 +1374,8 @@ mod tests {
 
         assert_eq!(a.set_loop(player, "once".into()), player);
         assert_eq!(a.seek(player, 900_000_000), player);
-        a.step(0);
-        a.step(300_000_000); // 0.9 s + 0.3 s, clamped to the 1 s end
+        a.step(0, None);
+        a.step(300_000_000, None); // 0.9 s + 0.3 s, clamped to the 1 s end
         let s = state_of(&a, player);
         assert_eq!(s.time_ns, 1_000_000_000, "Once clamps at the clip end");
 
@@ -1204,23 +1396,174 @@ mod tests {
         let inst_one = a.add_instance(player, one);
 
         // Equal weights: the normalized blend of 0 and 1.
-        let outputs = a.step(100_000_000);
+        let outputs = a.step(100_000_000, None);
         assert!((as_f32(value_of(&outputs, "mix/x").unwrap()) - 0.5).abs() < 1e-3);
 
         // Silencing the zero-instance leaves only the one-instance.
         assert_eq!(a.set_weight(player, inst_zero, 0.0), inst_zero);
-        let outputs = a.step(100_000_000);
+        let outputs = a.step(100_000_000, None);
         assert!((as_f32(value_of(&outputs, "mix/x").unwrap()) - 1.0).abs() < 1e-3);
 
         // Removing both instances stops the key from being emitted at all.
         assert_eq!(a.remove_instance(player, inst_zero), 1);
         assert_eq!(a.remove_instance(player, inst_one), 1);
         assert_eq!(a.remove_instance(player, inst_one), 0, "already gone");
-        let outputs = a.step(100_000_000);
+        let outputs = a.step(100_000_000, None);
         assert!(
             value_of(&outputs, "mix/x").is_none(),
             "no instances, no output for the key"
         );
+    }
+
+    fn near(actual: f32, expected: f32) {
+        assert!(
+            (actual - expected).abs() < 1e-3,
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    fn near_ns(actual: u64, expected: u64) {
+        assert!(
+            actual.abs_diff(expected) < 1_000,
+            "expected {expected} ns, got {actual}"
+        );
+    }
+
+    /// A window bounds `once`, a negative speed plays backwards through it,
+    /// and the state says when the player has ended and where its window is.
+    #[test]
+    fn a_window_and_a_negative_speed_bound_playback_and_report_its_end() {
+        let mut a = AnimationModule::new();
+        let anim = a.load_animation(ramp_clip("win", "win/x", true));
+        let player = a.create_player(Some("win".into()));
+        a.add_instance(player, anim);
+        a.set_loop(player, "once".into());
+        assert_eq!(a.set_window(player, 200_000_000, Some(800_000_000)), player);
+        a.seek(player, 700_000_000);
+        let out = a.step(200_000_000, None); // 0.7 s + 0.2 s, held at 0.8 s
+        near(as_f32(value_of(&out, "win/x").unwrap()), 0.8);
+        let s = state_of(&a, player);
+        assert!(s.ended, "held at the window end");
+        assert_eq!(s.state, "playing");
+        near_ns(s.window_start_ns, 200_000_000);
+        near_ns(s.window_end_ns.expect("an explicit end"), 800_000_000);
+        assert_eq!(s.duration_ns, 1_000_000_000, "a window leaves the length");
+
+        assert_eq!(a.set_speed(player, -1.0), player);
+        let out = a.step(300_000_000, None);
+        near(as_f32(value_of(&out, "win/x").unwrap()), 0.5);
+        let s = state_of(&a, player);
+        assert!(!s.ended);
+        near(s.speed, -1.0);
+        a.step(1_000_000_000, None);
+        let s = state_of(&a, player);
+        assert!(s.ended, "held at the window start");
+        near_ns(s.time_ns, 200_000_000);
+
+        // `loop` wraps backwards from the window start to its end.
+        a.set_loop(player, "loop".into());
+        let out = a.step(100_000_000, None);
+        near(as_f32(value_of(&out, "win/x").unwrap()), 0.7);
+
+        a.set_window(player, 0, None);
+        a.step(0, None);
+        let s = state_of(&a, player);
+        assert_eq!((s.window_start_ns, s.window_end_ns), (0, None));
+    }
+
+    /// Loads stepping at different rates, anchored at one `arora/time`, stand
+    /// at the playhead the time since the anchor gives, whichever steps the
+    /// anchor falls between.
+    #[test]
+    fn play_at_anchors_the_start_to_the_step_time() {
+        for step_ns in [100_000_000u64, 140_000_000, 175_000_000] {
+            let mut a = AnimationModule::new();
+            let anim = a.load_animation(ramp_clip("sync", "sync/x", true));
+            let player = a.create_player(None);
+            a.add_instance(player, anim);
+            a.stop(player);
+            // The device's clock reads 5 s at the module's first step.
+            let mut now = 5_000_000_000u64;
+            a.step(0, Some(now));
+            assert_eq!(a.play_at(player, 5_300_000_000), player);
+            let mut out = Vec::new();
+            while now < 5_700_000_000 {
+                now += step_ns;
+                out = a.step(step_ns, Some(now));
+            }
+            assert_eq!(now, 5_700_000_000);
+            near(as_f32(value_of(&out, "sync/x").unwrap()), 0.4);
+            near_ns(state_of(&a, player).time_ns, 400_000_000);
+        }
+    }
+
+    /// An anchor on a step boundary starts the player at that boundary; one
+    /// already past starts it there, the next step catching up; without
+    /// `time_ns`, the time base is the sum of the steps.
+    #[test]
+    fn play_at_on_a_boundary_in_the_past_and_without_a_step_time() {
+        let mut a = AnimationModule::new();
+        let anim = a.load_animation(ramp_clip("b", "b/x", true));
+        let player = a.create_player(None);
+        a.add_instance(player, anim);
+        a.stop(player);
+        a.play_at(player, 200_000_000);
+        a.step(100_000_000, Some(100_000_000));
+        assert_eq!(state_of(&a, player).state, "stopped", "holds until 0.2 s");
+        a.step(100_000_000, Some(200_000_000));
+        let s = state_of(&a, player);
+        assert_eq!((s.state.as_str(), s.time_ns), ("playing", 0));
+        a.step(100_000_000, Some(300_000_000));
+        near_ns(state_of(&a, player).time_ns, 100_000_000);
+
+        a.stop(player);
+        a.play_at(player, 100_000_000);
+        a.step(100_000_000, Some(400_000_000));
+        near_ns(state_of(&a, player).time_ns, 300_000_000);
+
+        let mut b = AnimationModule::new();
+        let anim = b.load_animation(ramp_clip("c", "c/x", true));
+        let player = b.create_player(None);
+        b.add_instance(player, anim);
+        b.stop(player);
+        b.step(100_000_000, None);
+        b.play_at(player, 150_000_000);
+        b.step(100_000_000, None);
+        near_ns(state_of(&b, player).time_ns, 50_000_000);
+    }
+
+    /// An instance's start offset and time scale apply to it alone and read
+    /// back from its state; a time scale that is not finite and positive is
+    /// rejected.
+    #[test]
+    fn instance_offset_and_time_scale_apply_per_instance() {
+        let mut a = AnimationModule::new();
+        let slow = a.load_animation(ramp_clip("slow", "slow/x", true));
+        let plain = a.load_animation(ramp_clip("plain", "plain/x", true));
+        let player = a.create_player(None);
+        let shifted = a.add_instance(player, slow);
+        a.add_instance(player, plain);
+        assert_eq!(a.set_start_offset(player, shifted, 250_000_000), shifted);
+        assert_eq!(a.set_time_scale(player, shifted, 2.0), shifted);
+        let out = a.step(750_000_000, None);
+        near(as_f32(value_of(&out, "slow/x").unwrap()), 0.25); // (0.75 - 0.25) / 2
+        near(as_f32(value_of(&out, "plain/x").unwrap()), 0.75);
+
+        let s = state_of(&a, player);
+        assert_eq!(s.duration_ns, 2_250_000_000, "0.25 s + 2 x 1 s");
+        let instance = &s.instances[0];
+        assert_eq!(
+            (instance.start_offset_ns, instance.time_scale),
+            (250_000_000, 2.0)
+        );
+        assert_eq!(
+            (s.instances[1].start_offset_ns, s.instances[1].time_scale),
+            (0, 1.0)
+        );
+
+        for rejected in [0.0, -1.0, f32::NAN, f32::INFINITY] {
+            assert_eq!(a.set_time_scale(player, shifted, rejected), u32::MAX);
+        }
     }
 
     #[test]
@@ -1272,7 +1615,7 @@ mod instances {
         // A command addressed to the other instance's player, and a step of
         // that instance, leave the first one untouched.
         assert_eq!(second.pause(player), player);
-        assert!(second.step(250_000_000).is_empty());
+        assert!(second.step(250_000_000, None).is_empty());
         assert!(second.player_states().is_empty());
         let state = state_of(&first, player);
         assert_eq!(state.state, "playing");
