@@ -32,62 +32,90 @@ quori.run(); // the device paces itself (or call quori.step(dtMs) per frame)
 
 // any time — the device's store stays live while it runs:
 quori.setValue(quori.path("standard/vizij/expression/happy"), 1);
-const run = await quori.spawn({ id: SAY_ID, args: [{ id: SAY_TEXT_PARAM_ID, value: { str: "Hello" } }] });
-runStatus(quori.readValues([run.status])[run.status]); // "running" | "success" | "failure"
-await quori.halt(run);
+const run = await quori.invoke("say", { text: "Hello" }); // a task method: its run's RunHandle
+runStatus(quori.readValues([run.status])[run.status]);  // "running" | "success" | "failure"
+await quori.halt(run.run);
 
 unloadVizij("quori"); // the scene, the camera, the GLB
 quori.dispose();
 ```
+
+A `Runtime` is a client of the Vizij's device with the surface any client of
+an Arora device has — a page here, a remote on a bridge, Semio Studio:
+
+- `call(call)` calls a module function by id; `invoke(method, args)` calls a
+  method the device describes by name, its arguments by parameter name, and
+  a task method (one returning a status) starts a run and resolves to its
+  `RunHandle` (`{ run, status, feedback, result, update }`);
+- `spawn(call)` and `halt(runId)` are the interpreter's SPAWN and HALT;
+- `listKeys(prefix?)` and `describeMethods(prefix?)` list the keys the
+  device holds, with their meta, and the methods it describes;
+- `readValues`, `writeValues`, `setValue`, `snapshot` and `drainChanges`
+  read and write its store;
+- `loadGraph(spec)` and `applyGraphEdits(edits)` are the interpreter's LOAD
+  and EDIT of a Vizij graph.
+
+Each operation that reaches the device is enqueued before it returns and
+applied at the device's next step, which its promise waits for: under
+`run()` just `await` it; a page that drives the device with `step` steps
+after issuing it. What the face does, it does through the methods its
+modules and its interpreter declare: `say`, `look_at` and `play_viseme`
+(the skills), `run_behavior` (programs), the animation module's functions,
+and the rest module's `reset` — every key back to the value it rests at
+(each free input of the face's graphs and programs to its authored default,
+each input the bundle's neutral pose names to its neutral) — and
+`reset_keys`, for the keys it names.
 
 A Vizij's paths are its own: `quori.rigPrefix` is `rig/<faceId>/` (the
 bundle's `faceId`) and `quori.path(relative)` builds one. `drainPicks()`
 reports pointer presses as `{ vizijId, elementId }` — the slot and the
 element id the GLB's RobotData declares, `null` for a press on no element;
 `describe(glb)` reads what a GLB declares without loading it: its elements,
-animatables, bounds and programs (with their labels), and from its bundle the
-poses and their groups, the rig's inputs with their ranges and defaults, the
-animations, and the bundle's metadata as authored (`speechConfig`,
-`activeMotionGraphId`, …) — everything a page builds its controls from.
+animatables, bounds and programs (each with its label and graph), and from
+its bundle the poses and their groups, the rig's inputs with their ranges
+and defaults, the animations, and the bundle's metadata as authored
+(`speechConfig`, `activeMotionGraphId`, …) — everything a page builds its
+controls from.
 
-`quori.reset()` returns the face to rest: each free input of its graphs and
-programs to its authored default, each input the bundle's neutral pose names
-to its neutral; `quori.reset(keys)` returns only the keys it names. Vizijs
-share the page's canvas, not its framing:
+Vizijs share the page's canvas, not its framing:
 `setView("quori", { bounds, fit, zoom, toneMapping })` frames and tone-maps
 one Vizij over `mount`'s options, and `safeArea("quori")` says where its
 framed bounds lie on the canvas, in CSS pixels, for a DOM overlay.
 
 ### Programs
 
-A Vizij's programs are the motiongraphs its bundle carries (`describe(glb)`
-lists their ids), and any graph a page defines. A program runs beside the
-face's graph as a task run of the device's interpreter — its
-`run_behavior` method, spawned and halted like any task run — so every
-client of the device starts, stops and watches programs the same way: a
-page through this package, a remote through a bridge.
+A Vizij's programs are the motiongraphs its bundle carries
+(`describe(glb).programs`), and any graph a page defines. A program runs
+beside the face's graph as a task run of the device's interpreter: its
+`run_behavior(name, behavior)` method, started and halted like any task run.
 
 ```ts
-const live = await quori.spawnProgram("authoring.motiongraph.main"); // a TaskHandle; several run at once
-const editor = await quori.spawnProgram(editorGraph, "editor");       // a page's graph, named
-quori.programRuns();             // [{ handle, name, status }] — read off the device's store
-await quori.editProgram(editor, editorGraph, editedGraph);           // in place
-await quori.halt(live);          // its outputs hold their last values
-await quori.reset(quori.programOutputs("authoring.motiongraph.main")); // back to rest, when the page says so
+import { behaviorValue, runEdits, BEHAVIOR_RUNS, runStatus } from "@vizij/runtime";
+
+const { programs } = await describe(glb);
+const main = programs.find((p) => p.id === "authoring.motiongraph.main")!;
+const live = await quori.invoke("run_behavior", { name: main.id, behavior: await behaviorValue(main.graph) });
+await quori.applyGraphEdits(await runEdits(live.run, main.graph, editedGraph)); // in place
+await quori.halt(live.run);                          // its outputs hold their last values
+await quori.invoke("reset_keys", { keys: { strs: outputs } }); // back to rest, when the page says so
+
+const runs = await quori.listKeys(BEHAVIOR_RUNS);   // every run: <run id>/status and <run id>/name
 ```
 
 - `loadVizij`'s `program` option (the bundle's active program by default)
-  names the program that runs from load; `programRuns()` finds its run by
-  the program's id, to halt it like any other.
+  names the program that runs from load, as a run named after the program.
 - A run's state is its status key: `running` until halted, `failure` once
   halted. Its name is a key of its own beside it, so any client tells which
-  program a run runs.
+  program a run runs. An ended run's keys stay.
 - Halting removes the program's nodes and leaves the store as it is.
   Starting it again is a new run, its stateful nodes (springs, smoothing)
   starting afresh. A program that wants to act on its start does so itself;
-  returning its outputs to rest is the page's explicit `reset(keys)`.
-- `editProgram(handle, from, to)` takes the run from `from` — the program it
-  runs — to `to`: the nodes `to` keeps keep their runtime state.
+  returning its outputs to rest is the page's explicit `reset_keys` — the
+  keys its graph's output nodes write.
+- `runEdits(runId, from, to)` builds the edits that take the run from
+  `from` — the graph it runs — to `to`: a run's nodes live in the device's
+  graph under ids the interpreter derives from the run, and the edits name
+  them, so the nodes `to` keeps keep their runtime state.
 - Two programs that write one key both write it each step; which value
   stands is not defined yet.
 
@@ -130,7 +158,7 @@ Arora wasm modules load into a device as guests: `startRuntime(graph, init,
 modules)` and `loadVizij`'s `options.modules` take `AroraModule`s —
 `{ headerJson, wasmBytes }`, what `@vizij/animation-module`'s
 `loadAnimationModule()` returns for its artifact; their functions are
-reachable by id from `runtime.call` and
+reachable from `runtime.call` and `runtime.invoke` and
 from the graph's `ExternalFunction` nodes, like the host-linked modules'. A
 guest under a host-linked module's id — the animation module's — is served
 by the host-linked one.
@@ -138,48 +166,54 @@ by the host-linked one.
 ### Animations
 
 A device's animations live in its animation module, and every client loads,
-plays and unloads them through the module's declared functions: the
-`Runtime`, a client on a bridge, Semio Studio. Each animation plays on a
-player of its own, named after the animation's id, so any client finds it in
-the player states the animation source writes to `vizij/animations/players`
-each step. A Vizij's own animations (its bundle's `animations`, what
+plays and unloads them through the module's declared functions, by name. A
+Vizij's own animations (its bundle's `animations`, what
 `describe(glb).animations` lists) load when the face loads, unless
-`loadVizij(id, glb, { animations: false })`; more load at any time. Each
-track writes the rig input its channel names (`gaze/left_right` drives
-`quori.path("gaze/left_right")`). An animation loads silent, stopped at its
-start, looping at speed 1; it writes its keys while it plays, is paused or
-has completed, and stops writing once stopped.
+`loadVizij(id, glb, { animations: false })`: each on a player named after the
+animation's id, its instance at weight 0, stopped — silent until a client
+gives it a weight and plays it. The player states the animation source writes
+to `vizij/animations/players` each step say which player plays what and
+where each stands; `decodePlayerStates` reads them. Each track writes the rig
+input its channel names (`gaze/left_right` drives
+`quori.path("gaze/left_right")`).
 
 ```ts
-quori.animations();                                  // [{ id, duration }] — seconds; whoever loaded them
-await quori.loadAnimation(animation);                // describe's shape → { id, name, duration }
-await quori.playAnimation(id, { reset: true });      // from the start; { speed } too
-quori.pauseAnimation(id);                            // holds the pose
-quori.seekAnimation(id, 1.5);                        // seconds
-quori.setAnimationLoop(id, false);                   // completes at its end instead of wrapping
-quori.setAnimationSpeed(id, 2);
-quori.animationState(id);                            // { time, duration, playing, loop, speed, completed }
-quori.stopAnimation(id, { clearOutputs: true });     // back to its first frame, then silent
-await quori.unloadAnimation(id);                     // its keys keep their last values
+import { ANIMATION_PLAYERS_PATH, decodePlayerStates } from "@vizij/runtime";
+
+const players = () => decodePlayerStates(quori.readValues([ANIMATION_PLAYERS_PATH])[ANIMATION_PLAYERS_PATH]);
+const { player, instances } = players().find((p) => p.name === "wave")!;
+const u32 = (n: number) => ({ u32: n });
+
+await quori.invoke("set_weight", { player: u32(player), instance: u32(instances[0].instance), weight: { f32: 1 } });
+await quori.invoke("play", { player: u32(player) });
+await quori.invoke("set_speed", { player: u32(player), speed: { f32: 2 } }); // kept across pause and play
+await quori.invoke("pause", { player: u32(player) });                         // holds the pose
+await quori.invoke("seek", { player: u32(player), time_ns: { u64: 1.5e9 } });
+await quori.invoke("set_loop", { player: u32(player), mode: "once" });        // "loop", "ping_pong"
+await quori.invoke("stop", { player: u32(player) });                          // back to its first frame
+await quori.invoke("set_weight", { player: u32(player), instance: u32(instances[0].instance), weight: { f32: 0 } }); // silent
+
+// a page's own animation, in describe's shape:
+const { moduleAnimation } = quori.moduleAnimation(animation);
+const anim = await quori.invoke("load_animation", { clip: moduleAnimation });   // { u32 }
+const created = await quori.invoke("create_player", { name: animation.id });   // { u32 }
+await quori.invoke("add_instance_with_weight", { player: created, anim, weight: { f32: 0 } });
+await quori.invoke("reload_animation", { anim, clip: edited });               // in place: the playback stays
+await quori.invoke("remove_player", { player: created });
+await quori.invoke("unload_animation", { anim });                              // its keys keep their last values
 ```
 
-`loadAnimation` sends `load_animation`, `create_player`,
-`add_instance_with_weight` (at 0) and `stop`; loading an id already loaded
-replaces it in one step, keeping the playback the module reports for it —
-playhead, loop mode, speed, weight, and whether it plays, is paused or is
-stopped — whoever set it: the authoring timeline's live edit.
-`unloadAnimation` sends `remove_player` and `unload_animation`. The transport
-sends `set_weight`, `play`, `pause`, `stop`, `seek`, `set_speed` and
-`set_loop`, and rejects for an id the device does not hold. Each call applies
-at the device's next step, which its promise waits for; a load or unload waits
-for the transport calls in flight on its id, and they for it. `animations` and
-`animationState` read the player states.
+A stopped player still writes its first frame at its weight: a client that
+wants an animation to let go of its keys gives it weight 0. Each call
+applies at the device's next step, in the order the calls were issued.
+`moduleAnimation(animation)` turns an animation in `describe`'s shape into
+the module's `AnimationClip`, each track keyed by the store key its channel
+names through this Vizij's rig, as the Vizij's own are loaded.
 
 The types are `Animation`, `AnimationTrack` and `AnimationKeyframe` (what
-`describe` lists), `LoadedAnimation`, `AnimationState`,
-`PlayAnimationOptions` and `StopAnimationOptions`. `Animation` is
-`@vizij/runtime`'s: importing it shadows the DOM's Web Animations
-`Animation` in that module.
+`describe` lists), `ModuleAnimation`, `PlayerState` and `InstanceState`.
+`Animation` is `@vizij/runtime`'s: importing it shadows the DOM's Web
+Animations `Animation` in that module.
 
 ### Profiles and mappings
 

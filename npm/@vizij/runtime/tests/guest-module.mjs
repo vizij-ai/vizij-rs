@@ -21,10 +21,11 @@ await assert.rejects(
 );
 
 // A well-formed guest loads; the device steps and its functions answer.
+const MODULE = JSON.parse(module.headerJson).id;
 const FN_CREATE_PLAYER = "76697a69-6a00-0000-0f00-000000000002";
 const P_NAME = "76697a69-6a00-0000-0f02-000000000001";
 const runtime = await startRuntime(undefined, undefined, [module]);
-const pending = runtime.call({ id: FN_CREATE_PLAYER, args: [{ id: P_NAME, value: { str: "p" } }] });
+const pending = runtime.call({ module_id: MODULE, id: FN_CREATE_PLAYER, args: [{ id: P_NAME, value: { str: "p" } }] });
 runtime.step(0);
 assert.ok("u32" in (await pending).ret, "create_player answers on a device with a guest loaded");
 runtime.dispose();

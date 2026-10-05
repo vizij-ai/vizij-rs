@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { FIXTURES, loadVizij, meanDiff32, open } from "./common.mjs";
+import { FIXTURES, loadVizij, meanDiff32, open, settled } from "./common.mjs";
 
 if (!FIXTURES) {
   console.log("VIZIJ_FIXTURES unset — skipping the browser snapshot regression");
@@ -29,7 +29,7 @@ try {
     // The neutral face: no program, as the references were rendered.
     await loadVizij(page, name, file, { program: "none" });
     // Let the pose flow through the device onto the scene.
-    await page.waitForTimeout(1500);
+    await settled(page);
     const shot = await page.screenshot({ clip: { x: 0, y: 0, width: 763, height: 486 } });
     const outDir = process.env.VIZIJ_SNAPSHOT_OUT;
     if (outDir) {

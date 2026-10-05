@@ -6,7 +6,7 @@
 // `VIZIJ_FIXTURES`; skips without.
 import assert from "node:assert/strict";
 import { PNG } from "pngjs";
-import { FIXTURES, loadVizij, open } from "./common.mjs";
+import { FIXTURES, loadVizij, open, settled } from "./common.mjs";
 
 if (!FIXTURES) {
   console.log("VIZIJ_FIXTURES unset — skipping the browser view test");
@@ -17,7 +17,6 @@ const RECTS = {
   a: { x: 0, y: 0, width: 381, height: 486 },
   b: { x: 382, y: 0, width: 381, height: 486 },
 };
-const SETTLE_MS = 1000;
 const INSET = 4;
 
 const { page, logs, close } = await open(FIXTURES);
@@ -43,7 +42,7 @@ try {
   };
   /** Each face's rectangle as drawn, and its safe area, once the view settled. */
   const look = async () => {
-    await page.waitForTimeout(SETTLE_MS);
+    await settled(page);
     // Inset from the rectangle's edges, which the canvas's focus ring and
     // the gap between the rectangles touch.
     const shot = async ({ x, y, width, height }) =>

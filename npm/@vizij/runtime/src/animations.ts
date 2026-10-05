@@ -1,71 +1,14 @@
 /**
- * What {@link Runtime}'s animation methods speak to the animation module: the
- * module's declared function, parameter and field ids (its Rust declaration,
- * `animation` in `vizij-animation-module`; `tests/animations.mjs` checks them
- * against the header `@vizij/animation-module` ships), and the decoding of
- * the `[PlayerState]` the composed animation source writes each step.
+ * The animation module's state as a client reads it: the \`[PlayerState]\`
+ * the composed animation source writes to {@link ANIMATION_PLAYERS_PATH}
+ * each step — one per player, by the name it was created under — decoded
+ * from the Arora records the store holds (keyed by field id) into plain
+ * objects. A client drives the module through its declared functions by
+ * name (\`runtime.invoke("play", { player })\`); this is how it learns which
+ * player plays what, and where each stands.
  *
  * @module
  */
-
-/** The declared ids the runtime calls, each function with its parameters. */
-export const ANIMATION_IDS = {
-  load_animation: {
-    function: "76697a69-6a00-0000-0f00-000000000001",
-    clip: "76697a69-6a00-0000-0f01-000000000001",
-  },
-  create_player: {
-    function: "76697a69-6a00-0000-0f00-000000000002",
-    name: "76697a69-6a00-0000-0f02-000000000001",
-  },
-  add_instance_with_weight: {
-    function: "76697a69-6a00-0000-0f00-000000000012",
-    player: "76697a69-6a00-0000-0f12-000000000001",
-    anim: "76697a69-6a00-0000-0f12-000000000002",
-    weight: "76697a69-6a00-0000-0f12-000000000003",
-  },
-  play: {
-    function: "76697a69-6a00-0000-0f00-000000000005",
-    player: "76697a69-6a00-0000-0f05-000000000001",
-  },
-  pause: {
-    function: "76697a69-6a00-0000-0f00-000000000006",
-    player: "76697a69-6a00-0000-0f06-000000000001",
-  },
-  stop: {
-    function: "76697a69-6a00-0000-0f00-000000000007",
-    player: "76697a69-6a00-0000-0f07-000000000001",
-  },
-  seek: {
-    function: "76697a69-6a00-0000-0f00-000000000008",
-    player: "76697a69-6a00-0000-0f08-000000000001",
-    time_ns: "76697a69-6a00-0000-0f08-000000000002",
-  },
-  set_speed: {
-    function: "76697a69-6a00-0000-0f00-000000000009",
-    player: "76697a69-6a00-0000-0f09-000000000001",
-    speed: "76697a69-6a00-0000-0f09-000000000002",
-  },
-  set_loop: {
-    function: "76697a69-6a00-0000-0f00-00000000000a",
-    player: "76697a69-6a00-0000-0f0a-000000000001",
-    mode: "76697a69-6a00-0000-0f0a-000000000002",
-  },
-  set_weight: {
-    function: "76697a69-6a00-0000-0f00-00000000000b",
-    player: "76697a69-6a00-0000-0f0b-000000000001",
-    instance: "76697a69-6a00-0000-0f0b-000000000002",
-    weight: "76697a69-6a00-0000-0f0b-000000000003",
-  },
-  unload_animation: {
-    function: "76697a69-6a00-0000-0f00-000000000010",
-    anim: "76697a69-6a00-0000-0f10-000000000001",
-  },
-  remove_player: {
-    function: "76697a69-6a00-0000-0f00-000000000011",
-    player: "76697a69-6a00-0000-0f11-000000000001",
-  },
-} as const;
 
 /** The store key the composed animation source writes `[PlayerState]` to,
  * each step. */
@@ -110,7 +53,8 @@ export interface PlayerState {
   time: number;
   /** Seconds: the player's length. */
   duration: number;
-  /** Zero while paused or stopped. */
+  /** The speed multiplier, as `set_speed` set it: kept while paused or
+   * stopped. */
   speed: number;
   /** `once`, `loop` or `ping_pong`, as `set_loop` takes it. */
   loopMode: string;

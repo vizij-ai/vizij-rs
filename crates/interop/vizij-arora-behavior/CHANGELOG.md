@@ -17,7 +17,8 @@ All notable changes to `vizij-arora-behavior`. The format follows
   graph writes `task/status` itself) and its `name` on `run::name_key`.
   `run::runs(store)` lists the runs a store holds keys of, by name, with
   their handles (`run::handle`); `run::edit(task, from, to)` is the EDIT
-  that changes a running behavior in place.
+  that changes a running behavior in place; `run::behavior(spec)` is a spec
+  as `run_behavior`'s `behavior` argument, for a client calling it by name.
 
 ### Fixed
 

@@ -56,17 +56,17 @@ const reddened = (before, after) => {
   return out;
 };
 const meanX = (points) => points.reduce((sum, [x]) => sum + x, 0) / points.length;
-// A press held over a frame (a software GPU's frame can outlast a click);
+// A press held over frames (a software GPU's frame can outlast a click);
 // what it picked. The browser can deliver one press twice (headless
 // Chromium's pointer and mouse events), so the picks it produced must agree.
 const press = async (x, y) => {
   await harness("picks");
   await page.mouse.move(x, y);
-  await page.waitForTimeout(300);
+  await frames(3);
   await page.mouse.down();
-  await page.waitForTimeout(300);
+  await frames(3);
   await page.mouse.up();
-  await page.waitForTimeout(300);
+  await frames(3);
   const picks = await harness("picks");
   for (const pick of picks) assert.deepEqual(pick, picks[0], `one press, ${JSON.stringify(picks)}`);
   return picks.slice(0, 1);
@@ -200,15 +200,21 @@ try {
       const snapshot = await harness("snapshot", "p");
       return outputs.map((id) => JSON.stringify(snapshot[keyOf[id]] ?? null));
     };
-    // What the program moves over two seconds.
+    // What the program moves over two seconds of device time: the test
+    // steps the device, and the view draws what it reached.
+    await harness("manual");
+    const run = async (steps) => {
+      await harness("advance", 16, steps);
+      await frames(3);
+    };
     const first = await read();
-    await page.waitForTimeout(2000);
+    await run(125);
     const second = await read();
     const driven = outputs.filter((_, i) => first[i] !== second[i]);
     console.log(`hold: the program drives ${driven.length} of ${outputs.length} outputs`);
     assert.ok(driven.length > 0, "the program drives no output");
     const drivenA = await shotBuffer();
-    await page.waitForTimeout(1500);
+    await run(90);
     const moving = meanDiff32(drivenA, await shotBuffer());
     assert.ok(moving > 0, "the face does not move under its program");
 
@@ -216,7 +222,7 @@ try {
     await frames(5);
     const heldA = await shotBuffer();
     const storeA = await read();
-    await page.waitForTimeout(1500);
+    await run(90);
     const heldB = await shotBuffer();
     const storeB = await read();
     const heldDiff = meanDiff32(heldA, heldB);
@@ -230,9 +236,10 @@ try {
     await harness("release", "p");
     await frames(5);
     const releasedA = await shotBuffer();
-    await page.waitForTimeout(1500);
+    await run(90);
     assert.ok(meanDiff32(releasedA, await shotBuffer()) > 0, "released outputs stay put");
     await harness("unload", "p");
+    await harness("manual", false);
   }
 
   // A structural edit reloads from GLB bytes: the previous scene stays on

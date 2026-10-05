@@ -282,13 +282,11 @@ pub fn builder_for(
     speech: Option<arora::HostModule>,
 ) -> Option<arora::AroraBuilder> {
     builder_with_guests(spec, rig, store, embedded_skills, speech, Vec::new())
-        .map(|(builder, _)| builder)
 }
 
 /// [`builder_for`] with wasm modules loaded as guests besides the host-linked
 /// ones: their functions dispatch by id, from a call and from the graph's
-/// `ExternalFunction` nodes, like the host modules'. Comes back with the
-/// function → module routing table the device resolves bare calls through.
+/// `ExternalFunction` nodes, like the host modules'.
 pub fn builder_with_guests(
     spec: &str,
     rig: RigHal,
@@ -296,10 +294,7 @@ pub fn builder_with_guests(
     embedded_skills: &[(String, serde_json::Value)],
     speech: Option<arora::HostModule>,
     guests: Vec<GuestModule>,
-) -> Option<(
-    arora::AroraBuilder,
-    std::collections::HashMap<uuid::Uuid, uuid::Uuid>,
-)> {
+) -> Option<arora::AroraBuilder> {
     let rig_prefix = rig_prefix_of(spec);
     let spec = match parse_spec(spec) {
         Ok(spec) => spec,
@@ -315,8 +310,8 @@ pub fn builder_with_guests(
             return None;
         }
     };
-    // Route the animation source's `step`/`player_states` handles (and any
-    // in-process transport call) to the host module registered below, and the
+    // Route the animation source's `step`/`player_states` handles to the host
+    // module registered below, and the
     // say skill's hosted `say` call to this build's text-to-speech provider.
     let mut function_modules = animation::function_modules();
     if let Some(provider) = &speech {
@@ -330,7 +325,7 @@ pub fn builder_with_guests(
                 .map(|export| (*export.id(), header.id)),
         );
     }
-    graph.set_function_modules(function_modules.clone());
+    graph.set_function_modules(function_modules);
     // The skills: the fragments the interpreter grafts per run — the shipped
     // ones, or the face's embedded overrides. No module implements look_at
     // or play_viseme: their fragments carry the contracts' descriptions, so
@@ -364,7 +359,7 @@ pub fn builder_with_guests(
     let builder = guests.into_iter().fold(builder, |builder, (header, wasm)| {
         builder.with_module(header, wasm)
     });
-    Some((builder, function_modules))
+    Some(builder)
 }
 
 /// Load `bundle`'s animations into a built device's animation module, through

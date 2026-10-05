@@ -15,6 +15,11 @@ export async function open(fixtures, query = "") {
     args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
   });
   const page = await browser.newPage({ viewport: { width: 800, height: 520 }, deviceScaleFactor: 1 });
+  // A software-rendered frame of a face is slow, and slower on a busy
+  // machine: a screenshot waits for the page to draw one. The tests wait on
+  // frames and device steps, never on the wall clock, so this bounds only a
+  // page that stopped drawing.
+  page.setDefaultTimeout(180_000);
   const logs = [];
   page.on("console", (m) => logs.push(`[${m.type()}] ${m.text()}`));
   page.on("pageerror", (e) => logs.push(`[pageerror] ${e.message}`));
@@ -43,6 +48,23 @@ export async function loadVizij(page, id, file, options) {
   );
   await page.waitForFunction((id) => window.vizijHarness.ready(id), id, { timeout: 240_000 });
   return device;
+}
+
+/** Show what the devices settle on: take the device clock from the page's
+ * frames, step every device `steps` times by 16 ms, then wait `frames` of
+ * the page's frames — the view reads each device's pose on its own frame
+ * and draws it on the next. Nothing here waits on the wall clock: a slow
+ * page takes longer, not less far. */
+export async function settled(page, { steps = 10, frames = 3 } = {}) {
+  await page.evaluate(
+    async ([steps, frames]) => {
+      const h = window.vizijHarness;
+      h.manual();
+      h.advance(16, steps);
+      await h.frames(frames);
+    },
+    [steps, frames],
+  );
 }
 
 /** Mean absolute per-channel difference (0..255) of two PNG buffers, both

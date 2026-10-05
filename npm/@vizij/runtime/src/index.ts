@@ -41,12 +41,6 @@ import {
 } from "@vizij/wasm-loader";
 import { loadBindings as loadWasmBindingsBrowser } from "@vizij/wasm-loader/browser";
 import { play as defaultPlay, type Play } from "./audio.js";
-import {
-  ANIMATION_IDS,
-  ANIMATION_PLAYERS_PATH,
-  decodePlayerStates,
-  type PlayerState,
-} from "./animations.js";
 
 /** A Vizij graph spec, as an object or already-serialized JSON. */
 export type GraphSpecInput = object | string;
@@ -142,10 +136,9 @@ export interface Skill {
 export type GraphEditsInput = object | string;
 
 /**
- * An Arora `Call`, as an object (or already-serialized JSON): the function
- * `id`, optionally the `module_id` it lives in (inferred from the loaded
- * modules when omitted), and `args` as `{ id, value }` pairs in the Arora
- * `Value` vocabulary.
+ * An Arora `Call`, as an object (or already-serialized JSON): the
+ * `module_id` and function `id` it calls, and `args` as `{ id, value }`
+ * pairs in the Arora `Value` vocabulary.
  */
 export type RuntimeCall = object | string;
 
@@ -156,41 +149,42 @@ export interface RuntimeCallResult {
 }
 
 /**
- * A task run's lifecycle contract, as {@link Runtime.spawn} resolves it: the
- * `status` key to watch (the run's `Status` value, terminal once it ends),
- * the `feedback` keys it updates while it runs, the `result` keys it writes
- * when it ends, the `update` keys a live goal update is written to, and the
- * `stop` call {@link Runtime.halt} issues. Keys are store paths.
+ * A task run, as {@link Runtime.spawn} and a task method's
+ * {@link Runtime.invoke} resolve it — the handle any Arora client is given:
+ * \`run\`, the run's id, which {@link Runtime.halt} takes; \`status\`, the key
+ * holding its {@link RunStatus} (terminal once it ends); and the \`feedback\`
+ * keys it updates while it runs, the \`result\` keys it writes when it ends,
+ * and the \`update\` keys a client writes to steer it. Keys are store paths.
  */
-export interface TaskHandle {
-  id: string;
-  stop: object;
+export interface RunHandle {
+  run: string;
   status: string;
   feedback: string[];
-  result?: string[];
-  update?: string[];
+  result: string[];
+  update: string[];
 }
+
+/** One of a Vizij's programs, as {@link describe} lists it. */
+export interface Program {
+  id: string;
+  label: string | null;
+  /** The program's graph spec: {@link behaviorValue} makes it
+   * \`run_behavior\`'s \`behavior\` argument. */
+  graph: object;
+}
+
+/**
+ * The key prefix of the interpreter's \`run_behavior\` runs:
+ * \`<BEHAVIOR_RUNS><run id>/status\` holds a run's {@link RunStatus} and
+ * \`<BEHAVIOR_RUNS><run id>/name\` the name it runs under — a program's id
+ * for a program. \`listKeys(BEHAVIOR_RUNS)\` lists every run the device has
+ * started; an ended run's keys stay, its status terminal.
+ */
+export const BEHAVIOR_RUNS =
+  "arora/tasks/61726f72-6100-0000-0000-000000000001/d5343617-a887-47da-82ea-9fcbe858f5c6/";
 
 /** A task run's lifecycle status, read off its `status` key. */
 export type RunStatus = "running" | "success" | "failure";
-
-/** A program, for {@link Runtime.spawnProgram} and its kin: the id of one of
- * the face's bundle programs, or a graph spec the page defines (as an
- * object). */
-export type ProgramInput = string | object;
-
-/**
- * A program's run, as {@link Runtime.programRuns} reads it off the device's
- * store: its {@link TaskHandle} (halt it with {@link Runtime.halt}), the
- * `name` it runs under — a bundle program's id, or the name its spawner gave
- * — and its {@link RunStatus}: `running` until halted, `failure` once
- * halted.
- */
-export interface ProgramRun {
-  handle: TaskHandle;
-  name: string;
-  status: RunStatus | undefined;
-}
 
 const RUN_STATUS_VARIANTS: Record<string, RunStatus> = {
   "acd79ec6-0c44-401a-82f8-5da5422d3eec": "running",
@@ -289,21 +283,23 @@ export interface AroraModule {
 
 /** Options for {@link loadVizij}: the composition, as {@link composeVizij}'s,
  * the program that runs from load, whether the bundle's neutral pose is
- * staged at load (default `true`; {@link Runtime.reset} returns to it at any
- * time), the speech — `audio` is the playback hook the `say` provider hands
+ * staged at load (default `true`; the rest module's `reset` returns to it at
+ * any time), the speech — `audio` is the playback hook the `say` provider hands
  * its audio to: the page's Web Audio player by default, `false` for a device
  * that plays no speech — and `speechApiUrl` the TTS deployment, and the wasm
  * modules to load into the device as guests. */
 export interface VizijOptions extends Omit<ComposeVizijOptions, "animations" | "program"> {
   /** The program that runs from load: `"auto"` (the bundle's active program
-   * — default), `"none"`, or a program id. It runs beside the face's graph,
-   * as {@link Runtime.spawnProgram} starts a program — not composed into the
-   * graph as {@link composeVizij} composes it — so a page halts it like any
-   * other: find its run with {@link Runtime.programRuns}. */
+   * — default), `"none"`, or a program id. It runs beside the face's graph
+   * as a \`run_behavior\` run named after the program, as any client starts
+   * one — not composed into the graph as {@link composeVizij} composes it —
+   * so a page finds it under {@link BEHAVIOR_RUNS} and halts it like any
+   * other run. */
   program?: string;
   /** Load the face's own animations (its bundle's `animations`) into its
-   * device, silent until played. Default `true`; `false` leaves the device's
-   * animation module empty for {@link Runtime.loadAnimation}. Unlike
+   * device: each on a player named after it, its instance at weight 0 —
+   * silent until a client gives it a weight and plays it. Default `true`;
+   * `false` leaves the device's animation module empty. Unlike
    * {@link composeVizij}'s option of the same name, it does not choose
    * whether the animation source is composed: a Vizij always composes it. */
   animations?: boolean;
@@ -401,10 +397,9 @@ export interface VizijDescription {
    * `rotation`, `scale`, `color`, `opacity`, or a morph target's name). */
   animatables: Record<string, { node: string; feature: string }>;
   graphs: { kind: string }[];
-  /** The ids of the motion-graph programs the Vizij can play. */
-  programs: string[];
-  /** Program id → its label, for the programs that carry one. */
-  programLabels: Record<string, string>;
+  /** The motion-graph programs the Vizij can run: each one's id, its label
+   * when it carries one, and its graph, as authored. */
+  programs: Program[];
   /** The program the bundle boots playing: `metadata.activeMotionGraphId`,
    * or the first of `metadata.activeMotionGraphIds`. */
   activeProgramId: string | null;
@@ -422,83 +417,42 @@ export interface VizijDescription {
   metadata: Record<string, unknown> | null;
 }
 
-/** An animation a Vizij's device holds, as {@link Runtime.animations} lists
- * it: the id its player is named after, and the player's length. */
-export interface LoadedAnimation {
-  id: string;
-  /** Seconds. */
-  duration: number;
-}
-
-/** What the wasm makes of an animation for the module's `load_animation`. */
-interface WasmModuleAnimation {
+/** An animation as the animation module's `load_animation` takes it, from
+ * {@link Runtime.moduleAnimation}. */
+export interface ModuleAnimation {
   id: string;
   name: string | null;
+  /** Seconds. */
   duration: number;
-  /** The module's `AnimationClip`, as an Arora `Value`. */
+  /** The module's `AnimationClip`, as an Arora `Value`: `load_animation`'s
+   * `clip` argument. */
   moduleAnimation: object;
 }
 
-/** An animation's playback, as {@link Runtime.animationState} reads it. */
-export interface AnimationState {
-  /** Seconds: the playhead. */
-  time: number;
-  /** Seconds. */
-  duration: number;
-  /** Advancing: played, neither paused, stopped nor completed. */
-  playing: boolean;
-  /** Wraps at its end (the default) rather than stopping there. */
-  loop: boolean;
-  /** The speed multiplier it plays at — kept while paused. */
-  speed: number;
-  /** Played to its end without looping: it holds its last pose there. */
-  completed: boolean;
+/** A key the device holds or describes, as {@link Runtime.listKeys} lists
+ * it — as every Arora bridge lists keys: its path, and in \`__meta\` what the
+ * device's store says of it (the shape it holds, its range and unit, the
+ * value it rests at, whether a client may write it). */
+export interface KeyInfo {
+  path: string;
+  __meta: Record<string, unknown>;
 }
 
-/** Options for {@link Runtime.playAnimation}. */
-export interface PlayAnimationOptions {
-  /** Start from the beginning rather than from the playhead. Default `false`. */
-  reset?: boolean;
-  /** The speed multiplier to play at, kept from then on (as
-   * {@link Runtime.setAnimationSpeed}). Default: the animation's current one,
-   * 1 at load. */
-  speed?: number;
-}
-
-/** Options for {@link Runtime.stopAnimation}. */
-export interface StopAnimationOptions {
-  /** Return the animation's keys to its first frame before it falls silent.
-   * `false` leaves them where the animation last wrote them. Default
-   * `true`. */
-  clearOutputs?: boolean;
-}
-
-/** The module's transport functions that take a player. */
-type TransportFunction = "play" | "pause" | "stop" | "seek" | "set_speed" | "set_loop";
-
-/** A transport method's body: the animation's player, what the runtime
- * remembers of it, and whether its earlier transport calls are in flight. */
-type TransportCommand = (
-  player: PlayerState,
-  transport: AnimationTransport,
-  settling: boolean,
-) => Promise<void>;
-
-/** What a player's state says a runtime last asked of it. */
-function askedOf(player: PlayerState): AnimationTransport["asked"] {
-  return player.state === "playing" || player.state === "paused" ? player.state : "stopped";
-}
-
-/** What a {@link Runtime} remembers of an animation it drives, for the player
- * it drives: the speed a pause or stop zeroes (the module reports 0 then),
- * and what it last asked of the animation. */
-interface AnimationTransport {
-  player: number;
-  speed: number;
-  asked: "playing" | "paused" | "stopped";
-  /** Bumped by every play, pause and stop, so a stop's deferred silence
-   * yields to a later command. */
-  epoch: number;
+/** A method the device describes, as {@link Runtime.describeMethods} lists
+ * it — as every Arora bridge lists methods — plus the module exporting it:
+ * what {@link Runtime.invoke} calls by name. */
+export interface MethodDescription {
+  /** Its name. */
+  path: string;
+  /** Its parameters, in declaration order. */
+  params?: { name: string; param_type: unknown; required: boolean }[];
+  return_type?: unknown;
+  description?: string;
+  /** Whether invoking it starts a run (it returns a task status). */
+  task: boolean;
+  /** The exporting module's id: {@link Runtime.invoke}'s \`moduleId\` when
+   * two modules export one name. */
+  module: string;
 }
 
 interface WasmVizijRuntime {
@@ -511,16 +465,11 @@ interface WasmVizijRuntime {
   readonly behaviorError: string | undefined;
   behaviorErrorChanged(): Promise<string | undefined>;
   call(call_json: string): Promise<string>;
-  spawn(call_json: string): Promise<string>;
-  spawnSkill(name: string, args_json: string): Promise<string>;
-  halt(handle_json: string): Promise<string>;
-  reset(): Promise<string>;
-  resetKeys(keys: string[]): Promise<string>;
-  programGraph(id: string): string | undefined;
-  spawnBehavior(name: string, graph_json: string): Promise<string>;
-  editBehavior(handle_json: string, from_json: string, to_json: string): Promise<string>;
-  behaviorRuns(): { handle: TaskHandle; name: string }[];
-  outputKeys(graph_json: string): string[];
+  invoke(method: string, args_json: string, module_id?: string): Promise<unknown>;
+  spawn(call_json: string): Promise<RunHandle>;
+  halt(run: string): Promise<void>;
+  listKeys(prefix?: string): Promise<KeyInfo[]>;
+  describeMethods(prefix?: string): Promise<MethodDescription[]>;
   loadGraph(graph_json: string): Promise<string>;
   applyGraphEdits(edits_json: string): Promise<string>;
   setValue(path: string, value_json: string): void;
@@ -528,7 +477,7 @@ interface WasmVizijRuntime {
   readValues(paths: string[]): Record<string, ValueJSON | null>;
   snapshot(): Record<string, ValueJSON>;
   drainChanges(): Record<string, ValueJSON | null>;
-  moduleAnimation(animation_json: string): WasmModuleAnimation;
+  moduleAnimation(animation_json: string): ModuleAnimation;
   hold(paths: string[]): void;
   release(paths?: string[]): void;
   free(): void;
@@ -565,6 +514,8 @@ interface WasmBindings {
   skills(): Skill[];
   skillSource(id: string): object | null;
   composeVizij(gltf_json: string, options_json?: string): object;
+  behaviorValue(graph_json: string): object;
+  runEdits(run: string, from_json: string, to_json: string): object;
 }
 
 const bindingCache: { current: WasmBindings | null } = { current: null };
@@ -653,32 +604,27 @@ export function init(input?: InitInput): Promise<void> {
   return _initPromise;
 }
 
-/** The id a module function returned (`{ u32: 3 }`). */
-function returnedId(ret: unknown): number {
-  const id = (ret as { u32?: unknown } | null)?.u32;
-  if (typeof id !== "number") {
-    throw new Error(
-      `@vizij/runtime: expected an id from the animation module, got ${JSON.stringify(ret)}`,
-    );
-  }
-  return id;
-}
-
 /**
  * A Vizij's device — or, from {@link startRuntime}, a device with no Vizij.
- * All methods talk to the device's own store; the graph it runs reads and
- * writes the same keys. A Vizij's paths live under its {@link rigPrefix};
- * {@link path} builds one.
+ * Its surface is the device's own, as any client of an Arora device has it
+ * (a bridge client, Semio Studio): {@link call}, {@link invoke},
+ * {@link spawn} and {@link halt}, {@link listKeys} and
+ * {@link describeMethods}, and the store's reads and writes. What the face
+ * does — its skills, its programs, its animations, its rest — it does
+ * through the methods its modules and its interpreter declare, by name:
+ *
+ * ```ts
+ * await quori.invoke("say", { text: "Hello" });                // a run's RunHandle
+ * await quori.invoke("run_behavior", { name: "live", behavior: await behaviorValue(graph) });
+ * await quori.invoke("reset");                                  // every key back to rest
+ * await quori.invoke("reset_keys", { keys: { strs: outputKeysOfMyGraph } });
+ * ```
+ *
+ * The graph it runs reads and writes the same keys. A Vizij's paths live
+ * under its {@link rigPrefix}; {@link path} builds one.
  */
 export class Runtime {
   private inner: WasmVizijRuntime;
-  private transports = new Map<string, AnimationTransport>();
-  /** Per animation id, the load or unload in flight: the next one, and the
-   * transport, wait for it. */
-  private loads = new Map<string, Promise<void>>();
-  /** Per animation id, the transport calls in flight: a load or unload waits
-   * for them, so it reads the playback they leave. */
-  private inflight = new Map<string, Set<Promise<void>>>();
 
   constructor(inner: WasmVizijRuntime) {
     this.inner = inner;
@@ -753,11 +699,12 @@ export class Runtime {
   }
 
   /**
-   * Call a module function through the device (the animation module's need
-   * no `module_id`). The call is enqueued before this returns and dispatches
-   * inside the device's **next** step, so the returned promise resolves only
-   * after that step runs. Under `run()` just `await` it; a direct driver
-   * calls `step` after issuing it.
+   * Call a module function by id: an Arora `Call` naming its `module_id`
+   * and function `id`, its `args` as `{ id, value }` pairs. Every operation
+   * of this surface that reaches the device is enqueued before it returns
+   * and applied inside the device's **next** step, so its promise resolves
+   * only after that step runs: under `run()` just `await` it; a direct
+   * driver calls {@link step} after issuing it.
    */
   call(call: RuntimeCall): Promise<RuntimeCallResult> {
     const json = typeof call === "string" ? call : JSON.stringify(call);
@@ -765,192 +712,92 @@ export class Runtime {
   }
 
   /**
-   * Spawn a described function — `say`, `look_at`, `play_viseme` — as a task
-   * run on the device's interpreter, the way a bridge does for a remote.
-   * Resolves (after the next step) to the run's {@link TaskHandle}: watch
-   * its `status` key, read its `feedback` keys, {@link halt} it with it.
+   * Call a method the device describes ({@link describeMethods}) by name,
+   * its arguments by parameter name in any `ValueInput` form — Arora's
+   * by-name invoke, as a bridge client sends it. A method that returns a
+   * task status starts a run, and the promise resolves to its
+   * {@link RunHandle}; any other resolves to its return value (an Arora
+   * `Value`, `undefined` for none). An argument the method does not declare
+   * fails the call. A name two modules export needs `moduleId` to choose
+   * one.
    */
-  spawn(call: RuntimeCall): Promise<TaskHandle> {
-    const json = typeof call === "string" ? call : JSON.stringify(call);
-    return this.inner.spawn(json).then((handle) => JSON.parse(handle) as TaskHandle);
-  }
-
-  /**
-   * Spawn one of the device's skills by name — `say` (`text`, `voice`),
-   * `look_at` (`policy`, `target`, `frame`), `play_viseme` (`shape`,
-   * `weight`) — with its arguments by parameter name, in any `ValueInput`
-   * shorthand. `say` needs a face loaded with a playback hook. Resolves
-   * like {@link spawn}.
-   */
-  spawnSkill(name: string, args: Record<string, ValueInput>): Promise<TaskHandle> {
+  invoke(
+    method: string,
+    args: Record<string, ValueInput> = {},
+    moduleId?: string,
+  ): Promise<unknown> {
     const normalized: Record<string, ValueJSON> = {};
     for (const [parameter, value] of Object.entries(args)) {
       normalized[parameter] = toValueJSON(value);
     }
-    return this.inner
-      .spawnSkill(name, JSON.stringify(normalized))
-      .then((handle) => JSON.parse(handle) as TaskHandle);
-  }
-
-  /** Halt a run: resolves once the halt is applied (its status key then
-   * reads terminal). */
-  halt(handle: TaskHandle): Promise<void> {
-    return this.inner.halt(JSON.stringify(handle)).then(() => undefined);
-  }
-
-  /**
-   * Return the face to rest: every key the device describes goes back to
-   * the value it rests at — each free input of its graphs and programs to
-   * its authored default, each input the bundle's neutral pose names to its
-   * neutral — and the graph carries the face there on its next tick. Given
-   * `keys`, only those go back: `reset(programOutputs(program))` is how a
-   * page returns a halted program's outputs to rest. Keys with no declared
-   * rest keep their values. The writes go through the device's store, so
-   * every bridge sees them. Resolves once applied; on a device not under
-   * `run()` a zero-dt step lands it.
-   */
-  reset(keys?: string[]): Promise<void> {
-    const done = keys === undefined ? this.inner.reset() : this.inner.resetKeys(keys);
-    if (!this.inner.running) {
-      this.inner.step(0);
-    }
-    return done.then(() => undefined);
-  }
-
-  /** The graph of the face's bundle program `id`, as authored; `undefined`
-   * for an id its bundle does not carry. */
-  programGraph(id: string): object | undefined {
-    const graph = this.inner.programGraph(id);
-    return graph === undefined ? undefined : (JSON.parse(graph) as object);
-  }
-
-  /** `program`'s graph as JSON: a bundle program's, by id, or the page's.
-   * Throws for an id the bundle does not carry. */
-  private programJson(program: ProgramInput): string {
-    if (typeof program !== "string") {
-      return JSON.stringify(program);
-    }
-    const graph = this.inner.programGraph(program);
-    if (graph === undefined) {
-      throw new Error(`the face has no program ${JSON.stringify(program)}`);
-    }
-    return graph;
-  }
-
-  /**
-   * Start a program: run it beside the device's graph until it is
-   * {@link halt}ed — the interpreter module's SPAWN of the interpreter's
-   * `run_behavior`, the call any client of the device starts a program
-   * with. `program` is one of the face's bundle programs, by id, or a graph
-   * the page defines. The run goes by `name` — the program's id by default;
-   * a page graph needs one — which every client reads off the device's
-   * store ({@link programRuns}). Several programs run at once.
-   *
-   * Resolves (after the next step) to the run's {@link TaskHandle}: its
-   * status reads `running` until a halt. A halted program's outputs hold
-   * their last values ({@link reset} returns them to rest), and starting it
-   * again is a new run, its stateful nodes starting afresh.
-   */
-  spawnProgram(program: ProgramInput, name?: string): Promise<TaskHandle> {
-    let runName = name;
-    if (runName === undefined) {
-      if (typeof program !== "string") {
-        return Promise.reject(new Error("a page's program needs a name"));
-      }
-      runName = program;
-    }
-    let graph: string;
     try {
-      graph = this.programJson(program);
-    } catch (e) {
-      return Promise.reject(e);
-    }
-    return this.inner
-      .spawnBehavior(runName, graph)
-      .then((handle) => JSON.parse(handle) as TaskHandle);
-  }
-
-  /**
-   * Change a running program in place: the EDIT that takes `handle`'s run
-   * from `from`, the program it runs (what it was spawned with, or the `to`
-   * of the edit before), to `to`. The nodes `to` keeps keep their runtime
-   * state; the store keeps every value. Applied at the device's next step,
-   * which the promise waits for — like {@link spawnProgram} and
-   * {@link halt}, and unlike {@link applyGraphEdits}, no zero-dt step is
-   * taken: one would settle the program's smoothing nodes on their targets
-   * at once, which is what keeping their state avoids.
-   */
-  editProgram(handle: TaskHandle, from: ProgramInput, to: object): Promise<void> {
-    try {
-      return this.inner
-        .editBehavior(JSON.stringify(handle), this.programJson(from), JSON.stringify(to))
-        .then(() => undefined);
+      return this.inner.invoke(method, JSON.stringify(normalized), moduleId);
     } catch (e) {
       return Promise.reject(e);
     }
   }
 
   /**
-   * The program runs the device's store holds, read the way any client of
-   * the device reads them: each run's handle, the name it runs under and its
-   * status. A program started at load ({@link VizijOptions.program}) is one.
-   * A run is listed from the step it starts on, and an ended one stays
-   * listed, its status `failure`. Sorted by name.
+   * Start a task run of `call` — an Arora `Call` naming a task method the
+   * device describes — through the interpreter module's SPAWN. Resolves to
+   * the run's {@link RunHandle}. {@link invoke} does the same by name.
    */
-  programRuns(): ProgramRun[] {
-    const runs = this.inner.behaviorRuns();
-    const statuses = this.inner.readValues(runs.map((run) => run.handle.status));
-    return runs.map(({ handle, name }) => ({
-      handle,
-      name,
-      status: runStatus(statuses[handle.status]),
-    }));
+  spawn(call: RuntimeCall): Promise<RunHandle> {
+    return this.inner.spawn(typeof call === "string" ? call : JSON.stringify(call));
   }
 
-  /** The store keys `program` writes — its output nodes' paths, sorted: what
-   * {@link reset} takes to return a halted program's outputs to rest. */
-  programOutputs(program: ProgramInput): string[] {
-    return this.inner.outputKeys(this.programJson(program));
+  /** Halt run `run` — its {@link RunHandle}'s `run` — through the
+   * interpreter module's HALT. Resolves once applied: the run's status key
+   * then reads `failure`. A run's outputs hold their last values; returning
+   * them to rest is the client's step (`invoke("reset_keys", { keys: { strs: keys } })`). */
+  halt(run: string): Promise<void> {
+    return this.inner.halt(run);
+  }
+
+  /** The keys the device holds or describes, under `prefix` when given,
+   * each with what its store says of it — Arora's ListKeys. A run's keys
+   * are listed under {@link BEHAVIOR_RUNS} and its kin. */
+  listKeys(prefix?: string): Promise<KeyInfo[]> {
+    return this.inner.listKeys(prefix);
+  }
+
+  /** The methods the device describes, under `prefix` when given, with
+   * their parameters and return type — Arora's DescribeMethods: what
+   * {@link invoke} calls by name. */
+  describeMethods(prefix?: string): Promise<MethodDescription[]> {
+    return this.inner.describeMethods(prefix);
   }
 
   /**
    * Replace the device's running graph **in place**: the spec reaches the
-   * interpreter as the engine's LOAD call, so the store, the modules and the
-   * device itself all survive the swap. Resolves once the new graph is
-   * installed; on a device not under `run()` a zero-dt step is taken so the
-   * swap lands without an external driver.
+   * interpreter as the interpreter module's LOAD, so the store, the modules
+   * and the device survive the swap, and the runs keep running. Applied at
+   * the device's next step, which the promise waits for.
    */
   loadGraph(graph: GraphSpecInput): Promise<void> {
     const json = typeof graph === "string" ? graph : JSON.stringify(graph);
-    const loaded = this.inner.loadGraph(json);
-    if (!this.inner.running) {
-      this.inner.step(0);
-    }
-    return loaded.then(() => undefined);
+    return this.inner.loadGraph(json).then(() => undefined);
   }
 
   /**
-   * Edit the running graph **in place**: `edits` is a spec-level graph diff
-   * (`upsert_nodes` / `remove_nodes` / `upsert_edges` / `remove_edges`) that
-   * reaches the interpreter as the engine's EDIT call. Unchanged nodes keep
-   * their runtime state. Resolves once applied; on a device not under
-   * `run()` a zero-dt step lands it.
+   * Edit the running graph **in place** — the interpreter module's EDIT —
+   * with a spec-level graph diff (`upsert_nodes` / `remove_nodes` /
+   * `upsert_edges` / `remove_edges`): the nodes it leaves alone keep their
+   * runtime state. {@link runEdits} builds the edits that change a run's
+   * behavior. Applied at the device's next step, which the promise waits
+   * for.
    */
   applyGraphEdits(edits: GraphEditsInput): Promise<void> {
     const json = typeof edits === "string" ? edits : JSON.stringify(edits);
-    const applied = this.inner.applyGraphEdits(json);
-    if (!this.inner.running) {
-      this.inner.step(0);
-    }
-    return applied.then(() => undefined);
+    return this.inner.applyGraphEdits(json).then(() => undefined);
   }
 
-  /** Write one store key. Accepts any `ValueInput` shorthand. */
+  /** Write one key, in any `ValueInput` form. */
   setValue(path: string, value: ValueInput): void {
     this.inner.setValue(path, JSON.stringify(toValueJSON(value)));
   }
 
-  /** Write several store keys as one change. */
+  /** Write several keys as one store change. */
   writeValues(values: Record<string, ValueInput>): void {
     const normalized: Record<string, ValueJSON> = {};
     for (const [path, value] of Object.entries(values)) {
@@ -959,374 +806,33 @@ export class Runtime {
     this.inner.writeValues(JSON.stringify(normalized));
   }
 
-  /** Read store keys; absent keys map to `null`. */
+  /** Read keys: each path maps to its value, or `null` when unset. */
   readValues(paths: string[]): Record<string, ValueJSON | null> {
     return this.inner.readValues(paths);
   }
 
-  /** Every key currently in the store. */
+  /** Every key the store holds, with its value. */
   snapshot(): Record<string, ValueJSON> {
     return this.inner.snapshot();
   }
 
-  /**
-   * The keys that changed since the last call (`null` = cleared). The first
-   * drain returns the store's whole current state: the subscription opens on
-   * it, so no separate init snapshot is needed.
-   */
+  /** The keys that changed since the previous drain (`null` = cleared); the
+   * first drain returns the whole current state. */
   drainChanges(): Record<string, ValueJSON | null> {
     return this.inner.drainChanges();
   }
 
   /**
-   * The animations the device's animation module holds, whoever loaded them
-   * — the Vizij's own, loaded with it, those {@link loadAnimation} loaded,
-   * and those another client loaded through the module's functions — read
-   * from the module: one per named player holding an instance, in the player
-   * states the animation source writes to `vizij/animations/players` each
-   * step, in load order. An animation writes the keys its tracks' channels
-   * name — while it plays, is paused or has completed.
+   * `animation` — one of {@link describe}'s `animations`, or a page's own in
+   * that shape — as the animation module's `load_animation` takes it: its
+   * id, name and duration (seconds), and `moduleAnimation`, the module's
+   * `AnimationClip` with each track keyed by the store key its channel
+   * names through this Vizij's rig, as the Vizij's own animations are
+   * loaded. Pass it on: `invoke("load_animation", { clip:
+   * moduleAnimation })`.
    */
-  animations(): LoadedAnimation[] {
-    const players = this.players();
-    const ids = [...new Set(players.map((player) => player.name))].filter((id) => id !== "");
-    return ids.flatMap((id) => {
-      const player = this.playerOf(id, players);
-      return player ? [{ id, duration: player.duration }] : [];
-    });
-  }
-
-  /**
-   * Load an animation into the device's animation module through the
-   * module's declared functions — what any client sends: `load_animation`,
-   * `create_player` named after the animation's id,
-   * `add_instance_with_weight` at 0 and `stop`. It loads silent, stopped at
-   * its start, looping at speed 1. `animation` is in {@link describe}'s
-   * `animations` shape (or a bundle `animations` entry), its channels
-   * resolved through the Vizij's rig like its own animations'.
-   *
-   * Loading an id already loaded replaces it — the old player and animation
-   * out and the new ones in, in one step — keeping its playback as the
-   * module reports it once the transport calls in flight have landed: the
-   * playhead, loop mode, speed, weight, and whether it plays, is paused or
-   * is stopped. That is the authoring timeline's live edit. Resolves once
-   * the device holds it (two steps, after those calls).
-   */
-  loadAnimation(animation: Animation): Promise<LoadedAnimation & { name: string | null }> {
-    const { id, name, duration, moduleAnimation } = this.inner.moduleAnimation(
-      JSON.stringify(animation),
-    );
-    return this.inOrder(id, () => this.load(id, moduleAnimation)).then(() => ({ id, name, duration }));
-  }
-
-  /**
-   * Unload an animation through the module's declared functions, once the
-   * transport calls in flight on it have landed: `remove_player` on its
-   * player and `unload_animation` on what it plays. Its keys keep the values
-   * it last wrote — a `stopAnimation` issued before returns them to its first
-   * frame. Resolves (after the step that applies it) to whether it was
-   * loaded.
-   */
-  unloadAnimation(id: string): Promise<boolean> {
-    return this.inOrder(id, async () => {
-      const transport = this.transports.get(id);
-      if (transport) {
-        transport.epoch += 1;
-        this.transports.delete(id);
-      }
-      const player = this.playerOf(id);
-      if (!player) {
-        return false;
-      }
-      await Promise.all([
-        this.animationCall("remove_player", { player: { u32: player.player } }),
-        ...player.instances.map(({ anim }) =>
-          this.animationCall("unload_animation", { anim: { u32: anim } }),
-        ),
-      ]);
-      return true;
-    });
-  }
-
-  /**
-   * Play an animation from its playhead, or from its start with `reset`.
-   * Applied at the device's next step, which the promise waits for. Its state
-   * reports `completed` once a non-looping animation reaches its end; it holds
-   * its last pose there until stopped or played again with `reset`.
-   */
-  playAnimation(id: string, options: PlayAnimationOptions = {}): Promise<void> {
-    return this.transport(id, (player, transport) => {
-      if (options.speed !== undefined) {
-        transport.speed = options.speed;
-      }
-      transport.asked = "playing";
-      transport.epoch += 1;
-      const calls = [this.weigh(player, 1)];
-      if (options.reset) {
-        calls.push(this.playerCall("seek", player, { time_ns: { u64: 0 } }));
-      }
-      calls.push(this.playerCall("play", player));
-      // `play` resumes at speed 1: the animation's own speed follows it.
-      calls.push(this.playerCall("set_speed", player, { speed: { f32: transport.speed } }));
-      return Promise.all(calls).then(() => undefined);
-    });
-  }
-
-  /** Hold an animation's playhead, and its pose. Applied at the next step. */
-  pauseAnimation(id: string): Promise<void> {
-    return this.transport(id, (player, transport) => {
-      transport.asked = "paused";
-      transport.epoch += 1;
-      return this.playerCall("pause", player);
-    });
-  }
-
-  /**
-   * Stop an animation: its playhead back to the start, and the animation
-   * silent — it no longer writes its keys. With `clearOutputs` (the default)
-   * its keys first return to its first frame, one step before it falls
-   * silent; the promise resolves once silent. A play before then wins.
-   */
-  stopAnimation(id: string, options: StopAnimationOptions = {}): Promise<void> {
-    return this.transport(id, (player, transport) => {
-      transport.asked = "stopped";
-      const epoch = (transport.epoch += 1);
-      const stopped = this.playerCall("stop", player);
-      if (options.clearOutputs === false) {
-        return Promise.all([stopped, this.weigh(player, 0)]).then(() => undefined);
-      }
-      return stopped.then(() => (transport.epoch === epoch ? this.weigh(player, 0) : undefined));
-    });
-  }
-
-  /** Move an animation's playhead to `seconds`. Applied at the next step; a
-   * silent animation moves without writing. */
-  seekAnimation(id: string, seconds: number): Promise<void> {
-    return this.transport(id, (player) => {
-      const ns = Math.max(0, Math.round(seconds * 1e9));
-      return this.playerCall("seek", player, { time_ns: { u64: ns } });
-    });
-  }
-
-  /** Loop an animation at its end (the default), or stop it there: `false`
-   * lets it complete. Applied at the next step. */
-  setAnimationLoop(id: string, loop: boolean): Promise<void> {
-    return this.transport(id, (player) =>
-      this.playerCall("set_loop", player, { mode: { str: loop ? "loop" : "once" } }),
-    );
-  }
-
-  /** Set an animation's speed multiplier: at once while it plays (at the next
-   * step), else from its next play. */
-  setAnimationSpeed(id: string, speed: number): Promise<void> {
-    return this.transport(id, (player, transport, settling) => {
-      transport.speed = speed;
-      // While this runtime's own calls are in flight the player states lag
-      // them: what it last asked stands for the module's state.
-      const playing = settling ? transport.asked === "playing" : player.state === "playing";
-      return playing
-        ? this.playerCall("set_speed", player, { speed: { f32: speed } })
-        : Promise.resolve();
-    });
-  }
-
-  /**
-   * An animation's playback as the animation source last reported it — the
-   * player states it writes to `vizij/animations/players` each step, which
-   * may lag a transport call by a step — or `null` for an animation the
-   * device does not hold. The speed of a paused or stopped animation, which
-   * the module reports as 0, is the one this runtime last set (1 when it set
-   * none). Cheap enough to poll every frame.
-   */
-  animationState(id: string): AnimationState | null {
-    const player = this.playerOf(id);
-    if (!player) {
-      return null;
-    }
-    const loop = player.loopMode !== "once";
-    // A non-looping player clamps its playhead at the end, still advancing.
-    const completed = !loop && player.duration > 0 && player.time >= player.duration - 1e-3;
-    return {
-      time: player.time,
-      duration: player.duration,
-      playing: player.state === "playing" && !completed,
-      loop,
-      speed: player.speed !== 0 ? player.speed : (this.remembered(id, player)?.speed ?? 1),
-      completed,
-    };
-  }
-
-  /** Load `moduleAnimation` as animation `id`, replacing the one loaded under it: the new
-   * player and animation first (one step), then — in one step, so no frame
-   * goes without either — the old player and animation out, the new instance
-   * in at the old one's weight, and the old playback restored as the module
-   * reports it after the first step. */
-  private async load(id: string, moduleAnimation: object): Promise<void> {
-    const before = this.playerOf(id);
-    const [anim, player] = await Promise.all([
-      this.animationCall("load_animation", { clip: moduleAnimation }).then(returnedId),
-      this.animationCall("create_player", { name: { str: id } }).then(returnedId),
-    ]);
-    // The old player as the module reports it now: after every transport
-    // call issued before this load, and the step that loaded the new one.
-    const old = before && (this.players().find((p) => p.player === before.player) ?? before);
-    const kept = old ? this.remembered(id, old) : undefined;
-    const calls: Promise<unknown>[] = [];
-    if (old) {
-      calls.push(this.animationCall("remove_player", { player: { u32: old.player } }));
-      for (const instance of old.instances) {
-        calls.push(this.animationCall("unload_animation", { anim: { u32: instance.anim } }));
-      }
-    }
-    calls.push(
-      this.animationCall("add_instance_with_weight", {
-        player: { u32: player },
-        anim: { u32: anim },
-        weight: { f32: old?.instances[0]?.weight ?? 0 },
-      }),
-    );
-    const command = (name: TransportFunction, args = {}) =>
-      calls.push(this.animationCall(name, { player: { u32: player }, ...args }));
-    if (old && old.loopMode !== "loop") {
-      command("set_loop", { mode: { str: old.loopMode } });
-    }
-    if (old && old.state !== "stopped") {
-      command("seek", { time_ns: { u64: Math.round(old.time * 1e9) } });
-      if (old.state === "playing") {
-        command("play");
-        command("set_speed", { speed: { f32: old.speed } });
-      } else {
-        command("pause");
-      }
-    } else {
-      command("stop");
-    }
-    await Promise.all(calls);
-    const speed = old && old.speed !== 0 ? old.speed : (kept?.speed ?? 1);
-    const asked = old ? askedOf(old) : "stopped";
-    this.transports.set(id, { player, speed, asked, epoch: kept?.epoch ?? 0 });
-  }
-
-  /** Run `task` once the load or unload of `id` in flight, and the transport
-   * calls in flight on it, have settled; the next load or unload, and the
-   * transport, wait for it in turn. */
-  private inOrder<T>(id: string, task: () => Promise<T>): Promise<T> {
-    const before = [this.loads.get(id), ...(this.inflight.get(id) ?? [])].map((pending) =>
-      pending?.catch(() => undefined),
-    );
-    const run = Promise.all(before).then(task);
-    const settled = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    this.loads.set(id, settled);
-    void settled.then(() => {
-      if (this.loads.get(id) === settled) {
-        this.loads.delete(id);
-      }
-    });
-    return run;
-  }
-
-  /**
-   * Run a transport `command` on animation `id`'s player — now, so its calls
-   * enqueue before this returns, or after the load or unload of `id` in
-   * flight. It rejects for an animation the device does not hold. `settling`
-   * says whether this runtime's earlier transport calls on `id` are still in
-   * flight.
-   */
-  private transport(id: string, command: TransportCommand): Promise<void> {
-    const issue = (): Promise<void> => {
-      try {
-        const player = this.playerOf(id);
-        if (!player) {
-          throw new Error(`@vizij/runtime: no animation ${JSON.stringify(id)} is loaded`);
-        }
-        let transport = this.remembered(id, player);
-        if (!transport) {
-          const speed = player.speed || 1;
-          transport = { player: player.player, speed, asked: askedOf(player), epoch: 0 };
-          this.transports.set(id, transport);
-        }
-        return command(player, transport, (this.inflight.get(id)?.size ?? 0) > 0);
-      } catch (error) {
-        return Promise.reject(error);
-      }
-    };
-    const pending = this.loads.get(id);
-    const run = pending ? pending.then(issue) : issue();
-    const inflight = this.inflight.get(id) ?? new Set<Promise<void>>();
-    this.inflight.set(id, inflight);
-    inflight.add(run);
-    const done = () => {
-      inflight.delete(run);
-      if (inflight.size === 0 && this.inflight.get(id) === inflight) {
-        this.inflight.delete(id);
-      }
-    };
-    run.then(done, done);
-    return run;
-  }
-
-  /** The module's players, as the animation source last wrote them. */
-  private players(): PlayerState[] {
-    return decodePlayerStates(
-      this.inner.readValues([ANIMATION_PLAYERS_PATH])[ANIMATION_PLAYERS_PATH],
-    );
-  }
-
-  /** The player animation `id` plays on, among `players`: the newest named
-   * `id` that holds an instance. */
-  private playerOf(id: string, players = this.players()): PlayerState | undefined {
-    return players.filter((player) => player.name === id && player.instances.length > 0).pop();
-  }
-
-  /** What this runtime remembers of animation `id`, when it is about `player`
-   * — or while a load of `id` is in flight, which moves it to the new player
-   * once done. */
-  private remembered(id: string, player: PlayerState): AnimationTransport | undefined {
-    const transport = this.transports.get(id);
-    return transport && (transport.player === player.player || this.loads.has(id))
-      ? transport
-      : undefined;
-  }
-
-  /** Call one of the animation module's declared functions, with its
-   * arguments by parameter name; resolves to what it returns. */
-  private animationCall<F extends keyof typeof ANIMATION_IDS>(
-    name: F,
-    args: Record<string, object> = {},
-  ): Promise<unknown> {
-    const ids = ANIMATION_IDS[name] as Record<string, string>;
-    return this.call({
-      id: ids.function,
-      args: Object.entries(args).map(([parameter, value]) => ({ id: ids[parameter], value })),
-    }).then((result) => result.ret);
-  }
-
-  /** Call one of the module's transport functions on `player`. */
-  private playerCall(
-    name: TransportFunction,
-    player: PlayerState,
-    args: Record<string, object> = {},
-  ): Promise<void> {
-    return this.animationCall(name, { player: { u32: player.player }, ...args }).then(
-      () => undefined,
-    );
-  }
-
-  /** Give `player`'s instances `weight`: 0 silences the animation, 1 lets it
-   * write. */
-  private weigh(player: PlayerState, weight: number): Promise<void> {
-    return Promise.all(
-      player.instances.map(({ instance }) =>
-        this.animationCall("set_weight", {
-          player: { u32: player.player },
-          instance: { u32: instance },
-          weight: { f32: weight },
-        }),
-      ),
-    ).then(() => undefined);
+  moduleAnimation(animation: Animation): ModuleAnimation {
+    return this.inner.moduleAnimation(JSON.stringify(animation));
   }
 
   /**
@@ -1557,7 +1063,7 @@ export async function describe(
 /**
  * A device with no Vizij: `graph` (a graph spec, in any form the spec
  * normalizer accepts) as its behavior over a fresh store and rig, its free
- * inputs resting at their authored defaults ({@link Runtime.reset}), the
+ * inputs resting at their authored defaults (the rest module's `reset`), the
  * animation and rest modules host-linked and `modules` loaded as guests.
  * Nothing is drawn — a bench, or a graph run in Node. Omit `graph` for the built-in
  * passthrough proof graph (`sensor/x` → `actuator/y`). Calls {@link init}
@@ -1692,6 +1198,39 @@ export async function composeVizij(
   );
 }
 
+/**
+ * `graph` (a graph spec, in any form the spec normalizer accepts) as
+ * \`run_behavior\`'s \`behavior\` argument: the graph as the interpreter
+ * module's LOAD carries one, as an Arora \`Value\`.
+ * \`runtime.invoke("run_behavior", { name, behavior })\` runs it beside the
+ * device's graph until halted. Calls {@link init} if it has not run yet.
+ */
+export async function behaviorValue(graph: GraphSpecInput, input?: InitInput): Promise<object> {
+  await init(input);
+  return bindings().behaviorValue(typeof graph === "string" ? graph : JSON.stringify(graph));
+}
+
+/**
+ * The graph edits that change run \`run\`'s behavior in place, from \`from\`
+ * — the graph it runs: what it was spawned with, or the \`to\` of the edit
+ * before — to \`to\`: what {@link Runtime.applyGraphEdits} takes. A run's
+ * nodes live in the device's graph under ids its interpreter derives from
+ * the run; these edits name them, so the nodes \`to\` keeps keep their
+ * runtime state. Calls {@link init} if it has not run yet.
+ */
+export async function runEdits(
+  run: string,
+  from: GraphSpecInput,
+  to: GraphSpecInput,
+  input?: InitInput,
+): Promise<object> {
+  await init(input);
+  const json = (graph: GraphSpecInput) => (typeof graph === "string" ? graph : JSON.stringify(graph));
+  return bindings().runEdits(run, json(from), json(to));
+}
+
+export { ANIMATION_PLAYERS_PATH, decodePlayerStates } from "./animations.js";
+export type { PlayerState, InstanceState } from "./animations.js";
 export { unlockAudio, play as playAudio, IDLE_STOP_MS } from "./audio.js";
 export type { Play, SpeechMark } from "./audio.js";
 export { toValueJSON } from "@vizij/value-json";

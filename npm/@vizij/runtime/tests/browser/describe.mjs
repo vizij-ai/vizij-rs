@@ -61,12 +61,17 @@ try {
     max: 1,
   });
 
-  // Programs with their labels; the bundle's active one.
-  assert.deepEqual(quori.programs, ["authoring.motiongraph.program.1", "authoring.motiongraph.main"]);
-  assert.deepEqual(quori.programLabels, {
-    "authoring.motiongraph.program.1": "Speaks",
-    "authoring.motiongraph.main": "Live",
-  });
+  // Programs with their labels and graphs; the bundle's active one.
+  assert.deepEqual(
+    quori.programs.map(({ id, label }) => [id, label]),
+    [
+      ["authoring.motiongraph.program.1", "Speaks"],
+      ["authoring.motiongraph.main", "Live"],
+    ],
+  );
+  for (const program of quori.programs) {
+    assert.ok(program.graph.nodes.length > 0, `${program.id} carries its graph`);
+  }
   assert.equal(quori.activeProgramId, "authoring.motiongraph.program.1");
 
   // Animations: ids, names, durations, tracks of time-ordered keyframes.
@@ -100,7 +105,7 @@ try {
   assert.deepEqual(toasty.poses, []);
   assert.deepEqual(toasty.poseGroups, []);
   assert.deepEqual(toasty.animations, []);
-  assert.deepEqual(toasty.programLabels, {});
+  assert.ok(toasty.programs.every((program) => program.label === null));
   assert.ok(toasty.rigInputs.length > 0);
   assert.equal(toasty.metadata.faceId, toasty.faceId);
 
