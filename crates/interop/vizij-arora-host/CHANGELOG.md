@@ -4,6 +4,16 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [5.2.0] - 2026-10-06
+
+### Changed
+
+- The ROS4HRI mapping shows a named expression at the commanded arousal as
+  its intensity, clamped to [0, 1], where it showed it at full weight. A
+  command naming an expression with an arousal of 0 or below (calm, or left
+  unset) now shows no expression. With no name, valence and arousal still
+  blend the expressions on the circumplex.
+
 ## [5.1.0] - 2026-10-04
 
 ### Added
