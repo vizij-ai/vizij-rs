@@ -350,8 +350,6 @@ For a new continuous policy:
 The generated `look_at.json` should not be edited manually. Regenerate it from the Rust generator with:
 
 ```bash
-cd ~/vizij_project/vizij-rs
-
 cargo run -p vizij-bundle -- export-skill look_at \
   -o /tmp/look_at.json
 
