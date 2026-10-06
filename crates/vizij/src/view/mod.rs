@@ -3,7 +3,8 @@
 //! Scene model matches the web renderer (`@vizij/render`): Z-up world, faces
 //! in the XY plane layered along Z, orthographic camera fit to the authored
 //! `rootBounds`, ambient-only lighting composed into unlit materials
-//! ([`Surface`]: diffuse scaled by `1 − metalness`, plus emissive), sRGB
+//! ([`Surface`]: diffuse — scaled by `1 − metalness` for a `standard`
+//! material — plus emissive, by the web's material kinds, [`Shading`]), sRGB
 //! output, no tone mapping unless a face asks for one ([`tone`], composed into
 //! the same materials), double-sided materials, opacity-driven alpha
 //! blending. The page's [`ViewOptions`] frame every face; a face's own
@@ -30,7 +31,7 @@ mod pick;
 pub mod snapshot;
 pub mod tone;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::Receiver;
@@ -53,7 +54,7 @@ use vizij_api_core::value::{as_bool, as_color_rgba, as_float, as_vec3, as_vector
 use vizij_api_core::{TypedPath, Value};
 
 use hold::{HoldTarget, Holds};
-use meta::{Binding, FaceMeta, FeatureKind};
+use meta::{Binding, FaceMeta, FeatureKind, PrimitiveShape};
 pub use tone::ToneMapping;
 
 /// The in-memory asset source the faces' GLBs are served from: a loaded
@@ -133,18 +134,38 @@ pub struct Face {
     pub camera: Entity,
 }
 
+/// Where one animatable lands in a face's spawned scene.
+#[derive(Debug, Clone)]
+pub struct Bound {
+    /// The entity it moves: the element's node for a transform feature, its
+    /// mesh for a material feature, the bearer of its morph weights for a
+    /// morph.
+    pub entity: Entity,
+    pub feature: FeatureKind,
+    /// The component of the feature it drives alone ([`Binding::axis`]).
+    pub axis: Option<usize>,
+    /// The morph target's index among the mesh's weights, for a morph.
+    pub morph_index: Option<usize>,
+}
+
 /// The joins from a face's animatables to its spawned scene: built once the
 /// GLB scene has spawned, empty until then.
 #[derive(Default)]
 pub struct Bindings {
-    /// animatable id → (target entity, feature, morph index, material shade factor).
-    pub by_uuid: HashMap<Uuid, (Entity, FeatureKind, Option<usize>, f32)>,
+    /// animatable id → where it lands.
+    pub by_uuid: HashMap<Uuid, Bound>,
     /// element id → the entities its features land on: what a pick tests,
     /// what the glow outlines, what a static feature is set on.
     pub elements: HashMap<Uuid, ElementTargets>,
     /// animatable id → the value last applied to the scene, what a held
     /// component keeps ([`hold`]).
     shown: HashMap<Uuid, Decoded>,
+    /// The triples per-axis animatables assemble, by the entity and feature
+    /// they land on: each write replaces one component and the whole triple
+    /// is applied. Kept rather than read back from the scene, because a
+    /// rotation read back is a quaternion, whose euler angles are not the
+    /// ones it was set from once the pitch leaves ±π/2.
+    assembled: HashMap<(Entity, FeatureKind), [f32; 3]>,
     /// The meshes whose materials the view composes ([`Surface`]): what the
     /// face's tone mapping goes over.
     surfaces: Vec<Entity>,
@@ -221,7 +242,8 @@ pub enum ViewEvent {
     },
     /// Set one feature of an element in place — a static feature, which no
     /// device output drives — by its RobotData name (`translation`,
-    /// `color`, a morph target's name, …). Applied once the face is
+    /// `color`, a per-axis `translation.x`, a morph target's name, …).
+    /// Applied once the face is
     /// indexed; a reload shows whatever its GLB carries.
     SetStaticFeature {
         face_id: String,
@@ -373,18 +395,48 @@ impl ViewOptions {
     }
 }
 
+/// How a material takes the ambient light, by the web's material kinds
+/// (RobotData's `material`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Shading {
+    /// `standard` (`MeshStandardMaterial`): the diffuse term scaled by
+    /// `1 − metalness`, plus emissive.
+    #[default]
+    Standard,
+    /// `phong` and `lambert`: the diffuse term plus emissive. Neither has a
+    /// metalness — their GLB material carries a `metallicFactor` all the same
+    /// (three's exporter writes 0.5 for a material that is not a standard
+    /// one) — and phong's specular highlight needs a direct light.
+    Diffuse,
+    /// `basic` (`MeshBasicMaterial`): its base color, unlit.
+    Basic,
+}
+
+impl Shading {
+    /// The shading of an element declaring `material`; a kind the view does
+    /// not draw otherwise shades as `standard`.
+    pub fn of(material: Option<&str>) -> Self {
+        match material {
+            Some("basic") => Shading::Basic,
+            Some("phong" | "lambert") => Shading::Diffuse,
+            _ => Shading::Standard,
+        }
+    }
+}
+
 /// What a mesh's material is made of, in the web's terms: the inputs its
 /// unlit color is composed from. Kept per mesh so a change to any one of
 /// them recomposes the whole, and initialised from the GLB material so a
 /// face whose look is authored into the material (a metallic plate, an
 /// emissive feature) reads right before its rig writes a thing.
 ///
-/// The composition is what three's ambient-only pipeline makes of a
-/// `MeshStandardMaterial` with no environment map: the diffuse term is the
-/// base color scaled by `1 − metalness` and the ambient factor (a metal has
-/// no diffuse, and with nothing to reflect it is black), the emissive term
-/// adds on top, and roughness changes nothing. A `basic` material
-/// (`MeshBasicMaterial`) is its base color alone.
+/// The composition is what three's pipeline makes of a material under one
+/// ambient light and no environment map, by its [`Shading`]: the diffuse
+/// term is the base color scaled by the ambient factor — and for a
+/// `standard` material by `1 − metalness` (a metal has no diffuse, and with
+/// nothing to reflect it is black) — the emissive term adds on top, and
+/// roughness, shininess and specular change nothing. A `basic` material is
+/// its base color alone.
 #[derive(Component, Clone, Debug, PartialEq)]
 pub struct Surface {
     /// Linear RGB (three's `color`).
@@ -396,8 +448,7 @@ pub struct Surface {
     pub emissive_intensity: f32,
     /// The ambient factor, `ambient/π`; 1 for a `basic` material.
     pub factor: f32,
-    /// A `basic` material: full albedo, no metalness, no emissive.
-    pub basic: bool,
+    pub shading: Shading,
     /// The face's tone mapping, applied to the composed color.
     pub tone: ToneMapping,
 }
@@ -407,7 +458,7 @@ impl Surface {
     fn from_material(
         material: &StandardMaterial,
         factor: f32,
-        basic: bool,
+        shading: Shading,
         tone: ToneMapping,
     ) -> Self {
         let base = material.base_color.to_linear();
@@ -422,17 +473,20 @@ impl Surface {
             ],
             emissive_intensity: 1.0,
             factor,
-            basic,
+            shading,
             tone,
         }
     }
 
     /// The unlit color the material renders with, tone-mapped.
     pub fn color(&self) -> Color {
-        let rgb = if self.basic {
+        let rgb = if self.shading == Shading::Basic {
             self.base
         } else {
-            let diffuse = (1.0 - self.metalness) * self.factor;
+            let diffuse = match self.shading {
+                Shading::Standard => (1.0 - self.metalness) * self.factor,
+                _ => self.factor,
+            };
             let mut rgb = [0.0; 3];
             for (i, channel) in rgb.iter_mut().enumerate() {
                 *channel = self.base[i] * diffuse + self.emissive[i] * self.emissive_intensity;
@@ -1004,8 +1058,12 @@ fn visible_extent(bounds: Vec2, fit: Fit, zoom: Vec2, width: f32, height: f32) -
 
 /// Joins each spawned GLB scene with its face's RobotData bindings: node
 /// `Name` → entity, for material/morph features the mesh primitive child.
-/// Also makes each bound mesh's material unique (GLB materials can be shared)
-/// and applies the web renderer's material conventions. Names are looked up
+/// Also gives every mesh of the scene its own material (GLB materials can be
+/// shared) under the web renderer's conventions — an element's mesh by the
+/// element's material kind, any other by what three's glTF loader makes of
+/// its material, so a GLB without RobotData (a plain Blender export) draws
+/// under the same model — and an element converted from an ellipse or
+/// rectangle whose node carries no mesh its unit mesh. Names are looked up
 /// under the face's own root, so two faces with the same node names never
 /// cross.
 #[allow(clippy::too_many_arguments)]
@@ -1017,11 +1075,20 @@ fn index_faces(
     children: Query<&Children>,
     meshes: Query<(Entity, &MeshMaterial3d<StandardMaterial>), With<Mesh3d>>,
     morphs: Query<Entity, With<MorphWeights>>,
+    mut transforms: Query<&mut Transform>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut mesh_assets: ResMut<Assets<Mesh>>,
     mut commands: Commands,
 ) {
     for (root, mut face) in &mut faces {
         if face.bindings.ready {
+            continue;
+        }
+        // Wait until the scene has spawned under the face's scene root.
+        let spawned = children
+            .get(root)
+            .is_ok_and(|kids| kids.iter().any(|kid| children.contains(kid)));
+        if !spawned {
             continue;
         }
         // Wait until every element's node has spawned. Names can collide:
@@ -1053,43 +1120,92 @@ fn index_faces(
             continue;
         }
 
-        // Per element: the transform target is the named node entity; the
-        // material/morph target is its first mesh-bearing descendant.
-        let mut mesh_of: HashMap<String, (Entity, Handle<StandardMaterial>)> = HashMap::new();
-        let mut morph_of: HashMap<String, Entity> = HashMap::new();
-        let mut elements = HashMap::new();
         let tone = views
             .0
             .get(&face.id)
             .map(|view| view.tone_mapping)
             .unwrap_or_default();
+        // Give `mesh` a material of its own: `loaded` under the web's
+        // conventions, shaded as `shading` ([`web_material`]).
+        let compose = |commands: &mut Commands,
+                       materials: &mut Assets<StandardMaterial>,
+                       mesh: Entity,
+                       loaded: StandardMaterial,
+                       shading: Shading| {
+            let factor = if shading == Shading::Basic {
+                1.0
+            } else {
+                options.albedo_factor()
+            };
+            let (material, surface) = web_material(loaded, shading, factor, tone);
+            commands
+                .entity(mesh)
+                .insert((MeshMaterial3d(materials.add(material)), surface));
+        };
+        let loaded = |handle: &Handle<StandardMaterial>, materials: &Assets<StandardMaterial>| {
+            materials.get(handle).cloned().unwrap_or_default()
+        };
+
+        // Per element: the transform target is the named node entity; the
+        // material/morph target is its own mesh, else its first mesh-bearing
+        // descendant. Every primitive of its own mesh takes its shading.
+        let mut mesh_of: HashMap<String, Entity> = HashMap::new();
+        let mut shaded: HashSet<Entity> = HashSet::new();
+        let mut morph_of: HashMap<String, Entity> = HashMap::new();
+        let mut elements = HashMap::new();
         for element in &face.meta.elements {
             let node = by_name[element.node_name.as_str()].0;
-            // three's MeshBasicMaterial ignores lights: full albedo. `standard`
-            // gets the ambient-Lambert factor.
-            let basic = element.material.as_deref() == Some("basic");
-            let factor = if basic { 1.0 } else { options.albedo_factor() };
-            for descendant in std::iter::once(node).chain(children.iter_descendants(node)) {
-                if let Ok((mesh_entity, material)) = meshes.get(descendant) {
-                    // Unique material per element, with web conventions applied:
-                    // double-sided, unlit with the web's ambient-only model
-                    // composed into the albedo ([`Surface`]) from what the
-                    // loader read — base color, metalness, emissive.
-                    let mut mat = materials
-                        .get(&material.0)
-                        .cloned()
-                        .unwrap_or_else(StandardMaterial::default);
-                    mat.double_sided = true;
-                    mat.cull_mode = None;
-                    mat.unlit = true;
-                    let surface = Surface::from_material(&mat, factor, basic, tone);
-                    surface.apply(&mut mat);
-                    let handle = materials.add(mat);
-                    commands
-                        .entity(mesh_entity)
-                        .insert((MeshMaterial3d(handle.clone()), surface));
-                    mesh_of.insert(element.node_name.clone(), (mesh_entity, handle));
-                    break;
+            let shading = Shading::of(element.material.as_deref());
+            // The element's own mesh is the node's or its primitives (the
+            // node's children); a deeper mesh is another element's.
+            let own_meshes: Vec<Entity> = std::iter::once(node)
+                .chain(children.get(node).into_iter().flat_map(|kids| kids.iter()))
+                .filter(|entity| meshes.contains(*entity))
+                .collect();
+            let mut own_mesh = own_meshes.first().copied();
+            match (own_mesh, element.primitive) {
+                (None, Some(primitive)) => {
+                    let mesh = commands
+                        .spawn((
+                            Mesh3d(mesh_assets.add(primitive_mesh(primitive.shape))),
+                            ChildOf(node),
+                        ))
+                        .id();
+                    let [r, g, b] = primitive.fill;
+                    let fill = StandardMaterial {
+                        base_color: Color::linear_rgba(r, g, b, primitive.opacity),
+                        ..StandardMaterial::default()
+                    };
+                    compose(&mut commands, &mut materials, mesh, fill, shading);
+                    shaded.insert(mesh);
+                    if let Ok(mut transform) = transforms.get_mut(node) {
+                        let [width, height] = primitive.size;
+                        transform.scale = Vec3::new(width, height, 1.0);
+                    }
+                    own_mesh = Some(mesh);
+                    mesh_of.insert(element.node_name.clone(), mesh);
+                }
+                (None, None) => {
+                    let first = children
+                        .iter_descendants(node)
+                        .find_map(|descendant| meshes.get(descendant).ok());
+                    if let Some((mesh, material)) = first {
+                        let material = loaded(&material.0, &materials);
+                        compose(&mut commands, &mut materials, mesh, material, shading);
+                        shaded.insert(mesh);
+                        mesh_of.insert(element.node_name.clone(), mesh);
+                    }
+                }
+                (Some(first), _) => {
+                    for mesh in own_meshes {
+                        let Ok((_, material)) = meshes.get(mesh) else {
+                            continue;
+                        };
+                        let material = loaded(&material.0, &materials);
+                        compose(&mut commands, &mut materials, mesh, material, shading);
+                        shaded.insert(mesh);
+                    }
+                    mesh_of.insert(element.node_name.clone(), first);
                 }
             }
             for descendant in std::iter::once(node).chain(children.iter_descendants(node)) {
@@ -1098,11 +1214,6 @@ fn index_faces(
                     break;
                 }
             }
-            // The element's own mesh is the node's or one of its primitives
-            // (the node's children); a deeper mesh is another element's.
-            let own_mesh = std::iter::once(node)
-                .chain(children.get(node).into_iter().flat_map(|kids| kids.iter()))
-                .find(|entity| meshes.contains(*entity));
             elements.insert(
                 element.id,
                 ElementTargets {
@@ -1113,8 +1224,37 @@ fn index_faces(
             );
         }
 
+        // Every other mesh of the scene, shaded as three's glTF loader makes
+        // its material: a `MeshBasicMaterial` for `KHR_materials_unlit`
+        // (which Bevy's loader reads as `unlit`), a `MeshStandardMaterial`
+        // otherwise.
+        for (mesh, material) in children
+            .iter_descendants(root)
+            .filter_map(|entity| meshes.get(entity).ok())
+        {
+            if shaded.contains(&mesh) {
+                continue;
+            }
+            let material = loaded(&material.0, &materials);
+            let shading = if material.unlit {
+                Shading::Basic
+            } else {
+                Shading::Standard
+            };
+            compose(&mut commands, &mut materials, mesh, material, shading);
+            shaded.insert(mesh);
+        }
+
         let mut by_uuid = HashMap::new();
-        for (uuid, Binding { node_name, feature }) in &face.meta.animatables {
+        for (
+            uuid,
+            Binding {
+                node_name,
+                feature,
+                axis,
+            },
+        ) in &face.meta.animatables
+        {
             let Some(&(node, _)) = by_name.get(node_name.as_str()) else {
                 continue;
             };
@@ -1123,25 +1263,9 @@ fn index_faces(
                 .elements
                 .iter()
                 .find(|e| &e.node_name == node_name);
-            let factor = if element.and_then(|e| e.material.as_deref()) == Some("basic") {
-                1.0
-            } else {
-                options.albedo_factor()
-            };
-            let entry = match feature {
+            let (entity, morph_index) = match feature {
                 FeatureKind::Translation | FeatureKind::Rotation | FeatureKind::Scale => {
-                    (node, feature.clone(), None, factor)
-                }
-                FeatureKind::Color
-                | FeatureKind::Opacity
-                | FeatureKind::Metalness
-                | FeatureKind::Roughness
-                | FeatureKind::Emissive
-                | FeatureKind::EmissiveIntensity => {
-                    let Some((mesh_entity, _)) = mesh_of.get(node_name) else {
-                        continue;
-                    };
-                    (*mesh_entity, feature.clone(), None, factor)
+                    (node, None)
                 }
                 FeatureKind::Morph(target) => {
                     let Some(&morph_entity) = morph_of.get(node_name) else {
@@ -1152,10 +1276,24 @@ fn index_faces(
                     else {
                         continue;
                     };
-                    (morph_entity, feature.clone(), Some(index), factor)
+                    (morph_entity, Some(index))
+                }
+                _ => {
+                    let Some(&mesh) = mesh_of.get(node_name) else {
+                        continue;
+                    };
+                    (mesh, None)
                 }
             };
-            by_uuid.insert(*uuid, entry);
+            by_uuid.insert(
+                *uuid,
+                Bound {
+                    entity,
+                    feature: feature.clone(),
+                    axis: *axis,
+                    morph_index,
+                },
+            );
         }
 
         log::info!(
@@ -1168,25 +1306,55 @@ fn index_faces(
             by_uuid,
             elements,
             shown: HashMap::new(),
-            surfaces: mesh_of.values().map(|(mesh, _)| *mesh).collect(),
+            assembled: HashMap::new(),
+            surfaces: shaded.into_iter().collect(),
             ready: true,
         };
+    }
+}
+
+/// `loaded` as the view draws it: double-sided, unlit, with the color the
+/// web's ambient-only model composes for it ([`Surface`]) from what the
+/// loader read — base color, metalness, emissive — and the surface that
+/// recomposes it as the rig writes.
+fn web_material(
+    mut loaded: StandardMaterial,
+    shading: Shading,
+    factor: f32,
+    tone: ToneMapping,
+) -> (StandardMaterial, Surface) {
+    loaded.double_sided = true;
+    loaded.cull_mode = None;
+    loaded.unlit = true;
+    let surface = Surface::from_material(&loaded, factor, shading, tone);
+    surface.apply(&mut loaded);
+    (loaded, surface)
+}
+
+/// The unit mesh of a converted ellipse or rectangle, as the web renderer
+/// generates it: a circle of radius 1 in 100 segments, a 1×1 plane, both in
+/// the XY plane facing +Z.
+fn primitive_mesh(shape: PrimitiveShape) -> Mesh {
+    match shape {
+        PrimitiveShape::Circle => Circle::new(1.0).mesh().resolution(100).build(),
+        PrimitiveShape::Plane => Rectangle::new(1.0, 1.0).mesh().build(),
     }
 }
 
 /// Set the static features waiting for their face, once it is indexed.
 fn apply_statics(
     mut pending: ResMut<PendingStatics>,
-    faces: Query<&Face, Without<Superseded>>,
+    mut faces: Query<&mut Face, Without<Superseded>>,
     mut scene: SceneFeatures,
 ) {
     if pending.0.is_empty() {
         return;
     }
-    for face in &faces {
+    for mut face in &mut faces {
         if !face.bindings.ready {
             continue;
         }
+        let face = &mut *face;
         let Some(edits) = pending.0.remove(&face.id) else {
             continue;
         };
@@ -1201,7 +1369,7 @@ fn apply_statics(
                 log::warn!("face {}: no element {element_id}", face.id);
                 continue;
             };
-            let Some(kind) = FeatureKind::from_name(&feature, &element.morph_targets) else {
+            let Some((kind, axis)) = FeatureKind::parse(&feature, &element.morph_targets) else {
                 log::warn!("face {}: {element_id} has no feature {feature:?}", face.id);
                 continue;
             };
@@ -1215,14 +1383,20 @@ fn apply_statics(
                 ),
                 _ => (targets.mesh, None),
             };
-            let (Some(entity), Some(decoded)) = (entity, decode(&kind, &value)) else {
+            let (Some(entity), Some(decoded)) = (entity, decode(&kind, axis, &value)) else {
                 log::warn!(
                     "face {}: {feature} of {element_id} does not take {value:?}",
                     face.id
                 );
                 continue;
             };
-            scene.apply(entity, &kind, morph_index, decoded);
+            let bound = Bound {
+                entity,
+                feature: kind,
+                axis,
+                morph_index,
+            };
+            scene.land(&mut face.bindings.assembled, &bound, decoded);
         }
     }
 }
@@ -1242,10 +1416,10 @@ fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneF
             let Some(id) = animatable_of(&path) else {
                 continue;
             };
-            let Some((entity, feature, morph_index, _factor)) = bindings.by_uuid.get(&id) else {
+            let Some(bound) = bindings.by_uuid.get(&id) else {
                 continue;
             };
-            let Some(mut decoded) = decode(feature, &value) else {
+            let Some(mut decoded) = decode(&bound.feature, bound.axis, &value) else {
                 continue;
             };
             if let Some(held) = held {
@@ -1254,14 +1428,14 @@ fn apply_poses(mut faces: Query<&mut Face>, holds: Res<Holds>, mut scene: SceneF
                         .shown
                         .get(&id)
                         .copied()
-                        .or_else(|| scene.read(*entity, feature, *morph_index))
+                        .or_else(|| scene.read(bound.entity, &bound.feature, bound.morph_index))
                 };
                 match hold::resolve(held, id, decoded, shown) {
                     Some(kept) => decoded = kept,
                     None => continue,
                 }
             }
-            scene.apply(*entity, feature, *morph_index, decoded);
+            scene.land(&mut bindings.assembled, bound, decoded);
             bindings.shown.insert(id, decoded);
         }
     }
@@ -1275,8 +1449,12 @@ pub(crate) enum Decoded {
     Scalar(f32),
 }
 
-/// `value` read as what `feature` takes; `None` when it is no such value.
-fn decode(feature: &FeatureKind, value: &Value) -> Option<Decoded> {
+/// `value` read as what `feature` takes — or, for a per-axis binding, its
+/// `axis` component takes: a scalar; `None` when it is no such value.
+fn decode(feature: &FeatureKind, axis: Option<usize>, value: &Value) -> Option<Decoded> {
+    if axis.is_some() {
+        return as_f32(value).map(Decoded::Scalar);
+    }
     match feature {
         FeatureKind::Translation | FeatureKind::Rotation => as_xyz(value).map(Decoded::Triple),
         FeatureKind::Scale => as_xyz(value)
@@ -1284,11 +1462,14 @@ fn decode(feature: &FeatureKind, value: &Value) -> Option<Decoded> {
             .or_else(|| as_f32(value).map(Decoded::Scalar)),
         // Graph color components are linear working-space floats (three's
         // `Color.setRGB` semantics), not sRGB.
-        FeatureKind::Color | FeatureKind::Emissive => as_rgb(value).map(Decoded::Triple),
+        FeatureKind::Color | FeatureKind::Emissive | FeatureKind::Specular => {
+            as_rgb(value).map(Decoded::Triple)
+        }
         FeatureKind::Opacity
         | FeatureKind::Metalness
         | FeatureKind::Roughness
         | FeatureKind::EmissiveIntensity
+        | FeatureKind::Shininess
         | FeatureKind::Morph(_) => as_f32(value).map(Decoded::Scalar),
     }
 }
@@ -1311,6 +1492,44 @@ struct SceneFeatures<'w, 's> {
 }
 
 impl SceneFeatures<'_, '_> {
+    /// Land `value` where `bound` says. A per-axis value replaces its
+    /// component of the triple in `assembled` — seeded from what the scene
+    /// shows on the component's first write — and the triple is applied; a
+    /// whole value is applied as is, and the next per-axis write seeds anew.
+    fn land(
+        &mut self,
+        assembled: &mut HashMap<(Entity, FeatureKind), [f32; 3]>,
+        bound: &Bound,
+        value: Decoded,
+    ) {
+        let key = || (bound.entity, bound.feature.clone());
+        match (bound.axis, value) {
+            (Some(axis), Decoded::Scalar(component)) => {
+                let triple = match assembled.entry(key()) {
+                    Entry::Occupied(entry) => entry.into_mut(),
+                    Entry::Vacant(entry) => {
+                        let Some(Decoded::Triple(shown)) =
+                            self.read(bound.entity, &bound.feature, None)
+                        else {
+                            return;
+                        };
+                        entry.insert(shown)
+                    }
+                };
+                triple[axis] = component;
+                let triple = Decoded::Triple(*triple);
+                self.apply(bound.entity, &bound.feature, None, triple);
+            }
+            (Some(_), Decoded::Triple(_)) => {}
+            (None, value) => {
+                if bound.feature.axes().is_some() && !assembled.is_empty() {
+                    assembled.remove(&key());
+                }
+                self.apply(bound.entity, &bound.feature, bound.morph_index, value);
+            }
+        }
+    }
+
     /// Set `feature` of `entity` to `value`; a value of the wrong shape for
     /// the feature changes nothing.
     fn apply(
@@ -1351,9 +1570,9 @@ impl SceneFeatures<'_, '_> {
             (FeatureKind::EmissiveIntensity, Scalar(i)) => {
                 self.edit_surface(entity, |s| s.emissive_intensity = i)
             }
-            // No direct light and no environment map: roughness has nothing
-            // to shape.
-            (FeatureKind::Roughness, _) => {}
+            // No direct light and no environment map: roughness, shininess
+            // and specular have nothing to shape.
+            (FeatureKind::Roughness | FeatureKind::Shininess | FeatureKind::Specular, _) => {}
             (FeatureKind::Morph(_), Scalar(w)) => {
                 if let (Ok(mut weights), Some(i)) =
                     (self.morph_weights.get_mut(entity), morph_index)
@@ -1404,7 +1623,7 @@ impl SceneFeatures<'_, '_> {
             FeatureKind::Opacity => Decoded::Scalar(surface()?.opacity),
             FeatureKind::Metalness => Decoded::Scalar(surface()?.metalness),
             FeatureKind::EmissiveIntensity => Decoded::Scalar(surface()?.emissive_intensity),
-            FeatureKind::Roughness => return None,
+            FeatureKind::Roughness | FeatureKind::Shininess | FeatureKind::Specular => return None,
             FeatureKind::Morph(_) => Decoded::Scalar(
                 *self
                     .morph_weights
@@ -1469,7 +1688,7 @@ mod tests {
             emissive,
             emissive_intensity: 1.0,
             factor: 0.5,
-            basic: false,
+            shading: Shading::Standard,
             tone: ToneMapping::None,
         }
     }
@@ -1503,7 +1722,7 @@ mod tests {
     #[test]
     fn a_basic_surface_is_its_base_color() {
         let mut surface = standard([0.2, 0.4, 0.8], 1.0, [1.0, 1.0, 1.0]);
-        surface.basic = true;
+        surface.shading = Shading::Basic;
         surface.factor = 1.0;
         assert_eq!(rgb(surface.color()), [0.2, 0.4, 0.8]);
         surface.opacity = 0.5;
@@ -1520,10 +1739,26 @@ mod tests {
             emissive: LinearRgba::rgb(0.3, 0.3, 0.0),
             ..StandardMaterial::default()
         };
-        let surface = Surface::from_material(&material, 0.5, false, ToneMapping::None);
+        let surface = Surface::from_material(&material, 0.5, Shading::Standard, ToneMapping::None);
         assert_eq!(surface.metalness, 1.0);
         assert_eq!(surface.emissive, [0.3, 0.3, 0.0]);
         assert_eq!(rgb(surface.color()), [0.3, 0.3, 0.0]);
+    }
+
+    /// A `phong` or `lambert` material has no metalness: under the ambient
+    /// light it is its diffuse term plus its emissive, whatever metallic
+    /// factor its GLB material carries (three's exporter writes 0.5 for
+    /// both); the kinds read from RobotData's `material`.
+    #[test]
+    fn a_diffuse_surface_ignores_metalness() {
+        let mut surface = standard([0.2, 0.4, 0.8], 0.5, [0.0, 0.0, 0.25]);
+        surface.shading = Shading::Diffuse;
+        assert_eq!(rgb(surface.color()), [0.1, 0.2, 0.65]);
+        assert_eq!(Shading::of(Some("phong")), Shading::Diffuse);
+        assert_eq!(Shading::of(Some("lambert")), Shading::Diffuse);
+        assert_eq!(Shading::of(Some("basic")), Shading::Basic);
+        assert_eq!(Shading::of(Some("standard")), Shading::Standard);
+        assert_eq!(Shading::of(None), Shading::Standard);
     }
 
     /// A face's tone mapping goes over the composed color, not the inputs.
@@ -1624,22 +1859,66 @@ mod tests {
         let vec3 = vizij_api_core::value::vec3([1.0, 2.0, 3.0]);
         let float = vizij_api_core::value::float(0.5);
         assert_eq!(
-            decode(&FeatureKind::Translation, &vec3),
+            decode(&FeatureKind::Translation, None, &vec3),
             Some(Decoded::Triple([1.0, 2.0, 3.0]))
         );
-        assert_eq!(decode(&FeatureKind::Translation, &float), None);
+        assert_eq!(decode(&FeatureKind::Translation, None, &float), None);
         assert_eq!(
-            decode(&FeatureKind::Scale, &float),
+            decode(&FeatureKind::Scale, None, &float),
             Some(Decoded::Scalar(0.5))
         );
         assert_eq!(
-            decode(&FeatureKind::Morph("open".into()), &float),
+            decode(&FeatureKind::Morph("open".into()), None, &float),
             Some(Decoded::Scalar(0.5))
         );
         assert_eq!(
-            decode(&FeatureKind::Color, &vec3),
+            decode(&FeatureKind::Color, None, &vec3),
             Some(Decoded::Triple([1.0, 2.0, 3.0]))
         );
+        // A per-axis binding takes its component alone.
+        assert_eq!(
+            decode(&FeatureKind::Translation, Some(0), &float),
+            Some(Decoded::Scalar(0.5))
+        );
+        assert_eq!(decode(&FeatureKind::Translation, Some(0), &vec3), None);
+    }
+
+    /// Per-axis writes assemble the feature's triple, each replacing its
+    /// own component of what the scene showed: a node's translation moves
+    /// one axis at a time, and its rotation keeps the euler angles it was
+    /// given — a pitch past ±π/2 included, which a rotation read back off
+    /// the quaternion would not return.
+    #[test]
+    fn per_axis_writes_assemble_the_feature() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let mut world = World::new();
+        world.init_resource::<Assets<StandardMaterial>>();
+        let node = world.spawn(Transform::from_xyz(1.0, 2.0, 3.0)).id();
+        let axis = |feature: FeatureKind, axis: usize| Bound {
+            entity: node,
+            feature,
+            axis: Some(axis),
+            morph_index: None,
+        };
+        let writes = vec![
+            (axis(FeatureKind::Translation, 1), 5.0),
+            (axis(FeatureKind::Rotation, 1), 2.0),
+            (axis(FeatureKind::Rotation, 0), 0.1),
+        ];
+        world
+            .run_system_once(move |mut scene: SceneFeatures| {
+                let mut assembled = HashMap::new();
+                for (bound, value) in &writes {
+                    scene.land(&mut assembled, bound, Decoded::Scalar(*value));
+                }
+            })
+            .expect("runs");
+        let transform = world.get::<Transform>(node).expect("a transform");
+        assert_eq!(transform.translation, Vec3::new(1.0, 5.0, 3.0));
+        assert!(transform
+            .rotation
+            .abs_diff_eq(euler_zyx([0.1, 2.0, 0.0]), 1e-6));
     }
 
     #[test]

@@ -1,9 +1,13 @@
-//! Visual regression: the native render of Quori, Toasty and Emy stays close
-//! to a committed reference, so a change to the renderer (camera, materials,
-//! morphs, the ambient model) that breaks the web-comparison parity fails CI.
-//! Quori and Toasty carry their look in `color`; Emy carries it in
-//! `metalness` and `emissive` (a black metallic plate, emissive features), so
-//! the three together cover every material term the ambient model composes.
+//! Visual regression: the native render of Quori, Toasty, Emy and Quori's
+//! Blender export stays close to a committed reference, so a change to the
+//! renderer (camera, materials, morphs, the ambient model) that breaks the
+//! web-comparison parity fails CI. Quori and Toasty carry their look in
+//! `color`; Emy carries it in `metalness` and `emissive` (a black metallic
+//! plate, emissive features), so the three together cover every material
+//! term the ambient model composes. The Blender export carries no RobotData
+//! at all — its colors in `emissiveFactor` over a black metallic base — and
+//! covers what the view makes of a plain GLB: every mesh under the same
+//! model, framed on the scene's bounding box.
 //!
 //! `#[ignore]`d — it renders on a GPU (lavapipe in CI), so the plain
 //! `cargo test` never runs it. CI's `snapshot-regression` job runs it with
@@ -29,6 +33,11 @@ const CASES: &[(&str, &str, &[u8])] = &[
         include_bytes!("references/toasty.png"),
     ),
     ("emy", "emy.glb", include_bytes!("references/emy.png")),
+    (
+        "quori_blender_export",
+        "Quori_Latest_Blender_Export.glb",
+        include_bytes!("references/quori_blender_export.png"),
+    ),
 ];
 
 /// Mean absolute per-channel difference (0..255) allowed after downscaling both

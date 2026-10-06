@@ -52,10 +52,34 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   gave it through `pause` and `stop`, and `set_speed` neither resumes nor
   pauses it.
 
+- Faces exported from Semio Studio read: their per-axis RobotData features
+  (`translation.x`, `rotation.r`, `color.g`, …) bind, an axis driven by an
+  animatable of its own moving that one component, a component `<id>.<axis>`
+  of a compound animatable binding `<id>` to the whole feature. A per-axis
+  name also sets a static feature (`setStaticFeature`, `SetStaticFeature`).
+- A RobotData `ellipse` or `rectangle` draws as a shape: a unit circle or
+  1×1 plane, scaled by its `width` and `height`, where its node carries no
+  mesh, filled by its `fillColor` and `fillOpacity`. Its stroke features are
+  dropped with a warning.
+- A GLB without RobotData — a plain Blender export — draws under the web's
+  material model and is framed on its scene's bounding box, as the web's
+  import derives it; so does a face whose RobotData declares no
+  `rootBounds`. Quori's Blender export joins the snapshot references.
+- The `shininess` and `specular` features of a `phong` material bind; under
+  the ambient-only light they change nothing, as in the web renderer.
+
 ### Changed
 
 - Opening another face (`O`, a dropped `.glb`, a reload) keeps the current one
   on screen until the new one is ready, instead of an empty window meanwhile.
+- A `phong` or `lambert` element is shaded without metalness, as three's
+  `MeshPhongMaterial` and `MeshLambertMaterial` are: its diffuse term no
+  longer dims by the `metallicFactor` its GLB material carries (0.5 from
+  three's exporter).
+- Every mesh of a face's scene is drawn under the web's material model, not
+  only those of its RobotData elements: a mesh no element declares is shaded
+  as three's glTF loader makes its material (basic for
+  `KHR_materials_unlit`, standard otherwise).
 
 ### Removed
 
@@ -66,6 +90,9 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Fixed
 
+- A face whose RobotData element sits on an unnamed glTF node is indexed:
+  the element joins the node under the name Bevy's loader gives it
+  (`GltfNode<index>`).
 - A face whose RobotData carries static features (a value in place of an
   animatable) loads; it was refused as bad RobotData.
 
