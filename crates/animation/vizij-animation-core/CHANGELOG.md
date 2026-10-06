@@ -4,6 +4,30 @@ All notable changes to `vizij-animation-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [4.0.0] - 2026-10-06
+
+### Breaking
+
+- `bake_animation_data`, `bake_animation_data_with_derivatives`,
+  `Engine::bake_animation` and `Engine::bake_animation_with_derivatives`
+  return `Result<_, BakeError>`. The engine's bakes refuse an animation not
+  loaded with `BakeError::NotLoaded`, where they returned `None`.
+
+### Added
+
+- `MAX_BAKE_SAMPLES` (2²⁰): a bake whose window at its frame rate would take
+  more samples over all tracks — derivative samples counted — is refused
+  with `BakeError::TooManySamples` before anything is allocated, so any rate
+  a caller passes yields a result or a refusal. The samples are reserved
+  fallibly (`BakeError::OutOfMemory`).
+
+### Fixed
+
+- A `start_time` past the clip's end bakes the clip's end, where it
+  panicked.
+- `bake_animation_data` samples the values alone; it computed every
+  derivative and dropped it.
+
 ## [3.0.0] - 2026-10-06
 
 ### Breaking

@@ -564,7 +564,9 @@ impl AnimationModule {
     /// and return the result as a JSON string (`vizij-animation-core`'s
     /// `export_baked_json` shape). `frame_rate` (Hz) defaults to 60,
     /// `start_time` (seconds) to 0, and `end_time` (seconds) to the clip
-    /// duration. Returns an empty string if `anim` is not loaded.
+    /// duration; the window clamps into the clip. Returns an empty string if
+    /// `anim` is not loaded, or if the bake would take more than the core's
+    /// `MAX_BAKE_SAMPLES` samples over all tracks.
     pub fn bake(
         &self,
         anim: u32,
@@ -574,15 +576,16 @@ impl AnimationModule {
     ) -> String {
         let cfg = baking_config(frame_rate, start_time, end_time);
         match self.engine.bake_animation(AnimId(anim), &cfg) {
-            Some(baked) => export_baked_json(&baked).to_string(),
-            None => String::new(),
+            Ok(baked) => export_baked_json(&baked).to_string(),
+            Err(_) => String::new(),
         }
     }
 
     /// Like [`AnimationModule::bake`], but also samples per-frame derivatives;
     /// returns the combined values-and-derivatives JSON
     /// (`export_baked_with_derivatives_json` shape). Returns an empty string
-    /// if `anim` is not loaded.
+    /// if `anim` is not loaded, or if the bake would take more than
+    /// `MAX_BAKE_SAMPLES` samples, values and derivatives together.
     pub fn bake_with_derivatives(
         &self,
         anim: u32,
@@ -595,10 +598,10 @@ impl AnimationModule {
             .engine
             .bake_animation_with_derivatives(AnimId(anim), &cfg)
         {
-            Some((baked, derivatives)) => {
+            Ok((baked, derivatives)) => {
                 export_baked_with_derivatives_json(&baked, &derivatives).to_string()
             }
-            None => String::new(),
+            Err(_) => String::new(),
         }
     }
 
@@ -665,7 +668,7 @@ fn guest<T>(f: impl FnOnce(&mut AnimationModule) -> T) -> T {
 #[arora_module::module(
     id = "76697a69-6a00-0000-0d00-000000000000",
     name = "vizij-animation",
-    version = "1.1.1",
+    version = "1.1.2",
     author = "Semio",
     license = "Proprietary",
     description = "vizij-animation-core as an Arora wasm module",
@@ -1660,6 +1663,27 @@ mod tests {
 
         // An unloaded animation bakes to an empty string.
         assert!(a.bake(u32::MAX, None, None, None).is_empty());
+    }
+
+    /// A bake beyond the core's sample bound is refused with an empty
+    /// string, and a window past the clip's end bakes its end.
+    #[test]
+    fn a_bake_too_large_is_refused_and_a_late_window_clamps() {
+        let mut a = AnimationModule::new();
+        let anim = a.load_animation(ramp_clip("big", "big/x", true));
+        assert!(a.bake(anim, Some(1e9), None, None).is_empty());
+        assert!(a
+            .bake_with_derivatives(anim, Some(1e9), None, None)
+            .is_empty());
+        assert!(a.bake(anim, Some(f32::MAX), None, None).is_empty());
+
+        let late = a.bake(anim, Some(30.0), Some(5.0), None);
+        let parsed: serde_json::Value = serde_json::from_str(&late).expect("baked JSON parses");
+        assert_eq!(parsed["start_time"].as_f64(), Some(1.0));
+        assert_eq!(
+            parsed["tracks"][0]["values"].as_array().map(Vec::len),
+            Some(1)
+        );
     }
 }
 

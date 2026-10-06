@@ -6,7 +6,7 @@
 
 use crate::accumulate::AccumulatorWithDerivatives;
 use crate::baking::{
-    bake_animation_data, bake_animation_data_with_derivatives, BakedAnimationData,
+    bake_animation_data, bake_animation_data_with_derivatives, BakeError, BakedAnimationData,
     BakedDerivativeAnimationData, BakingConfig,
 };
 use crate::binding::{BindingSet, BindingTable, ChannelKey, TargetResolver};
@@ -389,26 +389,32 @@ impl Engine {
             .collect()
     }
 
-    /// Bake a loaded animation into per-frame samples using the provided config.
+    /// Bake a loaded animation into per-frame samples using the provided config
+    /// (see [`bake_animation_data`]).
     ///
-    /// Returns `None` when `anim` is not currently loaded.
-    pub fn bake_animation(&self, anim: AnimId, cfg: &BakingConfig) -> Option<BakedAnimationData> {
-        self.anims
-            .get(anim)
-            .map(|data| bake_animation_data(anim, data, cfg))
+    /// Refused with [`BakeError::NotLoaded`] when `anim` is not currently
+    /// loaded, and as [`bake_animation_data`] refuses a bake.
+    pub fn bake_animation(
+        &self,
+        anim: AnimId,
+        cfg: &BakingConfig,
+    ) -> Result<BakedAnimationData, BakeError> {
+        let data = self.anims.get(anim).ok_or(BakeError::NotLoaded(anim))?;
+        bake_animation_data(anim, data, cfg)
     }
 
-    /// Bake animation values and derivatives in one pass.
+    /// Bake animation values and derivatives in one pass (see
+    /// [`bake_animation_data_with_derivatives`]).
     ///
-    /// Returns `None` when `anim` is not currently loaded.
+    /// Refused with [`BakeError::NotLoaded`] when `anim` is not currently
+    /// loaded, and as [`bake_animation_data_with_derivatives`] refuses a bake.
     pub fn bake_animation_with_derivatives(
         &self,
         anim: AnimId,
         cfg: &BakingConfig,
-    ) -> Option<(BakedAnimationData, BakedDerivativeAnimationData)> {
-        self.anims
-            .get(anim)
-            .map(|data| bake_animation_data_with_derivatives(anim, data, cfg))
+    ) -> Result<(BakedAnimationData, BakedDerivativeAnimationData), BakeError> {
+        let data = self.anims.get(anim).ok_or(BakeError::NotLoaded(anim))?;
+        bake_animation_data_with_derivatives(anim, data, cfg)
     }
 
     /// Create a new player with a display name and default looping behavior.

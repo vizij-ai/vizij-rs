@@ -128,7 +128,10 @@ Per tick and transport:
   combinable values the behavior conveys, not a second feedback channel.
 - `bake(anim, frame_rate?, start_time?, end_time?) -> str` and
   `bake_with_derivatives(…)` — the sampled clip as JSON; the optional window
-  defaults to 60 Hz over the whole clip.
+  defaults to 60 Hz over the whole clip and clamps into it. An empty string
+  when `anim` is not loaded, or when the bake would take more than
+  `vizij-animation-core`'s `MAX_BAKE_SAMPLES` (2²⁰) samples over all tracks,
+  derivatives included.
 
 A missing required argument fails the call, naming the parameter. An optional
 one may be left out, sent as `Value::Option(None)`, or sent present — wrapped in

@@ -13,6 +13,14 @@ All notable changes to `vizij-animation-wasm`. The format follows
   players report `ended`, and `PlayAfter` starts playback a delay into an
   update.
 
+### Changed
+
+- Built on `vizij-animation-core` 4: `bake_animation` and
+  `bake_animation_with_derivatives` throw for a bake of more than 2²⁰
+  samples over all tracks (derivatives counted) instead of allocating it,
+  and for an animation not loaded with the core's message ("no animation is
+  loaded under id N"); a `start_time` past the clip's end bakes its end.
+
 ## [2.0.0] - 2026-10-05
 
 ### Breaking
