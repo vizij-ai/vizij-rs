@@ -1,5 +1,15 @@
 # Changelog
 
+## 4.1.0
+
+### Minor Changes
+
+- 9dc784c: The view renders faces authored in the authoring app, exported from Blender, or exported from Semio Studio. A `phong` or `lambert` element is shaded as three's `MeshPhongMaterial` and `MeshLambertMaterial` are under the ambient light — diffuse plus emissive, no metalness — and `shininess` and `specular` bind (they shape nothing without a direct light). Every mesh of a face is drawn under that model, a mesh no element declares shaded as three's glTF loader makes its material, so a GLB without RobotData (a plain Blender export, its colors in `emissiveFactor`) renders its colors; a GLB declaring no `rootBounds` is framed on its scene's bounding box, which `describe()` reports as its `rootBounds`. Studio's per-axis RobotData features (`translation.x`, `rotation.r`, `color.g`) bind, and `setStaticFeature` takes their names; `describe()` reports a per-axis animatable's `feature` by that name. A RobotData `ellipse` or `rectangle` draws as a shape with a unit circle or plane scaled by its `width` and `height`, its stroke dropped with a warning. An element on an unnamed glTF node is found.
+- d838ba2: The ROS4HRI mapping shows a named expression (`standard/ros4hri/expression/name`) at the commanded arousal (`standard/ros4hri/expression/arousal`) as its intensity, clamped to 0..1, instead of at full weight: a name with an arousal of 0 or below shows no expression. An empty name still blends the expressions by valence and arousal on the circumplex.
+- 5bfa181: The `ros4hri` profile declares `standard/ros4hri/viseme`, the lip shape a ROS4HRI TTS node streams (a `u8` index into the face standard's 15 shapes, resting at `sil`): 27 keys in all. Nothing maps it to the lips yet.
+- 346c6fd: A device's animation module (1.1.0) adds `set_window`, `play_at`, `set_start_offset` and `set_time_scale`, callable with `Runtime.call`, plays backwards at a negative `set_speed`, and reports `ended`, the play window and each instance's timing in the player states at `vizij/animations/players` (see `@vizij/animation-module`). The device's animation source steps the module without `time_ns`, so there `play_at` counts from the module's first step.
+- 0971559: The face reports what it is saying: while a `say` run's audio plays, the utterance is the face's speech state, `standard/vizij/speech` (empty before playback starts and once it ends), readable like any other key. The browser provider counts the audio as playing once the page's playback hook reports a playhead past 0.
+
 ## 4.0.0
 
 ### Major Changes
