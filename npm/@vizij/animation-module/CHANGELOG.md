@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.0
+
+### Minor Changes
+
+- 346c6fd: The module (1.1.0) exports what a timeline transport needs. `set_window(player, start_ns, end_ns?)` sets a player's play window: `once` clamps into it and holds at the bound it reaches, `loop` wraps within it, `ping_pong` reflects within it, and `stop` returns to its start; without `end_ns` it ends at the player's length. `set_speed` takes a negative speed, which plays backwards through the window. `set_start_offset(player, instance, offset_ns)` and `set_time_scale(player, instance, time_scale)` set where an instance starts on its player's timeline and how its clip stretches there: its local time is (playhead − offset) / `time_scale`, and a time scale that is not finite and positive is rejected with `u32::MAX`. `play_at(player, time_ns)` starts a player at `time_ns` in the time base `step` is given, wherever that instant falls between steps, so players on devices sharing a clock reference start in lockstep; `step(dt_ns, time_ns?)` takes the device's `arora/time` as `time_ns`, and without it counts the steps' `dt_ns` from 0. `PlayerState` (record 1.2.0) adds `ended`, set while a `once` player holds at the window bound it plays toward, `window_start_ns` and `window_end_ns`; `InstanceState` (record 1.1.0) adds `start_offset_ns` and `time_scale`; `duration_ns` is the player's length, which a window does not shorten.
+
 ## 2.0.0
 
 ### Major Changes
