@@ -415,8 +415,10 @@ pub fn set_selection(vizij_id: String, element_ids: Vec<String>) -> Result<(), J
 /// edited while the page scrubs it. `feature` is its RobotData name —
 /// `translation`, `rotation` (an euler, radians), `scale` (`{x, y, z}`, or
 /// a number scaling evenly), `color`, `emissive` (linear `{r, g, b}`),
-/// `opacity`, `metalness`, `emissiveIntensity` (numbers), or one of the
-/// element's morph target names (a weight). `value_json` is the feature's
+/// `opacity`, `metalness`, `emissiveIntensity` (numbers), one component of
+/// a triple by Studio's per-axis name (`translation.x`, `rotation.r`,
+/// `color.g`: a number), or one of the element's morph target names (a
+/// weight). `value_json` is the feature's
 /// value as RobotData stores a static one, or any accepted vizij payload
 /// form. Applied once the Vizij is ready; a reload shows what its GLB
 /// carries.
@@ -479,7 +481,7 @@ fn describe_json(meta: &FaceMeta) -> serde_json::Value {
         .map(|(uuid, binding)| {
             (
                 uuid.to_string(),
-                serde_json::json!({ "node": binding.node_name, "feature": binding.feature.name() }),
+                serde_json::json!({ "node": binding.node_name, "feature": binding.feature_name() }),
             )
         })
         .collect();

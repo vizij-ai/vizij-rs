@@ -385,6 +385,9 @@ export interface VizijDescription {
   faceId: string | null;
   /** The prefix the Vizij's own paths live under (`rig/<faceId>/`). */
   rigPrefix: string;
+  /** The bounds the view frames: the authored `rootBounds`, or for a GLB
+   * declaring none, its scene's bounding box in the XY plane; `null` for a
+   * GLB without a mesh. */
   rootBounds: { center: { x: number; y: number }; size: { x: number; y: number } } | null;
   elements: {
     id: string;
@@ -394,7 +397,9 @@ export interface VizijDescription {
     morphTargets: string[];
   }[];
   /** animatable UUID → the node it drives and the feature (`translation`,
-   * `rotation`, `scale`, `color`, `opacity`, or a morph target's name). */
+   * `rotation`, `scale`, `color`, `opacity`, …, a component of one by
+   * Semio Studio's per-axis name — `translation.x`, `rotation.r`,
+   * `color.g` — or a morph target's name). */
   animatables: Record<string, { node: string; feature: string }>;
   graphs: { kind: string }[];
   /** The motion-graph programs the Vizij can run: each one's id, its label
@@ -1027,8 +1032,10 @@ export function setSelection(vizijId: string, elementIds: string[]): void {
  * the RobotData feature name: `translation`, `rotation` (an euler,
  * radians), `scale` (`{ x, y, z }`, or a number scaling evenly), `color`,
  * `emissive` (linear `{ r, g, b }`), `opacity`, `metalness`,
- * `emissiveIntensity` (numbers), or one of the element's morph target names
- * (a weight) — the value as RobotData stores a static feature, or any
+ * `emissiveIntensity` (numbers), one component of a triple by Semio
+ * Studio's per-axis name (`translation.x`, `rotation.r`, `color.g`: a
+ * number), or one of the element's morph target names (a weight) — the
+ * value as RobotData stores a static feature, or any
  * `ValueInput`. Applied once the Vizij is ready; a reload shows what its GLB
  * carries. A feature a device output drives is the device's again at its
  * next write.

@@ -78,7 +78,17 @@ device its bytes (`RuntimeHandle::reload`).
   per-node `RobotData` extension (the animatables — UUID-identified
   features) and the scene-root `VIZIJ_bundle` (graphs, poses,
   animations, metadata). Bevy loads the same GLB for meshes/materials/morphs; the two
-  worlds join on the glTF node name.
+  worlds join on the glTF node name (`GltfNode<index>` for an unnamed node,
+  as Bevy names it). Both RobotData feature models read: the web's whole
+  features (`translation`, `color`) and Semio Studio's per-axis ones
+  (`translation.x`, `rotation.r`, `color.g`), an axis binding its own
+  scalar animatable to one component, or a component `<id>.<axis>` of a
+  compound animatable binding `<id>` to the whole feature. An `ellipse` or
+  `rectangle` reads as a shape drawn with a unit circle or 1×1 plane scaled
+  by its `width` and `height` (where its node carries no mesh), its fill as
+  the material; its stroke features are dropped with a warning. A GLB
+  declaring no `rootBounds` is framed on its scene's XY bounding box, as
+  the web's import derives it.
 - **`face`** composes the bundle's graphs into one spec (node ids namespaced
   per source, store paths shared — the cross-source contract) and runs
   `RigHal` + `BlackboardStore` + `ProcessingGraph` as an arora; on desktop
@@ -308,23 +318,34 @@ publishes as `/robot_face/speech` for subtitles.
 
 ## Lighting model
 
-The web renders `MeshStandardMaterial` under a single `ambientLight(π/2)` and
-no environment map, which resolves to **base × (1 − metalness) × 0.5 +
-emissive × emissiveIntensity in linear space** (ambient intensity × the
-Lambert 1/π on the diffuse term; a metal has no diffuse and nothing to
-reflect, so a metallic plate is black; roughness shapes nothing). The native
-view reproduces this deterministically: every material renders unlit with
-that composition baked into its albedo (`--ambient`, default π/2), from the
-GLB material at load and from the `color`, `opacity`, `metalness`,
-`roughness`, `emissive` and `emissiveIntensity` bindings as the rig writes
-them. Elements declaring `material: "basic"` render at full albedo with no
-metalness or emissive term — three's `MeshBasicMaterial` ignores lights and
-has neither. Graph-driven `color` and `emissive` writes are linear
+The web renders its materials under a single `ambientLight(π/2)` and no
+environment map. A `MeshStandardMaterial` (`material: "standard"`) resolves
+to **base × (1 − metalness) × 0.5 + emissive × emissiveIntensity in linear
+space** (ambient intensity × the Lambert 1/π on the diffuse term; a metal
+has no diffuse and nothing to reflect, so a metallic plate is black;
+roughness shapes nothing). A `MeshPhongMaterial` or `MeshLambertMaterial`
+(`"phong"`, `"lambert"`) has no metalness and resolves to **base × 0.5 +
+emissive × emissiveIntensity** — the metallic factor their GLB material
+carries is ignored, and phong's `specular` and `shininess` need a direct
+light, so they shape nothing either. A `MeshBasicMaterial` (`"basic"`)
+ignores lights: its base color, with no metalness or emissive term.
+
+The native view reproduces this deterministically: every material renders
+unlit with that composition baked into its albedo (`--ambient`, default
+π/2), from the GLB material at load and from the `color`, `opacity`,
+`metalness`, `roughness`, `emissive`, `emissiveIntensity`, `shininess` and
+`specular` bindings as the rig writes them. A mesh no element declares — a
+GLB with no RobotData, such as a plain Blender export — is shaded as
+three's glTF loader makes its material: basic for `KHR_materials_unlit`,
+standard otherwise. Graph-driven `color` and `emissive` writes are linear
 working-space floats (three `Color.setRGB` semantics), not sRGB.
 
 Verified pixel-exact against the web renderer on flat regions of the
 reference faces: Quori and Toasty, whose look is in `color`, and Emy, whose
-look is a black metallic plate with emissive features.
+look is a black metallic plate with emissive features. Quori's Blender export
+carries its colors in `emissiveFactor` over a black metallic base and
+renders them exactly (its flat face color is the sRGB encoding of its
+emissive factor).
 
 
 ## Look-at policies

@@ -1,0 +1,5 @@
+---
+"@vizij/runtime": minor
+---
+
+The view renders faces authored in the authoring app, exported from Blender, or exported from Semio Studio. A `phong` or `lambert` element is shaded as three's `MeshPhongMaterial` and `MeshLambertMaterial` are under the ambient light — diffuse plus emissive, no metalness — and `shininess` and `specular` bind (they shape nothing without a direct light). Every mesh of a face is drawn under that model, a mesh no element declares shaded as three's glTF loader makes its material, so a GLB without RobotData (a plain Blender export, its colors in `emissiveFactor`) renders its colors; a GLB declaring no `rootBounds` is framed on its scene's bounding box, which `describe()` reports as its `rootBounds`. Studio's per-axis RobotData features (`translation.x`, `rotation.r`, `color.g`) bind, and `setStaticFeature` takes their names; `describe()` reports a per-axis animatable's `feature` by that name. A RobotData `ellipse` or `rectangle` draws as a shape with a unit circle or plane scaled by its `width` and `height`, its stroke dropped with a warning. An element on an unnamed glTF node is found.

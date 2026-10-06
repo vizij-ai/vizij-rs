@@ -93,8 +93,8 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
         .bindings
         .by_uuid
         .values()
-        .find(|(_, feature, _, _)| *feature == FeatureKind::Translation)
-        .map(|(entity, _, _, _)| *entity)
+        .find(|bound| bound.feature == FeatureKind::Translation)
+        .map(|bound| bound.entity)
         .expect("a translation binding");
     assert!(
         app.world().get::<Transform>(translated).is_some(),
@@ -120,6 +120,261 @@ fn a_face_composed_from_bytes_renders_the_devices_pose() {
         "the frame is flat ({} distinct colours)",
         distinct.len()
     );
+}
+
+/// A face exported from Semio Studio: RobotData features per axis, on an
+/// unnamed node, with a `phong` material, and no `rootBounds`. Its axes move
+/// the node one component at a time, a compound animatable split per axis
+/// colors it whole, and the phong material is shaded without the metallic
+/// factor its GLB carries.
+#[test]
+#[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job"]
+fn a_studio_exported_face_renders_its_per_axis_pose() {
+    use arora_hal::Hal;
+    use arora_types::data::{Key, StateChange};
+    use vizij::view::{Shading, Surface, ViewEvent};
+    use vizij_api_core::value::{float, vec3};
+
+    let (x, y, yaw, color) = (
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+    );
+    let glb = studio_face_glb(x, y, yaw, color);
+    let meta = vizij::view::meta::FaceMeta::from_glb_bytes(&glb).expect("reads");
+    assert_eq!(meta.root_bounds, Some((0.0, 0.0, 1.0, 1.0)));
+
+    let rig = vizij_arora_hal::RigHal::new();
+    let mut pose = StateChange::new();
+    for (id, value) in [
+        (x, float(0.25)),
+        (y, float(-0.125)),
+        (yaw, float(0.3)),
+        (color, vec3([1.0, 0.0, 0.0])),
+    ] {
+        pose.set.insert(Key::from(id.to_string()), Some(value));
+    }
+    rig.try_send(&pose);
+
+    let (events_tx, events_rx) = std::sync::mpsc::channel();
+    events_tx
+        .send(ViewEvent::LoadFace {
+            face_id: "studio".into(),
+            meta: Box::new(meta),
+            glb,
+            rig,
+        })
+        .unwrap();
+    let mut app = App::new();
+    FaceAssets::register(&mut app);
+    app.add_plugins(SnapshotPlugin {
+        width: WIDTH,
+        height: HEIGHT,
+    })
+    .insert_resource(ViewEvents(std::sync::Mutex::new(events_rx)))
+    .insert_resource(ViewOptions {
+        background: Color::BLACK,
+        fit: view::Fit::Contain,
+        zoom: Vec2::ONE,
+        ambient: std::f32::consts::FRAC_PI_2,
+        unlit: false,
+    })
+    .add_plugins(ViewPlugin);
+    let image = capture(&mut app, WIDTH, HEIGHT, 60, view::all_faces_ready).expect("a frame");
+
+    let mut faces = app.world_mut().query::<&Face>();
+    let face = faces.single(app.world()).expect("one face");
+    assert_eq!(face.bindings.by_uuid.len(), 4, "every animatable binds");
+    let targets = *face.bindings.elements.values().next().expect("the plate");
+    let transform = app.world().get::<Transform>(targets.node).expect("a node");
+    assert_eq!(transform.translation, Vec3::new(0.25, -0.125, 0.0));
+    assert!(transform
+        .rotation
+        .abs_diff_eq(Quat::from_rotation_z(0.3), 1e-6));
+    let surface = app
+        .world()
+        .get::<Surface>(targets.mesh.expect("a mesh"))
+        .expect("a surface");
+    assert_eq!(surface.shading, Shading::Diffuse);
+    assert_eq!(surface.base, [1.0, 0.0, 0.0]);
+
+    // Diffuse red under the ambient factor: linear 0.5, sRGB 188.
+    let red = image
+        .pixels()
+        .filter(|p| p.0[0].abs_diff(188) <= 2 && p.0[1] < 8 && p.0[2] < 8)
+        .count();
+    assert!(red > 100, "the plate is not drawn red ({red} pixels)");
+}
+
+/// The GLB of a one-plate face as Semio Studio exports it: an unnamed node
+/// carrying a unit square, a `phong` material with three's exporter's
+/// metallic factor of 0.5, and RobotData features per axis — `translation.x`
+/// and `translation.y` and `rotation.y` (yaw) each on an animatable of its
+/// own, `color.r/g/b` on the components of the compound animatable `color`.
+fn studio_face_glb(x: Uuid, y: Uuid, yaw: Uuid, color: Uuid) -> Vec<u8> {
+    let axis = |id: String| serde_json::json!({ "animated": true, "value": { "id": id, "type": "number", "default": 0 } });
+    let fixed = |value: f32| serde_json::json!({ "animated": false, "value": value });
+    let json = serde_json::json!({
+        "asset": { "version": "2.0" },
+        "extensionsUsed": ["RobotData"],
+        "scene": 0,
+        "scenes": [{ "nodes": [0] }],
+        "nodes": [{
+            "mesh": 0,
+            "extensions": { "RobotData": {
+                "id": Uuid::new_v4().to_string(),
+                "name": "Plate",
+                "type": "shape",
+                "material": "phong",
+                "features": {
+                    "translation.x": axis(x.to_string()),
+                    "translation.y": axis(y.to_string()),
+                    "translation.z": fixed(0.0),
+                    "rotation.r": fixed(0.0),
+                    "rotation.p": fixed(0.0),
+                    "rotation.y": axis(yaw.to_string()),
+                    "color.r": axis(format!("{color}.r")),
+                    "color.g": axis(format!("{color}.g")),
+                    "color.b": axis(format!("{color}.b")),
+                    "shininess": fixed(30.0),
+                }
+            } }
+        }],
+        "meshes": [{ "primitives": [{ "attributes": { "POSITION": 0 }, "indices": 1, "material": 0 }] }],
+        "materials": [{ "pbrMetallicRoughness": { "metallicFactor": 0.5, "roughnessFactor": 0.5 } }],
+        "accessors": [
+            { "bufferView": 0, "componentType": 5126, "count": 4, "type": "VEC3",
+              "min": [-0.5, -0.5, 0.0], "max": [0.5, 0.5, 0.0] },
+            { "bufferView": 1, "componentType": 5123, "count": 6, "type": "SCALAR" },
+        ],
+        "bufferViews": [
+            { "buffer": 0, "byteOffset": 0, "byteLength": 48 },
+            { "buffer": 0, "byteOffset": 48, "byteLength": 12 },
+        ],
+        "buffers": [{ "byteLength": 60 }],
+    });
+    let mut bin = Vec::new();
+    for p in [
+        [-0.5f32, -0.5, 0.0],
+        [0.5, -0.5, 0.0],
+        [0.5, 0.5, 0.0],
+        [-0.5, 0.5, 0.0],
+    ] {
+        for c in p {
+            bin.extend_from_slice(&c.to_le_bytes());
+        }
+    }
+    for i in [0u16, 1, 2, 0, 2, 3] {
+        bin.extend_from_slice(&i.to_le_bytes());
+    }
+    glb(&json, &bin)
+}
+
+/// A GLB container of `json` and its binary chunk `bin`.
+fn glb(json: &serde_json::Value, bin: &[u8]) -> Vec<u8> {
+    let mut json = serde_json::to_vec(json).unwrap();
+    while !json.len().is_multiple_of(4) {
+        json.push(b' ');
+    }
+    let total = 12 + 8 + json.len() + 8 + bin.len();
+    let mut glb = Vec::with_capacity(total);
+    glb.extend_from_slice(b"glTF");
+    glb.extend_from_slice(&2u32.to_le_bytes());
+    glb.extend_from_slice(&(total as u32).to_le_bytes());
+    glb.extend_from_slice(&(json.len() as u32).to_le_bytes());
+    glb.extend_from_slice(b"JSON");
+    glb.extend_from_slice(&json);
+    glb.extend_from_slice(&(bin.len() as u32).to_le_bytes());
+    glb.extend_from_slice(b"BIN\0");
+    glb.extend_from_slice(bin);
+    glb
+}
+
+/// A RobotData ellipse on a node carrying no mesh draws as its unit circle,
+/// sized by its `width` and `height` and filled by its `fillColor`; its
+/// stroke is not drawn.
+#[test]
+#[ignore = "renders on a GPU/lavapipe; run in the snapshot-regression CI job"]
+fn an_ellipse_draws_as_its_unit_circle() {
+    use vizij::view::{Shading, Surface, ViewEvent};
+
+    let fixed = |value: serde_json::Value| serde_json::json!({ "animated": false, "value": value });
+    let json = serde_json::json!({
+        "asset": { "version": "2.0" },
+        "extensionsUsed": ["RobotData"],
+        "scene": 0,
+        "scenes": [{ "nodes": [0] }],
+        "nodes": [{
+            "name": "Eye",
+            "extensions": { "RobotData": {
+                "id": Uuid::new_v4().to_string(),
+                "name": "Eye",
+                "type": "ellipse",
+                "features": {
+                    "translation": fixed(serde_json::json!({ "x": 0, "y": 0, "z": 0 })),
+                    "rotation": fixed(serde_json::json!({ "x": 0, "y": 0, "z": 0 })),
+                    "width": fixed(serde_json::json!(0.8)),
+                    "height": fixed(serde_json::json!(0.4)),
+                    "fillColor": fixed(serde_json::json!({ "r": 1, "g": 0, "b": 0 })),
+                    "strokeColor": fixed(serde_json::json!({ "r": 0, "g": 1, "b": 0 })),
+                    "strokeWidth": fixed(serde_json::json!(4)),
+                }
+            } }
+        }],
+    });
+    let glb = glb(&json, &[]);
+    let meta = vizij::view::meta::FaceMeta::from_glb_bytes(&glb).expect("reads");
+
+    let (events_tx, events_rx) = std::sync::mpsc::channel();
+    events_tx
+        .send(ViewEvent::LoadFace {
+            face_id: "ellipse".into(),
+            meta: Box::new(meta),
+            glb,
+            rig: vizij_arora_hal::RigHal::new(),
+        })
+        .unwrap();
+    let mut app = App::new();
+    FaceAssets::register(&mut app);
+    app.add_plugins(SnapshotPlugin {
+        width: WIDTH,
+        height: HEIGHT,
+    })
+    .insert_resource(ViewEvents(std::sync::Mutex::new(events_rx)))
+    .insert_resource(ViewOptions {
+        background: Color::BLACK,
+        fit: view::Fit::Contain,
+        zoom: Vec2::ONE,
+        ambient: std::f32::consts::FRAC_PI_2,
+        unlit: false,
+    })
+    .add_plugins(ViewPlugin);
+    let image = capture(&mut app, WIDTH, HEIGHT, 60, view::all_faces_ready).expect("a frame");
+
+    let mut faces = app.world_mut().query::<&Face>();
+    let face = faces.single(app.world()).expect("one face");
+    let targets = *face.bindings.elements.values().next().expect("the eye");
+    let scale = app
+        .world()
+        .get::<Transform>(targets.node)
+        .expect("a node")
+        .scale;
+    assert_eq!(scale, Vec3::new(0.8, 0.4, 1.0));
+    let mesh = targets.mesh.expect("a unit circle");
+    let surface = app.world().get::<Surface>(mesh).expect("a surface");
+    assert_eq!(surface.shading, Shading::Standard);
+    assert_eq!(surface.base, [1.0, 0.0, 0.0]);
+
+    // The default 5×4 bounds on 320×200 draw 50 px a unit: the ellipse is
+    // 80×40 px, about 2500 px of diffuse red (linear 0.5, sRGB 188), and
+    // nothing green.
+    let red = image
+        .pixels()
+        .filter(|p| p.0[0].abs_diff(188) <= 2 && p.0[1] < 8 && p.0[2] < 8)
+        .count();
+    assert!((2300..2700).contains(&red), "{red} red pixels");
+    assert!(image.pixels().all(|p| p.0[1] < 8), "a stroke is drawn");
 }
 
 /// Two faces in one App, each in its own slot with its own camera, placed

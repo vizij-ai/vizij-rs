@@ -10365,6 +10365,7 @@ dependencies = [
  "arora-behavior-tree-types",
  "arora-bridge",
  "arora-bridge-ros2",
+ "arora-hal",
  "arora-module",
  "arora-msgs-ros2",
  "arora-types",
