@@ -41,6 +41,8 @@ There is no `module.yaml`, `build.rs` or generated source in the crate.
 | `TrackOutput` | `{ track_id: str, default_key: str, value: <dynamic Value> }` |
 | `PlayerState` (record `1.2.0`) | `{ player: u32, state: str, time_ns: u64, duration_ns: u64, speed: f32, name: str, instances: [InstanceState], loop_mode: str, ended: bool, window_start_ns: u64, window_end_ns: u64? }` — `state` is `"playing" \| "paused" \| "stopped"`, as the last `play`, `pause` or `stop` left it (a player waiting for its `play_at` start keeps the state it had, `"playing"` from its start on); `duration_ns` is the player's length, the latest end over its instances; `speed` is the multiplier as `set_speed` set it, negative backwards; `name` is the one `create_player` gave it (empty without one); `loop_mode` is `"once" \| "loop" \| "ping_pong"`; `ended` says a `once` player has reached the window bound it plays toward; the window end is absent when it ends at the player's length |
 | `InstanceState` (record `1.1.0`) | `{ instance: u32, anim: u32, weight: f32, start_offset_ns: i64, time_scale: f32 }` — an instance on a player, the animation it plays, its blend weight, and its timing on the player timeline |
+| `BakedAnimation` | `{ frame_rate: f32, start_ns: u64, end_ns: u64, tracks: [BakedTrack] }` — an animation sampled at `frame_rate` Hz over a window of its clip, in nanoseconds; sample `i` is at `start_ns / 1e9 + i / frame_rate` seconds into the clip, up to the first at or past `end_ns`, one past the clip's end holding its end value; the window reads back as requested, clamped into the clip |
+| `BakedTrack` | `{ animatable_id: str, values: <dynamic Value>, derivatives: <dynamic Value> }` — a track's key and its samples: `values` a `Value::ArrayValue` of one dynamic value per frame, `derivatives` one `Value::Option` per frame from `bake_with_derivatives` (`Value::Option(None)` where a sample has no derivative) and an empty array from `bake`; each travels as one dynamic value because a record field cannot declare an array of them, so the records have a form on the self-describing value wire (a module call's, a bridge's) and none on a typed wire such as CDR |
 
 A keyframe/output `value` is a **dynamic `Value`** (the `KEY_VALUE_ID` escape
 hatch), so Vizij composites (`Vec3`/`Quat`/`Transform`/`ColorRgba`) ride through
@@ -126,10 +128,12 @@ Per tick and transport:
   `vizij/animations/players` — so a clip's end is the `ended` value there,
   not an event. A **patch**: the vision is state changes as first-class,
   combinable values the behavior conveys, not a second feedback channel.
-- `bake(anim, frame_rate?, start_time?, end_time?) -> str` and
-  `bake_with_derivatives(…)` — the sampled clip as JSON; the optional window
-  defaults to 60 Hz over the whole clip and clamps into it. An empty string
-  when `anim` is not loaded, or when the bake would take more than
+- `bake(anim, frame_rate?, start_ns?, end_ns?) -> BakedAnimation?` and
+  `bake_with_derivatives(…)` — the animation sampled at `frame_rate` Hz (60
+  when left out) over a window of its clip, in nanoseconds (the whole clip
+  when left out; it clamps into the clip), each sample a `Value`;
+  `bake_with_derivatives` adds each sample's derivative. Absent when `anim`
+  is not loaded, or when the bake would take more than
   `vizij-animation-core`'s `MAX_BAKE_SAMPLES` (2²⁰) samples over all tracks,
   derivatives included.
 

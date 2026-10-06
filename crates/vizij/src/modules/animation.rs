@@ -151,10 +151,10 @@ pub fn host_module() -> HostModule {
             Box::new(move |call| {
                 let anim = arg(call, ids::bake::ANIM, "anim")?;
                 let frame_rate = arg(call, ids::bake::FRAME_RATE, "frame_rate")?;
-                let start_time = arg(call, ids::bake::START_TIME, "start_time")?;
-                let end_time = arg(call, ids::bake::END_TIME, "end_time")?;
-                Ok(Value::from(
-                    a.borrow().bake(anim, frame_rate, start_time, end_time),
+                let start_ns = arg(call, ids::bake::START_NS, "start_ns")?;
+                let end_ns = arg(call, ids::bake::END_NS, "end_ns")?;
+                Ok(optional(
+                    a.borrow().bake(anim, frame_rate, start_ns, end_ns),
                 ))
             })
         }),
@@ -163,11 +163,12 @@ pub fn host_module() -> HostModule {
             Box::new(move |call| {
                 let anim = arg(call, ids::bake_with_derivatives::ANIM, "anim")?;
                 let frame_rate = arg(call, ids::bake_with_derivatives::FRAME_RATE, "frame_rate")?;
-                let start_time = arg(call, ids::bake_with_derivatives::START_TIME, "start_time")?;
-                let end_time = arg(call, ids::bake_with_derivatives::END_TIME, "end_time")?;
-                Ok(Value::from(a.borrow().bake_with_derivatives(
-                    anim, frame_rate, start_time, end_time,
-                )))
+                let start_ns = arg(call, ids::bake_with_derivatives::START_NS, "start_ns")?;
+                let end_ns = arg(call, ids::bake_with_derivatives::END_NS, "end_ns")?;
+                Ok(optional(
+                    a.borrow()
+                        .bake_with_derivatives(anim, frame_rate, start_ns, end_ns),
+                ))
             })
         }),
         (ids::unload_animation::FUNCTION, {
@@ -435,6 +436,11 @@ fn arg<T: FromArg>(call: &Call, id: Uuid, name: &str) -> Result<T, CallError> {
             message: format!("missing parameter `{name}`"),
         }),
     }
+}
+
+/// A declared optional return: `Value::Option`, its record inside when present.
+fn optional<T: Into<Value>>(record: Option<T>) -> Value {
+    Value::Option(record.map(|record| Box::new(record.into())))
 }
 
 /// Records as the typed `Value::ArrayStructure` a declared array return is:
@@ -778,6 +784,63 @@ mod tests {
             "50 ms after the anchor, got {} ns",
             state.time_ns
         );
+    }
+
+    /// `bake` answers a call with a `BakedAnimation` record, its window
+    /// arguments in nanoseconds, and `Value::Option(None)` for an animation
+    /// not loaded.
+    #[test]
+    fn bake_answers_with_a_baked_animation_record() {
+        let mut device = device();
+        let clip = module_animation(
+            &authored(serde_json::json!({ "id": "b", "duration": 1, "tracks": [
+                { "channel": "b", "keyframes": [
+                    { "time": 0, "value": 0 }, { "time": 1, "value": 1 },
+                ] },
+            ] })),
+            &ChannelKeys::default(),
+        );
+        let Value::U32(anim) = call(
+            &mut device,
+            ids::load_animation::FUNCTION,
+            vec![field(ids::load_animation::CLIP, clip.into())],
+        ) else {
+            panic!("an animation id");
+        };
+        let bake = |device: &mut arora::Arora, anim: u32| {
+            call(
+                device,
+                ids::bake::FUNCTION,
+                vec![
+                    field(ids::bake::ANIM, Value::U32(anim)),
+                    field(ids::bake::FRAME_RATE, Value::F32(10.0)),
+                    field(ids::bake::END_NS, Value::U64(500_000_000)),
+                ],
+            )
+        };
+        let Value::Option(Some(baked)) = bake(&mut device, anim) else {
+            panic!("a baked animation");
+        };
+        let baked = vizij_animation_module::BakedAnimation::try_from(*baked).expect("decodes");
+        assert_eq!((baked.start_ns, baked.end_ns), (0, 500_000_000));
+        let Value::ArrayValue(values) = &baked.tracks[0].values else {
+            panic!("an array value");
+        };
+        assert_eq!(values.len(), 6);
+        assert_eq!(bake(&mut device, anim + 1), Value::Option(None));
+
+        // A window in seconds, the arguments' former unit, is refused.
+        let error = device
+            .call(Call {
+                module_id: Some(ids::MODULE),
+                id: ids::bake::FUNCTION,
+                args: vec![
+                    field(ids::bake::ANIM, Value::U32(anim)),
+                    field(ids::bake::START_NS, Value::F32(0.5)),
+                ],
+            })
+            .expect_err("an f32 start");
+        assert!(error.to_string().contains("start_ns"), "{error}");
     }
 
     #[test]

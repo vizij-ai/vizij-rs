@@ -47,7 +47,8 @@
 //!   animation source writes it to `vizij/animations/players`); this call is a
 //!   **patch**: the vision is state changes as first-class, combinable values
 //!   the behavior conveys, not a second feedback channel;
-//! - baking — `bake` / `bake_with_derivatives`, the sampled clip as JSON.
+//! - baking — `bake` / `bake_with_derivatives`, the animation sampled at a
+//!   fixed rate as a [`BakedAnimation`] record of `Value`s.
 
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
@@ -56,9 +57,9 @@ use arora_types::value::Value;
 use arora_types::AroraType;
 
 use vizij_animation_core::{
-    export_baked_json, export_baked_with_derivatives_json, AnimId, AnimationData, BakingConfig,
-    Config, Engine, Inputs, InstId, InstanceCfg, InstanceUpdate, Keypoint as CoreKeypoint,
-    LoopMode, PlayerCommand, PlayerId, Track as CoreTrack, Transitions, Vec2,
+    AnimId, AnimationData, BakedAnimationData, BakedDerivativeAnimationData, BakingConfig, Config,
+    Engine, Inputs, InstId, InstanceCfg, InstanceUpdate, Keypoint as CoreKeypoint, LoopMode,
+    PlayerCommand, PlayerId, Track as CoreTrack, Transitions, Vec2,
 };
 
 // Boundary types --------------------------------------------------------------
@@ -196,6 +197,56 @@ pub struct InstanceState {
     pub start_offset_ns: i64,
     #[arora(id = "76697a69-6a00-0000-0112-000000000005")]
     pub time_scale: f32,
+}
+
+/// An animation sampled at a fixed rate over a window of its clip, as
+/// `bake` and `bake_with_derivatives` return it. Sample `i` of each track is
+/// the track at `start_ns / 1e9 + i / frame_rate` seconds into the clip, from
+/// the window's start up to the first sample at or past its end; a sample
+/// past the clip's end holds the clip's end value.
+///
+/// The records travel on the self-describing value wire (a module call's,
+/// a bridge's); the samples, dynamic values, have no form on a typed wire
+/// such as CDR.
+#[derive(Debug, Clone, PartialEq, AroraType)]
+#[arora(id = "76697a69-6a00-0000-0000-000000000120")]
+pub struct BakedAnimation {
+    /// The samples per second.
+    #[arora(id = "76697a69-6a00-0000-0120-000000000001")]
+    pub frame_rate: f32,
+    /// Where the window starts in the clip, in nanoseconds: the first
+    /// sample's instant.
+    #[arora(id = "76697a69-6a00-0000-0120-000000000002")]
+    pub start_ns: u64,
+    /// Where the window ends in the clip, in nanoseconds.
+    #[arora(id = "76697a69-6a00-0000-0120-000000000003")]
+    pub end_ns: u64,
+    /// One entry per track of the animation, in the clip's track order.
+    #[arora(id = "76697a69-6a00-0000-0120-000000000004")]
+    pub tracks: Vec<BakedTrack>,
+}
+
+/// One track's samples in a [`BakedAnimation`], one per frame.
+///
+/// The samples travel as one dynamic `Value`, a `Value::ArrayValue`, since a
+/// record field cannot declare an array of dynamic values; each element is a
+/// dynamic value as [`Keypoint::value`] is.
+#[derive(Debug, Clone, PartialEq, AroraType)]
+#[arora(id = "76697a69-6a00-0000-0000-000000000121")]
+pub struct BakedTrack {
+    /// The key the track animates: its [`AnimTrack::animatable_id`].
+    #[arora(id = "76697a69-6a00-0000-0121-000000000001")]
+    pub animatable_id: String,
+    /// The track's value at each frame: a `Value::ArrayValue`.
+    #[arora(id = "76697a69-6a00-0000-0121-000000000002", keyvalue)]
+    pub values: Value,
+    /// The track's rate of change per second at each frame, from
+    /// `bake_with_derivatives`: a `Value::ArrayValue` of `Value::Option`s,
+    /// `Value::Option(None)` where the sample has no derivative (a boolean
+    /// or text track).
+    /// Empty when the bake took no derivatives (`bake`).
+    #[arora(id = "76697a69-6a00-0000-0121-000000000003", keyvalue)]
+    pub derivatives: Value,
 }
 
 /// One load's state: the engine, the key-to-track index, the transport
@@ -560,49 +611,62 @@ impl AnimationModule {
             .collect()
     }
 
-    /// Bake animation `anim` to sampled per-track values over a fixed window
-    /// and return the result as a JSON string (`vizij-animation-core`'s
-    /// `export_baked_json` shape). `frame_rate` (Hz) defaults to 60,
-    /// `start_time` (seconds) to 0, and `end_time` (seconds) to the clip
-    /// duration; the window clamps into the clip. Returns an empty string if
-    /// `anim` is not loaded, or if the bake would take more than the core's
+    /// Bake animation `anim`: each of its tracks sampled at `frame_rate` Hz
+    /// (60 when left out) over the window from `start_ns` (0 when left out)
+    /// to `end_ns` (the clip's end when left out), in nanoseconds of the
+    /// clip's time; the window clamps into the clip. `None` when `anim` is
+    /// not loaded, or when the bake would take more than the core's
     /// `MAX_BAKE_SAMPLES` samples over all tracks.
     pub fn bake(
         &self,
         anim: u32,
         frame_rate: Option<f32>,
-        start_time: Option<f32>,
-        end_time: Option<f32>,
-    ) -> String {
-        let cfg = baking_config(frame_rate, start_time, end_time);
-        match self.engine.bake_animation(AnimId(anim), &cfg) {
-            Ok(baked) => export_baked_json(&baked).to_string(),
-            Err(_) => String::new(),
-        }
+        start_ns: Option<u64>,
+        end_ns: Option<u64>,
+    ) -> Option<BakedAnimation> {
+        let cfg = baking_config(frame_rate, start_ns, end_ns);
+        let baked = self.engine.bake_animation(AnimId(anim), &cfg).ok()?;
+        let window = self.bake_window(anim, start_ns, end_ns)?;
+        Some(baked_animation(baked, None, window))
     }
 
-    /// Like [`AnimationModule::bake`], but also samples per-frame derivatives;
-    /// returns the combined values-and-derivatives JSON
-    /// (`export_baked_with_derivatives_json` shape). Returns an empty string
-    /// if `anim` is not loaded, or if the bake would take more than
-    /// `MAX_BAKE_SAMPLES` samples, values and derivatives together.
+    /// [`AnimationModule::bake`], each sample with the track's derivative
+    /// there. `None` when `anim` is not loaded, or when the bake would take
+    /// more than `MAX_BAKE_SAMPLES` samples, values and derivatives together.
     pub fn bake_with_derivatives(
         &self,
         anim: u32,
         frame_rate: Option<f32>,
-        start_time: Option<f32>,
-        end_time: Option<f32>,
-    ) -> String {
-        let cfg = baking_config(frame_rate, start_time, end_time);
-        match self
+        start_ns: Option<u64>,
+        end_ns: Option<u64>,
+    ) -> Option<BakedAnimation> {
+        let cfg = baking_config(frame_rate, start_ns, end_ns);
+        let (baked, derivatives) = self
             .engine
             .bake_animation_with_derivatives(AnimId(anim), &cfg)
-        {
-            Ok((baked, derivatives)) => {
-                export_baked_with_derivatives_json(&baked, &derivatives).to_string()
-            }
-            Err(_) => String::new(),
-        }
+            .ok()?;
+        let window = self.bake_window(anim, start_ns, end_ns)?;
+        Some(baked_animation(baked, Some(derivatives), window))
+    }
+
+    /// The window a bake of `anim` takes, in nanoseconds: the requested one
+    /// clamped into the clip, `[start_ns, end_ns]` as the core clamps it,
+    /// computed in integers so it reads back as exactly what was asked.
+    fn bake_window(
+        &self,
+        anim: u32,
+        start_ns: Option<u64>,
+        end_ns: Option<u64>,
+    ) -> Option<(u64, u64)> {
+        let duration_ns = self
+            .engine
+            .list_animations()
+            .into_iter()
+            .find(|info| info.id == anim)
+            .map(|info| u64::from(info.duration_ms) * 1_000_000)?;
+        let start = start_ns.unwrap_or(0).min(duration_ns);
+        let end = end_ns.unwrap_or(duration_ns).clamp(start, duration_ns);
+        Some((start, end))
     }
 
     /// Advance the engine by `dt_ns` nanoseconds and return per-track outputs.
@@ -668,14 +732,14 @@ fn guest<T>(f: impl FnOnce(&mut AnimationModule) -> T) -> T {
 #[arora_module::module(
     id = "76697a69-6a00-0000-0d00-000000000000",
     name = "vizij-animation",
-    version = "1.1.2",
+    version = "2.0.0",
     author = "Semio",
     license = "Proprietary",
     description = "vizij-animation-core as an Arora wasm module",
     executable_mime = "application/wasm"
 )]
 pub mod animation {
-    use super::{guest, AnimationClip, PlayerState, TrackOutput};
+    use super::{guest, AnimationClip, BakedAnimation, PlayerState, TrackOutput};
 
     /// [`AnimationModule::load_animation`](super::AnimationModule::load_animation).
     #[export(id = "76697a69-6a00-0000-0f00-000000000001")]
@@ -787,10 +851,10 @@ pub mod animation {
     pub fn bake(
         #[param(id = "76697a69-6a00-0000-0f0e-000000000001")] anim: u32,
         #[param(id = "76697a69-6a00-0000-0f0e-000000000002")] frame_rate: Option<f32>,
-        #[param(id = "76697a69-6a00-0000-0f0e-000000000003")] start_time: Option<f32>,
-        #[param(id = "76697a69-6a00-0000-0f0e-000000000004")] end_time: Option<f32>,
-    ) -> String {
-        guest(|a| a.bake(anim, frame_rate, start_time, end_time))
+        #[param(id = "76697a69-6a00-0000-0f0e-000000000003")] start_ns: Option<u64>,
+        #[param(id = "76697a69-6a00-0000-0f0e-000000000004")] end_ns: Option<u64>,
+    ) -> Option<BakedAnimation> {
+        guest(|a| a.bake(anim, frame_rate, start_ns, end_ns))
     }
 
     /// [`AnimationModule::bake_with_derivatives`](super::AnimationModule::bake_with_derivatives).
@@ -798,10 +862,10 @@ pub mod animation {
     pub fn bake_with_derivatives(
         #[param(id = "76697a69-6a00-0000-0f0f-000000000001")] anim: u32,
         #[param(id = "76697a69-6a00-0000-0f0f-000000000002")] frame_rate: Option<f32>,
-        #[param(id = "76697a69-6a00-0000-0f0f-000000000003")] start_time: Option<f32>,
-        #[param(id = "76697a69-6a00-0000-0f0f-000000000004")] end_time: Option<f32>,
-    ) -> String {
-        guest(|a| a.bake_with_derivatives(anim, frame_rate, start_time, end_time))
+        #[param(id = "76697a69-6a00-0000-0f0f-000000000003")] start_ns: Option<u64>,
+        #[param(id = "76697a69-6a00-0000-0f0f-000000000004")] end_ns: Option<u64>,
+    ) -> Option<BakedAnimation> {
+        guest(|a| a.bake_with_derivatives(anim, frame_rate, start_ns, end_ns))
     }
 
     /// [`AnimationModule::unload_animation`](super::AnimationModule::unload_animation).
@@ -881,19 +945,19 @@ pub mod animation {
 
 // baking ---------------------------------------------------------------------
 
-/// Build a [`BakingConfig`] from the module's optional scalar arguments,
-/// falling back to the core defaults (frame rate 60 Hz, start 0 s, end = clip
+/// Build a [`BakingConfig`] from the module's optional arguments, falling
+/// back to the core defaults (frame rate 60 Hz, start 0 s, end = clip
 /// duration) for any argument left unset.
 fn baking_config(
     frame_rate: Option<f32>,
-    start_time: Option<f32>,
-    end_time: Option<f32>,
+    start_ns: Option<u64>,
+    end_ns: Option<u64>,
 ) -> BakingConfig {
     let defaults = BakingConfig::default();
     BakingConfig {
         frame_rate: frame_rate.unwrap_or(defaults.frame_rate),
-        start_time: start_time.unwrap_or(defaults.start_time),
-        end_time: end_time.or(defaults.end_time),
+        start_time: start_ns.map_or(defaults.start_time, ns_to_seconds),
+        end_time: end_ns.map(ns_to_seconds).or(defaults.end_time),
         derivative_epsilon: defaults.derivative_epsilon,
     }
 }
@@ -927,6 +991,43 @@ fn to_core_animation(clip: AnimationClip) -> (AnimationData, Vec<(String, String
         duration_ms: clip.duration,
     };
     (data, keys)
+}
+
+/// The core's bake as the module returns it, over the window `bake_window`
+/// gives in nanoseconds: each track's samples as one array value, with
+/// `derivatives`' when the bake took them (one track per track of `baked`, in
+/// its order).
+fn baked_animation(
+    baked: BakedAnimationData,
+    derivatives: Option<BakedDerivativeAnimationData>,
+    (start_ns, end_ns): (u64, u64),
+) -> BakedAnimation {
+    let mut derivatives = derivatives.map(|d| d.tracks.into_iter());
+    BakedAnimation {
+        frame_rate: baked.frame_rate,
+        start_ns,
+        end_ns,
+        tracks: baked
+            .tracks
+            .into_iter()
+            .map(|track| BakedTrack {
+                animatable_id: track.target_path,
+                values: Value::ArrayValue(track.values),
+                derivatives: Value::ArrayValue(
+                    derivatives
+                        .as_mut()
+                        .and_then(Iterator::next)
+                        .map(|d| {
+                            d.values
+                                .into_iter()
+                                .map(|sample| Value::Option(sample.map(Box::new)))
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                ),
+            })
+            .collect(),
+    }
 }
 
 /// Whether `weight` is a blend weight: finite and not negative.
@@ -1210,7 +1311,7 @@ mod tests {
             state_of(&a, second).instances.is_empty(),
             "the player stays, without the instance"
         );
-        assert!(a.bake(anim, None, None, None).is_empty());
+        assert!(a.bake(anim, None, None, None).is_none());
     }
 
     #[test]
@@ -1632,57 +1733,78 @@ mod tests {
         );
     }
 
+    /// A bake comes back as a `BakedAnimation`: the effective rate and
+    /// window in nanoseconds, and per track its key and its samples, the
+    /// derivatives only when asked for.
     #[test]
-    fn bake_exports_sampled_tracks_as_json() {
+    fn bake_returns_typed_samples() {
         let mut a = AnimationModule::new();
-        let anim = a.load_animation(constant_clip("bake-me", "joint/x", 0.5));
+        let anim = a.load_animation(ramp_clip("bake-me", "joint/x", true));
 
-        // A loaded clip bakes to a JSON object echoing the requested frame rate
-        // and carrying at least one track of sampled values.
-        let json = a.bake(anim, Some(30.0), None, None);
-        let parsed: serde_json::Value = serde_json::from_str(&json).expect("baked JSON parses");
-        assert_eq!(parsed["frame_rate"].as_f64(), Some(30.0));
-        let tracks = parsed["tracks"].as_array().expect("tracks array");
-        assert!(!tracks.is_empty(), "at least one baked track");
-        assert!(
-            tracks[0].get("target_path").is_some(),
-            "track carries a path"
+        let baked = a
+            .bake(anim, Some(4.0), Some(250_000_000), None)
+            .expect("a loaded animation bakes");
+        assert_eq!(baked.frame_rate, 4.0);
+        assert_eq!((baked.start_ns, baked.end_ns), (250_000_000, 1_000_000_000));
+        assert_eq!(baked.tracks.len(), 1);
+        let track = &baked.tracks[0];
+        assert_eq!(track.animatable_id, "joint/x");
+        let Value::ArrayValue(values) = &track.values else {
+            panic!("an array value, got {:?}", track.values);
+        };
+        let samples: Vec<f32> = values.iter().map(as_f32).collect();
+        assert_eq!(samples.len(), 4, "0.25 s to 1 s at 4 Hz, both ends");
+        for (sample, expected) in samples.iter().zip([0.25, 0.5, 0.75, 1.0]) {
+            near(*sample, expected);
+        }
+        assert_eq!(track.derivatives, Value::ArrayValue(Vec::new()));
+
+        let with = a
+            .bake_with_derivatives(anim, Some(4.0), Some(250_000_000), None)
+            .expect("a loaded animation bakes");
+        assert_eq!(with.tracks[0].values, track.values);
+        let Value::ArrayValue(derivatives) = &with.tracks[0].derivatives else {
+            panic!("an array value");
+        };
+        assert_eq!(derivatives.len(), 4);
+        let Value::Option(Some(slope)) = &derivatives[1] else {
+            panic!("a derivative at 0.5 s, got {:?}", derivatives[1]);
+        };
+        near(as_f32(slope), 1.0);
+
+        let value = Value::from(baked.clone());
+        assert_eq!(BakedAnimation::try_from(value).expect("decodes"), baked);
+
+        // The window reads back as requested, whatever f32 makes of it.
+        let window = a
+            .bake(anim, Some(10.0), Some(100_000_000), Some(1_234_000_000))
+            .expect("a loaded animation bakes");
+        assert_eq!(
+            (window.start_ns, window.end_ns),
+            (100_000_000, 1_000_000_000)
         );
-        assert!(
-            tracks[0]["values"]
-                .as_array()
-                .is_some_and(|v| !v.is_empty()),
-            "track has sampled values"
-        );
-
-        // The derivatives variant wraps values + derivatives.
-        let deriv = a.bake_with_derivatives(anim, Some(30.0), None, None);
-        let dparsed: serde_json::Value =
-            serde_json::from_str(&deriv).expect("derivative JSON parses");
-        assert!(dparsed.get("values").is_some() && dparsed.get("derivatives").is_some());
-
-        // An unloaded animation bakes to an empty string.
-        assert!(a.bake(u32::MAX, None, None, None).is_empty());
+        assert!(a.bake(u32::MAX, None, None, None).is_none());
     }
 
-    /// A bake beyond the core's sample bound is refused with an empty
-    /// string, and a window past the clip's end bakes its end.
+    /// A bake beyond the core's sample bound is refused with `None`, and a
+    /// window past the clip's end bakes its end.
     #[test]
     fn a_bake_too_large_is_refused_and_a_late_window_clamps() {
         let mut a = AnimationModule::new();
         let anim = a.load_animation(ramp_clip("big", "big/x", true));
-        assert!(a.bake(anim, Some(1e9), None, None).is_empty());
+        assert!(a.bake(anim, Some(1e9), None, None).is_none());
         assert!(a
             .bake_with_derivatives(anim, Some(1e9), None, None)
-            .is_empty());
-        assert!(a.bake(anim, Some(f32::MAX), None, None).is_empty());
+            .is_none());
+        assert!(a.bake(anim, Some(f32::MAX), None, None).is_none());
 
-        let late = a.bake(anim, Some(30.0), Some(5.0), None);
-        let parsed: serde_json::Value = serde_json::from_str(&late).expect("baked JSON parses");
-        assert_eq!(parsed["start_time"].as_f64(), Some(1.0));
+        let late = a
+            .bake(anim, Some(30.0), Some(5_000_000_000), None)
+            .expect("a window past the end bakes");
+        assert_eq!((late.start_ns, late.end_ns), (1_000_000_000, 1_000_000_000));
         assert_eq!(
-            parsed["tracks"][0]["values"].as_array().map(Vec::len),
-            Some(1)
+            late.tracks[0].values,
+            Value::ArrayValue(vec![Value::F32(1.0)])
         );
     }
 }

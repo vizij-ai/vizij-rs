@@ -248,17 +248,14 @@ fn bad_input_is_refused_without_a_trap() {
     client::add_instance(&mut engine, player, anim).expect("add_instance");
 
     let refused = client::bake(&mut engine, anim, Some(1e9), None, None).expect("bake");
-    assert!(refused.is_empty(), "a billion samples are refused");
-    let late = client::bake(&mut engine, anim, Some(30.0), Some(5.0), None).expect("bake");
-    let late: serde_json::Value = serde_json::from_str(&late).expect("baked JSON");
+    assert!(refused.is_none(), "a billion samples are refused");
+    let late = client::bake(&mut engine, anim, Some(30.0), Some(5_000_000_000), None)
+        .expect("bake")
+        .expect("a window past the end bakes the end");
+    assert_eq!((late.start_ns, late.end_ns), (1_000_000_000, 1_000_000_000));
     assert_eq!(
-        late["start_time"].as_f64(),
-        Some(1.0),
-        "a window past the end bakes the end"
-    );
-    assert_eq!(
-        late["tracks"][0]["values"].as_array().map(Vec::len),
-        Some(1)
+        late.tracks[0].values,
+        Value::ArrayValue(vec![Value::F32(1.0)])
     );
 
     let states = client::player_states(&mut engine).expect("player_states");
@@ -278,4 +275,40 @@ fn bad_input_is_refused_without_a_trap() {
             .expect("add_instance_with_weight"),
         u32::MAX
     );
+}
+
+/// A bake through the guest comes back as a typed `BakedAnimation`: its
+/// window in nanoseconds, each track's samples as `Value`s, and the
+/// derivatives as optional `Value`s when asked for.
+#[ignore = "needs the wasm artifact pre-built (a nested cargo build deadlocks on the build lock); run with --ignored after `cargo build -p vizij-animation-module --target wasm32-wasip1`"]
+#[test]
+fn a_bake_returns_typed_samples_through_the_wasm_module() {
+    use animation::client;
+    let mut engine = engine_with_the_guest();
+    let anim = client::load_animation(&mut engine, ramp_clip()).expect("load_animation");
+    let baked = client::bake(&mut engine, anim, Some(10.0), None, Some(500_000_000))
+        .expect("bake")
+        .expect("a loaded animation bakes");
+    assert_eq!(
+        (baked.frame_rate, baked.start_ns, baked.end_ns),
+        (10.0, 0, 500_000_000)
+    );
+    assert_eq!(baked.tracks[0].animatable_id, "node/x");
+    let Value::ArrayValue(values) = &baked.tracks[0].values else {
+        panic!("an array value, got {:?}", baked.tracks[0].values);
+    };
+    assert_eq!(values.len(), 6, "0 to 0.5 s at 10 Hz, both ends");
+    assert_eq!(baked.tracks[0].derivatives, Value::ArrayValue(Vec::new()));
+
+    let with = client::bake_with_derivatives(&mut engine, anim, Some(10.0), None, None)
+        .expect("bake_with_derivatives")
+        .expect("a loaded animation bakes");
+    let Value::ArrayValue(derivatives) = &with.tracks[0].derivatives else {
+        panic!("an array value");
+    };
+    assert_eq!(derivatives.len(), 11);
+    assert!(matches!(derivatives[5], Value::Option(Some(_))));
+    assert!(client::bake(&mut engine, anim + 1, None, None, None)
+        .expect("bake")
+        .is_none());
 }
