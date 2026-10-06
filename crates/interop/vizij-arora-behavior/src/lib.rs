@@ -1651,6 +1651,82 @@ mod tests {
         assert_eq!(read_key(&store, &handle.result[0]), Some(Value::U8(134)));
     }
 
+    /// The continuous gaze policies: `idle` and `random` ignore the goal
+    /// target, wander the gaze around a point 10 m straight ahead in the
+    /// face's own frame, and run until halted.
+    #[test]
+    fn idle_and_random_gaze_wander_until_halted() {
+        use crate::gaze::{self, look_at::ids::look_at as ids};
+
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        graph.set_task_fragment(ids::FUNCTION, gaze::look_at_fragment());
+        let mut bridge = NoopBridge;
+        store
+            .write(StateChange::set("sensor/x", float(0.75)))
+            .unwrap();
+
+        for policy in ["idle", "random"] {
+            let handle = graph
+                .spawn(
+                    Call {
+                        module_id: Some(arora_behavior::interpreter_module::ID),
+                        id: ids::FUNCTION,
+                        args: vec![
+                            StructureField {
+                                id: ids::POLICY,
+                                value: Box::new(Value::String(policy.to_string())),
+                            },
+                            StructureField {
+                                id: ids::TARGET,
+                                value: Box::new(Value::ArrayF32(vec![1.0, 2.0, 3.0])),
+                            },
+                            StructureField {
+                                id: ids::FRAME,
+                                value: Box::new(Value::String("sellion_link".to_string())),
+                            },
+                        ],
+                    },
+                    RunPolicy::Concurrent,
+                )
+                .expect("spawn");
+            let mut targets = Vec::new();
+            for _ in 0..20 {
+                graph.tick_store(&store, &mut bridge, 0.25).expect("tick");
+                assert_eq!(
+                    read_key(&store, &handle.status),
+                    Some(task::running()),
+                    "{policy} keeps running",
+                );
+                match read(&store, "standard/ros4hri/gaze/target") {
+                    Some(Value::ArrayF32(target)) => targets.push(target),
+                    other => panic!("{policy}: gaze target {other:?}"),
+                }
+            }
+            assert_eq!(
+                read(&store, "standard/ros4hri/gaze/frame"),
+                Some(Value::String(String::new())),
+                "{policy} gazes in the face's frame",
+            );
+            for target in &targets {
+                let [x, y, z] = target.as_slice() else {
+                    panic!("{policy}: gaze target {target:?}");
+                };
+                assert_eq!(*x, 10.0, "{policy} looks 10 m ahead");
+                assert!(y.abs() <= 2.5 && z.abs() <= 1.5, "{policy}: {target:?}");
+            }
+            assert!(
+                targets.windows(2).any(|pair| pair[0] != pair[1]),
+                "{policy} moves the gaze: {targets:?}",
+            );
+
+            graph.halt(handle.id).expect("halt");
+            graph.tick_store(&store, &mut bridge, 0.05).expect("tick");
+            assert_eq!(read_key(&store, &handle.status), Some(task::failure()));
+        }
+    }
+
     /// A behavior that damps the `in/target` input (from 0) onto `out`: its
     /// damp node's state is what a run carries across a LOAD or an EDIT.
     fn damped(out: &str) -> GraphSpec {
