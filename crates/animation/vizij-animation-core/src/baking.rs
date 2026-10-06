@@ -1,12 +1,28 @@
 #![allow(dead_code)]
 //! Baking API: produce baked samples for an AnimationData clip over a time window.
 
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 use crate::data::AnimationData;
 use crate::ids::AnimId;
-use crate::sampling::{sample_track_with_derivative_epsilon, DEFAULT_DERIVATIVE_EPSILON};
+use crate::sampling::{
+    sample_track, sample_track_with_derivative_epsilon, DEFAULT_DERIVATIVE_EPSILON,
+};
 use vizij_api_core::Value;
+
+/// The most samples one bake takes, over all its tracks; a bake with
+/// derivatives counts each derivative sample as well.
+///
+/// A bake reserves its samples before sampling, so one asking for more is
+/// refused with [`BakeError::TooManySamples`] whatever memory is available:
+/// no frame rate or window a caller passes makes it reserve more than this.
+/// At the bound, the samples of scalar and fixed-size kinds (vectors,
+/// quaternions, colors, transforms) take tens to a few hundred megabytes; a
+/// sample that owns data sized by its keyframes (a numeric array, a text)
+/// allocates it on top, infallibly.
+pub const MAX_BAKE_SAMPLES: usize = 1 << 20;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakingConfig {
@@ -16,7 +32,7 @@ pub struct BakingConfig {
     pub frame_rate: f32,
     /// Start time (seconds) in clip space.
     ///
-    /// Negative values clamp to `0.0`.
+    /// Clamps into `[0, duration]`; NaN is `0.0`.
     pub start_time: f32,
     /// End time (seconds) in clip space; if `None`, uses the animation duration in seconds.
     ///
@@ -38,6 +54,37 @@ impl Default for BakingConfig {
         }
     }
 }
+
+/// Why a bake produced no samples.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum BakeError {
+    /// No animation is loaded under the id.
+    NotLoaded(AnimId),
+    /// The window at the frame rate takes `samples` samples over all tracks,
+    /// more than [`MAX_BAKE_SAMPLES`].
+    TooManySamples {
+        /// The samples the bake would take.
+        samples: f64,
+    },
+    /// The samples could not be allocated.
+    OutOfMemory,
+}
+
+impl fmt::Display for BakeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BakeError::NotLoaded(anim) => write!(f, "no animation is loaded under id {}", anim.0),
+            BakeError::TooManySamples { samples } => write!(
+                f,
+                "a bake of {samples} samples: at most {MAX_BAKE_SAMPLES} are taken"
+            ),
+            BakeError::OutOfMemory => f.write_str("the baked samples could not be allocated"),
+        }
+    }
+}
+
+impl std::error::Error for BakeError {}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BakedTrack {
@@ -85,64 +132,131 @@ pub struct BakedDerivativeAnimationData {
     pub tracks: Vec<BakedDerivativeTrack>,
 }
 
-/// Bake a single [`AnimationData`] using the provided config.
+/// A bake's effective rate and window, and the frames it samples.
+struct Window {
+    rate: f32,
+    start: f32,
+    end: f32,
+    duration: f32,
+    frames: usize,
+}
+
+impl Window {
+    /// `cfg` applied to `data`, refused when the bake would take more than
+    /// [`MAX_BAKE_SAMPLES`] samples, `per_frame` per track and frame.
+    fn new(data: &AnimationData, cfg: &BakingConfig, per_frame: usize) -> Result<Self, BakeError> {
+        let rate = if cfg.frame_rate.is_finite() && cfg.frame_rate > 0.0 {
+            cfg.frame_rate
+        } else {
+            60.0
+        };
+        let rate = rate.max(1.0);
+        // Canonical duration (ms) in seconds, the baking time domain.
+        let duration = data.duration_ms as f32 / 1000.0;
+        let start = cfg.start_time.max(0.0).min(duration);
+        let end = cfg
+            .end_time
+            .filter(|end| end.is_finite())
+            .unwrap_or(duration)
+            .clamp(start, duration);
+        // Inclusive of the end. The span is multiplied in f32, where an
+        // inexact duration (0.1 s) times a rate rounds onto the integer it
+        // means; a rate that overflows it is infinite and refused.
+        let frames = f64::from(((end - start) * rate).ceil()) + 1.0;
+        let frames = if data.tracks.is_empty() { 0.0 } else { frames };
+        let samples = frames * (data.tracks.len() * per_frame) as f64;
+        if samples.is_nan() || samples > MAX_BAKE_SAMPLES as f64 {
+            return Err(BakeError::TooManySamples { samples });
+        }
+        Ok(Self {
+            rate,
+            start,
+            end,
+            duration,
+            frames: frames as usize,
+        })
+    }
+
+    /// The normalized clip time of frame `f`.
+    fn u(&self, f: usize) -> f32 {
+        let t = self.start + (f as f32) / self.rate;
+        if self.duration > 0.0 {
+            (t / self.duration).clamp(0.0, 1.0)
+        } else {
+            0.0
+        }
+    }
+}
+
+/// An empty vector with room for `len` elements, or [`BakeError::OutOfMemory`].
+fn with_capacity<T>(len: usize) -> Result<Vec<T>, BakeError> {
+    let mut v = Vec::new();
+    v.try_reserve_exact(len)
+        .map_err(|_| BakeError::OutOfMemory)?;
+    Ok(v)
+}
+
+/// Bake a single [`AnimationData`] using the provided config: each track
+/// sampled at every frame of the window.
 ///
-/// Invalid or non-finite config values are clamped/fallback-adjusted to safe defaults.
+/// Invalid or non-finite config values are clamped/fallback-adjusted to safe
+/// defaults; a bake of more than [`MAX_BAKE_SAMPLES`] samples is refused.
 pub fn bake_animation_data(
     anim_id: AnimId,
     data: &AnimationData,
     cfg: &BakingConfig,
-) -> BakedAnimationData {
-    bake_animation_data_with_derivatives(anim_id, data, cfg).0
+) -> Result<BakedAnimationData, BakeError> {
+    let window = Window::new(data, cfg, 1)?;
+    let mut tracks = with_capacity(data.tracks.len())?;
+    for track in &data.tracks {
+        let mut values = with_capacity(window.frames)?;
+        for f in 0..window.frames {
+            // Encode the POD samples into wire-form Values for the baked artifact.
+            values.push(sample_track(track, window.u(f)).into());
+        }
+        tracks.push(BakedTrack {
+            target_path: track.animatable_id.clone(),
+            values,
+        });
+    }
+    Ok(BakedAnimationData {
+        anim: anim_id,
+        frame_rate: window.rate,
+        start_time: window.start,
+        end_time: window.end,
+        tracks,
+    })
 }
 
-/// Bake animation values and derivatives simultaneously.
+/// Bake animation values and derivatives simultaneously: the values
+/// [`bake_animation_data`] gives, and each frame's derivative.
 ///
 /// The returned time window is expressed in clip seconds even though `AnimationData` stores
-/// durations in milliseconds.
+/// durations in milliseconds. A bake of more than [`MAX_BAKE_SAMPLES`]
+/// samples, values and derivatives together, is refused.
 pub fn bake_animation_data_with_derivatives(
     anim_id: AnimId,
     data: &AnimationData,
     cfg: &BakingConfig,
-) -> (BakedAnimationData, BakedDerivativeAnimationData) {
-    let sr = if cfg.frame_rate.is_finite() && cfg.frame_rate > 0.0 {
-        cfg.frame_rate
-    } else {
-        60.0
-    };
-    let sr = sr.max(1.0);
-    let start = cfg.start_time.max(0.0);
-    // Convert canonical duration (ms) to seconds for baking time domain
-    let duration_s = data.duration_ms as f32 / 1000.0;
-    let mut end = cfg.end_time.unwrap_or(duration_s);
-    if !end.is_finite() {
-        end = duration_s;
-    }
-    let end = end.clamp(start, duration_s);
-    let span = end - start;
-    let frames_f = (span * sr).ceil();
-    let frame_count = frames_f as usize + 1; // inclusive of end
-
+) -> Result<(BakedAnimationData, BakedDerivativeAnimationData), BakeError> {
+    let window = Window::new(data, cfg, 2)?;
     let derivative_epsilon = cfg
         .derivative_epsilon
         .filter(|eps| eps.is_finite() && *eps > 0.0)
         .unwrap_or(DEFAULT_DERIVATIVE_EPSILON);
 
-    let mut tracks = Vec::with_capacity(data.tracks.len());
-    let mut derivative_tracks = Vec::with_capacity(data.tracks.len());
+    let mut tracks = with_capacity(data.tracks.len())?;
+    let mut derivative_tracks = with_capacity(data.tracks.len())?;
     for track in &data.tracks {
-        let mut values = Vec::with_capacity(frame_count);
-        let mut derivatives = Vec::with_capacity(frame_count);
-        for f in 0..frame_count {
-            let t = start + (f as f32) / sr; // seconds in clip space
-            let u = if duration_s > 0.0 {
-                (t / duration_s).clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
-            let (v, deriv) =
-                sample_track_with_derivative_epsilon(track, u, duration_s, derivative_epsilon);
-            // Encode the POD samples into wire-form Values for the baked artifact.
+        let mut values = with_capacity(window.frames)?;
+        let mut derivatives = with_capacity(window.frames)?;
+        for f in 0..window.frames {
+            let (v, deriv) = sample_track_with_derivative_epsilon(
+                track,
+                window.u(f),
+                window.duration,
+                derivative_epsilon,
+            );
             values.push(v.into());
             derivatives.push(deriv.map(Value::from));
         }
@@ -156,22 +270,22 @@ pub fn bake_animation_data_with_derivatives(
         });
     }
 
-    (
+    Ok((
         BakedAnimationData {
             anim: anim_id,
-            frame_rate: sr,
-            start_time: start,
-            end_time: end,
+            frame_rate: window.rate,
+            start_time: window.start,
+            end_time: window.end,
             tracks,
         },
         BakedDerivativeAnimationData {
             anim: anim_id,
-            frame_rate: sr,
-            start_time: start,
-            end_time: end,
+            frame_rate: window.rate,
+            start_time: window.start,
+            end_time: window.end,
             tracks: derivative_tracks,
         },
-    )
+    ))
 }
 
 /// Export baked data as `serde_json::Value` using the stable baked-data schema.

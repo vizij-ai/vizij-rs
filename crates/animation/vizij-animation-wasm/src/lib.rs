@@ -281,9 +281,10 @@ impl VizijAnimation {
     pub fn bake_animation(&self, anim_id: u32, cfg: JsValue) -> Result<JsValue, JsError> {
         let cfg_rs = parse_baking_config(cfg)?;
         let aid = AnimId(anim_id);
-        let baked = self.core.bake_animation(aid, &cfg_rs).ok_or_else(|| {
-            JsError::new(&format!("bake_animation: unknown animation id {anim_id}"))
-        })?;
+        let baked = self
+            .core
+            .bake_animation(aid, &cfg_rs)
+            .map_err(|e| JsError::new(&format!("bake_animation: {e}")))?;
         swb::to_value(&baked)
             .map_err(|e| JsError::new(&format!("bake_animation serialize error: {e}")))
     }
@@ -382,7 +383,7 @@ impl VizijAnimation {
         let (values, derivatives): (BakedAnimationData, BakedDerivativeAnimationData) = self
             .core
             .bake_animation_with_derivatives(aid, &cfg_rs)
-            .ok_or_else(|| JsError::new("bake_animation_with_derivatives: animation not loaded"))?;
+            .map_err(|e| JsError::new(&format!("bake_animation_with_derivatives: {e}")))?;
         let payload = json!({
             "values": values,
             "derivatives": derivatives,

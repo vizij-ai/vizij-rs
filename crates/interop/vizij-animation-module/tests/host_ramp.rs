@@ -234,30 +234,37 @@ fn the_transport_reaches_the_wasm_module() {
     assert!(started.time_ns.abs_diff(50_000_000) < 1_000);
 }
 
-/// The guest answers the calls after a trap. A bake whose samples cannot be
-/// allocated traps the guest and changes nothing, so its players read back
-/// as they were. The arguments the module refuses come back as `u32::MAX`,
-/// before anything reaches the engine.
+/// Inputs that used to trap the guest are refused with a value: a bake of
+/// more samples than the core bakes comes back empty, a window past the
+/// clip's end bakes its end, and the arguments the module rejects come back
+/// as `u32::MAX`, before anything reaches the engine. The guest answers on.
 #[ignore = "needs the wasm artifact pre-built (a nested cargo build deadlocks on the build lock); run with --ignored after `cargo build -p vizij-animation-module --target wasm32-wasip1`"]
 #[test]
-fn a_trapped_call_leaves_the_guest_callable() {
+fn bad_input_is_refused_without_a_trap() {
     use animation::client;
     let mut engine = engine_with_the_guest();
     let anim = client::load_animation(&mut engine, ramp_clip()).expect("load_animation");
     let player = client::create_player(&mut engine, Some("p".into())).expect("create_player");
     client::add_instance(&mut engine, player, anim).expect("add_instance");
 
-    let trap = client::bake(&mut engine, anim, Some(1e9), None, None)
-        .expect_err("a billion samples do not fit the guest's memory");
-    assert!(
-        matches!(trap, arora_types::call::CallError::Trap { .. }),
-        "{trap}"
+    let refused = client::bake(&mut engine, anim, Some(1e9), None, None).expect("bake");
+    assert!(refused.is_empty(), "a billion samples are refused");
+    let late = client::bake(&mut engine, anim, Some(30.0), Some(5.0), None).expect("bake");
+    let late: serde_json::Value = serde_json::from_str(&late).expect("baked JSON");
+    assert_eq!(
+        late["start_time"].as_f64(),
+        Some(1.0),
+        "a window past the end bakes the end"
+    );
+    assert_eq!(
+        late["tracks"][0]["values"].as_array().map(Vec::len),
+        Some(1)
     );
 
-    let states = client::player_states(&mut engine).expect("player_states after a trap");
+    let states = client::player_states(&mut engine).expect("player_states");
     assert_eq!((states.len(), states[0].name.as_str()), (1, "p"));
     assert_eq!(states[0].instances.len(), 1);
-    let out = client::step(&mut engine, 250_000_000, None).expect("step after a trap");
+    let out = client::step(&mut engine, 250_000_000, None).expect("step");
     assert_eq!(out.len(), 1);
 
     for rejected in [f32::NAN, f32::INFINITY] {

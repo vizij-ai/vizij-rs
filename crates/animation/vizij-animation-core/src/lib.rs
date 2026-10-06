@@ -38,8 +38,8 @@ pub mod value;
 /// Baking helpers and exported baked-data contracts.
 pub use baking::{
     bake_animation_data, bake_animation_data_with_derivatives, export_baked_json,
-    export_baked_with_derivatives_json, BakedAnimationData, BakedDerivativeAnimationData,
-    BakedDerivativeTrack, BakingConfig,
+    export_baked_with_derivatives_json, BakeError, BakedAnimationData,
+    BakedDerivativeAnimationData, BakedDerivativeTrack, BakingConfig, MAX_BAKE_SAMPLES,
 };
 /// Binding traits and table types used by host adapters.
 pub use binding::{BindingSet, BindingTable, ChannelKey, TargetHandle, TargetResolver};

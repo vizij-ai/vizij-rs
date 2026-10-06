@@ -168,6 +168,7 @@ Most projects can rely on `Config::default()`, but headless baking tools or orch
 
 - `bake_animation_data` – Generates sampled animation data at a fixed frame rate for export.
 - `bake_animation_data_with_derivatives` – Adds derivative tracks using finite differencing (`derivative_epsilon` configurable via `BakingConfig`).
+- A bake of more than `MAX_BAKE_SAMPLES` (2²⁰) samples over all tracks, derivatives included, is refused with `BakeError::TooManySamples` before anything is allocated.
 - Export helpers serialise baked bundles back to JSON for tooling or offline optimisation.
 
 ### Events & Inputs

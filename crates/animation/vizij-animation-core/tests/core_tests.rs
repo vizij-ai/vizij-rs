@@ -671,7 +671,8 @@ fn baking_matches_sampling_and_counts() {
         a,
         &mk_anim("clip", 1.0, vec![track.clone()]),
         &cfg,
-    );
+    )
+    .expect("a bake within the bound");
     assert_eq!(baked.frame_rate, 60.0);
     assert_eq!(baked.start_time, 0.0);
     approx(baked.end_time, 1.0, 1e-6);
@@ -712,15 +713,134 @@ fn baking_with_derivatives_aligns_tracks() {
     };
 
     let (values, derivatives) =
-        vizij_animation_core::baking::bake_animation_data_with_derivatives(AnimId(0), &anim, &cfg);
+        vizij_animation_core::baking::bake_animation_data_with_derivatives(AnimId(0), &anim, &cfg)
+            .expect("a bake within the bound");
 
     assert_eq!(values.tracks.len(), derivatives.tracks.len());
+    let values_only =
+        vizij_animation_core::baking::bake_animation_data(AnimId(0), &anim, &cfg).expect("bake");
+    assert_eq!(
+        values_only.tracks[0].values, values.tracks[0].values,
+        "a values-only bake samples the same values"
+    );
     for (v_track, d_track) in values.tracks.iter().zip(derivatives.tracks.iter()) {
         assert_eq!(v_track.target_path, d_track.target_path);
         assert_eq!(v_track.values.len(), d_track.values.len());
     }
     let derivative_samples = &derivatives.tracks[0].values;
     assert!(derivative_samples.iter().any(|entry| entry.is_some()));
+}
+
+/// A bake whose window at its frame rate takes more than `MAX_BAKE_SAMPLES`
+/// samples over all tracks is refused before anything is allocated, at any
+/// rate; derivative samples count; a window starting past the clip's end
+/// bakes the end; an animation not loaded is named in the refusal.
+#[test]
+fn baking_refuses_more_samples_than_the_bound() {
+    use vizij_animation_core::{BakeError, MAX_BAKE_SAMPLES};
+    let tracks: Vec<Track> = (0..4)
+        .map(|i| mk_scalar_track_linear(&format!("node.{i}"), &[(0.0, 0.0), (1.0, 1.0)]))
+        .collect();
+    let anim = mk_anim("clip", 1.0, tracks);
+    let bake = |frame_rate: f32| {
+        let cfg = BakingConfig {
+            frame_rate,
+            ..Default::default()
+        };
+        vizij_animation_core::baking::bake_animation_data(AnimId(0), &anim, &cfg)
+    };
+    for rate in [1e9, f32::MAX] {
+        assert!(
+            matches!(bake(rate), Err(BakeError::TooManySamples { .. })),
+            "{rate} Hz"
+        );
+    }
+    // 4 tracks over 1 s: (rate + 1) frames each.
+    let at_bound = (MAX_BAKE_SAMPLES / 4 - 1) as f32;
+    assert_eq!(
+        bake(at_bound).expect("at the bound").tracks[0].values.len(),
+        MAX_BAKE_SAMPLES / 4
+    );
+    assert!(bake(at_bound + 1.0).is_err(), "one frame past it");
+    let cfg = BakingConfig {
+        frame_rate: at_bound,
+        ..Default::default()
+    };
+    assert!(
+        vizij_animation_core::baking::bake_animation_data_with_derivatives(AnimId(0), &anim, &cfg)
+            .is_err(),
+        "derivatives double the samples"
+    );
+    let half = BakingConfig {
+        frame_rate: (MAX_BAKE_SAMPLES / 8 - 1) as f32,
+        ..Default::default()
+    };
+    let (values, derivatives) =
+        vizij_animation_core::baking::bake_animation_data_with_derivatives(AnimId(0), &anim, &half)
+            .expect("values and derivatives at the bound");
+    assert_eq!(
+        values.tracks[0].values.len() + derivatives.tracks[0].values.len(),
+        MAX_BAKE_SAMPLES / 4
+    );
+
+    // An inexact duration keeps its frame count: 0.1 s at 10 Hz is 2 frames.
+    let short = mk_anim(
+        "short",
+        0.1,
+        vec![mk_scalar_track_linear("node.s", &[(0.0, 0.0), (1.0, 1.0)])],
+    );
+    let ten = BakingConfig {
+        frame_rate: 10.0,
+        ..Default::default()
+    };
+    let baked = vizij_animation_core::baking::bake_animation_data(AnimId(0), &short, &ten)
+        .expect("a short bake");
+    assert_eq!(baked.tracks[0].values.len(), 2);
+
+    // No tracks: nothing to sample at any rate.
+    let empty = mk_anim("empty", 1.0, Vec::new());
+    let huge = BakingConfig {
+        frame_rate: f32::MAX,
+        ..Default::default()
+    };
+    let baked = vizij_animation_core::baking::bake_animation_data(AnimId(0), &empty, &huge)
+        .expect("an empty bake");
+    assert!(baked.tracks.is_empty());
+
+    // Out-of-range windows clamp into the clip; a rate that is not positive
+    // and finite is 60 Hz.
+    for (start_time, end_time, frame_rate) in [
+        (f32::NAN, Some(f32::NAN), f32::NAN),
+        (-1.0, Some(f32::INFINITY), -5.0),
+        (0.5, Some(0.25), 0.0),
+    ] {
+        let cfg = BakingConfig {
+            frame_rate,
+            start_time,
+            end_time,
+            derivative_epsilon: Some(f32::NAN),
+        };
+        let baked = vizij_animation_core::baking::bake_animation_data(AnimId(0), &anim, &cfg)
+            .expect("a clamped bake");
+        assert_eq!(baked.frame_rate, 60.0);
+        assert!(baked.start_time <= baked.end_time);
+    }
+
+    let late = BakingConfig {
+        start_time: 5.0,
+        ..Default::default()
+    };
+    let baked = vizij_animation_core::baking::bake_animation_data(AnimId(0), &anim, &late)
+        .expect("a window past the end");
+    assert_eq!((baked.start_time, baked.end_time), (1.0, 1.0));
+    assert_eq!(baked.tracks[0].values, vec![Value::F32(1.0)]);
+
+    let eng = Engine::new(Config::default());
+    assert_eq!(
+        eng.bake_animation(AnimId(7), &BakingConfig::default())
+            .map(|_| ()),
+        Err(BakeError::NotLoaded(AnimId(7)))
+    );
 }
 
 // // it should bake animations through the engine facade using the same sampler
@@ -1141,7 +1261,8 @@ fn baking_empty_and_single_key_tracks() {
         end_time: Some(1.0),
         ..Default::default()
     };
-    let baked = vizij_animation_core::baking::bake_animation_data(AnimId(0), &anim, &cfg);
+    let baked =
+        vizij_animation_core::baking::bake_animation_data(AnimId(0), &anim, &cfg).expect("bake");
     assert_eq!(baked.tracks.len(), 2);
     // Single-key baked values should all equal the key's value
     assert!(baked.tracks.iter().any(|t| t.target_path == "node.single"
