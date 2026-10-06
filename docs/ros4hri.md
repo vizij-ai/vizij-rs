@@ -41,8 +41,7 @@ stays with the face.
 > **The ROS side lives in
 > [`arora-bridge-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-bridge-ros2),
 > not this repo.** Its `ExposureProfile::ros4hri()` preset subscribes the typed
-> face topics — PAL's `/robot_face/{expression,look_at,tts}` and IIIA's
-> `/expressive_face/{look_at,speech}` — and routes their fields onto these keys,
+> face topics — PAL's `/robot_face/{expression,look_at,tts}` — and routes their fields onto these keys,
 > publishes the [face image](#driving-a-key-from-ros-2) on
 > `/robot_face/image_raw[/compressed]`,
 > and binds the [`/skill/look_at`](#the-look_at-skill) action. The `vizij`
@@ -70,7 +69,7 @@ serves it); this table summarizes it.
 | `standard/ros4hri/gaze/target` | vec3 (m) | a look-at point (face frame: x forward, y left, z up) | per-eye gaze with vergence |
 | `standard/ros4hri/gaze/frame` | string | the look-at point's frame id | consumed by the `look_at` skill, not the mapping |
 | `standard/ros4hri/au/<code>` | f32 `[0,1]` | `hri_msgs/FacialActionUnits` | FACS action-unit intensity → muscle controls |
-| `standard/ros4hri/speech/text` | string | `/robot_face/tts`, `/expressive_face/speech` | the utterance to lip-sync — **nothing consumes it yet** (see Lips below) |
+| `standard/ros4hri/speech/text` | string | `/robot_face/tts` | the utterance to lip-sync — **nothing consumes it yet** (see Lips below) |
 
 ## Per-channel behaviour
 

@@ -184,8 +184,7 @@ local bridge:
 `--ros2` attaches [`arora-bridge-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-bridge-ros2)
 with its ROS4HRI exposure preset:
 
-- the typed face topics — `/robot_face/{expression,look_at,tts}` and
-  `/expressive_face/{look_at,speech}` — routed onto the `ros4hri` profile's
+- the typed face topics — `/robot_face/{expression,look_at,tts}` — routed onto the `ros4hri` profile's
   `standard/ros4hri/*` keys;
 - the **`/<namespace>/actions/{play_viseme,say}`** action servers, synthesized
   from the viseme players' signatures ([skills](../../docs/skills.md));

@@ -43,8 +43,7 @@ cargo run -p vizij --features ros2 -- --glb path/to/face.glb --ros2
 
 The device joins the ROS graph as a drop-in ROS4HRI face renderer:
 
-- **typed topic endpoints** — `/robot_face/{expression,look_at,tts}` and
-  `/expressive_face/{look_at,speech}` land on the face's `standard/ros4hri/*`
+- **typed topic endpoints** — `/robot_face/{expression,look_at,tts}` land on the face's `standard/ros4hri/*`
   keys;
 - **the `/skill/look_at` action** (`interaction_skills/LookAt`) — goal-driven
   gaze with tracking, glances, reset, priorities, and standard error codes;

@@ -74,8 +74,7 @@ support](ros4hri.md#driving-a-key-from-ros-2)).
 
 Two producers exist outside the players and neither reaches them:
 
-- **The ROS4HRI lipsync topic.** `/robot_face/tts` and
-  `/expressive_face/speech` land their text on `standard/ros4hri/speech/text`
+- **The ROS4HRI lipsync topic.** `/robot_face/tts` land their text on `standard/ros4hri/speech/text`
   ([ROS4HRI support](ros4hri.md#the-standardros4hri-key-contract)); nothing
   routes it into a `say` run, so the text moves no mouth.
 - **The web.** vizij-web runs its own lipsync in JS, against the face's pose
