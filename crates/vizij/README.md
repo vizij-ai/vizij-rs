@@ -184,19 +184,17 @@ local bridge:
 `--ros2` attaches [`arora-bridge-ros2`](https://github.com/semio-ai/arora-sdk/tree/main/crates/arora-bridge-ros2)
 with its ROS4HRI exposure preset:
 
-- the typed face topics — `/robot_face/{look_at,tts}` and
-  `/skill/set_expression` — routed onto the `ros4hri` profile's
-  `standard/ros4hri/*` keys;
+- the typed face topics — `/robot_face/{expression,look_at}` and
+  `/expressive_face/look_at` — routed onto the `ros4hri` profile's
+  `standard/ros4hri/*` keys. An expression command naming an expression
+  shows that expression alone at its arousal as the intensity (clamped to
+  0..1, so a calm, negative arousal shows none); one with an empty name
+  blends the expressions by its valence and arousal (each -1..1) on the
+  circumplex;
 - the **`/<namespace>/actions/{play_viseme,say}`** action servers, synthesized
   from the viseme players' signatures ([skills](../../docs/skills.md));
 - the **`/skill/look_at`** action server (`interaction_skills/LookAt`):
   track / glance / reset policies, priority preemption, standard error codes;
-- the **`/skill/set_expression`** expression input 
-  (interaction_skills/  SetExpression):
-  when an expression name is provided, arousal is used directly as the
-  selected Vizij expression's intensity (0..1); when the expression name is
-  empty, valence and arousal drive the normal ROS4HRI circumplex mapping
-  (arousal remains -1..1);
 - the **face image** on the `image_transport` pair PAL OS documents:
   `display/face/compressed` as a `sensor_msgs/CompressedImage` on
   `/robot_face/image_raw/compressed` (`--frame-format png`, the default), or
