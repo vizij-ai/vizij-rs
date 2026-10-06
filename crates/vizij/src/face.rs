@@ -1047,13 +1047,28 @@ mod tests {
         assert!(read_f32(&arora, standard::LEFT_EYE_POS_X).abs() < 0.01);
     }
 
+    /// A commanded name selects its expression alone, the arousal its
+    /// intensity: full at 1, partial in between, none for a calm (negative)
+    /// arousal.
     #[test]
-    fn ros4hri_expression_name_one_hots() {
+    fn ros4hri_expression_name_selects_at_arousal_intensity() {
         let mut arora = ros4hri_device();
         stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("happy"));
+        stage(&arora, ros4hri::EXPRESSION_AROUSAL_KEY, float(1.0));
         settle(&mut arora);
         assert!(read_f32(&arora, &standard::expression_path("happy")) > 0.95);
         assert!(read_f32(&arora, &standard::expression_path("neutral")) < 0.01);
+        assert!(read_f32(&arora, &standard::expression_path("sad")) < 0.01);
+
+        stage(&arora, ros4hri::EXPRESSION_AROUSAL_KEY, float(0.5));
+        settle(&mut arora);
+        let happy = read_f32(&arora, &standard::expression_path("happy"));
+        assert!((happy - 0.5).abs() < 0.05, "happy = {happy}");
+
+        stage(&arora, ros4hri::EXPRESSION_AROUSAL_KEY, float(-0.5));
+        settle(&mut arora);
+        let happy = read_f32(&arora, &standard::expression_path("happy"));
+        assert!(happy < 0.01, "happy = {happy}");
         assert!(read_f32(&arora, &standard::expression_path("sad")) < 0.01);
     }
 
@@ -1463,6 +1478,7 @@ mod tests {
 
         // A ROS4HRI expression command reaches Quori's emotion-pose plane.
         stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("happy"));
+        stage(&arora, ros4hri::EXPRESSION_AROUSAL_KEY, float(1.0));
         settle(&mut arora);
         let waist = read_f32(&arora, "rig/quori_latest/standard/vizij/expression/happy");
         assert!(waist > 0.95, "mapping output missing (happy = {waist})");

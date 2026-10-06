@@ -39,6 +39,11 @@
       }
     },
     {
+      "id": "expression/intensity",
+      "type": "clamp",
+      "params": {}
+    },
+    {
       "id": "expression/affect",
       "type": "join",
       "params": {}
@@ -2557,6 +2562,33 @@
   "edges": [
     {
       "from": {
+        "node_id": "in/expression/arousal"
+      },
+      "to": {
+        "node_id": "expression/intensity",
+        "input": "in"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/0"
+      },
+      "to": {
+        "node_id": "expression/intensity",
+        "input": "min"
+      }
+    },
+    {
+      "from": {
+        "node_id": "const/1"
+      },
+      "to": {
+        "node_id": "expression/intensity",
+        "input": "max"
+      }
+    },
+    {
+      "from": {
         "node_id": "in/expression/valence"
       },
       "to": {
@@ -4987,7 +5019,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/neutral/weight",
@@ -5077,7 +5109,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/angry/weight",
@@ -5167,7 +5199,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/sad/weight",
@@ -5257,7 +5289,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/happy/weight",
@@ -5347,7 +5379,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/surprised/weight",
@@ -5437,7 +5469,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/disgusted/weight",
@@ -5527,7 +5559,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/scared/weight",
@@ -5617,7 +5649,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/pleading/weight",
@@ -5707,7 +5739,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/vulnerable/weight",
@@ -5797,7 +5829,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/despaired/weight",
@@ -5887,7 +5919,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/guilty/weight",
@@ -5977,7 +6009,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/disappointed/weight",
@@ -6067,7 +6099,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/embarrassed/weight",
@@ -6157,7 +6189,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/horrified/weight",
@@ -6247,7 +6279,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/skeptical/weight",
@@ -6337,7 +6369,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/annoyed/weight",
@@ -6427,7 +6459,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/furious/weight",
@@ -6517,7 +6549,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/suspicious/weight",
@@ -6607,7 +6639,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/rejected/weight",
@@ -6697,7 +6729,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/bored/weight",
@@ -6787,7 +6819,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/tired/weight",
@@ -6877,7 +6909,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/asleep/weight",
@@ -6967,7 +6999,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/confused/weight",
@@ -7057,7 +7089,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/amazed/weight",
@@ -7147,7 +7179,7 @@
     },
     {
       "from": {
-        "node_id": "const/1"
+        "node_id": "expression/intensity"
       },
       "to": {
         "node_id": "expression/excited/weight",

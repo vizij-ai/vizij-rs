@@ -167,12 +167,15 @@ fn build(rig_prefix: &str) -> (String, Json) {
     let zero = g.constant(0.0);
     let one = g.constant(1.0);
 
-    // --- Expression: a commanded name one-hots; otherwise valence/arousal
-    // blend the named weights by proximity to each expression's circumplex
-    // anchor. ------------------------------------------------------------
+    // --- Expression: a commanded name selects its expression, at the
+    // commanded arousal as its intensity; otherwise valence/arousal blend the
+    // named weights by proximity to each expression's circumplex anchor. ---
     let name = g.input("in/expression/name", EXPRESSION_NAME_KEY, json!(""));
     let valence = g.input("in/expression/valence", EXPRESSION_VALENCE_KEY, json!(0.0));
     let arousal = g.input("in/expression/arousal", EXPRESSION_AROUSAL_KEY, json!(0.0));
+    // A named expression's intensity: the arousal, its negative half (calm)
+    // reading as no intensity rather than an inverted pose.
+    let intensity = g.clamp("expression/intensity", &arousal, 0.0, 1.0);
 
     // The commanded affect as a point (valence, arousal) on the circumplex.
     let affect = g.op(
@@ -249,15 +252,15 @@ fn build(rig_prefix: &str) -> (String, Json) {
         } else {
             g.mul(&id("blend"), &active, &share)
         };
-        // The commanded name selects: this expression → 1, no name → the
-        // blend, another name → 0.
+        // The commanded name selects: this expression → its intensity, no
+        // name → the circumplex blend, another name → 0.
         let weight = g.op(
             &id("weight"),
             "case",
             json!({ "case_labels": [expr, ""] }),
             &[
                 ("selector", &name),
-                ("operand_0", &one),
+                ("operand_0", &intensity),
                 ("operand_1", &blend),
                 ("default", &zero),
             ],

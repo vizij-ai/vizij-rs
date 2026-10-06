@@ -54,6 +54,10 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Changed
 
+- The ROS4HRI mapping shows a named expression at the commanded arousal as
+  its intensity (clamped to 0..1) instead of at full weight; an arousal of 0
+  or below shows none.
+
 - Opening another face (`O`, a dropped `.glb`, a reload) keeps the current one
   on screen until the new one is ready, instead of an empty window meanwhile.
 
