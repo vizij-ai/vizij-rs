@@ -196,6 +196,7 @@ pub fn generate_look_at() -> Json {
     // - `track` / `glance`: use the supplied target.
     // - `reset`: recenter on the straight-ahead rest target.
     // - `idle`: slowly wander around the forward direction.
+    // - `random`: wander faster and wider around it.
     //
     // Y controls horizontal gaze and Z controls vertical gaze. X stays fixed
     // at 10 m so the eyes look around a distant point in front of the face.
@@ -340,7 +341,7 @@ pub fn generate_look_at() -> Json {
         &[("lhs", &elapsed), ("rhs", &dwell)],
     );
 
-    // The lifecycle: tracking and idle run until halted; glance/reset succeed
+    // The lifecycle: tracking, idle and random run until halted; glance/reset succeed
     // once the target has settled; unimplemented policies fail.
     let running = g.node(
         "status/running",
@@ -358,7 +359,6 @@ pub fn generate_look_at() -> Json {
         json!({ "value": status(STATUS_FAILURE_VARIANT_ID) }),
     );
     let fixation = g.select("fixation/status", &settled, &success, &running);
-    eprintln!("[LOOK_AT] building lifecycle with idle=RUNNING");
     let lifecycle = g.op(
         "status",
         "case",
@@ -691,10 +691,10 @@ pub const SKILLS: [Skill; 3] = [
         id: look_at::NAME,
         title: "Look At",
         description: "The ROS4HRI gaze skill (interaction_skills/LookAt on /skill/look_at): \
-                        tracks a target on the standard gaze surface until cancelled, holds a
-                        glance/reset fixation then succeeds, slowly wanders around the forward
-                        direction for the idle policy, and answers ROS_ENOTSUP for unsupported
-                        policies.",
+                      tracks a target on the standard gaze surface until cancelled, holds a \
+                      glance/reset fixation then succeeds, wanders around the forward \
+                      direction until cancelled for the idle/random policies, and answers \
+                      ROS_ENOTSUP for the social/auto policies.",
         parameters: &LOOK_AT_PARAMS,
         asset_json: LOOK_AT_JSON,
     },
@@ -914,32 +914,45 @@ mod tests {
             assert!(outputs.contains(&path), "missing output {path}");
         }
     }
-    /// Idle and random are continuous gaze policies: their lifecycle branches
-    /// must remain Running rather than completing like glance/reset.
+
+    /// Idle and random are continuous gaze policies: each steers the gaze
+    /// target onto its own trajectory, keeps the run Running like tracking
+    /// (rather than settling like glance/reset), and answers no errno.
     #[test]
     fn look_at_continuous_policies_are_present() {
         let spec = generate_look_at();
-
-        let nodes = spec["nodes"].as_array().unwrap();
-
-        assert!(nodes.iter().any(|n| n["id"] == "gaze/idle/target"));
-        assert!(nodes.iter().any(|n| n["id"] == "gaze/random/target"));
-
-        let status = nodes
-            .iter()
-            .find(|n| n["id"] == "status")
-            .expect("look_at status case exists");
-
-        assert_eq!(
-            status["params"]["case_labels"],
-            json!(["", "track", "glance", "reset", "idle", "random"])
-        );
-
-        let running = nodes
-            .iter()
-            .find(|n| n["id"] == "status/running")
-            .expect("running status exists");
-
-        assert!(running["params"]["value"]["enum"].is_object());
+        let nodes = spec["nodes"].as_array().expect("nodes");
+        let edges = spec["edges"].as_array().expect("edges");
+        // The node feeding `input` of `node`, for the case operand a label
+        // selects.
+        let operand = |node: &str, label: &str| -> String {
+            let case = nodes
+                .iter()
+                .find(|n| n["id"] == node)
+                .unwrap_or_else(|| panic!("node {node}"));
+            let index = case["params"]["case_labels"]
+                .as_array()
+                .expect("case labels")
+                .iter()
+                .position(|l| l == label)
+                .unwrap_or_else(|| panic!("{node} has no case {label:?}"));
+            let input = format!("operand_{index}");
+            edges
+                .iter()
+                .find(|e| e["to"]["node_id"] == node && e["to"]["input"] == input.as_str())
+                .unwrap_or_else(|| panic!("{node}.{input} is unwired"))["from"]["node_id"]
+                .as_str()
+                .expect("source node id")
+                .to_string()
+        };
+        for policy in ["idle", "random"] {
+            assert_eq!(
+                operand("gaze/target", policy),
+                format!("gaze/{policy}/target")
+            );
+            assert_eq!(operand("gaze/frame", policy), "gaze/face_frame");
+            assert_eq!(operand("status", policy), "status/running");
+            assert_eq!(operand("errno", policy), operand("errno", "track"));
+        }
     }
 }
