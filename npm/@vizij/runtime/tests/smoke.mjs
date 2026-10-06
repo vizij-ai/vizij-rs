@@ -22,14 +22,17 @@ assert.deepEqual(changes["actuator/y"], { f32: 0.25 }, "change feed saw the grap
 const snapshot = runtime.snapshot();
 assert.deepEqual(snapshot["sensor/x"], { f32: 0.25 });
 
-// In-place graph swap (VIZ-57): the runtime and its store survive.
-await runtime.loadGraph({
+// In-place graph swap (VIZ-57): the runtime and its store survive. The LOAD
+// applies at the device's next step.
+const swapped = runtime.loadGraph({
   nodes: [
     { id: "in", type: "input", params: { path: "sensor/b", value: { float: 0 } } },
     { id: "out", type: "output", params: { path: "actuator/b" } },
   ],
   edges: [{ from: { node_id: "in" }, to: { node_id: "out", input: "in" } }],
 });
+runtime.step(0);
+await swapped;
 runtime.setValue("sensor/b", { f32: 0.75 });
 runtime.step(16);
 assert.deepEqual(runtime.readValues(["actuator/b"]), { "actuator/b": { f32: 0.75 } });

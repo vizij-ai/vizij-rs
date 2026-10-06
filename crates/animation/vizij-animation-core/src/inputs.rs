@@ -24,15 +24,18 @@ pub struct Inputs {
 /// same player observe the effects of earlier ones in the same tick.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PlayerCommand {
-    /// Resume or start playback for `player`.
+    /// Start or resume playback for `player`, at its speed, from its time.
     Play { player: PlayerId },
-    /// Pause playback by setting the player's speed to zero.
+    /// Hold the player's time where it is. The speed is kept for the next `Play`.
     Pause { player: PlayerId },
-    /// Stop playback and reset time to the player's window start.
+    /// Stop playback and reset time to the player's window start. The speed is kept for the
+    /// next `Play`.
     Stop { player: PlayerId },
-    /// Set the player's playback speed multiplier.
+    /// Set the multiplier a playing player's time advances at. It does not start, pause or
+    /// stop the player: a paused player stays paused, and a playing one at speed 0 holds its
+    /// time while it reads as playing.
     SetSpeed { player: PlayerId, speed: f32 },
-    /// Set the player's internal time in seconds.
+    /// Set the player's internal time in seconds. A stopped player is left paused there.
     Seek { player: PlayerId, time: f32 },
     /// Change how player time maps into clip-local time.
     SetLoopMode { player: PlayerId, mode: LoopMode },

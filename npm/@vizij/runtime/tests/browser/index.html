@@ -1,0 +1,217 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>@vizij/runtime browser harness</title>
+<style>
+  body { margin: 0; background: #202020; }
+  /* The canvas is exactly the reference render's size at device pixel ratio 1. */
+  #stage { position: relative; width: 763px; height: 486px; }
+  #faces { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+</style>
+<div id="stage"><canvas id="faces"></canvas></div>
+<!-- The package's dist imports its workspace siblings by name; the page maps
+     them onto their dist (the server follows pnpm's node_modules links). -->
+<script type="importmap">
+  {
+    "imports": {
+      "@vizij/value-json": "/node_modules/@vizij/value-json/dist/index.js",
+      "@vizij/wasm-loader": "/node_modules/@vizij/wasm-loader/dist/browser.js",
+      "@vizij/wasm-loader/browser": "/node_modules/@vizij/wasm-loader/dist/browser.js"
+    }
+  }
+</script>
+<script type="module">
+  import * as vizij from "../../dist/runtime/src/index.js";
+
+  const params = new URLSearchParams(location.search);
+  const background = params.get("background") ?? "000000";
+  const canvas = document.getElementById("faces");
+  const contextEvents = [];
+  canvas.addEventListener("webglcontextlost", () => contextEvents.push("lost"));
+  canvas.addEventListener("webglcontextrestored", () => contextEvents.push("restored"));
+
+  await vizij.init();
+  await vizij.mount("#faces", { background });
+
+  // The page owns every device and steps it on the device clock: by default
+  // on the page's frames, each by the frame's wall time; once a test takes
+  // the clock (`manual()`), only the test's `advance(dtMs)` steps them, so
+  // what a test reads after its steps does not depend on how fast the page
+  // runs. The scripted playback below reads the same clock.
+  const devices = new Map();
+  const stepErrors = [];
+  const clock = { manual: false, now: 0 };
+  function stepAll(dt) {
+    clock.now += dt;
+    for (const [id, device] of devices) {
+      try {
+        device.step(dt);
+      } catch (e) {
+        stepErrors.push(`${id}: ${e}`);
+      }
+    }
+  }
+  let last = performance.now();
+  function loop(t) {
+    const dt = Math.min(t - last, 100);
+    last = t;
+    if (!clock.manual) stepAll(dt);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+  const glbs = new Map();
+  async function glb(url) {
+    if (!glbs.has(url)) {
+      glbs.set(url, new Uint8Array(await (await fetch(url)).arrayBuffer()));
+    }
+    return glbs.get(url);
+  }
+
+  // A scripted playback hook for the speech tests: no audio output, a
+  // playhead at a quarter of the device clock's time since the first poll,
+  // ending after 260 ms; what it received is kept for the test to read. The
+  // crossfade smoother runs on `arora/dt`, so a shape's weight rises with the
+  // device time it stays current: at a quarter speed a 100 ms mark lasts
+  // 400 ms of it.
+  window.vizijPlayback = { calls: [] };
+  const scriptedPlay = (bytes, marks) => {
+    let start;
+    const call = { bytes: bytes.length, marks: marks.length, polls: 0, at: [] };
+    window.vizijPlayback.calls.push(call);
+    return () => {
+      start ??= clock.now;
+      const t = (clock.now - start) / 4;
+      call.polls += 1;
+      call.at.push([Math.round(clock.now), Math.round(t)]);
+      return t > 260 ? null : t;
+    };
+  };
+
+  // Resolves on the first animation frame where `ready(id)` reads true.
+  const nextReady = (id) =>
+    new Promise((resolve) => {
+      const poll = () => (vizij.ready(id) ? resolve() : requestAnimationFrame(poll));
+      poll();
+    });
+
+  window.vizijHarness = {
+    memory: () => vizij.memoryBytes(),
+    // Loading under an id already shown is a reload: the new device takes
+    // over and the previous one is disposed.
+    async load(id, url, options) {
+      const scripted = options && options.audio === "scripted";
+      const device = await vizij.loadVizij(id, await glb(url), {
+        ...options,
+        audio: scripted ? scriptedPlay : options?.audio,
+        speechApiUrl: scripted ? location.origin : options?.speechApiUrl,
+      });
+      devices.get(id)?.dispose();
+      devices.set(id, device);
+      return { rigPrefix: device.rigPrefix };
+    },
+    // A reload from GLB bytes, timed: `loadMs` until `loadVizij` returns
+    // (the GLB read, the graphs composed, the device built), `readyMs`
+    // until the new scene is indexed and posed — the frame the swap lands.
+    async reload(id, url, options) {
+      const bytes = await glb(url);
+      const start = performance.now();
+      const device = await vizij.loadVizij(id, bytes, { audio: false, ...options });
+      const loadMs = performance.now() - start;
+      devices.get(id)?.dispose();
+      devices.set(id, device);
+      const readyAt = vizij.ready(id);
+      await nextReady(id);
+      return { loadMs, readyMs: performance.now() - start, readyAt };
+    },
+    // A Vizij from bytes the page built (an edited or exported GLB).
+    async loadBytes(id, bytes, options) {
+      const device = await vizij.loadVizij(id, bytes, { audio: false, ...options });
+      devices.get(id)?.dispose();
+      devices.set(id, device);
+      return { rigPrefix: device.rigPrefix };
+    },
+    describe: async (url) => vizij.describe(await glb(url)),
+    describeBytes: (bytes) => vizij.describe(bytes),
+    rigPrefix: (id) => ({ rigPrefix: devices.get(id).rigPrefix }),
+    select: (id, elementIds) => vizij.setSelection(id, elementIds),
+    setStatic: (id, elementId, feature, value) =>
+      vizij.setStaticFeature(id, elementId, feature, value),
+    hold: (id, paths) => devices.get(id).hold(paths),
+    release: (id, paths) => devices.get(id).release(paths),
+    spawn: (id, call) => devices.get(id).spawn(call),
+    invoke: (id, method, args, moduleId) => devices.get(id).invoke(method, args, moduleId),
+    runStatus: (value) => vizij.runStatus(value),
+    halt: (id, run) => devices.get(id).halt(run),
+    listKeys: (id, prefix) => devices.get(id).listKeys(prefix),
+    describeMethods: (id, prefix) => devices.get(id).describeMethods(prefix),
+    applyGraphEdits: (id, edits) => devices.get(id).applyGraphEdits(edits),
+    behaviorValue: (graph) => vizij.behaviorValue(graph),
+    runEdits: (run, from, to) => vizij.runEdits(run, from, to),
+    behaviorRuns: vizij.BEHAVIOR_RUNS,
+    // The animation module's player states, as any client reads them.
+    players: (id) =>
+      vizij.decodePlayerStates(
+        devices.get(id).readValues([vizij.ANIMATION_PLAYERS_PATH])[vizij.ANIMATION_PLAYERS_PATH],
+      ),
+    moduleAnimation: (id, animation) => devices.get(id).moduleAnimation(animation),
+    step: (id, dtMs) => devices.get(id).step(dtMs),
+    // Take the device clock from the page's frames (`manual(false)` hands
+    // it back): while the test holds it, only `advance` steps the devices.
+    manual: (on = true) => {
+      clock.manual = on;
+    },
+    // Step every device `steps` times by `dtMs` on the device clock.
+    advance: (dtMs, steps = 1) => {
+      for (let i = 0; i < steps; i++) stepAll(dtMs);
+    },
+    now: () => clock.now,
+    // Resolves with `pending` once it settles, stepping the devices on the
+    // device clock meanwhile when the test owns it (an operation applies at
+    // the next step, an invoke over two), yielding to the page between steps.
+    settle: async (pending, dtMs = 16) => {
+      let done = false;
+      pending.then(
+        () => (done = true),
+        () => (done = true),
+      );
+      for (let i = 0; i < 200 && !done; i++) {
+        if (clock.manual) stepAll(dtMs);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      return pending;
+    },
+    // Resolves after `n` of the page's frames: the view draws on them.
+    frames: (n = 1) =>
+      new Promise((resolve) => {
+        const next = () => (--n <= 0 ? resolve() : requestAnimationFrame(next));
+        requestAnimationFrame(next);
+      }),
+    snapshot: (id) => devices.get(id).snapshot(),
+    place: (id, rect) => vizij.placeVizij(id, rect),
+    setView: (id, view) => vizij.setView(id, view),
+    safeArea: (id) => vizij.safeArea(id),
+    ready: (id) => vizij.ready(id),
+    unload(id) {
+      const device = devices.get(id);
+      if (!device) return false;
+      vizij.unloadVizij(id);
+      device.dispose();
+      devices.delete(id);
+      return true;
+    },
+    setValue: (id, path, value) => devices.get(id).setValue(path, value),
+    readValues: (id, paths) => devices.get(id).readValues(paths),
+    path: (id, relative) => devices.get(id).path(relative),
+    device: (id) => devices.get(id),
+    picks: () => vizij.drainPicks(),
+    state: () => {
+      const gl = canvas.getContext("webgl2");
+      return {
+        faces: [...devices.keys()],
+        stepErrors: stepErrors.slice(0, 5),
+        contextEvents: contextEvents.slice(),
+        contextLost: gl ? gl.isContextLost() : null,
+      };
+    },
+  };
+  window.vizijHarnessReady = true;
+</script>

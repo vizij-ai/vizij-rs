@@ -1,26 +1,47 @@
-// The animation module runs inside the browser runtime (VIZ-61 Stage A):
-// the runtime is constructed WITH the module, JS sets up a one-track ramp
-// through the call surface (load_animation / create_player / add_instance),
-// and a graph ExternalFunction node calls the module's step each tick,
-// landing the sampled outputs in the runtime store. Mirrors the Rust
-// host-side boundary proof (crates/interop/vizij-animation-module/tests/
-// host_ramp.rs) through the public JS surface.
+// The animation module is host-linked into every device: JS sets up a
+// one-track ramp through the call surface (load_animation / create_player /
+// add_instance, each call naming the module and the function by id), and a
+// graph ExternalFunction node calls the module's step each tick, landing the
+// sampled outputs in the device's store. Mirrors the Rust boundary proof
+// (crates/interop/vizij-animation-module/tests/host_ramp.rs) through the
+// public JS surface.
 import assert from "node:assert/strict";
-import { loadAnimationModule } from "@vizij/animation-module";
+import { headerJson } from "@vizij/animation-module";
 import { startRuntime } from "../dist/runtime/src/index.js";
 
-// --- declared ids (module.yaml + the type records) ---------------------------
-const FN_LOAD = "76697a69-6a00-0000-0f00-000000000001";
-const FN_CREATE_PLAYER = "76697a69-6a00-0000-0f00-000000000002";
-const FN_ADD_INSTANCE = "76697a69-6a00-0000-0f00-000000000003";
-const FN_STEP = "76697a69-6a00-0000-0f00-000000000004";
+// --- function and parameter ids, from the module's shipped header ------------
+// The header is written from the module's Rust declaration, so the ids a call
+// names are the declared ones. The package ships it beside the wasm artifact
+// this device does not need: the module is linked in.
+const header = JSON.parse(headerJson);
+const fn = (name) => {
+  const found = header.exports.find((e) => e.name === name);
+  assert.ok(found, `the header exports ${name}`);
+  return found;
+};
+const param = (fnName, paramName) => {
+  const found = fn(fnName).parameters.find((p) => p.name === paramName);
+  assert.ok(found, `${fnName} takes ${paramName}`);
+  return found.id;
+};
+const FN_LOAD = fn("load_animation").id;
+const FN_CREATE_PLAYER = fn("create_player").id;
+const FN_ADD_INSTANCE = fn("add_instance").id;
+const FN_STEP = fn("step").id;
 
-const P_CLIP = "76697a69-6a00-0000-0f01-000000000001";
-const P_NAME = "76697a69-6a00-0000-0f02-000000000001";
-const P_PLAYER = "76697a69-6a00-0000-0f03-000000000001";
-const P_ANIM = "76697a69-6a00-0000-0f03-000000000002";
-const P_DT_NS = "76697a69-6a00-0000-0f04-000000000001";
+const P_CLIP = param("load_animation", "clip");
+const P_NAME = param("create_player", "name");
+const P_PLAYER = param("add_instance", "player");
+const P_ANIM = param("add_instance", "anim");
+const P_DT_NS = param("step", "dt_ns");
 
+// add_instance takes the player and the animation; add_instance_with_weight
+// takes the instance's weight too.
+const parameters = (fnName) => fn(fnName).parameters.map((p) => p.name);
+assert.deepEqual(parameters("add_instance"), ["player", "anim"]);
+assert.deepEqual(parameters("add_instance_with_weight"), ["player", "anim", "weight"]);
+
+// --- structure and field ids (the module's type records) ---------------------
 const CLIP_TYPE = "76697a69-6a00-0000-0000-000000000100";
 const CLIP_NAME = "76697a69-6a00-0000-0100-000000000001";
 const CLIP_DURATION = "76697a69-6a00-0000-0100-000000000002";
@@ -45,7 +66,7 @@ const TO_TRACK_ID = "76697a69-6a00-0000-0110-000000000001";
 const TO_DEFAULT_KEY = "76697a69-6a00-0000-0110-000000000002";
 const TO_VALUE = "76697a69-6a00-0000-0110-000000000003";
 
-// --- the ramp clip, in the Arora Value JSON vocabulary -----------------------
+// --- the ramp AnimationClip, in the Arora Value JSON vocabulary --------------
 const field = (id, value) => ({ id, value });
 // Empty timing-handle arrays select the engine's default ease.
 const noHandles = () => ({ structs: { id: TRANSITION_HANDLE_TYPE, elements: [] } });
@@ -92,7 +113,7 @@ const clip = {
 // Each tick: read the runtime's built-in dt (arora/dt, nanoseconds) from the
 // store, call the module's step(dt) through the engine, and write the returned
 // [TrackOutput] to anim/out — the Stage-B shape (the graph drives the
-// animation module; no JS clip pipeline).
+// animation module; no JS animation pipeline).
 const graph = {
   nodes: [
     { id: "dt", type: "input", params: { path: "arora/dt" } },
@@ -110,12 +131,12 @@ const graph = {
 };
 
 // --- run ---------------------------------------------------------------------
-const runtime = await startRuntime(graph, undefined, [await loadAnimationModule()]);
+const runtime = await startRuntime(graph);
 
 // Setup through the call surface. Each call dispatches inside the next step.
 const pending = [
-  runtime.call({ id: FN_LOAD, args: [field(P_CLIP, clip)] }),
-  runtime.call({ id: FN_CREATE_PLAYER, args: [field(P_NAME, { str: "p" })] }),
+  runtime.call({ module_id: header.id, id: FN_LOAD, args: [field(P_CLIP, clip)] }),
+  runtime.call({ module_id: header.id, id: FN_CREATE_PLAYER, args: [field(P_NAME, { str: "p" })] }),
 ];
 runtime.step(0);
 const [anim, player] = await Promise.all(pending);
@@ -123,6 +144,7 @@ assert.ok("u32" in anim.ret, "load_animation returns an animation id");
 assert.ok("u32" in player.ret, "create_player returns a player id");
 
 const pInstance = runtime.call({
+  module_id: header.id,
   id: FN_ADD_INSTANCE,
   args: [field(P_PLAYER, player.ret), field(P_ANIM, anim.ret)],
 });

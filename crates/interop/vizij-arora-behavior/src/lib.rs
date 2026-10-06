@@ -19,23 +19,33 @@
 //! interpreter through the engine's interpreter module, so neither rebuilds the
 //! device.
 //!
+//! Task runs graft into the same graph, each its own fragment under
+//! `task/<run id>/`, beside the main behavior until it ends or is halted: a
+//! skill's registered [`TaskFragment`], the generic module-call wrapper, or —
+//! for [`run::RunBehavior::run_behavior`], the method the interpreter
+//! implements itself — the graph the spawn carries. A run's nodes are the
+//! graph's nodes under its id, so an EDIT there changes the run, and a LOAD
+//! of the main behavior leaves the live runs in place.
+//!
 //! [`ProcessingGraph::load`]: arora_behavior::BehaviorInterpreter::load
 //! [`ProcessingGraph::apply`]: arora_behavior::BehaviorInterpreter::apply
 
 pub mod gaze;
 pub mod graph_codec;
+pub mod run;
 pub mod speech;
 pub mod viseme;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use arora_behavior::graph::GraphDiff;
+use arora_behavior::graph::{GraphDiff, LinkSource};
 use arora_behavior::{
     built_in, interpreter_module, BehaviorContext, BehaviorError, BehaviorInterpreter,
     BehaviorStatus, Graph, RunPolicy, TaskHandle, TaskId,
 };
 use arora_types::call::{Call, CallBridge, CallResult};
 use arora_types::data::{DataStore, Key, StateChange};
+use arora_types::record::module::frozen;
 use arora_types::value::{Structure, StructureField, Value};
 use uuid::Uuid;
 use vizij_api_core::TypedPath;
@@ -141,15 +151,20 @@ impl NodeFunctions for CallBridgeFunctions<'_> {
     }
 }
 
-/// The handle-side index of one live run: where its fragment lives in the
-/// graph and which status key it reports on. The run itself is graph
-/// structure — these are the coordinates for pruning and sweeping it.
+/// The handle-side index of one live run: the function it implements and
+/// the status key it reports on. The run itself is graph structure — its
+/// nodes are the graph's nodes under its id ([`run_node_prefix`]), whatever
+/// EDITs did to them since the spawn.
 struct GraphRun {
     /// The function the run implements — what an exclusive spawn halts by.
     function: Uuid,
-    /// Every node the run grafted, removed together when it ends.
-    nodes: Vec<String>,
     status_key: Key,
+}
+
+/// The prefix every node id of run `task` starts with: `task/<run id>`.
+/// Run ids are uuids of one length, so no other run's ids share it.
+fn run_node_prefix(task: TaskId) -> String {
+    format!("task/{}", task.0)
 }
 
 /// A spawnable skill fragment: the implementation of a task-run function as
@@ -173,6 +188,10 @@ pub struct TaskFragment {
     /// spawning halts every live run of the same function first, so the
     /// newest run is the only one writing (a viseme player's lips).
     exclusive: bool,
+    /// The function the fragment implements, named and signed, when no
+    /// module implements it: the interpreter describes it, and the device
+    /// lists it under the interpreter module.
+    description: Option<frozen::Export>,
 }
 
 impl TaskFragment {
@@ -182,22 +201,26 @@ impl TaskFragment {
     /// cannot report its lifecycle is not a task.
     pub fn parse(json: &str, parameters: HashMap<Uuid, String>) -> Result<Self, String> {
         let spec = parse_spec(json)?;
-        let reports_status = spec.nodes.iter().any(|node| {
-            matches!(node.kind, NodeType::Output)
-                && node
-                    .params
-                    .path
-                    .as_ref()
-                    .is_some_and(|path| path.to_string() == "task/status")
-        });
-        if !reports_status {
+        if !writes_task_status(&spec) {
             return Err("a task fragment must declare an output on task/status".to_string());
         }
         Ok(Self {
             spec,
             parameters,
             exclusive: false,
+            description: None,
         })
+    }
+
+    /// Describe the function the fragment implements, for a function no
+    /// module implements: the interpreter lists it among its
+    /// [`described_methods`](BehaviorInterpreter::described_methods), so a
+    /// remote discovers it and spawns it through the interpreter module. A
+    /// fragment wrapping a module's own function (the say skill around its
+    /// provider) is left undescribed: the module describes it.
+    pub fn described(mut self, description: frozen::Export) -> Self {
+        self.description = Some(description);
+        self
     }
 
     /// Make new runs of the function take over: spawning one halts every
@@ -349,16 +372,57 @@ impl ProcessingGraph {
         &self.graph
     }
 
-    /// Remove a run's fragment from the retained graph; takes effect at the
-    /// next lowering. The run's status key keeps its last value — pruning
-    /// removes structure, not state.
-    fn prune_run(&mut self, run: &GraphRun) -> Result<(), BehaviorError> {
-        let diff = graph_codec::GraphSpecDiff {
-            remove_nodes: run.nodes.clone(),
-            ..graph_codec::GraphSpecDiff::default()
-        };
+    /// Graft run `task` of `function` — its fragment `diff` — into the
+    /// retained graph and index it by its status key. Nothing changes on an
+    /// error.
+    fn graft(
+        &mut self,
+        task: TaskId,
+        function: Uuid,
+        status_key: Key,
+        diff: graph_codec::GraphSpecDiff,
+    ) -> Result<(), BehaviorError> {
         let diff = graph_codec::spec_diff_to_graph_diff(&diff)
             .map_err(|message| BehaviorError { message })?;
+        self.graph.apply(diff).map_err(|e| BehaviorError {
+            message: format!("graft run: {e}"),
+        })?;
+        self.runs.insert(
+            task,
+            GraphRun {
+                function,
+                status_key,
+            },
+        );
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// The ids of the retained graph's nodes that belong to run `task` —
+    /// those under its [`run_node_prefix`] — as uuids.
+    fn run_nodes(&self, task: TaskId) -> Vec<Uuid> {
+        let prefix = run_node_prefix(task);
+        self.graph
+            .nodes
+            .keys()
+            .filter(|id| {
+                self.graph
+                    .variables
+                    .get(id)
+                    .is_some_and(|name| name.starts_with(&prefix))
+            })
+            .copied()
+            .collect()
+    }
+
+    /// Remove run `task`'s nodes from the retained graph; takes effect at the
+    /// next lowering. The run's status key keeps its last value — pruning
+    /// removes structure, not state.
+    fn prune_run(&mut self, task: TaskId) -> Result<(), BehaviorError> {
+        let diff = GraphDiff {
+            remove_nodes: self.run_nodes(task),
+            ..GraphDiff::default()
+        };
         self.graph.apply(diff).map_err(|e| BehaviorError {
             message: format!("prune run: {e}"),
         })?;
@@ -381,7 +445,7 @@ impl ProcessingGraph {
             store.write(change).map_err(|e| BehaviorError {
                 message: e.to_string(),
             })?;
-            self.prune_run(&run)?;
+            self.prune_run(task)?;
         }
         Ok(())
     }
@@ -404,8 +468,8 @@ impl ProcessingGraph {
             .map(|(task, _)| *task)
             .collect();
         for task in ended {
-            if let Some(run) = self.runs.remove(&task) {
-                self.prune_run(&run)?;
+            if self.runs.remove(&task).is_some() {
+                self.prune_run(task)?;
             }
         }
         Ok(())
@@ -505,16 +569,72 @@ impl ProcessingGraph {
     }
 }
 
+/// A node of a run's own, outside any fragment: an id under the run's
+/// [`run_node_prefix`] no fragment node id takes (those are under
+/// `task/<run id>/`).
+fn run_own_node(task: TaskId, name: &str) -> String {
+    format!("{}:{name}", run_node_prefix(task))
+}
+
+/// An output writing `path` from a constant `value`: two nodes of run
+/// `task`'s own, named after `name`.
+fn constant_output(
+    task: TaskId,
+    name: &str,
+    path: &str,
+    value: Value,
+) -> Result<(Vec<NodeSpec>, EdgeSpec), BehaviorError> {
+    let path = TypedPath::parse(path).map_err(|e| BehaviorError {
+        message: format!("'{path}' does not parse as a path: {e}"),
+    })?;
+    let constant = run_own_node(task, &format!("{name}:value"));
+    let output = run_own_node(task, name);
+    Ok((
+        vec![
+            NodeSpec {
+                id: constant.clone(),
+                kind: NodeType::Constant,
+                params: NodeParams {
+                    value: Some(value),
+                    ..NodeParams::default()
+                },
+                output_shapes: Default::default(),
+                input_defaults: Default::default(),
+            },
+            NodeSpec {
+                id: output.clone(),
+                kind: NodeType::Output,
+                params: NodeParams {
+                    path: Some(path),
+                    ..NodeParams::default()
+                },
+                output_shapes: Default::default(),
+                input_defaults: Default::default(),
+            },
+        ],
+        EdgeSpec {
+            from: EdgeOutputEndpoint {
+                node_id: constant,
+                output: "out".to_string(),
+            },
+            to: EdgeInputEndpoint {
+                node_id: output,
+                input: "in".to_string(),
+            },
+            selector: None,
+        },
+    ))
+}
+
 /// The generic run graft: an input on the run's update key (defaulting to
 /// the spawn-time argument bundle) feeding a [`NodeType::TaskRun`] node that
 /// calls the module function each tick, over an [`NodeType::Output`] on the
-/// run's status key. Returns the diff, the grafted node ids, and the run's
-/// update keys.
+/// run's status key. Returns the diff and the run's update keys.
 fn wrapper_graft(
     task: TaskId,
     prefix: &str,
     call: &Call,
-) -> Result<(graph_codec::GraphSpecDiff, Vec<String>, Vec<Key>), BehaviorError> {
+) -> Result<(graph_codec::GraphSpecDiff, Vec<Key>), BehaviorError> {
     let status_path = TypedPath::parse(&format!("{prefix}/status")).map_err(|e| BehaviorError {
         message: format!("the status key does not parse as a path: {e}"),
     })?;
@@ -574,7 +694,7 @@ fn wrapper_graft(
         upsert_edges: vec![
             EdgeSpec {
                 from: EdgeOutputEndpoint {
-                    node_id: args_node.clone(),
+                    node_id: args_node,
                     output: "out".to_string(),
                 },
                 to: EdgeInputEndpoint {
@@ -585,11 +705,11 @@ fn wrapper_graft(
             },
             EdgeSpec {
                 from: EdgeOutputEndpoint {
-                    node_id: run_node.clone(),
+                    node_id: run_node,
                     output: "out".to_string(),
                 },
                 to: EdgeInputEndpoint {
-                    node_id: status_node.clone(),
+                    node_id: status_node,
                     input: "in".to_string(),
                 },
                 selector: None,
@@ -597,41 +717,25 @@ fn wrapper_graft(
         ],
         ..graph_codec::GraphSpecDiff::default()
     };
-    Ok((
-        diff,
-        vec![args_node, run_node, status_node],
-        vec![Key::from(format!("{prefix}/update"))],
-    ))
+    Ok((diff, vec![Key::from(format!("{prefix}/update"))]))
 }
 
-/// The skill graft: a copy of the registered [`TaskFragment`], node ids
-/// namespaced under `task/<run id>/`, placeholder `task/…` paths rewritten to
-/// the run's key prefix, each parameter input's default replaced by the
-/// spawn-time argument it names, and a `task/update` input's default by the
-/// whole argument bundle (how a fragment hosts the run's own module call).
-/// Returns the diff, the grafted node ids, and the run's update keys: one
-/// per parameter, plus the bundle's.
-fn fragment_graft(
-    fragment: &TaskFragment,
+/// `spec`'s nodes and edges as run `task` holds them: node ids namespaced
+/// under `task/<run id>/`, placeholder `task/…` paths rewritten to the run's
+/// key prefix, each parameter input's default replaced by the spawn-time
+/// argument it names (`arguments`, by placeholder name), and a `task/update`
+/// input's default by the whole argument `bundle` when there is one (how a
+/// fragment hosts the run's own module call).
+pub(crate) fn graft_spec(
+    spec: &GraphSpec,
     task: TaskId,
     prefix: &str,
-    call: &Call,
-) -> Result<(graph_codec::GraphSpecDiff, Vec<String>, Vec<Key>), BehaviorError> {
-    // The spawn-time arguments by the placeholder input name each feeds.
-    let mut arguments: HashMap<&str, &Value> = HashMap::new();
-    for argument in &call.args {
-        if let Some(name) = fragment.parameters.get(&argument.id) {
-            arguments.insert(name.as_str(), argument.value.as_ref());
-        }
-    }
+    arguments: &HashMap<&str, &Value>,
+    bundle: Option<&Value>,
+) -> Result<(Vec<NodeSpec>, Vec<EdgeSpec>), BehaviorError> {
     let grafted_id = |id: &str| format!("task/{}/{}", task.0, id);
-    let args_bundle = Value::Structure(Structure {
-        id: call.id,
-        fields: call.args.clone(),
-    });
-
-    let mut upsert_nodes = Vec::with_capacity(fragment.spec.nodes.len());
-    for node in &fragment.spec.nodes {
+    let mut nodes = Vec::with_capacity(spec.nodes.len());
+    for node in &spec.nodes {
         let mut node = node.clone();
         if let Some(path) = &node.params.path {
             let path = path.to_string();
@@ -643,7 +747,9 @@ fn fragment_graft(
                     })?);
                 if matches!(node.kind, NodeType::Input) {
                     if placeholder == "update" {
-                        node.params.value = Some(args_bundle.clone());
+                        if let Some(bundle) = bundle {
+                            node.params.value = Some(bundle.clone());
+                        }
                     } else if let Some(value) = arguments.get(placeholder) {
                         node.params.value = Some((*value).clone());
                     }
@@ -651,10 +757,9 @@ fn fragment_graft(
             }
         }
         node.id = grafted_id(&node.id);
-        upsert_nodes.push(node);
+        nodes.push(node);
     }
-    let upsert_edges = fragment
-        .spec
+    let edges = spec
         .edges
         .iter()
         .map(|edge| {
@@ -664,8 +769,44 @@ fn fragment_graft(
             edge
         })
         .collect();
+    Ok((nodes, edges))
+}
 
-    let nodes: Vec<String> = upsert_nodes.iter().map(|node| node.id.clone()).collect();
+/// Whether `spec` reports its own lifecycle: an output on `task/status`.
+fn writes_task_status(spec: &GraphSpec) -> bool {
+    spec.nodes.iter().any(|node| {
+        matches!(node.kind, NodeType::Output)
+            && node
+                .params
+                .path
+                .as_ref()
+                .is_some_and(|path| path.to_string() == "task/status")
+    })
+}
+
+/// The skill graft: a copy of the registered [`TaskFragment`] ([`graft_spec`],
+/// a `task/update` input defaulting to the whole argument bundle). Returns
+/// the diff and the run's update keys: one per parameter, plus the bundle's.
+fn fragment_graft(
+    fragment: &TaskFragment,
+    task: TaskId,
+    prefix: &str,
+    call: &Call,
+) -> Result<(graph_codec::GraphSpecDiff, Vec<Key>), BehaviorError> {
+    // The spawn-time arguments by the placeholder input name each feeds.
+    let mut arguments: HashMap<&str, &Value> = HashMap::new();
+    for argument in &call.args {
+        if let Some(name) = fragment.parameters.get(&argument.id) {
+            arguments.insert(name.as_str(), argument.value.as_ref());
+        }
+    }
+    let args_bundle = Value::Structure(Structure {
+        id: call.id,
+        fields: call.args.clone(),
+    });
+    let (upsert_nodes, upsert_edges) =
+        graft_spec(&fragment.spec, task, prefix, &arguments, Some(&args_bundle))?;
+
     let mut names: Vec<&String> = fragment.parameters.values().collect();
     names.sort();
     let update = names
@@ -679,12 +820,51 @@ fn fragment_graft(
             upsert_edges,
             ..graph_codec::GraphSpecDiff::default()
         },
-        nodes,
         update,
     ))
 }
 
+/// The [`run_behavior`](run::RunBehavior::run_behavior) graft: the graph the
+/// call carries ([`graft_spec`]), plus the run's own two outputs — its name
+/// on the run's `name` key, and its status, `Running` until it is halted,
+/// unless the graph writes `task/status` itself. No update keys.
+fn behavior_graft(
+    task: TaskId,
+    prefix: &str,
+    call: &Call,
+) -> Result<graph_codec::GraphSpecDiff, BehaviorError> {
+    let (name, spec) = run::arguments(call).map_err(|message| BehaviorError { message })?;
+    let (mut upsert_nodes, mut upsert_edges) =
+        graft_spec(&spec, task, prefix, &HashMap::new(), None)?;
+    let (nodes, edge) =
+        constant_output(task, "name", &format!("{prefix}/name"), Value::String(name))?;
+    upsert_nodes.extend(nodes);
+    upsert_edges.push(edge);
+    if !writes_task_status(&spec) {
+        let (nodes, edge) =
+            constant_output(task, "status", &format!("{prefix}/status"), task::running())?;
+        upsert_nodes.extend(nodes);
+        upsert_edges.push(edge);
+    }
+    Ok(graph_codec::GraphSpecDiff {
+        upsert_nodes,
+        upsert_edges,
+        ..graph_codec::GraphSpecDiff::default()
+    })
+}
+
 impl BehaviorInterpreter for ProcessingGraph {
+    /// [`run_behavior`](run::RunBehavior::run_behavior), and the functions
+    /// the registered fragments implement, where a fragment is
+    /// [`described`](TaskFragment::described).
+    fn described_methods(&self) -> HashMap<Uuid, frozen::Export> {
+        self.fragments
+            .iter()
+            .filter_map(|(function, fragment)| Some((*function, fragment.description.clone()?)))
+            .chain(std::iter::once((run::FUNCTION, run::description())))
+            .collect()
+    }
+
     fn tick(&mut self, ctx: &mut BehaviorContext) -> Result<BehaviorStatus, BehaviorError> {
         let dt = built_in_dt_seconds(ctx.store);
         self.tick_store(ctx.store, &mut *ctx.call_bridge, dt)?;
@@ -700,11 +880,63 @@ impl BehaviorInterpreter for ProcessingGraph {
     /// It becomes the retained graph and lowers at the next tick, while the graph
     /// runtime is kept **warm**: nodes that survive the swap keep their
     /// integration state (springs/dampers/URDF chains) and the graph clock stays
-    /// continuous, so a program starting or stopping no longer restarts every
-    /// stateful node. The store and the `function -> module` map are untouched —
-    /// the store belongs to the device, and the loaded-module set is fixed at
-    /// device build.
-    fn load(&mut self, graph: Graph) -> Result<(), BehaviorError> {
+    /// continuous, so a recompose does not restart every stateful node. The
+    /// store and the `function -> module` map are untouched — the store
+    /// belongs to the device, and the loaded-module set is fixed at device
+    /// build.
+    ///
+    /// The live task runs are not the main behavior, so a load leaves them
+    /// running: their nodes carry over into the new graph with the links
+    /// between them and the names that decode them, and keep their state.
+    /// A link from a run node to a node the new graph lacks is dropped.
+    fn load(&mut self, mut graph: Graph) -> Result<(), BehaviorError> {
+        let carried: HashSet<Uuid> = self
+            .runs
+            .keys()
+            .flat_map(|task| self.run_nodes(*task))
+            .filter(|id| !graph.nodes.contains_key(id))
+            .collect();
+        let within = |source: &LinkSource| {
+            let mut source = source;
+            loop {
+                match source {
+                    LinkSource::Literal(_) => return true,
+                    LinkSource::Port(port) => return carried.contains(&port.node),
+                    LinkSource::Select { source: inner, .. } => source = inner,
+                    // A Vizij graph has no variable links (`graph_codec` decodes
+                    // none), so none is carried.
+                    LinkSource::Variable(_) => return false,
+                }
+            }
+        };
+        let links: Vec<_> = self
+            .graph
+            .links
+            .iter()
+            .filter(|link| carried.contains(&link.target.node) && within(&link.source))
+            .cloned()
+            .collect();
+        // The names the carried nodes and links decode by: node ids, kinds,
+        // slots.
+        let mut named: HashSet<Uuid> = HashSet::new();
+        for id in &carried {
+            let node = &self.graph.nodes[id];
+            named.insert(node.id);
+            named.insert(node.function);
+            named.extend(node.inputs.iter().chain(&node.outputs).map(|io| io.id));
+        }
+        for link in &links {
+            named.insert(link.target.port);
+        }
+        for id in named {
+            if let Some(name) = self.graph.variables.get(&id) {
+                graph.variables.entry(id).or_insert_with(|| name.clone());
+            }
+        }
+        for id in &carried {
+            graph.nodes.insert(*id, self.graph.nodes[id].clone());
+        }
+        graph.links.extend(links);
         self.graph = graph;
         self.dirty = true;
         Ok(())
@@ -725,10 +957,12 @@ impl BehaviorInterpreter for ProcessingGraph {
     }
 
     /// Spawn `call` as a concurrent task run — the interpreter module's SPAWN
-    /// entry point. The run grafts into the running graph: a registered
+    /// entry point. The run grafts into the running graph: for
+    /// [`run_behavior`](run::RunBehavior::run_behavior), the graph the call
+    /// carries, with the run's name and status outputs; a registered
     /// [`TaskFragment`] verbatim (its placeholder paths rewritten to the
     /// run's key prefix, its parameter inputs defaulted from the spawn-time
-    /// arguments), or the generic two-node wrapper — a [`NodeType::TaskRun`]
+    /// arguments); or the generic two-node wrapper — a [`NodeType::TaskRun`]
     /// node carrying the whole call over an [`NodeType::Output`] on the run's
     /// status key. The graph's ordinary evaluation then advances the run once
     /// per tick and the Output convention publishes its `Status` — the run is
@@ -741,6 +975,12 @@ impl BehaviorInterpreter for ProcessingGraph {
         // policy is accepted and treated as `Concurrent` until then.
         let _ = policy;
         let task = TaskId(Uuid::new_v4());
+        if call.id == run::FUNCTION {
+            let diff = behavior_graft(task, &run::prefix(task), &call)?;
+            let handle = run::handle(task);
+            self.graft(task, call.id, handle.status.clone(), diff)?;
+            return Ok(handle);
+        }
         let module = call
             .module_id
             .map(|m| m.to_string())
@@ -748,7 +988,7 @@ impl BehaviorInterpreter for ProcessingGraph {
         let prefix = format!("arora/tasks/{module}/{}/{}", call.id, task.0);
         let status_key = Key::from(format!("{prefix}/status"));
 
-        let (diff, nodes, update) = match self.fragments.get(&call.id) {
+        let (diff, update) = match self.fragments.get(&call.id) {
             Some(fragment) => {
                 // An exclusive function's live runs yield to the new one:
                 // halted on the next tick, which prunes them with their
@@ -767,25 +1007,7 @@ impl BehaviorInterpreter for ProcessingGraph {
             }
             None => wrapper_graft(task, &prefix, &call)?,
         };
-        let diff = graph_codec::spec_diff_to_graph_diff(&diff)
-            .map_err(|message| BehaviorError { message })?;
-        self.runs.insert(
-            task,
-            GraphRun {
-                function: call.id,
-                nodes,
-                status_key: status_key.clone(),
-            },
-        );
-        self.graph
-            .apply(diff)
-            .map_err(|e| BehaviorError {
-                message: format!("graft run: {e}"),
-            })
-            .inspect_err(|_| {
-                self.runs.remove(&task);
-            })?;
-        self.dirty = true;
+        self.graft(task, call.id, status_key.clone(), diff)?;
 
         Ok(TaskHandle {
             id: task,
@@ -1330,39 +1552,31 @@ mod tests {
     /// errno on the result key.
     #[test]
     fn a_registered_fragment_implements_the_spawned_run() {
-        use arora_types::gen_uuid_from_str;
-        use vizij_arora_host::skills;
-
-        let parameters: HashMap<Uuid, String> = skills::LOOK_AT_PARAMS
-            .iter()
-            .map(|name| (gen_uuid_from_str(name), name.to_string()))
-            .collect();
-        let fragment =
-            TaskFragment::parse(skills::LOOK_AT_JSON, parameters).expect("the asset parses");
+        use crate::gaze::{self, look_at::ids::look_at as ids};
 
         let store = SimpleDataStore::new();
         let mut graph =
             ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
-        graph.set_task_fragment(gen_uuid_from_str("look_at"), fragment);
+        graph.set_task_fragment(ids::FUNCTION, gaze::look_at_fragment());
         let mut bridge = NoopBridge;
         store
             .write(StateChange::set("sensor/x", float(0.75)))
             .unwrap();
 
         let look_at = |policy: &str, target: [f32; 3], frame: &str| Call {
-            module_id: Some(gen_uuid_from_str("gaze-module")),
-            id: gen_uuid_from_str("look_at"),
+            module_id: Some(arora_behavior::interpreter_module::ID),
+            id: ids::FUNCTION,
             args: vec![
                 StructureField {
-                    id: gen_uuid_from_str("policy"),
+                    id: ids::POLICY,
                     value: Box::new(Value::String(policy.to_string())),
                 },
                 StructureField {
-                    id: gen_uuid_from_str("target"),
+                    id: ids::TARGET,
                     value: Box::new(Value::ArrayF32(target.to_vec())),
                 },
                 StructureField {
-                    id: gen_uuid_from_str("frame"),
+                    id: ids::FRAME,
                     value: Box::new(Value::String(frame.to_string())),
                 },
             ],
@@ -1435,5 +1649,278 @@ mod tests {
         graph.tick_store(&store, &mut bridge, 0.05).expect("tick");
         assert_eq!(read_key(&store, &handle.status), Some(task::failure()));
         assert_eq!(read_key(&store, &handle.result[0]), Some(Value::U8(134)));
+    }
+
+    /// A behavior that damps the `in/target` input (from 0) onto `out`: its
+    /// damp node's state is what a run carries across a LOAD or an EDIT.
+    fn damped(out: &str) -> GraphSpec {
+        parse_spec(
+            &json!({
+                "nodes": [
+                    { "id": "target", "type": "input", "params": { "path": "in/target", "value": 0.0 } },
+                    { "id": "damp", "type": "damp", "params": { "half_life": 0.5 } },
+                    { "id": "out", "type": "output", "params": { "path": out } }
+                ],
+                "edges": [
+                    { "from": { "node_id": "target" }, "to": { "node_id": "damp", "input": "in" } },
+                    { "from": { "node_id": "damp" }, "to": { "node_id": "out", "input": "in" } }
+                ]
+            })
+            .to_string(),
+        )
+        .expect("the damped graph parses")
+    }
+
+    fn f32_at(store: &SimpleDataStore, path: &str) -> f32 {
+        match read(store, path) {
+            Some(Value::F32(value)) => value,
+            other => panic!("{path} = {other:?}"),
+        }
+    }
+
+    /// Spawn `behavior` as a run_behavior run under `name`.
+    fn spawn_behavior(graph: &mut ProcessingGraph, name: &str, behavior: &GraphSpec) -> TaskHandle {
+        let call = run::call(name, behavior).expect("the behavior encodes");
+        graph
+            .spawn(call, RunPolicy::Concurrent)
+            .expect("run_behavior spawns")
+    }
+
+    /// A damped run, started at rest and moving toward `in/target = 1`
+    /// for `ticks` ticks of 0.1 s. Returns the main graph's node count, the
+    /// handle and the value it last wrote to `out`.
+    fn moving_run(
+        graph: &mut ProcessingGraph,
+        store: &SimpleDataStore,
+        ticks: usize,
+    ) -> (usize, TaskHandle, f32) {
+        store
+            .write(StateChange::set("sensor/x", float(0.75)))
+            .unwrap();
+        let nodes_before = graph.graph().nodes.len();
+        let handle = spawn_behavior(graph, "damped", &damped("out"));
+        let mut bridge = NoopBridge;
+        graph.tick_store(store, &mut bridge, 0.1).expect("tick");
+        assert_eq!(f32_at(store, "out"), 0.0, "the run starts at rest");
+        store
+            .write(StateChange::set("in/target", float(1.0)))
+            .unwrap();
+        for _ in 0..ticks {
+            graph.tick_store(store, &mut bridge, 0.1).expect("tick");
+        }
+        let moving = f32_at(store, "out");
+        assert!(0.1 < moving && moving < 0.9, "on its way: {moving}");
+        (nodes_before, handle, moving)
+    }
+
+    /// The interpreter describes run_behavior itself, so a device lists it
+    /// under the interpreter module with its contract's signature.
+    #[test]
+    fn the_interpreter_describes_run_behavior() {
+        let graph = ProcessingGraph::from_spec(passthrough("a", "b")).expect("from_spec");
+        let described = graph.described_methods();
+        assert_eq!(described.get(&run::FUNCTION), Some(&run::description()));
+        assert_eq!(run::description().name, "run_behavior");
+    }
+
+    /// run_behavior runs the graph its call carries beside the main graph:
+    /// the run writes its outputs, `Running` on its status key and its name
+    /// on its name key. Halted, it fails and its nodes leave the graph,
+    /// while the store keeps what it wrote.
+    #[test]
+    fn run_behavior_runs_the_graph_it_carries_until_halted() {
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        store
+            .write(StateChange::set("sensor/x", float(0.75)))
+            .unwrap();
+        let nodes_before = graph.graph().nodes.len();
+
+        let handle = spawn_behavior(
+            &mut graph,
+            "constant",
+            &passthrough("program/in", "program/out"),
+        );
+        assert_eq!(handle, run::handle(handle.id));
+        let mut bridge = NoopBridge;
+        store
+            .write(StateChange::set("program/in", float(0.5)))
+            .unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read(&store, "program/out"), Some(float(0.5)));
+        assert_eq!(read(&store, "actuator/y"), Some(float(0.75)));
+        assert_eq!(read_key(&store, &handle.status), Some(task::running()));
+        assert_eq!(
+            read_key(&store, &run::name_key(handle.id)),
+            Some(Value::String("constant".to_string()))
+        );
+        // The graph and the run's own name and status outputs.
+        assert_eq!(graph.graph().nodes.len(), nodes_before + 2 + 4);
+
+        // Any client finds the run by its name.
+        let runs = run::runs(&store);
+        assert_eq!(runs, vec![(handle.clone(), "constant".to_string())]);
+
+        graph.halt(handle.id).expect("halt");
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read_key(&store, &handle.status), Some(task::failure()));
+        assert_eq!(graph.graph().nodes.len(), nodes_before);
+        store
+            .write(StateChange::set("program/in", float(0.25)))
+            .unwrap();
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(
+            read(&store, "program/out"),
+            Some(float(0.5)),
+            "a halted run's outputs hold"
+        );
+    }
+
+    /// A behavior that writes `task/status` decides when its run ends: no
+    /// status of the run's own competes with it.
+    #[test]
+    fn a_behavior_writing_its_status_ends_its_run() {
+        let store = SimpleDataStore::new();
+        let mut graph = ProcessingGraph::from_spec(passthrough("a", "b")).expect("from_spec");
+        let behavior = parse_spec(
+            &json!({
+                "nodes": [
+                    { "id": "done", "type": "constant", "params": { "value": serde_json::to_value(task::success()).unwrap() } },
+                    { "id": "status", "type": "output", "params": { "path": "task/status" } }
+                ],
+                "edges": [
+                    { "from": { "node_id": "done" }, "to": { "node_id": "status", "input": "in" } }
+                ]
+            })
+            .to_string(),
+        )
+        .expect("parse");
+        store.write(StateChange::set("a", float(0.0))).unwrap();
+        let nodes_before = graph.graph().nodes.len();
+        let handle = spawn_behavior(&mut graph, "once", &behavior);
+        let mut bridge = NoopBridge;
+        graph.tick_store(&store, &mut bridge, 0.016).expect("tick");
+        assert_eq!(read_key(&store, &handle.status), Some(task::success()));
+        assert_eq!(graph.graph().nodes.len(), nodes_before, "swept");
+    }
+
+    /// A LOAD replaces the main behavior and leaves the live runs running:
+    /// a run's nodes carry over with their state, and its halt still prunes
+    /// them.
+    #[test]
+    fn runs_survive_a_load() {
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        let (_, handle, moving) = moving_run(&mut graph, &store, 3);
+        let wrapper = graph
+            .spawn(look_at(), RunPolicy::Concurrent)
+            .expect("spawn a wrapper run");
+
+        let main = passthrough("sensor/b", "actuator/b");
+        graph
+            .load(graph_codec::encode(&main).expect("encode"))
+            .expect("load");
+        let nodes_after_load = graph.graph().nodes.len();
+        let mut bridge = RunBridge::new(Vec::new());
+        store
+            .write(StateChange::set("sensor/b", float(0.25)))
+            .unwrap();
+        graph.tick_store(&store, &mut bridge, 0.1).expect("tick");
+        assert_eq!(
+            read(&store, "actuator/b"),
+            Some(float(0.25)),
+            "the new main graph runs"
+        );
+        let next = f32_at(&store, "out");
+        assert!(
+            moving < next && next < 0.9,
+            "the run's damp kept its state: {moving} → {next}"
+        );
+        assert_eq!(read_key(&store, &handle.status), Some(task::running()));
+        assert_eq!(read_key(&store, &wrapper.status), Some(task::running()));
+        assert_eq!(
+            bridge.calls.len(),
+            1,
+            "the wrapper run still calls its function"
+        );
+
+        graph.halt(handle.id).expect("halt");
+        graph.halt(wrapper.id).expect("halt");
+        graph.tick_store(&store, &mut bridge, 0.1).expect("tick");
+        assert_eq!(
+            graph.graph().nodes.len(),
+            nodes_after_load - 3 - 4 - 3,
+            "the halts pruned both runs"
+        );
+        assert_eq!(graph.graph().nodes.len(), 2, "the main graph remains");
+    }
+
+    /// run::edit changes a running behavior in place: the nodes the new
+    /// graph keeps keep their state, the ones it adds join the run, and the
+    /// halt prunes the run as edited.
+    #[test]
+    fn an_edit_inside_a_run_keeps_its_state_and_its_halt_prunes_the_edit() {
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        let (nodes_before, handle, moving) = moving_run(&mut graph, &store, 3);
+
+        // The same damp, now also feeding a second output; the first output
+        // node is replaced by another id.
+        let edited = parse_spec(
+            &json!({
+                "nodes": [
+                    { "id": "target", "type": "input", "params": { "path": "in/target", "value": 0.0 } },
+                    { "id": "damp", "type": "damp", "params": { "half_life": 0.5 } },
+                    { "id": "out-renamed", "type": "output", "params": { "path": "out" } },
+                    { "id": "copy", "type": "output", "params": { "path": "out/copy" } }
+                ],
+                "edges": [
+                    { "from": { "node_id": "target" }, "to": { "node_id": "damp", "input": "in" } },
+                    { "from": { "node_id": "damp" }, "to": { "node_id": "out-renamed", "input": "in" } },
+                    { "from": { "node_id": "damp" }, "to": { "node_id": "copy", "input": "in" } }
+                ]
+            })
+            .to_string(),
+        )
+        .expect("parse");
+        let diff = run::edit(handle.id, &damped("out"), &edited).expect("the edit");
+        assert_eq!(diff.remove_nodes, vec![format!("task/{}/out", handle.id.0)]);
+        graph
+            .apply(graph_codec::spec_diff_to_graph_diff(&diff).expect("translate"))
+            .expect("apply");
+
+        let mut bridge = NoopBridge;
+        graph.tick_store(&store, &mut bridge, 0.1).expect("tick");
+        let next = f32_at(&store, "out");
+        assert!(
+            moving < next && next < 0.9,
+            "the kept damp kept its state: {moving} → {next}"
+        );
+        assert_eq!(f32_at(&store, "out/copy"), next, "the added node runs");
+        assert_eq!(graph.graph().nodes.len(), nodes_before + 4 + 4);
+
+        graph.halt(handle.id).expect("halt");
+        graph.tick_store(&store, &mut bridge, 0.1).expect("tick");
+        assert_eq!(
+            graph.graph().nodes.len(),
+            nodes_before,
+            "the halt pruned the run as edited"
+        );
+    }
+
+    /// A malformed run_behavior call is refused at the spawn, the graph
+    /// untouched.
+    #[test]
+    fn a_run_behavior_call_without_a_graph_is_refused() {
+        let mut graph = ProcessingGraph::from_spec(passthrough("a", "b")).expect("from_spec");
+        let nodes_before = graph.graph().nodes.len();
+        let mut call = run::call("bad", &passthrough("c", "d")).expect("encode");
+        call.args
+            .retain(|field| field.id == run::run_behavior::ids::run_behavior::NAME);
+        assert!(graph.spawn(call, RunPolicy::Concurrent).is_err());
+        assert_eq!(graph.graph().nodes.len(), nodes_before);
     }
 }

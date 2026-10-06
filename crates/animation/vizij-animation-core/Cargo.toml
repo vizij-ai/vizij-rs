@@ -1,6 +1,6 @@
 [package]
 name        = "vizij-animation-core"
-version = "1.0.0"
+version = "2.0.0"
 edition     = "2021"
 license     = "MIT OR Apache-2.0"
 description = "Core animation logic for Vizij (engine‑agnostic)."
@@ -16,7 +16,7 @@ exclude = ["*/scripts/*", ".github/*", "npm/*", "target/*"]
 [dependencies]
 serde       = { workspace = true }
 serde_json  = { workspace = true }
-vizij-api-core = { version = "1", path = "../../api/vizij-api-core" }
+vizij-api-core = { version = "2", path = "../../api/vizij-api-core" }
 
 [dev-dependencies]
 vizij-test-fixtures = { path = "../../test-fixtures/vizij-test-fixtures" }

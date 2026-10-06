@@ -4,6 +4,98 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [5.1.0] - 2026-10-04
+
+### Added
+
+- The `vizij-face` profile declares the blink, two more expressions and the
+  conversation state, 88 keys in all:
+  - `standard/vizij/blink` (`standard::BLINK`), tier `gaze`: a weight in
+    [0, 1], 0 open, 1 both eyes closed, resting at 0. A level the writer
+    shapes over time, independent of the eyelid positions; a face closes
+    each lid at least as far as the stronger of the two.
+  - `standard/vizij/expression/concerned` and `…/sleepy`, tier `expression`:
+    `standard::VIZIJ_EXPRESSION_NAMES`, the expressions beyond ROS4HRI's
+    vocabulary. `standard::expression_names()` is the standard's whole set,
+    `standard::ROS4HRI_EXPRESSION_NAMES` then these.
+  - `standard/vizij/conversation/{speaking,user_speaking,thinking}`
+    (`standard::CONVERSATION_STATES`, `standard::conversation_path`), tier
+    `conversation`: weights written 0 or 1 by the agent the face speaks
+    for, resting at 0.
+- `standard::ROS4HRI_EXPRESSION_NAMES`: the 25 names of
+  `hri_msgs/Expression`, which the ROS4HRI mapping commands.
+
+### Deprecated
+
+- `standard::EXPRESSION_NAMES`: ROS4HRI's subset of the standard's
+  expressions. Use `ROS4HRI_EXPRESSION_NAMES`, or `expression_names()` for
+  the whole set.
+
+The ROS4HRI mapping is unchanged: it writes none of the new keys.
+
+## [5.0.0] - 2026-10-04
+
+### Changed
+
+- **Breaking:** the bundle's authored animations are `contents::Animation`
+  and `contents::AnimationTrack`, held in `Bundle::animations` (serialized
+  `animations`) — named as the bundle and Semio Studio name them. They
+  replace `contents::Clip`, `contents::ClipTrack` and `Bundle::clips`;
+  `Keyframe` keeps its name.
+
+### Added
+
+- `contents::animation` reads one animation: a bundle `animations` entry, or
+  an animation in the shape `Animation` serializes to — what a client hands a
+  device to load at run time.
+- `Bundle::channel_keys` resolves an animation track's channel to the store
+  key it drives on the face (`ChannelKeys::key`): the rig input at
+  `<rig prefix><channel>`, a rig input path as is, an input by the name the
+  rig's node gives it, else the prefixed path.
+
+## [4.1.0] - 2026-10-02
+
+### Added
+
+- `Bundle` reads what an app builds its controls from, typed in the new
+  `contents` module: `poses` (`Pose`: id, name, description, the ids of the
+  groups it belongs to — its `groupIds`, its `groupId`, and the group its
+  `group` path names — and its input values), `pose_groups` (`PoseGroup`),
+  `rig_inputs` (`RigInput`: the rig graph's `metadata.vizij.inputs`, each
+  path relative to the rig prefix, with its label, group, default and range),
+  `clips` (`Clip`, `ClipTrack`, `Keyframe`: the authored `animations`,
+  keyframes in time order), `program_labels` (program id → its graph entry's
+  `label`), and `metadata`, the bundle's open-ended `metadata` as authored.
+  The `contents` types serialize in camelCase.
+- A `Bundle` built with a struct literal that names every field must name the
+  new ones, or end in `..Default::default()`.
+
+## [4.0.0] - 2026-09-28
+
+### Changed
+
+- **Breaking:** each skill's contract is a trait declared with arora-module's
+  `#[contract]`: `LookAt`, `PlayViseme` and `Say`, each beside a module
+  holding its ids (`look_at::ids::look_at::FUNCTION`, …), `NAME`,
+  `record(parent)` and `exports(implementation)`. They replace `SAY_ID`,
+  `SAY_TEXT_PARAM_ID`, `SAY_VOICE_PARAM_ID`, `SAY_VISEME_PARAM_ID`,
+  `LOOK_AT_FUNCTION`, `PLAY_VISEME_FUNCTION` and `SAY_FUNCTION`. The ids on
+  the wire are unchanged: the parameter ids of look_at and play_viseme,
+  hashed from their names, are literals of the same values.
+- **Breaking:** `say`'s `voice` is optional (`Option<String>`); a call
+  without one is spoken in the provider's default voice.
+- The say fragment passes `sil` as the provider's `viseme`, stated in its
+  task-run node's `value` (vizij-graph-core 2.1): a provider declared from
+  the contract fails a call that lacks a required argument.
+- Depends on arora-module 2.1.
+
+## [3.0.0] - 2026-09-26
+
+### Changed
+
+- **Breaking:** depends on arora-types 3, arora-behavior 9 and vizij-api-core 2;
+  the optional ROS 2 frames on arora-msgs-ros2 2.
+
 ## [2.1.0] - 2026-09-10
 
 ### Added

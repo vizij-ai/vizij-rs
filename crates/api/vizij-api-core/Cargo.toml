@@ -1,6 +1,6 @@
 [package]
 name = "vizij-api-core"
-version = "1.1.0"
+version = "2.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Vizij's shared Value/Shape/TypedPath contract, kept interoperable across the animation and node-graph stacks."
@@ -8,7 +8,7 @@ repository = "https://github.com/vizij-ai/vizij-rs"
 readme = "README.md"
 
 [dependencies]
-arora-types = "2"
+arora-types = "3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

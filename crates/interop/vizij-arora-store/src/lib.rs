@@ -10,6 +10,10 @@
 //! (epoch/source/shape) is kept Vizij-side; the `DataStore` view exposes just
 //! the values.
 //!
+//! What a key *is* — its type, range, rest value, whether a remote writer may
+//! change it — is kept beside the Blackboard ([`DataStore::meta`]): a key is
+//! describable before it holds a value, and the Blackboard's entries are values.
+//!
 //! Like `SimpleDataStore`, this is cheaply cloneable — clones share one store —
 //! and change subscriptions are plain std channels.
 
@@ -18,7 +22,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 
-use arora_types::data::{DataError, DataStore, Key, Slot, State, StateChange, Subscription};
+use arora_types::data::{
+    prefix_covers, DataError, DataStore, Key, KeyMeta, Slot, State, StateChange, Subscription,
+};
 use vizij_api_core::blackboard::{Blackboard, BlackboardEntry};
 use vizij_api_core::{TypedPath, Value};
 
@@ -27,6 +33,10 @@ const SOURCE: &str = "arora";
 
 struct Inner {
     blackboard: RwLock<Blackboard>,
+    /// What each described key is.
+    meta: RwLock<HashMap<Key, KeyMeta>>,
+    /// What every key under a prefix is, until a key's own meta says otherwise.
+    prefix_meta: RwLock<HashMap<String, KeyMeta>>,
     epoch: AtomicU64,
     subscribers: Mutex<Vec<Sender<StateChange>>>,
 }
@@ -68,6 +78,8 @@ impl BlackboardStore {
         Self {
             inner: Arc::new(Inner {
                 blackboard: RwLock::new(blackboard),
+                meta: RwLock::new(HashMap::new()),
+                prefix_meta: RwLock::new(HashMap::new()),
                 epoch: AtomicU64::new(0),
                 subscribers: Mutex::new(Vec::new()),
             }),
@@ -128,6 +140,38 @@ impl DataStore for BlackboardStore {
             }
         }
         self.inner.notify(changes);
+        Ok(())
+    }
+
+    fn meta(&self, keys: &[Key]) -> Vec<Option<KeyMeta>> {
+        let meta = self.inner.meta.read().unwrap();
+        let prefixes = self.inner.prefix_meta.read().unwrap();
+        keys.iter()
+            .map(|key| {
+                // The most specific statement: the key's own, else the deepest
+                // subtree covering it.
+                meta.get(key).cloned().or_else(|| {
+                    prefixes
+                        .iter()
+                        .filter(|(prefix, _)| prefix_covers(prefix, &key.path))
+                        .max_by_key(|(prefix, _)| prefix.len())
+                        .map(|(_, meta)| meta.clone())
+                })
+            })
+            .collect()
+    }
+
+    fn all_meta(&self) -> HashMap<Key, KeyMeta> {
+        self.inner.meta.read().unwrap().clone()
+    }
+
+    fn set_meta(&self, meta: HashMap<Key, KeyMeta>) -> Result<(), DataError> {
+        self.inner.meta.write().unwrap().extend(meta);
+        Ok(())
+    }
+
+    fn set_prefix_meta(&self, meta: HashMap<String, KeyMeta>) -> Result<(), DataError> {
+        self.inner.prefix_meta.write().unwrap().extend(meta);
         Ok(())
     }
 
@@ -295,6 +339,50 @@ mod tests {
         store.write(StateChange::set("a", float(1.0))).unwrap();
         store.write(StateChange::set("b", float(2.0))).unwrap();
         assert_eq!(store.snapshot().storage.len(), 2);
+    }
+
+    /// A key's own meta wins over its subtree's, the deepest subtree over a
+    /// shallower one, and a key nothing describes has none — whether or not it
+    /// holds a value.
+    #[test]
+    fn meta_resolves_to_the_most_specific_statement() {
+        let store = BlackboardStore::new();
+        store
+            .write(StateChange::set("face/mouth", float(0.0)))
+            .unwrap();
+        store
+            .set_prefix_meta(HashMap::from([
+                (String::new(), KeyMeta::new().described("anything")),
+                ("face".to_string(), KeyMeta::new().editable()),
+            ]))
+            .unwrap();
+        store
+            .set_meta(HashMap::from([(
+                Key::from("face/eyes"),
+                KeyMeta::new().range(0.0, 1.0),
+            )]))
+            .unwrap();
+        assert_eq!(
+            store.meta(&[
+                Key::from("face/eyes"),
+                Key::from("face/mouth"),
+                Key::from("faceplate"),
+            ]),
+            vec![
+                Some(KeyMeta::new().range(0.0, 1.0)),
+                Some(KeyMeta::new().editable()),
+                Some(KeyMeta::new().described("anything")),
+            ]
+        );
+        assert_eq!(
+            store.all_meta().into_keys().collect::<Vec<_>>(),
+            vec![Key::from("face/eyes")],
+            "a key is described before it holds a value; a subtree is no key"
+        );
+        assert_eq!(
+            BlackboardStore::new().meta(&[Key::from("face/mouth")]),
+            vec![None]
+        );
     }
 
     #[test]

@@ -47,10 +47,12 @@ vizij-bundle export-skill   look_at -o look_at.json
   top-level `profiles` array: the interface its graphs are authored against
   travels with the asset. Re-running replaces the entry of the same id.
 - **validate** — the standard-coverage report: which paths of each tier of
-  the `vizij-face` profile (gaze & lids, expressions, visemes, muscle) the
-  face's graphs listen on, the compliance level L0–L3, and what is missing.
-  `--min-level` turns it into a CI gate.
-- **profiles** — the profiles Vizij ships, as JSON: `vizij-face` (81 paths,
+  the `vizij-face` profile (gaze & lids, expressions, visemes, muscle,
+  conversation) the face's graphs listen on, the compliance level L0–L3, and
+  what is missing. The level climbs the first four tiers in order; the
+  conversation state is reported without being graded. `--min-level` turns it
+  into a CI gate.
+- **profiles** — the profiles Vizij ships, as JSON: `vizij-face` (88 paths,
   face-scoped) and `ros4hri` (25 paths, device-scoped).
 - **mappings** — the standard mappings Vizij ships, as JSON: the opt-in menu
   `add-standard` and the web's `mappings()` draw from.

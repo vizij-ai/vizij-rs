@@ -1,8 +1,8 @@
 //! Live ROS 2 end-to-end: a typed `interaction_skills/LookAt` client drives
 //! the gaze skill on the real vizij device over DDS.
 //!
-//! The whole production chain is under test — discovery (`DescribeMethods`
-//! over the device's gaze module), the ros4hri exposure profile's
+//! The whole production chain is under test — discovery (`DescribeMethods`,
+//! look_at described by the interpreter), the ros4hri exposure profile's
 //! `/skill/look_at` action binding, SPAWN into the node-graph interpreter
 //! (the shipped look_at fragment grafts as graph structure, writes the
 //! `standard/ros4hri/gaze/*` surface, and reports on its status key),
@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
-use crate::device::{builder_for, free_inputs};
+use crate::face::{builder_for, declare_keys, free_inputs};
 
 // The typed client's view of `interaction_skills/LookAt` — local mirrors of
 // the standard messages (`ros2_client::Message` is a foreign marker trait).
@@ -141,7 +141,7 @@ async fn the_look_at_skill_serves_the_standard_contract_on_the_vizij_device() {
     let domain_id: u16 = rand::rng().random_range(1..=200);
 
     // The real device: node-graph interpreter with the shipped look_at
-    // fragment, the described gaze module, and the ROS 2 bridge exposing the
+    // fragment, which describes the method, and the ROS 2 bridge exposing the
     // ros4hri profile. The store clone watches the gaze surface from the
     // test.
     let store = BlackboardStore::new();
@@ -155,6 +155,7 @@ async fn the_look_at_skill_serves_the_standard_contract_on_the_vizij_device() {
         RigHal::new(),
         store.clone(),
         &[],
+        None,
     )
     .expect("build the device")
     .with_host_module(speak_module())
@@ -173,8 +174,11 @@ async fn the_look_at_skill_serves_the_standard_contract_on_the_vizij_device() {
 
     let client_flow = async {
         let (_ctx, mut node) = create_test_node(domain_id, "skill_client");
-        // The reliable service profile ros2-client's own action examples use —
-        // the best-effort default drops service requests.
+        // The service profile a native rclcpp/rclpy client runs
+        // (`rmw_qos_profile_services_default`): reliable — the best-effort
+        // default drops service requests — and volatile. The bridge serves
+        // every service endpoint volatile on both sides (arora-bridge-ros2
+        // 6.3.1), so a reply reader asking for transient-local stays unmatched.
         let service_qos = {
             use ros2_client::ros2::{policy, QosPolicyBuilder};
             QosPolicyBuilder::new()
@@ -182,7 +186,7 @@ async fn the_look_at_skill_serves_the_standard_contract_on_the_vizij_device() {
                     max_blocking_time: ros2_client::ros2::Duration::from_millis(100),
                 })
                 .history(policy::History::KeepLast { depth: 4 })
-                .durability(policy::Durability::TransientLocal)
+                .durability(policy::Durability::Volatile)
                 .build()
         };
 
@@ -384,17 +388,19 @@ async fn a_free_input_takes_a_published_data_topic() {
     let spec = r#"{ "nodes": [
         {"id": "in", "type": "input", "params": {"path": "face/mouth/open"}}
     ], "edges": [] }"#;
-    let inputs = free_inputs(spec);
-    assert_eq!(inputs.len(), 1, "the input is free (nothing writes it)");
-    let mut config = arora_bridge_ros2::Ros2BridgeConfig::new("robot", domain_id)
+    assert_eq!(
+        free_inputs(spec).len(),
+        1,
+        "the input is free (nothing writes it)"
+    );
+    // The store opens it; the bridge subscribes what the store opens.
+    let store = BlackboardStore::new();
+    declare_keys(&store, spec, &[], &[]);
+    let config = arora_bridge_ros2::Ros2BridgeConfig::new("robot", domain_id)
         .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
-    for (path, ty) in &inputs {
-        config = config.with_input(path.clone(), ty.clone());
-    }
     let bridge = arora_bridge_ros2::Ros2Bridge::new(config).await;
 
-    let store = BlackboardStore::new();
-    let mut arora = builder_for(spec, RigHal::new(), store.clone(), &[])
+    let mut arora = builder_for(spec, RigHal::new(), store.clone(), &[], None)
         .expect("build the device")
         .with_bridge(Box::new(bridge))
         .build()
@@ -482,8 +488,8 @@ async fn the_device_keeps_a_flat_heap_in_a_ros_graph() {
     use arora_bridge_ros2::msg_types::{self, MessageType};
     use ros2_client::{DEFAULT_PUBLISHER_QOS, DEFAULT_SUBSCRIPTION_QOS};
 
-    use crate::frames::FrameFormat;
     use crate::memory_tests::{fan_out_spec, feed_frames, heap_floor, KEPT_BUDGET, STEP};
+    use crate::view::frames::FrameFormat;
 
     let _ = env_logger::builder()
         .parse_filters("warn")
@@ -494,11 +500,10 @@ async fn the_device_keeps_a_flat_heap_in_a_ros_graph() {
     // The device a running vizij is: the face's graph writing every actuated
     // key each step, its free input subscribed, and the ROS4HRI profile.
     let spec = fan_out_spec();
-    let mut config = arora_bridge_ros2::Ros2BridgeConfig::new("robot", domain_id)
+    let store = BlackboardStore::new();
+    declare_keys(&store, &spec, &[], &[]);
+    let config = arora_bridge_ros2::Ros2BridgeConfig::new("robot", domain_id)
         .with_profile(arora_bridge_ros2::ExposureProfile::ros4hri());
-    for (path, ty) in free_inputs(&spec) {
-        config = config.with_input(path, ty);
-    }
     // The frame publishes as the `sensor_msgs` image it already is, on the
     // ROS4HRI image topic the profile declares for its key — the path a
     // running device takes, and the one whose retention this measures.
@@ -507,8 +512,7 @@ async fn the_device_keeps_a_flat_heap_in_a_ros_graph() {
     let bridge = arora_bridge_ros2::Ros2Bridge::new(config).await;
 
     let rig = RigHal::new();
-    let store = BlackboardStore::new();
-    let mut arora = builder_for(&spec, rig.clone(), store.clone(), &[])
+    let mut arora = builder_for(&spec, rig.clone(), store.clone(), &[], None)
         .expect("build the device")
         .with_bridge(Box::new(bridge))
         .build()

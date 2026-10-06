@@ -1,16 +1,18 @@
 //! The Vizij face standard: the store paths a compliant face implements.
 //!
 //! Faces are driven through named controls on the store, under the
-//! `standard/vizij/` prefix. The vocabulary has three tiers, from coarse to
-//! fine; a face implements what it implements, and standard mappings (like the
-//! ROS4HRI one) degrade to the tiers a face covers. The same vocabulary is
-//! declared as data — the `vizij-face` profile in [`crate::profile`] — and a
-//! test holds the two equal:
+//! `standard/vizij/` prefix. The pose vocabulary has three tiers, from coarse
+//! to fine; a face implements what it implements, and standard mappings (like
+//! the ROS4HRI one) degrade to the tiers a face covers. Beside them, the
+//! conversation state tells a face what the dialogue it takes part in is
+//! doing. The same vocabulary is declared as data — the `vizij-face` profile
+//! in [`crate::profile`] — and a test holds the two equal:
 //!
-//! - **Gaze & lids** — per-eye position and eyelid controls.
+//! - **Gaze & lids** — per-eye position and eyelid controls, and the blink.
 //! - **Semantic** — one weight per named expression and per viseme shape. The
-//!   expression names are ROS4HRI's set; the viseme shapes are the industry
-//!   15-shape set (the Oculus/Meta convention).
+//!   expression names are ROS4HRI's set plus the ones faces implement beyond
+//!   it; the viseme shapes are the industry 15-shape set (the Oculus/Meta
+//!   convention).
 //! - **Muscle** — fine-grained face controls cherry-picked from FACS action
 //!   units and ARKit blendshapes: FACS supplies the taxonomy (each control
 //!   names an action unit, so ROS4HRI's `FacialActionUnits` maps losslessly),
@@ -21,6 +23,8 @@
 //!   (`eyeLook*` — redundant with the gaze tier) and FACS codes a command
 //!   channel cannot express (visibility, head/eye movement — owned by the
 //!   gaze tier) have none.
+//! - **Conversation** — whether the face is speaking, its interlocutor is
+//!   speaking, or it is thinking: state a face may react to, not a pose.
 //!
 //! Everything is an `f32` weight in [0, 1] unless a constant says otherwise.
 
@@ -72,13 +76,21 @@ pub const RIGHT_EYE_POS_Y: &str = "standard/vizij/right_eye/pos/y";
 pub const LEFT_EYE_TOP_EYELID_POS_Y: &str = "standard/vizij/left_eye_top_eyelid/pos/y";
 pub const RIGHT_EYE_TOP_EYELID_POS_Y: &str = "standard/vizij/right_eye_top_eyelid/pos/y";
 
+/// The blink, [0, 1]: 0 open, 1 both eyes closed. A level, not a trigger: the
+/// writer shapes each blink over time (the close and the reopen, ≈0.2 s in
+/// all), and the face renders the weight as is, with no transition of its
+/// own — the same split as the visemes, which keeps a face's adaptation
+/// stateless. It is independent of the eyelid positions, which keep their
+/// meaning: a face closes each lid at least as far as the stronger of the
+/// two, so a blink passes over lids held half-closed and returns them there.
+pub const BLINK: &str = "standard/vizij/blink";
+
 // --- Semantic tier: expressions --------------------------------------------
 
-/// The named expressions, from ROS4HRI's `hri_msgs/Expression` vocabulary.
-/// A face implements an expression by responding to its weight control at
-/// [`expression_path`]; the standard does not prescribe what the expression
-/// looks like — that is the face's authored pose.
-pub const EXPRESSION_NAMES: [&str; 25] = [
+/// The named expressions ROS4HRI's `hri_msgs/Expression` defines — the
+/// expressions the built-in ROS4HRI mapping commands by name. Part of the
+/// standard's set, [`expression_names`].
+pub const ROS4HRI_EXPRESSION_NAMES: [&str; 25] = [
     "neutral",
     "angry",
     "sad",
@@ -105,6 +117,30 @@ pub const EXPRESSION_NAMES: [&str; 25] = [
     "amazed",
     "excited",
 ];
+
+/// The named expressions the standard declares beyond ROS4HRI's vocabulary:
+/// expressions faces implement that `hri_msgs/Expression` does not name, so
+/// no ROS4HRI command reaches them. Part of the standard's set,
+/// [`expression_names`].
+pub const VIZIJ_EXPRESSION_NAMES: [&str; 2] = ["concerned", "sleepy"];
+
+/// The standard's named expressions: ROS4HRI's ([`ROS4HRI_EXPRESSION_NAMES`])
+/// followed by the ones beyond it ([`VIZIJ_EXPRESSION_NAMES`]). A face
+/// implements an expression by responding to its weight control at
+/// [`expression_path`]; the standard does not prescribe what the expression
+/// looks like — that is the face's authored pose.
+pub fn expression_names() -> impl Iterator<Item = &'static str> {
+    ROS4HRI_EXPRESSION_NAMES
+        .into_iter()
+        .chain(VIZIJ_EXPRESSION_NAMES)
+}
+
+/// ROS4HRI's expression names, which are not the standard's whole set.
+#[deprecated(
+    since = "4.1.0",
+    note = "ROS4HRI's subset of the standard's expressions: use `ROS4HRI_EXPRESSION_NAMES`, or `expression_names()` for the whole set"
+)]
+pub const EXPRESSION_NAMES: [&str; 25] = ROS4HRI_EXPRESSION_NAMES;
 
 /// The weight control path for a named expression.
 pub fn expression_path(name: &str) -> String {
@@ -220,6 +256,26 @@ pub fn control_for_arkit(arkit: &str) -> Option<&'static FaceControl> {
     FACE_CONTROLS.iter().find(|c| c.arkit == arkit)
 }
 
+// --- Conversation state ------------------------------------------------------
+
+/// The conversation states, each a weight at [`conversation_path`] written 0
+/// or 1 by whoever runs the dialogue — the agent the face speaks for:
+///
+/// - `speaking` — the face is speaking: 1 from the moment its utterance
+///   starts (a `say` run is spawned) until it ends or is stopped.
+/// - `user_speaking` — the person the face is talking with is speaking.
+/// - `thinking` — the agent is preparing its reply.
+///
+/// They describe the dialogue, not the face: a face reacts as its author
+/// chooses (a listening pose, an averted gaze while thinking) or not at all,
+/// and nothing in the standard writes them on its own.
+pub const CONVERSATION_STATES: [&str; 3] = ["speaking", "user_speaking", "thinking"];
+
+/// The weight path of a conversation state.
+pub fn conversation_path(state: &str) -> String {
+    format!("{VIZIJ_PREFIX}/conversation/{state}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -234,6 +290,18 @@ mod tests {
         arkit.sort_unstable();
         arkit.dedup();
         assert_eq!(arkit.len(), FACE_CONTROLS.len());
+    }
+
+    /// The names beyond ROS4HRI's are disjoint from it, so the ROS4HRI
+    /// mapping's one-hot over its own names never shadows them.
+    #[test]
+    fn expression_names_extend_ros4hri_without_overlap() {
+        let mut names: Vec<_> = expression_names().collect();
+        assert_eq!(names.len(), 27);
+        assert_eq!(names[..25], ROS4HRI_EXPRESSION_NAMES);
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), 27);
     }
 
     #[test]

@@ -11,22 +11,30 @@ module](../crates/interop/vizij-arora-host/src/standard.rs), which is the
 authoritative source; this page mirrors it. As data, the same vocabulary is
 the **`vizij-face` profile**
 ([`profiles/vizij-face.json`](../crates/interop/vizij-arora-host/profiles/vizij-face.json)):
-an interface of 82 typed paths, face-scoped — every face carries its own copy
+an interface of 88 typed paths, face-scoped — every face carries its own copy
 under its rig prefix — with each key's tier, FACS action unit, and ARKit
 blendshape as metadata. See [profiles and mappings](profiles-and-mappings.md).
 
 Everything is an `f32` weight in `[0, 1]` unless stated otherwise.
 
-## Three tiers
+## Three tiers and the conversation state
 
-The vocabulary runs coarse to fine. A face implements what it implements, and a
-standard mapping (like [ROS4HRI](ros4hri.md)) degrades to the tiers a face
-covers.
+The pose vocabulary runs coarse to fine. A face implements what it implements,
+and a standard mapping (like [ROS4HRI](ros4hri.md)) degrades to the tiers a
+face covers.
 
-1. **Gaze & lids** — where the eyes point and how open they are.
+1. **Gaze & lids** — where the eyes point, how open they are, and the blink.
 2. **Semantic** — one weight per named expression and per viseme shape.
 3. **Muscle** — fine-grained controls, one per FACS action unit / ARKit
    blendshape.
+
+Beside them, the **conversation state** tells the face what the dialogue it
+takes part in is doing — state it may react to, not a pose.
+
+In the profile, each key's `tier` is one of `gaze`, `expression`, `viseme`,
+`muscle` and `conversation`. `vizij-bundle validate` grades a face's
+compliance L0–L3 on the first four, in that order; it reports the
+conversation state without grading it.
 
 ## Gaze & lids
 
@@ -38,18 +46,30 @@ covers.
 | `standard/vizij/right_eye/pos/y` | `[-1, 1]` | as above, right eye |
 | `standard/vizij/left_eye_top_eyelid/pos/y` | `[0, 1]` | 0 open, 1 closed |
 | `standard/vizij/right_eye_top_eyelid/pos/y` | `[0, 1]` | 0 open, 1 closed |
+| `standard/vizij/blink` | `[0, 1]` | both eyes: 0 open, 1 closed |
 
 Per-eye positions (rather than a single gaze vector) let a mapping command
 vergence; the ROS4HRI mapping computes them from a face-frame target.
+
+The **blink** is a level, not a trigger. Whoever blinks the face shapes each
+blink over time — the close and the reopen, about 0.2 s in all — and the face
+renders the weight as is, with no transition of its own: the same split as the
+visemes, which keeps a face's adaptation stateless. The blink is independent of
+the eyelid positions, which keep their meaning: a face closes each lid at least
+as far as the stronger of the two, so a blink passes over lids held
+half-closed and returns them there. The ROS4HRI mapping does not write it; its
+idle blink drives the eyelid positions.
 
 ## Semantic tier
 
 ### Expressions
 
-One weight per named expression, at `standard/vizij/expression/<name>`. The
-names are ROS4HRI's `hri_msgs/Expression` vocabulary (25). The standard does
-**not** prescribe what an expression looks like — that is the face's authored
-pose; it prescribes only the name a caller commands.
+One weight per named expression, at `standard/vizij/expression/<name>`, 27 in
+all. The standard does **not** prescribe what an expression looks like — that
+is the face's authored pose; it prescribes only the name a caller commands.
+
+ROS4HRI's `hri_msgs/Expression` vocabulary (25), which the ROS4HRI mapping
+commands by name:
 
 ```
 neutral   angry      sad         happy        surprised
@@ -57,6 +77,12 @@ disgusted scared     pleading    vulnerable   despaired
 guilty    disappointed embarrassed horrified  skeptical
 annoyed   furious    suspicious  rejected     bored
 tired     asleep     confused    amazed       excited
+```
+
+and the expressions faces implement beyond it, which no ROS4HRI name reaches:
+
+```
+concerned sleepy
 ```
 
 ### Visemes
@@ -128,10 +154,26 @@ One more muscle-tier path, `standard/vizij/mouth/morph/jaw_open`, is the same
 muscle as `jaw_open` (AU 26, ARKit `jawOpen`) under the de-facto name every
 current face implements; the ROS4HRI mapping drives both.
 
+## Conversation state
+
+| Path | Range | Meaning |
+|---|---|---|
+| `standard/vizij/conversation/speaking` | `[0, 1]` | the face is speaking: 1 from the moment its utterance starts (a `say` run is spawned) until it ends or is stopped |
+| `standard/vizij/conversation/user_speaking` | `[0, 1]` | the person the face is talking with is speaking |
+| `standard/vizij/conversation/thinking` | `[0, 1]` | the agent is preparing its reply |
+
+Each is written 0 or 1 by whoever runs the dialogue — the agent the face speaks
+for — and rests at 0. They describe the dialogue, not the face: a face reacts as
+its author chooses (a listening pose, an averted gaze while thinking) or not at
+all, and nothing in the standard writes them on its own. ROS4HRI has no
+counterpart the mapping reads.
+
 ## Reaching the vocabulary in code
 
 `vizij-arora-host`'s `standard` module exposes the constants and the path
-helpers (`expression_path`, `viseme_path`, `face_path`), plus
+helpers (`expression_path`, `viseme_path`, `face_path`, `conversation_path`),
+the name sets (`expression_names()` — `ROS4HRI_EXPRESSION_NAMES` then
+`VIZIJ_EXPRESSION_NAMES` — `VISEME_SHAPES`, `CONVERSATION_STATES`), plus
 `controls_for_au(code)` (the lateralized pair or single control an AU drives)
 and `control_for_arkit(name)`. Callers should build paths through these rather
 than hand-format strings.

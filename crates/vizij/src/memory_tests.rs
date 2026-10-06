@@ -19,8 +19,8 @@ use arora_types::value::Value;
 use vizij_arora_hal::RigHal;
 use vizij_arora_store::BlackboardStore;
 
-use crate::device::builder_for;
-use crate::frames::{encode_frame, FrameFormat};
+use crate::face::builder_for;
+use crate::view::frames::{encode_frame, FrameFormat};
 
 /// Bytes the process has been handed and has not given back.
 static LIVE_BYTES: AtomicUsize = AtomicUsize::new(0);
@@ -105,7 +105,7 @@ fn gradient(side: u32) -> Vec<u8> {
     pixels
 }
 
-/// The view's frame feed, as [`crate::frames`] runs it: one `side`×`side` frame
+/// The view's frame feed, as [`crate::view::frames`] runs it: one `side`×`side` frame
 /// pushed onto the rig's reading feed every `1/rate_hz`, forever, with its
 /// encoded size added to `carried`. The pixels are encoded once and the value
 /// cloned per push — each push still allocates its own copy of the payload,
@@ -195,7 +195,7 @@ async fn the_device_alone_keeps_a_flat_heap_under_a_frame_feed() {
 
     let rig = RigHal::new();
     let store = BlackboardStore::new();
-    let mut arora = builder_for(&fan_out_spec(), rig.clone(), store.clone(), &[])
+    let mut arora = builder_for(&fan_out_spec(), rig.clone(), store.clone(), &[], None)
         .expect("build the device")
         .build()
         .expect("build arora");

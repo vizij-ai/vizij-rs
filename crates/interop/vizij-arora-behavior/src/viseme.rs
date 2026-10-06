@@ -1,32 +1,29 @@
-//! The viseme skill's exterior contract: the described `play_viseme`
-//! function a device registers, and the fragment that implements it.
+//! The viseme skill: the play_viseme contract's re-export and the fragment
+//! that implements it.
 //!
 //! The behavior is data — `vizij-arora-host`'s play_viseme skill fragment,
-//! grafted per run by the interpreter ([`TaskFragment`]) — so the module
-//! here carries only the contract: the described signature a bridge
-//! discovers (DescribeMethods) and exposes as an action. Signature and
-//! fragment derive from one parameter list
-//! ([`skills::PLAY_VISEME_PARAMS`](vizij_arora_host::skills::PLAY_VISEME_PARAMS)),
-//! so they cannot drift.
+//! grafted per run by the interpreter ([`TaskFragment`]). No module
+//! implements play_viseme: the fragment carries the contract's description,
+//! so the interpreter describes the method — what a bridge discovers
+//! (DescribeMethods) and exposes as an action — and a remote spawns it
+//! through the interpreter module.
 
 use std::collections::HashMap;
 
-use arora_behavior_tree_types::STATUS_ENUMERATION_ID;
-use arora_types::gen_uuid_from_str;
-use arora_types::record::module::frozen::{Function, Parameter};
-use arora_types::record::ty::{FrozenScalar, FrozenTy, PrimitiveKind};
-use arora_types::record::{FrozenReference, Version};
+use arora_types::record::module::frozen;
 use uuid::Uuid;
 use vizij_arora_host::skills;
 
 use crate::TaskFragment;
 
-/// The viseme module's id on the device — where the `play_viseme` call is
-/// registered.
-pub const MODULE_ID: Uuid = uuid::uuid!("57f4918d-227d-463e-8996-ac242f275990");
+pub use vizij_arora_host::skills::{play_viseme, PlayViseme};
 
-/// The `play_viseme` function's id.
-pub const PLAY_VISEME_ID: Uuid = uuid::uuid!("43747a8e-2f6c-42ae-9d14-d440c2195b2f");
+/// play_viseme as the contract describes it.
+fn play_viseme_description() -> frozen::Export {
+    play_viseme::descriptions()
+        .remove(&play_viseme::ids::play_viseme::FUNCTION)
+        .expect("the play_viseme contract declares play_viseme")
+}
 
 /// The play_viseme task fragment, parsed from the shipped asset with the
 /// face's rig prefix on the controls it writes — what the device's
@@ -40,6 +37,7 @@ pub fn play_viseme_fragment(rig_prefix: &str) -> TaskFragment {
     )
     .expect("the shipped play_viseme asset parses")
     .exclusive()
+    .described(play_viseme_description())
 }
 
 /// The play_viseme fragment the device registers, honoring the face's
@@ -50,10 +48,7 @@ pub fn play_viseme_fragment_from(
     embedded: &[(String, serde_json::Value)],
     rig_prefix: &str,
 ) -> TaskFragment {
-    if let Some((_, spec)) = embedded
-        .iter()
-        .find(|(id, _)| id == skills::PLAY_VISEME_FUNCTION)
-    {
+    if let Some((_, spec)) = embedded.iter().find(|(id, _)| id == play_viseme::NAME) {
         match TaskFragment::parse_with_rig_prefix(
             &spec.to_string(),
             rig_prefix,
@@ -63,7 +58,7 @@ pub fn play_viseme_fragment_from(
                 log::info!(
                     "play_viseme: the face's embedded skill fragment overrides the built-in"
                 );
-                return fragment.exclusive();
+                return fragment.exclusive().described(play_viseme_description());
             }
             Err(e) => {
                 log::warn!("embedded play_viseme fragment refused ({e}); the built-in serves")
@@ -73,45 +68,17 @@ pub fn play_viseme_fragment_from(
     play_viseme_fragment(rig_prefix)
 }
 
-/// The parameter `id → name` map shared by the fragment and the signature.
+/// The parameter `id → name` map the fragment serves as `task/<name>`
+/// inputs: every parameter of the call.
 pub fn play_viseme_parameters() -> HashMap<Uuid, String> {
-    skills::PLAY_VISEME_PARAMS
-        .iter()
-        .map(|name| (gen_uuid_from_str(name), name.to_string()))
-        .collect()
-}
-
-/// The described play_viseme signature: `(shape, weight)` returning the
-/// behavior `Status` — the task-run marker a bridge exposes as an action.
-pub fn play_viseme_signature() -> Function {
-    let kinds = [
-        PrimitiveKind::String, // shape, one of the standard's 15
-        PrimitiveKind::F32,    // weight, [0, 1]
-    ];
-    let mut parameters = HashMap::new();
-    let mut parameter_ordering = Vec::new();
-    for (name, kind) in skills::PLAY_VISEME_PARAMS.iter().zip(kinds) {
-        let id = gen_uuid_from_str(name);
-        parameter_ordering.push(id);
-        parameters.insert(
-            id,
-            Parameter {
-                name: name.to_string(),
-                ty: FrozenTy::from(kind),
-                mutable: false,
-            },
-        );
-    }
-    Function {
-        parameters,
-        parameter_ordering,
-        return_ty: FrozenTy::FrozenScalar(FrozenScalar {
-            reference: FrozenReference {
-                id: STATUS_ENUMERATION_ID,
-                version: Version::parse("1.0.0").expect("a valid version"),
-            },
-        }),
-    }
+    [
+        play_viseme::ids::play_viseme::SHAPE,
+        play_viseme::ids::play_viseme::WEIGHT,
+    ]
+    .into_iter()
+    .zip(skills::PLAY_VISEME_PARAMS)
+    .map(|(id, name)| (id, name.to_string()))
+    .collect()
 }
 
 #[cfg(test)]
@@ -136,17 +103,13 @@ mod tests {
     }
 
     #[test]
-    fn the_signature_is_action_shaped_over_the_parameter_list() {
-        let signature = play_viseme_signature();
-        let names: Vec<&str> = signature
-            .parameter_ordering
-            .iter()
-            .map(|id| signature.parameters[id].name.as_str())
-            .collect();
-        assert_eq!(names, skills::PLAY_VISEME_PARAMS);
-        assert!(matches!(
-            signature.return_ty,
-            FrozenTy::FrozenScalar(FrozenScalar { ref reference }) if reference.id == STATUS_ENUMERATION_ID
-        ));
+    fn the_fragment_serves_the_call_s_parameters_by_their_contract_ids() {
+        assert_eq!(
+            play_viseme_parameters(),
+            HashMap::from([
+                (play_viseme::ids::play_viseme::SHAPE, "shape".to_string()),
+                (play_viseme::ids::play_viseme::WEIGHT, "weight".to_string()),
+            ])
+        );
     }
 }

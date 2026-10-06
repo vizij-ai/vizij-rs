@@ -1,0 +1,1743 @@
+//! The arora device behind the view: `RigHal` + `BlackboardStore` + the
+//! face's composed graph as the behavior, with the animation, gaze, viseme
+//! and speech modules registered, and the face's program running beside it
+//! as a task run. This module is the composition, the same on every target;
+//! how a device is driven — a worker thread and the operator flow on desktop
+//! ([`native`]), a JS-paced step in the browser — is each entry point's.
+
+use anyhow::{anyhow, Result};
+use arora_types::data::{DataStore, Key, StateChange};
+use vizij_api_core::value::{float, Value};
+use vizij_arora_behavior::{gaze, speech, viseme};
+use vizij_arora_behavior::{parse_spec, ProcessingGraph};
+use vizij_arora_hal::RigHal;
+use vizij_arora_host::Bundle;
+pub use vizij_arora_host::ProgramSelect;
+use vizij_arora_store::BlackboardStore;
+
+use crate::view::meta::FaceMeta;
+
+use crate::modules::animation;
+
+/// Builds this device's speech provider — the host module behind the say
+/// skill's hosted `say` call, one per device generation: the cloud provider
+/// ([`vizij_arora_tts`]) at a deployment, the local Piper one, or the
+/// browser's over the page's playback. A device without one plays no
+/// speech; its `say` runs fail. The native driver rebuilds the device on
+/// its worker thread, so the builder crosses threads there; the browser's
+/// holds a JS function and never leaves its thread.
+#[cfg(not(target_arch = "wasm32"))]
+pub type SpeechProvider = std::sync::Arc<dyn Fn() -> arora::HostModule + Send + Sync>;
+#[cfg(target_arch = "wasm32")]
+pub type SpeechProvider = std::rc::Rc<dyn Fn() -> arora::HostModule>;
+
+/// How a face is composed and staged — carried from the entry point into
+/// each device generation and its reloads.
+#[derive(Clone)]
+pub struct FaceConfig {
+    /// Bundle graph kinds to compose into the base behavior (rig, pose-driver).
+    pub wanted: Vec<String>,
+    /// Which of the bundle's programs runs from load ([`spawn_program`]).
+    pub program: ProgramSelect,
+    /// Stage the bundle's neutral inputs into the store at boot.
+    pub stage_neutral: bool,
+    /// Serve ROS4HRI: compose the built-in mapping (`standard/ros4hri/*` keys
+    /// drive the face's standard controls) and, under `--ros2`, expose the
+    /// device through the ROS4HRI profile — the typed face topics, the face
+    /// image, the skill actions. On by default in the binary; `--no-ros4hri`
+    /// leaves a plain ROS 2 device, its keys under `/{namespace}/keys/…` and
+    /// nothing on the ROS4HRI names.
+    pub ros4hri: bool,
+    /// The speech provider, built per generation; `None` for a device that
+    /// plays no speech.
+    pub speech: Option<SpeechProvider>,
+}
+
+/// A face read for the device: its metadata and the one behavior graph its
+/// bundle composes to, validated.
+pub struct LoadedFace {
+    pub meta: FaceMeta,
+    /// The composed spec, as the interpreter parses it.
+    pub spec: String,
+}
+
+/// Load a face for the device from its GLB bytes: parse the metadata, compose
+/// its bundle graphs (the base kinds, the standard mappings, the animation
+/// source) into the one behavior graph, and validate it. No program is
+/// composed: a program runs beside that graph, as a task run
+/// ([`spawn_program`]).
+pub fn load_face(glb: &[u8], config: &FaceConfig) -> Result<LoadedFace> {
+    let meta = FaceMeta::from_glb_bytes(glb)?;
+    let wanted: Vec<&str> = config.wanted.iter().map(String::as_str).collect();
+    // The standard mappings this face composes: ROS4HRI unless opted out. The
+    // mapping writes the face's namespaced standard controls, so it takes the
+    // bundle's rig prefix.
+    let mut mappings = Vec::new();
+    if config.ros4hri {
+        mappings.push(vizij_arora_host::ros4hri::ros4hri_source(
+            &meta.bundle.rig_prefix(),
+        ));
+    }
+    // `with_animations`: the device always loads the animation module (see
+    // `builder_for`), so the animation source it dispatches to is always
+    // composed — inert until an animation plays (an animation loads silent,
+    // see `load_animations`).
+    let spec = meta
+        .bundle
+        .compose(&wanted, &ProgramSelect::None, true, &mappings)?
+        .to_string();
+    parse_spec(&spec).map_err(|e| anyhow!("composed spec does not parse: {e}"))?;
+    Ok(LoadedFace { meta, spec })
+}
+
+/// The composed graph's free inputs — input paths no graph in the composition
+/// writes (the ones a remote may drive) — with the type the store states for
+/// each ([`declare_keys`]):
+/// the input's default value decides (string → String, bool → Boolean,
+/// anything numeric or absent → F64); vector-valued inputs stay out (they
+/// travel as typed topics, e.g. the gaze target). Built-in keys stay out.
+///
+/// Defaults are read through the API's value parser: composition normalizes
+/// every source, so a default reaches here in its canonical serialized form
+/// (`{"f32": 0.0}`, `{"str": ""}`), not as the bare JSON literal an author
+/// wrote.
+pub fn free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type)> {
+    walk_free_inputs(spec)
+        .into_iter()
+        .map(|(path, ty, _)| (path, ty))
+        .collect()
+}
+
+/// Say in the store what the face's keys are — what every bridge relays, and
+/// what `reset` returns them to.
+///
+/// The keys are the free inputs (see [`free_inputs`]) of everything the face
+/// runs: its composed graph `spec`, and each of `programs` (the bundle's,
+/// `(id, spec)`) over it — a program runs beside the graph whenever a client
+/// spawns it, so the inputs it reads are the face's too. An input a program
+/// writes stays declared: the program runs only while it runs. Each is open
+/// to remote writers, of its type — a number in `[0, 1]` — and rests at its
+/// authored default. `neutral` (the bundle's neutral pose,
+/// [`Bundle::neutral_stage_writes`]) moves the rest of the keys it names, and
+/// gives a rig key that is no free input its rest alone: the standard inputs
+/// feed the rig through the adaptation, so a reset that left the rig out
+/// would be undone on the next tick.
+///
+/// [`Bundle::neutral_stage_writes`]: vizij_arora_host::Bundle::neutral_stage_writes
+pub fn declare_keys(
+    store: &dyn DataStore,
+    spec: &str,
+    programs: &[(String, serde_json::Value)],
+    neutral: &[(String, f32)],
+) {
+    use arora_types::data::KeyMeta;
+    use arora_types::value::Type;
+    let mut inputs = walk_free_inputs(spec);
+    // A program's inputs over the graph: the free inputs of the two composed,
+    // which the graph's own already hold but for the program's.
+    match serde_json::from_str::<serde_json::Value>(spec) {
+        Ok(base) => {
+            for (id, program) in programs {
+                let composed = vizij_arora_host::compose_sources(&[
+                    ("base".to_string(), base.clone()),
+                    (format!("program::{id}"), program.clone()),
+                ]);
+                match composed {
+                    Ok(composed) => inputs.extend(walk_free_inputs(&composed.to_string())),
+                    Err(e) => log::warn!("program {id:?} declares no keys: {e:#}"),
+                }
+            }
+        }
+        Err(e) if !programs.is_empty() => {
+            log::warn!("the graph is not JSON ({e}): its programs declare no keys")
+        }
+        Err(_) => {}
+    }
+    let mut meta: std::collections::HashMap<Key, KeyMeta> = inputs
+        .into_iter()
+        .map(|(path, ty, rest)| {
+            let mut input = KeyMeta::new().editable().of_type(ty.clone());
+            if ty == Type::F64 {
+                input = input.range(0.0, 1.0);
+            }
+            if let Some(rest) = rest {
+                input = input.resting_at(rest);
+            }
+            (Key::new(path), input)
+        })
+        .collect();
+    for (path, value) in neutral {
+        meta.entry(Key::from(path.as_str())).or_default().default = Some(float(*value));
+    }
+    if let Err(e) = store.set_meta(meta) {
+        log::warn!("the store keeps no key meta: the face's inputs stay closed ({e:?})");
+    }
+}
+
+/// Each free input with its type and its authored default, if any (see
+/// [`free_inputs`]).
+fn walk_free_inputs(spec: &str) -> Vec<(String, arora_types::value::Type, Option<Value>)> {
+    use arora_types::value::Type;
+    let Ok(spec) = serde_json::from_str::<serde_json::Value>(spec) else {
+        return Vec::new();
+    };
+    let nodes = spec
+        .get("nodes")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let path_of = |node: &serde_json::Value| {
+        node.get("params")
+            .and_then(|p| p.get("path"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    };
+    let kind_of = |node: &serde_json::Value| {
+        node.get("type")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_ascii_lowercase)
+            .unwrap_or_default()
+    };
+    let written: std::collections::HashSet<String> = nodes
+        .iter()
+        .filter(|n| kind_of(n) == "output")
+        .filter_map(path_of)
+        .collect();
+    let mut seen = std::collections::HashSet::new();
+    let mut inputs = Vec::new();
+    for node in nodes.iter().filter(|n| kind_of(n) == "input") {
+        let Some(path) = path_of(node) else { continue };
+        if written.contains(&path)
+            || path.starts_with(arora_behavior::built_in::PREFIX)
+            || !seen.insert(path.clone())
+        {
+            continue;
+        }
+        let (ty, default) = match node.get("params").and_then(|p| p.get("value")).cloned() {
+            None | Some(serde_json::Value::Null) => (Type::F64, None),
+            Some(json) => match vizij_api_core::json::parse_value(json) {
+                Ok(value @ Value::String(_)) => (Type::String, Some(value)),
+                Ok(value @ Value::Boolean(_)) => (Type::Boolean, Some(value)),
+                Ok(value) if vizij_api_core::value::as_float(&value).is_some() => {
+                    (Type::F64, Some(value))
+                }
+                _ => continue,
+            },
+        };
+        inputs.push((path, ty, default));
+    }
+    inputs.sort_by(|a, b| a.0.cmp(&b.0));
+    inputs
+}
+
+/// Stage a face's neutral pose into the store before the first tick: the web's
+/// `stagePoseNeutral`, ported. The rig's input nodes read these store paths, so
+/// pre-seeding them holds the face at its authored neutral even where the
+/// inputs' own defaults don't (a no-op when the bundle carries no neutral
+/// config, or every input already defaults to its neutral).
+pub fn stage_neutral_pose(store: &BlackboardStore, meta: &FaceMeta) {
+    let writes = meta.bundle.neutral_stage_writes();
+    if writes.is_empty() {
+        return;
+    }
+    let mut change = StateChange::new();
+    for (path, value) in &writes {
+        change
+            .set
+            .insert(Key::from(path.as_str()), Some(float(*value)));
+    }
+    match store.write(change) {
+        Ok(()) => log::info!("staged {} neutral inputs", writes.len()),
+        Err(e) => log::warn!("neutral staging failed: {e:?}"),
+    }
+}
+
+/// `RRGGBB` hex (leading `#` allowed) to sRGB bytes.
+pub fn parse_rgb(hex: &str) -> Result<[u8; 3]> {
+    let hex = hex.trim().trim_start_matches('#');
+    if hex.len() != 6 {
+        return Err(anyhow!("expected RRGGBB, got {hex:?}"));
+    }
+    Ok([
+        u8::from_str_radix(&hex[0..2], 16)?,
+        u8::from_str_radix(&hex[2..4], 16)?,
+        u8::from_str_radix(&hex[4..6], 16)?,
+    ])
+}
+
+/// An Arora wasm module to load into a device's engine as a guest: its
+/// header and its executable bytes.
+pub type GuestModule = (arora_types::module::low::Header, Vec<u8>);
+
+/// The device builder over the Vizij seams: the composed graph as the behavior,
+/// with the animation module loaded so the composed animation source's
+/// `ExternalFunction` nodes dispatch and its transport is callable, and
+/// `speech` as the say skill's provider when there is one. `None` (logged)
+/// when the spec does not encode.
+pub fn builder_for(
+    spec: &str,
+    rig: RigHal,
+    store: BlackboardStore,
+    embedded_skills: &[(String, serde_json::Value)],
+    speech: Option<arora::HostModule>,
+) -> Option<arora::AroraBuilder> {
+    builder_with_guests(spec, rig, store, embedded_skills, speech, Vec::new())
+}
+
+/// [`builder_for`] with wasm modules loaded as guests besides the host-linked
+/// ones: their functions dispatch by id, from a call and from the graph's
+/// `ExternalFunction` nodes, like the host modules'.
+pub fn builder_with_guests(
+    spec: &str,
+    rig: RigHal,
+    store: BlackboardStore,
+    embedded_skills: &[(String, serde_json::Value)],
+    speech: Option<arora::HostModule>,
+    guests: Vec<GuestModule>,
+) -> Option<arora::AroraBuilder> {
+    let rig_prefix = rig_prefix_of(spec);
+    let spec = match parse_spec(spec) {
+        Ok(spec) => spec,
+        Err(e) => {
+            log::error!("spec re-parse failed: {e}");
+            return None;
+        }
+    };
+    let mut graph = match ProcessingGraph::from_spec(spec) {
+        Ok(graph) => graph,
+        Err(e) => {
+            log::error!("graph encode failed: {e}");
+            return None;
+        }
+    };
+    // Route the animation source's `step`/`player_states` handles to the host
+    // module registered below, and the
+    // say skill's hosted `say` call to this build's text-to-speech provider.
+    let mut function_modules = animation::function_modules();
+    if let Some(provider) = &speech {
+        function_modules.insert(speech::say::ids::say::FUNCTION, provider.id());
+    }
+    for (header, _) in &guests {
+        function_modules.extend(
+            header
+                .exports
+                .iter()
+                .map(|export| (*export.id(), header.id)),
+        );
+    }
+    graph.set_function_modules(function_modules);
+    // The skills: the fragments the interpreter grafts per run — the shipped
+    // ones, or the face's embedded overrides. No module implements look_at
+    // or play_viseme: their fragments carry the contracts' descriptions, so
+    // the interpreter describes them. say's fragment wraps the provider's
+    // call, which the provider describes. The viseme players write the
+    // face's standard controls, so they take its rig prefix.
+    graph.set_task_fragment(
+        gaze::look_at::ids::look_at::FUNCTION,
+        gaze::look_at_fragment_from(embedded_skills),
+    );
+    graph.set_task_fragment(
+        viseme::play_viseme::ids::play_viseme::FUNCTION,
+        viseme::play_viseme_fragment_from(embedded_skills, &rig_prefix),
+    );
+    graph.set_task_fragment(
+        speech::say::ids::say::FUNCTION,
+        speech::say_fragment_from(embedded_skills, &rig_prefix),
+    );
+    let builder = arora::Arora::builder()
+        .with_hal(Box::new(rig))
+        .with_data_store(Box::new(store))
+        .with_behavior_interpreter(Box::new(graph))
+        .with_host_module(animation::host_module());
+    // The speech provider: the `say` behind the say skill (poll-on-tick,
+    // viseme out-parameter) — one per device, same contract whichever
+    // synthesizes and plays.
+    let builder = match speech {
+        Some(provider) => builder.with_host_module(provider),
+        None => builder,
+    };
+    let builder = guests.into_iter().fold(builder, |builder, (header, wasm)| {
+        builder.with_module(header, wasm)
+    });
+    Some(builder)
+}
+
+/// Load `bundle`'s animations into a built device's animation module, through
+/// the module's declared functions — the calls any client sends to load an
+/// animation. Per animation, in the bundle's order: `load_animation` (its
+/// tracks keyed by the store keys their channels name through the face's
+/// rig, [`animation::module_animation`]), `create_player` named after the
+/// animation's id, `add_instance_with_weight` at 0, and `stop`. Each is then
+/// silent, stopped at its start, until a client plays it — `set_weight` on
+/// its instance, then `play` — finding its player by name in
+/// `player_states`. Call it before the device's first step.
+pub fn load_animations(arora: &mut arora::Arora, bundle: &Bundle) -> Result<()> {
+    use arora_types::call::Call;
+    use arora_types::value::{StructureField, Value as AValue};
+    use vizij_animation_module::animation::ids;
+
+    let mut call = |function: uuid::Uuid, args: Vec<(uuid::Uuid, AValue)>| {
+        let ret = arora
+            .call(Call {
+                module_id: Some(ids::MODULE),
+                id: function,
+                args: args
+                    .into_iter()
+                    .map(|(id, value)| StructureField {
+                        id,
+                        value: Box::new(value),
+                    })
+                    .collect(),
+            })
+            .map_err(|e| anyhow!("{e}"))?
+            .ret;
+        match ret {
+            AValue::U32(id) => Ok(id),
+            other => Err(anyhow!("expected an id, got {other}")),
+        }
+    };
+    let keys = bundle.channel_keys();
+    for authored in &bundle.animations {
+        let clip = animation::module_animation(authored, &keys);
+        let anim = call(
+            ids::load_animation::FUNCTION,
+            vec![(ids::load_animation::CLIP, clip.into())],
+        )?;
+        let player = call(
+            ids::create_player::FUNCTION,
+            vec![(
+                ids::create_player::NAME,
+                AValue::String(authored.id.clone()),
+            )],
+        )?;
+        call(
+            ids::add_instance_with_weight::FUNCTION,
+            vec![
+                (ids::add_instance_with_weight::PLAYER, AValue::U32(player)),
+                (ids::add_instance_with_weight::ANIM, AValue::U32(anim)),
+                (ids::add_instance_with_weight::WEIGHT, AValue::F32(0.0)),
+            ],
+        )?;
+        call(
+            ids::stop::FUNCTION,
+            vec![(ids::stop::PLAYER, AValue::U32(player))],
+        )?;
+    }
+    Ok(())
+}
+
+/// The call that runs one of a bundle's programs, `(id, spec)`: the
+/// interpreter's `run_behavior` ([`vizij_arora_behavior::run`]) on the
+/// program's graph, under its id — the name any client reads off the run.
+pub fn program_call(id: &str, spec: &serde_json::Value) -> Result<arora_types::call::Call> {
+    let spec = parse_spec(&spec.to_string()).map_err(|e| anyhow!("program {id:?}: {e}"))?;
+    vizij_arora_behavior::run::call(id, &spec).map_err(|e| anyhow!("program {id:?}: {e}"))
+}
+
+/// Run the program `select` names (the face's [`FaceConfig::program`]) on a
+/// built device: the interpreter module's SPAWN of [`program_call`] — the
+/// call any client sends to start a program. The program runs beside the
+/// face's graph until a client halts it; its run is found by the program's
+/// id ([`vizij_arora_behavior::run::runs`]). `None` when `select` names no
+/// program of the bundle. Call it before the device's first step.
+pub fn spawn_program(
+    arora: &mut arora::Arora,
+    bundle: &Bundle,
+    select: &ProgramSelect,
+) -> Result<Option<arora_behavior::TaskHandle>> {
+    use arora_behavior::{interpreter_module, RunPolicy};
+    let Some((id, spec)) = bundle.program(select) else {
+        return Ok(None);
+    };
+    let call = program_call(id, spec)?;
+    let spawned = arora
+        .call(interpreter_module::encode_spawn(
+            &call,
+            RunPolicy::Concurrent,
+        ))
+        .map_err(|e| anyhow!("spawning program {id:?}: {e}"))?;
+    let handle = interpreter_module::decode_spawn_result(&spawned.ret)
+        .map_err(|e| anyhow!("spawning program {id:?}: {e}"))?;
+    log::info!("running program {id}");
+    Ok(Some(handle))
+}
+
+/// The prefix the face's standard controls live under in `spec` —
+/// `rig/<faceId>/` out of the first `…/standard/vizij/…` path it reads or
+/// writes — or empty when the face has no standard coverage (the players
+/// then write the bare standard, which nothing maps). The same derivation
+/// as vizij-standalone's.
+fn rig_prefix_of(spec: &str) -> String {
+    let Ok(spec) = serde_json::from_str::<serde_json::Value>(spec) else {
+        return String::new();
+    };
+    spec.get("nodes")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|node| {
+            node.pointer("/params/path")
+                .and_then(serde_json::Value::as_str)
+        })
+        .find_map(|path| {
+            path.find(vizij_arora_host::standard::VIZIJ_PREFIX)
+                .map(|at| path[..at].to_string())
+        })
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    /// The free inputs are the composed graph's unwritten input paths, typed by
+    /// their defaults; written inputs, built-ins, and vector inputs stay out.
+    #[test]
+    fn free_inputs_are_the_unwritten_typed_input_paths() {
+        use arora_types::value::Type;
+        let spec = r#"{"nodes": [
+            {"id": "a", "type": "input",  "params": {"path": "face/mouth/open"}},
+            {"id": "b", "type": "input",  "params": {"path": "standard/ros4hri/expression/name", "value": ""}},
+            {"id": "c", "type": "input",  "params": {"path": "flags/awake", "value": true}},
+            {"id": "d", "type": "input",  "params": {"path": "gaze/target", "value": [1.0, 0.0, 0.0]}},
+            {"id": "e", "type": "input",  "params": {"path": "internal/wired"}},
+            {"id": "f", "type": "output", "params": {"path": "internal/wired"}},
+            {"id": "g", "type": "input",  "params": {"path": "arora/dt"}}
+        ], "edges": []}"#;
+        assert_eq!(
+            super::free_inputs(spec),
+            vec![
+                ("face/mouth/open".to_string(), Type::F64),
+                ("flags/awake".to_string(), Type::Boolean),
+                ("standard/ros4hri/expression/name".to_string(), Type::String),
+            ]
+        );
+    }
+
+    /// The same inputs after composition: `compose_sources` normalizes every
+    /// source, so defaults arrive in their canonical serialized form.
+    #[test]
+    fn free_inputs_read_normalized_defaults() {
+        use arora_types::value::Type;
+        let spec = serde_json::json!({"nodes": [
+            {"id": "a", "type": "input",  "params": {"path": "face/mouth/open", "value": 0.0}},
+            {"id": "b", "type": "input",  "params": {"path": "standard/ros4hri/expression/name", "value": ""}},
+            {"id": "c", "type": "input",  "params": {"path": "flags/awake", "value": true}},
+            {"id": "d", "type": "input",  "params": {"path": "gaze/target", "value": {"x": 1.0, "y": 0.0, "z": 0.0}}}
+        ], "edges": []});
+        let composed = compose_sources(&[("src".to_string(), spec)]).unwrap();
+        assert_eq!(
+            composed["nodes"][0]["params"]["value"],
+            serde_json::json!({"f32": 0.0})
+        );
+        assert_eq!(
+            super::free_inputs(&composed.to_string()),
+            vec![
+                ("face/mouth/open".to_string(), Type::F64),
+                ("flags/awake".to_string(), Type::Boolean),
+                ("standard/ros4hri/expression/name".to_string(), Type::String),
+            ]
+        );
+    }
+
+    /// The store opens the free inputs, each typed, a number ranged, resting
+    /// at its authored default unless the neutral pose moves it; a neutral rig
+    /// key that is no input gets its rest alone and stays closed.
+    #[test]
+    fn declared_keys_open_the_free_inputs_at_their_rest() {
+        use arora_types::data::KeyMeta;
+        use arora_types::value::Type;
+        let spec = r#"{"nodes": [
+            {"id": "a", "type": "input", "params": {"path": "face/mouth/open", "value": {"f32": 0.25}}},
+            {"id": "b", "type": "input", "params": {"path": "flags/awake", "value": true}},
+            {"id": "c", "type": "input", "params": {"path": "face/brow"}}
+        ], "edges": []}"#;
+        let store = BlackboardStore::new();
+        declare_keys(
+            &store,
+            spec,
+            &[],
+            &[("face/brow".to_string(), 0.5), ("rig/jaw".to_string(), 0.1)],
+        );
+        let number = || KeyMeta::new().editable().of_type(Type::F64).range(0.0, 1.0);
+        assert_eq!(
+            store.meta(&[
+                Key::from("face/mouth/open"),
+                Key::from("face/brow"),
+                Key::from("flags/awake"),
+                Key::from("rig/jaw"),
+                Key::from("face/elsewhere"),
+            ]),
+            vec![
+                Some(number().resting_at(float(0.25))),
+                Some(number().resting_at(float(0.5))),
+                Some(
+                    KeyMeta::new()
+                        .editable()
+                        .of_type(Type::Boolean)
+                        .resting_at(Value::Boolean(true))
+                ),
+                Some(KeyMeta::new().resting_at(float(0.1))),
+                None,
+            ]
+        );
+    }
+
+    use super::*;
+    use std::time::Duration;
+    use vizij_arora_host::{animations_source, compose_sources, ANIMATION_PLAYERS_PATH};
+
+    /// A program's inputs are the face's keys: declared over the face's
+    /// graph, the inputs it reads join the graph's free inputs, and a rig
+    /// input it writes stays declared — the program runs only while it runs.
+    #[test]
+    fn declared_keys_cover_the_programs_inputs() {
+        use arora_types::data::KeyMeta;
+        use arora_types::value::Type;
+        let spec = r#"{"nodes": [
+            {"id": "a", "type": "input", "params": {"path": "rig/f/x", "value": {"f32": 0.25}}}
+        ], "edges": []}"#;
+        let program = serde_json::json!({"nodes": [
+            {"id": "speed", "type": "input", "params": {"path": "program/speed", "value": 0.5}},
+            {"id": "x", "type": "output", "params": {"path": "rig/f/x"}}
+        ], "edges": [
+            {"from": {"node_id": "speed"}, "to": {"node_id": "x", "input": "in"}}
+        ]});
+        let store = BlackboardStore::new();
+        declare_keys(&store, spec, &[("p".to_string(), program)], &[]);
+        let number = || KeyMeta::new().editable().of_type(Type::F64).range(0.0, 1.0);
+        assert_eq!(
+            store.meta(&[Key::from("rig/f/x"), Key::from("program/speed")]),
+            vec![
+                Some(number().resting_at(float(0.25))),
+                Some(number().resting_at(float(0.5))),
+            ]
+        );
+    }
+
+    /// The face's program runs beside its graph, not in it: `load_face`
+    /// composes none, and `spawn_program` starts the one `program` names as
+    /// a run of the interpreter's `run_behavior` — found in the store by the
+    /// program's id, `Running`, writing the rig. Halted, it ends and its
+    /// output holds.
+    #[test]
+    fn the_face_runs_its_program_beside_its_graph() {
+        use vizij_arora_behavior::{run, task};
+        let read = |arora: &arora::Arora, path: &str| {
+            arora
+                .store()
+                .read(&[Key::from(path)])
+                .into_iter()
+                .next()
+                .flatten()
+        };
+        let bundle = Bundle::from_bundle_json(&serde_json::json!({
+            "metadata": { "faceId": "f", "activeMotionGraphId": "wave" },
+            "graphs": [
+                { "kind": "rig", "spec": { "nodes": [
+                    { "id": "x", "type": "input", "params": { "path": "rig/f/x", "value": 0.0 } },
+                ], "edges": [] } },
+                { "kind": "motiongraph", "id": "wave", "spec": { "nodes": [
+                    { "id": "c", "type": "constant", "params": { "value": 0.75 } },
+                    { "id": "out", "type": "output", "params": { "path": "rig/f/x" } },
+                ], "edges": [
+                    { "from": { "node_id": "c" }, "to": { "node_id": "out", "input": "in" } },
+                ] } },
+            ],
+        }));
+        let spec = bundle
+            .compose(&["rig"], &ProgramSelect::None, true, &[])
+            .expect("compose")
+            .to_string();
+        let store = BlackboardStore::new();
+        let mut arora = builder_for(&spec, RigHal::new(), store.clone(), &[], None)
+            .expect("build the device")
+            .build()
+            .expect("build arora");
+        assert!(spawn_program(&mut arora, &bundle, &ProgramSelect::None)
+            .expect("no program")
+            .is_none());
+        let handle = spawn_program(&mut arora, &bundle, &ProgramSelect::Auto)
+            .expect("spawn the active program")
+            .expect("the bundle names one");
+        step_for(&mut arora, 0.05);
+        assert_eq!(
+            read(&arora, "rig/f/x"),
+            Some(float(0.75)),
+            "the program writes the rig"
+        );
+        assert_eq!(
+            run::runs(&store),
+            vec![(handle.clone(), "wave".to_string())]
+        );
+        let status = |arora: &arora::Arora| {
+            arora
+                .store()
+                .read(std::slice::from_ref(&handle.status))
+                .into_iter()
+                .next()
+                .flatten()
+        };
+        assert_eq!(status(&arora), Some(task::running()));
+
+        arora.call(handle.stop.clone()).expect("halt");
+        step_for(&mut arora, 0.05);
+        assert_eq!(status(&arora), Some(task::failure()));
+        assert_eq!(
+            read(&arora, "rig/f/x"),
+            Some(float(0.75)),
+            "its output holds"
+        );
+    }
+
+    /// The composed animation source ticks the loaded module: `builder_for`
+    /// loads the baked-in wasm and wires `set_function_modules`, so the source's
+    /// `player_states` `ExternalFunction` dispatches and its output lands in the
+    /// store. A dispatch failure ("no module registered") would abort the graph
+    /// tick before any write, so the key's mere presence proves the module runs.
+    #[test]
+    fn animation_source_ticks_the_loaded_module() {
+        let spec = compose_sources(&[animations_source()])
+            .expect("compose the animation source")
+            .to_string();
+        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
+            .expect("build the device over the loaded animation module")
+            .build()
+            .expect("build arora");
+        for _ in 0..3 {
+            arora.step(Duration::from_millis(16)).expect("step");
+        }
+        let key = Key::from(ANIMATION_PLAYERS_PATH);
+        let players = arora
+            .store()
+            .read(std::slice::from_ref(&key))
+            .into_iter()
+            .next()
+            .flatten();
+        assert!(
+            players.is_some(),
+            "{ANIMATION_PLAYERS_PATH} absent — the animation module did not dispatch",
+        );
+    }
+
+    /// A LookAt-style behavior spawned through the device: the SPAWN call
+    /// reaches the graph interpreter through the engine, the run grafts into
+    /// the running node graph and reports on its status key each step, and the
+    /// handle's stop call halts it — all in-process, no bridge involved.
+    #[test]
+    fn a_look_at_run_advances_and_halts_through_the_device() {
+        use arora_behavior::{interpreter_module, RunPolicy};
+        use arora_types::call::{Call, CallResult};
+        use arora_types::value::{StructureField, Value};
+        use uuid::Uuid;
+        use vizij_arora_behavior::task;
+
+        const GAZE_MODULE: Uuid = Uuid::from_u128(0x67617a65);
+        const LOOK_AT: Uuid = Uuid::from_u128(0x6c6f6f6b);
+        const TARGET: Uuid = Uuid::from_u128(0x74617267);
+
+        // A gaze skill that tracks indefinitely, like the real LookAt: every
+        // invocation steers toward its target and reports `Running`.
+        let gaze = arora::ModuleBuilder::new(GAZE_MODULE)
+            .function(LOOK_AT, |_call| {
+                Ok(CallResult {
+                    ret: task::running(),
+                    mutated: Vec::new(),
+                })
+            })
+            .build();
+
+        let mut arora = builder_for(
+            r#"{ "nodes": [], "edges": [] }"#,
+            RigHal::new(),
+            BlackboardStore::new(),
+            &[],
+            None,
+        )
+        .expect("build the device")
+        .with_host_module(gaze)
+        .build()
+        .expect("build arora");
+
+        let look_at = Call {
+            module_id: Some(GAZE_MODULE),
+            id: LOOK_AT,
+            args: vec![StructureField {
+                id: TARGET,
+                value: Box::new(Value::F32(0.5)),
+            }],
+        };
+        let spawned = arora
+            .call(interpreter_module::encode_spawn(
+                &look_at,
+                RunPolicy::Concurrent,
+            ))
+            .expect("SPAWN dispatches through the engine");
+        let handle =
+            interpreter_module::decode_spawn_result(&spawned.ret).expect("a TaskHandle comes back");
+
+        let status = |arora: &arora::Arora| {
+            arora
+                .store()
+                .read(std::slice::from_ref(&handle.status))
+                .into_iter()
+                .next()
+                .flatten()
+        };
+
+        arora.step(Duration::from_millis(16)).expect("step");
+        assert_eq!(status(&arora), Some(task::running()));
+        arora.step(Duration::from_millis(16)).expect("step");
+        assert_eq!(status(&arora), Some(task::running()), "indefinite tracking");
+
+        arora
+            .call(handle.stop.clone())
+            .expect("the handle's stop call dispatches");
+        arora.step(Duration::from_millis(16)).expect("step");
+        assert_eq!(status(&arora), Some(task::failure()), "halted");
+    }
+
+    /// The production gaze skill through the device: SPAWN on the described
+    /// `look_at` grafts the shipped fragment (`builder_for` registers it) —
+    /// asset content, no module call — so the goal target lands on the
+    /// standard gaze surface and the run reports `Running` until halted.
+    #[test]
+    fn the_gaze_skill_runs_the_shipped_fragment_through_the_device() {
+        use arora_behavior::{interpreter_module, RunPolicy};
+        use arora_types::call::Call;
+        use arora_types::value::StructureField;
+        use vizij_arora_behavior::task;
+
+        use vizij_arora_behavior::gaze::look_at::ids::look_at as ids;
+
+        let mut arora = builder_for(
+            r#"{ "nodes": [], "edges": [] }"#,
+            RigHal::new(),
+            BlackboardStore::new(),
+            &[],
+            None,
+        )
+        .expect("build the device")
+        .build()
+        .expect("build arora");
+
+        let look_at = Call {
+            module_id: Some(interpreter_module::ID),
+            id: ids::FUNCTION,
+            args: vec![
+                StructureField {
+                    id: ids::POLICY,
+                    value: Box::new(Value::String(String::new())),
+                },
+                StructureField {
+                    id: ids::TARGET,
+                    value: Box::new(Value::ArrayF32(vec![1.0, 2.0, 3.0])),
+                },
+                StructureField {
+                    id: ids::FRAME,
+                    value: Box::new(Value::String("sellion_link".to_string())),
+                },
+            ],
+        };
+        let spawned = arora
+            .call(interpreter_module::encode_spawn(
+                &look_at,
+                RunPolicy::Concurrent,
+            ))
+            .expect("SPAWN dispatches through the engine");
+        let handle =
+            interpreter_module::decode_spawn_result(&spawned.ret).expect("a TaskHandle comes back");
+
+        let read = |arora: &arora::Arora, key: &arora_types::data::Key| {
+            arora
+                .store()
+                .read(std::slice::from_ref(key))
+                .into_iter()
+                .next()
+                .flatten()
+        };
+
+        arora.step(Duration::from_millis(16)).expect("step");
+        assert_eq!(
+            read(&arora, &Key::from(ros4hri::GAZE_TARGET_KEY)),
+            Some(Value::ArrayF32(vec![1.0, 2.0, 3.0])),
+            "the fragment writes the goal onto the gaze surface"
+        );
+        assert_eq!(
+            read(&arora, &Key::from(ros4hri::GAZE_FRAME_KEY)),
+            Some(Value::String("sellion_link".to_string())),
+        );
+        assert_eq!(read(&arora, &handle.status), Some(task::running()));
+
+        arora
+            .call(handle.stop.clone())
+            .expect("the handle's stop call dispatches");
+        arora.step(Duration::from_millis(16)).expect("step");
+        assert_eq!(
+            read(&arora, &handle.status),
+            Some(task::failure()),
+            "halted"
+        );
+    }
+
+    /// A face's bundle-embedded `skill::look_at` fragment overrides the
+    /// shipped behavior — the `standard::<id>` precedence, applied to the
+    /// skill plane. The override here redirects the gaze write to a marker
+    /// key, proving the embedded copy (not the built-in) serves the run.
+    #[test]
+    fn the_face_embedded_skill_fragment_overrides_the_built_in() {
+        use arora_behavior::{interpreter_module, RunPolicy};
+        use arora_types::call::Call;
+        use arora_types::value::StructureField;
+        use vizij_arora_host::skills;
+
+        use vizij_arora_behavior::gaze::look_at::ids::look_at as ids;
+
+        let edited =
+            skills::LOOK_AT_JSON.replace(ros4hri::GAZE_TARGET_KEY, "test/edited/gaze/target");
+        let embedded = vec![(
+            "look_at".to_string(),
+            serde_json::from_str(&edited).expect("the edited fragment parses"),
+        )];
+
+        let mut arora = builder_for(
+            r#"{ "nodes": [], "edges": [] }"#,
+            RigHal::new(),
+            BlackboardStore::new(),
+            &embedded,
+            None,
+        )
+        .expect("build the device")
+        .build()
+        .expect("build arora");
+
+        let look_at = Call {
+            module_id: Some(interpreter_module::ID),
+            id: ids::FUNCTION,
+            args: vec![StructureField {
+                id: ids::TARGET,
+                value: Box::new(Value::ArrayF32(vec![7.0, 8.0, 9.0])),
+            }],
+        };
+        arora
+            .call(interpreter_module::encode_spawn(
+                &look_at,
+                RunPolicy::Concurrent,
+            ))
+            .expect("SPAWN dispatches through the engine");
+        arora.step(Duration::from_millis(16)).expect("step");
+
+        let read = |key: &str| {
+            arora
+                .store()
+                .read(std::slice::from_ref(&Key::from(key)))
+                .into_iter()
+                .next()
+                .flatten()
+        };
+        assert_eq!(
+            read("test/edited/gaze/target"),
+            Some(Value::ArrayF32(vec![7.0, 8.0, 9.0])),
+            "the embedded fragment's redirected write serves"
+        );
+        assert_eq!(
+            read(ros4hri::GAZE_TARGET_KEY),
+            None,
+            "the built-in fragment's write does not"
+        );
+    }
+
+    use vizij_api_core::value::{as_float, text, vec3, Value};
+    use vizij_arora_host::ros4hri::{self, ros4hri_source};
+    use vizij_arora_host::standard;
+
+    /// A device running only the ROS4HRI mapping (unprefixed controls) — the
+    /// headless harness for the mapping's math: stage `standard/
+    /// ros4hri/*` keys, tick, read `standard/vizij/*` controls back.
+    fn ros4hri_device() -> arora::Arora {
+        let spec = compose_sources(&[ros4hri_source("")])
+            .expect("compose the ros4hri mapping")
+            .to_string();
+        builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
+            .expect("build the device over the mapping")
+            .build()
+            .expect("build arora")
+    }
+
+    fn stage(arora: &arora::Arora, path: &str, value: Value) {
+        let mut change = StateChange::new();
+        change.set.insert(Key::from(path), Some(value));
+        arora.store().write(change).expect("stage");
+    }
+
+    fn read_f32(arora: &arora::Arora, path: &str) -> f32 {
+        let key = Key::from(path);
+        let value = arora
+            .store()
+            .read(std::slice::from_ref(&key))
+            .into_iter()
+            .next()
+            .flatten()
+            .unwrap_or_else(|| panic!("{path} absent"));
+        as_float(&value).unwrap_or_else(|| panic!("{path} not a float"))
+    }
+
+    /// Settle the ~200 ms smoothers: 2 s of 16 ms ticks.
+    fn settle(arora: &mut arora::Arora) {
+        for _ in 0..125 {
+            arora.step(Duration::from_millis(16)).expect("step");
+        }
+    }
+
+    /// A face that embeds its own modified `ros4hri` copy runs that copy
+    /// INSTEAD of the built-in — VIZ-92's precedence: an embedded mapping is
+    /// the author's pinned override of the shipped mapping. The embedded graph
+    /// here maps valence verbatim onto the happy weight (no smoothing, no
+    /// blending, name ignored), which the built-in never produces.
+    #[test]
+    fn embedded_mapping_wins_over_the_built_in() {
+        let bundle = vizij_arora_host::Bundle::from_bundle_json(&serde_json::json!({
+            "graphs": [{
+                "id": "standard::ros4hri",
+                "kind": "standard-profile",
+                "spec": {
+                    "nodes": [
+                        { "id": "v", "type": "input",
+                          "params": { "path": ros4hri::EXPRESSION_VALENCE_KEY, "value": 0.0 } },
+                        { "id": "o", "type": "output",
+                          "params": { "path": standard::expression_path("happy") } },
+                    ],
+                    "edges": [
+                        { "from": { "node_id": "v" }, "to": { "node_id": "o", "input": "in" } },
+                    ],
+                },
+            }]
+        }));
+        let spec = bundle
+            .compose(
+                &["rig"],
+                &vizij_arora_host::ProgramSelect::None,
+                false,
+                &[ros4hri_source("")],
+            )
+            .expect("compose the face with its embedded mapping")
+            .to_string();
+        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
+            .expect("build the device over the composed face")
+            .build()
+            .expect("build arora");
+        // The built-in would one-hot "sad" (happy ≈ 0, smoothed); the embedded
+        // verbatim mapping ignores the name and rides valence straight through.
+        stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("sad"));
+        stage(&arora, ros4hri::EXPRESSION_VALENCE_KEY, float(0.8));
+        settle(&mut arora);
+        let happy = read_f32(&arora, &standard::expression_path("happy"));
+        assert!(
+            (happy - 0.8).abs() < 1e-6,
+            "embedded mapping must win verbatim, got happy={happy}"
+        );
+    }
+
+    #[test]
+    fn ros4hri_mapping_rests_neutral() {
+        let mut arora = ros4hri_device();
+        settle(&mut arora);
+        assert!(read_f32(&arora, &standard::expression_path("neutral")) > 0.95);
+        assert!(read_f32(&arora, &standard::expression_path("happy")) < 0.01);
+        assert!(read_f32(&arora, &standard::expression_path("skeptical")) < 0.01);
+        // Eyes at their default forward target: centered.
+        assert!(read_f32(&arora, standard::LEFT_EYE_POS_X).abs() < 0.01);
+    }
+
+    #[test]
+    fn ros4hri_expression_name_one_hots() {
+        let mut arora = ros4hri_device();
+        stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("happy"));
+        settle(&mut arora);
+        assert!(read_f32(&arora, &standard::expression_path("happy")) > 0.95);
+        assert!(read_f32(&arora, &standard::expression_path("neutral")) < 0.01);
+        assert!(read_f32(&arora, &standard::expression_path("sad")) < 0.01);
+    }
+
+    #[test]
+    fn ros4hri_valence_arousal_blends_anchors() {
+        let mut arora = ros4hri_device();
+        stage(&arora, ros4hri::EXPRESSION_VALENCE_KEY, float(0.8));
+        stage(&arora, ros4hri::EXPRESSION_AROUSAL_KEY, float(0.4));
+        settle(&mut arora);
+        // The happy anchor sits at (0.8, 0.4): dominant, blended with its
+        // positive-affect neighbors, nothing negative.
+        let happy = read_f32(&arora, &standard::expression_path("happy"));
+        assert!(happy > 0.4, "happy = {happy}");
+        assert!(read_f32(&arora, &standard::expression_path("angry")) < 0.01);
+        assert!(read_f32(&arora, &standard::expression_path("neutral")) < 0.05);
+    }
+
+    #[test]
+    fn ros4hri_gaze_maps_eyes_with_vergence() {
+        let mut arora = ros4hri_device();
+        stage(&arora, ros4hri::GAZE_TARGET_KEY, vec3([1.0, 0.3, 0.2]));
+        settle(&mut arora);
+        let left_x = read_f32(&arora, standard::LEFT_EYE_POS_X);
+        let right_x = read_f32(&arora, standard::RIGHT_EYE_POS_X);
+        let left_y = read_f32(&arora, standard::LEFT_EYE_POS_Y);
+        // atan(0.33)/0.78 ≈ 0.41 (left, verged outward), atan(0.27)/0.78 ≈ 0.34.
+        assert!((0.35..=0.46).contains(&left_x), "left_x = {left_x}");
+        assert!((0.29..=0.40).contains(&right_x), "right_x = {right_x}");
+        assert!(left_x > right_x, "vergence: {left_x} <= {right_x}");
+        // atan(0.2)/0.78 ≈ 0.25.
+        assert!((0.20..=0.31).contains(&left_y), "left_y = {left_y}");
+
+        // Targets at or behind the face plane recenter the eyes.
+        stage(&arora, ros4hri::GAZE_TARGET_KEY, vec3([0.05, 0.5, 0.0]));
+        settle(&mut arora);
+        assert!(read_f32(&arora, standard::LEFT_EYE_POS_X).abs() < 0.01);
+    }
+
+    #[test]
+    fn ros4hri_action_units_route_to_muscles() {
+        let mut arora = ros4hri_device();
+        stage(&arora, &ros4hri::au_key(12), float(1.0));
+        stage(&arora, &ros4hri::au_key(26), float(0.8));
+        settle(&mut arora);
+        // AU 12 (lip corner puller) drives the lateralized smile pair.
+        assert!(read_f32(&arora, &standard::face_path("mouth_smile_left")) > 0.95);
+        assert!(read_f32(&arora, &standard::face_path("mouth_smile_right")) > 0.95);
+        assert!(read_f32(&arora, &standard::face_path("mouth_frown_left")) < 0.01);
+        // AU 26 (jaw drop) drives the muscle control and the de-facto mouth morph.
+        let jaw = read_f32(&arora, &standard::face_path("jaw_open"));
+        assert!((0.75..=0.85).contains(&jaw), "jaw = {jaw}");
+        let defacto = read_f32(&arora, "standard/vizij/mouth/morph/jaw_open");
+        assert!((0.75..=0.85).contains(&defacto), "de-facto jaw = {defacto}");
+    }
+
+    /// The shape a viseme player's feedback record names.
+    fn fed_back_viseme(arora: &arora::Arora, path: &str) -> Option<String> {
+        match read_value(arora, path)? {
+            Value::KeyValue(report) => match report.get_field("viseme")?.value.as_deref()? {
+                Value::String(shape) => Some(shape.clone()),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// How hard the feedback record says its shape is driven.
+    fn fed_back_intensity(arora: &arora::Arora, path: &str) -> f32 {
+        let Some(Value::KeyValue(report)) = read_value(arora, path) else {
+            return 0.0;
+        };
+        match report
+            .get_field("intensity")
+            .and_then(|f| f.value.as_deref())
+        {
+            Some(Value::F32(x)) => *x,
+            Some(Value::F64(x)) => *x as f32,
+            _ => 0.0,
+        }
+    }
+
+    fn read_value(arora: &arora::Arora, path: &str) -> Option<Value> {
+        arora
+            .store()
+            .read(&[Key::from(path)])
+            .into_iter()
+            .next()
+            .flatten()
+    }
+
+    /// Spawn `call` as a task run through the engine, as a bridge would.
+    fn spawn(
+        arora: &mut arora::Arora,
+        call: &arora_types::call::Call,
+    ) -> arora_behavior::TaskHandle {
+        use arora_behavior::{interpreter_module, RunPolicy};
+        let spawned = arora
+            .call(interpreter_module::encode_spawn(
+                call,
+                RunPolicy::Concurrent,
+            ))
+            .expect("SPAWN dispatches through the engine");
+        interpreter_module::decode_spawn_result(&spawned.ret).expect("a TaskHandle comes back")
+    }
+
+    /// A `play_viseme(shape, weight)` call, as a bridge would build it from
+    /// the described signature.
+    fn play_viseme_call(shape: &str, weight: f32) -> arora_types::call::Call {
+        use arora_types::value::StructureField;
+        let parameters = viseme::play_viseme_parameters();
+        let arg = |name: &str, value: Value| StructureField {
+            id: *parameters
+                .iter()
+                .find(|(_, n)| n == &name)
+                .expect("a declared parameter")
+                .0,
+            value: Box::new(value),
+        };
+        arora_types::call::Call {
+            module_id: Some(arora_behavior::interpreter_module::ID),
+            id: viseme::play_viseme::ids::play_viseme::FUNCTION,
+            args: vec![
+                arg("shape", Value::String(shape.to_string())),
+                arg("weight", Value::F32(weight)),
+            ],
+        }
+    }
+
+    fn step_for(arora: &mut arora::Arora, seconds: f32) {
+        let ticks = (seconds / 0.016).round() as usize;
+        for _ in 0..ticks {
+            arora.step(Duration::from_millis(16)).expect("step");
+        }
+    }
+
+    /// A play_viseme run drives its shape's weight through the lipsync
+    /// envelope — up within the attack, held, then closed — reports the
+    /// shape as the face's current viseme and as its feedback while it is
+    /// driven, and succeeds once the envelope has closed; the other shapes
+    /// stay at rest.
+    #[test]
+    fn a_play_viseme_run_plays_the_shape_through_its_envelope() {
+        use vizij_arora_behavior::task;
+        let mut arora = ros4hri_device();
+        let handle = spawn(&mut arora, &play_viseme_call("aa", 1.0));
+
+        // Past the attack (80 ms) and the crossfade: driven.
+        step_for(&mut arora, 0.2);
+        let aa = read_f32(&arora, &standard::viseme_path("aa"));
+        assert!(aa > 0.8, "aa = {aa} after the attack");
+        assert!(read_f32(&arora, &standard::viseme_path("oh")) < 0.01);
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("aa")));
+        assert_eq!(
+            fed_back_viseme(&arora, &handle.feedback[0].path).as_deref(),
+            Some("aa")
+        );
+        let intensity = fed_back_intensity(&arora, &handle.feedback[0].path);
+        assert!(intensity > 0.8, "intensity = {intensity} after the attack");
+        assert_eq!(
+            read_value(&arora, &handle.status.path),
+            Some(task::running())
+        );
+
+        // Past the hold and the release (480 ms in all): closed, done.
+        step_for(&mut arora, 0.45);
+        let aa = read_f32(&arora, &standard::viseme_path("aa"));
+        assert!(aa < 0.1, "aa = {aa} after the release");
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("sil")));
+        assert_eq!(
+            read_value(&arora, &handle.status.path),
+            Some(task::success())
+        );
+    }
+
+    /// A weight below one plays the shape at that weight; a second run for
+    /// another shape takes over — the first run ends preempted, and the lips
+    /// crossfade: the new shape rises while the old one closes from where it
+    /// was, with no snap (the fade's state is the face's own weight).
+    #[test]
+    fn a_new_play_viseme_run_takes_over_and_crossfades() {
+        use vizij_arora_behavior::task;
+        let mut arora = ros4hri_device();
+        let first = spawn(&mut arora, &play_viseme_call("PP", 0.5));
+        step_for(&mut arora, 0.2);
+        let pp = read_f32(&arora, &standard::viseme_path("PP"));
+        assert!((0.4..=0.55).contains(&pp), "PP = {pp} at half weight");
+
+        spawn(&mut arora, &play_viseme_call("oh", 1.0));
+        step_for(&mut arora, 0.032);
+        let pp_fading = read_f32(&arora, &standard::viseme_path("PP"));
+        assert!(
+            pp_fading < pp && pp_fading > 0.1,
+            "PP fades, no snap: {pp} → {pp_fading}"
+        );
+        assert_eq!(
+            read_value(&arora, &first.status.path),
+            Some(task::failure()),
+            "preempted"
+        );
+        step_for(&mut arora, 0.2);
+        assert!(read_f32(&arora, &standard::viseme_path("oh")) > 0.8);
+        assert!(read_f32(&arora, &standard::viseme_path("PP")) < 0.02);
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("oh")));
+    }
+
+    /// The say skill: its run hosts the provider's `say` call and drives the
+    /// lips from the viseme the provider streams — here a scripted provider
+    /// (two ticks of `PP`, two of `aa`, then done at rest) — reporting the
+    /// current viseme as the face's state and as the run's feedback, and the
+    /// call's status as its own.
+    #[test]
+    fn a_say_run_streams_the_provider_s_visemes_to_the_lips() {
+        use arora_behavior::Status;
+        use arora_types::value::StructureField;
+        use std::collections::HashMap;
+        use std::sync::{Arc, Mutex};
+        use uuid::Uuid;
+        use vizij_arora_behavior::task;
+
+        use speech::say::ids::say as ids;
+
+        /// Two ticks of `PP`, two of `aa`, then done at rest; it counts its
+        /// calls and checks the viseme each one passes in.
+        struct Scripted {
+            calls: Arc<Mutex<usize>>,
+        }
+
+        impl speech::Say for Scripted {
+            fn say(&mut self, text: String, _voice: Option<String>, viseme: &mut String) -> Status {
+                assert_eq!(text, "hello");
+                assert_eq!(
+                    viseme,
+                    speech::SILENCE_VISEME,
+                    "the fragment states the viseme"
+                );
+                let mut n = self.calls.lock().unwrap();
+                *n += 1;
+                let (status, current) = match *n {
+                    1 | 2 => (Status::Running, "PP"),
+                    3 | 4 => (Status::Running, "aa"),
+                    _ => (Status::Success, speech::SILENCE_VISEME),
+                };
+                *viseme = current.to_string();
+                status
+            }
+        }
+
+        const PROVIDER: Uuid = Uuid::from_u128(0x7474732d74657374);
+        let calls = Arc::new(Mutex::new(0usize));
+        let provider = arora::HostModule::from_exports(
+            PROVIDER,
+            speech::say::exports(Scripted {
+                calls: calls.clone(),
+            }),
+        );
+
+        // The device by hand: the profile as the base graph, the say fragment
+        // registered, the say call routed to the scripted provider.
+        let spec = compose_sources(&[ros4hri_source("")])
+            .expect("compose the ros4hri profile")
+            .to_string();
+        let mut graph =
+            ProcessingGraph::from_spec(parse_spec(&spec).expect("parse")).expect("encode");
+        graph.set_function_modules(HashMap::from([(ids::FUNCTION, PROVIDER)]));
+        graph.set_task_fragment(ids::FUNCTION, speech::say_fragment(""));
+        let mut arora = arora::Arora::builder()
+            .with_data_store(Box::new(BlackboardStore::new()))
+            .with_behavior_interpreter(Box::new(graph))
+            .with_host_module(provider)
+            .build()
+            .expect("build arora");
+
+        let say = arora_types::call::Call {
+            module_id: Some(PROVIDER),
+            id: ids::FUNCTION,
+            args: vec![
+                StructureField {
+                    id: ids::TEXT,
+                    value: Box::new(Value::String("hello".to_string())),
+                },
+                StructureField {
+                    id: ids::VOICE,
+                    value: Box::new(Value::String(String::new())),
+                },
+            ],
+        };
+        let handle = spawn(&mut arora, &say);
+
+        step_for(&mut arora, 0.032);
+        assert_eq!(*calls.lock().unwrap(), 2, "one provider call per tick");
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("PP")));
+        assert_eq!(
+            fed_back_viseme(&arora, &handle.feedback[0].path).as_deref(),
+            Some("PP")
+        );
+        let pp = read_f32(&arora, &standard::viseme_path("PP"));
+        assert!(pp > 0.3, "PP = {pp} rising");
+        assert_eq!(
+            read_value(&arora, &handle.status.path),
+            Some(task::running())
+        );
+
+        step_for(&mut arora, 0.032);
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("aa")));
+        assert!(read_f32(&arora, &standard::viseme_path("aa")) > 0.3);
+        assert!(
+            read_f32(&arora, &standard::viseme_path("PP")) < pp,
+            "PP crossfades out"
+        );
+
+        // The provider ends on its fifth call; the run reports it once the
+        // lips have settled (five crossfade half-lives), not before.
+        step_for(&mut arora, 0.032);
+        assert_eq!(read_value(&arora, standard::VISEME), Some(text("sil")));
+        assert_eq!(
+            read_value(&arora, &handle.status.path),
+            Some(task::running())
+        );
+        step_for(&mut arora, 0.2);
+        assert_eq!(
+            read_value(&arora, &handle.status.path),
+            Some(task::success())
+        );
+        assert!(read_f32(&arora, &standard::viseme_path("aa")) < 0.02);
+        assert_eq!(
+            *calls.lock().unwrap(),
+            5,
+            "a finished run is not re-invoked"
+        );
+    }
+
+    #[test]
+    fn ros4hri_blink_pulses_and_commanded_close_wins() {
+        let mut arora = ros4hri_device();
+        // Over 10 s the jittered 8 s cycle blinks at least once; between
+        // blinks the lids rest open.
+        let mut min_lid = f32::MAX;
+        let mut max_lid = f32::MIN;
+        for _ in 0..625 {
+            arora.step(Duration::from_millis(16)).expect("step");
+            let lid = read_f32(&arora, standard::LEFT_EYE_TOP_EYELID_POS_Y);
+            min_lid = min_lid.min(lid);
+            max_lid = max_lid.max(lid);
+        }
+        assert!(max_lid > 0.5, "no blink in 10 s (max lid {max_lid})");
+        assert!(min_lid < 0.05, "lids never rest open (min lid {min_lid})");
+
+        // Commanded eyes-closed holds the lids shut and inhibits the pulse.
+        stage(&arora, &ros4hri::au_key(43), float(1.0));
+        settle(&mut arora);
+        for _ in 0..300 {
+            arora.step(Duration::from_millis(16)).expect("step");
+            let lid = read_f32(&arora, standard::LEFT_EYE_TOP_EYELID_POS_Y);
+            assert!(lid > 0.9, "lid opened while commanded closed ({lid})");
+        }
+    }
+
+    /// End-to-end over the real demo face: graft Quori's standard-adaptation
+    /// sidecar into `Quori_Current_Extended.glb` with the bundler, compose the
+    /// ROS4HRI mapping, and drive the ROS4HRI keys through to Quori's pose
+    /// plane. Needs the GLB: set `VIZIJ_FIXTURES` to a directory holding it
+    /// (the snapshot-regression convention); skipped otherwise.
+    #[test]
+    fn ros4hri_drives_the_adapted_quori() {
+        let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
+            eprintln!("VIZIJ_FIXTURES unset — skipping the Quori integration test");
+            return;
+        };
+        let glb = std::path::Path::new(&fixtures).join("Quori_Current_Extended.glb");
+        let bytes = std::fs::read(&glb).expect("read the Quori GLB");
+
+        // The bundler grafts the committed adaptation sidecar into the bundle.
+        let sidecar = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../fixtures/faces/quori/standard-adaptation.json"
+        );
+        let spec = vizij_bundle::from_sidecar(
+            &std::fs::read_to_string(sidecar).expect("read the adaptation sidecar"),
+        )
+        .expect("parse the adaptation sidecar");
+        let mut face = vizij_bundle::Face::parse(&bytes).expect("parse the Quori GLB");
+        face.add_graph("standard-adaptation", "quori_standard_adaptation", spec)
+            .expect("graft the adaptation");
+        let adapted = face.to_bytes().expect("repack the GLB");
+        let cov = vizij_bundle::coverage(&vizij_bundle::Face::parse(&adapted).unwrap());
+        assert!(cov.level >= 2, "adapted Quori below L2 (L{})", cov.level);
+
+        // Compose like the binary's defaults: standard graphs + the ROS4HRI
+        // mapping, no autoplay (the idle program would contend on gaze paths).
+        let config = FaceConfig {
+            wanted: ["rig", "pose-driver", "pose", "standard-adaptation"]
+                .map(String::from)
+                .to_vec(),
+            program: ProgramSelect::None,
+            stage_neutral: true,
+            ros4hri: true,
+            speech: None,
+        };
+        let LoadedFace { meta, spec } =
+            load_face(&adapted, &config).expect("load the adapted face");
+        let store = BlackboardStore::new();
+        stage_neutral_pose(&store, &meta);
+        let mut arora = builder_for(&spec, RigHal::new(), store, &[], None)
+            .expect("build the device")
+            .build()
+            .expect("build arora");
+
+        // A ROS4HRI expression command reaches Quori's emotion-pose plane.
+        stage(&arora, ros4hri::EXPRESSION_NAME_KEY, text("happy"));
+        settle(&mut arora);
+        let waist = read_f32(&arora, "rig/quori_latest/standard/vizij/expression/happy");
+        assert!(waist > 0.95, "mapping output missing (happy = {waist})");
+        let pose = read_f32(&arora, "rig/quori_latest/poses/pose_d_happy_d.weight");
+        assert!(pose > 0.95, "adaptation output missing (pose = {pose})");
+
+        // A played viseme reaches the letter-pose plane: the run writes the
+        // face's prefixed standard control, the adaptation maps it.
+        spawn(&mut arora, &play_viseme_call("aa", 1.0));
+        step_for(&mut arora, 0.2);
+        let mouth = read_f32(&arora, "rig/quori_latest/poses/pose_a.weight");
+        assert!(mouth > 0.8, "viseme mapping missing (pose_a = {mouth})");
+        assert_eq!(
+            read_value(&arora, "rig/quori_latest/standard/vizij/viseme"),
+            Some(text("aa"))
+        );
+        step_for(&mut arora, 0.45);
+        let mouth = read_f32(&arora, "rig/quori_latest/poses/pose_a.weight");
+        assert!(mouth < 0.1, "the envelope closes (pose_a = {mouth})");
+
+        // The keys beyond ROS4HRI, written directly: an expression it does
+        // not name, the blink, and a conversation state each reach the input
+        // Quori's adaptation maps them onto.
+        for (control, rig_input) in [
+            (
+                standard::expression_path("concerned"),
+                "rig/quori_latest/poses/pose_d_concerned_d.weight",
+            ),
+            (standard::BLINK.to_string(), "rig/quori_latest/lids/blink"),
+            (
+                standard::conversation_path("speaking"),
+                "rig/quori_latest/speech/speaking",
+            ),
+        ] {
+            stage(&arora, &format!("rig/quori_latest/{control}"), float(1.0));
+            settle(&mut arora);
+            let value = read_f32(&arora, rig_input);
+            assert!(
+                value > 0.95,
+                "{control} does not reach {rig_input} ({value})"
+            );
+        }
+    }
+}
+
+/// A face's animations on the device its composition builds — the same on
+/// every target: loaded through the animation module's declared functions,
+/// silent until played, found by any client through the player states,
+/// writing the rig keys their channels name.
+#[cfg(test)]
+mod animation_tests {
+    use std::time::Duration;
+
+    use arora_types::call::Call;
+    use arora_types::value::{StructureField, Value as AValue};
+    use vizij_animation_module::animation::ids;
+    use vizij_animation_module::PlayerState;
+    use vizij_api_core::value::as_float;
+
+    use super::*;
+
+    fn call(
+        arora: &mut arora::Arora,
+        function: uuid::Uuid,
+        args: Vec<(uuid::Uuid, AValue)>,
+    ) -> AValue {
+        arora
+            .call(Call {
+                module_id: Some(ids::MODULE),
+                id: function,
+                args: args
+                    .into_iter()
+                    .map(|(id, value)| StructureField {
+                        id,
+                        value: Box::new(value),
+                    })
+                    .collect(),
+            })
+            .expect("the call dispatches")
+            .ret
+    }
+
+    /// The module's players, as any client reads them.
+    fn players(arora: &mut arora::Arora) -> Vec<PlayerState> {
+        call(arora, ids::player_states::FUNCTION, Vec::new())
+            .into_elements()
+            .expect("an array of PlayerState")
+            .into_iter()
+            .map(|state| PlayerState::try_from(state).expect("a PlayerState"))
+            .collect()
+    }
+
+    /// The player named `id`, as a client finds an animation's.
+    fn player(arora: &mut arora::Arora, id: &str) -> PlayerState {
+        players(arora)
+            .into_iter()
+            .find(|state| state.name == id)
+            .unwrap_or_else(|| panic!("no player named {id}"))
+    }
+
+    /// What a transport sends to play an animation: weight, then play.
+    fn play(arora: &mut arora::Arora, id: &str) {
+        let state = player(arora, id);
+        call(
+            arora,
+            ids::set_weight::FUNCTION,
+            vec![
+                (ids::set_weight::PLAYER, AValue::U32(state.player)),
+                (
+                    ids::set_weight::INSTANCE,
+                    AValue::U32(state.instances[0].instance),
+                ),
+                (ids::set_weight::WEIGHT, AValue::F32(1.0)),
+            ],
+        );
+        call(
+            arora,
+            ids::play::FUNCTION,
+            vec![(ids::play::PLAYER, AValue::U32(state.player))],
+        );
+    }
+
+    fn read(arora: &arora::Arora, path: &str) -> Option<f32> {
+        let key = Key::from(path);
+        arora
+            .store()
+            .read(std::slice::from_ref(&key))
+            .into_iter()
+            .next()
+            .flatten()
+            .and_then(|value| as_float(&value))
+    }
+
+    fn step_for(arora: &mut arora::Arora, seconds: f32) {
+        for _ in 0..(seconds / 0.01).round() as usize {
+            arora.step(Duration::from_millis(10)).expect("step");
+        }
+    }
+
+    /// A one-rig-input face whose animation ramps it, composed and built,
+    /// its animations loaded.
+    fn ramp_face() -> arora::Arora {
+        let bundle = Bundle::from_bundle_json(&serde_json::json!({
+            "metadata": { "faceId": "f" },
+            "graphs": [{ "kind": "rig", "spec": { "nodes": [
+                { "id": "input_x", "type": "input", "params": { "path": "rig/f/x", "value": 0.0 } },
+            ], "edges": [] } }],
+            "animations": [
+                { "id": "ramp", "clip": { "duration": 1, "tracks": [
+                    { "channel": "x", "keyframes": [
+                        { "time": 0, "value": 0 }, { "time": 1, "value": 1 },
+                    ] },
+                ] } },
+                { "id": "hold", "clip": { "duration": 2, "tracks": [
+                    { "channel": "x", "keyframes": [{ "time": 0, "value": 0.5 }] },
+                ] } },
+            ],
+        }));
+        let spec = bundle
+            .compose(&["rig"], &ProgramSelect::None, true, &[])
+            .expect("compose")
+            .to_string();
+        let mut arora = builder_for(&spec, RigHal::new(), BlackboardStore::new(), &[], None)
+            .expect("build the device")
+            .build()
+            .expect("build arora");
+        load_animations(&mut arora, &bundle).expect("load the face's animations");
+        arora
+    }
+
+    /// Each animation gets a player named after its id, holding one
+    /// instance of it at weight 0, stopped at its start.
+    #[test]
+    fn a_face_s_animations_load_silent_on_players_named_after_them() {
+        let mut arora = ramp_face();
+        step_for(&mut arora, 0.1);
+        let players = players(&mut arora);
+        let names: Vec<&str> = players.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["ramp", "hold"]);
+        for state in &players {
+            assert_eq!(state.state, "stopped", "{state:?}");
+            assert_eq!(state.time_ns, 0);
+            assert_eq!(state.instances.len(), 1);
+            assert_eq!(state.instances[0].weight, 0.0, "silent");
+        }
+        assert_eq!(players[1].duration_ns, 2_000_000_000);
+        assert_eq!(
+            read(&arora, "rig/f/x"),
+            None,
+            "a loaded animation writes nothing"
+        );
+    }
+
+    /// Played by name, an animation writes the rig input its channel names;
+    /// unloaded through the declared calls, it writes no more.
+    #[test]
+    fn a_face_animation_plays_by_name_and_unloads() {
+        let mut arora = ramp_face();
+        step_for(&mut arora, 0.1);
+        play(&mut arora, "ramp");
+        step_for(&mut arora, 0.5);
+        let x = read(&arora, "rig/f/x").expect("the animation writes rig/f/x");
+        assert!((0.4..0.6).contains(&x), "linear ramp at ~0.5 s, got {x}");
+
+        let ramp = player(&mut arora, "ramp");
+        let removed = call(
+            &mut arora,
+            ids::remove_player::FUNCTION,
+            vec![(ids::remove_player::PLAYER, AValue::U32(ramp.player))],
+        );
+        assert_eq!(removed, AValue::Boolean(true));
+        let unloaded = call(
+            &mut arora,
+            ids::unload_animation::FUNCTION,
+            vec![(
+                ids::unload_animation::ANIM,
+                AValue::U32(ramp.instances[0].anim),
+            )],
+        );
+        assert_eq!(unloaded, AValue::Boolean(true));
+        let names: Vec<String> = players(&mut arora).into_iter().map(|p| p.name).collect();
+        assert_eq!(names, ["hold"]);
+        let held = read(&arora, "rig/f/x");
+        step_for(&mut arora, 0.3);
+        assert_eq!(
+            read(&arora, "rig/f/x"),
+            held,
+            "its key keeps its last value"
+        );
+    }
+
+    /// The native device plays the animations the bundle of the demo face
+    /// carries. Needs `VIZIJ_FIXTURES` (see
+    /// `ros4hri_drives_the_adapted_quori`); skipped otherwise.
+    #[test]
+    fn quori_plays_its_animations() {
+        let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
+            eprintln!("VIZIJ_FIXTURES unset — skipping the Quori animation test");
+            return;
+        };
+        let glb = std::fs::read(std::path::Path::new(&fixtures).join("Quori_Current_Extended.glb"))
+            .expect("read the Quori GLB");
+        let config = FaceConfig {
+            wanted: ["rig", "pose-driver", "pose", "standard-adaptation"]
+                .map(String::from)
+                .to_vec(),
+            program: ProgramSelect::None,
+            stage_neutral: true,
+            ros4hri: true,
+            speech: None,
+        };
+        let LoadedFace { meta, spec } = load_face(&glb, &config).expect("load Quori");
+        let store = BlackboardStore::new();
+        stage_neutral_pose(&store, &meta);
+        let mut arora = builder_for(&spec, RigHal::new(), store, &meta.bundle.skills, None)
+            .expect("build the device")
+            .build()
+            .expect("build arora");
+        load_animations(&mut arora, &meta.bundle).expect("load Quori's animations");
+        let names: Vec<String> = players(&mut arora).into_iter().map(|p| p.name).collect();
+        assert_eq!(
+            names,
+            ["authoring.timeline.clip.1", "authoring.timeline.main"]
+        );
+
+        let gaze = "rig/quori_latest/gaze/left_right";
+        step_for(&mut arora, 0.2);
+        let resting = read(&arora, gaze).unwrap_or(0.0);
+        // "Nonesense" moves the gaze from -0.04 to -0.43 over its first 1.26 s.
+        play(&mut arora, "authoring.timeline.clip.1");
+        step_for(&mut arora, 1.0);
+        let played = read(&arora, gaze).expect("the animation writes the gaze");
+        assert!(
+            played < -0.2 && (played - resting).abs() > 0.1,
+            "the animation moves the gaze: {resting} → {played}"
+        );
+    }
+}

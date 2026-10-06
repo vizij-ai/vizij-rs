@@ -33,9 +33,6 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      # Test before lint: the build runs each crate's build script, emitting
-      # the generated sources (src/arora_generated.rs) that `cargo fmt --check`
-      # otherwise fails to resolve as modules.
       # Every crate but `vizij` takes `--all-features`; `vizij` cannot, because
       # its ROS 2 bridge backends (`ros2-dds` / `ros2-zenoh`) are compile-time
       # exclusive, so it gets one pass per backend. The Zenoh pass covers the
@@ -49,6 +46,45 @@ jobs:
       - run: cargo clippy -p vizij --features ros2-zenoh --bins -- -D warnings
       - run: cargo fmt --all -- --check
 
+  # The `vizij` library on the targets its other entry points build for: the
+  # browser module (wasm32, no desktop half) and the Android activity (arm64,
+  # the native driver with a headless front end and the Studio bridge).
+  # Neither links an app; each proves the crate's feature and target tables
+  # keep the library building where the binary cannot.
+  vizij-lib-targets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown, aarch64-linux-android
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-vizij-lib-targets-${{ hashFiles('**/Cargo.lock') }}
+      - run: cargo check -p vizij --lib --target wasm32-unknown-unknown --no-default-features
+      # The speech provider's browser producer, on the runner's Chrome.
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+      - name: Test the speech provider in headless Chrome
+        run: wasm-pack test --headless --chrome --chromedriver "$CHROMEWEBDRIVER/chromedriver" crates/interop/vizij-arora-tts
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+          add-to-path: false
+      - name: Check the library for arm64 Android with the Studio bridge
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          cargo install cargo-ndk --locked
+          cargo ndk -t arm64-v8a -P 26 check -p vizij --lib --no-default-features --features studio
+
   wasm:
     runs-on: ubuntu-latest
     steps:
@@ -59,14 +95,24 @@ jobs:
           # wasm32-wasip1 builds the animation-module artifact (an Arora guest
           # module, not a wasm-bindgen wrapper).
           targets: wasm32-wasip1
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-wasm-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Install wasm-pack
         run: cargo install wasm-pack
       - name: Build WASM into npm wrapper pkg/
         run: node scripts/build-animation-wasm.mjs
       - name: Build Graph WASM into npm wrapper pkg/
         run: node scripts/build-graph-wasm.mjs
-      - name: Build Arora-web WASM into npm wrapper pkg/
-        run: node scripts/build-arora-web-wasm.mjs
+      # The browser bundle is the whole vizij crate (Bevy included) for
+      # wasm32: the cache above is what keeps this under the job's budget.
+      - name: Build the runtime WASM (the vizij crate for the browser) into npm wrapper pkg/
+        run: node scripts/build-runtime-wasm.mjs
       - name: Install pnpm
         uses: pnpm/action-setup@v4
       - name: Setup Node
@@ -91,6 +137,29 @@ jobs:
           pnpm --filter @vizij/node-graph run test
           pnpm --filter @vizij/animation-module run test
           pnpm --filter @vizij/runtime run test
+      # The bundle on a page: Quori and Toasty against the native references
+      # under the same metric, the authoring viewport's calls, and 25
+      # load/unload cycles with a flat memory.
+      - name: Fetch the face GLBs from vizij-web
+        run: |
+          mkdir -p fixtures
+          base="https://raw.githubusercontent.com/vizij-ai/vizij-web/main/apps/vizij-authoring/public/assets"
+          curl -fsSL "$base/Quori_Current.glb" -o fixtures/Quori_Current.glb
+          curl -fsSL "$base/Quori_Current_Extended.glb" -o fixtures/Quori_Current_Extended.glb
+          curl -fsSL "$base/Toasty_Current.glb" -o fixtures/Toasty_Current.glb
+      - name: Install Chromium for Playwright
+        run: pnpm --filter @vizij/runtime exec playwright install --with-deps chromium
+      - name: Run the browser tests
+        env:
+          VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
+          VIZIJ_SNAPSHOT_OUT: ${{ github.workspace }}/browser-snapshots
+        run: pnpm --filter @vizij/runtime run test:browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-snapshots
+          path: browser-snapshots
+          if-no-files-found: ignore
 
   bench-smoke:
     runs-on: ubuntu-latest
@@ -130,12 +199,12 @@ jobs:
       - name: Install system dependencies (alsa/udev/wayland/xkb dev for Bevy)
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 24
+          # The job runs no package-manager install, so there is no store to cache.
+          package-manager-cache: false
       - name: Verify node registry artifacts are updated
         run: node scripts/verify-node-registry.mjs
 
@@ -185,18 +254,35 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-snapreg-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Fetch the face GLBs from vizij-web
+      - name: Fetch the face GLBs
+        # Quori and Toasty from vizij-web; Emy from its own repository, at the
+        # commit the reference was rendered from.
         run: |
           mkdir -p fixtures
           base="https://raw.githubusercontent.com/vizij-ai/vizij-web/main/apps/vizij-authoring/public/assets"
           curl -fsSL "$base/Quori_Current_Extended.glb" -o fixtures/Quori_Current_Extended.glb
           curl -fsSL "$base/Toasty_Current.glb" -o fixtures/Toasty_Current.glb
-      - name: Render Quori/Toasty on lavapipe and compare to references
+          emy="https://raw.githubusercontent.com/SaraCooperAmun/vizij_ros_face_launcher/c538974ef24e40a2d2e251768a5e48f148b5bf1f/emy_glbs/emy.glb"
+          curl -fsSL "$emy" -o fixtures/emy.glb
+      - name: Render Quori/Toasty/Emy on lavapipe and compare to references
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
           WGPU_BACKEND: vulkan
         run: cargo test -p vizij --test snapshot_regression -- --ignored --nocapture
+      - name: Compose faces from bytes headless through the library (one, two, 25 cycles)
+        env:
+          VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
+          WGPU_BACKEND: vulkan
+        run: cargo test -p vizij --test headless_face -- --ignored --nocapture
       - name: Drive the adapted Quori over the ROS4HRI mapping
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
-        run: cargo test -p vizij --bin vizij ros4hri_drives_the_adapted_quori -- --nocapture
+        run: cargo test -p vizij --lib ros4hri_drives_the_adapted_quori -- --nocapture
+      - name: Play Quori's animations on the native device
+        env:
+          VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
+        run: cargo test -p vizij --lib quori_plays_its_animations -- --nocapture
+      - name: Drive the face from a client on the local bridge
+        env:
+          VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
+        run: cargo test -p vizij --test local_bridge -- --nocapture

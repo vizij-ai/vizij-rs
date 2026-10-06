@@ -64,11 +64,7 @@ pnpm --filter @vizij/animation test
 
 ## Release Notes
 
-Animation releases follow the workspace Changesets flow rather than manual `cargo publish` / `npm publish` steps from this directory:
-
-1. Add a Changeset with `pnpm changeset` for any publishable package change.
-2. Run `pnpm release` to rebuild wasm and shared packages before tagging.
-3. Let CI handle `pnpm ci:version` and `pnpm ci:publish`.
+Animation releases follow the workspace flow (the root README's Publishing & Versioning) rather than manual `cargo publish` / `npm publish` steps from this directory: add a changeset with `pnpm changeset` for any change to `@vizij/animation`, and CI versions it through the Version Packages PR and publishes it once that merges.
 
 If you change animation ABI or wrapper-visible behavior, rebuild the wasm package and confirm the wrapper still agrees on `abi_version()`.
 

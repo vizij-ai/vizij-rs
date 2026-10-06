@@ -23,6 +23,7 @@ mod noise;
 mod numeric;
 mod plan;
 mod shape_helpers;
+#[cfg(feature = "urdf_ik")]
 mod urdfik;
 mod value_layout;
 mod variadic;

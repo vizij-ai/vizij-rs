@@ -85,7 +85,15 @@ export interface BakedAnimationData {
 ----------------------------------------------------------- */
 export type LoopMode = "Once" | "Loop" | "PingPong";
 
-/** Player-level command bag applied before the engine advances time for a tick. */
+/**
+ * Player-level command bag applied before the engine advances time for a tick.
+ *
+ * `Play`, `Pause` and `Stop` set whether the player's time advances; `SetSpeed`
+ * only sets the multiplier it advances at while playing. A player keeps its
+ * speed through `Pause` and `Stop`, so `Play` resumes at it, and `SetSpeed`
+ * neither resumes a paused player nor pauses a playing one. `Seek` leaves a
+ * stopped player paused at the time it seeks to.
+ */
 export type PlayerCommand =
   | { Play: { player: PlayerId } }
   | { Pause: { player: PlayerId } }
@@ -313,8 +321,10 @@ export interface InstanceInfo {
 export interface PlayerInfo {
   id: number;
   name: string;
+  /** As the last `Play`, `Pause` or `Stop` left it; a new player plays. */
   state: PlaybackState;
   time: number; // seconds
+  /** The multiplier `SetSpeed` set (1 unless set), whatever the state. */
   speed: number;
   loop_mode: LoopMode;
   start_time: number; // seconds

@@ -4,6 +4,29 @@ All notable changes to `vizij-graph-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] - 2026-09-28
+
+### Changed
+
+- A `TaskRun` node calls with its `value` param's fields, then the fields of
+  its `args` input, which win for a parameter both name. The `args` input
+  used to replace `value` whole; a graph now states a fixed argument once —
+  a mutable argument's initial value — under the live argument bundle.
+
+## [2.0.0] - 2026-09-26
+
+### Changed
+
+- **Breaking:** depends on arora-behavior 9 and vizij-api-core 2.
+
+## [1.4.1] - 2026-09-19
+
+### Fixed
+
+- The crate compiles with `default-features = false`: the `urdfik` module and
+  its imports are gated on `urdf_ik` as one unit, so a consumer that wants no
+  kinematics (a browser bundle) drops `k` and `urdf-rs` from its build.
+
 ## [1.4.0] - 2026-09-10
 
 ### Added

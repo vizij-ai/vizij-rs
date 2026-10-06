@@ -33,8 +33,9 @@ file summarises, it does not replace, those sources.
   `vizij-graph-wasm`, and npm `@vizij/node-graph`.
 - **Interop (Arora) stack**: `crates/interop/*` adapts the Vizij stacks onto
   Arora runtime seams — `vizij-arora` (Value interop), `vizij-arora-store`,
-  `vizij-arora-hal`, `vizij-arora-behavior`, `vizij-arora-web` (npm
-  `@vizij/runtime`), and `vizij-animation-module` (npm `@vizij/animation-module`).
+  `vizij-arora-hal`, `vizij-arora-behavior`, and `vizij-animation-module` (npm
+  `@vizij/animation-module`); `crates/vizij` is the view and the device on every
+  target, and its `web` module is npm `@vizij/runtime`.
 - **Test fixtures**: `vizij-test-fixtures` crate that exposes the shared JSON
   manifest, mirrored to npm `@vizij/test-fixtures` for browsers.
 - **Support packages**: npm `@vizij/value-json`, `@vizij/wasm-loader`, and
@@ -71,11 +72,10 @@ Install the watcher dependency once with `cargo install cargo-watch`.
 |------|---------|
 | Install git hooks (fmt/clippy/test) | `bash scripts/install-git-hooks.sh` |
 | Run hook jobs manually | `./.githooks/pre-commit` / `./.githooks/pre-push` |
-| Dry-run crates + npm release | `bash scripts/dry-run-release.sh` |
 | Create a Changeset entry | `pnpm changeset` |
-| CI version bump (Changesets action) | `pnpm ci:version` |
-| Validate wasm/shared builds before tagging | `pnpm release` |
-| CI publish (build wasm + `changeset publish`) | `pnpm ci:publish` |
+| Apply pending changesets (what the Version Packages PR runs) | `pnpm ci:version` |
+| List the npm versions CI would publish | `node scripts/ci-publish.mjs --dry-run` |
+| Publish what npm is missing (what `publish-npm` runs) | `pnpm ci:publish` |
 | Link npm packages for vizij-web | Build locally, then use temporary `link:` deps in `vizij-web` (see its README) |
 | Rebuild after ABI bumps | `cargo build -p <wasm-crate> --target wasm32-unknown-unknown && pnpm run build:wasm:<stack>` |
 | WASM perf harness (full) | `pnpm run perf:wasm` |
@@ -110,8 +110,8 @@ Prerequisite: add the wasm32 target with `rustup target add wasm32-unknown-unkno
 - Scope visibility with `pub(crate)` wherever possible and add Rustdoc comments
   for public APIs, including short usage snippets if the surface isn't obvious.
 - Co-locate unit tests in `#[cfg(test)]` modules; use crate-level `tests/`
-  folders for integration coverage (`vizij-arora-web/tests` is a good
-  example). Add wasm-bindgen tests when adjusting wasm surfaces.
+  folders for integration coverage (`crates/vizij/tests` is a good example).
+  Add wasm-bindgen tests when adjusting wasm surfaces.
 - Run fmt/clippy/tests (ideally via the git hooks) before shipping; call out any
   steps you skipped.
 
