@@ -4,6 +4,18 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [6.1.0] - 2026-10-06
+
+### Added
+
+- `ros4hri::VISEME_KEY`, `standard/ros4hri/viseme`: the lip shape a ROS4HRI
+  TTS node streams at the audio playhead (`hri_msgs/Viseme.value` from
+  `/tts/viseme` or `/tts/visemes`, which arora-bridge-ros2's ROS4HRI preset
+  lands here), as a `u8` index into `standard::VISEME_SHAPES`, resting at
+  `0` (`sil`). The `ros4hri` profile declares it as an input, 27 keys in all.
+  Nothing maps it yet: the face's lips belong to whichever viseme player is
+  running, and a mapping channel would clobber a run's weights (VIZ-162).
+
 ## [6.0.0] - 2026-10-06
 
 ### Added

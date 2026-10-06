@@ -63,8 +63,8 @@ Vizij ships two:
 
 | profile | scope | keys | declared by |
 |---|---|---|---|
-| `vizij-face` | face | 88 — gaze, lids & blink, 27 expressions, 15 visemes, 36 muscle-tier controls, 3 conversation states | the [face standard](face-standard.md) |
-| `ros4hri` | device | 25 — expression name/valence/arousal, gaze target and frame, 20 action units | the [ROS4HRI key contract](ros4hri.md#the-standardros4hri-key-contract) |
+| `vizij-face` | face | 90 — gaze, lids & blink, 27 expressions, 15 visemes, 36 muscle-tier controls, 3 conversation states; and the 2 speech-state keys it reports (the current viseme, the utterance) | the [face standard](face-standard.md) |
+| `ros4hri` | device | 27 — expression name/valence/arousal, gaze target and frame, the streamed viseme, 20 action units; and the speech text it reports | the [ROS4HRI key contract](ros4hri.md#the-standardros4hri-key-contract) |
 
 Both are generated from the Rust constants
 ([`profile.rs`](../crates/interop/vizij-arora-host/src/profile.rs)) and held

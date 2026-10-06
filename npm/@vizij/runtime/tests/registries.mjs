@@ -13,15 +13,15 @@ import {
 
 // The shipped profiles, summarized: the face standard (face-scoped — 88
 // inputs plus the two speech state keys it reports) and the ROS4HRI
-// interface (device-scoped — 5 named command keys, one per action unit, and
-// the speech text it reports; the lipsync surface is the viseme players',
-// not ROS4HRI's).
+// interface (device-scoped — 6 named command keys, the streamed viseme among
+// them as one code rather than a weight per shape, one per action unit, and
+// the speech text it reports).
 const listed = await profiles();
 assert.deepEqual(
   listed.map((p) => [p.id, p.scope, p.keys]),
   [
     ["vizij-face", "face", 90],
-    ["ros4hri", "device", 26],
+    ["ros4hri", "device", 27],
   ],
 );
 
