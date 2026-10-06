@@ -314,22 +314,43 @@ If the check fails, run `./scripts/install-git-hooks.sh` to fix it.
 
 ### Publishing & Versioning
 
-Each domain stack keeps the Rust crate, WASM crate, and npm wrapper versions in lockstep. Publishing now flows through [Changesets](.changeset/README.md) plus the automated `publish-npm` workflow.
+npm packages and crates publish **from CI when their version reaches `main`**: a
+publishable `@vizij/*` package or crate whose version on `main` is not on its
+registry yet is published, and one already there is skipped, so re-runs are
+safe.
 
-### Prerequisites
+- **npm:** [`publish-npm.yml`](.github/workflows/publish-npm.yml) runs on every
+  push to `main` that touches `npm/**`, and on `workflow_dispatch` (optionally
+  for one package). It runs [`scripts/ci-publish.mjs`](scripts/ci-publish.mjs),
+  which asks the registry package by package, builds only what it will publish
+  (a wasm wrapper from its crates first), and publishes a prerelease version
+  (`3.0.0-alpha.0`) under its own dist-tag, so `latest` keeps the last release.
+  `node scripts/ci-publish.mjs --dry-run` lists what it would publish.
+- **crates:** [`publish-crates.yml`](.github/workflows/publish-crates.yml) runs on
+  every push to `main` that touches a crate's `Cargo.toml`, and on
+  `workflow_dispatch`. It publishes the crates it lists, in dependency order.
 
-- npm trusted publishing (OIDC): the workflow holds `id-token: write` and each `@vizij/*` package names this repository's `publish-npm` workflow as its trusted publisher on npmjs.com. There is no token in the repo's secrets. Trusted publishing cannot create a package, so a new `@vizij/*` package's first version is published by hand; the workflow handles every later one.
-- Each publishable package has `"private": false` and a `publishConfig.access` entry.
+Authentication is trusted publishing (OIDC) on both registries, with no token in
+the repository's secrets: each `@vizij/*` package names `publish-npm.yml` as its
+trusted publisher, and each crate names `publish-crates.yml`. **Do not rename
+either file**; a renamed one publishes nothing until every trusted publisher is
+reconfigured. Trusted publishing cannot create a package or a crate, so a new
+one's first version is published by hand, and the workflows handle every later
+one. Each publishable npm package has `"private": false` and a
+`publishConfig.access` entry.
 
-### How a release flows
+#### Releasing a change
 
-1. Bump the Rust + WASM crate versions in their `Cargo.toml` files (npm wrappers stay on autopilot).
-2. Run `pnpm changeset` and select the npm packages under `npm/@vizij/*` that changed. Commit the generated markdown under `.changeset/`.
-3. Once those changes land on the branch you want to ship (e.g., `graph-refactor`), cut a tag named `npm-pub-<something>` (for example `npm-pub-graph-refactor-2025-11-11`) that points at that branch head, and push both the tag and branch to origin. You can also trigger the workflow manually with `workflow_dispatch`.
-4. The `publish-npm` workflow finds the remote branch that contains the tagged commit, checks it out, runs `pnpm ci:version` (which deletes the processed changesets, bumps package versions, and commits `chore(release): version packages` onto that same branch), then runs `pnpm ci:publish`. That script temporarily rewrites any `workspace:` dependency ranges to real semver versions, rebuilds the wasm/shared packages, executes `changeset publish`, and restores the workspace protocol before the job pushes anything back. The workflow pushes the release commit and the generated package tags back to the branch; the publishes carry provenance.
-5. After the workflow finishes, pull your feature branch so you have the auto-generated release commit locally.
-
-Use `scripts/dry-run-release.sh` to sanity-check the end-to-end flow (builds, wasm bundling, npm pack contents) before pushing real releases.
+- **npm:** in your PR, run `pnpm changeset` and commit the generated
+  `.changeset/*.md`, written for a reader of the changelog. Once it merges,
+  [`release.yml`](.github/workflows/release.yml) opens or updates a **Version
+  Packages** PR that applies every pending changeset: the version bumps, patch
+  bumps cascaded to workspace dependents, and the `CHANGELOG.md` entries.
+  Merging that PR lands the versions on `main`, and `publish-npm.yml` publishes
+  them. A package on a prerelease version is bumped by hand instead, because a
+  changeset turns `3.0.0-alpha.0` into `3.0.0` whatever the bump.
+- **crates:** bump the version in the crate's `Cargo.toml` and add its
+  `CHANGELOG.md` entry in the PR; merging it publishes the crate.
 
 ---
 
@@ -354,18 +375,17 @@ vizij-rs/
 │  │  ├─ vizij-arora-hal           # Vizij rig presented as an Arora HAL
 │  │  ├─ vizij-arora-behavior      # Vizij node graph as an Arora behavior interpreter
 │  │  ├─ vizij-arora-host          # Bundle composition, face standard, profiles & mappings (ROS4HRI), skills
-│  │  ├─ vizij-arora-web           # Browser wasm cdylib: Vizij runtime as an Arora device
 │  │  └─ vizij-animation-module    # vizij-animation-core packaged as an Arora wasm module
 │  ├─ tools/
 │  │  └─ vizij-bundle              # Face-GLB bundle tool: inspect/pack/validate, declare profiles, embed mappings
-│  ├─ vizij                        # The native app: cargo run shows a face, running an arora
+│  ├─ vizij                        # The view and the device on every target: the desktop app (cargo run), the browser module (@vizij/runtime)
 │  └─ test-fixtures/
 │     └─ vizij-test-fixtures       # Loads JSON fixtures referenced across stacks
 ├─ npm/
 │  ├─ @vizij/animation-module      # vizij-animation-core built as an Arora wasm module (assets)
 │  ├─ @vizij/animation             # Stable ESM wrapper around `vizij-animation-wasm`
 │  ├─ @vizij/node-graph            # Wrapper around `vizij-graph-wasm`
-│  ├─ @vizij/runtime               # Browser Vizij runtime as an Arora device (wasm bindings)
+│  ├─ @vizij/runtime               # Vizij faces in the browser: the view and the device in one wasm module
 │  ├─ @vizij/test-fixtures         # Browser bundle of shared JSON fixtures
 │  ├─ @vizij/value-json            # Shared JSON coercion helpers
 │  └─ @vizij/wasm-loader           # Loader that enforces ABI compatibility
@@ -405,8 +425,8 @@ The `crates/interop/*` family adapts the Vizij stacks onto Arora runtime seams s
 | `vizij-arora-hal`        | Vizij rig presented as an Arora HAL.                                   | — |
 | `vizij-arora-behavior`   | Vizij node graph driven as an Arora behavior interpreter.              | — |
 | `vizij-arora-host`       | Composes a face's bundle graphs; hosts the [face standard](docs/face-standard.md) vocabulary, the [profiles and mappings](docs/profiles-and-mappings.md) registries (incl. [ROS4HRI](docs/ros4hri.md)), and the skills registry. | — |
-| `vizij-arora-web`        | Browser wasm cdylib composing a Vizij runtime as an Arora device.      | `@vizij/runtime` |
 | `vizij-animation-module` | `vizij-animation-core` packaged as an Arora wasm module.               | `@vizij/animation-module` |
+| `vizij`                  | The Bevy view and the arora device of a face, on every target: the desktop binary, the browser module (its `web` module). | `@vizij/runtime` |
 
 ### Support Packages
 

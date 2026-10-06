@@ -1,72 +1,33 @@
-//! The speech skill's exterior contract: the `say` function — its ids and
-//! described signature, identical across the text-to-speech providers — and
-//! the fragment that implements the skill.
+//! The speech skill: the say contract's re-export — identical across the
+//! text-to-speech providers — and the fragment that implements the skill.
 //!
-//! A provider is a host module whose `say(text, voice) -> Status` call is
+//! A provider implements [`Say`] under its own module id: its `say` call is
 //! re-invoked each tick while `Running` (the poll-on-tick contract) and
 //! streams the viseme at the audio playhead through the mutable `viseme`
 //! parameter, as one of the face standard's shapes. The skill's fragment
 //! hosts that call on the run's own argument bundle and drives the lips from
-//! the streamed viseme; the device registers the provider under the
-//! function id so the fragment's call reaches it.
+//! the streamed viseme; the device routes the call to the provider it
+//! registered by the function id.
 
 use std::collections::HashMap;
 
-use arora_behavior_tree_types::STATUS_ENUMERATION_ID;
-use arora_types::record::module::frozen::{Function, Parameter};
-use arora_types::record::ty::{FrozenScalar, FrozenTy, PrimitiveKind};
-use arora_types::record::{FrozenReference, Version};
 use uuid::Uuid;
 use vizij_arora_host::skills;
 
 use crate::TaskFragment;
 
-/// The `say` function's id and those of its parameters — identical across
-/// providers, which is what lets a provider crate implement the call without
+/// The say contract, which lets a provider crate implement the call without
 /// depending on the skill that hosts it.
-pub use vizij_arora_host::skills::{
-    SAY_ID, SAY_TEXT_PARAM_ID, SAY_VISEME_PARAM_ID, SAY_VOICE_PARAM_ID, SILENCE_VISEME,
-};
-
-/// `say(text, voice) -> Status`, with a mutable `viseme` out-parameter. The
-/// `Status` return is the task-run marker a bridge exposes as an action.
-pub fn say_signature() -> Function {
-    let mut parameters = HashMap::new();
-    let mut parameter_ordering = Vec::new();
-    for (id, name, kind, mutable) in [
-        (SAY_TEXT_PARAM_ID, "text", PrimitiveKind::String, false),
-        (SAY_VOICE_PARAM_ID, "voice", PrimitiveKind::String, false),
-        (SAY_VISEME_PARAM_ID, "viseme", PrimitiveKind::String, true),
-    ] {
-        parameter_ordering.push(id);
-        parameters.insert(
-            id,
-            Parameter {
-                name: name.to_string(),
-                ty: FrozenTy::from(kind),
-                mutable,
-            },
-        );
-    }
-    Function {
-        parameters,
-        parameter_ordering,
-        return_ty: FrozenTy::FrozenScalar(FrozenScalar {
-            reference: FrozenReference {
-                id: STATUS_ENUMERATION_ID,
-                version: Version::parse("1.0.0").expect("a valid version"),
-            },
-        }),
-    }
-}
+pub use vizij_arora_host::skills::{say, Say, SILENCE_VISEME};
 
 /// The parameter `id → name` map the fragment serves as `task/<name>`
 /// inputs: the call's inputs, not its `viseme` output.
-fn say_parameters() -> HashMap<Uuid, String> {
-    HashMap::from([
-        (SAY_TEXT_PARAM_ID, "text".to_string()),
-        (SAY_VOICE_PARAM_ID, "voice".to_string()),
-    ])
+pub fn say_parameters() -> HashMap<Uuid, String> {
+    [say::ids::say::TEXT, say::ids::say::VOICE]
+        .into_iter()
+        .zip(skills::SAY_PARAMS)
+        .map(|(id, name)| (id, name.to_string()))
+        .collect()
 }
 
 /// The say task fragment, parsed from the shipped asset with the face's rig
@@ -85,7 +46,7 @@ pub fn say_fragment_from(
     embedded: &[(String, serde_json::Value)],
     rig_prefix: &str,
 ) -> TaskFragment {
-    if let Some((_, spec)) = embedded.iter().find(|(id, _)| id == skills::SAY_FUNCTION) {
+    if let Some((_, spec)) = embedded.iter().find(|(id, _)| id == say::NAME) {
         match TaskFragment::parse_with_rig_prefix(&spec.to_string(), rig_prefix, say_parameters()) {
             Ok(fragment) => {
                 log::info!("say: the face's embedded skill fragment overrides the built-in");
@@ -108,7 +69,7 @@ mod tests {
         let nodes = spec["nodes"].as_array().unwrap();
         assert!(nodes
             .iter()
-            .any(|n| n["params"]["function"] == SAY_ID.to_string()));
+            .any(|n| n["params"]["function"] == say::ids::say::FUNCTION.to_string()));
         let outputs: Vec<&str> = nodes
             .iter()
             .filter(|n| n["kind"] == "output" || n["type"] == "output")
@@ -121,11 +82,13 @@ mod tests {
     }
 
     #[test]
-    fn the_signature_streams_the_viseme_as_an_out_parameter() {
-        let signature = say_signature();
-        let viseme = &signature.parameters[&SAY_VISEME_PARAM_ID];
-        assert!(viseme.mutable);
-        assert_eq!(viseme.name, "viseme");
-        assert!(!signature.parameters[&SAY_TEXT_PARAM_ID].mutable);
+    fn the_fragment_serves_the_call_s_inputs_by_their_contract_ids() {
+        assert_eq!(
+            say_parameters(),
+            HashMap::from([
+                (say::ids::say::TEXT, "text".to_string()),
+                (say::ids::say::VOICE, "voice".to_string()),
+            ])
+        );
     }
 }

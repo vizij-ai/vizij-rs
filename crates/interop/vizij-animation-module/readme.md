@@ -6,17 +6,28 @@ runs inside any Arora runtime (native, browser, Web Worker).
 
 ## What it is
 
-The animation `Engine` lives in a **guest global** (`lazy_static`, like
-`polly`): a wasm module's `Store`/`Memory` persist across `dispatch`, so the
-engine's state survives between calls — no engine state round-trips through the
-store.
+The module's state — the animation `Engine`, the key-to-track index and the
+transport commands buffered for the next step — is an `AnimationModule`. The
+module has no notion of which engine loaded it: the state is scoped by the
+load. The wasm guest owns one in a **guest global**, in the linear memory of
+the `Store` the executor creates per `load_module` — each engine that loads
+the module gets its own, persisting across `dispatch` calls (no engine state
+round-trips through the data store); the declared functions act on that
+global. A host that links this crate as an rlib
+(`vizij`'s native and browser devices) has no executor to scope it, so it
+builds one `AnimationModule` per `host_module()` — the host-linked
+counterpart of a load — and two devices in one process never share an
+engine.
 
-The boundary types are declared in [`module.yaml`](module.yaml) + the type
-records under [`types/`](types), and the arora-module-authoring `rust` generator
-(0.2.0, ARORA-55) emits the typed `Struct <-> Value::Structure` glue into
-`src/arora_generated/`.
+The module's interface is declared in Rust with
+[`arora-module`](https://crates.io/crates/arora-module): `animation` in
+[`src/lib.rs`](src/lib.rs) pins the module, function and parameter ids, and
+from it come the header a `module.yaml` is written from (`animation::header`),
+the store record, typed client stubs, and the wasm guest's entry points. The
+boundary types derive `AroraType` with the ids and versions of their records.
+There is no `module.yaml`, `build.rs` or generated source in the crate.
 
-### Declared schema (`module.yaml` types)
+### Declared schema
 
 | type | shape |
 | --- | --- |
@@ -25,7 +36,8 @@ records under [`types/`](types), and the arora-module-authoring `rust` generator
 | `Keypoint` | `{ id: str, stamp: f32, value: <dynamic Value>, transitions_in: [TransitionHandle], transitions_out: [TransitionHandle] }` |
 | `TransitionHandle` | `{ x: f32, y: f32 }` — a cubic-bezier timing handle in normalized segment space; a keypoint carries zero or one per side (empty = the engine's default ease) |
 | `TrackOutput` | `{ track_id: str, default_key: str, value: <dynamic Value> }` |
-| `PlayerState` | `{ player: u32, state: str, time_ns: u64, duration_ns: u64, speed: f32 }` — `state` is `"playing" \| "paused" \| "stopped"` |
+| `PlayerState` (record `1.1.0`) | `{ player: u32, state: str, time_ns: u64, duration_ns: u64, speed: f32, name: str, instances: [InstanceState], loop_mode: str }` — `state` is `"playing" \| "paused" \| "stopped"`, as the last `play`, `pause` or `stop` left it, and `speed` the multiplier as `set_speed` set it; `name` is the one `create_player` gave it (empty without one); `loop_mode` is `"once" \| "loop" \| "ping_pong"` |
+| `InstanceState` | `{ instance: u32, anim: u32, weight: f32 }` — an instance on a player, the animation it plays, its blend weight |
 
 A keyframe/output `value` is a **dynamic `Value`** (the `KEY_VALUE_ID` escape
 hatch), so Vizij composites (`Vec3`/`Quat`/`Transform`/`ColorRgba`) ride through
@@ -34,9 +46,32 @@ per-composite type is declared here; the runtime `Value` carries the identity.
 
 ### Exports
 
+Loading and unloading are structural edits, applied immediately:
+
 - `load_animation(clip: AnimationClip) -> u32` — load a clip, return its `AnimId`.
-- `create_player(name: str) -> u32` — return a `PlayerId`.
-- `add_instance(player: u32, anim: u32) -> u32` — return an `InstId`.
+- `reload_animation(anim: u32, clip: AnimationClip) -> bool` — replace a loaded
+  animation's tracks and duration under the same id. Every instance of it
+  stays on its player with its weight and samples the new tracks from the
+  next step, each output naming its new track; the players keep their state,
+  playhead, speed and loop mode. `false`, changing nothing, when `anim` is not
+  loaded.
+- `create_player(name: Option<str>) -> u32` — return a `PlayerId`; the name
+  defaults to empty. A player plays from its creation, at speed 1, looping.
+- `add_instance(player: u32, anim: u32) -> u32` — attach an instance of
+  `anim` to `player`, blending at weight 1, and return its `InstId`.
+- `add_instance_with_weight(player: u32, anim: u32, weight: f32) -> u32` — the
+  same, blending at `weight`. Added at 0, it writes nothing until `set_weight`
+  gives it a weight: a client learns the instance's id only from the reply, so
+  its own `set_weight` lands a step after the instance.
+- `remove_instance(player: u32, instance: u32) -> u32` — 1 when the instance
+  was on the player, 0 otherwise.
+- `remove_player(player: u32) -> bool` — the player and its instances; the
+  animations it played stay loaded.
+- `unload_animation(anim: u32) -> bool` — the animation and every instance of
+  it, on every player.
+
+Per tick and transport:
+
 - `step(dt_ns: u64) -> [TrackOutput]` — advance by the `arora/dt` built-in key
   nanoseconds and return **per-track outputs keyed by track identity**, each
   carrying the track's **default authored key** (`animatable_id`) plus its
@@ -47,16 +82,29 @@ per-composite type is declared here; the runtime `Value` carries the identity.
   `set_loop(player, mode)` (`"once" | "loop" | "ping_pong"`), and
   `set_weight(player, instance, weight)` buffer into the engine's **next**
   `step`, in issue order — the same phase a device applies external calls in.
-  `remove_instance(player, instance)` is a structural edit, applied
-  immediately like `add_instance`.
-- `player_states() -> [PlayerState]` — playback feedback, one entry per
-  player. A **patch**: the vision is state changes as first-class,
-  combinable values the behavior conveys, not a second feedback channel.
+  `play`, `pause` and `stop` set whether a player's time advances; `set_speed`
+  only sets the multiplier it advances at while playing. A player keeps its
+  speed through `pause` and `stop`, so `play` resumes at it; `set_speed`
+  neither resumes a paused player nor pauses a playing one; a `seek` leaves a
+  stopped player paused where it seeks.
+- `player_states() -> [PlayerState]` — one entry per player, in creation
+  order: its name, its playback, its loop mode and its instances. A client that did not
+  load an animation finds it here: Vizij names an animation's player after
+  the animation's id. A **patch**: the vision is state changes as
+  first-class, combinable values the behavior conveys, not a second feedback
+  channel.
+- `bake(anim, frame_rate?, start_time?, end_time?) -> str` and
+  `bake_with_derivatives(…)` — the sampled clip as JSON; the optional window
+  defaults to 60 Hz over the whole clip.
+
+A missing required argument fails the call, naming the parameter. An optional
+one may be left out, sent as `Value::Option(None)`, or sent present — wrapped in
+`Value::Option` or bare.
 
 ## Building & testing
 
 ```sh
-# native logic test (guest global engine + per-track output contract):
+# native logic test (an AnimationModule per test + per-track output contract):
 cargo test -p vizij-animation-module --lib
 
 # build the wasm artifact:
@@ -64,7 +112,8 @@ cargo build -p vizij-animation-module --target wasm32-wasip1
 ```
 
 The host-side end-to-end test (`tests/host_ramp.rs`) loads the built `.wasm`
-into a real Arora engine and proves the `arora_call` boundary. It is
+into a real Arora engine under the declared header and drives it through the
+declaration's client stubs, proving the `arora_call` boundary. It is
 `#[ignore]`d because building the artifact from inside the test deadlocks the
 cargo build lock; pre-build it (the wasm command above), then run with
 `cargo test -p vizij-animation-module --test host_ramp -- --ignored`.

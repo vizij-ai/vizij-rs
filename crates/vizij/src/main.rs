@@ -1,4 +1,4 @@
-//! Vizij: an arora with a head.
+//! Vizij on the desktop: an arora with a head.
 //!
 //! `cargo run -- --glb <face.glb>` opens the Vizij view (Bevy) rendering the
 //! face, driven by an arora device running the face's own graphs (rig +
@@ -6,36 +6,65 @@
 //! offscreen (no window) and writes a PNG instead — the comparison harness
 //! against the web renderer.
 
-#[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
-use anyhow::Context;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use bevy::prelude::*;
 use clap::Parser;
 
-mod animation;
-mod device;
-mod frames;
-mod gaze;
-#[cfg(test)]
-mod memory_tests;
-mod meta;
-#[cfg(all(test, feature = "ros2-dds"))]
-mod ros2_tests;
-mod snapshot;
-// The TTS provider modules share one contract (`tts_api`); the `tts-piper`
-// feature swaps which provider this build registers.
-#[cfg(feature = "tts-piper")]
-mod tts_piper;
-mod view;
-mod viseme;
+mod open;
+
+use vizij::face::{self, FaceConfig};
+use vizij::native::{self, BridgeConfig, Mode, Runtime};
+use vizij::view::{self, frames, snapshot, FaceAssets};
 
 /// Vizij: render a GLB face natively over an arora device.
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Cli {
-    /// Path to the face GLB (with embedded RobotData + VIZIJ_bundle).
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    /// The face GLB (with embedded RobotData + VIZIJ_bundle): a path or an
+    /// `http(s)://` URL. Omitted, the face loaded last time opens again.
+    #[arg(long, short = 'g')]
+    glb: Option<String>,
+
+    /// The local bridge's port (WebSocket, and the control panel on the same
+    /// port).
+    #[arg(long, short = 'p', default_value_t = 9000)]
+    port: u16,
+
+    /// The address the local bridge binds; `0.0.0.0` opens it to the LAN.
+    #[arg(long, default_value = "127.0.0.1")]
+    bind: String,
+
+    /// Don't serve the control panel page on the local bridge's port.
     #[arg(long)]
-    glb: std::path::PathBuf,
+    no_web_control: bool,
+
+    /// Open the window full screen (borderless, on `--display`).
+    #[arg(long, short = 'f')]
+    fullscreen: bool,
+
+    /// The display the window opens on, by index (`list-displays`).
+    #[arg(long, short = 'd')]
+    display: Option<usize>,
+
+    /// The window's width, in logical pixels (default: the face's aspect at
+    /// 720 px high).
+    #[arg(long, short = 'W')]
+    width: Option<u32>,
+
+    /// The window's height, in logical pixels.
+    #[arg(long, short = 'H')]
+    height: Option<u32>,
+
+    /// Open the window without title bar and borders.
+    #[arg(long)]
+    no_decorations: bool,
+
+    /// Keep the window above the others.
+    #[arg(long)]
+    always_on_top: bool,
 
     /// Render one frame offscreen to this PNG and exit (no window).
     #[arg(long)]
@@ -103,17 +132,20 @@ struct Cli {
 
     /// The TF frame published frames are stamped with (`header.frame_id`).
     /// Default: the face's id from its GLB (`metadata.faceId`, e.g.
-    /// `quori_latest`), else the GLB's file stem.
+    /// `quori_latest`), else `face`.
     #[arg(long)]
     frame_id: Option<String>,
 
-    /// Autoplay this motiongraph program id instead of the bundle's own
-    /// `activeMotionGraphId`. Window mode plays the active program by default;
-    /// `--snapshot` stays on the neutral face unless a program is named.
+    /// Run this motiongraph program from launch instead of the bundle's own
+    /// `activeMotionGraphId`: beside the face's graph, as a task run any
+    /// client of the device halts. Window mode runs the active program by
+    /// default; `--snapshot` stays on the neutral face unless a program is
+    /// named.
     #[arg(long)]
     program: Option<String>,
 
-    /// Don't autoplay any program — hold the rig's authored/neutral pose.
+    /// Don't run any program from launch — hold the rig's authored/neutral
+    /// pose.
     #[arg(long)]
     no_autoplay: bool,
 
@@ -133,15 +165,26 @@ struct Cli {
     #[arg(long, num_args = 0..=1, default_missing_value = "")]
     ros2: Option<String>,
 
-    /// Attach the Semio Studio bridge, configured from the environment
-    /// (`DEVICE_OWNERS`, …). Composes with the local bridge.
+    /// Attach the Semio Studio bridge: the device registers under the
+    /// identity kept in the app's data directory, else as the operator
+    /// answers on the terminal (kept for next time), else from the
+    /// environment (`DEVICE_OWNERS`, …). Composes with the local bridge.
     #[cfg(feature = "studio")]
     #[arg(long)]
     studio: bool,
 }
 
+#[derive(clap::Subcommand, Debug)]
+enum Command {
+    /// List the displays, by the index `--display` takes.
+    ListDisplays,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    if let Some(Command::ListDisplays) = cli.command {
+        return list_displays();
+    }
     // In window mode the arora operator flow owns logging (its front end —
     // TUI or headless — installs the log sink); the snapshot harness keeps
     // its own quiet logger.
@@ -155,33 +198,37 @@ fn main() -> Result<()> {
         .map(|kind| kind.trim().to_string())
         .collect();
     let mode = if cli.snapshot.is_some() {
-        device::Mode::Quiet
+        Mode::Quiet
     } else {
-        device::Mode::Operator
+        Mode::Operator
     };
     // Which program plays: an explicit `--program` wins; `--no-autoplay` forces
     // none; otherwise the window autoplays the bundle's active program while the
     // snapshot stays on the deterministic neutral face.
     let program = if cli.no_autoplay {
-        device::ProgramSelect::None
+        face::ProgramSelect::None
     } else if let Some(id) = cli.program.clone() {
-        device::ProgramSelect::Id(id)
+        face::ProgramSelect::Id(id)
     } else if cli.snapshot.is_some() {
-        device::ProgramSelect::None
+        face::ProgramSelect::None
     } else {
-        device::ProgramSelect::Auto
+        face::ProgramSelect::Auto
     };
-    let config = device::FaceConfig {
+    let config = FaceConfig {
         wanted,
         program,
         stage_neutral: !cli.no_stage_neutral,
         ros4hri: !cli.no_ros4hri,
+        speech: Some(speech_provider()),
     };
-    let bridges = device::BridgeConfig {
+    let bridges = BridgeConfig {
+        local: arora::bridge_ws::ServerConfig::with_port(cli.port)
+            .bind_address(cli.bind.clone())
+            .serve_control_panel(!cli.no_web_control),
         #[cfg(any(feature = "ros2-dds", feature = "ros2-zenoh"))]
         ros2: cli.ros2.as_deref().map(parse_ros2).transpose()?,
         #[cfg(feature = "studio")]
-        studio: cli.studio,
+        studio: cli.studio.then(|| data_dir().join("studio-identity.json")),
     };
     // Frames are the ROS4HRI face image, so they follow that exposure unless
     // a rate is given (see `frames::publish_rate`).
@@ -190,10 +237,17 @@ fn main() -> Result<()> {
     #[cfg(not(any(feature = "ros2-dds", feature = "ros2-zenoh")))]
     let ros2 = false;
     let rate_hz = frames::publish_rate(cli.frame_rate, ros2, !cli.no_ros4hri)?;
-    let dev = device::start(&cli.glb, config, bridges, mode)?;
+    let source = match cli.glb.clone() {
+        Some(source) => source,
+        None => remembered_face().ok_or_else(|| {
+            anyhow!("no face: pass --glb <path or URL> (the face loaded last time is remembered)")
+        })?,
+    };
+    let glb = read_face(&source)?;
+    let dev = native::start(&glb, config, bridges, mode)?;
+    remember_face(&source);
     println!(
-        "vizij: {} — {} elements, {} animatables, {} bundle graphs",
-        dev.glb_path,
+        "vizij: {source} — {} elements, {} animatables, {} bundle graphs",
         dev.meta.elements.len(),
         dev.meta.animatables.len(),
         dev.meta.bundle.graphs.len(),
@@ -202,10 +256,10 @@ fn main() -> Result<()> {
         format: cli.frame_format,
         rate_hz,
         fixed_frame_id: cli.frame_id.clone(),
-        face_frame_id: frames::default_frame_id(dev.meta.bundle.face_id.as_deref(), &dev.glb_path),
+        face_frame_id: frames::default_frame_id(&dev.meta),
     };
 
-    let [r, g, b] = device::parse_rgb(&cli.background)?;
+    let [r, g, b] = face::parse_rgb(&cli.background)?;
     let options = view::ViewOptions {
         background: Color::srgb_u8(r, g, b),
         fit: cli.fit,
@@ -213,63 +267,184 @@ fn main() -> Result<()> {
         ambient: cli.ambient,
         unlit: cli.unlit,
     };
-    let device::Device {
-        rig,
+    let Runtime {
         meta,
-        glb_path,
         events,
+        handle,
         ..
     } = dev;
-    let face = view::Face { meta, glb_path };
-    let device_res = view::DeviceRes { rig };
 
     match (&cli.snapshot, cli.headless) {
-        (Some(out), _) => run_snapshot(&cli, face, device_res, options, out),
-        (None, true) => run_headless(&cli.size, face, device_res, options, events, frame_config),
-        (None, false) => run_window(face, device_res, options, events, frame_config),
+        (Some(out), _) => run_snapshot(&cli, events, options, out),
+        (None, true) => run_headless(&cli.size, events, options, frame_config),
+        (None, false) => run_window(&cli, &meta, events, handle, options, frame_config),
     }
+}
+
+/// The app's data directory: the remembered face and the Studio identity.
+fn data_dir() -> std::path::PathBuf {
+    dirs::data_local_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("vizij")
+}
+
+/// The face's bytes: a file, or a URL fetched whole.
+fn read_face(source: &str) -> Result<Vec<u8>> {
+    if source.starts_with("http://") || source.starts_with("https://") {
+        let runtime = tokio::runtime::Runtime::new()?;
+        return runtime.block_on(async {
+            let response = reqwest::get(source)
+                .await
+                .with_context(|| format!("cannot fetch {source}"))?
+                .error_for_status()
+                .with_context(|| format!("cannot fetch {source}"))?;
+            Ok(response.bytes().await?.to_vec())
+        });
+    }
+    std::fs::read(source).with_context(|| format!("cannot read GLB {source}"))
+}
+
+/// The face loaded last time, as `--glb` was given.
+fn remembered_face() -> Option<String> {
+    std::fs::read_to_string(data_dir().join("last-face"))
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn remember_face(source: &str) {
+    let dir = data_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(dir.join("last-face"), source);
+}
+
+/// Print the displays, by the index `--display` takes, and exit. Straight
+/// from winit — the event loop Bevy would open, resumed once with no window,
+/// and left as soon as the monitors are read.
+fn list_displays() -> Result<()> {
+    use winit::application::ApplicationHandler;
+    use winit::event_loop::ActiveEventLoop;
+
+    struct Lister;
+    impl ApplicationHandler for Lister {
+        fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+            let primary = event_loop.primary_monitor();
+            for (index, monitor) in event_loop.available_monitors().enumerate() {
+                let size = monitor.size();
+                println!(
+                    "{index}: {} — {}x{} at {:.0}%{}",
+                    monitor.name().unwrap_or_else(|| "unnamed".to_string()),
+                    size.width,
+                    size.height,
+                    monitor.scale_factor() * 100.0,
+                    if primary.as_ref() == Some(&monitor) {
+                        " (primary)"
+                    } else {
+                        ""
+                    }
+                );
+            }
+            event_loop.exit();
+        }
+        fn window_event(
+            &mut self,
+            _: &ActiveEventLoop,
+            _: winit::window::WindowId,
+            _: winit::event::WindowEvent,
+        ) {
+        }
+    }
+    winit::event_loop::EventLoop::new()?.run_app(&mut Lister)?;
+    Ok(())
+}
+
+/// This build's speech provider: the local Piper module under `tts-piper`,
+/// the cloud provider otherwise, at the deployment `API_URL` names or the
+/// default one.
+#[cfg(not(feature = "tts-piper"))]
+fn speech_provider() -> face::SpeechProvider {
+    let api_base =
+        std::env::var("API_URL").unwrap_or_else(|_| vizij_arora_tts::DEFAULT_API_BASE.to_string());
+    std::sync::Arc::new(move || {
+        vizij_arora_tts::host_module(vizij_arora_tts::Config {
+            api_base: api_base.clone(),
+        })
+    })
+}
+
+#[cfg(feature = "tts-piper")]
+fn speech_provider() -> face::SpeechProvider {
+    std::sync::Arc::new(vizij::modules::tts_piper::host_module)
+}
+
+/// The view over the device's events: the in-memory asset source registered
+/// before the default plugins (which the asset plugin's construction
+/// requires), then the events the device already queued its face on.
+fn view_over(app: &mut App, events: std::sync::mpsc::Receiver<view::ViewEvent>) {
+    FaceAssets::register(app);
+    app.insert_resource(view::ViewEvents(std::sync::Mutex::new(events)));
 }
 
 /// The window size the app opens at: the face's authored aspect at a 720px
 /// height, so it starts letterbox-free (resizes and full screen then follow
 /// the `--fit` policy).
-fn window_resolution(face: &view::Face) -> (u32, u32) {
-    let (_, _, bw, bh) = face.meta.root_bounds.unwrap_or((0.0, 0.0, 5.0, 4.0));
+fn window_resolution(meta: &view::meta::FaceMeta) -> (u32, u32) {
+    let (_, _, bw, bh) = meta.root_bounds.unwrap_or((0.0, 0.0, 5.0, 4.0));
     let height = 720.0_f32;
     let width = (height * bw / bh).clamp(320.0, 1600.0);
     (width.round() as u32, height as u32)
 }
 
 fn run_window(
-    face: view::Face,
-    device_res: view::DeviceRes,
+    cli: &Cli,
+    meta: &view::meta::FaceMeta,
+    events: std::sync::mpsc::Receiver<view::ViewEvent>,
+    handle: native::RuntimeHandle,
     options: view::ViewOptions,
-    events: std::sync::mpsc::Receiver<device::DeviceEvent>,
     frame_config: frames::FrameConfig,
 ) -> Result<()> {
-    let (width, height) = window_resolution(&face);
+    use bevy::window::{MonitorSelection, WindowLevel, WindowMode, WindowPosition};
+
+    let (width, height) = window_resolution(meta);
+    let monitor = match cli.display {
+        Some(index) => MonitorSelection::Index(index),
+        None => MonitorSelection::Primary,
+    };
     let mut app = App::new();
+    view_over(&mut app, events);
     app.add_plugins(
         DefaultPlugins
             .set(WindowPlugin {
                 primary_window: Some(Window {
                     title: "Vizij".to_string(),
-                    resolution: (width, height).into(),
+                    resolution: (cli.width.unwrap_or(width), cli.height.unwrap_or(height)).into(),
+                    mode: if cli.fullscreen {
+                        WindowMode::BorderlessFullscreen(monitor)
+                    } else {
+                        WindowMode::Windowed
+                    },
+                    position: WindowPosition::Centered(monitor),
+                    decorations: !cli.no_decorations,
+                    window_level: if cli.always_on_top {
+                        WindowLevel::AlwaysOnTop
+                    } else {
+                        WindowLevel::Normal
+                    },
                     ..default()
                 }),
                 ..default()
             })
+            // The face is served from memory ([`FaceAssets`]); no `.meta`
+            // file exists to probe for.
             .set(bevy::asset::AssetPlugin {
-                unapproved_path_mode: bevy::asset::UnapprovedPathMode::Allow,
+                meta_check: bevy::asset::AssetMetaCheck::Never,
                 ..default()
             })
             .disable::<bevy::log::LogPlugin>(),
     )
-    .insert_resource(face)
-    .insert_resource(device_res)
     .insert_resource(options)
-    .insert_resource(view::DeviceEvents(std::sync::Mutex::new(events)))
-    .add_plugins(view::ViewPlugin);
+    .add_plugins(view::ViewPlugin)
+    .add_plugins(open::OpenPlugin(handle));
     // Frame publishing works with a window too (not only headless): capture the
     // window and push the frame onto the device's reading feed.
     if frame_config.publishes() {
@@ -277,7 +452,7 @@ fn run_window(
             .add_plugins(frames::FramesPlugin);
     }
     app.run();
-    restore_terminal();
+    native::restore_terminal();
     Ok(())
 }
 
@@ -287,10 +462,8 @@ fn run_window(
 /// as usual (bridges attached), so frames fan out over every bridge.
 fn run_headless(
     size: &str,
-    face: view::Face,
-    device_res: view::DeviceRes,
+    events: std::sync::mpsc::Receiver<view::ViewEvent>,
     options: view::ViewOptions,
-    events: std::sync::mpsc::Receiver<device::DeviceEvent>,
     frame_config: frames::FrameConfig,
 ) -> Result<()> {
     use bevy::app::ScheduleRunnerPlugin;
@@ -298,6 +471,7 @@ fn run_headless(
 
     let (width, height) = parse_size(size)?;
     let mut app = App::new();
+    view_over(&mut app, events);
     app.add_plugins(
         DefaultPlugins
             .set(WindowPlugin {
@@ -305,8 +479,10 @@ fn run_headless(
                 exit_condition: bevy::window::ExitCondition::DontExit,
                 ..default()
             })
+            // The face is served from memory ([`FaceAssets`]); no `.meta`
+            // file exists to probe for.
             .set(bevy::asset::AssetPlugin {
-                unapproved_path_mode: bevy::asset::UnapprovedPathMode::Allow,
+                meta_check: bevy::asset::AssetMetaCheck::Never,
                 ..default()
             })
             .disable::<bevy::winit::WinitPlugin>()
@@ -315,10 +491,7 @@ fn run_headless(
     .add_plugins(ScheduleRunnerPlugin::run_loop(
         std::time::Duration::from_secs_f64(1.0 / 60.0),
     ))
-    .insert_resource(face)
-    .insert_resource(device_res)
     .insert_resource(options)
-    .insert_resource(view::DeviceEvents(std::sync::Mutex::new(events)))
     .add_plugins(view::ViewPlugin);
 
     // The offscreen image the view camera renders into (COPY_SRC so the frame
@@ -339,46 +512,26 @@ fn run_headless(
         );
     }
     app.run();
-    restore_terminal();
+    native::restore_terminal();
     Ok(())
-}
-
-/// The device's terminal UI runs on the worker thread; returning from a Bevy run
-/// ends the process without unwinding that thread, which would leave the terminal
-/// in raw mode on the alternate screen. Undo its setup (arora's `restore_terminal`
-/// recipe) on the way out.
-fn restore_terminal() {
-    if std::io::IsTerminal::is_terminal(&std::io::stdout()) {
-        use crossterm::event::DisableMouseCapture;
-        use crossterm::terminal::{disable_raw_mode, LeaveAlternateScreen};
-        let _ = disable_raw_mode();
-        let _ = crossterm::execute!(std::io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
-    }
 }
 
 fn run_snapshot(
     cli: &Cli,
-    face: view::Face,
-    device_res: view::DeviceRes,
+    events: std::sync::mpsc::Receiver<view::ViewEvent>,
     options: view::ViewOptions,
     out: &std::path::Path,
 ) -> Result<()> {
     let (width, height) = parse_size(&cli.size)?;
     let mut app = App::new();
+    view_over(&mut app, events);
     app.add_plugins(snapshot::SnapshotPlugin { width, height })
-        .insert_resource(face)
-        .insert_resource(device_res)
         .insert_resource(options)
         .add_plugins(view::ViewPlugin);
 
     // Ready once the scene is indexed (bindings joined); settle ~1 s of frames
     // so the device's pose has flowed through the HAL onto the scene.
-    let img = snapshot::capture(&mut app, width, height, 60, |app| {
-        app.world()
-            .get_resource::<view::BindingIndex>()
-            .map(|i| i.ready)
-            .unwrap_or(false)
-    })?;
+    let img = snapshot::capture(&mut app, width, height, 60, view::all_faces_ready)?;
     snapshot::save_png(&img, out)?;
     println!("snapshot written to {}", out.display());
     Ok(())

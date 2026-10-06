@@ -4,6 +4,13 @@ All notable changes to `vizij-api-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-09-26
+
+### Changed
+
+- **Breaking:** depends on arora-types 3, whose `Value` this crate converts to
+  and from.
+
 ## [1.1.0] - 2026-09-10
 
 ### Changed

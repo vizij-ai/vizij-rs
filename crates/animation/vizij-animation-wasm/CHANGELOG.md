@@ -4,7 +4,16 @@ All notable changes to `vizij-animation-wasm`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.0.0] - 2026-10-05
+
+### Breaking
+
+- Built on vizij-animation-core 2.0.0: a player's playback state is
+  independent of its speed. `Pause` and `Stop` keep the speed and `Play`
+  resumes at it; `SetSpeed` only sets the multiplier (it neither resumes a
+  paused player nor pauses a playing one at 0). `list_players` reports
+  `state` as the last `Play`, `Pause` or `Stop` left it and `speed` as set;
+  a `Seek` leaves a stopped player `Paused`.
 
 ### Changed
 

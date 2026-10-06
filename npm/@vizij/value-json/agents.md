@@ -6,4 +6,4 @@
 - **Docs**: Keep the README current (conversion matrix, tree-shaking tips, shape metadata guidance).
 - **Dependencies**: Mirrors `vizij-api-core`; coordinate structural changes with the Rust crate.
 - **Common work**: Add coercion helpers, update union types, ensure TypeScript definitions stay aligned with Rust schema.
-- **Release**: Queue a changeset, get it on `main`, then push an `npm-pub-*` tag to trigger the CI release (runs `pnpm ci:version` + `pnpm ci:publish`).
+- **Release**: Add a changeset (`pnpm changeset`) in your PR. Once it merges, CI opens or updates the Version Packages PR; merging that publishes the package.

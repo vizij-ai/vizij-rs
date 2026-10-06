@@ -11,7 +11,9 @@
 //! - **Expression** — a non-empty `expression/name` one-hots the named weight;
 //!   otherwise `valence`/`arousal` blend the named weights by proximity to
 //!   each expression's circumplex anchor. Weights are smoothed and written to
-//!   `standard/vizij/expression/<name>`.
+//!   `standard/vizij/expression/<name>` for ROS4HRI's names
+//!   ([`ROS4HRI_EXPRESSION_NAMES`]). The standard's expressions beyond them
+//!   have no ROS4HRI name, so the mapping leaves them to other writers.
 //! - **Gaze** — `gaze/target` (vec3, meters, face frame: x forward, y left,
 //!   z up) maps to per-eye positions with vergence, the incumbent ±0.78 rad →
 //!   ±1 normalization, and a center fallback for targets at or behind the
@@ -22,7 +24,9 @@
 //!   `mouth/morph/jaw_open` control.
 //! - **Blink** — an idle generator (≈8 s cycle, deterministically jittered,
 //!   0.2 s parabolic pulse) drives the eyelids, inhibited while the eyes are
-//!   commanded closed or the face is asleep.
+//!   commanded closed or the face is asleep. The standard's
+//!   `standard/vizij/blink` is not written: that key is for a caller's
+//!   blinks, which the face layers over these lids.
 //!
 //! All continuous channels pass through a ~200 ms exponential smoother (the
 //! incumbent ROS4HRI face's dynamics). The graph is generated data: it
@@ -33,7 +37,7 @@
 use serde_json::{json, Value as Json};
 
 use crate::graph_builder::GraphBuilder;
-use crate::standard::{self, EXPRESSION_NAMES, FACE_CONTROLS};
+use crate::standard::{self, FACE_CONTROLS, ROS4HRI_EXPRESSION_NAMES};
 
 /// Source id of the composed mapping (node ids get `ros4hri::` prefixes).
 pub const ROS4HRI_SOURCE_ID: &str = "ros4hri";
@@ -55,7 +59,7 @@ pub fn au_key(code: u8) -> String {
 
 /// Circumplex anchor (valence, arousal) per expression name, used to blend
 /// the named weights when only `valence`/`arousal` are commanded. Order
-/// matches [`EXPRESSION_NAMES`].
+/// matches [`ROS4HRI_EXPRESSION_NAMES`].
 #[rustfmt::skip]
 pub const EXPRESSION_ANCHORS: [(f64, f64); 25] = [
     (0.0, 0.0),     // neutral
@@ -194,7 +198,7 @@ fn build(rig_prefix: &str) -> (String, Json) {
     let rest = g.sub("expression/affect/rest", &one, &active);
 
     // Per anchor, the raw kernel weight max(0, 1 − dist² / R²).
-    let kernels: Vec<String> = EXPRESSION_NAMES
+    let kernels: Vec<String> = ROS4HRI_EXPRESSION_NAMES
         .iter()
         .zip(EXPRESSION_ANCHORS)
         .map(|(expr, (av, aa))| {
@@ -234,7 +238,7 @@ fn build(rig_prefix: &str) -> (String, Json) {
     let denominator = g.max("expression/kernel/denominator", &sum, &eps);
 
     let mut asleep_weight = None;
-    for (expr, kernel) in EXPRESSION_NAMES.iter().zip(&kernels) {
+    for (expr, kernel) in ROS4HRI_EXPRESSION_NAMES.iter().zip(&kernels) {
         let id = |step: &str| format!("expression/{expr}/{step}");
         let share = g.div(&id("share"), kernel, &denominator);
         let blend = if *expr == "neutral" {
@@ -391,7 +395,7 @@ fn build(rig_prefix: &str) -> (String, Json) {
     let gated = g.select("blink/pulse/gated", &in_window, &parabola, &zero);
     let pulse = g.clamp("blink/pulse", &gated, 0.0, 1.0);
     // Inhibit while the eyes are commanded closed or the face is asleep.
-    let asleep = asleep_weight.expect("asleep is in EXPRESSION_NAMES");
+    let asleep = asleep_weight.expect("asleep is in ROS4HRI_EXPRESSION_NAMES");
     let commanded = g.max("blink/commanded", &eyes_closed, &asleep);
     let open_share = g.sub("blink/open_share", &one, &commanded);
     let idle = g.mul("blink/idle", &pulse, &open_share);
@@ -438,7 +442,7 @@ mod tests {
             .filter(|n| n["type"] == "output")
             .filter_map(|n| n["params"]["path"].as_str())
             .collect();
-        for expr in EXPRESSION_NAMES {
+        for expr in ROS4HRI_EXPRESSION_NAMES {
             let path = format!("rig/test_face/standard/vizij/expression/{expr}");
             assert!(paths.contains(&path.as_str()), "missing {path}");
         }
@@ -490,7 +494,7 @@ mod tests {
 
     #[test]
     fn anchors_pair_with_names() {
-        assert_eq!(EXPRESSION_ANCHORS.len(), EXPRESSION_NAMES.len());
+        assert_eq!(EXPRESSION_ANCHORS.len(), ROS4HRI_EXPRESSION_NAMES.len());
         // Neutral anchors the origin so idle valence/arousal rests neutral.
         assert_eq!(EXPRESSION_ANCHORS[0], (0.0, 0.0));
     }

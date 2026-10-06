@@ -2,18 +2,27 @@ name: publish-crates
 
 # Publishes the publishable Rust crates to crates.io, in dependency order,
 # skipping any crate whose current version is already on the index — so a run
-# is always safe to repeat.
+# is always safe to repeat, and a version bump merged to main publishes itself.
 #
 # Authentication is crates.io Trusted Publishing (OIDC, no long-lived token):
 # every published crate carries a Trusted Publisher config on crates.io naming
 # this repository and this workflow file. A brand-new crate needs its config
 # created (as a pending publisher) before its first publish.
 on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/**/Cargo.toml"
+      - ".github/workflows/publish-crates.yml"
   workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
+
+concurrency:
+  group: publish-crates
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -21,6 +30,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
+      # `cargo publish` builds each crate to verify it; vizij-arora-tts plays
+      # audio through rodio, whose ALSA backend needs the system headers.
+      - name: Install system dependencies (alsa dev)
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
       - uses: rust-lang/crates-io-auth-action@v1
         id: auth
       - name: Publish (ordered, skip-if-published)

@@ -1,42 +1,37 @@
-//! The gaze skill's exterior contract: the described `look_at` function a
-//! device registers, and the fragment that implements it.
+//! The gaze skill: the look_at contract's re-export and the fragment that
+//! implements it.
 //!
 //! The behavior is data — `vizij-arora-host`'s look_at skill fragment,
-//! grafted per run by the interpreter ([`TaskFragment`]) — so the module
-//! here carries only the contract: the described signature a bridge
-//! discovers (DescribeMethods) and an exposure profile binds to the ROS4HRI
-//! `/skill/look_at` action (`interaction_skills/LookAt`). Signature and
-//! fragment derive from one parameter list
-//! ([`skills::LOOK_AT_PARAMS`](vizij_arora_host::skills::LOOK_AT_PARAMS)),
-//! so they cannot drift.
+//! grafted per run by the interpreter ([`TaskFragment`]). No module
+//! implements look_at: the fragment carries the contract's description, so
+//! the interpreter describes the method — what a bridge discovers
+//! (DescribeMethods) and an exposure profile binds to the ROS4HRI
+//! `/skill/look_at` action (`interaction_skills/LookAt`) — and a remote
+//! spawns it through the interpreter module.
 
 use std::collections::HashMap;
 
-use arora_behavior_tree_types::STATUS_ENUMERATION_ID;
-use arora_types::gen_uuid_from_str;
-use arora_types::record::module::frozen::{Function, Parameter};
-use arora_types::record::ty::{FrozenScalar, FrozenTy, PrimitiveKind};
-use arora_types::record::{FrozenReference, Version};
+use arora_types::record::module::frozen;
 use uuid::Uuid;
 use vizij_arora_host::skills;
 
 use crate::TaskFragment;
 
-/// The gaze module's id on the device.
-pub fn module_id() -> Uuid {
-    gen_uuid_from_str("gaze-module")
-}
-
-/// The look_at function's id.
-pub fn look_at_id() -> Uuid {
-    gen_uuid_from_str(skills::LOOK_AT_FUNCTION)
-}
+pub use vizij_arora_host::skills::{look_at, LookAt};
 
 /// The look_at task fragment, parsed from the shipped asset — what the
 /// device's interpreter grafts per goal.
 pub fn look_at_fragment() -> TaskFragment {
     TaskFragment::parse(skills::LOOK_AT_JSON, look_at_parameters())
         .expect("the shipped look_at asset parses")
+        .described(look_at_description())
+}
+
+/// look_at as the contract describes it.
+fn look_at_description() -> frozen::Export {
+    look_at::descriptions()
+        .remove(&look_at::ids::look_at::FUNCTION)
+        .expect("the look_at contract declares look_at")
 }
 
 /// The look_at fragment the device registers, honoring the face's pinned
@@ -45,14 +40,11 @@ pub fn look_at_fragment() -> TaskFragment {
 /// embedded fragment that does not hold the task contract is refused loudly
 /// and the built-in serves.
 pub fn look_at_fragment_from(embedded: &[(String, serde_json::Value)]) -> TaskFragment {
-    if let Some((_, spec)) = embedded
-        .iter()
-        .find(|(id, _)| id == skills::LOOK_AT_FUNCTION)
-    {
+    if let Some((_, spec)) = embedded.iter().find(|(id, _)| id == look_at::NAME) {
         match TaskFragment::parse(&spec.to_string(), look_at_parameters()) {
             Ok(fragment) => {
                 log::info!("look_at: the face's embedded skill fragment overrides the built-in");
-                return fragment;
+                return fragment.described(look_at_description());
             }
             Err(e) => log::warn!("embedded look_at fragment refused ({e}); the built-in serves"),
         }
@@ -60,44 +52,58 @@ pub fn look_at_fragment_from(embedded: &[(String, serde_json::Value)]) -> TaskFr
     look_at_fragment()
 }
 
-/// The parameter `id → name` map shared by the fragment and the signature.
+/// The parameter `id → name` map the fragment serves as `task/<name>`
+/// inputs: every parameter of the call.
 pub fn look_at_parameters() -> HashMap<Uuid, String> {
-    skills::LOOK_AT_PARAMS
-        .iter()
-        .map(|name| (gen_uuid_from_str(name), name.to_string()))
-        .collect()
+    [
+        look_at::ids::look_at::POLICY,
+        look_at::ids::look_at::TARGET,
+        look_at::ids::look_at::FRAME,
+    ]
+    .into_iter()
+    .zip(skills::LOOK_AT_PARAMS)
+    .map(|(id, name)| (id, name.to_string()))
+    .collect()
 }
 
-/// The described look_at signature: `(policy, target, frame)` returning the
-/// behavior `Status` — the task-run marker a bridge exposes as an action.
-pub fn look_at_signature() -> Function {
-    let kinds = [
-        PrimitiveKind::String,   // policy
-        PrimitiveKind::ArrayF32, // target (vec3, meters, face frame)
-        PrimitiveKind::String,   // frame
-    ];
-    let mut parameters = HashMap::new();
-    let mut parameter_ordering = Vec::new();
-    for (name, kind) in skills::LOOK_AT_PARAMS.iter().zip(kinds) {
-        let id = gen_uuid_from_str(name);
-        parameter_ordering.push(id);
-        parameters.insert(
-            id,
-            Parameter {
-                name: name.to_string(),
-                ty: FrozenTy::from(kind),
-                mutable: false,
-            },
-        );
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arora_behavior::BehaviorInterpreter;
+
+    /// The fragment, built-in or the face's own, carries look_at's
+    /// description: the interpreter describes the method.
+    #[test]
+    fn the_interpreter_describes_look_at_from_its_fragment() {
+        let embedded = vec![(
+            look_at::NAME.to_string(),
+            serde_json::from_str(skills::LOOK_AT_JSON).unwrap(),
+        )];
+        for fragment in [look_at_fragment(), look_at_fragment_from(&embedded)] {
+            let mut graph = crate::ProcessingGraph::from_spec(
+                crate::parse_spec(r#"{ "nodes": [], "edges": [] }"#).unwrap(),
+            )
+            .unwrap();
+            graph.set_task_fragment(look_at::ids::look_at::FUNCTION, fragment);
+            let described = graph.described_methods();
+            // look_at, beside the interpreter's own run_behavior.
+            assert_eq!(described.len(), 2);
+            assert_eq!(
+                described[&look_at::ids::look_at::FUNCTION],
+                look_at_description()
+            );
+        }
     }
-    Function {
-        parameters,
-        parameter_ordering,
-        return_ty: FrozenTy::FrozenScalar(FrozenScalar {
-            reference: FrozenReference {
-                id: STATUS_ENUMERATION_ID,
-                version: Version::parse("1.0.0").expect("a valid version"),
-            },
-        }),
+
+    #[test]
+    fn the_fragment_serves_the_call_s_parameters_by_their_contract_ids() {
+        assert_eq!(
+            look_at_parameters(),
+            HashMap::from([
+                (look_at::ids::look_at::POLICY, "policy".to_string()),
+                (look_at::ids::look_at::TARGET, "target".to_string()),
+                (look_at::ids::look_at::FRAME, "frame".to_string()),
+            ])
+        );
     }
 }

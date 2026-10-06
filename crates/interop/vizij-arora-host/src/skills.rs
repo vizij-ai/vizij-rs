@@ -3,9 +3,11 @@
 //! A skill fragment is the *implementation* of a device task-run method as
 //! asset content — a graph spec the interpreter grafts per run
 //! (`vizij-arora-behavior`'s task-fragment registry) instead of calling host
-//! code. The exterior contract (the method's described signature, and the
-//! ROS 2 action an exposure profile binds it to) lives with the device and
-//! the bridge; this module owns only the behavior.
+//! code. Each skill's exterior contract — its function's id, name and
+//! signature — is declared here once, as a trait ([`LookAt`], [`PlayViseme`],
+//! [`Say`]): the device describes the method from it, a module implementing
+//! it is registered under the implementer's own module id, and an exposure
+//! profile binds a ROS 2 action to the method by its name.
 //!
 //! Fragments speak a placeholder-path convention the interpreter rewrites to
 //! each run's key prefix at graft time:
@@ -27,24 +29,36 @@
 //! ([`standard::VISEME`]) and the run's feedback follow.
 
 use arora_behavior::{
-    STATUS_ENUMERATION_ID, STATUS_FAILURE_VARIANT_ID, STATUS_RUNNING_VARIANT_ID,
+    Status, STATUS_ENUMERATION_ID, STATUS_FAILURE_VARIANT_ID, STATUS_RUNNING_VARIANT_ID,
     STATUS_SUCCESS_VARIANT_ID,
 };
 use serde_json::{json, Value as Json};
 use uuid::Uuid;
-use vizij_api_core::value::{Enumeration, Value};
+use vizij_api_core::value::{Enumeration, Structure, StructureField, Value};
 
 use crate::graph_builder::GraphBuilder;
 use crate::ros4hri::{GAZE_FRAME_KEY, GAZE_TARGET_KEY};
 use crate::standard::{self, VISEME_SHAPES};
 
-/// The look_at method's parameters, in declared order — the fragment's
-/// placeholder inputs and the described signature's parameter names, from one
-/// list so the contract and the behavior cannot drift.
-pub const LOOK_AT_PARAMS: [&str; 3] = ["policy", "target", "frame"];
+/// The gaze skill: `look_at` directs the gaze at `target`, a point in
+/// `frame`, under `policy`. Its fragment ([`generate_look_at`]) implements
+/// it; the module a device registers for it only fails, and exists so the
+/// method is described.
+#[arora_module::contract(name = "look_at")]
+pub trait LookAt {
+    #[export(id = "21566ce4-59a5-43a8-bf6d-1ea9e205415e")]
+    fn look_at(
+        &mut self,
+        #[param(id = "3a8db272-79a9-4cd3-861a-9fe3b485a8a9")] policy: String,
+        #[param(id = "5984f824-c4b8-4bdc-8706-187ac05f3bab")] target: Vec<f32>,
+        #[param(id = "b8211f70-7626-47d9-8815-c59357a81d5f")] frame: String,
+    ) -> Status;
+}
 
-/// The look_at method's name, as the device describes it.
-pub const LOOK_AT_FUNCTION: &str = "look_at";
+/// The look_at method's parameters, in declared order: the fragment's
+/// placeholder inputs, and the parameter names of [`LookAt::look_at`] (a test
+/// holds the two equal).
+pub const LOOK_AT_PARAMS: [&str; 3] = ["policy", "target", "frame"];
 
 /// How long a `glance`/`reset` fixation holds before the run succeeds,
 /// seconds.
@@ -60,32 +74,52 @@ const ROS_ENOTSUP: u8 = 134;
 /// sync with [`generate_look_at`].
 pub const LOOK_AT_JSON: &str = include_str!("../skills/look_at.json");
 
-/// The play_viseme method's parameters: the viseme shape (one of
-/// [`VISEME_SHAPES`]) and the weight it is driven to, [0, 1].
-pub const PLAY_VISEME_PARAMS: [&str; 2] = ["shape", "weight"];
+/// The viseme skill: `play_viseme` plays one viseme `shape` (one of
+/// [`VISEME_SHAPES`]) through the lipsync envelope, driven to `weight` in
+/// `[0, 1]`. Its fragment ([`generate_play_viseme`]) implements it; the
+/// module a device registers for it only fails, and exists so the method is
+/// described.
+#[arora_module::contract(name = "play_viseme")]
+pub trait PlayViseme {
+    #[export(id = "43747a8e-2f6c-42ae-9d14-d440c2195b2f")]
+    fn play_viseme(
+        &mut self,
+        #[param(id = "da9fb9bc-12f7-486b-a65b-7ada44eb15f6")] shape: String,
+        #[param(id = "2055ee33-cdc7-4eb0-a04e-dc49d9314a61")] weight: f32,
+    ) -> Status;
+}
 
-/// The play_viseme method's name, as the device describes it.
-pub const PLAY_VISEME_FUNCTION: &str = "play_viseme";
+/// The play_viseme method's parameters, in declared order: the fragment's
+/// placeholder inputs, and the parameter names of
+/// [`PlayViseme::play_viseme`] (a test holds the two equal).
+pub const PLAY_VISEME_PARAMS: [&str; 2] = ["shape", "weight"];
 
 /// The canonical play_viseme fragment asset; regenerate with
 /// `vizij-bundle export-skill play_viseme`.
 pub const PLAY_VISEME_JSON: &str = include_str!("../skills/play_viseme.json");
 
-/// The say method's parameters: the text to speak and the voice.
+/// The speech skill: `say` speaks `text` in `voice` (the provider's own when
+/// `None`) and streams the viseme at the audio playhead — one of
+/// [`VISEME_SHAPES`] — through the mutable `viseme`. Each text-to-speech
+/// provider implements it under its own module id, and is re-invoked each
+/// tick while `Running` (the poll-on-tick contract). The say fragment
+/// ([`generate_say`]) hosts the call and drives the lips from the streamed
+/// viseme.
+#[arora_module::contract(name = "say")]
+pub trait Say {
+    #[export(id = "77bf2798-e7ce-47c6-a45c-3c2e9ba1837d")]
+    fn say(
+        &mut self,
+        #[param(id = "881dc182-d4ba-4ea0-9e81-f4eddab6f669")] text: String,
+        #[param(id = "f56ca142-db46-4c58-bc44-7896c4b54d5c")] voice: Option<String>,
+        #[param(id = "a1fbf58b-bf66-44a6-a503-9d9078ee5755")] viseme: &mut String,
+    ) -> Status;
+}
+
+/// The say method's inputs, in declared order: the fragment's placeholder
+/// inputs, and the leading parameter names of [`Say::say`] (a test holds the
+/// two equal) — its `viseme` is an output.
 pub const SAY_PARAMS: [&str; 2] = ["text", "voice"];
-
-/// The say method's name, as the device describes it.
-pub const SAY_FUNCTION: &str = "say";
-
-/// The say contract's ids — identical across the text-to-speech providers,
-/// so a behavior references `say` without caring which provider a build
-/// registered. The fragment hosts the module call under [`SAY_ID`] and reads
-/// the viseme the provider streams through its mutable parameter
-/// [`SAY_VISEME_PARAM_ID`].
-pub const SAY_ID: Uuid = uuid::uuid!("77bf2798-e7ce-47c6-a45c-3c2e9ba1837d");
-pub const SAY_TEXT_PARAM_ID: Uuid = uuid::uuid!("881dc182-d4ba-4ea0-9e81-f4eddab6f669");
-pub const SAY_VOICE_PARAM_ID: Uuid = uuid::uuid!("f56ca142-db46-4c58-bc44-7896c4b54d5c");
-pub const SAY_VISEME_PARAM_ID: Uuid = uuid::uuid!("a1fbf58b-bf66-44a6-a503-9d9078ee5755");
 
 /// The rest token every viseme player writes when nothing is speaking — the
 /// `sil` shape of [`VISEME_SHAPES`].
@@ -471,22 +505,32 @@ pub fn generate_play_viseme() -> Json {
 /// Regenerate the say fragment from first principles — the export path
 /// behind the canonical asset.
 ///
-/// The run hosts the device's `say` module call ([`SAY_ID`]) on the run's
-/// own argument bundle (`task/update`, live-updatable) and drives the lips
-/// from the viseme the provider streams through its mutable parameter — the
-/// lipsync driver at full weight, so the current viseme's shape is on and
-/// the others fade. The run reports the call's status as its own once the
-/// call has ended and the lips have settled; until then it is running.
+/// The run hosts the device's [`Say::say`] call on the run's own argument
+/// bundle (`task/update`, live-updatable), with the viseme it passes in
+/// stated as [`SILENCE_VISEME`], and drives the lips from the viseme the
+/// provider streams back — the lipsync driver at full weight, so the current
+/// viseme's shape is on and the others fade. The run reports the call's
+/// status as its own once the call has ended and the lips have settled; until
+/// then it is running.
 pub fn generate_say() -> Json {
     let g = &mut GraphBuilder::new();
     let args = g.input("in/args", "task/update", Json::Null);
+    let initial_viseme = serde_json::to_value(Value::Structure(Structure {
+        id: say::ids::say::FUNCTION,
+        fields: vec![StructureField {
+            id: say::ids::say::VISEME,
+            value: Box::new(Value::String(SILENCE_VISEME.to_string())),
+        }],
+    }))
+    .expect("an argument bundle serializes");
     // The run's first keyed `mutated` slot is the provider's viseme parameter.
     let run = g.node(
         "say/call",
         "taskrun",
         json!({
-            "function": SAY_ID.to_string(),
-            "record_keys": [SAY_VISEME_PARAM_ID.to_string()]
+            "function": say::ids::say::FUNCTION.to_string(),
+            "record_keys": [say::ids::say::VISEME.to_string()],
+            "value": initial_viseme
         }),
     );
     g.edge(&args, &run, "args");
@@ -530,8 +574,9 @@ pub const SKILL_KIND: &str = "skill";
 /// A skill in the shipped registry: its identity, the contract's parameter
 /// names, and the fragment asset behind it.
 pub struct Skill {
-    /// Registry id — the described function name, also the id everywhere a
-    /// user opts in (bundle graph ids, npm lookups).
+    /// Registry id — the skill contract's name, which is also its function's
+    /// (the described method name), and the id everywhere a user opts in
+    /// (bundle graph ids, npm lookups).
     pub id: &'static str,
     pub title: &'static str,
     pub description: &'static str,
@@ -545,7 +590,7 @@ pub struct Skill {
 /// Every skill Vizij ships.
 pub const SKILLS: [Skill; 3] = [
     Skill {
-        id: LOOK_AT_FUNCTION,
+        id: look_at::NAME,
         title: "Look At",
         description: "The ROS4HRI gaze skill (interaction_skills/LookAt on /skill/look_at): \
                       tracks a target on the standard gaze surface until cancelled, holds a \
@@ -555,7 +600,7 @@ pub const SKILLS: [Skill; 3] = [
         asset_json: LOOK_AT_JSON,
     },
     Skill {
-        id: PLAY_VISEME_FUNCTION,
+        id: play_viseme::NAME,
         title: "Play Viseme",
         description: "Plays one viseme shape of the face standard's 15-shape set at a weight, \
                       through the lipsync envelope (ramp in, hold, ramp out, about half a \
@@ -564,7 +609,7 @@ pub const SKILLS: [Skill; 3] = [
         asset_json: PLAY_VISEME_JSON,
     },
     Skill {
-        id: SAY_FUNCTION,
+        id: say::NAME,
         title: "Say",
         description: "Speaks a text: hosts the device's text-to-speech `say` call and drives \
                       the lips from the viseme it streams, through the same lipsync driver as \
@@ -614,6 +659,42 @@ pub fn skills_json() -> Json {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arora_types::record::module::frozen::{ExportKind, Module};
+
+    /// A contract's one function: its name and parameter names, in order.
+    fn declared(record: Module, function: Uuid) -> (String, Vec<String>) {
+        let export = &record.exports[&function];
+        let ExportKind::Function(signature) = &export.kind;
+        let parameters = signature
+            .parameter_ordering
+            .iter()
+            .map(|id| signature.parameters[id].name.clone())
+            .collect();
+        (export.name.clone(), parameters)
+    }
+
+    /// Each skill's contract is named after its one function, which the
+    /// registry and the ROS profile name the skill by, and the fragment's
+    /// inputs are the function's parameters.
+    #[test]
+    fn each_contract_declares_the_skill_s_method() {
+        let parent = Uuid::nil();
+        let (name, parameters) = declared(look_at::record(parent), look_at::ids::look_at::FUNCTION);
+        assert_eq!(name, look_at::NAME);
+        assert_eq!(parameters, LOOK_AT_PARAMS);
+
+        let (name, parameters) = declared(
+            play_viseme::record(parent),
+            play_viseme::ids::play_viseme::FUNCTION,
+        );
+        assert_eq!(name, play_viseme::NAME);
+        assert_eq!(parameters, PLAY_VISEME_PARAMS);
+
+        let (name, parameters) = declared(say::record(parent), say::ids::say::FUNCTION);
+        assert_eq!(name, say::NAME);
+        assert_eq!(parameters, ["text", "voice", "viseme"]);
+        assert_eq!(parameters[..SAY_PARAMS.len()], SAY_PARAMS);
+    }
 
     /// The committed asset must equal what the generator produces — otherwise
     /// `export-skill` was not re-run after editing the builder. Regenerate
@@ -701,7 +782,8 @@ mod tests {
             .as_array()
             .unwrap()
             .iter()
-            .any(|n| n["type"] == "taskrun" && n["params"]["function"] == SAY_ID.to_string()));
+            .any(|n| n["type"] == "taskrun"
+                && n["params"]["function"] == say::ids::say::FUNCTION.to_string()));
     }
 
     /// The fragment holds the placeholder contract the interpreter grafts

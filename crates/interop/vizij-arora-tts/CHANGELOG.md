@@ -4,6 +4,79 @@ All notable changes to `vizij-arora-tts`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [5.0.0] - 2026-10-05
+
+### Breaking
+
+- Built on vizij-arora-behavior 4 (vizij-arora-host 5): the say contract
+  re-exported here (`say`, `Say`, `SILENCE_VISEME`) is vizij-arora-behavior
+  4's, so it does not unify with that of a crate built on
+  vizij-arora-behavior 3.
+
+## [4.0.0] - 2026-09-28
+
+### Breaking
+
+- The provider implements the say contract, `Say`, and the module is
+  `HostModule::from_exports(MODULE_ID, say::exports(provider))`. The crate
+  re-exports `say`, `Say` and `SILENCE_VISEME` in place of `say_signature` and
+  the `SAY_*` ids. A call without `text` or `viseme` fails, where it used to
+  return a failure status. Depends on arora-engine 5.1 and arora-behavior 9.
+- `host_module` takes a `Config`: the deployment (`api_base`, no more
+  `API_URL` read inside the crate) and, in the browser, the page's playback
+  hook. The module keeps its runs in the closure, not in a process-wide map.
+- `follow`, `Pulse` and the playback pieces changed shape: `Pulse` is a value
+  (`new`, `beat`, `since`, `halt_bound`), `cues` maps marks to `Cue`s,
+  `SpeechMark` is public and serializable.
+- The halt bound follows a slow ticker: `IDLE_STOP`, or `HALT_TICKS` (4) of
+  the tick interval when the ticks come slower than that — a page at a few
+  frames a second ticks hundreds of milliseconds apart, and one missed tick
+  is not a halt. The interval is the ticker's, learned across runs
+  (`Pulse::sharing_interval`) so a new run is judged right from its first
+  tick. The page's player keeps the same rule.
+
+### Added
+
+- An argument reads the same whichever form an optional takes: a bare value,
+  or one wrapped in `Value::Option` (arora-types 3's optional form). A caller
+  that sends no voice, or `None`, gets the default — what `voice` will be once
+  the say contract declares it optional (VIZ-163).
+- The browser producer (`wasm32`): a `spawn_local` future fetches and hands
+  the page's `play(audioBytes, marks) -> playhead()` hook the audio and the
+  marks; the tick polls the playhead and maps the marks to the shape. The
+  page's player enforces the halt bound: a playhead not polled for
+  `IDLE_STOP` stops the audio. `synthesize` is public and the same on every
+  target.
+- `host_module_with_synth` for tests: a scripted synthesizer the browser
+  producer awaits.
+- The wasm-bindgen tests (`tests/browser.rs`, `wasm-pack test --headless
+  --chrome`): the visemes at the page's playhead, a failing playback.
+
+## [3.0.0] - 2026-09-26
+
+### Changed
+
+- **Breaking:** depends on arora-types 3, arora-engine 5, vizij-graph-core 2 and
+  vizij-arora-behavior 2.
+
+## [2.1.0] - 2026-09-19
+
+### Changed
+
+- A halt is silence: the interpreter stops re-invoking `say`, nothing in the
+  module ABI tells the producer, so every tick refreshes the run's pulse and
+  a producer that sees no tick for `IDLE_STOP` (250 ms) stops the audio and
+  ends the run. Audio still queued at that point is cut, not played out.
+- The viseme follows the sink's own playhead (`Sink::get_pos()`) rather than
+  wall-clock time since `append`, so a late audio start no longer shifts the
+  lips ahead of the sound.
+
+### Added
+
+- The playback loop every native provider shares, public so a sibling
+  provider (the Piper one in `vizij`) plays under the same halt rule: `Cue`,
+  `Pulse`, `IDLE_STOP`, `is_halted`, `follow`, `Playback` and `shape_at`.
+
 ## [2.0.0] - 2026-09-10
 
 ### Breaking

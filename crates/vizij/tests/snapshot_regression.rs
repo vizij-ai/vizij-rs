@@ -1,6 +1,9 @@
-//! Visual regression: the native render of Quori and Toasty stays close to a
-//! committed reference, so a change to the renderer (camera, materials, morphs,
-//! the ambient model) that breaks the web-comparison parity fails CI.
+//! Visual regression: the native render of Quori, Toasty and Emy stays close
+//! to a committed reference, so a change to the renderer (camera, materials,
+//! morphs, the ambient model) that breaks the web-comparison parity fails CI.
+//! Quori and Toasty carry their look in `color`; Emy carries it in
+//! `metalness` and `emissive` (a black metallic plate, emissive features), so
+//! the three together cover every material term the ambient model composes.
 //!
 //! `#[ignore]`d — it renders on a GPU (lavapipe in CI), so the plain
 //! `cargo test` never runs it. CI's `snapshot-regression` job runs it with
@@ -25,6 +28,7 @@ const CASES: &[(&str, &str, &[u8])] = &[
         "Toasty_Current.glb",
         include_bytes!("references/toasty.png"),
     ),
+    ("emy", "emy.glb", include_bytes!("references/emy.png")),
 ];
 
 /// Mean absolute per-channel difference (0..255) allowed after downscaling both

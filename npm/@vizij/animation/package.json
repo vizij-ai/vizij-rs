@@ -1,6 +1,6 @@
 {
   "name": "@vizij/animation",
-  "version": "0.4.1",
+  "version": "1.0.0",
   "description": "WASM bindings for Vizij animation core.",
   "license": "MIT",
   "repository": {

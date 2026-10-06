@@ -5,8 +5,10 @@
 //! - [`compose_sources`] unions several graph sources into the one graph a
 //!   device runs (the rig, the pose-driver, a playing program, …).
 //! - [`Bundle`] reads the face's `VIZIJ_bundle`: its graphs, its motiongraph
-//!   programs, the profiles it declares, the program to autoplay, and the
-//!   neutral-pose config.
+//!   programs, the profiles it declares, the program to autoplay, the
+//!   neutral-pose config, and what an app builds its controls from — the
+//!   poses and their groups, the rig's inputs, the animations
+//!   ([`contents`]) and the bundle's open-ended metadata.
 //! - [`ProgramSelect`] picks which program plays; [`Bundle::compose`] composes
 //!   the base graphs plus that program.
 //! - [`Bundle::neutral_stage_writes`] resolves the neutral inputs to the store
@@ -17,6 +19,7 @@
 //! This is only the logic both hosts would otherwise write twice, once in Rust
 //! and once in TypeScript.
 
+pub mod contents;
 #[cfg(feature = "publish-frames")]
 pub mod frames;
 mod graph_builder;
@@ -64,6 +67,9 @@ pub struct Bundle {
     /// The motiongraph programs, `(id, spec)` — the graphs the face can play on
     /// top of its rig (e.g. Quori's "Speaks").
     pub programs: Vec<(String, Json)>,
+    /// Program id → the `label` its graph entry carries, for the programs
+    /// that have one.
+    pub program_labels: HashMap<String, String>,
     /// The profiles this face declares it implements — the interfaces its
     /// graphs are authored against, carried in the bundle's top-level
     /// `profiles` array. A profile is an interface, not a graph, so it sits
@@ -77,6 +83,19 @@ pub struct Bundle {
     /// `metadata.faceId` — the rig's namespace (its input paths live under
     /// `rig/<faceId>/`).
     pub face_id: Option<String>,
+    /// `poses.config.poses`.
+    pub poses: Vec<contents::Pose>,
+    /// `poses.config.poseGroups`.
+    pub pose_groups: Vec<contents::PoseGroup>,
+    /// The inputs the first `rig` graph declares (its spec's
+    /// `metadata.vizij.inputs`).
+    pub rig_inputs: Vec<contents::RigInput>,
+    /// The authored `animations`.
+    pub animations: Vec<contents::Animation>,
+    /// `metadata` as authored — open-ended: the face id, the speech
+    /// configuration (`speechConfig`), the active motion graph, exporter
+    /// details. `None` when the bundle has none.
+    pub metadata: Option<Json>,
 }
 
 impl Bundle {
@@ -113,6 +132,7 @@ impl Bundle {
 
         let mut graphs = Vec::new();
         let mut programs = Vec::new();
+        let mut program_labels = HashMap::new();
         let mut standard_mappings = Vec::new();
         let mut skills = Vec::new();
         for entry in bundle
@@ -136,6 +156,9 @@ impl Bundle {
             if kind == "motiongraph" {
                 if let Some(id) = entry.get("id").and_then(Json::as_str) {
                     programs.push((id.to_string(), spec.clone()));
+                    if let Some(label) = entry.get("label").and_then(Json::as_str) {
+                        program_labels.insert(id.to_string(), label.to_string());
+                    }
                 }
             }
             if kind == mappings::STANDARD_MAPPING_KIND {
@@ -191,15 +214,29 @@ impl Bundle {
             .and_then(Json::as_str)
             .map(str::to_string);
 
+        let pose_groups = contents::pose_groups(bundle);
+        let poses = contents::poses(bundle, &pose_groups);
+        let rig_inputs = graphs
+            .iter()
+            .find(|(kind, _)| kind == "rig")
+            .map(|(_, spec)| contents::rig_inputs(spec))
+            .unwrap_or_default();
+
         Bundle {
             graphs,
             standard_mappings,
             skills,
             programs,
+            program_labels,
             profiles,
             active_program_id,
             neutral_inputs,
             face_id,
+            poses,
+            pose_groups,
+            rig_inputs,
+            animations: contents::animations(bundle),
+            metadata: metadata.cloned(),
         }
     }
 
@@ -230,7 +267,8 @@ impl Bundle {
     /// earlier ones on any store path they share (the web composes the same
     /// way, for the same last-writer-wins reason). So a mapping overrides the
     /// base rig's resting writes, a playing program overrides the mapping, and
-    /// a playing clip overrides everything. Returns the composed graph spec.
+    /// a playing animation overrides everything. Returns the composed graph
+    /// spec.
     ///
     /// Mappings come from two places: the face's own embedded copies
     /// ([`standard_mappings`](Bundle::standard_mappings)), always composed,
@@ -295,6 +333,70 @@ impl Bundle {
             .filter_map(|(name, value)| map.get(name).map(|path| (path.clone(), *value as f32)))
             .collect()
     }
+
+    /// How this face's animation channels name store keys: through its first
+    /// `rig` graph's input nodes, under its [`rig_prefix`](Bundle::rig_prefix).
+    pub fn channel_keys(&self) -> ChannelKeys {
+        let rig = self.graphs.iter().find(|(kind, _)| kind == "rig");
+        ChannelKeys {
+            prefix: self.rig_prefix(),
+            inputs: rig
+                .map(|(_, spec)| {
+                    nodes_of(spec)
+                        .filter(|node| {
+                            node.get("type")
+                                .and_then(Json::as_str)
+                                .is_some_and(|t| t.eq_ignore_ascii_case("input"))
+                        })
+                        .filter_map(|node| node.pointer("/params/path").and_then(Json::as_str))
+                        .map(|path| path.trim().to_string())
+                        .collect()
+                })
+                .unwrap_or_default(),
+            by_name: rig
+                .map(|(_, spec)| collect_input_path_map(spec))
+                .unwrap_or_default(),
+        }
+    }
+}
+
+/// How an animation track's `channel` names the store key it drives on one
+/// face, resolved through the face's rig — [`Bundle::channel_keys`].
+///
+/// A channel is rig-relative (`gaze/left_right`, `poses/<id>.weight`), so its
+/// key is the rig input at `<rig prefix><channel>`. A channel that is no such
+/// input resolves, in order: to itself when it already is a rig input path;
+/// to the input the rig names it by (its node id, as
+/// [`collect_input_path_map`] reads them); else to `<rig prefix><channel>`
+/// regardless, a key some other graph may read. A channel already under
+/// `rig/` is never prefixed again.
+#[derive(Debug, Clone, Default)]
+pub struct ChannelKeys {
+    prefix: String,
+    inputs: std::collections::HashSet<String>,
+    by_name: HashMap<String, String>,
+}
+
+impl ChannelKeys {
+    /// The store key `channel` drives.
+    pub fn key(&self, channel: &str) -> String {
+        let channel = channel.trim().trim_start_matches('/');
+        if self.inputs.contains(channel) {
+            return channel.to_string();
+        }
+        let prefixed = format!("{}{channel}", self.prefix);
+        if self.inputs.contains(&prefixed) {
+            return prefixed;
+        }
+        if let Some(path) = self.by_name.get(channel) {
+            return path.clone();
+        }
+        if channel.starts_with("rig/") {
+            channel.to_string()
+        } else {
+            prefixed
+        }
+    }
 }
 
 /// Source id of the animation source (see [`compose_sources`] for how source
@@ -306,10 +408,11 @@ pub const ANIMATIONS_SOURCE_ID: &str = "animations";
 /// over a bridge and across a device restart like any other value.
 pub const ANIMATION_PLAYERS_PATH: &str = "vizij/animations/players";
 
-// The animation module's declared ids (mirror `module.yaml` / the web host's
-// `ANIMATION_MODULE_*`). The graph carries them as opaque handles: the
-// `ExternalFunction` nodes name the module functions, the `output` node the
-// `TrackOutput` fields it fans out by.
+// The animation module's declared ids (its Rust declaration, `animation` in
+// vizij-animation-module, which this published crate cannot depend on; the
+// `vizij` crate tests that they match). The graph carries them as opaque
+// handles: the `ExternalFunction` nodes name the module functions, the
+// `output` node the `TrackOutput` fields it fans out by.
 const FN_STEP: &str = "76697a69-6a00-0000-0f00-000000000004";
 const FN_PLAYER_STATES: &str = "76697a69-6a00-0000-0f00-00000000000d";
 const PARAM_DT_NS: &str = "76697a69-6a00-0000-0f04-000000000001";
@@ -321,13 +424,16 @@ const FIELD_OUTPUT_VALUE: &str = "76697a69-6a00-0000-0110-000000000003";
 /// node calls the module's `step` every tick, fed the runtime's built-in
 /// `arora/dt` (nanoseconds), and a path-less `output` node fans the returned
 /// `[TrackOutput]` batch onto the store keys each record names — its
-/// `default_key`, the final rig paths decided at clip load. A second
-/// `ExternalFunction` node writes `player_states()` to [`ANIMATION_PLAYERS_PATH`].
+/// `default_key`, the final rig paths decided when an animation loads. A
+/// second `ExternalFunction` node writes `player_states()` to
+/// [`ANIMATION_PLAYERS_PATH`].
 ///
-/// The source is inert until a clip plays: with no instances the module's `step`
-/// returns nothing, so the `output` writes nothing and the rig/program pose
-/// stands. Transport (load a clip, play/pause/seek/…) is driven through the
-/// module's exported functions — over a bridge, or in-process — not from here.
+/// The source is inert until an animation plays: with no instance of weight
+/// the module's `step` returns nothing — an animation loads silent, its
+/// instance at weight 0 — so the `output` writes nothing and the
+/// rig/program pose stands. Loading and transport (load/unload, play/pause/
+/// seek/…, an instance's weight) are driven through the module's declared
+/// functions — over a bridge, or in-process — not from here.
 pub fn animations_source() -> (String, Json) {
     let spec = json!({
         "nodes": [
@@ -548,6 +654,37 @@ mod tests {
         })
     }
 
+    /// An animation channel resolves through the face's rig: the rig input
+    /// under the rig prefix, an input path as is, an input by its node name,
+    /// else the prefixed path.
+    #[test]
+    fn a_channel_resolves_to_the_rig_input_it_names() {
+        let mut bundle = bundle_json();
+        bundle["metadata"]["faceId"] = json!("quori");
+        bundle["graphs"][0]["spec"] = graph(
+            json!([
+                { "id": "input_direct_gaze_left_right", "type": "input",
+                  "params": { "path": "rig/quori/gaze/left_right" } },
+                { "id": "input_mouth_smile", "type": "input",
+                  "params": { "path": "rig/quori/mouth/smile_amount" } },
+            ]),
+            json!([]),
+        );
+        let keys = Bundle::from_bundle_json(&bundle).channel_keys();
+        assert_eq!(keys.key("gaze/left_right"), "rig/quori/gaze/left_right");
+        assert_eq!(keys.key("/gaze/left_right"), "rig/quori/gaze/left_right");
+        assert_eq!(
+            keys.key("rig/quori/gaze/left_right"),
+            "rig/quori/gaze/left_right"
+        );
+        assert_eq!(keys.key("mouth_smile"), "rig/quori/mouth/smile_amount");
+        assert_eq!(keys.key("gaze_left_right"), "rig/quori/gaze/left_right");
+        assert_eq!(keys.key("poses/p.weight"), "rig/quori/poses/p.weight");
+        assert_eq!(keys.key("rig/other/x"), "rig/other/x");
+        // No rig, no prefix: a channel is its own key.
+        assert_eq!(Bundle::default().channel_keys().key("gaze/x"), "gaze/x");
+    }
+
     #[test]
     fn bundle_reads_programs_and_active_id() {
         let b = Bundle::from_bundle_json(&bundle_json());
@@ -560,6 +697,42 @@ mod tests {
         );
         assert!(b.program(&ProgramSelect::None).is_none());
         assert!(b.program(&ProgramSelect::Id("nope".into())).is_none());
+    }
+
+    /// What an app reads beside the graphs: program labels, the pose
+    /// config, the rig's declared inputs, the animations, and the metadata as
+    /// authored.
+    #[test]
+    fn bundle_reads_what_an_app_builds_its_controls_from() {
+        let mut bundle = bundle_json();
+        bundle["graphs"][1]["label"] = json!("Speaks");
+        bundle["graphs"][0]["spec"]["metadata"] = json!({ "vizij": { "inputs": [
+            { "id": "gaze_x", "path": "/gaze/x", "range": { "min": -1, "max": 1 } },
+        ] } });
+        bundle["metadata"]["speechConfig"] = json!({ "voice": "Ruth", "visemeGroupId": "v" });
+        bundle["poses"]["config"]["poseGroups"] =
+            json!([{ "id": "v", "name": "Visemes", "path": "visemes" }]);
+        bundle["poses"]["config"]["poses"] =
+            json!([{ "id": "pose_a", "name": "A", "group": "visemes" }]);
+        bundle["animations"] =
+            json!([{ "id": "wave", "clip": { "name": "Wave", "duration": 5, "tracks": [] } }]);
+        let b = Bundle::from_bundle_json(&bundle);
+
+        assert_eq!(b.program_labels.len(), 1);
+        assert_eq!(b.program_labels["prog.speaks"], "Speaks");
+        assert_eq!(b.rig_inputs.len(), 1);
+        assert_eq!(b.rig_inputs[0].path, "gaze/x");
+        assert_eq!(b.pose_groups[0].id, "v");
+        assert_eq!(b.poses[0].group_ids, ["v"]);
+        assert_eq!(b.animations[0].id, "wave");
+        let metadata = b.metadata.unwrap();
+        assert_eq!(metadata["speechConfig"]["voice"], "Ruth");
+        assert_eq!(metadata["activeMotionGraphId"], "prog.speaks");
+
+        // A bundle without them reads empty.
+        let bare = Bundle::from_bundle_json(&json!({}));
+        assert!(bare.poses.is_empty() && bare.rig_inputs.is_empty() && bare.animations.is_empty());
+        assert!(bare.metadata.is_none());
     }
 
     #[test]
