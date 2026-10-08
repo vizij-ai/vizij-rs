@@ -1775,6 +1775,103 @@ mod tests {
             );
         }
     }
+
+    /// Faces whose rigs predate the standard, each with the adaptation
+    /// sidecar committed for it: grafted with the bundler, a standard control
+    /// reaches the face's own pose weight, blink or eye. Needs the GLBs under
+    /// `VIZIJ_FIXTURES`; a face absent there is skipped.
+    #[test]
+    fn the_sidecars_drive_their_faces() {
+        let Ok(fixtures) = std::env::var("VIZIJ_FIXTURES") else {
+            eprintln!("VIZIJ_FIXTURES unset — skipping the face sidecar test");
+            return;
+        };
+        type Reach<'a> = (&'a str, &'a str, f32);
+        // (GLB, sidecar, face id, [(standard control set to 1, face input, the value it reaches)]).
+        let faces: [(&str, &str, &str, &[Reach]); 2] = [
+            (
+                "Quori_Current.glb",
+                "quori/Quori_Current.standard-adaptation.json",
+                "quori_latest",
+                &[
+                    ("expression/happy", "poses/pose_happy.weight", 1.0),
+                    ("expression/concerned", "poses/pose_concerned.weight", 1.0),
+                    ("viseme/aa", "poses/pose_a.weight", 1.0),
+                    ("blink", "blink", 1.0),
+                    // The eye travels to the end of its authored range.
+                    ("left_eye/pos/x", "propsrig/l_eye/translation/x", 6.7),
+                ],
+            ),
+            (
+                "Hugo_Current.glb",
+                "hugo/Hugo_Current.standard-adaptation.json",
+                "hugo_latest_blender_export",
+                &[
+                    ("expression/happy", "poses/pose_happy.weight", 1.0),
+                    ("expression/sleepy", "poses/pose_sleepy.weight", 1.0),
+                    ("viseme/PP", "poses/pose_p.weight", 1.0),
+                    ("blink", "blink", 1.0),
+                    ("left_eye/pos/x", "propsrig/l_eye/translation/x", 0.0),
+                ],
+            ),
+        ];
+        let config = FaceConfig {
+            wanted: ["rig", "pose-driver", "pose", "standard-adaptation"]
+                .map(String::from)
+                .to_vec(),
+            program: ProgramSelect::None,
+            stage_neutral: true,
+            ros4hri: false,
+            speech: None,
+        };
+        for (glb, sidecar, face_id, controls) in faces {
+            let Ok(bytes) = std::fs::read(std::path::Path::new(&fixtures).join(glb)) else {
+                eprintln!("{glb} not under VIZIJ_FIXTURES — skipped");
+                continue;
+            };
+            let sidecar = format!(
+                "{}/../../fixtures/faces/{sidecar}",
+                env!("CARGO_MANIFEST_DIR")
+            );
+            let spec = vizij_bundle::from_sidecar(
+                &std::fs::read_to_string(&sidecar).expect("read the adaptation sidecar"),
+            )
+            .expect("parse the adaptation sidecar");
+            let mut face = vizij_bundle::Face::parse(&bytes).expect("parse the GLB");
+            face.add_graph(
+                "standard-adaptation",
+                &format!("{face_id}_standard_adaptation"),
+                spec,
+            )
+            .expect("graft the adaptation");
+            let adapted = face.to_bytes().expect("repack the GLB");
+
+            let LoadedFace { meta, spec } = load_face(&adapted, &config).expect("load the face");
+            let store = BlackboardStore::new();
+            stage_neutral_pose(&store, &meta);
+            let mut arora = builder_for(&spec, RigHal::new(), store, &[], None)
+                .expect("build the device")
+                .build()
+                .expect("build arora");
+            // An adaptation holds no state: a write shows on the next tick.
+            let tick = |arora: &mut arora::Arora| {
+                for _ in 0..2 {
+                    arora.step(Duration::from_millis(16)).expect("step");
+                }
+            };
+            for (control, input, reached) in controls {
+                let control = format!("rig/{face_id}/standard/vizij/{control}");
+                stage(&arora, &control, float(1.0));
+                tick(&mut arora);
+                let value = read_f32(&arora, &format!("rig/{face_id}/{input}"));
+                assert!(
+                    (value - reached).abs() < 0.01,
+                    "{glb}: {control} = 1 leaves {input} at {value}, not {reached}"
+                );
+                stage(&arora, &control, float(0.0));
+            }
+        }
+    }
 }
 
 /// A face's animations on the device its composition builds — the same on

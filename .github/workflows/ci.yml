@@ -141,9 +141,10 @@ jobs:
       # under the same metric, the authoring viewport's calls, and 25
       # load/unload cycles with a flat memory.
       - name: Fetch the face GLBs from vizij-web
+        # Pinned to a commit, so a re-export cannot move a reference.
         run: |
           mkdir -p fixtures
-          base="https://raw.githubusercontent.com/vizij-ai/vizij-web/main/apps/vizij-authoring/public/assets"
+          base="https://raw.githubusercontent.com/vizij-ai/vizij-web/8f9ea2965c6415904ad4e0f87639a370eff0c4d8/apps/vizij-authoring/public/assets"
           curl -fsSL "$base/Quori_Current.glb" -o fixtures/Quori_Current.glb
           curl -fsSL "$base/Quori_Current_Extended.glb" -o fixtures/Quori_Current_Extended.glb
           curl -fsSL "$base/Toasty_Current.glb" -o fixtures/Toasty_Current.glb
@@ -255,14 +256,18 @@ jobs:
             target
           key: ${{ runner.os }}-snapreg-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Fetch the face GLBs
-        # Quori and Toasty from vizij-web; the Blender export of Quori from
-        # vizij-web and Emy from its own repository, each at the commit its
-        # reference was rendered from.
+        # Each face pinned to the commit its reference or test was written
+        # against, so a re-export cannot move what a test reads: Quori,
+        # Toasty and the Quori and Hugo the sidecar test grafts onto from
+        # vizij-web, Quori's Blender export from vizij-web at the commit its
+        # reference was rendered from, and Emy from its own repository.
         run: |
           mkdir -p fixtures
-          base="https://raw.githubusercontent.com/vizij-ai/vizij-web/main/apps/vizij-authoring/public/assets"
+          base="https://raw.githubusercontent.com/vizij-ai/vizij-web/8f9ea2965c6415904ad4e0f87639a370eff0c4d8/apps/vizij-authoring/public/assets"
           curl -fsSL "$base/Quori_Current_Extended.glb" -o fixtures/Quori_Current_Extended.glb
           curl -fsSL "$base/Toasty_Current.glb" -o fixtures/Toasty_Current.glb
+          curl -fsSL "$base/Quori_Current.glb" -o fixtures/Quori_Current.glb
+          curl -fsSL "$base/Hugo_Current.glb" -o fixtures/Hugo_Current.glb
           blender="https://raw.githubusercontent.com/vizij-ai/vizij-web/866ae9d33dfcf38e70b7f6112c979f27f7fae21f/apps/vizij-authoring/public/assets"
           curl -fsSL "$blender/Quori_Latest_Blender_Export.glb" -o fixtures/Quori_Latest_Blender_Export.glb
           emy="https://raw.githubusercontent.com/SaraCooperAmun/vizij_ros_face_launcher/c538974ef24e40a2d2e251768a5e48f148b5bf1f/emy_glbs/emy.glb"
@@ -281,6 +286,10 @@ jobs:
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
         run: cargo test -p vizij --lib ros4hri_drives_the_adapted_quori -- --nocapture
+      - name: Drive Quori and Hugo through their adaptation sidecars
+        env:
+          VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
+        run: cargo test -p vizij --lib the_sidecars_drive_their_faces -- --nocapture
       - name: Play Quori's animations on the native device
         env:
           VIZIJ_FIXTURES: ${{ github.workspace }}/fixtures
