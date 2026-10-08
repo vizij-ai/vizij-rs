@@ -289,9 +289,13 @@ fn not_ready(vizij_id: &str) {
     }
 }
 
-/// Confine the Vizij's camera to a rectangle of the canvas, in CSS pixels
-/// relative to the canvas (`x`, `y` from its top-left corner) — how several
-/// Vizijs share one canvas. The rectangle is kept across the Vizij's reloads.
+/// Draw the Vizij into a rectangle of the canvas, in CSS pixels relative to
+/// the canvas (`x`, `y` from its top-left corner) — how several Vizijs share
+/// one canvas. Any rectangle: the Vizij is framed on all of it and the part
+/// on the canvas draws, so a rectangle scrolled past an edge shows its Vizij
+/// cut off there; an empty one (a width or height of 0 or less) or one
+/// wholly off the canvas draws nothing. The rectangle is kept across the
+/// Vizij's reloads.
 #[wasm_bindgen(js_name = placeVizij)]
 pub fn place_vizij(
     vizij_id: String,
@@ -301,10 +305,14 @@ pub fn place_vizij(
     height: f64,
 ) -> Result<(), JsValue> {
     let scale = device_pixel_ratio();
-    let px = |v: f64| (v * scale).round().max(0.0) as u32;
+    // Edges, not sizes, are rounded, so rectangles that tile in CSS pixels
+    // tile in physical ones.
+    let px = |v: f64| (v * scale).round() as i32;
+    let min = IVec2::new(px(x), px(y));
+    let max = IVec2::new(px(x + width.max(0.0)), px(y + height.max(0.0)));
     send(ViewEvent::PlaceFace {
         face_id: vizij_id,
-        rect: Some([px(x), px(y), px(width), px(height)]),
+        rect: Some(IRect { min, max }),
     })
 }
 
@@ -342,8 +350,10 @@ pub fn set_view(vizij_id: String, view_json: Option<String>) -> Result<(), JsVal
 /// Where the Vizij's safe area — the bounds its camera frames — lies on the
 /// canvas, as `{ x, y, width, height }` in CSS pixels from the canvas's
 /// top-left corner (the frame [`place_vizij`] takes), as of the last frame
-/// drawn; `null` before the Vizij's camera has drawn. A zoom that crops the
-/// bounds reaches past the Vizij's rectangle.
+/// drawn; `null` before the Vizij's camera has drawn, and while it is placed
+/// on an empty rectangle. A zoom that crops the bounds reaches past the
+/// Vizij's rectangle, and a rectangle past the canvas's edge takes its safe
+/// area with it.
 #[wasm_bindgen(js_name = safeArea)]
 pub fn safe_area(vizij_id: String) -> Result<JsValue, JsValue> {
     let area = SAFE_AREAS.lock().ok().and_then(|areas| {
@@ -461,7 +471,7 @@ pub fn memory_bytes() -> f64 {
 
 /// What a GLB declares, without loading it: `{ faceId, rigPrefix, rootBounds,
 /// elements: [{ id, name, kind, material, morphTargets }], animatables:
-/// { <uuid>: { node, feature } }, graphs: [{ kind }], programs: [{ id,
+/// { <uuid>: { node, feature } }, graphs: [{ id, kind }], programs: [{ id,
 /// label, graph }], activeProgramId, neutralInputs, poses,
 /// poseGroups, rigInputs, animations, metadata }` — what a page needs to build
 /// its controls and name the face's paths. `poses`, `poseGroups`, `rigInputs`
@@ -507,7 +517,10 @@ fn describe_json(meta: &FaceMeta) -> serde_json::Value {
             "morphTargets": e.morph_targets,
         })).collect::<Vec<_>>(),
         "animatables": animatables.into_iter().collect::<serde_json::Map<String, serde_json::Value>>(),
-        "graphs": meta.bundle.graphs.iter().map(|(kind, _)| serde_json::json!({ "kind": kind })).collect::<Vec<_>>(),
+        "graphs": meta.bundle.graphs.iter().zip(&meta.bundle.graph_ids).map(|((kind, _), id)| serde_json::json!({
+            "id": id,
+            "kind": kind,
+        })).collect::<Vec<_>>(),
         "programs": meta.bundle.programs.iter().map(|(id, graph)| serde_json::json!({
             "id": id,
             "label": meta.bundle.program_labels.get(id),
@@ -533,6 +546,20 @@ pub fn behavior_value(graph_json: &str) -> Result<JsValue, JsValue> {
         .and_then(|spec| vizij_arora_behavior::run::behavior(&spec))
         .map_err(|e| JsValue::from_str(&e))?;
     to_js(&value)
+}
+
+/// The store keys a run of `graph_json` (any form the spec normalizer
+/// accepts) writes and leaves holding when halted: its output nodes' paths,
+/// sorted, without the `task/…` outputs that land on the run's own keys —
+/// what `invoke("reset_keys", { keys: { strs } })` takes to return a halted
+/// program's outputs to rest.
+#[wasm_bindgen(js_name = outputKeys)]
+pub fn output_keys(graph_json: &str) -> Result<Vec<String>, JsValue> {
+    let spec = parse_spec(graph_json).map_err(|e| JsValue::from_str(&e))?;
+    Ok(vizij_arora_behavior::run::outputs(&spec)
+        .into_iter()
+        .map(|key| key.path)
+        .collect())
 }
 
 /// The graph edits that change run `run`'s behavior in place from

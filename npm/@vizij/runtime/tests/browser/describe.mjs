@@ -61,6 +61,14 @@ try {
     max: 1,
   });
 
+  // The bundle's graphs, each with its id and kind, the programs among them.
+  assert.deepEqual(quori.graphs, [
+    { id: "quori_latest", kind: "rig" },
+    { id: "quori_latest_pose_graph", kind: "pose-driver" },
+    { id: "authoring.motiongraph.program.1", kind: "motiongraph" },
+    { id: "authoring.motiongraph.main", kind: "motiongraph" },
+  ]);
+
   // Programs with their labels and graphs; the bundle's active one.
   assert.deepEqual(
     quori.programs.map(({ id, label }) => [id, label]),

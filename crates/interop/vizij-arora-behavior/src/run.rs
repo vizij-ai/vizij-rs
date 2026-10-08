@@ -23,7 +23,8 @@
 //! - A halt prunes the fragment and leaves the store as it is: the run's
 //!   outputs hold their last values. Spawning again is a new run, its nodes
 //!   starting from fresh state; a graph that acts on its start does so
-//!   itself. Returning the keys a run wrote to rest is the client's step.
+//!   itself. Returning the keys a run wrote to rest is the client's step,
+//!   [`outputs`] naming them.
 //! - [`edit`] is the EDIT that changes a running behavior in place: the
 //!   nodes the new graph keeps keep their state.
 //!
@@ -41,7 +42,7 @@ use arora_types::data::{DataStore, Key};
 use arora_types::value::{StructureField, Value};
 use arora_types::value_serde;
 use uuid::Uuid;
-use vizij_graph_core::types::GraphSpec;
+use vizij_graph_core::types::{GraphSpec, NodeType};
 
 use crate::graph_codec::{self, GraphSpecDiff};
 
@@ -172,6 +173,25 @@ pub fn runs(store: &dyn DataStore) -> Vec<(TaskHandle, String)> {
         .collect();
     runs.sort_by(|a, b| a.1.cmp(&b.1).then(a.0.id.0.cmp(&b.0.id.0)));
     runs
+}
+
+/// The store keys a run of `spec` writes, and leaves holding when it is
+/// halted: the path of each of its output nodes, once each, sorted — what a
+/// client returns to rest after the halt (the rest module's `reset_keys`).
+/// An output on a `task/…` path writes one of the run's own keys under
+/// [`prefix`] — its status, its feedback — the run's record rather than an
+/// output to rest, and is not listed; nor is a path-less output, whose keyed
+/// batch names its keys only as it runs.
+pub fn outputs(spec: &GraphSpec) -> Vec<Key> {
+    let paths: std::collections::BTreeSet<String> = spec
+        .nodes
+        .iter()
+        .filter(|node| matches!(node.kind, NodeType::Output))
+        .filter_map(|node| node.params.path.as_ref())
+        .map(ToString::to_string)
+        .filter(|path| !path.starts_with("task/"))
+        .collect();
+    paths.into_iter().map(Key::from).collect()
 }
 
 /// The EDIT that changes run `task`'s behavior from `from` to `to` in place:

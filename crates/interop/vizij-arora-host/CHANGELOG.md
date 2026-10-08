@@ -4,6 +4,17 @@ All notable changes to `vizij-arora-host`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [6.4.0] - 2026-10-10
+
+### Added
+
+- `Bundle::graph_ids`: the `id` each of `Bundle::graphs`' entries carries, by
+  position (`graph_ids[i]` is `graphs[i]`'s), `None` for an entry without
+  one — the rig's, the pose driver's and the programs' ids beside their
+  kinds.
+- A `Bundle` built with a struct literal that names every field must name
+  the new one, or end in `..Default::default()`.
+
 ## [6.3.0] - 2026-10-10
 
 ### Added

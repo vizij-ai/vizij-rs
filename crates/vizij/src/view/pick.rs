@@ -9,9 +9,10 @@
 //! mesh backend, every press reaches the window entity.
 //!
 //! The press is resolved against the faces whose rectangle holds the
-//! pointer, the one drawn last first: the nearest element its ray meets is
-//! the pick, and a press that meets no element of any of them is a miss of
-//! the topmost. A press outside every face's rectangle is no face's.
+//! pointer where it is drawn, the one drawn last first: the nearest element
+//! its ray meets is the pick, and a press that meets no element of any of
+//! them is a miss of the topmost. A press outside every face's drawn
+//! rectangle is no face's.
 
 use bevy::ecs::system::SystemParam;
 use bevy::math::Affine3A;
@@ -42,7 +43,9 @@ pub(super) fn on_press(
         .filter_map(|face| {
             let (camera, transform) = cameras.get(face.camera).ok()?;
             camera
-                .logical_viewport_rect()?
+                .is_active
+                .then(|| camera.logical_viewport_rect())
+                .flatten()?
                 .contains(position)
                 .then_some((face, camera, transform))
         })

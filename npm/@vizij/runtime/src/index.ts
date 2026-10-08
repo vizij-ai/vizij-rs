@@ -169,7 +169,8 @@ export interface Program {
   id: string;
   label: string | null;
   /** The program's graph spec: {@link behaviorValue} makes it
-   * \`run_behavior\`'s \`behavior\` argument. */
+   * \`run_behavior\`'s \`behavior\` argument, and {@link outputKeys} lists
+   * the keys its run leaves holding when halted. */
   graph: object;
 }
 
@@ -401,7 +402,9 @@ export interface VizijDescription {
    * Semio Studio's per-axis name — `translation.x`, `rotation.r`,
    * `color.g` — or a morph target's name). */
   animatables: Record<string, { node: string; feature: string }>;
-  graphs: { kind: string }[];
+  /** The bundle's graph entries — its rig, pose driver, programs, … — each
+   * with the `id` it carries (`null` for one without) and its `kind`. */
+  graphs: { id: string | null; kind: string }[];
   /** The motion-graph programs the Vizij can run: each one's id, its label
    * when it carries one, and its graph, as authored. */
   programs: Program[];
@@ -520,6 +523,7 @@ interface WasmBindings {
   skillSource(id: string): object | null;
   composeVizij(gltf_json: string, options_json?: string): object;
   behaviorValue(graph_json: string): object;
+  outputKeys(graph_json: string): string[];
   runEdits(run: string, from_json: string, to_json: string): object;
 }
 
@@ -622,7 +626,7 @@ export function init(input?: InitInput): Promise<void> {
  * await quori.invoke("say", { text: "Hello" });                // a run's RunHandle
  * await quori.invoke("run_behavior", { name: "live", behavior: await behaviorValue(graph) });
  * await quori.invoke("reset");                                  // every key back to rest
- * await quori.invoke("reset_keys", { keys: { strs: outputKeysOfMyGraph } });
+ * await quori.invoke("reset_keys", { keys: { strs: await outputKeys(graph) } });
  * ```
  *
  * The graph it runs reads and writes the same keys. A Vizij's paths live
@@ -754,7 +758,8 @@ export class Runtime {
   /** Halt run `run` — its {@link RunHandle}'s `run` — through the
    * interpreter module's HALT. Resolves once applied: the run's status key
    * then reads `failure`. A run's outputs hold their last values; returning
-   * them to rest is the client's step (`invoke("reset_keys", { keys: { strs: keys } })`). */
+   * them to rest is the client's step: {@link outputKeys} of its graph, then
+   * `invoke("reset_keys", { keys: { strs: keys } })`. */
   halt(run: string): Promise<void> {
     return this.inner.halt(run);
   }
@@ -936,15 +941,20 @@ export function unloadVizij(vizijId: string): void {
   bindings().unloadVizij(vizijId);
 }
 
-/** Confine the Vizij's camera to a rectangle of the canvas (CSS pixels from
- * its top-left corner) — how several Vizijs share one canvas. Kept across the
- * Vizij's reloads. */
+/** Draw the Vizij into a rectangle of the canvas (CSS pixels from its
+ * top-left corner) — how several Vizijs share one canvas. Any rectangle: the
+ * Vizij is framed on all of it and the part on the canvas draws, so a slot
+ * scrolled past the canvas's edge shows its Vizij cut off there, at the
+ * position and scale the whole slot gives it; an empty rectangle (a width or
+ * height of 0 or less) or one wholly off the canvas draws nothing. A Vizij
+ * never placed, or given back with {@link fillCanvas}, draws over the whole
+ * canvas. Kept across the Vizij's reloads. */
 export function placeVizij(vizijId: string, rect: Rect): void {
   bindings().placeVizij(vizijId, rect.x, rect.y, rect.width, rect.height);
 }
 
 /** Place the Vizij over `element`, as it lies over `canvas` on the page —
- * call it again when the layout changes. */
+ * call it again when the layout changes or the page scrolls. */
 export function placeVizijIn(vizijId: string, element: Element, canvas: Element): void {
   const c = canvas.getBoundingClientRect();
   const e = element.getBoundingClientRect();
@@ -973,7 +983,9 @@ export function setView(vizijId: string, view: VizijView): void {
  * canvas, in CSS pixels from the canvas's top-left corner (the frame
  * {@link placeVizij} takes), as of the last frame drawn: what a DOM overlay
  * outlining it is positioned by. A zoom that crops the bounds reaches past
- * the Vizij's rectangle. `null` until the Vizij's camera has drawn.
+ * the Vizij's rectangle, and a rectangle past the canvas's edge takes its
+ * safe area with it. `null` until the Vizij's camera has drawn, and while
+ * it is placed on an empty rectangle.
  */
 export function safeArea(vizijId: string): Rect | null {
   return bindings().safeArea(vizijId);
@@ -1215,6 +1227,19 @@ export async function composeVizij(
 export async function behaviorValue(graph: GraphSpecInput, input?: InitInput): Promise<object> {
   await init(input);
   return bindings().behaviorValue(typeof graph === "string" ? graph : JSON.stringify(graph));
+}
+
+/**
+ * The store keys a run of `graph` (a graph spec, in any form the spec
+ * normalizer accepts) writes and leaves holding when it is halted: its output
+ * nodes' paths, sorted — without the outputs on `task/…` paths, which land on
+ * the run's own keys. What returns a halted program's outputs to rest:
+ * `runtime.invoke("reset_keys", { keys: { strs: await outputKeys(graph) } })`.
+ * Calls {@link init} if it has not run yet.
+ */
+export async function outputKeys(graph: GraphSpecInput, input?: InitInput): Promise<string[]> {
+  await init(input);
+  return bindings().outputKeys(typeof graph === "string" ? graph : JSON.stringify(graph));
 }
 
 /**

@@ -2582,6 +2582,70 @@ mod tests {
         );
     }
 
+    /// run::outputs names exactly the keys a run writes beside its own: each
+    /// output node's path, in any form the spec normalizer reads — a type in
+    /// any case, a path object — and not the `task/…` outputs, which land on
+    /// the run's keys.
+    #[test]
+    fn a_runs_outputs_are_the_keys_it_writes_beside_its_own() {
+        let store = SimpleDataStore::new();
+        let mut graph =
+            ProcessingGraph::from_spec(passthrough("sensor/x", "actuator/y")).expect("from_spec");
+        store
+            .write(StateChange::set("sensor/x", float(0.25)))
+            .unwrap();
+        let mut bridge = NoopBridge;
+        graph.tick_store(&store, &mut bridge, 0.1).expect("tick");
+        let keys = |store: &SimpleDataStore| -> std::collections::BTreeSet<String> {
+            store
+                .snapshot()
+                .storage
+                .into_keys()
+                .map(|key| key.path)
+                .collect()
+        };
+        let before = keys(&store);
+
+        let behavior = parse_spec(
+            &json!({
+                "nodes": [
+                    { "id": "c", "type": "constant", "params": { "value": 0.5 } },
+                    { "id": "a", "type": "Output", "params": { "path": "rig/face/a" } },
+                    { "id": "b", "type": "output", "params": { "path": { "path": "rig/face/b.x" } } },
+                    { "id": "b-again", "type": "output", "params": { "path": "rig/face/b.x" } },
+                    { "id": "seen", "type": "output", "params": { "path": "task/feedback" } }
+                ],
+                "edges": [
+                    { "from": { "node_id": "c" }, "to": { "node_id": "a", "input": "in" } },
+                    { "from": { "node_id": "c" }, "to": { "node_id": "b", "input": "in" } },
+                    { "from": { "node_id": "c" }, "to": { "node_id": "b-again", "input": "in" } },
+                    { "from": { "node_id": "c" }, "to": { "node_id": "seen", "input": "in" } }
+                ]
+            })
+            .to_string(),
+        )
+        .expect("parse");
+        let outputs: Vec<String> = run::outputs(&behavior)
+            .into_iter()
+            .map(|key| key.path)
+            .collect();
+        assert_eq!(outputs, ["rig/face/a", "rig/face/b.x"]);
+
+        let handle = spawn_behavior(&mut graph, "outputs", &behavior);
+        graph.tick_store(&store, &mut bridge, 0.1).expect("tick");
+        let run_keys = run::prefix(handle.id);
+        let written: Vec<String> = keys(&store)
+            .difference(&before)
+            .filter(|key| !key.starts_with(&run_keys))
+            .cloned()
+            .collect();
+        assert_eq!(written, outputs, "the keys the run wrote beside its own");
+        assert!(
+            read(&store, &format!("{run_keys}/feedback")).is_some(),
+            "the task/ output wrote the run's feedback"
+        );
+    }
+
     /// A malformed run_behavior call is refused at the spawn, the graph
     /// untouched.
     #[test]

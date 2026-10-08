@@ -348,7 +348,7 @@ fn two_faces_share_one_target_each_in_its_own_viewport() {
         events_tx
             .send(ViewEvent::PlaceFace {
                 face_id: id.to_string(),
-                rect: Some([x, 0, half, HEIGHT]),
+                rect: Some(IRect::new(x as i32, 0, (x + half) as i32, HEIGHT as i32)),
             })
             .unwrap();
     }

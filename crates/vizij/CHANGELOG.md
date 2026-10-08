@@ -22,6 +22,21 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
   draws (`view::meta::FaceMeta::unbound`), are accepted and move nothing.
   `FaceConfig::studio` turns it on (feature `studio`), and
   `view::meta::Binding::rest` carries the default.
+- A face's rectangle is any rectangle of its target
+  (`ViewEvent::PlaceFace` takes an `IRect`; the browser module's
+  `placeVizij` any CSS rectangle): the face is framed on the whole rectangle
+  and the part inside the target draws — a sub-camera view of the whole
+  rectangle's projection — so a rectangle reaching past an edge shows its
+  face cut off there, at the position and scale the whole rectangle gives
+  it. An empty rectangle, or one wholly outside the target, draws nothing
+  and takes no picks; a face never placed draws over the whole target. The
+  safe area follows the whole rectangle. A camera of its own clears the
+  target with the background, below every face's, so the target shows the
+  background wherever no face draws, also when none does.
+- The browser module's `outputKeys(graph)`: the store keys a run of `graph`
+  writes and leaves holding when halted (`vizij_arora_behavior::run::outputs`),
+  what `reset_keys` takes to return a halted program's outputs to rest.
+  `describe` lists each graph with its `id` beside its `kind`.
 
 - The face reports what it is saying: while a `say` run's audio plays, the
   utterance is the face's speech state, `standard/vizij/speech`, empty before

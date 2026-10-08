@@ -71,7 +71,8 @@ bundle's `faceId`) and `quori.path(relative)` builds one. `drainPicks()`
 reports pointer presses as `{ vizijId, elementId }` — the slot and the
 element id the GLB's RobotData declares, `null` for a press on no element;
 `describe(glb)` reads what a GLB declares without loading it: its elements,
-animatables, bounds and programs (each with its label and graph), and from
+animatables, bounds, graphs (each with its id and kind) and programs (each
+with its label and graph), and from
 its bundle the poses and their groups, the rig's inputs with their ranges
 and defaults, the animations, and the bundle's metadata as authored
 (`speechConfig`, `activeMotionGraphId`, …) — everything a page builds its
@@ -82,6 +83,20 @@ Vizijs share the page's canvas, not its framing:
 one Vizij over `mount`'s options, and `safeArea("quori")` says where its
 framed bounds lie on the canvas, in CSS pixels, for a DOM overlay.
 
+Where a Vizij draws is its rectangle of the canvas:
+
+- `placeVizij(id, { x, y, width, height })` (or `placeVizijIn(id, element,
+  canvas)`, called again as the page scrolls or its layout changes) takes any
+  rectangle. The Vizij is framed on the whole rectangle, and the part on the
+  canvas draws: a slot scrolled half past the canvas's edge shows half its
+  Vizij, at the position and scale the whole slot gives it.
+- An empty rectangle (a width or height of 0 or less) or one wholly off the
+  canvas draws nothing, and its Vizij takes no picks.
+- A Vizij never placed, or given back with `fillCanvas(id)`, draws over the
+  whole canvas — the single face of a page.
+- Wherever no Vizij draws, the canvas shows `mount`'s `background`, and is
+  transparent without one.
+
 ### Programs
 
 A Vizij's programs are the motiongraphs its bundle carries
@@ -90,13 +105,14 @@ beside the face's graph as a task run of the device's interpreter: its
 `run_behavior(name, behavior)` method, started and halted like any task run.
 
 ```ts
-import { behaviorValue, runEdits, BEHAVIOR_RUNS, runStatus } from "@vizij/runtime";
+import { behaviorValue, outputKeys, runEdits, BEHAVIOR_RUNS, runStatus } from "@vizij/runtime";
 
 const { programs } = await describe(glb);
 const main = programs.find((p) => p.id === "authoring.motiongraph.main")!;
 const live = await quori.invoke("run_behavior", { name: main.id, behavior: await behaviorValue(main.graph) });
 await quori.applyGraphEdits(await runEdits(live.run, main.graph, editedGraph)); // in place
 await quori.halt(live.run);                          // its outputs hold their last values
+const outputs = await outputKeys(main.graph);       // the keys its run leaves holding
 await quori.invoke("reset_keys", { keys: { strs: outputs } }); // back to rest, when the page says so
 
 const runs = await quori.listKeys(BEHAVIOR_RUNS);   // every run: <run id>/status and <run id>/name
@@ -110,8 +126,11 @@ const runs = await quori.listKeys(BEHAVIOR_RUNS);   // every run: <run id>/statu
 - Halting removes the program's nodes and leaves the store as it is.
   Starting it again is a new run, its stateful nodes (springs, smoothing)
   starting afresh. A program that wants to act on its start does so itself;
-  returning its outputs to rest is the page's explicit `reset_keys` — the
-  keys its graph's output nodes write.
+  returning its outputs to rest is the page's explicit `reset_keys` of
+  `outputKeys(graph)`: the keys its graph's output nodes write, read as the
+  device reads them — any form the spec normalizer accepts — and without the
+  outputs on `task/…` paths, which write the run's own keys. Any graph a
+  page runs has them, the bundle's programs and its own alike.
 - `runEdits(runId, from, to)` builds the edits that take the run from
   `from` — the graph it runs — to `to`: a run's nodes live in the device's
   graph under ids the interpreter derives from the run, and the edits name
