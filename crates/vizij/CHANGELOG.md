@@ -10,6 +10,17 @@ the browser module, attached to the `vizij-v<version>` GitHub release.
 
 ### Added
 
+- Under `--studio` the face serves Semio Studio's keys (`vizij::studio`, the
+  Studio-key profile, composed into the face's behavior from its RobotData
+  bindings): Studio's `<id>.target_position` lands under the animatable id
+  the view indexes — a vector, euler or colour written per component,
+  `<uuid>.<axis>`, lands joined under `<uuid>` — and `<id>.position`
+  reports it back; `<id>.studio_value` and `<id>.target_velocity` are
+  accepted and ignored, so Studio's whole update for an entity lands. Each
+  target rests at the animatable's RobotData default; an animatable the
+  face's own graphs write is left to them. `FaceConfig::studio` turns it on
+  (feature `studio`), and `view::meta::Binding::rest` carries the default.
+
 - The face reports what it is saying: while a `say` run's audio plays, the
   utterance is the face's speech state, `standard/vizij/speech`, empty before
   playback starts and once it ends. Under `--ros2` it is published on
