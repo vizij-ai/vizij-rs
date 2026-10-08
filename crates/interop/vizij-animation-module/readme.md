@@ -39,6 +39,8 @@ There is no `module.yaml`, `build.rs` or generated source in the crate.
 | `Keypoint` | `{ id: str, stamp: f32, value: <dynamic Value>, transitions_in: [TransitionHandle], transitions_out: [TransitionHandle] }` |
 | `TransitionHandle` | `{ x: f32, y: f32 }` — a cubic-bezier timing handle in normalized segment space; a keypoint carries zero or one per side (empty = the engine's default ease) |
 | `TrackOutput` | `{ track_id: str, default_key: str, value: <dynamic Value> }` |
+| `StepValues` | `{ revision: u32, values: <dynamic Value> }` — `values` a `Value::ArrayValue`, one value per position of `output_keys`, `Value::Unit` where no instance weighs |
+| `OutputKeys` | `{ revision: u32, keys: [str] }` — the key of each position of `step_values`' values |
 | `PlayerState` (record `1.2.0`) | `{ player: u32, state: str, time_ns: u64, duration_ns: u64, speed: f32, name: str, instances: [InstanceState], loop_mode: str, ended: bool, window_start_ns: u64, window_end_ns: u64? }` — `state` is `"playing" \| "paused" \| "stopped"`, as the last `play`, `pause` or `stop` left it (a player waiting for its `play_at` start keeps the state it had, `"playing"` from its start on); `duration_ns` is the player's length, the latest end over its instances; `speed` is the multiplier as `set_speed` set it, negative backwards; `name` is the one `create_player` gave it (empty without one); `loop_mode` is `"once" \| "loop" \| "ping_pong"`; `ended` says a `once` player has reached the window bound it plays toward; the window end is absent when it ends at the player's length |
 | `InstanceState` (record `1.1.0`) | `{ instance: u32, anim: u32, weight: f32, start_offset_ns: i64, time_scale: f32 }` — an instance on a player, the animation it plays, its blend weight, and its timing on the player timeline |
 | `BakedAnimation` | `{ frame_rate: f32, start_ns: u64, end_ns: u64, tracks: [BakedTrack] }` — an animation sampled at `frame_rate` Hz over a window of its clip, in nanoseconds; sample `i` is at `start_ns / 1e9 + i / frame_rate` seconds into the clip, up to the first at or past `end_ns`, one past the clip's end holding its end value; the window reads back as requested, clamped into the clip |
@@ -82,8 +84,20 @@ Per tick and transport:
   the `arora/dt` built-in key, to `time_ns`, the `arora/time` key (left out,
   the previous step's time plus `dt_ns`, from 0), and return **per-track
   outputs keyed by track identity**, each carrying the track's **default
-  authored key** (`animatable_id`) plus its sampled value. The consumer
-  decides the final store key: default = the authored key, overridable.
+  authored key** (`animatable_id`) plus its sampled value, in the order of
+  `output_keys`. The consumer decides the final store key: default = the
+  authored key, overridable.
+- `step_values(dt_ns: u64, time_ns: u64?) -> StepValues` — the same step,
+  returning the values alone, by position: `{ revision: u32, values }`,
+  `values` a `Value::ArrayValue` as long as the key table, each position the
+  value written to its key this step or `Value::Unit` when no instance
+  weighs on it. No key or track id is built or sent per step.
+- `output_keys() -> OutputKeys` — `{ revision: u32, keys: [str] }`, the key
+  of each position of `step_values`: per player, in creation order, each key
+  its instances write, in the order they first write it (a key two players
+  write has a position per player). Only a structural edit changes it, and
+  one that does gives a new `revision`; a consumer reads it again when
+  `step_values` reports another revision.
 - Transport — buffered into the engine's **next** `step`, in issue order (the
   same phase a device applies external calls in); each returns the player id
   (`set_weight`, `set_start_offset` and `set_time_scale` the instance id), or

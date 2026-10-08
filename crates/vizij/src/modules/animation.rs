@@ -246,6 +246,18 @@ pub fn host_module() -> HostModule {
                 ))
             })
         }),
+        (ids::step_values::FUNCTION, {
+            let a = a(());
+            Box::new(move |call| {
+                let dt_ns = arg(call, ids::step_values::DT_NS, "dt_ns")?;
+                let time_ns = arg(call, ids::step_values::TIME_NS, "time_ns")?;
+                Ok(Value::from(a.borrow_mut().step_values(dt_ns, time_ns)))
+            })
+        }),
+        (ids::output_keys::FUNCTION, {
+            let a = a(());
+            Box::new(move |_call| Ok(Value::from(a.borrow().output_keys())))
+        }),
     ];
 
     let mut signatures = signatures();
@@ -843,6 +855,67 @@ mod tests {
         assert!(error.to_string().contains("start_ns"), "{error}");
     }
 
+    /// `step_values` answers with the values by position in the table
+    /// `output_keys` answers with, both under one revision.
+    #[test]
+    fn step_values_follow_the_output_keys() {
+        let mut device = device();
+        let player = create_player(&mut device, "p");
+        let clip = module_animation(
+            &authored(serde_json::json!({ "id": "v", "duration": 1, "tracks": [
+                { "channel": "a", "keyframes": [{ "time": 0, "value": 1 }] },
+                { "channel": "b", "keyframes": [{ "time": 0, "value": 2 }] },
+            ] })),
+            &ChannelKeys::default(),
+        );
+        let Value::U32(anim) = call(
+            &mut device,
+            ids::load_animation::FUNCTION,
+            vec![field(ids::load_animation::CLIP, clip.into())],
+        ) else {
+            panic!("an animation id");
+        };
+        call(
+            &mut device,
+            ids::add_instance::FUNCTION,
+            vec![
+                field(ids::add_instance::PLAYER, Value::U32(player)),
+                field(ids::add_instance::ANIM, Value::U32(anim)),
+            ],
+        );
+        let keys = vizij_animation_module::OutputKeys::try_from(call(
+            &mut device,
+            ids::output_keys::FUNCTION,
+            Vec::new(),
+        ))
+        .expect("an OutputKeys record");
+        assert_eq!(keys.keys.len(), 2);
+        let step = vizij_animation_module::StepValues::try_from(call(
+            &mut device,
+            ids::step_values::FUNCTION,
+            vec![field(ids::step_values::DT_NS, Value::U64(0))],
+        ))
+        .expect("a StepValues record");
+        assert_eq!(step.revision, keys.revision);
+        let Value::ArrayValue(values) = step.values else {
+            panic!("an array value");
+        };
+        let by_key: Vec<(&str, &Value)> =
+            keys.keys.iter().map(String::as_str).zip(&values).collect();
+        assert!(
+            by_key
+                .iter()
+                .any(|(k, v)| k.ends_with('a') && **v == Value::F32(1.0)),
+            "{by_key:?}"
+        );
+        assert!(
+            by_key
+                .iter()
+                .any(|(k, v)| k.ends_with('b') && **v == Value::F32(2.0)),
+            "{by_key:?}"
+        );
+    }
+
     #[test]
     fn an_animation_reloads_through_a_call() {
         let mut device = device();
@@ -899,7 +972,7 @@ mod tests {
     #[test]
     fn every_declared_function_is_registered_and_described() {
         let declared = function_modules();
-        assert_eq!(declared.len(), 23);
+        assert_eq!(declared.len(), 25);
         let module = host_module();
         let described: Vec<Uuid> = module.descriptions().iter().map(|d| d.id).collect();
         for function in declared.keys() {

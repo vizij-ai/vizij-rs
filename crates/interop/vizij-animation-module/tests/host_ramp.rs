@@ -312,3 +312,29 @@ fn a_bake_returns_typed_samples_through_the_wasm_module() {
         .expect("bake")
         .is_none());
 }
+
+/// `output_keys` and `step_values` through the guest: the values come back
+/// by position in the key table, under its revision.
+#[ignore = "needs the wasm artifact pre-built (a nested cargo build deadlocks on the build lock); run with --ignored after `cargo build -p vizij-animation-module --target wasm32-wasip1`"]
+#[test]
+fn step_values_follow_the_output_keys_through_the_wasm_module() {
+    use animation::client;
+    let mut engine = engine_with_the_guest();
+    let anim = client::load_animation(&mut engine, ramp_clip()).expect("load_animation");
+    let player = client::create_player(&mut engine, None).expect("create_player");
+    client::add_instance(&mut engine, player, anim).expect("add_instance");
+    let keys = client::output_keys(&mut engine).expect("output_keys");
+    assert_eq!(keys.keys, ["node/x"]);
+    let step = client::step_values(&mut engine, 500_000_000, None).expect("step_values");
+    assert_eq!(step.revision, keys.revision);
+    let Value::ArrayValue(values) = step.values else {
+        panic!("an array value, got {:?}", step.values);
+    };
+    let Value::F32(sample) = values[0] else {
+        panic!("a scalar, got {:?}", values[0]);
+    };
+    assert!(
+        (sample - 0.5).abs() < 1e-3,
+        "~0.5 at the midpoint, got {sample}"
+    );
+}

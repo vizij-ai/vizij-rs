@@ -211,10 +211,10 @@ fn sampling_linear_step_bezier() {
 #[test]
 fn accumulates_vector_values_componentwise() {
     let mut acc = AccumulatorWithDerivatives::new();
-    acc.add("vec", &TrackValue::Vector(vec![0.0, 2.0, 4.0]), None, 1.0);
-    acc.add("vec", &TrackValue::Vector(vec![2.0, 0.0, 2.0]), None, 1.0);
-    let finalized = acc.finalize();
-    let (value, derivative) = finalized.get("vec").expect("vector entry");
+    acc.reset(1);
+    acc.add(0, &TrackValue::Vector(vec![0.0, 2.0, 4.0]), None, 1.0);
+    acc.add(0, &TrackValue::Vector(vec![2.0, 0.0, 2.0]), None, 1.0);
+    let (value, derivative) = &acc.take(0).expect("vector entry");
     assert!(derivative.is_none());
     if let Value::ArrayF32(data) = value {
         assert_eq!(data, &vec![1.0, 1.0, 3.0]);
@@ -223,10 +223,10 @@ fn accumulates_vector_values_componentwise() {
     }
 
     let mut acc_list = AccumulatorWithDerivatives::new();
-    acc_list.add("list", &TrackValue::NumericArray(vec![0.0, 4.0]), None, 1.0);
-    acc_list.add("list", &TrackValue::NumericArray(vec![2.0, 0.0]), None, 1.0);
-    let list_finalized = acc_list.finalize();
-    let (list_value, list_deriv) = list_finalized.get("list").expect("list entry");
+    acc_list.reset(1);
+    acc_list.add(0, &TrackValue::NumericArray(vec![0.0, 4.0]), None, 1.0);
+    acc_list.add(0, &TrackValue::NumericArray(vec![2.0, 0.0]), None, 1.0);
+    let (list_value, list_deriv) = &acc_list.take(0).expect("list entry");
     assert!(list_deriv.is_none());
     // Sequences are one ArrayValue kind: the old List/Tuple distinction is
     // gone, so the averaged result comes back as an ArrayValue of floats.
@@ -594,7 +594,8 @@ fn outputs_push_event_manual() {
 #[test]
 fn accumulator_blends_values_and_derivatives() {
     let mut accum = AccumulatorWithDerivatives::new();
-    let key = "node.scalar";
+    accum.reset(3);
+    let (key, flag) = (0, 1);
     accum.add(
         key,
         &TrackValue::Float(1.0),
@@ -607,25 +608,27 @@ fn accumulator_blends_values_and_derivatives() {
         Some(&TrackValue::Float(2.0)),
         0.75,
     );
-    // Derivatives omitted should not register in the map.
-    accum.add("node.flag", &TrackValue::Bool(true), None, 1.0);
+    // Derivatives omitted should not register.
+    accum.add(flag, &TrackValue::Bool(true), None, 1.0);
 
-    let blended = accum.finalize();
-    let (value, derivative) = blended.get(key).expect("blended scalar value present");
+    let (value, derivative) = accum.take(key).expect("blended scalar value present");
     if let Value::F32(v) = value {
-        approx(*v, 2.5, 1e-6);
+        approx(v, 2.5, 1e-6);
     } else {
         panic!("expected blended float value");
     }
     if let Some(Value::F32(dv)) = derivative {
-        approx(*dv, 2.5, 1e-6);
+        approx(dv, 2.5, 1e-6);
     } else {
         panic!("expected blended float derivative");
     }
-    let (_, flag_derivative) = blended
-        .get("node.flag")
-        .expect("flag change should be present");
+    let (_, flag_derivative) = accum.take(flag).expect("flag change should be present");
     assert!(flag_derivative.is_none());
+    assert!(
+        accum.take(2).is_none(),
+        "nothing weighed on the third output"
+    );
+    assert!(accum.take(key).is_none(), "taking empties the output");
 }
 
 /// it should emit derivatives when requesting update_values_and_derivatives()
@@ -1317,4 +1320,140 @@ fn config_and_value_serde_roundtrip() {
     let skp = serde_json::to_string(&kp).unwrap();
     let kp2: Keypoint = serde_json::from_str(&skp).unwrap();
     assert_eq!(kp, kp2);
+}
+
+/// Outputs are laid out by structural edits: one per key per player, in
+/// player order and then first-write order; `update_by_target` reports each
+/// by its index (`None` where nothing weighs on it) and `update_values` the
+/// same values as keyed changes, in that order. Transport leaves the layout;
+/// structural edits bump its revision.
+#[test]
+fn outputs_are_laid_out_by_structural_edits() {
+    use vizij_animation_core::OutputTarget;
+    let mut eng = Engine::new(Config::default());
+    let a = eng.load_animation(mk_anim(
+        "a",
+        1.0,
+        vec![
+            mk_scalar_track_linear("k.x", &[(0.0, 1.0), (1.0, 1.0)]),
+            mk_scalar_track_linear("k.y", &[(0.0, 2.0), (1.0, 2.0)]),
+        ],
+    ));
+    let b = eng.load_animation(mk_anim(
+        "b",
+        1.0,
+        vec![mk_scalar_track_linear("k.y", &[(0.0, 4.0), (1.0, 4.0)])],
+    ));
+    let p = eng.create_player("p");
+    let q = eng.create_player("q");
+    let r0 = eng.output_revision();
+    eng.add_instance(q, b, InstanceCfg::default());
+    eng.add_instance(p, a, InstanceCfg::default());
+    let ib = eng.add_instance(
+        p,
+        b,
+        InstanceCfg {
+            weight: 0.0,
+            ..InstanceCfg::default()
+        },
+    );
+    assert_ne!(eng.output_revision(), r0);
+    let target = |player: PlayerId, key: &str| OutputTarget {
+        player,
+        key: key.to_string(),
+    };
+    assert_eq!(
+        eng.output_targets(),
+        [target(p, "k.x"), target(p, "k.y"), target(q, "k.y")]
+    );
+
+    let values = eng.update_by_target(0.1, Inputs::default()).to_vec();
+    assert_eq!(
+        values,
+        [
+            Some(Value::F32(1.0)),
+            Some(Value::F32(2.0)),
+            Some(Value::F32(4.0))
+        ]
+    );
+    let revision = eng.output_revision();
+    let mut inputs = Inputs::default();
+    inputs.instance_updates.push(InstanceUpdate {
+        player: p,
+        inst: ib,
+        weight: Some(1.0),
+        time_scale: None,
+        start_offset: None,
+        enabled: None,
+    });
+    let changes: Vec<(String, Value)> = eng
+        .update_values(0.0, inputs)
+        .changes
+        .iter()
+        .map(|c| (c.key.clone(), c.value.clone()))
+        .collect();
+    assert_eq!(
+        changes,
+        [
+            ("k.x".to_string(), Value::F32(1.0)),
+            ("k.y".to_string(), Value::F32(3.0)),
+            ("k.y".to_string(), Value::F32(4.0)),
+        ]
+    );
+    assert_eq!(
+        eng.output_revision(),
+        revision,
+        "an update is no structural edit"
+    );
+
+    assert!(eng.remove_player(q));
+    assert_ne!(eng.output_revision(), revision);
+    assert_eq!(eng.output_targets(), [target(p, "k.x"), target(p, "k.y")]);
+    assert!(eng.unload_animation(a));
+    assert_eq!(eng.output_targets(), [target(p, "k.y")]);
+    let pause = Inputs {
+        player_cmds: vec![PlayerCommand::Pause { player: p }],
+        ..Inputs::default()
+    };
+    assert_eq!(eng.update_by_target(0.0, pause), [Some(Value::F32(4.0))]);
+}
+
+/// Replacing an animation's data lays out the outputs its new tracks write;
+/// a replacement writing the same keys keeps the revision.
+#[test]
+fn replacing_an_animation_lays_out_its_new_keys() {
+    let mut eng = Engine::new(Config::default());
+    let a = eng.load_animation(mk_anim(
+        "a",
+        1.0,
+        vec![mk_scalar_track_linear("k.x", &[(0.0, 1.0), (1.0, 1.0)])],
+    ));
+    let p = eng.create_player("p");
+    eng.add_instance(p, a, InstanceCfg::default());
+    let revision = eng.output_revision();
+    let keys = |eng: &Engine| -> Vec<String> {
+        eng.output_targets().iter().map(|t| t.key.clone()).collect()
+    };
+    assert_eq!(keys(&eng), ["k.x"]);
+
+    let wider = || {
+        mk_anim(
+            "b",
+            1.0,
+            vec![
+                mk_scalar_track_linear("k.y", &[(0.0, 2.0), (1.0, 2.0)]),
+                mk_scalar_track_linear("k.x", &[(0.0, 3.0), (1.0, 3.0)]),
+            ],
+        )
+    };
+    assert!(eng.replace_animation(a, wider()));
+    assert_eq!(keys(&eng), ["k.y", "k.x"]);
+    let replaced = eng.output_revision();
+    assert_ne!(replaced, revision);
+    assert_eq!(
+        eng.update_by_target(0.0, Inputs::default()),
+        [Some(Value::F32(2.0)), Some(Value::F32(3.0))]
+    );
+    assert!(eng.replace_animation(a, wider()));
+    assert_eq!(eng.output_revision(), replaced, "the same keys");
 }

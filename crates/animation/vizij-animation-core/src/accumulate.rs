@@ -1,12 +1,10 @@
 #![allow(dead_code)]
-//! Accumulation of per-target POD contributions and blending into final
+//! Accumulation of per-output POD contributions and blending into final
 //! wire-form [`Value`]s.
 //!
 //! Contributions arrive as sampled [`TrackValue`]s; the accumulator keeps
 //! weighted component sums in plain arrays and encodes each blended result
 //! through the vocabulary constructors once, in [`AccumulatorWithDerivatives::finalize`].
-
-use std::collections::HashMap;
 
 use crate::interp::functions::nlerp_quat;
 use crate::value::{TrackValue, Transform, Value};
@@ -337,23 +335,37 @@ impl AccumEntry {
     }
 }
 
-/// Accumulates per-handle contributions across instances, tracking both values and optional
-/// derivatives so the engine can emit aligned `(Value, Option<Value>)` pairs.
-#[derive(Default)]
+/// Accumulates weighted contributions per output, an output being an index
+/// the caller assigns, tracking both values and optional derivatives so the
+/// engine can emit aligned `(Value, Option<Value>)` pairs. Its buffers are
+/// reused across [`reset`](Self::reset)s, so a steady number of outputs
+/// allocates nothing per frame for scalar kinds.
+#[derive(Debug, Default)]
 pub struct AccumulatorWithDerivatives {
-    values: HashMap<String, AccumEntry>,
-    derivatives: HashMap<String, AccumEntry>,
+    values: Vec<Option<AccumEntry>>,
+    derivatives: Vec<Option<AccumEntry>>,
 }
 
 impl AccumulatorWithDerivatives {
+    /// An accumulator over no outputs; [`reset`](Self::reset) sizes it.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Add a weighted contribution to the accumulator.
+    /// Empty every output and hold `outputs` of them, indices `0..outputs`.
+    pub fn reset(&mut self, outputs: usize) {
+        for buffer in [&mut self.values, &mut self.derivatives] {
+            buffer.clear();
+            buffer.resize(outputs, None);
+        }
+    }
+
+    /// Add a weighted contribution to `output`. A weight that is not
+    /// positive contributes nothing, and an output past those
+    /// [`reset`](Self::reset) holds is ignored.
     pub fn add(
         &mut self,
-        handle: &str,
+        output: usize,
         value: &TrackValue,
         derivative: Option<&TrackValue>,
         weight: f32,
@@ -361,34 +373,28 @@ impl AccumulatorWithDerivatives {
         if weight <= 0.0 {
             return;
         }
-
-        self.values
-            .entry(handle.to_string())
-            .and_modify(|entry| entry.add_value(value, weight))
-            .or_insert_with(|| AccumEntry::from_value(value, weight));
-
-        if let Some(deriv) = derivative {
-            self.derivatives
-                .entry(handle.to_string())
-                .and_modify(|entry| entry.add_value(deriv, weight))
-                .or_insert_with(|| AccumEntry::from_value(deriv, weight));
+        let add = |entry: &mut Option<AccumEntry>, v: &TrackValue| match entry {
+            Some(entry) => entry.add_value(v, weight),
+            None => *entry = Some(AccumEntry::from_value(v, weight)),
+        };
+        if let Some(entry) = self.values.get_mut(output) {
+            add(entry, value);
+        }
+        if let (Some(entry), Some(derivative)) = (self.derivatives.get_mut(output), derivative) {
+            add(entry, derivative);
         }
     }
 
-    /// Finalize accumulated values into canonical `(value, derivative)` pairs keyed by handle.
-    pub fn finalize(self) -> HashMap<String, (Value, Option<Value>)> {
-        let Self {
-            values,
-            mut derivatives,
-        } = self;
-
-        let mut out = HashMap::with_capacity(values.len());
-        for (handle, entry) in values.into_iter() {
-            if let Some(value) = entry.finalize() {
-                let derivative = derivatives.remove(&handle).and_then(AccumEntry::finalize);
-                out.insert(handle, (value, derivative));
-            }
-        }
-        out
+    /// The blended value of `output` with its derivative, if any contributed
+    /// one, emptying it: `None` when nothing weighed on it since the last
+    /// [`reset`](Self::reset).
+    pub fn take(&mut self, output: usize) -> Option<(Value, Option<Value>)> {
+        let derivative = self
+            .derivatives
+            .get_mut(output)
+            .and_then(Option::take)
+            .and_then(AccumEntry::finalize);
+        let value = self.values.get_mut(output)?.take()?.finalize()?;
+        Some((value, derivative))
     }
 }

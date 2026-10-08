@@ -4,6 +4,31 @@ All notable changes to `vizij-animation-core`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [5.0.0] - 2026-10-08
+
+### Breaking
+
+- `AccumulatorWithDerivatives` accumulates by output index, not by key:
+  `reset(outputs)`, `add(output, …)` and `take(output)` replace the
+  key-taking `add` and the `HashMap`-returning `finalize`, and its buffers
+  are reused across frames.
+- `Instance` gains a private field, so it can no longer be built outside
+  the crate (the engine builds it in `add_instance`).
+- `Outputs::changes` come in output order — per player, in creation order,
+  each key in the order its instances first write it — where they came in
+  hash order, varying from step to step.
+
+### Added
+
+- `Engine::output_targets()`: the engine's outputs, one per key a player's
+  instances write (`OutputTarget { player, key }`), laid out by structural
+  edits (`add_instance`, `remove_instance`, `remove_player`,
+  `unload_animation`, `replace_animation`, `prebind`);
+  `Engine::output_revision()` changes whenever the targets do.
+- `Engine::update_by_target(dt, inputs)`: steps and returns each output's
+  value by index (`None` where no instance weighs on it), building and
+  copying no key.
+
 ## [4.0.0] - 2026-10-06
 
 ### Breaking
